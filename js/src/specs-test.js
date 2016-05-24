@@ -41,9 +41,20 @@ suite('Specs', () => {
     assert.equal(spec.path, '//foo');
   });
 
-  test('DataSetSpec', async () => {
-    const invalid = ['mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls'];
+  test('DatasetSpec', async () => {
+    const invalid = ['mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
+        'http::dsname', 'mem:/a/bogus/path:dsname'];
     invalid.forEach(s => assert.isNull(DatasetSpec.parse(s)));
+
+    const invalidDatasetNames = [' ', '', '$', '#', ':', '\n', '💩'];
+    for (const s of invalidDatasetNames) {
+      assert.isNull(DatasetSpec.parse(`mem:${s}`));
+    }
+
+    const validDatasetNames = ['a', 'Z', '0','/', '-', '_'];
+    for (const s of validDatasetNames) {
+      assert.isNotNull(DatasetSpec.parse(`mem:${s}`));
+    }
 
     let spec = DatasetSpec.parse('mem:ds');
     invariant(spec);

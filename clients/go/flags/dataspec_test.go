@@ -287,6 +287,18 @@ func TestDatasetSpecs(t *testing.T) {
 		assert.Error(err)
 	}
 
+	invalidDatasetNames := []string{" ", "", "$", "#", ":", "\n", "💩"}
+	for _, s := range invalidDatasetNames {
+		_, err := ParseDatasetSpec("mem:" + s)
+		assert.Error(err)
+	}
+
+	validDatasetNames := []string{"a", "Z", "0", "/", "-", "_"}
+	for _, s := range validDatasetNames {
+		_, err := ParseDatasetSpec("mem:" + s)
+		assert.NoError(err)
+	}
+
 	setSpec, err := ParseDatasetSpec("http://localhost:8000:dsname")
 	assert.NoError(err)
 	assert.Equal(DatasetSpec{StoreSpec: DatabaseSpec{Protocol: "http", Path: "//localhost:8000"}, DatasetName: "dsname"}, setSpec)

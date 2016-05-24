@@ -148,3 +148,15 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 	assert.True(dsy.Head().Get(datas.ValueField).Equals(c))
 }
+
+func TestIdValidation(t *testing.T) {
+	assert := assert.New(t)
+	store := datas.NewDatabase(chunks.NewMemoryStore())
+
+	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
+	for _, id := range invalidDatasetNames {
+		assert.Panics(func() {
+			NewDataset(store, id)
+		})
+	}
+}

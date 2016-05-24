@@ -14,7 +14,7 @@ import (
 
 var (
 	storeRegex = regexp.MustCompile("^([^:]+):?(.+)?$")
-	pathRegex  = regexp.MustCompile("^(.+):(.+)$")
+	pathRegex  = regexp.MustCompile(`^(.+):([a-zA-Z0-9\-_/]+)$`)
 )
 
 type DatabaseSpec struct {

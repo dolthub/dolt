@@ -10,8 +10,8 @@ import {invariant, notNull} from './assert.js';
 suite('Dataset', () => {
   test('commit', async () => {
     const bs = makeTestingBatchStore();
-    const store = new Database(bs);
-    let ds = new Dataset(store, 'ds1');
+    const db = new Database(bs);
+    let ds = new Dataset(db, 'ds1');
 
     // |a|
     const ds2 = await ds.commit('a');
@@ -49,7 +49,7 @@ suite('Dataset', () => {
 
 
     // Add a commit to a different datasetId
-    ds = new Dataset(store, 'otherDs');
+    ds = new Dataset(db, 'otherDs');
     ds = await ds.commit('a');
     assert.strictEqual('a', notNull(await ds.head('otherDs')).value);
 
@@ -58,5 +58,14 @@ suite('Dataset', () => {
     assert.strictEqual('d', notNull(await newStore.head('ds1')).value);
     assert.strictEqual('a', notNull(await newStore.head('otherDs')).value);
     await newStore.close();
+  });
+
+  test('id validation', () => {
+    const db = new Database(makeTestingBatchStore());
+
+    const invalidDatasetNames = [' ', '', 'a ', ' a', '$', '#', ':', '\n', '💩'];
+    for (const s of invalidDatasetNames) {
+      assert.throws(() => { new Dataset(db, s); });
+    }
   });
 });

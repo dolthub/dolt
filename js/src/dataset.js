@@ -6,11 +6,16 @@ import type Database from './database.js';
 import Ref from './ref.js';
 import Set from './set.js';
 
+const idRe = /^[a-zA-Z0-9\-_/]+$/;
+
 export default class Dataset {
   _store: Database;
   _id: string;
 
   constructor(store: Database, id: string) {
+    if (!idRe.test(id)) {
+      throw new TypeError(`Invalid dataset ID: ${id}`);
+    }
     this._store = store;
     this._id = id;
   }

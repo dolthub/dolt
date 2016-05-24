@@ -69,7 +69,7 @@ export class DatasetSpec {
 
   // Returns a parsed spec, or null if the spec was invalid.
   static parse(spec: string): ?DatasetSpec {
-    const match = spec.match(/^(.+)\:(.+)$/);
+    const match = spec.match(/^(.+)\:([a-zA-Z0-9\-_/]+)$/);
     if (!match) {
       return null;
     }

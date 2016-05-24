@@ -1,19 +1,23 @@
 package dataset
 
 import (
+	"regexp"
+
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
 )
+
+var idRe = regexp.MustCompile(`^[a-zA-Z0-9\-_/]+$`)
 
 type Dataset struct {
 	store datas.Database
 	id    string
 }
 
-func NewDataset(store datas.Database, datasetID string) Dataset {
-	d.Exp.NotEmpty(datasetID, "Cannot create an unnamed Dataset.")
-	return Dataset{store, datasetID}
+func NewDataset(db datas.Database, datasetID string) Dataset {
+	d.Exp.True(idRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
+	return Dataset{db, datasetID}
 }
 
 func (ds *Dataset) Store() datas.Database {
