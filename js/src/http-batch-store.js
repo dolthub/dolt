@@ -27,16 +27,31 @@ const readBatchOptions = {
 export default class HttpBatchStore extends BatchStore {
   _rpc: RpcStrings;
 
-  constructor(url: string, maxReads: number = 5, fetchOptions: FetchOptions = {}) {
+  constructor(urlparam: string, maxReads: number = 5, fetchOptions: FetchOptions = {}) {
+    const [url, params] = separateParams(urlparam);
     const rpc = {
-      getRefs: url + '/getRefs/',
-      root: url + '/root/',
-      writeValue: url + '/writeValue/',
+      getRefs: url + '/getRefs/' + params,
+      root: url + '/root/' + params,
+      writeValue: url + '/writeValue/' + params,
     };
 
     super(maxReads, new Delegate(rpc, fetchOptions));
     this._rpc = rpc;
   }
+}
+
+function separateParams(url: string): [string, string] {
+  let u = url;
+  let params = '';
+  const m = url.match(/^(.+?)(\?.+)?$/);
+  if (!m) {
+    throw new Error('Could not parse url: ' + url);
+  }
+  if (m[2]) {
+    [, u, params] = m;
+  }
+  u = u.replace(/\/*$/, '');
+  return [u, params];
 }
 
 function mergeOptions(baseOpts: FetchOptions, opts: FetchOptions): FetchOptions {
