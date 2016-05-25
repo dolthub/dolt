@@ -179,12 +179,11 @@ export class JsonArrayWriter {
         this.write(w2.array);
         break;
       }
-      case Kind.Ref: {
+      case Kind.Ref:
         invariant(v instanceof Ref,
                   () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeRef(v);
         break;
-      }
       case Kind.Set: {
         invariant(v instanceof Set,
                   () => `Failed to write Set. Invalid type: ${describeTypeOfValue(v)}`);
@@ -201,16 +200,11 @@ export class JsonArrayWriter {
         this.write(w2.array);
         break;
       }
-      case Kind.Type: {
+      case Kind.Type:
         invariant(v instanceof Type,
                   () => `Failed to write Type. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeType(v, []);
         break;
-      }
-      case Kind.Value: {
-        this.writeValue(v);
-        break;
-      }
       case Kind.Struct:
         invariant(v instanceof Struct,
                   () => `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);

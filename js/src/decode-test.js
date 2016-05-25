@@ -167,17 +167,6 @@ suite('Decode', () => {
     assert.equal(await v.get(2), 'hi');
   });
 
-  test('read value list of number', () => {
-    const a = [Kind.Value, Kind.List, Kind.Number, false,
-      [Kind.Number, '0', Kind.Number, '1', Kind.Number, '2']];
-    const r = new JsonArrayReader(a, db);
-    const v = r.readValue();
-    invariant(v instanceof List);
-
-    const l = new List([0, 1, 2]);
-    assert.isTrue(equals(l, v));
-  });
-
   test('read compound list', () => {
     const r1 = db.writeValue(newListFromSequence(newListLeafSequence(db, [0])));
     const r2 = db.writeValue(newListFromSequence(newListLeafSequence(db, [1, 2])));
@@ -232,17 +221,6 @@ suite('Decode', () => {
     assert.isTrue(equals(v, m));
   });
 
-  test('read value map of number to number', () => {
-    const a = parseJson(`[ValueKind, MapKind, NumberKind, NumberKind, false,
-      [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`);
-    const r = new JsonArrayReader(a, db);
-    const v: Map<number, number> = r.readValue();
-    invariant(v instanceof Map);
-
-    const m = new Map([[0, 1], [2, 3]]);
-    assert.isTrue(equals(v, m));
-  });
-
   test('read set of number', () => {
     const a = parseJson(`[SetKind, NumberKind, false,
       [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`);
@@ -274,17 +252,6 @@ suite('Decode', () => {
     const v = r.readValue();
     invariant(v instanceof NomsSet);
     assert.isTrue(v.hash.equals(l.hash));
-  });
-
-  test('read value set of number', () => {
-    const a = parseJson(`[ValueKind, SetKind, NumberKind, false,
-      [NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"]]`);
-    const r = new JsonArrayReader(a, db);
-    const v: NomsSet<number> = r.readValue();
-    invariant(v instanceof NomsSet);
-
-    const s = new NomsSet([0, 1, 2, 3]);
-    assert.isTrue(equals(v, s));
   });
 
   function assertStruct(s: ?Struct, desc: TypeDesc, data: {[key: string]: any}) {
@@ -345,34 +312,6 @@ suite('Decode', () => {
       b: true,
       l: new List([0, 1, 2]),
       s: 'hi',
-    });
-  });
-
-  test('test read value struct', () => {
-    const tr = makeStructType('A1', {
-      'x': numberType,
-      's': stringType,
-      'b': boolType,
-    });
-
-    const a = parseJson(`[
-      ValueKind, StructKind, "A1", [
-        "b", BoolKind,
-        "s", StringKind,
-        "x", NumberKind
-      ],
-      BoolKind, true,
-      StringKind, "hi",
-      NumberKind, "42"
-    ]`);
-
-    const r = new JsonArrayReader(a, db);
-    const v = r.readValue();
-
-    assertStruct(v, tr.desc, {
-      x: 42,
-      s: 'hi',
-      b: true,
     });
   });
 

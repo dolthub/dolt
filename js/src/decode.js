@@ -227,9 +227,6 @@ export class JsonArrayReader {
         return this.readFloat();
       case Kind.String:
         return this.readString();
-      case Kind.Value: {
-        return this.readValue();
-      }
       case Kind.List: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
