@@ -7,13 +7,10 @@ import {
   Dataset,
   DatasetSpec,
   invariant,
-  newList,
-  newSet,
+  jsonToNoms,
   newStruct,
+  Set,
   Struct,
-} from '@attic/noms';
-import type {
-  valueOrPrimitive,
 } from '@attic/noms';
 
 const args = argv
@@ -62,7 +59,7 @@ async function main(): Promise<void> {
     throw 'invalid destination dataset spec';
   }
 
-  out = outSpec.set();
+  out = outSpec.dataset();
 
   if (args['auth-token'] && args['auth-secret']) {
     authToken = args['auth-token'];
@@ -81,11 +78,11 @@ async function main(): Promise<void> {
         `${clearLine}${++seen} of ${photosetsJSON.length} photosets imported...`);
       return p;
     });
-  })).then(sets => newSet(sets));
+  })).then(sets => new Set(sets));
 
   process.stdout.write(clearLine);
   return out.commit(newStruct('', {
-    photosetsMeta: await toNoms(photosetsJSON),
+    photosetsMeta: jsonToNoms(photosetsJSON),
     photosets: await photosets,
   })).then();
 }
@@ -101,7 +98,7 @@ async function getPhotoset(id: string): Promise<Struct> {
       'last_update, geo, tags, machine_tags, o_dims, views, media, path_alias, url_sq, url_t, ' +
       'url_s, url_m, url_o',
   });
-  const res = await toNoms(json.photoset);
+  const res = jsonToNoms(json.photoset);
   invariant(res instanceof Struct);
   return res;
 }
@@ -134,7 +131,8 @@ function promptForAuth(url: string): Promise<void> {
     process.stdout.write(`Go to ${url} to grant permissions to access Flickr...\n`);
     const rl = readline.createInterface({input: process.stdin, output: process.stdout});
     rl.question('Press enter when done\n', () => {
-      process.stdout.write(`Authenticated: authToken: ${authToken} - authSecret: ${authSecret}\n`);
+      process.stdout.write('Authenticated. Next time run:\n' +
+        `${process.argv.join(' ')} --auth-token=${authToken} --auth-secret=${authSecret}\n\n`);
       res();
       rl.close();
     });
@@ -159,28 +157,4 @@ function callFlickr(method: string, params: ?{[key: string]: string}) {
       },
     });
   });
-}
-
-async function toNoms(v: any): Promise<valueOrPrimitive> {
-  switch (typeof v) {
-    case 'boolean':
-    case 'number':
-    case 'string':
-      return v;
-  }
-
-  if (v instanceof Array) {
-    return await newList(await Promise.all(v.map(c => toNoms(c))));
-  }
-
-  if (v instanceof Object) {
-    const props = {};
-    await Promise.all(
-      Object.keys(v).map(k => {
-        return toNoms(v[k]).then(c => props[k] = c);
-      }));
-    return newStruct('', props);
-  }
-
-  throw new Error('unexpected type: ' + v);
 }
