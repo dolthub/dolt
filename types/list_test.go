@@ -708,3 +708,49 @@ func TestListDiffLoadLimit(t *testing.T) {
 	assert.Nil(diff2)
 	assert.Equal("load limit exceeded", err2.Error())
 }
+
+func TestListDiffString1(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
+	nums2 := []Value{NewString("one"), NewString("two"), NewString("three")}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err2)
+	assert.Equal(0, len(diff2))
+
+	diff2Expected := []Splice{}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffString2(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
+	nums2 := []Value{NewString("one"), NewString("two"), NewString("three"), NewString("four")}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err2)
+	assert.Equal(1, len(diff2))
+
+	diff2Expected := []Splice{
+		Splice{3, 0, 1, 3},
+	}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffString3(t *testing.T) {
+	assert := assert.New(t)
+	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
+	nums2 := []Value{NewString("one"), NewString("two"), NewString("four")}
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff2, err2 := l2.Diff(l1)
+	assert.NoError(err2)
+	assert.Equal(1, len(diff2))
+
+	diff2Expected := []Splice{
+		Splice{2, 1, 1, 2},
+	}
+	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+}

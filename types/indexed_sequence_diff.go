@@ -34,18 +34,9 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 		return indexedSequenceDiff(last, lastHeight, lastOffset, currentChild, currentHeight-1, currentOffset, newLoadLimit)
 	}
 
-	var edEqFn EditDistanceEqualsFn
-	if isMetaSequence(last) {
-		edEqFn = func(i uint64, j uint64) bool {
-			return last.getItem(int(i)).(metaTuple).ref == current.getItem(int(j)).(metaTuple).ref
-		}
-	} else {
-		edEqFn = func(i uint64, j uint64) bool {
-			return last.getItem(int(i)) == current.getItem(int(j))
-		}
-	}
-
-	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), edEqFn)
+	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), func(i uint64, j uint64) bool {
+		return last.equalsAt(int(i), current.getItem(int(j)))
+	})
 
 	finalSplices := []Splice{}
 	newLoadLimit := loadLimit

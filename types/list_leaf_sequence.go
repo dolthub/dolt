@@ -20,6 +20,10 @@ func (ll listLeafSequence) getOffset(idx int) uint64 {
 	return uint64(idx)
 }
 
+func (ll listLeafSequence) equalsAt(idx int, other interface{}) bool {
+	return ll.values[idx].Equals(other.(Value))
+}
+
 // sequence interface
 func (ll listLeafSequence) getItem(idx int) sequenceItem {
 	return ll.values[idx]

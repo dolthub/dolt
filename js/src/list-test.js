@@ -27,6 +27,7 @@ import {
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import List from './list.js';
+import {equals} from './compare.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -405,6 +406,55 @@ suite('Diff List', () => {
       [3050,50,49,3051],
       [4000,49,50,4000],
       [4050,50,49,4051],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
+  test('String 1', async () => {
+    const nums1 = ['one', 'two', 'three'];
+    const nums2 = nums1.slice(0);
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
+  test('String 2', async () => {
+    const nums1 = ['one', 'two', 'three'];
+    const nums2 = ['one', 'two', 'three', 'four'];
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [3,0,1,3],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
+  test('String 3', async () => {
+    const nums1 = ['one', 'two', 'three'];
+    const nums2 = ['one', 'two', 'four'];
+
+    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [2,1,1,2],
     ];
     assert.deepEqual(expectedDiff, directDiff);
   });

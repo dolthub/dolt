@@ -10,6 +10,7 @@ import (
 type indexedSequence interface {
 	sequence
 	getOffset(idx int) uint64
+	equalsAt(idx int, other interface{}) bool
 }
 
 type indexedMetaSequence struct {
@@ -58,6 +59,10 @@ func (ims indexedMetaSequence) getOffset(idx int) uint64 {
 	}
 
 	return ims.offsets[idx] - 1
+}
+
+func (ims indexedMetaSequence) equalsAt(idx int, other interface{}) bool {
+	return ims.getItem(idx).(metaTuple).ref == other.(metaTuple).ref
 }
 
 func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
