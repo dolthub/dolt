@@ -335,7 +335,7 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
 	if method == "POST" {
 		d.Exp.False(current.IsEmpty())
-		params := url.Values{}
+		params := u.Query()
 		params.Add("last", last.String())
 		params.Add("current", current.String())
 		u.RawQuery = params.Encode()
