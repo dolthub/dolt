@@ -14,16 +14,16 @@ npm run build
 ## Run
 
 ```
-noms-view serve .
+noms ui .
 ```
 
-Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?store=xyz.
+Then, navigate to the URL printed by `noms ui`, e.g. http://127.0.0.1:12345
 
 ## Develop
 
 ```
 npm run start
-noms-view serve .
+noms ui .
 ```
 
 ## TODO

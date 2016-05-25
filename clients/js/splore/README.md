@@ -17,13 +17,13 @@ go build
 cd ../../js/splore
 ./build.py
 
-# Launch Splore with noms-view
-cd ../../../cmd/noms-view
+# Launch Splore with noms-ui
+cd ../../../cmd/noms-ui
 go build
-./noms-view serve ../../clients/js/splore db="ldb:/tmp/sploretest"
+./noms-ui ../../clients/js/splore db="ldb:/tmp/sploretest"
 ```
 
-Then, navigate to the URL printed by noms-view, e.g. http://127.0.0.1:12345?db=xyz.
+Then, navigate to the URL printed by `noms-ui`, e.g. http://127.0.0.1:12345?db=xyz.
 
 ## Develop
 

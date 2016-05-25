@@ -21,12 +21,10 @@ import (
 
 const (
 	dsPathPrefix = "/-ds"
-	serveCmd     = "serve"
 )
 
 var (
-	hostFlag    = flag.String("host", "localhost:0", "Host to listen on")
-	showHelp    = flag.Bool("help", false, "Show help message")
+	portFlag    = flag.Int("port", 0, "Port to listen on")
 	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 )
 
@@ -39,25 +37,25 @@ type chunkStoreRecords map[string]chunkStoreRecord
 
 func main() {
 	usage := func() {
-		fmt.Fprintln(os.Stderr, "Starts a server to display a web application with access to one or more noms datasets\n")
-		fmt.Printf("Usage: noms view %s <view-dir> arg1=val1 arg2=val2...\n", serveCmd)
+		fmt.Fprintln(os.Stderr, "Usage: noms ui [-host HOST] directory [args...]\n")
+		fmt.Fprintln(os.Stderr, "  args are of the form arg1=val1, arg2=val2, etc. \"ldb:\" values are automatically translated into paths to an HTTP noms database server.\n")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 	flag.Usage = usage
 
-	if *showHelp || len(flag.Args()) < 2 || flag.Arg(0) != serveCmd {
+	if len(flag.Args()) == 0 {
 		usage()
 		os.Exit(1)
 	}
 
-	viewDir := flag.Arg(1)
-	qsValues, stores := constructQueryString(flag.Args()[2:])
+	uiDir := flag.Arg(0)
+	qsValues, stores := constructQueryString(flag.Args()[1:])
 
 	router := &httprouter.Router{
 		HandleMethodNotAllowed: true,
-		NotFound:               http.FileServer(http.Dir(viewDir)),
+		NotFound:               http.FileServer(http.Dir(uiDir)),
 		RedirectFixedPath:      true,
 	}
 
@@ -70,7 +68,7 @@ func main() {
 	router.POST(prefix+constants.RootPath, routeToStore(stores, datas.HandleRootPost))
 	router.OPTIONS(prefix+constants.RootPath, routeToStore(stores, datas.HandleRootGet))
 
-	l, err := net.Listen("tcp", *hostFlag)
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *portFlag))
 	d.Chk.NoError(err)
 
 	srv := &http.Server{
@@ -84,7 +82,7 @@ func main() {
 		qs = "?" + qsValues.Encode()
 	}
 
-	fmt.Printf("Starting view %s at http://%s%s\n", viewDir, l.Addr().String(), qs)
+	fmt.Printf("Starting UI %s at http://%s%s\n", uiDir, l.Addr().String(), qs)
 	log.Fatal(srv.Serve(l))
 }
 
