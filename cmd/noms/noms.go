@@ -6,11 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"sort"
 	"strings"
 	"syscall"
 
-	"github.com/attic-labs/noms/d"
 	goisatty "github.com/mattn/go-isatty"
 )
 
@@ -27,9 +25,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "Flags:\n\n")
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, "\nCommands:\n\n")
-	for _, cmd := range findCmds() {
-		fmt.Fprintf(os.Stderr, "  %s\n", cmd)
-	}
+	fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(listCmds(), "\n  "))
 	fmt.Fprintf(os.Stderr, "\nSee noms <command> -h for information on each available command.\n\n")
 }
 
@@ -39,48 +35,74 @@ func main() {
 
 	if flag.NArg() == 0 || flag.Arg(0) == "help" {
 		usage()
-		return
+		os.Exit(1)
 	}
 
-	cmdName := cmdPrefix + flag.Arg(0)
-	executable, err := exec.LookPath(cmdName)
-	if err != nil {
-		if execErr, ok := err.(*exec.Error); ok {
-			d.Chk.Equal(exec.ErrNotFound, execErr.Err)
-			fmt.Fprintf(os.Stderr, "error: %s is not an available command\n", flag.Arg(0))
-		} else {
-			d.Chk.NoError(err)
-		}
+	cmd := findCmd(flag.Arg(0))
+	if cmd == "" {
+		fmt.Fprintf(os.Stderr, "error: %s is not an available command\n", flag.Arg(0))
 		usage()
-		return
+		os.Exit(1)
 	}
 
-	executeCmd(executable)
+	executeCmd(cmd)
 }
 
-func findCmds() []string {
-	paths := strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))
+func findCmd(name string) (cmd string) {
+	nomsName := cmdPrefix + name
+	forEachDir(func(dir *os.File) (stop bool) {
+		if isNomsExecutable(dir, nomsName) {
+			cmd = path.Join(dir.Name(), nomsName)
+			stop = true
+		}
+		return
+	})
+	return
+}
+
+func listCmds() []string {
 	cmds := []string{}
-	prefixLen := len(cmdPrefix)
-	for _, p := range paths {
-		dir, err := os.Open(p)
-		if err == nil {
-			names, err := dir.Readdirnames(0)
-			if err == nil {
-				for _, n := range names {
-					if strings.HasPrefix(n, cmdPrefix) && len(n) > prefixLen {
-						fi, err := os.Stat(path.Join(p, n))
-						d.Chk.NoError(err)
-						if !fi.IsDir() && fi.Mode()&0111 != 0 {
-							cmds = append(cmds, n[prefixLen:])
-						}
-					}
-				}
+
+	forEachDir(func(dir *os.File) (stop bool) {
+		// dir.Readdirnames may return an error, but |names| may still contain valid files.
+		names, _ := dir.Readdirnames(0)
+		for _, n := range names {
+			if isNomsExecutable(dir, n) {
+				cmds = append(cmds, n[len(cmdPrefix):])
+			}
+		}
+		return
+	})
+
+	return cmds
+}
+
+func forEachDir(cb func(dir *os.File) bool) {
+	lookups := []struct {
+		Env    string
+		Suffix string
+	}{
+		{"PATH", ""},
+		{"GOPATH", "bin"},
+	}
+
+	for _, lookup := range lookups {
+		env := os.Getenv(lookup.Env)
+		if env == "" {
+			continue
+		}
+
+		paths := strings.Split(env, string(os.PathListSeparator))
+		for _, p := range paths {
+			dir, err := os.Open(path.Join(p, lookup.Suffix))
+			if err != nil {
+				continue
+			}
+			if cb(dir) {
+				return
 			}
 		}
 	}
-	sort.Strings(cmds)
-	return cmds
 }
 
 func executeCmd(executable string) {
@@ -127,4 +149,13 @@ func executeCmd(executable string) {
 			os.Exit(-1)
 		}
 	}
+}
+
+func isNomsExecutable(dir *os.File, name string) bool {
+	if !strings.HasPrefix(name, cmdPrefix) || len(name) == len(cmdPrefix) {
+		return false
+	}
+
+	fi, err := os.Stat(path.Join(dir.Name(), name))
+	return err == nil && !fi.IsDir() && fi.Mode()&0111 != 0
 }
