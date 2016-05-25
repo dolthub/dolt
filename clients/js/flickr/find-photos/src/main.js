@@ -3,6 +3,7 @@
 import argv from 'yargs';
 import {
   DatasetSpec,
+  getTypeOfValue,
   isSubtype,
   makeStructType,
   makeUnionType,
@@ -72,15 +73,21 @@ async function main(): Promise<void> {
   let result = Promise.resolve(new Set());
 
   // TODO: How to report progress?
-  await walk(input, output.database, v => {
-    if (v instanceof Struct && isSubtype(imageType, v.type)) {
-      const s = newStruct('Photo', {
-        title: v.title || '',
+  await walk(input, output.database, (v: any) => {
+    if (isSubtype(imageType, getTypeOfValue(v))) {
+      const photo: Object = {
+        title: v.title,
         tags: new Set(v.tags ? v.tags.split(' ') : []),
-        geoposition: getGeo(v),
         sizes: getSizes(v),
-      });
-      result = result.then(r => r.insert(s));
+      };
+
+      // Flickr API always includes a geoposition, but sometimes it is zero.
+      const geo = (getGeo(v):Object);
+      if (geo.latitude !== 0 && geo.longitude !== 0) {
+        photo.geoposition = geo;
+      }
+
+      result = result.then(r => r.insert(newStruct('Photo', photo)));
       return true;
     }
     return false;
@@ -90,11 +97,10 @@ async function main(): Promise<void> {
 }
 
 function getGeo(input: Object): Struct {
-  const geopos = {
-    latitude: Number(input.latitude || 0),
-    longitude: Number(input.longitude || 0),
-  };
-  return newStruct('Geoposition', geopos);
+  return newStruct('Geoposition', {
+    latitude: Number(input.latitude),
+    longitude: Number(input.longitude),
+  });
 }
 
 function getSizes(input: Object): Map<Struct, string> {
