@@ -1,0 +1,101 @@
+// @flow
+
+import argv from 'yargs';
+import {
+  default as fetch,
+  Request,
+  Headers,
+} from 'node-fetch';
+import {
+  DatasetSpec,
+  invariant,
+  jsonToNoms,
+  List,
+  newStruct,
+  Struct,
+} from '@attic/noms';
+
+const args = argv
+  .usage(
+    'Imports photo metadata from Facebook API\n\n' +
+    'Usage: noms-facebook-slurp --access-token=<token> <dest-dataset>\n\n' +
+    'Create an access token as follows:\n' +
+    '1. Browse to https://developers.facebook.com/tools/explorer/\n' +
+    '2. Login with your Facebook credentials\n' +
+    '3. In the "Get Token" dropdown menu, select "Get User Access Token"\n' +
+    '4. Copy the Access Token from the textbox')
+  .demand(1)
+  .option('access-token', {
+    describe: 'Facebook API access key',
+    type: 'string',
+    demand: true,
+  })
+  .argv;
+
+const clearLine = '\x1b[2K\r';
+
+main().catch(ex => {
+  console.error(ex);
+  process.exit(1);
+});
+
+async function main(): Promise<void> {
+  const outSpec = DatasetSpec.parse(args._[0]);
+  if (!outSpec) {
+    throw 'invalid destination dataset spec';
+  }
+
+  const out = outSpec.dataset();
+  const [user, photos] = await Promise.all([
+    getUser(),
+    getPhotos(),
+    // TODO: Add more object types here
+  ]);
+  await out.commit(newStruct('', {user, photos}));
+  process.stdout.write(clearLine);
+  return;
+}
+
+async function getUser(): Promise<Struct> {
+  const result = await jsonToNoms(await callFacebook('v2.5/me'));
+  invariant(result instanceof Struct);
+  return result;
+}
+
+async function getPhotos(): Promise<List> {
+  // Calculate the number of expected fetches via the list of albums, so that we can show progress.
+  // This appears to be the fastest way (photos only let you paginate).
+  const batchSize = 1000;
+  const albumsJSON = await callFacebook(`v2.5/me/albums?limit=${batchSize}&fields=count`);
+  const expected = albumsJSON.data.reduce((prev, album) => prev + album.count, 0);
+  let seen = 0;
+
+  const updateProgress = () => {
+    const progress = Math.round(seen / expected * 100);
+    process.stdout.write(clearLine + `${progress}% photos of ${expected} imported...`);
+  };
+
+  updateProgress();
+
+  // Sadly we cannot issue these requests in parallel because Facebook doesn't give you a way to
+  // get individual page URLs ahead of time.
+  let result = await new List();
+  let url = 'v2.5/me/photos/uploaded?limit=1000&fields=place,name,created_time,images,' +
+    'tags{x,y,name}&date_format=U';
+  while (url) {
+    const photosJSON = await callFacebook(url);
+    result = await result.append(await jsonToNoms(photosJSON));
+    url = photosJSON.paging.next;
+    seen += photosJSON.data.length;
+    updateProgress();
+  }
+  return result;
+}
+
+function callFacebook(path: string): Promise<any> {
+  const url = 'https://graph.facebook.com/' + path;
+  return fetch(new Request(url, {
+    headers: new Headers(
+      {'Authorization': `Bearer ${args['access-token']}`}),
+  })).then(resp => resp.json());
+}
