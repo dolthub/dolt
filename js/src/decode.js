@@ -1,6 +1,6 @@
 // @flow
 
-import {BlobLeafSequence, newBlobFromSequence} from './blob.js';
+import Blob, {BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Hash from './hash.js';
 import Ref, {constructRef} from './ref.js';
@@ -23,11 +23,11 @@ import {
 import {MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
-import {ListLeafSequence, newListFromSequence} from './list.js';
-import {MapLeafSequence, newMapFromSequence} from './map.js';
-import {SetLeafSequence, newSetFromSequence} from './set.js';
+import List, {ListLeafSequence} from './list.js';
+import Map, {MapLeafSequence} from './map.js';
+import Set, {SetLeafSequence} from './set.js';
 import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
-import {ValueBase} from './value.js';
+import {ValueBase, setHash} from './value.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
 
@@ -216,10 +216,10 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         if (isMeta) {
           const r2 = new JsonArrayReader(this.readArray(), this._ds);
-          return newBlobFromSequence(r2.readIndexedMetaSequence(t));
+          return Blob.fromSequence(r2.readIndexedMetaSequence(t));
         }
 
-        return newBlobFromSequence(this.readBlobLeafSequence());
+        return Blob.fromSequence(this.readBlobLeafSequence());
       }
       case Kind.Bool:
         return this.readBool();
@@ -231,17 +231,17 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         if (isMeta) {
-          return newListFromSequence(r2.readIndexedMetaSequence(t));
+          return List.fromSequence(r2.readIndexedMetaSequence(t));
         }
-        return newListFromSequence(r2.readListLeafSequence(t));
+        return List.fromSequence(r2.readListLeafSequence(t));
       }
       case Kind.Map: {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         if (isMeta) {
-          return newMapFromSequence(r2.readOrderedMetaSequence(t));
+          return Map.fromSequence(r2.readOrderedMetaSequence(t));
         }
-        return newMapFromSequence(r2.readMapLeafSequence(t));
+        return Map.fromSequence(r2.readMapLeafSequence(t));
       }
       case Kind.Ref:
         return this.readRef(t);
@@ -249,9 +249,9 @@ export class JsonArrayReader {
         const isMeta = this.readBool();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
         if (isMeta) {
-          return newSetFromSequence(r2.readOrderedMetaSequence(t));
+          return Set.fromSequence(r2.readOrderedMetaSequence(t));
         }
-        return newSetFromSequence(r2.readSetLeafSequence(t));
+        return Set.fromSequence(r2.readSetLeafSequence(t));
       }
       case Kind.Struct:
         return this.readStruct(t);
@@ -308,15 +308,14 @@ export function decodeNomsValue(chunk: Chunk, vr: ValueReader): Value {
       v = reader.readValue();
       break;
     }
-    case blobTag: {
-      v = newBlobFromSequence(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
+    case blobTag:
+      v = Blob.fromSequence(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
       break;
-    }
     default:
       throw new Error('Not implemented');
   }
   if (v instanceof ValueBase) {
-    (v: ValueBase)._hash = chunk.hash;
+    setHash(v, chunk.hash);
   }
   return v;
 }

@@ -4,8 +4,10 @@ import Ref from './ref.js';
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
+import {invariant} from './assert.js';
+import {init as initValueBase} from './value.js';
 
-export class Collection<S: Sequence> extends ValueBase {
+export default class Collection<S: Sequence> extends ValueBase {
   sequence: S;
 
   constructor(sequence: S) {
@@ -23,5 +25,16 @@ export class Collection<S: Sequence> extends ValueBase {
 
   get chunks(): Array<Ref> {
     return this.sequence.chunks;
+  }
+
+  /**
+   * Creates a new Collection from a sequence.
+   */
+  static fromSequence<T: Collection, S: Sequence>(s: S): T {
+    const col = Object.create(this.prototype);
+    invariant(col instanceof this);
+    initValueBase(col);
+    col.sequence = s;
+    return col;
   }
 }

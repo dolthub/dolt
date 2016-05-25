@@ -5,7 +5,7 @@ import {sha1Size} from './hash.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
-import type {Collection} from './collection.js';
+import type Collection from './collection.js';
 import type {Type} from './type.js';
 import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
@@ -15,10 +15,10 @@ import Ref from './ref.js';
 import Sequence from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
-import {newListFromSequence} from './list.js';
-import {newMapFromSequence} from './map.js';
-import {newSetFromSequence} from './set.js';
-import {newBlobFromSequence} from './blob.js';
+import List from './list.js';
+import Map from './map.js';
+import Set from './set.js';
+import Blob from './blob.js';
 import {equals} from './compare.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
@@ -201,10 +201,10 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
     const last = tuples[tuples.length - 1];
     let col: Collection;
     if (kind === Kind.Map) {
-      col = newMapFromSequence(newMapMetaSequence(vr, tuples));
+      col = Map.fromSequence(newMapMetaSequence(vr, tuples));
     } else {
       invariant(kind === Kind.Set);
-      col = newSetFromSequence(newSetMetaSequence(vr, tuples));
+      col = Set.fromSequence(newSetMetaSequence(vr, tuples));
     }
     return [new MetaTuple(new Ref(col), last.value, numLeaves, col), col];
   };
@@ -228,10 +228,10 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
     }, 0);
     let col: Collection;
     if (kind === Kind.List) {
-      col = newListFromSequence(newListMetaSequence(vr, tuples));
+      col = List.fromSequence(newListMetaSequence(vr, tuples));
     } else {
       invariant(kind === Kind.Blob);
-      col = newBlobFromSequence(newBlobMetaSequence(vr, tuples));
+      col = Blob.fromSequence(newBlobMetaSequence(vr, tuples));
     }
     return [new MetaTuple(new Ref(col), sum, sum, col), col];
   };

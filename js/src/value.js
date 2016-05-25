@@ -10,7 +10,7 @@ export class ValueBase {
   _hash: ?Hash;
 
   constructor() {
-    this._hash = null;
+    init(this);
   }
 
   get type(): Type {
@@ -35,4 +35,13 @@ export function getChunksOfValue(v: Value): Array<Ref> {
   }
 
   return [];
+}
+
+export function init(v: ValueBase) {
+  v._hash = null;
+}
+
+// For internal use only. Do not export this from noms.js
+export function setHash(v: ValueBase, h: Hash) {
+  v._hash = h;
 }

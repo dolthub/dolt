@@ -26,11 +26,11 @@ import {encode as encodeBase64} from './base64.js';
 import {newListMetaSequence, MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms-kind.js';
-import List, {newListFromSequence, newListLeafSequence} from './list.js';
+import List, {newListLeafSequence} from './list.js';
 import Map from './map.js';
 import Blob from './blob.js';
 // Set is already in use in this file.
-import NomsSet, {newSetFromSequence} from './set.js';
+import NomsSet from './set.js';
 import {suite, setup, teardown, test} from 'mocha';
 import {equals} from './compare.js';
 
@@ -168,16 +168,16 @@ suite('Decode', () => {
   });
 
   test('read compound list', () => {
-    const r1 = db.writeValue(newListFromSequence(newListLeafSequence(db, [0])));
-    const r2 = db.writeValue(newListFromSequence(newListLeafSequence(db, [1, 2])));
-    const r3 = db.writeValue(newListFromSequence(newListLeafSequence(db, [3, 4, 5])));
+    const r1 = db.writeValue(List.fromSequence(newListLeafSequence(db, [0])));
+    const r2 = db.writeValue(List.fromSequence(newListLeafSequence(db, [1, 2])));
+    const r3 = db.writeValue(List.fromSequence(newListLeafSequence(db, [3, 4, 5])));
     const tuples = [
       new MetaTuple(r1, 1, 1),
       new MetaTuple(r2, 2, 2),
       new MetaTuple(r3, 3, 3),
     ];
 
-    const l: List<number> = newListFromSequence(newListMetaSequence(db, tuples));
+    const l: List<number> = List.fromSequence(newListMetaSequence(db, tuples));
 
     const a = [
       Kind.List, Kind.Number, true, [
@@ -240,7 +240,7 @@ suite('Decode', () => {
       new MetaTuple(r1, 1, 2),
       new MetaTuple(r2, 4, 3),
     ];
-    const l: NomsSet<number> = newSetFromSequence(newSetMetaSequence(db, tuples));
+    const l: NomsSet<number> = NomsSet.fromSequence(newSetMetaSequence(db, tuples));
 
     const a = parseJson(`[
       SetKind, NumberKind, true, [

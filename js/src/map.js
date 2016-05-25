@@ -7,7 +7,7 @@ import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
-import {Collection} from './collection.js';
+import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {sha1Size} from './hash.js';
 import {getHashOfValue} from './get-hash.js';
@@ -39,7 +39,7 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
       }
     }
 
-    const nm = newMapFromSequence(newMapLeafSequence(vr, items));
+    const nm = Map.fromSequence(newMapLeafSequence(vr, items));
     const mt = new MetaTuple(new Ref(nm), indexValue, items.length, nm);
     return [mt, nm];
   };
@@ -183,14 +183,6 @@ export default class Map<K: Value, V: Value> extends
   diff(from: Map<K, V>): Promise<[Array<K>, Array<K>, Array<K>]> {
     return diff(from.sequence, this.sequence);
   }
-}
-
-export function newMapFromSequence<K: Value, V: Value>(
-    sequence: OrderedSequence): Map<K, V> {
-  const map = Object.create(Map.prototype);
-  map._hash = null; // ValueBase
-  map.sequence = sequence;
-  return map;
 }
 
 export class MapLeafSequence<K: Value, V: Value> extends

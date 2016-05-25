@@ -8,7 +8,7 @@ import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {ValueBase} from './value.js';
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
-import {Collection} from './collection.js';
+import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
@@ -36,7 +36,7 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
       }
     }
 
-    const ns = newSetFromSequence(newSetLeafSequence(vr, items));
+    const ns = Set.fromSequence(newSetLeafSequence(vr, items));
     const mt = new MetaTuple(new Ref(ns), indexValue, items.length, ns);
     return [mt, ns];
   };
@@ -194,13 +194,6 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
       return [added, removed];
     });
   }
-}
-
-export function newSetFromSequence<T: Value>(sequence: OrderedSequence): Set<T> {
-  const set = Object.create(Set.prototype);
-  set._hash = null; // ValueBase
-  set.sequence = sequence;
-  return set;
 }
 
 export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {

@@ -26,7 +26,7 @@ import {
 } from './test-util.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
-import List, {newListFromSequence} from './list.js';
+import List from './list.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -270,14 +270,14 @@ suite('CompoundList', () => {
     const l4 = new List(['m', 'n']);
     const r4 = db.writeValue(l4);
 
-    const m1 = newListFromSequence(newListMetaSequence(
+    const m1 = List.fromSequence(newListMetaSequence(
       db, [new MetaTuple(r1, 2, 2), new MetaTuple(r2, 2, 2)]));
     const rm1 = db.writeValue(m1);
-    const m2 = newListFromSequence(newListMetaSequence(
+    const m2 = List.fromSequence(newListMetaSequence(
       db, [new MetaTuple(r3, 2, 2), new MetaTuple(r4, 2, 2)]));
     const rm2 = db.writeValue(m2);
 
-    const l = newListFromSequence(newListMetaSequence(
+    const l = List.fromSequence(newListMetaSequence(
       db, [new MetaTuple(rm1, 4, 4), new MetaTuple(rm2, 4, 4)]));
     return l;
   }

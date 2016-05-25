@@ -1,6 +1,6 @@
 // @flow
 
-import {Collection} from './collection.js';
+import Collection from './collection.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
@@ -60,13 +60,6 @@ export class BlobReader {
   }
 }
 
-export function newBlobFromSequence(sequence: IndexedSequence): Blob {
-  const blob = Object.create(Blob.prototype);
-  blob._hash = null; // ValueBase
-  blob.sequence = sequence;
-  return blob;
-}
-
 export class BlobLeafSequence extends IndexedSequence<number> {
   constructor(vr: ?ValueReader, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
@@ -84,7 +77,7 @@ const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 function newBlobLeafChunkFn(vr: ?ValueReader = null): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, new Uint8Array(items));
-    const blob = newBlobFromSequence(blobLeaf);
+    const blob = Blob.fromSequence(blobLeaf);
     const mt = new MetaTuple(new Ref(blob), items.length, items.length, blob);
     return [mt, blob];
   };

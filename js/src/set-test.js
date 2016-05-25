@@ -13,7 +13,7 @@ import {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
-import Set, {newSetFromSequence} from './set.js';
+import Set from './set.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
@@ -305,7 +305,7 @@ suite('CompoundSet', () => {
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
-        last = newSetFromSequence(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
+        last = Set.fromSequence(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves));

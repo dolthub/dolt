@@ -7,7 +7,7 @@ import type {Splice} from './edit-distance.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
-import {Collection} from './collection.js';
+import Collection from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
 import {getHashOfValue} from './get-hash.js';
@@ -26,7 +26,7 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    const list = newListFromSequence(newListLeafSequence(vr, items));
+    const list = List.fromSequence(newListLeafSequence(vr, items));
     const mt = new MetaTuple(new Ref(list), items.length, items.length, list);
     return [mt, list];
   };
@@ -123,13 +123,6 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   get length(): number {
     return this.sequence.numLeaves;
   }
-}
-
-export function newListFromSequence<T: Value>(sequence: IndexedSequence): List<T> {
-  const list = Object.create(List.prototype);
-  list._hash = null; // ValueBase
-  list.sequence = sequence;
-  return list;
 }
 
 export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
