@@ -3,8 +3,8 @@ package chunks
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestDynamoStoreTestSuite(t *testing.T) {

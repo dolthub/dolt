@@ -9,7 +9,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestLevelDBPutCacheSuite(t *testing.T) {

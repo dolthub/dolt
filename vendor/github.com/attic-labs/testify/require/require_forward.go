@@ -1,5 +1,5 @@
 /*
-* CODE GENERATED AUTOMATICALLY WITH github.com/stretchr/testify/_codegen
+* CODE GENERATED AUTOMATICALLY WITH github.com/attic-labs/testify/_codegen
 * THIS FILE MUST NOT BE EDITED BY HAND
 */
 
@@ -7,9 +7,7 @@ package require
 
 import (
 
-	assert "github.com/stretchr/testify/assert"
-	http "net/http"
-	url "net/url"
+	assert "github.com/attic-labs/testify/assert"
 	time "time"
 )
 
@@ -121,58 +119,6 @@ func (a *Assertions) FailNow(failureMessage string, msgAndArgs ...interface{}) {
 // Returns whether the assertion was successful (true) or not (false).
 func (a *Assertions) False(value bool, msgAndArgs ...interface{}) {
 	False(a.t, value, msgAndArgs...)
-}
-
-
-// HTTPBodyContains asserts that a specified handler returns a
-// body that contains a string.
-// 
-//  a.HTTPBodyContains(myHandler, "www.google.com", nil, "I'm Feeling Lucky")
-// 
-// Returns whether the assertion was successful (true) or not (false).
-func (a *Assertions) HTTPBodyContains(handler http.HandlerFunc, method string, url string, values url.Values, str interface{}) {
-	HTTPBodyContains(a.t, handler, method, url, values, str)
-}
-
-
-// HTTPBodyNotContains asserts that a specified handler returns a
-// body that does not contain a string.
-// 
-//  a.HTTPBodyNotContains(myHandler, "www.google.com", nil, "I'm Feeling Lucky")
-// 
-// Returns whether the assertion was successful (true) or not (false).
-func (a *Assertions) HTTPBodyNotContains(handler http.HandlerFunc, method string, url string, values url.Values, str interface{}) {
-	HTTPBodyNotContains(a.t, handler, method, url, values, str)
-}
-
-
-// HTTPError asserts that a specified handler returns an error status code.
-// 
-//  a.HTTPError(myHandler, "POST", "/a/b/c", url.Values{"a": []string{"b", "c"}}
-// 
-// Returns whether the assertion was successful (true) or not (false).
-func (a *Assertions) HTTPError(handler http.HandlerFunc, method string, url string, values url.Values) {
-	HTTPError(a.t, handler, method, url, values)
-}
-
-
-// HTTPRedirect asserts that a specified handler returns a redirect status code.
-// 
-//  a.HTTPRedirect(myHandler, "GET", "/a/b/c", url.Values{"a": []string{"b", "c"}}
-// 
-// Returns whether the assertion was successful (true) or not (false).
-func (a *Assertions) HTTPRedirect(handler http.HandlerFunc, method string, url string, values url.Values) {
-	HTTPRedirect(a.t, handler, method, url, values)
-}
-
-
-// HTTPSuccess asserts that a specified handler returns a success status code.
-// 
-//  a.HTTPSuccess(myHandler, "POST", "http://www.google.com", nil)
-// 
-// Returns whether the assertion was successful (true) or not (false).
-func (a *Assertions) HTTPSuccess(handler http.HandlerFunc, method string, url string, values url.Values) {
-	HTTPSuccess(a.t, handler, method, url, values)
 }
 
 

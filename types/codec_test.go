@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestEncode(t *testing.T) {

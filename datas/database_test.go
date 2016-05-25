@@ -6,7 +6,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 // writesOnCommit allows tests to adjust for how many writes databaseCommon performs on Commit()

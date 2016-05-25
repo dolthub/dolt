@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestLevelDBStoreTestSuite(t *testing.T) {

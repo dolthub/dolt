@@ -3,7 +3,7 @@ package chunks
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestChunkWriteAfterCloseFails(t *testing.T) {

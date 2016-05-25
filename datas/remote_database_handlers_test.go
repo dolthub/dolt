@@ -16,7 +16,7 @@ import (
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestHandleWriteValue(t *testing.T) {

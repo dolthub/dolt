@@ -5,8 +5,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/testify/suite"
 )
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the

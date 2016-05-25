@@ -11,7 +11,7 @@ import (
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
 	"github.com/julienschmidt/httprouter"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestHTTPBatchStore(t *testing.T) {

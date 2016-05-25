@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestStringEquals(t *testing.T) {

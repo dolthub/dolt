@@ -6,7 +6,7 @@ import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func createTestDataset(name string) Dataset {

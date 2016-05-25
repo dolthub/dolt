@@ -1,7 +1,7 @@
 package chunks
 
 import (
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 
 	"github.com/attic-labs/noms/hash"
 )

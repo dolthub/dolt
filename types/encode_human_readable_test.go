@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func assertWriteHRSEqual(t *testing.T, expected string, v Value) {

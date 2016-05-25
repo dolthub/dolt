@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestSchemaDetection(t *testing.T) {

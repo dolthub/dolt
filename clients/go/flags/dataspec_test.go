@@ -14,7 +14,7 @@ import (
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 // TODO: implement this with mock httpService

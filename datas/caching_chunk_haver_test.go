@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/chunks"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestCachingChunkHaver(t *testing.T) {

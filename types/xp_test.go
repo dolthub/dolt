@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 	"testing"
 )
 

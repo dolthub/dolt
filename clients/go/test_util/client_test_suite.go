@@ -6,7 +6,7 @@ import (
 	"path"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 type ClientTestSuite struct {

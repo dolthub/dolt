@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/clients/go/test_util"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestCounter(t *testing.T) {

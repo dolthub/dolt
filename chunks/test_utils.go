@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/hash"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {

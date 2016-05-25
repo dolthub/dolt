@@ -2,8 +2,8 @@ package mock
 
 import (
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/testify/require"
 	"testing"
 	"time"
 )
@@ -759,6 +759,68 @@ func Test_Mock_AssertExpectations(t *testing.T) {
 
 	// make the call now
 	mockedService.Called(1, 2, 3)
+
+	// now assert expectations
+	assert.True(t, mockedService.AssertExpectations(tt))
+
+}
+
+func Test_Mock_AssertExpectations_Placeholder_NoArgs(t *testing.T) {
+
+	var mockedService = new(TestExampleImplementation)
+
+	mockedService.On("Test_Mock_AssertExpectations_Placeholder_NoArgs").Return(5, 6, 7).Once()
+	mockedService.On("Test_Mock_AssertExpectations_Placeholder_NoArgs").Return(7, 6, 5)
+
+	tt := new(testing.T)
+	assert.False(t, mockedService.AssertExpectations(tt))
+
+	// make the call now
+	mockedService.Called()
+
+	// now assert expectations
+	assert.True(t, mockedService.AssertExpectations(tt))
+
+}
+
+func Test_Mock_AssertExpectations_Placeholder(t *testing.T) {
+
+	var mockedService = new(TestExampleImplementation)
+
+	mockedService.On("Test_Mock_AssertExpectations_Placeholder", 1, 2, 3).Return(5, 6, 7).Once()
+	mockedService.On("Test_Mock_AssertExpectations_Placeholder", 3, 2, 1).Return(7, 6, 5)
+
+	tt := new(testing.T)
+	assert.False(t, mockedService.AssertExpectations(tt))
+
+	// make the call now
+	mockedService.Called(1, 2, 3)
+
+	// now assert expectations
+	assert.False(t, mockedService.AssertExpectations(tt))
+
+	// make call to the second expectation
+	mockedService.Called(3, 2, 1)
+
+	// now assert expectations again
+	assert.True(t, mockedService.AssertExpectations(tt))
+}
+
+func Test_Mock_AssertExpectations_With_Pointers(t *testing.T) {
+
+	var mockedService = new(TestExampleImplementation)
+
+	mockedService.On("Test_Mock_AssertExpectations_With_Pointers", &struct{ Foo int }{1}).Return(1)
+	mockedService.On("Test_Mock_AssertExpectations_With_Pointers", &struct{ Foo int }{2}).Return(2)
+
+	tt := new(testing.T)
+	assert.False(t, mockedService.AssertExpectations(tt))
+
+	s := struct{ Foo int }{1}
+	// make the calls now
+	mockedService.Called(&s)
+	s.Foo = 2
+	mockedService.Called(&s)
 
 	// now assert expectations
 	assert.True(t, mockedService.AssertExpectations(tt))

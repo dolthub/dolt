@@ -11,7 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/hash"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestRead(t *testing.T) {

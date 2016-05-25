@@ -8,8 +8,8 @@ import (
 	"github.com/attic-labs/noms/clients/go/test_util"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestNomsShow(t *testing.T) {

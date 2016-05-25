@@ -3,7 +3,7 @@ package chunks
 import (
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestReadThroughStoreTestSuite(t *testing.T) {

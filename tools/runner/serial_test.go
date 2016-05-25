@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 const (

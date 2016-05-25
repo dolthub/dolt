@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/hash"
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestHintRoundTrip(t *testing.T) {

@@ -3,7 +3,7 @@ package d
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/attic-labs/testify/assert"
 )
 
 func TestTry(t *testing.T) {

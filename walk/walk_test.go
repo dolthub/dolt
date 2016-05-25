@@ -5,7 +5,7 @@ import (
 
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/types"
-	"github.com/stretchr/testify/suite"
+	"github.com/attic-labs/testify/suite"
 )
 
 func TestWalkTestSuite(t *testing.T) {

@@ -1,6 +1,6 @@
 package types
 
-import "github.com/stretchr/testify/suite"
+import "github.com/attic-labs/testify/suite"
 
 type collectionTestSuite struct {
 	suite.Suite
