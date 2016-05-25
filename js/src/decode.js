@@ -27,6 +27,7 @@ import {ListLeafSequence, newListFromSequence} from './list.js';
 import {MapLeafSequence, newMapFromSequence} from './map.js';
 import {SetLeafSequence, newSetFromSequence} from './set.js';
 import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
+import {ValueBase} from './value.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
 
@@ -302,16 +303,23 @@ export class JsonArrayReader {
 
 export function decodeNomsValue(chunk: Chunk, vr: ValueReader): Value {
   const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
-
+  let v: Value;
   switch (tag) {
     case typedTag: {
       const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
       const reader = new JsonArrayReader(payload, vr);
-      return reader.readValue();
+      v = reader.readValue();
+      break;
     }
-    case blobTag:
-      return newBlobFromSequence(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
+    case blobTag: {
+      v = newBlobFromSequence(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
+      break;
+    }
     default:
       throw new Error('Not implemented');
   }
+  if (v instanceof ValueBase) {
+    (v: ValueBase)._hash = chunk.hash;
+  }
+  return v;
 }

@@ -70,6 +70,12 @@ func TestEnsureHash(t *testing.T) {
 		}
 	}
 
+	for _, v := range values {
+		expected := byte(0x42)
+		assignHash(v.(hashCacher), hash.New(hash.Sha1Digest{0: expected}))
+		testRef(v.Hash(), expected)
+	}
+
 	count = byte(1)
 	values = []Value{
 		Bool(false),

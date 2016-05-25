@@ -41,6 +41,10 @@ func NewStructWithType(t *Type, data structData) Struct {
 	return newStructFromData(newData, t)
 }
 
+func (s Struct) hashPointer() *hash.Hash {
+	return s.h
+}
+
 // Value interface
 func (s Struct) Equals(other Value) bool {
 	return other != nil && s.t.Equals(other.Type()) && s.Hash() == other.Hash()

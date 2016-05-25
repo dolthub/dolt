@@ -12,7 +12,7 @@ import (
 
 // ValueReader is an interface that knows how to read Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value reading.
 type ValueReader interface {
-	ReadValue(r hash.Hash) Value
+	ReadValue(h hash.Hash) Value
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value read/writing.
@@ -22,20 +22,24 @@ type ValueReadWriter interface {
 }
 
 // DecodeChunk decodes a value from a chunk source. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
-func DecodeChunk(c chunks.Chunk, vr ValueReader) Value {
+func DecodeChunk(c chunks.Chunk, vr ValueReader) (v Value) {
 	if c.IsEmpty() {
 		return nil
 	}
 
-	v := decode(bytes.NewReader(c.Data()))
-
-	switch v := v.(type) {
+	decoded := decode(bytes.NewReader(c.Data()))
+	switch decoded := decoded.(type) {
 	case io.Reader:
-		data, err := ioutil.ReadAll(v)
+		data, err := ioutil.ReadAll(decoded)
 		d.Chk.NoError(err)
-		return newBlob(newBlobLeafSequence(vr, data))
+		v = newBlob(newBlobLeafSequence(vr, data))
 	case []interface{}:
-		return fromTypedEncodeable(v, vr)
+		v = fromTypedEncodeable(decoded, vr)
+	default:
+		panic("Unreachable")
 	}
-	panic("Unreachable")
+	if cacher, ok := v.(hashCacher); ok {
+		assignHash(cacher, c.Hash())
+	}
+	return
 }

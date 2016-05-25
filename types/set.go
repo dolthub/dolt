@@ -53,6 +53,10 @@ func (s Set) sequence() sequence {
 	return s.seq
 }
 
+func (s Set) hashPointer() *hash.Hash {
+	return s.h
+}
+
 // Value interface
 func (s Set) Equals(other Value) bool {
 	return other != nil && s.Hash() == other.Hash()

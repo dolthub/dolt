@@ -15,9 +15,17 @@ func getHashNoOverride(v Value) hash.Hash {
 	return EncodeValue(v, nil).Hash()
 }
 
-func EnsureHash(r *hash.Hash, v Value) hash.Hash {
-	if r.IsEmpty() {
-		*r = getHash(v)
+func EnsureHash(h *hash.Hash, v Value) hash.Hash {
+	if h.IsEmpty() {
+		*h = getHash(v)
 	}
-	return *r
+	return *h
+}
+
+type hashCacher interface {
+	hashPointer() *hash.Hash
+}
+
+func assignHash(hc hashCacher, h hash.Hash) {
+	*hc.hashPointer() = h
 }

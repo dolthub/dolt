@@ -15,6 +15,10 @@ func (fs String) String() string {
 	return fs.s
 }
 
+func (s String) hashPointer() *hash.Hash {
+	return s.h
+}
+
 // Value interface
 func (s String) Equals(other Value) bool {
 	if other, ok := other.(String); ok {

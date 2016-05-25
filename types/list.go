@@ -59,6 +59,10 @@ func (l List) sequence() sequence {
 	return l.seq
 }
 
+func (l List) hashPointer() *hash.Hash {
+	return l.h
+}
+
 // Value interface
 func (l List) Equals(other Value) bool {
 	return other != nil && l.Hash() == other.Hash()

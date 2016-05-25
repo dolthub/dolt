@@ -51,6 +51,10 @@ func (b Blob) sequence() sequence {
 	return b.seq
 }
 
+func (b Blob) hashPointer() *hash.Hash {
+	return b.h
+}
+
 // Value interface
 func (b Blob) Equals(other Value) bool {
 	return other != nil && b.Hash() == other.Hash()

@@ -405,13 +405,12 @@ suite('Decode', () => {
 
   test('decodeNomsValue', () => {
     const chunk = Chunk.fromString(
-        `t [${Kind.Value},${Kind.Set},${Kind.Number},false,[${Kind.Number},"0",${
+        `t [${Kind.Set},${Kind.Number},false,[${Kind.Number},"0",${
           Kind.Number},"1",${Kind.Number},"2",${Kind.Number},"3"]]`);
     const v = decodeNomsValue(chunk, db);
     invariant(v instanceof NomsSet);
 
     const s: NomsSet<number> = new NomsSet([0, 1, 2, 3]);
-
     assert.isTrue(equals(v, s));
   });
 

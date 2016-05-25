@@ -50,6 +50,10 @@ func (m Map) sequence() sequence {
 	return m.seq
 }
 
+func (m Map) hashPointer() *hash.Hash {
+	return m.h
+}
+
 // Value interface
 func (m Map) Equals(other Value) bool {
 	return other != nil && m.Hash() == other.Hash()

@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/hash"
 )
 
 const batchSize = 16
@@ -27,14 +28,15 @@ func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
 
 // Enequeue adds a Chunk to the queue of Chunks waiting to be Put into vbs' backing ChunkStore. The instance keeps an internal buffer of Chunks, spilling to the ChunkStore when the buffer is full. If an attempt to Put Chunks fails, this method returns the BackpressureError from the underlying ChunkStore.
 func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureError {
-	r := c.Hash()
-	if vbs.vs.isPresent(r) {
+	h := c.Hash()
+	if vbs.vs.isPresent(h) {
 		return nil
 	}
 	v := DecodeChunk(c, vbs.vs)
-	d.Exp.NotNil(v, "Chunk with hash %s failed to decode", r)
+	d.Exp.NotNil(v, "Chunk with hash %s failed to decode", h)
+	d.Exp.Equal(EnsureHash(&hash.Hash{}, v), h)
 	vbs.vs.checkChunksInCache(v)
-	vbs.vs.set(r, hintedChunk{v.Type(), r})
+	vbs.vs.set(h, hintedChunk{v.Type(), h})
 
 	vbs.batch[vbs.count] = c
 	vbs.count++
