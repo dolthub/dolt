@@ -263,14 +263,15 @@ function encodeEmbeddedNomsValue(v: Value, vw: ?ValueWriter): Chunk {
 // Top level blobs are not encoded using JSON but prefixed with 'b ' followed
 // by the raw bytes.
 function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
-  const arr = sequence.items;
-  const data = new Uint8Array(2 + arr.length);
-  data[0] = 98;  // 'b'
-  data[1] = 32;  // ' '
-  for (let i = 0; i < arr.length; i++) {
-    data[i + 2] = arr[i];
-  }
-  return new Chunk(data);
+  const {items} = sequence;
+  const {length} = items;
+  const buf = new ArrayBuffer(2 + length);
+  const head = new Uint8Array(buf, 0, 2);
+  head[0] = 98;  // 'b'
+  head[1] = 32;  // ' '
+  const tail = new Uint8Array(buf, 2, length);
+  tail.set(items);
+  return new Chunk(new Uint8Array(buf));
 }
 
 export function encodeNomsValue(v: Value, vw: ?ValueWriter): Chunk {
