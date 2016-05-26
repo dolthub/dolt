@@ -82,6 +82,8 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		for c := range chunkChan {
 			if bpe == nil {
 				bpe = vbs.Enqueue(c)
+			} else {
+				bpe = append(bpe, c.Hash())
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
@@ -102,7 +104,7 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	})
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v\nSaw hashes %v", err, hashes), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Error: %v\nChunks in payload: %v", err, hashes), http.StatusBadRequest)
 		return
 	}
 }

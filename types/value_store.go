@@ -72,7 +72,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	if lvs.isPresent(hash) {
 		return r
 	}
-	hints := lvs.checkChunksInCache(v)
+	hints := lvs.chunkHintsFromCache(v)
 	lvs.bs.SchedulePut(c, height, hints)
 	lvs.set(hash, hintedChunk{v.Type(), hash})
 	return r
@@ -123,26 +123,37 @@ func (lvs *ValueStore) checkAndSet(r hash.Hash, entry chunkCacheEntry) {
 	}
 }
 
-func (lvs *ValueStore) checkChunksInCache(v Value) map[hash.Hash]struct{} {
+func (lvs *ValueStore) chunkHintsFromCache(v Value) Hints {
+	return lvs.checkChunksInCache(v, false)
+}
+
+func (lvs *ValueStore) ensureChunksInCache(v Value) {
+	lvs.checkChunksInCache(v, true)
+}
+
+func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 	hints := map[hash.Hash]struct{}{}
 	for _, reachable := range v.Chunks() {
-		entry := lvs.check(reachable.TargetHash())
+		// First, check the type cache to see if reachable is already known to be valid.
+		targetHash := reachable.TargetHash()
+		entry := lvs.check(targetHash)
+
+		// If it's not already in the cache, attempt to read the value directly, which will put it and its chunks into the cache.
 		if entry == nil || !entry.Present() {
-			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetHash())
+			var reachableV Value
+			if readValues {
+				reachableV = lvs.ReadValue(targetHash)
+				entry = lvs.check(targetHash)
+			}
+			if reachableV == nil {
+				d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetHash())
+			}
 		}
 		if hint := entry.Hint(); !hint.IsEmpty() {
 			hints[hint] = struct{}{}
 		}
 
-		// BUG 1121
-		// It's possible that entry.Type() will be simply 'Value', but that 'reachable' is actually a
-		// properly-typed object -- that is, a Ref to some specific Type. The Exp below would fail,
-		// though it's possible that the Type is actually correct. We wouldn't be able to verify
-		// without reading it, though, so we'll dig into this later.
 		targetType := getTargetType(reachable)
-		if targetType.Equals(ValueType) {
-			continue
-		}
 		d.Exp.True(entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetHash(), entry.Type(), targetType)
 	}
 	return hints
