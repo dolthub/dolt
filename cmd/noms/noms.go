@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -74,6 +75,7 @@ func listCmds() []string {
 		return
 	})
 
+	sort.Strings(cmds)
 	return cmds
 }
 
@@ -86,6 +88,8 @@ func forEachDir(cb func(dir *os.File) bool) {
 		{"GOPATH", "bin"},
 	}
 
+	seen := map[string]bool{}
+
 	for _, lookup := range lookups {
 		env := os.Getenv(lookup.Env)
 		if env == "" {
@@ -94,11 +98,15 @@ func forEachDir(cb func(dir *os.File) bool) {
 
 		paths := strings.Split(env, string(os.PathListSeparator))
 		for _, p := range paths {
-			dir, err := os.Open(path.Join(p, lookup.Suffix))
-			if err != nil {
+			p := path.Join(p, lookup.Suffix)
+
+			if seen[p] {
 				continue
 			}
-			if cb(dir) {
+
+			seen[p] = true
+
+			if dir, err := os.Open(p); err == nil && cb(dir) {
 				return
 			}
 		}
