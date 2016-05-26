@@ -604,6 +604,9 @@ func TestListDiffVersusEmpty(t *testing.T) {
 }
 
 func TestListDiffReverse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
@@ -618,6 +621,9 @@ func TestListDiffReverse(t *testing.T) {
 }
 
 func TestListDiffRemove5x100(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -644,6 +650,9 @@ func TestListDiffRemove5x100(t *testing.T) {
 }
 
 func TestListDiffAdd5x5(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -670,6 +679,9 @@ func TestListDiffAdd5x5(t *testing.T) {
 }
 
 func TestListDiffReplaceReverse5x100(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
