@@ -264,14 +264,11 @@ function encodeEmbeddedNomsValue(v: Value, vw: ?ValueWriter): Chunk {
 // by the raw bytes.
 function encodeTopLevelBlob(sequence: BlobLeafSequence): Chunk {
   const {items} = sequence;
-  const {length} = items;
-  const buf = new ArrayBuffer(2 + length);
-  const head = new Uint8Array(buf, 0, 2);
-  head[0] = 98;  // 'b'
-  head[1] = 32;  // ' '
-  const tail = new Uint8Array(buf, 2, length);
-  tail.set(items);
-  return new Chunk(new Uint8Array(buf));
+  const data = new Uint8Array(2 + items.length);
+  data[0] = 98;  // 'b'
+  data[1] = 32;  // ' '
+  data.set(items, 2);
+  return new Chunk(data);
 }
 
 export function encodeNomsValue(v: Value, vw: ?ValueWriter): Chunk {
