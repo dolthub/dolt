@@ -103,7 +103,8 @@ export class Delegate {
   }
 
   async updateRoot(current: Hash, last: Hash): Promise<boolean> {
-    const params = `?current=${current}&last=${last}`;
+    const ch = this._rpc.root.indexOf('?') >= 0 ? '&' : '?';
+    const params = `${ch}current=${current}&last=${last}`;
     try {
       await fetchText(this._rpc.root + params, {method: 'POST'});
       return true;

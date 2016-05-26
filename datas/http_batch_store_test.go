@@ -1,6 +1,7 @@
 package datas
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -10,9 +11,11 @@ import (
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/noms/types"
-	"github.com/julienschmidt/httprouter"
 	"github.com/attic-labs/testify/suite"
+	"github.com/julienschmidt/httprouter"
 )
+
+const testAuthToken = "aToken123"
 
 func TestHTTPBatchStore(t *testing.T) {
 	suite.Run(t, &HTTPBatchStoreSuite{})
@@ -72,6 +75,24 @@ func newHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 		},
 	)
 	hcs := newHTTPBatchStore("http://localhost:9000", "")
+	hcs.httpClient = serv
+	return hcs
+}
+
+func newAuthenticatingHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite, hostUrl string) *httpBatchStore {
+	authenticate := func(req *http.Request) {
+		suite.Equal(testAuthToken, req.URL.Query().Get("access_token"))
+	}
+
+	serv := inlineServer{httprouter.New()}
+	serv.POST(
+		constants.RootPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			authenticate(req)
+			HandleRootPost(w, req, ps, suite.cs)
+		},
+	)
+	hcs := newHTTPBatchStore(hostUrl, "")
 	hcs.httpClient = serv
 	return hcs
 }
@@ -180,7 +201,15 @@ func (suite *HTTPBatchStoreSuite) TestRoot() {
 
 func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 	c := chunks.NewChunk([]byte("abc"))
-	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.True(suite.cs.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.store.Root())
+}
+
+func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {
+	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
+	store := newAuthenticatingHTTPBatchStoreForTest(suite, u)
+	c := chunks.NewChunk([]byte("abc"))
+	suite.True(store.UpdateRoot(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
