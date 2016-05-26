@@ -24,7 +24,7 @@ const args = argv
   .argv;
 
 main().catch(ex => {
-  process.stdout.write(ex);
+  console.error(ex);
   process.exit(1);
 });
 
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   let result = Promise.resolve(new Set());
 
   // TODO: progress
-  await walk(input.photos, output.database, async (v: any) => {
+  await walk(input.photos, inSpec.database.database(), async (v: any) => {
     if (v instanceof Struct && isSubtype(photoType, v.type)) {
       const photo: Object = {
         title: v.name || '',

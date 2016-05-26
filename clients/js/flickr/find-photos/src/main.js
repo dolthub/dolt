@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   let result = Promise.resolve(new Set());
 
   // TODO: How to report progress?
-  await walk(input, output.database, (v: any) => {
+  await walk(input, inSpec.database.database(), (v: any) => {
     if (isSubtype(imageType, getTypeOfValue(v))) {
       const photo: Object = {
         title: v.title,
