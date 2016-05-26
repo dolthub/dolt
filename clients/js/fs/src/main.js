@@ -32,8 +32,9 @@ const fileType = makeStructType('File', {
   content: makeRefType(blobType),
 });
 const directoryType = makeStructType('Directory', {
-  entries: makeRefType(makeUnionType([fileType, directoryType])),
+  entries: blobType,
 });
+directoryType.desc.fields.entries = makeRefType(makeUnionType([fileType, directoryType]));
 
 const File = createStructClass(fileType);
 const Directory = createStructClass(directoryType);
@@ -63,8 +64,8 @@ async function main(): Promise<void> {
 
   startTime = Date.now();
 
-  const ds = spec.set();
-  const de = await processPath(path, ds.store);
+  const ds = spec.dataset();
+  const de = await processPath(path, ds.database);
   if (de) {
     await ds.commit(de);
     process.stdout.write('\ndone\n');
@@ -98,13 +99,11 @@ async function processDirectory(p: string, store: Database): Promise<Directory> 
   numFilesComplete++;
   updateProgress();
 
-  const resolved = await Promise.all(children);
-  const entries = resolved
-    .filter(([, dirEntry]) => dirEntry)
-    .reduce((l, t) => { l.push(...t); return l; }, []);
-  const fm = new Map(entries);
+  const entries = new Map(
+    (await Promise.all(children))
+      .filter(([, dirEntry]) => dirEntry));
   return new Directory({
-    entries: store.writeValue(fm),
+    entries: store.writeValue(entries),
   });
 }
 
