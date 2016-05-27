@@ -8,6 +8,7 @@ import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 import type Value from './value.js';
 import {compare, equals} from './compare.js';
+import {describeType} from './encode-human-readable.js';
 
 export interface TypeDesc {
   kind: NomsKind;
@@ -141,6 +142,10 @@ export class Type<T: TypeDesc> extends ValueBase {
   get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
+  }
+
+  describe(): string {
+    return describeType(this);
   }
 }
 

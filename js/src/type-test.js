@@ -121,4 +121,16 @@ suite('Type', () => {
     assertValid('a_');
     assertValid('a0_');
   });
+
+  test('type.describe', () => {
+    // This is tested exaustively as part of HRS, just testing here that
+    // type.describe() is present and works.
+    [
+      [numberType, 'Number'],
+      [stringType, 'String'],
+      [makeSetType(numberType), 'Set<Number>'],
+    ].forEach(([t, desc]) => {
+      assert.equal(t.describe(), desc);
+    });
+  });
 });
