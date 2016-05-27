@@ -136,7 +136,7 @@ func routeToStore(stores chunkStoreRecords, handler datas.Handler) httprouter.Ha
 func split2(s, sep string) (string, string, bool) {
 	substrs := strings.SplitN(s, sep, 2)
 	if len(substrs) != 2 {
-		fmt.Println("Invalid arg %s, must be of form k%sv", s, sep)
+		fmt.Printf("Invalid arg %s, must be of form k%sv\n", s, sep)
 		return "", "", false
 	}
 	return substrs[0], substrs[1], true
