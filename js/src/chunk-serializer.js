@@ -15,6 +15,8 @@ export type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
 export function serialize(hints: Set<Hash>, stream: ChunkStream): Promise<ArrayBuffer> {
   let buf = new ArrayBuffer(1024);
   const ensureCapacity = (needed: number) => {
+    if (buf.byteLength >= needed)
+      return;
     let newLen = buf.byteLength;
     for (; newLen < needed; newLen *= 2)
       ;
