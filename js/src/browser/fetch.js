@@ -34,9 +34,17 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
 }
 
 export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
+  if (self.fetch) {
+    return self.fetch(url, options).then(resp => resp.text());
+  }
+
   return fetch(url, 'text', options);
 }
 
 export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {
+  if (self.fetch) {
+    return self.fetch(url, options).then(resp => resp.arrayBuffer());
+  }
+
   return fetch(url, 'arraybuffer', options);
 }
