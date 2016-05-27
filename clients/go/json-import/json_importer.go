@@ -51,7 +51,7 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	_, err = ds.Commit(util.NomsValueFromDecodedJSON(jsonObject))
+	_, err = ds.Commit(util.NomsValueFromDecodedJSON(jsonObject, true))
 	d.Exp.NoError(err)
 	ds.Database().Close()
 }

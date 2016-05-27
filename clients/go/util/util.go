@@ -21,7 +21,7 @@ import (
 // Composites:
 //  - []interface{}
 //  - map[string]interface{}
-func NomsValueFromDecodedJSON(o interface{}) types.Value {
+func NomsValueFromDecodedJSON(o interface{}, useStruct bool) types.Value {
 	switch o := o.(type) {
 	case string:
 		return types.NewString(o)
@@ -34,23 +34,35 @@ func NomsValueFromDecodedJSON(o interface{}) types.Value {
 	case []interface{}:
 		items := make([]types.Value, 0, len(o))
 		for _, v := range o {
-			nv := NomsValueFromDecodedJSON(v)
+			nv := NomsValueFromDecodedJSON(v, useStruct)
 			if nv != nil {
 				items = append(items, nv)
 			}
 		}
 		return types.NewList(items...)
 	case map[string]interface{}:
-		kv := make([]types.Value, 0, len(o)*2)
-
-		for k, v := range o {
-			nv := NomsValueFromDecodedJSON(v)
-			if nv != nil {
-				kv = append(kv, types.NewString(k), nv)
+		var v types.Value
+		if useStruct {
+			fields := make(map[string]types.Value, len(o))
+			for k, v := range o {
+				nv := NomsValueFromDecodedJSON(v, useStruct)
+				if nv != nil {
+					k := types.EscapeStructField(k)
+					fields[k] = nv
+				}
 			}
+			v = types.NewStruct("", fields)
+		} else {
+			kv := make([]types.Value, 0, len(o)*2)
+			for k, v := range o {
+				nv := NomsValueFromDecodedJSON(v, useStruct)
+				if nv != nil {
+					kv = append(kv, types.NewString(k), nv)
+				}
+			}
+			v = types.NewMap(kv...)
 		}
-
-		return types.NewMap(kv...)
+		return v
 
 	default:
 		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
