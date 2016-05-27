@@ -10,13 +10,28 @@ import (
 
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/test_util"
+	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
+type testExiter struct{}
+type exitError struct {
+	code int
+}
+
+func (e exitError) Error() string {
+	return fmt.Sprintf("Exiting with code: %d", e.code)
+}
+
+func (testExiter) Exit(code int) {
+	panic(exitError{code})
+}
+
 func TestNomsShow(t *testing.T) {
+	util.UtilExiter = testExiter{}
 	suite.Run(t, &nomsShowTestSuite{})
 }
 
@@ -29,7 +44,7 @@ func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
 	s.NoError(err)
 	ds, err := sp.Dataset()
 	s.NoError(err)
-	ds, err = ds.Commit(types.Number(1))
+	ds, err = ds.Commit(types.Number(i))
 	s.NoError(err)
 	commit := ds.Head()
 	fmt.Printf("commit hash: %s, type: %s\n", commit.Hash(), commit.Type().Name())
@@ -46,7 +61,7 @@ func (s *nomsShowTestSuite) TestNomsLog() {
 	ds, err := sp.Dataset()
 	s.NoError(err)
 	ds.Database().Close()
-	s.Equal("", s.Run(main, []string{spec}))
+	s.Panics(func() { s.Run(main, []string{spec}) })
 
 	testCommitInResults(s, spec, 1)
 	testCommitInResults(s, spec, 2)
@@ -66,6 +81,42 @@ func addBranchedDataset(newDs, parentDs dataset.Dataset, v string) (dataset.Data
 
 func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) {
 	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
+}
+
+func (s *nomsShowTestSuite) TestNArg() {
+	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	dsName := "nArgTest"
+	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	s.NoError(err)
+	db, err := dbSpec.Database()
+	s.NoError(err)
+
+	ds := dataset.NewDataset(db, dsName)
+
+	ds, err = addCommit(ds, "1")
+	h1 := ds.Head().Hash()
+	s.NoError(err)
+	ds, err = addCommit(ds, "2")
+	s.NoError(err)
+	h2 := ds.Head().Hash()
+	ds, err = addCommit(ds, "3")
+	s.NoError(err)
+	h3 := ds.Head().Hash()
+	db.Close()
+
+	dsSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, dsName)
+	s.NotContains(s.Run(main, []string{"-n=1", dsSpec}), h1.String())
+	res := s.Run(main, []string{"-n=0", dsSpec})
+	s.Contains(res, h3.String())
+	s.Contains(res, h2.String())
+	s.Contains(res, h1.String())
+
+	vSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, h3)
+	s.NotContains(s.Run(main, []string{"-n=1", vSpec}), h1.String())
+	res = s.Run(main, []string{"-n=0", vSpec})
+	s.Contains(res, h3.String())
+	s.Contains(res, h2.String())
+	s.Contains(res, h1.String())
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
