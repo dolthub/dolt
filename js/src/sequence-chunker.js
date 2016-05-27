@@ -60,7 +60,7 @@ export function chunkSequenceSync<C: Collection, S>(
   return chunker.doneSync();
 }
 
-export default class SequenceChunker<C: Collection, S, U:Sequence> {
+export default class SequenceChunker<C: Collection, S, U: Sequence> {
   _cursor: ?SequenceCursor<S, U>;
   _isOnChunkBoundary: boolean;
   _parent: ?SequenceChunker<C, MetaTuple, MetaSequence>;

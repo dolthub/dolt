@@ -26,7 +26,7 @@ import {
 } from './test-util.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
-import List from './list.js';
+import List, {ListWriter} from './list.js';
 import {equals} from './compare.js';
 
 const testListSize = 5000;
@@ -492,4 +492,55 @@ suite('Diff List', () => {
 
     assert.strictEqual('Load limit exceeded', exMessage);
   });
+
+  test('ListWriter', async () => {
+    const values = intSequence(15);
+    const l = new List(values);
+
+    const w = new ListWriter();
+    for (let i = 0; i < values.length; i++) {
+      w.write(values[i]);
+    }
+
+    w.close();
+    const l2 = w.list;
+    const l3 = w.list;
+    assert.isTrue(equals(l, l2));
+    assert.strictEqual(l2, l3);
+  });
+
+  test('ListWriter close throws', () => {
+    const values = intSequence(15);
+    const w = new ListWriter();
+    for (let i = 0; i < values.length; i++) {
+      w.write(values[i]);
+    }
+    w.close();
+
+    let ex;
+    try {
+      w.close();  // Cannot close twice.
+    } catch (e) {
+      ex = e;
+    }
+    assert.instanceOf(ex, TypeError);
+  });
+
+  test('ListWriter write throws', () => {
+    const values = intSequence(15);
+    const w = new ListWriter();
+    for (let i = 0; i < values.length; i++) {
+      w.write(values[i]);
+    }
+    w.close();
+
+    let ex;
+    try {
+      w.write(42);  // Cannot write after close.
+    } catch (e) {
+      ex = e;
+    }
+    assert.instanceOf(ex, TypeError);
+  });
+
 });

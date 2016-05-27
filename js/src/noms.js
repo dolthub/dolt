@@ -23,7 +23,7 @@ export {
 export {encodeNomsValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
-export {default as List, ListLeafSequence} from './list.js';
+export {default as List, ListWriter, ListLeafSequence} from './list.js';
 export {default as Map, MapLeafSequence} from './map.js';
 export {default as Set, SetLeafSequence} from './set.js';
 export {IndexedSequence} from './indexed-sequence.js';

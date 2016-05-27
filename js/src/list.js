@@ -12,14 +12,18 @@ import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
 import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
-import {MetaTuple, newIndexedMetaSequenceBoundaryChecker,
-  newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
+import {
+  MetaTuple,
+  newIndexedMetaSequenceBoundaryChecker,
+  newIndexedMetaSequenceChunkFn,
+} from './meta-sequence.js';
 import {sha1Size} from './hash.js';
 import Ref from './ref.js';
 import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
+import SequenceChunker from './sequence-chunker.js';
 
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
@@ -153,4 +157,42 @@ function clampIndex(idx: number, length: number): number {
   }
 
   return idx < 0 ? Math.max(0, length + idx) : idx;
+}
+
+type ListWriterState = 'writable' | 'closed';
+
+export class ListWriter<T: Value> {
+  _state: ListWriterState;
+  _list: ?List<T>;
+  _chunker: SequenceChunker<List<T>, T, ListLeafSequence<T>>;
+
+  constructor() {
+    this._state = 'writable';
+    this._chunker = new SequenceChunker(null, newListLeafChunkFn(),
+        newIndexedMetaSequenceChunkFn(Kind.List, null), newListLeafBoundaryChecker(),
+        newIndexedMetaSequenceBoundaryChecker);
+  }
+
+  write(item: T) {
+    assert(this._state === 'writable');
+    this._chunker.append(item);
+  }
+
+  close() {
+    assert(this._state === 'writable');
+    this._list = this._chunker.doneSync();
+    this._state = 'closed';
+  }
+
+  get list(): List {
+    assert(this._state === 'closed');
+    invariant(this._list);
+    return this._list;
+  }
+}
+
+function assert(v: any) {
+  if (!v) {
+    throw new TypeError('Invalid usage of ListWriter');
+  }
 }
