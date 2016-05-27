@@ -4,7 +4,6 @@
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
-  "jsnext:main": "dist/es6/noms.js",
   "engines": {
     "node": ">=5.11",
     "npm": ">=3"
@@ -43,25 +42,19 @@
     "ts": "mocha --ui tdd --timeout=4000 --reporter spec --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
     "test": "mocha --ui tdd --timeout=6000 --reporter dot --compilers js:babel-core/register src/*-test.js",
     "prepublish": "rm -rf dist/ && npm run compile && npm run copy-flow-files",
-    "compile": "npm run compile-to-commonjs && npm run compile-to-es6",
+    "compile": "npm run compile-to-commonjs",
     "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/",
-    "compile-to-es6": "BABEL_ENV=es6 babel -d dist/es6 src/",
-    "copy-flow-files": "npm run copy-flow-files-commonjs && npm run copy-flow-files-es6",
-    "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/",
-    "copy-flow-files-es6": "node build/copy-flow-files.js -d dist/es6/ src/"
+    "copy-flow-files": "npm run copy-flow-files-commonjs",
+    "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/"
   },
   "browser": {
     "./src/fetch.js": "./src/browser/fetch.js",
     "./dist/commonjs/fetch.js": "./dist/commonjs/browser/fetch.js",
-    "./dist/es6/fetch.js": "./dist/es6/browser/fetch.js",
     "./src/sha1.js": "./src/browser/sha1.js",
     "./dist/commonjs/sha1.js": "./dist/commonjs/browser/sha1.js",
-    "./dist/es6/sha1.js": "./dist/es6/browser/sha1.js",
     "./src/utf8.js": "./src/browser/utf8.js",
     "./dist/commonjs/utf8.js": "./dist/commonjs/browser/utf8.js",
-    "./dist/es6/utf8.js": "./dist/es6/browser/utf8.js",
     "./src/put-cache.js": "./src/browser/put-cache.js",
-    "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js",
-    "./dist/es6/put-cache.js": "./dist/es6/browser/put-cache.js"
+    "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js"
   }
 }

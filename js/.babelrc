@@ -33,20 +33,5 @@
         ]
       ]
     },
-    "es6": {
-      "presets": ["react"],
-      "plugins": [
-        "syntax-async-functions",
-        "syntax-flow",
-        "transform-async-to-generator",
-        "transform-class-properties",
-        [
-          "transform-runtime", {
-            "polyfill": false,
-            "regenerator": true
-          }
-        ]
-      ]
-    },
   }
 }
