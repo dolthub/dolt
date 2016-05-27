@@ -133,3 +133,23 @@ func TestStructDiff(t *testing.T) {
 			"c": NewSet(Number(0), Number(1), NewString("bar")),
 		}))
 }
+
+func TestEscStructField(t *testing.T) {
+	assert := assert.New(t)
+	cases := []string{
+		"a", "a",
+		"AaZz19_", "AaZz19_",
+		"Q", "Q51",
+		"AQ1", "AQ511",
+		"$", "Q24",
+		"_content", "Q5Fcontent",
+		"Few ¢ents Short", "FewQ20QC2A2entsQ20Short",
+		"💩", "QF09F92A9",
+		"https://picasaweb.google.com/data", "httpsQ3AQ2FQ2FpicasawebQ2EgoogleQ2EcomQ2Fdata",
+	}
+
+	for i := 0; i < len(cases); i += 2 {
+		orig, expected := cases[i], cases[i+1]
+		assert.Equal(expected, EscapeStructField(orig))
+	}
+}

@@ -17,23 +17,23 @@ type LibTestSuite struct {
 }
 
 func (suite *LibTestSuite) TestPrimitiveTypes() {
-	suite.EqualValues(types.NewString("expected"), util.NomsValueFromDecodedJSON("expected"))
-	suite.EqualValues(types.Bool(false), util.NomsValueFromDecodedJSON(false))
-	suite.EqualValues(types.Number(1.7), util.NomsValueFromDecodedJSON(1.7))
-	suite.False(util.NomsValueFromDecodedJSON(1.7).Equals(types.Bool(true)))
+	suite.EqualValues(types.NewString("expected"), util.NomsValueFromDecodedJSON("expected", false))
+	suite.EqualValues(types.Bool(false), util.NomsValueFromDecodedJSON(false, false))
+	suite.EqualValues(types.Number(1.7), util.NomsValueFromDecodedJSON(1.7, false))
+	suite.False(util.NomsValueFromDecodedJSON(1.7, false).Equals(types.Bool(true)))
 }
 
 func (suite *LibTestSuite) TestCompositeTypes() {
 	// [false true]
 	suite.EqualValues(
 		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
-		util.NomsValueFromDecodedJSON([]interface{}{false, true}))
+		util.NomsValueFromDecodedJSON([]interface{}{false, true}, false))
 
 	// [[false true]]
 	suite.EqualValues(
 		types.NewList().Append(
 			types.NewList().Append(types.Bool(false)).Append(types.Bool(true))),
-		util.NomsValueFromDecodedJSON([]interface{}{[]interface{}{false, true}}))
+		util.NomsValueFromDecodedJSON([]interface{}{[]interface{}{false, true}}, false))
 
 	// {"string": "string",
 	//  "list": [false true],
@@ -52,11 +52,32 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"map":    map[string]interface{}{"nested": "string"},
-	})
+	}, false)
 
 	suite.True(m.Equals(o))
 }
 
+func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
+	// {"string": "string",
+	//  "list": [false true],
+	//  "struct": {"nested": "string"}
+	// }
+	tstruct := types.NewStruct("", map[string]types.Value{
+		"string": types.NewString("string"),
+		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		"struct": types.NewStruct("", map[string]types.Value{
+			"nested": types.NewString("string"),
+		}),
+	})
+	o := util.NomsValueFromDecodedJSON(map[string]interface{}{
+		"string": "string",
+		"list":   []interface{}{false, true},
+		"struct": map[string]interface{}{"nested": "string"},
+	}, true)
+
+	suite.True(tstruct.Equals(o))
+}
+
 func (suite *LibTestSuite) TestPanicOnUnsupportedType() {
-	suite.Panics(func() { util.NomsValueFromDecodedJSON(map[int]string{1: "one"}) }, "Should panic on map[int]string!")
+	suite.Panics(func() { util.NomsValueFromDecodedJSON(map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
 }

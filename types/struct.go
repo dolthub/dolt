@@ -1,6 +1,10 @@
 package types
 
 import (
+	"bytes"
+	"fmt"
+	"regexp"
+
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/hash"
 )
@@ -166,4 +170,42 @@ func StructDiff(s1, s2 Struct) (changed []string) {
 	})
 
 	return
+}
+
+var escapeChar = "Q"
+var headPattern = regexp.MustCompile("[a-zA-PR-Z]")
+var tailPattern = regexp.MustCompile("[a-zA-PR-Z1-9_]")
+var completePattern = regexp.MustCompile("^" + headPattern.String() + tailPattern.String() + "*$")
+
+// Escapes names for use as noms structs. Disallowed characters are encoded as
+// 'Q<hex-encoded-utf8-bytes>'. Note that Q itself is also escaped since it is
+// the escape character.
+func EscapeStructField(input string) string {
+	if completePattern.MatchString(input) {
+		return input
+	}
+
+	encode := func(s1 string, p *regexp.Regexp) string {
+		if p.MatchString(s1) && s1 != escapeChar {
+			return s1
+		}
+
+		var hs = fmt.Sprintf("%X", s1)
+		var buf bytes.Buffer
+		buf.WriteString(escapeChar)
+		if len(hs) == 1 {
+			buf.WriteString("0")
+		}
+		buf.WriteString(hs)
+		return buf.String()
+	}
+
+	output := ""
+	pattern := headPattern
+	for _, ch := range input {
+		output += encode(string([]rune{ch}), pattern)
+		pattern = tailPattern
+	}
+
+	return output
 }

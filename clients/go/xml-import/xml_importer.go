@@ -96,7 +96,7 @@ func main() {
 				object := xmlObject.Old()
 				file.Close()
 
-				nomsObj := util.NomsValueFromDecodedJSON(object)
+				nomsObj := util.NomsValueFromDecodedJSON(object, false)
 				d.Chk.IsType(expectedType, nomsObj)
 
 				var r types.Ref
