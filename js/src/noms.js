@@ -18,6 +18,7 @@ export {
   StructFieldMirror,
   newStruct,
   createStructClass,
+  escapeStructField,
 } from './struct.js';
 export {encodeNomsValue} from './encode.js';
 export {invariant, notNull} from './assert.js';
