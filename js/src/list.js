@@ -75,12 +75,13 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
     return this.splice(this.length, 0, ...values);
   }
 
-  async forEach(cb: (v: T, i: number) => void): Promise<void> {
+  async forEach(cb: (v: T, i: number) => ?Promise<void>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(0);
+    const promises = [];
     return cursor.iter((v, i) => {
-      cb(v, i);
+      promises.push(cb(v, i));
       return false;
-    });
+    }).then(() => Promise.all(promises)).then(() => void 0);
   }
 
   iterator(): AsyncIterator<T> {

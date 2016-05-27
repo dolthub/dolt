@@ -246,6 +246,21 @@ suite('SetLeaf', () => {
     assert.deepEqual(['a', 'b'], values);
   });
 
+  test('forEachAsyncCB', async () => {
+    const m = new Set(['a', 'b']);
+
+    let resolver = null;
+    const p = new Promise(resolve => resolver = resolve);
+
+    const values = [];
+    const foreachPromise = m.forEach(k => p.then(() => {
+      values.push(k);
+    }));
+
+    notNull(resolver)();
+    return foreachPromise.then(() => assert.deepEqual(['a', 'b'], values));
+  });
+
   test('iterator', async () => {
     const test = async items => {
       const m = new Set(items);
@@ -348,6 +363,23 @@ suite('CompoundSet', () => {
     const values = [];
     await c.forEach((k) => { values.push(k); });
     assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
+  });
+
+  test('forEachAsyncCB', async () => {
+    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
+
+    let resolver = null;
+    const p = new Promise(resolve => resolver = resolve);
+
+    const values = [];
+    const foreachPromise = c.forEach(k => p.then(() => {
+      values.push(k);
+    }));
+
+    notNull(resolver)();
+    return foreachPromise.then(() => {
+      assert.deepEqual(['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n'], values);
+    });
   });
 
   test('iterator', async () => {

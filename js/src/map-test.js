@@ -10,7 +10,7 @@ import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import Struct, {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import Chunk from './chunk.js';
 import Map from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
@@ -310,6 +310,21 @@ suite('MapLeaf', () => {
     assert.deepEqual(['a', 4, 'k', 8], kv);
   });
 
+  test('forEachAsyncCB', async () => {
+    const m = new Map([['a', 4], ['k', 8]]);
+
+    let resolver = null;
+    const p = new Promise(resolve => resolver = resolve);
+
+    const kv = [];
+    const foreachPromise = m.forEach((v, k) => p.then(() => {
+      kv.push(k, v);
+    }));
+
+    notNull(resolver)();
+    return foreachPromise.then(() => assert.deepEqual(['a', 4, 'k', 8], kv));
+  });
+
   test('iterator', async () => {
     const test = async entries => {
       const m = new Map(entries);
@@ -448,6 +463,24 @@ suite('CompoundMap', () => {
     await c.forEach((v, k) => { kv.push(k, v); });
     assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
         true, 'n', false], kv);
+  });
+
+  test('forEachAsyncCB', async () => {
+    const [c] = build(db);
+
+    let resolver = null;
+    const p = new Promise(resolve => resolver = resolve);
+
+    const kv = [];
+    const foreachPromise = c.forEach((v, k) => p.then(() => {
+      kv.push(k, v);
+    }));
+
+    notNull(resolver)();
+    return foreachPromise.then(() => {
+      assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
+        true, 'n', false], kv);
+    });
   });
 
   test('iterator', async () => {

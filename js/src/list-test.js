@@ -25,7 +25,7 @@ import {
   testRoundTripAndValidate,
 } from './test-util.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import List from './list.js';
 import {equals} from './compare.js';
 
@@ -95,6 +95,19 @@ suite('List', () => {
     assert.deepEqual(nums, out);
   }
 
+  async function testForEachAsyncCB(nums: Array<any>, list: List): Promise<void> {
+    let resolver = null;
+    const p = new Promise(resolve => resolver = resolve);
+
+    const out = [];
+    const foreachPromise = list.forEach(v => p.then(() => {
+      out.push(v);
+    }));
+
+    notNull(resolver)();
+    return foreachPromise.then(() => assert.deepEqual(nums, out));
+  }
+
   async function listTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
                                expectPrependChunkDiff: number,
                                expectAppendChunkDiff: number): Promise<void> {
@@ -114,6 +127,7 @@ suite('List', () => {
     });
 
     await testForEach(nums, list);
+    await testForEachAsyncCB(nums, list);
     await testToJS(nums, list);
     await testGet(nums, list);
     await testPrependChunkDiff(nums, list, expectPrependChunkDiff);
