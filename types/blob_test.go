@@ -119,20 +119,40 @@ func (suite *blobTestSuite) TestRandomRead() {
 	buffReader := bytes.NewReader(suite.buff)
 	blobReader := suite.col.(Blob).Reader()
 
-	readByteRange := func(r io.ReadSeeker, start int64, count int64) []byte {
+	readByteRange := func(r io.ReadSeeker, start, rel, count int64) []byte {
 		bytes := make([]byte, count)
 		n, err := r.Seek(start, 0)
 		suite.NoError(err)
 		suite.Equal(start, n)
+		n2, err := r.Seek(rel, 1)
+		suite.NoError(err)
+		suite.Equal(start+rel, n2)
+		n3, err := io.ReadFull(r, bytes)
+		suite.NoError(err)
+		suite.Equal(int(count), n3)
+		return bytes
+	}
+
+	readByteRangeFromEnd := func(r io.ReadSeeker, length, offset, count int64) []byte {
+		bytes := make([]byte, count)
+		n, err := r.Seek(offset, 2)
+		suite.NoError(err)
+		suite.Equal(length+offset, n)
 		n2, err := io.ReadFull(r, bytes)
 		suite.NoError(err)
 		suite.Equal(int(count), n2)
 		return bytes
 	}
 
-	checkByteRange := func(start int64, count int64) {
-		expect := readByteRange(buffReader, start, count)
-		actual := readByteRange(blobReader, start, count)
+	checkByteRange := func(start, rel, count int64) {
+		expect := readByteRange(buffReader, start, rel, count)
+		actual := readByteRange(blobReader, start, rel, count)
+		suite.Equal(expect, actual)
+	}
+
+	checkByteRangeFromEnd := func(length, offset, count int64) {
+		expect := readByteRangeFromEnd(buffReader, length, offset, count)
+		actual := readByteRangeFromEnd(blobReader, length, offset, count)
 		suite.Equal(expect, actual)
 	}
 
@@ -140,7 +160,10 @@ func (suite *blobTestSuite) TestRandomRead() {
 	start := int64(0)
 	count := int64(length / 2)
 	for count > 2 {
-		checkByteRange(start, count)
+		checkByteRange(start, 0, count)
+		checkByteRange(0, start, count)
+		checkByteRange(start/2, start-(start/2), count)
+		checkByteRangeFromEnd(length, start-length, count)
 		start = start + count
 		count = (length - start) / 2
 	}

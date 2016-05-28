@@ -23,7 +23,7 @@ export default class Blob extends Collection<IndexedSequence> {
   }
 
   getReader(): BlobReader {
-    return new BlobReader(this.sequence.newCursorAt(0));
+    return new BlobReader(this.sequence);
   }
 
   get length(): number {
@@ -32,31 +32,92 @@ export default class Blob extends Collection<IndexedSequence> {
 }
 
 export class BlobReader {
+  _sequence: IndexedSequence;
   _cursor: Promise<SequenceCursor<number, IndexedSequence<number>>>;
-  _lock: boolean;
+  _pos: number;
+  _lock: string;
 
-  constructor(cursor: Promise<SequenceCursor<number, IndexedSequence<number>>>) {
-    this._cursor = cursor;
-    this._lock = false;
+  constructor(sequence: IndexedSequence) {
+    this._sequence = sequence;
+    this._cursor = sequence.newCursorAt(0);
+    this._pos = 0;
+    this._lock = '';
   }
 
-  async read(): Promise<{done: boolean, value?: Uint8Array}> {
-    invariant(!this._lock, 'cannot read without completing current read');
-    this._lock = true;
+  /**
+   * Reads the next chunk of bytes from this blob.
+   *
+   * Returns {done: false, value: chunk} if there is more data, or {done: true} if there is none.
+   */
+  read(): Promise<{done: boolean, value?: Uint8Array}> {
+    invariant(this._lock === '', `cannot read without completing current ${this._lock}`);
+    this._lock = 'read';
 
-    const cur = await this._cursor;
-    if (!cur.valid) {
-      return {done: true};
+    return this._cursor.then(cur => {
+      if (!cur.valid) {
+        return {done: true};
+      }
+      return this._readCur(cur).then(arr => ({done: false, value: arr}));
+    }).then(res => {
+      this._lock = '';
+      return res;
+    });
+  }
+
+  _readCur(cur: SequenceCursor): Promise<Uint8Array> {
+    let arr = cur.sequence.items;
+    invariant(arr instanceof Uint8Array);
+
+    const idx = cur.indexInChunk;
+    if (idx > 0) {
+      invariant(idx < arr.byteLength);
+      arr = new Uint8Array(arr.buffer, arr.byteOffset + idx, arr.byteLength - idx);
     }
 
-    const arr = cur.sequence.items;
-    await cur.advanceChunk();
+    return cur.advanceChunk().then(() => {
+      this._pos += arr.byteLength;
+      return arr;
+    });
+  }
 
-    // No more awaits after this, so we can't be interrupted.
-    this._lock = false;
+  /**
+   * Seeks the reader to a position either relative to the start, the current position, or end of
+   * the blob.
+   *
+   * If |whence| is 0, |offset| will be relative to the start.
+   * If |whence| is 1, |offset| will be relative to the current position.
+   * If |whence| is 2, |offset| will be relative to the end.
+   */
+  seek(offset: number, whence: number = 0): Promise<number> {
+    invariant(this._lock === '', `cannot seek without completing current ${this._lock}`);
+    this._lock = 'seek';
 
-    invariant(arr instanceof Uint8Array);
-    return {done: false, value: arr};
+    let abs = this._pos;
+
+    switch (whence) {
+      case 0:
+        abs = offset;
+        break;
+      case 1:
+        abs += offset;
+        break;
+      case 2:
+        abs = this._sequence.numLeaves + offset;
+        break;
+      default:
+        throw new Error(`invalid whence ${whence}`);
+    }
+
+    invariant(abs >= 0, `cannot seek to negative position ${abs}`);
+
+    this._cursor = this._sequence.newCursorAt(abs);
+
+    // Wait for the seek to complete so that reads will be relative to the new position.
+    return this._cursor.then(() => {
+      this._pos = abs;
+      this._lock = '';
+      return abs;
+    });
   }
 }
 

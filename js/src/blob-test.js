@@ -2,7 +2,7 @@
 
 import {blobType, refOfBlobType} from './type.js';
 import {assert} from 'chai';
-import Blob, {BlobWriter} from './blob.js';
+import Blob, {BlobReader, BlobWriter} from './blob.js';
 import {suite, test} from 'mocha';
 import {
   assertChunkCountAndType,
@@ -19,17 +19,19 @@ import {equals} from './compare.js';
 
 suite('Blob', () => {
 
-  async function assertReadFull(expect: Uint8Array, blob: Blob): Promise<void> {
+  async function assertReadFull(expect: Uint8Array, reader: BlobReader): Promise<void> {
     const length = expect.length;
-    const reader = blob.getReader();
     let i = 0;
+    let pos = reader._pos;
 
     while (i < length) {
       const next = await reader.read();
       assert.isFalse(next.done);
       const arr = next.value;
       invariant(arr);
-      for (let j = 0; j < arr.length; j++) {
+      assert.strictEqual(arr.length + pos, reader._pos);
+      pos = reader._pos;
+      for (let j = 0; j < arr.length && i < length; j++) {
         assert.strictEqual(expect[i], arr[j]);
         i++;
       }
@@ -58,6 +60,40 @@ suite('Blob', () => {
     assert.strictEqual(expectCount, chunkDiffCount(blob, v2));
   }
 
+  async function testRandomRead(buff: Uint8Array, blob: Blob): Promise<void> {
+    const checkByteRange = async (start: number, rel: number, count: number) => {
+      const buffSlice = new Uint8Array(buff.buffer, buff.byteOffset + rel + start, count);
+      const blobReader = blob.getReader();
+      assert.strictEqual(start, await blobReader.seek(start));
+      assert.strictEqual(start, blobReader._pos);
+      assert.strictEqual(start + rel, await blobReader.seek(rel, 1));
+      assert.strictEqual(start + rel, blobReader._pos);
+      await assertReadFull(buffSlice, blobReader);
+    };
+
+    const checkByteRangeFromEnd = async (length: number, offset: number, count: number) => {
+      const buffSlice = new Uint8Array(buff.buffer,
+                                       buff.byteOffset + buff.byteLength + offset,
+                                       count);
+      const blobReader = blob.getReader();
+      assert.strictEqual(length + offset, await blobReader.seek(offset, 2));
+      assert.strictEqual(length + offset, blobReader._pos);
+      await assertReadFull(buffSlice, blobReader);
+    };
+
+    const length = buff.byteLength;
+    let start = 0;
+    let count = length / 2;
+    while (count > 2) {
+      await checkByteRange(start, 0, count);
+      await checkByteRange(0, start, count);
+      await checkByteRange(Math.floor(start / 2), Math.ceil(start / 2), count);
+      await checkByteRangeFromEnd(length, start - length, count);
+      start += count;
+      count = (length - start) / 2;
+    }
+  }
+
   function randomBuff(len: number): Uint8Array {
     const r = new CountingByteReader();
     const a = new Uint8Array(len);
@@ -80,13 +116,12 @@ suite('Blob', () => {
     assertChunkCountAndType(expectChunkCount, refOfBlobType, blob);
 
     await testRoundTripAndValidate(blob, async(b2) => {
-      await assertReadFull(buff, b2);
+      await assertReadFull(buff, b2.getReader());
     });
-
-    // TODO: Random Read
 
     await testPrependChunkDiff(buff, blob, expectPrependChunkDiff);
     await testAppendChunkDiff(buff, blob, expectAppendChunkDiff);
+    await testRandomRead(buff, blob);
   }
 
   class CountingByteReader {
