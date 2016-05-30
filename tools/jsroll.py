@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# Copyright 2016 The Noms Authors. All rights reserved.
+# Licensed under the Apache License, version 2.0:
+# http://www.apache.org/licenses/LICENSE-2.0
+
 # This tool updates the npm version of @attic/noms, @attic/eslintrc, etc in all package.json files.
 #
 # Run this whenever the version of an npm package is changed, then for each,
