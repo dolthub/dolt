@@ -5,20 +5,11 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/hash"
 	"github.com/attic-labs/testify/assert"
 )
-
-func TestGetRef(t *testing.T) {
-	assert := assert.New(t)
-	input := fmt.Sprintf("t [%d,false]", BoolKind)
-	expected := hash.FromData([]byte(input))
-	actual := getHash(Bool(false))
-	assert.Equal(expected, actual)
-}
 
 func TestEnsureHash(t *testing.T) {
 	assert := assert.New(t)

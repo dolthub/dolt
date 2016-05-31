@@ -24,7 +24,7 @@ import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00';
+const setOfNRef = 'sha1-1fc97c4e369770b643e013569c68687765601514';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -74,19 +74,19 @@ suite('BuildSet', () => {
   test('LONG: set of n numbers', async () => {
     const nums = intSequence(testSetSize);
     const s = new Set(nums);
-    assert.strictEqual(s.hash.toString(), setOfNRef);
+    assert.strictEqual(setOfNRef, s.hash.toString());
 
     // shuffle kvs, and test that the constructor sorts properly
     nums.sort(() => Math.random() > .5 ? 1 : -1);
     const s2 = new Set(nums);
-    assert.strictEqual(s2.hash.toString(), setOfNRef);
+    assert.strictEqual(setOfNRef, s2.hash.toString());
   });
 
   test('LONG: set of struct, set of n numbers', async () => {
     const nums = intSequence(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
     const s = new Set(structs);
-    assert.strictEqual(s.hash.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
+    assert.strictEqual('sha1-4e6c7eb66b2cc252611a38cb06eed751d2bdf3c3', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
@@ -101,7 +101,7 @@ suite('BuildSet', () => {
     const nums = intSequence(testSetSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new Set(refs);
-    assert.strictEqual(s.hash.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
+    assert.strictEqual('sha1-c8396816c8fb961939cc7c9dcf8011efe9040103', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -193,7 +193,7 @@ suite('BuildSet', () => {
     vals.sort(compare);
 
     const s = new Set(vals);
-    assert.strictEqual(s.hash.toString(), 'sha1-84ce63b4fb804fe9668133bf5d3136cfffcdc788');
+    assert.strictEqual('sha1-4af5578e97bbe7ae1326087f004e828716ac7b85', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);

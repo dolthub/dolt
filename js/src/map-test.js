@@ -23,7 +23,7 @@ import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-2bc451349d04c5f90cfe73d1e6eb3ee626db99a1';
+const mapOfNRef = 'sha1-9fce950ce2606ced8681a695b608384c642ffb53';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -111,7 +111,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.hash.toString(), 'sha1-5c9a17f6da0ebfebc1f82f498ac46992fad85250');
+    assert.strictEqual(m.hash.toString(), 'sha1-b119c8145a3ed519d1271a35a4b25723ed0b61d2');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -225,7 +225,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.hash.toString(), 'sha1-3840c9c93d79663e77a60f13f2877a8f5843da38');
+    assert.strictEqual(m.hash.toString(), 'sha1-c4b291de9dfb466f3afbd0c9bd0afb0ce5f33c70');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);

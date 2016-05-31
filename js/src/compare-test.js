@@ -10,11 +10,8 @@ import {equals, compare} from './compare.js';
 import {
   boolType,
 } from './type.js';
-import Blob from './blob.js';
 import List from './list.js';
-import Map from './map.js';
 import Set from './set.js';
-import {newStruct} from './struct.js';
 
 suite('compare.js', () => {
   suite('compare', () => {
@@ -44,8 +41,8 @@ suite('compare.js', () => {
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       // These two are ordered by hash
-      assert.isAbove(compare(listA, listC), 0);
-      assert.isBelow(compare(listC, listA), 0);
+      assert.isAbove(compare(listC, listA), 0);
+      assert.isBelow(compare(listA, listC), 0);
     });
 
     test('union', () => {
@@ -67,12 +64,8 @@ suite('compare.js', () => {
         'a', 'b', 'c',
 
         // The order of these are done by the hash.
-        new Set([0, 1, 2, 3]),
-        new Map([[0, 1], [2, 3]]),
         boolType,
-        new Blob(new Uint8Array([0, 1, 2, 3])),
-        new List([0, 1, 2, 3]),
-        newStruct('', {x: 1, s: 'a'}),
+        new Set([0, 1, 2, 3]),
 
         // Value - values cannot be value
         // Parent - values cannot be parent

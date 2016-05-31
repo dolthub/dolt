@@ -6,11 +6,13 @@
 
 import Chunk from './chunk.js';
 import Hash, {emptyHash} from './hash.js';
-import Ref from './ref.js';
+import {constructRef, maxChunkHeight} from './ref.js';
+import type Ref from './ref.js';
 import type BatchStore from './batch-store.js';
 import type Value from './value.js';
 import {
   getTypeOfValue,
+  makeRefType,
   Type,
   valueType,
 } from './type.js';
@@ -79,7 +81,8 @@ export default class ValueStore {
     const chunk = encodeNomsValue(v, this);
     invariant(!chunk.isEmpty());
     const {hash} = chunk;
-    const ref = new Ref(v);
+    const height = maxChunkHeight(v) + 1;
+    const ref = constructRef(makeRefType(getTypeOfValue(v)), hash, height);
     const entry = this._knownHashes.get(hash);
     if (entry && entry.present) {
       return ref;

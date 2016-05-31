@@ -12,6 +12,22 @@ import (
 	"github.com/attic-labs/noms/hash"
 )
 
+// ValueReader is an interface that knows how to read Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value reading.
+type ValueReader interface {
+	ReadValue(h hash.Hash) Value
+}
+
+// ValueWriter is an interface that knows how to write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value writing.
+type ValueWriter interface {
+	WriteValue(v Value) Ref
+}
+
+// ValueReadWriter is an interface that knows how to read and write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value read/writing.
+type ValueReadWriter interface {
+	ValueReader
+	ValueWriter
+}
+
 // ValueStore provides methods to read and write Noms Values to a BatchStore. It validates Values as they are written, but does not guarantee that these Values are persisted to the BatchStore until a subsequent Flush. or Close.
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
@@ -49,7 +65,11 @@ func (lvs *ValueStore) BatchStore() BatchStore {
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
 func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
-	v := DecodeChunk(lvs.bs.Get(r), lvs)
+	chunk := lvs.bs.Get(r)
+	if chunk.IsEmpty() {
+		return nil
+	}
+	v := DecodeValue(chunk, lvs)
 
 	var entry chunkCacheEntry = absentChunk{}
 	if v != nil {

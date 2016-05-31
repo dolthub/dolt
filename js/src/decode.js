@@ -6,12 +6,10 @@
 
 import Blob, {BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
-import Hash from './hash.js';
 import Ref, {constructRef} from './ref.js';
 import {newStructWithTypeNoValidation} from './struct.js';
 import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
-import {decode as decodeBase64} from './base64.js';
 import {
   getPrimitiveType,
   makeListType,
@@ -22,11 +20,10 @@ import {
   makeUnionType,
   StructDesc,
   Type,
-  typeType,
 } from './type.js';
 import {MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
-import {isPrimitiveKind, Kind} from './noms-kind.js';
+import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
@@ -34,87 +31,28 @@ import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
 import {ValueBase, setHash} from './value.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
+import type {NomsReader} from './codec.js';
+import {BinaryNomsReader} from './codec.js';
 
-const typedTag = 't ';
-const blobTag = 'b ';
-
-export class JsonArrayReader {
-  _a: Array<any>;
-  _i: number;
+export class ValueDecoder {
+  _r: NomsReader;
   _ds: ValueReader;
 
-  constructor(a: Array<any>, ds: ValueReader) {
-    this._a = a;
-    this._i = 0;
+  constructor(r: NomsReader, ds: ValueReader) {
+    this._r = r;
     this._ds = ds;
   }
 
-  read(): any {
-    return this._a[this._i++];
-  }
-
-  atEnd(): boolean {
-    return this._i >= this._a.length;
-  }
-
-  readString(): string {
-    const next = this.read();
-    invariant(typeof next === 'string');
-    return next;
-  }
-
-  readBool(): boolean {
-    const next = this.read();
-    invariant(typeof next === 'boolean');
-    return next;
-  }
-
-  readInt(): number {
-    const next = this.read();
-    invariant(typeof next === 'string');
-    return parseInt(next, 10);
-  }
-
-  readUint(): number {
-    const v = this.readInt();
-    invariant(v >= 0);
-    return v;
-  }
-
-  readUint8(): number {
-    const v = this.read();
-    invariant((v & 0xff) === v);
-    return v;
-  }
-
-  readUint16(): number {
-    const v = this.read();
-    invariant((v & 0xffff) === v);
-    return v;
-  }
-
-  readFloat(): number {
-    const next = this.read();
-    invariant(typeof next === 'string');
-    return parseFloat(next);
-  }
-
-  readArray(): Array<any> {
-    const next = this.read();
-    invariant(Array.isArray(next));
-    return next;
-  }
-
   readKind(): NomsKind {
-    const next = this.read();
-    invariant(typeof next === 'number');
-    return next;
+    return this._r.readUint8();
   }
 
-  readHash(): Hash {
-    const next = this.readString();
-    return Hash.parse(next);
+  readRef(t: Type): Ref {
+    const hash = this._r.readHash();
+    const height = this._r.readUint64();
+    return constructRef(t, hash, height);
   }
+
 
   readType(parentStructTypes: Type[]): Type {
     const k = this.readKind();
@@ -128,21 +66,18 @@ export class JsonArrayReader {
         return makeSetType(this.readType(parentStructTypes));
       case Kind.Ref:
         return makeRefType(this.readType(parentStructTypes));
-
+      case Kind.Struct:
+        return this.readStructType(parentStructTypes);
       case Kind.Union: {
-        const len = this.readUint16();
+        const len = this._r.readUint32();
         const types: Type[] = new Array(len);
         for (let i = 0; i < len; i++) {
           types[i] = this.readType(parentStructTypes);
         }
         return makeUnionType(types);
       }
-      case Kind.Type:
-        return typeType;
-      case Kind.Struct:
-        return this.readStructType(parentStructTypes);
       case Kind.Parent: {
-        const i = this.readUint8();
+        const i = this._r.readUint32();
         return parentStructTypes[parentStructTypes.length - 1 - i];
       }
     }
@@ -152,13 +87,14 @@ export class JsonArrayReader {
   }
 
   readBlobLeafSequence(): BlobLeafSequence {
-    const bytes = decodeBase64(this.readString());
+    const bytes = this._r.readBytes();
     return new BlobLeafSequence(this._ds, bytes);
   }
 
-  readSequence(): Array<any> {
+  readValueSequence(): Array<Value> {
+    const count = this._r.readUint32();
     const list = [];
-    while (!this.atEnd()) {
+    for (let i = 0; i < count; i++) {
       const v = this.readValue();
       list.push(v);
     }
@@ -167,32 +103,35 @@ export class JsonArrayReader {
   }
 
   readListLeafSequence(t: Type): ListLeafSequence {
-    const seq = this.readSequence();
-    return new ListLeafSequence(this._ds, t, seq);
+    const data = this.readValueSequence();
+    return new ListLeafSequence(this._ds, t, data);
   }
 
   readSetLeafSequence(t: Type): SetLeafSequence {
-    const seq = this.readSequence();
-    return new SetLeafSequence(this._ds, t, seq);
+    const data = this.readValueSequence();
+    return new SetLeafSequence(this._ds, t, data);
   }
 
   readMapLeafSequence(t: Type): MapLeafSequence {
-    const entries = [];
-    while (!this.atEnd()) {
+    const count = this._r.readUint32();
+    const data = [];
+    for (let i = 0; i < count; i++) {
       const k = this.readValue();
       const v = this.readValue();
-      entries.push([k, v]);
+      data.push([k, v]);
     }
 
-    return new MapLeafSequence(this._ds, t, entries);
+    return new MapLeafSequence(this._ds, t, data);
   }
 
   readMetaSequence(): Array<MetaTuple> {
+    const count = this._r.readUint32();
+
     const data: Array<MetaTuple> = [];
-    while (!this.atEnd()) {
+    for (let i = 0; i < count; i++) {
       const ref = this.readValue();
       const v = this.readValue();
-      const numLeaves = this.readInt();
+      const numLeaves = this._r.readUint64();
       data.push(new MetaTuple(ref, v, numLeaves, null));
     }
 
@@ -207,60 +146,54 @@ export class JsonArrayReader {
     return new OrderedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
-  readRef(t: Type): Ref {
-    const hash = this.readHash();
-    const height = this.readInt();
-    return constructRef(t, hash, height);
-  }
-
   readValue(): any {
     const t = this.readType([]);
     switch (t.kind) {
       case Kind.Blob: {
-        const isMeta = this.readBool();
+        const isMeta = this._r.readBool();
         if (isMeta) {
-          const r2 = new JsonArrayReader(this.readArray(), this._ds);
-          return Blob.fromSequence(r2.readIndexedMetaSequence(t));
+          return Blob.fromSequence(this.readIndexedMetaSequence(t));
         }
 
         return Blob.fromSequence(this.readBlobLeafSequence());
       }
       case Kind.Bool:
-        return this.readBool();
+        return this._r.readBool();
       case Kind.Number:
-        return this.readFloat();
+        return this._r.readFloat64();
       case Kind.String:
-        return this.readString();
+        return this._r.readString();
       case Kind.List: {
-        const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const isMeta = this._r.readBool();
         if (isMeta) {
-          return List.fromSequence(r2.readIndexedMetaSequence(t));
+          return List.fromSequence(this.readIndexedMetaSequence(t));
         }
-        return List.fromSequence(r2.readListLeafSequence(t));
+        return List.fromSequence(this.readListLeafSequence(t));
       }
       case Kind.Map: {
-        const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const isMeta = this._r.readBool();
         if (isMeta) {
-          return Map.fromSequence(r2.readOrderedMetaSequence(t));
+          return Map.fromSequence(this.readOrderedMetaSequence(t));
         }
-        return Map.fromSequence(r2.readMapLeafSequence(t));
+        return Map.fromSequence(this.readMapLeafSequence(t));
       }
       case Kind.Ref:
         return this.readRef(t);
       case Kind.Set: {
-        const isMeta = this.readBool();
-        const r2 = new JsonArrayReader(this.readArray(), this._ds);
+        const isMeta = this._r.readBool();
         if (isMeta) {
-          return Set.fromSequence(r2.readOrderedMetaSequence(t));
+          return Set.fromSequence(this.readOrderedMetaSequence(t));
         }
-        return Set.fromSequence(r2.readSetLeafSequence(t));
+        return Set.fromSequence(this.readSetLeafSequence(t));
       }
       case Kind.Struct:
         return this.readStruct(t);
       case Kind.Type:
         return this.readType([]);
+      case Kind.Parent:
+      case Kind.Union:
+      case Kind.Value:
+        throw new Error('A value instance can never have type' + kindToString[t.kind]);
     }
 
     throw new Error('Unreached');
@@ -271,55 +204,45 @@ export class JsonArrayReader {
     invariant(desc instanceof StructDesc);
 
     const data: {[key: string]: Value} = Object.create(null);
-
-    desc.forEachField((name: string) => {
-      const v = this.readValue();
-      data[name] = v;
-    });
+    desc.forEachField((name: string) => data[name] = this.readValue());
 
     return newStructWithTypeNoValidation(type, data);
   }
 
   readStructType(parentStructTypes: Type[]): Type {
-    const name = this.readString();
+    const name = this._r.readString();
+
     const fields = {};
     const structType = makeStructType(name, fields);
     parentStructTypes.push(structType);
 
     const newFields = Object.create(null);
-    const fieldReader = new JsonArrayReader(this.readArray(), this._ds);
-    while (!fieldReader.atEnd()) {
-      const fieldName = fieldReader.readString();
-      const fieldType = fieldReader.readType(parentStructTypes);
+
+    const count = this._r.readUint32();
+    for (let i = 0; i < count; i++) {
+      const fieldName = this._r.readString();
+      const fieldType = this.readType(parentStructTypes);
       newFields[fieldName] = fieldType;
     }
 
     // Mutate the already created structType since when looking for the cycle we compare
     // by identity.
     structType.desc.fields = newFields;
+    structType.desc.fieldCount = count;
+
     parentStructTypes.pop();
     return structType;
   }
 }
 
 export function decodeNomsValue(chunk: Chunk, vr: ValueReader): Value {
-  const tag = new Chunk(new Uint8Array(chunk.data.buffer, 0, 2)).toString();
-  let v: Value;
-  switch (tag) {
-    case typedTag: {
-      const payload = JSON.parse(new Chunk(new Uint8Array(chunk.data.buffer, 2)).toString());
-      const reader = new JsonArrayReader(payload, vr);
-      v = reader.readValue();
-      break;
-    }
-    case blobTag:
-      v = Blob.fromSequence(new BlobLeafSequence(vr, new Uint8Array(chunk.data.buffer, 2)));
-      break;
-    default:
-      throw new Error('Not implemented');
-  }
+  const data = chunk.data;
+  const dec = new ValueDecoder(new BinaryNomsReader(data), vr);
+  const v = dec.readValue();
+
   if (v instanceof ValueBase) {
     setHash(v, chunk.hash);
   }
+
   return v;
 }

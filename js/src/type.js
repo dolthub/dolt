@@ -63,10 +63,12 @@ export class CompoundDesc {
 export class StructDesc {
   name: string;
   fields: {[key: string]: Type};
+  fieldCount: number;
 
   constructor(name: string, fields: {[key: string]: Type}) {
     this.name = name;
     this.fields = fields;
+    this.fieldCount = Object.keys(fields).length;
   }
 
   get kind(): NomsKind {

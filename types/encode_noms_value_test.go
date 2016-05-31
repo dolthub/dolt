@@ -12,345 +12,444 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestWritePrimitives(t *testing.T) {
-	assert := assert.New(t)
+type nomsTestReader struct {
+	a []interface{}
+	i int
+}
 
-	f := func(k NomsKind, v Value, ex interface{}) {
+func (r *nomsTestReader) read() interface{} {
+	v := r.a[r.i]
+	r.i++
+	return v
+}
 
-		w := newJSONArrayWriter(NewTestValueStore())
-		w.writeValue(v)
-		assert.EqualValues([]interface{}{k, ex}, w.toArray())
+func (r *nomsTestReader) atEnd() bool {
+	return r.i >= len(r.a)
+}
+
+func (r *nomsTestReader) readString() string {
+	return r.read().(string)
+}
+
+func (r *nomsTestReader) readBool() bool {
+	return r.read().(bool)
+}
+
+func (r *nomsTestReader) readUint8() uint8 {
+	return r.read().(uint8)
+}
+
+func (r *nomsTestReader) readUint32() uint32 {
+	return r.read().(uint32)
+}
+
+func (r *nomsTestReader) readUint64() uint64 {
+	return r.read().(uint64)
+}
+
+func (r *nomsTestReader) readFloat64() float64 {
+	return r.read().(float64)
+}
+
+func (r *nomsTestReader) readBytes() []byte {
+	return r.read().([]byte)
+}
+
+func (r *nomsTestReader) readHash() hash.Hash {
+	return hash.Parse(r.readString())
+}
+
+type nomsTestWriter struct {
+	a []interface{}
+}
+
+func (w *nomsTestWriter) write(v interface{}) {
+	w.a = append(w.a, v)
+}
+
+func (w *nomsTestWriter) writeString(s string) {
+	w.write(s)
+}
+
+func (w *nomsTestWriter) writeBool(b bool) {
+	w.write(b)
+}
+
+func (w *nomsTestWriter) writeUint8(v uint8) {
+	w.write(v)
+}
+
+func (w *nomsTestWriter) writeUint32(v uint32) {
+	w.write(v)
+}
+
+func (w *nomsTestWriter) writeUint64(v uint64) {
+	w.write(v)
+}
+
+func (w *nomsTestWriter) writeFloat64(v float64) {
+	w.write(v)
+}
+
+func (w *nomsTestWriter) writeBytes(v []byte) {
+	w.write(v)
+}
+
+func (w *nomsTestWriter) writeHash(h hash.Hash) {
+	w.writeString(h.String())
+}
+
+func assertEncoding(t *testing.T, expect []interface{}, v Value) {
+	vs := NewTestValueStore()
+	tw := &nomsTestWriter{}
+	enc := valueEncoder{tw, vs}
+	enc.writeValue(v)
+	assert.EqualValues(t, expect, tw.a)
+
+	ir := &nomsTestReader{expect, 0}
+	dec := valueDecoder{ir, vs}
+	v2 := dec.readValue()
+	assert.True(t, ir.atEnd())
+	assert.True(t, v.Equals(v2))
+}
+
+func TestRoundTrips(t *testing.T) {
+	assertRoundTrips := func(v Value) {
+		vs := NewTestValueStore()
+		out := DecodeValue(EncodeValue(v, vs), vs)
+		assert.True(t, v.Equals(out))
 	}
 
-	f(BoolKind, Bool(true), true)
-	f(BoolKind, Bool(false), false)
+	assertRoundTrips(Bool(false))
+	assertRoundTrips(Bool(true))
 
-	f(NumberKind, Number(0), "0")
-	f(NumberKind, Number(1e18), "1000000000000000000")
-	f(NumberKind, Number(1e19), "10000000000000000000")
-	f(NumberKind, Number(float64(1e19)), "10000000000000000000")
-	f(NumberKind, Number(float64(1e20)), "1e+20")
+	assertRoundTrips(Number(1))
+	assertRoundTrips(Number(-0))
+	assertRoundTrips(Number(0))
+	assertRoundTrips(Number(1))
 
-	f(StringKind, NewString("hi"), "hi")
+	assertRoundTrips(NewString(""))
+	assertRoundTrips(NewString("foo"))
+	assertRoundTrips(NewString("AINT NO THANG"))
+	assertRoundTrips(NewString("💩"))
+
+	assertRoundTrips(NewStruct("", structData{"a": Bool(true), "b": NewString("foo"), "c": Number(2.3)}))
+
+	listLeaf := newList(newListLeafSequence(nil, Number(4), Number(5), Number(6), Number(7)))
+	assertRoundTrips(listLeaf)
+
+	assertRoundTrips(newList(newListMetaSequence([]metaTuple{
+		newMetaTuple(Number(10), nil, NewRef(listLeaf), 10),
+		newMetaTuple(Number(20), nil, NewRef(listLeaf), 20),
+	}, nil)))
+}
+
+func TestWritePrimitives(t *testing.T) {
+	assertEncoding(t,
+		[]interface{}{
+			uint8(BoolKind), true,
+		},
+		Bool(true))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(BoolKind), false,
+		},
+		Bool(false))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(NumberKind), float64(0),
+		},
+		Number(0))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(NumberKind), float64(1000000000000000000),
+		},
+		Number(1e18))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(NumberKind), float64(10000000000000000000),
+		},
+		Number(1e19))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(NumberKind), float64(1e+20),
+		},
+		Number(1e20))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StringKind), "hi",
+		},
+		NewString("hi"))
 }
 
 func TestWriteSimpleBlob(t *testing.T) {
-	assert := assert.New(t)
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(NewBlob(bytes.NewBuffer([]byte{0x00, 0x01})))
-	assert.EqualValues([]interface{}{BlobKind, false, "AAE="}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(BlobKind), false, []byte{0x00, 0x01},
+		},
+		NewBlob(bytes.NewBuffer([]byte{0x00, 0x01})),
+	)
 }
 
 func TestWriteList(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewList(Number(0), Number(1), Number(2), Number(3))
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{ListKind, NumberKind, false, []interface{}{NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(NumberKind), false, uint32(4) /* len */, uint8(NumberKind), float64(0), uint8(NumberKind), float64(1), uint8(NumberKind), float64(2), uint8(NumberKind), float64(3),
+		},
+		NewList(Number(0), Number(1), Number(2), Number(3)),
+	)
 }
 
 func TestWriteListOfList(t *testing.T) {
-	assert := assert.New(t)
-
-	l1 := NewList(Number(0))
-	l2 := NewList(Number(1), Number(2), Number(3))
-	v := NewList(l1, l2)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	// List<List<Number>([[0], [1, 2, 3]])
-	assert.EqualValues([]interface{}{ListKind, ListKind, NumberKind, false, []interface{}{
-		ListKind, NumberKind, false, []interface{}{NumberKind, "0"},
-		ListKind, NumberKind, false, []interface{}{NumberKind, "1", NumberKind, "2", NumberKind, "3"}}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(ListKind), uint8(NumberKind), false,
+			uint32(2), // len
+			uint8(ListKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(NumberKind), float64(0),
+			uint8(ListKind), uint8(NumberKind), false, uint32(3) /* len */, uint8(NumberKind), float64(1), uint8(NumberKind), float64(2), uint8(NumberKind), float64(3),
+		},
+		NewList(NewList(Number(0)), NewList(Number(1), Number(2), Number(3))),
+	)
 }
 
 func TestWriteSet(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewSet(Number(3), Number(1), Number(2), Number(0))
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{SetKind, NumberKind, false, []interface{}{NumberKind, "0", NumberKind, "1", NumberKind, "2", NumberKind, "3"}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(SetKind), uint8(NumberKind), false, uint32(4) /* len */, uint8(NumberKind), float64(0), uint8(NumberKind), float64(1), uint8(NumberKind), float64(2), uint8(NumberKind), float64(3),
+		},
+		NewSet(Number(3), Number(1), Number(2), Number(0)),
+	)
 }
 
 func TestWriteSetOfSet(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewSet(NewSet(Number(0)), NewSet(Number(1), Number(2), Number(3)))
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{SetKind, SetKind, NumberKind, false, []interface{}{
-		SetKind, NumberKind, false, []interface{}{NumberKind, "1", NumberKind, "2", NumberKind, "3"},
-		SetKind, NumberKind, false, []interface{}{NumberKind, "0"}}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(SetKind), uint8(SetKind), uint8(NumberKind), false,
+			uint32(2), // len
+			uint8(SetKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(NumberKind), float64(0),
+			uint8(SetKind), uint8(NumberKind), false, uint32(3) /* len */, uint8(NumberKind), float64(1), uint8(NumberKind), float64(2), uint8(NumberKind), float64(3),
+		},
+		NewSet(NewSet(Number(0)), NewSet(Number(1), Number(2), Number(3))),
+	)
 }
 
 func TestWriteMap(t *testing.T) {
-	assert := assert.New(t)
-
-	v := newMap(newMapLeafSequence(nil, mapEntry{NewString("a"), Bool(false)}, mapEntry{NewString("b"), Bool(true)}))
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	// The order of the elements is based on the order defined by OrderedValue.
-	assert.EqualValues([]interface{}{MapKind, StringKind, BoolKind, false, []interface{}{
-		StringKind, "a", BoolKind, false, StringKind, "b", BoolKind, true}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(MapKind), uint8(StringKind), uint8(BoolKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(BoolKind), false, uint8(StringKind), "b", uint8(BoolKind), true,
+		},
+		NewMap(NewString("a"), Bool(false), NewString("b"), Bool(true)),
+	)
 }
 
 func TestWriteMapOfMap(t *testing.T) {
-	assert := assert.New(t)
-
-	// Map<Map<String, Number>, Set<Bool>>
-	// { {"a": 0}: {true} }
-	v := NewMap(NewMap(NewString("a"), Number(0)), NewSet(Bool(true)))
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	// the order of the elements is based on the hash of the value.
-	assert.EqualValues([]interface{}{MapKind, MapKind, StringKind, NumberKind, SetKind, BoolKind, false, []interface{}{
-		MapKind, StringKind, NumberKind, false, []interface{}{StringKind, "a", NumberKind, "0"},
-		SetKind, BoolKind, false, []interface{}{BoolKind, true}}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(MapKind), uint8(MapKind), uint8(StringKind), uint8(NumberKind), uint8(SetKind), uint8(BoolKind), false,
+			uint32(1), // len
+			uint8(MapKind), uint8(StringKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(StringKind), "a", uint8(NumberKind), float64(0),
+			uint8(SetKind), uint8(BoolKind), false, uint32(1) /* len */, uint8(BoolKind), true,
+		},
+		NewMap(NewMap(NewString("a"), Number(0)), NewSet(Bool(true))),
+	)
 }
 
 func TestWriteCompoundBlob(t *testing.T) {
-	assert := assert.New(t)
-
 	r1 := hash.Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := hash.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := hash.Parse("sha1-0000000000000000000000000000000000000003")
 
-	v := newBlob(newBlobMetaSequence([]metaTuple{
-		newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 11), 20),
-		newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 22), 40),
-		newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 33), 60),
-	}, NewTestValueStore()))
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-
-	// the order of the elements is based on the hash of the value.
-	assert.EqualValues([]interface{}{
-		BlobKind, true, []interface{}{
-			RefKind, BlobKind, r1.String(), "11", NumberKind, "20", "20",
-			RefKind, BlobKind, r2.String(), "22", NumberKind, "40", "40",
-			RefKind, BlobKind, r3.String(), "33", NumberKind, "60", "60",
+	assertEncoding(t,
+		[]interface{}{
+			uint8(BlobKind), true,
+			uint32(3), // len
+			uint8(RefKind), uint8(BlobKind), r1.String(), uint64(11), uint8(NumberKind), float64(20), uint64(20),
+			uint8(RefKind), uint8(BlobKind), r2.String(), uint64(22), uint8(NumberKind), float64(40), uint64(40),
+			uint8(RefKind), uint8(BlobKind), r3.String(), uint64(33), uint8(NumberKind), float64(60), uint64(60),
 		},
-	}, w.toArray())
+		newBlob(newBlobMetaSequence([]metaTuple{
+			newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 11), 20),
+			newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 22), 40),
+			newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 33), 60),
+		}, NewTestValueStore())),
+	)
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewStruct("S", nil)
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S", uint32(0), /* len */
+		},
+		NewStruct("S", nil),
+	)
 }
 
 func TestWriteStruct(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewStruct("S", structData{"x": Number(42), "b": Bool(true)})
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BoolKind, "x", NumberKind}, BoolKind, true, NumberKind, "42"}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S", uint32(2) /* len */, "b", uint8(BoolKind), "x", uint8(NumberKind),
+			uint8(BoolKind), true, uint8(NumberKind), float64(42),
+		},
+		NewStruct("S", structData{"x": Number(42), "b": Bool(true)}),
+	)
 }
 
 func TestWriteStructWithList(t *testing.T) {
-	assert := assert.New(t)
-
 	// struct S {l: List<String>}({l: ["a", "b"]})
-	v := NewStruct("S", structData{"l": NewList(NewString("a"), NewString("b"))})
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, StringKind},
-		ListKind, StringKind, false, []interface{}{StringKind, "a", StringKind, "b"}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(StringKind),
+			uint8(ListKind), uint8(StringKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
+		},
+		NewStruct("S", structData{"l": NewList(NewString("a"), NewString("b"))}),
+	)
 
 	// struct S {l: List<>}({l: []})
-	v = NewStruct("S", structData{"l": NewList()})
-	w = newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"l", ListKind, UnionKind, uint16(0)},
-		ListKind, UnionKind, uint16(0), false, []interface{}{}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(UnionKind), uint32(0),
+			uint8(ListKind), uint8(UnionKind), uint32(0), false, uint32(0), /* len */
+		},
+		NewStruct("S", structData{"l": NewList()}),
+	)
 }
 
 func TestWriteStructWithStruct(t *testing.T) {
-	assert := assert.New(t)
-
 	// struct S2 {
 	//   x: Number
 	// }
 	// struct S {
 	//   s: S2
 	// }
-
-	// {s: {x: 42}}
-	v := NewStruct("S", structData{"s": NewStruct("S2", structData{"x": Number(42)})})
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"s", StructKind, "S2", []interface{}{"x", NumberKind}}, StructKind, "S2", []interface{}{"x", NumberKind}, NumberKind, "42"}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S",
+			uint32(1), // len
+			"s", uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind),
+			uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind),
+			uint8(NumberKind), float64(42),
+		},
+		// {s: {x: 42}}
+		NewStruct("S", structData{"s": NewStruct("S2", structData{"x": Number(42)})}),
+	)
 }
 
 func TestWriteStructWithBlob(t *testing.T) {
-	assert := assert.New(t)
-
-	b := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
-	v := NewStruct("S", structData{"b": b})
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{StructKind, "S", []interface{}{"b", BlobKind}, BlobKind, false, "AAE="}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "S", uint32(1) /* len */, "b", uint8(BlobKind), uint8(BlobKind), false, []byte{0x00, 0x01},
+		},
+		NewStruct("S", structData{"b": NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))}),
+	)
 }
 
 func TestWriteCompoundList(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-
-	list1 := newList(newListLeafSequence(cs, Number(0)))
-	list2 := newList(newListLeafSequence(cs, Number(1), Number(2), Number(3)))
-	cl := newList(newListMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), list1, NewRef(list1), 1),
-		newMetaTuple(Number(4), list2, NewRef(list2), 4),
-	}, cs))
-
-	w := newJSONArrayWriter(cs)
-	w.writeValue(cl)
-	assert.EqualValues([]interface{}{
-		ListKind, NumberKind, true, []interface{}{
-			RefKind, ListKind, NumberKind, list1.Hash().String(), "1", NumberKind, "1", "1",
-			RefKind, ListKind, NumberKind, list2.Hash().String(), "1", NumberKind, "4", "4",
+	list1 := newList(newListLeafSequence(nil, Number(0)))
+	list2 := newList(newListLeafSequence(nil, Number(1), Number(2), Number(3)))
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(NumberKind), true,
+			uint32(2), // len,
+			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list1.Hash().String(), uint64(1), uint8(NumberKind), float64(1), uint64(1),
+			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(4),
 		},
-	}, w.toArray())
+		newList(newListMetaSequence([]metaTuple{
+			newMetaTuple(Number(1), list1, NewRef(list1), 1),
+			newMetaTuple(Number(4), list2, NewRef(list2), 4),
+		}, nil)),
+	)
 }
 
 func TestWriteCompoundSet(t *testing.T) {
-	assert := assert.New(t)
-	cs := NewTestValueStore()
-	set1 := newSet(newSetLeafSequence(cs, Number(0), Number(1)))
-	set2 := newSet(newSetLeafSequence(cs, Number(2), Number(3), Number(4)))
-	cl := newSet(newSetMetaSequence([]metaTuple{
-		newMetaTuple(Number(1), set1, NewRef(set1), 2),
-		newMetaTuple(Number(4), set2, NewRef(set2), 3),
-	}, cs))
+	set1 := newSet(newSetLeafSequence(nil, Number(0), Number(1)))
+	set2 := newSet(newSetLeafSequence(nil, Number(2), Number(3), Number(4)))
 
-	w := newJSONArrayWriter(cs)
-	w.writeValue(cl)
-	assert.EqualValues([]interface{}{
-		SetKind, NumberKind, true, []interface{}{
-			RefKind, SetKind, NumberKind, set1.Hash().String(), "1", NumberKind, "1", "2",
-			RefKind, SetKind, NumberKind, set2.Hash().String(), "1", NumberKind, "4", "3",
+	assertEncoding(t,
+		[]interface{}{
+			uint8(SetKind), uint8(NumberKind), true,
+			uint32(2), // len,
+			uint8(RefKind), uint8(SetKind), uint8(NumberKind), set1.Hash().String(), uint64(1), uint8(NumberKind), float64(1), uint64(2),
+			uint8(RefKind), uint8(SetKind), uint8(NumberKind), set2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(3),
 		},
-	}, w.toArray())
-}
-
-func TestWriteListOfValue(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewList(
-		NewString("0"),
-		Number(1),
-		NewString("2"),
-		Bool(true),
+		newSet(newSetMetaSequence([]metaTuple{
+			newMetaTuple(Number(1), set1, NewRef(set1), 2),
+			newMetaTuple(Number(4), set2, NewRef(set2), 3),
+		}, nil)),
 	)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-
-	assert.EqualValues([]interface{}{ListKind, UnionKind, uint16(3), BoolKind, NumberKind, StringKind, false, []interface{}{
-		StringKind, "0",
-		NumberKind, "1",
-		StringKind, "2",
-		BoolKind, true,
-	}}, w.toArray())
 }
 
-func TestWriteListOfValueWithStruct(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewList(NewStruct("S", structData{"x": Number(42)}))
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{ListKind,
-		StructKind, "S", []interface{}{"x", NumberKind}, false, []interface{}{
-			StructKind, "S", []interface{}{"x", NumberKind}, NumberKind, "42"}}, w.toArray())
+func TestWriteListOfUnion(t *testing.T) {
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(UnionKind), uint32(3) /* len */, uint8(BoolKind), uint8(StringKind), uint8(NumberKind), false,
+			uint32(4) /* len */, uint8(StringKind), "0", uint8(NumberKind), float64(1), uint8(StringKind), "2", uint8(BoolKind), true,
+		},
+		NewList(
+			NewString("0"),
+			Number(1),
+			NewString("2"),
+			Bool(true),
+		),
+	)
 }
 
-func TestWriteListOfValueWithType(t *testing.T) {
-	assert := assert.New(t)
+func TestWriteListOfStruct(t *testing.T) {
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
+			uint32(1) /* len */, uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), uint8(NumberKind), float64(42),
+		},
+		NewList(NewStruct("S", structData{"x": Number(42)})),
+	)
+}
 
+func TestWriteListOfUnionWithType(t *testing.T) {
 	structType := MakeStructType("S", TypeMap{
 		"x": NumberType,
 	})
 
-	v := NewList(
-		Bool(true),
-		NumberType,
-		TypeType,
-		structType,
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(TypeKind), false,
+			uint32(4) /* len */, uint8(BoolKind), true, uint8(TypeKind), uint8(NumberKind), uint8(TypeKind), uint8(TypeKind), uint8(TypeKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind),
+		},
+		NewList(
+			Bool(true),
+			NumberType,
+			TypeType,
+			structType,
+		),
 	)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{ListKind, UnionKind, uint16(2), BoolKind, TypeKind, false, []interface{}{
-		BoolKind, true,
-		TypeKind, NumberKind,
-		TypeKind, TypeKind,
-		TypeKind, StructKind, "S", []interface{}{"x", NumberKind}}}, w.toArray())
 }
 
-func TestWriteRef(t *testing.T) {
-	assert := assert.New(t)
-
+func nomsTestWriteRef(t *testing.T) {
 	typ := MakeRefType(NumberType)
 	r := hash.Parse("sha1-0123456789abcdef0123456789abcdef01234567")
-	v := constructRef(typ, r, 4)
 
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{RefKind, NumberKind, r.String(), "4"}, w.toArray())
-}
-
-func TestWriteTypeValue(t *testing.T) {
-	assert := assert.New(t)
-
-	test := func(expected []interface{}, v *Type) {
-		w := newJSONArrayWriter(NewTestValueStore())
-		w.writeValue(v)
-		assert.EqualValues(expected, w.toArray())
-	}
-
-	test([]interface{}{TypeKind, NumberKind}, NumberType)
-	test([]interface{}{TypeKind, ListKind, BoolKind}, MakeListType(BoolType))
-	test([]interface{}{TypeKind, MapKind, BoolKind, StringKind}, MakeMapType(BoolType, StringType))
-
-	test([]interface{}{TypeKind, StructKind, "S", []interface{}{"v", ValueKind, "x", NumberKind}},
-		MakeStructType("S", TypeMap{
-			"x": NumberType,
-			"v": ValueType,
-		}))
-
-	test([]interface{}{TypeKind, UnionKind, uint16(0)}, MakeUnionType())
-	test([]interface{}{TypeKind, UnionKind, uint16(2), NumberKind, StringKind}, MakeUnionType(NumberType, StringType))
-	test([]interface{}{TypeKind, ListKind, UnionKind, uint16(0)}, MakeListType(MakeUnionType()))
+	assertEncoding(t,
+		[]interface{}{
+			uint8(RefKind), uint8(NumberKind), r.String(), uint64(4),
+		},
+		constructRef(typ, r, 4),
+	)
 }
 
 func TestWriteListOfTypes(t *testing.T) {
-	assert := assert.New(t)
-
-	v := NewList(BoolType, StringType)
-
-	// List<Type>([Bool, String])
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{ListKind, TypeKind, false, []interface{}{TypeKind, BoolKind, TypeKind, StringKind}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(TypeKind), false, uint32(2) /* len */, uint8(TypeKind), uint8(BoolKind), uint8(TypeKind), uint8(StringKind),
+		},
+		NewList(BoolType, StringType),
+	)
 }
 
-func TestWriteRecursiveStruct(t *testing.T) {
-	assert := assert.New(t)
-
+func nomsTestWriteRecursiveStruct(t *testing.T) {
 	// struct A6 {
 	//   cs: List<A6>
 	//   v: Number
@@ -365,39 +464,35 @@ func TestWriteRecursiveStruct(t *testing.T) {
 
 	structType.Desc.(StructDesc).Fields["cs"] = listType
 
-	// {v: 42, cs: [{v: 555, cs: []}]}
-	v := NewStructWithType(structType, structData{
-		"v":  Number(42),
-		"cs": NewList(),
-	})
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	w.writeValue(v)
-	assert.EqualValues([]interface{}{
-		StructKind, "A6", []interface{}{
-			"cs", ListKind, ParentKind, uint8(0),
-			"v", NumberKind,
+	assertEncoding(t,
+		[]interface{}{
+			uint8(StructKind), "A6", uint32(2) /* len */, "cs", uint8(ListKind), uint8(ParentKind), uint32(0), "v", uint8(NumberKind),
+			uint8(ListKind), uint8(UnionKind), uint32(0) /* len */, false, uint32(0), /* len */
+			uint8(NumberKind), float64(42),
 		},
-		ListKind, UnionKind, uint16(0), false, []interface{}{},
-		NumberKind, "42",
-	}, w.toArray())
+		// {v: 42, cs: [{v: 555, cs: []}]}
+		NewStructWithType(structType, structData{
+			"v":  Number(42),
+			"cs": NewList(),
+		}),
+	)
 }
 
 func TestWriteUnionList(t *testing.T) {
-	assert := assert.New(t)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	v := NewList(NewString("hi"), Number(42))
-	w.writeValue(v)
-	assert.Equal([]interface{}{ListKind, UnionKind, uint16(2), NumberKind, StringKind,
-		false, []interface{}{StringKind, "hi", NumberKind, "42"}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(StringKind), uint8(NumberKind),
+			false, uint32(2) /* len */, uint8(StringKind), "hi", uint8(NumberKind), float64(42),
+		},
+		NewList(NewString("hi"), Number(42)),
+	)
 }
 
 func TestWriteEmptyUnionList(t *testing.T) {
-	assert := assert.New(t)
-
-	w := newJSONArrayWriter(NewTestValueStore())
-	v := NewList()
-	w.writeValue(v)
-	assert.Equal([]interface{}{ListKind, UnionKind, uint16(0), false, []interface{}{}}, w.toArray())
+	assertEncoding(t,
+		[]interface{}{
+			uint8(ListKind), uint8(UnionKind), uint32(0) /* len */, false, uint32(0), /* len */
+		},
+		NewList(),
+	)
 }

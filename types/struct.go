@@ -67,12 +67,11 @@ func (s Struct) Hash() hash.Hash {
 }
 
 func (s Struct) ChildValues() (res []Value) {
-	res = append(res, s.t)
-	for name := range s.desc().Fields {
+	s.desc().IterFields(func(name string, t *Type) {
 		v, ok := s.data[name]
 		d.Chk.True(ok)
 		res = append(res, v)
-	}
+	})
 	return
 }
 

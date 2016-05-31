@@ -142,7 +142,7 @@ func SomeChunksP(r types.Ref, bs types.BatchStore, stopCb SomeChunksStopCallback
 			return
 		}
 
-		v := types.DecodeChunk(c, nil)
+		v := types.DecodeValue(c, nil)
 		for _, r1 := range v.Chunks() {
 			wg.Add(1)
 			rq.tail() <- r1

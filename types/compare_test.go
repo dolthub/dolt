@@ -5,7 +5,6 @@
 package types
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -13,7 +12,6 @@ import (
 
 func TestTotalOrdering(t *testing.T) {
 	assert := assert.New(t)
-	vs := NewTestValueStore()
 
 	// values in increasing order. Some of these are compared by ref so changing the serialization might change the ordering.
 	values := []Value{
@@ -22,13 +20,8 @@ func TestTotalOrdering(t *testing.T) {
 		NewString("a"), NewString("b"), NewString("c"),
 
 		// The order of these are done by the hash.
-		vs.WriteValue(Number(10)),
-		NewSet(Number(0), Number(1), Number(2), Number(3)),
-		NewMap(Number(0), Number(1), Number(2), Number(3)),
 		BoolType,
-		NewBlob(bytes.NewBuffer([]byte{0x00, 0x01, 0x02, 0x03})),
-		NewList(Number(0), Number(1), Number(2), Number(3)),
-		NewStruct("a", structData{"x": Number(1), "s": NewString("a")}),
+		NewSet(Number(0), Number(1), Number(2), Number(3)),
 
 		// Value - values cannot be value
 		// Parent - values cannot be parent

@@ -62,8 +62,8 @@ func TestWriteHumanReadableRef(t *testing.T) {
 
 	x := Number(42)
 	rv := vs.WriteValue(x)
-	assertWriteHRSEqual(t, "sha1-bd0b7d4cb11321762f4206f0d6c6fdf820f8556e", rv)
-	assertWriteTaggedHRSEqual(t, "Ref<Number>(sha1-bd0b7d4cb11321762f4206f0d6c6fdf820f8556e)", rv)
+	assertWriteHRSEqual(t, "sha1-c47f695d492ba4a218281aa7c0269d304af48b9e", rv)
+	assertWriteTaggedHRSEqual(t, "Ref<Number>(sha1-c47f695d492ba4a218281aa7c0269d304af48b9e)", rv)
 }
 
 func TestWriteHumanReadableCollections(t *testing.T) {
@@ -90,34 +90,34 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	m := NewMap(s, l, s2, l2)
 	assertWriteHRSEqual(t, `{
   {
-    "c",
-    "d",
-  }: [
-    2,
-    3,
-  ],
-  {
     "a",
     "b",
   }: [
     0,
     1,
+  ],
+  {
+    "c",
+    "d",
+  }: [
+    2,
+    3,
   ],
 }`, m)
 	assertWriteTaggedHRSEqual(t, `Map<Set<String>, List<Number>>({
   {
-    "c",
-    "d",
-  }: [
-    2,
-    3,
-  ],
-  {
     "a",
     "b",
   }: [
     0,
     1,
+  ],
+  {
+    "c",
+    "d",
+  }: [
+    2,
+    3,
   ],
 })`, m)
 }
@@ -211,10 +211,10 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Set<Number>", MakeSetType(NumberType))
 	assertWriteHRSEqual(t, "Ref<Number>", MakeRefType(NumberType))
 	assertWriteHRSEqual(t, "Map<Number, String>", MakeMapType(NumberType, StringType))
-	assertWriteHRSEqual(t, "Number | String", MakeUnionType(NumberType, StringType))
+	assertWriteHRSEqual(t, "String | Number", MakeUnionType(NumberType, StringType))
 	assertWriteHRSEqual(t, "Bool", MakeUnionType(BoolType))
 	assertWriteHRSEqual(t, "", MakeUnionType())
-	assertWriteHRSEqual(t, "List<Number | String>", MakeListType(MakeUnionType(NumberType, StringType)))
+	assertWriteHRSEqual(t, "List<String | Number>", MakeListType(MakeUnionType(NumberType, StringType)))
 	assertWriteHRSEqual(t, "List<>", MakeListType(MakeUnionType()))
 }
 

@@ -26,6 +26,10 @@ export function constructRef(t: Type, targetHash: Hash, height: number): Ref {
   return rv;
 }
 
+export function maxChunkHeight(v: Value): number {
+  return getChunksOfValue(v).reduce((max, c) => Math.max(max, c.height), 0);
+}
+
 export default class Ref<T: Value> extends ValueBase {
   _type: Type;
   // Hash of the value this points to.
@@ -37,7 +41,7 @@ export default class Ref<T: Value> extends ValueBase {
   constructor(val: T) {
     super();
     this._type = makeRefType(getTypeOfValue(val));
-    this.height = 1 + getChunksOfValue(val).reduce((max, c) => Math.max(max, c.height), 0);
+    this.height = 1 + maxChunkHeight(val);
     this.targetHash = getHashOfValue(val);
   }
 

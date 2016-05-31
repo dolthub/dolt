@@ -5,90 +5,31 @@
 package types
 
 import (
-	"encoding/base64"
 	"fmt"
-	"io/ioutil"
-	"strconv"
-	"strings"
 
 	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/hash"
 )
 
-func fromTypedEncodeable(i []interface{}, vr ValueReader) Value {
-	r := newJSONArrayReader(i, vr)
-	return r.readValue()
-}
-
-type jsonArrayReader struct {
-	a  []interface{}
-	i  int
+type valueDecoder struct {
+	nomsReader
 	vr ValueReader
 }
 
-func newJSONArrayReader(a []interface{}, vr ValueReader) *jsonArrayReader {
-	return &jsonArrayReader{a: a, i: 0, vr: vr}
+func newValueDecoder(nr nomsReader, vr ValueReader) *valueDecoder {
+	return &valueDecoder{nr, vr}
 }
 
-func (r *jsonArrayReader) read() interface{} {
-	v := r.a[r.i]
-	r.i++
-	return v
+func (r *valueDecoder) readKind() NomsKind {
+	return NomsKind(r.readUint8())
 }
 
-func (r *jsonArrayReader) atEnd() bool {
-	return r.i >= len(r.a)
-}
-
-func (r *jsonArrayReader) readString() string {
-	return r.read().(string)
-}
-
-func (r *jsonArrayReader) readBool() bool {
-	return r.read().(bool)
-}
-
-func (r *jsonArrayReader) readFloat() float64 {
-	v, err := strconv.ParseFloat(r.readString(), 64)
-	d.Chk.Nil(err)
-	return v
-}
-
-func (r *jsonArrayReader) readInt() int64 {
-	v, err := strconv.ParseInt(r.readString(), 10, 64)
-	d.Chk.Nil(err)
-	return v
-}
-
-func (r *jsonArrayReader) readUint() uint64 {
-	v, err := strconv.ParseUint(r.readString(), 10, 64)
-	d.Chk.Nil(err)
-	return v
-}
-
-func (r *jsonArrayReader) readUint8() uint8 {
-	return uint8(r.read().(float64))
-}
-
-func (r *jsonArrayReader) readUint16() uint16 {
-	return uint16(r.read().(float64))
-}
-
-func (r *jsonArrayReader) readArray() []interface{} {
-	return r.read().([]interface{})
-}
-
-func (r *jsonArrayReader) readKind() NomsKind {
-	return NomsKind(r.read().(float64))
-}
-
-func (r *jsonArrayReader) readRef(t *Type) Ref {
-	h := hash.Parse(r.readString())
-	height := r.readUint()
+func (r *valueDecoder) readRef(t *Type) Ref {
+	h := r.readHash()
+	height := r.readUint64()
 	return constructRef(t, h, height)
 }
 
-func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
+func (r *valueDecoder) readType(parentStructTypes []*Type) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind:
@@ -102,15 +43,15 @@ func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
 	case StructKind:
 		return r.readStructType(parentStructTypes)
 	case UnionKind:
-		l := r.readUint16()
+		l := r.readUint32()
 		elemTypes := make([]*Type, l)
-		for i := uint16(0); i < l; i++ {
+		for i := uint32(0); i < l; i++ {
 			elemTypes[i] = r.readType(parentStructTypes)
 		}
 		return MakeUnionType(elemTypes...)
 	case ParentKind:
-		i := r.readUint8()
-		d.Chk.True(i < uint8(len(parentStructTypes)))
+		i := r.readUint32()
+		d.Chk.True(i < uint32(len(parentStructTypes)))
 		return parentStructTypes[len(parentStructTypes)-1-int(i)]
 	}
 
@@ -118,37 +59,37 @@ func (r *jsonArrayReader) readType(parentStructTypes []*Type) *Type {
 	return MakePrimitiveType(k)
 }
 
-func (r *jsonArrayReader) readBlobLeafSequence() indexedSequence {
-	s := r.readString()
-	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(s))
-	b, err := ioutil.ReadAll(decoder)
-	d.Exp.NoError(err)
+func (r *valueDecoder) readBlobLeafSequence() indexedSequence {
+	b := r.readBytes()
 	return newBlobLeafSequence(r.vr, b)
 }
 
-func (r *jsonArrayReader) readListLeafSequence(t *Type) indexedSequence {
-	data := []Value{}
-	for !r.atEnd() {
+func (r *valueDecoder) readValueSequence() ValueSlice {
+	count := r.readUint32()
+
+	data := ValueSlice{}
+	for i := uint32(0); i < count; i++ {
 		v := r.readValue()
 		data = append(data, v)
 	}
 
+	return data
+}
+
+func (r *valueDecoder) readListLeafSequence(t *Type) indexedSequence {
+	data := r.readValueSequence()
 	return listLeafSequence{data, t, r.vr}
 }
 
-func (r *jsonArrayReader) readSetLeafSequence(t *Type) orderedSequence {
-	data := []Value{}
-	for !r.atEnd() {
-		v := r.readValue()
-		data = append(data, v)
-	}
-
+func (r *valueDecoder) readSetLeafSequence(t *Type) orderedSequence {
+	data := r.readValueSequence()
 	return setLeafSequence{data, t, r.vr}
 }
 
-func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
+func (r *valueDecoder) readMapLeafSequence(t *Type) orderedSequence {
+	count := r.readUint32()
 	data := []mapEntry{}
-	for !r.atEnd() {
+	for i := uint32(0); i < count; i++ {
 		k := r.readValue()
 		v := r.readValue()
 		data = append(data, mapEntry{k, v})
@@ -157,66 +98,67 @@ func (r *jsonArrayReader) readMapLeafSequence(t *Type) orderedSequence {
 	return mapLeafSequence{data, t, r.vr}
 }
 
-func (r *jsonArrayReader) readMetaSequence() metaSequenceData {
+func (r *valueDecoder) readMetaSequence() metaSequenceData {
+	count := r.readUint32()
+
 	data := metaSequenceData{}
-	for !r.atEnd() {
+	for i := uint32(0); i < count; i++ {
 		h := r.readValue().(Ref)
 		v := r.readValue()
-		numLeaves := uint64(r.readUint())
+		numLeaves := r.readUint64()
 		data = append(data, newMetaTuple(v, nil, h, numLeaves))
 	}
 
 	return data
 }
 
-func (r *jsonArrayReader) readIndexedMetaSequence(t *Type) indexedMetaSequence {
+func (r *valueDecoder) readIndexedMetaSequence(t *Type) indexedMetaSequence {
 	return newIndexedMetaSequence(r.readMetaSequence(), t, r.vr)
 }
 
-func (r *jsonArrayReader) readOrderedMetaSequence(t *Type) orderedMetaSequence {
+func (r *valueDecoder) readOrderedMetaSequence(t *Type) orderedMetaSequence {
 	return newOrderedMetaSequence(r.readMetaSequence(), t, r.vr)
 }
 
-func (r *jsonArrayReader) readValue() Value {
+func (r *valueDecoder) readValue() Value {
 	t := r.readType(nil)
 	switch t.Kind() {
 	case BlobKind:
 		isMeta := r.readBool()
 		if isMeta {
-			r2 := newJSONArrayReader(r.readArray(), r.vr)
-			return newBlob(r2.readIndexedMetaSequence(t))
+			return newBlob(r.readIndexedMetaSequence(t))
 		}
 
 		return newBlob(r.readBlobLeafSequence())
 	case BoolKind:
-		return Bool(r.read().(bool))
+		return Bool(r.readBool())
 	case NumberKind:
-		return Number(r.readFloat())
+		return Number(r.readFloat64())
 	case StringKind:
 		return NewString(r.readString())
 	case ListKind:
 		isMeta := r.readBool()
-		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		if isMeta {
-			return newList(r2.readIndexedMetaSequence(t))
+			return newList(r.readIndexedMetaSequence(t))
 		}
-		return newList(r2.readListLeafSequence(t))
+
+		return newList(r.readListLeafSequence(t))
 	case MapKind:
 		isMeta := r.readBool()
-		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		if isMeta {
-			return newMap(r2.readOrderedMetaSequence(t))
+			return newMap(r.readOrderedMetaSequence(t))
 		}
-		return newMap(r2.readMapLeafSequence(t))
+
+		return newMap(r.readMapLeafSequence(t))
 	case RefKind:
 		return r.readRef(t)
 	case SetKind:
 		isMeta := r.readBool()
-		r2 := newJSONArrayReader(r.readArray(), r.vr)
 		if isMeta {
-			return newSet(r2.readOrderedMetaSequence(t))
+			return newSet(r.readOrderedMetaSequence(t))
 		}
-		return newSet(r2.readSetLeafSequence(t))
+
+		return newSet(r.readSetLeafSequence(t))
 	case StructKind:
 		return r.readStruct(t)
 	case TypeKind:
@@ -228,10 +170,11 @@ func (r *jsonArrayReader) readValue() Value {
 	panic("not reachable")
 }
 
-func (r *jsonArrayReader) readStruct(t *Type) Value {
+func (r *valueDecoder) readStruct(t *Type) Value {
 	// We've read `[StructKind, name, fields, unions` at this point
-	values := []Value{}
 	desc := t.Desc.(StructDesc)
+
+	values := []Value{}
 	desc.IterFields(func(name string, t *Type) {
 		values = append(values, r.readValue())
 	})
@@ -239,7 +182,7 @@ func (r *jsonArrayReader) readStruct(t *Type) Value {
 	return structBuilder(values, t)
 }
 
-func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
+func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
 
 	fields := map[string]*Type{}
@@ -247,10 +190,10 @@ func (r *jsonArrayReader) readStructType(parentStructTypes []*Type) *Type {
 	parentStructTypes = append(parentStructTypes, st)
 	desc := st.Desc.(StructDesc)
 
-	fieldReader := newJSONArrayReader(r.readArray(), r.vr)
-	for !fieldReader.atEnd() {
-		fieldName := fieldReader.readString()
-		fieldType := fieldReader.readType(parentStructTypes)
+	count := r.readUint32()
+	for i := uint32(0); i < count; i++ {
+		fieldName := r.readString()
+		fieldType := r.readType(parentStructTypes)
 		fields[fieldName] = fieldType
 	}
 	desc.Fields = fields

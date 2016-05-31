@@ -34,7 +34,7 @@ import {
 import TestDatabase from './test-database.js';
 
 const testListSize = 5000;
-const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
+const listOfNRef = 'sha1-241e54086d50c131db3c2f3f5f17e68f42fd98ac';
 
 async function assertToJS(list: List, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -146,18 +146,18 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, 'sha1-26169e4d8d3175994c992ca21be07c30ad2007e3', 17, 19, 2);
+    await listTestSuite(10, 'sha1-99a9e8aa75f9363b561d4576c99630b1103c9083', 2, 2, 2);
   });
 
   test('LONG: List 4K', async () => {
-    await listTestSuite(12, 'sha1-35f79a6d2ddbe34ad469b1bf2a9a1b460e0e997c', 2, 3, 2);
+    await listTestSuite(12, 'sha1-3e4d4c123dceea5b45fcddb207a40b7e0f69a4f2', 4, 2, 2);
   });
 
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = intSequence(testListSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new List(refs);
-    assert.strictEqual(s.hash.toString(), 'sha1-2e79d54322aa793d0e8d48380a28927a257a141a');
+    assert.strictEqual('sha1-ac7830942e248613be6643a2667048667e9c22d1', s.hash.toString());
     assert.strictEqual(testListSize, s.length);
 
     const height = deriveCollectionHeight(s);
@@ -186,7 +186,7 @@ suite('List', () => {
       s = await s.append(i);
     }
 
-    assert.strictEqual(s.hash.toString(), listOfNRef);
+    assert.strictEqual(listOfNRef, s.hash.toString());
   });
 
   test('LONG: remove', async () => {
@@ -198,7 +198,7 @@ suite('List', () => {
       s = await s.remove(testListSize + count, testListSize + count + 1);
     }
 
-    assert.strictEqual(s.hash.toString(), listOfNRef);
+    assert.strictEqual(listOfNRef, s.hash.toString());
   });
 
   test('LONG: splice', async () => {
@@ -215,7 +215,7 @@ suite('List', () => {
       await splice500At(i * 1000);
     }
 
-    assert.strictEqual(s.hash.toString(), listOfNRef);
+    assert.strictEqual(listOfNRef, s.hash.toString());
   });
 
   test('LONG: write, read, modify, read', async () => {
@@ -566,7 +566,7 @@ suite('ListWriter', () => {
   });
 
   test('ListWriter with ValueReadWriter', async () => {
-    const values = intSequence(15);
+    const values = intSequence(75);
     const l = new List(values);
 
     // The number of writes depends on how many chunks we've encountered.

@@ -152,11 +152,11 @@ func (suite *listTestSuite) TestMap() {
 }
 
 func TestListSuite1K(t *testing.T) {
-	suite.Run(t, newListTestSuite(10, "sha1-26169e4d8d3175994c992ca21be07c30ad2007e3", 17, 19, 2))
+	suite.Run(t, newListTestSuite(10, "sha1-99a9e8aa75f9363b561d4576c99630b1103c9083", 2, 2, 2))
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, "sha1-35f79a6d2ddbe34ad469b1bf2a9a1b460e0e997c", 2, 3, 2))
+	suite.Run(t, newListTestSuite(12, "sha1-3e4d4c123dceea5b45fcddb207a40b7e0f69a4f2", 4, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {
@@ -575,7 +575,7 @@ func TestListFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testListSize)
 	s := NewList(nums...)
-	assert.Equal("sha1-aa1605484d993e89dbc0431acb9f2478282f9d94", s.Hash().String())
+	assert.Equal("sha1-241e54086d50c131db3c2f3f5f17e68f42fd98ac", s.Hash().String())
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -586,7 +586,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testListSize)
 	s := NewList(nums...)
-	assert.Equal("sha1-2e79d54322aa793d0e8d48380a28927a257a141a", s.Hash().String())
+	assert.Equal("sha1-ac7830942e248613be6643a2667048667e9c22d1", s.Hash().String())
 }
 
 func TestListModifyAfterRead(t *testing.T) {

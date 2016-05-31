@@ -141,7 +141,9 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return ch.Done().(Set)
+
+	ns := ch.Done().(Set)
+	return ns
 }
 
 func (s Set) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
