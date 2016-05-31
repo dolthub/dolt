@@ -107,6 +107,15 @@ func newTestSetWithGen(length int, gen testSetGenFn) testSet {
 	return values
 }
 
+func validateSet(t *testing.T, s Set, values ValueSlice) {
+	assert.True(t, s.Equals(NewSet(values...)))
+	out := ValueSlice{}
+	s.IterAll(func(v Value) {
+		out = append(out, v)
+	})
+	assert.True(t, out.Equals(values))
+}
+
 type setTestSuite struct {
 	collectionTestSuite
 	elems testSet
@@ -331,6 +340,22 @@ func TestSetHas2(t *testing.T) {
 	doTest(getTestRefValueOrderSet(2))
 	doTest(getTestRefToNativeOrderSet(2, vs))
 	doTest(getTestRefToValueOrderSet(2, vs))
+}
+
+func validateSetInsertion(t *testing.T, values ValueSlice) {
+	s := NewSet()
+	for i, v := range values {
+		s = s.Insert(v)
+		validateSet(t, s, values[0:i+1])
+	}
+}
+
+func TestSetValidateInsertAscending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	validateSetInsertion(t, generateNumbersAsValues(300))
 }
 
 func TestSetInsert(t *testing.T) {

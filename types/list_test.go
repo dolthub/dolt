@@ -63,6 +63,15 @@ func newTestListFromList(list List) testList {
 	return tl
 }
 
+func validateList(t *testing.T, l List, values ValueSlice) {
+	assert.True(t, l.Equals(NewList(values...)))
+	out := ValueSlice{}
+	l.IterAll(func(v Value, idx uint64) {
+		out = append(out, v)
+	})
+	assert.True(t, out.Equals(values))
+}
+
 type listTestSuite struct {
 	collectionTestSuite
 	elems testList
@@ -307,6 +316,22 @@ func TestListAppend(t *testing.T) {
 	assert.Equal(expected, listToSimple(cl6))
 	assert.Equal(3*getTestListLen()+4, cl6.Len())
 	assert.True(newList(expected).Equals(cl6))
+}
+
+func validateListInsertion(t *testing.T, values ValueSlice) {
+	s := NewList()
+	for i, v := range values {
+		s = s.Insert(uint64(i), v)
+		validateList(t, s, values[0:i+1])
+	}
+}
+
+func TestListValidateInsertAscending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	validateListInsertion(t, generateNumbersAsValues(300))
 }
 
 func TestListInsertNothing(t *testing.T) {

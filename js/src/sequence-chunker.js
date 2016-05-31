@@ -97,14 +97,41 @@ export default class SequenceChunker<C: Collection, S, U: Sequence> {
       await notNull(this._parent).resume();
     }
 
-    // TODO: Only call maxNPrevItems once.
-    const prev =
-      await cursor.maxNPrevItems(this._boundaryChecker.windowSize - 1);
-    for (let i = 0; i < prev.length; i++) {
-      this._boundaryChecker.write(prev[i]);
+    // Number of previous items which must be hashed into the boundary checker.
+    let primeHashCount = this._boundaryChecker.windowSize - 1;
+
+    // If the cursor is beyond the final position in the sequence, the preceeding
+    // item may have been a chunk boundary. In that case, we must test at least the preceeding item.
+    const appendPenultimate = cursor.idx === cursor.length;
+    if (appendPenultimate) {
+      // In that case, we prime enough items *prior* to the penultimate item to be correct.
+      primeHashCount++;
     }
 
-    this._current = await cursor.maxNPrevItems(cursor.indexInChunk);
+    // Number of items preceeding initial cursor in present chunk.
+    const primeCurrentCount = cursor.indexInChunk;
+
+    // Number of items to fetch prior to cursor position
+    const prevCount = Math.max(primeHashCount, primeCurrentCount);
+
+    const prev = await cursor.maxNPrevItems(prevCount);
+    for (let i = 0; i < prev.length; i++) {
+      const item = prev[i];
+      const backIdx = prev.length - i;
+      if (appendPenultimate && backIdx === 1) {
+        // Test the penultimate item for a boundary.
+        this.append(item);
+        continue;
+      }
+
+      if (backIdx <= primeHashCount) {
+        this._boundaryChecker.write(item);
+      }
+      if (backIdx <= primeCurrentCount) {
+        this._current.push(item);
+      }
+    }
+
     this._used = this._current.length > 0;
   }
 

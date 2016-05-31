@@ -41,6 +41,22 @@ class CountingMemoryStore extends MemoryStore {
   }
 }
 
+function intKVs(count: number): [[number, number]] {
+  const kvs = [];
+  for (let i = 0; i < count; i++) {
+    kvs.push([i, i + 1]);
+  }
+  return kvs;
+}
+
+async function validateMap(m: Map, kvs: [[number, number]]): Promise<void> {
+  assert.isTrue(equals(new Map(kvs), m));
+
+  const out = [];
+  await m.forEach((v, k) => void(out.push([k, v])));
+  assert.deepEqual(kvs, out);
+}
+
 suite('BuildMap', () => {
 
   test('unique keys - strings', async () => {
@@ -69,11 +85,7 @@ suite('BuildMap', () => {
   });
 
   test('LONG: set of n numbers', () => {
-    const kvs = [];
-    for (let i = 0; i < testMapSize; i++) {
-      kvs.push([i, i + 1]);
-    }
-
+    const kvs = intKVs(testMapSize);
     const m = new Map(kvs);
     assert.strictEqual(m.hash.toString(), mapOfNRef);
 
@@ -95,10 +107,7 @@ suite('BuildMap', () => {
   });
 
   test('LONG: map of ref to ref, set of n numbers', () => {
-    const kvs = [];
-    for (let i = 0; i < testMapSize; i++) {
-      kvs.push([i, i + 1]);
-    }
+    const kvs = intKVs(testMapSize);
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
@@ -124,11 +133,21 @@ suite('BuildMap', () => {
     assert.strictEqual(m.hash.toString(), mapOfNRef);
   });
 
-  test('LONG: set existing', async () => {
-    const kvs = [];
-    for (let i = 0; i < testMapSize; i++) {
-      kvs.push([i, i + 1]);
+  async function validateSet(kvs: [[number, number]]): Promise<void> {
+    let m = new Map();
+    for (let i = 0; i < kvs.length; i++) {
+      const kv = kvs[i];
+      m = await m.set(kv[0], kv[1]);
+      await validateMap(m, kvs.slice(0, i + 1));
     }
+  }
+
+  test('LONG: validate - set ascending', async () => {
+    await validateSet(intKVs(300));
+  });
+
+  test('LONG: set existing', async () => {
+    const kvs = intKVs(testMapSize);
 
     let m = new Map(kvs);
     for (let i = 0; i < testMapSize; i++) {
@@ -157,10 +176,7 @@ suite('BuildMap', () => {
   test('LONG: write, read, modify, read', async () => {
     const db = new Database(makeTestingBatchStore());
 
-    const kvs = [];
-    for (let i = 0; i < testMapSize; i++) {
-      kvs.push([i, i + 1]);
-    }
+    const kvs = intKVs(testMapSize);
 
     const m = new Map(kvs);
 

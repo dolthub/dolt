@@ -7,21 +7,21 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
+import BatchStore from './batch-store.js';
 import Chunk from './chunk.js';
 import Database from './database.js';
+import Hash from './hash.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import BatchStore from './batch-store.js';
-import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
-import {newStruct} from './struct.js';
-import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
-import {invariant, notNull} from './assert.js';
-import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import Set from './set.js';
-import {OrderedSequence} from './ordered-sequence.js';
-import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
+import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
+import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
+import {OrderedSequence} from './ordered-sequence.js';
 import {compare, equals} from './compare.js';
+import {flatten, flattenParallel, intSequence, deriveCollectionHeight} from './test-util.js';
+import {invariant, notNull} from './assert.js';
+import {newStruct} from './struct.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-8186877fb71711b8e6a516ed5c8ad1ccac8c6c00';
@@ -42,12 +42,12 @@ class CountingMemoryStore extends MemoryStore {
   }
 }
 
-function firstNNumbers(n: number): Array<number> {
-  const nums = [];
-  for (let i = 0; i < n; i++) {
-    nums.push(i);
-  }
-  return nums;
+async function validateSet(s: Set, values: number[]): Promise<void> {
+  assert.isTrue(equals(new Set(values), s));
+
+  const out = [];
+  await s.forEach(v => { out.push(v); });
+  assert.deepEqual(values, out);
 }
 
 suite('BuildSet', () => {
@@ -72,7 +72,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: set of n numbers', async () => {
-    const nums = firstNNumbers(testSetSize);
+    const nums = intSequence(testSetSize);
     const s = new Set(nums);
     assert.strictEqual(s.hash.toString(), setOfNRef);
 
@@ -83,7 +83,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: set of struct, set of n numbers', async () => {
-    const nums = firstNNumbers(testSetSize);
+    const nums = intSequence(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
     const s = new Set(structs);
     assert.strictEqual(s.hash.toString(), 'sha1-f10d8ccbc2270bb52bb988a0cadff912e2723eed');
@@ -98,7 +98,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: set of ref, set of n numbers', async () => {
-    const nums = firstNNumbers(testSetSize);
+    const nums = intSequence(testSetSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new Set(refs);
     assert.strictEqual(s.hash.toString(), 'sha1-14eeb2d1835011bf3e018121ba3274bc08e634e5');
@@ -109,18 +109,32 @@ suite('BuildSet', () => {
   });
 
   test('LONG: insert', async () => {
-    const nums = firstNNumbers(testSetSize - 10);
-    let s = new Set(nums);
-    for (let i = testSetSize - 10; i < testSetSize; i++) {
-      s = await s.insert(i);
-      assert.strictEqual(i + 1, s.size);
+    const nums = intSequence(testSetSize);
+    const build = nums.slice(0, testSetSize - 10);
+    const insert = nums.slice(testSetSize - 10);
+    let s = new Set(build);
+    for (let i = 0; i < insert.length; i++) {
+      s = await s.insert(insert[i]);
+      assert.strictEqual(build.length + i + 1, s.size);
     }
 
-    assert.strictEqual(s.hash.toString(), 'sha1-b41aab13e8de940d998c1f55a2f48f63159a19e0');
+    await validateSet(s, nums);
+  });
+
+  async function validateInsertion(values: number[]): Promise<void> {
+    let s = new Set();
+    for (let i = 0; i < values.length; i++) {
+      s = await s.insert(values[i]);
+      await validateSet(s, values.slice(0, i + 1));
+    }
+  }
+
+  test('LONG: validate - insert ascending', async () => {
+    await validateInsertion(intSequence(300));
   });
 
   test('LONG: remove', async () => {
-    const nums = firstNNumbers(testSetSize + 10);
+    const nums = intSequence(testSetSize + 10);
     let s = new Set(nums);
     let count = 10;
     while (count-- > 0) {
@@ -134,7 +148,7 @@ suite('BuildSet', () => {
   test('LONG: write, read, modify, read', async () => {
     const db = new Database(makeTestingBatchStore());
 
-    const nums = firstNNumbers(testSetSize);
+    const nums = intSequence(testSetSize);
     const s = new Set(nums);
     const r = db.writeValue(s).targetHash;
     const s2 = await db.readValue(r);
@@ -153,11 +167,10 @@ suite('BuildSet', () => {
     await db.close();
   });
 
-
   test('LONG: union write, read, modify, read', async () => {
     const db = new Database(makeTestingBatchStore());
 
-    const tmp = firstNNumbers(testSetSize);
+    const tmp = intSequence(testSetSize);
     const numbers = [];
     const strings = [];
     const structs = [];
@@ -552,7 +565,7 @@ suite('CompoundSet', () => {
   });
 
   test('LONG: canned set diff', async () => {
-    let s1 = new Set(firstNNumbers(testSetSize));
+    let s1 = new Set(intSequence(testSetSize));
     s1 = await db.readValue(db.writeValue(s1).targetHash);
 
     {

@@ -56,13 +56,44 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 		if cur.parent != nil {
 			seq.createParent()
 		}
-		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		// This can be WindowSize-1, not WindowSize, because the first appended item will fill the remaining spot in the hash window.
-		for _, item := range cur.maxNPrevItems(boundaryChk.WindowSize() - 1) {
-			boundaryChk.Write(item)
+
+		// Number of previous items which must be hashed into the boundary checker.
+		primeHashCount := boundaryChk.WindowSize() - 1
+
+		// If the cursor is beyond the final position in the sequence, the preceeding item may have been a chunk boundary. In that case, we must test at least the preceeding item.
+		appendPenultimate := cur.idx == cur.length()
+		if appendPenultimate {
+			// In that case, we prime enough items *prior* to the penultimate item to be correct.
+			primeHashCount++
 		}
-		// Reconstruct this entire chunk.
-		seq.current = cur.maxNPrevItems(cur.indexInChunk())
+
+		// Number of items preceeding initial cursor in present chunk.
+		primeCurrentCount := cur.indexInChunk()
+
+		// Number of items to fetch prior to cursor position
+		prevCount := primeHashCount
+		if primeCurrentCount > prevCount {
+			prevCount = primeCurrentCount
+		}
+
+		prev := cur.maxNPrevItems(prevCount)
+		for i, item := range prev {
+			backIdx := len(prev) - i
+			if appendPenultimate && backIdx == 1 {
+				// Test the penultimate item for a boundary.
+				seq.Append(item)
+				continue
+			}
+
+			if backIdx <= primeHashCount {
+				boundaryChk.Write(item)
+			}
+
+			if backIdx <= primeCurrentCount {
+				seq.current = append(seq.current, item)
+			}
+		}
+
 		seq.used = len(seq.current) > 0
 	}
 

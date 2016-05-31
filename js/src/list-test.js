@@ -8,10 +8,15 @@ import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
 import Database from './database.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import List, {ListWriter} from './list.js';
 import Ref from './ref.js';
-import {newStruct} from './struct.js';
+import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {calcSplices} from './edit-distance.js';
+import {equals} from './compare.js';
+import {invariant, notNull} from './assert.js';
+import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {newStruct} from './struct.js';
+
 import {
   makeRefType,
   makeListType,
@@ -28,10 +33,6 @@ import {
   intSequence,
   testRoundTripAndValidate,
 } from './test-util.js';
-import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
-import {invariant, notNull} from './assert.js';
-import List, {ListWriter} from './list.js';
-import {equals} from './compare.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -41,6 +42,13 @@ async function assertToJS(list: List, nums: Array<any>, start: number = 0,
   const jsArray = await list.toJS(start, end);
   const expect = nums.slice(start, end);
   assert.deepEqual(expect, jsArray);
+}
+
+async function validateList(l: List, values: number[]): Promise<void> {
+  assert.isTrue(equals(new List(values), l));
+  const out = [];
+  await l.forEach(v => void(out.push(v)));
+  assert.deepEqual(values, out);
 }
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
@@ -159,15 +167,16 @@ suite('List', () => {
     assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
 
-  test('LONG: insert', async () => {
-    const nums = intSequence(testListSize - 10);
-    let s = new List(nums);
-
-    for (let i = testListSize - 10; i < testListSize; i++) {
-      s = await s.insert(i, i);
+  async function validateInsertion(values: number[]): Promise<void> {
+    let l = new List();
+    for (let i = 0; i < values.length; i++) {
+      l = await l.insert(i, values[i]);
+      await validateList(l, values.slice(0, i + 1));
     }
+  }
 
-    assert.strictEqual(s.hash.toString(), listOfNRef);
+  test('LONG: validate - insert ascending', async () => {
+    await validateInsertion(intSequence(300));
   });
 
   test('LONG: append', async () => {

@@ -20,6 +20,19 @@ type mapEntrySlice []mapEntry
 func (mes mapEntrySlice) Len() int           { return len(mes) }
 func (mes mapEntrySlice) Swap(i, j int)      { mes[i], mes[j] = mes[j], mes[i] }
 func (mes mapEntrySlice) Less(i, j int) bool { return mes[i].key.Less(mes[j].key) }
+func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
+	if mes.Len() != other.Len() {
+		return false
+	}
+
+	for i, v := range mes {
+		if !v.key.Equals(other[i].key) || !v.value.Equals(other[i].value) {
+			return false
+		}
+	}
+
+	return true
+}
 
 func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
 	kts := make([]*Type, len(data))

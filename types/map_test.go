@@ -144,6 +144,18 @@ func newTestMapWithGen(length int, gen testMapGenFn) testMap {
 	return testMap{entries, gen(Number(mask + 1))}
 }
 
+func validateMap(t *testing.T, m Map, entries mapEntrySlice) {
+	tm := testMap{entries: entries}
+	assert.True(t, m.Equals(tm.toMap()))
+
+	out := mapEntrySlice{}
+	m.IterAll(func(k Value, v Value) {
+		out = append(out, mapEntry{k, v})
+	})
+
+	assert.True(t, out.Equals(entries))
+}
+
 type mapTestSuite struct {
 	collectionTestSuite
 	elems testMap
@@ -437,6 +449,22 @@ func TestMapSetGet(t *testing.T) {
 	assert.True(Number(42).Equals(m2.Get(NewString("foo"))))
 	assert.True(Number(43).Equals(m3.Get(NewString("foo"))))
 	assert.Nil(m4.Get(NewString("foo")))
+}
+
+func validateMapInsertion(t *testing.T, tm testMap) {
+	m := NewMap()
+	for i, entry := range tm.entries {
+		m = m.Set(entry.key, entry.value)
+		validateMap(t, m, tm.entries[0:i+1])
+	}
+}
+
+func TestMapValidateInsertAscending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	validateMapInsertion(t, newTestMap(300))
 }
 
 func TestMapSet(t *testing.T) {
