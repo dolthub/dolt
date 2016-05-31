@@ -193,7 +193,7 @@ export class JsonArrayReader {
       const ref = this.readValue();
       const v = this.readValue();
       const numLeaves = this.readInt();
-      data.push(new MetaTuple(ref, v, numLeaves));
+      data.push(new MetaTuple(ref, v, numLeaves, null));
     }
 
     return data;

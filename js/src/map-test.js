@@ -413,15 +413,21 @@ suite('CompoundMap', () => {
     const l4 = new Map([['m', true], ['n', false]]);
     const r4 = vwr.writeValue(l4);
 
-    const m1 = Map.fromSequence(newMapMetaSequence(vwr, [new MetaTuple(r1, 'b', 2),
-        new MetaTuple(r2, 'f', 2)]));
+    const m1 = Map.fromSequence(newMapMetaSequence(vwr, [
+      new MetaTuple(r1, 'b', 2, null),
+      new MetaTuple(r2, 'f', 2, null),
+    ]));
     const rm1 = vwr.writeValue(m1);
-    const m2 = Map.fromSequence(newMapMetaSequence(vwr, [new MetaTuple(r3, 'i', 2),
-        new MetaTuple(r4, 'n', 2)]));
+    const m2 = Map.fromSequence(newMapMetaSequence(vwr, [
+      new MetaTuple(r3, 'i', 2, null),
+      new MetaTuple(r4, 'n', 2, null),
+    ]));
     const rm2 = vwr.writeValue(m2);
 
-    const c = Map.fromSequence(newMapMetaSequence(vwr, [new MetaTuple(rm1, 'f', 4),
-        new MetaTuple(rm2, 'n', 4)]));
+    const c = Map.fromSequence(newMapMetaSequence(vwr, [
+      new MetaTuple(rm1, 'f', 4, null),
+      new MetaTuple(rm2, 'n', 4, null),
+    ]));
     return [c, m1, m2];
   }
 

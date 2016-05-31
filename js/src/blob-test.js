@@ -7,7 +7,7 @@
 import {blobType, refOfBlobType} from './type.js';
 import {assert} from 'chai';
 import Blob, {BlobReader, BlobWriter} from './blob.js';
-import {suite, test} from 'mocha';
+import {suite, test, setup, teardown} from 'mocha';
 import {
   assertChunkCountAndType,
   assertValueHash,
@@ -17,6 +17,7 @@ import {
 } from './test-util.js';
 import {invariant} from './assert.js';
 import {equals} from './compare.js';
+import TestDatabase from './test-database.js';
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go
@@ -171,47 +172,87 @@ suite('Blob', () => {
   test('LONG: Blob 256K', () =>
     blobTestSuite(18, 'sha1-42d53b4f225322f70d725d53f8bc631d4549b6e4', 13, 2, 2));
 
-  test('BlobWriter', () => {
-    const a = randomBuff(15);
-    const b1 = new Blob(a);
-    const w = new BlobWriter();
-    w.write(new Uint8Array(a.buffer, 0, 5));
-    w.write(new Uint8Array(a.buffer, 5, 5));
-    w.write(new Uint8Array(a.buffer, 10, 5));
-    w.close();
-    const b2 = w.blob;
-    const b3 = w.blob;
-    assert.strictEqual(b2, b3);
-    assert.isTrue(equals(b1, b2));
-  });
+  suite('BlobWriter', () => {
+    let db;
 
-  test('BlobWriter close throws', () => {
-    const a = randomBuff(15);
-    const w = new BlobWriter();
-    w.write(a);
-    w.close();
+    setup(() => {
+      db = new TestDatabase();
+    });
 
-    let ex;
-    try {
-      w.close();  // Cannot close twice.
-    } catch (e) {
-      ex = e;
-    }
-    assert.instanceOf(ex, TypeError);
-  });
+    teardown((): Promise<void> => db.close());
 
-  test('BlobWriter write throws', () => {
-    const a = randomBuff(15);
-    const w = new BlobWriter();
-    w.write(a);
-    w.close();
+    test('BlobWriter', () => {
+      const a = randomBuff(15);
+      const b1 = new Blob(a);
+      const w = new BlobWriter();
+      w.write(new Uint8Array(a.buffer, 0, 5));
+      w.write(new Uint8Array(a.buffer, 5, 5));
+      w.write(new Uint8Array(a.buffer, 10, 5));
+      w.close();
+      const b2 = w.blob;
+      const b3 = w.blob;
+      assert.strictEqual(b2, b3);
+      assert.isTrue(equals(b1, b2));
+    });
 
-    let ex;
-    try {
-      w.write(a);  // Cannot write after close.
-    } catch (e) {
-      ex = e;
-    }
-    assert.instanceOf(ex, TypeError);
+    test('BlobWriter close throws', () => {
+      const a = randomBuff(15);
+      const w = new BlobWriter();
+      w.write(a);
+      w.close();
+
+      let ex;
+      try {
+        w.close();  // Cannot close twice.
+      } catch (e) {
+        ex = e;
+      }
+      assert.instanceOf(ex, TypeError);
+    });
+
+    test('BlobWriter write throws', () => {
+      const a = randomBuff(15);
+      const w = new BlobWriter();
+      w.write(a);
+      w.close();
+
+      let ex;
+      try {
+        w.write(a);  // Cannot write after close.
+      } catch (e) {
+        ex = e;
+      }
+      assert.instanceOf(ex, TypeError);
+    });
+
+    test('BlobWriter with ValueReadWriter', () => {
+      const a = randomBuff(1500);
+      const b1 = new Blob(a);
+      const w = new BlobWriter(db);
+
+      // The number of writes depends on how many chunks we've encountered.
+      let writes = 0;
+      assert.equal(db.writeCount, writes);
+
+      w.write(new Uint8Array(a.buffer, 0, 500));
+      assert.equal(db.writeCount, writes);
+
+      w.write(new Uint8Array(a.buffer, 500, 500));
+      writes++;
+      assert.equal(db.writeCount, writes);
+
+      w.write(new Uint8Array(a.buffer, 1000, 500));
+      writes++;
+      assert.equal(db.writeCount, writes);
+
+      w.close();
+      writes += 2;  // one for the last leaf chunk and one for the meta chunk.
+      assert.equal(db.writeCount, writes);
+
+      const b2 = w.blob;
+      const b3 = w.blob;
+      assert.strictEqual(b2, b3);
+      assert.isTrue(equals(b1, b2));
+    });
   });
 });

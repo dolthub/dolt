@@ -6,7 +6,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ValueReader} from './value-store.js';
+import type {ValueReader, ValueWriter, ValueReadWriter} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
@@ -32,10 +32,15 @@ import SequenceChunker from './sequence-chunker.js';
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
-function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
+function newListLeafChunkFn<T: Value>(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
   return (items: Array<T>) => {
     const list = List.fromSequence(newListLeafSequence(vr, items));
-    const mt = new MetaTuple(new Ref(list), items.length, items.length, list);
+    let mt;
+    if (vw) {
+      mt = new MetaTuple(vw.writeValue(list), items.length, items.length, null);
+    } else {
+      mt = new MetaTuple(new Ref(list), items.length, items.length, list);
+    }
     return [mt, list];
   };
 }
@@ -50,8 +55,8 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   constructor(values: Array<T> = []) {
     const self = chunkSequenceSync(
         values,
-        newListLeafChunkFn(null),
-        newIndexedMetaSequenceChunkFn(Kind.List, null),
+        newListLeafChunkFn(null, null),
+        newIndexedMetaSequenceChunkFn(Kind.List, null, null),
         newListLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
     super(self.sequence);
@@ -65,8 +70,8 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
     return this.sequence.newCursorAt(idx).then(cursor =>
-      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
-                    newIndexedMetaSequenceChunkFn(Kind.List, vr),
+      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr, null),
+                    newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
                     newListLeafBoundaryChecker(),
                     newIndexedMetaSequenceBoundaryChecker));
   }
@@ -170,10 +175,10 @@ export class ListWriter<T: Value> {
   _list: ?List<T>;
   _chunker: SequenceChunker<List<T>, T, ListLeafSequence<T>>;
 
-  constructor() {
+  constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
-    this._chunker = new SequenceChunker(null, newListLeafChunkFn(),
-        newIndexedMetaSequenceChunkFn(Kind.List, null), newListLeafBoundaryChecker(),
+    this._chunker = new SequenceChunker(null, newListLeafChunkFn(vrw, vrw),
+        newIndexedMetaSequenceChunkFn(Kind.List, vrw, vrw), newListLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
   }
 

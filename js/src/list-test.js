@@ -7,14 +7,12 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
-import Database from './database.js';
 import List, {ListWriter} from './list.js';
 import Ref from './ref.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {newStruct} from './struct.js';
 
 import {
@@ -33,6 +31,7 @@ import {
   intSequence,
   testRoundTripAndValidate,
 } from './test-util.js';
+import TestDatabase from './test-database.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-aa1605484d993e89dbc0431acb9f2478282f9d94';
@@ -220,7 +219,7 @@ suite('List', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const nums = intSequence(testListSize);
     const s = new List(nums);
@@ -242,7 +241,7 @@ suite('ListLeafSequence', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -284,7 +283,7 @@ suite('CompoundList', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -299,14 +298,14 @@ suite('CompoundList', () => {
     const r4 = db.writeValue(l4);
 
     const m1 = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(r1, 2, 2), new MetaTuple(r2, 2, 2)]));
+      db, [new MetaTuple(r1, 2, 2, null), new MetaTuple(r2, 2, 2, null)]));
     const rm1 = db.writeValue(m1);
     const m2 = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(r3, 2, 2), new MetaTuple(r4, 2, 2)]));
+      db, [new MetaTuple(r3, 2, 2, null), new MetaTuple(r4, 2, 2, null)]));
     const rm2 = db.writeValue(m2);
 
     const l = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(rm1, 4, 4), new MetaTuple(rm2, 4, 4)]));
+      db, [new MetaTuple(rm1, 4, 4, null), new MetaTuple(rm2, 4, 4, null)]));
     return l;
   }
 
@@ -505,6 +504,16 @@ suite('Diff List', () => {
 
     assert.strictEqual('Load limit exceeded', exMessage);
   });
+});
+
+suite('ListWriter', () => {
+  let db;
+
+  setup(() => {
+    db = new TestDatabase();
+  });
+
+  teardown((): Promise<void> => db.close());
 
   test('ListWriter', async () => {
     const values = intSequence(15);
@@ -554,6 +563,32 @@ suite('Diff List', () => {
       ex = e;
     }
     assert.instanceOf(ex, TypeError);
+  });
+
+  test('ListWriter with ValueReadWriter', async () => {
+    const values = intSequence(15);
+    const l = new List(values);
+
+    // The number of writes depends on how many chunks we've encountered.
+    let writes = 0;
+    assert.equal(db.writeCount, writes);
+
+    const w = new ListWriter(db);
+    for (let i = 0; i < values.length; i++) {
+      w.write(values[i]);
+    }
+
+    writes++;
+    assert.equal(db.writeCount, writes);
+
+    w.close();
+    writes += 2;  // one for the last leaf chunk and one for the meta chunk.
+    assert.equal(db.writeCount, writes);
+
+    const l2 = w.list;
+    const l3 = w.list;
+    assert.isTrue(equals(l, l2));
+    assert.strictEqual(l2, l3);
   });
 
 });

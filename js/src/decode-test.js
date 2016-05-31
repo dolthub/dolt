@@ -176,9 +176,9 @@ suite('Decode', () => {
     const r2 = db.writeValue(List.fromSequence(newListLeafSequence(db, [1, 2])));
     const r3 = db.writeValue(List.fromSequence(newListLeafSequence(db, [3, 4, 5])));
     const tuples = [
-      new MetaTuple(r1, 1, 1),
-      new MetaTuple(r2, 2, 2),
-      new MetaTuple(r3, 3, 3),
+      new MetaTuple(r1, 1, 1, null),
+      new MetaTuple(r2, 2, 2, null),
+      new MetaTuple(r3, 3, 3, null),
     ];
 
     const l: List<number> = List.fromSequence(newListMetaSequence(db, tuples));
@@ -241,8 +241,8 @@ suite('Decode', () => {
     const r1 = db.writeValue(new NomsSet([0, 1]));
     const r2 = db.writeValue(new NomsSet([2, 3, 4]));
     const tuples = [
-      new MetaTuple(r1, 1, 2),
-      new MetaTuple(r2, 4, 3),
+      new MetaTuple(r1, 1, 2, null),
+      new MetaTuple(r2, 4, 3, null),
     ];
     const l: NomsSet<number> = NomsSet.fromSequence(newSetMetaSequence(db, tuples));
 

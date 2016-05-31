@@ -23,7 +23,7 @@ import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 
 export interface ValueWriter {
-  writeValue<T: Value>(v: T, t: ?Type): Ref<T>
+  writeValue<T: Value>(v: T): Ref<T>
 }
 
 export interface ValueReader {

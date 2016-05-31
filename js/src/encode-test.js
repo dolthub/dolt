@@ -121,9 +121,9 @@ suite('Encode', () => {
     const r2 = db.writeValue(Set.fromSequence(newSetLeafSequence(db, [1, 2])));
     const r3 = db.writeValue(Set.fromSequence(newSetLeafSequence(db, [3, 4, 5])));
     const tuples = [
-      new MetaTuple(r1, 0, 1),
-      new MetaTuple(r2, 2, 2),
-      new MetaTuple(r3, 5, 3),
+      new MetaTuple(r1, 0, 1, null),
+      new MetaTuple(r2, 2, 2, null),
+      new MetaTuple(r3, 5, 3, null),
     ];
     const l = Set.fromSequence(newSetMetaSequence(db, tuples));
 
@@ -225,9 +225,9 @@ suite('Encode', () => {
     const r2 = db.writeValue(List.fromSequence(newListLeafSequence(db, [1, 2])));
     const r3 = db.writeValue(List.fromSequence(newListLeafSequence(db, [3, 4, 5])));
     const tuples = [
-      new MetaTuple(r1, 1, 1),
-      new MetaTuple(r2, 2, 2),
-      new MetaTuple(r3, 3, 3),
+      new MetaTuple(r1, 1, 1, null),
+      new MetaTuple(r2, 2, 2, null),
+      new MetaTuple(r3, 3, 3, null),
     ];
     const l = List.fromSequence(newListMetaSequence(db, tuples));
 
@@ -246,8 +246,8 @@ suite('Encode', () => {
     const r1 = db.writeValue(Set.fromSequence(newSetLeafSequence(db, [true])));
     const r2 = db.writeValue(Set.fromSequence(newSetLeafSequence(db, [false])));
     const tuples = [
-      new MetaTuple(r1, true, 1),
-      new MetaTuple(r2, false, 1),
+      new MetaTuple(r1, true, 1, null),
+      new MetaTuple(r2, false, 1, null),
     ];
     const l = Set.fromSequence(newSetMetaSequence(db, tuples));
 

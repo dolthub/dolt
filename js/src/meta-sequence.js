@@ -7,7 +7,7 @@
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {sha1Size} from './hash.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ValueReader} from './value-store.js';
+import type {ValueReader, ValueWriter} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type Collection from './collection.js';
 import type {Type} from './type.js';
@@ -33,7 +33,7 @@ export class MetaTuple<K> {
   numLeaves: number;
   child: ?Collection;
 
-  constructor(ref: Ref, value: K, numLeaves: number, child: ?Collection = null) {
+  constructor(ref: Ref, value: K, numLeaves: number, child: ?Collection) {
     this.ref = ref;
     this.child = child;
     this.value = value;
@@ -224,7 +224,8 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
+                                              vw: ?ValueWriter): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
       invariant(mt.value === mt.numLeaves);
@@ -237,7 +238,13 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
       invariant(kind === Kind.Blob);
       col = Blob.fromSequence(newBlobMetaSequence(vr, tuples));
     }
-    return [new MetaTuple(new Ref(col), sum, sum, col), col];
+    let mt;
+    if (vw) {
+      mt = new MetaTuple(vw.writeValue(col), sum, sum, null);
+    } else {
+      mt = new MetaTuple(new Ref(col), sum, sum, col);
+    }
+    return [mt, col];
   };
 }
 

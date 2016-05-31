@@ -42,9 +42,9 @@ suite('MetaSequence', () => {
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
 
-    const iseq1 = newIndexedMetaSequenceChunkFn(Kind.List, null)([mt1, mt2])[0];
+    const iseq1 = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([mt1, mt2])[0];
     assert.strictEqual(2, iseq1.ref.height);
-    const iseq2 = newIndexedMetaSequenceChunkFn(Kind.List, null)([iseq1, iseq1])[0];
+    const iseq2 = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([iseq1, iseq1])[0];
     assert.strictEqual(3, iseq2.ref.height);
   });
 });

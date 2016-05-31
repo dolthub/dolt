@@ -103,7 +103,6 @@ export default class Database {
     return this._vs.readValue(hash);
   }
 
-
   writeValue<T: Value>(v: T): Ref<T> {
     return this._vs.writeValue(v);
   }

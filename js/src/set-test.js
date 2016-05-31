@@ -330,7 +330,7 @@ suite('CompoundSet', () => {
     for (let i = 0; i < values.length; i += 2) {
       const l = new Set([values[i], values[i + 1]]);
       const r = vwr.writeValue(l);
-      tuples.push(new MetaTuple(r, values[i + 1], 2));
+      tuples.push(new MetaTuple(r, values[i + 1], 2, null));
     }
 
     let last: ?Set = null;
@@ -340,7 +340,7 @@ suite('CompoundSet', () => {
         last = Set.fromSequence(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
         next.push(new MetaTuple(r, tuples[i + 1].value,
-                                tuples[i].numLeaves + tuples[i + 1].numLeaves));
+                                tuples[i].numLeaves + tuples[i + 1].numLeaves, null));
       }
 
       tuples = next;
