@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "noms example javascript client with a counter",
   "dependencies": {
-    "@attic/noms": "^41.3.0",
+    "@attic/noms": "^41.5.0",
     "babel-regenerator-runtime": "6.5.0",
     "csv": "^1.1.0",
     "request": "^2.72.0"

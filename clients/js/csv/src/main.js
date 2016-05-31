@@ -7,7 +7,7 @@
 import argv from 'yargs';
 import request from 'request';
 import parse from 'csv-parse';
-import {DatasetSpec, List, Struct, newStruct, escapeStructField} from '@attic/noms';
+import {DatasetSpec, List, ListWriter, Struct, newStruct, escapeStructField} from '@attic/noms';
 
 const args = argv
   .usage('Usage: $0 <url> <dataset>')
@@ -31,8 +31,7 @@ function main() {
   }
 
   const ds = spec.dataset();
-
-  let listP = Promise.resolve(new List([]));
+  const w = new ListWriter();
   const parser = parse({columns: true});
   let i = 0;
 
@@ -41,10 +40,8 @@ function main() {
     while ((record = parser.read())) {
       i++;
       const struct = newStruct('', specializeRecordTypes(record));
-      listP = listP.then(list => {
-        process.stdout.write(`${clearLine}${i} rows`);
-        return list.append(struct);
-      });
+      w.write(struct);
+      process.stdout.write(`${clearLine}${i} rows`);
     }
   });
 
@@ -54,10 +51,10 @@ function main() {
   });
 
   parser.on('finish', () => {
-    listP.then(list => {
-      process.stdout.write(`${clearLine}Committing ${list.length} rows\n`);
-      return ds.commit(list);
-    }).then(() => {
+    w.close();
+    const list = w.list;
+    process.stdout.write(`${clearLine}Committing ${i} rows`);
+    ds.commit(list).then(() => {
       const elapsed = (Date.now() - startTime) / 1000;
       process.stdout.write(`${clearLine}Wrote ${i} rows in ${elapsed}s\n`);
       process.exit(0);
