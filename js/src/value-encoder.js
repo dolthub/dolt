@@ -4,30 +4,27 @@
 
 // @flow
 
-import Chunk from './chunk.js';
-import Ref from './ref.js';
-import Struct, {StructMirror} from './struct.js';
-import type {NomsKind} from './noms-kind.js';
-import {StructDesc, Type, getTypeOfValue} from './type.js';
-import {MetaTuple} from './meta-sequence.js';
-import {invariant} from './assert.js';
-import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
+import Blob, {BlobLeafSequence} from './blob.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
-import Set, {SetLeafSequence} from './set.js';
+import Ref from './ref.js';
 import Sequence from './sequence.js';
-import {setEncodeNomsValue} from './get-hash.js';
-import Blob, {BlobLeafSequence} from './blob.js';
-import {describeTypeOfValue} from './encode-human-readable.js';
-import type {primitive} from './primitives.js';
+import Set, {SetLeafSequence} from './set.js';
+import Struct, {StructMirror} from './struct.js';
 import type Value from './value.js';
-import type {ValueWriter} from './value-store.js';
+import type {NomsKind} from './noms-kind.js';
 import type {NomsWriter} from './codec.js';
-import {BinaryNomsWriter} from './codec.js';
+import type {ValueWriter} from './value-store.js';
+import type {primitive} from './primitives.js';
+import {MetaTuple} from './meta-sequence.js';
+import {StructDesc, Type, getTypeOfValue} from './type.js';
+import {describeTypeOfValue} from './encode-human-readable.js';
+import {invariant} from './assert.js';
+import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 
 type primitiveOrArray = primitive | Array<primitiveOrArray>;
 
-export class ValueEncoder {
+export default class ValueEncoder {
   _w: NomsWriter;
   _vw: ?ValueWriter;
 
@@ -251,12 +248,3 @@ export class ValueEncoder {
     parentStructTypes.pop();
   }
 }
-
-export function encodeNomsValue(v: Value, vw: ?ValueWriter): Chunk {
-  const w = new BinaryNomsWriter();
-  const enc = new ValueEncoder(w, vw);
-  enc.writeValue(v);
-  return new Chunk(w.data);
-}
-
-setEncodeNomsValue(encodeNomsValue);

@@ -12,7 +12,7 @@ import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
 import ValueStore from './value-store.js';
 import List from './list.js';
-import {encodeNomsValue} from './encode.js';
+import {encodeValue} from './codec.js';
 import {equals} from './compare.js';
 
 export class FakeBatchStore extends BatchStore {
@@ -27,7 +27,7 @@ suite('ValueStore', () => {
     const vs = new ValueStore(new FakeBatchStore(ms));
     const input = 'abc';
 
-    const c = encodeNomsValue(input);
+    const c = encodeValue(input);
     const v1 = await vs.readValue(c.hash);
     assert.equal(null, v1);
 

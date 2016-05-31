@@ -18,9 +18,9 @@ import {
 } from './type.js';
 import {Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
-import {decodeNomsValue} from './decode.js';
+import {decodeValue} from './codec.js';
 import {invariant, notNull} from './assert.js';
-import {encodeNomsValue} from './encode.js';
+import {encodeValue} from './codec.js';
 import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 
@@ -63,7 +63,7 @@ export default class ValueStore {
       return null;
     }
 
-    const v = decodeNomsValue(chunk, this);
+    const v = decodeValue(chunk, this);
     this._valueCache.add(hash, chunk.data.length, v);
     this._knownHashes.cacheChunks(v, hash);
     // hash is trivially a hint for v, so consider putting that in the cache.
@@ -78,7 +78,7 @@ export default class ValueStore {
 
   writeValue<T: Value>(v: T): Ref<T> {
     const t = getTypeOfValue(v);
-    const chunk = encodeNomsValue(v, this);
+    const chunk = encodeValue(v, this);
     invariant(!chunk.isEmpty());
     const {hash} = chunk;
     const height = maxChunkHeight(v) + 1;

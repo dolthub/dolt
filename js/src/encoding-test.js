@@ -18,8 +18,9 @@ import Set, {newSetLeafSequence} from './set.js';
 import type Value from './value.js';
 import type {NomsKind} from './noms-kind.js';
 import {Kind} from './noms-kind.js';
-import {decodeNomsValue, ValueDecoder} from './decode.js';
-import {encodeNomsValue, ValueEncoder} from './encode.js';
+import ValueDecoder from './value-decoder.js';
+import ValueEncoder from './value-encoder.js';
+import {encodeValue, decodeValue} from './codec.js';
 import {equals} from './compare.js';
 import {invariant} from './assert.js';
 import {makeTestingBatchStore} from './batch-store-adaptor.js';
@@ -45,8 +46,8 @@ import {
 
 function assertRoundTrips(v: Value) {
   const db = new Database(makeTestingBatchStore());
-  const c = encodeNomsValue(v, db);
-  const out = decodeNomsValue(c, db);
+  const c = encodeValue(v, db);
+  const out = decodeValue(c, db);
   assert.isTrue(equals(v, out));
 }
 

@@ -13,7 +13,7 @@ import {getTypeOfValue} from './type.js';
 import {ValueBase} from './value.js';
 
 type encodeFn = (v: Value, vw: ?ValueWriter) => Chunk;
-let encodeNomsValue: ?encodeFn = null;
+let encodeValue: ?encodeFn = null;
 
 export function getHashOfValue(v: Value): Hash {
   if (v instanceof ValueBase) {
@@ -24,7 +24,7 @@ export function getHashOfValue(v: Value): Hash {
 }
 
 export function getHash(v: Value): Hash {
-  return notNull(encodeNomsValue)(v, null).hash;
+  return notNull(encodeValue)(v, null).hash;
 }
 
 export function ensureHash(h: ?Hash, v: Value): Hash {
@@ -35,6 +35,6 @@ export function ensureHash(h: ?Hash, v: Value): Hash {
   return getHash(v);
 }
 
-export function setEncodeNomsValue(encode: encodeFn) {
-  encodeNomsValue = encode;
+export function setEncodeValue(encode: encodeFn) {
+  encodeValue = encode;
 }

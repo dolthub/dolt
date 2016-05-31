@@ -13,7 +13,7 @@ import Database from './database.js';
 import {invariant, notNull} from './assert.js';
 import List from './list.js';
 import Map from './map.js';
-import {encodeNomsValue} from './encode.js';
+import {encodeValue} from './codec.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
 import {equals} from './compare.js';
 
@@ -23,7 +23,7 @@ suite('Database', () => {
     const ds = new Database(bs);
     const input = 'abc';
 
-    const c = encodeNomsValue(input);
+    const c = encodeValue(input);
     const v1 = await ds.readValue(c.hash);
     assert.equal(null, v1);
 

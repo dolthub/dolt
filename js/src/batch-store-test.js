@@ -9,7 +9,7 @@ import {assert} from 'chai';
 import MemoryStore from './memory-store.js';
 import BatchStore from './batch-store.js';
 import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
-import {encodeNomsValue} from './encode.js';
+import {encodeValue} from './codec.js';
 
 suite('BatchStore', () => {
   test('get after schedulePut works immediately', async () => {
@@ -17,7 +17,7 @@ suite('BatchStore', () => {
     const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
     const input = 'abc';
 
-    const c = encodeNomsValue(input);
+    const c = encodeValue(input);
     bs.schedulePut(c, new Set());
 
     const chunk = await bs.get(c.hash);
@@ -30,7 +30,7 @@ suite('BatchStore', () => {
     const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
     const input = 'abc';
 
-    const c = encodeNomsValue(input);
+    const c = encodeValue(input);
     bs.schedulePut(c, new Set());
 
     let chunk = await bs.get(c.hash);

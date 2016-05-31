@@ -5,7 +5,6 @@
 // @flow
 
 import Blob, {BlobLeafSequence} from './blob.js';
-import Chunk from './chunk.js';
 import Ref, {constructRef} from './ref.js';
 import {newStructWithTypeNoValidation} from './struct.js';
 import type Struct from './struct.js';
@@ -28,13 +27,11 @@ import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
 import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
-import {ValueBase, setHash} from './value.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
 import type {NomsReader} from './codec.js';
-import {BinaryNomsReader} from './codec.js';
 
-export class ValueDecoder {
+export default class ValueDecoder {
   _r: NomsReader;
   _ds: ValueReader;
 
@@ -52,7 +49,6 @@ export class ValueDecoder {
     const height = this._r.readUint64();
     return constructRef(t, hash, height);
   }
-
 
   readType(parentStructTypes: Type[]): Type {
     const k = this.readKind();
@@ -233,16 +229,4 @@ export class ValueDecoder {
     parentStructTypes.pop();
     return structType;
   }
-}
-
-export function decodeNomsValue(chunk: Chunk, vr: ValueReader): Value {
-  const data = chunk.data;
-  const dec = new ValueDecoder(new BinaryNomsReader(data), vr);
-  const v = dec.readValue();
-
-  if (v instanceof ValueBase) {
-    setHash(v, chunk.hash);
-  }
-
-  return v;
 }

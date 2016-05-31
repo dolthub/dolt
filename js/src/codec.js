@@ -4,9 +4,36 @@
 
 // @flow
 
+import Chunk from './chunk.js';
 import Hash, {sha1Size} from './hash.js';
+import ValueDecoder from './value-decoder.js';
+import ValueEncoder from './value-encoder.js';
 import {encode, decode} from './utf8.js';
 import {invariant} from './assert.js';
+import {setEncodeValue} from './get-hash.js';
+import {setHash, ValueBase} from './value.js';
+
+export function encodeValue(v: Value, vw: ?ValueWriter): Chunk {
+  const w = new BinaryNomsWriter();
+  const enc = new ValueEncoder(w, vw);
+  enc.writeValue(v);
+  return new Chunk(w.data);
+}
+
+setEncodeValue(encodeValue);
+
+export function decodeValue(chunk: Chunk, vr: ValueReader): Value {
+  const data = chunk.data;
+  const dec = new ValueDecoder(new BinaryNomsReader(data), vr);
+  const v = dec.readValue();
+
+  if (v instanceof ValueBase) {
+    setHash(v, chunk.hash);
+  }
+
+  return v;
+}
+
 
 const maxUInt32 = Math.pow(2, 32);
 const littleEndian = true;
