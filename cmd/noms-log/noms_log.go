@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 var (
 	color         = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
 	maxLines      = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
+	maxCommits    = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
 	showHelp      = flag.Bool("help", false, "show help text")
 	showGraph     = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
 	stdoutIsTty   = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
@@ -33,7 +35,8 @@ var (
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Displays the history of a Noms dataset\n")
-		fmt.Fprintln(os.Stderr, "Usage: noms log <dataset>")
+		fmt.Fprintln(os.Stderr, "Usage: noms log <commitObject>")
+		fmt.Fprintln(os.Stderr, "commitObject must be a dataset or object spec that refers to a commit.")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nSee \"Spelling Objects\" at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.\n\n")
 	}
@@ -50,23 +53,31 @@ func main() {
 
 	useColor = shouldUseColor()
 
-	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	spec, err := flags.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
-	dataset, err := spec.Dataset()
-	util.CheckError(err)
+	database, value, err := spec.Value()
+	if err != nil {
+		util.CheckErrorNoUsage(err)
+	}
+	defer database.Close()
 
-	origCommit, ok := dataset.MaybeHead()
-
-	if ok {
-		iter := NewCommitIterator(dataset.Database(), origCommit)
-		for ln, ok := iter.Next(); ok; ln, ok = iter.Next() {
-			if printCommit(ln) != nil {
-				break
-			}
-		}
+	origCommit, ok := value.(types.Struct)
+	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
+		util.CheckError(fmt.Errorf("%s does not reference a Commit object", spec))
 	}
 
-	dataset.Database().Close()
+	iter := NewCommitIterator(database, origCommit)
+	displayed := 0
+	if *maxCommits <= 0 {
+		*maxCommits = math.MaxInt32
+	}
+	for ln, ok := iter.Next(); ok && displayed < *maxCommits; ln, ok = iter.Next() {
+		if printCommit(ln) != nil {
+			break
+		}
+		displayed++
+	}
+
 }
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if

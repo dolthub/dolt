@@ -49,3 +49,7 @@ func NewMapOfStringToRefOfCommit() types.Map {
 func typeForSetOfRefOfCommit() *types.Type {
 	return types.MakeSetType(types.MakeRefType(commitType))
 }
+
+func CommitType() *types.Type {
+	return commitType
+}

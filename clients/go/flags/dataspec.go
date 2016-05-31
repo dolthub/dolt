@@ -159,6 +159,7 @@ func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
 
 	commit, ok := dataset.MaybeHead()
 	if !ok {
+		dataset.Database().Close()
 		return nil, nil, fmt.Errorf("No head value for dataset: %s", spec.DatasetName)
 	}
 
