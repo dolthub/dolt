@@ -25,7 +25,7 @@ git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/n
 # Build
 
 ```
-go install ./cmd/...
+go install github.com/attic-labs/noms/cmd/...
 ```
 
 # Run
