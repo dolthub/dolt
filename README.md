@@ -27,8 +27,7 @@ git clone https://github.com/attic-labs/noms
 # Build
 
 ```
-go install `go list ./... | grep -v /vendor/`
-go test `go list ./... | grep -v /vendor/`
+go install ./cmd/...
 ```
 
 # Run
