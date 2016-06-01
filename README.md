@@ -29,6 +29,8 @@ go build
 ./counter ldb:/tmp/nomsdb:counter
 ./counter ldb:/tmp/nomsdb:counter
 ./counter ldb:/tmp/nomsdb:counter
+
+noms log ldb:/tmp/nomsdb:counter
 ```
 
 # What next?
