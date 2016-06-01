@@ -26,12 +26,3 @@ noms ds http://localhost:8000
 # Print the history of the counter dataset
 noms log http://localhost:8000:counter
 ```
-
-## About
-
-Server is not commonly used directly by users, but is a building block used by other tools. For example, you can connect the counter application to your running server like so:
-
-```
-./counter http://localhost:8000:counter
-./counter http://localhost:8000:counter
-```
