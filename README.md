@@ -1,4 +1,4 @@
-# Noms
+# Hello!
 
 Noms is a content-addressable, append-only, peer-to-peer, structured data store.
 
@@ -6,25 +6,18 @@ In other words, *noms is git for data*.
 
 This repository contains two reference implementations of the noms protocol - one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
 
-# Prerequisites
+# Get Noms
 
+First make sure you have these prerequisites installed:
+
+* [Git](https://git-scm.com/)
 * [Go 1.6+](https://golang.org/dl/)
-* [Python 2.7+](https://www.python.org/downloads/) (Note: Python 2.x only, not Python 3.x)
 * [Node.js 5.11+](https://nodejs.org/download/)
 
-# Set environment variables
-
-* Ensure [`$GOPATH` is set correctly](https://golang.org/doc/code.html#GOPATH)
-
-# Get the code
+Then, fetch and build Noms:
 
 ```
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
-```
-
-# Build
-
-```
 go install github.com/attic-labs/noms/cmd/...
 ```
 
