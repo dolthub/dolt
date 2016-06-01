@@ -8,7 +8,7 @@ import "github.com/attic-labs/noms/d"
 
 func assertSubtype(t *Type, v Value) {
 	if !isSubtype(t, v.Type()) {
-		d.Chk.Fail("Invalid type", "Expected: %s, found: %s", t.Describe(), v.Type().Describe())
+		d.Chk.Fail("Invalid type")
 	}
 }
 

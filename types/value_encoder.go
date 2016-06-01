@@ -50,7 +50,7 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 		panic("unreached")
 	default:
 		w.writeKind(k)
-		d.Chk.True(IsPrimitiveKind(k), "Kind: %v Desc: %s\n", t.Kind(), t.Describe())
+		d.Chk.True(IsPrimitiveKind(k))
 	}
 }
 

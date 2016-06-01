@@ -22,7 +22,7 @@ func NewRef(v Value) Ref {
 
 // Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
 func constructRef(t *Type, target hash.Hash, height uint64) Ref {
-	d.Chk.Equal(RefKind, t.Kind(), "Invalid type. Expected: RefKind, found: %s", t.Describe())
+	d.Chk.Equal(RefKind, t.Kind())
 	d.Chk.NotEqual(ValueType, t.Desc.(CompoundDesc).ElemTypes[0])
 	return Ref{target, height, t, &hash.Hash{}}
 }
