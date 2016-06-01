@@ -31,7 +31,7 @@ module.exports = {
     'quotes': [2, 'single'],
     'radix': 2,
     'semi': 2,
-    'space-after-keywords': 2,
+    'keyword-spacing': 2,
     'space-before-function-paren': 0,
     'space-in-parens': [2, 'never'],
     'space-infix-ops': 2,
