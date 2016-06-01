@@ -36,11 +36,5 @@ noms log ldb:/tmp/nomsdb:counter
 # What next?
 
 * Learn the core tools: [`serve`](cmd/noms-serve), [`splore`](clients/js/splore), [`sync`](cmd/noms-sync), [`csv import/export`](clients/go/csv), [`json-import`](clients/go/json-import), [`xml-import`](clients/go/xml-import)
-* Run sample apps: (TODO)
 * NomDL reference (TODO)
-* Go SDK reference (TODO)
 * JavaScript SDK reference (TODO)
-
-## Recommended Chrome extensions
-
-* Hides generated (Go) files from GitHub pull requests: [GitHub PR gen hider](https://chrome.google.com/webstore/detail/mhemmopgidccpkibohejfhlbkggdcmhf).
