@@ -24,11 +24,15 @@ func NewPath() Path {
 }
 
 func (p Path) AddField(name string) Path {
-	return append(p, newFieldPart(name))
+	p1 := make(Path, len(p), len(p)+1)
+	copy(p1, p)
+	return append(p1, newFieldPart(name))
 }
 
 func (p Path) AddIndex(idx Value) Path {
-	return append(p, newIndexPart(idx))
+	p1 := make(Path, len(p), len(p)+1)
+	copy(p1, p)
+	return append(p1, newIndexPart(idx))
 }
 
 func (p Path) Resolve(v Value) (resolved Value) {
