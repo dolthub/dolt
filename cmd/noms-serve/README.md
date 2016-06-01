@@ -11,7 +11,7 @@ go build
 ./counter ldb:/tmp/nomsdb:counter
 ./counter ldb:/tmp/nomsdb:counter
 
-noms serve ldb:/tmp/nomsdb:counter
+noms serve ldb:/tmp/nomsdb
 ```
 
 Then, in a separate shell:
