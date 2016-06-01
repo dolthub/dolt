@@ -103,3 +103,15 @@ func TestPathToString(t *testing.T) {
 	assert.Equal("[\"0\"][\"1\"][\"100\"]", NewPath().AddIndex(NewString("0")).AddIndex(NewString("1")).AddIndex(NewString("100")).String())
 	assert.Equal(".foo[0].bar[4.5][false]", NewPath().AddField("foo").AddIndex(Number(0)).AddField("bar").AddIndex(Number(4.5)).AddIndex(Bool(false)).String())
 }
+
+func TestPathImmutability(t *testing.T) {
+	assert := assert.New(t)
+	p1 := NewPath().AddField("/").AddField("value").AddField("data").AddIndex(Number(1)).AddField("data")
+	p2 := p1.AddField("x")
+	p3 := p1.AddField("y")
+	p4 := p3.AddIndex(Number(19))
+	assert.Equal("./.value.data[1].data", p1.String())
+	assert.Equal("./.value.data[1].data.x", p2.String())
+	assert.Equal("./.value.data[1].data.y", p3.String())
+	assert.Equal("./.value.data[1].data.y[19]", p4.String())
+}
