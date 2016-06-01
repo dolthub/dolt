@@ -7,14 +7,20 @@ noms-serve implements a noms database over HTTP.
 ```
 cd $GOPATH/src/github.com/attic-labs/noms/clients/go/counter
 go build
-./counter ldb:/tmp/servertest:counter
-./counter ldb:/tmp/servertest:counter
-./counter ldb:/tmp/servertest:counter
+./counter ldb:/tmp/nomsdb:counter
+./counter ldb:/tmp/nomsdb:counter
+./counter ldb:/tmp/nomsdb:counter
 
-noms serve ldb:/tmp/servertest
+noms serve ldb:/tmp/nomsdb:counter
 ```
 
-Then navigate a web browser to [http://localhost:8000/root](http://localhost:8000/root). You should see a string starting with `sha1-...`. This _ref_ is the unique identifier for the current state of the database. You can explore it further by fetching URLs like http://localhost:8000/ref/sha1-...
+Then, in a separate shell:
+
+```
+./counter http://localhost:8000:counter
+
+noms ds http://localhost:8000
+```
 
 ## About
 
