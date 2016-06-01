@@ -19,7 +19,13 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 	buff := &bytes.Buffer{}
 	enc := newValueEncoder(binaryNomsWriter{buff}, vw)
 	enc.writeValue(v)
-	return chunks.NewChunk(buff.Bytes())
+
+	c := chunks.NewChunk(buff.Bytes())
+	if cacher, ok := v.(hashCacher); ok {
+		assignHash(cacher, c.Hash())
+	}
+
+	return c
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.

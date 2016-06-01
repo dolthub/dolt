@@ -17,7 +17,12 @@ export function encodeValue(v: Value, vw: ?ValueWriter): Chunk {
   const w = new BinaryNomsWriter();
   const enc = new ValueEncoder(w, vw);
   enc.writeValue(v);
-  return new Chunk(w.data);
+  const chunk = new Chunk(w.data);
+  if (v instanceof ValueBase) {
+    setHash(v, chunk.hash);
+  }
+
+  return chunk;
 }
 
 setEncodeValue(encodeValue);
