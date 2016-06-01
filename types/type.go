@@ -126,10 +126,15 @@ func MakePrimitiveTypeByString(p string) *Type {
 
 func MakeStructType(name string, fields map[string]*Type) *Type {
 	verifyStructName(name)
+	names := make([]string, len(fields))
+	i := 0
 	for fn := range fields {
 		verifyFieldName(fn)
+		names[i] = fn
+		i++
 	}
-	return buildType(StructDesc{name, fields})
+	sort.Strings(names)
+	return buildType(StructDesc{name, fields, names})
 }
 
 var fieldNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)

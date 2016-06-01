@@ -15,7 +15,6 @@ import {
   makeMapType,
   makeRefType,
   makeSetType,
-  makeStructType,
   makeUnionType,
   StructDesc,
   Type,
@@ -207,24 +206,20 @@ export default class ValueDecoder {
 
   readStructType(parentStructTypes: Type[]): Type {
     const name = this._r.readString();
+    const count = this._r.readUint32();
 
-    const fields = {};
-    const structType = makeStructType(name, fields);
+    const fields = Object.create(null);
+    const desc = new StructDesc(name, fields, count);
+    const structType = new Type(desc);
     parentStructTypes.push(structType);
 
-    const newFields = Object.create(null);
-
-    const count = this._r.readUint32();
     for (let i = 0; i < count; i++) {
       const fieldName = this._r.readString();
       const fieldType = this.readType(parentStructTypes);
-      newFields[fieldName] = fieldType;
+      // Mutate the already created structType since when looking for the cycle we compare
+      // by identity.
+      fields[fieldName] = fieldType;
     }
-
-    // Mutate the already created structType since when looking for the cycle we compare
-    // by identity.
-    structType.desc.fields = newFields;
-    structType.desc.fieldCount = count;
 
     parentStructTypes.pop();
     return structType;

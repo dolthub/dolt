@@ -4,8 +4,6 @@
 
 package types
 
-import "sort"
-
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
@@ -73,8 +71,9 @@ type TypeMap map[string]*Type
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
-	Name   string
-	Fields TypeMap
+	Name        string
+	Fields      TypeMap
+	sortedNames []string
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -94,12 +93,7 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 }
 
 func (s StructDesc) IterFields(cb func(name string, t *Type)) {
-	names := make([]string, 0, len(s.Fields))
-	for name := range s.Fields {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range s.sortedNames {
 		cb(name, s.Fields[name])
 	}
 }

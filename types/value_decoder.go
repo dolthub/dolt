@@ -186,17 +186,20 @@ func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
 
 	fields := map[string]*Type{}
-	st := MakeStructType(name, fields)
+	fieldNames := []string{}
+	desc := StructDesc{name, fields, fieldNames}
+	st := buildType(desc)
 	parentStructTypes = append(parentStructTypes, st)
-	desc := st.Desc.(StructDesc)
 
 	count := r.readUint32()
 	for i := uint32(0); i < count; i++ {
 		fieldName := r.readString()
 		fieldType := r.readType(parentStructTypes)
 		fields[fieldName] = fieldType
+		fieldNames = append(fieldNames, fieldName)
 	}
 	desc.Fields = fields
+	desc.sortedNames = fieldNames
 	st.Desc = desc
 	return st
 }

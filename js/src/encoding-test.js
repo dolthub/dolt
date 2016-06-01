@@ -503,5 +503,3 @@ suite('Encoding', () => {
     new List());
   });
 });
-
-

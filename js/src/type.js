@@ -65,10 +65,10 @@ export class StructDesc {
   fields: {[key: string]: Type};
   fieldCount: number;
 
-  constructor(name: string, fields: {[key: string]: Type}) {
+  constructor(name: string, fields: {[key: string]: Type}, fieldCount: number) {
     this.name = name;
     this.fields = fields;
-    this.fieldCount = Object.keys(fields).length;
+    this.fieldCount = fieldCount;
   }
 
   get kind(): NomsKind {
@@ -108,11 +108,9 @@ export class StructDesc {
 
   forEachField(cb: (name: string, type: Type) => void) {
     const {fields} = this;
-    const names = Object.keys(fields);
-    names.sort();
-    names.forEach(n => {
+    for (const n in fields) {
       cb(n, fields[n]);
-    });
+    }
   }
 }
 
@@ -181,8 +179,16 @@ export function makeRefType(elemType: Type): Type<CompoundDesc> {
 
 export function makeStructType(name: string, fields: {[key: string]: Type}): Type<StructDesc> {
   verifyStructName(name);
-  Object.keys(fields).forEach(verifyFieldName);
-  return buildType(new StructDesc(name, fields));
+  const newFields = Object.create(null);
+  const keys = Object.keys(fields);
+  keys.sort();
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    verifyFieldName(k);
+    newFields[k] = fields[k];
+  }
+
+  return buildType(new StructDesc(name, newFields, keys.length));
 }
 
 /**
