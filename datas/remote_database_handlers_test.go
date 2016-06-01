@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"fmt"
@@ -137,13 +138,13 @@ func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
 	return body
 }
 
-func TestBuildGetRefsRequest(t *testing.T) {
+func TestBuildHashesRequest(t *testing.T) {
 	assert := assert.New(t)
 	hashes := map[hash.Hash]struct{}{
 		hash.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
 		hash.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
 	}
-	r := buildGetRefsRequest(hashes)
+	r := buildHashesRequest(hashes)
 	b, err := ioutil.ReadAll(r)
 	assert.NoError(err)
 
@@ -187,6 +188,46 @@ func TestHandleGetRefs(t *testing.T) {
 		for c := range chunkChan {
 			assert.Equal(chnx[0].Hash(), c.Hash())
 			chnx = chnx[1:]
+		}
+		assert.Empty(chnx)
+	}
+}
+
+func TestHandleHasRefs(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	input1, input2 := "abc", "def"
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte(input1)),
+		chunks.NewChunk([]byte(input2)),
+	}
+	err := cs.PutMany(chnx)
+	assert.NoError(err)
+
+	absent := hash.Parse("sha1-0000000000000000000000000000000000000002")
+	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
+
+	w := httptest.NewRecorder()
+	HandleHasRefs(w,
+		&http.Request{Body: ioutil.NopCloser(body), Method: "POST", Header: http.Header{
+			"Content-Type": {"application/x-www-form-urlencoded"},
+		}},
+		params{},
+		cs,
+	)
+
+	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+		scanner := bufio.NewScanner(w.Body)
+		scanner.Split(bufio.ScanWords)
+		for scanner.Scan() {
+			h := hash.Parse(scanner.Text())
+			scanner.Scan()
+			if scanner.Text() == "true" {
+				assert.Equal(chnx[0].Hash(), h)
+				chnx = chnx[1:]
+			} else {
+				assert.Equal(absent, h)
+			}
 		}
 		assert.Empty(chnx)
 	}

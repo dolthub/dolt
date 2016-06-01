@@ -67,6 +67,12 @@ func newHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 		},
 	)
 	serv.POST(
+		constants.HasRefsPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			HandleHasRefs(w, req, ps, cs)
+		},
+	)
+	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 			HandleRootPost(w, req, ps, cs)
@@ -218,8 +224,23 @@ func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestGet() {
-	c := chunks.NewChunk([]byte("abc"))
-	suite.cs.Put(c)
-	got := suite.store.Get(c.Hash())
-	suite.Equal(c.Hash(), got.Hash())
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	suite.NoError(suite.cs.PutMany(chnx))
+	got := suite.store.Get(chnx[0].Hash())
+	suite.Equal(chnx[0].Hash(), got.Hash())
+	got = suite.store.Get(chnx[1].Hash())
+	suite.Equal(chnx[1].Hash(), got.Hash())
+}
+
+func (suite *HTTPBatchStoreSuite) TestHas() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	suite.NoError(suite.cs.PutMany(chnx))
+	suite.True(suite.store.Has(chnx[0].Hash()))
+	suite.True(suite.store.Has(chnx[1].Hash()))
 }

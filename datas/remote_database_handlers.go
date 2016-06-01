@@ -126,23 +126,15 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
 
-		err := req.ParseForm()
-		d.Exp.NoError(err)
-		refStrs := req.PostForm["ref"]
-		d.Exp.True(len(refStrs) > 0)
-
-		refs := make([]hash.Hash, len(refStrs))
-		for idx, refStr := range refStrs {
-			refs[idx] = hash.Parse(refStr)
-		}
+		hashes := extractHashes(req)
 
 		w.Header().Add("Content-Type", "application/octet-stream")
 		writer := respWriter(req, w)
 		defer writer.Close()
 
 		sz := chunks.NewSerializer(writer)
-		for _, r := range refs {
-			c := cs.Get(r)
+		for _, h := range hashes {
+			c := cs.Get(h)
 			if !c.IsEmpty() {
 				sz.Put(c)
 			}
@@ -156,12 +148,46 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	}
 }
 
-func buildGetRefsRequest(refs map[hash.Hash]struct{}) io.Reader {
+func extractHashes(req *http.Request) hash.HashSlice {
+	err := req.ParseForm()
+	d.Exp.NoError(err)
+	hashStrs := req.PostForm["ref"]
+	d.Exp.True(len(hashStrs) > 0)
+
+	hashes := make(hash.HashSlice, len(hashStrs))
+	for idx, refStr := range hashStrs {
+		hashes[idx] = hash.Parse(refStr)
+	}
+	return hashes
+}
+
+func buildHashesRequest(hashes map[hash.Hash]struct{}) io.Reader {
 	values := &url.Values{}
-	for r := range refs {
+	for r := range hashes {
 		values.Add("ref", r.String())
 	}
 	return strings.NewReader(values.Encode())
+}
+
+func HandleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	err := d.Try(func() {
+		d.Exp.Equal("POST", req.Method)
+
+		hashes := extractHashes(req)
+
+		w.Header().Add("Content-Type", "text/plain")
+		writer := respWriter(req, w)
+		defer writer.Close()
+
+		for _, h := range hashes {
+			fmt.Fprintf(writer, "%s %t\n", h, cs.Has(h))
+		}
+	})
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+		return
+	}
 }
 
 func HandleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {

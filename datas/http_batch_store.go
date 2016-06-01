@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -36,7 +37,8 @@ type httpBatchStore struct {
 	host          *url.URL
 	httpClient    httpDoer
 	auth          string
-	readQueue     chan chunks.ReadRequest
+	getQueue      chan chunks.ReadRequest
+	hasQueue      chan chunks.ReadRequest
 	writeQueue    chan writeRequest
 	flushChan     chan struct{}
 	finishedChan  chan struct{}
@@ -54,7 +56,8 @@ func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		host:          u,
 		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
 		auth:          auth,
-		readQueue:     make(chan chunks.ReadRequest, readBufferSize),
+		getQueue:      make(chan chunks.ReadRequest, readBufferSize),
+		hasQueue:      make(chan chunks.ReadRequest, readBufferSize),
 		writeQueue:    make(chan writeRequest, writeBufferSize),
 		flushChan:     make(chan struct{}),
 		finishedChan:  make(chan struct{}),
@@ -64,6 +67,7 @@ func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		unwrittenPuts: newOrderedChunkCache(),
 	}
 	buffSink.batchGetRequests()
+	buffSink.batchHasRequests()
 	buffSink.batchPutRequests()
 	return buffSink
 }
@@ -100,39 +104,61 @@ func (bhcs *httpBatchStore) Close() (e error) {
 	bhcs.workerWg.Wait()
 
 	close(bhcs.flushChan)
+	close(bhcs.getQueue)
+	close(bhcs.hasQueue)
 	close(bhcs.writeQueue)
 	close(bhcs.rateLimit)
 	return
 }
 
-func (bhcs *httpBatchStore) Get(r hash.Hash) chunks.Chunk {
-	pending := bhcs.unwrittenPuts.Get(r)
-	if !pending.IsEmpty() {
+func (bhcs *httpBatchStore) Get(h hash.Hash) chunks.Chunk {
+	if pending := bhcs.unwrittenPuts.Get(h); !pending.IsEmpty() {
 		return pending
 	}
 
 	ch := make(chan chunks.Chunk)
 	bhcs.requestWg.Add(1)
-	bhcs.readQueue <- chunks.NewGetRequest(r, ch)
+	bhcs.getQueue <- chunks.NewGetRequest(h, ch)
 	return <-ch
 }
 
 func (bhcs *httpBatchStore) batchGetRequests() {
+	bhcs.batchReadRequests(bhcs.getQueue, bhcs.getRefs)
+}
+
+func (bhcs *httpBatchStore) Has(h hash.Hash) bool {
+	if bhcs.unwrittenPuts.has(h) {
+		return true
+	}
+
+	ch := make(chan bool)
+	bhcs.requestWg.Add(1)
+	bhcs.hasQueue <- chunks.NewHasRequest(h, ch)
+	return <-ch
+}
+
+func (bhcs *httpBatchStore) batchHasRequests() {
+	bhcs.batchReadRequests(bhcs.hasQueue, bhcs.hasRefs)
+}
+
+type batchGetter func(hashes hashSet, batch chunks.ReadBatch)
+
+func (bhcs *httpBatchStore) batchReadRequests(queue <-chan chunks.ReadRequest, getter batchGetter) {
 	bhcs.workerWg.Add(1)
 	go func() {
 		defer bhcs.workerWg.Done()
 
 		for done := false; !done; {
 			select {
-			case req := <-bhcs.readQueue:
-				bhcs.sendGetRequests(req)
+			case req := <-queue:
+				bhcs.sendReadRequests(req, queue, getter)
 			case <-bhcs.finishedChan:
 				done = true
 			}
-			// Drain the readQueue before returning
+			// Drain queue before returning
 			select {
-			case req := <-bhcs.readQueue:
-				bhcs.sendGetRequests(req)
+			case req := <-queue:
+				bhcs.sendReadRequests(req, queue, getter)
 			default:
 				//drained!
 			}
@@ -140,7 +166,7 @@ func (bhcs *httpBatchStore) batchGetRequests() {
 	}()
 }
 
-func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
+func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
 	batch := chunks.ReadBatch{}
 	hashes := hashSet{}
 
@@ -153,7 +179,7 @@ func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 	addReq(req)
 	for drained := false; !drained && len(hashes) < readBufferSize; {
 		select {
-		case req := <-bhcs.readQueue:
+		case req := <-queue:
 			addReq(req)
 		default:
 			drained = true
@@ -168,17 +194,17 @@ func (bhcs *httpBatchStore) sendGetRequests(req chunks.ReadRequest) {
 			batch.Close()
 		}()
 
-		bhcs.getRefs(hashes, &batch)
+		getter(hashes, batch)
 		<-bhcs.rateLimit
 	}()
 }
 
-func (bhcs *httpBatchStore) getRefs(hashes hashSet, cs chunks.ChunkSink) {
+func (bhcs *httpBatchStore) getRefs(hashes hashSet, batch chunks.ReadBatch) {
 	// POST http://<host>/getRefs/. Post body: ref=sha1---&ref=sha1---& Response will be chunk data if present, 404 if absent.
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
 
-	req := newRequest("POST", bhcs.auth, u.String(), buildGetRefsRequest(hashes), http.Header{
+	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
 		"Accept-Encoding": {"gzip"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
@@ -188,16 +214,58 @@ func (bhcs *httpBatchStore) getRefs(hashes hashSet, cs chunks.ChunkSink) {
 	defer closeResponse(res)
 	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
-	reader := res.Body
+	reader := resBodyReader(res)
+	defer reader.Close()
+
+	rl := make(chan struct{}, 1) // Rate limit to 1 because there are already N goroutines waiting on responses, all we need to do is send the Chunks back through their channels.
+	chunks.Deserialize(reader, &batch, rl)
+}
+
+func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
+	// POST http://<host>/hasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|".
+	u := *bhcs.host
+	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.HasRefsPath)
+
+	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
+		"Accept-Encoding": {"gzip"},
+		"Content-Type":    {"application/x-www-form-urlencoded"},
+	})
+
+	res, err := bhcs.httpClient.Do(req)
+	d.Chk.NoError(err)
+	defer closeResponse(res)
+	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+
+	reader := resBodyReader(res)
+	defer reader.Close()
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(bufio.ScanWords)
+	for scanner.Scan() {
+		h := hash.Parse(scanner.Text())
+		d.Chk.True(scanner.Scan())
+		if scanner.Text() == "true" {
+			for _, outstanding := range batch[h] {
+				// This is a little gross, but OutstandingHas.Satisfy() expects a chunk. It ignores it, though, and just sends 'true' over the channel it's holding.
+				outstanding.Satisfy(chunks.EmptyChunk)
+			}
+		} else {
+			for _, outstanding := range batch[h] {
+				outstanding.Fail()
+			}
+		}
+		delete(batch, h)
+	}
+}
+
+func resBodyReader(res *http.Response) (reader io.ReadCloser) {
+	reader = res.Body
 	if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
 		gr, err := gzip.NewReader(reader)
 		d.Chk.NoError(err)
-		defer gr.Close()
 		reader = gr
 	}
-
-	rl := make(chan struct{}, 1) // Rate limit to 1 because there are already N goroutines waiting on responses, all we need to do is send the Chunks back through their channels.
-	chunks.Deserialize(reader, cs, rl)
+	return
 }
 
 func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
