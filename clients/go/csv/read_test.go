@@ -114,25 +114,24 @@ func TestReadParseError(t *testing.T) {
 	}()
 }
 
-func TestNormalizeHeaderName(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.Equal("a", NormalizeHeaderName("a"))
-	assert.Equal("ab", NormalizeHeaderName("ab"))
-	assert.Equal("a0", NormalizeHeaderName("a0"))
-
-	assert.Equal("a_b", NormalizeHeaderName("a b"))
-
-	assert.Panics(func() { NormalizeHeaderName(" ") })
-	assert.Panics(func() { NormalizeHeaderName("0") })
-}
-
-func TestDuplicateNormalizedHeaderNames(t *testing.T) {
+func TestDuplicateHeaderName(t *testing.T) {
 	assert := assert.New(t)
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
 	dataString := "1,2\n3,4\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
-	headers := []string{"A+", "A-"}
+	headers := []string{"A", "A"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
 	assert.Panics(func() { Read(r, "test", headers, kinds, ds) })
+}
+
+func TestEscapeFieldNames(t *testing.T) {
+	assert := assert.New(t)
+	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	dataString := "1\n"
+	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
+	headers := []string{"A A"}
+	kinds := KindSlice{types.NumberKind}
+	l, _ := Read(r, "test", headers, kinds, ds)
+	assert.Equal(uint64(1), l.Len())
+	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
 }
