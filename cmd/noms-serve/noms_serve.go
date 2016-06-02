@@ -19,8 +19,7 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 8000, "")
-	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
+	port = flag.Int("port", 8000, "")
 )
 
 func main() {

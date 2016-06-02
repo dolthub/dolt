@@ -17,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/datas"
 	"github.com/attic-labs/noms/types"
-	goisatty "github.com/mattn/go-isatty"
+	"github.com/attic-labs/noms/util/outputpager"
 	"github.com/mgutz/ansi"
 )
 
@@ -27,7 +27,6 @@ var (
 	maxCommits    = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
 	showHelp      = flag.Bool("help", false, "show help text")
 	showGraph     = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
-	stdoutIsTty   = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
 	useColor      = false
 	maxLinesError = errors.New("Maximum number of lines written")
 )
@@ -61,6 +60,8 @@ func main() {
 	}
 	defer database.Close()
 
+	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
+
 	origCommit, ok := value.(types.Struct)
 	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", spec))
@@ -78,6 +79,10 @@ func main() {
 		displayed++
 	}
 
+	if waitChan != nil {
+		os.Stdout.Close()
+		<-waitChan
+	}
 }
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
@@ -228,16 +233,9 @@ func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (int, err
 	return out.numLines, err
 }
 
-func isStdoutTty() bool {
-	if *stdoutIsTty != 1 && *stdoutIsTty != 0 {
-		return goisatty.IsTerminal(os.Stdout.Fd())
-	}
-	return *stdoutIsTty == 1
-}
-
 func shouldUseColor() bool {
 	if *color != 1 && *color != 0 {
-		return isStdoutTty()
+		return outputpager.IsStdoutTty()
 	}
 	return *color == 1
 }

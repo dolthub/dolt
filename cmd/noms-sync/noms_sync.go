@@ -19,8 +19,7 @@ import (
 )
 
 var (
-	p           = flag.Uint("p", 512, "parallelism")
-	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
+	p = flag.Uint("p", 512, "parallelism")
 )
 
 func main() {

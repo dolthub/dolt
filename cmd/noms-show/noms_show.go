@@ -13,11 +13,11 @@ import (
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/util/outputpager"
 )
 
 var (
-	showHelp    = flag.Bool("help", false, "show help text")
-	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
+	showHelp = flag.Bool("help", false, "show help text")
 )
 
 func main() {
@@ -43,7 +43,14 @@ func main() {
 	database, value, err := spec.Value()
 	util.CheckError(err)
 
+	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
+
 	types.WriteEncodedValueWithTags(os.Stdout, value)
 	fmt.Fprintf(os.Stdout, "\n")
 	database.Close()
+
+	if waitChan != nil {
+		os.Stdout.Close()
+		<-waitChan
+	}
 }
