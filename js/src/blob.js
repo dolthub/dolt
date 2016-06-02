@@ -10,7 +10,7 @@ import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
 import type {ValueReader, ValueWriter, ValueReadWriter} from './value-store.js';
 import {blobType} from './type.js';
-import {MetaTuple, newIndexedMetaSequenceChunkFn, newIndexedMetaSequenceBoundaryChecker,} from
+import {MetaTuple, newIndexedMetaSequenceChunkFn, newIndexedMetaSequenceBoundaryChecker} from
   './meta-sequence.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import Ref from './ref.js';

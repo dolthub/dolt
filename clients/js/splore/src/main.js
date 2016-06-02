@@ -218,11 +218,11 @@ function handleNodeClick(e: MouseEvent, id: string) {
 
   if (id.indexOf('/') > -1) {
     if (data.links[id] && data.links[id].length > 0) {
-      data.nodes[id].isOpen = !Boolean(data.nodes[id].isOpen);
+      data.nodes[id].isOpen = !data.nodes[id].isOpen;
       render();
     }
   } else {
-    data.nodes[id].isOpen = !Boolean(data.nodes[id].isOpen);
+    data.nodes[id].isOpen = !data.nodes[id].isOpen;
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {

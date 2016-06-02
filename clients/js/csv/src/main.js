@@ -7,7 +7,7 @@
 import argv from 'yargs';
 import request from 'request';
 import parse from 'csv-parse';
-import {DatasetSpec, List, ListWriter, Struct, newStruct, escapeStructField} from '@attic/noms';
+import {DatasetSpec, ListWriter, Struct, newStruct, escapeStructField} from '@attic/noms';
 
 const args = argv
   .usage('Usage: $0 <url> <dataset>')

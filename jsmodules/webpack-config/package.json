@@ -6,5 +6,8 @@
   "dependencies": {
     "babel-loader": "^6.2.1",
     "webpack": "^1.12.11"
+  },
+  "scripts": {
+    "test": "exit 0"
   }
 }

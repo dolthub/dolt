@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const input = inSpec.dataset();
   const commit = await input.head();
   const head = commit && commit.value;
-  invariant(head, quit(`{args._[0]} does not exist}`));
+  invariant(head, quit(`${args._[0]} does not exist}`));
 
   const pitchers = new Map();
   const inningPs = [];

@@ -8,5 +8,8 @@
     "eslint": "^2.11.1",
     "eslint-plugin-flow-vars": "^0.4.0",
     "eslint-plugin-react": "^5.1.1"
+  },
+  "scripts": {
+    "test": "exit 0"
   }
 }

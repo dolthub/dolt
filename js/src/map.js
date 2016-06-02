@@ -16,9 +16,9 @@ import {compare, equals} from './compare.js';
 import {sha1Size} from './hash.js';
 import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
-import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn,} from
+import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn} from
   './meta-sequence.js';
-import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator,} from
+import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {ValueBase} from './value.js';

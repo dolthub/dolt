@@ -8,7 +8,7 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import List from './list.js';
-import {MetaTuple, newOrderedMetaSequenceChunkFn, newIndexedMetaSequenceChunkFn,} from
+import {MetaTuple, newOrderedMetaSequenceChunkFn, newIndexedMetaSequenceChunkFn} from
   './meta-sequence.js';
 import Ref from './ref.js';
 import Set from './set.js';
