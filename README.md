@@ -31,7 +31,7 @@ noms log ldb:/tmp/nomsdb:counter
 
 # What next?
 
-* [Introduction to Noms](intro.md)
-* [Command Line Tour](cli-tour.md)
-* [JavaScript SDK Tour](js-tour.md)
+* [Introduction to Noms](doc/intro.md)
+* [Command Line Tour](doc/cli-tour.md)
+* [JavaScript SDK Tour](doc/js-tour.md)
 * Check out our demos (TODO)
