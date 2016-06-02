@@ -31,7 +31,7 @@ noms log ldb:/tmp/nomsdb:counter
 
 # What next?
 
-* Introduction to Noms (TODO)
-* [Command Line Tour](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md)
-* [JavaScript SDK Tour](https://github.com/attic-labs/noms/blob/master/doc/js-tour.md)
+* [How it Works - Noms Design Overview](design.md)
+* [Command Line Tour](cli-tour.md)
+* [JavaScript SDK Tour](js-tour.md)
 * Check out our demos (TODO)
