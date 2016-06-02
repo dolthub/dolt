@@ -19,11 +19,7 @@ Then, fetch and build Noms:
 ```
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
 go install github.com/attic-labs/noms/cmd/...
-```
 
-# Run
-
-```
 cd "$GOPATH/src/github.com/attic-labs/noms/clients/go/counter"
 go build
 ./counter ldb:/tmp/nomsdb:counter
@@ -35,6 +31,7 @@ noms log ldb:/tmp/nomsdb:counter
 
 # What next?
 
-* Learn the core tools: [`serve`](cmd/noms-serve), [`splore`](clients/js/splore), [`sync`](cmd/noms-sync), [`csv import/export`](clients/go/csv), [`json-import`](clients/go/json-import), [`xml-import`](clients/go/xml-import)
-* NomDL reference (TODO)
-* JavaScript SDK reference (TODO)
+* Introduction to Noms (TODO)
+* [Command Line Tour](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md)
+* [JavaScript SDK Tour](https://github.com/attic-labs/noms/blob/master/doc/js-tour.md)
+* Check out our demos (TODO)
