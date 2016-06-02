@@ -135,7 +135,7 @@ func (s Struct) findField(n string) (*Type, bool) {
 
 func structBuilder(values []Value, t *Type) Value {
 	desc := t.Desc.(StructDesc)
-	data := structData{}
+	data := make(map[string]Value, len(desc.Fields))
 
 	i := 0
 	desc.IterFields(func(name string, t *Type) {

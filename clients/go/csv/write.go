@@ -15,11 +15,10 @@ import (
 
 // ValueToListAndElemDesc ensures that v is a types.List of structs, pulls the types.StructDesc that describes the elements of v out of vr, and returns the List and related StructDesc.
 func ValueToListAndElemDesc(v types.Value, vr types.ValueReader) (types.List, types.StructDesc) {
-	d.Exp.Equal(types.ListKind, v.Type().Kind(),
-		"Dataset must be List<>, found: %s", v.Type().Describe())
+	d.Exp.True(types.ListKind == v.Type().Kind())
 
 	t := v.Type().Desc.(types.CompoundDesc).ElemTypes[0]
-	d.Exp.Equal(types.StructKind, t.Kind(), "Did not find Struct: %s", t.Describe())
+	d.Exp.True(types.StructKind == t.Kind())
 	return v.(types.List), t.Desc.(types.StructDesc)
 }
 
@@ -45,8 +44,7 @@ func Write(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
 
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
 	structDesc.IterFields(func(name string, t *types.Type) {
-		d.Exp.Equal(true, types.IsPrimitiveKind(t.Kind()),
-			"Non-primitive CSV export not supported:", t.Describe())
+		d.Exp.True(types.IsPrimitiveKind(t.Kind()))
 		fieldNames = append(fieldNames, name)
 	})
 	return

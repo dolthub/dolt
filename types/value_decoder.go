@@ -174,9 +174,12 @@ func (r *valueDecoder) readStruct(t *Type) Value {
 	// We've read `[StructKind, name, fields, unions` at this point
 	desc := t.Desc.(StructDesc)
 
-	values := []Value{}
+	count := len(desc.Fields)
+	values := make([]Value, count, count)
+	i := 0
 	desc.IterFields(func(name string, t *Type) {
-		values = append(values, r.readValue())
+		values[i] = r.readValue()
+		i++
 	})
 
 	return structBuilder(values, t)
@@ -185,18 +188,19 @@ func (r *valueDecoder) readStruct(t *Type) Value {
 func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
 
-	fields := map[string]*Type{}
-	fieldNames := []string{}
+	count := r.readUint32()
+
+	fields := make(TypeMap, count)
+	fieldNames := make([]string, count, count)
 	desc := StructDesc{name, fields, fieldNames}
 	st := buildType(desc)
 	parentStructTypes = append(parentStructTypes, st)
 
-	count := r.readUint32()
 	for i := uint32(0); i < count; i++ {
 		fieldName := r.readString()
 		fieldType := r.readType(parentStructTypes)
 		fields[fieldName] = fieldType
-		fieldNames = append(fieldNames, fieldName)
+		fieldNames[i] = fieldName
 	}
 	desc.Fields = fields
 	desc.sortedNames = fieldNames
