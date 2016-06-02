@@ -20,7 +20,7 @@ Then, fetch and build Noms:
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
 go install github.com/attic-labs/noms/cmd/...
 
-cd "$GOPATH/src/github.com/attic-labs/noms/clients/go/counter"
+cd $GOPATH/src/github.com/attic-labs/noms/clients/go/counter
 go build
 ./counter ldb:/tmp/nomsdb:counter
 ./counter ldb:/tmp/nomsdb:counter
