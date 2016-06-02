@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	toDelete    = flag.String("d", "", "dataset to delete")
-	stdoutIsTty = flag.Int("stdout-is-tty", -1, "value of 1 forces tty ouput, 0 forces non-tty output (provided for use by other programs)")
+	toDelete = flag.String("d", "", "dataset to delete")
 )
 
 func main() {

@@ -13,20 +13,14 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-
-	goisatty "github.com/mattn/go-isatty"
 )
 
 const (
 	cmdPrefix = "noms-"
 )
 
-var (
-	noPager = flag.Bool("no-pager", false, "suppress paging functionality")
-)
-
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s [-no-pager] [command] [command-args]\n\n", path.Base(os.Args[0]))
+	fmt.Fprintf(os.Stderr, "usage: %s command [command-args]\n\n", path.Base(os.Args[0]))
 	fmt.Fprintf(os.Stderr, "Flags:\n\n")
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, "\nCommands:\n\n")
@@ -118,39 +112,16 @@ func forEachDir(cb func(dir *os.File) bool) {
 }
 
 func executeCmd(executable string) {
-	lessCmd, err := exec.LookPath("less")
-	if err != nil {
-		*noPager = true
-	}
 	args := flag.Args()[1:]
 	if len(args) == 0 {
 		args = append(args, "-help")
 	}
-	if !*noPager {
-		arg := "-stdout-is-tty=0"
-		if goisatty.IsTerminal(os.Stdout.Fd()) {
-			arg = "-stdout-is-tty=1"
-		}
-		args = append([]string{arg}, args...)
-	}
-	c1 := exec.Command(executable, args...)
-	c1.Stdin = os.Stdin
-	c1.Stdout = os.Stdout
-	c1.Stderr = os.Stderr
+	nomsCmd := exec.Command(executable, args...)
+	nomsCmd.Stdin = os.Stdin
+	nomsCmd.Stdout = os.Stdout
+	nomsCmd.Stderr = os.Stderr
 
-	if !*noPager {
-		c1.Stdout = nil
-		c2 := exec.Command(lessCmd, []string{"-FSRX"}...)
-		c2.Stdin, _ = c1.StdoutPipe()
-		c2.Stdout = os.Stdout
-		c2.Stderr = os.Stderr
-		c2.Start()
-		err = c1.Run()
-		c2.Wait()
-	} else {
-		err = c1.Run()
-	}
-
+	err := nomsCmd.Run()
 	if err != nil {
 		switch t := err.(type) {
 		case *exec.ExitError:
