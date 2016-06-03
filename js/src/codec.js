@@ -1,8 +1,8 @@
+// @flow
+
 // Copyright 2016 The Noms Authors. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
-
-// @flow
 
 import Chunk from './chunk.js';
 import Hash, {sha1Size} from './hash.js';
@@ -12,6 +12,8 @@ import {encode, decode} from './utf8.js';
 import {invariant} from './assert.js';
 import {setEncodeValue} from './get-hash.js';
 import {setHash, ValueBase} from './value.js';
+import type Value from './value.js';
+import type {ValueReader, ValueWriter} from './value-store.js';
 
 export function encodeValue(v: Value, vw: ?ValueWriter): Chunk {
   const w = new BinaryNomsWriter();

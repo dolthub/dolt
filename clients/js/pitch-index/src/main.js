@@ -1,8 +1,8 @@
+// @flow
+
 // Copyright 2016 The Noms Authors. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
-
-// @flow
 
 import argv from 'yargs';
 import {
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
   await outSpec.dataset().commit(new NomsMap(mapData));
 }
 
-async function maybeProcessPitcher(ep: Promise<XMLEntity>, pitchers: Map<string, string>):
+async function maybeProcessPitcher(ep: Promise<XMLElement>, pitchers: Map<string, string>):
   Promise<void> {
   const player = await (await ep).get('Player');
   if (player) {

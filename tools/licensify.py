@@ -77,7 +77,10 @@ def buildLicensePattern(ext):
   # We want to make sure shebang files stay at head of file.
   shebang = r'(\#\!.+\n\n?|)'
 
-  return '^' + shebang + '(' + prefix + head + body + suffix + r'\n)?'
+  # Allow flow annotations
+  flowAnotation = r'(// @flow\n\n?|)'
+
+  return '^' + shebang + flowAnotation + '(' + prefix + head + body + suffix + r'\n)?'
 
 
 # Gets the license block for files with extension |ext|.
@@ -88,7 +91,7 @@ def getLicense(ext):
     result = first + '\n' + result
   if last != '':
     result = result + '\n' + last
-  return r'\g<1>' + result + '\n\n'
+  return r'\g<1>\g<2>' + result + '\n\n'
 
 
 if __name__ == '__main__':

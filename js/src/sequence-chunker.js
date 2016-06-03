@@ -1,8 +1,8 @@
+// @flow
+
 // Copyright 2016 The Noms Authors. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
-
-// @flow
 
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
