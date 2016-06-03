@@ -258,7 +258,7 @@ func TestStreamingListCreation(t *testing.T) {
 	sl := <-listChan
 	assert.True(cl.Equals(sl))
 	cl.Iter(func(v Value, idx uint64) (done bool) {
-		done = !assert.EqualValues(v, sl.Get(idx))
+		done = !assert.True(v.Equals(sl.Get(idx)))
 		return
 	})
 }

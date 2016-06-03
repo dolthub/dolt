@@ -37,8 +37,3 @@ func (v Bool) Chunks() []Ref {
 func (v Bool) Type() *Type {
 	return BoolType
 }
-
-// ValueWriter - primitive interface
-func (v Bool) ToPrimitive() interface{} {
-	return bool(v)
-}

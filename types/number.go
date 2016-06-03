@@ -37,8 +37,3 @@ func (v Number) Chunks() []Ref {
 func (v Number) Type() *Type {
 	return NumberType
 }
-
-// ValueWriter - primitive interface
-func (v Number) ToPrimitive() interface{} {
-	return float64(v)
-}
