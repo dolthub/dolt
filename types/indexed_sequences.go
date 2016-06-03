@@ -131,9 +131,8 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink Value
 			col = newBlob(metaSeq)
 		}
 		if sink != nil {
-			r := sink.WriteValue(col)
-			return newMetaTuple(Number(tuples.uint64ValuesSum()), nil, r, numLeaves), col
+			return newMetaTuple(sink.WriteValue(col), Number(tuples.uint64ValuesSum()), numLeaves, nil), col
 		}
-		return newMetaTuple(Number(tuples.uint64ValuesSum()), col, NewRef(col), numLeaves), col
+		return newMetaTuple(NewRef(col), Number(tuples.uint64ValuesSum()), numLeaves, col), col
 	}
 }

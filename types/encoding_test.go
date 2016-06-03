@@ -139,8 +139,8 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence([]metaTuple{
-		newMetaTuple(Number(10), nil, NewRef(listLeaf), 10),
-		newMetaTuple(Number(20), nil, NewRef(listLeaf), 20),
+		newMetaTuple(NewRef(listLeaf), Number(10), 10, nil),
+		newMetaTuple(NewRef(listLeaf), Number(20), 20, nil),
 	}, nil)))
 }
 
@@ -274,9 +274,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 			uint8(RefKind), uint8(BlobKind), r3.String(), uint64(33), uint8(NumberKind), float64(60), uint64(60),
 		},
 		newBlob(newBlobMetaSequence([]metaTuple{
-			newMetaTuple(Number(20), nil, constructRef(RefOfBlobType, r1, 11), 20),
-			newMetaTuple(Number(40), nil, constructRef(RefOfBlobType, r2, 22), 40),
-			newMetaTuple(Number(60), nil, constructRef(RefOfBlobType, r3, 33), 60),
+			newMetaTuple(constructRef(RefOfBlobType, r1, 11), Number(20), 20, nil),
+			newMetaTuple(constructRef(RefOfBlobType, r2, 22), Number(40), 40, nil),
+			newMetaTuple(constructRef(RefOfBlobType, r3, 33), Number(60), 60, nil),
 		}, NewTestValueStore())),
 	)
 }
@@ -360,8 +360,8 @@ func TestWriteCompoundList(t *testing.T) {
 			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(4),
 		},
 		newList(newListMetaSequence([]metaTuple{
-			newMetaTuple(Number(1), list1, NewRef(list1), 1),
-			newMetaTuple(Number(4), list2, NewRef(list2), 4),
+			newMetaTuple(NewRef(list1), Number(1), 1, list1),
+			newMetaTuple(NewRef(list2), Number(4), 4, list2),
 		}, nil)),
 	)
 }
@@ -378,8 +378,8 @@ func TestWriteCompoundSet(t *testing.T) {
 			uint8(RefKind), uint8(SetKind), uint8(NumberKind), set2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(3),
 		},
 		newSet(newSetMetaSequence([]metaTuple{
-			newMetaTuple(Number(1), set1, NewRef(set1), 2),
-			newMetaTuple(Number(4), set2, NewRef(set2), 3),
+			newMetaTuple(NewRef(set1), Number(1), 2, set1),
+			newMetaTuple(NewRef(set2), Number(4), 3, set2),
 		}, nil)),
 	)
 }

@@ -35,17 +35,17 @@ func TestEnsureHash(t *testing.T) {
 	}()
 
 	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))
-	cb := newBlob(newBlobMetaSequence([]metaTuple{{bl, Ref{}, Number(2), 2}}, vs))
+	cb := newBlob(newBlobMetaSequence([]metaTuple{{Ref{}, Number(2), 2, bl}}, vs))
 
 	ll := newList(newListLeafSequence(nil, NewString("foo")))
 	lt := MakeListType(StringType)
-	cl := newList(newIndexedMetaSequence([]metaTuple{{ll, Ref{}, Number(1), 1}}, lt, vs))
+	cl := newList(newIndexedMetaSequence([]metaTuple{{Ref{}, Number(1), 1, ll}}, lt, vs))
 
 	ml := newMap(newMapLeafSequence(nil, mapEntry{NewString("foo"), NewString("bar")}))
-	cm := newMap(newOrderedMetaSequence([]metaTuple{{ml, Ref{}, NewString("foo"), 1}}, MakeMapType(StringType, StringType), vs))
+	cm := newMap(newOrderedMetaSequence([]metaTuple{{Ref{}, NewString("foo"), 1, ml}}, MakeMapType(StringType, StringType), vs))
 
 	sl := newSet(newSetLeafSequence(nil, NewString("foo")))
-	cps := newSet(newOrderedMetaSequence([]metaTuple{{sl, Ref{}, NewString("foo"), 1}}, MakeSetType(StringType), vs))
+	cps := newSet(newOrderedMetaSequence([]metaTuple{{Ref{}, NewString("foo"), 1, sl}}, MakeSetType(StringType), vs))
 
 	count = byte(1)
 	values := []Value{

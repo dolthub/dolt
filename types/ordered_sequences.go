@@ -170,6 +170,6 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 			col = newMap(metaSeq)
 		}
 
-		return newMetaTuple(tuples.last().value, col, NewRef(col), numLeaves), col
+		return newMetaTuple(NewRef(col), tuples.last().value, numLeaves, col), col
 	}
 }

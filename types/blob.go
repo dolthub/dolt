@@ -153,7 +153,7 @@ func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 		}
 
 		blob := newBlob(newBlobLeafSequence(vr, buff))
-		return newMetaTuple(Number(len(buff)), blob, NewRef(blob), uint64(len(buff))), blob
+		return newMetaTuple(NewRef(blob), Number(len(buff)), uint64(len(buff)), blob), blob
 	}
 }
 

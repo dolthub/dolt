@@ -18,17 +18,17 @@ type metaSequence interface {
 	getChildSequence(idx int) sequence
 }
 
-func newMetaTuple(value Value, child Collection, childRef Ref, numLeaves uint64) metaTuple {
-	d.Chk.NotEqual(Ref{}, childRef)
-	return metaTuple{child, childRef, value, numLeaves}
+func newMetaTuple(ref Ref, value Value, numLeaves uint64, child Collection) metaTuple {
+	d.Chk.NotEqual(Ref{}, ref)
+	return metaTuple{ref, value, numLeaves, child}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	child     Collection // may be nil
 	ref       Ref
 	value     Value
 	numLeaves uint64
+	child     Collection // may be nil
 }
 
 func (mt metaTuple) uint64Value() uint64 {

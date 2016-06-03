@@ -35,9 +35,9 @@ export class MetaTuple<K> {
 
   constructor(ref: Ref, value: K, numLeaves: number, child: ?Collection) {
     this.ref = ref;
-    this.child = child;
     this.value = value;
     this.numLeaves = numLeaves;
+    this.child = child;
   }
 
   getSequence(vr: ?ValueReader): Promise<Sequence> {

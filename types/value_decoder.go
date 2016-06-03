@@ -103,10 +103,10 @@ func (r *valueDecoder) readMetaSequence() metaSequenceData {
 
 	data := metaSequenceData{}
 	for i := uint32(0); i < count; i++ {
-		h := r.readValue().(Ref)
-		v := r.readValue()
+		ref := r.readValue().(Ref)
+		value := r.readValue()
 		numLeaves := r.readUint64()
-		data = append(data, newMetaTuple(v, nil, h, numLeaves))
+		data = append(data, newMetaTuple(ref, value, numLeaves, nil))
 	}
 
 	return data
