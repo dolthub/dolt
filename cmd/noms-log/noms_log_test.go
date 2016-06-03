@@ -54,7 +54,7 @@ func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
 
 func (s *nomsShowTestSuite) TestNomsLog() {
 	datasetName := "dsTest"
-	spec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, datasetName)
+	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
 	sp, err := flags.ParseDatasetSpec(spec)
 	s.NoError(err)
 
@@ -84,7 +84,7 @@ func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) 
 }
 
 func (s *nomsShowTestSuite) TestNArg() {
-	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
 	dbSpec, err := flags.ParseDatabaseSpec(spec)
 	s.NoError(err)
@@ -104,14 +104,14 @@ func (s *nomsShowTestSuite) TestNArg() {
 	h3 := ds.Head().Hash()
 	db.Close()
 
-	dsSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, dsName)
+	dsSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, dsName)
 	s.NotContains(s.Run(main, []string{"-n=1", dsSpec}), h1.String())
 	res := s.Run(main, []string{"-n=0", dsSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 
-	vSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, h3)
+	vSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, h3.String())
 	s.NotContains(s.Run(main, []string{"-n=1", vSpec}), h1.String())
 	res = s.Run(main, []string{"-n=0", vSpec})
 	s.Contains(res, h3.String())
@@ -120,7 +120,7 @@ func (s *nomsShowTestSuite) TestNArg() {
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
-	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dbSpec, err := flags.ParseDatabaseSpec(spec)
 	s.NoError(err)
 	db, err := dbSpec.Database()
@@ -168,11 +168,11 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b1.Database().Close()
-	s.Equal(graphRes1, s.Run(main, []string{"-graph", spec + ":b1"}))
+	s.Equal(graphRes1, s.Run(main, []string{"-graph", test_util.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph2() {
-	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dbSpec, err := flags.ParseDatabaseSpec(spec)
 	s.NoError(err)
 	db, err := dbSpec.Database()
@@ -198,11 +198,11 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes2, s.Run(main, []string{"-graph", spec + ":ba"}))
+	s.Equal(graphRes2, s.Run(main, []string{"-graph", test_util.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph3() {
-	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dbSpec, err := flags.ParseDatabaseSpec(spec)
 	s.NoError(err)
 	db, err := dbSpec.Database()
@@ -238,7 +238,7 @@ func (s *nomsShowTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes3, s.Run(main, []string{"-graph", spec + ":w"}))
+	s.Equal(graphRes3, s.Run(main, []string{"-graph", test_util.CreateValueSpecString("ldb", s.LdbDir, "w")}))
 }
 
 func (s *nomsShowTestSuite) TestTruncation() {
@@ -250,7 +250,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 		return types.NewList(nv...)
 	}
 
-	spec := fmt.Sprintf("ldb:%s", s.LdbDir)
+	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dbSpec, err := flags.ParseDatabaseSpec(spec)
 	s.NoError(err)
 	db, err := dbSpec.Database()
@@ -266,9 +266,10 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	s.NoError(err)
 	db.Close()
 
-	s.Equal(truncRes1, s.Run(main, []string{spec + ":truncate"}))
-	s.Equal(truncRes2, s.Run(main, []string{"-max-lines=-1", spec + ":truncate"}))
-	s.Equal(truncRes3, s.Run(main, []string{"-max-lines=0", spec + ":truncate"}))
+	dsSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "truncate")
+	s.Equal(truncRes1, s.Run(main, []string{dsSpec}))
+	s.Equal(truncRes2, s.Run(main, []string{"-max-lines=-1", dsSpec}))
+	s.Equal(truncRes3, s.Run(main, []string{"-max-lines=0", dsSpec}))
 }
 
 func TestBranchlistSplice(t *testing.T) {

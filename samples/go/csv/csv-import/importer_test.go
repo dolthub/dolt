@@ -43,7 +43,7 @@ func (s *testSuite) TestCSVImporter() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
@@ -85,7 +85,7 @@ func (s *testSuite) TestCSVImporterReportTypes() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("Possible types for each column:\na: String\nb: Number,String\n", out)
 }
@@ -105,7 +105,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
@@ -137,7 +137,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/go/d"
@@ -44,7 +43,7 @@ func writeTestData(ds dataset.Dataset, value types.Value) types.Ref {
 
 func (s *nomsShowTestSuite) TestNomsShow() {
 	datasetName := "dsTest"
-	spec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, datasetName)
+	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
 	sp, err := flags.ParseDatasetSpec(spec)
 	d.Chk.NoError(err)
 	ds, err := sp.Dataset()
@@ -54,7 +53,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	r := writeTestData(ds, s1)
 	s.Equal(res1, s.Run(main, []string{spec}))
 
-	spec1 := fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetHash().String())
+	spec1 := test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
 	s.Equal(res2, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()
@@ -62,7 +61,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	r = writeTestData(ds, list)
 	s.Equal(res3, s.Run(main, []string{spec}))
 
-	spec1 = fmt.Sprintf("ldb:%s:%s", s.LdbDir, r.TargetHash().String())
+	spec1 = test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
 	s.Equal(res4, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()

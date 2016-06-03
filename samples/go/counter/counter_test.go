@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/samples/go/test_util"
@@ -21,7 +20,7 @@ type counterTestSuite struct {
 }
 
 func (s *counterTestSuite) TestCounter() {
-	spec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, "counter")
+	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, "counter")
 	args := []string{spec}
 	s.Equal("1\n", s.Run(main, args))
 	s.Equal("2\n", s.Run(main, args))
