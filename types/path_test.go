@@ -64,7 +64,7 @@ func TestPathMap(t *testing.T) {
 	assertPathResolvesTo(assert, nil, v, NewPath().AddIndex(Number(4)))
 }
 
-func TestPathMutli(t *testing.T) {
+func TestPathMulti(t *testing.T) {
 	assert := assert.New(t)
 
 	m1 := NewMap(
