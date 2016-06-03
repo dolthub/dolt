@@ -10,21 +10,21 @@ import (
 func TestQueue(t *testing.T) {
 	assert := assert.New(t)
 	const testSize = 4
-	dq := diffQueue{}
+	dq := NewDiffQueue()
 
 	for i := 1; i <= testSize; i++ {
-		dq.Push(diffInfo{key: types.Number(i)})
-		assert.Equal(i, dq.len)
+		dq.PushBack(diffInfo{key: types.Number(i)})
+		assert.Equal(i, dq.Len())
 	}
 
 	for i := 1; i <= testSize; i++ {
-		di, ok := dq.Pop()
+		di, ok := dq.PopFront()
 		assert.True(ok)
 		assert.Equal(di.key.(types.Number).ToPrimitive().(float64), float64(i))
-		assert.Equal(testSize-i, dq.len)
+		assert.Equal(testSize-i, dq.Len())
 	}
 
-	_, ok := dq.Pop()
+	_, ok := dq.PopFront()
 	assert.False(ok)
-	assert.Equal(diffQueue{}, dq)
+	assert.Equal(NewDiffQueue(), dq)
 }

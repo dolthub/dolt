@@ -73,7 +73,7 @@ func TestNomsMapdiff(t *testing.T) {
 
 	m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 	m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
 	buf := util.NewBuffer(nil)
 	diff(buf)
 	assert.Equal(expected, buf.String())
@@ -85,12 +85,12 @@ func TestNomsSetDiff(t *testing.T) {
 
 	s1 := createSet("one", "three", "five", "seven", "nine")
 	s2 := createSet("one", "three", "five-diff", "seven", "nine")
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
 	diff(os.Stdout)
 
 	s1 = createSet(mm1, mm2, mm3, mm4)
 	s2 = createSet(mm1, mm2, mm3x, mm4)
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
 	buf := util.NewBuffer(nil)
 	diff(buf)
 	assert.Equal(expected, buf.String())
@@ -112,7 +112,7 @@ func TestNomsStructDiff(t *testing.T) {
 	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
 	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")
 
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
 	buf := util.NewBuffer(nil)
 	diff(buf)
 	assert.Equal(expected, buf.String())
@@ -124,17 +124,17 @@ func TestNomsListDiff(t *testing.T) {
 
 	l1 := createList(1, 2, 3, 4, 44, 5, 6)
 	l2 := createList(1, 22, 3, 4, 5, 6)
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
 	diff(os.Stdout)
 
 	l1 = createList("one", "two", "three", "four", "five", "six")
 	l2 = createList("one", "two", "three", "four", "five", "six", "seven")
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
 	diff(os.Stdout)
 
 	l1 = createList(mm1, mm2, mm3, mm4)
 	l2 = createList(mm1, mm2, mm3x, mm4)
-	diffQ.Push(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
+	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
 	buf := util.NewBuffer(nil)
 	diff(buf)
 	assert.Equal(expected, buf.String())

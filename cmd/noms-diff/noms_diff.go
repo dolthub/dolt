@@ -21,7 +21,7 @@ const (
 
 var (
 	showHelp = flag.Bool("help", false, "show help text")
-	diffQ    = diffQueue{}
+	diffQ    = NewDiffQueue()
 )
 
 func main() {
@@ -61,7 +61,7 @@ func main() {
 		v1:   value1,
 		v2:   value2,
 	}
-	diffQ.Push(di)
+	diffQ.PushBack(di)
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
 
@@ -74,17 +74,17 @@ func main() {
 	}
 }
 
-func isPrimitive(v1 types.Value) bool {
+func isPrimitiveOrRef(v1 types.Value) bool {
 	kind := v1.Type().Kind()
 	return types.IsPrimitiveKind(kind) || kind == types.RefKind
 }
 
 func canCompare(v1, v2 types.Value) bool {
-	return !isPrimitive(v1) && v1.Type().Kind() == v1.Type().Kind()
+	return !isPrimitiveOrRef(v1) && v1.Type().Kind() == v2.Type().Kind()
 }
 
 func diff(w io.Writer) {
-	for di, ok := diffQ.Pop(); ok; di, ok = diffQ.Pop() {
+	for di, ok := diffQ.PopFront(); ok; di, ok = diffQ.PopFront() {
 		p, key, v1, v2 := di.path, di.key, di.v1, di.v2
 
 		v1.Type().Kind()
@@ -127,7 +127,7 @@ func diffLists(w io.Writer, p types.Path, v1, v2 types.List) {
 				if canCompare(lastEl, newEl) {
 					idx := types.Number(splice.SpAt + i)
 					p1 := p.AddIndex(idx)
-					diffQ.Push(diffInfo{p1, idx, lastEl, newEl})
+					diffQ.PushBack(diffInfo{p1, idx, lastEl, newEl})
 				} else {
 					wroteHeader = writeHeader(w, wroteHeader, p)
 					line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
@@ -166,7 +166,7 @@ func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
 			buf := bytes.NewBuffer(nil)
 			types.WriteEncodedValueWithTags(buf, k)
 			p1 := p.AddField(buf.String())
-			diffQ.Push(diffInfo{path: p1, key: k, v1: c1, v2: c2})
+			diffQ.PushBack(diffInfo{path: p1, key: k, v1: c1, v2: c2})
 		} else {
 			wroteHeader = writeHeader(w, wroteHeader, p)
 			line(w, subPrefix, k, v1.Get(k))
@@ -184,7 +184,7 @@ func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
 		f2 := v2.Get(field)
 		if canCompare(f1, f2) {
 			p1 := p.AddField(field)
-			diffQ.Push(diffInfo{path: p1, key: types.NewString(field), v1: f1, v2: f2})
+			diffQ.PushBack(diffInfo{path: p1, key: types.NewString(field), v1: f1, v2: f2})
 		} else {
 			wroteHeader = writeHeader(w, wroteHeader, p)
 			line(w, subPrefix, types.NewString(field), f1)
@@ -198,7 +198,7 @@ func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {
 	added, removed := v2.Diff(v1)
 	if len(added) == 1 && len(removed) == 1 && canCompare(added[0], removed[0]) {
 		p1 := p.AddField(added[0].Hash().String())
-		diffQ.Push(diffInfo{path: p1, key: types.NewString(""), v1: removed[0], v2: added[0]})
+		diffQ.PushBack(diffInfo{path: p1, key: types.NewString(""), v1: removed[0], v2: added[0]})
 	} else {
 		for _, value := range removed {
 			wroteHeader = writeHeader(w, wroteHeader, p)
