@@ -57,7 +57,7 @@ fire-permits
 Noms datasets are versioned. You can see the history with `log`:
 
 ```
-> noms log http://demo.noms.io/cli-tour:movie-locations
+> noms log http://demo.noms.io/cli-tour:film-locations
 
 sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
 Parent: sha1-b50c323c568bfff07a13fe276236cbdf40b5d846
