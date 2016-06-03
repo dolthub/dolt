@@ -41,7 +41,7 @@ noms sync http://localhost:8000:foo http://localhost:8000:bar
 
 This command is trivial and causes basically zero IO. Noms checks whether the destination database has the chunk pointed to by `foo`, finds that it does (obviously, because it is in the same database), and then adds a new dataset pointing at that chunk.
 
-Syncs across database can be effiicent by the same logic if the destination database already has all or most of the chunks required chunks.
+Syncs across database can be efficient by the same logic if the destination database already has all or most of the chunks required chunks.
 
 See [Noms Command Line Tour](cli-tour.md) for more on the command-line interface to Noms.
 
@@ -85,7 +85,7 @@ Strings, numbers, unions, and structs are not chunked, and should be used for "r
 
 Types serve several purposes in Noms:
 
-1. Most importantly, types allow Noms data to be self-describing. Ever Noms chunk has a header that describes its type. This means that anyone (or any software) can look at the header of a chunk and know the shape of all the data reachable via that chunk with some precision. This makes writing code that works with Noms much less error-prone. In languages that support generics, one can work with Noms data in a completely statically typed way.
+1. Most importantly, types allow Noms data to be self-describing. Every Noms chunk has a header that describes its type. This means that anyone (or any software) can look at the header of a chunk and know the shape of all the data reachable via that chunk with some precision. This makes writing code that works with Noms much less error-prone. In languages that support generics, one can work with Noms data in a completely statically typed way.
 
 2. Users of Noms can define their own structures and publish data that uses them. This allows for ad-hoc standardization of types within communities working on similar data.
 
