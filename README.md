@@ -12,7 +12,6 @@ First make sure you have these prerequisites installed:
 
 * [Git](https://git-scm.com/)
 * [Go 1.6+](https://golang.org/dl/)
-* [Node.js 5.11+](https://nodejs.org/download/)
 
 Then, fetch and build Noms:
 
