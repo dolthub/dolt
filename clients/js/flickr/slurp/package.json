@@ -3,7 +3,7 @@
   "description": "Imports album and photo metadata from Flickr",
   "main": "dist/main.js",
   "dependencies": {
-    "@attic/noms": "39.2.0",
+    "@attic/noms": "^42.0.0",
     "babel-regenerator-runtime": "6.5.0",
     "flickr-oauth-and-upload": "0.8.0",
     "humanize": "0.0.9",

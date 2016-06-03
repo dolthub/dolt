@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const ds = spec.set();
+  const ds = spec.dataset();
   await increment(ds);
 }
 

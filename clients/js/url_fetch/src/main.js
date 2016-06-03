@@ -42,7 +42,7 @@ function main(): Promise<void> {
     return Promise.resolve();
   }
 
-  const set = spec.set();
+  const set = spec.dataset();
   return getBlob(url)
     .then(b => set.commit(b))
     .then(() => {

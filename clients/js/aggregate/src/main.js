@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   const outSpec = DatasetSpec.parse(args._[1]);
   invariant(outSpec, quit('invalid input dataset spec'));
 
-  const input = inSpec.set();
+  const input = inSpec.dataset();
   const rv = await input.headRef();
   if (!rv) {
     process.stderr.write(`{args._[0]} does not exist}\n`);

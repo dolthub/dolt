@@ -3,7 +3,7 @@
   "description": "Finds photos in slurped flickr data",
   "main": "dist/main.js",
   "dependencies": {
-    "@attic/noms": "39.2.0",
+    "@attic/noms": "^42.0.0",
     "babel-regenerator-runtime": "6.5.0",
     "yargs": "4.4.0"
   },

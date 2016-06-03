@@ -44,7 +44,7 @@ function getMap() {
   })();
 
   if (args.ds) {
-    const ds = DatasetSpec.parse(args.ds).set();
+    const ds = DatasetSpec.parse(args.ds).dataset();
     return ds.head().then(commit => commit.value);
   } else {
     return Promise.resolve(new Map([['Donkeys', 36], ['Monkeys', 8], ['Giraffes', 12]]));
