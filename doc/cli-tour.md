@@ -49,9 +49,9 @@ The `noms ds` command lists the _datasets_ within a particular database:
 > noms ds http://demo.noms.io/cli-tour
 
 registered-businesses
+film-locations
 fire-incidents
 fire-permits
-movie-locations
 ```
 
 Noms datasets are versioned. You can see the history with `log`:
