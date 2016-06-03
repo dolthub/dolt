@@ -20,7 +20,7 @@ func TestQueue(t *testing.T) {
 	for i := 1; i <= testSize; i++ {
 		di, ok := dq.PopFront()
 		assert.True(ok)
-		assert.Equal(di.key.(types.Number).ToPrimitive().(float64), float64(i))
+		assert.Equal(float64(di.key.(types.Number)), float64(i))
 		assert.Equal(testSize-i, dq.Len())
 	}
 
