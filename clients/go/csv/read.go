@@ -73,13 +73,7 @@ func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
 var fieldNameFirstCharRe = regexp.MustCompile(`^[a-zA-Z]`)
 var fieldNameTailNonValidRe = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
-// NormalizeHeaderName replaces non valid characters in the header names with `_`. If the leading character of the header name is not in [a-zA-Z] this panics.
-func NormalizeHeaderName(s string) string {
-	d.Exp.True(fieldNameFirstCharRe.MatchString(s))
-	return fieldNameTailNonValidRe.ReplaceAllString(s, "_")
-}
-
-// MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings. This also normalizes header names using NormalizeHeaderName.
+// MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
 func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) *types.Type {
 	useStringType := len(kinds) == 0
 	d.Chk.True(useStringType || len(headers) == len(kinds))
@@ -89,12 +83,9 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 		if !useStringType {
 			kind = kinds[i]
 		}
-
-		nk := NormalizeHeaderName(key)
-		_, ok := fields[nk]
-		d.Exp.False(ok, `Duplicate field name "%s" (normalized to "%s")`, key, nk)
-
-		fields[nk] = types.MakePrimitiveType(kind)
+		_, ok := fields[key]
+		d.Exp.False(ok, `Duplicate field name "%s"`, key)
+		fields[key] = types.MakePrimitiveType(kind)
 	}
 	return types.MakeStructType(structName, fields)
 }
@@ -102,7 +93,12 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func Read(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
+func Read(r *csv.Reader, structName string, headers_raw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
+	headers := make([]string, len(headers_raw))
+	for i, h := range headers_raw {
+		headers[i] = types.EscapeStructField(h)
+	}
+
 	t = MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listChan := types.NewStreamingList(vrw, valueChan)
