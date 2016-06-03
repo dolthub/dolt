@@ -68,7 +68,7 @@ suite('compare.js', () => {
         new Set([0, 1, 2, 3]),
 
         // Value - values cannot be value
-        // Parent - values cannot be parent
+        // Cycle - values cannot be cycle
         // Union - values cannot be unions
       ];
 

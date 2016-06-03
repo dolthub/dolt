@@ -171,7 +171,7 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	switch t.Kind() {
 	case BoolKind, StringKind:
 		w.Write(v)
-	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, ParentKind:
+	case NumberKind, BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, CycleKind:
 		// TODO: Numbers have unique syntax now...
 		w.writeType(t, nil)
 		w.write("(")
@@ -217,7 +217,7 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 		}
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
-	case ParentKind:
+	case CycleKind:
 	default:
 		panic("unreachable")
 	}
@@ -226,7 +226,7 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	idx := indexOfType(t, parentStructTypes)
 	if idx != -1 {
-		w.writeParent(uint8(len(parentStructTypes) - 1 - idx))
+		w.writeCycle(uint8(len(parentStructTypes) - 1 - idx))
 		return
 	}
 	parentStructTypes = append(parentStructTypes, t)
@@ -251,11 +251,11 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	w.write("}")
 }
 
-func (w *hrsWriter) writeParent(i uint8) {
+func (w *hrsWriter) writeCycle(i uint8) {
 	if w.err != nil {
 		return
 	}
-	_, w.err = fmt.Fprintf(w.w, "Parent<%d>", i)
+	_, w.err = fmt.Fprintf(w.w, "Cycle<%d>", i)
 }
 
 func EncodedValue(v Value) string {

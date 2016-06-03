@@ -18,7 +18,7 @@ export const Kind: {
   Set: NomsKind,
   Struct: NomsKind,
   Type: NomsKind,
-  Parent: NomsKind,
+  Cycle: NomsKind,
   Union: NomsKind,
 } = {
   Bool: 0,
@@ -32,7 +32,7 @@ export const Kind: {
   Set: 8,
   Struct: 9,
   Type: 10,
-  Parent: 11,  // Only used in encoding/decoding.
+  Cycle: 11,  // Only used in encoding/decoding.
   Union: 12,
 };
 
@@ -48,7 +48,7 @@ kindToStringMap[Kind.Ref] = 'Ref';
 kindToStringMap[Kind.Set] = 'Set';
 kindToStringMap[Kind.Struct] = 'Struct';
 kindToStringMap[Kind.Type] = 'Type';
-kindToStringMap[Kind.Parent] = 'Parent';
+kindToStringMap[Kind.Cycle] = 'Cycle';
 kindToStringMap[Kind.Union] = 'Union';
 
 export function kindToString(kind: NomsKind): string {

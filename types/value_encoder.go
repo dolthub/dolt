@@ -46,7 +46,7 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 		}
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
-	case ParentKind:
+	case CycleKind:
 		panic("unreached")
 	default:
 		w.writeKind(k)
@@ -154,7 +154,7 @@ func (w *valueEncoder) writeValue(v Value) {
 		w.writeType(vt, nil)
 	case StructKind:
 		w.writeStruct(v, t)
-	case ParentKind, UnionKind, ValueKind:
+	case CycleKind, UnionKind, ValueKind:
 		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
@@ -176,8 +176,8 @@ func (w *valueEncoder) writeStruct(v Value, t *Type) {
 	}
 }
 
-func (w *valueEncoder) writeParent(i int) {
-	w.writeKind(ParentKind)
+func (w *valueEncoder) writeCycle(i int) {
+	w.writeKind(CycleKind)
 	w.writeUint32(uint32(i))
 }
 
@@ -185,7 +185,7 @@ func (w *valueEncoder) writeStructType(t *Type, parentStructTypes []*Type) {
 	// The runtime representaion of struct types can contain cycles. These cycles are broken when encoding and decoding using special "back ref" placeholders.
 	i := indexOfType(t, parentStructTypes)
 	if i != -1 {
-		w.writeParent(len(parentStructTypes) - i - 1)
+		w.writeCycle(len(parentStructTypes) - i - 1)
 		return
 	}
 	parentStructTypes = append(parentStructTypes, t)

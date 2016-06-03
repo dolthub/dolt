@@ -24,7 +24,7 @@ func TestTotalOrdering(t *testing.T) {
 		NewSet(Number(0), Number(1), Number(2), Number(3)),
 
 		// Value - values cannot be value
-		// Parent - values cannot be parent
+		// Cycle - values cannot be cycle
 		// Union - values cannot be unions
 	}
 

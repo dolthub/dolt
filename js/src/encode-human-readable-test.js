@@ -98,20 +98,20 @@ suite('Encode human readable types', () => {
     a.desc.fields['c'] = makeListType(a);
 
     assertWriteType(`struct A {
-  b: Parent<0>
-  c: List<Parent<0>>
+  b: Cycle<0>
+  c: List<Cycle<0>>
   d: struct D {
-    e: Parent<0>
-    f: Parent<1>
+    e: Cycle<0>
+    f: Cycle<1>
   }
 }`, a);
 
     assertWriteType(`struct D {
-  e: Parent<0>
+  e: Cycle<0>
   f: struct A {
-    b: Parent<0>
-    c: List<Parent<0>>
-    d: Parent<1>
+    b: Cycle<0>
+    c: List<Cycle<0>>
+    d: Cycle<1>
   }
 }`, d);
   });

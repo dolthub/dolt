@@ -108,20 +108,20 @@ export class TypeWriter {
       case Kind.Struct:
         this._writeStructType(t, parentStructTypes);
         break;
-      case Kind.Parent:
+      case Kind.Cycle:
       default:
         throw new Error('unreachable');
     }
   }
 
-  _writeParent(i: number) {
-    this._w.write(`Parent<${i}>`);
+  _writeCycle(i: number) {
+    this._w.write(`Cycle<${i}>`);
   }
 
   _writeStructType(t: Type, parentStructTypes: Type[]) {
     const idx = parentStructTypes.indexOf(t);
     if (idx !== -1) {
-      this._writeParent(parentStructTypes.length - idx - 1);
+      this._writeCycle(parentStructTypes.length - idx - 1);
       return;
     }
     parentStructTypes.push(t);

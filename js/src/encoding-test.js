@@ -232,7 +232,7 @@ suite('Encoding', () => {
   const SetKind = Kind.Set;
   const StructKind = Kind.Struct;
   const TypeKind = Kind.Type;
-  const ParentKind = Kind.Parent;
+  const CycleKind = Kind.Cycle;
   const UnionKind = Kind.Union;
 
   function assertEncoding(encoding: any[], v: Value) {
@@ -480,7 +480,7 @@ suite('Encoding', () => {
     structType.desc.fields['cs'] = listType;
 
     assertEncoding([
-      uint8(StructKind), 'A6', uint32(2) /* len */, 'cs', uint8(ListKind), uint8(ParentKind), uint32(0), 'v', uint8(NumberKind),
+      uint8(StructKind), 'A6', uint32(2) /* len */, 'cs', uint8(ListKind), uint8(CycleKind), uint32(0), 'v', uint8(NumberKind),
       uint8(ListKind), uint8(UnionKind), uint32(0) /* len */, false, uint32(0), /* len */
       uint8(NumberKind), float64(42),
     ],

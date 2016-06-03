@@ -39,7 +39,7 @@ var KindToString = map[NomsKind]string{
 	StringKind: "String",
 	TypeKind:   "Type",
 	ValueKind:  "Value",
-	ParentKind: "Parent",
+	CycleKind:  "Cycle",
 	UnionKind:  "Union",
 }
 

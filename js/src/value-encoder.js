@@ -60,7 +60,7 @@ export default class ValueEncoder {
       case Kind.Struct:
         this.writeStructType(t, parentStructTypes);
         break;
-      case Kind.Parent:
+      case Kind.Cycle:
         throw new Error('unreached');
 
       default:
@@ -205,7 +205,7 @@ export default class ValueEncoder {
                   () => `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);
         this.writeStruct(v);
         break;
-      case Kind.Parent:
+      case Kind.Cycle:
       case Kind.Union:
       case Kind.Value:
         throw new Error('A value instance can never have type ' + kindToString[t.kind]);
@@ -221,15 +221,15 @@ export default class ValueEncoder {
     });
   }
 
-  writeParent(i: number) {
-    this.writeKind(Kind.Parent);
+  writeCycle(i: number) {
+    this.writeKind(Kind.Cycle);
     this._w.writeUint32(i);
   }
 
   writeStructType(t: Type<StructDesc>, parentStructTypes: Type<StructDesc>[]) {
     const i = parentStructTypes.indexOf(t);
     if (i !== -1) {
-      this.writeParent(parentStructTypes.length - i - 1);
+      this.writeCycle(parentStructTypes.length - i - 1);
       return;
     }
 

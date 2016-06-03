@@ -466,7 +466,7 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "A6", uint32(2) /* len */, "cs", uint8(ListKind), uint8(ParentKind), uint32(0), "v", uint8(NumberKind),
+			uint8(StructKind), "A6", uint32(2) /* len */, "cs", uint8(ListKind), uint8(CycleKind), uint32(0), "v", uint8(NumberKind),
 			uint8(ListKind), uint8(UnionKind), uint32(0) /* len */, false, uint32(0), /* len */
 			uint8(NumberKind), float64(42),
 		},

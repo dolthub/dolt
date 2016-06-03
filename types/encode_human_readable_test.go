@@ -284,36 +284,36 @@ func TestRecursiveStruct(t *testing.T) {
 	a.Desc.(StructDesc).Fields["d"] = d
 	d.Desc.(StructDesc).Fields["e"] = d
 	assertWriteHRSEqual(t, `struct A {
-  b: Parent<0>
-  c: List<Parent<0>>
+  b: Cycle<0>
+  c: List<Cycle<0>>
   d: struct D {
-    e: Parent<0>
-    f: Parent<1>
+    e: Cycle<0>
+    f: Cycle<1>
   }
 }`, a)
 	assertWriteTaggedHRSEqual(t, `Type(struct A {
-  b: Parent<0>
-  c: List<Parent<0>>
+  b: Cycle<0>
+  c: List<Cycle<0>>
   d: struct D {
-    e: Parent<0>
-    f: Parent<1>
+    e: Cycle<0>
+    f: Cycle<1>
   }
 })`, a)
 
 	assertWriteHRSEqual(t, `struct D {
-  e: Parent<0>
+  e: Cycle<0>
   f: struct A {
-    b: Parent<0>
-    c: List<Parent<0>>
-    d: Parent<1>
+    b: Cycle<0>
+    c: List<Cycle<0>>
+    d: Cycle<1>
   }
 }`, d)
 	assertWriteTaggedHRSEqual(t, `Type(struct D {
-  e: Parent<0>
+  e: Cycle<0>
   f: struct A {
-    b: Parent<0>
-    c: List<Parent<0>>
-    d: Parent<1>
+    b: Cycle<0>
+    c: List<Cycle<0>>
+    d: Cycle<1>
   }
 })`, d)
 }

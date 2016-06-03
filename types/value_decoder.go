@@ -49,7 +49,7 @@ func (r *valueDecoder) readType(parentStructTypes []*Type) *Type {
 			elemTypes[i] = r.readType(parentStructTypes)
 		}
 		return MakeUnionType(elemTypes...)
-	case ParentKind:
+	case CycleKind:
 		i := r.readUint32()
 		d.Chk.True(i < uint32(len(parentStructTypes)))
 		return parentStructTypes[len(parentStructTypes)-1-int(i)]
@@ -163,7 +163,7 @@ func (r *valueDecoder) readValue() Value {
 		return r.readStruct(t)
 	case TypeKind:
 		return r.readType(nil)
-	case ParentKind, UnionKind, ValueKind:
+	case CycleKind, UnionKind, ValueKind:
 		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
 	}
 

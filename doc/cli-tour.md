@@ -92,7 +92,7 @@ You can see the entire serialization of any object in the database with `noms sh
 > noms show http://demo.noms.io/cli-tour:sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
 
 struct Commit {
-  parents: Set<Ref<Parent<0>>>
+  parents: Set<Ref<Cycle<0>>>
   value: Value
 }({
   parents: {

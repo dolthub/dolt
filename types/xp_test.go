@@ -44,7 +44,7 @@ func newTestSuite() *testSuite {
 		SetKind
 		StructKind
 		TypeKind
-		ParentKind // Only used in encoding/decoding.
+		CycleKind // Only used in encoding/decoding.
 		UnionKind
 	*/
 

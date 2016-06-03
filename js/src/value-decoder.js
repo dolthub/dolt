@@ -71,7 +71,7 @@ export default class ValueDecoder {
         }
         return makeUnionType(types);
       }
-      case Kind.Parent: {
+      case Kind.Cycle: {
         const i = this._r.readUint32();
         return parentStructTypes[parentStructTypes.length - 1 - i];
       }
@@ -185,7 +185,7 @@ export default class ValueDecoder {
         return this.readStruct(t);
       case Kind.Type:
         return this.readType([]);
-      case Kind.Parent:
+      case Kind.Cycle:
       case Kind.Union:
       case Kind.Value:
         throw new Error('A value instance can never have type' + kindToString[t.kind]);
