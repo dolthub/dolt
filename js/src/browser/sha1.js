@@ -10,6 +10,6 @@ import Rusha from 'rusha';
 
 const r = new Rusha();
 
-export function hex(data: Uint8Array): string {
-  return r.digest(data);
+export default function sha1(data: Uint8Array): Uint32Array {
+  return r.rawDigest(data);
 }

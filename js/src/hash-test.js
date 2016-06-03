@@ -8,14 +8,12 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import Hash, {emptyHash} from './hash.js';
 import {encode} from './utf8.js';
+import {notNull} from './assert.js';
 
 suite('Hash', () => {
   test('parse', () => {
     function assertParseError(s) {
-      assert.throws(() => {
-        Hash.parse(s);
-      });
-      assert.equal(null, Hash.maybeParse(s));
+      assert.equal(null, Hash.parse(s));
     }
 
     assertParseError('foo');
@@ -33,13 +31,12 @@ suite('Hash', () => {
 
     const valid = 'sha1-0000000000000000000000000000000000000000';
     assert.isNotNull(Hash.parse(valid));
-    assert.isNotNull(Hash.maybeParse(valid));
   });
 
   test('equals', () => {
-    const r0 = Hash.parse('sha1-0000000000000000000000000000000000000000');
-    const r01 = Hash.parse('sha1-0000000000000000000000000000000000000000');
-    const r1 = Hash.parse('sha1-0000000000000000000000000000000000000001');
+    const r0 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000000'));
+    const r01 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000000'));
+    const r1 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'));
 
     assert.isTrue(r0.equals(r01));
     assert.isTrue(r01.equals(r0));
@@ -49,7 +46,7 @@ suite('Hash', () => {
 
   test('toString', () => {
     const s = 'sha1-0123456789abcdef0123456789abcdef01234567';
-    const r = Hash.parse(s);
+    const r = notNull(Hash.parse(s));
     assert.strictEqual(s, r.toString());
   });
 
@@ -61,11 +58,11 @@ suite('Hash', () => {
 
   test('isEmpty', () => {
     const digest = new Uint8Array(20);
-    let r = Hash.fromDigest(digest);
+    let r = new Hash(digest);
     assert.isTrue(r.isEmpty());
 
     digest[0] = 10;
-    r = Hash.fromDigest(digest);
+    r = new Hash(digest);
     assert.isFalse(r.isEmpty());
 
     r = emptyHash;

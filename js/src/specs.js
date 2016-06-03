@@ -121,7 +121,7 @@ export class HashSpec {
       return null;
     }
 
-    const hash = Hash.maybeParse(match[2]);
+    const hash = Hash.parse(match[2]);
     if (!hash) {
       return null;
     }

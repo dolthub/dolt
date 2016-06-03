@@ -169,7 +169,7 @@ suite('Encoding', () => {
     }
 
     readHash(): Hash {
-      return new Hash(this.readString());
+      return Hash.parse(this.readString());
     }
   }
 

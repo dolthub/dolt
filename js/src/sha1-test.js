@@ -7,13 +7,21 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import {hex as hexNode} from './sha1.js';
-import {hex as hexBrowser} from './browser/sha1.js';
+import sha1Node from './sha1.js';
+import sha1Browser from './browser/sha1.js';
 
 suite('Sha1', () => {
   test('hex', () => {
     function assertSame(arr: Uint8Array) {
-      assert.strictEqual(hexNode(arr), hexBrowser(arr));
+      // Node uses a Buffer, browser uses a Uint8Array
+      const n = sha1Node(arr);
+      const b = sha1Browser(arr);
+      assert.equal(n.byteLength, b.byteLength);
+      const n2 = new Uint8Array(n.buffer, n.byteOffset, n.byteLength);
+      const b2 = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+      for (let i = 0; i < n2.length; i++) {
+        assert.equal(n2[i], b2[i]);
+      }
     }
 
     assertSame(new Uint8Array(0));

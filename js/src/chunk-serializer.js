@@ -102,7 +102,7 @@ function deserializeHints(buffer: ArrayBuffer): {hints: Array<Hash>, offset: num
     invariant(buffer.byteLength - offset >= sha1Size, 'Invalid hint buffer');
 
     const hashArray = new Uint8Array(buffer, offset, sha1Size);
-    const hash = Hash.fromDigest(new Uint8Array(hashArray));
+    const hash = new Hash(hashArray);
     offset += sha1Size;
 
     hints.push(hash);
@@ -119,7 +119,7 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
     invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
     const hashArray = new Uint8Array(buffer, offset, sha1Size);
-    const hash = Hash.fromDigest(new Uint8Array(hashArray));
+    const hash = new Hash(hashArray);
     offset += sha1Size;
 
     const view = new DataView(buffer, offset, chunkLengthSize);

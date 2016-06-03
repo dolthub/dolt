@@ -8,8 +8,8 @@
 
 import crypto from 'crypto';
 
-export function hex(data: Uint8Array): string {
+export default function sha1(data: Uint8Array): Uint8Array {
   const hash = crypto.createHash('sha1');
   hash.update(data);
-  return hash.digest('hex');
+  return hash.digest();
 }

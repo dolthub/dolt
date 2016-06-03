@@ -82,7 +82,8 @@ suite('Specs', () => {
   });
 
   test('HashSpec', async () => {
-    const testHash = new Hash('sha1-0000000000000000000000000000000000000000');
+    const testHash = Hash.parse('sha1-0000000000000000000000000000000000000000');
+    invariant(testHash);
     const invalid = [
       'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
       'mem:not-hash', 'mem:sha1-', 'mem:sha2-0000',
@@ -106,7 +107,8 @@ suite('Specs', () => {
     assert.equal(spec.database.scheme, 'http');
     assert.equal(spec.database.path, '//foo:8000/test');
 
-    const testHash = new Hash('sha1-0000000000000000000000000000000000000000');
+    const testHash = Hash.parse('sha1-0000000000000000000000000000000000000000');
+    invariant(testHash);
     spec = parseObjectSpec(`http://foo:8000/test:${testHash}`);
     invariant(spec);
     assert.isNotNull(spec.value());

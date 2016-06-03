@@ -9,6 +9,7 @@ import {suite, test} from 'mocha';
 import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Hash from './hash.js';
+import {notNull} from './assert.js';
 
 suite('MemoryStore', () => {
   async function assertInputInStore(input: string, hash: Hash, ms: MemoryStore) {
@@ -43,9 +44,9 @@ suite('MemoryStore', () => {
     assert.isTrue(oldRoot.isEmpty());
 
     // sha1('Bogus, Dude')
-    const bogusRoot = Hash.parse('sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5');
+    const bogusRoot = notNull(Hash.parse('sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5'));
      // sha1('Hello, World')
-    const newRoot = Hash.parse('sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd');
+    const newRoot = notNull(Hash.parse('sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd'));
 
     // Try to update root with bogus oldRoot
     let result = await ms.updateRoot(newRoot, bogusRoot);
@@ -58,7 +59,7 @@ suite('MemoryStore', () => {
 
   test('get non-existing', async () => {
     const ms = new MemoryStore();
-    const hash = Hash.parse('sha1-1111111111111111111111111111111111111111');
+    const hash = notNull(Hash.parse('sha1-1111111111111111111111111111111111111111'));
     const c = await ms.get(hash);
     assert.isTrue(c.isEmpty());
   });

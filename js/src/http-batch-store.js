@@ -12,6 +12,7 @@ import type {ChunkStream} from './chunk-serializer.js';
 import {serialize, deserializeChunks} from './chunk-serializer.js';
 import {emptyChunk} from './chunk.js';
 import {fetchArrayBuffer, fetchText} from './fetch.js';
+import {notNull} from './assert.js';
 
 const HTTP_STATUS_CONFLICT = 409;
 
@@ -103,7 +104,7 @@ export class Delegate {
 
   async getRoot(): Promise<Hash> {
     const hashStr = await fetchText(this._rpc.root, this._rootOptions);
-    return Hash.parse(hashStr);
+    return notNull(Hash.parse(hashStr));
   }
 
   async updateRoot(current: Hash, last: Hash): Promise<boolean> {
