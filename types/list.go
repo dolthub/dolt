@@ -227,9 +227,18 @@ func makeListLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
 		}
 
 		list := newList(newListLeafSequence(vr, values...))
+
+		var ref Ref
+		var child Collection
 		if sink != nil {
-			return newMetaTuple(sink.WriteValue(list), Number(len(values)), uint64(len(values)), nil), list
+			// Eagerly write chunks
+			ref = sink.WriteValue(list)
+			child = nil
+		} else {
+			ref = NewRef(list)
+			child = list
 		}
-		return newMetaTuple(NewRef(list), Number(len(values)), uint64(len(values)), list), list
+
+		return newMetaTuple(ref, Number(len(values)), uint64(len(values)), child), list
 	}
 }

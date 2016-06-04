@@ -144,7 +144,7 @@ func newBlobLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
+func newBlobLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (metaTuple, Collection) {
 		buff := make([]byte, len(items))
 
@@ -153,23 +153,38 @@ func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 		}
 
 		blob := newBlob(newBlobLeafSequence(vr, buff))
-		return newMetaTuple(NewRef(blob), Number(len(buff)), uint64(len(buff)), blob), blob
+		var ref Ref
+		var child Collection
+		if sink != nil {
+			// Eagerly write chunks
+			ref = sink.WriteValue(blob)
+			child = nil
+		} else {
+			ref = NewRef(blob)
+			child = blob
+		}
+
+		return newMetaTuple(ref, Number(len(buff)), uint64(len(buff)), child), blob
 	}
 }
 
 func NewBlob(r io.Reader) Blob {
-	seq := newEmptySequenceChunker(newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
-	buf := []byte{0}
+	return NewStreamingBlob(r, nil)
+}
+
+func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
+	seq := newEmptySequenceChunker(newBlobLeafChunkFn(nil, vrw), newIndexedMetaSequenceChunkFn(BlobKind, nil, vrw), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	buf := [8192]byte{}
 	for {
-		n, err := r.Read(buf)
-		d.Chk.True(n <= 1)
-		if n == 1 {
-			seq.Append(buf[0])
+		n, err := r.Read(buf[:])
+		for i := 0; i < n; i++ {
+			seq.Append(buf[i])
 		}
 		if err != nil {
-			d.Chk.Equal(io.EOF, err)
+			d.Chk.True(io.EOF == err)
 			break
 		}
 	}
 	return seq.Done().(Blob)
+
 }
