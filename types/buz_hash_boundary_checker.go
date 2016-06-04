@@ -4,10 +4,7 @@
 
 package types
 
-import (
-	"github.com/attic-labs/buzhash"
-	"github.com/attic-labs/noms/d"
-)
+import "github.com/attic-labs/buzhash"
 
 type buzHashBoundaryChecker struct {
 	h                     *buzhash.BuzHash
@@ -23,10 +20,7 @@ func newBuzHashBoundaryChecker(windowSize, valueSize int, pattern uint32, getByt
 }
 
 func (b *buzHashBoundaryChecker) Write(item sequenceItem) bool {
-	bytes := b.getBytes(item)
-	d.Chk.Equal(b.valueSize, len(bytes))
-	_, err := b.h.Write(bytes)
-	d.Chk.NoError(err)
+	b.h.Write(b.getBytes(item))
 	return b.h.Sum32()&b.pattern == b.pattern
 }
 

@@ -92,7 +92,7 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 		seq = cs.(orderedSequence)
 	}
 
-	d.Chk.NotNil(cur)
+	d.Chk.True(cur != nil)
 	return cur
 }
 
@@ -165,7 +165,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 			metaSeq := newSetMetaSequence(tuples, vr)
 			col = newSet(metaSeq)
 		} else {
-			d.Chk.Equal(MapKind, kind)
+			d.Chk.True(MapKind == kind)
 			metaSeq := newMapMetaSequence(tuples, vr)
 			col = newMap(metaSeq)
 		}

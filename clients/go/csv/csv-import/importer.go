@@ -84,7 +84,7 @@ func main() {
 
 	if *reportTypes {
 		kinds := csv.ReportValidFieldTypes(cr, headers)
-		d.Chk.Equal(len(headers), len(kinds))
+		d.Chk.True(len(headers) == len(kinds))
 		fmt.Println("Possible types for each column:")
 		for i, key := range headers {
 			fmt.Printf("%s: %s\n", key, strings.Join(csv.KindsToStrings(kinds[i]), ","))

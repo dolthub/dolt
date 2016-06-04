@@ -106,7 +106,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	v := ds.store.ReadValue(r.TargetHash())
 
-	d.Exp.NotNil(v, "%v cannot be found", r)
+	d.Exp.True(v != nil, "%v cannot be found", r)
 	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
 	return v.(types.Struct)
 }

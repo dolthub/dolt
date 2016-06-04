@@ -48,7 +48,7 @@ func (cf *ClientFlags) CreateProgressFile() error {
 }
 
 func (cf *ClientFlags) CloseProgressFile() {
-	d.Chk.NotNil(cf.progressFile, "Progress file was never created")
+	d.Chk.True(cf.progressFile != nil, "Progress file was never created")
 	cf.progressFile.Close()
 }
 

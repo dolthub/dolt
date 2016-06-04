@@ -35,10 +35,10 @@ func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk
 
 func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
-	d.Chk.NotNil(makeChunk)
-	d.Chk.NotNil(parentMakeChunk)
-	d.Chk.NotNil(boundaryChk)
-	d.Chk.NotNil(newBoundaryChecker)
+	d.Chk.True(makeChunk != nil)
+	d.Chk.True(parentMakeChunk != nil)
+	d.Chk.True(boundaryChk != nil)
+	d.Chk.True(newBoundaryChecker != nil)
 
 	seq := &sequenceChunker{
 		cur,
@@ -101,7 +101,7 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 }
 
 func (seq *sequenceChunker) Append(item sequenceItem) {
-	d.Chk.NotNil(item)
+	d.Chk.True(item != nil)
 	// Check |isOnChunkBoundary| immediately, because it's effectively a continuation from the last call to Append. Specifically, this happens when the last call to Append created the first chunk boundary, which delayed creating the parent until absolutely necessary. Otherwise, we will be in a state where a parent has only a single item, which is invalid.
 	if seq.isOnChunkBoundary {
 		seq.createParent()
@@ -129,7 +129,7 @@ func (seq *sequenceChunker) skipParentIfExists() {
 }
 
 func (seq *sequenceChunker) createParent() {
-	d.Chk.Nil(seq.parent)
+	d.Chk.True(seq.parent == nil)
 	var parent *sequenceCursor
 	if seq.cur != nil && seq.cur.parent != nil {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
@@ -158,7 +158,7 @@ func (seq *sequenceChunker) Done() Value {
 
 	if seq.isRoot() {
 		_, done := seq.makeChunk(seq.current)
-		d.Chk.NotNil(done)
+		d.Chk.True(done != nil)
 		return done
 	}
 

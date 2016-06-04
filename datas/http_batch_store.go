@@ -212,7 +212,7 @@ func (bhcs *httpBatchStore) getRefs(hashes hashSet, batch chunks.ReadBatch) {
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
-	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
 	reader := resBodyReader(res)
 	defer reader.Close()
@@ -234,7 +234,7 @@ func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
 	defer closeResponse(res)
-	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
 	reader := resBodyReader(res)
 	defer reader.Close()
@@ -376,7 +376,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			}
 		}
 
-		d.Exp.Equal(http.StatusCreated, res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
+		d.Exp.True(http.StatusCreated == res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
 	}()
 }
 
@@ -385,7 +385,7 @@ func (bhcs *httpBatchStore) Root() hash.Hash {
 	res := bhcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
 	defer closeResponse(res)
 
-	d.Chk.Equal(http.StatusOK, res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
 	return hash.Parse(string(data))
@@ -445,6 +445,6 @@ func formatErrorResponse(res *http.Response) string {
 func closeResponse(res *http.Response) error {
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
-	d.Chk.Equal(0, len(data), string(data))
+	d.Chk.True(0 == len(data), string(data))
 	return res.Body.Close()
 }

@@ -38,12 +38,12 @@ func NewSerializer(writer io.Writer) ChunkSink {
 
 	go func() {
 		for chunk := range s.chs {
-			d.Chk.NotNil(chunk.Data)
+			d.Chk.True(chunk.Data != nil)
 
 			digest := chunk.Hash().Digest()
 			n, err := io.Copy(s.writer, bytes.NewReader(digest[:]))
 			d.Chk.NoError(err)
-			d.Chk.Equal(int64(sha1.Size), n)
+			d.Chk.True(int64(sha1.Size) == n)
 
 			// Because of chunking at higher levels, no chunk should never be more than 4GB
 			chunkSize := uint32(len(chunk.Data()))
@@ -52,7 +52,7 @@ func NewSerializer(writer io.Writer) ChunkSink {
 
 			n, err = io.Copy(s.writer, bytes.NewReader(chunk.Data()))
 			d.Chk.NoError(err)
-			d.Chk.Equal(uint32(n), chunkSize)
+			d.Chk.True(uint32(n) == chunkSize)
 		}
 
 		s.done <- struct{}{}
@@ -129,7 +129,7 @@ func deserializeChunk(reader io.Reader) Chunk {
 		return EmptyChunk
 	}
 	d.Chk.NoError(err)
-	d.Chk.Equal(int(sha1.Size), n)
+	d.Chk.True(int(sha1.Size) == n)
 	h := hash.New(digest)
 
 	chunkSize := uint32(0)
@@ -139,8 +139,8 @@ func deserializeChunk(reader io.Reader) Chunk {
 	w := NewChunkWriter()
 	n2, err := io.CopyN(w, reader, int64(chunkSize))
 	d.Chk.NoError(err)
-	d.Chk.Equal(int64(chunkSize), n2)
+	d.Chk.True(int64(chunkSize) == n2)
 	c := w.Chunk()
-	d.Chk.Equal(h, c.Hash())
+	d.Chk.True(h == c.Hash())
 	return c
 }

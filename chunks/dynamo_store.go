@@ -235,10 +235,10 @@ func (s *DynamoStore) buildRequestItems(hashes map[hash.Hash]bool) map[string]*d
 func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.AttributeValue, batch ReadBatch) {
 	for _, item := range responses {
 		p := item[refAttr]
-		d.Chk.NotNil(p)
+		d.Chk.True(p != nil)
 		r := hash.FromSlice(s.removeNamespace(p.B))
 		p = item[chunkAttr]
-		d.Chk.NotNil(p)
+		d.Chk.True(p != nil)
 		b := p.B
 		if p = item[compAttr]; p != nil && *p.S == gzipValue {
 			gr, err := gzip.NewReader(bytes.NewReader(b))
@@ -400,9 +400,9 @@ func (s *DynamoStore) Root() hash.Hash {
 	itemLen := len(result.Item)
 	d.Chk.True(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
 	if itemLen == 3 {
-		d.Chk.NotNil(result.Item[compAttr])
-		d.Chk.NotNil(result.Item[compAttr].S)
-		d.Chk.Equal(noneValue, *result.Item[compAttr].S)
+		d.Chk.True(result.Item[compAttr] != nil)
+		d.Chk.True(result.Item[compAttr].S != nil)
+		d.Chk.True(noneValue == *result.Item[compAttr].S)
 	}
 	return hash.FromSlice(result.Item[chunkAttr].B)
 }

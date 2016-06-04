@@ -66,27 +66,27 @@ type LevelDBStore struct {
 }
 
 func (l *LevelDBStore) Root() hash.Hash {
-	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
 	return l.rootByKey(l.rootKey)
 }
 
 func (l *LevelDBStore) UpdateRoot(current, last hash.Hash) bool {
-	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
 	return l.updateRootByKey(l.rootKey, current, last)
 }
 
 func (l *LevelDBStore) Get(ref hash.Hash) Chunk {
-	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
 	return l.getByKey(l.toChunkKey(ref), ref)
 }
 
 func (l *LevelDBStore) Has(ref hash.Hash) bool {
-	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
 	return l.hasByKey(l.toChunkKey(ref))
 }
 
 func (l *LevelDBStore) Put(c Chunk) {
-	d.Chk.NotNil(l.internalLevelDBStore, "Cannot use LevelDBStore after Close().")
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
 	l.putByKey(l.toChunkKey(c.Hash()), c)
 }
 
@@ -230,7 +230,7 @@ type LevelDBStoreFactory struct {
 }
 
 func (f *LevelDBStoreFactory) CreateStore(ns string) ChunkStore {
-	d.Chk.NotNil(f.store, "Cannot use LevelDBStoreFactory after Shutter().")
+	d.Chk.True(f.store != nil, "Cannot use LevelDBStoreFactory after Shutter().")
 	return newLevelDBStore(f.store, []byte(ns), false)
 }
 

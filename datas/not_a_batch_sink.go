@@ -149,7 +149,7 @@ func (bhcs *notABatchSink) sendWriteRequests(chnx []chunks.Chunk) {
 		res, err := bhcs.httpClient.Do(req)
 		d.Chk.NoError(err)
 
-		d.Chk.Equal(res.StatusCode, http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
+		d.Chk.True(res.StatusCode == http.StatusCreated, "Unexpected response: %s", http.StatusText(res.StatusCode))
 		closeResponse(res)
 		<-bhcs.rateLimit
 	}()

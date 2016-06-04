@@ -54,7 +54,7 @@ func FromData(data []byte) Hash {
 
 // FromSlice creates a new Hash backed by data, ensuring that data is an acceptable length.
 func FromSlice(data []byte) Hash {
-	d.Chk.Len(data, sha1.Size)
+	d.Chk.True(len(data) == sha1.Size)
 	digest := Sha1Digest{}
 	copy(digest[:], data)
 	return New(digest)
@@ -71,7 +71,7 @@ func MaybeParse(s string) (r Hash, ok bool) {
 	d.Chk.NoError(err) // The regexp above should have validated the input
 
 	// If there was no error, we should have decoded exactly one digest worth of bytes.
-	d.Chk.Equal(sha1.Size, n)
+	d.Chk.True(sha1.Size == n)
 	ok = true
 	return
 }

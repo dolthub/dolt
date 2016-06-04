@@ -206,7 +206,7 @@ func newRefQueue() refQueue {
 					push(r)
 				case head <- first:
 					r := pop()
-					d.Chk.Equal(r, first)
+					d.Chk.True(r == first)
 				case <-done:
 					break loop
 				}

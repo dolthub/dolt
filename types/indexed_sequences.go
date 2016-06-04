@@ -81,7 +81,7 @@ func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
 		seq = cs.(indexedSequence)
 	}
 
-	d.Chk.NotNil(cur)
+	d.Chk.True(cur != nil)
 	return cur
 }
 
@@ -126,7 +126,7 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink Value
 			metaSeq := newListMetaSequence(tuples, source)
 			col = newList(metaSeq)
 		} else {
-			d.Chk.Equal(BlobKind, kind)
+			d.Chk.True(BlobKind == kind)
 			metaSeq := newBlobMetaSequence(tuples, source)
 			col = newBlob(metaSeq)
 		}

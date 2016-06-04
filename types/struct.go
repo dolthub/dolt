@@ -22,7 +22,7 @@ type Struct struct {
 }
 
 func newStructFromData(data structData, t *Type) Struct {
-	d.Chk.Equal(t.Kind(), StructKind)
+	d.Chk.True(t.Kind() == StructKind)
 	return Struct{data, t, &hash.Hash{}}
 }
 
@@ -147,7 +147,7 @@ func structBuilder(values []Value, t *Type) Value {
 }
 
 func structReader(s Struct, t *Type) []Value {
-	d.Chk.Equal(t.Kind(), StructKind)
+	d.Chk.True(t.Kind() == StructKind)
 	values := []Value{}
 
 	desc := t.Desc.(StructDesc)

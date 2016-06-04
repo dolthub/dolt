@@ -84,7 +84,7 @@ func (s *remoteDatabaseServer) makeHandle(hndlr Handler) httprouter.Handle {
 
 func (s *remoteDatabaseServer) connState(c net.Conn, cs http.ConnState) {
 	if s.closing {
-		d.Chk.Equal(cs, http.StateClosed)
+		d.Chk.True(cs == http.StateClosed)
 		return
 	}
 	s.csChan <- &connectionState{c, cs}

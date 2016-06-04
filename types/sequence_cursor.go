@@ -31,7 +31,7 @@ func (cur *sequenceCursor) getItem(idx int) sequenceItem {
 }
 
 func (cur *sequenceCursor) sync() {
-	d.Chk.NotNil(cur.parent)
+	d.Chk.True(cur.parent != nil)
 	cur.seq = cur.parent.getChildSequence()
 }
 
@@ -98,7 +98,7 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(allowBeforeStart bool) b
 	if cur.idx == -1 {
 		return false
 	}
-	d.Chk.Equal(0, cur.idx)
+	d.Chk.True(0 == cur.idx)
 	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(false) {
 		cur.sync()
 		cur.idx = cur.length() - 1

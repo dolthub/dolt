@@ -87,7 +87,7 @@ func main() {
 	b := types.NewBlob(pr)
 	ds, err = ds.Commit(b)
 	if err != nil {
-		d.Chk.Equal(datas.ErrMergeNeeded, err)
+		d.Chk.True(datas.ErrMergeNeeded == err)
 		fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
 		return
 	}

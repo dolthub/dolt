@@ -35,7 +35,7 @@ func serializeHash(w io.Writer, hash hash.Hash) {
 	digest := hash.Digest()
 	n, err := io.Copy(w, bytes.NewReader(digest[:]))
 	d.Chk.NoError(err)
-	d.Chk.Equal(int64(sha1.Size), n)
+	d.Chk.True(int64(sha1.Size) == n)
 }
 
 func deserializeHints(reader io.Reader) types.Hints {
@@ -66,6 +66,6 @@ func deserializeHash(reader io.Reader) hash.Hash {
 	digest := hash.Sha1Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	d.Chk.NoError(err)
-	d.Chk.Equal(int(sha1.Size), n)
+	d.Chk.True(int(sha1.Size) == n)
 	return hash.New(digest)
 }
