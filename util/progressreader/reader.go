@@ -15,18 +15,27 @@ func New(inner io.Reader, cb Callback) io.Reader {
 	return &reader{
 		inner,
 		uint64(0),
+		uint64(0),
 		cb,
 	}
 }
 
 type reader struct {
-	inner io.Reader
-	seen  uint64
-	cb    Callback
+	inner    io.Reader
+	seen     uint64
+	lastMult uint64
+	cb       Callback
 }
 
+const reportFreq = 2 << 19 // 1 MB
+
 func (r *reader) Read(p []byte) (n int, err error) {
-	r.cb(r.seen)
+	mult := uint64(r.seen / reportFreq)
+	if mult > r.lastMult {
+		r.cb(r.seen)
+		r.lastMult = mult
+	}
+
 	n, err = r.inner.Read(p)
 	r.seen += uint64(n)
 	return
