@@ -24,30 +24,30 @@ noms log http://demo.noms.io/cli-tour:film-locations
   <tr>
     <td><a href="doc/cli-tour.md#noms-log">Versioning</a><br>
         Each commit is retained and can be viewed or reverted
-    <td><b>Type inference</b><br>
+    <td><a href="doc/intro.md#types">Type inference</a><br>
         Each dataset has a precise schema that is automatically inferred
-    <td><b>Atomic commits</b><br>
+    <td><a href="doc/intro.md#databases-and-datasets">Atomic commits</a><br>
         Immutability enables atomic commits of any size
   <tr>
-    <td><b>Diff</b><br>
+    <td><a href="doc/cli-tour.md#noms-diff">Diff</a><br>
     	Compare structured datasets of any size efficiently
-    <td><b>Schema versioning</b><br>
+    <td><a href="doc/intro.md#type-accretion.md">Schema versioning</a><br>
     	Narrow or widen schemas instantly, without rewriting data
-    <td><b>Sorted indexes</b><br>
+    <td><a href="#doc/intro.md#indexing-and-searching-with-prolly-trees">Sorted indexes</a><br>
     	Fast range queries, on a single or a combination of attributes
   <tr>
-    <td><b>Fork</b><br>
+    <td><a href="doc/cli-tour.md#noms-sync">Fork</a><br>
       Create your own isolated branch of a dataset to work in
-    <td><b>Schema validation</b> (soon)<br>
+    <td><a href="doc/intro.md#types">Schema validation</a> (soon)<br>
       Optionally constrain commit types on a per-dataset basis
-    <td><b>Insanely easy import</b><br>
+    <td><a href="samples/js/fb">Insanely easy import</a><br>
       Import snapshots—Noms auto-dedupes and generates a precise changelog
   <tr>
-    <td><b>Sync</b><br>
+    <td><a href="doc/cli-tour.md#noms-sync">Sync</a><br>
       Sync disconnected database instances efficiently and correctly
-    <td><b>Structural typing</b><br>
+    <td><a href="doc/intro.md#types">Structural typing</a><br>
       Index, search, and match data by structure shape
-    <td><b>Awesome export</b><br>
+    <td>Awesome export<br>
       Use dataset history to precisely apply sync changes out of Noms
 </table>
 
