@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/types"
 )
 
 // ValueToListAndElemDesc ensures that v is a types.List of structs, pulls the types.StructDesc that describes the elements of v out of vr, and returns the List and related StructDesc.

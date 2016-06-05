@@ -3,7 +3,7 @@ package main
 import (
 	"container/list"
 
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/types"
 )
 
 type diffInfo struct {

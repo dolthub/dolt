@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
 

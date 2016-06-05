@@ -16,11 +16,11 @@ import (
 
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/util"
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/types"
-	"github.com/attic-labs/noms/util/progressreader"
-	"github.com/attic-labs/noms/util/status"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/progressreader"
+	"github.com/attic-labs/noms/go/util/status"
 	human "github.com/dustin/go-humanize"
 )
 

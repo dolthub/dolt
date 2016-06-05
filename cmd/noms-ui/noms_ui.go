@@ -16,10 +16,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/constants"
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/datas"
+	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/julienschmidt/httprouter"
 )
 

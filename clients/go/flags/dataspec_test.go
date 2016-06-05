@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/dataset"
-	"github.com/attic-labs/noms/hash"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
 

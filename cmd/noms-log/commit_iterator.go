@@ -7,8 +7,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/attic-labs/noms/datas"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/types"
 )
 
 type CommitIterator struct {
