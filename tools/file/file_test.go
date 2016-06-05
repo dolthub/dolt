@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/testify/suite"
 )
 
