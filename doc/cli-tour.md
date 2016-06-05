@@ -39,7 +39,7 @@ noms sync [options] <source-object> <dest-dataset>
 ...
 ```
 
-## Explore
+## noms ds
 
 There's a sample database running at http://demo.noms.io/cli-tour. Let's take a look inside...
 
@@ -53,6 +53,8 @@ film-locations
 fire-incidents
 fire-permits
 ```
+
+## noms log
 
 Noms datasets are versioned. You can see the history with `log`:
 
@@ -86,6 +88,8 @@ List<struct Row {
 
 Note that Noms is a typed system. What is being shown here is not text, but the first bit of a serialization of the structured data that Noms actually stores.
 
+## noms show
+
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
@@ -115,7 +119,7 @@ struct Commit {
     },
 ```
 
-## Sync
+## noms sync
 
 You can work with Noms databases that are remote exactly the same as you work with local databases. But it's frequently useful to move data to a local machine, for example, if you intend to make local changes.
 
@@ -141,6 +145,10 @@ open /tmp/film-location.csv and edit it, then:
 > csv-import /tmp/film-location.csv ldb:/tmp/noms:films
 ```
 
-`noms show ldb:/tmp/noms:films` should now include your change!
+#noms diff
 
-`noms diff` [coming soon](https://github.com/attic-labs/noms/issues/1272) to make this more clear.
+The `noms diff` command can show you the differences between any two values. Let's see our change:
+
+```
+> noms diff ldb:/tmp/noms:films http://demo.noms.io/cli-tour:film-locations
+```
