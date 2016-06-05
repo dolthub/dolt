@@ -15,14 +15,14 @@ go install github.com/attic-labs/noms/cmd/...
 
 noms log http://demo.noms.io/cli-tour:film-locations
 ```
-[Samples](TODO)&nbsp; | &nbsp;[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)
+[**Samples**](TODO)&nbsp; | &nbsp;[**Command-Line Tour**](doc/cli-tour.md)&nbsp; | &nbsp;[**JavaScript SDK Tour**](doc/js-tour.md)&nbsp; | &nbsp;[**Intro to Noms**](doc/intro.md)
 
 
 ## Features
 
 <table>
   <tr>
-    <td><b>Versioning</b><br>
+    <td><a href="doc/cli-tour.md#noms-log">Versioning</a><br>
         Each commit is retained and can be viewed or reverted
     <td><b>Type inference</b><br>
         Each dataset has a precise schema that is automatically inferred
