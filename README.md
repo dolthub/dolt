@@ -53,7 +53,7 @@ noms log http://demo.noms.io/cli-tour:film-locations
 
 ## Use Cases
 
-We're just getting started, but here are a few places we think Noms is especially well-suited:
+We're just getting started, but here are a few use cases we think Noms is especially well-suited for:
 
 * **Data collaboration**—Work on data together. Track changes, fork, merge, sync, etc. The entire Git workflow, but on large-scale, structured data.
 * **ETL**—ETL based on Noms is inherently incremental, undoable, idempotent, and auditable.
@@ -63,7 +63,7 @@ We're just getting started, but here are a few places we think Noms is especiall
 
 ## Get Involved
 
-Noms is developed completely in the open. Come say hi.
+Noms is developed in the open. Come say hi.
 
 - [Mailing List](nomsdb@googlegroups.com)
 - [Slack](atticlabs.slack.com/messages/dev)
