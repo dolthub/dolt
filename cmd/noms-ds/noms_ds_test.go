@@ -7,11 +7,11 @@ package main
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/clients/go/test_util"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/samples/go/test_util"
 	"github.com/attic-labs/testify/suite"
 )
 

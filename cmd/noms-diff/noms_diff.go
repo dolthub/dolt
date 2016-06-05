@@ -8,10 +8,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/attic-labs/noms/clients/go/flags"
-	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/outputpager"
+	"github.com/attic-labs/noms/samples/go/flags"
+	"github.com/attic-labs/noms/samples/go/util"
 )
 
 const (

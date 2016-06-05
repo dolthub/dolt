@@ -15,7 +15,7 @@ before_script:
 - npm install
 - npm test
 - popd
-- pushd clients/js/splore
+- pushd samples/js/splore
 - npm prune
 - ./build.py
 - npm test
@@ -33,7 +33,7 @@ notifications:
 cache:
   directories:
   - js/node_modules
-  - clients/js/splore/node_modules
+  - samples/js/splore/node_modules
 deploy:
   provider: script
   script: tools/publish-js-sdk.py

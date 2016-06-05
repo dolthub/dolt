@@ -130,7 +130,7 @@ films
 We can now make an edit locally:
 
 ```
-> cd $GOPATH/src/github.com/attic-labs/noms/clients/go/csv
+> cd $GOPATH/src/github.com/attic-labs/noms/samples/go/csv
 > go install ./...
 > csv-export ldb:/tmp/noms:films /tmp/film-locations.csv
 ```

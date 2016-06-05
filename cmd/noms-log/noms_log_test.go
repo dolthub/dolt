@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/clients/go/flags"
-	"github.com/attic-labs/noms/clients/go/test_util"
-	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/samples/go/flags"
+	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )

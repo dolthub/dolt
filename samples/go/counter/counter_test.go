@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/clients/go/test_util"
+	"github.com/attic-labs/noms/samples/go/test_util"
 	"github.com/attic-labs/testify/suite"
 )
 
