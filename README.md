@@ -15,38 +15,38 @@ go install github.com/attic-labs/noms/cmd/...
 
 noms log http://demo.noms.io/cli-tour:film-locations
 ```
-[**Samples**](TODO)&nbsp; | &nbsp;[**Command-Line Tour**](doc/cli-tour.md)&nbsp; | &nbsp;[**JavaScript SDK Tour**](doc/js-tour.md)&nbsp; | &nbsp;[**Intro to Noms**](doc/intro.md)
+[Samples](samples/)&nbsp; | &nbsp;[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)
 
 
 ## Features
 
 <table>
   <tr>
-    <td><a href="doc/cli-tour.md#noms-log">Versioning</a><br>
-        Each commit is retained and can be viewed or reverted
-    <td><a href="doc/intro.md#types">Type inference</a><br>
-        Each dataset has a precise schema that is automatically inferred
-    <td><a href="doc/intro.md#databases-and-datasets">Atomic commits</a><br>
-        Immutability enables atomic commits of any size
+    <td><b>Versioning</b><br>
+        Each commit is <a href="doc/cli-tour.md#noms-log">retained</a> and can be viewed or reverted
+    <td><b>Type inference</b><br>
+        Each dataset has a precise schema that is automatically <a href="doc/intro.md#types">inferred</a>
+    <td><b>Atomic commits</b><br>
+        Immutability enables <a href="doc/intro.md#databases-and-datasets">atomic commits</a> of any size
   <tr>
-    <td><a href="doc/cli-tour.md#noms-diff">Diff</a><br>
-    	Compare structured datasets of any size efficiently
-    <td><a href="doc/intro.md#type-accretion.md">Schema versioning</a><br>
-    	Narrow or widen schemas instantly, without rewriting data
-    <td><a href="#doc/intro.md#indexing-and-searching-with-prolly-trees">Sorted indexes</a><br>
-    	Fast range queries, on a single or a combination of attributes
+    <td><b>Diff</b><br>
+    	<a href="doc/cli-tour.md#noms-diff">Compare</a> structured datasets of any size efficiently
+    <td><b>Schema versioning</b><br>
+    	<a href="doc/intro.md#type-accretion.md">Narrow or widen</a> schemas instantly, without rewriting data
+    <td><b>Sorted indexes</b><br>
+    	Fast <a href="a href="#doc/intro.md#indexing-and-searching-with-prolly-trees">range queries</a>, on a single or a combination of attributes
   <tr>
-    <td><a href="doc/cli-tour.md#noms-sync">Fork</a><br>
-      Create your own isolated branch of a dataset to work in
-    <td><a href="doc/intro.md#types">Schema validation</a> (soon)<br>
-      Optionally constrain commit types on a per-dataset basis
-    <td><a href="samples/js/fb">Insanely easy import</a><br>
-      Import snapshots—Noms auto-dedupes and generates a precise changelog
+    <td><b>Fork</b><br>
+      Create your own isolated <a href="doc/cli-tour.md#noms-sync">branch</a> of a dataset to work in
+    <td><b>Schema validation</b> (soon)<br>
+      Optionally <a href="doc/intro.md#types">constrain</a> commit types on a per-dataset basis
+    <td><b>Insanely easy import</b><br>
+      Import <a href="samples/js/fb">snapshots</a>—Noms auto-dedupes and generates a precise changelog
   <tr>
-    <td><a href="doc/cli-tour.md#noms-sync">Sync</a><br>
-      Sync disconnected database instances efficiently and correctly
-    <td><a href="doc/intro.md#types">Structural typing</a><br>
-      Index, search, and match data by structure shape
+    <td><b>Sync</b><br>
+      <a href="doc/cli-tour.md#noms-sync">Sync</a> disconnected database instances efficiently and correctly
+    <td><b>Structural typing</b><br>
+      Index, search, and match data by structure <a href="doc/intro.md#types">shape</a>
     <td>Awesome export<br>
       Use dataset history to precisely apply sync changes out of Noms
 </table>
