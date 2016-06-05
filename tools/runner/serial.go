@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/go/d"
 )
 
 // Env is a map of env vars, mapping key string to value string.
