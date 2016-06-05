@@ -7,8 +7,8 @@ package pkg
 import (
 	"io"
 
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/types"
 )
 
 // Parsed represents a parsed Noms type package, which has some additional metadata beyond that which is present in a types.Package.
