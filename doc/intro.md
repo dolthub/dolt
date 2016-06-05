@@ -24,7 +24,9 @@ A _database_ is the top-level abstraction in Noms.
 
 A database has two responsibilities: it provides storage of [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage) chunks of data, and it keeps track of zero or more _datasets_.
 
-A Noms database can be implemented on top of any underlying storage system that provides key/value storage with at least optimistic concurrency. We have implementations of Noms databases on top of [LevelDB](https://github.com/google/leveldb) (usually used locally), our own [HTTP protocol](https://github.com/attic-labs/noms/blob/master/datas/database_server.go) (used for working with a remote database), [Amazon Dynamo](https://aws.amazon.com/dynamodb/), and [memory](https://github.com/attic-labs/noms/blob/master/js/src/memory-store.js) (mainly used for testing).
+A Noms database can be implemented on top of any underlying storage system that provides key/value storage with at least optional optimistic concurrency. We only use optimistic concurrency to store the current value of each dataset. Chunks themselves are immutable.
+
+We have implementations of Noms databases on top of [LevelDB](https://github.com/google/leveldb) (usually used locally), our own [HTTP protocol](https://github.com/attic-labs/noms/blob/master/datas/database_server.go) (used for working with a remote database), [Amazon Dynamo](https://aws.amazon.com/dynamodb/), and [memory](https://github.com/attic-labs/noms/blob/master/js/src/memory-store.js) (mainly used for testing).
 
 Here's an example of creating an http-backed database using the [JavaScript Noms SDK](js-tour.md):
 
