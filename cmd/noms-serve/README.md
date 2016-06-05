@@ -5,7 +5,7 @@ noms-serve implements a noms database over HTTP.
 ## Example
 
 ```
-cd $GOPATH/src/github.com/attic-labs/noms/clients/go/counter
+cd $GOPATH/src/github.com/attic-labs/noms/samples/go/counter
 go build
 ./counter ldb:/tmp/nomsdb:counter
 ./counter ldb:/tmp/nomsdb:counter

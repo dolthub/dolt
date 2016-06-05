@@ -15,10 +15,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/attic-labs/noms/clients/go/flags"
-	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/samples/go/flags"
+	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/clbanning/mxj"
 )
 

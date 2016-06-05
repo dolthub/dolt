@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attic-labs/noms/clients/go/csv"
-	"github.com/attic-labs/noms/clients/go/flags"
-	"github.com/attic-labs/noms/clients/go/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/samples/go/csv"
+	"github.com/attic-labs/noms/samples/go/flags"
+	"github.com/attic-labs/noms/samples/go/util"
 
 	humanize "github.com/dustin/go-humanize"
 )

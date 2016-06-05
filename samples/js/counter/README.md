@@ -7,7 +7,7 @@ counter uses noms/js to read and write a simple incrementing counter.
 
 ```
 noms serve ldb:/tmp/noms &
-cd ../../clients/js/counter
+cd ../../samples/js/counter
 npm install
 npm run build
 node . http://localhost:8000:counter
