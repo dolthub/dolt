@@ -9,7 +9,7 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"github.com/attic-labs/noms/d"
+	"github.com/attic-labs/noms/go/d"
 )
 
 var (

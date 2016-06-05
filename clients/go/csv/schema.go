@@ -8,8 +8,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/types"
 )
 
 type schemaOptions []*typeCanFit

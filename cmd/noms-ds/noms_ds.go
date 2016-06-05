@@ -11,7 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/clients/go/flags"
 	"github.com/attic-labs/noms/clients/go/util"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/types"
 )
 
 var (
