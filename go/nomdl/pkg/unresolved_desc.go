@@ -4,7 +4,7 @@
 
 package pkg
 
-import "github.com/attic-labs/noms/types"
+import "github.com/attic-labs/noms/go/types"
 
 const UnresolvedKind = 100
 

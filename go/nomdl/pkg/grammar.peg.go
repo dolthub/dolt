@@ -15,7 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/types"
 )
 
 type alias struct {

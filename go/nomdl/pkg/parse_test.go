@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/d"
-	"github.com/attic-labs/noms/types"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/suite"
 )
 
