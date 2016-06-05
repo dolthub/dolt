@@ -12,6 +12,7 @@ In other words, Noms is Git for data.
 ```
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
 go install github.com/attic-labs/noms/cmd/...
+
 noms log http://demo.noms.io/cli-tour:film-locations
 ```
 [Samples](TODO)&nbsp; | &nbsp;[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)
@@ -21,33 +22,33 @@ noms log http://demo.noms.io/cli-tour:film-locations
 
 <table>
   <tr>
-    <td><b>Versioning</b><br>
-		Each commit is retained and can be viewed or reverted
-  	<td><b>Type inference</b><br>
-  		Each dataset has a precise schema that is automatically inferred
-  	<td><b>Atomic commits</b><br>
-  		Immutability enables atomic commits of any size
+    <td><b><a href="doc/cli-tour.md#noms-log">Versioning</a></b><br>
+        Each commit is retained and can be viewed or reverted
+    <td><b><a href="doc/intro.md#type-accretion">Type inference</a></b><br>
+        Each dataset has a precise schema that is automatically inferred
+    <td><b><a href="doc/intro.md#databases-and-datasets">Atomic commits</a></b><br>
+        Immutability enables atomic commits of any size
   <tr>
-    <td><b>Diff</b><br>
+    <td><b><a href="doc/cli-tour.md#noms-diff">Diff</a></b><br>
     	Compare structured datasets of any size efficiently
-    <td><b>Schema versioning</b><br>
+    <td><b><a href="doc/intro.md#type-accretion">Schema versioning</a></b><br>
     	Narrow or widen schemas instantly, without rewriting data
-    <td><b>Sorted indexes</b><br>
+    <td><b><a href="doc/intro.md#indexing-and-searching-with-prolly-trees">Sorted indexes</a></b><br>
     	Fast range queries, on a single or a combination of attributes
   <tr>
-	<td><b>Fork</b><br>
-		Create your own isolated branch of a dataset to work in
-    <td><b>Schema validation</b> (soon)<br>
-    	Optionally constrain commit types on a per-dataset basis
-  	<td><b>Insanely easy import</b><br>
-  		Continuous import from anywhere with automatic deduplication
+    <td><b><a href="doc/cli-tour.md#noms-sync">Fork</a></b><br>
+      Create your own isolated branch of a dataset to work in
+    <td><b><a href="doc/intro.md#types">Schema validation</a></b> (soon)<br>
+      Optionally constrain commit types on a per-dataset basis
+    <td><b><a href="samples/js/fb">Insanely easy import</a></b><br>
+      Continuous import from anywhere with automatic deduplication
   <tr>
-  	<td><b>Sync</b><br>
-  		Sync disconnected database instances efficiently and correctly
-  	<td><b>Structural typing</b><br>
-  		Index, search, and match data by structure shape
-  	<td><b>Awesome export</b><br>
-  		Continuously and efficiently export from Noms to anywhere
+    <td><b><a href="doc/cli-tour.md#noms-sync">Sync</a></b><br>
+      Sync disconnected database instances efficiently and correctly
+    <td><b><a href="doc/intro.md#types">Structural typing</a></b><br>
+      Index, search, and match data by structure shape
+    <td><b>Awesome export</b><br>
+      Continuously and efficiently export from Noms to anywhere
 </table>
 
 
