@@ -23,44 +23,32 @@ noms log http://demo.noms.io/cli-tour:film-locations
 <table>
   <tr>
     <td><b>Versioning</b><br>
-        Each commit is retained and can be viewed or reverted<br>
-        <em>topic: <a href="doc/cli-tour.md#noms-log"><code>noms log</code></a></em>
+        Each commit is retained and can be viewed or reverted
     <td><b>Type inference</b><br>
-        Each dataset has a precise schema that is automatically inferred<br>
-        <em>topic: <a href="doc/intro.md#types">type accretion</a></em>
+        Each dataset has a precise schema that is automatically inferred
     <td><b>Atomic commits</b><br>
-        Immutability enables atomic commits of any size<br>
-        <em>topic: <a href="doc/intro.md#databases-and-datasets">Database and Datasets</a>
+        Immutability enables atomic commits of any size
   <tr>
     <td><b>Diff</b><br>
-      Compare structured datasets of any size efficiently<br>
-      <em>topic: <a href="doc/cli-tour.md#noms-diff"><code>noms diff</code></a>
+      Compare structured datasets of any size efficiently
     <td><b>Schema versioning</b><br>
-      Narrow or widen schemas instantly, without rewriting data<br>
-      <em>topic: <a href="doc/intro.md#type-accretion.md"><code>type accretion</code></a></em>
+      Narrow or widen schemas instantly, without rewriting data
     <td><b>Sorted indexes</b><br>
-      Fast range queries, on a single or a combination of attributes<br>
-      <em>topic: <a href="a href="#doc/intro.md#indexing-and-searching-with-prolly-trees">indexing</a></em>
+      Fast range queries, on a single or a combination of attributes
   <tr>
     <td><b>Fork</b><br>
-      Create your own isolated branch of a dataset to work on<br>
-      <em>topic: <a href="doc/cli-tour.md#noms-sync"><code>noms sync</code></a></em>
+      Create your own isolated branch of a dataset to work on
     <td><b>Schema validation</b> (soon)<br>
-      Optionally constrain commit types on a per-dataset basis<br>
-      <em>topic: <a href="doc/intro.md#types">types</a></em>
+      Optionally constrain commit types on a per-dataset basis
     <td><b>Insanely easy import</b><br>
-      Noms auto-dedupes snapshots and generates a precise changelog<br>
-      <em>topic: <a href="samples/js/fb">fb import sample</a></em>
+      Noms auto-dedupes snapshots and generates a precise changelog
   <tr>
     <td><b>Sync</b><br>
-      Sync disconnected database instances efficiently and correctly<br>
-      <em>topic: <a href="doc/cli-tour.md#noms-sync"><code>noms sync</code></a>
+      Sync disconnected database instances efficiently and correctly
     <td><b>Structural typing</b><br>
-      Index, search, and match data by structure shape<br>
-      <em>topic: <a href="<a href="doc/intro.md#types">types</a></em>
+      Index, search, and match data by structure shape
     <td><b>Awesome export</b><br>
-      Use dataset history to precisely apply sync changes out of Noms<br>
-      <em>Example coming soon</em>
+      Use dataset history to precisely apply sync changes out of Noms
 </table>
 
 
