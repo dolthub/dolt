@@ -6,7 +6,9 @@ This is a quick introduction to the Noms command-line interface. It should only 
 
 ## Install Noms
 
-... if you haven't already. Follow the instructions [here](https://github.com/attic-labs/noms#get-noms).
+... if you haven't already. Follow the instructions [here](https://github.com/attic-labs/noms#setup).
+
+## The `noms` command
 
 Now you should be able to run `noms`:
 
@@ -25,8 +27,6 @@ Available commands:
 
 See noms <command> -h for information on each available command.
 ```
-
-## The `noms` command
 
 Without any arguments, `noms` lists out all available commands. To get information on a specific command, we can suffix it with `-h`:
 
@@ -136,13 +136,13 @@ We can now make an edit locally:
 ```
 > cd $GOPATH/src/github.com/attic-labs/noms/samples/go/csv
 > go install ./...
-> csv-export ldb:/tmp/noms:films /tmp/film-locations.csv
+> csv-export ldb:/tmp/noms:films > /tmp/film-locations.csv
 ```
 
 open /tmp/film-location.csv and edit it, then:
 
 ```
-> csv-import /tmp/film-location.csv ldb:/tmp/noms:films
+> csv-import ldb:/tmp/noms:films /tmp/film-locations.csv
 ```
 
 #noms diff
@@ -150,5 +150,20 @@ open /tmp/film-location.csv and edit it, then:
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
 ```
-> noms diff ldb:/tmp/noms:films http://demo.noms.io/cli-tour:film-locations
+> noms diff http://demo.noms.io/cli-tour:film-locations ldb:/tmp/noms:films
+
+./.parents {
+-   Ref<struct Commit {
+-     parents: Set<Ref<Cycle<0>>>
+-     value: Value
+-   }>(sha1-4883ff49f930718f7aafede265b51f83c99cf7bc)
++   Ref<struct Commit {
++     parents: Set<Ref<Cycle<0>>>
++     value: Value
++   }>(sha1-b50c323c568bfff07a13fe276236cbdf40b5d846)
+  }
+./.value[213] {
+-   "Locations": "Mission Delores Park (Mission District) via J-Church MUNI Train"
++   "Locations": "Mission Dolores Park (Mission District) via J-Church MUNI Train"
+...
 ```
