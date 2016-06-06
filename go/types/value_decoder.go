@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type valueDecoder struct {
@@ -173,37 +174,27 @@ func (r *valueDecoder) readValue() Value {
 func (r *valueDecoder) readStruct(t *Type) Value {
 	// We've read `[StructKind, name, fields, unions` at this point
 	desc := t.Desc.(StructDesc)
-
-	count := len(desc.Fields)
-	values := make([]Value, count, count)
-	i := 0
-	desc.IterFields(func(name string, t *Type) {
+	count := desc.Len()
+	values := make([]Value, count)
+	for i := 0; i < count; i++ {
 		values[i] = r.readValue()
-		i++
-	})
+	}
 
-	return structBuilder(values, t)
+	return Struct{values, t, &hash.Hash{}}
 }
 
 func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
 	name := r.readString()
-
 	count := r.readUint32()
 
-	fields := make(TypeMap, count)
-	fieldNames := make([]string, count, count)
-	desc := StructDesc{name, fields, fieldNames}
+	fields := make(fieldSlice, count)
+	desc := StructDesc{name, fields}
 	st := buildType(desc)
 	parentStructTypes = append(parentStructTypes, st)
 
 	for i := uint32(0); i < count; i++ {
-		fieldName := r.readString()
-		fieldType := r.readType(parentStructTypes)
-		fields[fieldName] = fieldType
-		fieldNames[i] = fieldName
+		fields[i] = field{name: r.readString(), t: r.readType(parentStructTypes)}
 	}
-	desc.Fields = fields
-	desc.sortedNames = fieldNames
 	st.Desc = desc
 	return st
 }

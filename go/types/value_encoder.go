@@ -171,7 +171,7 @@ func indexOfType(t *Type, ts []*Type) int {
 }
 
 func (w *valueEncoder) writeStruct(v Value, t *Type) {
-	for _, v := range structReader(v.(Struct), t) {
+	for _, v := range v.(Struct).values {
 		w.writeValue(v)
 	}
 }
@@ -193,11 +193,12 @@ func (w *valueEncoder) writeStructType(t *Type, parentStructTypes []*Type) {
 	w.writeKind(StructKind)
 	w.writeString(t.Name())
 
-	count := len(t.Desc.(StructDesc).Fields)
+	count := t.Desc.(StructDesc).Len()
 	w.writeUint32(uint32(count))
 
-	t.Desc.(StructDesc).IterFields(func(name string, t *Type) {
-		w.writeString(name)
-		w.writeType(t, parentStructTypes)
-	})
+	fields := t.Desc.(StructDesc).fields
+	for _, field := range fields {
+		w.writeString(field.name)
+		w.writeType(field.t, parentStructTypes)
+	}
 }

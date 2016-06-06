@@ -4,6 +4,12 @@
 
 package types
 
+import (
+	"sort"
+
+	"github.com/attic-labs/noms/go/d"
+)
+
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
@@ -68,12 +74,22 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 
 type TypeMap map[string]*Type
 
+type field struct {
+	name string
+	t    *Type
+}
+
+type fieldSlice []field
+
+func (s fieldSlice) Len() int           { return len(s) }
+func (s fieldSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s fieldSlice) Less(i, j int) bool { return s[i].name < s[j].name }
+
 // StructDesc describes a custom Noms Struct.
 // Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
-	Name        string
-	Fields      TypeMap
-	sortedNames []string
+	Name   string
+	fields []field
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -81,11 +97,12 @@ func (s StructDesc) Kind() NomsKind {
 }
 
 func (s StructDesc) Equals(other TypeDesc) bool {
-	if s.Kind() != other.Kind() || len(s.Fields) != len(other.(StructDesc).Fields) {
+	if s.Kind() != other.Kind() || len(s.fields) != len(other.(StructDesc).fields) {
 		return false
 	}
-	for i, t := range other.(StructDesc).Fields {
-		if !s.Fields[i].Equals(t) {
+	otherDesc := other.(StructDesc)
+	for i, field := range s.fields {
+		if field.name != otherDesc.fields[i].name || !field.t.Equals(otherDesc.fields[i].t) {
 			return false
 		}
 	}
@@ -93,7 +110,34 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 }
 
 func (s StructDesc) IterFields(cb func(name string, t *Type)) {
-	for _, name := range s.sortedNames {
-		cb(name, s.Fields[name])
+	for _, field := range s.fields {
+		cb(field.name, field.t)
 	}
+}
+
+func (s StructDesc) Field(name string) *Type {
+	f, i := s.findField(name)
+	if i == -1 {
+		return nil
+	}
+	return f.t
+}
+
+func (s StructDesc) SetField(name string, t *Type) {
+	f, i := s.findField(name)
+	d.Chk.True(i != -1, "No such field %s", name)
+	f.t = t
+}
+
+func (s StructDesc) findField(name string) (*field, int) {
+	i := sort.Search(len(s.fields), func(i int) bool { return s.fields[i].name >= name })
+	if i == len(s.fields) || s.fields[i].name != name {
+		return nil, -1
+	}
+	return &s.fields[i], i
+}
+
+// Len returns the number of fields in the struct
+func (s StructDesc) Len() int {
+	return len(s.fields)
 }

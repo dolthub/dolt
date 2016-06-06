@@ -66,7 +66,7 @@ func newFieldPart(name string) fieldPart {
 
 func (fp fieldPart) Resolve(v Value) Value {
 	if s, ok := v.(Struct); ok {
-		if fv, ok := s.data[fp.name]; ok {
+		if fv, ok := s.MaybeGet(fp.name); ok {
 			return fv
 		}
 	}

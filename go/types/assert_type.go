@@ -46,21 +46,21 @@ func isSubtype(requiredType, concreteType *Type) bool {
 		if requiredDesc.Name != "" && requiredDesc.Name != concreteDesc.Name {
 			return false
 		}
-		type Entry struct {
-			name string
-			t    *Type
-		}
-		entries := make([]Entry, 0, len(requiredDesc.Fields))
-		requiredDesc.IterFields(func(name string, t *Type) {
-			entries = append(entries, Entry{name, t})
-		})
-		for _, entry := range entries {
-			at, ok := concreteDesc.Fields[entry.name]
-			if !ok || !isSubtype(entry.t, at) {
+		j := 0
+		for _, field := range requiredDesc.fields {
+			for ; j < concreteDesc.Len() && concreteDesc.fields[j].name != field.name; j++ {
+			}
+			if j == concreteDesc.Len() {
+				return false
+			}
+
+			f := concreteDesc.fields[j]
+			if !isSubtype(field.t, f.t) {
 				return false
 			}
 		}
 		return true
+
 	}
 
 	panic("unreachable")

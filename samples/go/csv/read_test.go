@@ -34,10 +34,10 @@ b,2,false
 
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
-	assert.Len(desc.Fields, 3)
-	assert.Equal(types.StringKind, desc.Fields["A"].Kind())
-	assert.Equal(types.NumberKind, desc.Fields["B"].Kind())
-	assert.Equal(types.BoolKind, desc.Fields["C"].Kind())
+	assert.Equal(desc.Len(), 3)
+	assert.Equal(types.StringKind, desc.Field("A").Kind())
+	assert.Equal(types.NumberKind, desc.Field("B").Kind())
+	assert.Equal(types.BoolKind, desc.Field("C").Kind())
 
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.NewString("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.NewString("b")))
@@ -65,9 +65,9 @@ func testTrailingHelper(t *testing.T, dataString string) {
 
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
-	assert.Len(desc.Fields, 2)
-	assert.Equal(types.StringKind, desc.Fields["A"].Kind())
-	assert.Equal(types.StringKind, desc.Fields["B"].Kind())
+	assert.Equal(desc.Len(), 2)
+	assert.Equal(types.StringKind, desc.Field("A").Kind())
+	assert.Equal(types.StringKind, desc.Field("B").Kind())
 }
 
 func TestReadTrailingHole(t *testing.T) {

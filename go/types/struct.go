@@ -16,14 +16,18 @@ import (
 type structData map[string]Value
 
 type Struct struct {
-	data structData
-	t    *Type
-	h    *hash.Hash
+	values []Value
+	t      *Type
+	h      *hash.Hash
 }
 
 func newStructFromData(data structData, t *Type) Struct {
 	d.Chk.True(t.Kind() == StructKind)
-	return Struct{data, t, &hash.Hash{}}
+	values := make([]Value, len(data))
+	for i, field := range t.Desc.(StructDesc).fields {
+		values[i] = data[field.name]
+	}
+	return Struct{values, t, &hash.Hash{}}
 }
 
 func NewStruct(name string, data structData) Struct {
@@ -38,15 +42,16 @@ func NewStruct(name string, data structData) Struct {
 }
 
 func NewStructWithType(t *Type, data structData) Struct {
-	newData := make(structData, len(data))
 	desc := t.Desc.(StructDesc)
-	for name, t := range desc.Fields {
-		v, ok := data[name]
-		d.Chk.True(ok, "Missing required field %s", name)
-		assertSubtype(t, v)
-		newData[name] = v
+	d.Chk.True(len(data) == len(desc.fields))
+	values := make([]Value, desc.Len())
+	for i, field := range desc.fields {
+		v, ok := data[field.name]
+		d.Chk.True(ok, "Missing required field %s", field.name)
+		assertSubtype(field.t, v)
+		values[i] = v
 	}
-	return newStructFromData(newData, t)
+	return Struct{values, t, &hash.Hash{}}
 }
 
 func (s Struct) hashPointer() *hash.Hash {
@@ -66,20 +71,13 @@ func (s Struct) Hash() hash.Hash {
 	return EnsureHash(s.h, s)
 }
 
-func (s Struct) ChildValues() (res []Value) {
-	s.desc().IterFields(func(name string, t *Type) {
-		v, ok := s.data[name]
-		d.Chk.True(ok)
-		res = append(res, v)
-	})
-	return
+func (s Struct) ChildValues() []Value {
+	return s.values
 }
 
 func (s Struct) Chunks() (chunks []Ref) {
 	chunks = append(chunks, s.t.Chunks()...)
-	for name := range s.desc().Fields {
-		v, ok := s.data[name]
-		d.Chk.True(ok)
+	for _, v := range s.values {
 		chunks = append(chunks, v.Chunks()...)
 	}
 
@@ -95,82 +93,41 @@ func (s Struct) desc() StructDesc {
 }
 
 func (s Struct) MaybeGet(n string) (Value, bool) {
-	_, ok := s.findField(n)
-	if !ok {
+	_, i := s.desc().findField(n)
+	if i == -1 {
 		return nil, false
 	}
-	v, ok := s.data[n]
-	return v, ok
+	return s.values[i], true
 }
 
 func (s Struct) Get(n string) Value {
-	_, ok := s.findField(n)
-	d.Chk.True(ok, `Struct has no field "%s"`, n)
-	v, ok := s.data[n]
-	d.Chk.True(ok)
-	return v
+	f, i := s.desc().findField(n)
+	d.Chk.True(i != -1, `Struct has no field "%s"`, f.name)
+	return s.values[i]
 }
 
 func (s Struct) Set(n string, v Value) Struct {
-	t, ok := s.findField(n)
-	d.Chk.True(ok, "Struct has no field %s", n)
-	assertSubtype(t, v)
-	data := make(structData, len(s.data))
-	for k, v := range s.data {
-		data[k] = v
-	}
-	data[n] = v
+	f, i := s.desc().findField(n)
+	d.Chk.True(i != -1, "Struct has no field %s", n)
+	assertSubtype(f.t, v)
+	values := make([]Value, len(s.values))
+	copy(values, s.values)
+	values[i] = v
 
-	return newStructFromData(data, s.t)
-}
-
-func (s Struct) findField(n string) (*Type, bool) {
-	for name, typ := range s.desc().Fields {
-		if name == n {
-			return typ, true
-		}
-	}
-	return nil, false
-}
-
-func structBuilder(values []Value, t *Type) Value {
-	desc := t.Desc.(StructDesc)
-	data := make(map[string]Value, len(desc.Fields))
-
-	i := 0
-	desc.IterFields(func(name string, t *Type) {
-		data[name] = values[i]
-		i++
-	})
-
-	return newStructFromData(data, t)
-}
-
-func structReader(s Struct, t *Type) []Value {
-	d.Chk.True(t.Kind() == StructKind)
-	values := []Value{}
-
-	desc := t.Desc.(StructDesc)
-	desc.IterFields(func(name string, t *Type) {
-		v, ok := s.data[name]
-		d.Chk.True(ok)
-		values = append(values, v)
-	})
-
-	return values
+	return Struct{values, s.t, &hash.Hash{}}
 }
 
 // s1 & s2 must be of the same type. Returns the set of field names which have different values in the respective structs
 func StructDiff(s1, s2 Struct) (changed []string) {
 	d.Chk.True(s1.Type().Equals(s2.Type()))
 
-	s1.desc().IterFields(func(name string, t *Type) {
-		v1 := s1.data[name]
-		v2 := s2.data[name]
+	fields := s1.desc().fields
+	for i, v1 := range s1.values {
+		v2 := s2.values[i]
 		if !v1.Equals(v2) {
-			changed = append(changed, name)
+			changed = append(changed, fields[i].name)
 		}
-	})
+	}
 
 	return
 }

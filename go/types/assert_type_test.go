@@ -205,9 +205,9 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	t11 := MakeStructType("Commit", TypeMap{
 		"value":   NumberType,
-		"parents": MakeSetType(MakeRefType(NumberType /* placeholder */)),
+		"parents": NumberType, // placeholder MakeSetType(MakeRefType(NumberType /* placeholder */)),
 	})
-	t11.Desc.(StructDesc).Fields["parents"].Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0] = t11
+	t11.Desc.(StructDesc).SetField("parents", MakeSetType(MakeRefType(t1)))
 	assertSubtype(t11, c1)
 
 	c2 := NewStruct("Commit", structData{

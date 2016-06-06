@@ -279,10 +279,10 @@ func TestRecursiveStruct(t *testing.T) {
 		"e": nil,
 		"f": a,
 	})
-	a.Desc.(StructDesc).Fields["b"] = a
-	a.Desc.(StructDesc).Fields["c"] = MakeListType(a)
-	a.Desc.(StructDesc).Fields["d"] = d
-	d.Desc.(StructDesc).Fields["e"] = d
+	a.Desc.(StructDesc).SetField("b", a)
+	a.Desc.(StructDesc).SetField("c", MakeListType(a))
+	a.Desc.(StructDesc).SetField("d", d)
+	d.Desc.(StructDesc).SetField("e", d)
 	assertWriteHRSEqual(t, `struct A {
   b: Cycle<0>
   c: List<Cycle<0>>

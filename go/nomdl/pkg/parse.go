@@ -66,10 +66,12 @@ func findType(n string, ts []*types.Type) *types.Type {
 // resolveReferences replaces references with the actual Type
 func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 	var rec func(t *types.Type) *types.Type
-	resolveFields := func(fields types.TypeMap) {
-		for name, t := range fields {
+	resolveFields := func(desc types.StructDesc) *types.Type {
+		fields := make(types.TypeMap, desc.Len())
+		desc.IterFields(func(name string, t *types.Type) {
 			fields[name] = rec(t)
-		}
+		})
+		return types.MakeStructType(desc.Name, fields)
 	}
 	rec = func(t *types.Type) *types.Type {
 		switch t.Kind() {
@@ -91,7 +93,8 @@ func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 			elemTypes := t.Desc.(types.CompoundDesc).ElemTypes
 			return types.MakeMapType(rec(elemTypes[0]), rec(elemTypes[1]))
 		case types.StructKind:
-			resolveFields(t.Desc.(types.StructDesc).Fields)
+			return resolveFields(t.Desc.(types.StructDesc))
+
 		}
 		return t
 	}

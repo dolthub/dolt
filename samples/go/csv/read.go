@@ -103,7 +103,10 @@ func Read(r *csv.Reader, structName string, headers_raw []string, kinds KindSlic
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listChan := types.NewStreamingList(vrw, valueChan)
 
-	structFields := t.Desc.(types.StructDesc).Fields
+	kindMap := make(map[string]types.NomsKind, len(headers))
+	t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
+		kindMap[name] = t.Kind()
+	})
 
 	for {
 		row, err := r.Read()
@@ -118,7 +121,7 @@ func Read(r *csv.Reader, structName string, headers_raw []string, kinds KindSlic
 		for i, v := range row {
 			if i < len(headers) {
 				name := headers[i]
-				fields[name] = StringToType(v, structFields[name].Kind())
+				fields[name] = StringToType(v, kindMap[name])
 			}
 		}
 		valueChan <- types.NewStructWithType(t, fields)

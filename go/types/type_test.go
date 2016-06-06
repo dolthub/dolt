@@ -23,7 +23,7 @@ func TestTypes(t *testing.T) {
 	recType := MakeStructType("RecursiveStruct", TypeMap{
 		"self": nil,
 	})
-	recType.Desc.(StructDesc).Fields["self"] = recType
+	recType.Desc.(StructDesc).SetField("self", recType)
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()

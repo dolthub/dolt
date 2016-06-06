@@ -26,7 +26,7 @@ func init() {
 		ValueField:   types.ValueType,
 	}
 	commitType = types.MakeStructType(structName, fieldTypes)
-	commitType.Desc.(types.StructDesc).Fields[ParentsField] = types.MakeSetType(types.MakeRefType(commitType))
+	commitType.Desc.(types.StructDesc).SetField(ParentsField, types.MakeSetType(types.MakeRefType(commitType)))
 }
 
 func NewCommit() types.Struct {

@@ -462,7 +462,7 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 	listType := MakeListType(structType)
 	// Mutate...
 
-	structType.Desc.(StructDesc).Fields["cs"] = listType
+	structType.Desc.(StructDesc).SetField("cs", listType)
 
 	assertEncoding(t,
 		[]interface{}{
