@@ -64,7 +64,7 @@ Work on data together. Track changes, fork, merge, sync, etc. The entire Git wor
 
 #### ETL
 
-Noms should work really well as a backing store for ETL pipelines. Noms-backed ETL is naturally:
+ETL based on Noms is naturally:
 
 * **Incremental:** Noms datasets can be efficiently diffed, so only the changed data needs to be run through the pipeline.
 * **Versioned:** Any transform can be compared to the previous run and trivially undone or re-applied.
@@ -73,15 +73,15 @@ Noms should work really well as a backing store for ETL pipelines. Noms-backed E
 
 #### Data Integration and Enrichment
 
-Noms also should be a natural way to collect, integrate, index, and integrate data from disparate sources.
+Use Noms as a central place to collect, integrate, index, and integrate data from disparate sources.
 
-Due to content-addressing, Noms naturally deduplicates all data, so importers can be trivially simple - just dump coarse-grained snapshots periodically and have only the changes re-processed (see [samples/js/fb](samples/js/fb), [samples/js/flickr](samples/js/flickr) for some early examples of this).
+Noms naturally deduplicates all data, so import can be trivially simple - just dump coarse-grained snapshots periodically and only reprocess the changes.
 
-Metadata in such an enviornment can be modeled non-destructively, as assertions from source object to metadata. Such assertions would be naturally versioned and revertable. They would also be owned by the program that made them, meaning they could be manipulated en-masse, leading to easy experimentation.
+Model metadata non-destructively, as verioned, revertable assertions from source object to metadata.
 
 #### Decentralized database
 
-Noms should be a natural fit to move data around certain kinds of widely decentralized applications. Rather than moving raw data files, e.g., with rsync, and then rebuilding the database at each node, just move the database itself.
+Noms is a natural fit for moving structured data around widely distributed or decentralized applications. Rather than moving raw data files, e.g., with rsync, and then rebuilding the database at each node, just move the database itself.
 
 
 ## Get Involved
