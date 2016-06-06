@@ -71,7 +71,7 @@ Noms should work really well as a backing store for ETL pipelines. Noms-backed E
 
 #### Data Integration and Enrichment
 
-Similar to ETL, Noms makes a natural store for data aggregation, integration, and enrichment. Data integration and enrichment can be modeled in a non-destructive way as metadata assertions from content to attribute. Assertions can be owned by the creating application and undone en-masse by deleting a single Noms dataset.
+Noms also should be a natural way to collect, integrate, index, and integrate data from disparate sources. Due to content-addressing, Noms naturally deduplicate all data, so importers can be trivially simple. Indexing and integration metadata can be modeled non-destructively. Assertions can be owned by the creating application and undone en-masse by deleting a single Noms dataset.
 
 #### Decentralized database
 
