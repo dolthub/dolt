@@ -4,11 +4,20 @@ This is a short introduction to using Noms from JavaScript. It should only take 
 
 ## Requirements
 
-You'll need Node (v5.11+). Go [install that](https://nodejs.org/en/), if you haven't already.
+* [Noms command-line tools](https://github.com/attic-labs/noms#setup)
+* [Node v5.11+](https://nodejs.org/en/)
 
-## Install Noms
+## Start a Local Database
 
-On a command-line:
+Let's create a local database to play with:
+
+```sh
+noms serve ldb:/tmp/noms-js-tour
+```
+
+## Install Noms NPM Package
+
+Leave the sever running, and in a separate terminal:
 
 ```sh
 mkdir noms-tour
@@ -30,10 +39,10 @@ To get started with Noms, first create a Database:
 ```js
 const noms = require('@attic/noms');
 
-const database = new noms.Database(new noms.MemoryStore());
+const db = noms.DatabaseSpec.parse('http://localhost:8000').database();
 ```
 
-A database is backed by a "ChunkStore", which is where physical chunks of data are kept. Noms/JS comes with several ChunkStore implementations, including MemoryStore, which is useful for testing.
+See [Spelling in Noms](spelling.md) for more information on database spec strings.
 
 
 
@@ -42,109 +51,133 @@ A database is backed by a "ChunkStore", which is where physical chunks of data a
 Datasets are the main interface you'll use to work with Noms. A dataset is just a named value in the database that you can update:
 
 ```js
-const dataset = new noms.Dataset(database, "counter");
+let ds = new noms.Dataset(db, "people");
 
 // prints: null
-dataset.head().then(console.log);
+ds.head().then(console.log);
 
-dataset.commit(1);
+let data = new noms.List([
+  noms.newStruct('', {
+  	given: 'Rickon',
+  	male: true,
+  }),
+  noms.newStruct('', {
+  	given: 'Bran',
+  	male: true,
+  }),
+  noms.newStruct('', {
+  	given: 'Arya',
+  	male: false,
+  }),
+  noms.newStruct('', {
+  	given: 'Sansa',
+  	male: false,
+  }),
+]);
 
 // prints:
-// struct Commit<{
-//   parents: Set
-//   value: Value
-// }>(
-//   parents: [],
-//   value: 1,
-// )
-dataset.head().then(console.log);
+// List<struct  {
+//   given: String
+//   male: Bool
+// }>
+console.log(data.type.describe());
 
-dataset.commit(2);
-dataset.commit("three");
-dataset.commit({
-	count: 4,
-});
+ds.commit(data).
+  then(r => ds = r);
+
+// prints: Rickon
+ds.head().
+  then(commit => commit.value.get(0)).
+  then(v => console.log(v.given));
+```
+
+You can also see this on the command-line. In a new (third) terminal:
+
+```sh
+> noms ds http://localhost:8000
+people
+
+> noms show http://localhost:8000:people
+struct Commit {
+  parents: Set<Ref<Cycle<0>>>
+  value: Value
+}({
+  parents: {},
+  value: [
+     {
+      given: "Rickon",
+      male: true,
+    },
+...
+```
+
+Let's add some more data. Back in Node:
+
+```
+data.append(noms.newStruct('', {
+  given: 'Jon',
+  family: 'Snow',
+  male: true,
+})).then(d => data = d);
 
 // prints:
-// struct<{
-//   count: Number
-// }>(
-//   value: 4,
-// )
-dataset.head().then(h => console.log(h.value));
+// List<struct  {
+//   family: String
+//   given: String
+//   male: Bool
+// } | struct  {
+//   given: String
+//   male: Bool
+// }>
+console.log(data.type.describe());
+
+ds.commit(data).
+  then(r => ds = r);
 ```
 
 Datasets are versioned. When you *commit* a new value, you aren't overwriting the old value, but adding to a historical log of values.
 
 ```js
-function printHead(head) {
-	console.log(head.value);
-	head.parents().first()
-		.then(headRef => headRef.targetValue())
-		.then(printHead);
+function printCommit(commit) {
+  console.log('list', commit.value.hash.toString(),
+      'length:', commit.value.length);
+  commit.parents.first().
+    then(r => r.targetValue(db)).
+    then(printCommit);
 }
 
 // Prints:
-// {count:4}
-// "three"
-// 2
-// 1
-dataset.head().then(printHead);
-```
-
-Datasets can be very large. Noms will automatically break large lists, maps, sets, and blobs into chunks (using [Prolly Trees](TODO)), so that they can be transferred, searched, and updated efficiently.
-
-If you have structs with really large fields though, it's sometimes useful to break them up manually:
-
-```js
-// Write a value to the database manually, outside of a commit
-// Note that this doesn't get flushed until the next commit()
-const log = 'logloglog'.repeat(100000);
-const logRef = database.writeValue({log});
-console.log(r);
-
-database.readValue(r).then(v => console.log(v == log));
-
-dataset.commit({
-	count: 5,
-	logOutput: r,
-});
-
-dataset.head().then(h => {
-	// prints: {ref: ...}
-	console.log(h.value);
-
-	// Prints the first bit of the log
-	h.value.targetValue().then(v => console.log.substr(0, 100));
-}
+// list sha1-eba46d10a2d1d10eb9f115c7b8df8c45653b430e length: 5
+// list sha1-9cf762c697b10a2868957b6c4ea30de36608ac08 length: 4
+ds.head().then(printCommit);
 ```
 
 ## Values
 
-Noms supports a [variety of datatypes](TODO-link-to-overview-of-Noms-and-Noms-datatypes). The following table summarizes the JavaScript datatype(s) used to represent each Noms datatype.
+Noms supports a [variety of datatypes](intro.md#types). The following table summarizes the JavaScript datatype(s) used to represent each Noms datatype.
 
 Noms Type | JavaScript Type
 --------------- | ---------
 Boolean | boolean
 Number | number
 String | string
-Blob | [noms.Blob](#Blob)
-Set | [noms.Set](#Set)
-List | [noms.List](#List)
-Map | [noms.Map](#Map)
-Ref | [noms.Ref](#Ref)
-Struct | Object
+Blob | noms.Blob
+Set | noms.Set
+List | noms.List
+Map | noms.Map
+Ref | noms.Ref
+Struct | noms.Struct
 
 In most cases, the Noms JavaScript library will automatically convert between JavaScript types and Noms types. For example:
 
 ```js
 // Writes a noms value of type:
 // Struct<foo: String, num: Number, list: List<String|Number>>
-store.writeValue({
+store.writeValue(newStruct('', {
   foo: "bar",
   num: 42,
   list: new List("a", "b", 4, 8),
-});
+}));
 ```
 
-Sometimes it's nice to expliclty control the type. You can do that with [NomsValue](TODO).
+Sometimes it's nice to explicitly control the type. You can do that by calling `new Struct` directy and passing a `Type` for the first parameter.
