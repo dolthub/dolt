@@ -4,6 +4,8 @@
 
 In other words, Noms is Git for data.
 
+This repository contains two reference implementations of the database—one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
+
 ## Setup
 
 1. Install [Go 1.6+](https://golang.org/dl/)
