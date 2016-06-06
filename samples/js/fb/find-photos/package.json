@@ -1,6 +1,7 @@
 {
   "name": "noms-fb-find-photos",
   "description": "Finds photos in slurped flickr data",
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "dependencies": {
     "@attic/noms": "^42.0.0",

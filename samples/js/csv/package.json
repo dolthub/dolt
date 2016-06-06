@@ -1,8 +1,9 @@
 {
   "name": "@attic/csv",
+  "description": "noms example javascript client with a counter",
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "version": "1.0.0",
-  "description": "noms example javascript client with a counter",
   "dependencies": {
     "@attic/noms": "^42.0.0",
     "babel-regenerator-runtime": "6.5.0",

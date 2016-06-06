@@ -1,5 +1,6 @@
 {
   "name": "@attic/noms",
+  "license": "Apache-2.0",
   "version": "44.0.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",

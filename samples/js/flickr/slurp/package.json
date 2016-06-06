@@ -1,6 +1,7 @@
 {
   "name": "noms-flickr-slurp",
   "description": "Imports album and photo metadata from Flickr",
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "dependencies": {
     "@attic/noms": "^42.0.0",

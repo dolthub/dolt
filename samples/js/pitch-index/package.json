@@ -1,5 +1,6 @@
 {
   "name": "@attic/pitch-index",
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "version": "1.0.1",
   "description": "noms example javascript thing",

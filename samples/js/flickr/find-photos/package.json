@@ -1,6 +1,7 @@
 {
   "name": "noms-flickr-find-photos",
   "description": "Creates standard photo structs out of slurped flickr data",
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "dependencies": {
     "@attic/noms": "39.2.0",
