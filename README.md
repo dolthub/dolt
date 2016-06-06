@@ -79,7 +79,7 @@ Metadata in such an enviornment can be modeled non-destructively, as assertions 
 
 #### Decentralized database
 
-Noms should be a natural fit to move data around certain kinds of widely decentralized applications. Rather than just moving raw files, e.g., with rsync, you can move around structured data which is immediately queryable and usable by the applciation.
+Noms should be a natural fit to move data around certain kinds of widely decentralized applications. Rather than moving raw data files, e.g., with rsync, and then rebuilding the database at each node, just move the database itself.
 
 
 ## Get Involved
