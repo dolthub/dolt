@@ -17,7 +17,7 @@ noms serve ldb:/tmp/noms-js-tour
 
 ## Install Noms NPM Package
 
-Leave the sever running, and in a separate terminal:
+Leave the server running, and in a separate terminal:
 
 ```sh
 mkdir noms-tour
