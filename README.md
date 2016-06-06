@@ -56,10 +56,26 @@ noms log http://demo.noms.io/cli-tour:film-locations
 
 We're just getting started, but here are a few use cases we think Noms is especially well-suited for:
 
-* **Data collaboration**—Work on data together. Track changes, fork, merge, sync, etc. The entire Git workflow, but on large-scale, structured data.
-* **ETL**—ETL based on Noms is inherently incremental, undoable, idempotent, and auditable.
-* **Data integration and enrichment**—A content-addressed database should be a really nice place to do data integration. Enrichments can be modeled as extensions to source data which are trivially undoable.
-* **Decentralized database**—Noms is a natural fit to move structured data around certain kinds of widely decentralized applications.
+#### Data Collaboration
+
+Work on data together. Track changes, fork, merge, sync, etc. The entire Git workflow, but on large-scale, structured or unstructured data. Useful for teams doing data analysis, cleansing, enrichment, etc.
+
+#### ETL
+
+Noms should work really well as a backing store for ETL pipelines. Noms-backed ETL is naturally:
+
+* **Incremental:** Noms datasets can be efficiently diffed, so only the changed data needs to be run through the pipeline.
+* **Versioned:** Any transform can be compared to the previous run and trivially undone or re-applied.
+* **Idempotent:** If a transform fails in the middle for any reason, it can simply be re-run. A transform's result will always be the same no matter how many times it is run.
+* **Auditable:** Content-addressing enables precisely tracking inputs to each transform and result.
+
+#### Data Integration and Enrichment
+
+Similar to ETL, Noms makes a natural store for data aggregation, integration, and enrichment. Data integration and enrichment can be modeled in a non-destructive way as metadata assertions from content to attribute. Assertions can be owned by the creating application and undone en-masse by deleting a single Noms dataset.
+
+#### Decentralized database
+
+Noms should be a natural fit to move data around certain kinds of widely decentralized applications. Rather than just moving raw files, e.g., with rsync, you can move around structured data which is immediately queryable and usable by the applciation.
 
 
 ## Get Involved
