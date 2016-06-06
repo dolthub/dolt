@@ -88,6 +88,6 @@ Noms is a natural fit for moving structured data around widely distributed or de
 
 Noms is developed in the open. Come say hi.
 
-- [Mailing List](nomsdb@googlegroups.com)
+- [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
 - [Slack](atticlabs.slack.com/messages/dev)
 - [Twitter](https://twitter.com/nomsdb)
