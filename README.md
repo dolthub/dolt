@@ -71,7 +71,11 @@ Noms should work really well as a backing store for ETL pipelines. Noms-backed E
 
 #### Data Integration and Enrichment
 
-Noms also should be a natural way to collect, integrate, index, and integrate data from disparate sources. Due to content-addressing, Noms naturally deduplicate all data, so importers can be trivially simple. Indexing and integration metadata can be modeled non-destructively. Assertions can be owned by the creating application and undone en-masse by deleting a single Noms dataset.
+Noms also should be a natural way to collect, integrate, index, and integrate data from disparate sources.
+
+Due to content-addressing, Noms naturally deduplicates all data, so importers can be trivially simple - just dump coarse-grained snapshots periodically and have only the changes re-processed (see [clients/js/fb](clients/js/fb), [client/js/flickr](clients/js/flickr) for some early examples of this).
+
+Metadata in such an enviornment can be modeled non-destructively, as assertions from source object to metadata. Such assertions would be naturally versioned and revertable. They would also be owned by the program that made them, meaning they could be manipulated en-masse, leading to easy experimentation.
 
 #### Decentralized database
 
