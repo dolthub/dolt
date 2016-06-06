@@ -51,7 +51,7 @@ See [Spelling in Noms](spelling.md) for more information on database spec string
 Datasets are the main interface you'll use to work with Noms. A dataset is just a named value in the database that you can update:
 
 ```js
-let ds = new noms.Dataset(db, "people");
+let ds = new noms.Dataset(db, 'people');
 
 // prints: null
 ds.head().then(console.log);
