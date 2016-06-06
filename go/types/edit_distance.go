@@ -146,11 +146,15 @@ func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previous
 	// "Deletion" columns
 	rowCount := previousEnd - previousStart + 1
 	columnCount := currentEnd - currentStart + 1
+
 	distances := make([][]uint64, rowCount)
+	distance := make([]uint64, rowCount*columnCount)
+	for i := range distances {
+		distances[i], distance = distance[:columnCount], distance[columnCount:]
+	}
 
 	// "Addition" rows. Initialize null column.
 	for i := uint64(0); i < rowCount; i++ {
-		distances[i] = make([]uint64, columnCount)
 		distances[i][0] = i
 	}
 

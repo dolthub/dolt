@@ -113,11 +113,12 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 				childIsMeta = isMetaSequence(idxSeq)
 			}
 		}
-		for j := 0; j < seq.seqLen(); j++ {
-			if childIsMeta {
-				metaItems = append(metaItems, seq.getItem(j).(metaTuple))
-			} else {
-				valueItems = append(valueItems, seq.getItem(j).(Value))
+		if childIsMeta {
+			childMs, _ := seq.(indexedMetaSequence)
+			metaItems = append(metaItems, childMs.metaSequenceObject.tuples...)
+		} else {
+			if ll, ok := seq.(listLeafSequence); ok {
+				valueItems = append(valueItems, ll.values...)
 			}
 		}
 	}
