@@ -65,13 +65,15 @@ function load() {
   const httpStore = new HttpBatchStore(params.db, undefined, opts);
   database = new Database(httpStore);
 
-  const setRootHash = hash => {
+  const setRootHash = (hash: Hash) => {
     rootHash = hash;
     handleChunkLoad(hash, hash);
   };
 
   if (params.hash) {
-    setRootHash(Hash.parse(params.ref));
+    const hash = Hash.parse(params.ref);
+    invariant(hash);
+    setRootHash(hash);
   } else {
     httpStore.getRoot().then(setRootHash);
   }
@@ -227,6 +229,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
       render();
     } else {
       const hash = Hash.parse(id);
+      invariant(hash);
       database.readValue(hash).then(value => {
         handleChunkLoad(hash, value, id);
       });

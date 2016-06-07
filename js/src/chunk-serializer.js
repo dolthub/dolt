@@ -101,7 +101,8 @@ function deserializeHints(buffer: ArrayBuffer): {hints: Array<Hash>, offset: num
   for (; offset < totalLength;) {
     invariant(buffer.byteLength - offset >= sha1Size, 'Invalid hint buffer');
 
-    const hashArray = new Uint8Array(buffer, offset, sha1Size);
+    // Make a slice/copy of the ArrayBuffer to prevent `buffer` from being gc'ed.
+    const hashArray = new Uint8Array(buffer.slice(offset, offset + sha1Size));
     const hash = new Hash(hashArray);
     offset += sha1Size;
 
@@ -118,6 +119,7 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
   for (; offset < totalLenth;) {
     invariant(buffer.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
+    // No need to copy the data out since we are not holding on to the hash object.
     const hashArray = new Uint8Array(buffer, offset, sha1Size);
     const hash = new Hash(hashArray);
     offset += sha1Size;
@@ -128,9 +130,8 @@ export function deserializeChunks(buffer: ArrayBuffer, offset: number = 0): Arra
 
     invariant(offset + chunkLength <= totalLenth, 'Invalid chunk buffer');
 
-    const dataArray = new Uint8Array(buffer, offset, chunkLength);
-    const chunk = new Chunk(new Uint8Array(dataArray)); // Makes a slice (copy) of the byte sequence
-                                                        // from buffer.
+    // Make a copy of the data so that buffer can be collected.
+    const chunk = new Chunk(new Uint8Array(buffer.slice(offset, offset + chunkLength)));
 
     invariant(chunk.hash.equals(hash), 'Serialized hash !== computed hash');
 

@@ -34,9 +34,12 @@ function sha1ToUint8Array(s: string): Uint8Array {
 export default class Hash {
   _digest: Uint8Array;
 
+  /**
+   * The Hash instance does not copy the `digest` so if the `digest` is part of a large ArrayBuffer
+   * the caller might want to make a copy first to prevent that ArrayBuffer from being retained.
+   */
   constructor(digest: Uint8Array) {
-    // Make a copy to prevent holding on to the data that was passed in.
-    this._digest = new Uint8Array(digest);
+    this._digest = digest;
   }
 
   get digest(): Uint8Array {

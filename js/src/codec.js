@@ -128,7 +128,8 @@ export class BinaryNomsReader {
   }
 
   readHash(): Hash {
-    const digest = new Uint8Array(this.buff, this.offset, sha1Size);
+    // Make a copy of the data.
+    const digest = new Uint8Array(this.buff.slice(this.offset, this.offset + sha1Size));
     this.offset += sha1Size;
     return new Hash(digest);
   }
