@@ -6,7 +6,6 @@ package main
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -66,7 +65,7 @@ func (s *testSuite) TestCSVExporter() {
 	ds.Database().Close()
 
 	// Run exporter
-	dataspec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, setName)
+	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{dataspec})
 
 	// Verify output

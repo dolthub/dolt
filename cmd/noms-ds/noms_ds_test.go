@@ -31,8 +31,8 @@ func (s *testSuite) TestEmptyNomsDs() {
 
 	ds.Close()
 
-	dataStoreName := "ldb:" + dir + "/name"
-	rtnVal := s.Run(main, []string{dataStoreName})
+	dbSpec := test_util.CreateDatabaseSpecString("ldb", dir+"/name")
+	rtnVal := s.Run(main, []string{dbSpec})
 	s.Equal("", rtnVal)
 }
 
@@ -41,14 +41,13 @@ func (s *testSuite) TestNomsDs() {
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
 	ds := datas.NewDatabase(cs)
-	id := "testdataset"
 
+	id := "testdataset"
 	set := dataset.NewDataset(ds, id)
 	set, err := set.Commit(types.NewString("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
-
 	set2 := dataset.NewDataset(ds, id2)
 	set2, err = set2.Commit(types.NewString("Commit Value2"))
 	s.NoError(err)
@@ -56,16 +55,16 @@ func (s *testSuite) TestNomsDs() {
 	err = ds.Close()
 	s.NoError(err)
 
-	dataStoreName := "ldb:" + dir + "/name"
-	datasetName := dataStoreName + ":" + id
-	dataset2Name := dataStoreName + ":" + id2
+	dbSpec := test_util.CreateDatabaseSpecString("ldb", dir+"/name")
+	datasetName := test_util.CreateValueSpecString("ldb", dir+"/name", id)
+	dataset2Name := test_util.CreateValueSpecString("ldb", dir+"/name", id2)
 
 	// both datasets show up
-	rtnVal := s.Run(main, []string{dataStoreName})
+	rtnVal := s.Run(main, []string{dbSpec})
 	s.Equal(id+"\n"+id2+"\n", rtnVal)
 
 	// both datasets again, to make sure printing doesn't change them
-	rtnVal = s.Run(main, []string{dataStoreName})
+	rtnVal = s.Run(main, []string{dbSpec})
 	s.Equal(id+"\n"+id2+"\n", rtnVal)
 
 	// delete one dataset, print message at delete
@@ -75,7 +74,7 @@ func (s *testSuite) TestNomsDs() {
 	// resetting flag because main is called multiple times
 	*toDelete = ""
 	// print datasets, just one left
-	rtnVal = s.Run(main, []string{dataStoreName})
+	rtnVal = s.Run(main, []string{dbSpec})
 	s.Equal(id2+"\n", rtnVal)
 
 	// delete the second dataset
@@ -85,6 +84,6 @@ func (s *testSuite) TestNomsDs() {
 	//resetting flag because main is called multiple times
 	*toDelete = ""
 	// print datasets, none left
-	rtnVal = s.Run(main, []string{dataStoreName})
+	rtnVal = s.Run(main, []string{dbSpec})
 	s.Equal("", rtnVal)
 }

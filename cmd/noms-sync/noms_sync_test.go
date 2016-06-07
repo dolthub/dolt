@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"path"
 	"testing"
 
@@ -34,9 +33,9 @@ func (s *testSuite) TestSync() {
 	source1HeadRef := source1.Head().Hash()
 	source2.Database().Close() // Close Database backing both Datasets
 
-	sourceSpec := fmt.Sprintf("ldb:%s:%s", s.LdbDir, source1HeadRef)
+	sourceSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, source1HeadRef.String())
 	ldb2dir := path.Join(s.TempDir, "ldb2")
-	sinkDatasetSpec := fmt.Sprintf("ldb:%s:%s", ldb2dir, "bar")
+	sinkDatasetSpec := test_util.CreateValueSpecString("ldb", ldb2dir, "bar")
 	out := s.Run(main, []string{sourceSpec, sinkDatasetSpec})
 	s.Equal("", out)
 
@@ -44,7 +43,7 @@ func (s *testSuite) TestSync() {
 	s.True(types.Number(42).Equals(dest.Head().Get(datas.ValueField)))
 	dest.Database().Close()
 
-	sourceDataset := fmt.Sprintf("ldb:%s:%s", s.LdbDir, "foo")
+	sourceDataset := test_util.CreateValueSpecString("ldb", s.LdbDir, "foo")
 	out = s.Run(main, []string{sourceDataset, sinkDatasetSpec})
 	s.Equal("", out)
 

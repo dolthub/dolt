@@ -22,11 +22,15 @@ export class DatabaseSpec {
 
   // Returns parsed spec, or null if the spec was invalid.
   static parse(spec: string): ?DatabaseSpec {
-    const match = spec.match(/^(.+?)(\:.+)?$/);
+    const match = spec.match(/^(.+?)(:.+)?$/);
     if (!match) {
       return null;
     }
-    const [, scheme, path] = match;
+    const [, scheme, p] = match;
+    if (p && p.indexOf('::') > 0) {
+      return null;
+    }
+    const path = p ? p.substr(1) : p;
     switch (scheme) {
       case 'http':
       case 'https':
@@ -42,7 +46,7 @@ export class DatabaseSpec {
       default:
         return null;
     }
-    return new this(scheme, (path || '').substr(1));
+    return new this(scheme, path || '');
   }
 
   constructor(scheme: string, path: string) {
@@ -73,15 +77,16 @@ export class DatasetSpec {
 
   // Returns a parsed spec, or null if the spec was invalid.
   static parse(spec: string): ?DatasetSpec {
-    const match = spec.match(/^(.+)\:([a-zA-Z0-9\-_/]+)$/);
+    const match = spec.match(/^(.+)\:\:([a-zA-Z0-9\-_/]+)$/);
     if (!match) {
       return null;
     }
-    const database = DatabaseSpec.parse(match[1]);
+    const [, dbSpec, dsName] = match;
+    const database = DatabaseSpec.parse(dbSpec);
     if (!database) {
       return null;
     }
-    return new this(database, match[2]);
+    return new this(database, dsName);
   }
 
   constructor(database: DatabaseSpec, name: string) {
@@ -116,17 +121,18 @@ export class HashSpec {
 
   // Returns a parsed spec, or null if the spec was invalid.
   static parse(spec: string): ?HashSpec {
-    const match = spec.match(/^(.+)\:(.+)$/);
+    const match = spec.match(/^(.+)\:\:([\-sh0-9a-fA-F]+)$/);
     if (!match) {
       return null;
     }
 
-    const hash = Hash.parse(match[2]);
+    const [, dbSpec, hashPart] = match;
+    const hash = Hash.parse(hashPart);
     if (!hash) {
       return null;
     }
 
-    const database = DatabaseSpec.parse(match[1]);
+    const database = DatabaseSpec.parse(dbSpec);
     if (!database) {
       return null;
     }

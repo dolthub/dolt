@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -49,7 +48,7 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		err := errors.New("Expected exactly two parameters (dataset and path) after flags, but you have %d. Maybe you put a flag after the path?")
+		err := fmt.Errorf("Expected exactly two parameters (dataset and path) after flags, but you have %d. Maybe you put a flag after the path?", flag.NArg())
 		util.CheckError(err)
 	}
 
