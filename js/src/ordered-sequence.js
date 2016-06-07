@@ -9,7 +9,8 @@ import type {AsyncIteratorResult} from './async-iterator.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import {compare} from './compare.js';
-import Sequence, {search, SequenceCursor} from './sequence.js';
+import search from './binary-search.js';
+import Sequence, {SequenceCursor} from './sequence.js';
 import {ValueBase} from './value.js';
 
 export class OrderedSequence<K: Value, T> extends Sequence<T> {

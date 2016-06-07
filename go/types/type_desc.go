@@ -125,7 +125,7 @@ func (s StructDesc) Field(name string) *Type {
 
 func (s StructDesc) SetField(name string, t *Type) {
 	f, i := s.findField(name)
-	d.Chk.True(i != -1, "No such field %s", name)
+	d.Chk.True(i != -1, `No such field "%s"`, name)
 	f.t = t
 }
 

@@ -6,12 +6,12 @@
 
 import assertSubtype from './assert-type.js';
 import type Ref from './ref.js';
-import type {Type, StructDesc} from './type.js';
+import type {Type, StructDesc, Field} from './type.js';
 import type Value from './value.js';
 import {Kind} from './noms-kind.js';
-import {ValueBase} from './value.js';
+import {ValueBase, init as initValue} from './value.js';
 import {equals} from './compare.js';
-import {getTypeOfValue, makeStructType} from './type.js';
+import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import {encode as utf8Encode} from './utf8.js';
@@ -31,8 +31,8 @@ type StructData = {[key: string]: Value};
  *
  * ```js
  * interface MyStruct extends Struct {
- *   get x(): int8;
- *   setX(value: int8): MyStruct;
+ *   get x(): number;
+ *   setX(value: number): MyStruct;
  *   get s(): string;
  *   setS(value: string): MyStruct;
  * }
@@ -40,16 +40,21 @@ type StructData = {[key: string]: Value};
  * To reflect over structs you can create a new StructMirror.
  */
 export default class Struct extends ValueBase {
-  _data: StructData;
   _type: Type;
+  _values: Value[];
 
-  constructor(type: Type, data: StructData) {
+  constructor(type: Type<StructDesc>, data: StructData) {
     super();
 
     invariant(type.kind === Kind.Struct);
 
-    this._type = type;
-    this._data = data;
+    const {fields} = type.desc;
+    const values = new Array(fields.length);
+    for (let i = 0; i < fields.length; i++) {
+      values[i] = data[fields[i].name];
+    }
+
+    init(this, type, values);
   }
 
   get type(): Type {
@@ -85,8 +90,8 @@ export class StructFieldMirror {
   name: string;
   type: Type;
 
-  constructor(data: StructData, name: string, type: Type) {
-    this.value = data[name];
+  constructor(value: Value, name: string, type: Type) {
+    this.value = value;
     this.name = name;
     this.type = type;
   }
@@ -95,11 +100,11 @@ export class StructFieldMirror {
 type FieldCallback = (f: StructFieldMirror) => void;
 
 export class StructMirror<T: Struct> {
-  _data: StructData;
+  _values: Value[];
   type: Type<StructDesc>;
 
   constructor(s: Struct) {
-    this._data = s._data;
+    this._values = s._values;
     this.type = s.type;
   }
 
@@ -108,8 +113,8 @@ export class StructMirror<T: Struct> {
   }
 
   forEachField(cb: FieldCallback) {
-    this.desc.forEachField((name, type) => {
-      cb(new StructFieldMirror(this._data, name, type));
+    this.desc.fields.forEach((f, i) => {
+      cb(new StructFieldMirror(this._values[i], f.name, f.type));
     });
   }
 
@@ -118,16 +123,17 @@ export class StructMirror<T: Struct> {
   }
 
   get(name: string): ?Value {
-    return this._data[name];
+    const i = findFieldIndex(name, this.desc.fields);
+    return i !== -1 ? this._values[i] : undefined;
   }
 
   has(name: string): boolean {
-    return this.get(name) !== undefined;
+    return findFieldIndex(name, this.desc.fields) !== -1;
   }
 
   set(name: string, value: ?Value): T {
-    const data = addProperty(this, name, value);
-    return newStruct(this.name, data);
+    const values = setValue(this._values, this.desc.fields, name, value);
+    return newStructWithValues(this.type, values);
   }
 }
 
@@ -145,22 +151,23 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
 
   const c: any = class extends Struct {
     constructor(data: StructData) {
+      validate(type, data);
       super(type, data);
     }
   };
 
-  type.desc.forEachField((name: string, _: Type) => {
-    Object.defineProperty(c.prototype, name, {
+  type.desc.fields.forEach((f: Field, i: number) => {
+    Object.defineProperty(c.prototype, f.name, {
       configurable: true,
       enumerable: false,
       get: function() {
-        return this._data[name];
+        return this._values[i];
       },
     });
-    Object.defineProperty(c.prototype, setterName(name), {
+    Object.defineProperty(c.prototype, setterName(f.name), {
       configurable: true,
       enumerable: false,
-      value: getSetter(name),
+      value: getSetter(i),
       writable: true,
     });
   });
@@ -168,44 +175,45 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
   return cache[k] = c;
 }
 
-function getSetter(name: string) {
+function getSetter(i: number) {
   return function(value) {
-    const newData = Object.assign(Object.create(null), this._data);
-    newData[name] = value;
-    return new this.constructor(newData);
+    const values = this._values.concat();  // clone
+    values[i] = value;
+    return newStructWithValues(this.type, values);
   };
 }
 
-function addProperty(mirror: StructMirror, name: string, value: ?Value): StructData {
-  const data = Object.create(null);
-  let found = false;
-  mirror.forEachField(f => {
-    if (f.name === name) {
-      if (value !== undefined) {
-        data[name] = value;
-      }
-      found = true;
-    } else {
-      data[f.name] = f.value;
-    }
-  });
-
-  invariant(found);
-  return data;
+function setValue(values: Value[], fields: Field[], name: string, value: ?Value): Value[] {
+  const i = findFieldIndex(name, fields);
+  invariant(i !== -1);
+  const newValues = values.concat();  // shallow clone
+  newValues[i] = value;
+  return newValues;
 }
 
 export function newStruct<T: Struct>(name: string, data: StructData): T {
-  return newStructWithTypeNoValidation(computeTypeForStruct(name, data), data);
+  const type = computeTypeForStruct(name, data);
+  // Skip validation since there is no way the type and data can mismatch.
+  return new (createStructClass(type))(data);
 }
 
 export function newStructWithType<T: Struct>(type: Type<StructDesc>, data: StructData): T {
   validate(type, data);
-  return newStructWithTypeNoValidation(type, data);
+  return new (createStructClass(type))(data);
 }
 
-export function newStructWithTypeNoValidation<T: Struct>(type: Type<StructDesc>,
-    data: StructData): T {
-  return new (createStructClass(type))(data);
+function init<T: Struct>(s: T, type: Type, values: Value[]) {
+  s._type = type;
+  s._values = values;
+}
+
+export function newStructWithValues<T: Struct>(type: Type, values: Value[]): T {
+  const c = createStructClass(type);
+  const s = Object.create(c.prototype);
+  invariant(s instanceof c);
+  initValue(s);
+  init(s, type, values);
+  return s;
 }
 
 function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> {
@@ -227,11 +235,11 @@ export function structDiff(s1: Struct, s2: Struct): [string] {
   invariant(desc1.equals(desc2));
 
   const changed = [];
-  desc1.forEachField((name: string, _: Type) => {
-    const v1 = s1._data[name];
-    const v2 = s2._data[name];
+  desc1.fields.forEach((f: Field, i: number) => {
+    const v1 = s1._values[i];
+    const v2 = s2._values[i];
     if (!equals(v1, v2)) {
-      changed.push(name);
+      changed.push(f.name);
     }
   });
 

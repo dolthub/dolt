@@ -231,9 +231,9 @@ suite('validate type', () => {
 
     const t11 = makeStructType('Commit', {
       value: numberType,
-      parents: makeSetType(makeRefType(numberType /* placeholder */)),
+      parents: numberType,  // placeholder
     });
-    t11.desc.fields['parents'].desc.elemTypes[0].desc.elemTypes[0] = t11;
+    t11.desc.setField('parents', makeSetType(makeRefType(t11)));
     assertSubtype(t11, c1);
 
     const c2 = newStruct('Commit', {

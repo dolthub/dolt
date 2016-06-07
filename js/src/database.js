@@ -44,7 +44,7 @@ export function getDatasTypes(): DatasTypes {
     });
     const refOfCommitType = makeRefType(commitType);
     const commitSetType = makeSetType(refOfCommitType);
-    commitType.desc.fields['parents'] = commitSetType;
+    commitType.desc.setField('parents', commitSetType);
     const commitMapType = makeMapType(stringType, refOfCommitType);
     datasTypes = {
       commitType,

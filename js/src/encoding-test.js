@@ -477,7 +477,7 @@ suite('Encoding', () => {
       cs: numberType, // placeholder
     });
     const listType = makeListType(structType);
-    structType.desc.fields['cs'] = listType;
+    structType.desc.setField('cs', listType);
 
     assertEncoding([
       uint8(StructKind), 'A6', uint32(2) /* len */, 'cs', uint8(ListKind), uint8(CycleKind), uint32(0), 'v', uint8(NumberKind),

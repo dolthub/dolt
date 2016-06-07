@@ -15,12 +15,13 @@ import Set from './set.js';
 export default class Commit<T: Value> extends Struct {
   constructor(value: T, parents: Set<Ref<Commit>> = new Set()) {
     const {commitType} = getDatasTypes();
-    super(commitType, {value, parents});
+    super(commitType, {parents, value});
   }
 
   get value(): T {
-    // $FlowIssue: _data is private.
-    const value: T = this._data.value;
+    invariant(this.type.desc.fields[1].name === 'value');
+    // $FlowIssue: _values is private.
+    const value: T = this._values[1];
     return value;
   }
 
@@ -29,8 +30,9 @@ export default class Commit<T: Value> extends Struct {
   }
 
   get parents(): Set<Ref<Commit>> {
-    // $FlowIssue: _data is private.
-    const parents: Set<Ref<Commit>> = this._data.parents;
+    invariant(this.type.desc.fields[0].name === 'parents');
+    // $FlowIssue: _values is private.
+    const parents: Set<Ref<Commit>> = this._values[0];
     invariant(parents instanceof Set);
     return parents;
   }

@@ -122,7 +122,7 @@ suite('Struct', () => {
       'l': valueType, // placeholder
     });
     const listType = makeListType(type);
-    type.desc.fields['l'] = listType;
+    type.desc.setField('l', listType);
 
     const emptyList = new List([], listType);
     newStructWithType(type, {b: true, l: emptyList});

@@ -91,11 +91,11 @@ suite('Encode human readable types', () => {
       'e': valueType,  // placeholder
       'f': a,
     });
-    a.desc.fields['b'] = a;
-    a.desc.fields['d'] = d;
-    d.desc.fields['e'] = d;
-    d.desc.fields['f'] = a;
-    a.desc.fields['c'] = makeListType(a);
+    a.desc.setField('b', a);
+    a.desc.setField('d', d);
+    d.desc.setField('e', d);
+    d.desc.setField('f', a);
+    a.desc.setField('c', makeListType(a));
 
     assertWriteType(`struct A {
   b: Cycle<0>

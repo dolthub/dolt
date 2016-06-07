@@ -66,14 +66,21 @@ export function isSubtype(requiredType: Type, concreteType: Type): boolean {
       return false;
     }
 
-    const fields: Array<[string, Type]> = [];
-    requiredDesc.forEachField((name: string, type: Type) => {
-      fields.push([name, type]);
-    });
-    return fields.every(f => {
-      const at = concreteDesc.fields[f[0]];
-      return at && isSubtype(f[1], at);
-    });
+    let j = 0;
+    const requiredFields = requiredDesc.fields;
+    const concreteFields = concreteDesc.fields;
+    for (let i = 0; i < requiredFields.length; i++) {
+      const name = requiredFields[i].name;
+      for (; j < concreteFields.length && concreteFields[j].name !== name; j++);
+      if (j === concreteFields.length) {
+        return false;
+      }
+
+      if (!isSubtype(requiredFields[i].type, concreteFields[j].type)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   invariant(false);

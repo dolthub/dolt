@@ -13,6 +13,7 @@ import {ValueBase} from './value.js';
 import type Value from './value.js';
 import {compare, equals} from './compare.js';
 import {describeType} from './encode-human-readable.js';
+import search from './binary-search.js';
 
 export interface TypeDesc {
   kind: NomsKind;
@@ -60,15 +61,22 @@ export class CompoundDesc {
   }
 }
 
+export type Field = {
+  name: string;
+  type: Type;
+};
+
 export class StructDesc {
   name: string;
-  fields: {[key: string]: Type};
-  fieldCount: number;
+  fields: Field[];
 
-  constructor(name: string, fields: {[key: string]: Type}, fieldCount: number) {
+  constructor(name: string, fields: Field[]) {
     this.name = name;
     this.fields = fields;
-    this.fieldCount = fieldCount;
+  }
+
+  get fieldCount(): number {
+    return this.fields.length;
   }
 
   get kind(): NomsKind {
@@ -85,20 +93,15 @@ export class StructDesc {
     }
     invariant(other instanceof StructDesc);
 
-    const names = Object.keys(this.fields);
-    const otherNames = Object.keys(other.fields);
+    const fields = this.fields;
+    const otherFields = other.fields;
 
-    if (names.length !== otherNames.length) {
+    if (fields.length !== otherFields.length) {
       return false;
     }
 
-    for (let i = 0; i < names.length; i++) {
-      const name = names[i];
-      if (!other.fields[name]) {
-        return false;
-      }
-
-      if (!equals(this.fields[name], other.fields[name])) {
+    for (let i = 0; i < fields.length; i++) {
+      if (fields[i].name !== otherFields[i].name || !equals(fields[i].type, otherFields[i].type)) {
         return false;
       }
     }
@@ -107,12 +110,42 @@ export class StructDesc {
   }
 
   forEachField(cb: (name: string, type: Type) => void) {
-    const {fields} = this;
-    for (const n in fields) {
-      cb(n, fields[n]);
+    const fields = this.fields;
+    for (let i = 0; i < fields.length; i++) {
+      cb(fields[i].name, fields[i].type);
     }
   }
+
+  getField(name: string): ?Type {
+    const f = findField(name, this.fields);
+    return f && f.type;
+  }
+
+  setField(name: string, type: Type) {
+    const f = findField(name, this.fields);
+    if (!f) {
+      throw new Error(`No such field "${name}"`);
+    }
+    f.type = type;
+  }
 }
+
+function findField(name: string, fields: Field[]): ?Field {
+  const i = findFieldIndex(name, fields);
+  return i !== -1 ? fields[i] : undefined;
+}
+
+/**
+ * Finds the index of the `Field` or `-1` if not found.
+ */
+export function findFieldIndex(name: string, fields: Field[]): number {
+  const i = search(fields.length, i => {
+    const n = fields[i].name;
+    return n === name ? 0 : n > name ? 1 : -1;
+  });
+  return i === fields.length || fields[i].name !== name ? -1 : i;
+}
+
 
 export class Type<T: TypeDesc> extends ValueBase {
   _desc: T;
@@ -179,16 +212,17 @@ export function makeRefType(elemType: Type): Type<CompoundDesc> {
 
 export function makeStructType(name: string, fields: {[key: string]: Type}): Type<StructDesc> {
   verifyStructName(name);
-  const newFields = Object.create(null);
   const keys = Object.keys(fields);
   keys.sort();
+  const fs = new Array(keys.length);
   for (let i = 0; i < keys.length; i++) {
-    const k = keys[i];
-    verifyFieldName(k);
-    newFields[k] = fields[k];
+    const name = keys[i];
+    verifyFieldName(name);
+    const type = fields[name];
+    fs[i] = {name, type};
   }
 
-  return buildType(new StructDesc(name, newFields, keys.length));
+  return buildType(new StructDesc(name, fs));
 }
 
 /**

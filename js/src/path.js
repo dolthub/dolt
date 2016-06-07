@@ -33,7 +33,7 @@ class FieldPart {
         return;
       }
 
-      const f = (t.desc: StructDesc).fields[this.name];
+      const f = (t.desc: StructDesc).getField(this.name);
       if (!f) {
         return; // non-present field
       }
