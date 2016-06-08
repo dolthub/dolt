@@ -114,8 +114,8 @@ func TestHintsOnCache(t *testing.T) {
 		})
 
 		hints := cvs.chunkHintsFromCache(s2)
-		if assert.Len(hints, 2) {
-			for _, hash := range []hash.Hash{r.TargetHash(), cr3.TargetHash()} {
+		if assert.Len(hints, 1) {
+			for _, hash := range []hash.Hash{r.TargetHash()} {
 				_, present := hints[hash]
 				assert.True(present)
 			}

@@ -98,7 +98,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	}
 	hints := lvs.chunkHintsFromCache(v)
 	lvs.bs.SchedulePut(c, height, hints)
-	lvs.set(hash, hintedChunk{v.Type(), hash})
+	lvs.set(hash, (*presentChunk)(v.Type()))
 	return r
 }
 
@@ -166,6 +166,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 		if entry == nil || !entry.Present() {
 			var reachableV Value
 			if readValues {
+				// TODO: log or report that we needed to ReadValue here BUG 1762
 				reachableV = lvs.ReadValue(targetHash)
 				entry = lvs.check(targetHash)
 			}
@@ -204,6 +205,20 @@ func (h hintedChunk) Hint() (r hash.Hash) {
 
 func (h hintedChunk) Type() *Type {
 	return h.t
+}
+
+type presentChunk Type
+
+func (p *presentChunk) Present() bool {
+	return true
+}
+
+func (p *presentChunk) Hint() (h hash.Hash) {
+	return
+}
+
+func (p *presentChunk) Type() *Type {
+	return (*Type)(p)
 }
 
 type absentChunk struct{}
