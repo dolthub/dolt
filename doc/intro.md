@@ -3,15 +3,21 @@
 Most conventional database systems share two central properties:
 
 1. Data is modeled as a single point-in-time. Once a transaction commits, the previous state of the database is either lost, or available only as a fallback by reconstructing from transaction logs.
+
 2. Data is modeled as a single source of truth. Even large-scale distributed databases which are internally a fault-tolerant network of nodes, present the abstraction to clients of being a single logical master, with which clients must coordinate in order to change state.
 
 Noms blends the properties of decentralized systems, such as Git, with properties of traditional databases in order to create a general-purpose decentralized database, in which:
 
 1. Any peer’s state is as valid as any other
+
 2. All commit-states of the database are retained and available at any time. 
+
 3. Any peer is free to move forward independently of communication from any other -- while retaining the ability to reconcile changes at some point in the future.
+
 4. The basic properties of structured databases (efficient queries, updates, and range scans) are retained.
+
 5. Diffs between any two sets of data can be computed efficiently.
+
 6. Synchronization between disconnected copies of the database can be performed efficiently and correctly.
 
 ## Basics
