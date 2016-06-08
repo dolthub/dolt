@@ -38,7 +38,7 @@ const fileType = makeStructType('File', {
 const directoryType = makeStructType('Directory', {
   entries: blobType,
 });
-directoryType.desc.fields.entries = makeRefType(makeUnionType([fileType, directoryType]));
+directoryType.desc.setField('entries', makeRefType(makeUnionType([fileType, directoryType])));
 
 const File = createStructClass(fileType);
 const Directory = createStructClass(directoryType);

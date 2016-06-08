@@ -56,6 +56,7 @@ async function main(): Promise<void> {
     if (m) {
       for (const [pitcherID, pitches] of m) {
         const pitcher = pitchers.get(pitcherID);
+        invariant(pitcher);
         pitcherPitches.set(pitcher, extendArray(pitches, pitcherPitches.get(pitcher)));
       }
     }
