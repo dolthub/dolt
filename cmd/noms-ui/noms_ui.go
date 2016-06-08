@@ -63,8 +63,6 @@ func main() {
 	}
 
 	prefix := dsPathPrefix + "/:store"
-	router.POST(prefix+constants.PostRefsPath, routeToStore(stores, datas.HandlePostRefs))
-	router.OPTIONS(prefix+constants.PostRefsPath, routeToStore(stores, datas.HandlePostRefs))
 	router.POST(prefix+constants.GetRefsPath, routeToStore(stores, datas.HandleGetRefs))
 	router.OPTIONS(prefix+constants.GetRefsPath, routeToStore(stores, datas.HandleGetRefs))
 	router.GET(prefix+constants.RootPath, routeToStore(stores, datas.HandleRootGet))

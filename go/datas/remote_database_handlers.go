@@ -26,23 +26,6 @@ type URLParams interface {
 
 type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore)
 
-// HandlePostRefs puts a bunch of chunks into cs without doing any validation. This is bad and shall be done away with once we fix BUG 822.
-func HandlePostRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
-
-		reader := bodyReader(req)
-		defer reader.Close()
-		chunks.Deserialize(reader, cs, nil)
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
-}
-
 func bodyReader(req *http.Request) (reader io.ReadCloser) {
 	reader = req.Body
 	if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
