@@ -267,9 +267,9 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	db.Close()
 
 	dsSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "truncate")
-	s.Equal(truncRes1, s.Run(main, []string{dsSpec}))
-	s.Equal(truncRes2, s.Run(main, []string{"-max-lines=-1", dsSpec}))
-	s.Equal(truncRes3, s.Run(main, []string{"-max-lines=0", dsSpec}))
+	s.Equal(truncRes1, s.Run(main, []string{"-graph", dsSpec}))
+	s.Equal(truncRes2, s.Run(main, []string{"-graph", "-max-lines=-1", dsSpec}))
+	s.Equal(truncRes3, s.Run(main, []string{"-graph", "-max-lines=0", dsSpec}))
 }
 
 func TestBranchlistSplice(t *testing.T) {

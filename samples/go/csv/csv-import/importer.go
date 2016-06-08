@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,18 +26,24 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
-var (
-	// Actually the delimiter uses runes, which can be multiple characters long.
-	// https://blog.golang.org/strings
-	delimiter   = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
-	header      = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
-	name        = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
-	reportTypes = flag.Bool("report-types", false, "read the entire file and report which types all values in each column would occupy safely.")
-	columnTypes = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
-	noProgress  = flag.Bool("no-progress", false, "prevents progress from being output if true")
+const (
+	destList = iota
+	destMap  = iota
 )
 
 func main() {
+	var (
+		// Actually the delimiter uses runes, which can be multiple characters long.
+		// https://blog.golang.org/strings
+		delimiter       = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+		header          = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
+		name            = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
+		columnTypes     = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
+		noProgress      = flag.Bool("no-progress", false, "prevents progress from being output if true")
+		destType        = flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the name of the column that is a the unique identifier for the column")
+		destTypePattern = regexp.MustCompile("^(list|map):(\\d+)$")
+	)
+
 	flags.RegisterDatabaseFlags()
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
@@ -60,8 +68,21 @@ func main() {
 
 	comma, err := csv.StringToRune(*delimiter)
 	if err != nil {
-		fmt.Println(err.Error())
-		flag.Usage()
+		util.CheckError(err)
+		return
+	}
+
+	var dest int
+	var pk int
+	if *destType == "list" {
+		dest = destList
+	} else if match := destTypePattern.FindStringSubmatch(*destType); match != nil {
+		dest = destMap
+		pk, err = strconv.Atoi(match[2])
+		d.Chk.NoError(err)
+	} else {
+		fmt.Println("Invalid dest-type: ", *destType)
+		return
 	}
 
 	fi, err := res.Stat()
@@ -81,16 +102,6 @@ func main() {
 		headers = strings.Split(*header, string(comma))
 	}
 
-	if *reportTypes {
-		kinds := csv.ReportValidFieldTypes(cr, headers)
-		d.Chk.True(len(headers) == len(kinds))
-		fmt.Println("Possible types for each column:")
-		for i, key := range headers {
-			fmt.Printf("%s: %s\n", key, strings.Join(csv.KindsToStrings(kinds[i]), ","))
-		}
-		return
-	}
-
 	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
 	util.CheckError(err)
 	ds, err := spec.Dataset()
@@ -102,7 +113,12 @@ func main() {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
 	}
 
-	value, _ := csv.Read(cr, *name, headers, kinds, ds.Database())
+	var value types.Value
+	if dest == destList {
+		value, _ = csv.ReadToList(cr, *name, headers, kinds, ds.Database())
+	} else {
+		value = csv.ReadToMap(cr, headers, pk, kinds, ds.Database())
+	}
 	_, err = ds.Commit(value)
 	if !*noProgress {
 		status.Clear()

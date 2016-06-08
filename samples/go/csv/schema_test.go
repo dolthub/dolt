@@ -5,9 +5,7 @@
 package csv
 
 import (
-	"bytes"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -265,31 +263,4 @@ func TestSchemaDetection(t *testing.T) {
 				types.StringKind},
 		},
 	)
-}
-
-func TestReportValidFieldTypes(t *testing.T) {
-	assert := assert.New(t)
-	data := [][]string{
-		{"h1", "h2", "h3"},
-		{"1.1", "true", "d3"},
-		{"2", "false", "d6"},
-	}
-	expectedKinds := []KindSlice{
-		KindSlice{types.NumberKind, types.StringKind},
-		KindSlice{types.BoolKind, types.StringKind},
-		KindSlice{types.StringKind},
-	}
-	dataString := ""
-	for _, row := range data {
-		dataString = dataString + strings.Join(row, ",") + "\n"
-	}
-
-	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
-	headers, err := r.Read()
-	assert.NoError(err)
-	assert.Equal(data[0], headers)
-	kinds := ReportValidFieldTypes(r, headers)
-	for i, ks := range kinds {
-		assert.Equal(expectedKinds[i], ks)
-	}
 }

@@ -65,20 +65,16 @@ func (s *testSuite) TestCSVImporter() {
 	})
 }
 
-func (s *testSuite) TestCSVImporterReportTypes() {
-	oldReportTypes := *reportTypes
-	*reportTypes = true
-	defer func() { *reportTypes = oldReportTypes }()
-
+func (s *testSuite) TestCSVImporterToMap() {
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
 	defer input.Close()
 	defer os.Remove(input.Name())
 
-	_, err = input.WriteString("a,b\n")
+	_, err = input.WriteString("a,b,c\n")
 	d.Chk.NoError(err)
-	for i := 0; i < 100; i++ {
-		_, err = input.WriteString(fmt.Sprintf("a%d,%d\n", i, i))
+	for i := 0; i < 20; i++ {
+		_, err = input.WriteString(fmt.Sprintf("a%d,%d,%d\n", i, i, i*2))
 		d.Chk.NoError(err)
 	}
 	_, err = input.Seek(0, 0)
@@ -86,16 +82,26 @@ func (s *testSuite) TestCSVImporterReportTypes() {
 
 	setName := "csv"
 	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
-	s.Equal("Possible types for each column:\na: String\nb: Number,String\n", out)
+	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number,Number", "-dest-type", "map:1", dataspec, input.Name()})
+	s.Equal("", out)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	m := ds.Head().Get(datas.ValueField).(types.Map)
+	s.Equal(uint64(20), m.Len())
+
+	for i := 0; i < 20; i++ {
+		m.Get(types.Number(i)).(types.Struct).Equals(types.NewStruct("", map[string]types.Value{
+			"a": types.NewString(fmt.Sprintf("a%d", i)),
+			"c": types.Number(i * 2),
+		}))
+	}
 }
 
 func (s *testSuite) TestCSVImporterWithPipe() {
-	oldDelimiter := delimiter
-	newDelimiter := "|"
-	delimiter = &newDelimiter
-	defer func() { delimiter = oldDelimiter }()
-
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
 	defer input.Close()
@@ -106,7 +112,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
+	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-delimiter", "|", dataspec, input.Name()})
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
@@ -123,11 +129,6 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 }
 
 func (s *testSuite) TestCSVImporterWithExternalHeader() {
-	oldHeader := header
-	newHeader := "x,y"
-	header = &newHeader
-	defer func() { header = oldHeader }()
-
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
 	defer input.Close()
@@ -138,7 +139,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
+	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-header", "x,y", dataspec, input.Name()})
 	s.Equal("", out)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)

@@ -5,6 +5,7 @@
 package test_util
 
 import (
+	"flag"
 	"io/ioutil"
 	"os"
 	"path"
@@ -50,6 +51,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 		os.Stderr = origErr
 	}()
 
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	m()
 
 	_, err := suite.out.Seek(0, 0)

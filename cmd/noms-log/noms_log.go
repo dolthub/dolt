@@ -22,16 +22,19 @@ import (
 )
 
 var (
-	color         = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
-	maxLines      = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
-	maxCommits    = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
-	showHelp      = flag.Bool("help", false, "show help text")
-	showGraph     = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
-	useColor      = false
-	maxLinesError = errors.New("Maximum number of lines written")
+	color, maxLines, maxCommits *int
+	showHelp, showGraph         *bool
+	useColor                    = false
+	maxLinesError               = errors.New("Maximum number of lines written")
 )
 
 func main() {
+	color = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
+	maxLines = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
+	maxCommits = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
+	showHelp = flag.Bool("help", false, "show help text")
+	showGraph = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
+
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Displays the history of a Noms dataset\n")
 		fmt.Fprintln(os.Stderr, "Usage: noms log <commitObject>")

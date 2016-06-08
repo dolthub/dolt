@@ -7,7 +7,6 @@ package csv
 import (
 	"encoding/csv"
 	"io"
-	"regexp"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
@@ -42,37 +41,6 @@ func KindsToStrings(kinds KindSlice) []string {
 	return strs
 }
 
-// ReportValidFieldTypes takes a CSV reader and the headers. It returns a slice of types.NomsKind for each column in the data indicating what Noms types could be used to represent that row.
-// For example, if all values in a row are negative integers between -127 and 0, the slice for that row would be [types.Int8Kind, types.Int16Kind, types.Int32Kind, types.Int64Kind, types.Float32Kind, types.Float64Kind, types.StringKind]. If even one value in the row is a floating point number, however, all the integer kinds would be dropped. All values can be represented as a string, so that option is always provided.
-func ReportValidFieldTypes(r *csv.Reader, headers []string) []KindSlice {
-	options := newSchemaOptions(len(headers))
-	rowChan := make(chan []string)
-	doneChan := make(chan struct{})
-	go func() {
-		for row := range rowChan {
-			options.Test(row)
-		}
-		doneChan <- struct{}{}
-	}()
-
-	for {
-		row, err := r.Read()
-		if err == io.EOF {
-			close(rowChan)
-			break
-		}
-		d.Exp.NoError(err, "Error decoding CSV")
-
-		rowChan <- row
-	}
-	<-doneChan
-	return options.ValidKinds()
-}
-
-// Field names are of the form `^[a-zA-Z][a-zA-Z0-9_]*$`)
-var fieldNameFirstCharRe = regexp.MustCompile(`^[a-zA-Z]`)
-var fieldNameTailNonValidRe = regexp.MustCompile(`[^a-zA-Z0-9]`)
-
 // MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
 func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) *types.Type {
 	useStringType := len(kinds) == 0
@@ -93,7 +61,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func Read(r *csv.Reader, structName string, headers_raw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
+func ReadToList(r *csv.Reader, structName string, headers_raw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
 	headers := make([]string, len(headers_raw))
 	for i, h := range headers_raw {
 		headers[i] = types.EscapeStructField(h)
@@ -128,4 +96,52 @@ func Read(r *csv.Reader, structName string, headers_raw []string, kinds KindSlic
 	}
 
 	return <-listChan, t
+}
+
+func ReadToMap(r *csv.Reader, headers_raw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) (m types.Map) {
+	headers := make([]string, 0, len(headers_raw)-1)
+	for i, h := range headers_raw {
+		if i != pkIdx {
+			headers = append(headers, types.EscapeStructField(h))
+		}
+	}
+
+	var pkKind types.NomsKind
+	if len(kinds) == 0 {
+		pkKind = types.StringKind
+	} else {
+		pkKind = kinds[pkIdx]
+		kinds = append(kinds[:pkIdx], kinds[pkIdx+1:]...)
+	}
+
+	t := MakeStructTypeFromHeaders(headers, "", kinds)
+	kindMap := make(map[string]types.NomsKind, len(headers))
+	t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
+		kindMap[name] = t.Kind()
+	})
+
+	m = types.NewMap()
+	fields := map[string]types.Value{}
+	var pk types.Value
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+
+		fieldIndex := 0
+		for x, v := range row {
+			if x == pkIdx {
+				pk = StringToType(v, pkKind)
+			} else if fieldIndex < len(headers) {
+				name := headers[fieldIndex]
+				fields[name] = StringToType(v, kindMap[name])
+				fieldIndex++
+			}
+		}
+		m = m.Set(pk, types.NewStructWithType(t, fields))
+	}
+	return
 }

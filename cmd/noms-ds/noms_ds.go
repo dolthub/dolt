@@ -14,11 +14,9 @@ import (
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
-var (
-	toDelete = flag.String("d", "", "dataset to delete")
-)
-
 func main() {
+	toDelete := flag.String("d", "", "dataset to delete")
+
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Noms dataset management\n")
 		fmt.Fprintln(os.Stderr, "Usage: noms ds [<database> | -d <dataset>]")

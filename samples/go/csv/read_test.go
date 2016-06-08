@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestRead(t *testing.T) {
+func TestReadToList(t *testing.T) {
 	assert := assert.New(t)
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
 
@@ -26,7 +26,7 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	l, typ := Read(r, "test", headers, kinds, ds)
+	l, typ := ReadToList(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(2), l.Len())
 
@@ -49,6 +49,36 @@ b,2,false
 	assert.True(l.Get(1).(types.Struct).Get("C").Equals(types.Bool(false)))
 }
 
+func TestReadToMap(t *testing.T) {
+	assert := assert.New(t)
+	ds := datas.NewDatabase(chunks.NewMemoryStore())
+
+	dataString := `a,1,true
+b,2,false
+`
+	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
+
+	headers := []string{"A", "B", "C"}
+	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
+	m := ReadToMap(r, headers, 0, kinds, ds)
+
+	assert.Equal(uint64(2), m.Len())
+	assert.True(m.Type().Equals(
+		types.MakeMapType(types.StringType, types.MakeStructType("", map[string]*types.Type{
+			"B": types.NumberType,
+			"C": types.BoolType,
+		}))))
+
+	assert.True(m.Get(types.NewString("a")).Equals(types.NewStruct("", map[string]types.Value{
+		"B": types.Number(1),
+		"C": types.Bool(true),
+	})))
+	assert.True(m.Get(types.NewString("b")).Equals(types.NewStruct("", map[string]types.Value{
+		"B": types.Number(2),
+		"C": types.Bool(false),
+	})))
+}
+
 func testTrailingHelper(t *testing.T, dataString string) {
 	assert := assert.New(t)
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
@@ -57,7 +87,7 @@ func testTrailingHelper(t *testing.T, dataString string) {
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l, typ := Read(r, "test", headers, kinds, ds)
+	l, typ := ReadToList(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(3), l.Len())
 
@@ -110,7 +140,7 @@ func TestReadParseError(t *testing.T) {
 			_, ok := r.(*csv.ParseError)
 			assert.True(ok, "Should be a ParseError")
 		}()
-		Read(r, "test", headers, kinds, ds)
+		ReadToList(r, "test", headers, kinds, ds)
 	}()
 }
 
@@ -121,7 +151,7 @@ func TestDuplicateHeaderName(t *testing.T) {
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A", "A"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	assert.Panics(func() { Read(r, "test", headers, kinds, ds) })
+	assert.Panics(func() { ReadToList(r, "test", headers, kinds, ds) })
 }
 
 func TestEscapeFieldNames(t *testing.T) {
@@ -131,7 +161,7 @@ func TestEscapeFieldNames(t *testing.T) {
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A A"}
 	kinds := KindSlice{types.NumberKind}
-	l, _ := Read(r, "test", headers, kinds, ds)
+	l, _ := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
 }
