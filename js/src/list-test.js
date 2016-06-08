@@ -7,18 +7,19 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
-import List, {ListWriter} from './list.js';
+import List, {ListWriter, ListLeafSequence} from './list.js';
 import Ref from './ref.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
-
 import {
-  makeRefType,
   makeListType,
+  makeRefType,
+  makeUnionType,
   numberType,
+  stringType,
 } from './type.js';
 import {
   assertChunkCountAndType,
@@ -32,6 +33,7 @@ import {
   testRoundTripAndValidate,
 } from './test-util.js';
 import TestDatabase from './test-database.js';
+import {IndexedMetaSequence} from './meta-sequence.js';
 
 const testListSize = 5000;
 const listOfNRef = 'sha1-241e54086d50c131db3c2f3f5f17e68f42fd98ac';
@@ -591,4 +593,27 @@ suite('ListWriter', () => {
     assert.strictEqual(l2, l3);
   });
 
+  test('Type after mutations', async () => {
+    async function t(n, c) {
+      const values: any = intSequence(n);
+
+      let l = new List(values);
+      assert.equal(l.length, n);
+      assert.instanceOf(l.sequence, c);
+      assert.isTrue(equals(l.type, makeListType(numberType)));
+
+      l = await l.append('a');
+      assert.equal(l.length, n + 1);
+      assert.instanceOf(l.sequence, c);
+      assert.isTrue(equals(l.type, makeListType(makeUnionType([numberType, stringType]))));
+
+      l = await l.splice(l.length - 1, 1);
+      assert.equal(l.length, n);
+      assert.instanceOf(l.sequence, c);
+      assert.isTrue(equals(l.type, makeListType(numberType)));
+    }
+
+    await t(10, ListLeafSequence);
+    await t(100, IndexedMetaSequence);
+  });
 });

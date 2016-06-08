@@ -16,11 +16,18 @@ import Struct, {newStruct} from './struct.js';
 import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import Chunk from './chunk.js';
-import Map from './map.js';
+import Map, {MapLeafSequence} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
+import {OrderedMetaSequence} from './meta-sequence.js';
+import {
+  makeMapType,
+  makeUnionType,
+  numberType,
+  stringType,
+} from './type.js';
 
 const testMapSize = 1000;
 const mapOfNRef = 'sha1-9fce950ce2606ced8681a695b608384c642ffb53';
@@ -657,5 +664,33 @@ suite('CompoundMap', () => {
     assert.equal(2, chunks.length);
     assert.deepEqual(sequence.items[0].ref, chunks[0]);
     assert.deepEqual(sequence.items[1].ref, chunks[1]);
+  });
+
+  test('Type after mutations', async () => {
+    async function t(n, c) {
+      const values: any = new Array(n);
+      for (let i = 0; i < n; i++) {
+        values[i] = [i, i];
+      }
+
+      let m = new Map(values);
+      assert.equal(m.size, n);
+      assert.instanceOf(m.sequence, c);
+      assert.isTrue(equals(m.type, makeMapType(numberType, numberType)));
+
+      m = await m.set('a', 'a');
+      assert.equal(m.size, n + 1);
+      assert.instanceOf(m.sequence, c);
+      assert.isTrue(equals(m.type, makeMapType(makeUnionType([numberType, stringType]),
+                                               makeUnionType([numberType, stringType]))));
+
+      m = await m.remove('a');
+      assert.equal(m.size, n);
+      assert.instanceOf(m.sequence, c);
+      assert.isTrue(equals(m.type, makeMapType(numberType, numberType)));
+    }
+
+    await t(10, MapLeafSequence);
+    await t(100, OrderedMetaSequence);
   });
 });

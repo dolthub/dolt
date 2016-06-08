@@ -13,7 +13,7 @@ import Database from './database.js';
 import Hash from './hash.js';
 import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import Set from './set.js';
+import Set, {SetLeafSequence} from './set.js';
 import type {ValueReadWriter} from './value-store.js';
 import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
@@ -22,6 +22,13 @@ import {compare, equals} from './compare.js';
 import {flatten, flattenParallel, intSequence, deriveCollectionHeight} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
+import {OrderedMetaSequence} from './meta-sequence.js';
+import {
+  makeSetType,
+  makeUnionType,
+  numberType,
+  stringType,
+} from './type.js';
 
 const testSetSize = 5000;
 const setOfNRef = 'sha1-1fc97c4e369770b643e013569c68687765601514';
@@ -309,8 +316,8 @@ suite('SetLeaf', () => {
   test('chunks', () => {
     const refs = ['x', 'a', 'b'].map(c => db.writeValue(c));
     refs.sort(compare);
-    const l = new Set(['z', ...refs]);
-    assert.deepEqual(refs, l.chunks);
+    const s = new Set(['z', ...refs]);
+    assert.deepEqual(refs, s.chunks);
   });
 });
 
@@ -328,8 +335,8 @@ suite('CompoundSet', () => {
 
     let tuples = [];
     for (let i = 0; i < values.length; i += 2) {
-      const l = new Set([values[i], values[i + 1]]);
-      const r = vwr.writeValue(l);
+      const s = new Set([values[i], values[i + 1]]);
+      const r = vwr.writeValue(s);
       tuples.push(new MetaTuple(r, values[i + 1], 2, null));
     }
 
@@ -662,5 +669,61 @@ suite('CompoundSet', () => {
     assert.equal(2, chunks.length);
     assert.deepEqual(sequence.items[0].ref, chunks[0]);
     assert.deepEqual(sequence.items[1].ref, chunks[1]);
+  });
+
+  test('Type after mutations', async () => {
+    async function t(n, c) {
+      const values: any = intSequence(n);
+
+      let s = new Set(values);
+      assert.equal(s.size, n);
+      assert.instanceOf(s.sequence, c);
+      assert.isTrue(equals(s.type, makeSetType(numberType)));
+
+      s = await s.insert('a');
+      assert.equal(s.size, n + 1);
+      assert.instanceOf(s.sequence, c);
+      assert.isTrue(equals(s.type, makeSetType(makeUnionType([numberType, stringType]))));
+
+      s = await s.remove('a');
+      assert.equal(s.size, n);
+      assert.instanceOf(s.sequence, c);
+      assert.isTrue(equals(s.type, makeSetType(numberType)));
+    }
+
+    await t(10, SetLeafSequence);
+    await t(100, OrderedMetaSequence);
+  });
+
+  test('Type after mutations - interesect', async () => {
+    async function t(n, c) {
+      const nums: any = intSequence(n);
+      const strings = nums.map(n => String.fromCodePoint(n));
+      const combined = nums.concat(strings);
+
+      const numSet = new Set(nums);
+      assert.equal(numSet.size, n);
+      assert.instanceOf(numSet.sequence, c);
+      assert.isTrue(equals(numSet.type, makeSetType(numberType)));
+
+      const stringSet = new Set(strings);
+      assert.equal(stringSet.size, n);
+      assert.instanceOf(stringSet.sequence, c);
+      assert.isTrue(equals(stringSet.type, makeSetType(stringType)));
+
+      const combinedSet = new Set(combined);
+      assert.equal(combinedSet.size, 2 * n);
+      assert.instanceOf(combinedSet.sequence, c);
+      assert.isTrue(equals(combinedSet.type, makeSetType(makeUnionType([numberType, stringType]))));
+
+      const s = await combinedSet.intersect(numSet);
+      assert.isTrue(equals(s, numSet));
+
+      const s2 = await combinedSet.intersect(stringSet);
+      assert.isTrue(equals(s2, stringSet));
+    }
+
+    await t(10, SetLeafSequence);
+    await t(100, OrderedMetaSequence);
   });
 });

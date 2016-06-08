@@ -795,3 +795,29 @@ func TestListDiffString3(t *testing.T) {
 	}
 	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
 }
+
+func TestListTypeAfterMutations(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(n int, c interface{}) {
+		values := generateNumbersAsValues(n)
+
+		l := NewList(values...)
+		assert.Equal(l.Len(), uint64(n))
+		assert.IsType(c, l.sequence())
+		assert.True(l.Type().Equals(MakeListType(NumberType)))
+
+		l = l.Append(NewString("a"))
+		assert.Equal(l.Len(), uint64(n+1))
+		assert.IsType(c, l.sequence())
+		assert.True(l.Type().Equals(MakeListType(MakeUnionType(NumberType, StringType))))
+
+		l = l.Splice(l.Len()-1, 1)
+		assert.Equal(l.Len(), uint64(n))
+		assert.IsType(c, l.sequence())
+		assert.True(l.Type().Equals(MakeListType(NumberType)))
+	}
+
+	test(10, listLeafSequence{})
+	test(100, indexedMetaSequence{})
+}

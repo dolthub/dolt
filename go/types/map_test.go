@@ -947,3 +947,33 @@ func TestMapModifyAfterRead(t *testing.T) {
 	m = m.Set(fst, fstval)
 	assert.True(m.Has(fst))
 }
+
+func TestMapTypeAfterMutations(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(n int, c interface{}) {
+		values := make([]Value, 2*n)
+		for i := 0; i < n; i++ {
+			values[2*i] = Number(i)
+			values[2*i+1] = Number(i)
+		}
+
+		m := NewMap(values...)
+		assert.Equal(m.Len(), uint64(n))
+		assert.IsType(c, m.sequence())
+		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))
+
+		m = m.Set(NewString("a"), NewString("a"))
+		assert.Equal(m.Len(), uint64(n+1))
+		assert.IsType(c, m.sequence())
+		assert.True(m.Type().Equals(MakeMapType(MakeUnionType(NumberType, StringType), MakeUnionType(NumberType, StringType))))
+
+		m = m.Remove(NewString("a"))
+		assert.Equal(m.Len(), uint64(n))
+		assert.IsType(c, m.sequence())
+		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))
+	}
+
+	test(10, mapLeafSequence{})
+	test(100, orderedMetaSequence{})
+}

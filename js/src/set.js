@@ -159,11 +159,6 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
       return this;
     }
 
-    // Can't intersect sets of different element type.
-    for (let i = 0; i < sets.length; i++) {
-      invariant(equals(sets[i].type, this.type));
-    }
-
     let cursor = await this.sequence.newCursorAt(null);
     if (!cursor.valid) {
       return this;
