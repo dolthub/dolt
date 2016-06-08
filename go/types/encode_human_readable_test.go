@@ -222,15 +222,15 @@ func TestWriteHumanReadableTaggedPrimitiveValues(t *testing.T) {
 	assertWriteHRSEqual(t, "true", Bool(true))
 	assertWriteHRSEqual(t, "false", Bool(false))
 
-	assertWriteTaggedHRSEqual(t, "Number(0)", Number(0))
-	assertWriteTaggedHRSEqual(t, "Number(42)", Number(42))
-	assertWriteTaggedHRSEqual(t, "Number(-42)", Number(-42))
+	assertWriteTaggedHRSEqual(t, "0", Number(0))
+	assertWriteTaggedHRSEqual(t, "42", Number(42))
+	assertWriteTaggedHRSEqual(t, "-42", Number(-42))
 
-	assertWriteTaggedHRSEqual(t, "Number(3.1415926535)", Number(3.1415926535))
+	assertWriteTaggedHRSEqual(t, "3.1415926535", Number(3.1415926535))
 
-	assertWriteTaggedHRSEqual(t, "Number(314159.26535)", Number(3.1415926535e5))
+	assertWriteTaggedHRSEqual(t, "314159.26535", Number(3.1415926535e5))
 
-	assertWriteTaggedHRSEqual(t, "Number(3.1415926535e+20)", Number(3.1415926535e20))
+	assertWriteTaggedHRSEqual(t, "3.1415926535e+20", Number(3.1415926535e20))
 
 	assertWriteTaggedHRSEqual(t, `"abc"`, NewString("abc"))
 	assertWriteTaggedHRSEqual(t, `" "`, NewString(" "))
