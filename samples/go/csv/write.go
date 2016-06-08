@@ -24,19 +24,25 @@ func ValueToListAndElemDesc(v types.Value, vr types.ValueReader) (types.List, ty
 
 // Write takes a types.List l of structs (described by sd) and writes it to output as comma-delineated values.
 func Write(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
-	fieldNames := getFieldNamesFromStruct(sd)
+	structChan := make(chan types.Struct, 1024)
+	go func() {
+		l.IterAll(func(v types.Value, index uint64) {
+			structChan <- v.(types.Struct)
+		})
+		close(structChan)
+	}()
 
+	fieldNames := getFieldNamesFromStruct(sd)
 	csvWriter := csv.NewWriter(output)
 	csvWriter.Comma = comma
-
 	d.Exp.NoError(csvWriter.Write(fieldNames), "Failed to write header %v", fieldNames)
 	record := make([]string, len(fieldNames))
-	l.IterAll(func(v types.Value, index uint64) {
+	for s := range structChan {
 		for i, f := range fieldNames {
-			record[i] = fmt.Sprintf("%v", v.(types.Struct).Get(f))
+			record[i] = fmt.Sprintf("%v", s.Get(f))
 		}
 		d.Exp.NoError(csvWriter.Write(record), "Failed to write record %v", record)
-	})
+	}
 
 	csvWriter.Flush()
 	d.Exp.NoError(csvWriter.Error(), "error flushing csv")
