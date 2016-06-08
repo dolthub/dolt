@@ -8,11 +8,11 @@ Most conventional database systems share two central properties:
 
 Noms blends the properties of decentralized systems, such as [Git](https://git-scm.com/), with properties of traditional databases in order to create a general-purpose decentralized database, in which:
 
-1. Any peer’s state is as valid as any other
+1. Any peer’s state is as valid as any other.
 
-2. All commit-states of the database are retained and available at any time. 
+2. All commits of the database are retained and available at any time. 
 
-3. Any peer is free to move forward independently of communication from any other -- while retaining the ability to reconcile changes at some point in the future.
+3. Any peer is free to move forward independently of communication from any other—while retaining the ability to reconcile changes at some point in the future.
 
 4. The basic properties of structured databases (efficient queries, updates, and range scans) are retained.
 
@@ -22,7 +22,7 @@ Noms blends the properties of decentralized systems, such as [Git](https://git-s
 
 ## Basics
 
-As in Git, [Bitcoin](https://bitcoin.org/en/), [Ethereum](https://www.ethereum.org/), [IPFS](https://ipfs.io/), [Camlistore](https://camlistore.org/), [bup](https://bup.github.io/), and other systems, Noms models data as a directed graph of nodes in which every node has a _hash_. A node's hash is derived from the values encoded in the node and (transitively) from the values encoded in all nodes which are reachable from that node.
+As in Git, [Bitcoin](https://bitcoin.org/en/), [Ethereum](https://www.ethereum.org/), [IPFS](https://ipfs.io/), [Camlistore](https://camlistore.org/), [bup](https://bup.github.io/), and other systems, Noms models data as a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) of nodes in which every node has a _hash_. A node's hash is derived from the values encoded in the node and (transitively) from the values encoded in all nodes which are reachable from that node.
 
 In other words, a Noms database is a single large [Merkle DAG](https://github.com/jbenet/random-ideas/issues/20).
 
@@ -53,21 +53,17 @@ A dataset is nothing more than a named pointer into the DAG. Consider the follow
 noms sync http://localhost:8000:foo http://localhost:8000:bar
 ```
 
-This command is trivial and causes basically zero IO. Noms checks whether the destination database has the chunk pointed to by `foo`, finds that it does (obviously, because it is in the same database), and then adds a new dataset pointing at that chunk.
+This command is trivial and causes basically zero IO. Noms first resolves the dataset name `foo` in `http://localhost:8000`. This results in a hash. Noms then checks whether that hash exists in the destination database (which in this case is the same as the source database), finds that it does, and then adds a new dataset pointing at that chunk.
 
 Syncs across database can be efficient by the same logic if the destination database already has all or most of the chunks required chunks.
 
-See [Noms Command Line Tour](cli-tour.md) for more on the command-line interface to Noms.
+## Time
 
-See [Spelling in Noms](spelling.md) for more on accessing databases and datasets.
-
-## Modeling data as a graph
-
-Noms models any logical value as a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) which has exactly one root node, zero or more descendent nodes and exactly one corresponding hash value, which is deterministically derived from the data of the value itself.
+All data in Noms is immutable. Once a piece of data is stored, it is never changed. To represent state changes, Noms uses a progression of `Commit`  structures.
 
 [TODO - diagram]
 
-A Commit represents the state of a Noms dataset at a point in time. Changes to state are represented by progressions of commits. All values, including commits, are immutable.
+As in Git, Commits typically have one _parent_, which is the previous commit in time. But in the cases of merges, a Noms commit can have multiple parents.
 
 ### Chunks
 
