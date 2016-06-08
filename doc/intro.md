@@ -6,7 +6,7 @@ Most conventional database systems share two central properties:
 
 2. Data is modeled as a single source of truth. Even large-scale distributed databases which are internally a fault-tolerant network of nodes, present the abstraction to clients of being a single logical master, with which clients must coordinate in order to change state.
 
-Noms blends the properties of decentralized systems, such as Git, with properties of traditional databases in order to create a general-purpose decentralized database, in which:
+Noms blends the properties of decentralized systems, such as [Git](https://git-scm.com/), with properties of traditional databases in order to create a general-purpose decentralized database, in which:
 
 1. Any peer’s state is as valid as any other
 
@@ -22,7 +22,13 @@ Noms blends the properties of decentralized systems, such as Git, with propertie
 
 ## Basics
 
-The central idea of Noms is similar that of Git: model data as a directed graph of nodes in which every node has a hash value which is derived from the values encoded in the node and (transitively) from the values encoded in all nodes which are reachable from that node (IOW, as  a “[Merkle DAG](https://github.com/jbenet/random-ideas/issues/20)”). When two nodes have the same hash, they represent identical logical values and the respective subgraph of nodes reachable from each are topologically equivalent. This allows for efficient operations such as computing and reconciling differences and synchronizing state.
+As in Git, [Bitcoin](https://bitcoin.org/en/), [Ethereum](https://www.ethereum.org/), [IPFS](https://ipfs.io/), [Camlistore](https://camlistore.org/), [bup](https://bup.github.io/), and other systems, Noms models data as a directed graph of nodes in which every node has a _hash_. A node's hash is derived from the values encoded in the node and (transitively) from the values encoded in all nodes which are reachable from that node.
+
+In other words, a Noms database is a single large [Merkle DAG](https://github.com/jbenet/random-ideas/issues/20).
+
+When two nodes have the same hash, they represent identical logical values and the respective subgraph of nodes reachable from each are topologically equivalent. Importantly, in Noms, the reverse is also true: a single logical value has one and only one hash. When two nodes have differnet hashes, they represent different logical values.
+
+Noms extends the ideas of prior systems to enable efficiently computing and reconciling differences, synchronizing state, and building indexes over large-scale, structured data.
 
 ## Databases and Datasets
 
