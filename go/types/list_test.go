@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -616,7 +617,6 @@ func TestListDiffIdentical(t *testing.T) {
 	assert.NoError(err2)
 	assert.Equal(0, len(diff1))
 	assert.Equal(0, len(diff2))
-	assert.NoError(err1)
 }
 
 func TestListDiffVersusEmpty(t *testing.T) {
@@ -720,11 +720,11 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err2)
-	assert.Equal(10, len(diff2))
+	diff, err := l2.Diff(l1)
+	assert.NoError(err)
+	assert.Equal(10, len(diff))
 
-	diff2Expected := []Splice{
+	diffExpected := []Splice{
 		Splice{0, 49, 50, 0},
 		Splice{50, 50, 49, 51},
 		Splice{1000, 49, 50, 1000},
@@ -736,7 +736,7 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 		Splice{4000, 49, 50, 4000},
 		Splice{4050, 50, 49, 4051},
 	}
-	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
 
 func TestListDiffLoadLimit(t *testing.T) {
@@ -745,8 +745,11 @@ func TestListDiffLoadLimit(t *testing.T) {
 	nums2 := generateNumbersAsValues(5000)
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff2, err2 := l2.DiffWithLoadLimit(l1, 50)
+	diff1, err1 := l2.DiffWithLoadLimit(l1, 50)
+	diff2, err2 := l1.DiffWithLoadLimit(l2, 50)
+	assert.Nil(diff1)
 	assert.Nil(diff2)
+	assert.Equal("load limit exceeded", err1.Error())
 	assert.Equal("load limit exceeded", err2.Error())
 }
 
@@ -756,12 +759,12 @@ func TestListDiffString1(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err2)
-	assert.Equal(0, len(diff2))
+	diff, err := l2.Diff(l1)
+	assert.NoError(err)
+	assert.Equal(0, len(diff))
 
-	diff2Expected := []Splice{}
-	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+	diffExpected := []Splice{}
+	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
 
 func TestListDiffString2(t *testing.T) {
@@ -770,14 +773,14 @@ func TestListDiffString2(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three"), NewString("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err2)
-	assert.Equal(1, len(diff2))
+	diff, err := l2.Diff(l1)
+	assert.NoError(err)
+	assert.Equal(1, len(diff))
 
-	diff2Expected := []Splice{
+	diffExpected := []Splice{
 		Splice{3, 0, 1, 3},
 	}
-	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
 
 func TestListDiffString3(t *testing.T) {
@@ -786,14 +789,54 @@ func TestListDiffString3(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err2)
-	assert.Equal(1, len(diff2))
+	diff, err := l2.Diff(l1)
+	assert.NoError(err)
+	assert.Equal(1, len(diff))
 
-	diff2Expected := []Splice{
+	diffExpected := []Splice{
 		Splice{2, 1, 1, 2},
 	}
-	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
+	assert.Equal(diffExpected, diff, "expected diff is wrong")
+}
+
+func TestListDiffLargeWithSameMiddle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	cs1 := chunks.NewTestStore()
+	vs1 := newLocalValueStore(cs1)
+	nums1 := generateNumbersAsValues(5000)
+	l1 := NewList(nums1...)
+	ref1 := vs1.WriteValue(l1).TargetHash()
+	refList1 := vs1.ReadValue(ref1).(List)
+
+	cs2 := chunks.NewTestStore()
+	vs2 := newLocalValueStore(cs2)
+	nums2 := generateNumbersAsValuesFromToBy(5, 4550, 1)
+	l2 := NewList(nums2...)
+	ref2 := vs2.WriteValue(l2).TargetHash()
+	refList2 := vs2.ReadValue(ref2).(List)
+
+	// diff lists without value store
+	diff1, err1 := l2.Diff(l1)
+	assert.NoError(err1)
+	assert.Equal(2, len(diff1))
+
+	// diff lists from value stores
+	diff2, err2 := refList2.Diff(refList1)
+	assert.NoError(err2)
+	assert.Equal(2, len(diff2))
+
+	// diff without and with value store should be same
+	assert.Equal(diff1, diff2)
+
+	// should only read/write a "small & reasonably sized portion of the total"
+	assert.Equal(95, cs1.Writes)
+	assert.Equal(18, cs1.Reads)
+	assert.Equal(85, cs2.Writes)
+	assert.Equal(8, cs2.Reads)
 }
 
 func TestListTypeAfterMutations(t *testing.T) {

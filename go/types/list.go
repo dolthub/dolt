@@ -6,7 +6,6 @@ package types
 
 import (
 	"crypto/sha1"
-	"math"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -190,7 +189,7 @@ func (l List) IterAll(f listIterAllFunc) {
 }
 
 func (l List) Diff(last List) ([]Splice, error) {
-	return l.DiffWithLoadLimit(last, math.MaxUint64)
+	return l.DiffWithLoadLimit(last, DIFF_WITHOUT_LIMIT)
 }
 
 func (l List) DiffWithLoadLimit(last List, loadLimit uint64) ([]Splice, error) {

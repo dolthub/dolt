@@ -9,9 +9,13 @@ import (
 	"math"
 )
 
+const (
+	DIFF_WITHOUT_LIMIT = math.MaxUint64
+)
+
 func maybeLoadCompositeSequence(ms indexedMetaSequence, idx uint64, length uint64, loadLimit uint64) (seq indexedSequence, newLoadLimit uint64, err error) {
 	newLoadLimit = loadLimit
-	if loadLimit > 0 && loadLimit != math.MaxUint64 {
+	if loadLimit > 0 && loadLimit != DIFF_WITHOUT_LIMIT {
 		if length > newLoadLimit {
 			return nil, 0, errors.New("load limit exceeded")
 		}
