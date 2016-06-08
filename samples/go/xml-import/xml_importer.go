@@ -17,6 +17,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/clbanning/mxj"
@@ -63,8 +64,8 @@ func main() {
 		ds, err := spec.Dataset()
 		util.CheckError(err)
 
-		if util.MaybeStartCPUProfile() {
-			defer util.StopCPUProfile()
+		if profile.MaybeStartCPUProfile() {
+			defer profile.StopCPUProfile()
 		}
 
 		cpuCount := runtime.NumCPU()
@@ -142,7 +143,7 @@ func main() {
 			d.Exp.NoError(err)
 		}
 
-		util.MaybeWriteMemProfile()
+		profile.MaybeWriteMemProfile()
 	})
 
 	if err != nil {

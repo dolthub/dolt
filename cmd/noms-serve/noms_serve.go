@@ -14,6 +14,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
@@ -59,8 +60,8 @@ func main() {
 	}()
 
 	d.Try(func() {
-		if util.MaybeStartCPUProfile() {
-			defer util.StopCPUProfile()
+		if profile.MaybeStartCPUProfile() {
+			defer profile.StopCPUProfile()
 		}
 		server.Run()
 	})

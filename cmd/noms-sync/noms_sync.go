@@ -14,6 +14,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
@@ -27,8 +28,8 @@ func main() {
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Moves datasets between or within databases\n")
-		fmt.Fprintln(os.Stderr, "noms sync [options] <source-object> <dest-dataset>\n")
+		fmt.Fprintln(os.Stderr, "Moves datasets between or within databases")
+		fmt.Fprintln(os.Stderr, "noms sync [options] <source-object> <dest-dataset>")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling objects and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
@@ -54,14 +55,14 @@ func main() {
 	defer sinkDataset.Database().Close()
 
 	err = d.Try(func() {
-		if util.MaybeStartCPUProfile() {
-			defer util.StopCPUProfile()
+		if profile.MaybeStartCPUProfile() {
+			defer profile.StopCPUProfile()
 		}
 
 		var err error
 		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), int(*p))
 
-		util.MaybeWriteMemProfile()
+		profile.MaybeWriteMemProfile()
 		d.Exp.NoError(err)
 	})
 
