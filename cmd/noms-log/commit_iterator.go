@@ -64,7 +64,7 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 	// Now that the branchlist has been adusted, check to see if there are branches with common
 	// ancestors that will be folded together on this commit's graph.
 	foldedCols := iter.branches.HighestBranchIndexes()
-	return LogNode{
+	node := LogNode{
 		cr:               br.cr,
 		commit:           br.commit,
 		startingColCount: startingColCount,
@@ -73,7 +73,8 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 		newCols:          newCols,
 		foldedCols:       foldedCols,
 		lastCommit:       iter.branches.IsEmpty(),
-	}, true
+	}
+	return node, true
 }
 
 type LogNode struct {
@@ -88,7 +89,7 @@ type LogNode struct {
 }
 
 func (n LogNode) String() string {
-	return fmt.Sprintf("cr: %s, startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
+	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash().String()[0:9], n.cr.Height(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
 }
 
 // True if this commit's graph will expand to show an additional branch
@@ -112,7 +113,7 @@ type branch struct {
 }
 
 func (b branch) String() string {
-	return b.cr.TargetHash().String()
+	return fmt.Sprintf("%s(%d)", b.cr.TargetHash().String()[0:9], b.cr.Height())
 }
 
 type branchList []branch
