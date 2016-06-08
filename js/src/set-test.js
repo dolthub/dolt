@@ -115,13 +115,13 @@ suite('BuildSet', () => {
     assert.strictEqual(height + 1, s.sequence.items[0].ref.height);
   });
 
-  test('LONG: insert', async () => {
+  test('LONG: add', async () => {
     const nums = intSequence(testSetSize);
     const build = nums.slice(0, testSetSize - 10);
     const insert = nums.slice(testSetSize - 10);
     let s = new Set(build);
     for (let i = 0; i < insert.length; i++) {
-      s = await s.insert(insert[i]);
+      s = await s.add(insert[i]);
       assert.strictEqual(build.length + i + 1, s.size);
     }
 
@@ -131,21 +131,21 @@ suite('BuildSet', () => {
   async function validateInsertion(values: number[]): Promise<void> {
     let s = new Set();
     for (let i = 0; i < values.length; i++) {
-      s = await s.insert(values[i]);
+      s = await s.add(values[i]);
       await validateSet(s, values.slice(0, i + 1));
     }
   }
 
-  test('LONG: validate - insert ascending', async () => {
+  test('LONG: validate - add ascending', async () => {
     await validateInsertion(intSequence(300));
   });
 
-  test('LONG: remove', async () => {
+  test('LONG: delete', async () => {
     const nums = intSequence(testSetSize + 10);
     let s = new Set(nums);
     let count = 10;
     while (count-- > 0) {
-      s = await s.remove(testSetSize + count);
+      s = await s.delete(testSetSize + count);
       assert.strictEqual(testSetSize + count, s.size);
     }
 
@@ -165,7 +165,7 @@ suite('BuildSet', () => {
     assert.strictEqual(testSetSize, s2.size);
 
     invariant(s2 instanceof Set);
-    const s3 = await s2.remove(testSetSize - 1);
+    const s3 = await s2.delete(testSetSize - 1);
     const outNums2 = [];
     await s3.forEach(k => outNums2.push(k));
     nums.splice(testSetSize - 1, 1);
@@ -220,7 +220,7 @@ suite('BuildSet', () => {
     }
 
     invariant(s2 instanceof Set);
-    const s3 = await s2.remove(vals[testSetSize - 1]);  // removes struct
+    const s3 = await s2.delete(vals[testSetSize - 1]);  // removes struct
     const outVals2 = [];
     await s3.forEach(k => outVals2.push(k));
     vals.splice(testSetSize - 1, 1);
@@ -576,20 +576,20 @@ suite('CompoundSet', () => {
     s1 = await db.readValue(db.writeValue(s1).targetHash);
 
     {
-      // Insert/remove at start.
-      const s2 = await s1.insert(-1);
+      // Insert/delete at start.
+      const s2 = await s1.add(-1);
       assert.deepEqual([[-1], []], await s2.diff(s1));
       assert.deepEqual([[], [-1]], await s1.diff(s2));
     }
     {
-      // Insert/remove at end.
-      const s2 = await s1.insert(testSetSize);
+      // Insert/delete at end.
+      const s2 = await s1.add(testSetSize);
       assert.deepEqual([[testSetSize], []], await s2.diff(s1));
       assert.deepEqual([[], [testSetSize]], await s1.diff(s2));
     }
     {
-      // Insert/remove in middle.
-      const s2 = await s1.remove(testSetSize / 2);
+      // Insert/delete in middle.
+      const s2 = await s1.delete(testSetSize / 2);
       assert.deepEqual([[], [testSetSize / 2]], await s2.diff(s1));
       assert.deepEqual([[testSetSize / 2], []], await s1.diff(s2));
     }
@@ -680,12 +680,12 @@ suite('CompoundSet', () => {
       assert.instanceOf(s.sequence, c);
       assert.isTrue(equals(s.type, makeSetType(numberType)));
 
-      s = await s.insert('a');
+      s = await s.add('a');
       assert.equal(s.size, n + 1);
       assert.instanceOf(s.sequence, c);
       assert.isTrue(equals(s.type, makeSetType(makeUnionType([numberType, stringType]))));
 
-      s = await s.remove('a');
+      s = await s.delete('a');
       assert.equal(s.size, n);
       assert.instanceOf(s.sequence, c);
       assert.isTrue(equals(s.type, makeSetType(numberType)));

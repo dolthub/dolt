@@ -165,7 +165,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.hash.toString(), mapOfNRef);
   });
 
-  test('LONG: remove', async () => {
+  test('LONG: delete', async () => {
     const kvs = [];
     for (let i = 0; i < testMapSize + 10; i++) {
       kvs.push([i, i + 1]);
@@ -173,7 +173,7 @@ suite('BuildMap', () => {
 
     let m = new Map(kvs);
     for (let i = testMapSize; i < testMapSize + 10; i++) {
-      m = await m.remove(i);
+      m = await m.delete(i);
     }
 
     assert.strictEqual(m.hash.toString(), mapOfNRef);
@@ -195,7 +195,7 @@ suite('BuildMap', () => {
     assert.strictEqual(testMapSize, m2.size);
 
     invariant(m2 instanceof Map);
-    const m3 = await m2.remove(testMapSize - 1);
+    const m3 = await m2.delete(testMapSize - 1);
     const outKvs2 = [];
     await m3.forEach((v, k) => outKvs2.push([k, v]));
     kvs.splice(testMapSize * 1 - 1, 1);
@@ -270,7 +270,7 @@ suite('BuildMap', () => {
     }
 
     invariant(m2 instanceof Map);
-    const m3 = await m2.remove(sortedKeys[testMapSize - 1]);  // removes struct
+    const m3 = await m2.delete(sortedKeys[testMapSize - 1]);  // removes struct
     const outVals2 = [];
     const outKeys2 = [];
     await m2.forEach((v, k) => {
@@ -684,7 +684,7 @@ suite('CompoundMap', () => {
       assert.isTrue(equals(m.type, makeMapType(makeUnionType([numberType, stringType]),
                                                makeUnionType([numberType, stringType]))));
 
-      m = await m.remove('a');
+      m = await m.delete('a');
       assert.equal(m.size, n);
       assert.instanceOf(m.sequence, c);
       assert.isTrue(equals(m.type, makeMapType(numberType, numberType)));

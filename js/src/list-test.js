@@ -197,7 +197,7 @@ suite('List', () => {
 
     let count = 10;
     while (count-- > 0) {
-      s = await s.remove(testListSize + count, testListSize + count + 1);
+      s = await s.remove(testListSize + count);
     }
 
     assert.strictEqual(listOfNRef, s.hash.toString());

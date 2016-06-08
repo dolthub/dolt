@@ -80,8 +80,8 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
     return this.splice(idx, 0, ...values);
   }
 
-  remove(start: number, end: number): Promise<List<T>> {
-    return this.splice(start, end - start);
+  remove(idx: number): Promise<List<T>> {
+    return this.splice(idx, 1);
   }
 
   append(...values: Array<T>): Promise<List<T>> {

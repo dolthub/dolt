@@ -169,7 +169,7 @@ export default class Map<K: Value, V: Value> extends
     return this._splice(cursor, [[key, value]], remove);
   }
 
-  async remove(key: K): Promise<Map<K, V>> {
+  async delete(key: K): Promise<Map<K, V>> {
     const cursor = await this.sequence.newCursorAt(key);
     if (cursor.valid && equals(cursor.getCurrentKey(), key)) {
       return this._splice(cursor, [], 1);
