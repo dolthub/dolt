@@ -7,18 +7,21 @@ package datas
 import (
 	"sync"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
 )
 
-type cachingChunkHaver struct {
-	backing  chunks.ChunkSource
-	hasCache map[hash.Hash]bool
-	mu       *sync.Mutex
+type chunkHaver interface {
+	Has(h hash.Hash) bool
 }
 
-func newCachingChunkHaver(cs chunks.ChunkSource) *cachingChunkHaver {
-	return &cachingChunkHaver{cs, map[hash.Hash]bool{}, &sync.Mutex{}}
+type cachingChunkHaver struct {
+	backing  chunkHaver
+	hasCache map[hash.Hash]bool
+	mu       *sync.RWMutex
+}
+
+func newCachingChunkHaver(cs chunkHaver) *cachingChunkHaver {
+	return &cachingChunkHaver{cs, map[hash.Hash]bool{}, &sync.RWMutex{}}
 }
 
 func (ccs *cachingChunkHaver) Has(r hash.Hash) bool {
@@ -31,8 +34,8 @@ func (ccs *cachingChunkHaver) Has(r hash.Hash) bool {
 }
 
 func checkCache(ccs *cachingChunkHaver, r hash.Hash) (has, ok bool) {
-	ccs.mu.Lock()
-	defer ccs.mu.Unlock()
+	ccs.mu.RLock()
+	defer ccs.mu.RUnlock()
 	has, ok = ccs.hasCache[r]
 	return
 }

@@ -74,11 +74,10 @@ func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error
 }
 
 func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
-	_, topDown := ds.Database().(*datas.LocalDatabase)
-	return ds.pull(sourceStore, sourceRef, concurrency, topDown)
+	return ds.pull(sourceStore, sourceRef, concurrency)
 }
 
-func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency int, topDown bool) (Dataset, error) {
+func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
 	sink := *ds
 
 	sinkHeadRef := types.Ref{}
@@ -90,12 +89,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 		return sink, nil
 	}
 
-	if topDown {
-		datas.CopyMissingChunksP(source, sink.Database().(*datas.LocalDatabase), sourceRef, concurrency)
-	} else {
-		datas.CopyReachableChunksP(source, sink.Database(), sourceRef, sinkHeadRef, concurrency)
-	}
-
+	datas.Pull(source, sink.Database(), sourceRef, sinkHeadRef)
 	err := datas.ErrOptimisticLockFailed
 	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.setNewHead(sourceRef) {
 	}

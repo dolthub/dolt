@@ -23,7 +23,7 @@ import (
     Chunk N
 
   Chunk:
-    Hash   // 20-byte sha1 hash
+    Hash  // 20-byte sha1 hash
     Len   // 4-byte int
     Data  // len(Data) == Len
 */
@@ -89,8 +89,8 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg := sync.WaitGroup{}
 
 	for {
-		c := deserializeChunk(reader)
-		if c.IsEmpty() {
+		c, success := deserializeChunk(reader)
+		if !success {
 			break
 		}
 
@@ -113,8 +113,8 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 // DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
 func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 	for {
-		c := deserializeChunk(reader)
-		if c.IsEmpty() {
+		c, success := deserializeChunk(reader)
+		if !success {
 			break
 		}
 		chunkChan <- c
@@ -122,11 +122,11 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 	close(chunkChan)
 }
 
-func deserializeChunk(reader io.Reader) Chunk {
+func deserializeChunk(reader io.Reader) (Chunk, bool) {
 	digest := hash.Sha1Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	if err == io.EOF {
-		return EmptyChunk
+		return EmptyChunk, false
 	}
 	d.Chk.NoError(err)
 	d.Chk.True(int(sha1.Size) == n)
@@ -141,6 +141,6 @@ func deserializeChunk(reader io.Reader) Chunk {
 	d.Chk.NoError(err)
 	d.Chk.True(int64(chunkSize) == n2)
 	c := w.Chunk()
-	d.Chk.True(h == c.Hash())
-	return c
+	d.Chk.True(h == c.Hash(), "%s != %s", h, c.Hash())
+	return c, true
 }

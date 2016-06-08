@@ -17,7 +17,7 @@ type Chunk struct {
 	data []byte
 }
 
-var EmptyChunk = Chunk{}
+var EmptyChunk = NewChunk([]byte{})
 
 func (c Chunk) Hash() hash.Hash {
 	return c.r

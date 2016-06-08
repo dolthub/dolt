@@ -14,6 +14,7 @@ import (
 )
 
 type databaseCommon struct {
+	cch      *cachingChunkHaver
 	vs       *types.ValueStore
 	rt       chunks.RootTracker
 	rootRef  hash.Hash
@@ -25,8 +26,8 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDatabaseCommon(vs *types.ValueStore, rt chunks.RootTracker) databaseCommon {
-	return databaseCommon{vs: vs, rt: rt, rootRef: rt.Root()}
+func newDatabaseCommon(cch *cachingChunkHaver, vs *types.ValueStore, rt chunks.RootTracker) databaseCommon {
+	return databaseCommon{cch: cch, vs: vs, rt: rt, rootRef: rt.Root()}
 }
 
 func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
@@ -66,6 +67,10 @@ func (ds *databaseCommon) Datasets() types.Map {
 	}
 
 	return *ds.datasets
+}
+
+func (ds *databaseCommon) has(h hash.Hash) bool {
+	return ds.cch.Has(h)
 }
 
 func (ds *databaseCommon) ReadValue(r hash.Hash) types.Value {

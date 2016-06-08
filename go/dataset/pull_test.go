@@ -41,7 +41,7 @@ func NewSet(ds Dataset, vs ...types.Value) types.Ref {
 	return ds.Database().WriteValue(v)
 }
 
-func pullTest(t *testing.T, topdown bool) {
+func TestPullTopDown(t *testing.T) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -73,20 +73,12 @@ func pullTest(t *testing.T, topdown bool) {
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func TestPullTopDown(t *testing.T) {
-	pullTest(t, true)
-}
-
-func TestPullExclude(t *testing.T) {
-	pullTest(t, false)
-}
-
-func pullFirstCommit(t *testing.T, topdown bool) {
+func TestPullFirstCommitTopDown(t *testing.T) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -102,20 +94,12 @@ func pullFirstCommit(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
 
-func TestPullFirstCommitTopDown(t *testing.T) {
-	pullFirstCommit(t, true)
-}
-
-func TestPullFirstCommitExclude(t *testing.T) {
-	pullFirstCommit(t, false)
-}
-
-func pullDeepRef(t *testing.T, topdown bool) {
+func TestPullDeepRefTopDown(t *testing.T) {
 	assert := assert.New(t)
 
 	sink := createTestDataset("sink")
@@ -129,15 +113,7 @@ func pullDeepRef(t *testing.T, topdown bool) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1, topdown)
+	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
-}
-
-func TestPullDeepRefTopDown(t *testing.T) {
-	pullDeepRef(t, true)
-}
-
-func TestPullDeepRefExclude(t *testing.T) {
-	pullDeepRef(t, false)
 }

@@ -77,8 +77,9 @@ type httpDoer interface {
 }
 
 type writeRequest struct {
-	hash  hash.Hash
-	hints types.Hints
+	hash      hash.Hash
+	hints     types.Hints
+	justHints bool
 }
 
 // Use a custom http client rather than http.DefaultClient. We limit ourselves to a maximum of |requestLimit| concurrent http requests, the custom httpClient ups the maxIdleConnsPerHost value so that one connection stays open for each concurrent request.
@@ -274,7 +275,11 @@ func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 	}
 
 	bhcs.requestWg.Add(1)
-	bhcs.writeQueue <- writeRequest{c.Hash(), hints}
+	bhcs.writeQueue <- writeRequest{c.Hash(), hints, false}
+}
+
+func (bhcs *httpBatchStore) AddHints(hints types.Hints) {
+	bhcs.writeQueue <- writeRequest{hash.Hash{}, hints, true}
 }
 
 func (bhcs *httpBatchStore) batchPutRequests() {
@@ -285,10 +290,12 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 		hints := types.Hints{}
 		hashes := hashSet{}
 		handleRequest := func(wr writeRequest) {
-			if hashes.Has(wr.hash) {
-				bhcs.requestWg.Done() // Already have a put enqueued for wr.hash.
-			} else {
-				hashes.Insert(wr.hash)
+			if !wr.justHints {
+				if hashes.Has(wr.hash) {
+					bhcs.requestWg.Done() // Already have a put enqueued for wr.hash.
+				} else {
+					hashes.Insert(wr.hash)
+				}
 			}
 			for hint := range wr.hints {
 				hints[hint] = struct{}{}
@@ -347,6 +354,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 				gw.Close()
 				pw.Close()
 				errChan <- err
+				close(errChan)
 			}()
 			body := buildWriteValueRequest(serializedChunks, hints)
 

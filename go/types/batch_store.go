@@ -20,6 +20,9 @@ type BatchStore interface {
 	// c may or may not be persisted when Put() returns, but is guaranteed to be persistent after a call to Flush() or Close().
 	SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints)
 
+	// AddHints allows additional hints, as used by SchedulePut, to be added for use in the current batch.
+	AddHints(hints Hints)
+
 	// Flush causes enqueued Puts to be persisted.
 	Flush()
 	io.Closer
@@ -39,20 +42,23 @@ func NewBatchStoreAdaptor(cs chunks.ChunkStore) BatchStore {
 }
 
 // Get simply proxies to the backing ChunkStore
-func (lbs *BatchStoreAdaptor) Get(h hash.Hash) chunks.Chunk {
-	return lbs.cs.Get(h)
+func (bsa *BatchStoreAdaptor) Get(h hash.Hash) chunks.Chunk {
+	return bsa.cs.Get(h)
 }
 
 // SchedulePut simply calls Put on the underlying ChunkStore, and ignores hints.
-func (lbs *BatchStoreAdaptor) SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints) {
-	lbs.cs.Put(c)
+func (bsa *BatchStoreAdaptor) SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints) {
+	bsa.cs.Put(c)
 }
 
+// AddHints is a noop.
+func (bsa *BatchStoreAdaptor) AddHints(hints Hints) {}
+
 // Flush is a noop.
-func (lbs *BatchStoreAdaptor) Flush() {}
+func (bsa *BatchStoreAdaptor) Flush() {}
 
 // Close closes the underlying ChunkStore
-func (lbs *BatchStoreAdaptor) Close() error {
-	lbs.Flush()
-	return lbs.cs.Close()
+func (bsa *BatchStoreAdaptor) Close() error {
+	bsa.Flush()
+	return bsa.cs.Close()
 }

@@ -7,6 +7,7 @@ package datas
 import "github.com/attic-labs/noms/go/types"
 
 var commitType *types.Type
+var refOfCommitType *types.Type
 
 const (
 	ParentsField = "parents"
@@ -27,6 +28,7 @@ func init() {
 	}
 	commitType = types.MakeStructType(structName, fieldTypes)
 	commitType.Desc.(types.StructDesc).SetField(ParentsField, types.MakeSetType(types.MakeRefType(commitType)))
+	refOfCommitType = types.MakeRefType(commitType)
 }
 
 func NewCommit() types.Struct {
@@ -39,7 +41,7 @@ func NewCommit() types.Struct {
 }
 
 func typeForMapOfStringToRefOfCommit() *types.Type {
-	return types.MakeMapType(types.StringType, types.MakeRefType(commitType))
+	return types.MakeMapType(types.StringType, refOfCommitType)
 }
 
 func NewMapOfStringToRefOfCommit() types.Map {
@@ -47,7 +49,7 @@ func NewMapOfStringToRefOfCommit() types.Map {
 }
 
 func typeForSetOfRefOfCommit() *types.Type {
-	return types.MakeSetType(types.MakeRefType(commitType))
+	return types.MakeSetType(refOfCommitType)
 }
 
 func CommitType() *types.Type {

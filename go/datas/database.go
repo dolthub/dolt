@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -39,15 +40,8 @@ type Database interface {
 	// Delete removes the Dataset named datasetID from the map at the root of the Database. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the database is always returned.
 	Delete(datasetID string) (Database, error)
 
-	batchSink() batchSink
+	has(hash hash.Hash) bool
 	batchStore() types.BatchStore
-}
-
-// This interface exists solely to allow RemoteDatabaseClient to pass back a gross side-channel thing for the purposes of pull.
-type batchSink interface {
-	SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints)
-	Flush()
-	io.Closer
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {

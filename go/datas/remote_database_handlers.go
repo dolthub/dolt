@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -76,7 +77,11 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		d.Exp.Equal("POST", req.Method)
 
 		reader := bodyReader(req)
-		defer reader.Close()
+		defer func() {
+			// Ensure all data on reader is consumed
+			io.Copy(ioutil.Discard, reader)
+			reader.Close()
+		}()
 		vbs := types.NewValidatingBatchingSink(cs)
 		vbs.Prepare(deserializeHints(reader))
 
