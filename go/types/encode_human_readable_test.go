@@ -128,7 +128,7 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 		"y": Number(2),
 	})
 	assertWriteHRSEqual(t, "S1 {\n  x: 1,\n  y: 2,\n}", str)
-	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number\n  y: Number\n}({\n  x: 1,\n  y: 2,\n})", str)
+	assertWriteTaggedHRSEqual(t, "struct S1 {\n  x: Number,\n  y: Number,\n}({\n  x: 1,\n  y: 2,\n})", str)
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
@@ -154,7 +154,7 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
   },
 ]`, l)
 	assertWriteTaggedHRSEqual(t, `List<struct S3 {
-  x: Number
+  x: Number,
 }>([
   S3 {
     x: 1,
@@ -284,37 +284,37 @@ func TestRecursiveStruct(t *testing.T) {
 	a.Desc.(StructDesc).SetField("d", d)
 	d.Desc.(StructDesc).SetField("e", d)
 	assertWriteHRSEqual(t, `struct A {
-  b: Cycle<0>
-  c: List<Cycle<0>>
+  b: Cycle<0>,
+  c: List<Cycle<0>>,
   d: struct D {
-    e: Cycle<0>
-    f: Cycle<1>
-  }
+    e: Cycle<0>,
+    f: Cycle<1>,
+  },
 }`, a)
 	assertWriteTaggedHRSEqual(t, `Type(struct A {
-  b: Cycle<0>
-  c: List<Cycle<0>>
+  b: Cycle<0>,
+  c: List<Cycle<0>>,
   d: struct D {
-    e: Cycle<0>
-    f: Cycle<1>
-  }
+    e: Cycle<0>,
+    f: Cycle<1>,
+  },
 })`, a)
 
 	assertWriteHRSEqual(t, `struct D {
-  e: Cycle<0>
+  e: Cycle<0>,
   f: struct A {
-    b: Cycle<0>
-    c: List<Cycle<0>>
-    d: Cycle<1>
-  }
+    b: Cycle<0>,
+    c: List<Cycle<0>>,
+    d: Cycle<1>,
+  },
 }`, d)
 	assertWriteTaggedHRSEqual(t, `Type(struct D {
-  e: Cycle<0>
+  e: Cycle<0>,
   f: struct A {
-    b: Cycle<0>
-    c: List<Cycle<0>>
-    d: Cycle<1>
-  }
+    b: Cycle<0>,
+    c: List<Cycle<0>>,
+    d: Cycle<1>,
+  },
 })`, d)
 }
 

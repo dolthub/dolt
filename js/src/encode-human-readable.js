@@ -141,6 +141,7 @@ export class TypeWriter {
       this._w.write(name);
       this._w.write(': ');
       this._writeType(type, parentStructTypes);
+      this._w.write(',');
       this._w.newLine();
     });
 

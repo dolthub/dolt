@@ -244,6 +244,7 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 		w.write(name)
 		w.write(": ")
 		w.writeType(t, parentStructTypes)
+		w.write(",")
 		w.newLine()
 	})
 	w.outdent()

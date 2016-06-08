@@ -61,7 +61,7 @@ suite('Encode human readable types', () => {
       'x': numberType,
       'y': stringType,
     });
-    assertWriteType('struct S1 {\n  x: Number\n  y: String\n}', type);
+    assertWriteType('struct S1 {\n  x: Number,\n  y: String,\n}', type);
   });
 
 
@@ -69,7 +69,7 @@ suite('Encode human readable types', () => {
     const type = makeStructType('S3', {
       'x': numberType,
     });
-    assertWriteType('List<struct S3 {\n  x: Number\n}>', makeListType(type));
+    assertWriteType('List<struct S3 {\n  x: Number,\n}>', makeListType(type));
   });
 
   test('recursive struct', () => {
@@ -98,21 +98,21 @@ suite('Encode human readable types', () => {
     a.desc.setField('c', makeListType(a));
 
     assertWriteType(`struct A {
-  b: Cycle<0>
-  c: List<Cycle<0>>
+  b: Cycle<0>,
+  c: List<Cycle<0>>,
   d: struct D {
-    e: Cycle<0>
-    f: Cycle<1>
-  }
+    e: Cycle<0>,
+    f: Cycle<1>,
+  },
 }`, a);
 
     assertWriteType(`struct D {
-  e: Cycle<0>
+  e: Cycle<0>,
   f: struct A {
-    b: Cycle<0>
-    c: List<Cycle<0>>
-    d: Cycle<1>
-  }
+    b: Cycle<0>,
+    c: List<Cycle<0>>,
+    d: Cycle<1>,
+  },
 }`, d);
   });
 });

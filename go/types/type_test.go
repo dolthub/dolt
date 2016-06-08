@@ -55,7 +55,7 @@ func TestTypeRefDescribe(t *testing.T) {
 		"Field1": StringType,
 		"Field2": BoolType,
 	})
-	assert.Equal("struct MahStruct {\n  Field1: String\n  Field2: Bool\n}", mahType.Describe())
+	assert.Equal("struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe())
 }
 
 func TestTypeOrdered(t *testing.T) {
