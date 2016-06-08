@@ -348,10 +348,8 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			serializedChunks, pw := io.Pipe()
 			errChan := make(chan error)
 			go func() {
-				gw := gzip.NewWriter(pw)
-				err := bhcs.unwrittenPuts.ExtractChunks(hashes, gw)
-				// The ordering of these is important. Close the gzipper to flush data to pw, then close pw so that the HTTP stack which is reading from serializedChunks knows it has everything, and only THEN block on errChan.
-				gw.Close()
+				err := bhcs.unwrittenPuts.ExtractChunks(hashes, pw)
+				// The ordering of these is important. Close the pipe so that the HTTP stack which is reading from serializedChunks knows it has everything, and only THEN block on errChan.
 				pw.Close()
 				errChan <- err
 				close(errChan)
@@ -362,7 +360,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
 			req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
 				"Accept-Encoding":  {"gzip"},
-				"Content-Encoding": {"gzip"},
+				"Content-Encoding": {"x-snappy-framed"},
 				"Content-Type":     {"application/octet-stream"},
 			})
 

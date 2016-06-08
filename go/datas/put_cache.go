@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/golang/snappy"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -72,9 +73,11 @@ func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 
 	if !present {
 		buf := &bytes.Buffer{}
-		sz := chunks.NewSerializer(buf)
+		gw := snappy.NewBufferedWriter(buf)
+		sz := chunks.NewSerializer(gw)
 		sz.Put(c)
 		sz.Close()
+		gw.Close()
 		d.Chk.NoError(p.orderedChunks.Put(dbKey, buf.Bytes(), nil))
 		return true
 	}
@@ -100,7 +103,7 @@ func (p *orderedChunkCache) Get(hash hash.Hash) chunks.Chunk {
 	}
 	data, err := p.orderedChunks.Get(dbKey, nil)
 	d.Chk.NoError(err)
-	reader := bytes.NewReader(data)
+	reader := snappy.NewReader(bytes.NewReader(data))
 	chunkChan := make(chan chunks.Chunk)
 	go chunks.DeserializeToChan(reader, chunkChan)
 	return <-chunkChan
