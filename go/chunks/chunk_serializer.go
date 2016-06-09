@@ -38,27 +38,31 @@ func NewSerializer(writer io.Writer) ChunkSink {
 
 	go func() {
 		for chunk := range s.chs {
-			d.Chk.True(chunk.Data != nil)
-
-			digest := chunk.Hash().Digest()
-			n, err := io.Copy(s.writer, bytes.NewReader(digest[:]))
-			d.Chk.NoError(err)
-			d.Chk.True(int64(sha1.Size) == n)
-
-			// Because of chunking at higher levels, no chunk should never be more than 4GB
-			chunkSize := uint32(len(chunk.Data()))
-			err = binary.Write(s.writer, binary.BigEndian, chunkSize)
-			d.Chk.NoError(err)
-
-			n, err = io.Copy(s.writer, bytes.NewReader(chunk.Data()))
-			d.Chk.NoError(err)
-			d.Chk.True(uint32(n) == chunkSize)
+			Serialize(chunk, s.writer)
 		}
-
-		s.done <- struct{}{}
+		close(s.done)
 	}()
 
 	return s
+}
+
+// Serialize a single Chunk to writer.
+func Serialize(chunk Chunk, writer io.Writer) {
+	d.Chk.True(chunk.data != nil)
+
+	digest := chunk.Hash().Digest()
+	n, err := io.Copy(writer, bytes.NewReader(digest[:]))
+	d.Chk.NoError(err)
+	d.Chk.True(int64(sha1.Size) == n)
+
+	// Because of chunking at higher levels, no chunk should never be more than 4GB
+	chunkSize := uint32(len(chunk.Data()))
+	err = binary.Write(writer, binary.BigEndian, chunkSize)
+	d.Chk.NoError(err)
+
+	n, err = io.Copy(writer, bytes.NewReader(chunk.Data()))
+	d.Chk.NoError(err)
+	d.Chk.True(uint32(n) == chunkSize)
 }
 
 type serializer struct {

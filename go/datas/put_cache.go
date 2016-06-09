@@ -74,9 +74,7 @@ func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 	if !present {
 		buf := &bytes.Buffer{}
 		gw := snappy.NewBufferedWriter(buf)
-		sz := chunks.NewSerializer(gw)
-		sz.Put(c)
-		sz.Close()
+		chunks.Serialize(c, gw)
 		gw.Close()
 		d.Chk.NoError(p.orderedChunks.Put(dbKey, buf.Bytes(), nil))
 		return true
