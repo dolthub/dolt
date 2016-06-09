@@ -5,6 +5,7 @@
 package hash
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -85,19 +86,9 @@ func Parse(s string) Hash {
 }
 
 func (r Hash) Less(other Hash) bool {
-	d1, d2 := r.digest, other.digest
-	for k := 0; k < len(d1); k++ {
-		b1, b2 := d1[k], d2[k]
-		if b1 < b2 {
-			return true
-		} else if b1 > b2 {
-			return false
-		}
-	}
-
-	return false
+	return bytes.Compare(r.digest[:], other.digest[:]) < 0
 }
 
 func (r Hash) Greater(other Hash) bool {
-	return !r.Less(other) && r != other
+	return bytes.Compare(r.digest[:], other.digest[:]) > 0
 }
