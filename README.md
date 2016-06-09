@@ -15,7 +15,7 @@ This repository contains two reference implementations of the database—one in 
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
 go install github.com/attic-labs/noms/cmd/...
 
-noms log http://demo.noms.io/cli-tour:film-locations
+noms log http://demo.noms.io/cli-tour::film-locations
 ```
 [Samples](samples/)&nbsp; | &nbsp;[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)
 
