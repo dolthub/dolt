@@ -21,6 +21,7 @@ export {
   StructMirror,
   StructFieldMirror,
   newStruct,
+  newStructWithType,
   createStructClass,
   escapeStructField,
 } from './struct.js';
