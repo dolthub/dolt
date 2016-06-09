@@ -59,7 +59,7 @@ fire-permits
 Noms datasets are versioned. You can see the history with `log`:
 
 ```
-> noms log http://demo.noms.io/cli-tour:film-locations
+> noms log http://demo.noms.io/cli-tour::film-locations
 
 sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
 Parent: sha1-b50c323c568bfff07a13fe276236cbdf40b5d846
@@ -93,7 +93,7 @@ Note that Noms is a typed system. What is being shown here is not text, but the 
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
-> noms show http://demo.noms.io/cli-tour:sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
+> noms show http://demo.noms.io/cli-tour::sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
 
 struct Commit {
   parents: Set<Ref<Cycle<0>>>
@@ -126,7 +126,7 @@ You can work with Noms databases that are remote exactly the same as you work wi
 Moving data in Noms is done with the `sync` command. Note that unlike Git, we do not make a distinction between _push_ and _pull_. It's the same operation in both directions:
 
 ```
-> noms sync http://demo.noms.io/cli-tour:film-locations ldb:/tmp/noms:films
+> noms sync http://demo.noms.io/cli-tour::film-locations ldb:/tmp/noms::films
 > noms ds ldb:/tmp/noms
 films
 ```
@@ -142,7 +142,7 @@ We can now make an edit locally:
 open /tmp/film-location.csv and edit it, then:
 
 ```
-> csv-import ldb:/tmp/noms:films /tmp/film-locations.csv
+> csv-import ldb:/tmp/noms::films /tmp/film-locations.csv
 ```
 
 #noms diff
@@ -150,7 +150,7 @@ open /tmp/film-location.csv and edit it, then:
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
 ```
-> noms diff http://demo.noms.io/cli-tour:film-locations ldb:/tmp/noms:films
+> noms diff http://demo.noms.io/cli-tour::film-locations ldb:/tmp/noms::films
 
 ./.parents {
 -   Ref<struct Commit {
