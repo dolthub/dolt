@@ -26,6 +26,14 @@ Dataset specifications take the form:
 
 See [spelling databases](#spelling-databases) for how to build the `database` part of the name. The `dataset` part is just any string matching the regex `^[a-zA-Z0-9\-_/]+$`.
 
+Example datasets:
+
+```
+ldb:/tmp/test-db::my-dataset
+http://localhost:8000::registered-businesses
+https://demo.noms.io/aa::music
+```
+
 ## Spelling Values
 
 Value specifications take the form:
