@@ -97,7 +97,7 @@ You can also see this on the command-line. In a new (third) terminal:
 > noms ds http://localhost:8000
 people
 
-> noms show http://localhost:8000:people
+> noms show http://localhost:8000::people
 struct Commit {
   parents: Set<Ref<Cycle<0>>>
   value: Value
