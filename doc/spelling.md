@@ -7,21 +7,21 @@ Many commands and APIs in Noms accept database, dataset, or value specifications
 database specifications take the form:
 
 ```
-<protocol>:<path>
+<protocol>[:<path>]
 ```
 
 The `path` part of the name is interpreted differently depending on the protocol:
 
-- **http(s):** specs describe a remote database to be accessed over HTTP. In this case, the entire database spec is a normal http(s) URL. For example: `https://dev.noms.io/aa`.
-- **ldb:** specs describe a local [LevelDB](https://github.com/google/leveldb)-backed database. In this case, the path component should be a relative or absolute path on disk to a directory in which to store the LevelDB data. For example: `ldb:~/noms-data`.
-- **mem:** specs describe an ephemeral memory-backed database. In this case, the path component is not used and must be empty.
+- **http(s)** specs describe a remote database to be accessed over HTTP. In this case, the entire database spec is a normal http(s) URL. For example: `https://dev.noms.io/aa`.
+- **ldb** specs describe a local [LevelDB](https://github.com/google/leveldb)-backed database. In this case, the path component should be a relative or absolute path on disk to a directory in which to store the LevelDB data. For example: `ldb:~/noms-data`.
+- **mem** specs describe an ephemeral memory-backed database. In this case, the path component is not used and must be empty.
 
 ## Spelling Datasets
 
 Dataset specifications take the form:
 
 ```
-<database>:<dataset>
+<database>::<dataset>
 ```
 
 See [spelling databases](#spelling-databases) for how to build the `database` part of the name. The `dataset` part is just any string matching the regex `^[a-zA-Z0-9\-_/]+$`.
@@ -31,7 +31,7 @@ See [spelling databases](#spelling-databases) for how to build the `database` pa
 Value specifications take the form:
 
 ```
-<database>:<value-name>
+<database>::<value-name>
 ```
 
 See [spelling databases](#spelling-databases) for how to build the database part of the name.
@@ -42,11 +42,11 @@ The `value-name` part can be either a ref or a dataset name. If  `value-name` ma
 
 ```sh
 # “foo” dataset at http://api.noms.io/-/aa
-http://api.noms.io/-/aa:foo
+http://api.noms.io/-/aa::foo
 
 # value sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041 at http://localhost:8000
-http://localhost:8000/monkey:sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041
+http://localhost:8000/monkey::sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041
 
 # “bonk” dataset at ldb:/foo/bar
-ldb:/foo/bar:bonk
+ldb:/foo/bar::bonk
 ```
