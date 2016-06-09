@@ -36,7 +36,7 @@ func main() {
 
 	buildCount := *count
 	insertCount := buildCount / 50
-	profiling := profile.MaybeStartCPUProfile()
+	defer profile.MaybeStartProfile().Stop()
 
 	collectionTypes := []string{"List", "Set", "Map"}
 	buildFns := []buildCollectionFn{buildList, buildSet, buildMap}
@@ -104,10 +104,6 @@ func main() {
 	readDuration := time.Since(t1)
 	d.Chk.True(bytes.Compare(blobBytes, outBytes) == 0)
 	fmt.Printf("\t\t\t%s\t\t%s\n\n", rate(buildDuration, *blobSize), rate(readDuration, *blobSize))
-
-	if profiling {
-		profile.StopCPUProfile()
-	}
 }
 
 func rate(d time.Duration, size uint64) string {
@@ -144,7 +140,7 @@ var structType = types.MakeStructType("S1", map[string]*types.Type{
 
 func createStruct(i uint64) types.Value {
 	return types.NewStructWithType(structType, map[string]types.Value{
-		"str":  types.NewString(fmt.Sprintf("i am a 55 bytes............................%12d", strPrefix, i)),
+		"str":  types.NewString(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
 		"num":  types.Number(i),
 		"bool": types.Bool(i%2 == 0),
 	})

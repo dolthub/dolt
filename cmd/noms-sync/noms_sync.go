@@ -28,8 +28,8 @@ func main() {
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Moves datasets between or within databases")
-		fmt.Fprintln(os.Stderr, "noms sync [options] <source-object> <dest-dataset>")
+		fmt.Fprintf(os.Stderr, "Moves datasets between or within databases\n\n")
+		fmt.Fprintf(os.Stderr, "noms sync [options] <source-object> <dest-dataset>\n\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling objects and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
@@ -55,14 +55,10 @@ func main() {
 	defer sinkDataset.Database().Close()
 
 	err = d.Try(func() {
-		if profile.MaybeStartCPUProfile() {
-			defer profile.StopCPUProfile()
-		}
+		defer profile.MaybeStartProfile().Stop()
 
 		var err error
 		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), int(*p))
-
-		profile.MaybeWriteMemProfile()
 		d.Exp.NoError(err)
 	})
 

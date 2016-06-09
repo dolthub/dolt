@@ -17,6 +17,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/samples/go/csv"
@@ -49,7 +50,7 @@ func main() {
 	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>\n")
+		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>\n\n")
 		flag.PrintDefaults()
 	}
 
@@ -61,6 +62,8 @@ func main() {
 	}
 
 	path := flag.Arg(1)
+
+	defer profile.MaybeStartProfile().Stop()
 
 	res, err := os.Open(path)
 	d.Exp.NoError(err)

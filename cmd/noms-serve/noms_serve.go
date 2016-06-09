@@ -25,8 +25,8 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Serves a Noms database over HTTP\n")
-		fmt.Fprintln(os.Stderr, "Usage: noms serve <database>")
+		fmt.Fprintf(os.Stderr, "Serves a Noms database over HTTP\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: noms serve <database>\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling databases, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
@@ -60,9 +60,7 @@ func main() {
 	}()
 
 	d.Try(func() {
-		if profile.MaybeStartCPUProfile() {
-			defer profile.StopCPUProfile()
-		}
+		defer profile.MaybeStartProfile().Stop()
 		server.Run()
 	})
 }
