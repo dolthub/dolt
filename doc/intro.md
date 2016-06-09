@@ -50,7 +50,7 @@ var db = noms.DatabaseSpec.parse('http://localhost:8000').db();
 A dataset is nothing more than a named pointer into the DAG. Consider the following command to copy the dataset named `foo` to the dataset named `bar` within a database:
 
 ```
-noms sync http://localhost:8000:foo http://localhost:8000:bar
+noms sync http://localhost:8000::foo http://localhost:8000::bar
 ```
 
 This command is trivial and causes basically zero IO. Noms first resolves the dataset name `foo` in `http://localhost:8000`. This results in a hash. Noms then checks whether that hash exists in the destination database (which in this case is the same as the source database), finds that it does, and then adds a new dataset pointing at that chunk.
