@@ -10,7 +10,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-const batchSize = 16
+const batchSize = 100
 
 type ValidatingBatchingSink struct {
 	vs    *ValueStore
@@ -37,7 +37,7 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureEr
 		return nil
 	}
 	v := DecodeValue(c, vbs.vs)
-	d.Exp.Equal(EnsureHash(&hash.Hash{}, v), h)
+	d.Exp.True(EnsureHash(&hash.Hash{}, v) == h)
 	vbs.vs.ensureChunksInCache(v)
 	vbs.vs.set(h, hintedChunk{v.Type(), h})
 

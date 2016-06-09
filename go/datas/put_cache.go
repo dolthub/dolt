@@ -102,9 +102,9 @@ func (p *orderedChunkCache) Get(hash hash.Hash) chunks.Chunk {
 	data, err := p.orderedChunks.Get(dbKey, nil)
 	d.Chk.NoError(err)
 	reader := snappy.NewReader(bytes.NewReader(data))
-	chunkChan := make(chan chunks.Chunk)
+	chunkChan := make(chan *chunks.Chunk)
 	go chunks.DeserializeToChan(reader, chunkChan)
-	return <-chunkChan
+	return *(<-chunkChan)
 }
 
 // Clear can be called from any goroutine to remove chunks referenced by the given hashes from the cache.
