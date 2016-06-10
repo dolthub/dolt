@@ -56,8 +56,6 @@
     "./src/utf8.js": "./src/browser/utf8.js",
     "./dist/commonjs/utf8.js": "./dist/commonjs/browser/utf8.js",
     "./src/put-cache.js": "./src/browser/put-cache.js",
-    "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js",
-    "./src/binary-noms-writer.js": "./src/browser/binary-noms-writer.js",
-    "./dist/commonjs/binary-noms-writer.js": "./dist/commonjs/browser/binary-noms-writer.js"
+    "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js"
   }
 }

@@ -47,7 +47,6 @@ export default class Hash {
   }
 
   isEmpty(): boolean {
-    // TODO: Use Buffer equals with empty hash.
     for (let i = 0; i < sha1Size; i++) {
       if (this._digest[i]) {
         return false;
@@ -57,7 +56,6 @@ export default class Hash {
   }
 
   equals(other: Hash): boolean {
-    // TODO: Use Buffer equals
     for (let i = 0; i < sha1Size; i++) {
       if (this._digest[i] !== other._digest[i]) {
         return false;
@@ -67,7 +65,6 @@ export default class Hash {
   }
 
   compare(other: Hash): number {
-    // TODO: Use Buffer.compare
     for (let i = 0; i < sha1Size; i++) {
       const d = this._digest[i] - other._digest[i];
       if (d) {
@@ -78,7 +75,6 @@ export default class Hash {
   }
 
   toString(): string {
-    // TODO: Use Buffer toString('hex')?
     return uint8ArrayToSha1(this._digest);
   }
 

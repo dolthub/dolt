@@ -42,7 +42,9 @@ export default class OrderedPutCache {
   }
 
   _init(): Promise<DbCollection> {
+    // invariant(false === true);
     return makeTempDir().then((dir): Promise<DbCollection> => {
+      // console.log('creating', dir);
       this._folder = dir;
       const coll = new DbCollection(dir);
       return coll.ensureIndex({hash: 1}, {unique: true}).then(() => coll);
@@ -156,21 +158,9 @@ class DbCollection {
   insert(item: ChunkItem, options: Object = {}): Promise<number> {
     return new Promise((resolve, reject) => {
       options.w = 1;
-
-      // TODO(arv): TingoDB is broken for Uint8Array
-      let data;
-      if (item.data instanceof Buffer) {
-        data = new Binary(item.data);
-      } else {
-        invariant(item.data instanceof Uint8Array);
-        const {buffer, byteOffset, byteLength} = item.data;
-        const ua = new Uint8Array(buffer.slice(byteOffset, byteOffset + byteLength));
-        // $FlowIssue
-        const buf = new Buffer(ua);
-        data = new Binary(buf);
-      }
-
-      this._coll.insert({hash: item.hash, data}, options, (err, result) => {
+      //$FlowIssue
+      const data = new Binary(new Buffer(item.data.buffer));
+      this._coll.insert({hash: item.hash, data: data}, options, (err, result) => {
         if (err) {
           reject(err);
         } else {

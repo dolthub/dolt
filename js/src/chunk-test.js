@@ -34,7 +34,7 @@ suite('Chunk', () => {
       assert.isTrue(c.isEmpty());
     }
 
-    assertChunkIsEmpty(new Chunk(new Uint8Array(0)));
+    assertChunkIsEmpty(new Chunk());
     assertChunkIsEmpty(Chunk.fromString(''));
   });
 });

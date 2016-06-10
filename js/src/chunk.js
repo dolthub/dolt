@@ -11,7 +11,7 @@ export default class Chunk {
   data: Uint8Array;
   _hash: ?Hash;
 
-  constructor(data: Uint8Array, hash: ?Hash) {
+  constructor(data: Uint8Array = new Uint8Array(0), hash: ?Hash) {
     this.data = data;
     this._hash = hash;
   }
@@ -35,4 +35,4 @@ export default class Chunk {
   }
 }
 
-export const emptyChunk = new Chunk(new Uint8Array(0));
+export const emptyChunk = new Chunk();
