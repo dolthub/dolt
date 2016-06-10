@@ -115,13 +115,13 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 }
 
 // DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
-func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
+func DeserializeToChan(reader io.Reader, chunkChan chan<- *Chunk) {
 	for {
 		c, success := deserializeChunk(reader)
 		if !success {
 			break
 		}
-		chunkChan <- c
+		chunkChan <- &c
 	}
 	close(chunkChan)
 }

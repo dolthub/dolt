@@ -116,7 +116,7 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	}
 	assert.Equal(len(hints), count)
 
-	chunkChan := make(chan chunks.Chunk, 16)
+	chunkChan := make(chan *chunks.Chunk, 16)
 	go chunks.DeserializeToChan(gr, chunkChan)
 	for c := range chunkChan {
 		assert.Equal(chnx[0].Hash(), c.Hash())
@@ -180,7 +180,7 @@ func TestHandleGetRefs(t *testing.T) {
 	)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		chunkChan := make(chan chunks.Chunk)
+		chunkChan := make(chan *chunks.Chunk)
 		go chunks.DeserializeToChan(w.Body, chunkChan)
 		for c := range chunkChan {
 			assert.Equal(chnx[0].Hash(), c.Hash())

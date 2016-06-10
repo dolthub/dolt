@@ -41,12 +41,12 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		vbs := types.NewValidatingBatchingSink(cs)
 		vbs.Prepare(deserializeHints(reader))
 
-		chunkChan := make(chan chunks.Chunk, 16)
+		chunkChan := make(chan *chunks.Chunk, 16)
 		go chunks.DeserializeToChan(reader, chunkChan)
 		var bpe chunks.BackpressureError
 		for c := range chunkChan {
 			if bpe == nil {
-				bpe = vbs.Enqueue(c)
+				bpe = vbs.Enqueue(*c)
 			} else {
 				bpe = append(bpe, c.Hash())
 			}
