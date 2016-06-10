@@ -384,6 +384,7 @@ func TestSetInsert2(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {
@@ -444,7 +445,7 @@ func TestSetRemove2(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-
+	t.Parallel()
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, ts testSet) {

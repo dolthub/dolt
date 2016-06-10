@@ -607,6 +607,7 @@ func TestListModifyAfterRead(t *testing.T) {
 }
 
 func TestListDiffIdentical(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
 	l1 := NewList(nums...)
@@ -620,6 +621,7 @@ func TestListDiffIdentical(t *testing.T) {
 }
 
 func TestListDiffVersusEmpty(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
 	l1 := NewList(nums1...)
@@ -636,6 +638,7 @@ func TestListDiffReverse(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
@@ -653,6 +656,7 @@ func TestListDiffRemove5x100(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -682,6 +686,7 @@ func TestListDiffAdd5x5(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -708,6 +713,7 @@ func TestListDiffAdd5x5(t *testing.T) {
 }
 
 func TestListDiffReplaceReverse5x100(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -740,6 +746,7 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 }
 
 func TestListDiffLoadLimit(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
 	nums2 := generateNumbersAsValues(5000)
@@ -754,6 +761,7 @@ func TestListDiffLoadLimit(t *testing.T) {
 }
 
 func TestListDiffString1(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three")}
@@ -768,6 +776,7 @@ func TestListDiffString1(t *testing.T) {
 }
 
 func TestListDiffString2(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three"), NewString("four")}
@@ -784,6 +793,7 @@ func TestListDiffString2(t *testing.T) {
 }
 
 func TestListDiffString3(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("four")}
@@ -803,6 +813,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 
 	cs1 := chunks.NewTestStore()

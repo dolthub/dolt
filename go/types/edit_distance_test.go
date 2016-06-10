@@ -16,6 +16,7 @@ func assertDiff(assert *assert.Assertions, last []uint64, current []uint64, expe
 }
 
 func TestEditDistanceAppend(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2},
@@ -25,6 +26,7 @@ func TestEditDistanceAppend(t *testing.T) {
 }
 
 func TestEditDistancePrepend(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{3, 4, 5, 6},
@@ -34,6 +36,7 @@ func TestEditDistancePrepend(t *testing.T) {
 }
 
 func TestEditDistanceChopFromEnd(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5},
@@ -43,6 +46,7 @@ func TestEditDistanceChopFromEnd(t *testing.T) {
 }
 
 func TestEditDistanceChopFromStart(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5},
@@ -52,6 +56,7 @@ func TestEditDistanceChopFromStart(t *testing.T) {
 }
 
 func TestEditDistanceChopFromMiddle(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5},
@@ -61,6 +66,7 @@ func TestEditDistanceChopFromMiddle(t *testing.T) {
 }
 
 func TestEditDistanceA(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8},
@@ -73,6 +79,7 @@ func TestEditDistanceA(t *testing.T) {
 }
 
 func TestEditDistanceRemoveABunch(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -87,6 +94,7 @@ func TestEditDistanceRemoveABunch(t *testing.T) {
 }
 
 func TestEditDistanceAddABunch(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -102,6 +110,7 @@ func TestEditDistanceAddABunch(t *testing.T) {
 }
 
 func TestEditDistanceUpdateABunch(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -115,6 +124,7 @@ func TestEditDistanceUpdateABunch(t *testing.T) {
 }
 
 func TestEditDistanceLeftOverlap(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -126,6 +136,7 @@ func TestEditDistanceLeftOverlap(t *testing.T) {
 }
 
 func TestEditDistanceRightOverlap(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -137,6 +148,7 @@ func TestEditDistanceRightOverlap(t *testing.T) {
 }
 
 func TestEditDistanceWithin(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -148,6 +160,7 @@ func TestEditDistanceWithin(t *testing.T) {
 }
 
 func TestEditDistanceWithout(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -159,6 +172,7 @@ func TestEditDistanceWithout(t *testing.T) {
 }
 
 func TestEditDistanceMix1(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -174,6 +188,7 @@ func TestEditDistanceMix1(t *testing.T) {
 }
 
 func TestEditDistanceReverse(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 	assertDiff(assert,
 		[]uint64{0, 1, 2, 3, 4, 5, 6, 7},

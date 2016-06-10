@@ -263,6 +263,7 @@ func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int,
 }
 
 func TestMapDiff(t *testing.T) {
+	t.Parallel()
 	testMap1 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
 		return v
 	})
@@ -358,6 +359,7 @@ func TestMapRemove(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 
 	doTest := func(incr int, tm testMap) {
@@ -471,6 +473,7 @@ func TestMapSet(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	t.Parallel()
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, tm testMap) {
