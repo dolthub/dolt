@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/attic-labs/noms/cmd/noms-diff/diff"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/outputpager"
@@ -22,10 +23,9 @@ import (
 )
 
 var (
-	color, maxLines, maxCommits *int
-	showHelp, showGraph         *bool
-	useColor                    = false
-	maxLinesError               = errors.New("Maximum number of lines written")
+	color, maxLines, maxCommits    *int
+	showHelp, showGraph, showValue *bool
+	useColor                       = false
 )
 
 func main() {
@@ -34,6 +34,7 @@ func main() {
 	maxCommits = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
 	showHelp = flag.Bool("help", false, "show help text")
 	showGraph = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
+	showValue = flag.Bool("show-value", false, "show commit value rather than diff information -- this is temporary")
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Displays the history of a Noms dataset\n")
@@ -76,7 +77,7 @@ func main() {
 		*maxCommits = math.MaxInt32
 	}
 	for ln, ok := iter.Next(); ok && displayed < *maxCommits; ln, ok = iter.Next() {
-		if printCommit(ln) != nil {
+		if printCommit(ln, database) != nil {
 			break
 		}
 		displayed++
@@ -90,7 +91,7 @@ func main() {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(node LogNode) (err error) {
+func printCommit(node LogNode, db datas.Database) (err error) {
 	lineno := 0
 	doColor := func(s string) string { return s }
 	if useColor {
@@ -113,11 +114,12 @@ func printCommit(node LogNode) (err error) {
 	}
 	if *maxLines != 0 {
 		var n int
-		n, err = writeCommitLines(node, *maxLines, lineno, os.Stdout)
+		if *showValue {
+			n, err = writeCommitLines(node, *maxLines, lineno, os.Stdout)
+		} else {
+			n, err = writeDiffLines(node, db, *maxLines, lineno, os.Stdout)
+		}
 		lineno += n
-	}
-	if !node.lastCommit {
-		fmt.Printf("%s\n", genGraph(node, lineno))
 	}
 	return
 }
@@ -175,65 +177,44 @@ func genGraph(node LogNode, lineno int) string {
 	return string(buf)
 }
 
-type maxLineWriter struct {
-	numLines int
-	maxLines int
-	node     LogNode
-	dest     io.Writer
-	first    bool
-}
-
-func (w *maxLineWriter) Write(data []byte) (n int, err error) {
-	doGraph := func() error {
-		var err error
-		w.numLines++
-		if *showGraph {
-			s := genGraph(w.node, w.numLines)
-			_, err = w.dest.Write([]byte(s))
-		}
-		return err
-	}
-
-	if w.first && len(data) > 0 {
-		w.first = false
-		err = doGraph()
-		if err != nil {
-			return
-		}
-	}
-
-	for _, b := range data {
-		n++
-		if w.numLines == w.maxLines {
-			err = maxLinesError
-			return
-		}
-		// TODO: This is not technically correct due to utf-8, but ... meh.
-		newLine := b == byte('\n')
-		_, err = w.dest.Write(data[n-1 : n])
-		if err != nil {
-			return
-		}
-		if newLine {
-			err = doGraph()
-		}
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
-func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (int, error) {
-	out := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, first: true}
-	err := types.WriteEncodedValueWithTags(out, node.commit.Get(datas.ValueField))
-	if err == maxLinesError {
-		fmt.Fprint(w, "...")
-		out.numLines++
+func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true}
+	err = types.WriteEncodedValueWithTags(mlw, node.commit.Get(datas.ValueField))
+	if err != nil {
+		mlw.forceWrite([]byte("..."))
+		mlw.numLines++
 		err = nil
 	}
-	fmt.Fprintln(w)
-	return out.numLines, err
+	mlw.forceWrite([]byte("\n"))
+	if !node.lastCommit {
+		mlw.forceWrite([]byte("\n"))
+	}
+	return mlw.numLines, err
+}
+
+func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true}
+	parents := node.commit.Get(datas.ParentsField).(types.Set)
+	var parent types.Value = nil
+	if parents.Len() > 0 {
+		parent = parents.First()
+	}
+	if parent == nil {
+		_, err = fmt.Fprint(mlw, "\n")
+		return 1, err
+	}
+
+	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
+	err = diff.Diff(mlw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField))
+	if err != nil {
+		mlw.forceWrite([]byte("...\n"))
+		mlw.numLines++
+		err = nil
+	}
+	if !node.lastCommit {
+		mlw.forceWrite([]byte("\n"))
+	}
+	return mlw.numLines, err
 }
 
 func shouldUseColor() bool {

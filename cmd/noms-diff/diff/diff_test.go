@@ -1,7 +1,10 @@
-package main
+// Copyright 2016 The Noms Authors. All rights reserved.
+// Licensed under the Apache License, version 2.0:
+// http://www.apache.org/licenses/LICENSE-2.0
+
+package diff
 
 import (
-	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -18,8 +21,6 @@ var (
 	mm3  = createMap("m1", "m-one", "v2", "m-two", "m3", "m-three", "m4", aa1)
 	mm3x = createMap("m1", "m-one", "v2", "m-two", "m3", "m-three-diff", "m4", aa1x)
 	mm4  = createMap("n1", "n-one", "n2", "n-two", "n3", "n-three", "n4", aa1)
-
-	startPath = types.NewPath().AddField("/")
 )
 
 func valToTypesValue(v interface{}) types.Value {
@@ -73,26 +74,26 @@ func TestNomsMapdiff(t *testing.T) {
 
 	m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 	m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
 	buf := util.NewBuffer(nil)
-	diff(buf)
+	Diff(buf, m1, m2)
 	assert.Equal(expected, buf.String())
 }
 
 func TestNomsSetDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./.sha1-c26be7ea6e815f747c1552fe402a773ad466be88 {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./.sha1-c26be7ea6e815f747c1552fe402a773ad466be88.\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
 
+	expected := "./ {\n-   \"five\"\n+   \"five-diff\"\n  }\n"
 	s1 := createSet("one", "three", "five", "seven", "nine")
 	s2 := createSet("one", "three", "five-diff", "seven", "nine")
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
-	diff(os.Stdout)
+	buf := util.NewBuffer(nil)
+	Diff(buf, s1, s2)
+	assert.Equal(expected, buf.String())
 
+	expected = "./.sha1-c26be7ea6e815f747c1552fe402a773ad466be88 {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./.sha1-c26be7ea6e815f747c1552fe402a773ad466be88.\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
 	s1 = createSet(mm1, mm2, mm3, mm4)
 	s2 = createSet(mm1, mm2, mm3x, mm4)
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: s1, v2: s2})
-	buf := util.NewBuffer(nil)
-	diff(buf)
+	buf = util.NewBuffer(nil)
+	Diff(buf, s1, s2)
 	assert.Equal(expected, buf.String())
 }
 
@@ -112,30 +113,32 @@ func TestNomsStructDiff(t *testing.T) {
 	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
 	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")
 
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: m1, v2: m2})
 	buf := util.NewBuffer(nil)
-	diff(buf)
+	Diff(buf, m1, m2)
 	assert.Equal(expected, buf.String())
 }
 
 func TestNomsListDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./[2] {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./[2].\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
 
+	expected := "./ {\n-   2\n+   22\n-   44\n  }\n"
 	l1 := createList(1, 2, 3, 4, 44, 5, 6)
 	l2 := createList(1, 22, 3, 4, 5, 6)
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
-	diff(os.Stdout)
+	buf := util.NewBuffer(nil)
+	Diff(buf, l1, l2)
+	assert.Equal(expected, buf.String())
 
+	expected = "./ {\n+   \"seven\"\n  }\n"
 	l1 = createList("one", "two", "three", "four", "five", "six")
 	l2 = createList("one", "two", "three", "four", "five", "six", "seven")
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
-	diff(os.Stdout)
+	buf = util.NewBuffer(nil)
+	Diff(buf, l1, l2)
+	assert.Equal(expected, buf.String())
 
+	expected = "./[2] {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./[2].\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
 	l1 = createList(mm1, mm2, mm3, mm4)
 	l2 = createList(mm1, mm2, mm3x, mm4)
-	diffQ.PushBack(diffInfo{path: startPath, key: nil, v1: l1, v2: l2})
-	buf := util.NewBuffer(nil)
-	diff(buf)
+	buf = util.NewBuffer(nil)
+	Diff(buf, l1, l2)
 	assert.Equal(expected, buf.String())
 }
