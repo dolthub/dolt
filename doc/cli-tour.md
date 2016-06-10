@@ -19,8 +19,10 @@ usage: noms [-no-pager] [command] [command-args]
 
 Available commands:
 
+  diff
   ds
   log
+  serve
   show
   sync
   ui
@@ -48,10 +50,7 @@ The `noms ds` command lists the _datasets_ within a particular database:
 ```
 > noms ds http://demo.noms.io/cli-tour
 
-registered-businesses
 film-locations
-fire-incidents
-fire-permits
 ```
 
 ## noms log
