@@ -14,7 +14,6 @@ import (
 type indexedSequence interface {
 	sequence
 	getOffset(idx int) uint64
-	equalsAt(idx int, other interface{}) bool
 }
 
 type indexedMetaSequence struct {
@@ -43,14 +42,11 @@ func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) in
 		cum += mt.uint64Value()
 		offsets = append(offsets, cum)
 	}
+	leafCount := offsets[len(offsets)-1]
 	return indexedMetaSequence{
-		metaSequenceObject{tuples, t, vr},
+		metaSequenceObject{tuples, t, vr, leafCount},
 		offsets,
 	}
-}
-
-func (ims indexedMetaSequence) numLeaves() uint64 {
-	return ims.offsets[len(ims.offsets)-1]
 }
 
 func (ims indexedMetaSequence) getOffset(idx int) uint64 {
@@ -65,8 +61,11 @@ func (ims indexedMetaSequence) getOffset(idx int) uint64 {
 	return ims.offsets[idx] - 1
 }
 
-func (ims indexedMetaSequence) equalsAt(idx int, other interface{}) bool {
-	return ims.getItem(idx).(metaTuple).ref.Equals(other.(metaTuple).ref)
+func (ims indexedMetaSequence) getCompareFn(other sequence) compareFn {
+	oms := other.(indexedMetaSequence)
+	return func(idx, otherIdx int) bool {
+		return ims.tuples[idx].ref.TargetHash() == oms.tuples[otherIdx].ref.TargetHash()
+	}
 }
 
 func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {

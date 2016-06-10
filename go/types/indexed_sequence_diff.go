@@ -42,8 +42,9 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 		return indexedSequenceDiff(last, lastHeight, lastOffset, currentChild, currentHeight-1, currentOffset, newLoadLimit)
 	}
 
+	compareFn := last.getCompareFn(current)
 	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), func(i uint64, j uint64) bool {
-		return last.equalsAt(int(i), current.getItem(int(j)))
+		return compareFn(int(i), int(j))
 	})
 
 	finalSplices := []Splice{}

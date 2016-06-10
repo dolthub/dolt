@@ -6,6 +6,8 @@ package types
 
 type sequenceItem interface{}
 
+type compareFn func(x int, y int) bool
+
 type sequence interface {
 	getItem(idx int) sequenceItem
 	seqLen() int
@@ -13,4 +15,5 @@ type sequence interface {
 	valueReader() ValueReader
 	Chunks() []Ref
 	Type() *Type
+	getCompareFn(other sequence) compareFn
 }

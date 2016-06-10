@@ -17,6 +17,7 @@ import Ref from './ref.js';
 import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
+import type {EqualsFn} from './edit-distance.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {
@@ -133,6 +134,11 @@ export class BlobLeafSequence extends IndexedSequence<number> {
 
   getOffset(idx: number): number {
     return idx;
+  }
+
+  getCompareFn(other: IndexedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      this.items[idx] === other.items[otherIdx];
   }
 }
 

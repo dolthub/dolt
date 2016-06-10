@@ -56,9 +56,10 @@ func (msd metaSequenceData) last() metaTuple {
 }
 
 type metaSequenceObject struct {
-	tuples metaSequenceData
-	t      *Type
-	vr     ValueReader
+	tuples    metaSequenceData
+	t         *Type
+	vr        ValueReader
+	leafCount uint64
 }
 
 func (ms metaSequenceObject) data() metaSequenceData {
@@ -88,6 +89,10 @@ func (ms metaSequenceObject) Chunks() []Ref {
 
 func (ms metaSequenceObject) Type() *Type {
 	return ms.t
+}
+
+func (ms metaSequenceObject) numLeaves() uint64 {
+	return ms.leafCount
 }
 
 // metaSequence interface

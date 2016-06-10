@@ -79,10 +79,13 @@ func (ml mapLeafSequence) getKey(idx int) Value {
 	return ml.data[idx].key
 }
 
-func (ml mapLeafSequence) equalsAt(idx int, other interface{}) bool {
-	entry := ml.data[idx]
-	otherEntry := other.(mapEntry)
-	return entry.key.Equals(otherEntry.key) && entry.value.Equals(otherEntry.value)
+func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
+	oml := other.(mapLeafSequence)
+	return func(idx, otherIdx int) bool {
+		entry := ml.data[idx]
+		otherEntry := oml.data[otherIdx]
+		return entry.key.Equals(otherEntry.key) && entry.value.Equals(otherEntry.value)
+	}
 }
 
 // Collection interface

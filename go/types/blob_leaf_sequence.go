@@ -18,8 +18,11 @@ func (bl blobLeafSequence) getOffset(idx int) uint64 {
 	return uint64(idx)
 }
 
-func (bl blobLeafSequence) equalsAt(idx int, other interface{}) bool {
-	return bl.data[idx] == other
+func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {
+	otherbl := other.(blobLeafSequence)
+	return func(idx, otherIdx int) bool {
+		return bl.data[idx] == otherbl.data[otherIdx]
+	}
 }
 
 // sequence interface

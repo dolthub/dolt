@@ -29,7 +29,7 @@ export default async function diff<K: Value, T>(
     await fastForward(lastCur, currentCur);
 
     while (lastCur.valid && currentCur.valid &&
-           !lastCur.sequence.equalsAt(lastCur.idx, currentCur.getCurrent())) {
+           !lastCur.sequence.getCompareFn(currentCur.sequence)(lastCur.idx, currentCur.idx)) {
       const lastKey = lastCur.getCurrentKey(), currentKey = currentCur.getCurrentKey();
 
       if (equals(lastKey, currentKey)) {
@@ -109,5 +109,5 @@ async function doFastForward(allowPastEnd: boolean,
 }
 
 function isCurrentEqual(a: SequenceCursor, b: SequenceCursor): boolean {
-  return a.sequence.equalsAt(a.idx, b.getCurrent());
+  return a.sequence.getCompareFn(b.sequence)(a.idx, b.idx);
 }

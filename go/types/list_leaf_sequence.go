@@ -24,8 +24,11 @@ func (ll listLeafSequence) getOffset(idx int) uint64 {
 	return uint64(idx)
 }
 
-func (ll listLeafSequence) equalsAt(idx int, other interface{}) bool {
-	return ll.values[idx].Equals(other.(Value))
+func (ll listLeafSequence) getCompareFn(other sequence) compareFn {
+	oll := other.(listLeafSequence)
+	return func(idx, otherIdx int) bool {
+		return ll.values[idx].Equals(oll.values[otherIdx])
+	}
 }
 
 // sequence interface

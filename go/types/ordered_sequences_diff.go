@@ -22,7 +22,7 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added [
 		fastForward(lastCur, currentCur)
 
 		for lastCur.valid() && currentCur.valid() &&
-			!lastCur.seq.(orderedSequence).equalsAt(lastCur.idx, currentCur.current()) {
+			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if lastKey.Equals(currentKey) {
@@ -96,6 +96,5 @@ func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHa
 }
 
 func isCurrentEqual(a *sequenceCursor, b *sequenceCursor) bool {
-	aSeq := a.seq.(orderedSequence)
-	return aSeq.equalsAt(a.idx, b.current())
+	return a.seq.getCompareFn(b.seq)(a.idx, b.idx)
 }

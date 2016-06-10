@@ -26,6 +26,7 @@ import {sha1Size} from './hash.js';
 import {removeDuplicateFromOrdered} from './map.js';
 import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
+import type {EqualsFn} from './edit-distance.js';
 
 const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
@@ -201,8 +202,9 @@ export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
     return this.items[idx];
   }
 
-  equalsAt(idx: number, other: any): boolean {
-    return equals(this.items[idx], other);
+  getCompareFn(other: OrderedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      equals(this.items[idx], other.items[otherIdx]);
   }
 
   get chunks(): Array<Ref> {

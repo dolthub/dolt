@@ -23,6 +23,7 @@ import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator} from
 import diff from './ordered-sequence-diff.js';
 import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
+import type {EqualsFn} from './edit-distance.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
 
@@ -196,9 +197,10 @@ export class MapLeafSequence<K: Value, V: Value> extends
     return this.items[idx][KEY];
   }
 
-  equalsAt(idx: number, other: MapEntry<K, V>): boolean {
-    const entry = this.items[idx];
-    return equals(entry[KEY], other[KEY]) && equals(entry[VALUE], other[VALUE]);
+  getCompareFn(other: OrderedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      equals(this.items[idx][KEY], other.items[otherIdx][KEY]) &&
+      equals(this.items[idx][VALUE], other.items[otherIdx][VALUE]);
   }
 
   get chunks(): Array<Ref> {

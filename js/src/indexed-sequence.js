@@ -8,10 +8,18 @@ import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
 import {notNull} from './assert.js';
 import Sequence, {search, SequenceCursor} from './sequence.js';
+import type {EqualsFn} from './edit-distance.js';
+import {equals} from './compare.js';
 
 export class IndexedSequence<T> extends Sequence<T> {
   getOffset(idx: number): number { // eslint-disable-line no-unused-vars
     throw new Error('override');
+  }
+
+  getCompareFn(other: IndexedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      // $FlowIssue
+      equals(this.items[idx], other.items[otherIdx]);
   }
 
   async newCursorAt(idx: number): Promise<IndexedSequenceCursor> {

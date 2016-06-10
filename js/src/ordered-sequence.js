@@ -10,6 +10,7 @@ import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
 import {compare} from './compare.js';
 import search from './binary-search.js';
+import type {EqualsFn} from './edit-distance.js';
 import Sequence, {SequenceCursor} from './sequence.js';
 import {ValueBase} from './value.js';
 
@@ -47,10 +48,7 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
     throw new Error('override');
   }
 
-  /**
-   * Returns true if the item in this sequence at |idx| is equal to |other|.
-   */
-  equalsAt(idx: number, other: any): boolean { // eslint-disable-line no-unused-vars
+  getCompareFn(other: OrderedSequence): EqualsFn { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 }

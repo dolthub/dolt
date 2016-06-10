@@ -7,7 +7,6 @@
 import type {Splice} from './edit-distance.js';
 import {calcSplices, SPLICE_ADDED, SPLICE_AT, SPLICE_FROM,
   SPLICE_REMOVED} from './edit-distance.js';
-import {equals} from './compare.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import type {IndexedSequence} from './indexed-sequence.js';
@@ -50,9 +49,7 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
   invariant(last.isMeta === current.isMeta);
   invariant(lastHeight === currentHeight);
 
-  const splices = calcSplices(last.length, current.length, last.isMeta ?
-        (l, c) => equals(last.items[l].ref, current.items[c].ref) :
-        (l, c) => equals(last.items[l], current.items[c]));
+  const splices = calcSplices(last.length, current.length, last.getCompareFn(current));
 
   const splicesP = splices.map(splice => {
     if (!last.isMeta || splice[SPLICE_REMOVED] === 0 || splice[SPLICE_ADDED] === 0) {

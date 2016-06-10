@@ -15,12 +15,10 @@ import (
 type orderedSequence interface {
 	sequence
 	getKey(idx int) Value
-	equalsAt(idx int, other interface{}) bool
 }
 
 type orderedMetaSequence struct {
 	metaSequenceObject
-	leafCount uint64
 }
 
 func newSetMetaSequence(tuples metaSequenceData, vr ValueReader) orderedMetaSequence {
@@ -53,21 +51,19 @@ func newOrderedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) or
 	}
 
 	return orderedMetaSequence{
-		metaSequenceObject{tuples, t, vr},
-		leafCount,
+		metaSequenceObject{tuples, t, vr, leafCount},
 	}
-}
-
-func (oms orderedMetaSequence) numLeaves() uint64 {
-	return oms.leafCount
 }
 
 func (oms orderedMetaSequence) getKey(idx int) Value {
 	return oms.tuples[idx].value
 }
 
-func (oms orderedMetaSequence) equalsAt(idx int, other interface{}) bool {
-	return oms.tuples[idx].ref.Equals(other.(metaTuple).ref)
+func (oms orderedMetaSequence) getCompareFn(other sequence) compareFn {
+	ooms := other.(orderedMetaSequence)
+	return func(idx, otherIdx int) bool {
+		return oms.tuples[idx].ref.TargetHash() == ooms.tuples[otherIdx].ref.TargetHash()
+	}
 }
 
 func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {

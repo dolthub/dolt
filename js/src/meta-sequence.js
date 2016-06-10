@@ -23,7 +23,7 @@ import List from './list.js';
 import Map from './map.js';
 import Set from './set.js';
 import Blob from './blob.js';
-import {equals} from './compare.js';
+import type {EqualsFn} from './edit-distance.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
 
@@ -145,6 +145,11 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   getOffset(idx: number): number {
     return this._offsets[idx] - 1;
   }
+
+  getCompareFn(other: IndexedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      this.items[idx].ref.targetHash.equals(other.items[otherIdx].ref.targetHash);
+  }
 }
 
 export function newMapMetaSequence<K: Value>(vr: ?ValueReader,
@@ -194,8 +199,9 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
     return this.items[idx].value;
   }
 
-  equalsAt(idx: number, other: MetaTuple): boolean {
-    return equals(this.items[idx].ref, other.ref);
+  getCompareFn(other: OrderedSequence): EqualsFn {
+    return (idx: number, otherIdx: number) =>
+      this.items[idx].ref.targetHash.equals(other.items[otherIdx].ref.targetHash);
   }
 }
 

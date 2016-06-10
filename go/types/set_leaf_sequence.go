@@ -52,7 +52,10 @@ func (sl setLeafSequence) getKey(idx int) Value {
 	return sl.data[idx]
 }
 
-func (sl setLeafSequence) equalsAt(idx int, other interface{}) bool {
-	entry := sl.data[idx]
-	return entry.Equals(other.(Value))
+func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
+	osl := other.(setLeafSequence)
+	return func(idx, otherIdx int) bool {
+		entry := sl.data[idx]
+		return entry.Equals(osl.data[otherIdx])
+	}
 }
