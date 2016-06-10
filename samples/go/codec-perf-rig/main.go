@@ -10,8 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"runtime/pprof"
 	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -20,7 +18,6 @@ import (
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/flags"
 )
 
 var (
@@ -35,84 +32,61 @@ const boolSize = uint64(1)
 const structSize = uint64(64)
 
 func main() {
-	flags.RegisterDatabaseFlags()
 	flag.Parse()
 
+	buildCount := *count
+	insertCount := buildCount / 50
 	profiling := profile.MaybeStartCPUProfile()
 
 	collectionTypes := []string{"List", "Set", "Map"}
-	buildOneFns := []buildCollectionFn{buildList, buildSet, buildMap}
+	buildFns := []buildCollectionFn{buildList, buildSet, buildMap}
 	buildIncrFns := []buildCollectionFn{buildListIncrementally, buildSetIncrementally, buildMapIncrementally}
 	readFns := []readCollectionFn{readList, readSet, readMap}
 
 	elementTypes := []string{"numbers (8 B)", "strings (32 B)", "structs (64 B)"}
 	elementSizes := []uint64{numberSize, stringSize, structSize}
-	createValueFns := []createValuesFn{createNumbers, createStrings, createStructs}
+	valueFns := []createValueFn{createNumber, createString, createStruct}
 
 	for i, colType := range collectionTypes {
-		buildCount := *count
-		appendCount := *count / 50
-		fmt.Printf("Testing %s: \t\tbuild %d\t\t\tscan %d\t\t\tinsert %d\n", colType, buildCount, buildCount, appendCount)
+		fmt.Printf("Testing %s: \t\tbuild %d\t\t\tscan %d\t\t\tinsert %d\n", colType, buildCount, buildCount, insertCount)
 
 		for j, elementType := range elementTypes {
-			elementSize := elementSizes[j]
-			buildSize := elementSize * buildCount
-			incrSize := elementSize * appendCount
-
-			valueFn := createValueFns[j]
-			var vals types.ValueSlice
+			valueFn := valueFns[j]
 
 			// Build One-Time
 			ms := chunks.NewMemoryStore()
 			ds := dataset.NewDataset(datas.NewDatabase(ms), "test")
-			if colType == "Map" {
-				vals = valueFn(buildCount * 2)
-				buildSize *= 2
-				incrSize *= 2
-			} else {
-				vals = valueFn(buildCount)
-			}
 			t1 := time.Now()
-			col := buildOneFns[i](vals)
+			col := buildFns[i](buildCount, valueFn)
 			ds, err := ds.Commit(col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
 			// Read
-			if i == 1 && j == 1 {
-				f, err := os.Create("cpu.prof")
-				d.Exp.NoError(err)
-				pprof.StartCPUProfile(f)
-			}
-
 			t1 = time.Now()
 			col = ds.Head().Get(datas.ValueField).(types.Collection)
 			readFns[i](col)
 			readDuration := time.Since(t1)
-			if i == 1 && j == 1 {
-				pprof.StopCPUProfile()
-			}
 
 			// Build Incrementally
 			ms = chunks.NewMemoryStore()
 			ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
-			if colType == "Map" {
-				vals = valueFn(appendCount * 2)
-			} else {
-				vals = valueFn(appendCount)
-			}
 			t1 = time.Now()
-			col = buildIncrFns[i](vals)
+			col = buildIncrFns[i](insertCount, valueFn)
 			ds, err = ds.Commit(col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
+
+			elementSize := elementSizes[j]
+			buildSize := elementSize * buildCount
+			incrSize := elementSize * insertCount
 
 			fmt.Printf("%s\t\t%s\t\t%s\t\t%s\n", elementType, rate(buildDuration, buildSize), rate(readDuration, buildSize), rate(incrDuration, incrSize))
 		}
 		fmt.Println()
 	}
 
-	fmt.Printf("Testing blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
+	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	ms := chunks.NewMemoryStore()
 	ds := dataset.NewDataset(datas.NewDatabase(ms), "test")
@@ -123,7 +97,9 @@ func main() {
 	ds.Commit(blob)
 	buildDuration := time.Since(t1)
 
+	ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
 	t1 = time.Now()
+	blob = ds.Head().Get(datas.ValueField).(types.Blob)
 	outBytes, _ := ioutil.ReadAll(blob.Reader())
 	readDuration := time.Since(t1)
 	d.Chk.True(bytes.Compare(blobBytes, outBytes) == 0)
@@ -138,8 +114,8 @@ func rate(d time.Duration, size uint64) string {
 	return fmt.Sprintf("%d ms (%.2f MB/s)", uint64(d)/1000000, float64(size)*1000/float64(d))
 }
 
-type createValuesFn func(count uint64) types.ValueSlice
-type buildCollectionFn func(values types.ValueSlice) types.Collection
+type createValueFn func(i uint64) types.Value
+type buildCollectionFn func(count uint64, createFn createValueFn) types.Collection
 type readCollectionFn func(value types.Collection)
 
 func makeBlobBytes(byteLength uint64) []byte {
@@ -151,22 +127,13 @@ func makeBlobBytes(byteLength uint64) []byte {
 	}
 	return buff.Bytes()
 }
-func createStrings(count uint64) types.ValueSlice {
-	values := make(types.ValueSlice, count)
-	for i := uint64(0); i < count; i++ {
-		values[i] = types.NewString(fmt.Sprintf("%s%d", strPrefix, i))
-	}
 
-	return values
+func createString(i uint64) types.Value {
+	return types.NewString(fmt.Sprintf("%s%d", strPrefix, i))
 }
 
-func createNumbers(count uint64) types.ValueSlice {
-	values := make(types.ValueSlice, count)
-	for i := uint64(0); i < count; i++ {
-		values[i] = types.Number(i)
-	}
-
-	return values
+func createNumber(i uint64) types.Value {
+	return types.Number(i)
 }
 
 var structType = types.MakeStructType("S1", map[string]*types.Type{
@@ -175,27 +142,27 @@ var structType = types.MakeStructType("S1", map[string]*types.Type{
 	"bool": types.BoolType,
 })
 
-func createStructs(count uint64) types.ValueSlice {
-	values := make(types.ValueSlice, count)
-	for i := uint64(0); i < count; i++ {
-		values[i] = types.NewStructWithType(structType, map[string]types.Value{
-			"str":  types.NewString(fmt.Sprintf("i am a 55 bytes............................%12d", strPrefix, i)),
-			"num":  types.Number(i),
-			"bool": types.Bool(i%2 == 0),
-		})
-	}
-
-	return values
+func createStruct(i uint64) types.Value {
+	return types.NewStructWithType(structType, map[string]types.Value{
+		"str":  types.NewString(fmt.Sprintf("i am a 55 bytes............................%12d", strPrefix, i)),
+		"num":  types.Number(i),
+		"bool": types.Bool(i%2 == 0),
+	})
 }
 
-func buildList(values types.ValueSlice) types.Collection {
+func buildList(count uint64, createFn createValueFn) types.Collection {
+	values := make([]types.Value, count)
+	for i := uint64(0); i < count; i++ {
+		values[i] = createFn(i)
+	}
+
 	return types.NewList(values...)
 }
 
-func buildListIncrementally(values types.ValueSlice) types.Collection {
+func buildListIncrementally(count uint64, createFn createValueFn) types.Collection {
 	l := types.NewList()
-	for i, v := range values {
-		l = l.Insert(uint64(i), v)
+	for i := uint64(0); i < count; i++ {
+		l = l.Insert(i, createFn(i))
 	}
 
 	return l
@@ -208,14 +175,19 @@ func readList(c types.Collection) {
 	})
 }
 
-func buildSet(values types.ValueSlice) types.Collection {
+func buildSet(count uint64, createFn createValueFn) types.Collection {
+	values := make([]types.Value, count)
+	for i := uint64(0); i < count; i++ {
+		values[i] = createFn(i)
+	}
+
 	return types.NewSet(values...)
 }
 
-func buildSetIncrementally(values types.ValueSlice) types.Collection {
+func buildSetIncrementally(count uint64, createFn createValueFn) types.Collection {
 	s := types.NewSet()
-	for _, v := range values {
-		s = s.Insert(v)
+	for i := uint64(0); i < count; i++ {
+		s = s.Insert(createFn(i))
 	}
 
 	return s
@@ -228,14 +200,20 @@ func readSet(c types.Collection) {
 	})
 }
 
-func buildMap(values types.ValueSlice) types.Collection {
+func buildMap(count uint64, createFn createValueFn) types.Collection {
+	values := make([]types.Value, count*2)
+	for i := uint64(0); i < count*2; i++ {
+		values[i] = createFn(i)
+	}
+
 	return types.NewMap(values...)
 }
 
-func buildMapIncrementally(values types.ValueSlice) types.Collection {
+func buildMapIncrementally(count uint64, createFn createValueFn) types.Collection {
 	m := types.NewMap()
-	for i := 0; i < len(values); i += 2 {
-		m = m.Set(values[i], values[i+1])
+
+	for i := uint64(0); i < count*2; i += 2 {
+		m = m.Set(createFn(i), createFn(i+1))
 	}
 
 	return m
