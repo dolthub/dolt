@@ -80,7 +80,7 @@ func MaybeParse(s string) (r Hash, ok bool) {
 func Parse(s string) Hash {
 	r, ok := MaybeParse(s)
 	if !ok {
-		d.Exp.Fail(fmt.Sprintf("Cound not parse Hash: %s", s))
+		d.PanicIfError(fmt.Errorf("Cound not parse Hash: %s", s))
 	}
 	return r
 }

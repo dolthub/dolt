@@ -99,7 +99,7 @@ func StringToType(s string, k types.NomsKind) types.Value {
 	case types.StringKind:
 		return types.String(s)
 	default:
-		d.Exp.Fail("Invalid column type kind:", k)
+		d.PanicIfTrue(true, "Invalid column type kind:", k)
 	}
 	panic("not reached")
 }

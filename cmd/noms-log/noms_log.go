@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/cmd/noms-diff/diff"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -182,6 +183,7 @@ func genGraph(node LogNode, lineno int) string {
 func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
 	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true}
 	err = types.WriteEncodedValueWithTags(mlw, node.commit.Get(datas.ValueField))
+	d.PanicIfNotType(err, MaxLinesErr)
 	if err != nil {
 		mlw.forceWrite([]byte("..."))
 		mlw.numLines++
@@ -208,6 +210,7 @@ func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.
 
 	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
 	err = diff.Diff(mlw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField))
+	d.PanicIfNotType(err, MaxLinesErr)
 	if err != nil {
 		mlw.forceWrite([]byte("...\n"))
 		mlw.numLines++

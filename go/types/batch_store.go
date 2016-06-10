@@ -59,7 +59,7 @@ func (bsa *BatchStoreAdaptor) SchedulePut(c chunks.Chunk, refHeight uint64, hint
 
 func (bsa *BatchStoreAdaptor) expectVersion() {
 	dataVersion := bsa.cs.Version()
-	d.Exp.True(constants.NomsVersion == dataVersion, "SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
 }
 
 // AddHints is a noop.

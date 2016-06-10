@@ -438,7 +438,7 @@ func (s *DynamoStore) Root() hash.Hash {
 			refAttr: {B: s.rootKey},
 		},
 	})
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 
 	itemLen := len(result.Item)
 	if itemLen == 0 {

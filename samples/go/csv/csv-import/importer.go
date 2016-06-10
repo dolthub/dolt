@@ -66,7 +66,7 @@ func main() {
 	defer profile.MaybeStartProfile().Stop()
 
 	res, err := os.Open(path)
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	defer res.Close()
 
 	comma, err := csv.StringToRune(*delimiter)
@@ -100,7 +100,7 @@ func main() {
 	var headers []string
 	if *header == "" {
 		headers, err = cr.Read()
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 	} else {
 		headers = strings.Split(*header, string(comma))
 	}
@@ -124,7 +124,7 @@ func main() {
 	if !*noProgress {
 		status.Clear()
 	}
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 }
 
 func getStatusPrinter(expected uint64) progressreader.Callback {

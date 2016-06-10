@@ -39,7 +39,7 @@ func main() {
 		newVal = uint64(lastVal.(types.Number)) + 1
 	}
 	_, err = ds.Commit(types.Number(newVal))
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 
 	fmt.Println(newVal)
 }

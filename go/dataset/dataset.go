@@ -20,7 +20,7 @@ type Dataset struct {
 }
 
 func NewDataset(db datas.Database, datasetID string) Dataset {
-	d.Exp.True(idRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
+	d.PanicIfTrue(!idRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
 	return Dataset{db, datasetID}
 }
 
@@ -116,8 +116,8 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	v := ds.store.ReadValue(r.TargetHash())
 
-	d.Exp.True(v != nil, "%v cannot be found", r)
-	d.Exp.True(v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
+	d.PanicIfTrue(v == nil, "%v cannot be found", r)
+	d.PanicIfTrue(!v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
 	return v.(types.Struct)
 }
 

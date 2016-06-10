@@ -34,11 +34,11 @@ func main() {
 	}
 	err := d.Try(func() {
 		stagingDir, err := filepath.Abs(flag.Arg(0))
-		d.Exp.NoError(err, "Path to staging directory (first arg) must be valid, not %s", flag.Arg(0))
-		d.Exp.NoError(os.MkdirAll(stagingDir, 0755))
+		d.PanicIfTrue(err != nil, "Path to staging directory (first arg) must be valid, not %s", flag.Arg(0))
+		d.PanicIfError(os.MkdirAll(stagingDir, 0755))
 
 		goPath := os.Getenv("GOPATH")
-		d.Exp.NotEmpty(goPath, "GOPATH must be set!")
+		d.PanicIfTrue(goPath == "", "GOPATH must be set!")
 		workspace := os.Getenv("WORKSPACE")
 		if workspace == "" {
 			fmt.Printf("WORKSPACE not set in environment; using GOPATH (%s).\n", goPath)

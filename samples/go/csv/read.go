@@ -26,7 +26,7 @@ func StringsToKinds(strs []string) KindSlice {
 	kinds := make(KindSlice, len(strs))
 	for i, str := range strs {
 		k, ok := StringToKind[str]
-		d.Exp.True(ok)
+		d.PanicIfTrue(!ok, "StringToKind[%s] failed", str)
 		kinds[i] = k
 	}
 	return kinds
@@ -52,7 +52,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 			kind = kinds[i]
 		}
 		_, ok := fields[key]
-		d.Exp.False(ok, `Duplicate field name "%s"`, key)
+		d.PanicIfTrue(ok, `Duplicate field name "%s"`, key)
 		fields[key] = types.MakePrimitiveType(kind)
 	}
 	return types.MakeStructType(structName, fields)

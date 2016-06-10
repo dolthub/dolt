@@ -40,7 +40,7 @@ type intermediate struct {
 
 func runParser(filename string, r io.Reader) intermediate {
 	got, err := ParseReader(filename, r)
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	return got.(intermediate)
 }
 
@@ -59,7 +59,7 @@ func findType(n string, ts []*types.Type) *types.Type {
 			return t
 		}
 	}
-	d.Exp.Fail("Undefined reference %s", n)
+	d.PanicIfTrue(true, "Undefined reference %s", n)
 	return nil
 }
 
@@ -81,7 +81,7 @@ func resolveReferences(i *intermediate, aliases map[string][]*types.Type) {
 				return findType(desc.Name, i.Types)
 			}
 			ts, ok := aliases[desc.Namespace]
-			d.Exp.True(ok, "No such namespace: %s", desc.Namespace)
+			d.PanicIfTrue(!ok, "No such namespace: %s", desc.Namespace)
 			return findType(desc.Name, ts)
 		case types.ListKind:
 			return types.MakeListType(rec(t.Desc.(types.CompoundDesc).ElemTypes[0]))
