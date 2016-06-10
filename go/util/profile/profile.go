@@ -6,39 +6,62 @@ package profile
 
 import (
 	"flag"
+	"io"
 	"os"
+	"runtime"
 	"runtime/pprof"
 
 	"github.com/attic-labs/noms/go/d"
 )
 
 var (
-	cpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memProfile = flag.String("memprofile", "", "write memory profile to this file")
+	cpuProfile   = flag.String("cpuprofile", "", "write cpu profile to file")
+	memProfile   = flag.String("memprofile", "", "write memory profile to this file")
+	blockProfile = flag.String("blockprofile", "", "write block profile to this file")
 )
 
-// MaybeStartCPUProfile checks the -cpuprofile flag and, if it is set, attempts to start writing CPU profile data to the named file. Stopping CPU profiling is left to the caller.
-func MaybeStartCPUProfile() bool {
+// MaybeStartProfile checks the -blockProfile, -cpuProfile, and -memProfile flag and, for each that is set, attempts to start gathering profiling data into the appropriate files. It returns an object with one method, Stop(), that must be called in order to flush profile data to disk before the process terminates.
+func MaybeStartProfile() interface {
+	Stop()
+} {
+	p := &prof{}
+	if *blockProfile != "" {
+		f, err := os.Create(*blockProfile)
+		d.Exp.NoError(err)
+		runtime.SetBlockProfileRate(1)
+		p.bp = f
+	}
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
 		d.Exp.NoError(err)
 		pprof.StartCPUProfile(f)
-		return true
+		p.cpu = f
 	}
-	return false
-}
-
-// StopCPUProfile is a wrapper around pprof.StopCPUProfile(), provided for consistency; callers don't have to be aware of pprof at all.
-func StopCPUProfile() {
-	pprof.StopCPUProfile()
-}
-
-// MaybeWriteMemProfile checks the -memprofile flag and, if it is set, attempts to write memory profiling data to the named file.
-func MaybeWriteMemProfile() {
 	if *memProfile != "" {
 		f, err := os.Create(*memProfile)
-		defer f.Close()
 		d.Exp.NoError(err)
-		pprof.WriteHeapProfile(f)
+		p.mem = f
+	}
+	return p
+}
+
+type prof struct {
+	bp  io.WriteCloser
+	cpu io.Closer
+	mem io.WriteCloser
+}
+
+func (p *prof) Stop() {
+	if p.bp != nil {
+		pprof.Lookup("block").WriteTo(p.bp, 0)
+		p.bp.Close()
+		runtime.SetBlockProfileRate(0)
+	}
+	if p.cpu != nil {
+		p.cpu.Close()
+	}
+	if p.mem != nil {
+		pprof.WriteHeapProfile(p.mem)
+		p.mem.Close()
 	}
 }

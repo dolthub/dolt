@@ -64,9 +64,7 @@ func main() {
 		ds, err := spec.Dataset()
 		util.CheckError(err)
 
-		if profile.MaybeStartCPUProfile() {
-			defer profile.StopCPUProfile()
-		}
+		defer profile.MaybeStartProfile().Stop()
 
 		cpuCount := runtime.NumCPU()
 		runtime.GOMAXPROCS(cpuCount)
@@ -90,7 +88,7 @@ func main() {
 		}
 
 		wg := sync.WaitGroup{}
-		importXml := func() {
+		importXML := func() {
 			expectedType := types.NewMap()
 			for f := range filesChan {
 				file, err := os.Open(f.path)
@@ -118,7 +116,7 @@ func main() {
 		go getFilePaths()
 		for i := 0; i < cpuCount*8; i++ {
 			wg.Add(1)
-			go importXml()
+			go importXML()
 		}
 		go func() {
 			wg.Wait()
@@ -142,8 +140,6 @@ func main() {
 			_, err := ds.Commit(rl)
 			d.Exp.NoError(err)
 		}
-
-		profile.MaybeWriteMemProfile()
 	})
 
 	if err != nil {
