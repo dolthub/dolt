@@ -21,9 +21,12 @@ const (
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s command [command-args]\n\n", path.Base(os.Args[0]))
-	fmt.Fprintf(os.Stderr, "Flags:\n\n")
-	flag.PrintDefaults()
-	fmt.Fprintf(os.Stderr, "\nCommands:\n\n")
+	if hasDefinedFlags(flag.CommandLine) {
+		fmt.Fprintf(os.Stderr, "Flags:\n\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\n")
+	}
+	fmt.Fprintf(os.Stderr, "Commands:\n\n")
 	fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(listCmds(), "\n  "))
 	fmt.Fprintf(os.Stderr, "\nSee noms <command> -h for information on each available command.\n\n")
 }
@@ -45,6 +48,13 @@ func main() {
 	}
 
 	executeCmd(cmd)
+}
+
+func hasDefinedFlags(fs *flag.FlagSet) (hasFlags bool) {
+	fs.VisitAll(func(*flag.Flag) {
+		hasFlags = true
+	})
+	return
 }
 
 func findCmd(name string) (cmd string) {
