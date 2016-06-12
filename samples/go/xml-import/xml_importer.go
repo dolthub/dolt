@@ -16,9 +16,9 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/clbanning/mxj"
 )
@@ -51,7 +51,7 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
 	err := d.Try(func() {
-		flags.RegisterDatabaseFlags()
+		spec.RegisterDatabaseFlags()
 		flag.Usage = customUsage
 		flag.Parse()
 
@@ -59,7 +59,7 @@ func main() {
 			util.CheckError(errors.New("Expected dataset followed by directory path"))
 		}
 		dir := flag.Arg(1)
-		spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+		spec, err := spec.ParseDatasetSpec(flag.Arg(0))
 		util.CheckError(err)
 		ds, err := spec.Dataset()
 		util.CheckError(err)

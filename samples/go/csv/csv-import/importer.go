@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/samples/go/csv"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 
 	humanize "github.com/dustin/go-humanize"
@@ -45,7 +45,7 @@ func main() {
 		destTypePattern = regexp.MustCompile("^(list|map):(\\d+)$")
 	)
 
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
@@ -105,7 +105,7 @@ func main() {
 		headers = strings.Split(*header, string(comma))
 	}
 
-	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
 	util.CheckError(err)
 	ds, err := spec.Dataset()
 	util.CheckError(err)

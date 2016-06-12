@@ -11,8 +11,8 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/cmd/noms-diff/diff"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -43,9 +43,9 @@ func main() {
 		util.CheckError(errors.New("expected exactly two arguments"))
 	}
 
-	spec1, err := flags.ParsePathSpec(flag.Arg(0))
+	spec1, err := spec.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
-	spec2, err := flags.ParsePathSpec(flag.Arg(1))
+	spec2, err := spec.ParsePathSpec(flag.Arg(1))
 	util.CheckError(err)
 
 	db1, value1, err := spec1.Value()

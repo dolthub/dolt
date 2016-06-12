@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -27,7 +27,7 @@ func main() {
 	flag.Parse()
 
 	if *toDelete != "" {
-		setSpec, err := flags.ParseDatasetSpec(*toDelete)
+		setSpec, err := spec.ParseDatasetSpec(*toDelete)
 		util.CheckError(err)
 
 		set, err := setSpec.Dataset()
@@ -49,7 +49,7 @@ func main() {
 			return
 		}
 
-		storeSpec, err := flags.ParseDatabaseSpec(flag.Arg(0))
+		storeSpec, err := spec.ParseDatabaseSpec(flag.Arg(0))
 		util.CheckError(err)
 
 		store, err := storeSpec.Database()

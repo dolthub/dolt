@@ -14,8 +14,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -31,7 +31,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling databases, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
 
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -39,7 +39,7 @@ func main() {
 		return
 	}
 
-	spec, err := flags.ParseDatabaseSpec(flag.Arg(0))
+	spec, err := spec.ParseDatabaseSpec(flag.Arg(0))
 	util.CheckError(err)
 	if spec.Protocol != "mem" && spec.Protocol != "ldb" {
 		err := errors.New("Illegal database spec for server, must be 'mem' or 'ldb'")

@@ -15,9 +15,9 @@ import (
 
 	"github.com/attic-labs/noms/cmd/noms-diff/diff"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/mgutz/ansi"
 )
@@ -56,7 +56,7 @@ func main() {
 
 	useColor = shouldUseColor()
 
-	spec, err := flags.ParsePathSpec(flag.Arg(0))
+	spec, err := spec.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
 	database, value, err := spec.Value()
 	if err != nil {

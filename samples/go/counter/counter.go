@@ -12,8 +12,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -23,14 +23,14 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if flag.NArg() != 1 {
 		util.CheckError(errors.New("expected dataset arg"))
 	}
 
-	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
 	util.CheckError(err)
 	ds, err := spec.Dataset()
 	util.CheckError(err)

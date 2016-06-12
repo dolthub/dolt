@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -38,7 +38,7 @@ func main() {
 		util.CheckError(errors.New("expected exactly one argument"))
 	}
 
-	spec, err := flags.ParsePathSpec(flag.Arg(0))
+	spec, err := spec.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
 	database, value, err := spec.Value()
 	util.CheckError(err)

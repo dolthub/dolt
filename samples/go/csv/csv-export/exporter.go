@@ -13,8 +13,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/samples/go/csv"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -25,7 +25,7 @@ var (
 )
 
 func main() {
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	cpuCount := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpuCount)
 
@@ -40,7 +40,7 @@ func main() {
 		util.CheckError(errors.New("expected dataset arg"))
 	}
 
-	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
 	util.CheckError(err)
 
 	ds, err := spec.Dataset()

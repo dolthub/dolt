@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/test_util"
 	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/attic-labs/testify/assert"
@@ -39,8 +39,8 @@ type nomsShowTestSuite struct {
 	test_util.ClientTestSuite
 }
 
-func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
-	sp, err := flags.ParseDatasetSpec(spec)
+func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
+	sp, err := spec.ParseDatasetSpec(str)
 	s.NoError(err)
 	ds, err := sp.Dataset()
 	s.NoError(err)
@@ -48,22 +48,22 @@ func testCommitInResults(s *nomsShowTestSuite, spec string, i int) {
 	s.NoError(err)
 	commit := ds.Head()
 	ds.Database().Close()
-	s.Contains(s.Run(main, []string{spec}), commit.Hash().String())
+	s.Contains(s.Run(main, []string{str}), commit.Hash().String())
 }
 
 func (s *nomsShowTestSuite) TestNomsLog() {
 	datasetName := "dsTest"
-	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	sp, err := flags.ParseDatasetSpec(spec)
+	str := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	sp, err := spec.ParseDatasetSpec(str)
 	s.NoError(err)
 
 	ds, err := sp.Dataset()
 	s.NoError(err)
 	ds.Database().Close()
-	s.Panics(func() { s.Run(main, []string{spec}) })
+	s.Panics(func() { s.Run(main, []string{str}) })
 
-	testCommitInResults(s, spec, 1)
-	testCommitInResults(s, spec, 2)
+	testCommitInResults(s, str, 1)
+	testCommitInResults(s, str, 2)
 }
 
 func addCommit(ds dataset.Dataset, v string) (dataset.Dataset, error) {
@@ -83,9 +83,9 @@ func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) 
 }
 
 func (s *nomsShowTestSuite) TestNArg() {
-	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
-	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	dbSpec, err := spec.ParseDatabaseSpec(str)
 	s.NoError(err)
 	db, err := dbSpec.Database()
 	s.NoError(err)
@@ -119,8 +119,8 @@ func (s *nomsShowTestSuite) TestNArg() {
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
-	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	dbSpec, err := spec.ParseDatabaseSpec(str)
 	s.NoError(err)
 	db, err := dbSpec.Database()
 	s.NoError(err)
@@ -172,8 +172,8 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph2() {
-	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	dbSpec, err := spec.ParseDatabaseSpec(str)
 	s.NoError(err)
 	db, err := dbSpec.Database()
 	s.NoError(err)
@@ -203,8 +203,8 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph3() {
-	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	dbSpec, err := spec.ParseDatabaseSpec(str)
 	s.NoError(err)
 	db, err := dbSpec.Database()
 	s.NoError(err)
@@ -252,8 +252,8 @@ func (s *nomsShowTestSuite) TestTruncation() {
 		return types.NewList(nv...)
 	}
 
-	spec := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := flags.ParseDatabaseSpec(spec)
+	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	dbSpec, err := spec.ParseDatabaseSpec(str)
 	s.NoError(err)
 	db, err := dbSpec.Database()
 	s.NoError(err)

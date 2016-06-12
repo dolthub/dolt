@@ -13,9 +13,9 @@ import (
 	"runtime"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 )
 
@@ -34,20 +34,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling objects and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
 	}
 
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if flag.NArg() != 2 {
 		util.CheckError(errors.New("expected a source object and destination dataset"))
 	}
 
-	sourceSpec, err := flags.ParsePathSpec(flag.Arg(0))
+	sourceSpec, err := spec.ParsePathSpec(flag.Arg(0))
 	util.CheckError(err)
 	sourceStore, sourceObj, err := sourceSpec.Value()
 	util.CheckError(err)
 	defer sourceStore.Close()
 
-	sinkSpec, err := flags.ParseDatasetSpec(flag.Arg(1))
+	sinkSpec, err := spec.ParseDatasetSpec(flag.Arg(1))
 	util.CheckError(err)
 
 	sinkDataset, err := sinkSpec.Dataset()

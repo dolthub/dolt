@@ -9,8 +9,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/test_util"
 	"github.com/attic-labs/testify/suite"
 )
@@ -43,15 +43,15 @@ func writeTestData(ds dataset.Dataset, value types.Value) types.Ref {
 
 func (s *nomsShowTestSuite) TestNomsShow() {
 	datasetName := "dsTest"
-	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	sp, err := flags.ParseDatasetSpec(spec)
+	str := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	sp, err := spec.ParseDatasetSpec(str)
 	d.Chk.NoError(err)
 	ds, err := sp.Dataset()
 	d.Chk.NoError(err)
 
 	s1 := types.NewString("test string")
 	r := writeTestData(ds, s1)
-	s.Equal(res1, s.Run(main, []string{spec}))
+	s.Equal(res1, s.Run(main, []string{str}))
 
 	spec1 := test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
 	s.Equal(res2, s.Run(main, []string{spec1}))
@@ -59,12 +59,12 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	ds, err = sp.Dataset()
 	list := types.NewList(types.NewString("elem1"), types.Number(2), types.NewString("elem3"))
 	r = writeTestData(ds, list)
-	s.Equal(res3, s.Run(main, []string{spec}))
+	s.Equal(res3, s.Run(main, []string{str}))
 
 	spec1 = test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
 	s.Equal(res4, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()
 	_ = writeTestData(ds, s1)
-	s.Equal(res5, s.Run(main, []string{spec}))
+	s.Equal(res5, s.Run(main, []string{str}))
 }

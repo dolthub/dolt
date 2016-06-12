@@ -5,13 +5,13 @@
 package test_util
 
 import (
-    "fmt"
+	"fmt"
 )
 
 func CreateDatabaseSpecString(protocol, path string) string {
-    return fmt.Sprintf("%s:%s", protocol, path)
+	return fmt.Sprintf("%s:%s", protocol, path)
 }
 
 func CreateValueSpecString(protocol, path, value string) string {
-    return fmt.Sprintf("%s:%s::%s", protocol, path, value)
+	return fmt.Sprintf("%s:%s::%s", protocol, path, value)
 }

@@ -16,10 +16,10 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
-	"github.com/attic-labs/noms/samples/go/flags"
 	"github.com/attic-labs/noms/samples/go/util"
 	human "github.com/dustin/go-humanize"
 )
@@ -34,14 +34,14 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flags.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags()
 	flag.Parse()
 
 	if flag.NArg() != 2 {
 		util.CheckError(errors.New("expected dataset and url arguments"))
 	}
 
-	spec, err := flags.ParseDatasetSpec(flag.Arg(0))
+	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
 	if err != nil {
 		util.CheckError(err)
 	}
