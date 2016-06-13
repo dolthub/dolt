@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	SPLICE_UNASSIGNED = math.MaxUint64
+	DEFAULT_MAX_SPLICE_MATRIX_SIZE = 1e6
+	SPLICE_UNASSIGNED              = math.MaxUint64
 
 	UNCHANGED = 0
 	UPDATED   = 1
@@ -36,11 +37,24 @@ func (s Splice) String() string {
 	return fmt.Sprintf("[%d, %d, %d, %d]", s.SpAt, s.SpRemoved, s.SpAdded, s.SpFrom)
 }
 
-func min(a, b uint64) uint64 {
+func uint64_min(a, b uint64) uint64 {
 	if a < b {
 		return a
 	}
 	return b
+}
+
+func uint64_min3(a, b, c uint64) uint64 {
+	if a < b {
+		if a < c {
+			return a
+		}
+	} else {
+		if b < c {
+			return b
+		}
+	}
+	return c
 }
 
 func reverse(numbers []uint64) []uint64 {
@@ -59,9 +73,8 @@ func addSplice(splices []Splice, s Splice) []Splice {
 	return splices
 }
 
-func calcSplices(previousLength uint64, currentLength uint64, eqFn EditDistanceEqualsFn) []Splice {
-	splices := make([]Splice, 0)
-	minLength := min(previousLength, currentLength)
+func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSize uint64, eqFn EditDistanceEqualsFn) []Splice {
+	minLength := uint64_min(previousLength, currentLength)
 	prefixCount := sharedPrefix(eqFn, minLength)
 	suffixCount := sharedSuffix(eqFn, previousLength, currentLength, minLength-prefixCount)
 
@@ -71,7 +84,7 @@ func calcSplices(previousLength uint64, currentLength uint64, eqFn EditDistanceE
 	currentEnd := currentLength - suffixCount
 
 	if (currentEnd-currentStart) == 0 && (previousEnd-previousStart) == 0 {
-		return splices
+		return []Splice{}
 	}
 
 	if currentStart == currentEnd {
@@ -80,7 +93,15 @@ func calcSplices(previousLength uint64, currentLength uint64, eqFn EditDistanceE
 		return []Splice{Splice{previousStart, 0, currentEnd - currentStart, currentStart}}
 	}
 
-	distances := calcEditDistances(eqFn, previousStart, previousEnd, currentStart, currentEnd)
+	previousLength = previousEnd - previousStart
+	currentLength = currentEnd - currentStart
+
+	if previousLength*currentLength > maxSpliceMatrixSize {
+		return []Splice{Splice{0, previousLength, currentLength, 0}}
+	}
+
+	splices := make([]Splice, 0)
+	distances := calcEditDistances(eqFn, previousStart, previousLength, currentStart, currentLength)
 	ops := operationsFromEditDistances(distances)
 
 	var splice *Splice
@@ -141,12 +162,13 @@ func calcSplices(previousLength uint64, currentLength uint64, eqFn EditDistanceE
 	return splices
 }
 
-func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previousEnd uint64,
-	currentStart uint64, currentEnd uint64) [][]uint64 {
+func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previousLen uint64,
+	currentStart uint64, currentLen uint64) [][]uint64 {
 	// "Deletion" columns
-	rowCount := previousEnd - previousStart + 1
-	columnCount := currentEnd - currentStart + 1
+	rowCount := previousLen + 1
+	columnCount := currentLen + 1
 
+	// see https://golang.org/doc/effective_go.html#two_dimensional_slices for below allocation optimization
 	distances := make([][]uint64, rowCount)
 	distance := make([]uint64, rowCount*columnCount)
 	for i := range distances {
@@ -170,7 +192,7 @@ func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previous
 			} else {
 				north := distances[i-1][j] + 1
 				west := distances[i][j-1] + 1
-				distances[i][j] = min(north, west)
+				distances[i][j] = uint64_min(north, west)
 			}
 		}
 	}
@@ -198,8 +220,7 @@ func operationsFromEditDistances(distances [][]uint64) []uint64 {
 		west := distances[i-1][j]
 		north := distances[i][j-1]
 
-		minValue := min(west, north)
-		minValue = min(minValue, northWest)
+		minValue := uint64_min3(west, north, northWest)
 
 		if minValue == northWest {
 			if northWest == current {

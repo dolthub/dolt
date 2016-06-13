@@ -44,7 +44,7 @@ func (tl testList) RemoveAt(idx int) testList {
 func (tl testList) Diff(last testList) []Splice {
 	// Note: this could be use tl.toList/last.toList and then tlList.Diff(lastList)
 	// but the purpose of this method is to be redundant.
-	return calcSplices(uint64(len(last)), uint64(len(tl)),
+	return calcSplices(uint64(len(last)), uint64(len(tl)), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
 		func(i uint64, j uint64) bool { return last[i] == tl[j] })
 }
 
@@ -612,10 +612,8 @@ func TestListDiffIdentical(t *testing.T) {
 	nums := generateNumbersAsValues(5)
 	l1 := NewList(nums...)
 	l2 := NewList(nums...)
-	diff1, err1 := l1.Diff(l2)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err1)
-	assert.NoError(err2)
+	diff1 := l1.Diff(l2)
+	diff2 := l2.Diff(l1)
 	assert.Equal(0, len(diff1))
 	assert.Equal(0, len(diff2))
 }
@@ -626,12 +624,14 @@ func TestListDiffVersusEmpty(t *testing.T) {
 	nums1 := generateNumbersAsValues(5)
 	l1 := NewList(nums1...)
 	l2 := NewList()
-	diff1, err1 := l1.Diff(l2)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.Equal(1, len(diff1))
+	diff1 := l1.Diff(l2)
+	diff2 := l2.Diff(l1)
+
 	assert.Equal(len(diff2), len(diff1))
+	diffExpected := []Splice{
+		Splice{0, 0, 5, 0},
+	}
+	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 }
 
 func TestListDiffReverse(t *testing.T) {
@@ -644,12 +644,36 @@ func TestListDiffReverse(t *testing.T) {
 	nums2 := reverseValues(nums1)
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1, err1 := l1.Diff(l2)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.Equal(2, len(diff1))
+	diff1 := l1.Diff(l2)
+	diff2 := l2.Diff(l1)
+
+	diffExpected := []Splice{
+		Splice{0, 5000, 5000, 0},
+	}
+	assert.Equal(diffExpected, diff1, "expected diff is wrong")
+	assert.Equal(diffExpected, diff2, "expected diff is wrong")
+}
+
+func TestListDiffReverseWithLargerLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	t.Parallel()
+	assert := assert.New(t)
+	nums1 := generateNumbersAsValues(5000)
+	nums2 := reverseValues(nums1)
+	l1 := NewList(nums1...)
+	l2 := NewList(nums2...)
+	diff1 := l1.DiffWithLimit(l2, 27e6)
+	diff2 := l2.DiffWithLimit(l1, 27e6)
+
 	assert.Equal(len(diff2), len(diff1))
+	diffExpected := []Splice{
+		Splice{0, 2499, 2500, 0},
+		Splice{2500, 2500, 2499, 2501},
+	}
+	assert.Equal(diffExpected, diff1, "expected diff is wrong")
+	assert.Equal(diffExpected, diff2, "expected diff is wrong")
 }
 
 func TestListDiffRemove5x100(t *testing.T) {
@@ -665,13 +689,10 @@ func TestListDiffRemove5x100(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1, err1 := l1.Diff(l2)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.Equal(5, len(diff2))
-	assert.Equal(len(diff1), len(diff2))
+	diff1 := l1.Diff(l2)
+	diff2 := l2.Diff(l1)
 
+	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
 		Splice{0, 100, 0, 0},
 		Splice{1000, 100, 0, 0},
@@ -695,13 +716,10 @@ func TestListDiffAdd5x5(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1, err1 := l1.Diff(l2)
-	diff2, err2 := l2.Diff(l1)
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.Equal(5, len(diff2))
-	assert.Equal(len(diff1), len(diff2))
+	diff1 := l1.Diff(l2)
+	diff2 := l2.Diff(l1)
 
+	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
 		Splice{5, 0, 5, 5},
 		Splice{1000, 0, 5, 1005},
@@ -726,9 +744,7 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff, err := l2.Diff(l1)
-	assert.NoError(err)
-	assert.Equal(10, len(diff))
+	diff := l2.Diff(l1)
 
 	diffExpected := []Splice{
 		Splice{0, 49, 50, 0},
@@ -745,21 +761,6 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
 
-func TestListDiffLoadLimit(t *testing.T) {
-	t.Parallel()
-	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5)
-	nums2 := generateNumbersAsValues(5000)
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
-	diff1, err1 := l2.DiffWithLoadLimit(l1, 50)
-	diff2, err2 := l1.DiffWithLoadLimit(l2, 50)
-	assert.Nil(diff1)
-	assert.Nil(diff2)
-	assert.Equal("load limit exceeded", err1.Error())
-	assert.Equal("load limit exceeded", err2.Error())
-}
-
 func TestListDiffString1(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
@@ -767,12 +768,8 @@ func TestListDiffString1(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff, err := l2.Diff(l1)
-	assert.NoError(err)
+	diff := l2.Diff(l1)
 	assert.Equal(0, len(diff))
-
-	diffExpected := []Splice{}
-	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
 
 func TestListDiffString2(t *testing.T) {
@@ -782,9 +779,7 @@ func TestListDiffString2(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("three"), NewString("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff, err := l2.Diff(l1)
-	assert.NoError(err)
-	assert.Equal(1, len(diff))
+	diff := l2.Diff(l1)
 
 	diffExpected := []Splice{
 		Splice{3, 0, 1, 3},
@@ -799,9 +794,7 @@ func TestListDiffString3(t *testing.T) {
 	nums2 := []Value{NewString("one"), NewString("two"), NewString("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff, err := l2.Diff(l1)
-	assert.NoError(err)
-	assert.Equal(1, len(diff))
+	diff := l2.Diff(l1)
 
 	diffExpected := []Splice{
 		Splice{2, 1, 1, 2},
@@ -831,13 +824,11 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	refList2 := vs2.ReadValue(ref2).(List)
 
 	// diff lists without value store
-	diff1, err1 := l2.Diff(l1)
-	assert.NoError(err1)
+	diff1 := l2.Diff(l1)
 	assert.Equal(2, len(diff1))
 
 	// diff lists from value stores
-	diff2, err2 := refList2.Diff(refList1)
-	assert.NoError(err2)
+	diff2 := refList2.Diff(refList1)
 	assert.Equal(2, len(diff2))
 
 	// diff without and with value store should be same

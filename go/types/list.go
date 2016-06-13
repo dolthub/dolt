@@ -188,24 +188,24 @@ func (l List) IterAll(f listIterAllFunc) {
 	})
 }
 
-func (l List) Diff(last List) ([]Splice, error) {
-	return l.DiffWithLoadLimit(last, DIFF_WITHOUT_LIMIT)
+func (l List) Diff(last List) []Splice {
+	return l.DiffWithLimit(last, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
-func (l List) DiffWithLoadLimit(last List, loadLimit uint64) ([]Splice, error) {
+func (l List) DiffWithLimit(last List, maxSpliceMatrixSize uint64) []Splice {
 	if l.Equals(last) {
-		return []Splice{}, nil // nothing changed
+		return []Splice{} // nothing changed
 	}
 	lLen, lastLen := l.Len(), last.Len()
 	if lLen == 0 {
-		return []Splice{Splice{0, lastLen, 0, 0}}, nil // everything removed
+		return []Splice{Splice{0, lastLen, 0, 0}} // everything removed
 	}
 	if lastLen == 0 {
-		return []Splice{Splice{0, 0, lLen, 0}}, nil // everything added
+		return []Splice{Splice{0, 0, lLen, 0}} // everything added
 	}
 	lastCur := newCursorAtIndex(last.seq, 0)
 	lCur := newCursorAtIndex(l.seq, 0)
-	return indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, loadLimit)
+	return indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, maxSpliceMatrixSize)
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {

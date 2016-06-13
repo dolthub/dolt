@@ -28,6 +28,7 @@ const UPDATED = 1;
 const INSERTED = 2;
 const REMOVED = 3;
 
+const DISTANCE_MATRIX_LIMIT = 10000;
 
 export function calcSplices(previousLength: number, currentLength: number,
                             eqFn: EqualsFn): Array<Splice> {
@@ -50,6 +51,11 @@ export function calcSplices(previousLength: number, currentLength: number,
     return [[previousStart, previousEnd - previousStart, 0, 0]];
   } else if (previousStart === previousEnd) {
     return [[previousStart, 0, currentEnd - currentStart, currentStart]];
+  }
+
+  if (previousEnd - previousStart > DISTANCE_MATRIX_LIMIT &&
+    currentEnd - currentStart > DISTANCE_MATRIX_LIMIT) {
+    return [[0, previousEnd - previousStart, currentEnd - currentStart, 0]];
   }
 
   const distances = calcEditDistances(eqFn, previousStart, previousEnd, currentStart, currentEnd);
