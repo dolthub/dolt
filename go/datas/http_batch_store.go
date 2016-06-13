@@ -171,10 +171,12 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 	batch := chunks.ReadBatch{}
 	hashes := hashSet{}
 
+	count := 0
 	addReq := func(req chunks.ReadRequest) {
 		hash := req.Hash()
 		batch[hash] = append(batch[hash], req.Outstanding())
 		hashes.Insert(hash)
+		count++
 	}
 
 	addReq(req)
@@ -187,11 +189,10 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 		}
 	}
 
-	fullBatchSize := len(batch)
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
-			bhcs.requestWg.Add(-fullBatchSize)
+			bhcs.requestWg.Add(-count)
 			batch.Close()
 		}()
 
