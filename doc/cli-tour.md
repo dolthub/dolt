@@ -60,28 +60,28 @@ Noms datasets are versioned. You can see the history with `log`:
 ```
 > noms log http://demo.noms.io/cli-tour::film-locations
 
-sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
-Parent: sha1-b50c323c568bfff07a13fe276236cbdf40b5d846
-List<struct Row {
-  ActorQ201: String
-  ActorQ202: String
-  ActorQ203: String
-  Director: String
-  Distributor: String
-  FunQ20Facts: String
-  Locations: String
+sha1-bd662ff9bc708c0bed11cf5609d3a2ab644c7c6d
+Parent: sha1-31a5cc0997fc4053e25ebbb40c0a9fbcc5c942d5
+./[213] {
+-   "Locations": "Mission Delores Park (Mission District) via J-Church MUNI Train"
++   "Locations": "Mission Dolores Park (Mission District) via J-Church MUNI Train"
+./[221] {
+-   "FunFacts": "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest building in San Francisco, built in 1791, and has survived two major earthquakes."
++   "FunFacts": "Mission Dolores' official name is Mission San Francisco de Assis. It is the oldest building in San Francisco, built in 1791, and has survived two major earthquakes."
+-   "Locations": "Mission Delores (3321 16th Street, Mission District)"
++   "Locations": "Mission Dolores (3321 16th Street, Mission District)"
 ...
 
-sha1-b50c323c568bfff07a13fe276236cbdf40b5d846
-Parent: sha1-4883ff49f930718f7aafede265b51f83c99cf7bc
-List<struct Row {
-  ActorQ201: String
-  ActorQ202: String
-  ActorQ203: String
-  Director: String
-  Distributor: String
-  FunQ20Facts: String
-  Locations: String
+sha1-31a5cc0997fc4053e25ebbb40c0a9fbcc5c942d5
+Parent: sha1-a3a49c4f9910a982ec5f58aa0e33f26cecdf26bc
+./ {
++   struct Row {
++     Actor1: String,
++     Actor2: String,
++     Actor3: String,
++     Director: String,
++     Distributor: String,
++     FunFacts: String,
 ...
 ```
 
