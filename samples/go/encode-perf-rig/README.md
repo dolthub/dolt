@@ -8,6 +8,7 @@ Binary is faster no matter the size of the numbers.
 
 As of June 3rd, these are the numbers I get on a MacBook Pro 2.7 GHz Intel Core i5.
 
+```
 $ ./run.sh 
 
 small numbers save a lot of space as strings
@@ -47,6 +48,7 @@ IO  90 MB (10,000,000 nums) in 11.259321946s (8.0 MB/s)
 then if we special case small integers we get even more space savings
 encoding: binary-varint from: 0 to: 10000000 by: 1
 IO  49 MB (10,000,000 nums) in 10.096619263s (4.8 MB/s)
+```
 
 TODO:
 - Implement flag for setting precision
