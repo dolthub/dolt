@@ -58,6 +58,7 @@ func (p *prof) Stop() {
 		runtime.SetBlockProfileRate(0)
 	}
 	if p.cpu != nil {
+		pprof.StopCPUProfile()
 		p.cpu.Close()
 	}
 	if p.mem != nil {
