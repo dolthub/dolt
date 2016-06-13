@@ -32,7 +32,7 @@ import {
   intSequence,
   testRoundTripAndValidate,
 } from './test-util.js';
-import TestDatabase from './test-database.js';
+import {TestDatabase} from './test-util.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 
 const testListSize = 5000;

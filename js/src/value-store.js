@@ -8,7 +8,7 @@ import Chunk from './chunk.js';
 import Hash, {emptyHash} from './hash.js';
 import {constructRef, maxChunkHeight} from './ref.js';
 import type Ref from './ref.js';
-import type BatchStore from './batch-store.js';
+import type {BatchStore} from './batch-store.js';
 import type Value from './value.js';
 import {
   getTypeOfValue,

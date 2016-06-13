@@ -7,18 +7,17 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
-import Database from './database.js';
-import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
-import BatchStore from './batch-store.js';
-import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import Struct, {newStruct} from './struct.js';
-import {flatten, flattenParallel, deriveCollectionHeight} from './test-util.js';
+import {
+  flatten,
+  flattenParallel,
+  deriveCollectionHeight,
+  TestDatabase,
+} from './test-util.js';
 import {invariant, notNull} from './assert.js';
-import Chunk from './chunk.js';
 import Map, {MapLeafSequence} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
-import Hash from './hash.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
@@ -33,20 +32,6 @@ const testMapSize = 1000;
 const mapOfNRef = 'sha1-9fce950ce2606ced8681a695b608384c642ffb53';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
-
-class CountingMemoryStore extends MemoryStore {
-  getCount: number;
-
-  constructor() {
-    super();
-    this.getCount = 0;
-  }
-
-  get(hash: Hash): Promise<Chunk> {
-    this.getCount++;
-    return super.get(hash);
-  }
-}
 
 function intKVs(count: number): [[number, number]] {
   const kvs = [];
@@ -181,7 +166,7 @@ suite('BuildMap', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const kvs = intKVs(testMapSize);
 
@@ -205,7 +190,7 @@ suite('BuildMap', () => {
   });
 
   test('LONG: union write, read, modify, read', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const keys = [];
     const kvs = [];
@@ -295,7 +280,7 @@ suite('MapLeaf', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -405,7 +390,7 @@ suite('CompoundMap', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -606,8 +591,7 @@ suite('CompoundMap', () => {
       return testRandomDiff(mapSize, inM1, inM2, inBoth);
     }
 
-    const ms = new CountingMemoryStore();
-    const db = new Database(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
+    const db = new TestDatabase();
     [m1, m2] = await Promise.all([m1, m2].map(s => db.readValue(db.writeValue(s).targetHash)));
 
     assert.deepEqual([[], [], []], await m1.diff(m1));

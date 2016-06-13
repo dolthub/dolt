@@ -5,7 +5,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {invariant} from './assert.js';
-import BatchStoreAdaptor from './batch-store-adaptor.js';
 import Database from './database.js';
 import Hash from './hash.js';
 import {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
@@ -31,7 +30,6 @@ suite('Specs', () => {
       assert.equal(spec.path, tc.path);
       const database = spec.database();
       assert.instanceOf(database, Database);
-      assert.instanceOf(database._vs._bs, BatchStoreAdaptor);
       await database.close();
     });
   });
@@ -68,7 +66,6 @@ suite('Specs', () => {
       assert.equal(spec.name, 'ds');
       const database = spec.database.database();
       assert.instanceOf(database, Database);
-      assert.instanceOf(database._vs._bs, BatchStoreAdaptor);
       await database.close();
     });
   });

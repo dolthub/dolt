@@ -11,7 +11,7 @@ import Set from './set.js';
 import type Value from './value.js';
 import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
-import BatchStore from './batch-store.js';
+import type {BatchStore} from './batch-store.js';
 import {
   makeRefType,
   makeStructType,

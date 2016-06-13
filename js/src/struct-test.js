@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {TestDatabase} from './test-util.js';
 import Struct, {
   newStruct,
   newStructWithType,
@@ -23,7 +23,6 @@ import {
   valueType,
 } from './type.js';
 import {suite, test} from 'mocha';
-import Database from './database.js';
 import {equals} from './compare.js';
 import List from './list.js';
 import Map from './map.js';
@@ -39,7 +38,7 @@ suite('Struct', () => {
   });
 
   test('chunks', () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const b = true;
     const r = db.writeValue(b);

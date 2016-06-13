@@ -5,8 +5,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import Hash from './hash.js';
-import BatchStore from './batch-store.js';
-import type {UnsentReadMap} from './batch-store.js';
+import RemoteBatchStore from './remote-batch-store.js';
+import type {UnsentReadMap} from './remote-batch-store.js';
 import type {FetchOptions} from './fetch.js';
 import type {ChunkStream} from './chunk-serializer.js';
 import {serialize, deserializeChunks} from './chunk-serializer.js';
@@ -29,7 +29,7 @@ const readBatchOptions = {
   },
 };
 
-export default class HttpBatchStore extends BatchStore {
+export default class HttpBatchStore extends RemoteBatchStore {
   _rpc: RpcStrings;
 
   constructor(urlparam: string, maxReads: number = 5, fetchOptions: FetchOptions = {}) {

@@ -7,24 +7,16 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import MemoryStore from './memory-store.js';
-import type {ChunkStore} from './chunk-store.js';
-import BatchStore from './batch-store.js';
-import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
+import {BatchStoreAdaptor} from './batch-store.js';
 import ValueStore from './value-store.js';
 import List from './list.js';
 import {encodeValue} from './codec.js';
 import {equals} from './compare.js';
 
-export class FakeBatchStore extends BatchStore {
-  constructor(cs: ChunkStore) {
-    super(3, new BatchStoreAdaptorDelegate(cs));
-  }
-}
-
 suite('ValueStore', () => {
   test('readValue', async () => {
     const ms = new MemoryStore();
-    const vs = new ValueStore(new FakeBatchStore(ms));
+    const vs = new ValueStore(new BatchStoreAdaptor(ms));
     const input = 'abc';
 
     const c = encodeValue(input);
@@ -38,7 +30,7 @@ suite('ValueStore', () => {
   });
 
   test('writeValue primitives', async () => {
-    const vs = new ValueStore(new FakeBatchStore(new MemoryStore()));
+    const vs = new ValueStore(new BatchStoreAdaptor(new MemoryStore()));
 
     const r1 = vs.writeValue('hello').targetHash;
     const r2 = vs.writeValue(false).targetHash;
@@ -54,7 +46,7 @@ suite('ValueStore', () => {
   });
 
   test('writeValue rejects invalid', async () => {
-    const bs = new FakeBatchStore(new MemoryStore());
+    const bs = new BatchStoreAdaptor(new MemoryStore());
     let vs = new ValueStore(bs);
     const r = vs.writeValue('hello');
     vs.flush().then(() => { vs.close(); });
@@ -72,7 +64,7 @@ suite('ValueStore', () => {
   });
 
   test('write coalescing', async () => {
-    const bs = new FakeBatchStore(new MemoryStore());
+    const bs = new BatchStoreAdaptor(new MemoryStore());
     const vs = new ValueStore(bs, 1e6);
 
     const r1 = vs.writeValue('hello').targetHash;
@@ -83,7 +75,7 @@ suite('ValueStore', () => {
   });
 
   test('read caching', async () => {
-    const bs = new FakeBatchStore(new MemoryStore());
+    const bs = new BatchStoreAdaptor(new MemoryStore());
     const vs = new ValueStore(bs, 1e6);
 
     const r1 = vs.writeValue('hello').targetHash;
@@ -96,7 +88,7 @@ suite('ValueStore', () => {
   });
 
   test('caching eviction', async () => {
-    const bs = new FakeBatchStore(new MemoryStore());
+    const bs = new BatchStoreAdaptor(new MemoryStore());
     const vs = new ValueStore(bs, 15);
 
     const r1 = vs.writeValue('hello').targetHash;
@@ -121,7 +113,7 @@ suite('ValueStore', () => {
   });
 
   test('hints on cache', async () => {
-    const bs = new FakeBatchStore(new MemoryStore());
+    const bs = new BatchStoreAdaptor(new MemoryStore());
     const vs = new ValueStore(bs, 15);
 
     const l = new List([vs.writeValue(1), vs.writeValue(2)]);

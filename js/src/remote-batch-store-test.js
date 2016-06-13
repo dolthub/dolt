@@ -6,15 +6,12 @@
 
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
-import MemoryStore from './memory-store.js';
-import BatchStore from './batch-store.js';
-import {BatchStoreAdaptorDelegate} from './batch-store-adaptor.js';
+import {makeTestingRemoteBatchStore} from './remote-batch-store.js';
 import {encodeValue} from './codec.js';
 
 suite('BatchStore', () => {
   test('get after schedulePut works immediately', async () => {
-    const ms = new MemoryStore();
-    const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
+    const bs = makeTestingRemoteBatchStore();
     const input = 'abc';
 
     const c = encodeValue(input);
@@ -26,8 +23,7 @@ suite('BatchStore', () => {
   });
 
   test('get after schedulePut works after flush', async () => {
-    const ms = new MemoryStore();
-    const bs = new BatchStore(3, new BatchStoreAdaptorDelegate(ms));
+    const bs = makeTestingRemoteBatchStore();
     const input = 'abc';
 
     const c = encodeValue(input);

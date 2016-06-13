@@ -9,21 +9,20 @@ import {suite, test} from 'mocha';
 import {assert} from 'chai';
 
 import Blob from './blob.js';
-import Database from './database.js';
 import Hash from './hash.js';
 import List, {newListLeafSequence} from './list.js';
 import Map from './map.js';
 import Ref, {constructRef} from './ref.js';
 import Set, {newSetLeafSequence} from './set.js';
+import ValueDecoder from './value-decoder.js';
+import ValueEncoder from './value-encoder.js';
 import type Value from './value.js';
 import type {NomsKind} from './noms-kind.js';
 import {Kind} from './noms-kind.js';
-import ValueDecoder from './value-decoder.js';
-import ValueEncoder from './value-encoder.js';
+import {TestDatabase} from './test-util.js';
 import {encodeValue, decodeValue} from './codec.js';
 import {equals} from './compare.js';
 import {invariant} from './assert.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {newStruct, newStructWithType} from './struct.js';
 import {
   MetaTuple,
@@ -45,7 +44,7 @@ import {
 } from './type.js';
 
 function assertRoundTrips(v: Value) {
-  const db = new Database(makeTestingBatchStore());
+  const db = new TestDatabase();
   const c = encodeValue(v, db);
   const out = decodeValue(c, db);
   assert.isTrue(equals(v, out));

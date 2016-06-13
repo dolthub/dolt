@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import BatchStoreAdaptor from './batch-store-adaptor.js';
+import {BatchStoreAdaptor} from './batch-store.js';
 import Dataset from './dataset.js';
 import Database from './database.js';
 import HttpBatchStore from './http-batch-store.js';

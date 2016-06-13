@@ -7,8 +7,7 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 import type Value from './value.js';
-import Database from './database.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {TestDatabase} from './test-util.js';
 
 export class TestValue {
   _value: Value;
@@ -27,7 +26,7 @@ suite('cross platform test', () => {
   // assert the values are equal and
   // verify the digest is what we expect
   async function roundTripDigestTest(t: TestValue): Promise<void> {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
     const r = db.writeValue(t._value);
     const v2 = await db.readValue(r.targetHash);
     assert.strictEqual(v2, t._value, t._description);

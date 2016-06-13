@@ -17,7 +17,7 @@ import {
 } from './test-util.js';
 import {invariant} from './assert.js';
 import {equals} from './compare.js';
-import TestDatabase from './test-database.js';
+import {TestDatabase} from './test-util.js';
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go

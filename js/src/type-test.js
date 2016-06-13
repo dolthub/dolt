@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {TestDatabase} from './test-util.js';
 import {assert} from 'chai';
 import {
   boolType,
@@ -18,12 +18,11 @@ import {
   getTypeOfValue,
 } from './type.js';
 import {suite, test} from 'mocha';
-import Database from './database.js';
 import {equals} from './compare.js';
 
 suite('Type', () => {
   test('types', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);

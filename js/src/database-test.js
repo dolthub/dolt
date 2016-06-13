@@ -5,7 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {suite, test} from 'mocha';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {makeTestingRemoteBatchStore} from './remote-batch-store.js';
 import {emptyHash} from './hash.js';
 import {assert} from 'chai';
 import Commit from './commit.js';
@@ -19,7 +19,7 @@ import {equals} from './compare.js';
 
 suite('Database', () => {
   test('access', async () => {
-    const bs = makeTestingBatchStore();
+    const bs = makeTestingRemoteBatchStore();
     const ds = new Database(bs);
     const input = 'abc';
 
@@ -36,7 +36,7 @@ suite('Database', () => {
   });
 
   test('commit', async () => {
-    const bs = new makeTestingBatchStore();
+    const bs = makeTestingRemoteBatchStore();
     let ds = new Database(bs);
     const datasetID = 'ds1';
 
@@ -111,7 +111,7 @@ suite('Database', () => {
   });
 
   test('concurrency', async () => {
-    const bs = new makeTestingBatchStore();
+    const bs = makeTestingRemoteBatchStore();
     let ds = new Database(bs);
     const datasetID = 'ds1';
 
@@ -151,14 +151,14 @@ suite('Database', () => {
 
 
   test('empty datasets', async () => {
-    const ds = new Database(makeTestingBatchStore());
+    const ds = new Database(makeTestingRemoteBatchStore());
     const datasets = await ds.datasets();
     assert.strictEqual(0, datasets.size);
     await ds.close();
   });
 
   test('head', async () => {
-    const bs = new makeTestingBatchStore();
+    const bs = makeTestingRemoteBatchStore();
     let ds = new Database(bs);
 
     const commit = new Commit('foo');
@@ -179,7 +179,7 @@ suite('Database', () => {
   });
 
   test('height of refs', async () => {
-    const ds = new Database(new makeTestingBatchStore());
+    const ds = new Database(new makeTestingRemoteBatchStore());
 
     const v1 = ds.writeValue('hello');
     assert.strictEqual(1, v1.height);
@@ -191,7 +191,7 @@ suite('Database', () => {
   });
 
   test('height of collections', async() => {
-    const ds = new Database(new makeTestingBatchStore());
+    const ds = new Database(new makeTestingRemoteBatchStore());
 
     // Set<String>.
     const v1 = 'hello';

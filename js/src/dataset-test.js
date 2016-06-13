@@ -5,7 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {suite, test} from 'mocha';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
+import {makeTestingRemoteBatchStore} from './remote-batch-store.js';
 import {assert} from 'chai';
 import Dataset from './dataset.js';
 import Database from './database.js';
@@ -13,7 +13,7 @@ import {invariant, notNull} from './assert.js';
 
 suite('Dataset', () => {
   test('commit', async () => {
-    const bs = makeTestingBatchStore();
+    const bs = makeTestingRemoteBatchStore();
     const db = new Database(bs);
     let ds = new Dataset(db, 'ds1');
 
@@ -65,7 +65,7 @@ suite('Dataset', () => {
   });
 
   test('id validation', () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new Database(makeTestingRemoteBatchStore());
 
     const invalidDatasetNames = [' ', '', 'a ', ' a', '$', '#', ':', '\n', '💩'];
     for (const s of invalidDatasetNames) {

@@ -13,8 +13,24 @@ import {AsyncIterator} from './async-iterator.js';
 import {getChunksOfValue, ValueBase} from './value.js';
 import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, Type} from './type.js';
-import {makeTestingBatchStore} from './batch-store-adaptor.js';
 import {equals} from './compare.js';
+import {BatchStoreAdaptor} from './batch-store.js';
+import MemoryStore from './memory-store.js';
+import type Ref from './ref.js';
+
+export class TestDatabase extends Database {
+  writeCount: number;
+
+  constructor() {
+    super(new BatchStoreAdaptor(new MemoryStore()));
+    this.writeCount = 0;
+  }
+
+  writeValue<T: Value>(v: T): Ref<T> {
+    this.writeCount++;
+    return super.writeValue(v);
+  }
+}
 
 export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   const values = [];
@@ -51,11 +67,11 @@ export function assertChunkCountAndType(expectCount: number, expectType: Type,
 
 export async function testRoundTripAndValidate<T: Value>(v: T,
       validateFn: (v2: T) => Promise<void>): Promise<void> {
-  const bs = makeTestingBatchStore();
-  const ds = new Database(bs);
+  const ms = new MemoryStore();
+  const ds = new Database(new BatchStoreAdaptor(ms));
 
   const r1 = await ds.writeValue(v).targetHash;
-  const ds2 = new Database(bs);
+  const ds2 = new Database(new BatchStoreAdaptor(ms));
 
   const v2 = await ds2.readValue(r1);
   if (v instanceof ValueBase) {

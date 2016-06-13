@@ -7,19 +7,19 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
-import BatchStore from './batch-store.js';
-import Chunk from './chunk.js';
-import Database from './database.js';
-import Hash from './hash.js';
-import MemoryStore from './memory-store.js';
 import Ref from './ref.js';
 import Set, {SetLeafSequence} from './set.js';
 import type {ValueReadWriter} from './value-store.js';
-import {BatchStoreAdaptorDelegate, makeTestingBatchStore} from './batch-store-adaptor.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {OrderedSequence} from './ordered-sequence.js';
 import {compare, equals} from './compare.js';
-import {flatten, flattenParallel, intSequence, deriveCollectionHeight} from './test-util.js';
+import {
+  flatten,
+  flattenParallel,
+  intSequence,
+  deriveCollectionHeight,
+  TestDatabase,
+} from './test-util.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
@@ -34,20 +34,6 @@ const testSetSize = 5000;
 const setOfNRef = 'sha1-1fc97c4e369770b643e013569c68687765601514';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
-
-class CountingMemoryStore extends MemoryStore {
-  getCount: number;
-
-  constructor() {
-    super();
-    this.getCount = 0;
-  }
-
-  get(hash: Hash): Promise<Chunk> {
-    this.getCount++;
-    return super.get(hash);
-  }
-}
 
 async function validateSet(s: Set, values: number[]): Promise<void> {
   assert.isTrue(equals(new Set(values), s));
@@ -153,7 +139,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: write, read, modify, read', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const nums = intSequence(testSetSize);
     const s = new Set(nums);
@@ -175,7 +161,7 @@ suite('BuildSet', () => {
   });
 
   test('LONG: union write, read, modify, read', async () => {
-    const db = new Database(makeTestingBatchStore());
+    const db = new TestDatabase();
 
     const tmp = intSequence(testSetSize);
     const numbers = [];
@@ -236,7 +222,7 @@ suite('SetLeaf', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -325,7 +311,7 @@ suite('CompoundSet', () => {
   let db;
 
   setup(() => {
-    db = new Database(makeTestingBatchStore());
+    db = new TestDatabase();
   });
 
   teardown((): Promise<void> => db.close());
@@ -622,8 +608,7 @@ suite('CompoundSet', () => {
       return testRandomDiff(setSize, inS1, inS2);
     }
 
-    const ms = new CountingMemoryStore();
-    const db = new Database(new BatchStore(3, new BatchStoreAdaptorDelegate(ms)));
+    const db = new TestDatabase();
     [s1, s2] = await Promise.all([s1, s2].map(s => db.readValue(db.writeValue(s).targetHash)));
 
     assert.deepEqual([[], []], await s1.diff(s1));
