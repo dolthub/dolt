@@ -89,7 +89,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 		return sink, nil
 	}
 
-	datas.Pull(source, sink.Database(), sourceRef, sinkHeadRef)
+	datas.Pull(source, sink.Database(), sourceRef, sinkHeadRef, concurrency)
 	err := datas.ErrOptimisticLockFailed
 	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.setNewHead(sourceRef) {
 	}

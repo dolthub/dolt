@@ -6,6 +6,7 @@ package datas
 
 import (
 	"container/heap"
+	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -14,7 +15,7 @@ import (
 
 // Pull objects that descends from sourceRef from srcDB to sinkDB. sinkHeadRef should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This allows the algorithm to figure out which portions of data are already present in sinkDB and skip copying them.
 // TODO: Figure out how to add concurrency.
-func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref) {
+func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int) {
 	srcQ, sinkQ := types.RefHeap{sourceRef}, types.RefHeap{sinkHeadRef}
 	heap.Init(&srcQ)
 	heap.Init(&sinkQ)
@@ -24,32 +25,97 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref) {
 		heap.Pop(&sinkQ)
 	}
 
-	hc := hintCache{}
-	reachableChunks := hashSet{}
-
 	// Since we expect sourceRef to descend from sinkHeadRef, we assume srcDB has a superset of the data in sinkDB. There are some cases where, logically, the code wants to read data it knows to be in sinkDB. In this case, it doesn't actually matter which Database the data comes from, so as an optimization we use whichever is a LocalDatabase -- if either is.
 	mostLocalDB := srcDB
 	if _, ok := sinkDB.(*LocalDatabase); ok {
 		mostLocalDB = sinkDB
 	}
+	// traverseWorker below takes refs off of {src,sink,com}Chan, processes them to figure out what reachable refs should be traversed, and then sends the results to {srcRes,sinkRes,comRes}Chan.
+	// sending to (or closing) the 'done' channel causes traverseWorkers to exit.
+	srcChan := make(chan types.Ref)
+	sinkChan := make(chan types.Ref)
+	comChan := make(chan types.Ref)
+	srcResChan := make(chan traverseResult)
+	sinkResChan := make(chan traverseResult)
+	comResChan := make(chan traverseResult)
+	done := make(chan struct{})
 
+	workerWg := &sync.WaitGroup{}
+	defer func() {
+		close(done)
+		workerWg.Wait()
+
+		close(srcChan)
+		close(sinkChan)
+		close(comChan)
+		close(srcResChan)
+		close(sinkResChan)
+		close(comResChan)
+	}()
+	traverseWorker := func() {
+		workerWg.Add(1)
+		go func() {
+			for {
+				select {
+				case srcRef := <-srcChan:
+					srcResChan <- traverseSource(srcRef, srcDB, sinkDB)
+				case sinkRef := <-sinkChan:
+					sinkResChan <- traverseSink(sinkRef, mostLocalDB)
+				case comRef := <-comChan:
+					comResChan <- traverseCommon(comRef, sinkHeadRef, mostLocalDB)
+				case <-done:
+					workerWg.Done()
+					return
+				}
+			}
+		}()
+	}
+	for i := 0; i < concurrency; i++ {
+		traverseWorker()
+	}
+
+	// hc and reachableChunks aren't goroutine-safe, so only write them here.
+	hc := hintCache{}
+	reachableChunks := hashSet{}
 	for !srcQ.Empty() {
-		srcRef := srcQ[0]
+		srcRefs, sinkRefs, comRefs := planWork(&srcQ, &sinkQ)
+		srcWork, sinkWork, comWork := len(srcRefs), len(sinkRefs), len(comRefs)
 
-		// If the head of one Q is "higher" than the other, traverse it and then loop again. "HigherThan" sorts first by greater ref-height, then orders Refs by TargetHash.
-		if sinkQ.Empty() || types.HigherThan(srcRef, sinkQ[0]) {
-			traverseSource(&srcQ, srcDB, sinkDB, reachableChunks)
-			continue
-		}
-		// Either the head of sinkQ is higher, or the heads of both queues are equal.
-		if types.HigherThan(sinkQ[0], srcRef) {
-			traverseSink(&sinkQ, mostLocalDB, hc)
-			continue
-		}
+		// These goroutines send work to traverseWorkers, blocking when all are busy. They self-terminate when they've sent all they have.
+		go sendWork(srcChan, srcRefs)
+		go sendWork(sinkChan, sinkRefs)
+		go sendWork(comChan, comRefs)
+		//  Don't use srcRefs, sinkRefs, or comRefs after this point. The goroutines above own them.
 
-		// The heads of both Qs are the same.
-		d.Chk.True(!sinkQ.Empty(), "The heads should be the same, but sinkQ is empty!")
-		traverseCommon(sinkHeadRef, &sinkQ, &srcQ, mostLocalDB, hc)
+		for srcWork+sinkWork+comWork > 0 {
+			select {
+			case res := <-srcResChan:
+				for _, reachable := range res.reachables {
+					heap.Push(&srcQ, reachable)
+					reachableChunks.Insert(reachable.TargetHash())
+				}
+				if !res.readHash.IsEmpty() {
+					reachableChunks.Remove(res.readHash)
+				}
+				srcWork--
+			case res := <-sinkResChan:
+				for _, reachable := range res.reachables {
+					heap.Push(&sinkQ, reachable)
+					hc[reachable.TargetHash()] = res.readHash
+				}
+				sinkWork--
+			case res := <-comResChan:
+				isHeadOfSink := res.readHash == sinkHeadRef.TargetHash()
+				for _, reachable := range res.reachables {
+					heap.Push(&sinkQ, reachable)
+					if !isHeadOfSink {
+						heap.Push(&srcQ, reachable)
+					}
+					hc[reachable.TargetHash()] = res.readHash
+				}
+				comWork--
+			}
+		}
 	}
 	hints := types.Hints{}
 	for hash := range reachableChunks {
@@ -60,59 +126,116 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref) {
 	sinkDB.batchStore().AddHints(hints)
 }
 
-type hintCache map[hash.Hash]hash.Hash
-
-func traverseSource(srcQ *types.RefHeap, src Database, sinkDB Database, reachableChunks hashSet) {
-	srcRef := heap.Pop(srcQ).(types.Ref)
-	h := srcRef.TargetHash()
-	if !sinkDB.has(h) {
-		srcBS := src.batchStore()
-		c := srcBS.Get(h)
-		v := types.DecodeValue(c, src)
-		d.Chk.True(v != nil, "Expected decoded chunk to be non-nil.")
-		for _, reachable := range v.Chunks() {
-			heap.Push(srcQ, reachable)
-			reachableChunks.Insert(reachable.TargetHash())
-		}
-		sinkDB.batchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
-		delete(reachableChunks, h)
-	}
+type traverseResult struct {
+	readHash   hash.Hash
+	reachables types.RefSlice
 }
 
-func traverseSink(sinkQ *types.RefHeap, db Database, hc hintCache) {
-	sinkRef := heap.Pop(sinkQ).(types.Ref)
-	if sinkRef.Height() > 1 {
-		h := sinkRef.TargetHash()
-		for _, reachable := range sinkRef.TargetValue(db).Chunks() {
-			heap.Push(sinkQ, reachable)
-			hc[reachable.TargetHash()] = h
-		}
-	}
-}
-
-func traverseCommon(sinkHead types.Ref, sinkQ, srcQ *types.RefHeap, db Database, hc hintCache) {
-	comRef, sinkRef := heap.Pop(srcQ).(types.Ref), heap.Pop(sinkQ).(types.Ref)
-	d.Chk.True(comRef.Equals(sinkRef), "traverseCommon expects refs to be equal: %s != %s", comRef.TargetHash(), sinkRef.TargetHash())
-	if comRef.Height() == 1 {
+// planWork deals with three possible situations:
+// - head of srcQ is higher than head of sinkQ
+// - head of sinkQ is higher than head of srcQ
+// - both heads are at the same height
+//
+// As we build up lists of refs to be processed in parallel, we need to avoid blowing past potential common refs. This could happen if we're too aggressive about pulling refs off the 'lower' queue. For now, if one queue is higher than the other we'll run down it and stop once we hit a ref at the same height as the head of the lower queue. If the two queues are at the same height, then just process them in tandem, checking for any that might be in common.
+func planWork(srcQ, sinkQ *types.RefHeap) (srcRefs, sinkRefs, comRefs types.RefSlice) {
+	srcHt, sinkHt := headHeight(srcQ), headHeight(sinkQ)
+	if srcHt > sinkHt {
+		srcRefs = burnDown(srcQ, srcHt, sinkHt)
 		return
 	}
-	if comRef.Type().Equals(refOfCommitType) {
+	if sinkHt > srcHt {
+		sinkRefs = burnDown(sinkQ, sinkHt, srcHt)
+		return
+	}
+
+	d.Chk.True(srcHt == sinkHt, "%d != %d", srcHt, sinkHt)
+	stopHt := srcHt
+	for ; srcHt == stopHt || sinkHt == stopHt; srcHt, sinkHt = headHeight(srcQ), headHeight(sinkQ) {
+		srcPeek, sinkPeek := peek(srcQ), peek(sinkQ)
+		if types.HeapOrder(sinkPeek, srcPeek) {
+			sinkRefs = append(sinkRefs, heap.Pop(sinkQ).(types.Ref))
+			continue
+		}
+		if types.HeapOrder(srcPeek, sinkPeek) {
+			srcRefs = append(srcRefs, heap.Pop(srcQ).(types.Ref))
+			continue
+		}
+		d.Chk.True(!sinkQ.Empty(), "The heads should be the same, but sinkQ is empty!")
+		d.Chk.True(srcPeek.Equals(sinkPeek), "Refs should be equal: %s != %s", srcPeek.TargetHash(), sinkPeek.TargetHash())
+		heap.Pop(sinkQ)
+		comRefs = append(comRefs, heap.Pop(srcQ).(types.Ref))
+	}
+	return
+}
+
+func burnDown(q *types.RefHeap, start, stop uint64) (refs types.RefSlice) {
+	for ht := start; ht > stop; ht = headHeight(q) {
+		refs = append(refs, heap.Pop(q).(types.Ref))
+	}
+	return
+}
+
+func headHeight(h *types.RefHeap) (height uint64) {
+	if !h.Empty() {
+		height = (*h)[0].Height()
+	}
+	return
+}
+
+func peek(h *types.RefHeap) (head types.Ref) {
+	if !h.Empty() {
+		head = (*h)[0]
+	}
+	return
+}
+
+func sendWork(ch chan<- types.Ref, refs types.RefSlice) {
+	for _, r := range refs {
+		ch <- r
+	}
+}
+
+type hintCache map[hash.Hash]hash.Hash
+
+func traverseSource(srcRef types.Ref, srcDB, sinkDB Database) traverseResult {
+	h := srcRef.TargetHash()
+	if !sinkDB.has(h) {
+		srcBS := srcDB.batchStore()
+		c := srcBS.Get(h)
+		v := types.DecodeValue(c, srcDB)
+		d.Chk.True(v != nil, "Expected decoded chunk to be non-nil.")
+		sinkDB.batchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
+		return traverseResult{h, v.Chunks()}
+	}
+	return traverseResult{}
+}
+
+func traverseSink(sinkRef types.Ref, db Database) traverseResult {
+	if sinkRef.Height() > 1 {
+		return traverseResult{sinkRef.TargetHash(), sinkRef.TargetValue(db).Chunks()}
+	}
+	return traverseResult{}
+}
+
+func traverseCommon(comRef, sinkHead types.Ref, db Database) traverseResult {
+	if comRef.Height() > 1 && comRef.Type().Equals(refOfCommitType) {
 		commit := comRef.TargetValue(db).(types.Struct)
 		// We don't want to traverse the parents of sinkHead, but we still want to traverse its Value on the sinkDB side. We also still want to traverse all children, in both the srcDB and sinkDB, of any common Commit that is not at the Head of sinkDB.
-		isHeadOfSink := comRef.Equals(sinkHead)
 		exclusionSet := types.NewSet()
-		if isHeadOfSink {
+		if comRef.Equals(sinkHead) {
 			exclusionSet = commit.Get(ParentsField).(types.Set)
 		}
-		commitHash := comRef.TargetHash()
-		for _, reachable := range commit.Chunks() {
-			if !exclusionSet.Has(reachable) {
-				heap.Push(sinkQ, reachable)
-				if !isHeadOfSink {
-					heap.Push(srcQ, reachable)
-				}
-				hc[reachable.TargetHash()] = commitHash
+		chunks := types.RefSlice(commit.Chunks())
+		for i := 0; i < len(chunks); {
+			if exclusionSet.Has(chunks[i]) {
+				end := len(chunks) - 1
+				chunks.Swap(i, end)
+				chunks = chunks[:end]
+				continue
 			}
+			i++
 		}
+		return traverseResult{comRef.TargetHash(), chunks}
 	}
+	return traverseResult{}
 }
