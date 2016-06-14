@@ -102,6 +102,10 @@ func respWriter(req *http.Request, w http.ResponseWriter) (writer io.WriteCloser
 		w.Header().Add("Content-Encoding", "gzip")
 		gw := gzip.NewWriter(w)
 		writer = gw
+	} else if strings.Contains(req.Header.Get("Accept-Encoding"), "x-snappy-framed") {
+		w.Header().Add("Content-Encoding", "x-snappy-framed")
+		sw := snappy.NewBufferedWriter(w)
+		writer = sw
 	}
 	return
 }

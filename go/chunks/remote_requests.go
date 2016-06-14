@@ -85,20 +85,3 @@ func (rb *ReadBatch) Close() error {
 	}
 	return nil
 }
-
-// Put is implemented so that ReadBatch implements the ChunkSink interface.
-func (rb *ReadBatch) Put(c Chunk) {
-	for _, or := range (*rb)[c.Hash()] {
-		or.Satisfy(c)
-	}
-
-	delete(*rb, c.Hash())
-}
-
-// PutMany is implemented so that ReadBatch implements the ChunkSink interface.
-func (rb *ReadBatch) PutMany(chunks []Chunk) (e BackpressureError) {
-	for _, c := range chunks {
-		rb.Put(c)
-	}
-	return
-}
