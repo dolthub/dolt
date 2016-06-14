@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/csv"
 	"github.com/attic-labs/noms/samples/go/util"
 )
@@ -52,6 +53,8 @@ func main() {
 	util.CheckError(err)
 
 	err = d.Try(func() {
+		defer profile.MaybeStartProfile().Stop()
+
 		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.Head().Get(datas.ValueField), ds.Database())
 		csv.Write(nomsList, structDesc, comma, os.Stdout)
 	})
