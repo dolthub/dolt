@@ -12,7 +12,7 @@ func (h RefHeap) Len() int {
 }
 
 func (h RefHeap) Less(i, j int) bool {
-	return HigherThan(h[i], h[j])
+	return HeapOrder(h[i], h[j])
 }
 
 func (h RefHeap) Swap(i, j int) {
@@ -31,12 +31,12 @@ func (h *RefHeap) Pop() interface{} {
 	return x
 }
 
-func (h *RefHeap) Empty() bool {
-	return len(*h) == 0
+func (h RefHeap) Empty() bool {
+	return len(h) == 0
 }
 
-// HigherThan returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
-func HigherThan(a, b Ref) bool {
+// HeapOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
+func HeapOrder(a, b Ref) bool {
 	if a.Height() == b.Height() {
 		return a.TargetHash().Less(b.TargetHash())
 	}

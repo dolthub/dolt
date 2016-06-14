@@ -58,6 +58,10 @@ func (hs hashSet) Has(hash hash.Hash) (has bool) {
 	return
 }
 
+func (hs hashSet) Remove(hash hash.Hash) {
+	delete(hs, hash)
+}
+
 // Insert can be called from any goroutine to store c in the cache. If c is successfully added to the cache, Insert returns true. If c was already in the cache, Insert returns false.
 func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 	hash := c.Hash()

@@ -108,7 +108,7 @@ func (suite *PullSuite) TestPullEverything() {
 	l := buildListOfHeight(2, suite.source)
 	sourceRef := suite.commitToSource(l, types.NewSet())
 
-	Pull(suite.source, suite.sink, sourceRef, types.Ref{})
+	Pull(suite.source, suite.sink, sourceRef, types.Ref{}, 2)
 	suite.Equal(0, suite.sinkCS.Reads)
 
 	suite.sink.batchStore().Flush()
@@ -148,7 +148,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	srcL = buildListOfHeight(5, suite.source)
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef)
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
 	if suite.sinkIsLocal() {
 		// C1 gets read from most-local DB
 		expectedReads++
@@ -195,7 +195,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 	preReads := suite.sinkCS.Reads
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef)
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
 
 	// No objects read from sink, since sink Head is not an ancestor of source HEAD.
 	suite.Equal(preReads, suite.sinkCS.Reads)
@@ -236,7 +236,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	srcL = srcL.Set(1, suite.source.WriteValue(L3))
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef)
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
 
 	if suite.sinkIsLocal() {
 		// 3 objects read from sink: L3, L2 and C1 (when considering the shared commit).
