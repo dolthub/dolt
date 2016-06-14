@@ -7,6 +7,8 @@
 // This is a port (to flowtype, with minor modifications) of
 // https://github.com/Polymer/observe-js/blob/master/src/observe.js#L1309.
 
+export const DEFAULT_MAX_SPLICE_MATRIX_SIZE = 2e7; // eslint-disable-line no-unused-vars
+
 export const SPLICE_UNASSIGNED = -1;
 export const SPLICE_AT = 0;
 export const SPLICE_REMOVED = 1;
@@ -28,11 +30,9 @@ const UPDATED = 1;
 const INSERTED = 2;
 const REMOVED = 3;
 
-const DISTANCE_MATRIX_LIMIT = 10000;
-
 export function calcSplices(previousLength: number, currentLength: number,
+                            maxSpliceMatrixSize: number,
                             eqFn: EqualsFn): Array<Splice> {
-
   const minLength = Math.min(previousLength, currentLength);
   const prefixCount = sharedPrefix(eqFn, minLength);
   const suffixCount = sharedSuffix(eqFn, previousLength, currentLength, minLength - prefixCount);
@@ -53,12 +53,15 @@ export function calcSplices(previousLength: number, currentLength: number,
     return [[previousStart, 0, currentEnd - currentStart, currentStart]];
   }
 
-  if (previousEnd - previousStart > DISTANCE_MATRIX_LIMIT &&
-    currentEnd - currentStart > DISTANCE_MATRIX_LIMIT) {
-    return [[0, previousEnd - previousStart, currentEnd - currentStart, 0]];
+  previousLength = previousEnd - previousStart;
+  currentLength = currentEnd - currentStart;
+
+  if (previousLength * currentLength > maxSpliceMatrixSize) {
+    return [[0, previousLength, currentLength, 0]];
   }
 
-  const distances = calcEditDistances(eqFn, previousStart, previousEnd, currentStart, currentEnd);
+  const distances = calcEditDistances(eqFn, previousStart, previousLength, currentStart,
+    currentLength);
   const ops = operationsFromEditDistances(distances);
 
   const splices = [];
@@ -127,12 +130,12 @@ export function calcSplices(previousLength: number, currentLength: number,
   return splices;
 }
 
-function calcEditDistances(eqFn: EqualsFn, previousStart: number, previousEnd: number,
+function calcEditDistances(eqFn: EqualsFn, previousStart: number, previousLength: number,
                            currentStart: number,
-                           currentEnd: number): Array<Array<number>> {
+                           currentLength: number): Array<Array<number>> {
   // "Deletion" columns
-  const rowCount = previousEnd - previousStart + 1;
-  const columnCount = currentEnd - currentStart + 1;
+  const rowCount = previousLength + 1;
+  const columnCount = currentLength + 1;
   const distances: Array<Array<number>> = new Array(rowCount);
 
   let i: number = 0;

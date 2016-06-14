@@ -7,12 +7,13 @@
 import {suite, test} from 'mocha';
 import type {Splice} from './edit-distance.js';
 import {assert} from 'chai';
-import {calcSplices} from './edit-distance.js';
+import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';
 
 suite('Edit Distance', () => {
 
   function assertDiff<T>(last: Array<T>, current: Array<T>, expect: Array<Splice>) {
     assert.deepEqual(expect, calcSplices(last.length, current.length,
+      DEFAULT_MAX_SPLICE_MATRIX_SIZE,
       (i, j) => last[i] === current[j]));
   }
 

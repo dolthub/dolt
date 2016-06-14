@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DEFAULT_MAX_SPLICE_MATRIX_SIZE = 1e6
+	DEFAULT_MAX_SPLICE_MATRIX_SIZE = 2e7
 	SPLICE_UNASSIGNED              = math.MaxUint64
 
 	UNCHANGED = 0

@@ -28,6 +28,7 @@ import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
 import SequenceChunker from './sequence-chunker.js';
+import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
@@ -105,7 +106,8 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
   }
 
-  diff(last: List<T>, loadLimit: number = -1): Promise<Array<Splice>> {
+  diff(last: List<T>,
+       maxSpliceMatrixSize: number = DEFAULT_MAX_SPLICE_MATRIX_SIZE): Promise<Array<Splice>> {
     invariant(equals(this.type, last.type));
 
     if (equals(this, last)) {
@@ -118,9 +120,9 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
       return Promise.resolve([[0, 0, this.length, 0]]); // Everything added
     }
 
-    const loadLimitArg = loadLimit === -1 ? null : {count : loadLimit};
     return Promise.all([last.sequence.newCursorAt(0), this.sequence.newCursorAt(0)]).then(cursors =>
-        diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0, loadLimitArg));
+        diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0,
+             maxSpliceMatrixSize));
   }
 
   // $FlowIssue

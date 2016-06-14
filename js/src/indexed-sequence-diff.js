@@ -11,45 +11,31 @@ import {IndexedMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import type {IndexedSequence} from './indexed-sequence.js';
 
-type LoadLimit = {
-  count: number,
-}
-
 export function diff(last: IndexedSequence, lastHeight: number, lastOffset: number,
                      current: IndexedSequence, currentHeight: number, currentOffset: number,
-                     loadLimit: ?LoadLimit): Promise<Array<Splice>> {
-
-  const maybeLoadCompositeSequence = (ms: IndexedMetaSequence, idx: number, length: number) => {
-    if (loadLimit) {
-      loadLimit.count -= length;
-      if (loadLimit.count < 0) {
-        return Promise.reject(new Error('Load limit exceeded'));
-      }
-    }
-
-    return ms.getCompositeChildSequence(idx, length);
-  };
+                     maxSpliceMatrixSize: number): Promise<Array<Splice>> {
 
   if (lastHeight > currentHeight) {
     invariant(lastOffset === 0 && currentOffset === 0);
     invariant(last instanceof IndexedMetaSequence);
-    return maybeLoadCompositeSequence(last, 0, last.length).then(lastChild =>
+    return last.getCompositeChildSequence(0, last.length).then(lastChild =>
         diff(lastChild, lastHeight - 1, lastOffset, current, currentHeight, currentOffset,
-             loadLimit));
+             maxSpliceMatrixSize));
   }
 
   if (currentHeight > lastHeight) {
     invariant(lastOffset === 0 && currentOffset === 0);
     invariant(current instanceof IndexedMetaSequence);
-    return maybeLoadCompositeSequence(current, 0, current.length).then(currentChild =>
+    return current.getCompositeChildSequence(0, current.length).then(currentChild =>
         diff(last, lastHeight, lastOffset, currentChild, currentHeight - 1, currentOffset,
-             loadLimit));
+             maxSpliceMatrixSize));
   }
 
   invariant(last.isMeta === current.isMeta);
   invariant(lastHeight === currentHeight);
 
-  const splices = calcSplices(last.length, current.length, last.getCompareFn(current));
+  const splices = calcSplices(last.length, current.length, maxSpliceMatrixSize,
+    last.getCompareFn(current));
 
   const splicesP = splices.map(splice => {
     if (!last.isMeta || splice[SPLICE_REMOVED] === 0 || splice[SPLICE_ADDED] === 0) {
@@ -62,9 +48,9 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
     }
 
     invariant(last instanceof IndexedMetaSequence && current instanceof IndexedMetaSequence);
-    const lastChildP = maybeLoadCompositeSequence(last, splice[SPLICE_AT], splice[SPLICE_REMOVED]);
-    const currentChildP = maybeLoadCompositeSequence(current, splice[SPLICE_FROM],
-                                                     splice[SPLICE_ADDED]);
+    const lastChildP = last.getCompositeChildSequence(splice[SPLICE_AT], splice[SPLICE_REMOVED]);
+    const currentChildP = current.getCompositeChildSequence(splice[SPLICE_FROM],
+      splice[SPLICE_ADDED]);
 
     let lastChildOffset = lastOffset;
     if (splice[SPLICE_AT] > 0) {
@@ -78,7 +64,7 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
     return Promise.all([lastChildP, currentChildP]).then(childSequences =>
       diff(childSequences[0], lastHeight - 1, lastChildOffset, childSequences[1], currentHeight - 1,
            currentChildOffset,
-           loadLimit));
+           maxSpliceMatrixSize));
   });
 
   return Promise.all(splicesP).then(spliceArrays => {

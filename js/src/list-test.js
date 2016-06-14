@@ -10,7 +10,7 @@ import {suite, setup, teardown, test} from 'mocha';
 import List, {ListWriter, ListLeafSequence} from './list.js';
 import Ref from './ref.js';
 import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
-import {calcSplices} from './edit-distance.js';
+import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
@@ -352,6 +352,23 @@ suite('CompoundList', () => {
 });
 
 suite('Diff List', () => {
+  test('Identical', async () => {
+    const nums1 = intSequence(5);
+    const nums2 = nums1.slice(0);
+
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => nums1[i] === nums2[j]);
+
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
   test('LONG: Remove 5x100', async () => {
     const nums1 = intSequence(5000);
     const nums2 = nums1.slice(0);
@@ -361,7 +378,8 @@ suite('Diff List', () => {
       nums2.splice(count * 1000, 100);
     }
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => nums1[i] === nums2[j]);
 
     const l1 = new List(nums1);
     const l2 = new List(nums2);
@@ -379,6 +397,43 @@ suite('Diff List', () => {
     assert.deepEqual(expectedDiff, directDiff);
   });
 
+  test('LONG: Reverse', async () => {
+    const nums1 = intSequence(5000);
+    const nums2 = nums1.slice(0).reverse();
+
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => nums1[i] === nums2[j]);
+
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [[0, 5000, 5000, 0]];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
+  test('LONG: Reverse - Larger Limit', async () => {
+    const nums1 = intSequence(5000);
+    const nums2 = nums1.slice(0).reverse();
+
+    const directDiff = calcSplices(nums1.length, nums2.length, 27e6,
+      (i, j) => nums1[i] === nums2[j]);
+
+    const l1 = new List(nums1);
+    const l2 = new List(nums2);
+
+    const listDiff = await l2.diff(l1, 27e6);
+    assert.deepEqual(directDiff, listDiff);
+
+    const expectedDiff = [
+      [0, 2499, 2500, 0],
+      [2500, 2500, 2499, 2501],
+    ];
+    assert.deepEqual(expectedDiff, directDiff);
+  });
+
   test('LONG: Add 5x5', async () => {
     const nums1 = intSequence(5000);
     const nums2 = nums1.slice(0);
@@ -388,7 +443,8 @@ suite('Diff List', () => {
       nums2.splice(count * 1000, 0, 0, 1, 2, 3, 4);
     }
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => nums1[i] === nums2[j]);
 
     const l1 = new List(nums1);
     const l2 = new List(nums2);
@@ -416,7 +472,8 @@ suite('Diff List', () => {
       nums2.splice(count * 1000, 100, ...out);
     }
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => nums1[i] === nums2[j]);
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -442,7 +499,8 @@ suite('Diff List', () => {
     const nums1 = ['one', 'two', 'three'];
     const nums2 = nums1.slice(0);
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => equals(nums1[i],nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -457,7 +515,8 @@ suite('Diff List', () => {
     const nums1 = ['one', 'two', 'three'];
     const nums2 = ['one', 'two', 'three', 'four'];
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => equals(nums1[i],nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -474,7 +533,8 @@ suite('Diff List', () => {
     const nums1 = ['one', 'two', 'three'];
     const nums2 = ['one', 'two', 'four'];
 
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => equals(nums1[i],nums2[j]));
+    const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+      (i, j) => equals(nums1[i],nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -487,25 +547,6 @@ suite('Diff List', () => {
     assert.deepEqual(expectedDiff, directDiff);
   });
 
-  test('LONG: Load Limit', async () => {
-    const nums1 = intSequence(5);
-    const nums2 = intSequence(5000);
-
-    const directDiff = calcSplices(nums1.length, nums2.length, (i, j) => nums1[i] === nums2[j]);
-    const l1 = new List(nums1);
-    const l2 = new List(nums2);
-
-    const listDiff = await l2.diff(l1);
-    assert.deepEqual(directDiff, listDiff);
-    let exMessage = '';
-    try {
-      await l2.diff(l1, 50);
-    } catch (ex) {
-      exMessage = ex.message;
-    }
-
-    assert.strictEqual('Load limit exceeded', exMessage);
-  });
 });
 
 suite('ListWriter', () => {
