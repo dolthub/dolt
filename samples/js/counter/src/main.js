@@ -36,9 +36,9 @@ async function main(): Promise<void> {
 async function increment(ds: Dataset): Promise<Dataset> {
   let lastVal = 0;
 
-  const commit = await ds.head();
-  if (commit !== null && commit !== undefined) {
-    lastVal = Number(commit.value);
+  const value = await ds.headValue();
+  if (value !== null) {
+    lastVal = Number(value);
   }
 
   const newVal = lastVal + 1;

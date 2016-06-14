@@ -72,4 +72,19 @@ suite('Dataset', () => {
       assert.throws(() => { new Dataset(db, s); });
     }
   });
+
+  test('commit', async () => {
+    const db = new Database(makeTestingRemoteBatchStore());
+    let ds1 = new Dataset(db, 'ds1');
+
+    // |a|
+    ds1 = await ds1.commit('a');
+    assert.strictEqual('a', await ds1.head().then(c => c && c.value));
+
+    const hv1 = await ds1.headValue();
+    assert.strictEqual('a', hv1);
+
+    const ds2 = new Dataset(db, 'ds2');
+    assert.isNull(await ds2.headValue());
+  });
 });

@@ -94,9 +94,9 @@ func listPersons(ds dataset.Dataset) {
 }
 
 func getPersons(ds dataset.Dataset) types.Map {
-	h, ok := ds.MaybeHead()
+	hv, ok := ds.MaybeHeadValue()
 	if ok {
-		return h.Get("value").(types.Map)
+		return hv.(types.Map)
 	} else {
 		return types.NewMap()
 	}

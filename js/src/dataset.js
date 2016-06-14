@@ -40,6 +40,10 @@ export default class Dataset {
     return this._database.head(this._id);
   }
 
+  headValue(): Promise<?Value> {
+    return this.head().then(commit => commit && commit.value);
+  }
+
   // Commit updates the commit that a dataset points at. If parents is provided then an the promise
   // is rejected if the commit does not descend from the parents.
   async commit(v: Value,

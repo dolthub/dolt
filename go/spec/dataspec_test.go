@@ -70,7 +70,7 @@ func TestMemDataset(t *testing.T) {
 	commit := types.NewString("Commit Value")
 	dsTest, err := dataset1.Commit(commit)
 	assert.NoError(err)
-	assert.EqualValues(commit, dsTest.Head().Get(datas.ValueField))
+	assert.EqualValues(commit, dsTest.HeadValue())
 }
 
 func TestLDBDataset(t *testing.T) {
@@ -94,7 +94,7 @@ func TestLDBDataset(t *testing.T) {
 	assert.NoError(err)
 	dataset, err := sp.Dataset()
 	assert.NoError(err)
-	assert.EqualValues(commit, dataset.Head().Get(datas.ValueField))
+	assert.EqualValues(commit, dataset.HeadValue())
 
 	os.Remove(dir)
 }
@@ -121,7 +121,7 @@ func TestLDBObject(t *testing.T) {
 	assert.NoError(err)
 	dataset2, err := sp1.Dataset()
 	assert.NoError(err)
-	r2 := dataset2.Head().Get(datas.ValueField)
+	r2 := dataset2.HeadValue()
 	s2 := r2.(types.Ref).TargetValue(dataset2.Database())
 	assert.Equal(s1.String(), s2.(types.String).String())
 	dataset2.Database().Close()

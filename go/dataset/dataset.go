@@ -54,6 +54,22 @@ func (ds *Dataset) HeadRef() types.Ref {
 	return r
 }
 
+// HeadValue returns the Value field of the current head Commit.
+func (ds *Dataset) HeadValue() types.Value {
+	c := ds.Head()
+	return c.Get(datas.ValueField)
+}
+
+// MaybeHeadValue returns the Value field of the current head Commit, if avaliable. If not it
+// returns nil and 'false'.
+func (ds *Dataset) MaybeHeadValue() (types.Value, bool) {
+	c, ok := ds.Database().MaybeHead(ds.id)
+	if !ok {
+		return nil, false
+	}
+	return c.Get(datas.ValueField), true
+}
+
 // Commit updates the commit that a dataset points at. The new Commit is constructed using v and the current Head.
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
