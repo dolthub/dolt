@@ -105,9 +105,7 @@ func main() {
 		headers = strings.Split(*header, string(comma))
 	}
 
-	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
-	util.CheckError(err)
-	ds, err := spec.Dataset()
+	ds, err := spec.GetDataset(flag.Arg(0))
 	util.CheckError(err)
 	defer ds.Database().Close()
 

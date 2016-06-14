@@ -39,13 +39,7 @@ func main() {
 		return
 	}
 
-	sp, err := spec.ParseDatasetSpec(*dsStr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	ds, err := sp.Dataset()
+	ds, err := spec.GetDataset(*dsStr)
 	defer ds.Database().Close()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)

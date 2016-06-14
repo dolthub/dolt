@@ -43,16 +43,11 @@ func main() {
 		util.CheckError(errors.New("expected exactly two arguments"))
 	}
 
-	spec1, err := spec.ParsePathSpec(flag.Arg(0))
-	util.CheckError(err)
-	spec2, err := spec.ParsePathSpec(flag.Arg(1))
-	util.CheckError(err)
-
-	db1, value1, err := spec1.Value()
+	db1, value1, err := spec.GetPath(flag.Arg(0))
 	util.CheckError(err)
 	defer db1.Close()
 
-	db2, value2, err := spec2.Value()
+	db2, value2, err := spec.GetPath(flag.Arg(1))
 	util.CheckError(err)
 	defer db2.Close()
 

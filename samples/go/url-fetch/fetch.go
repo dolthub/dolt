@@ -41,11 +41,7 @@ func main() {
 		util.CheckError(errors.New("expected dataset and url arguments"))
 	}
 
-	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
-	if err != nil {
-		util.CheckError(err)
-	}
-	ds, err := spec.Dataset()
+	ds, err := spec.GetDataset(flag.Arg(0))
 	util.CheckError(err)
 
 	url := flag.Arg(1)

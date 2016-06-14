@@ -41,16 +41,11 @@ func main() {
 		util.CheckError(errors.New("expected a source object and destination dataset"))
 	}
 
-	sourceSpec, err := spec.ParsePathSpec(flag.Arg(0))
-	util.CheckError(err)
-	sourceStore, sourceObj, err := sourceSpec.Value()
+	sourceStore, sourceObj, err := spec.GetPath(flag.Arg(0))
 	util.CheckError(err)
 	defer sourceStore.Close()
 
-	sinkSpec, err := spec.ParseDatasetSpec(flag.Arg(1))
-	util.CheckError(err)
-
-	sinkDataset, err := sinkSpec.Dataset()
+	sinkDataset, err := spec.GetDataset(flag.Arg(1))
 	util.CheckError(err)
 	defer sinkDataset.Database().Close()
 

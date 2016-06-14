@@ -40,10 +40,7 @@ func main() {
 		util.CheckError(errors.New("expected dataset arg"))
 	}
 
-	spec, err := spec.ParseDatasetSpec(flag.Arg(0))
-	util.CheckError(err)
-
-	ds, err := spec.Dataset()
+	ds, err := spec.GetDataset(flag.Arg(0))
 	util.CheckError(err)
 
 	defer ds.Database().Close()

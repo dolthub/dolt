@@ -59,9 +59,7 @@ func main() {
 			util.CheckError(errors.New("Expected dataset followed by directory path"))
 		}
 		dir := flag.Arg(1)
-		spec, err := spec.ParseDatasetSpec(flag.Arg(0))
-		util.CheckError(err)
-		ds, err := spec.Dataset()
+		ds, err := spec.GetDataset(flag.Arg(0))
 		util.CheckError(err)
 
 		defer profile.MaybeStartProfile().Stop()

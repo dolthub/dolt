@@ -38,9 +38,7 @@ func main() {
 		util.CheckError(errors.New("expected exactly one argument"))
 	}
 
-	spec, err := spec.ParsePathSpec(flag.Arg(0))
-	util.CheckError(err)
-	database, value, err := spec.Value()
+	database, value, err := spec.GetPath(flag.Arg(0))
 	util.CheckError(err)
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)

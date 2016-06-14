@@ -56,9 +56,7 @@ func main() {
 
 	useColor = shouldUseColor()
 
-	spec, err := spec.ParsePathSpec(flag.Arg(0))
-	util.CheckError(err)
-	database, value, err := spec.Value()
+	database, value, err := spec.GetPath(flag.Arg(0))
 	if err != nil {
 		util.CheckErrorNoUsage(err)
 	}
@@ -68,7 +66,7 @@ func main() {
 
 	origCommit, ok := value.(types.Struct)
 	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
-		util.CheckError(fmt.Errorf("%s does not reference a Commit object", spec))
+		util.CheckError(fmt.Errorf("%s does not reference a Commit object", flag.Arg(0)))
 	}
 
 	iter := NewCommitIterator(database, origCommit)

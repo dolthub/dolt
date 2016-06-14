@@ -22,6 +22,30 @@ var (
 	pathRegex     = regexp.MustCompile(`^(.+)::([a-zA-Z0-9\-_/]+)$`)
 )
 
+func GetDatabase(str string) (datas.Database, error) {
+	sp, err := ParseDatabaseSpec(str)
+	if err != nil {
+		return nil, err
+	}
+	return sp.Database()
+}
+
+func GetDataset(str string) (dataset.Dataset, error) {
+	sp, err := ParseDatasetSpec(str)
+	if err != nil {
+		return dataset.Dataset{}, err
+	}
+	return sp.Dataset()
+}
+
+func GetPath(str string) (datas.Database, types.Value, error) {
+	sp, err := ParsePathSpec(str)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sp.Value()
+}
+
 type DatabaseSpec struct {
 	Protocol    string
 	Path        string

@@ -27,10 +27,7 @@ func main() {
 	flag.Parse()
 
 	if *toDelete != "" {
-		setSpec, err := spec.ParseDatasetSpec(*toDelete)
-		util.CheckError(err)
-
-		set, err := setSpec.Dataset()
+		set, err := spec.GetDataset(*toDelete)
 		util.CheckError(err)
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
@@ -49,10 +46,7 @@ func main() {
 			return
 		}
 
-		storeSpec, err := spec.ParseDatabaseSpec(flag.Arg(0))
-		util.CheckError(err)
-
-		store, err := storeSpec.Database()
+		store, err := spec.GetDatabase(flag.Arg(0))
 		util.CheckError(err)
 		defer store.Close()
 
