@@ -4,11 +4,11 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {assert} from 'chai';
-import {suite, test} from 'mocha';
 import Hash, {emptyHash} from './hash.js';
-import {encode} from './utf8.js';
+import {assert} from 'chai';
+import Bytes from './bytes.js';
 import {notNull} from './assert.js';
+import {suite, test} from 'mocha';
 
 suite('Hash', () => {
   test('parse', () => {
@@ -51,13 +51,13 @@ suite('Hash', () => {
   });
 
   test('fromData', () => {
-    const r = Hash.fromData(encode('abc'));
+    const r = Hash.fromData(Bytes.fromString('abc'));
 
     assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
   });
 
   test('isEmpty', () => {
-    const digest = new Uint8Array(20);
+    const digest = Bytes.alloc(20);
     let r = new Hash(digest);
     assert.isTrue(r.isEmpty());
 

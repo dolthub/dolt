@@ -45,9 +45,9 @@ export function fetchText(url: string, options: FetchOptions = {}): Promise<stri
   return fetch(url, 'text', options);
 }
 
-export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {
+export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
   if (self.fetch) {
-    return self.fetch(url, options).then(resp => resp.arrayBuffer());
+    return self.fetch(url, options).then(resp => resp.arrayBuffer()).then(ar => new Uint8Array(ar));
   }
 
   return fetch(url, 'arraybuffer', options);

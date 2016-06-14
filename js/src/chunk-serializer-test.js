@@ -10,6 +10,7 @@ import Chunk from './chunk.js';
 import type Hash from './hash.js';
 import {deserialize, serialize} from './chunk-serializer.js';
 import type {ChunkStream} from './chunk-serializer.js';
+import Bytes from './bytes.js';
 
 suite('ChunkSerializer', () => {
 
@@ -81,10 +82,10 @@ suite('ChunkSerializer', () => {
   test('large chunk', async () => {
     const expHints = [];
     const expChunks = [
-      new Chunk(new Uint8Array(1024)),
+      new Chunk(Bytes.alloc(1024)),
       Chunk.fromString('abc'),
       Chunk.fromString('def'),
-      new Chunk(new Uint8Array(2048))];
+      new Chunk(Bytes.alloc(2048))];
 
     const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
     const {hints, chunks} = deserialize(await pSerialized);

@@ -14,7 +14,7 @@ import {equals} from './compare.js';
 import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
-import {encode as utf8Encode} from './utf8.js';
+import Bytes from './bytes.js';
 
 type StructData = {[key: string]: Value};
 
@@ -271,7 +271,7 @@ export function escapeStructField(input: string): string {
     }
 
     let out = escapeChar;
-    utf8Encode(c).forEach(b => {
+    Bytes.fromString(c).forEach(b => {
       const hex = b.toString(16).toUpperCase();
       if (hex.length === 1) {
         out += '0';

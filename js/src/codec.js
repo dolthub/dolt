@@ -8,12 +8,12 @@ import Chunk from './chunk.js';
 import Hash, {sha1Size} from './hash.js';
 import ValueDecoder from './value-decoder.js';
 import ValueEncoder from './value-encoder.js';
-import {encode, decode} from './utf8.js';
 import {invariant} from './assert.js';
 import {setEncodeValue} from './get-hash.js';
 import {setHash, ValueBase} from './value.js';
 import type Value from './value.js';
 import type {ValueReader, ValueWriter} from './value-store.js';
+import Bytes from './bytes.js';
 
 export function encodeValue(v: Value, vw: ?ValueWriter): Chunk {
   const w = new BinaryNomsWriter();
@@ -68,22 +68,20 @@ export interface NomsWriter {
 }
 
 export class BinaryNomsReader {
-  buff: ArrayBuffer;
+  buff: Uint8Array;
   dv: DataView;
   offset: number;
-  length: number;
 
-  constructor(data: Uint8Array) {
-    this.buff = data.buffer;
-    this.offset = data.byteOffset;
-    this.length = data.byteLength;
-    this.dv = new DataView(this.buff, this.offset, this.length);
+  constructor(buff: Uint8Array) {
+    this.buff = buff;
+    this.dv = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
+    this.offset = 0;
   }
 
   readBytes(): Uint8Array {
     const size = this.readUint32();
     // Make a copy of the buffer to return
-    const v = new Uint8Array(new Uint8Array(this.buff, this.offset, size));
+    const v = Bytes.slice(this.buff, this.offset, this.offset + size);
     this.offset += size;
     return v;
   }
@@ -122,54 +120,49 @@ export class BinaryNomsReader {
 
   readString(): string {
     const size = this.readUint32();
-    const v = new Uint8Array(this.buff, this.offset, size);
+    const str = Bytes.readUtf8(this.buff, this.offset, this.offset + size);
     this.offset += size;
-    return decode(v);
+    return str;
   }
 
   readHash(): Hash {
     // Make a copy of the data.
-    const digest = new Uint8Array(this.buff.slice(this.offset, this.offset + sha1Size));
+    const digest = Bytes.slice(this.buff, this.offset, this.offset + sha1Size);
     this.offset += sha1Size;
     return new Hash(digest);
   }
 }
 
-const initialBufferSize = 2048;
+const initialBufferSize = 16;
 
 export class BinaryNomsWriter {
-  buff: ArrayBuffer;
+  buff: Uint8Array;
   dv: DataView;
   offset: number;
-  length: number;
 
   constructor() {
-    this.buff = new ArrayBuffer(initialBufferSize);
-    this.dv = new DataView(this.buff, 0);
+    this.buff = Bytes.alloc(initialBufferSize);
+    this.dv = new DataView(this.buff.buffer, 0);
     this.offset = 0;
-    this.length = this.buff.byteLength;
   }
 
   get data(): Uint8Array {
     // Callers now owns the copied data.
-    return new Uint8Array(new Uint8Array(this.buff, 0, this.offset));
+    return Bytes.slice(this.buff, 0, this.offset);
   }
 
   ensureCapacity(n: number): void {
-    if (this.offset + n <= this.length) {
+    let length = this.buff.byteLength;
+    if (this.offset + n <= length) {
       return;
     }
 
-    const oldData = new Uint8Array(this.buff);
-
-    while (this.offset + n > this.length) {
-      this.length *= 2;
+    while (this.offset + n > length) {
+      length *= 2;
     }
-    this.buff = new ArrayBuffer(this.length);
-    this.dv = new DataView(this.buff, 0);
 
-    const a = new Uint8Array(this.buff);
-    a.set(oldData);
+    this.buff = Bytes.grow(this.buff, length);
+    this.dv = new DataView(this.buff.buffer);
   }
 
   writeBytes(v: Uint8Array): void {
@@ -177,8 +170,7 @@ export class BinaryNomsWriter {
     this.writeUint32(size);
 
     this.ensureCapacity(size);
-    const a = new Uint8Array(this.buff, this.offset, size);
-    a.set(v);
+    Bytes.copy(v, this.buff, this.offset);
     this.offset += size;
   }
 
@@ -213,13 +205,14 @@ export class BinaryNomsWriter {
   }
 
   writeString(v: string): void {
-    this.writeBytes(encode(v));
+    // TODO: This is a bummer. Ensure even the largest UTF8 string will fit.
+    this.ensureCapacity(4 + v.length * 4);
+    this.offset = Bytes.encodeUtf8(v, this.buff, this.dv, this.offset);
   }
 
   writeHash(h: Hash): void {
     this.ensureCapacity(sha1Size);
-    const a = new Uint8Array(this.buff, this.offset, sha1Size);
-    a.set(h.digest);
+    Bytes.copy(h.digest, this.buff, this.offset);
     this.offset += sha1Size;
   }
 }

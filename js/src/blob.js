@@ -18,6 +18,7 @@ import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
+import Bytes from './bytes.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {
@@ -76,7 +77,7 @@ export class BlobReader {
     const idx = cur.indexInChunk;
     if (idx > 0) {
       invariant(idx < arr.byteLength);
-      arr = new Uint8Array(arr.buffer, arr.byteOffset + idx, arr.byteLength - idx);
+      arr = Bytes.subarray(arr, idx, arr.byteLength);
     }
 
     return cur.advanceChunk().then(() => {
@@ -147,7 +148,7 @@ const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 
 function newBlobLeafChunkFn(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
   return (items: Array<number>) => {
-    const blobLeaf = new BlobLeafSequence(vr, new Uint8Array(items));
+    const blobLeaf = new BlobLeafSequence(vr, Bytes.fromValues(items));
     const blob = Blob.fromSequence(blobLeaf);
     let mt;
     if (vw) {

@@ -11,7 +11,7 @@ import type {FetchOptions} from './fetch.js';
 import type {ChunkStream} from './chunk-serializer.js';
 import {serialize, deserializeChunks} from './chunk-serializer.js';
 import {emptyChunk} from './chunk.js';
-import {fetchArrayBuffer, fetchText} from './fetch.js';
+import {fetchUint8Array, fetchText} from './fetch.js';
 import {notNull} from './assert.js';
 
 const HTTP_STATUS_CONFLICT = 409;
@@ -81,9 +81,9 @@ export class Delegate {
     const hashStrs = Object.keys(reqs);
     const body = hashStrs.map(r => 'ref=' + r).join('&');
     const opts = Object.assign(this._readBatchOptions, {body: body});
-    const buf = await fetchArrayBuffer(this._rpc.getRefs, opts);
+    const buf = await fetchUint8Array(this._rpc.getRefs, opts);
 
-    const chunks = deserializeChunks(buf);
+    const chunks = deserializeChunks(buf, new DataView(buf.buffer, buf.byteOffset, buf.byteLength));
 
     // Return success
     chunks.forEach(chunk => {

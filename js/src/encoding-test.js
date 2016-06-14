@@ -9,6 +9,7 @@ import {suite, test} from 'mocha';
 import {assert} from 'chai';
 
 import Blob from './blob.js';
+import Bytes from './bytes.js';
 import Hash from './hash.js';
 import List, {newListLeafSequence} from './list.js';
 import Map from './map.js';
@@ -266,8 +267,8 @@ suite('Encoding', () => {
 
   test('simple blob', () => {
     assertEncoding([
-      uint8(BlobKind), false, new Uint8Array([0, 1]),
-    ], new Blob(new Uint8Array([0, 1])));
+      uint8(BlobKind), false, Bytes.fromValues([0, 1]),
+    ], new Blob(Bytes.fromValues([0, 1])));
   });
 
   test('list', () => {
@@ -386,9 +387,9 @@ suite('Encoding', () => {
 
   test('struct with blob', () => {
     assertEncoding([
-      uint8(StructKind), 'S', uint32(1) /* len */, 'b', uint8(BlobKind), uint8(BlobKind), false, new Uint8Array([0, 1]),
+      uint8(StructKind), 'S', uint32(1) /* len */, 'b', uint8(BlobKind), uint8(BlobKind), false, Bytes.fromValues([0, 1]),
     ],
-    newStruct('S', {b: new Blob(new Uint8Array([0, 1]))}));
+    newStruct('S', {b: new Blob(Bytes.fromValues([0, 1]))}));
   });
 
   test('compound list', () => {

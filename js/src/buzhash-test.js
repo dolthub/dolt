@@ -7,11 +7,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import BuzHash from './buzhash.js';
-import {encode} from './utf8.js';
-
-function bytes(s: string): Uint8Array {
-  return encode(s);
-}
+import Bytes from './bytes.js';
 
 const loremipsum1 = `Lorem ipsum dolor sit amet, consectetuer adipiscing elit.
 Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et
@@ -78,10 +74,12 @@ suite('BuzHash', () => {
       assert.isTrue(found);
     }
 
-    test(32, bytes('Aenean massa. Cum sociis natoque'), bytes(loremipsum1), 91);
+    test(32,
+      Bytes.fromString('Aenean massa. Cum sociis natoque'),
+      Bytes.fromString(loremipsum1), 91);
     test(64,
-      bytes('Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi'),
-      bytes(loremipsum2),
+      Bytes.fromString('Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi'),
+      Bytes.fromString(loremipsum2),
       592);
   });
 });

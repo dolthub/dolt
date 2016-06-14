@@ -9,11 +9,11 @@ import {assert} from 'chai';
 import Chunk from './chunk.js';
 import Hash from './hash.js';
 import {notNull} from './assert.js';
+import Bytes from './bytes.js';
 
 suite('Chunk', () => {
   test('construct', () => {
     const c = Chunk.fromString('abc');
-    assert.strictEqual(c.toString(), 'abc');
     assert.isTrue(c.hash.equals(
         notNull(Hash.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d'))));
     assert.isFalse(c.isEmpty());
@@ -22,7 +22,6 @@ suite('Chunk', () => {
   test('construct with hash', () => {
     const hash = notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'));
     const c = Chunk.fromString('abc', hash);
-    assert.strictEqual(c.toString(), 'abc');
     assert.isTrue(c.hash.equals(
         notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'))));
     assert.isFalse(c.isEmpty());
@@ -34,7 +33,7 @@ suite('Chunk', () => {
       assert.isTrue(c.isEmpty());
     }
 
-    assertChunkIsEmpty(new Chunk());
+    assertChunkIsEmpty(new Chunk(Bytes.alloc(0)));
     assertChunkIsEmpty(Chunk.fromString(''));
   });
 });

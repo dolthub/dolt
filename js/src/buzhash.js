@@ -6,6 +6,8 @@
 
 // This a javascript port of github.com/kch42/buzhash.
 
+import Bytes from './bytes.js';
+
 const bytehash: Array<number> = [
   0x12bd9527, 0xf4140cea, 0x987bd6e1, 0x79079850, 0xafbfd539, 0xd350ce0a,
   0x82973931, 0x9fc32b9c, 0x28003b88, 0xc30c13aa, 0x6b678c34, 0x5844ef1d,
@@ -64,7 +66,7 @@ export default class BuzHash {
     this._n = n;
     this._bshiftn = n % 32;
     this._bshiftm = 32 - this._bshiftn;
-    this._buf = new Uint8Array(n);
+    this._buf = Bytes.alloc(n);
     this.reset();
   }
 

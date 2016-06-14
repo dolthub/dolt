@@ -5,13 +5,13 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import Hash from './hash.js';
-import {encode, decode} from './utf8.js';
+import Bytes from './bytes.js';
 
 export default class Chunk {
   data: Uint8Array;
   _hash: ?Hash;
 
-  constructor(data: Uint8Array = new Uint8Array(0), hash: ?Hash) {
+  constructor(data: Uint8Array, hash: ?Hash) {
     this.data = data;
     this._hash = hash;
   }
@@ -25,14 +25,14 @@ export default class Chunk {
   }
 
   toString(): string {
-    return decode(this.data);
+    return Bytes.toString(this.data);
+  }
+
+  static fromString(s: string, hash: ?Hash): Chunk {
+    return new Chunk(Bytes.fromString(s), hash);
   }
 
   static emptyChunk: Chunk;
-
-  static fromString(s: string, hash: ?Hash): Chunk {
-    return new Chunk(encode(s), hash);
-  }
 }
 
-export const emptyChunk = new Chunk();
+export const emptyChunk = new Chunk(Bytes.alloc(0));

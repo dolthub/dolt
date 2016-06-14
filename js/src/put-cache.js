@@ -9,6 +9,7 @@ import type {tcoll as Collection} from 'tingodb';
 import fs from 'fs';
 import Chunk, {emptyChunk} from './chunk.js';
 import {invariant} from './assert.js';
+import Bytes from './bytes.js';
 
 const __tingodb = tingodb();
 
@@ -57,8 +58,10 @@ export default class OrderedPutCache {
       return false;
     }
     this._chunkIndex.set(hash, -1);
+    // TODO: Bug #1814.
+    const data = Bytes.slice(c.data, 0, c.data.byteLength);
     const p = this._coll
-      .then(coll => coll.insert({hash: hash, data: c.data}))
+      .then(coll => coll.insert({hash: hash, data: data}))
       .then(itemId => this._chunkIndex.set(hash, itemId))
       .then(() => { this._appends.delete(p); });
     this._appends.add(p);
@@ -206,7 +209,7 @@ class DbCollection {
 }
 
 function recordToItem(record: DbRecord): ChunkItem {
-  return {hash: record.hash, data: new Uint8Array(record.data.buffer)};
+  return {hash: record.hash, data: record.data.buffer};
 }
 
 function makeTempDir(): Promise<string> {

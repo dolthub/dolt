@@ -6,6 +6,7 @@
 
 import {request} from 'http';
 import {parse} from 'url';
+import Bytes from './bytes.js';
 
 export type FetchOptions = {
   method?: string,
@@ -14,7 +15,7 @@ export type FetchOptions = {
   withCredentials? : boolean,
 };
 
-function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}): Promise<T> {
+function fetch(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
   const opts: any = parse(url);
   opts.method = options.method || 'GET';
   if (options.headers) {
@@ -26,12 +27,30 @@ function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}
         reject(res.statusCode);
         return;
       }
-      let buf = new Buffer(0);
-      res.on('data', (chunk: Buffer) => {
-        buf = Buffer.concat([buf, chunk]);
+
+      let buf = Bytes.alloc(2048);
+      let offset = 0;
+      const ensureCapacity = (n: number) => {
+        let length = buf.byteLength;
+        if (offset + n <= length) {
+          return;
+        }
+
+        while (offset + n > length) {
+          length *= 2;
+        }
+
+        buf = Bytes.grow(buf, length);
+      };
+
+      res.on('data', (chunk: Uint8Array) => {
+        const size = chunk.byteLength;
+        ensureCapacity(size);
+        Bytes.copy(chunk, buf, offset);
+        offset += size;
       });
       res.on('end', () => {
-        resolve(f(buf));
+        resolve(Bytes.subarray(buf, 0, offset));
       });
     });
     req.on('error', err => {
@@ -51,22 +70,13 @@ function fetch<T>(url: string, f: (buf: Buffer) => T, options: FetchOptions = {}
   });
 }
 
-function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
-  const ab = new ArrayBuffer(buf.length);
-  const view = new Uint8Array(ab);
-  for (let i = 0; i < buf.length; i++) {
-    view[i] = buf[i];
-  }
-  return ab;
-}
-
 function arrayBufferToBuffer(ab: ArrayBuffer): Buffer {
   // $FlowIssue: Node type declaration doesn't include ArrayBuffer.
   return new Buffer(ab);
 }
 
-function bufferToString(buf: Buffer): string {
-  return buf.toString();
+function bufferToString(buf: Uint8Array): string {
+  return Bytes.readUtf8(buf, 0, buf.byteLength);
 }
 
 function normalizeBody(opts: FetchOptions): FetchOptions {
@@ -77,9 +87,9 @@ function normalizeBody(opts: FetchOptions): FetchOptions {
 }
 
 export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
-  return fetch(url, bufferToString, normalizeBody(options));
+  return fetch(url, normalizeBody(options)).then(ar => bufferToString(ar));
 }
 
-export function fetchArrayBuffer(url: string, options: FetchOptions = {}): Promise<ArrayBuffer> {
-  return fetch(url, bufferToArrayBuffer, options);
+export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
+  return fetch(url, options);
 }

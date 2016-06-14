@@ -4,6 +4,9 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
+import {assert} from 'chai';
+
 import {BatchStoreAdaptor} from './batch-store.js';
 import {createStructClass} from './struct.js';
 import Database from './database.js';
@@ -19,10 +22,6 @@ import List from './list.js';
 import Map from './map.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
 import walk from './walk.js';
-
-import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
-import {assert} from 'chai';
-
 import type Value from './value.js';
 
 suite('walk', () => {
