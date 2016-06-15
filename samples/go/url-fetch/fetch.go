@@ -43,6 +43,7 @@ func main() {
 
 	ds, err := spec.GetDataset(flag.Arg(0))
 	util.CheckError(err)
+	defer ds.Database().Close()
 
 	url := flag.Arg(1)
 	start = time.Now()
