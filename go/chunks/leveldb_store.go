@@ -12,6 +12,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/golang/snappy"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -94,9 +95,9 @@ func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
 	numBytes := 0
 	b := new(leveldb.Batch)
 	for _, c := range chunks {
-		d := c.Data()
-		numBytes += len(d)
-		b.Put(l.toChunkKey(c.Hash()), d)
+		data := snappy.Encode(nil, c.Data())
+		numBytes += len(data)
+		b.Put(l.toChunkKey(c.Hash()), data)
 	}
 	l.putBatch(b, numBytes)
 	return
@@ -167,13 +168,14 @@ func (l *internalLevelDBStore) updateRootByKey(key []byte, current, last hash.Ha
 }
 
 func (l *internalLevelDBStore) getByKey(key []byte, ref hash.Hash) Chunk {
-	data, err := l.db.Get(key, nil)
+	compressed, err := l.db.Get(key, nil)
 	l.getCount++
 	if err == errors.ErrNotFound {
 		return EmptyChunk
 	}
 	d.Chk.NoError(err)
-
+	data, err := snappy.Decode(nil, compressed)
+	d.Chk.NoError(err)
 	return NewChunkWithHash(ref, data)
 }
 
@@ -186,10 +188,11 @@ func (l *internalLevelDBStore) hasByKey(key []byte) bool {
 
 func (l *internalLevelDBStore) putByKey(key []byte, c Chunk) {
 	l.concurrentWriteLimit <- struct{}{}
-	err := l.db.Put(key, c.Data(), nil)
+	data := snappy.Encode(nil, c.Data())
+	err := l.db.Put(key, data, nil)
 	d.Chk.NoError(err)
 	l.putCount++
-	l.putBytes += int64(len(c.Data()))
+	l.putBytes += int64(len(data))
 	<-l.concurrentWriteLimit
 }
 
