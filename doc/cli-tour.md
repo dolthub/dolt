@@ -85,7 +85,7 @@ Parent: sha1-a3a49c4f9910a982ec5f58aa0e33f26cecdf26bc
 ...
 ```
 
-Note that Noms is a typed system. What is being shown here is not text, but the first bit of a serialization of the structured data that Noms actually stores.
+Note that Noms is a typed system. What is being shown here for each entry is not text, but a serialization of the diff between two datasets.
 
 ## noms show
 
