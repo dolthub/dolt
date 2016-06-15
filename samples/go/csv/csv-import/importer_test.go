@@ -52,7 +52,7 @@ func (s *testSuite) TestCSVImporter() {
 	defer ds.Database().Close()
 	defer os.RemoveAll(s.LdbDir)
 
-	l := ds.Head().Get(datas.ValueField).(types.List)
+	l := ds.HeadValue().(types.List)
 	s.Equal(uint64(100), l.Len())
 
 	i := uint64(0)
@@ -90,7 +90,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 	defer ds.Database().Close()
 	defer os.RemoveAll(s.LdbDir)
 
-	m := ds.Head().Get(datas.ValueField).(types.Map)
+	m := ds.HeadValue().(types.Map)
 	s.Equal(uint64(20), m.Len())
 
 	for i := 0; i < 20; i++ {
@@ -120,7 +120,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	defer ds.Database().Close()
 	defer os.RemoveAll(s.LdbDir)
 
-	l := ds.Head().Get(datas.ValueField).(types.List)
+	l := ds.HeadValue().(types.List)
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
 	st := v.(types.Struct)
@@ -147,7 +147,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	defer ds.Database().Close()
 	defer os.RemoveAll(s.LdbDir)
 
-	l := ds.Head().Get(datas.ValueField).(types.List)
+	l := ds.HeadValue().(types.List)
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
 	st := v.(types.Struct)

@@ -40,7 +40,7 @@ func (s *testSuite) TestSync() {
 	s.Equal("", out)
 
 	dest := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
-	s.True(types.Number(42).Equals(dest.Head().Get(datas.ValueField)))
+	s.True(types.Number(42).Equals(dest.HeadValue()))
 	dest.Database().Close()
 
 	sourceDataset := test_util.CreateValueSpecString("ldb", s.LdbDir, "foo")
@@ -48,6 +48,6 @@ func (s *testSuite) TestSync() {
 	s.Equal("", out)
 
 	dest = dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
-	s.True(types.Number(43).Equals(dest.Head().Get(datas.ValueField)))
+	s.True(types.Number(43).Equals(dest.HeadValue()))
 	dest.Database().Close()
 }

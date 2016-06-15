@@ -64,7 +64,7 @@ func main() {
 
 			// Read
 			t1 = time.Now()
-			col = ds.Head().Get(datas.ValueField).(types.Collection)
+			col = ds.HeadValue().(types.Collection)
 			readFns[i](col)
 			readDuration := time.Since(t1)
 
@@ -99,7 +99,7 @@ func main() {
 
 	ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
 	t1 = time.Now()
-	blob = ds.Head().Get(datas.ValueField).(types.Blob)
+	blob = ds.HeadValue().(types.Blob)
 	outBytes, _ := ioutil.ReadAll(blob.Reader())
 	readDuration := time.Since(t1)
 	d.Chk.True(bytes.Compare(blobBytes, outBytes) == 0)

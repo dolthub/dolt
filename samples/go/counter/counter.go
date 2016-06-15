@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/util"
@@ -35,11 +34,10 @@ func main() {
 
 	defer ds.Database().Close()
 
-	lastVal := uint64(0)
-	if commit, ok := ds.MaybeHead(); ok {
-		lastVal = uint64(commit.Get(datas.ValueField).(types.Number))
+	newVal := uint64(1)
+	if lastVal, ok := ds.MaybeHeadValue(); ok {
+		newVal = uint64(lastVal.(types.Number)) + 1
 	}
-	newVal := lastVal + 1
 	_, err = ds.Commit(types.Number(newVal))
 	d.Exp.NoError(err)
 

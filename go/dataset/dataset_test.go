@@ -164,3 +164,33 @@ func TestIdValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestHeadValueFunctions(t *testing.T) {
+	assert := assert.New(t)
+
+	id1 := "testdataset"
+	id2 := "otherdataset"
+	cs := chunks.NewMemoryStore()
+
+	ds1 := newDS(id1, cs)
+
+	// ds1: |a|
+	a := types.NewString("a")
+	ds1, err := ds1.Commit(a)
+	assert.NoError(err)
+
+	hv := ds1.Head().Get(datas.ValueField)
+	assert.Equal(a, hv)
+	assert.Equal(a, ds1.HeadValue())
+
+	hv, ok := ds1.MaybeHeadValue()
+	assert.True(ok)
+	assert.Equal(a, hv)
+
+	ds2 := newDS(id2, cs)
+	assert.Panics(func() {
+		ds2.HeadValue()
+	})
+	_, ok = ds2.MaybeHeadValue()
+	assert.False(ok)
+}

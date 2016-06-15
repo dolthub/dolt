@@ -35,14 +35,13 @@ async function main(): Promise<void> {
   invariant(outSpec, quit('invalid input dataset spec'));
 
   const input = inSpec.dataset();
-  const commit = await input.head();
-  const head = commit && commit.value;
-  invariant(head, quit(`${args._[0]} does not exist}`));
+  const hv = await input.headValue();
+  invariant(hv, quit(`${args._[0]} does not exist}`));
 
   const pitchers = new Map();
   const inningPs = [];
   const playerPs = [];
-  await head.forEach((ref: Ref<XMLElement>) => {
+  await hv.forEach((ref: Ref<XMLElement>) => {
     // We force elemP to be 'any' here because the 'inning' entry and the 'Player' entry have
     // different types that involve multiple levels of nested maps OR strings.
     const elemP: any = ref.targetValue(input.database);
