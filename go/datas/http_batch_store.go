@@ -21,6 +21,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/golang/snappy"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -207,20 +208,49 @@ func (bhcs *httpBatchStore) getRefs(hashes hashSet, batch chunks.ReadBatch) {
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
 
 	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
-		"Accept-Encoding": {"gzip"},
+		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
 
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
-	defer closeResponse(res)
+	reader := resBodyReader(res)
+	defer closeResponse(reader)
+
 	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
-	reader := resBodyReader(res)
-	defer reader.Close()
+	rl := make(chan struct{}, 16)
+	chunks.Deserialize(reader, &readBatchChunkSink{&batch, &sync.RWMutex{}}, rl)
+}
 
-	rl := make(chan struct{}, 1) // Rate limit to 1 because there are already N goroutines waiting on responses, all we need to do is send the Chunks back through their channels.
-	chunks.Deserialize(reader, &batch, rl)
+type readBatchChunkSink struct {
+	batch *chunks.ReadBatch
+	mu    *sync.RWMutex
+}
+
+func (rb *readBatchChunkSink) Put(c chunks.Chunk) {
+	rb.mu.RLock()
+	for _, or := range (*(rb.batch))[c.Hash()] {
+		or.Satisfy(c)
+	}
+	rb.mu.RUnlock()
+
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	delete(*(rb.batch), c.Hash())
+}
+
+func (rb *readBatchChunkSink) PutMany(chnx []chunks.Chunk) (e chunks.BackpressureError) {
+	for _, c := range chnx {
+		rb.Put(c)
+	}
+	return
+}
+
+func (rb *readBatchChunkSink) Close() error {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+	return rb.batch.Close()
 }
 
 func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
@@ -229,17 +259,16 @@ func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.HasRefsPath)
 
 	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
-		"Accept-Encoding": {"gzip"},
+		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
 
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
-	defer closeResponse(res)
-	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
-
 	reader := resBodyReader(res)
-	defer reader.Close()
+	defer closeResponse(reader)
+
+	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(bufio.ScanWords)
@@ -266,6 +295,9 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 		gr, err := gzip.NewReader(reader)
 		d.Chk.NoError(err)
 		reader = gr
+	} else if strings.Contains(res.Header.Get("Content-Encoding"), "x-snappy-framed") {
+		sr := snappy.NewReader(reader)
+		reader = ioutil.NopCloser(sr)
 	}
 	return
 }
@@ -359,6 +391,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 
 			url := *bhcs.host
 			url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
+			// TODO: Make this accept snappy encoding
 			req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
 				"Accept-Encoding":  {"gzip"},
 				"Content-Encoding": {"x-snappy-framed"},
@@ -368,7 +401,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			res, err = bhcs.httpClient.Do(req)
 			d.Exp.NoError(err)
 			d.Exp.NoError(<-errChan)
-			defer closeResponse(res)
+			defer closeResponse(res.Body)
 
 			if tryAgain = res.StatusCode == httpStatusTooManyRequests; tryAgain {
 				reader := res.Body
@@ -390,7 +423,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 func (bhcs *httpBatchStore) Root() hash.Hash {
 	// GET http://<host>/root. Response will be ref of root.
 	res := bhcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
-	defer closeResponse(res)
+	defer closeResponse(res.Body)
 
 	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	data, err := ioutil.ReadAll(res.Body)
@@ -403,7 +436,7 @@ func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	bhcs.Flush()
 
 	res := bhcs.requestRoot("POST", current, last)
-	defer closeResponse(res)
+	defer closeResponse(res.Body)
 
 	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusConflict, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	return res.StatusCode == http.StatusOK
@@ -449,9 +482,9 @@ func formatErrorResponse(res *http.Response) string {
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
-func closeResponse(res *http.Response) error {
-	data, err := ioutil.ReadAll(res.Body)
+func closeResponse(rc io.ReadCloser) error {
+	data, err := ioutil.ReadAll(rc)
 	d.Chk.NoError(err)
 	d.Chk.True(0 == len(data), string(data))
-	return res.Body.Close()
+	return rc.Close()
 }
