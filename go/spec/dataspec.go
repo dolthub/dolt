@@ -58,8 +58,8 @@ type DatasetSpec struct {
 }
 
 type RefSpec struct {
-	StoreSpec DatabaseSpec
-	Ref       hash.Hash
+	DbSpec DatabaseSpec
+	Ref    hash.Hash
 }
 
 type PathSpec interface {
@@ -130,7 +130,7 @@ func ParseRefSpec(spec string) (RefSpec, error) {
 	}
 
 	if r, ok := hash.MaybeParse(dspec.DatasetName); ok {
-		return RefSpec{StoreSpec: dspec.DbSpec, Ref: r}, nil
+		return RefSpec{DbSpec: dspec.DbSpec, Ref: r}, nil
 	}
 
 	return RefSpec{}, fmt.Errorf("Invalid path spec: %s", spec)
@@ -208,11 +208,11 @@ func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
 }
 
 func (spec RefSpec) Value() (datas.Database, types.Value, error) {
-	store, err := spec.StoreSpec.Database()
+	db, err := spec.DbSpec.Database()
 	if err != nil {
 		return nil, nil, err
 	}
-	return store, store.ReadValue(spec.Ref), nil
+	return db, db.ReadValue(spec.Ref), nil
 }
 
 func RegisterDatabaseFlags() {
