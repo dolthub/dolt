@@ -138,7 +138,8 @@ func MakeStructType(name string, fields map[string]*Type) *Type {
 	return buildType(StructDesc{name, fs})
 }
 
-var fieldNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
+var fieldNameComponentRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*`)
+var fieldNameRe = regexp.MustCompile(fieldNameComponentRe.String() + "$")
 
 func verifyName(name, kind string) {
 	d.Exp.True(fieldNameRe.MatchString(name), `Invalid struct%s name: "%s"`, kind, name)

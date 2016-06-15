@@ -5,8 +5,11 @@
 package types
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/attic-labs/noms/go/d"
@@ -33,6 +36,50 @@ func (p Path) AddIndex(idx Value) Path {
 	p1 := make(Path, len(p), len(p)+1)
 	copy(p1, p)
 	return append(p1, newIndexPart(idx))
+}
+
+func (p Path) AddPath(str string) (Path, error) {
+	if len(str) == 0 {
+		return Path{}, errors.New("Empty path")
+	}
+
+	return p.addPath(str)
+}
+
+func (p Path) addPath(str string) (Path, error) {
+	if len(str) == 0 {
+		return p, nil
+	}
+
+	op, tail := str[0], str[1:]
+
+	switch op {
+	case '.':
+		idx := fieldNameComponentRe.FindIndex([]byte(tail))
+		if idx == nil {
+			return Path{}, errors.New("Invalid field " + tail)
+		}
+
+		return p.AddField(tail[:idx[1]]).addPath(tail[idx[1]:])
+
+	case '[':
+		if len(tail) == 0 {
+			return Path{}, errors.New("Path ends in [")
+		}
+
+		idx, rem, err := parsePathIndex(tail)
+		if err != nil {
+			return Path{}, err
+		}
+
+		return p.AddIndex(idx).addPath(rem)
+
+	case ']':
+		return Path{}, errors.New("] is missing opening [")
+
+	default:
+		return Path{}, errors.New(fmt.Sprintf("%c is not a valid operator", op))
+	}
 }
 
 func (p Path) Resolve(v Value) (resolved Value) {
@@ -110,4 +157,60 @@ func (ip indexPart) Resolve(v Value) Value {
 
 func (ip indexPart) String() string {
 	return fmt.Sprintf("[%s]", EncodedValue(ip.idx))
+}
+
+func parsePathIndex(str string) (idx Value, rem string, err error) {
+Switch:
+	switch str[0] {
+	case '"':
+		// String is complicated because ] might be quoted, and " or \ might be escaped.
+		stringBuf := bytes.Buffer{}
+		i := 1
+
+		for ; i < len(str); i++ {
+			c := str[i]
+			if c == '"' {
+				break
+			}
+			if c == '\\' && i < len(str)-1 {
+				i++
+				c = str[i]
+				if c != '\\' && c != '"' {
+					err = errors.New(`Only " and \ can be escaped`)
+					break Switch
+				}
+			}
+			stringBuf.WriteByte(c)
+		}
+
+		if i == len(str) {
+			err = errors.New("[ is missing closing ]")
+		} else {
+			idx = NewString(stringBuf.String())
+			rem = str[i+2:]
+		}
+
+	default:
+		split := strings.SplitN(str, "]", 2)
+		if len(split) < 2 {
+			err = errors.New("[ is missing closing ]")
+			break Switch
+		}
+
+		idxStr := split[0]
+		rem = split[1]
+
+		if idxStr == "true" {
+			idx = Bool(true)
+		} else if idxStr == "false" {
+			idx = Bool(false)
+		} else if i, err2 := strconv.ParseFloat(idxStr, 64); err2 == nil {
+			// Should we be more strict here? ParseFloat allows leading and trailing dots, and exponents.
+			idx = Number(i)
+		} else {
+			err = errors.New("Invalid index " + idxStr)
+		}
+	}
+
+	return
 }

@@ -146,7 +146,6 @@ func ParsePathSpec(spec string) (PathSpec, error) {
 		return nil, fmt.Errorf("Invalid path spec: %s", spec)
 	}
 	return pathSpec, nil
-
 }
 
 func (s DatabaseSpec) String() string {
