@@ -11,7 +11,7 @@ import (
 
 type StringEncoderDecoder struct{}
 
-func NewStringEncodedDecoder() StringEncoderDecoder {
+func StringEncodedDecoder() StringEncoderDecoder {
 	return StringEncoderDecoder{}
 }
 

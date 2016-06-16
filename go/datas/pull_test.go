@@ -189,7 +189,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	srcL := buildListOfHeight(3, suite.source)
 	sourceRef := suite.commitToSource(srcL, types.NewSet())
 
-	sinkL = sinkL.Append(types.NewString("oy!"))
+	sinkL = sinkL.Append(types.String("oy!"))
 	sinkRef = suite.commitToSink(sinkL, types.NewSet(sinkRef))
 	srcL = srcL.Set(1, buildListOfHeight(5, suite.source))
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
@@ -231,7 +231,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	sourceRef := suite.commitToSource(srcL, types.NewSet())
 	L3 := srcL.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
 	L2 := L3.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
-	L2 = L2.Append(suite.source.WriteValue(types.NewString("oy!")))
+	L2 = L2.Append(suite.source.WriteValue(types.String("oy!")))
 	L3 = L3.Set(1, suite.source.WriteValue(L2))
 	srcL = srcL.Set(1, suite.source.WriteValue(L3))
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))

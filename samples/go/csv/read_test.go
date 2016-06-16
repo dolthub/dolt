@@ -39,8 +39,8 @@ b,2,false
 	assert.Equal(types.NumberKind, desc.Field("B").Kind())
 	assert.Equal(types.BoolKind, desc.Field("C").Kind())
 
-	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.NewString("a")))
-	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.NewString("b")))
+	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.String("a")))
+	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.String("b")))
 
 	assert.True(l.Get(0).(types.Struct).Get("B").Equals(types.Number(1)))
 	assert.True(l.Get(1).(types.Struct).Get("B").Equals(types.Number(2)))
@@ -69,11 +69,11 @@ b,2,false
 			"C": types.BoolType,
 		}))))
 
-	assert.True(m.Get(types.NewString("a")).Equals(types.NewStruct("", map[string]types.Value{
+	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("", map[string]types.Value{
 		"B": types.Number(1),
 		"C": types.Bool(true),
 	})))
-	assert.True(m.Get(types.NewString("b")).Equals(types.NewStruct("", map[string]types.Value{
+	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("", map[string]types.Value{
 		"B": types.Number(2),
 		"C": types.Bool(false),
 	})))

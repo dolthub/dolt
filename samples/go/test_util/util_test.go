@@ -21,7 +21,7 @@ type LibTestSuite struct {
 }
 
 func (suite *LibTestSuite) TestPrimitiveTypes() {
-	suite.EqualValues(types.NewString("expected"), util.NomsValueFromDecodedJSON("expected", false))
+	suite.EqualValues(types.String("expected"), util.NomsValueFromDecodedJSON("expected", false))
 	suite.EqualValues(types.Bool(false), util.NomsValueFromDecodedJSON(false, false))
 	suite.EqualValues(types.Number(1.7), util.NomsValueFromDecodedJSON(1.7, false))
 	suite.False(util.NomsValueFromDecodedJSON(1.7, false).Equals(types.Bool(true)))
@@ -44,14 +44,14 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 	//  "map": {"nested": "string"}
 	// }
 	m := types.NewMap(
-		types.NewString("string"),
-		types.NewString("string"),
-		types.NewString("list"),
+		types.String("string"),
+		types.String("string"),
+		types.String("list"),
 		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
-		types.NewString("map"),
+		types.String("map"),
 		types.NewMap(
-			types.NewString("nested"),
-			types.NewString("string")))
+			types.String("nested"),
+			types.String("string")))
 	o := util.NomsValueFromDecodedJSON(map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
@@ -67,10 +67,10 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 	//  "struct": {"nested": "string"}
 	// }
 	tstruct := types.NewStruct("", map[string]types.Value{
-		"string": types.NewString("string"),
+		"string": types.String("string"),
 		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
 		"struct": types.NewStruct("", map[string]types.Value{
-			"nested": types.NewString("string"),
+			"nested": types.String("string"),
 		}),
 	})
 	o := util.NomsValueFromDecodedJSON(map[string]interface{}{

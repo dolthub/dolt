@@ -31,7 +31,7 @@ func TestLDBDatabase(t *testing.T) {
 	cs := chunks.NewLevelDBStoreUseFlags(ldbDir, "")
 	ds := datas.NewDatabase(cs)
 
-	s1 := types.NewString("A String")
+	s1 := types.String("A String")
 	s1Ref := ds.WriteValue(s1)
 	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, s1Ref))
 	ds.Close()
@@ -40,7 +40,7 @@ func TestLDBDatabase(t *testing.T) {
 	assert.NoError(errRead)
 	store, err := sp.Database()
 	assert.NoError(err)
-	assert.Equal(s1.String(), store.ReadValue(s1.Hash()).(types.String).String())
+	assert.Equal(s1, store.ReadValue(s1.Hash()))
 	store.Close()
 	os.Remove(dir)
 }
@@ -67,7 +67,7 @@ func TestMemDataset(t *testing.T) {
 	assert.NoError(err)
 	dataset1, err := sp1.Dataset()
 	assert.NoError(err)
-	commit := types.NewString("Commit Value")
+	commit := types.String("Commit Value")
 	dsTest, err := dataset1.Commit(commit)
 	assert.NoError(err)
 	assert.EqualValues(commit, dsTest.HeadValue())
@@ -84,7 +84,7 @@ func TestLDBDataset(t *testing.T) {
 	id := "dsName"
 
 	set := dataset.NewDataset(ds, id)
-	commit := types.NewString("Commit Value")
+	commit := types.String("Commit Value")
 	set, err = set.Commit(commit)
 	assert.NoError(err)
 	ds.Close()
@@ -109,7 +109,7 @@ func TestLDBObject(t *testing.T) {
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbpath, "")
 	store1 := datas.NewDatabase(cs1)
 	dataset1 := dataset.NewDataset(store1, dsId)
-	s1 := types.NewString("Commit Value")
+	s1 := types.String("Commit Value")
 	r1 := store1.WriteValue(s1)
 	_, err = dataset1.Commit(r1)
 	assert.NoError(err)
@@ -123,13 +123,13 @@ func TestLDBObject(t *testing.T) {
 	assert.NoError(err)
 	r2 := dataset2.HeadValue()
 	s2 := r2.(types.Ref).TargetValue(dataset2.Database())
-	assert.Equal(s1.String(), s2.(types.String).String())
+	assert.Equal(s1, s2)
 	dataset2.Database().Close()
 
 	spec3 := fmt.Sprintf("ldb:%s::%s", ldbpath, s1.Hash().String())
 	sp3, err := ParsePathSpec(spec3)
 	database, v3, err := sp3.Value()
-	assert.Equal(s1.String(), v3.(types.String).String())
+	assert.Equal(s1, v3)
 	database.Close()
 }
 
@@ -144,7 +144,7 @@ func TestReadRef(t *testing.T) {
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbPath, "")
 	database1 := datas.NewDatabase(cs1)
 	dataset1 := dataset.NewDataset(database1, datasetId)
-	commit := types.NewString("Commit Value")
+	commit := types.String("Commit Value")
 	dataset1, err = dataset1.Commit(commit)
 	assert.NoError(err)
 	r1 := dataset1.Head().Hash()

@@ -128,12 +128,12 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(Number(0))
 	assertRoundTrips(Number(1))
 
-	assertRoundTrips(NewString(""))
-	assertRoundTrips(NewString("foo"))
-	assertRoundTrips(NewString("AINT NO THANG"))
-	assertRoundTrips(NewString("💩"))
+	assertRoundTrips(String(""))
+	assertRoundTrips(String("foo"))
+	assertRoundTrips(String("AINT NO THANG"))
+	assertRoundTrips(String("💩"))
 
-	assertRoundTrips(NewStruct("", structData{"a": Bool(true), "b": NewString("foo"), "c": Number(2.3)}))
+	assertRoundTrips(NewStruct("", structData{"a": Bool(true), "b": String("foo"), "c": Number(2.3)}))
 
 	listLeaf := newList(newListLeafSequence(nil, Number(4), Number(5), Number(6), Number(7)))
 	assertRoundTrips(listLeaf)
@@ -185,7 +185,7 @@ func TestWritePrimitives(t *testing.T) {
 		[]interface{}{
 			uint8(StringKind), "hi",
 		},
-		NewString("hi"))
+		String("hi"))
 }
 
 func TestWriteSimpleBlob(t *testing.T) {
@@ -244,7 +244,7 @@ func TestWriteMap(t *testing.T) {
 		[]interface{}{
 			uint8(MapKind), uint8(StringKind), uint8(BoolKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(BoolKind), false, uint8(StringKind), "b", uint8(BoolKind), true,
 		},
-		NewMap(NewString("a"), Bool(false), NewString("b"), Bool(true)),
+		NewMap(String("a"), Bool(false), String("b"), Bool(true)),
 	)
 }
 
@@ -256,7 +256,7 @@ func TestWriteMapOfMap(t *testing.T) {
 			uint8(MapKind), uint8(StringKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(StringKind), "a", uint8(NumberKind), float64(0),
 			uint8(SetKind), uint8(BoolKind), false, uint32(1) /* len */, uint8(BoolKind), true,
 		},
-		NewMap(NewMap(NewString("a"), Number(0)), NewSet(Bool(true))),
+		NewMap(NewMap(String("a"), Number(0)), NewSet(Bool(true))),
 	)
 }
 
@@ -307,7 +307,7 @@ func TestWriteStructWithList(t *testing.T) {
 			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(StringKind),
 			uint8(ListKind), uint8(StringKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
 		},
-		NewStruct("S", structData{"l": NewList(NewString("a"), NewString("b"))}),
+		NewStruct("S", structData{"l": NewList(String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -391,9 +391,9 @@ func TestWriteListOfUnion(t *testing.T) {
 			uint32(4) /* len */, uint8(StringKind), "0", uint8(NumberKind), float64(1), uint8(StringKind), "2", uint8(BoolKind), true,
 		},
 		NewList(
-			NewString("0"),
+			String("0"),
 			Number(1),
-			NewString("2"),
+			String("2"),
 			Bool(true),
 		),
 	)
@@ -484,7 +484,7 @@ func TestWriteUnionList(t *testing.T) {
 			uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(StringKind), uint8(NumberKind),
 			false, uint32(2) /* len */, uint8(StringKind), "hi", uint8(NumberKind), float64(42),
 		},
-		NewList(NewString("hi"), Number(42)),
+		NewList(String("hi"), Number(42)),
 	)
 }
 

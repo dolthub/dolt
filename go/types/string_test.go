@@ -12,10 +12,10 @@ import (
 
 func TestStringEquals(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewString("foo")
-	s2 := NewString("foo")
+	s1 := String("foo")
+	s2 := String("foo")
 	s3 := s2
-	s4 := NewString("bar")
+	s4 := String("bar")
 	assert.True(s1.Equals(s2))
 	assert.True(s2.Equals(s1))
 	assert.True(s1.Equals(s3))
@@ -26,12 +26,12 @@ func TestStringEquals(t *testing.T) {
 
 func TestStringString(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewString("")
-	s2 := NewString("foo")
-	assert.Equal("", s1.String())
-	assert.Equal("foo", s2.String())
+	s1 := String("")
+	s2 := String("foo")
+	assert.Equal("", string(s1))
+	assert.Equal("foo", string(s2))
 }
 
 func TestStringType(t *testing.T) {
-	assert.True(t, NewString("hi").Type().Equals(StringType))
+	assert.True(t, String("hi").Type().Equals(StringType))
 }

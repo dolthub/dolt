@@ -49,11 +49,11 @@ func TestPullTopDown(t *testing.T) {
 
 	// Give sink and source some initial shared context.
 	sourceInitialValue := types.NewMap(
-		types.NewString("first"), NewList(source),
-		types.NewString("second"), NewList(source, types.Number(2)))
+		types.String("first"), NewList(source),
+		types.String("second"), NewList(source, types.Number(2)))
 	sinkInitialValue := types.NewMap(
-		types.NewString("first"), NewList(sink),
-		types.NewString("second"), NewList(sink, types.Number(2)))
+		types.String("first"), NewList(sink),
+		types.String("second"), NewList(sink, types.Number(2)))
 
 	var err error
 	source, err = source.Commit(sourceInitialValue)
@@ -63,13 +63,13 @@ func TestPullTopDown(t *testing.T) {
 
 	// Add some new stuff to source.
 	updatedValue := sourceInitialValue.Set(
-		types.NewString("third"), NewList(source, types.Number(3)))
+		types.String("third"), NewList(source, types.Number(3)))
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
 	// Add some more stuff, so that source isn't directly ahead of sink.
 	updatedValue = updatedValue.Set(
-		types.NewString("fourth"), NewList(source, types.Number(4)))
+		types.String("fourth"), NewList(source, types.Number(4)))
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
@@ -85,8 +85,8 @@ func TestPullFirstCommitTopDown(t *testing.T) {
 	source := createTestDataset("source")
 
 	sourceInitialValue := types.NewMap(
-		types.NewString("first"), NewList(source),
-		types.NewString("second"), NewList(source, types.Number(2)))
+		types.String("first"), NewList(source),
+		types.String("second"), NewList(source, types.Number(2)))
 
 	NewList(sink)
 	NewList(sink, types.Number(2))

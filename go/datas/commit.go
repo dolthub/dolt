@@ -33,7 +33,7 @@ func init() {
 
 func NewCommit() types.Struct {
 	initialFields := map[string]types.Value{
-		ValueField:   types.NewString(""),
+		ValueField:   types.String(""),
 		ParentsField: types.NewSet(),
 	}
 

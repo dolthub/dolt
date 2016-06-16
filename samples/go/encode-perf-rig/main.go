@@ -48,7 +48,7 @@ func runTest(encoderDecoder EncoderDecoder, n *big.Float) (nBytes uint64) {
 
 func getEncoder(name string) EncoderDecoder {
 	if name == "string" {
-		return NewStringEncodedDecoder()
+		return StringEncodedDecoder()
 	} else if name == "binary" {
 		return NewBinaryEncoderDecoder()
 	} else if name == "binary-int" {

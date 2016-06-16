@@ -97,7 +97,7 @@ func StringToType(s string, k types.NomsKind) types.Value {
 		d.Chk.NoError(err)
 		return types.Bool(bval)
 	case types.StringKind:
-		return types.NewString(s)
+		return types.String(s)
 	default:
 		d.Exp.Fail("Invalid column type kind:", k)
 	}

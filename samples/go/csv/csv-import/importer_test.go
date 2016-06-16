@@ -59,7 +59,7 @@ func (s *testSuite) TestCSVImporter() {
 	l.IterAll(func(v types.Value, j uint64) {
 		s.Equal(i, j)
 		st := v.(types.Struct)
-		s.Equal(types.NewString(fmt.Sprintf("a%d", i)), st.Get("a"))
+		s.Equal(types.String(fmt.Sprintf("a%d", i)), st.Get("a"))
 		s.Equal(types.Number(i), st.Get("b"))
 		i++
 	})
@@ -95,7 +95,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 
 	for i := 0; i < 20; i++ {
 		m.Get(types.Number(i)).(types.Struct).Equals(types.NewStruct("", map[string]types.Value{
-			"a": types.NewString(fmt.Sprintf("a%d", i)),
+			"a": types.String(fmt.Sprintf("a%d", i)),
 			"c": types.Number(i * 2),
 		}))
 	}
@@ -124,7 +124,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
 	st := v.(types.Struct)
-	s.Equal(types.NewString("1"), st.Get("a"))
+	s.Equal(types.String("1"), st.Get("a"))
 	s.Equal(types.Number(2), st.Get("b"))
 }
 
@@ -151,6 +151,6 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	s.Equal(uint64(1), l.Len())
 	v := l.Get(0)
 	st := v.(types.Struct)
-	s.Equal(types.NewString("7"), st.Get("x"))
+	s.Equal(types.String("7"), st.Get("x"))
 	s.Equal(types.Number(8), st.Get("y"))
 }

@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	portFlag = flag.Int("port", 8000, "port to listen on")
-	ldbDir   = flag.String("ldb-dir", "", "directory for ldb database")
-	authKeyFlag   = flag.String("authkey", "", "directory for ldb database")
+	portFlag    = flag.Int("port", 8000, "port to listen on")
+	ldbDir      = flag.String("ldb-dir", "", "directory for ldb database")
+	authKeyFlag = flag.String("authkey", "", "directory for ldb database")
 )
 
 func usage() {
@@ -42,6 +42,5 @@ func main() {
 	}
 	defer factory.Shutter()
 
-    
 	startWebServer(factory, *authKeyFlag)
 }

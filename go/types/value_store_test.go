@@ -43,7 +43,7 @@ func TestEnsureChunksInCache(t *testing.T) {
 	cvs := newLocalValueStore(cs)
 
 	b := NewEmptyBlob()
-	s := NewString("oy")
+	s := String("oy")
 	bref := NewRef(b)
 	sref := NewRef(s)
 	l := NewList(bref, sref)
@@ -65,7 +65,7 @@ func TestEnsureChunksFails(t *testing.T) {
 	bref := NewRef(b)
 	assert.Panics(func() { cvs.ensureChunksInCache(bref) })
 
-	s := NewString("oy")
+	s := String("oy")
 	cs.Put(EncodeValue(b, nil))
 	cs.Put(EncodeValue(s, nil))
 

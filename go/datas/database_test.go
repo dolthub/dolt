@@ -101,7 +101,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.Zero(datasets.Len())
 
 	// |a|
-	a := types.NewString("a")
+	a := types.String("a")
 	aCommit := NewCommit().Set(ValueField, a)
 	ds2, err := suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
@@ -121,7 +121,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.ds = ds2
 
 	// |a| <- |b|
-	b := types.NewString("b")
+	b := types.String("b")
 	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
@@ -131,14 +131,14 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	// |a| <- |b|
 	//   \----|c|
 	// Should be disallowed.
-	c := types.NewString("c")
+	c := types.String("c")
 	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b| <- |d|
-	d := types.NewString("d")
+	d := types.String("d")
 	dCommit := NewCommit().Set(ValueField, d).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
@@ -169,13 +169,13 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 
 	// |a|
 	var err error
-	a := types.NewString("a")
+	a := types.String("a")
 	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit().Set(ValueField, a))
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID1).Get(ValueField).Equals(a))
 
 	// ds1; |a|, ds2: |b|
-	b := types.NewString("b")
+	b := types.String("b")
 	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit().Set(ValueField, b))
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID2).Get(ValueField).Equals(b))
@@ -201,13 +201,13 @@ func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 	var err error
 
 	// |a|
-	a := types.NewString("a")
+	a := types.String("a")
 	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
 	// |a| <- |b|
-	b := types.NewString("b")
+	b := types.String("b")
 	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	ds2, err := suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
@@ -233,10 +233,10 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 
 	// Setup:
 	// |a| <- |b|
-	a := types.NewString("a")
+	a := types.String("a")
 	aCommit := NewCommit().Set(ValueField, a)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
-	b := types.NewString("b")
+	b := types.String("b")
 	bCommit := NewCommit().Set(ValueField, b).Set(ParentsField, types.NewSet(types.NewRef(aCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
@@ -247,7 +247,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 
 	// Change 1:
 	// |a| <- |b| <- |c|
-	c := types.NewString("c")
+	c := types.String("c")
 	cCommit := NewCommit().Set(ValueField, c).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.NoError(err)
@@ -256,7 +256,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// Change 2:
 	// |a| <- |b| <- |e|
 	// Should be disallowed, Database returned by Commit() should have |c| as Head.
-	e := types.NewString("e")
+	e := types.String("e")
 	eCommit := NewCommit().Set(ValueField, e).Set(ParentsField, types.NewSet(types.NewRef(bCommit)))
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
@@ -264,7 +264,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
-	r1 := suite.ds.WriteValue(types.NewString("hello"))
+	r1 := suite.ds.WriteValue(types.String("hello"))
 	suite.Equal(uint64(1), r1.Height())
 
 	r2 := suite.ds.WriteValue(r1)
@@ -277,8 +277,8 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	setOfRefOfStringType := types.MakeSetType(types.MakeRefType(types.StringType))
 
 	// Set<String>
-	v1 := types.NewString("hello")
-	v2 := types.NewString("world")
+	v1 := types.String("hello")
+	v2 := types.String("world")
 	s1 := types.NewSet(v1, v2)
 	suite.Equal(uint64(1), suite.ds.WriteValue(s1).Height())
 
@@ -287,8 +287,8 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	suite.Equal(uint64(2), suite.ds.WriteValue(s2).Height())
 
 	// List<Set<String>>
-	v3 := types.NewString("foo")
-	v4 := types.NewString("bar")
+	v3 := types.String("foo")
+	v4 := types.String("bar")
 	s3 := types.NewSet(v3, v4)
 	l1 := types.NewList(s1, s3)
 	suite.Equal(uint64(1), suite.ds.WriteValue(l1).Height())

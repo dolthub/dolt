@@ -27,7 +27,7 @@ func valToTypesValue(v interface{}) types.Value {
 	var v1 types.Value
 	switch t := v.(type) {
 	case string:
-		v1 = types.NewString(t)
+		v1 = types.String(t)
 	case int:
 		v1 = types.Number(t)
 	case types.Value:
@@ -108,7 +108,7 @@ func TestNomsStructDiff(t *testing.T) {
 		"field4", "field4-data",
 	}
 	s1 := createStruct("TestData", fieldData...)
-	s2 := s1.Set("field3", types.NewString("field3-data-diff"))
+	s2 := s1.Set("field3", types.String("field3-data-diff"))
 
 	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
 	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")

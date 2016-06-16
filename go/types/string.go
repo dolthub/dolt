@@ -6,40 +6,22 @@ package types
 
 import "github.com/attic-labs/noms/go/hash"
 
-type String struct {
-	s string
-	h *hash.Hash
-}
-
-func NewString(s string) String {
-	return String{s, &hash.Hash{}}
-}
-
-func (fs String) String() string {
-	return fs.s
-}
-
-func (s String) hashPointer() *hash.Hash {
-	return s.h
-}
+type String string
 
 // Value interface
 func (s String) Equals(other Value) bool {
-	if other, ok := other.(String); ok {
-		return s.s == other.s
-	}
-	return false
+	return s == other
 }
 
 func (s String) Less(other Value) bool {
 	if s2, ok := other.(String); ok {
-		return s.s < s2.s
+		return s < s2
 	}
 	return StringKind < other.Type().Kind()
 }
 
-func (fs String) Hash() hash.Hash {
-	return EnsureHash(fs.h, fs)
+func (s String) Hash() hash.Hash {
+	return getHash(s)
 }
 
 func (fs String) ChildValues() []Value {

@@ -41,20 +41,20 @@ func TestWriteHumanReadablePrimitiveValues(t *testing.T) {
 	assertWriteHRSEqual(t, "314159.26535", Number(3.1415926535e5))
 	assertWriteHRSEqual(t, "3.1415926535e+20", Number(3.1415926535e20))
 
-	assertWriteHRSEqual(t, `"abc"`, NewString("abc"))
-	assertWriteHRSEqual(t, `" "`, NewString(" "))
-	assertWriteHRSEqual(t, `"\t"`, NewString("\t"))
-	assertWriteHRSEqual(t, `"\t"`, NewString("	"))
-	assertWriteHRSEqual(t, `"\n"`, NewString("\n"))
-	assertWriteHRSEqual(t, `"\n"`, NewString(`
+	assertWriteHRSEqual(t, `"abc"`, String("abc"))
+	assertWriteHRSEqual(t, `" "`, String(" "))
+	assertWriteHRSEqual(t, `"\t"`, String("\t"))
+	assertWriteHRSEqual(t, `"\t"`, String("	"))
+	assertWriteHRSEqual(t, `"\n"`, String("\n"))
+	assertWriteHRSEqual(t, `"\n"`, String(`
 `))
-	assertWriteHRSEqual(t, `"\r"`, NewString("\r"))
-	assertWriteHRSEqual(t, `"\r\n"`, NewString("\r\n"))
-	assertWriteHRSEqual(t, `"\xff"`, NewString("\xff"))
-	assertWriteHRSEqual(t, `"💩"`, NewString("\xf0\x9f\x92\xa9"))
-	assertWriteHRSEqual(t, `"💩"`, NewString("💩"))
-	assertWriteHRSEqual(t, `"\a"`, NewString("\007"))
-	assertWriteHRSEqual(t, `"☺"`, NewString("\u263a"))
+	assertWriteHRSEqual(t, `"\r"`, String("\r"))
+	assertWriteHRSEqual(t, `"\r\n"`, String("\r\n"))
+	assertWriteHRSEqual(t, `"\xff"`, String("\xff"))
+	assertWriteHRSEqual(t, `"💩"`, String("\xf0\x9f\x92\xa9"))
+	assertWriteHRSEqual(t, `"💩"`, String("💩"))
+	assertWriteHRSEqual(t, `"\a"`, String("\007"))
+	assertWriteHRSEqual(t, `"☺"`, String("\u263a"))
 }
 
 func TestWriteHumanReadableRef(t *testing.T) {
@@ -84,8 +84,8 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	l := NewList(Number(0), Number(1))
 	l2 := NewList(Number(2), Number(3))
 
-	s := NewSet(NewString("a"), NewString("b"))
-	s2 := NewSet(NewString("c"), NewString("d"))
+	s := NewSet(String("a"), String("b"))
+	s2 := NewSet(String("c"), String("d"))
 
 	m := NewMap(s, l, s2, l2)
 	assertWriteHRSEqual(t, `{
@@ -232,20 +232,20 @@ func TestWriteHumanReadableTaggedPrimitiveValues(t *testing.T) {
 
 	assertWriteTaggedHRSEqual(t, "3.1415926535e+20", Number(3.1415926535e20))
 
-	assertWriteTaggedHRSEqual(t, `"abc"`, NewString("abc"))
-	assertWriteTaggedHRSEqual(t, `" "`, NewString(" "))
-	assertWriteTaggedHRSEqual(t, `"\t"`, NewString("\t"))
-	assertWriteTaggedHRSEqual(t, `"\t"`, NewString("	"))
-	assertWriteTaggedHRSEqual(t, `"\n"`, NewString("\n"))
-	assertWriteTaggedHRSEqual(t, `"\n"`, NewString(`
+	assertWriteTaggedHRSEqual(t, `"abc"`, String("abc"))
+	assertWriteTaggedHRSEqual(t, `" "`, String(" "))
+	assertWriteTaggedHRSEqual(t, `"\t"`, String("\t"))
+	assertWriteTaggedHRSEqual(t, `"\t"`, String("	"))
+	assertWriteTaggedHRSEqual(t, `"\n"`, String("\n"))
+	assertWriteTaggedHRSEqual(t, `"\n"`, String(`
 `))
-	assertWriteTaggedHRSEqual(t, `"\r"`, NewString("\r"))
-	assertWriteTaggedHRSEqual(t, `"\r\n"`, NewString("\r\n"))
-	assertWriteTaggedHRSEqual(t, `"\xff"`, NewString("\xff"))
-	assertWriteTaggedHRSEqual(t, `"💩"`, NewString("\xf0\x9f\x92\xa9"))
-	assertWriteTaggedHRSEqual(t, `"💩"`, NewString("💩"))
-	assertWriteTaggedHRSEqual(t, `"\a"`, NewString("\007"))
-	assertWriteTaggedHRSEqual(t, `"☺"`, NewString("\u263a"))
+	assertWriteTaggedHRSEqual(t, `"\r"`, String("\r"))
+	assertWriteTaggedHRSEqual(t, `"\r\n"`, String("\r\n"))
+	assertWriteTaggedHRSEqual(t, `"\xff"`, String("\xff"))
+	assertWriteTaggedHRSEqual(t, `"💩"`, String("\xf0\x9f\x92\xa9"))
+	assertWriteTaggedHRSEqual(t, `"💩"`, String("💩"))
+	assertWriteTaggedHRSEqual(t, `"\a"`, String("\007"))
+	assertWriteTaggedHRSEqual(t, `"☺"`, String("\u263a"))
 }
 
 func TestWriteHumanReadableTaggedType(t *testing.T) {

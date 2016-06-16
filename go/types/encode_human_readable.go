@@ -62,7 +62,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write(strconv.FormatFloat(float64(v.(Number)), 'g', -1, 64))
 
 	case StringKind:
-		w.write(strconv.Quote(v.(String).String()))
+		w.write(strconv.Quote(string(v.(String))))
 
 	case BlobKind:
 		w.maybeWriteIndentation()

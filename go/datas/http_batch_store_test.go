@@ -113,7 +113,7 @@ func (suite *HTTPBatchStoreSuite) TearDownTest() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestPutChunk() {
-	c := types.EncodeValue(types.NewString("abc"), nil)
+	c := types.EncodeValue(types.String("abc"), nil)
 	suite.store.SchedulePut(c, 1, types.Hints{})
 	suite.store.Flush()
 
@@ -122,8 +122,8 @@ func (suite *HTTPBatchStoreSuite) TestPutChunk() {
 
 func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	vals := []types.Value{
-		types.NewString("abc"),
-		types.NewString("def"),
+		types.String("abc"),
+		types.String("def"),
 	}
 	l := types.NewList()
 	for _, val := range vals {
@@ -138,8 +138,8 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 
 func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	vals := []types.Value{
-		types.NewString("abc"),
-		types.NewString("def"),
+		types.String("abc"),
+		types.String("def"),
 	}
 	chnx := []chunks.Chunk{
 		types.EncodeValue(vals[0], nil),
@@ -189,8 +189,8 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 	defer bpcs.Close()
 
 	vals := []types.Value{
-		types.NewString("abc"),
-		types.NewString("def"),
+		types.String("abc"),
+		types.String("def"),
 	}
 	l := types.NewList()
 	for _, v := range vals {

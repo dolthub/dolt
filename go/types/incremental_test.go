@@ -16,12 +16,12 @@ var (
 	testVals = []Value{
 		Bool(true),
 		Number(1),
-		NewString("hi"),
+		String("hi"),
 		NewBlob(bytes.NewReader([]byte("hi"))),
 		// compoundBlob
-		NewSet(NewString("hi")),
-		NewList(NewString("hi")),
-		NewMap(NewString("hi"), NewString("hi")),
+		NewSet(String("hi")),
+		NewList(String("hi")),
+		NewMap(String("hi"), String("hi")),
 	}
 )
 

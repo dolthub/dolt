@@ -134,11 +134,11 @@ func diffStructs(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Struct) 
 		f2 := v2.Get(field)
 		if canCompare(f1, f2) {
 			p1 := p.AddField(field)
-			dq.PushBack(diffInfo{path: p1, key: types.NewString(field), v1: f1, v2: f2})
+			dq.PushBack(diffInfo{path: p1, key: types.String(field), v1: f1, v2: f2})
 		} else {
 			wroteHeader = writeHeader(w, wroteHeader, p)
-			line(w, subPrefix, types.NewString(field), f1)
-			line(w, addPrefix, types.NewString(field), f2)
+			line(w, subPrefix, types.String(field), f1)
+			line(w, addPrefix, types.String(field), f2)
 		}
 	}
 }
@@ -148,7 +148,7 @@ func diffSets(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Set) {
 	added, removed := v2.Diff(v1)
 	if len(added) == 1 && len(removed) == 1 && canCompare(added[0], removed[0]) {
 		p1 := p.AddField(added[0].Hash().String())
-		dq.PushBack(diffInfo{path: p1, key: types.NewString(""), v1: removed[0], v2: added[0]})
+		dq.PushBack(diffInfo{path: p1, key: types.String(""), v1: removed[0], v2: added[0]})
 	} else {
 		for _, value := range removed {
 			wroteHeader = writeHeader(w, wroteHeader, p)

@@ -70,8 +70,8 @@ func addPerson(ds dataset.Dataset) {
 
 	np := types.NewStruct("Person", map[string]types.Value{
 		"id":    types.Number(id),
-		"name":  types.NewString(flag.Arg(2)),
-		"title": types.NewString(flag.Arg(3)),
+		"name":  types.String(flag.Arg(2)),
+		"title": types.String(flag.Arg(3)),
 	})
 
 	ds.Commit(getPersons(ds).Set(types.Number(id), np))
@@ -87,9 +87,9 @@ func listPersons(ds dataset.Dataset) {
 	d.IterAll(func(k, v types.Value) {
 		s := v.(types.Struct)
 		fmt.Printf("%s (id: %d, title: %s)\n",
-			s.Get("name").(types.String).String(),
+			s.Get("name"),
 			uint64(s.Get("id").(types.Number)),
-			s.Get("title").(types.String).String())
+			s.Get("title"))
 	})
 }
 

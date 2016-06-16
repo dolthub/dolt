@@ -125,7 +125,7 @@ func makeBlobBytes(byteLength uint64) []byte {
 }
 
 func createString(i uint64) types.Value {
-	return types.NewString(fmt.Sprintf("%s%d", strPrefix, i))
+	return types.String(fmt.Sprintf("%s%d", strPrefix, i))
 }
 
 func createNumber(i uint64) types.Value {
@@ -140,7 +140,7 @@ var structType = types.MakeStructType("S1", map[string]*types.Type{
 
 func createStruct(i uint64) types.Value {
 	return types.NewStructWithType(structType, map[string]types.Value{
-		"str":  types.NewString(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
+		"str":  types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
 		"num":  types.Number(i),
 		"bool": types.Bool(i%2 == 0),
 	})

@@ -72,7 +72,7 @@ func TestWriteValue(t *testing.T) {
 	assert.Equal(http.StatusOK, w.Code)
 
 	tval := types.Bool(true)
-	wval := types.NewString(testString)
+	wval := types.String(testString)
 	chunk1 := types.EncodeValue(tval, nil)
 	chunk2 := types.EncodeValue(wval, nil)
 	refList := types.NewList(types.NewRef(tval), types.NewRef(wval))
@@ -112,5 +112,5 @@ func TestWriteValue(t *testing.T) {
 	ms := chunks.NewMemoryStore()
 	chunks.Deserialize(w.Body, ms, nil)
 	v := types.DecodeValue(ms.Get(whash), datas.NewDatabase(ms))
-	assert.Equal(testString, v.(types.String).String())
+	assert.Equal(testString, string(v.(types.String)))
 }

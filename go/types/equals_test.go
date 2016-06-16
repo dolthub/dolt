@@ -21,9 +21,9 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return Number(0) },
 		func() Value { return Number(-1) },
 		func() Value { return Number(1) },
-		func() Value { return NewString("") },
-		func() Value { return NewString("hi") },
-		func() Value { return NewString("bye") },
+		func() Value { return String("") },
+		func() Value { return String("hi") },
+		func() Value { return String("bye") },
 		func() Value {
 			return NewBlob(&bytes.Buffer{})
 		},
@@ -42,12 +42,12 @@ func TestValueEquals(t *testing.T) {
 			}, nil))
 		},
 		func() Value { return NewList() },
-		func() Value { return NewList(NewString("foo")) },
-		func() Value { return NewList(NewString("bar")) },
+		func() Value { return NewList(String("foo")) },
+		func() Value { return NewList(String("bar")) },
 		func() Value { return NewMap() },
-		func() Value { return NewMap(NewString("a"), NewString("a")) },
+		func() Value { return NewMap(String("a"), String("a")) },
 		func() Value { return NewSet() },
-		func() Value { return NewSet(NewString("hi")) },
+		func() Value { return NewSet(String("hi")) },
 
 		func() Value { return BoolType },
 		func() Value { return StringType },

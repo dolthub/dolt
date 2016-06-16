@@ -38,7 +38,7 @@ func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
 }
 
 func (ds *databaseCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
-	if r, ok := ds.Datasets().MaybeGet(types.NewString(datasetID)); ok {
+	if r, ok := ds.Datasets().MaybeGet(types.String(datasetID)); ok {
 		return r.(types.Ref), true
 	}
 	return types.Ref{}, false
@@ -103,7 +103,7 @@ func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error 
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
-		r, hasHead := currentDatasets.MaybeGet(types.NewString(datasetID))
+		r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
 
 		// First commit in dataset is always fast-foward.
 		if hasHead {
@@ -117,14 +117,14 @@ func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error 
 			}
 		}
 	}
-	currentDatasets = currentDatasets.Set(types.NewString(datasetID), commitRef)
+	currentDatasets = currentDatasets.Set(types.String(datasetID), commitRef)
 	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootRef is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (ds *databaseCommon) doDelete(datasetID string) error {
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
-	currentDatasets = currentDatasets.Remove(types.NewString(datasetID))
+	currentDatasets = currentDatasets.Remove(types.String(datasetID))
 	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 

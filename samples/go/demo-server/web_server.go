@@ -25,7 +25,7 @@ const (
 var (
 	authRegexp = regexp.MustCompile("^Bearer\\s+(\\S*)$")
 	router     *httprouter.Router
-    authKey    = ""
+	authKey    = ""
 )
 
 func setupWebServer(factory chunks.Factory) *httprouter.Router {
@@ -59,8 +59,8 @@ func setupWebServer(factory chunks.Factory) *httprouter.Router {
 }
 
 func startWebServer(factory chunks.Factory, key string) {
-    d.Chk.NotEmpty(key, "No auth key was provided to startWebServer")
-    authKey = key
+	d.Chk.NotEmpty(key, "No auth key was provided to startWebServer")
+	authKey = key
 	router = setupWebServer(factory)
 
 	fmt.Printf("Listening on http://localhost:%d/...\n", *portFlag)
@@ -71,7 +71,7 @@ func startWebServer(factory chunks.Factory, key string) {
 			router.ServeHTTP(w, req)
 		}),
 	}
-    
+
 	log.Fatal(srv.Serve(l))
 }
 

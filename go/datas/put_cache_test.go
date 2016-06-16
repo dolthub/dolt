@@ -31,11 +31,11 @@ type LevelDBPutCacheSuite struct {
 func (suite *LevelDBPutCacheSuite) SetupTest() {
 	suite.cache = newOrderedChunkCache()
 	suite.values = []types.Value{
-		types.NewString("abc"),
-		types.NewString("def"),
-		types.NewString("ghi"),
-		types.NewString("jkl"),
-		types.NewString("mno"),
+		types.String("abc"),
+		types.String("def"),
+		types.String("ghi"),
+		types.String("jkl"),
+		types.String("mno"),
 	}
 	suite.chnx = map[hash.Hash]chunks.Chunk{}
 	for _, v := range suite.values {

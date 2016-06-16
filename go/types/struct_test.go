@@ -18,9 +18,9 @@ func TestGenericStructEquals(t *testing.T) {
 		"s": StringType,
 	})
 
-	data1 := structData{"x": Bool(true), "s": NewString("hi")}
+	data1 := structData{"x": Bool(true), "s": String("hi")}
 	s1 := newStructFromData(data1, typ)
-	data2 := structData{"x": Bool(true), "s": NewString("hi")}
+	data2 := structData{"x": Bool(true), "s": String("hi")}
 	s2 := newStructFromData(data2, typ)
 
 	assert.True(s1.Equals(s2))
@@ -46,29 +46,29 @@ func TestGenericStructChunks(t *testing.T) {
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStruct("S2", map[string]Value{"b": Bool(true), "o": NewString("hi")})
+	s := NewStruct("S2", map[string]Value{"b": Bool(true), "o": String("hi")})
 	assert.True(s.Get("b").Equals(Bool(true)))
 	_, ok := s.MaybeGet("missing")
 	assert.False(ok)
 
-	s2 := NewStruct("S2", map[string]Value{"b": Bool(false), "o": NewString("hi")})
+	s2 := NewStruct("S2", map[string]Value{"b": Bool(false), "o": String("hi")})
 	assert.True(s2.Get("b").Equals(Bool(false)))
 	o, ok := s2.MaybeGet("o")
 	assert.True(ok)
-	assert.True(NewString("hi").Equals(o))
+	assert.True(String("hi").Equals(o))
 
 	typ := MakeStructType("S2", TypeMap{
 		"b": BoolType,
 		"o": StringType,
 	})
 	assert.Panics(func() { NewStructWithType(typ, nil) })
-	assert.Panics(func() { NewStructWithType(typ, map[string]Value{"o": NewString("hi")}) })
+	assert.Panics(func() { NewStructWithType(typ, map[string]Value{"o": String("hi")}) })
 }
 
 func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStruct("S3", map[string]Value{"b": Bool(true), "o": NewString("hi")})
+	s := NewStruct("S3", map[string]Value{"b": Bool(true), "o": String("hi")})
 	s2 := s.Set("b", Bool(false))
 
 	assert.Panics(func() { s.Set("b", Number(1)) })
@@ -89,52 +89,52 @@ func TestStructDiff(t *testing.T) {
 		}
 	}
 
-	s1 := NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("hi"), "c": Number(4)})
+	s1 := NewStruct("", map[string]Value{"a": Bool(true), "b": String("hi"), "c": Number(4)})
 
 	assertDiff([]string{}, s1,
-		NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("hi"), "c": Number(4)}))
+		NewStruct("", map[string]Value{"a": Bool(true), "b": String("hi"), "c": Number(4)}))
 
 	assertDiff([]string{"a", "b"}, s1,
-		NewStruct("", map[string]Value{"a": Bool(false), "b": NewString("bye"), "c": Number(4)}))
+		NewStruct("", map[string]Value{"a": Bool(false), "b": String("bye"), "c": Number(4)}))
 
 	assertDiff([]string{"b", "c"}, s1,
-		NewStruct("", map[string]Value{"a": Bool(true), "b": NewString("bye"), "c": Number(5)}))
+		NewStruct("", map[string]Value{"a": Bool(true), "b": String("bye"), "c": Number(5)}))
 
 	assertDiff([]string{"a", "c"}, s1,
-		NewStruct("", map[string]Value{"a": Bool(false), "b": NewString("hi"), "c": Number(10)}))
+		NewStruct("", map[string]Value{"a": Bool(false), "b": String("hi"), "c": Number(10)}))
 
 	s2 := NewStruct("", map[string]Value{
 		"a": NewList(Number(0), Number(1)),
-		"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
-		"c": NewSet(Number(0), Number(1), NewString("foo")),
+		"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
+		"c": NewSet(Number(0), Number(1), String("foo")),
 	})
 
 	assertDiff([]string{}, s2,
 		NewStruct("", map[string]Value{
 			"a": NewList(Number(0), Number(1)),
-			"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), NewString("foo")),
+			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]string{"a", "b"}, s2,
 		NewStruct("", map[string]Value{
 			"a": NewList(Number(1), Number(1)),
-			"b": NewMap(NewString("foo"), Bool(true), NewString("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), NewString("foo")),
+			"b": NewMap(String("foo"), Bool(true), String("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]string{"a", "c"}, s2,
 		NewStruct("", map[string]Value{
 			"a": NewList(Number(0)),
-			"b": NewMap(NewString("foo"), Bool(false), NewString("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(2), NewString("foo")),
+			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(2), String("foo")),
 		}))
 
 	assertDiff([]string{"b", "c"}, s2,
 		NewStruct("", map[string]Value{
 			"a": NewList(Number(0), Number(1)),
-			"b": NewMap(NewString("boo"), Bool(false), NewString("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), NewString("bar")),
+			"b": NewMap(String("boo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(Number(0), Number(1), String("bar")),
 		}))
 }
 

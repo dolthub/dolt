@@ -40,7 +40,7 @@ func (suite *WalkAllTestSuite) storeAndRef(v types.Value) types.Ref {
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
 	suite.walkWorker(suite.storeAndRef(types.Number(0.0)), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewString("hello")), 2)
+	suite.walkWorker(suite.storeAndRef(types.String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
@@ -79,12 +79,12 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	//  []: "wow"
 	// }
 	nested := types.NewMap(
-		types.NewString("string"), types.NewString("string"),
-		types.NewString("list"), suite.NewList(cs, types.Bool(false), types.Bool(true)),
-		types.NewString("map"), suite.NewMap(cs, types.NewString("nested"), types.NewString("string")),
-		types.NewString("mtlist"), suite.NewList(cs),
-		types.NewString("set"), suite.NewSet(cs, types.Number(5), types.Number(7), types.Number(8)),
-		suite.NewList(cs), types.NewString("wow"), // note that the dupe list chunk is skipped
+		types.String("string"), types.String("string"),
+		types.String("list"), suite.NewList(cs, types.Bool(false), types.Bool(true)),
+		types.String("map"), suite.NewMap(cs, types.String("nested"), types.String("string")),
+		types.String("mtlist"), suite.NewList(cs),
+		types.String("set"), suite.NewSet(cs, types.Number(5), types.Number(7), types.Number(8)),
+		suite.NewList(cs), types.String("wow"), // note that the dupe list chunk is skipped
 	)
 	suite.walkWorker(suite.storeAndRef(nested), 25)
 }
@@ -99,7 +99,7 @@ type WalkTestSuite struct {
 
 func (suite *WalkTestSuite) SetupTest() {
 	suite.vs = types.NewTestValueStore()
-	suite.shouldSeeItem = types.NewString("zzz")
+	suite.shouldSeeItem = types.String("zzz")
 	suite.shouldSee = types.NewList(suite.shouldSeeItem)
 	suite.deadValue = types.Number(0xDEADBEEF)
 	suite.mustSkip = types.NewList(suite.deadValue)
@@ -143,7 +143,7 @@ func (suite *WalkTestSuite) SkipTestSkipSetElement() {
 }
 
 func (suite *WalkTestSuite) SkipTestSkipMapValue() {
-	shouldAlsoSeeItem := types.NewString("Also good")
+	shouldAlsoSeeItem := types.String("Also good")
 	shouldAlsoSee := types.NewSet(shouldAlsoSeeItem)
 	wholeMap := types.NewMap(suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)

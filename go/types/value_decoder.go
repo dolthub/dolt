@@ -136,7 +136,7 @@ func (r *valueDecoder) readValue() Value {
 	case NumberKind:
 		return Number(r.readFloat64())
 	case StringKind:
-		return NewString(r.readString())
+		return String(r.readString())
 	case ListKind:
 		isMeta := r.readBool()
 		if isMeta {

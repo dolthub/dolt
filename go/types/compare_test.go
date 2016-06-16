@@ -17,7 +17,7 @@ func TestTotalOrdering(t *testing.T) {
 	values := []Value{
 		Bool(false), Bool(true),
 		Number(-10), Number(0), Number(10),
-		NewString("a"), NewString("b"), NewString("c"),
+		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
 		BoolType,

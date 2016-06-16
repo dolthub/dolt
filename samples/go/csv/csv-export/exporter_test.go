@@ -56,7 +56,7 @@ func (s *testSuite) TestCSVExporter() {
 		fields := make(map[string]types.Value)
 		for j, v := range row {
 			name := header[j]
-			fields[name] = types.NewString(v)
+			fields[name] = types.String(v)
 		}
 		structs[i] = types.NewStructWithType(typ, fields)
 	}

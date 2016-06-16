@@ -49,7 +49,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	ds, err := sp.Dataset()
 	d.Chk.NoError(err)
 
-	s1 := types.NewString("test string")
+	s1 := types.String("test string")
 	r := writeTestData(ds, s1)
 	s.Equal(res1, s.Run(main, []string{str}))
 
@@ -57,7 +57,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	s.Equal(res2, s.Run(main, []string{spec1}))
 
 	ds, err = sp.Dataset()
-	list := types.NewList(types.NewString("elem1"), types.Number(2), types.NewString("elem3"))
+	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
 	r = writeTestData(ds, list)
 	s.Equal(res3, s.Run(main, []string{str}))
 

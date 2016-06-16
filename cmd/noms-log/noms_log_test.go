@@ -67,7 +67,7 @@ func (s *nomsShowTestSuite) TestNomsLog() {
 }
 
 func addCommit(ds dataset.Dataset, v string) (dataset.Dataset, error) {
-	return ds.Commit(types.NewString(v))
+	return ds.Commit(types.String(v))
 }
 
 func addCommitWithValue(ds dataset.Dataset, v types.Value) (dataset.Dataset, error) {
@@ -75,11 +75,11 @@ func addCommitWithValue(ds dataset.Dataset, v types.Value) (dataset.Dataset, err
 }
 
 func addBranchedDataset(newDs, parentDs dataset.Dataset, v string) (dataset.Dataset, error) {
-	return newDs.CommitWithParents(types.NewString(v), types.NewSet().Insert(parentDs.HeadRef()))
+	return newDs.CommitWithParents(types.String(v), types.NewSet().Insert(parentDs.HeadRef()))
 }
 
 func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) {
-	return ds1.CommitWithParents(types.NewString(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
+	return ds1.CommitWithParents(types.String(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
 }
 
 func (s *nomsShowTestSuite) TestNArg() {
@@ -247,7 +247,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}
 		for _, v := range l {
-			nv = append(nv, types.NewString(v))
+			nv = append(nv, types.String(v))
 		}
 		return types.NewList(nv...)
 	}

@@ -20,12 +20,12 @@ func TestDatasetCommitTracker(t *testing.T) {
 	cs := chunks.NewMemoryStore()
 
 	ds1 := NewDataset(datas.NewDatabase(cs), id1)
-	ds1Commit := types.NewString("Commit value for " + id1)
+	ds1Commit := types.String("Commit value for " + id1)
 	ds1, err := ds1.Commit(ds1Commit)
 	assert.NoError(err)
 
 	ds2 := NewDataset(datas.NewDatabase(cs), id2)
-	ds2Commit := types.NewString("Commit value for " + id2)
+	ds2Commit := types.String("Commit value for " + id2)
 	ds2, err = ds2.Commit(ds2Commit)
 	assert.NoError(err)
 
@@ -51,7 +51,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	ds1 := newDS(id1, cs)
 
 	// ds1: |a|
-	a := types.NewString("a")
+	a := types.String("a")
 	ds1, err := ds1.Commit(a)
 	assert.NoError(err)
 	assert.True(ds1.Head().Get(datas.ValueField).Equals(a))
@@ -64,14 +64,14 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert.True(ds2.Head().Get(datas.ValueField).Equals(a))
 
 	// ds1: |a| <- |b|
-	b := types.NewString("b")
+	b := types.String("b")
 	ds1, err = ds1.Commit(b)
 	assert.NoError(err)
 	assert.True(ds1.Head().Get(datas.ValueField).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
-	c := types.NewString("c")
+	c := types.String("c")
 	ds2, err = ds2.Commit(c)
 	assert.NoError(err)
 	assert.True(ds2.Head().Get(datas.ValueField).Equals(c))
@@ -79,7 +79,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
 	mergeParents := types.NewSet(types.NewRef(ds1.Head()), types.NewRef(ds2.Head()))
-	d := types.NewString("d")
+	d := types.String("d")
 	ds2, err = ds2.CommitWithParents(d, mergeParents)
 	assert.NoError(err)
 	assert.True(ds2.Head().Get(datas.ValueField).Equals(d))
@@ -98,7 +98,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	dsy := newDS(id1, cs)
 
 	// dsx: || -> |a|
-	a := types.NewString("a")
+	a := types.String("a")
 	dsx, err := dsx.Commit(a)
 	assert.NoError(err)
 	assert.True(dsx.Head().Get(datas.ValueField).Equals(a))
@@ -106,7 +106,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	// dsy: || -> |b|
 	_, ok := dsy.MaybeHead()
 	assert.False(ok)
-	b := types.NewString("b")
+	b := types.String("b")
 	dsy, err = dsy.Commit(b)
 	assert.Error(err)
 	// Commit failed, but ds1 now has latest head, so we should be able to just try again.
@@ -121,7 +121,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	id1 := "testdataset"
 	cs := chunks.NewMemoryStore()
 
-	a := types.NewString("a")
+	a := types.String("a")
 	{
 		// ds1: || -> |a|
 		ds1 := newDS(id1, cs)
@@ -135,14 +135,14 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 
 	// dsx: |a| -> |b|
 	assert.True(dsx.Head().Get(datas.ValueField).Equals(a))
-	b := types.NewString("b")
+	b := types.String("b")
 	dsx, err := dsx.Commit(b)
 	assert.NoError(err)
 	assert.True(dsx.Head().Get(datas.ValueField).Equals(b))
 
 	// dsy: |a| -> |c|
 	assert.True(dsy.Head().Get(datas.ValueField).Equals(a))
-	c := types.NewString("c")
+	c := types.String("c")
 	dsy, err = dsy.Commit(c)
 	assert.Error(err)
 	assert.True(dsy.Head().Get(datas.ValueField).Equals(b))
@@ -175,7 +175,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	ds1 := newDS(id1, cs)
 
 	// ds1: |a|
-	a := types.NewString("a")
+	a := types.String("a")
 	ds1, err := ds1.Commit(a)
 	assert.NoError(err)
 

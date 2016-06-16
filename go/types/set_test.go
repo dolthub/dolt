@@ -228,7 +228,7 @@ func TestSetLen(t *testing.T) {
 	assert := assert.New(t)
 	s0 := NewSet()
 	assert.Equal(uint64(0), s0.Len())
-	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
+	s1 := NewSet(Bool(true), Number(1), String("hi"))
 	assert.Equal(uint64(3), s1.Len())
 	diffSetTest(assert, s0, s1, 0, 3)
 	diffSetTest(assert, s1, s0, 3, 0)
@@ -283,11 +283,11 @@ func TestSetDuplicateInsert(t *testing.T) {
 
 func TestSetUniqueKeysString(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(NewString("hello"), NewString("world"), NewString("hello"))
+	s1 := NewSet(String("hello"), String("world"), String("hello"))
 	assert.Equal(uint64(2), s1.Len())
-	assert.True(s1.Has(NewString("hello")))
-	assert.True(s1.Has(NewString("world")))
-	assert.False(s1.Has(NewString("foo")))
+	assert.True(s1.Has(String("hello")))
+	assert.True(s1.Has(String("world")))
+	assert.False(s1.Has(String("foo")))
 }
 
 func TestSetUniqueKeysNumber(t *testing.T) {
@@ -303,13 +303,13 @@ func TestSetUniqueKeysNumber(t *testing.T) {
 
 func TestSetHas(t *testing.T) {
 	assert := assert.New(t)
-	s1 := NewSet(Bool(true), Number(1), NewString("hi"))
+	s1 := NewSet(Bool(true), Number(1), String("hi"))
 	assert.True(s1.Has(Bool(true)))
 	assert.False(s1.Has(Bool(false)))
 	assert.True(s1.Has(Number(1)))
 	assert.False(s1.Has(Number(0)))
-	assert.True(s1.Has(NewString("hi")))
-	assert.False(s1.Has(NewString("ho")))
+	assert.True(s1.Has(String("hi")))
+	assert.False(s1.Has(String("ho")))
 
 	s2 := s1.Insert(Bool(false))
 	assert.True(s2.Has(Bool(false)))
@@ -606,20 +606,20 @@ func TestSetOrdering(t *testing.T) {
 	testSetOrder(assert,
 		StringType,
 		[]Value{
-			NewString("a"),
-			NewString("z"),
-			NewString("b"),
-			NewString("y"),
-			NewString("c"),
-			NewString("x"),
+			String("a"),
+			String("z"),
+			String("b"),
+			String("y"),
+			String("c"),
+			String("x"),
 		},
 		[]Value{
-			NewString("a"),
-			NewString("b"),
-			NewString("c"),
-			NewString("x"),
-			NewString("y"),
-			NewString("z"),
+			String("a"),
+			String("b"),
+			String("c"),
+			String("x"),
+			String("y"),
+			String("z"),
 		},
 	)
 
@@ -686,21 +686,21 @@ func TestSetOrdering(t *testing.T) {
 	testSetOrder(assert,
 		ValueType,
 		[]Value{
-			NewString("a"),
-			NewString("z"),
-			NewString("b"),
-			NewString("y"),
-			NewString("c"),
-			NewString("x"),
+			String("a"),
+			String("z"),
+			String("b"),
+			String("y"),
+			String("c"),
+			String("x"),
 		},
 		// Ordered by value
 		[]Value{
-			NewString("a"),
-			NewString("b"),
-			NewString("c"),
-			NewString("x"),
-			NewString("y"),
-			NewString("z"),
+			String("a"),
+			String("b"),
+			String("c"),
+			String("x"),
+			String("y"),
+			String("z"),
 		},
 	)
 
@@ -817,12 +817,12 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		assert.IsType(c, s.sequence())
 		assert.True(s.Type().Equals(MakeSetType(NumberType)))
 
-		s = s.Insert(NewString("a"))
+		s = s.Insert(String("a"))
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.sequence())
 		assert.True(s.Type().Equals(MakeSetType(MakeUnionType(NumberType, StringType))))
 
-		s = s.Remove(NewString("a"))
+		s = s.Remove(String("a"))
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.sequence())
 		assert.True(s.Type().Equals(MakeSetType(NumberType)))

@@ -28,7 +28,7 @@ import (
 func NomsValueFromDecodedJSON(o interface{}, useStruct bool) types.Value {
 	switch o := o.(type) {
 	case string:
-		return types.NewString(o)
+		return types.String(o)
 	case bool:
 		return types.Bool(o)
 	case float64:
@@ -61,7 +61,7 @@ func NomsValueFromDecodedJSON(o interface{}, useStruct bool) types.Value {
 			for k, v := range o {
 				nv := NomsValueFromDecodedJSON(v, useStruct)
 				if nv != nil {
-					kv = append(kv, types.NewString(k), nv)
+					kv = append(kv, types.String(k), nv)
 				}
 			}
 			v = types.NewMap(kv...)

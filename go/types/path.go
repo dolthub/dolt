@@ -186,7 +186,7 @@ Switch:
 		if i == len(str) {
 			err = errors.New("[ is missing closing ]")
 		} else {
-			idx = NewString(stringBuf.String())
+			idx = String(stringBuf.String())
 			rem = str[i+2:]
 		}
 

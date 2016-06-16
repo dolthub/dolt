@@ -283,23 +283,23 @@ func TestNewMap(t *testing.T) {
 	assert := assert.New(t)
 	m := NewMap()
 	assert.Equal(uint64(0), m.Len())
-	m = NewMap(NewString("foo1"), NewString("bar1"), NewString("foo2"), NewString("bar2"))
+	m = NewMap(String("foo1"), String("bar1"), String("foo2"), String("bar2"))
 	assert.Equal(uint64(2), m.Len())
-	assert.True(NewString("bar1").Equals(m.Get(NewString("foo1"))))
-	assert.True(NewString("bar2").Equals(m.Get(NewString("foo2"))))
+	assert.True(String("bar1").Equals(m.Get(String("foo1"))))
+	assert.True(String("bar2").Equals(m.Get(String("foo2"))))
 }
 
 func TestMapUniqueKeysString(t *testing.T) {
 	assert := assert.New(t)
 	l := []Value{
-		NewString("hello"), NewString("world"),
-		NewString("foo"), NewString("bar"),
-		NewString("bar"), NewString("foo"),
-		NewString("hello"), NewString("foo"),
+		String("hello"), String("world"),
+		String("foo"), String("bar"),
+		String("bar"), String("foo"),
+		String("hello"), String("foo"),
 	}
 	m := NewMap(l...)
 	assert.Equal(uint64(3), m.Len())
-	assert.True(NewString("foo").Equals(m.Get(NewString("hello"))))
+	assert.True(String("foo").Equals(m.Get(String("hello"))))
 }
 
 func TestMapUniqueKeysNumber(t *testing.T) {
@@ -345,14 +345,14 @@ func TestMapHas(t *testing.T) {
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
-	assert.False(m1.Has(NewString("foo")))
-	m2 := m1.Set(NewString("foo"), NewString("foo"))
-	assert.False(m1.Has(NewString("foo")))
-	assert.True(m2.Has(NewString("foo")))
-	m3 := m1.Remove(NewString("foo"))
-	assert.False(m1.Has(NewString("foo")))
-	assert.True(m2.Has(NewString("foo")))
-	assert.False(m3.Has(NewString("foo")))
+	assert.False(m1.Has(String("foo")))
+	m2 := m1.Set(String("foo"), String("foo"))
+	assert.False(m1.Has(String("foo")))
+	assert.True(m2.Has(String("foo")))
+	m3 := m1.Remove(String("foo"))
+	assert.False(m1.Has(String("foo")))
+	assert.True(m2.Has(String("foo")))
+	assert.False(m3.Has(String("foo")))
 }
 
 func TestMapRemove(t *testing.T) {
@@ -401,8 +401,8 @@ func TestMapFirst(t *testing.T) {
 	assert.Nil(k)
 	assert.Nil(v)
 
-	m1 = m1.Set(NewString("foo"), NewString("bar"))
-	m1 = m1.Set(NewString("hot"), NewString("dog"))
+	m1 = m1.Set(String("foo"), String("bar"))
+	m1 = m1.Set(String("hot"), String("dog"))
 	ak, av := m1.First()
 	var ek, ev Value
 
@@ -438,19 +438,19 @@ func TestMapFirst2(t *testing.T) {
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 	m1 := NewMap()
-	assert.Nil(m1.Get(NewString("foo")))
-	m2 := m1.Set(NewString("foo"), Number(42))
-	assert.Nil(m1.Get(NewString("foo")))
-	assert.True(Number(42).Equals(m2.Get(NewString("foo"))))
-	m3 := m2.Set(NewString("foo"), Number(43))
-	assert.Nil(m1.Get(NewString("foo")))
-	assert.True(Number(42).Equals(m2.Get(NewString("foo"))))
-	assert.True(Number(43).Equals(m3.Get(NewString("foo"))))
-	m4 := m3.Remove(NewString("foo"))
-	assert.Nil(m1.Get(NewString("foo")))
-	assert.True(Number(42).Equals(m2.Get(NewString("foo"))))
-	assert.True(Number(43).Equals(m3.Get(NewString("foo"))))
-	assert.Nil(m4.Get(NewString("foo")))
+	assert.Nil(m1.Get(String("foo")))
+	m2 := m1.Set(String("foo"), Number(42))
+	assert.Nil(m1.Get(String("foo")))
+	assert.True(Number(42).Equals(m2.Get(String("foo"))))
+	m3 := m2.Set(String("foo"), Number(43))
+	assert.Nil(m1.Get(String("foo")))
+	assert.True(Number(42).Equals(m2.Get(String("foo"))))
+	assert.True(Number(43).Equals(m3.Get(String("foo"))))
+	m4 := m3.Remove(String("foo"))
+	assert.Nil(m1.Get(String("foo")))
+	assert.True(Number(42).Equals(m2.Get(String("foo"))))
+	assert.True(Number(43).Equals(m3.Get(String("foo"))))
+	assert.Nil(m4.Get(String("foo")))
 }
 
 func validateMapInsertion(t *testing.T, tm testMap) {
@@ -526,11 +526,11 @@ func TestMapSetM(t *testing.T) {
 	m1 := NewMap()
 	m2 := m1.SetM()
 	assert.True(m1.Equals(m2))
-	m3 := m2.SetM(NewString("foo"), NewString("bar"), NewString("hot"), NewString("dog"))
+	m3 := m2.SetM(String("foo"), String("bar"), String("hot"), String("dog"))
 	assert.Equal(uint64(2), m3.Len())
-	assert.True(NewString("bar").Equals(m3.Get(NewString("foo"))))
-	assert.True(NewString("dog").Equals(m3.Get(NewString("hot"))))
-	m4 := m3.SetM(NewString("mon"), NewString("key"))
+	assert.True(String("bar").Equals(m3.Get(String("foo"))))
+	assert.True(String("dog").Equals(m3.Get(String("hot"))))
+	m4 := m3.SetM(String("mon"), String("key"))
 	assert.Equal(uint64(2), m3.Len())
 	assert.Equal(uint64(3), m4.Len())
 }
@@ -595,18 +595,18 @@ func TestMapIter(t *testing.T) {
 	m.Iter(cb)
 	assert.Equal(0, len(results))
 
-	m = m.SetM(NewString("a"), Number(0), NewString("b"), Number(1))
+	m = m.SetM(String("a"), Number(0), String("b"), Number(1))
 	m.Iter(cb)
 	assert.Equal(2, len(results))
-	assert.True(got(NewString("a"), Number(0)))
-	assert.True(got(NewString("b"), Number(1)))
+	assert.True(got(String("a"), Number(0)))
+	assert.True(got(String("b"), Number(1)))
 
 	results = resultList{}
 	stop = true
 	m.Iter(cb)
 	assert.Equal(1, len(results))
 	// Iteration order not guaranteed, but it has to be one of these.
-	assert.True(got(NewString("a"), Number(0)) || got(NewString("b"), Number(1)))
+	assert.True(got(String("a"), Number(0)) || got(String("b"), Number(1)))
 }
 
 func TestMapIter2(t *testing.T) {
@@ -679,8 +679,8 @@ func TestMapEquals(t *testing.T) {
 	diffMapTest(assert, m3, m1, 0, 0, 0)
 	diffMapTest(assert, m3, m2, 0, 0, 0)
 
-	m1 = NewMap(NewString("foo"), Number(0.0), NewString("bar"), NewList())
-	m2 = m2.SetM(NewString("foo"), Number(0.0), NewString("bar"), NewList())
+	m1 = NewMap(String("foo"), Number(0.0), String("bar"), NewList())
+	m2 = m2.SetM(String("foo"), Number(0.0), String("bar"), NewList())
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
@@ -699,18 +699,18 @@ func TestMapNotStringKeys(t *testing.T) {
 	b1 := NewBlob(bytes.NewBufferString("blob1"))
 	b2 := NewBlob(bytes.NewBufferString("blob2"))
 	l := []Value{
-		Bool(true), NewString("true"),
-		Bool(false), NewString("false"),
-		Number(1), NewString("Number: 1"),
-		Number(0), NewString("Number: 0"),
-		b1, NewString("blob1"),
-		b2, NewString("blob2"),
-		NewList(), NewString("empty list"),
-		NewList(NewList()), NewString("list of list"),
-		NewMap(), NewString("empty map"),
-		NewMap(NewMap(), NewMap()), NewString("map of map/map"),
-		NewSet(), NewString("empty set"),
-		NewSet(NewSet()), NewString("map of set/set"),
+		Bool(true), String("true"),
+		Bool(false), String("false"),
+		Number(1), String("Number: 1"),
+		Number(0), String("Number: 0"),
+		b1, String("blob1"),
+		b2, String("blob2"),
+		NewList(), String("empty list"),
+		NewList(NewList()), String("list of list"),
+		NewMap(), String("empty map"),
+		NewMap(NewMap(), NewMap()), String("map of map/map"),
+		NewSet(), String("empty set"),
+		NewSet(NewSet()), String("map of set/set"),
 	}
 	m1 := NewMap(l...)
 	assert.Equal(uint64(12), m1.Len())
@@ -735,32 +735,32 @@ func TestMapOrdering(t *testing.T) {
 	testMapOrder(assert,
 		StringType, StringType,
 		[]Value{
-			NewString("a"), NewString("unused"),
-			NewString("z"), NewString("unused"),
-			NewString("b"), NewString("unused"),
-			NewString("y"), NewString("unused"),
-			NewString("c"), NewString("unused"),
-			NewString("x"), NewString("unused"),
+			String("a"), String("unused"),
+			String("z"), String("unused"),
+			String("b"), String("unused"),
+			String("y"), String("unused"),
+			String("c"), String("unused"),
+			String("x"), String("unused"),
 		},
 		[]Value{
-			NewString("a"),
-			NewString("b"),
-			NewString("c"),
-			NewString("x"),
-			NewString("y"),
-			NewString("z"),
+			String("a"),
+			String("b"),
+			String("c"),
+			String("x"),
+			String("y"),
+			String("z"),
 		},
 	)
 
 	testMapOrder(assert,
 		NumberType, StringType,
 		[]Value{
-			Number(0), NewString("unused"),
-			Number(1000), NewString("unused"),
-			Number(1), NewString("unused"),
-			Number(100), NewString("unused"),
-			Number(2), NewString("unused"),
-			Number(10), NewString("unused"),
+			Number(0), String("unused"),
+			Number(1000), String("unused"),
+			Number(1), String("unused"),
+			Number(100), String("unused"),
+			Number(2), String("unused"),
+			Number(10), String("unused"),
 		},
 		[]Value{
 			Number(0),
@@ -775,12 +775,12 @@ func TestMapOrdering(t *testing.T) {
 	testMapOrder(assert,
 		NumberType, StringType,
 		[]Value{
-			Number(0), NewString("unused"),
-			Number(-30), NewString("unused"),
-			Number(25), NewString("unused"),
-			Number(1002), NewString("unused"),
-			Number(-5050), NewString("unused"),
-			Number(23), NewString("unused"),
+			Number(0), String("unused"),
+			Number(-30), String("unused"),
+			Number(25), String("unused"),
+			Number(1002), String("unused"),
+			Number(-5050), String("unused"),
+			Number(23), String("unused"),
 		},
 		[]Value{
 			Number(-5050),
@@ -795,12 +795,12 @@ func TestMapOrdering(t *testing.T) {
 	testMapOrder(assert,
 		NumberType, StringType,
 		[]Value{
-			Number(0.0001), NewString("unused"),
-			Number(0.000001), NewString("unused"),
-			Number(1), NewString("unused"),
-			Number(25.01e3), NewString("unused"),
-			Number(-32.231123e5), NewString("unused"),
-			Number(23), NewString("unused"),
+			Number(0.0001), String("unused"),
+			Number(0.000001), String("unused"),
+			Number(1), String("unused"),
+			Number(25.01e3), String("unused"),
+			Number(-32.231123e5), String("unused"),
+			Number(23), String("unused"),
 		},
 		[]Value{
 			Number(-32.231123e5),
@@ -815,28 +815,28 @@ func TestMapOrdering(t *testing.T) {
 	testMapOrder(assert,
 		ValueType, StringType,
 		[]Value{
-			NewString("a"), NewString("unused"),
-			NewString("z"), NewString("unused"),
-			NewString("b"), NewString("unused"),
-			NewString("y"), NewString("unused"),
-			NewString("c"), NewString("unused"),
-			NewString("x"), NewString("unused"),
+			String("a"), String("unused"),
+			String("z"), String("unused"),
+			String("b"), String("unused"),
+			String("y"), String("unused"),
+			String("c"), String("unused"),
+			String("x"), String("unused"),
 		},
 		[]Value{
-			NewString("a"),
-			NewString("b"),
-			NewString("c"),
-			NewString("x"),
-			NewString("y"),
-			NewString("z"),
+			String("a"),
+			String("b"),
+			String("c"),
+			String("x"),
+			String("y"),
+			String("z"),
 		},
 	)
 
 	testMapOrder(assert,
 		BoolType, StringType,
 		[]Value{
-			Bool(true), NewString("unused"),
-			Bool(false), NewString("unused"),
+			Bool(true), String("unused"),
+			Bool(false), String("unused"),
 		},
 		[]Value{
 			Bool(false),
@@ -850,7 +850,7 @@ func TestMapEmpty(t *testing.T) {
 
 	m := NewMap()
 	assert.True(m.Empty())
-	m = m.Set(Bool(false), NewString("hi"))
+	m = m.Set(Bool(false), String("hi"))
 	assert.False(m.Empty())
 	m = m.Set(NewList(), NewMap())
 	assert.False(m.Empty())
@@ -863,17 +863,17 @@ func TestMapType(t *testing.T) {
 	m := NewMap()
 	assert.True(m.Type().Equals(emptyMapType))
 
-	m2 := m.Remove(NewString("B"))
+	m2 := m.Remove(String("B"))
 	assert.True(emptyMapType.Equals(m2.Type()))
 
 	tr := MakeMapType(StringType, NumberType)
-	m2 = m.Set(NewString("A"), Number(1))
+	m2 = m.Set(String("A"), Number(1))
 	assert.True(tr.Equals(m2.Type()))
 
-	m2 = m.SetM(NewString("B"), Number(2), NewString("C"), Number(2))
+	m2 = m.SetM(String("B"), Number(2), String("C"), Number(2))
 	assert.True(tr.Equals(m2.Type()))
 
-	m3 := m2.Set(NewString("A"), Bool(true))
+	m3 := m2.Set(String("A"), Bool(true))
 	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, NumberType)).Equals(m3.Type()), m3.Type().Describe())
 	m4 := m3.Set(Bool(true), Number(1))
 	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, NumberType)).Equals(m4.Type()))
@@ -966,12 +966,12 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		assert.IsType(c, m.sequence())
 		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))
 
-		m = m.Set(NewString("a"), NewString("a"))
+		m = m.Set(String("a"), String("a"))
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.sequence())
 		assert.True(m.Type().Equals(MakeMapType(MakeUnionType(NumberType, StringType), MakeUnionType(NumberType, StringType))))
 
-		m = m.Remove(NewString("a"))
+		m = m.Remove(String("a"))
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.sequence())
 		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))

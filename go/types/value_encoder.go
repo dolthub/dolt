@@ -148,7 +148,7 @@ func (w *valueEncoder) writeValue(v Value) {
 
 		w.writeSetLeafSequence(seq.(setLeafSequence))
 	case StringKind:
-		w.writeString(v.(String).String())
+		w.writeString(string(v.(String)))
 	case TypeKind:
 		vt := v.(*Type)
 		w.writeType(vt, nil)

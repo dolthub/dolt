@@ -764,8 +764,8 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 func TestListDiffString1(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
-	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
-	nums2 := []Value{NewString("one"), NewString("two"), NewString("three")}
+	nums1 := []Value{String("one"), String("two"), String("three")}
+	nums2 := []Value{String("one"), String("two"), String("three")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
 	diff := l2.Diff(l1)
@@ -775,8 +775,8 @@ func TestListDiffString1(t *testing.T) {
 func TestListDiffString2(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
-	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
-	nums2 := []Value{NewString("one"), NewString("two"), NewString("three"), NewString("four")}
+	nums1 := []Value{String("one"), String("two"), String("three")}
+	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
 	diff := l2.Diff(l1)
@@ -790,8 +790,8 @@ func TestListDiffString2(t *testing.T) {
 func TestListDiffString3(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
-	nums1 := []Value{NewString("one"), NewString("two"), NewString("three")}
-	nums2 := []Value{NewString("one"), NewString("two"), NewString("four")}
+	nums1 := []Value{String("one"), String("two"), String("three")}
+	nums2 := []Value{String("one"), String("two"), String("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
 	diff := l2.Diff(l1)
@@ -852,7 +852,7 @@ func TestListTypeAfterMutations(t *testing.T) {
 		assert.IsType(c, l.sequence())
 		assert.True(l.Type().Equals(MakeListType(NumberType)))
 
-		l = l.Append(NewString("a"))
+		l = l.Append(String("a"))
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.sequence())
 		assert.True(l.Type().Equals(MakeListType(MakeUnionType(NumberType, StringType))))
