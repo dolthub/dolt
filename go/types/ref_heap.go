@@ -35,6 +35,17 @@ func (h RefHeap) Empty() bool {
 	return len(h) == 0
 }
 
+func (h RefHeap) Peek() (head Ref) {
+	return h.PeekAt(0)
+}
+
+func (h RefHeap) PeekAt(idx int) (peek Ref) {
+	if idx < len(h) {
+		peek = h[idx]
+	}
+	return
+}
+
 // HeapOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
 func HeapOrder(a, b Ref) bool {
 	if a.Height() == b.Height() {

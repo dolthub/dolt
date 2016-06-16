@@ -136,57 +136,48 @@ type traverseResult struct {
 // - head of sinkQ is higher than head of srcQ
 // - both heads are at the same height
 //
-// As we build up lists of refs to be processed in parallel, we need to avoid blowing past potential common refs. This could happen if we're too aggressive about pulling refs off the 'lower' queue. For now, if one queue is higher than the other we'll run down it and stop once we hit a ref at the same height as the head of the lower queue. If the two queues are at the same height, then just process them in tandem, checking for any that might be in common.
+// As we build up lists of refs to be processed in parallel, we need to avoid blowing past potential common refs. When processing a given Ref, we enumerate Refs of all Chunks that are directly reachable, which must _by definition_ be shorter than the given Ref. This means that, for example, if the queues are the same height we know that nothing can happen that will put more Refs of that height on either queue. In general, if you look at the height of the Ref at the head of a queue, you know that all Refs of that height in the current graph under consideration are already in the queue. Conversely, for any height less than that of the head of the queue, it's possible that Refs of that height remain to be discovered. Given this, we can figure out which Refs are safe to pull off the 'taller' queue in the cases where the heights of the two queues are not equal.
+// If one queue is 'taller' than the other, it's clear that we can process all refs from the taller queue with height greater than the height of the 'shorter' queue. We should also be able to process refs from the taller queue that are of the same height as the shorter queue, as long as we also check to see if they're common to both queues. It is not safe, however, to pull unique items off the shorter queue at this point. It's possible that, in processing some of the Refs from the taller queue, that these Refs will be discovered to be common after all.
 func planWork(srcQ, sinkQ *types.RefHeap) (srcRefs, sinkRefs, comRefs types.RefSlice) {
 	srcHt, sinkHt := headHeight(srcQ), headHeight(sinkQ)
 	if srcHt > sinkHt {
-		srcRefs = burnDown(srcQ, srcHt, sinkHt)
+		srcRefs, comRefs = burnDown(srcQ, sinkQ, srcHt, sinkHt)
 		return
 	}
 	if sinkHt > srcHt {
-		sinkRefs = burnDown(sinkQ, sinkHt, srcHt)
+		sinkRefs, comRefs = burnDown(sinkQ, srcQ, sinkHt, srcHt)
 		return
 	}
-
 	d.Chk.True(srcHt == sinkHt, "%d != %d", srcHt, sinkHt)
-	stopHt := srcHt
-	for ; srcHt == stopHt || sinkHt == stopHt; srcHt, sinkHt = headHeight(srcQ), headHeight(sinkQ) {
-		srcPeek, sinkPeek := peek(srcQ), peek(sinkQ)
-		if types.HeapOrder(sinkPeek, srcPeek) {
-			sinkRefs = append(sinkRefs, heap.Pop(sinkQ).(types.Ref))
+	srcRefs, comRefs = burnDown(srcQ, sinkQ, srcHt, sinkHt)
+	sinkRefs, _ = burnDown(sinkQ, srcQ, sinkHt, srcHt)
+	return
+}
+
+func burnDown(taller, shorter *types.RefHeap, tall, short uint64) (tallRefs, comRefs types.RefSlice) {
+	for ht := tall; ht > short; ht = headHeight(taller) {
+		tallRefs = append(tallRefs, heap.Pop(taller).(types.Ref))
+	}
+	for shortIdx := 0; !taller.Empty() && headHeight(taller) == short; {
+		tallRef := heap.Pop(taller).(types.Ref)
+		shortPeek := shorter.PeekAt(shortIdx)
+		if types.HeapOrder(tallRef, shortPeek) {
+			tallRefs = append(tallRefs, tallRef)
 			continue
 		}
-		if types.HeapOrder(srcPeek, sinkPeek) {
-			srcRefs = append(srcRefs, heap.Pop(srcQ).(types.Ref))
+		if types.HeapOrder(shortPeek, tallRef) {
+			shortIdx++
 			continue
 		}
-		d.Chk.True(!sinkQ.Empty(), "The heads should be the same, but sinkQ is empty!")
-		d.Chk.True(srcPeek.Equals(sinkPeek), "Refs should be equal: %s != %s", srcPeek.TargetHash(), sinkPeek.TargetHash())
-		heap.Pop(sinkQ)
-		comRefs = append(comRefs, heap.Pop(srcQ).(types.Ref))
+		d.Chk.True(tallRef.Equals(shortPeek), "Refs should be equal: %s != %s", tallRef.TargetHash(), shortPeek.TargetHash())
+		heap.Remove(shorter, shortIdx)
+		comRefs = append(comRefs, tallRef)
 	}
 	return
 }
 
-func burnDown(q *types.RefHeap, start, stop uint64) (refs types.RefSlice) {
-	for ht := start; ht > stop; ht = headHeight(q) {
-		refs = append(refs, heap.Pop(q).(types.Ref))
-	}
-	return
-}
-
-func headHeight(h *types.RefHeap) (height uint64) {
-	if !h.Empty() {
-		height = (*h)[0].Height()
-	}
-	return
-}
-
-func peek(h *types.RefHeap) (head types.Ref) {
-	if !h.Empty() {
-		head = (*h)[0]
-	}
-	return
+func headHeight(h *types.RefHeap) uint64 {
+	return h.Peek().Height()
 }
 
 func sendWork(ch chan<- types.Ref, refs types.RefSlice) {
