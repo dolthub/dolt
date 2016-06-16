@@ -192,11 +192,11 @@ func line(w io.Writer, start string, key, v2 types.Value) {
 	_, err = w.Write([]byte(start))
 	d.Exp.NoError(err)
 	if key != nil {
-		d.Exp.NoError(types.WriteEncodedValueWithTags(pw, key))
+		d.Exp.NoError(types.WriteEncodedValue(pw, key))
 		_, err = w.Write([]byte(": "))
 		d.Exp.NoError(err)
 	}
-	d.Exp.NoError(types.WriteEncodedValueWithTags(pw, v2))
+	d.Exp.NoError(types.WriteEncodedValue(pw, v2))
 	_, err = w.Write([]byte("\n"))
 	d.Exp.NoError(err)
 }
