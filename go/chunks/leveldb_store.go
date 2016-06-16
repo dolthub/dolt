@@ -51,10 +51,15 @@ func NewLevelDBStore(dir, ns string, maxFileHandles int, dumpStats bool) *LevelD
 }
 
 func newLevelDBStore(store *internalLevelDBStore, ns []byte, closeBackingStore bool) *LevelDBStore {
+	copyNsAndAppend := func(suffix string) (out []byte) {
+		out = make([]byte, len(ns)+len(suffix))
+		copy(out[copy(out, ns):], []byte(suffix))
+		return
+	}
 	return &LevelDBStore{
 		internalLevelDBStore: store,
-		rootKey:              append(ns, []byte(rootKeyConst)...),
-		chunkPrefix:          append(ns, []byte(chunkPrefixConst)...),
+		rootKey:              copyNsAndAppend(rootKeyConst),
+		chunkPrefix:          copyNsAndAppend(chunkPrefixConst),
 		closeBackingStore:    closeBackingStore,
 	}
 }
