@@ -130,7 +130,7 @@ func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLe
 	d.Exp.NotEmpty(dir)
 	d.Exp.NoError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
-		Compression:            opt.SnappyCompression,
+		Compression:            opt.NoCompression,
 		Filter:                 filter.NewBloomFilter(10), // 10 bits/key
 		OpenFilesCacheCapacity: maxFileHandles,
 		WriteBuffer:            1 << 24, // 16MiB,
