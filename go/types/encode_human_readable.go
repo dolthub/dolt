@@ -266,6 +266,13 @@ func EncodedValue(v Value) string {
 	return buf.String()
 }
 
+// WriteEncodedValue writes the serialization of a value
+func WriteEncodedValue(w io.Writer, v Value) error {
+	hrs := &hrsWriter{w: w}
+	hrs.Write(v)
+	return hrs.err
+}
+
 func EncodedValueWithTags(v Value) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf}
