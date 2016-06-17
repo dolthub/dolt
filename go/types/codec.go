@@ -69,16 +69,9 @@ type binaryNomsReader struct {
 	offset uint32
 }
 
-func (b *binaryNomsReader) assertCanRead(n uint32) {
-	if b.offset+n > uint32(len(b.buff)) {
-		panic("unexpected end of input")
-	}
-}
-
 func (b *binaryNomsReader) readBytes() []byte {
 	size := b.readUint32()
 
-	b.assertCanRead(size)
 	buff := make([]byte, size, size)
 	copy(buff, b.buff[b.offset:b.offset+size])
 	b.offset += size
@@ -86,14 +79,12 @@ func (b *binaryNomsReader) readBytes() []byte {
 }
 
 func (b *binaryNomsReader) readUint8() uint8 {
-	b.assertCanRead(1)
 	v := uint8(b.buff[b.offset])
 	b.offset++
 	return v
 }
 
 func (b *binaryNomsReader) readUint32() uint32 {
-	b.assertCanRead(4)
 	v := uint32(b.buff[b.offset]) |
 		uint32(b.buff[b.offset+1])<<8 |
 		uint32(b.buff[b.offset+2])<<16 |
@@ -103,7 +94,6 @@ func (b *binaryNomsReader) readUint32() uint32 {
 }
 
 func (b *binaryNomsReader) readUint64() uint64 {
-	b.assertCanRead(8)
 	v := uint64(b.buff[b.offset]) |
 		uint64(b.buff[b.offset+1])<<8 |
 		uint64(b.buff[b.offset+2])<<16 |
@@ -127,14 +117,12 @@ func (b *binaryNomsReader) readBool() bool {
 func (b *binaryNomsReader) readString() string {
 	size := b.readUint32()
 
-	b.assertCanRead(size)
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
 	return v
 }
 
 func (b *binaryNomsReader) readHash() hash.Hash {
-	b.assertCanRead(sha1.Size)
 	digest := hash.Sha1Digest{}
 	copy(digest[:], b.buff[b.offset:b.offset+sha1.Size])
 	b.offset += sha1.Size
