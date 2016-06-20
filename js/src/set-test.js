@@ -511,33 +511,6 @@ suite('CompoundSet', () => {
     });
   });
 
-  async function testIntersect(expect: Array<string>, seqs: Array<Array<string>>) {
-    const first = build(db, seqs[0]);
-    const sets:Array<Set> = [];
-    for (let i = 1; i < seqs.length; i++) {
-      sets.push(build(db, seqs[i]));
-    }
-
-    const result = await first.intersect(...sets);
-    const actual = [];
-    await result.forEach(v => { actual.push(v); });
-    assert.deepEqual(expect, actual);
-  }
-
-  test('LONG: intersect', async () => {
-    await testIntersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']]);
-    await testIntersect(['a', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['a', 'h', 'i', 'j', 'k', 'l', 'm', 'n']]);
-    await testIntersect(['d', 'e', 'f', 'g', 'h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k']]);
-    await testIntersect(['h'], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['h', 'i', 'j', 'k', 'l', 'm', 'n', 'o']]);
-    await testIntersect([], [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-        ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'], ['i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']]);
-  });
-
   test('iterator at 0', async () => {
     const test = async (expected, items) => {
       const set = new Set(items);
@@ -674,38 +647,6 @@ suite('CompoundSet', () => {
       assert.equal(s.size, n);
       assert.instanceOf(s.sequence, c);
       assert.isTrue(equals(s.type, makeSetType(numberType)));
-    }
-
-    await t(10, SetLeafSequence);
-    await t(100, OrderedMetaSequence);
-  });
-
-  test('Type after mutations - interesect', async () => {
-    async function t(n, c) {
-      const nums: any = intSequence(n);
-      const strings = nums.map(n => String.fromCodePoint(n));
-      const combined = nums.concat(strings);
-
-      const numSet = new Set(nums);
-      assert.equal(numSet.size, n);
-      assert.instanceOf(numSet.sequence, c);
-      assert.isTrue(equals(numSet.type, makeSetType(numberType)));
-
-      const stringSet = new Set(strings);
-      assert.equal(stringSet.size, n);
-      assert.instanceOf(stringSet.sequence, c);
-      assert.isTrue(equals(stringSet.type, makeSetType(stringType)));
-
-      const combinedSet = new Set(combined);
-      assert.equal(combinedSet.size, 2 * n);
-      assert.instanceOf(combinedSet.sequence, c);
-      assert.isTrue(equals(combinedSet.type, makeSetType(makeUnionType([numberType, stringType]))));
-
-      const s = await combinedSet.intersect(numSet);
-      assert.isTrue(equals(s, numSet));
-
-      const s2 = await combinedSet.intersect(stringSet);
-      assert.isTrue(equals(s2, stringSet));
     }
 
     await t(10, SetLeafSequence);

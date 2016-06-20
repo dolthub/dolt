@@ -155,37 +155,6 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
     return this.sequence.numLeaves;
   }
 
-  async intersect(...sets: Array<Set<T>>): Promise<Set<T>> {
-    if (sets.length === 0) {
-      return this;
-    }
-
-    let cursor = await this.sequence.newCursorAt(null);
-    if (!cursor.valid) {
-      return this;
-    }
-
-    const values: Array<T> = [];
-
-    for (let i = 0; cursor.valid && i < sets.length; i++) {
-      const first = cursor.getCurrent();
-      const next = await sets[i].sequence.newCursorAt(first);
-      if (!next.valid) {
-        break;
-      }
-
-      cursor = new SetIntersectionCursor(cursor, next);
-      await cursor.align();
-    }
-
-    while (cursor.valid) {
-      values.push(cursor.getCurrent());
-      await cursor.advance();
-    }
-
-    return new Set(values);
-  }
-
   /**
    * Returns a 2-tuple [added, removed] sorted values.
    */
@@ -209,65 +178,5 @@ export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
 
   get chunks(): Array<Ref> {
     return getValueChunks(this.items);
-  }
-}
-
-type OrderedCursor<K: Value> = {
-  valid: boolean;
-  getCurrent(): K;
-  advanceTo(key: K): Promise<boolean>;
-  advance(): Promise<boolean>;
-}
-
-class SetIntersectionCursor<K: Value> {
-  s1: OrderedCursor<K>;
-  s2: OrderedCursor<K>;
-  valid: boolean;
-
-  constructor(s1: OrderedCursor<K>, s2: OrderedCursor<K>) {
-    invariant(s1.valid && s2.valid);
-    this.s1 = s1;
-    this.s2 = s2;
-    this.valid = true;
-  }
-
-  getCurrent(): K {
-    invariant(this.valid);
-    return this.s1.getCurrent();
-  }
-
-  async align(): Promise<boolean> {
-    let v1 = this.s1.getCurrent();
-    let v2 = this.s2.getCurrent();
-
-    let i;
-    while ((i = compare(v1, v2)) !== 0) {
-      if (i < 0) {
-        if (!await this.s1.advanceTo(v2)) {
-          return this.valid = false;
-        }
-
-        v1 = this.s1.getCurrent();
-        continue;
-      }
-
-      if (!await this.s2.advanceTo(v1)) {
-        return this.valid = false;
-      }
-
-      v2 = this.s2.getCurrent();
-    }
-
-    return this.valid = true;
-  }
-
-  async advanceTo(key: K): Promise<boolean> {
-    invariant(this.valid);
-    return this.valid = await this.s1.advanceTo(key) && await this.align();
-  }
-
-  async advance(): Promise<boolean> {
-    invariant(this.valid);
-    return this.valid = await this.s1.advance() && await this.align();
   }
 }
