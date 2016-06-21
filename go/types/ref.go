@@ -13,7 +13,7 @@ type Ref struct {
 	target hash.Hash
 	height uint64
 	t      *Type
-	hash   *hash.Hash
+	h      *hash.Hash
 }
 
 func NewRef(v Value) Ref {
@@ -52,7 +52,7 @@ func (r Ref) TargetValue(vr ValueReader) Value {
 
 // Value interface
 func (r Ref) Equals(other Value) bool {
-	return other != nil && r.t.Equals(other.Type()) && r.Hash() == other.Hash()
+	return other != nil && r.Hash() == other.Hash()
 }
 
 func (r Ref) Less(other Value) bool {
@@ -60,7 +60,11 @@ func (r Ref) Less(other Value) bool {
 }
 
 func (r Ref) Hash() hash.Hash {
-	return EnsureHash(r.hash, r)
+	if r.h.IsEmpty() {
+		*r.h = getHash(r)
+	}
+
+	return *r.h
 }
 
 func (r Ref) ChildValues() []Value {

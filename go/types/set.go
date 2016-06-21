@@ -71,7 +71,11 @@ func (s Set) Less(other Value) bool {
 }
 
 func (s Set) Hash() hash.Hash {
-	return EnsureHash(s.h, s)
+	if s.h.IsEmpty() {
+		*s.h = getHash(s)
+	}
+
+	return *s.h
 }
 
 func (s Set) ChildValues() (values []Value) {

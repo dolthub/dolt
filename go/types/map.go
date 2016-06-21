@@ -68,7 +68,11 @@ func (m Map) Less(other Value) bool {
 }
 
 func (m Map) Hash() hash.Hash {
-	return EnsureHash(m.h, m)
+	if m.h.IsEmpty() {
+		*m.h = getHash(m)
+	}
+
+	return *m.h
 }
 
 func (m Map) ChildValues() (values []Value) {

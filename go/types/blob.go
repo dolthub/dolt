@@ -69,7 +69,11 @@ func (b Blob) Less(other Value) bool {
 }
 
 func (b Blob) Hash() hash.Hash {
-	return EnsureHash(b.h, b)
+	if b.h.IsEmpty() {
+		*b.h = getHash(b)
+	}
+
+	return *b.h
 }
 
 func (b Blob) ChildValues() []Value {

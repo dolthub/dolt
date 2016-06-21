@@ -7,7 +7,6 @@ package types
 import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 const batchSize = 100
@@ -37,7 +36,7 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureEr
 		return nil
 	}
 	v := DecodeValue(c, vbs.vs)
-	d.Exp.True(EnsureHash(&hash.Hash{}, v) == h)
+	d.Exp.True(getHash(v) == h)
 	vbs.vs.ensureChunksInCache(v)
 	vbs.vs.set(h, hintedChunk{v.Type(), h})
 

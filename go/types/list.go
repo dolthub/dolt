@@ -76,7 +76,11 @@ func (l List) Less(other Value) bool {
 }
 
 func (l List) Hash() hash.Hash {
-	return EnsureHash(l.h, l)
+	if l.h.IsEmpty() {
+		*l.h = getHash(l)
+	}
+
+	return *l.h
 }
 
 func (l List) ChildValues() (values []Value) {

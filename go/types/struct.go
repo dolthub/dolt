@@ -60,7 +60,7 @@ func (s Struct) hashPointer() *hash.Hash {
 
 // Value interface
 func (s Struct) Equals(other Value) bool {
-	return other != nil && s.t.Equals(other.Type()) && s.Hash() == other.Hash()
+	return other != nil && s.Hash() == other.Hash()
 }
 
 func (s Struct) Less(other Value) bool {
@@ -68,7 +68,11 @@ func (s Struct) Less(other Value) bool {
 }
 
 func (s Struct) Hash() hash.Hash {
-	return EnsureHash(s.h, s)
+	if s.h.IsEmpty() {
+		*s.h = getHash(s)
+	}
+
+	return *s.h
 }
 
 func (s Struct) ChildValues() []Value {

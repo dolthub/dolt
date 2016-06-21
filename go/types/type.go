@@ -53,7 +53,11 @@ func (t *Type) Less(other Value) (res bool) {
 }
 
 func (t *Type) Hash() hash.Hash {
-	return EnsureHash(t.h, t)
+	if t.h.IsEmpty() {
+		*t.h = getHash(t)
+	}
+
+	return *t.h
 }
 
 func (t *Type) ChildValues() (res []Value) {
