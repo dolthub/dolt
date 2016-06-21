@@ -203,6 +203,17 @@ suite('List', () => {
     assert.strictEqual(listOfNRef, s.hash.toString());
   });
 
+  test('LONG: remove at end', async() => {
+    const nums = intSequence(testListSize / 20);
+    let s = new List(nums);
+
+    for (let i = nums.length - 1; i >= 0; i--) {
+      s = await s.remove(i, i + 1);
+      const expect = new List(nums.slice(0, i));
+      assert.isTrue(equals(expect, s));
+    }
+  });
+
   test('LONG: splice', async () => {
     const nums = intSequence(testListSize);
     let s = new List(nums);

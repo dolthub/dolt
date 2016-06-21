@@ -17,17 +17,17 @@ type newBoundaryCheckerFn func() boundaryChecker
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
-	isOnChunkBoundary          bool
 	parent                     *sequenceChunker
 	current                    []sequenceItem
+	lastSeq                    sequence
 	makeChunk, parentMakeChunk makeChunkFn
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
-	used                       bool
+	done                       bool
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
-type makeChunkFn func(values []sequenceItem) (metaTuple, Collection)
+type makeChunkFn func(values []sequenceItem) (metaTuple, sequence)
 
 func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	return newSequenceChunker(nil, makeChunk, parentMakeChunk, boundaryChk, newBoundaryChecker)
@@ -40,11 +40,11 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 	d.Chk.True(boundaryChk != nil)
 	d.Chk.True(newBoundaryChecker != nil)
 
-	seq := &sequenceChunker{
+	sc := &sequenceChunker{
 		cur,
-		false,
 		nil,
 		[]sequenceItem{},
+		nil,
 		makeChunk, parentMakeChunk,
 		boundaryChk,
 		newBoundaryChecker,
@@ -52,9 +52,8 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 	}
 
 	if cur != nil {
-		// Eagerly create a chunker for each level of the existing tree, but note that we may not necessarily need them all, since chunk boundaries may change such that the tree ends up shallower. The |seq.used| flag accounts for that case.
 		if cur.parent != nil {
-			seq.createParent()
+			sc.createParent()
 		}
 
 		// Number of previous items which must be hashed into the boundary checker.
@@ -81,7 +80,7 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 			backIdx := len(prev) - i
 			if appendPenultimate && backIdx == 1 {
 				// Test the penultimate item for a boundary.
-				seq.Append(item)
+				sc.Append(item)
 				continue
 			}
 
@@ -90,108 +89,126 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 			}
 
 			if backIdx <= primeCurrentCount {
-				seq.current = append(seq.current, item)
+				sc.current = append(sc.current, item)
 			}
 		}
+	}
 
-		seq.used = len(seq.current) > 0
+	return sc
+}
+
+func (sc *sequenceChunker) Append(item sequenceItem) {
+	d.Chk.True(item != nil)
+	sc.current = append(sc.current, item)
+	if sc.boundaryChk.Write(item) {
+		sc.handleChunkBoundary(true)
+	}
+}
+
+func (sc *sequenceChunker) Skip() {
+	if sc.cur.advance() && sc.cur.indexInChunk() == 0 {
+		// Advancing moved our cursor into the next chunk. We need to advance our parent's cursor, so that when our parent writes out the remaining chunks it doesn't include the chunk that we skipped.
+		sc.skipParentIfExists()
+	}
+}
+
+func (sc *sequenceChunker) skipParentIfExists() {
+	if sc.parent != nil && sc.parent.cur != nil {
+		sc.parent.Skip()
+	}
+}
+
+func (sc *sequenceChunker) createParent() {
+	d.Chk.True(sc.parent == nil)
+	var parent *sequenceCursor
+	if sc.cur != nil && sc.cur.parent != nil {
+		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
+		parent = sc.cur.parent.clone()
+	}
+	sc.parent = newSequenceChunker(parent, sc.parentMakeChunk, sc.parentMakeChunk, sc.newBoundaryChecker(), sc.newBoundaryChecker)
+}
+
+func (sc *sequenceChunker) handleChunkBoundary(createParentIfNil bool) {
+	d.Chk.NotEmpty(sc.current)
+	chunk, seq := sc.makeChunk(sc.current)
+	sc.current = []sequenceItem{}
+	sc.lastSeq = seq
+	if sc.parent == nil && createParentIfNil {
+		sc.createParent()
+	}
+	if sc.parent != nil {
+		sc.parent.Append(chunk)
+	}
+}
+
+func (sc *sequenceChunker) Done() sequence {
+	d.Chk.False(sc.done)
+	sc.done = true
+
+	for s := sc; s != nil; s = s.parent {
+		if s.cur != nil {
+			s.finalizeCursor()
+		}
+	}
+
+	// Chunkers will probably have current items which didn't hit a chunk boundary. Pretend they end on chunk boundaries for now.
+	for s := sc; s != nil; s = s.parent {
+		if len(s.current) > 0 {
+			// Don't create a new parent if we haven't chunked.
+			s.handleChunkBoundary(s.lastSeq != nil)
+		}
+	}
+
+	// The rest of this code figures out which sequence in the parent chain is canonical. That is:
+	// * It's empty, or
+	// * It never chunked, so it's not a prollytree, or
+	// * It chunked, so it's a prollytree, but it must have at least 2 children (or it could have been represented as that 1 child).
+	//
+	// Examples of when we may have constructed non-canonical sequences:
+	// * If the previous tree (i.e. its cursor) was deeper, we will have created empty parents.
+	// * If the last appended item was on a chunk boundary, there may be a sequence with a single chunk.
+
+	// Firstly, follow up the parent chain to find the highest chunker which did chunk.
+	var seq sequence
+	for s := sc; s != nil; s = s.parent {
+		if s.lastSeq != nil {
+			seq = s.lastSeq
+		}
+	}
+
+	if seq == nil {
+		_, seq = sc.makeChunk([]sequenceItem{})
+		return seq
+	}
+
+	// Lastly, step back down to find a meta sequence with more than 1 child.
+	for seq.seqLen() <= 1 {
+		d.Chk.NotEqual(0, seq.seqLen())
+		ms, ok := seq.(metaSequence)
+		if !ok {
+			break
+		}
+		seq = ms.getChildSequence(0)
 	}
 
 	return seq
 }
 
-func (seq *sequenceChunker) Append(item sequenceItem) {
-	d.Chk.True(item != nil)
-	// Check |isOnChunkBoundary| immediately, because it's effectively a continuation from the last call to Append. Specifically, this happens when the last call to Append created the first chunk boundary, which delayed creating the parent until absolutely necessary. Otherwise, we will be in a state where a parent has only a single item, which is invalid.
-	if seq.isOnChunkBoundary {
-		seq.createParent()
-		seq.handleChunkBoundary()
-		seq.isOnChunkBoundary = false
-	}
-	seq.current = append(seq.current, item)
-	seq.used = true
-	if seq.boundaryChk.Write(item) {
-		seq.handleChunkBoundary()
-	}
-}
-
-func (seq *sequenceChunker) Skip() {
-	if seq.cur.advance() && seq.cur.indexInChunk() == 0 {
-		// Advancing moved our cursor into the next chunk. We need to advance our parent's cursor, so that when our parent writes out the remaining chunks it doesn't include the chunk that we skipped.
-		seq.skipParentIfExists()
-	}
-}
-
-func (seq *sequenceChunker) skipParentIfExists() {
-	if seq.parent != nil && seq.parent.cur != nil {
-		seq.parent.Skip()
-	}
-}
-
-func (seq *sequenceChunker) createParent() {
-	d.Chk.True(seq.parent == nil)
-	var parent *sequenceCursor
-	if seq.cur != nil && seq.cur.parent != nil {
-		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
-		parent = seq.cur.parent.clone()
-	}
-	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
-}
-
-func (seq *sequenceChunker) handleChunkBoundary() {
-	d.Chk.NotEmpty(seq.current)
-	if seq.parent == nil {
-		// Wait until there is a parent.
-		d.Chk.False(seq.isOnChunkBoundary)
-		seq.isOnChunkBoundary = true
-	} else {
-		chunk, _ := seq.makeChunk(seq.current)
-		seq.parent.Append(chunk)
-		seq.current = []sequenceItem{}
-	}
-}
-
-func (seq *sequenceChunker) Done() Value {
-	if seq.cur != nil {
-		seq.finalizeCursor()
-	}
-
-	if seq.isRoot() {
-		_, done := seq.makeChunk(seq.current)
-		d.Chk.True(done != nil)
-		return done
-	}
-
-	if len(seq.current) > 0 {
-		seq.handleChunkBoundary()
-	}
-	return seq.parent.Done()
-}
-
-func (seq *sequenceChunker) isRoot() bool {
-	for ancstr := seq.parent; ancstr != nil; ancstr = ancstr.parent {
-		if ancstr.used {
-			return false
-		}
-	}
-	return true
-}
-
-func (seq *sequenceChunker) finalizeCursor() {
-	if !seq.cur.valid() {
+func (sc *sequenceChunker) finalizeCursor() {
+	if !sc.cur.valid() {
 		// The cursor is past the end, and due to the way cursors work, the parent cursor will actually point to its last chunk. We need to force it to point past the end so that our parent's Done() method doesn't add the last chunk twice.
-		seq.skipParentIfExists()
+		sc.skipParentIfExists()
 		return
 	}
 
 	// Append the rest of the values in the sequence, up to the window size, plus the rest of that chunk. It needs to be the full window size because anything that was appended/skipped between chunker construction and finalization will have changed the hash state.
-	fzr := seq.cur.clone()
-	for i := 0; i < seq.boundaryChk.WindowSize() || fzr.indexInChunk() > 0; i++ {
+	fzr := sc.cur.clone()
+	for i := 0; i < sc.boundaryChk.WindowSize() || fzr.indexInChunk() > 0; i++ {
 		if i == 0 || fzr.indexInChunk() == 0 {
 			// Every time we step into a chunk from the original sequence, that chunk will no longer exist in the new sequence. The parent must be instructed to skip it.
-			seq.skipParentIfExists()
+			sc.skipParentIfExists()
 		}
-		seq.Append(fzr.current())
+		sc.Append(fzr.current())
 		if !fzr.advance() {
 			break
 		}

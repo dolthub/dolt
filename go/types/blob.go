@@ -149,14 +149,16 @@ func newBlobLeafBoundaryChecker() boundaryChecker {
 }
 
 func newBlobLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, Collection) {
+	return func(items []sequenceItem) (metaTuple, sequence) {
 		buff := make([]byte, len(items))
 
 		for i, v := range items {
 			buff[i] = v.(byte)
 		}
 
-		blob := newBlob(newBlobLeafSequence(vr, buff))
+		seq := newBlobLeafSequence(vr, buff)
+		blob := newBlob(seq)
+
 		var ref Ref
 		var child Collection
 		if sink != nil {
@@ -168,7 +170,7 @@ func newBlobLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
 			child = blob
 		}
 
-		return newMetaTuple(ref, Number(len(buff)), uint64(len(buff)), child), blob
+		return newMetaTuple(ref, Number(len(buff)), uint64(len(buff)), child), seq
 	}
 }
 
@@ -189,6 +191,6 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 			break
 		}
 	}
-	return seq.Done().(Blob)
+	return newBlob(seq.Done().(indexedSequence))
 
 }

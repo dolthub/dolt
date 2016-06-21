@@ -43,6 +43,10 @@ export default class Sequence<T> {
     return Promise.resolve(null);
   }
 
+  getChildSequenceSync(idx: number): ?Sequence { // eslint-disable-line no-unused-vars
+    return null;
+  }
+
   get chunks(): Array<Ref> {
     return [];
   }

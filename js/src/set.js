@@ -41,9 +41,10 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
       }
     }
 
-    const ns = Set.fromSequence(newSetLeafSequence(vr, items));
+    const seq = newSetLeafSequence(vr, items);
+    const ns = Set.fromSequence(seq);
     const mt = new MetaTuple(new Ref(ns), indexValue, items.length, ns);
-    return [mt, ns];
+    return [mt, seq];
   };
 }
 
@@ -68,13 +69,14 @@ export function newSetLeafSequence<K: Value>(
 
 export default class Set<T: Value> extends Collection<OrderedSequence> {
   constructor(values: Array<T> = []) {
-    const self = chunkSequenceSync(
+    const seq = chunkSequenceSync(
         buildSetData(values),
         newSetLeafChunkFn(null),
         newOrderedMetaSequenceChunkFn(Kind.Set, null),
         newSetLeafBoundaryChecker(),
         newOrderedMetaSequenceBoundaryChecker);
-    super(self.sequence);
+    invariant(seq instanceof OrderedSequence);
+    super(seq);
   }
 
   async has(key: T): Promise<boolean> {
@@ -118,7 +120,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
     return chunkSequence(cursor, insert, remove, newSetLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Set, vr),
                          newSetLeafBoundaryChecker(),
-                         newOrderedMetaSequenceBoundaryChecker);
+                         newOrderedMetaSequenceBoundaryChecker).then(s => Set.fromSequence(s));
   }
 
   async add(value: T): Promise<Set<T>> {

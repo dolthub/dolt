@@ -156,7 +156,7 @@ function newBlobLeafChunkFn(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
     } else {
       mt = new MetaTuple(new Ref(blob), items.length, items.length, blob);
     }
-    return [mt, blob];
+    return [mt, blobLeaf];
   };
 }
 
@@ -187,7 +187,7 @@ export class BlobWriter {
 
   close() {
     assert(this._state === 'writable');
-    this._blob = this._chunker.doneSync();
+    this._blob = Blob.fromSequence(this._chunker.doneSync());
     this._state = 'closed';
   }
 

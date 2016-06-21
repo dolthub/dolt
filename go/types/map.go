@@ -34,7 +34,7 @@ func NewMap(kv ...Value) Map {
 		seq.Append(entry)
 	}
 
-	return seq.Done().(Map)
+	return newMap(seq.Done().(orderedSequence))
 }
 
 func (m Map) Diff(last Map) (added []Value, removed []Value, modified []Value) {
@@ -149,7 +149,7 @@ func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return ch.Done().(Map)
+	return newMap(ch.Done().(orderedSequence))
 }
 
 func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
@@ -234,14 +234,15 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 }
 
 func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, Collection) {
+	return func(items []sequenceItem) (metaTuple, sequence) {
 		mapData := make([]mapEntry, len(items), len(items))
 
 		for i, v := range items {
 			mapData[i] = v.(mapEntry)
 		}
 
-		m := newMap(newMapLeafSequence(vr, mapData...))
+		seq := newMapLeafSequence(vr, mapData...)
+		m := newMap(seq)
 
 		var indexValue Value
 		if len(mapData) > 0 {
@@ -251,6 +252,6 @@ func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 			}
 		}
 
-		return newMetaTuple(NewRef(m), indexValue, uint64(len(items)), m), m
+		return newMetaTuple(NewRef(m), indexValue, uint64(len(items)), m), seq
 	}
 }

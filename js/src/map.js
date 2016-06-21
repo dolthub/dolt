@@ -4,6 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+import {invariant} from './assert.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
@@ -44,9 +45,10 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
       }
     }
 
-    const nm = Map.fromSequence(newMapLeafSequence(vr, items));
+    const seq = newMapLeafSequence(vr, items);
+    const nm = Map.fromSequence(seq);
     const mt = new MetaTuple(new Ref(nm), indexValue, items.length, nm);
-    return [mt, nm];
+    return [mt, seq];
   };
 }
 
@@ -88,13 +90,14 @@ function buildMapData<K: Value, V: Value>(
 export default class Map<K: Value, V: Value> extends
     Collection<OrderedSequence> {
   constructor(kvs: Array<MapEntry<K, V>> = []) {
-    const self = chunkSequenceSync(
+    const seq = chunkSequenceSync(
         buildMapData(kvs),
         newMapLeafChunkFn(null),
         newOrderedMetaSequenceChunkFn(Kind.Map, null),
         newMapLeafBoundaryChecker(),
         newOrderedMetaSequenceBoundaryChecker);
-    super(self.sequence);
+    invariant(seq instanceof OrderedSequence);
+    super(seq);
   }
 
   async has(key: K): Promise<boolean> {
@@ -152,7 +155,7 @@ export default class Map<K: Value, V: Value> extends
     return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Map, vr),
                          newMapLeafBoundaryChecker(),
-                         newOrderedMetaSequenceBoundaryChecker);
+                         newOrderedMetaSequenceBoundaryChecker).then(s => Map.fromSequence(s));
   }
 
   async set(key: K, value: V): Promise<Map<K, V>> {

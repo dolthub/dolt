@@ -35,14 +35,15 @@ const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
   return (items: Array<T>) => {
-    const list = List.fromSequence(newListLeafSequence(vr, items));
+    const seq = newListLeafSequence(vr, items);
+    const list = List.fromSequence(seq);
     let mt;
     if (vw) {
       mt = new MetaTuple(vw.writeValue(list), items.length, items.length, null);
     } else {
       mt = new MetaTuple(new Ref(list), items.length, items.length, list);
     }
-    return [mt, list];
+    return [mt, seq];
   };
 }
 
@@ -54,13 +55,14 @@ function newListLeafBoundaryChecker<T: Value>(): BoundaryChecker<T> {
 
 export default class List<T: Value> extends Collection<IndexedSequence> {
   constructor(values: Array<T> = []) {
-    const self = chunkSequenceSync(
+    const seq = chunkSequenceSync(
         values,
         newListLeafChunkFn(null, null),
         newIndexedMetaSequenceChunkFn(Kind.List, null, null),
         newListLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
-    super(self.sequence);
+    invariant(seq instanceof IndexedSequence);
+    super(seq);
   }
 
   async get(idx: number): Promise<T> {
@@ -74,7 +76,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
       chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr, null),
                     newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
                     newListLeafBoundaryChecker(),
-                    newIndexedMetaSequenceBoundaryChecker));
+                    newIndexedMetaSequenceBoundaryChecker)).then(s => List.fromSequence(s));
   }
 
   insert(idx: number, ...values: Array<T>): Promise<List<T>> {
@@ -175,7 +177,7 @@ type ListWriterState = 'writable' | 'closed';
 export class ListWriter<T: Value> {
   _state: ListWriterState;
   _list: ?List<T>;
-  _chunker: SequenceChunker<List<T>, T, ListLeafSequence<T>>;
+  _chunker: SequenceChunker<T, ListLeafSequence<T>>;
 
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
@@ -191,7 +193,7 @@ export class ListWriter<T: Value> {
 
   close() {
     assert(this._state === 'writable');
-    this._list = this._chunker.doneSync();
+    this._list = List.fromSequence(this._chunker.doneSync());
     this._state = 'closed';
   }
 

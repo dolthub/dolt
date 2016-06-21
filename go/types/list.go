@@ -32,7 +32,7 @@ func NewList(values ...Value) List {
 	for _, v := range values {
 		seq.Append(v)
 	}
-	return seq.Done().(List)
+	return newList(seq.Done().(indexedSequence))
 }
 
 // NewStreamingList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to vrw -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
@@ -43,7 +43,7 @@ func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 		for v := range values {
 			seq.Append(v)
 		}
-		out <- seq.Done().(List)
+		out <- newList(seq.Done().(indexedSequence))
 		close(out)
 	}()
 	return out
@@ -151,7 +151,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return ch.Done().(List)
+	return newList(ch.Done().(indexedSequence))
 }
 
 func (l List) Insert(idx uint64, vs ...Value) List {
@@ -159,6 +159,7 @@ func (l List) Insert(idx uint64, vs ...Value) List {
 }
 
 func (l List) Remove(start uint64, end uint64) List {
+	d.Chk.True(start <= end)
 	return l.Splice(start, end-start)
 }
 
@@ -222,14 +223,15 @@ func newListLeafBoundaryChecker() boundaryChecker {
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func makeListLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, Collection) {
+	return func(items []sequenceItem) (metaTuple, sequence) {
 		values := make([]Value, len(items))
 
 		for i, v := range items {
 			values[i] = v.(Value)
 		}
 
-		list := newList(newListLeafSequence(vr, values...))
+		seq := newListLeafSequence(vr, values...)
+		list := newList(seq)
 
 		var ref Ref
 		var child Collection
@@ -242,6 +244,6 @@ func makeListLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
 			child = list
 		}
 
-		return newMetaTuple(ref, Number(len(values)), uint64(len(values)), child), list
+		return newMetaTuple(ref, Number(len(values)), uint64(len(values)), child), seq
 	}
 }

@@ -208,7 +208,10 @@ func getTestListLen() uint64 {
 }
 
 func getTestList() testList {
-	length := int(getTestListLen())
+	return getTestListWithLen(int(getTestListLen()))
+}
+
+func getTestListWithLen(length int) testList {
 	s := rand.NewSource(42)
 	values := make([]Value, length)
 	for i := 0; i < length; i++ {
@@ -538,6 +541,22 @@ func TestListRemoveRanges(t *testing.T) {
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList)-incr; i += incr {
 		assert.Equal(len(testList)-incr, int(whole.Remove(uint64(i), uint64(i+incr)).Len()))
+	}
+}
+
+func TestListRemoveAtEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	tl := getTestListWithLen(testListSize / 10)
+	cl := tl.toList()
+
+	for i := len(tl) - 1; i >= 0; i-- {
+		cl = cl.Remove(uint64(i), uint64(i+1))
+		expect := tl[0:i].toList()
+		assert.True(expect.Equals(cl))
 	}
 }
 

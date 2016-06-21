@@ -146,7 +146,7 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 }
 
 func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, Collection) {
+	return func(items []sequenceItem) (metaTuple, sequence) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
 
@@ -156,16 +156,17 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 			numLeaves += mt.numLeaves
 		}
 
+		var metaSeq orderedMetaSequence
 		var col Collection
 		if kind == SetKind {
-			metaSeq := newSetMetaSequence(tuples, vr)
+			metaSeq = newSetMetaSequence(tuples, vr)
 			col = newSet(metaSeq)
 		} else {
 			d.Chk.True(MapKind == kind)
-			metaSeq := newMapMetaSequence(tuples, vr)
+			metaSeq = newMapMetaSequence(tuples, vr)
 			col = newMap(metaSeq)
 		}
 
-		return newMetaTuple(NewRef(col), tuples.last().value, numLeaves, col), col
+		return newMetaTuple(NewRef(col), tuples.last().value, numLeaves, col), metaSeq
 	}
 }

@@ -48,6 +48,10 @@ export class MetaTuple<K> {
           return c.sequence;
         });
   }
+
+  getSequenceSync(): Sequence {
+    return notNull(this.child).sequence;
+  }
 }
 
 // The elemTypes of the collection inside the Ref<Collection<?, ?>>
@@ -125,6 +129,15 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
     return mt.getSequence(this.vr);
   }
 
+  getChildSequenceSync(idx: number): ?Sequence {
+    if (!this.isMeta) {
+      return null;
+    }
+
+    const mt = this.items[idx];
+    return mt.getSequenceSync();
+  }
+
   // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
   // concatentation as one long composite sequence
   getCompositeChildSequence(start: number, length: number):
@@ -195,6 +208,15 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
     return mt.getSequence(this.vr);
   }
 
+  getChildSequenceSync(idx: number): ?Sequence {
+    if (!this.isMeta) {
+      return null;
+    }
+
+    const mt = this.items[idx];
+    return mt.getSequenceSync();
+  }
+
   getKey(idx: number): K {
     return this.items[idx].value;
   }
@@ -209,14 +231,17 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
   return (tuples: Array<MetaTuple>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const last = tuples[tuples.length - 1];
+    let seq: OrderedMetaSequence;
     let col: Collection;
     if (kind === Kind.Map) {
-      col = Map.fromSequence(newMapMetaSequence(vr, tuples));
+      seq = newMapMetaSequence(vr, tuples);
+      col = Map.fromSequence(seq);
     } else {
       invariant(kind === Kind.Set);
-      col = Set.fromSequence(newSetMetaSequence(vr, tuples));
+      seq = newSetMetaSequence(vr, tuples);
+      col = Set.fromSequence(seq);
     }
-    return [new MetaTuple(new Ref(col), last.value, numLeaves, col), col];
+    return [new MetaTuple(new Ref(col), last.value, numLeaves, col), seq];
   };
 }
 
@@ -237,12 +262,15 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
       invariant(mt.value === mt.numLeaves);
       return l + mt.value;
     }, 0);
+    let seq: IndexedMetaSequence;
     let col: Collection;
     if (kind === Kind.List) {
-      col = List.fromSequence(newListMetaSequence(vr, tuples));
+      seq = newListMetaSequence(vr, tuples);
+      col = List.fromSequence(seq);
     } else {
       invariant(kind === Kind.Blob);
-      col = Blob.fromSequence(newBlobMetaSequence(vr, tuples));
+      seq = newBlobMetaSequence(vr, tuples);
+      col = Blob.fromSequence(seq);
     }
     let mt;
     if (vw) {
@@ -250,7 +278,7 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
     } else {
       mt = new MetaTuple(new Ref(col), sum, sum, col);
     }
-    return [mt, col];
+    return [mt, seq];
   };
 }
 

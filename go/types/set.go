@@ -34,7 +34,7 @@ func NewSet(v ...Value) Set {
 		seq.Append(v)
 	}
 
-	return seq.Done().(Set)
+	return newSet(seq.Done().(orderedSequence))
 }
 
 func (s Set) Diff(last Set) (added []Value, removed []Value) {
@@ -146,7 +146,7 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 		ch.Append(v)
 	}
 
-	ns := ch.Done().(Set)
+	ns := newSet(ch.Done().(orderedSequence))
 	return ns
 }
 
@@ -211,14 +211,15 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 }
 
 func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, Collection) {
+	return func(items []sequenceItem) (metaTuple, sequence) {
 		setData := make([]Value, len(items), len(items))
 
 		for i, v := range items {
 			setData[i] = v.(Value)
 		}
 
-		set := newSet(newSetLeafSequence(vr, setData...))
+		seq := newSetLeafSequence(vr, setData...)
+		set := newSet(seq)
 
 		var indexValue Value
 		if len(setData) > 0 {
@@ -228,6 +229,6 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 			}
 		}
 
-		return newMetaTuple(NewRef(set), indexValue, uint64(len(items)), set), set
+		return newMetaTuple(NewRef(set), indexValue, uint64(len(items)), set), seq
 	}
 }

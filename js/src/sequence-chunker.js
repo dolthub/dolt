@@ -6,27 +6,26 @@
 
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
-import type Collection from './collection.js';
 import type {MetaSequence, MetaTuple} from './meta-sequence.js';
 import type {SequenceCursor} from './sequence.js';
 
 export type BoundaryChecker<T> = {
   write: (item: T) => boolean;
   windowSize: number;
-}
+};
 
 export type NewBoundaryCheckerFn = () => BoundaryChecker<MetaTuple>;
 
-export type makeChunkFn<T: Collection> = (items: Array<any>) => [MetaTuple, T];
+export type makeChunkFn<T, S: Sequence> = (items: Array<T>) => [MetaTuple, S];
 
-export async function chunkSequence<C: Collection, S>(
+export async function chunkSequence<T, S: Sequence<T>>(
     cursor: SequenceCursor,
-    insert: Array<S>,
+    insert: Array<T>,
     remove: number,
-    makeChunk: makeChunkFn<C>,
-    parentMakeChunk: makeChunkFn<C>,
-    boundaryChecker: BoundaryChecker<S>,
-    newBoundaryChecker: NewBoundaryCheckerFn): Promise<C> {
+    makeChunk: makeChunkFn<T, S>,
+    parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
+    boundaryChecker: BoundaryChecker<T>,
+    newBoundaryChecker: NewBoundaryCheckerFn): Promise<Sequence> {
 
   const chunker = new SequenceChunker(cursor, makeChunk, parentMakeChunk, boundaryChecker,
                                       newBoundaryChecker);
@@ -49,12 +48,12 @@ export async function chunkSequence<C: Collection, S>(
 // Like |chunkSequence|, but without an existing cursor (implying this is a new collection), so it
 // can be synchronous. Necessary for constructing collections without a Promises or async/await.
 // There is no equivalent in the Go code because Go is already synchronous.
-export function chunkSequenceSync<C: Collection, S>(
-    insert: Array<S>,
-    makeChunk: makeChunkFn<C>,
-    parentMakeChunk: makeChunkFn<C>,
-    boundaryChecker: BoundaryChecker<S>,
-    newBoundaryChecker: NewBoundaryCheckerFn): C {
+export function chunkSequenceSync<T, S: Sequence<T>>(
+    insert: Array<T>,
+    makeChunk: makeChunkFn<T, S>,
+    parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
+    boundaryChecker: BoundaryChecker<T>,
+    newBoundaryChecker: NewBoundaryCheckerFn): Sequence {
 
   const chunker = new SequenceChunker(null, makeChunk, parentMakeChunk, boundaryChecker,
                                       newBoundaryChecker);
@@ -64,30 +63,30 @@ export function chunkSequenceSync<C: Collection, S>(
   return chunker.doneSync();
 }
 
-export default class SequenceChunker<C: Collection, S, U: Sequence> {
-  _cursor: ?SequenceCursor<S, U>;
-  _isOnChunkBoundary: boolean;
-  _parent: ?SequenceChunker<C, MetaTuple, MetaSequence>;
-  _current: Array<S>;
-  _makeChunk: makeChunkFn<C>;
-  _parentMakeChunk: makeChunkFn<C>;
-  _boundaryChecker: BoundaryChecker<S>;
+export default class SequenceChunker<T, S: Sequence<T>> {
+  _cursor: ?SequenceCursor<T, S>;
+  _parent: ?SequenceChunker<MetaTuple, MetaSequence>;
+  _current: Array<T>;
+  _lastSeq: ?S;
+  _makeChunk: makeChunkFn<T, S>;
+  _parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>;
+  _boundaryChecker: BoundaryChecker<T>;
   _newBoundaryChecker: NewBoundaryCheckerFn;
-  _used: boolean;
+  _done: boolean;
 
   constructor(cursor: ?SequenceCursor, makeChunk: makeChunkFn,
               parentMakeChunk: makeChunkFn,
-              boundaryChecker: BoundaryChecker<S>,
+              boundaryChecker: BoundaryChecker<T>,
               newBoundaryChecker: NewBoundaryCheckerFn) {
     this._cursor = cursor;
-    this._isOnChunkBoundary = false;
     this._parent = null;
     this._current = [];
+    this._lastSeq = null;
     this._makeChunk = makeChunk;
     this._parentMakeChunk = parentMakeChunk;
     this._boundaryChecker = boundaryChecker;
     this._newBoundaryChecker = newBoundaryChecker;
-    this._used = false;
+    this._done = false;
   }
 
   async resume(): Promise<void> {
@@ -131,20 +130,12 @@ export default class SequenceChunker<C: Collection, S, U: Sequence> {
         this._current.push(item);
       }
     }
-
-    this._used = this._current.length > 0;
   }
 
-  append(item: S) {
-    if (this._isOnChunkBoundary) {
-      this.createParent();
-      this.handleChunkBoundary();
-      this._isOnChunkBoundary = false;
-    }
+  append(item: T) {
     this._current.push(item);
-    this._used = true;
     if (this._boundaryChecker.write(item)) {
-      this.handleChunkBoundary();
+      this.handleChunkBoundary(true);
     }
   }
 
@@ -172,63 +163,88 @@ export default class SequenceChunker<C: Collection, S, U: Sequence> {
         this._newBoundaryChecker);
   }
 
-  handleChunkBoundary() {
+  handleChunkBoundary(createParentIfNil: boolean) {
     invariant(this._current.length > 0);
-    const parent = this._parent;
-    if (!parent) {
-      invariant(!this._isOnChunkBoundary);
-      this._isOnChunkBoundary = true;
-    } else {
-      invariant(this._current.length > 0);
-      const chunk = this._makeChunk(this._current)[0];
-      parent.append(chunk);
-      this._current = [];
+    const [chunk, seq] = this._makeChunk(this._current);
+    this._current = [];
+    this._lastSeq = seq;
+    if (!this._parent && createParentIfNil) {
+      this.createParent();
+    }
+    if (this._parent) {
+      this._parent.append(chunk);
     }
   }
 
-  async done(): Promise<C> {
-    if (this._cursor) {
-      await this.finalizeCursor();
+  async done(): Promise<Sequence> {
+    invariant(!this._done);
+    this._done = true;
+
+    for (let s = this; s; s = s._parent) {
+      if (s._cursor) {
+        await s.finalizeCursor();
+      }
     }
 
-    if (this.isRoot()) {
-      return this._makeChunk(this._current)[1];
+    // Chunkers will probably have current items which didn't hit a chunk boundary. Pretend they end
+    // on chunk boundaries for now.
+    this.finalizeChunkBoundaries();
+
+    // The rest of this code figures out which sequence in the parent chain is canonical. That is:
+    // * It's empty, or
+    // * It never chunked, so it's not a prollytree, or
+    // * It chunked, so it's a prollytree, but it must have at least 2 children (or it could have
+    //   been represented as that 1 child).
+    //
+    // Examples of when we may have constructed non-canonical sequences:
+    // * If the previous tree (i.e. its cursor) was deeper, we will have created empty parents.
+    // * If the last appended item was on a chunk boundary, there may be a sequence with a single
+    //   chunk.
+
+    // Firstly, follow up the parent chain to find the highest chunker which did chunk.
+    let seq = this.findRoot();
+    if (!seq) {
+      seq = this._makeChunk([])[1];
+      return seq;
     }
 
-    if (this._current.length > 0) {
-      this.handleChunkBoundary();
+    // Lastly, step back down to find a meta sequence with more than 1 child.
+    while (seq.length <= 1) {
+      invariant(seq.length !== 0);
+      if (!seq.isMeta) {
+        break;
+      }
+      seq = notNull(await seq.getChildSequence(0));
     }
 
-    invariant(this._parent);
-    return this._parent.done();
+    return notNull(seq); // flow should not need this notNull
   }
 
   // Like |done|, but assumes there is no cursor, so it can be synchronous. Necessary for
   // constructing collections without Promises or async/await. There is no equivalent in the Go
   // code because Go is already synchronous.
-  doneSync(): C {
+  doneSync(): Sequence {
     invariant(!this._cursor);
+    invariant(!this._done);
+    this._done = true;
 
-    if (this.isRoot()) {
-      return this._makeChunk(this._current)[1];
+    this.finalizeChunkBoundaries();
+
+    let seq = this.findRoot();
+    if (!seq) {
+      seq = this._makeChunk([])[1];
+      return seq;
     }
 
-    if (this._current.length > 0) {
-      this.handleChunkBoundary();
-    }
-
-    invariant(this._parent);
-    return this._parent.doneSync();
-  }
-
-  isRoot(): boolean {
-    for (let ancestor = this._parent; ancestor; ancestor = ancestor._parent) {
-      if (ancestor._used) {
-        return false;
+    while (seq.length <= 1) {
+      invariant(seq.length !== 0);
+      if (!seq.isMeta) {
+        break;
       }
+      seq = notNull(seq.getChildSequenceSync(0));
     }
 
-    return true;
+    return notNull(seq); // flow should not need this notNull
   }
 
   async finalizeCursor(): Promise<void> {
@@ -249,5 +265,24 @@ export default class SequenceChunker<C: Collection, S, U: Sequence> {
         break;
       }
     }
+  }
+
+  finalizeChunkBoundaries() {
+    for (let s = this; s; s = s._parent) {
+      if (s._current.length > 0) {
+        // Don't create a new parent if we haven't chunked.
+        s.handleChunkBoundary(Boolean(s._lastSeq));
+      }
+    }
+  }
+
+  findRoot(): ?Sequence {
+    let root = null;
+    for (let s = this; s; s = s._parent) {
+      if (s._lastSeq) {
+        root = s._lastSeq;
+      }
+    }
+    return root;
   }
 }
