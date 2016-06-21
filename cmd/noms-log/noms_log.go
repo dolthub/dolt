@@ -62,6 +62,10 @@ func main() {
 	}
 	defer database.Close()
 
+	if value == nil {
+		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
+	}
+
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
 
 	origCommit, ok := value.(types.Struct)

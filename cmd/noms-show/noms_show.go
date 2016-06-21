@@ -35,11 +35,16 @@ func main() {
 	}
 
 	if len(flag.Args()) != 1 {
-		util.CheckError(errors.New("expected exactly one argument"))
+		util.CheckErrorNoUsage(errors.New("expected exactly one argument"))
 	}
 
 	database, value, err := spec.GetPath(flag.Arg(0))
-	util.CheckError(err)
+	util.CheckErrorNoUsage(err)
+
+	if value == nil {
+		fmt.Fprintf(os.Stderr, "Object not found: %s\n", flag.Arg(0))
+		return
+	}
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
 

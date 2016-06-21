@@ -40,15 +40,21 @@ func main() {
 	}
 
 	if len(flag.Args()) != 2 {
-		util.CheckError(errors.New("expected exactly two arguments"))
+		util.CheckErrorNoUsage(errors.New("Expected exactly two arguments"))
 	}
 
 	db1, value1, err := spec.GetPath(flag.Arg(0))
-	util.CheckError(err)
+	util.CheckErrorNoUsage(err)
+	if value1 == nil {
+		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
+	}
 	defer db1.Close()
 
 	db2, value2, err := spec.GetPath(flag.Arg(1))
-	util.CheckError(err)
+	util.CheckErrorNoUsage(err)
+	if value2 == nil {
+		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(1)))
+	}
 	defer db2.Close()
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
