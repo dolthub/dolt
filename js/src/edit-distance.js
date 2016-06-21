@@ -7,7 +7,7 @@
 // This is a port (to flowtype, with minor modifications) of
 // https://github.com/Polymer/observe-js/blob/master/src/observe.js#L1309.
 
-export const DEFAULT_MAX_SPLICE_MATRIX_SIZE = 2e7; // eslint-disable-line no-unused-vars
+export const DEFAULT_MAX_SPLICE_MATRIX_SIZE = 2e7;
 
 export const SPLICE_UNASSIGNED = -1;
 export const SPLICE_AT = 0;
