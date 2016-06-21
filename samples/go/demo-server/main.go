@@ -10,7 +10,7 @@ import (
 var (
 	portFlag    = flag.Int("port", 8000, "port to listen on")
 	ldbDir      = flag.String("ldb-dir", "", "directory for ldb database")
-	authKeyFlag = flag.String("authkey", "", "directory for ldb database")
+	authKeyFlag = flag.String("authkey", "", "token to use for authenticating write operations")
 )
 
 func usage() {
