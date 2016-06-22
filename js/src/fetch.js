@@ -12,10 +12,14 @@ export type FetchOptions = {
   method?: string,
   body?: any,
   headers?: {[key: string]: string},
+  respHeaders?: string[],
   withCredentials? : boolean,
 };
 
-function fetch(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
+type TextResponse = {headers: Map<string, string>, buf: string}
+type BufResponse = {headers: Map<string, string>, buf: Uint8Array}
+
+function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   const opts: any = parse(url);
   opts.method = options.method || 'GET';
   if (options.headers) {
@@ -50,7 +54,13 @@ function fetch(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
         offset += size;
       });
       res.on('end', () => {
-        resolve(Bytes.subarray(buf, 0, offset));
+        const headers = new Map();
+        if (opts.respHeaders) {
+          for (const header of opts.respHeaders) {
+            headers.set(header, res.headers[header]);
+          }
+        }
+        resolve({headers: headers, buf: Bytes.subarray(buf, 0, offset)});
       });
     });
     req.on('error', err => {
@@ -86,10 +96,11 @@ function normalizeBody(opts: FetchOptions): FetchOptions {
   return opts;
 }
 
-export function fetchText(url: string, options: FetchOptions = {}): Promise<string> {
-  return fetch(url, normalizeBody(options)).then(ar => bufferToString(ar));
+export function fetchText(url: string, options: FetchOptions = {}): Promise<TextResponse> {
+  return fetch(url, normalizeBody(options))
+    .then(({headers, buf}) => ({headers: headers, buf: bufferToString(buf)}));
 }
 
-export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<Uint8Array> {
+export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   return fetch(url, options);
 }

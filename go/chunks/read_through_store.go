@@ -74,3 +74,7 @@ func (rts ReadThroughStore) Root() hash.Hash {
 func (rts ReadThroughStore) UpdateRoot(current, last hash.Hash) bool {
 	return rts.backingStore.UpdateRoot(current, last)
 }
+
+func (rts ReadThroughStore) Version() string {
+	return rts.backingStore.Version()
+}

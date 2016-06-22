@@ -48,7 +48,7 @@ func TestHandleWriteValue(t *testing.T) {
 	sz.Close()
 
 	w := httptest.NewRecorder()
-	HandleWriteValue(w, &http.Request{Body: ioutil.NopCloser(body), Method: "POST"}, params{}, cs)
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		ds2 := NewDatabase(cs)
@@ -84,7 +84,7 @@ func TestHandleWriteValueBackpressure(t *testing.T) {
 	sz.Close()
 
 	w := httptest.NewRecorder()
-	HandleWriteValue(w, &http.Request{Body: ioutil.NopCloser(body), Method: "POST"}, params{}, cs)
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
 
 	if assert.Equal(httpStatusTooManyRequests, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		hashes := deserializeHashes(w.Body)
@@ -171,10 +171,11 @@ func TestHandleGetRefs(t *testing.T) {
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
 
 	w := httptest.NewRecorder()
-	HandleGetRefs(w,
-		&http.Request{Body: ioutil.NopCloser(body), Method: "POST", Header: http.Header{
+	HandleGetRefs(
+		w,
+		newRequest("POST", "", "", body, http.Header{
 			"Content-Type": {"application/x-www-form-urlencoded"},
-		}},
+		}),
 		params{},
 		cs,
 	)
@@ -205,10 +206,11 @@ func TestHandleHasRefs(t *testing.T) {
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
 
 	w := httptest.NewRecorder()
-	HandleHasRefs(w,
-		&http.Request{Body: ioutil.NopCloser(body), Method: "POST", Header: http.Header{
+	HandleHasRefs(
+		w,
+		newRequest("POST", "", "", body, http.Header{
 			"Content-Type": {"application/x-www-form-urlencoded"},
-		}},
+		}),
 		params{},
 		cs,
 	)
@@ -238,7 +240,7 @@ func TestHandleGetRoot(t *testing.T) {
 	assert.True(cs.UpdateRoot(c.Hash(), hash.Hash{}))
 
 	w := httptest.NewRecorder()
-	HandleRootGet(w, &http.Request{Method: "GET"}, params{}, cs)
+	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		root := hash.Parse(string(w.Body.Bytes()))
@@ -263,15 +265,16 @@ func TestHandlePostRoot(t *testing.T) {
 	queryParams.Add("last", chnx[0].Hash().String())
 	queryParams.Add("current", chnx[1].Hash().String())
 	u.RawQuery = queryParams.Encode()
+	url := u.String()
 
 	w := httptest.NewRecorder()
-	HandleRootPost(w, &http.Request{URL: u, Method: "POST"}, params{}, cs)
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
 	assert.True(cs.UpdateRoot(chnx[0].Hash(), hash.Hash{}))
 	w = httptest.NewRecorder()
-	HandleRootPost(w, &http.Request{URL: u, Method: "POST"}, params{}, cs)
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 

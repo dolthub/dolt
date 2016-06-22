@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
@@ -27,54 +28,90 @@ type URLParams interface {
 
 type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore)
 
-func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	hashes := hash.HashSlice{}
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
+// NomsVersionHeader is the name of the header that Noms clients and servers must set in every request/response.
+const NomsVersionHeader = "X-Noms-Vers"
 
-		reader := bodyReader(req)
-		defer func() {
-			// Ensure all data on reader is consumed
-			io.Copy(ioutil.Discard, reader)
-			reader.Close()
-		}()
-		vbs := types.NewValidatingBatchingSink(cs)
-		vbs.Prepare(deserializeHints(reader))
+var (
+	// HandleWriteValue is meant to handle HTTP POST requests to the writeValue/ server endpoint. The payload should be an appropriately-ordered sequence of Chunks to be validated and stored on the server.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
+	HandleWriteValue = versionCheck(handleWriteValue)
 
-		chunkChan := make(chan *chunks.Chunk, 16)
-		go chunks.DeserializeToChan(reader, chunkChan)
-		var bpe chunks.BackpressureError
-		for c := range chunkChan {
-			if bpe == nil {
-				bpe = vbs.Enqueue(*c)
-			} else {
-				bpe = append(bpe, c.Hash())
-			}
-			// If a previous Enqueue() errored, we still need to drain chunkChan
-			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
-			hashes = append(hashes, c.Hash())
-		}
-		if bpe == nil {
-			bpe = vbs.Flush()
-		}
-		if bpe != nil {
-			w.WriteHeader(httpStatusTooManyRequests)
-			w.Header().Add("Content-Type", "application/octet-stream")
-			writer := respWriter(req, w)
-			defer writer.Close()
-			serializeHashes(writer, bpe.AsHashes())
+	// HandleGetRefs is meant to handle HTTP POST requests to the getRefs/ server endpoint. Given a sequence of Chunk hashes, the server will fetch and return them.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
+	HandleGetRefs = versionCheck(handleGetRefs)
+
+	// HandleWriteValue is meant to handle HTTP POST requests to the hasRefs/ server endpoint. Given a sequence of Chunk hashes, the server check for their presence and return a list of true/false responses.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
+	HandleHasRefs = versionCheck(handleHasRefs)
+
+	// HandleRootGet is meant to handle HTTP GET requests to the root/ server endpoint. The server returns the hash of the Root as a string.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
+	HandleRootGet = versionCheck(handleRootGet)
+
+	// HandleWriteValue is meant to handle HTTP POST requests to the root/ server endpoint. This is used to update the Root to point to a new Chunk.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
+	HandleRootPost = versionCheck(handleRootPost)
+)
+
+func versionCheck(hndlr Handler) Handler {
+	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
+		if req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
+			http.Error(
+				w,
+				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), constants.NomsVersion),
+				http.StatusBadRequest,
+			)
 			return
 		}
-		w.WriteHeader(http.StatusCreated)
-	})
 
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v\nChunks in payload: %v", err, hashes), http.StatusBadRequest)
-		return
+		err := d.Try(func() { hndlr(w, req, ps, cs) })
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+			return
+		}
 	}
 }
 
-// Contents of the returned io.Reader are gzipped.
+func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	d.Exp.Equal("POST", req.Method)
+
+	reader := bodyReader(req)
+	defer func() {
+		// Ensure all data on reader is consumed
+		io.Copy(ioutil.Discard, reader)
+		reader.Close()
+	}()
+	vbs := types.NewValidatingBatchingSink(cs)
+	vbs.Prepare(deserializeHints(reader))
+
+	chunkChan := make(chan *chunks.Chunk, 16)
+	go chunks.DeserializeToChan(reader, chunkChan)
+	var bpe chunks.BackpressureError
+	for c := range chunkChan {
+		if bpe == nil {
+			bpe = vbs.Enqueue(*c)
+		} else {
+			bpe = append(bpe, c.Hash())
+		}
+		// If a previous Enqueue() errored, we still need to drain chunkChan
+		// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
+	}
+	if bpe == nil {
+		bpe = vbs.Flush()
+	}
+	if bpe != nil {
+		w.WriteHeader(httpStatusTooManyRequests)
+		w.Header().Add("Content-Type", "application/octet-stream")
+		writer := respWriter(req, w)
+		defer writer.Close()
+		serializeHashes(writer, bpe.AsHashes())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// Contents of the returned io.Reader are snappy-compressed.
 func buildWriteValueRequest(serializedChunks io.Reader, hints map[hash.Hash]struct{}) io.Reader {
 	body := &bytes.Buffer{}
 	gw := snappy.NewBufferedWriter(body)
@@ -118,30 +155,23 @@ func (wc wc) Close() error {
 	return nil
 }
 
-func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
+func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	d.Exp.Equal("POST", req.Method)
 
-		hashes := extractHashes(req)
+	hashes := extractHashes(req)
 
-		w.Header().Add("Content-Type", "application/octet-stream")
-		writer := respWriter(req, w)
-		defer writer.Close()
+	w.Header().Add("Content-Type", "application/octet-stream")
+	writer := respWriter(req, w)
+	defer writer.Close()
 
-		sz := chunks.NewSerializer(writer)
-		for _, h := range hashes {
-			c := cs.Get(h)
-			if !c.IsEmpty() {
-				sz.Put(c)
-			}
+	sz := chunks.NewSerializer(writer)
+	for _, h := range hashes {
+		c := cs.Get(h)
+		if !c.IsEmpty() {
+			sz.Put(c)
 		}
-		sz.Close()
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
 	}
+	sz.Close()
 }
 
 func extractHashes(req *http.Request) hash.HashSlice {
@@ -165,62 +195,41 @@ func buildHashesRequest(hashes map[hash.Hash]struct{}) io.Reader {
 	return strings.NewReader(values.Encode())
 }
 
-func HandleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
+func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	d.Exp.Equal("POST", req.Method)
 
-		hashes := extractHashes(req)
+	hashes := extractHashes(req)
 
-		w.Header().Add("Content-Type", "text/plain")
-		writer := respWriter(req, w)
-		defer writer.Close()
+	w.Header().Add("Content-Type", "text/plain")
+	writer := respWriter(req, w)
+	defer writer.Close()
 
-		for _, h := range hashes {
-			fmt.Fprintf(writer, "%s %t\n", h, cs.Has(h))
-		}
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
+	for _, h := range hashes {
+		fmt.Fprintf(writer, "%s %t\n", h, cs.Has(h))
 	}
 }
 
-func HandleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	err := d.Try(func() {
-		d.Exp.Equal("GET", req.Method)
+func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
+	d.Exp.Equal("GET", req.Method)
 
-		rootRef := rt.Root()
-		fmt.Fprintf(w, "%v", rootRef.String())
-		w.Header().Add("content-type", "text/plain")
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
-		return
-	}
+	rootRef := rt.Root()
+	fmt.Fprintf(w, "%v", rootRef.String())
+	w.Header().Add("content-type", "text/plain")
 }
 
-func HandleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	err := d.Try(func() {
-		d.Exp.Equal("POST", req.Method)
+func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
+	d.Exp.Equal("POST", req.Method)
 
-		params := req.URL.Query()
-		tokens := params["last"]
-		d.Exp.Len(tokens, 1)
-		last := hash.Parse(tokens[0])
-		tokens = params["current"]
-		d.Exp.Len(tokens, 1)
-		current := hash.Parse(tokens[0])
+	params := req.URL.Query()
+	tokens := params["last"]
+	d.Exp.Len(tokens, 1)
+	last := hash.Parse(tokens[0])
+	tokens = params["current"]
+	d.Exp.Len(tokens, 1)
+	current := hash.Parse(tokens[0])
 
-		if !rt.UpdateRoot(current, last) {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+	if !rt.UpdateRoot(current, last) {
+		w.WriteHeader(http.StatusConflict)
 		return
 	}
 }

@@ -122,3 +122,21 @@ func TestHintsOnCache(t *testing.T) {
 		}
 	}
 }
+
+func TestPanicOnReadBadVersion(t *testing.T) {
+	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
+	assert.Panics(t, func() { cvs.ReadValue(hash.Hash{}) })
+}
+
+func TestPanicOnWriteBadVersion(t *testing.T) {
+	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
+	assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()) })
+}
+
+type badVersionStore struct {
+	*chunks.TestStore
+}
+
+func (b *badVersionStore) Version() string {
+	return "BAD"
+}

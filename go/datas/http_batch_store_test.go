@@ -107,6 +107,20 @@ func newAuthenticatingHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite, hostUrl 
 	return hcs
 }
 
+func newBadVersionHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite) *httpBatchStore {
+	serv := inlineServer{httprouter.New()}
+	serv.POST(
+		constants.RootPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			HandleRootPost(w, req, ps, suite.cs)
+			w.Header().Set(NomsVersionHeader, "BAD")
+		},
+	)
+	hcs := newHTTPBatchStore("http://localhost", "")
+	hcs.httpClient = serv
+	return hcs
+}
+
 func (suite *HTTPBatchStoreSuite) TearDownTest() {
 	suite.store.Close()
 	suite.cs.Close()
@@ -209,10 +223,16 @@ func (suite *HTTPBatchStoreSuite) TestRoot() {
 	suite.Equal(c.Hash(), suite.store.Root())
 }
 
+func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
+	store := newBadVersionHTTPBatchStoreForTest(suite)
+	c := chunks.NewChunk([]byte("abc"))
+	suite.Panics(func() { store.UpdateRoot(c.Hash(), hash.Hash{}) })
+}
+
 func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 	c := chunks.NewChunk([]byte("abc"))
-	suite.True(suite.cs.UpdateRoot(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.store.Root())
+	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
 func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {

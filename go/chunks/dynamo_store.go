@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/aws/aws-sdk-go/aws"
@@ -35,12 +36,14 @@ const (
 	refAttr         = "ref"
 	chunkAttr       = "chunk"
 	compAttr        = "comp"
+	numAttr         = "num"
 	noneValue       = "none"
 	gzipValue       = "gzip"
 )
 
 var (
 	dynamoRootKey            = []byte("root")
+	dynamoVersionKey         = []byte("vers")
 	valueNotExistsExpression = fmt.Sprintf("attribute_not_exists(%s)", chunkAttr)
 	valueEqualsExpression    = fmt.Sprintf("%s = :prev", chunkAttr)
 )
@@ -58,6 +61,8 @@ type DynamoStore struct {
 	namespace       []byte
 	namespaceLen    int
 	rootKey         []byte
+	versionKey      []byte
+	versionSetOnce  sync.Once
 	ddbsvc          ddbsvc
 	writeTime       int64
 	writeBatchCount uint64
@@ -91,6 +96,8 @@ func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc, showStats boo
 	store := &DynamoStore{
 		table:         table,
 		namespace:     []byte(namespace),
+		rootKey:       append([]byte(namespace), dynamoRootKey...),
+		versionKey:    append([]byte(namespace), dynamoVersionKey...),
 		ddbsvc:        ddb,
 		readQueue:     make(chan ReadRequest, readBufferSize),
 		writeQueue:    make(chan Chunk, writeBufferSize),
@@ -100,7 +107,6 @@ func newDynamoStoreFromDDBsvc(table, namespace string, ddb ddbsvc, showStats boo
 		unwrittenPuts: newUnwrittenPutCache(),
 	}
 	store.namespaceLen = len(store.namespace)
-	store.rootKey = append(store.namespace, dynamoRootKey...)
 	store.batchGetRequests()
 	store.batchPutRequests()
 	store.showStats = showStats
@@ -273,6 +279,7 @@ func (s *DynamoStore) batchPutRequests() {
 }
 
 func (s *DynamoStore) sendWriteRequests(first Chunk) {
+	s.versionSetOnce.Do(s.setVersIfUnset)
 	n := time.Now().UnixNano()
 	defer func() {
 		s.writeBatchCount++
@@ -384,6 +391,46 @@ func (s *DynamoStore) Close() error {
 	return nil
 }
 
+func (s *DynamoStore) Version() string {
+	result, err := s.ddbsvc.GetItem(&dynamodb.GetItemInput{
+		TableName: aws.String(s.table),
+		Key: map[string]*dynamodb.AttributeValue{
+			refAttr: {B: s.versionKey},
+		},
+	})
+	d.Chk.NoError(err)
+
+	itemLen := len(result.Item)
+	if itemLen == 0 {
+		return constants.NomsVersion
+	}
+	d.Chk.True(itemLen == 2, "Version should have 2 attributes on it: %+v", result.Item)
+	d.Chk.True(result.Item[numAttr] != nil)
+	d.Chk.True(result.Item[numAttr].S != nil)
+	return aws.StringValue(result.Item[chunkAttr].S)
+}
+
+func (s *DynamoStore) setVersIfUnset() {
+	putArgs := dynamodb.PutItemInput{
+		TableName: aws.String(s.table),
+		Item: map[string]*dynamodb.AttributeValue{
+			refAttr: {B: s.versionKey},
+			numAttr: {S: aws.String(constants.NomsVersion)},
+		},
+		ConditionExpression: aws.String(valueNotExistsExpression),
+	}
+
+	if _, err := s.ddbsvc.PutItem(&putArgs); err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() != "ConditionalCheckFailedException" {
+				d.Chk.NoError(awsErr)
+			}
+		} else {
+			d.Chk.NoError(err)
+		}
+	}
+}
+
 func (s *DynamoStore) Root() hash.Hash {
 	result, err := s.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		TableName: aws.String(s.table),
@@ -393,11 +440,10 @@ func (s *DynamoStore) Root() hash.Hash {
 	})
 	d.Exp.NoError(err)
 
-	if len(result.Item) == 0 {
+	itemLen := len(result.Item)
+	if itemLen == 0 {
 		return hash.Hash{}
 	}
-
-	itemLen := len(result.Item)
 	d.Chk.True(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
 	if itemLen == 3 {
 		d.Chk.True(result.Item[compAttr] != nil)
@@ -408,6 +454,7 @@ func (s *DynamoStore) Root() hash.Hash {
 }
 
 func (s *DynamoStore) UpdateRoot(current, last hash.Hash) bool {
+	s.versionSetOnce.Do(s.setVersIfUnset)
 	s.requestWg.Wait()
 
 	putArgs := dynamodb.PutItemInput{

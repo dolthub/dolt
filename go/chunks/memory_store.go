@@ -7,6 +7,7 @@ package chunks
 import (
 	"sync"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -41,6 +42,10 @@ func (ms *MemoryStore) Has(r hash.Hash) bool {
 	}
 	_, ok := ms.data[r]
 	return ok
+}
+
+func (ms *MemoryStore) Version() string {
+	return constants.NomsVersion
 }
 
 func (ms *MemoryStore) Put(c Chunk) {

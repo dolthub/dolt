@@ -53,5 +53,6 @@ func (suite *LevelDBStoreTestSuite) TestReservedKeys() {
 	// This was happening to us here, so ldb.chunkPrefix was "/chunk/" and ldb.rootKey was "/chun" instead of "/root"
 	ldb := suite.factory.CreateStore("").(*LevelDBStore)
 	suite.True(bytes.HasSuffix(ldb.rootKey, []byte(rootKeyConst)))
+	suite.True(bytes.HasSuffix(ldb.versionKey, []byte(versionKeyConst)))
 	suite.True(bytes.HasSuffix(ldb.chunkPrefix, []byte(chunkPrefixConst)))
 }

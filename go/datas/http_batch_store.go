@@ -214,6 +214,7 @@ func (bhcs *httpBatchStore) getRefs(hashes hashSet, batch chunks.ReadBatch) {
 
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
+	expectVersion(res)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
@@ -265,6 +266,7 @@ func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
 
 	res, err := bhcs.httpClient.Do(req)
 	d.Chk.NoError(err)
+	expectVersion(res)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
@@ -401,6 +403,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			res, err = bhcs.httpClient.Do(req)
 			d.Exp.NoError(err)
 			d.Exp.NoError(<-errChan)
+			expectVersion(res)
 			defer closeResponse(res.Body)
 
 			if tryAgain = res.StatusCode == httpStatusTooManyRequests; tryAgain {
@@ -423,6 +426,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 func (bhcs *httpBatchStore) Root() hash.Hash {
 	// GET http://<host>/root. Response will be ref of root.
 	res := bhcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
+	expectVersion(res)
 	defer closeResponse(res.Body)
 
 	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -436,6 +440,7 @@ func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	bhcs.Flush()
 
 	res := bhcs.requestRoot("POST", current, last)
+	expectVersion(res)
 	defer closeResponse(res.Body)
 
 	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusConflict, "Unexpected response: %s", http.StatusText(res.StatusCode))
@@ -464,6 +469,7 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 func newRequest(method, auth, url string, body io.Reader, header http.Header) *http.Request {
 	req, err := http.NewRequest(method, url, body)
 	d.Chk.NoError(err)
+	req.Header.Set(NomsVersionHeader, constants.NomsVersion)
 	for k, vals := range header {
 		for _, v := range vals {
 			req.Header.Add(k, v)
@@ -479,6 +485,15 @@ func formatErrorResponse(res *http.Response) string {
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
 	return fmt.Sprintf("%s:\n%s\n", res.Status, data)
+}
+
+func expectVersion(res *http.Response) {
+	dataVersion := res.Header.Get(NomsVersionHeader)
+	if constants.NomsVersion != dataVersion {
+		ioutil.ReadAll(res.Body)
+		res.Body.Close()
+		d.Exp.Fail("Version mismatch", "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	}
 }
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.

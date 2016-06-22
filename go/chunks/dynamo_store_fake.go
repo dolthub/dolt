@@ -7,6 +7,7 @@ package chunks
 import (
 	"bytes"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -24,6 +25,7 @@ type fakeDDB struct {
 	assert      *assert.Assertions
 	numPuts     int
 	numCompPuts int
+	version     string
 }
 
 type record struct {
@@ -32,7 +34,11 @@ type record struct {
 }
 
 func createFakeDDB(a *assert.Assertions) *fakeDDB {
-	return &fakeDDB{data: map[string]record{}, assert: a}
+	return &fakeDDB{
+		data:    map[string]record{},
+		assert:  a,
+		version: constants.NomsVersion,
+	}
 }
 
 func (m *fakeDDB) BatchGetItem(input *dynamodb.BatchGetItemInput) (*dynamodb.BatchGetItemOutput, error) {
@@ -85,19 +91,20 @@ func (m *fakeDDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb
 func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
 	key := input.Key[refAttr].B
 	m.assert.NotNil(key, "key should have been a blob: %+v", input.Key[refAttr])
-	value, comp := m.get(key)
 
 	item := map[string]*dynamodb.AttributeValue{}
-	if value != nil {
-		item = map[string]*dynamodb.AttributeValue{
-			refAttr:   {B: key},
-			chunkAttr: {B: value},
-			compAttr:  {S: aws.String(comp)},
+	if bytes.HasSuffix(key, dynamoVersionKey) {
+		item[refAttr] = &dynamodb.AttributeValue{B: key}
+		item[numAttr] = &dynamodb.AttributeValue{S: aws.String(m.version)}
+	} else {
+		value, comp := m.get(key)
+		if value != nil {
+			item[refAttr] = &dynamodb.AttributeValue{B: key}
+			item[chunkAttr] = &dynamodb.AttributeValue{B: value}
+			item[compAttr] = &dynamodb.AttributeValue{S: aws.String(comp)}
 		}
 	}
-	return &dynamodb.GetItemOutput{
-		Item: item,
-	}, nil
+	return &dynamodb.GetItemOutput{Item: item}, nil
 }
 
 func (m *fakeDDB) get(k []byte) ([]byte, string) {
@@ -109,10 +116,18 @@ func (m *fakeDDB) put(k, v []byte, c string) {
 }
 
 func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+	m.assert.NotNil(input.Item[refAttr], "%s should have been present", refAttr)
+	m.assert.NotNil(input.Item[refAttr].B, "key should have been a blob: %+v", input.Item[refAttr])
 	key := input.Item[refAttr].B
+	if bytes.HasSuffix(key, dynamoVersionKey) {
+		m.assert.NotNil(input.Item[numAttr], "%s should have been present", numAttr)
+		m.assert.NotNil(input.Item[numAttr].S, "vers should have been a string: %+v", input.Item[numAttr])
+		m.version = aws.StringValue(input.Item[numAttr].S)
+		return &dynamodb.PutItemOutput{}, nil
+	}
+	m.assert.NotNil(input.Item[chunkAttr], "%s should have present", chunkAttr)
+	m.assert.NotNil(input.Item[chunkAttr].B, "value should have been a blob: %+v", input.Item[chunkAttr])
 	value := input.Item[chunkAttr].B
-	m.assert.NotNil(key, "key should have been a blob: %+v", input.Item[refAttr])
-	m.assert.NotNil(value, "value should have been a blob: %+v", input.Item[chunkAttr])
 
 	mustNotExist := *(input.ConditionExpression) == valueNotExistsExpression
 	current, present := m.data[string(key)]

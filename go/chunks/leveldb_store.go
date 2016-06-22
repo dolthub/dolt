@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/golang/snappy"
@@ -21,6 +22,7 @@ import (
 
 const (
 	rootKeyConst     = "/root"
+	versionKeyConst  = "/vers"
 	chunkPrefixConst = "/chunk/"
 )
 
@@ -59,6 +61,7 @@ func newLevelDBStore(store *internalLevelDBStore, ns []byte, closeBackingStore b
 	return &LevelDBStore{
 		internalLevelDBStore: store,
 		rootKey:              copyNsAndAppend(rootKeyConst),
+		versionKey:           copyNsAndAppend(versionKeyConst),
 		chunkPrefix:          copyNsAndAppend(chunkPrefixConst),
 		closeBackingStore:    closeBackingStore,
 	}
@@ -67,8 +70,10 @@ func newLevelDBStore(store *internalLevelDBStore, ns []byte, closeBackingStore b
 type LevelDBStore struct {
 	*internalLevelDBStore
 	rootKey           []byte
+	versionKey        []byte
 	chunkPrefix       []byte
 	closeBackingStore bool
+	versionSetOnce    sync.Once
 }
 
 func (l *LevelDBStore) Root() hash.Hash {
@@ -78,6 +83,7 @@ func (l *LevelDBStore) Root() hash.Hash {
 
 func (l *LevelDBStore) UpdateRoot(current, last hash.Hash) bool {
 	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	l.versionSetOnce.Do(l.setVersIfUnset)
 	return l.updateRootByKey(l.rootKey, current, last)
 }
 
@@ -91,12 +97,20 @@ func (l *LevelDBStore) Has(ref hash.Hash) bool {
 	return l.hasByKey(l.toChunkKey(ref))
 }
 
+func (l *LevelDBStore) Version() string {
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	return l.versByKey(l.versionKey)
+}
+
 func (l *LevelDBStore) Put(c Chunk) {
 	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	l.versionSetOnce.Do(l.setVersIfUnset)
 	l.putByKey(l.toChunkKey(c.Hash()), c)
 }
 
 func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
+	d.Chk.True(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	l.versionSetOnce.Do(l.setVersIfUnset)
 	numBytes := 0
 	b := new(leveldb.Batch)
 	for _, c := range chunks {
@@ -121,6 +135,14 @@ func (l *LevelDBStore) toChunkKey(r hash.Hash) []byte {
 	out := make([]byte, len(l.chunkPrefix), len(l.chunkPrefix)+len(digest))
 	copy(out, l.chunkPrefix)
 	return append(out, digest...)
+}
+
+func (l *LevelDBStore) setVersIfUnset() {
+	exists, err := l.db.Has(l.versionKey, nil)
+	d.Chk.NoError(err)
+	if !exists {
+		l.setVersByKey(l.versionKey)
+	}
 }
 
 type internalLevelDBStore struct {
@@ -189,6 +211,22 @@ func (l *internalLevelDBStore) hasByKey(key []byte) bool {
 	d.Chk.NoError(err)
 	l.hasCount++
 	return exists
+}
+
+func (l *internalLevelDBStore) versByKey(key []byte) string {
+	val, err := l.db.Get(key, nil)
+	if err == errors.ErrNotFound {
+		return constants.NomsVersion
+	}
+	d.Chk.NoError(err)
+	return string(val)
+}
+
+func (l *internalLevelDBStore) setVersByKey(key []byte) {
+	l.concurrentWriteLimit <- struct{}{}
+	err := l.db.Put(key, []byte(constants.NomsVersion), nil)
+	d.Chk.NoError(err)
+	<-l.concurrentWriteLimit
 }
 
 func (l *internalLevelDBStore) putByKey(key []byte, c Chunk) {
