@@ -4,7 +4,9 @@
 
 package types
 
-import "github.com/attic-labs/buzhash"
+import (
+	"github.com/kch42/buzhash"
+)
 
 type buzHashBoundaryChecker struct {
 	h                     *buzhash.BuzHash
