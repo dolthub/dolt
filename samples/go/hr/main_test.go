@@ -6,6 +6,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os/exec"
 	"path"
 	"runtime"
 	"testing"
@@ -39,10 +41,15 @@ Abigail Boodman (id: 43, title: Chief Architect)
 `, out)
 }
 
-func (s *testSuite) ReadCanned() {
+func (s *testSuite) TestReadCanned() {
 	_, p, _, _ := runtime.Caller(0)
 	p = path.Join(path.Dir(p), "test-data")
-	out := s.Run(main, []string{"-ds", fmt.Sprintf("ldb:%s::hr", p), "list-persons"})
+	dst, err := ioutil.TempDir("", "")
+	s.NoError(err)
+	// Have to copy the canned data elsewhere because just reading the database modifies it.
+	_, err = exec.Command("cp", "-r", p, dst).Output()
+	s.NoError(err)
+	out := s.Run(main, []string{"-ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
 	s.Equal(`Aaron Boodman (id: 7, title: Chief Evangelism Officer)
 Samuel Boodman (id: 13, title: VP, Culture)
 `, out)
