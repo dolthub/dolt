@@ -74,7 +74,7 @@ func versionCheck(hndlr Handler) Handler {
 }
 
 func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.Exp.Equal("POST", req.Method)
+	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
 
 	reader := bodyReader(req)
 	defer func() {
@@ -124,7 +124,7 @@ func bodyReader(req *http.Request) (reader io.ReadCloser) {
 	reader = req.Body
 	if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
 		gr, err := gzip.NewReader(reader)
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		reader = gr
 	} else if strings.Contains(req.Header.Get("Content-Encoding"), "x-snappy-framed") {
 		sr := snappy.NewReader(reader)
@@ -156,7 +156,7 @@ func (wc wc) Close() error {
 }
 
 func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.Exp.Equal("POST", req.Method)
+	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
 
 	hashes := extractHashes(req)
 
@@ -176,9 +176,9 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 func extractHashes(req *http.Request) hash.HashSlice {
 	err := req.ParseForm()
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	hashStrs := req.PostForm["ref"]
-	d.Exp.True(len(hashStrs) > 0)
+	d.PanicIfTrue(len(hashStrs) <= 0, "PostForm is empty")
 
 	hashes := make(hash.HashSlice, len(hashStrs))
 	for idx, refStr := range hashStrs {
@@ -196,7 +196,7 @@ func buildHashesRequest(hashes map[hash.Hash]struct{}) io.Reader {
 }
 
 func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.Exp.Equal("POST", req.Method)
+	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
 
 	hashes := extractHashes(req)
 
@@ -210,7 +210,7 @@ func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 }
 
 func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	d.Exp.Equal("GET", req.Method)
+	d.PanicIfTrue(req.Method != "GET", "Expected post method.")
 
 	rootRef := rt.Root()
 	fmt.Fprintf(w, "%v", rootRef.String())
@@ -218,14 +218,14 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 }
 
 func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	d.Exp.Equal("POST", req.Method)
+	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
 
 	params := req.URL.Query()
 	tokens := params["last"]
-	d.Exp.Len(tokens, 1)
+	d.PanicIfTrue(len(tokens) != 1, `Expected "last" query param value`)
 	last := hash.Parse(tokens[0])
 	tokens = params["current"]
-	d.Exp.Len(tokens, 1)
+	d.PanicIfTrue(len(tokens) != 1, `Expected "current" query param value`)
 	current := hash.Parse(tokens[0])
 
 	if !rt.UpdateRoot(current, last) {

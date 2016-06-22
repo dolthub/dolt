@@ -54,7 +54,7 @@ func main() {
 
 		var err error
 		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), int(*p))
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 	})
 
 	if err != nil {

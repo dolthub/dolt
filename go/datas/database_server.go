@@ -30,7 +30,7 @@ type remoteDatabaseServer struct {
 
 func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *remoteDatabaseServer {
 	dataVersion := cs.Version()
-	d.Exp.True(constants.NomsVersion == dataVersion, "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	return &remoteDatabaseServer{
 		cs, port, nil, make(chan *connectionState, 16), false,
 	}

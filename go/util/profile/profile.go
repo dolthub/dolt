@@ -27,19 +27,19 @@ func MaybeStartProfile() interface {
 	p := &prof{}
 	if *blockProfile != "" {
 		f, err := os.Create(*blockProfile)
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		runtime.SetBlockProfileRate(1)
 		p.bp = f
 	}
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		pprof.StartCPUProfile(f)
 		p.cpu = f
 	}
 	if *memProfile != "" {
 		f, err := os.Create(*memProfile)
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		p.mem = f
 	}
 	return p

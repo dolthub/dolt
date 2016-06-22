@@ -36,7 +36,7 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureEr
 		return nil
 	}
 	v := DecodeValue(c, vbs.vs)
-	d.Exp.True(getHash(v) == h)
+	d.PanicIfTrue(getHash(v) != h, "Invalid hash found")
 	vbs.vs.ensureChunksInCache(v)
 	vbs.vs.set(h, hintedChunk{v.Type(), h})
 

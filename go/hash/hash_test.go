@@ -16,7 +16,8 @@ func TestParseError(t *testing.T) {
 
 	assertParseError := func(s string) {
 		e := d.Try(func() { Parse(s) })
-		assert.IsType(d.UsageError{}, e)
+		_, ok := e.(d.WrappedError)
+		assert.True(ok)
 	}
 
 	assertParseError("foo")

@@ -154,8 +154,8 @@ type internalLevelDBStore struct {
 }
 
 func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLevelDBStore {
-	d.Exp.NotEmpty(dir)
-	d.Exp.NoError(os.MkdirAll(dir, 0700))
+	d.PanicIfTrue(dir == "", "dir cannot be empty")
+	d.PanicIfError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
 		Compression:            opt.NoCompression,
 		Filter:                 filter.NewBloomFilter(10), // 10 bits/key

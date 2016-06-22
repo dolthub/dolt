@@ -114,7 +114,7 @@ func diffMaps(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Map) {
 		c1, c2 := v1.Get(k), v2.Get(k)
 		if canCompare(c1, c2) {
 			buf := bytes.NewBuffer(nil)
-			d.Exp.NoError(types.WriteEncodedValueWithTags(buf, k))
+			d.PanicIfError(types.WriteEncodedValueWithTags(buf, k))
 			p1 := p.AddField(buf.String())
 			dq.PushBack(diffInfo{path: p1, key: k, v1: c1, v2: c2})
 		} else {
@@ -190,24 +190,24 @@ func line(w io.Writer, start string, key, v2 types.Value) {
 	var err error
 	pw := prefixWriter{w: w, prefix: []byte(start)}
 	_, err = w.Write([]byte(start))
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	if key != nil {
-		d.Exp.NoError(types.WriteEncodedValue(pw, key))
+		d.PanicIfError(types.WriteEncodedValue(pw, key))
 		_, err = w.Write([]byte(": "))
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 	}
-	d.Exp.NoError(types.WriteEncodedValue(pw, v2))
+	d.PanicIfError((types.WriteEncodedValue(pw, v2)))
 	_, err = w.Write([]byte("\n"))
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 }
 
 func writeHeader(w io.Writer, wroteHeader bool, p types.Path) bool {
 	var err error
 	if !wroteHeader {
 		_, err = w.Write([]byte(p.String()))
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		_, err = w.Write([]byte(" {\n"))
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 		wroteHeader = true
 	}
 	return wroteHeader
@@ -216,6 +216,6 @@ func writeHeader(w io.Writer, wroteHeader bool, p types.Path) bool {
 func writeFooter(w io.Writer, wroteHeader bool) {
 	if wroteHeader {
 		_, err := w.Write([]byte("  }\n"))
-		d.Exp.NoError(err)
+		d.PanicIfError(err)
 	}
 }

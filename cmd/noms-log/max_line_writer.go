@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	maxLinesError = MaxLinesError{"Maximum number of lines written"}
+	MaxLinesErr = MaxLinesError{"Maximum number of lines written"}
 )
 
 type MaxLinesError struct {
@@ -41,7 +41,7 @@ func (w *maxLineWriter) writeMax(data []byte, enforceMax bool) (byteCnt int, err
 		}
 		byteCnt++
 		if enforceMax && w.maxLines >= 0 && w.numLines >= w.maxLines {
-			err = maxLinesError
+			err = MaxLinesErr
 			return
 		}
 		// TODO: This is not technically correct due to utf-8, but ... meh.

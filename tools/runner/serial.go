@@ -43,8 +43,8 @@ func ForceRun(exe string, args ...string) {
 // ForceRunInDir runs 'exe [args...]' in the given directory, and d.Chk()s on failure. Inherits the environment of the current process.
 func ForceRunInDir(dir string, env Env, exe string, args ...string) {
 	info, err := os.Stat(dir)
-	d.Exp.NoError(err, "Can't stat %s", dir)
-	d.Exp.True(info.IsDir(), "%s must be a path to a directory.", dir)
+	d.PanicIfTrue(err != nil, "Can't stat %s", dir)
+	d.PanicIfTrue(!info.IsDir(), "%s must be a path to a directory.", dir)
 	d.Chk.NoError(runEnvDir(os.Stdout, os.Stderr, env, dir, exe, args...))
 }
 
@@ -71,7 +71,7 @@ func Serial(stdout, stderr io.Writer, env Env, dir, filename string, args ...str
 			// Some programs like npm create temporary log files which confuse filepath.Walk.
 			return nil
 		}
-		d.Exp.NoError(err, "Failed directory traversal at %s", path)
+		d.PanicIfTrue(err != nil, "Failed directory traversal at %s", path)
 		if !info.IsDir() && filepath.Base(path) == filename {
 			scriptAndArgs := append([]string{filepath.Base(path)}, args...)
 			runErr := runEnvDir(stdout, stderr, env, filepath.Dir(path), "python", scriptAndArgs...)
@@ -82,6 +82,6 @@ func Serial(stdout, stderr io.Writer, env Env, dir, filename string, args ...str
 		}
 		return nil
 	})
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	return success
 }

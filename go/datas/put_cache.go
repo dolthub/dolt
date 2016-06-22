@@ -23,7 +23,7 @@ import (
 
 func newOrderedChunkCache() *orderedChunkCache {
 	dir, err := ioutil.TempDir("", "")
-	d.Exp.NoError(err)
+	d.PanicIfError(err)
 	db, err := leveldb.OpenFile(dir, &opt.Options{
 		Compression:            opt.NoCompression,
 		Filter:                 filter.NewBloomFilter(10), // 10 bits/key

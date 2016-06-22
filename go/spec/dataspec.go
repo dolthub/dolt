@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/hash"
@@ -155,9 +156,13 @@ func (s DatabaseSpec) String() string {
 func (spec DatabaseSpec) Database() (ds datas.Database, err error) {
 	switch spec.Protocol {
 	case "http", "https":
-		ds = datas.NewRemoteDatabase(spec.String(), "Bearer "+spec.accessToken)
+		err = d.Unwrap(d.Try(func() {
+			ds = datas.NewRemoteDatabase(spec.String(), "Bearer "+spec.accessToken)
+		}))
 	case "ldb":
-		ds = datas.NewDatabase(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
+		err = d.Unwrap(d.Try(func() {
+			ds = datas.NewDatabase(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
+		}))
 	case "mem":
 		ds = datas.NewDatabase(chunks.NewMemoryStore())
 	default:

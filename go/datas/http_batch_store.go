@@ -51,8 +51,8 @@ type httpBatchStore struct {
 
 func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 	u, err := url.Parse(baseURL)
-	d.Exp.NoError(err)
-	d.Exp.True(u.Scheme == "http" || u.Scheme == "https")
+	d.PanicIfError(err)
+	d.PanicIfTrue(u.Scheme != "http" && u.Scheme != "https", "Unrecognized scheme: %s", u.Scheme)
 	buffSink := &httpBatchStore{
 		host:          u,
 		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
@@ -401,8 +401,8 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			})
 
 			res, err = bhcs.httpClient.Do(req)
-			d.Exp.NoError(err)
-			d.Exp.NoError(<-errChan)
+			d.PanicIfError(err)
+			d.PanicIfError(<-errChan)
 			expectVersion(res)
 			defer closeResponse(res.Body)
 
@@ -410,7 +410,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 				reader := res.Body
 				if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
 					gr, err := gzip.NewReader(reader)
-					d.Exp.NoError(err)
+					d.PanicIfError(err)
 					defer gr.Close()
 					reader = gr
 				}
@@ -419,7 +419,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints)
 			}
 		}
 
-		d.Exp.True(http.StatusCreated == res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
+		d.PanicIfTrue(http.StatusCreated != res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
 	}()
 }
 
@@ -451,7 +451,7 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
 	if method == "POST" {
-		d.Exp.False(current.IsEmpty())
+		d.PanicIfTrue(current.IsEmpty(), "Unexpected empty value")
 		params := u.Query()
 		params.Add("last", last.String())
 		params.Add("current", current.String())
@@ -461,7 +461,7 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 	req := newRequest(method, bhcs.auth, u.String(), nil, nil)
 
 	res, err := bhcs.httpClient.Do(req)
-	d.Chk.NoError(err)
+	d.PanicIfError(err)
 
 	return res
 }
@@ -492,7 +492,7 @@ func expectVersion(res *http.Response) {
 	if constants.NomsVersion != dataVersion {
 		ioutil.ReadAll(res.Body)
 		res.Body.Close()
-		d.Exp.Fail("Version mismatch", "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
+		d.PanicIfError(fmt.Errorf("Version mismatch\n\r\tSDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion))
 	}
 }
 
