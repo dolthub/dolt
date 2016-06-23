@@ -192,6 +192,11 @@ func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
 	st := buildType(desc)
 	parentStructTypes = append(parentStructTypes, st)
 
+	// HACK: If readType ends up referring to this type it is possible that we still have a null pointer for the type. Initialize all of the types to a valid (dummy) type.
+	for i := uint32(0); i < count; i++ {
+		fields[i].t = ValueType
+	}
+
 	for i := uint32(0); i < count; i++ {
 		fields[i] = field{name: r.readString(), t: r.readType(parentStructTypes)}
 	}
