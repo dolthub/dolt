@@ -84,7 +84,11 @@ console.log(data.type.describe());
 
 ds.commit(data).
   then(r => ds = r);
+```
 
+Now we can explore the data:
+
+```
 // prints: Rickon
 ds.head().
   then(commit => commit.value.get(0)).
