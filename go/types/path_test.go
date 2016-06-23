@@ -5,18 +5,21 @@
 package types
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
 )
 
 func assertPathResolvesTo(assert *assert.Assertions, expect, ref Value, p Path) {
+	actual := p.Resolve(ref)
 	if expect == nil {
-		assert.Nil(p.Resolve(ref))
-		return
+		assert.Nil(actual)
+	} else if actual == nil {
+		assert.Fail("", "Expected %s, but got nil", EncodedValue(expect))
+	} else {
+		assert.True(expect.Equals(actual), "Expected %s, but got %s", EncodedValue(expect), EncodedValue(actual))
 	}
-
-	assert.True(expect.Equals(p.Resolve(ref)))
 }
 
 func assertPathStringResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
@@ -85,6 +88,56 @@ func TestPathMap(t *testing.T) {
 	assertPathStringResolvesTo(assert, nil, v, `[4]`)
 }
 
+func TestPathHashIndex(t *testing.T) {
+	assert := assert.New(t)
+
+	b := Bool(true)
+	br := NewRef(b)
+	i := Number(0)
+	s := String("foo")
+	l := NewList(b, i, s)
+	lr := NewRef(l)
+	m := NewMap(
+		b, br,
+		br, i,
+		i, s,
+		l, lr,
+		lr, b,
+	)
+
+	hashStr := func(v Value) string {
+		return fmt.Sprintf("[#%s]", v.Hash())
+	}
+
+	// Primitives are only addressable by their values.
+	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(b.Hash()))
+	assertPathStringResolvesTo(assert, nil, m, hashStr(b))
+	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(i.Hash()))
+	assertPathStringResolvesTo(assert, nil, m, hashStr(i))
+	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(s.Hash()))
+	assertPathStringResolvesTo(assert, nil, m, hashStr(s))
+
+	// Other values are only addressable by their hashes.
+	assertPathResolvesTo(assert, i, m, NewPath().AddHashIndex(br.Hash()))
+	assertPathStringResolvesTo(assert, i, m, hashStr(br))
+	assertPathResolvesTo(assert, lr, m, NewPath().AddHashIndex(l.Hash()))
+	assertPathStringResolvesTo(assert, lr, m, hashStr(l))
+	assertPathResolvesTo(assert, b, m, NewPath().AddHashIndex(lr.Hash()))
+	assertPathStringResolvesTo(assert, b, m, hashStr(lr))
+
+	// Lists cannot be addressed by hashes, obviously.
+	assertPathResolvesTo(assert, nil, l, NewPath().AddHashIndex(i.Hash()))
+	assertPathStringResolvesTo(assert, nil, l, hashStr(i))
+}
+
+func TestPathHashIndexOfSingletonMap(t *testing.T) {
+	// This test is to make sure we don't accidentally return |b| if it's the only element.
+	assert := assert.New(t)
+	b := Bool(true)
+	m := NewMap(b, b)
+	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(b.Hash()))
+}
+
 func TestPathMulti(t *testing.T) {
 	assert := assert.New(t)
 
@@ -97,6 +150,7 @@ func TestPathMulti(t *testing.T) {
 	m2 := NewMap(
 		String("d"), String("dar"),
 		Bool(false), String("earth"),
+		m1, String("fire"),
 	)
 
 	l := NewList(m1, m2)
@@ -127,6 +181,8 @@ func TestPathMulti(t *testing.T) {
 	assertPathStringResolvesTo(assert, String("dar"), s, `.foo[1]["d"]`)
 	assertPathResolvesTo(assert, String("earth"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddIndex(Bool(false)))
 	assertPathStringResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
+	assertPathResolvesTo(assert, String("fire"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddHashIndex(m1.Hash()))
+	assertPathStringResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1][#%s]`, m1.Hash().String()))
 }
 
 func TestPathToAndFromString(t *testing.T) {
@@ -142,6 +198,8 @@ func TestPathToAndFromString(t *testing.T) {
 	test("[0]", NewPath().AddIndex(Number(0)))
 	test("[\"0\"][\"1\"][\"100\"]", NewPath().AddIndex(String("0")).AddIndex(String("1")).AddIndex(String("100")))
 	test(".foo[0].bar[4.5][false]", NewPath().AddField("foo").AddIndex(Number(0)).AddField("bar").AddIndex(Number(4.5)).AddIndex(Bool(false)))
+	h := Number(42).Hash() // arbitrary hash
+	test(fmt.Sprintf(".foo[#%s]", h.String()), NewPath().AddField("foo").AddHashIndex(h))
 }
 
 func TestPathImmutability(t *testing.T) {
@@ -182,6 +240,7 @@ func TestPathParseSuccess(t *testing.T) {
 	test(`["[[br][]acke]]ts"]`, NewPath().AddIndex(String("[[br][]acke]]ts")))
 	test(`["xπy✌z"]`, NewPath().AddIndex(String("xπy✌z")))
 	test(`["ಠ_ಠ"]`, NewPath().AddIndex(String("ಠ_ಠ")))
+	test(`["ಠ_ಠ"]`, NewPath().AddIndex(String("ಠ_ಠ")))
 }
 
 func TestPathParseErrors(t *testing.T) {
@@ -212,7 +271,7 @@ func TestPathParseErrors(t *testing.T) {
 	test(".foo[.bar", "[ is missing closing ]")
 	test(".foo]", "] is missing opening [")
 	test(".foo].bar", "] is missing opening [")
-	test(".foo[]", "Invalid index ")
+	test(".foo[]", "Empty index value")
 	test(".foo[[]", "Invalid index [")
 	test(".foo[[]]", "Invalid index [")
 	test(".foo[42.1.2]", "Invalid index 42.1.2")
@@ -226,6 +285,7 @@ func TestPathParseErrors(t *testing.T) {
 	test(`.foo["`, "[ is missing closing ]")
 	test(`.foo["\`, "[ is missing closing ]")
 	test(`.foo["]`, "[ is missing closing ]")
-	test(".foo[#sha1-invalid]", "Invalid index #sha1-invalid")
+	test(".foo[#]", "Invalid hash ")
+	test(".foo[#sha1-invalid]", "Invalid hash sha1-invalid")
 	test(`.foo["hello\nworld"]`, `Only " and \ can be escaped`)
 }

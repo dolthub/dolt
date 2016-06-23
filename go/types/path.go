@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type Path []pathPart
@@ -27,15 +28,21 @@ func NewPath() Path {
 }
 
 func (p Path) AddField(name string) Path {
-	p1 := make(Path, len(p), len(p)+1)
-	copy(p1, p)
-	return append(p1, newFieldPart(name))
+	return p.appendPart(newFieldPart(name))
 }
 
 func (p Path) AddIndex(idx Value) Path {
+	return p.appendPart(newIndexPart(idx))
+}
+
+func (p Path) AddHashIndex(h hash.Hash) Path {
+	return p.appendPart(newHashIndexPart(h))
+}
+
+func (p Path) appendPart(part pathPart) Path {
 	p1 := make(Path, len(p), len(p)+1)
 	copy(p1, p)
-	return append(p1, newIndexPart(idx))
+	return append(p1, part)
 }
 
 func (p Path) AddPath(str string) (Path, error) {
@@ -67,12 +74,17 @@ func (p Path) addPath(str string) (Path, error) {
 			return Path{}, errors.New("Path ends in [")
 		}
 
-		idx, rem, err := parsePathIndex(tail)
+		idx, h, rem, err := parsePathIndex(tail)
 		if err != nil {
 			return Path{}, err
 		}
 
-		return p.AddIndex(idx).addPath(rem)
+		d.Chk.NotEqual(idx == nil, h.IsEmpty())
+		if idx != nil {
+			return p.AddIndex(idx).addPath(rem)
+		} else {
+			return p.AddHashIndex(h).addPath(rem)
+		}
 
 	case ']':
 		return Path{}, errors.New("] is missing opening [")
@@ -159,7 +171,38 @@ func (ip indexPart) String() string {
 	return fmt.Sprintf("[%s]", EncodedValue(ip.idx))
 }
 
-func parsePathIndex(str string) (idx Value, rem string, err error) {
+type hashIndexPart struct {
+	h hash.Hash
+}
+
+func newHashIndexPart(h hash.Hash) hashIndexPart {
+	return hashIndexPart{h}
+}
+
+func (hip hashIndexPart) Resolve(v Value) (res Value) {
+	m, ok := v.(Map)
+	if !ok {
+		return nil
+	}
+
+	cur := newCursorAt(m.seq, orderedKeyFromHash(hip.h), false, false)
+	if !cur.valid() {
+		return nil
+	}
+
+	entry := cur.current().(mapEntry)
+	if entry.key.Hash() != hip.h {
+		return nil
+	}
+
+	return entry.value
+}
+
+func (hip hashIndexPart) String() string {
+	return fmt.Sprintf("[#%s]", hip.h.String())
+}
+
+func parsePathIndex(str string) (idx Value, h hash.Hash, rem string, err error) {
 Switch:
 	switch str[0] {
 	case '"':
@@ -200,7 +243,15 @@ Switch:
 		idxStr := split[0]
 		rem = split[1]
 
-		if idxStr == "true" {
+		if len(idxStr) == 0 {
+			err = errors.New("Empty index value")
+		} else if idxStr[0] == '#' {
+			hashStr := idxStr[1:]
+			h, _ = hash.MaybeParse(hashStr)
+			if h.IsEmpty() {
+				err = errors.New("Invalid hash " + hashStr)
+			}
+		} else if idxStr == "true" {
 			idx = Bool(true)
 		} else if idxStr == "false" {
 			idx = Bool(false)
