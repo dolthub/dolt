@@ -39,7 +39,7 @@ const args = argv
 // }
 //
 // struct Directory {
-//   entries: Map<String, Ref<Cycle<0>> | Ref<File>>,
+//   entries: Map<String, Cycle<0> | File>,
 // }
 
 const fileType = makeStructType('File', {
@@ -49,7 +49,7 @@ const directoryType = makeStructType('Directory', {
   entries: blobType,
 });
 const entriesType = makeMapType(stringType,
-    makeUnionType([makeRefType(fileType), makeRefType(directoryType)]));
+    makeUnionType([fileType, directoryType]));
 directoryType.desc.setField('entries', entriesType);
 
 const File = createStructClass(fileType);
@@ -113,7 +113,7 @@ async function processDirectory(p: string, store: Database): Promise<Directory> 
       if (!dirEntry) {
         return null;
       }
-      return [name, store.writeValue(dirEntry)];
+      return [name, dirEntry];
     });
   }).filter(x => x);
 
