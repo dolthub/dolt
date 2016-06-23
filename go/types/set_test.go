@@ -15,8 +15,6 @@ import (
 
 const testSetSize = 5000
 
-type testSetGenFn func(v Number) Value
-
 type testSet ValueSlice
 
 func (ts testSet) Remove(from, to int) testSet {
@@ -74,13 +72,11 @@ func (ts testSet) toSet() Set {
 	return NewSet(ts...)
 }
 
-func newTestSet(length int) testSet {
-	var values testSet
+func newSortedTestSet(length int, gen genValueFn) (values testSet) {
 	for i := 0; i < length; i++ {
-		values = append(values, Number(i))
+		values = append(values, gen(i))
 	}
-
-	return values
+	return
 }
 
 func newTestSetFromSet(s Set) testSet {
@@ -91,15 +87,15 @@ func newTestSetFromSet(s Set) testSet {
 	return values
 }
 
-func newTestSetWithGen(length int, gen testSetGenFn) testSet {
+func newRandomTestSet(length int, gen genValueFn) testSet {
 	s := rand.NewSource(4242)
-	used := map[int64]bool{}
+	used := map[int]bool{}
 
 	var values []Value
 	for len(values) < length {
-		v := s.Int63() & 0xffffff
+		v := int(s.Int63()) & 0xffffff
 		if _, ok := used[v]; !ok {
-			values = append(values, gen(Number(v)))
+			values = append(values, gen(v))
 			used[v] = true
 		}
 	}
@@ -121,10 +117,11 @@ type setTestSuite struct {
 	elems testSet
 }
 
-func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *setTestSuite {
+func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *setTestSuite {
 	length := 1 << size
-	elems := newTestSet(length)
-	tr := MakeSetType(NumberType)
+	elemType := gen(0).Type()
+	elems := newSortedTestSet(length, gen)
+	tr := MakeSetType(elemType)
 	set := NewSet(elems...)
 	return &setTestSuite{
 		collectionTestSuite: collectionTestSuite{
@@ -161,34 +158,38 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 }
 
 func TestSetSuite1K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, "sha1-5e5eda1a8813f19d0e5e68e6725cb6b3d9b63daa", 14, 2, 2))
+	suite.Run(t, newSetTestSuite(10, "sha1-5e5eda1a8813f19d0e5e68e6725cb6b3d9b63daa", 14, 2, 2, newNumber))
 }
 
 func TestSetSuite4K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, "sha1-d32df81dba427a00d949f3dbca477a5d2d8057a9", 2, 2, 2))
+	suite.Run(t, newSetTestSuite(12, "sha1-d32df81dba427a00d949f3dbca477a5d2d8057a9", 2, 2, 2, newNumber))
+}
+
+func TestSetSuite1KStructs(t *testing.T) {
+	suite.Run(t, newSetTestSuite(10, "sha1-5cccc0406d9f1102592e9cd63f794c0b508a5ef8", 18, 2, 2, newNumberStruct))
+}
+
+func TestSetSuite4KStructs(t *testing.T) {
+	suite.Run(t, newSetTestSuite(12, "sha1-b9a1403102103acbc3c780a0177278661b49b2e0", 2, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {
-	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return v
-	})
+	return newRandomTestSet(int(setPattern)*scale, newNumber)
 }
 
 func getTestRefValueOrderSet(scale int) testSet {
-	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return NewSet(v)
-	})
+	return newRandomTestSet(int(setPattern)*scale, newNumber)
 }
 
 func getTestRefToNativeOrderSet(scale int, vw ValueWriter) testSet {
-	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(v)
+	return newRandomTestSet(int(setPattern)*scale, func(v int) Value {
+		return vw.WriteValue(Number(v))
 	})
 }
 
 func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
-	return newTestSetWithGen(int(setPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(NewSet(v))
+	return newRandomTestSet(int(setPattern)*scale, func(v int) Value {
+		return vw.WriteValue(NewSet(Number(v)))
 	})
 }
 

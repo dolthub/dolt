@@ -16,7 +16,7 @@ import (
 
 const testMapSize = 1000
 
-type testMapGenFn func(v Number) Value
+type genValueFn func(i int) Value
 
 type testMap struct {
 	entries     mapEntrySlice
@@ -109,12 +109,19 @@ func (tm testMap) FlattenAll() []Value {
 	return tm.Flatten(0, len(tm.entries))
 }
 
-func newTestMap(length int) testMap {
-	entries := make([]mapEntry, 0, length)
+func newSortedTestMap(length int, gen genValueFn) testMap {
+	keys := make(ValueSlice, 0, length)
 	for i := 0; i < length; i++ {
-		entry := mapEntry{Number(i), Number(i * 2)}
-		entries = append(entries, entry)
+		keys = append(keys, gen(i))
 	}
+
+	sort.Sort(keys)
+
+	entries := make([]mapEntry, 0, len(keys))
+	for i, k := range keys {
+		entries = append(entries, mapEntry{k, Number(i * 2)})
+	}
+
 	return testMap{entries, Number(length + 2)}
 }
 
@@ -126,22 +133,22 @@ func newTestMapFromMap(m Map) testMap {
 	return testMap{entries, Number(-0)}
 }
 
-func newTestMapWithGen(length int, gen testMapGenFn) testMap {
+func newRandomTestMap(length int, gen genValueFn) testMap {
 	s := rand.NewSource(4242)
-	used := map[int64]bool{}
+	used := map[int]bool{}
 
-	var mask int64 = 0xffffff
+	var mask int = 0xffffff
 	entries := make([]mapEntry, 0, length)
 	for len(entries) < length {
-		v := s.Int63() & mask
+		v := int(s.Int63()) & mask
 		if _, ok := used[v]; !ok {
-			entry := mapEntry{gen(Number(v)), gen(Number(v * 2))}
+			entry := mapEntry{gen(v), gen(v * 2)}
 			entries = append(entries, entry)
 			used[v] = true
 		}
 	}
 
-	return testMap{entries, gen(Number(mask + 1))}
+	return testMap{entries, gen(mask + 1)}
 }
 
 func validateMap(t *testing.T, m Map, entries mapEntrySlice) {
@@ -161,10 +168,11 @@ type mapTestSuite struct {
 	elems testMap
 }
 
-func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *mapTestSuite {
+func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *mapTestSuite {
 	length := 1 << size
-	elems := newTestMap(length)
-	tr := MakeMapType(NumberType, NumberType)
+	keyType := gen(0).Type()
+	elems := newSortedTestMap(length, gen)
+	tr := MakeMapType(keyType, NumberType)
 	tmap := NewMap(elems.FlattenAll()...)
 	return &mapTestSuite{
 		collectionTestSuite: collectionTestSuite{
@@ -179,8 +187,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 				l2 := v2.(Map)
 				out := ValueSlice{}
 				l2.IterAll(func(key, value Value) {
-					out = append(out, key)
-					out = append(out, value)
+					out = append(out, key, value)
 				})
 				return ValueSlice(elems.FlattenAll()).Equals(out)
 			},
@@ -190,8 +197,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 				copy(dup[1:], elems.entries)
 				flat := []Value{}
 				for _, entry := range dup {
-					flat = append(flat, entry.key)
-					flat = append(flat, entry.value)
+					flat = append(flat, entry.key, entry.value)
 				}
 				return NewMap(flat...)
 			},
@@ -201,8 +207,7 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 				dup[len(dup)-1] = mapEntry{Number(length*2 + 1), Number((length*2 + 1) * 2)}
 				flat := []Value{}
 				for _, entry := range dup {
-					flat = append(flat, entry.key)
-					flat = append(flat, entry.value)
+					flat = append(flat, entry.key, entry.value)
 				}
 				return NewMap(flat...)
 			},
@@ -211,35 +216,46 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	}
 }
 
+func newNumberStruct(i int) Value {
+	return NewStruct("", structData{"n": Number(i)})
+}
+
 func TestMapSuite1K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "sha1-b4dfda98cac31acfb42c42bbe7692d576855e520", 2, 2, 2))
+	suite.Run(t, newMapTestSuite(10, "sha1-b4dfda98cac31acfb42c42bbe7692d576855e520", 2, 2, 2, newNumber))
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f", 4, 2, 2))
+	suite.Run(t, newMapTestSuite(12, "sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f", 4, 2, 2, newNumber))
+}
+func TestMapSuite1KStructs(t *testing.T) {
+	suite.Run(t, newMapTestSuite(10, "sha1-a9fb9df66b63d1a74a1d1a486d05d34b30d84441", 18, 2, 2, newNumberStruct))
+}
+
+func TestMapSuite4KStructs(t *testing.T) {
+	suite.Run(t, newMapTestSuite(12, "sha1-c6256462bb26942e33e4b9e5ece3136a458b8ae8", 76, 2, 2, newNumberStruct))
+}
+
+func newNumber(i int) Value {
+	return Number(i)
 }
 
 func getTestNativeOrderMap(scale int) testMap {
-	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return v
-	})
+	return newRandomTestMap(int(mapPattern)*scale, newNumber)
 }
 
 func getTestRefValueOrderMap(scale int) testMap {
-	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return NewSet(v)
-	})
+	return newRandomTestMap(int(mapPattern)*scale, newNumber)
 }
 
 func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
-	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(v)
+	return newRandomTestMap(int(mapPattern)*scale, func(i int) Value {
+		return vw.WriteValue(Number(i))
 	})
 }
 
 func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
-	return newTestMapWithGen(int(mapPattern)*scale, func(v Number) Value {
-		return vw.WriteValue(NewSet(v))
+	return newRandomTestMap(int(mapPattern)*scale, func(i int) Value {
+		return vw.WriteValue(NewSet(Number(i)))
 	})
 }
 
@@ -264,12 +280,8 @@ func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int,
 
 func TestMapDiff(t *testing.T) {
 	t.Parallel()
-	testMap1 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
-		return v
-	})
-	testMap2 := newTestMapWithGen(int(mapPattern)*2, func(v Number) Value {
-		return v
-	})
+	testMap1 := newRandomTestMap(int(mapPattern)*2, newNumber)
+	testMap2 := newRandomTestMap(int(mapPattern)*2, newNumber)
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap()
 	map2 := testMap2.toMap()
@@ -466,7 +478,7 @@ func TestMapValidateInsertAscending(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	validateMapInsertion(t, newTestMap(300))
+	validateMapInsertion(t, newSortedTestMap(300, newNumber))
 }
 
 func TestMapSet(t *testing.T) {

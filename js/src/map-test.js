@@ -10,11 +10,18 @@ import {suite, setup, teardown, test} from 'mocha';
 import Ref from './ref.js';
 import Struct, {newStruct} from './struct.js';
 import {
+  assertChunkCountAndType,
+  assertValueHash,
+  assertValueType,
+  deriveCollectionHeight,
+  intSequence,
   flatten,
   flattenParallel,
-  deriveCollectionHeight,
   TestDatabase,
+  testRoundTripAndValidate,
 } from './test-util.js';
+import {getTypeOfValue} from './type.js';
+import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
 import Map, {MapLeafSequence} from './map.js';
 import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
@@ -23,6 +30,7 @@ import {compare, equals} from './compare.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
 import {
   makeMapType,
+  makeRefType,
   makeUnionType,
   numberType,
   stringType,
@@ -33,7 +41,7 @@ const mapOfNRef = 'sha1-9fce950ce2606ced8681a695b608384c642ffb53';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
-function intKVs(count: number): [[number, number]] {
+function intKVs(count: number): [number, number][] {
   const kvs = [];
   for (let i = 0; i < count; i++) {
     kvs.push([i, i + 1]);
@@ -50,6 +58,46 @@ async function validateMap(m: Map, kvs: [[number, number]]): Promise<void> {
 }
 
 suite('BuildMap', () => {
+  async function mapTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
+                              gen: (i: number) => Value): Promise<void> {
+    const length = 1 << size;
+    const keys = intSequence(length).map(gen);
+    keys.sort(compare);
+    const entries = keys.map((k, i) => [k, i * 2]);
+    const tr = makeMapType(getTypeOfValue(gen(0)), numberType);
+    const map = new Map(entries);
+
+    assertValueType(tr, map);
+    assert.strictEqual(length, map.size);
+    assertValueHash(expectHashStr, map);
+    assertChunkCountAndType(expectChunkCount, makeRefType(tr), map);
+
+    await testRoundTripAndValidate(map, async v2 => {
+      const out = await flatten(v2.iterator());
+      for (let i = 0; i < entries.length; i++) {
+        assert.isTrue(equals(entries[i][0], out[i][0]));
+        assert.isTrue(equals(entries[i][1], out[i][1]));
+      }
+    });
+  }
+
+  test('Map 1K', async () => {
+    await mapTestSuite(10, 'sha1-b4dfda98cac31acfb42c42bbe7692d576855e520', 2, i => i);
+  });
+
+  test('LONG: Map 4K', async () => {
+    await mapTestSuite(12, 'sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f', 4, i => i);
+  });
+
+  const newNumberStruct = i => newStruct('', {n: i});
+
+  test('Map 1K structs', async () => {
+    await mapTestSuite(10, 'sha1-a9fb9df66b63d1a74a1d1a486d05d34b30d84441', 18, newNumberStruct);
+  });
+
+  test('LONG: Map 4K structs', async () => {
+    await mapTestSuite(12, 'sha1-c6256462bb26942e33e4b9e5ece3136a458b8ae8', 76, newNumberStruct);
+  });
 
   test('unique keys - strings', async () => {
     const kvs = [

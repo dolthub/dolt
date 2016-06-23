@@ -13,16 +13,23 @@ import type {ValueReadWriter} from './value-store.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {compare, equals} from './compare.js';
 import {
+  assertChunkCountAndType,
+  assertValueHash,
+  assertValueType,
+  deriveCollectionHeight,
   flatten,
   flattenParallel,
   intSequence,
-  deriveCollectionHeight,
   TestDatabase,
+  testRoundTripAndValidate,
 } from './test-util.js';
+import {getTypeOfValue} from './type.js';
+import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
 import {
+  makeRefType,
   makeSetType,
   makeUnionType,
   numberType,
@@ -43,6 +50,45 @@ async function validateSet(s: Set, values: number[]): Promise<void> {
 }
 
 suite('BuildSet', () => {
+  async function setTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
+                              gen: (i: number) => Value): Promise<void> {
+    const length = 1 << size;
+    const elems = intSequence(length).map(gen);
+    elems.sort(compare);
+    const tr = makeSetType(getTypeOfValue(gen(0)));
+    const set = new Set(elems);
+
+    assertValueType(tr, set);
+    assert.strictEqual(length, set.size);
+    assertValueHash(expectHashStr, set);
+    assertChunkCountAndType(expectChunkCount, makeRefType(tr), set);
+
+    await testRoundTripAndValidate(set, async v2 => {
+      const out = await flatten(v2.iterator());
+      for (let i = 0; i < elems.length; i++) {
+        assert.isTrue(equals(elems[i], out[i]));
+      }
+    });
+  }
+
+  test('Set 1K', async () => {
+    await setTestSuite(10, 'sha1-5e5eda1a8813f19d0e5e68e6725cb6b3d9b63daa', 14, i => i);
+  });
+
+  test('LONG: Set 4K', async () => {
+    await setTestSuite(12, 'sha1-d32df81dba427a00d949f3dbca477a5d2d8057a9', 2, i => i);
+  });
+
+  const newNumberStruct = i => newStruct('', {n: i});
+
+  test('Set 1K structs', async () => {
+    await setTestSuite(10, 'sha1-5cccc0406d9f1102592e9cd63f794c0b508a5ef8', 18, newNumberStruct);
+  });
+
+  test('LONG: Set 4K structs', async () => {
+    await setTestSuite(12, 'sha1-b9a1403102103acbc3c780a0177278661b49b2e0', 2, newNumberStruct);
+  });
+
   test('unique keys - strings', async () => {
     const strs = ['hello', 'world', 'hello'];
     const s = new Set(strs);
