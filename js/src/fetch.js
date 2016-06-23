@@ -12,12 +12,12 @@ export type FetchOptions = {
   method?: string,
   body?: any,
   headers?: {[key: string]: string},
-  respHeaders?: string[],
   withCredentials? : boolean,
 };
 
-type TextResponse = {headers: Map<string, string>, buf: string}
-type BufResponse = {headers: Map<string, string>, buf: Uint8Array}
+type Response<T> = {headers: {[key: string]: string}, buf: T};
+type TextResponse = Response<string>;
+type BufResponse = Response<Uint8Array>;
 
 function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   const opts: any = parse(url);
@@ -28,7 +28,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   return new Promise((resolve, reject) => {
     const req = request(opts, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        reject(res.statusCode);
+        reject(new Error(`HTTP Error: ${res.statusCode}`));
         return;
       }
 
@@ -54,13 +54,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
         offset += size;
       });
       res.on('end', () => {
-        const headers = new Map();
-        if (opts.respHeaders) {
-          for (const header of opts.respHeaders) {
-            headers.set(header, res.headers[header]);
-          }
-        }
-        resolve({headers: headers, buf: Bytes.subarray(buf, 0, offset)});
+        resolve({headers: res.headers, buf: Bytes.subarray(buf, 0, offset)});
       });
     });
     req.on('error', err => {
@@ -98,7 +92,7 @@ function normalizeBody(opts: FetchOptions): FetchOptions {
 
 export function fetchText(url: string, options: FetchOptions = {}): Promise<TextResponse> {
   return fetch(url, normalizeBody(options))
-    .then(({headers, buf}) => ({headers: headers, buf: bufferToString(buf)}));
+    .then(({headers, buf}) => ({headers, buf: bufferToString(buf)}));
 }
 
 export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<BufResponse> {

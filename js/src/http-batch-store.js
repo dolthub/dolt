@@ -11,12 +11,15 @@ import type {FetchOptions} from './fetch.js';
 import type {ChunkStream} from './chunk-serializer.js';
 import {serialize, deserializeChunks} from './chunk-serializer.js';
 import {emptyChunk} from './chunk.js';
-import {fetchUint8Array, fetchText} from './fetch.js';
+import {
+  fetchUint8Array as fetchUint8ArrayWithoutVersion,
+  fetchText as fetchTextWithoutVersion,
+} from './fetch.js';
 import {notNull} from './assert.js';
-import {NomsVersion} from './version.js';
+import nomsVersion from './version.js';
 
 const HTTP_STATUS_CONFLICT = 409;
-const VersionHeader = 'X-Noms-Vers';
+const versionHeader = 'x-noms-vers';
 
 type RpcStrings = {
   getRefs: string,
@@ -24,12 +27,19 @@ type RpcStrings = {
   writeValue: string,
 };
 
-const versOptions = {
+const versionOptions = {
   headers: {
-    VersionHeader: NomsVersion,
+    [versionHeader]: nomsVersion,
   },
-  respHeaders: [VersionHeader],
 };
+
+function fetchText(url: string, options: FetchOptions) {
+  return fetchTextWithoutVersion(url, mergeOptions(options, versionOptions));
+}
+
+function fetchUint8Array(url: string, options: FetchOptions) {
+  return fetchUint8ArrayWithoutVersion(url, mergeOptions(options, versionOptions));
+}
 
 const readBatchOptions = {
   method: 'POST',
@@ -81,8 +91,8 @@ export class Delegate {
 
   constructor(rpc: RpcStrings, fetchOptions: FetchOptions) {
     this._rpc = rpc;
-    this._rootOptions = mergeOptions(versOptions, fetchOptions);
-    this._readBatchOptions = mergeOptions(readBatchOptions, this._rootOptions);
+    this._rootOptions = fetchOptions;
+    this._readBatchOptions = mergeOptions(readBatchOptions, fetchOptions);
     this._body = new ArrayBuffer(0);
   }
 
@@ -150,10 +160,10 @@ export class Delegate {
 }
 
 function checkVersion(headers: {[key: string]: string}): ?Error {
-  const vers = headers[VersionHeader];
-  if (vers !== NomsVersion) {
+  const version = headers[versionHeader];
+  if (version !== nomsVersion) {
     return new Error(
-      `SDK version ${NomsVersion} is not compatible with data of version ${vers}.`);
+      `SDK version ${nomsVersion} is not compatible with data of version ${version}.`);
   }
   return null;
 }

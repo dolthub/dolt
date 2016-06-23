@@ -9,13 +9,12 @@ export type FetchOptions = {
   method?: string,
   body?: any,
   headers?: {[key: string]: string},
-  respHeaders?: string[],
   withCredentials? : boolean,
 };
 
-type TextResponse = {headers: Map<string, string>, buf: string}
-type BufResponse = {headers: Map<string, string>, buf: Uint8Array}
-type Response<T> = {headers: Map<string, string>, buf: T}
+type Response<T> = {headers: {[key: string]: string}, buf: T};
+type TextResponse = Response<string>;
+type BufResponse = Response<Uint8Array>;
 
 function fetch<T>(url: string, responseType: string, options: FetchOptions = {}):
  Promise<Response<T>> {
@@ -26,15 +25,9 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
   const p = new Promise((res, rej) => {
     xhr.onloadend = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const headers = new Map();
-        if (options.respHeaders) {
-          for (const header of options.respHeaders) {
-            headers.set(header, res.headers[header]);
-          }
-        }
-        res({headers: headers, buf: xhr.response});
+        res({headers: res.headers, buf: xhr.response});
       } else {
-        rej(xhr.status);
+        rej(new Error(`HTTP Error: ${xhr.status}`));
       }
     };
   });
@@ -53,7 +46,7 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
 export function fetchText(url: string, options: FetchOptions = {}): Promise<TextResponse> {
   if (self.fetch) {
     return self.fetch(url, options)
-      .then(resp => ({headers: new Map(resp.headers), buf: resp.text()}));
+      .then(resp => ({headers: resp.headers, buf: resp.text()}));
   }
 
   return fetch(url, 'text', options);
@@ -62,8 +55,7 @@ export function fetchText(url: string, options: FetchOptions = {}): Promise<Text
 export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   if (self.fetch) {
     return self.fetch(url, options)
-      .then(resp => [resp.headers, resp.arrayBuffer()])
-      .then((headers, ar) => ({headers: headers, buf: new Uint8Array(ar)}));
+      .then(resp => ({headers: resp.headers, buf: new Uint8Array(resp.arrayBuffer())}));
   }
 
   return fetch(url, 'arraybuffer', options);

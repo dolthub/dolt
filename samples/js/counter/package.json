@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "version": "1.0.1",
   "dependencies": {
-    "@attic/noms": "^42.0.0",
+    "@attic/noms": "file:../../../js/",
     "babel-regenerator-runtime": "6.5.0"
   },
   "devDependencies": {

@@ -29,7 +29,7 @@ type URLParams interface {
 type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore)
 
 // NomsVersionHeader is the name of the header that Noms clients and servers must set in every request/response.
-const NomsVersionHeader = "X-Noms-Vers"
+const NomsVersionHeader = "x-noms-vers"
 
 var (
 	// HandleWriteValue is meant to handle HTTP POST requests to the writeValue/ server endpoint. The payload should be an appropriately-ordered sequence of Chunks to be validated and stored on the server.
