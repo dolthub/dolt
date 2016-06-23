@@ -76,35 +76,6 @@ export class OrderedSequenceCursor<T, K: Value> extends
 
     return this.idx < this.length;
   }
-
-  async advanceTo(key: K): Promise<boolean> {
-    if (!this.valid) {
-      throw new Error('Invalid Cursor');
-    }
-
-    if (this._seekTo(key)) {
-      return true;
-    }
-
-    if (!this.parent) {
-      return false;
-    }
-
-    const p = this.parent;
-    invariant(p instanceof OrderedSequenceCursor);
-    const old = p.getCurrent();
-    if (!await p.advanceTo(key)) {
-      return false;
-    }
-
-    this.idx = 0;
-    if (old !== p.getCurrent()) {
-      await this.sync();
-    }
-
-    invariant(this._seekTo(key));
-    return true;
-  }
 }
 
 export class OrderedSequenceIterator<T, K: Value> extends AsyncIterator<T> {

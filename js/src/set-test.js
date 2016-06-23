@@ -11,7 +11,6 @@ import Ref from './ref.js';
 import Set, {SetLeafSequence} from './set.js';
 import type {ValueReadWriter} from './value-store.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
-import {OrderedSequence} from './ordered-sequence.js';
 import {compare, equals} from './compare.js';
 import {
   flatten,
@@ -458,57 +457,6 @@ suite('CompoundSet', () => {
     const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
     const values = await c.map((k) => Promise.resolve(k + '*'));
     assert.deepEqual(['a*', 'b*', 'e*', 'f*', 'h*', 'i*', 'm*', 'n*'], values);
-  });
-
-  async function asyncAssertThrows(f: () => any):Promise<boolean> {
-    let error: any = null;
-    try {
-      await f();
-    } catch (er) {
-      error = er;
-    }
-
-    return error !== null;
-  }
-
-  test('advanceTo', async () => {
-    const c = build(db, ['a', 'b', 'e', 'f', 'h', 'i', 'm', 'n']);
-
-    invariant(c.sequence instanceof OrderedSequence);
-    let cursor = await c.sequence.newCursorAt(null);
-    assert.ok(cursor);
-    assert.strictEqual('a', cursor.getCurrent());
-
-    assert.isTrue(await cursor.advanceTo('h'));
-    assert.strictEqual('h', cursor.getCurrent());
-
-    assert.isTrue(await cursor.advanceTo('k'));
-    assert.strictEqual('m', cursor.getCurrent());
-
-    assert.isFalse(await cursor.advanceTo('z')); // not found
-    assert.isFalse(cursor.valid);
-
-    invariant(c.sequence instanceof OrderedSequence);
-    cursor = await c.sequence.newCursorAt('x'); // not found
-    assert.isFalse(cursor.valid);
-
-    invariant(c.sequence instanceof OrderedSequence);
-    cursor = await c.sequence.newCursorAt('e');
-    assert.ok(cursor);
-    assert.strictEqual('e', cursor.getCurrent());
-
-    assert.isTrue(await cursor.advanceTo('m'));
-    assert.strictEqual('m', cursor.getCurrent());
-
-    assert.isTrue(await cursor.advanceTo('n'));
-    assert.strictEqual('n', cursor.getCurrent());
-
-    assert.isFalse(await cursor.advanceTo('s'));
-    assert.isFalse(cursor.valid);
-
-    asyncAssertThrows(async () => {
-      await notNull(cursor).advanceTo('x');
-    });
   });
 
   test('iterator at 0', async () => {
