@@ -9,17 +9,19 @@ import humanize from 'humanize';
 import path from 'path';
 import argv from 'yargs';
 import {
+  Blob,
   blobType,
   BlobWriter,
   createStructClass,
   DatasetSpec,
   Database,
+  makeMapType,
   makeRefType,
   makeStructType,
   makeUnionType,
   Map,
-  Blob,
   Ref,
+  stringType,
 } from '@attic/noms';
 
 const clearLine = '\x1b[2K\r';
@@ -32,13 +34,23 @@ const args = argv
   .demand(1)
   .argv;
 
+// struct File {
+//   content: Ref<Blob>,
+// }
+//
+// struct Directory {
+//   entries: Map<String, Ref<Cycle<0>> | Ref<File>>,
+// }
+
 const fileType = makeStructType('File', {
   content: makeRefType(blobType),
 });
 const directoryType = makeStructType('Directory', {
   entries: blobType,
 });
-directoryType.desc.setField('entries', makeRefType(makeUnionType([fileType, directoryType])));
+const entriesType = makeMapType(stringType,
+    makeUnionType([makeRefType(fileType), makeRefType(directoryType)]));
+directoryType.desc.setField('entries', entriesType);
 
 const File = createStructClass(fileType);
 const Directory = createStructClass(directoryType);
@@ -97,8 +109,13 @@ async function processDirectory(p: string, store: Database): Promise<Directory> 
   const names = await fs.readdir(p);
   const children = names.map(name => {
     const chPath = path.join(p, name);
-    return processPath(chPath, store).then(dirEntry => [name, dirEntry]);
-  });
+    return processPath(chPath, store).then(dirEntry => {
+      if (!dirEntry) {
+        return null;
+      }
+      return [name, store.writeValue(dirEntry)];
+    });
+  }).filter(x => x);
 
   numFilesComplete++;
   updateProgress();
@@ -106,9 +123,8 @@ async function processDirectory(p: string, store: Database): Promise<Directory> 
   const entries = new Map(
     (await Promise.all(children))
       .filter(([, dirEntry]) => dirEntry));
-  return new Directory({
-    entries: store.writeValue(entries),
-  });
+
+  return new Directory({entries});
 }
 
 async function processFile(p: string, store: Database): Promise<File> {
