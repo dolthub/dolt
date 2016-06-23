@@ -8,8 +8,12 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import List from './list.js';
-import {MetaTuple, newOrderedMetaSequenceChunkFn, newIndexedMetaSequenceChunkFn} from
-  './meta-sequence.js';
+import {
+  OrderedKey,
+  MetaTuple,
+  newOrderedMetaSequenceChunkFn,
+  newIndexedMetaSequenceChunkFn,
+} from './meta-sequence.js';
 import Ref from './ref.js';
 import Set from './set.js';
 import {Kind} from './noms-kind.js';
@@ -18,8 +22,8 @@ suite('MetaSequence', () => {
   test('calculate ordered sequence MetaTuple height', async () => {
     const set1 = new Set(['bar', 'baz']);
     const set2 = new Set(['foo', 'qux', 'zoo']);
-    const mt1 = new MetaTuple(new Ref(set1), 'baz', 2, set1);
-    const mt2 = new MetaTuple(new Ref(set2), 'zoo', 3, set2);
+    const mt1 = new MetaTuple(new Ref(set1), new OrderedKey('baz'), 2, set1);
+    const mt2 = new MetaTuple(new Ref(set2), new OrderedKey('zoo'), 3, set2);
 
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
@@ -36,8 +40,8 @@ suite('MetaSequence', () => {
   test('calculate indexed sequence MetaTuple height', async () => {
     const list1 = new List(['bar', 'baz']);
     const list2 = new List(['foo', 'qux', 'zoo']);
-    const mt1 = new MetaTuple(new Ref(list1), 2, 2, list1);
-    const mt2 = new MetaTuple(new Ref(list2), 3, 3, list2);
+    const mt1 = new MetaTuple(new Ref(list1), new OrderedKey(2), 2, list1);
+    const mt2 = new MetaTuple(new Ref(list2), new OrderedKey(3), 3, list2);
 
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);

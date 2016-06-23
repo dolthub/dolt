@@ -7,7 +7,7 @@
 import Blob, {BlobLeafSequence} from './blob.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
-import Ref from './ref.js';
+import Ref, {constructRef} from './ref.js';
 import Sequence from './sequence.js';
 import Set, {SetLeafSequence} from './set.js';
 import Struct, {StructMirror} from './struct.js';
@@ -17,9 +17,9 @@ import type {NomsWriter} from './codec.js';
 import type {ValueWriter} from './value-store.js';
 import type {primitive} from './primitives.js';
 import {MetaTuple} from './meta-sequence.js';
-import {StructDesc, Type, getTypeOfValue} from './type.js';
+import {boolType, getTypeOfValue, makeRefType, StructDesc, Type} from './type.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 
 type primitiveOrArray = primitive | Array<primitiveOrArray>;
@@ -116,7 +116,14 @@ export default class ValueEncoder {
         this._vw.writeValue(child);
       }
       this.writeValue(tuple.ref);
-      this.writeValue(tuple.value);
+      let val = tuple.key.v;
+      if (!tuple.key.isOrderedByValue) {
+        // See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+        val = constructRef(makeRefType(boolType), notNull(tuple.key.h), 0);
+      } else {
+        val = notNull(val);
+      }
+      this.writeValue(val);
       this._w.writeUint64(tuple.numLeaves);
     }
     return true;

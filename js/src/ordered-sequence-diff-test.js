@@ -22,7 +22,7 @@ suite('OrderedSequenceCursor', () => {
     const newMetaSequenceCursor = nums => {
       const lst = new Set(nums);
       assert.isTrue(lst.sequence.isMeta);
-      return lst.sequence.newCursorAt(0);
+      return lst.sequence.newCursorAt();
     };
 
     {

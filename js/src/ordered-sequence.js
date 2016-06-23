@@ -6,22 +6,31 @@
 
 import {AsyncIterator} from './async-iterator.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
+import {OrderedKey} from './meta-sequence.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
-import {compare} from './compare.js';
 import search from './binary-search.js';
 import type {EqualsFn} from './edit-distance.js';
 import Sequence, {SequenceCursor} from './sequence.js';
-import {ValueBase} from './value.js';
 
 export class OrderedSequence<K: Value, T> extends Sequence<T> {
+  // See newCursorAt().
+  newCursorAtValue(val: ?K, forInsertion: boolean = false, last: boolean = false):
+      Promise<OrderedSequenceCursor> {
+    let key;
+    if (val !== null && val !== undefined) {
+      key = new OrderedKey(val);
+    }
+    return this.newCursorAt(key, forInsertion, last);
+  }
+
   // Returns:
   //   -null, if sequence is empty.
   //   -null, if all values in sequence are < key.
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(key: ?K, forInsertion: boolean = false, last: boolean = false):
+  async newCursorAt(key: ?OrderedKey, forInsertion: boolean = false, last: boolean = false):
       Promise<OrderedSequenceCursor> {
     let cursor: ?OrderedSequenceCursor = null;
     let sequence: ?OrderedSequence = this;
@@ -44,7 +53,7 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
   /**
    * Gets the key used for ordering the sequence at index |idx|.
    */
-  getKey(idx: number): K { // eslint-disable-line no-unused-vars
+  getKey(idx: number): OrderedKey { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 
@@ -55,7 +64,7 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
 
 export class OrderedSequenceCursor<T, K: Value> extends
     SequenceCursor<T, OrderedSequence> {
-  getCurrentKey(): K {
+  getCurrentKey(): OrderedKey {
     invariant(this.idx >= 0 && this.idx < this.length);
     return this.sequence.getKey(this.idx);
   }
@@ -66,8 +75,8 @@ export class OrderedSequenceCursor<T, K: Value> extends
 
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
-  _seekTo(key: K, lastPositionIfNotfound: boolean = false): boolean {
-    this.idx = search(this.length, getSearchFunction(this.sequence, key));
+  _seekTo(key: OrderedKey, lastPositionIfNotfound: boolean = false): boolean {
+    this.idx = search(this.length, i => this.sequence.getKey(i).compare(key));
 
     if (this.idx === this.length && lastPositionIfNotfound) {
       invariant(this.idx > 0);
@@ -93,22 +102,4 @@ export class OrderedSequenceIterator<T, K: Value> extends AsyncIterator<T> {
   return(): Promise<AsyncIteratorResult<T>> {
     return this._iterator.then(it => it.return());
   }
-}
-
-function getSearchFunction(sequence: OrderedSequence, key: Value):
-    (i: number) => number {
-  if (sequence.isMeta) {
-    const keyRef = key instanceof ValueBase ? key.hash : null;
-    return i => {
-      const sk = sequence.getKey(i);
-      if (sk instanceof ValueBase) {
-        if (keyRef) {
-          return sk.targetHash.compare(keyRef);
-        }
-        return 1;
-      }
-      return compare(sk, key);
-    };
-  }
-  return i => compare(sequence.getKey(i), key);
 }

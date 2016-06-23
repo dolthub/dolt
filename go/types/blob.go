@@ -170,7 +170,7 @@ func newBlobLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
 			child = blob
 		}
 
-		return newMetaTuple(ref, Number(len(buff)), uint64(len(buff)), child), seq
+		return newMetaTuple(ref, orderedKeyFromInt(len(buff)), uint64(len(buff)), child), seq
 	}
 }
 

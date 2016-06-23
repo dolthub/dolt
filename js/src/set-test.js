@@ -10,7 +10,7 @@ import {suite, setup, teardown, test} from 'mocha';
 import Ref from './ref.js';
 import Set, {SetLeafSequence} from './set.js';
 import type {ValueReadWriter} from './value-store.js';
-import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';
+import {OrderedKey, MetaTuple, newSetMetaSequence} from './meta-sequence.js';
 import {compare, equals} from './compare.js';
 import {
   assertChunkCountAndType,
@@ -82,11 +82,11 @@ suite('BuildSet', () => {
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Set 1K structs', async () => {
-    await setTestSuite(10, 'sha1-5cccc0406d9f1102592e9cd63f794c0b508a5ef8', 18, newNumberStruct);
+    await setTestSuite(10, 'sha1-9d904bcb2b06b0361a73f9ccbdfeca53f081030f', 18, newNumberStruct);
   });
 
   test('LONG: Set 4K structs', async () => {
-    await setTestSuite(12, 'sha1-b9a1403102103acbc3c780a0177278661b49b2e0', 2, newNumberStruct);
+    await setTestSuite(12, 'sha1-a8f3b3362cde66638e6e1fb8359ad5675b7b5292', 2, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -124,7 +124,7 @@ suite('BuildSet', () => {
     const nums = intSequence(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
     const s = new Set(structs);
-    assert.strictEqual('sha1-4e6c7eb66b2cc252611a38cb06eed751d2bdf3c3', s.hash.toString());
+    assert.strictEqual('sha1-4f207ac30b7922b5c2181769ce827d9a3cbc8b9b', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
@@ -139,7 +139,7 @@ suite('BuildSet', () => {
     const nums = intSequence(testSetSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new Set(refs);
-    assert.strictEqual('sha1-c8396816c8fb961939cc7c9dcf8011efe9040103', s.hash.toString());
+    assert.strictEqual('sha1-084c21ccfb81d18d1b6da8bae6b5de1f52d1bd00', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -231,7 +231,7 @@ suite('BuildSet', () => {
     vals.sort(compare);
 
     const s = new Set(vals);
-    assert.strictEqual('sha1-4af5578e97bbe7ae1326087f004e828716ac7b85', s.hash.toString());
+    assert.strictEqual('sha1-b40b9337b0a87c1c0233a415e28bd5294cab6abb', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
@@ -368,7 +368,7 @@ suite('CompoundSet', () => {
     for (let i = 0; i < values.length; i += 2) {
       const s = new Set([values[i], values[i + 1]]);
       const r = vwr.writeValue(s);
-      tuples.push(new MetaTuple(r, values[i + 1], 2, null));
+      tuples.push(new MetaTuple(r, new OrderedKey(values[i + 1]), 2, null));
     }
 
     let last: ?Set = null;
@@ -377,7 +377,7 @@ suite('CompoundSet', () => {
       for (let i = 0; i < tuples.length; i += 2) {
         last = Set.fromSequence(newSetMetaSequence(vwr, [tuples[i], tuples[i + 1]]));
         const r = vwr.writeValue(last);
-        next.push(new MetaTuple(r, tuples[i + 1].value,
+        next.push(new MetaTuple(r, tuples[i + 1].key,
                                 tuples[i].numLeaves + tuples[i + 1].numLeaves, null));
       }
 

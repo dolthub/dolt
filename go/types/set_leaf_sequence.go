@@ -48,8 +48,8 @@ func (sl setLeafSequence) Type() *Type {
 }
 
 // orderedSequence interface
-func (sl setLeafSequence) getKey(idx int) Value {
-	return sl.data[idx]
+func (sl setLeafSequence) getKey(idx int) orderedKey {
+	return newOrderedKey(sl.data[idx])
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {

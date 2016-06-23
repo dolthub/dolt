@@ -5,6 +5,7 @@
 package types
 
 import (
+	"bytes"
 	"math/rand"
 	"sort"
 	"testing"
@@ -166,11 +167,11 @@ func TestSetSuite4K(t *testing.T) {
 }
 
 func TestSetSuite1KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, "sha1-5cccc0406d9f1102592e9cd63f794c0b508a5ef8", 18, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(10, "sha1-9d904bcb2b06b0361a73f9ccbdfeca53f081030f", 18, 2, 2, newNumberStruct))
 }
 
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, "sha1-b9a1403102103acbc3c780a0177278661b49b2e0", 2, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, "sha1-a8f3b3362cde66638e6e1fb8359ad5675b7b5292", 2, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {
@@ -787,7 +788,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("sha1-c8396816c8fb961939cc7c9dcf8011efe9040103", s.Hash().String())
+	assert.Equal("sha1-084c21ccfb81d18d1b6da8bae6b5de1f52d1bd00", s.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }
@@ -831,4 +832,51 @@ func TestSetTypeAfterMutations(t *testing.T) {
 
 	test(10, setLeafSequence{})
 	test(100, orderedMetaSequence{})
+}
+
+func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
+	assert := assert.New(t)
+
+	vs := []Value{
+		// Values
+		Bool(true),
+		Number(0),
+		String("hello"),
+		NewBlob(bytes.NewBufferString("buf")),
+		NewSet(Bool(true)),
+		NewList(Bool(true)),
+		NewMap(Bool(true), Number(0)),
+		NewStruct("", structData{"field": Bool(true)}),
+		// Refs of values
+		NewRef(Bool(true)),
+		NewRef(Number(0)),
+		NewRef(String("hello")),
+		NewRef(NewBlob(bytes.NewBufferString("buf"))),
+		NewRef(NewSet(Bool(true))),
+		NewRef(NewList(Bool(true))),
+		NewRef(NewMap(Bool(true), Number(0))),
+		NewRef(NewStruct("", structData{"field": Bool(true)})),
+	}
+
+	s := NewSet(vs...)
+	for i := 1; !isMetaSequence(s.sequence()); i++ {
+		v := Number(i)
+		vs = append(vs, v)
+		s = s.Insert(v)
+	}
+
+	assert.Equal(len(vs), int(s.Len()))
+	assert.True(bool(s.First().(Bool)))
+
+	for _, v := range vs {
+		assert.True(s.Has(v))
+	}
+
+	for len(vs) > 0 {
+		v := vs[0]
+		vs = vs[1:]
+		s = s.Remove(v)
+		assert.False(s.Has(v))
+		assert.Equal(len(vs), int(s.Len()))
+	}
 }

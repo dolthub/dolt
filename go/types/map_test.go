@@ -228,11 +228,11 @@ func TestMapSuite4K(t *testing.T) {
 	suite.Run(t, newMapTestSuite(12, "sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f", 4, 2, 2, newNumber))
 }
 func TestMapSuite1KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "sha1-a9fb9df66b63d1a74a1d1a486d05d34b30d84441", 18, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(10, "sha1-73ab90e854ea52001e59ea4b097c9f3b40565d8c", 18, 2, 2, newNumberStruct))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "sha1-c6256462bb26942e33e4b9e5ece3136a458b8ae8", 76, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, "sha1-b48765e4423ec48eb5925276794b2864a4b48928", 76, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -940,7 +940,7 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("sha1-b119c8145a3ed519d1271a35a4b25723ed0b61d2", m.Hash().String())
+	assert.Equal("sha1-c43b17db2fa433aa1842b8b0b25acfd10e035be3", m.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
@@ -991,4 +991,59 @@ func TestMapTypeAfterMutations(t *testing.T) {
 
 	test(10, mapLeafSequence{})
 	test(100, orderedMetaSequence{})
+}
+
+func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := Number(42)
+	kvs := []Value{
+		// Values
+		Bool(true), v,
+		Number(0), v,
+		String("hello"), v,
+		NewBlob(bytes.NewBufferString("buf")), v,
+		NewSet(Bool(true)), v,
+		NewList(Bool(true)), v,
+		NewMap(Bool(true), Number(0)), v,
+		NewStruct("", structData{"field": Bool(true)}), v,
+		// Refs of values
+		NewRef(Bool(true)), v,
+		NewRef(Number(0)), v,
+		NewRef(String("hello")), v,
+		NewRef(NewBlob(bytes.NewBufferString("buf"))), v,
+		NewRef(NewSet(Bool(true))), v,
+		NewRef(NewList(Bool(true))), v,
+		NewRef(NewMap(Bool(true), Number(0))), v,
+		NewRef(NewStruct("", structData{"field": Bool(true)})), v,
+	}
+
+	m := NewMap(kvs...)
+	for i := 1; !isMetaSequence(m.sequence()); i++ {
+		k := Number(i)
+		kvs = append(kvs, k, v)
+		m = m.Set(k, v)
+	}
+
+	assert.Equal(len(kvs)/2, int(m.Len()))
+	fk, fv := m.First()
+	assert.True(bool(fk.(Bool)))
+	assert.True(v.Equals(fv))
+
+	for i, kOrV := range kvs {
+		if i%2 == 0 {
+			assert.True(m.Has(kOrV))
+			assert.True(v.Equals(m.Get(kOrV)))
+		} else {
+			assert.True(v.Equals(kOrV))
+		}
+	}
+
+	for len(kvs) > 0 {
+		k := kvs[0]
+		kvs = kvs[2:]
+		m = m.Remove(k)
+		assert.False(m.Has(k))
+		assert.Equal(len(kvs)/2, int(m.Len()))
+	}
 }

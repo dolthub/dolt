@@ -91,7 +91,7 @@ func (m Map) Type() *Type {
 }
 
 func (m Map) First() (Value, Value) {
-	cur := newCursorAtKey(m.seq, nil, false, false)
+	cur := newCursorAt(m.seq, emptyKey, false, false)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -100,7 +100,7 @@ func (m Map) First() (Value, Value) {
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtKey(m.seq, key, false, false)
+	cur := newCursorAtValue(m.seq, key, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -153,13 +153,13 @@ func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map
 }
 
 func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtKey(m.seq, v, true, false)
+	cur = newCursorAtValue(m.seq, v, true, false)
 	found = cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(v)
 	return
 }
 
 func (m Map) Has(key Value) bool {
-	cur := newCursorAtKey(m.seq, key, false, false)
+	cur := newCursorAtValue(m.seq, key, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -175,7 +175,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAtKey(m.seq, nil, false, false)
+	cur := newCursorAt(m.seq, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -185,7 +185,7 @@ func (m Map) Iter(cb mapIterCallback) {
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {
-	cur := newCursorAtKey(m.seq, nil, false, false)
+	cur := newCursorAt(m.seq, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		cb(entry.key, entry.value)
@@ -244,14 +244,11 @@ func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 		seq := newMapLeafSequence(vr, mapData...)
 		m := newMap(seq)
 
-		var indexValue Value
+		var key orderedKey
 		if len(mapData) > 0 {
-			indexValue = mapData[len(mapData)-1].key
-			if !isKindOrderedByValue(indexValue.Type().Kind()) {
-				indexValue = NewRef(indexValue)
-			}
+			key = newOrderedKey(mapData[len(mapData)-1].key)
 		}
 
-		return newMetaTuple(NewRef(m), indexValue, uint64(len(items)), m), seq
+		return newMetaTuple(NewRef(m), key, uint64(len(items)), m), seq
 	}
 }

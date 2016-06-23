@@ -9,7 +9,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import List, {ListWriter, ListLeafSequence} from './list.js';
 import Ref from './ref.js';
-import {MetaTuple, newListMetaSequence} from './meta-sequence.js';
+import {OrderedKey, MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
@@ -310,15 +310,18 @@ suite('CompoundList', () => {
     const l4 = new List(['m', 'n']);
     const r4 = db.writeValue(l4);
 
-    const m1 = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(r1, 2, 2, null), new MetaTuple(r2, 2, 2, null)]));
+    const m1 = List.fromSequence(newListMetaSequence(db, [
+      new MetaTuple(r1, new OrderedKey(2), 2, null),
+      new MetaTuple(r2, new OrderedKey(2), 2, null)]));
     const rm1 = db.writeValue(m1);
-    const m2 = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(r3, 2, 2, null), new MetaTuple(r4, 2, 2, null)]));
+    const m2 = List.fromSequence(newListMetaSequence(db, [
+      new MetaTuple(r3, new OrderedKey(2), 2, null),
+      new MetaTuple(r4, new OrderedKey(2), 2, null)]));
     const rm2 = db.writeValue(m2);
 
-    const l = List.fromSequence(newListMetaSequence(
-      db, [new MetaTuple(rm1, 4, 4, null), new MetaTuple(rm2, 4, 4, null)]));
+    const l = List.fromSequence(newListMetaSequence(db, [
+      new MetaTuple(rm1, new OrderedKey(4), 4, null),
+      new MetaTuple(rm2, new OrderedKey(4), 4, null)]));
     return l;
   }
 

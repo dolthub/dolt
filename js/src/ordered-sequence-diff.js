@@ -5,7 +5,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {invariant} from './assert.js';
-import {equals, less} from './compare.js';
 import {OrderedSequence, OrderedSequenceCursor} from './ordered-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -31,25 +30,25 @@ export default async function diff<K: Value, T>(
     while (lastCur.valid && currentCur.valid &&
            !lastCur.sequence.getCompareFn(currentCur.sequence)(lastCur.idx, currentCur.idx)) {
       const lastKey = lastCur.getCurrentKey(), currentKey = currentCur.getCurrentKey();
-
-      if (equals(lastKey, currentKey)) {
-        modified.push(lastKey);
-        await Promise.all([lastCur.advance(), currentCur.advance()]);
-      } else if (less(lastKey, currentKey)) {
-        removed.push(lastKey);
+      const compare = currentKey.compare(lastKey);
+      if (compare < 0) {
+        added.push(currentKey.value());
+        await currentCur.advance();
+      } else if (compare > 0) {
+        removed.push(lastKey.value());
         await lastCur.advance();
       } else {
-        added.push(currentKey);
-        await currentCur.advance();
+        modified.push(currentKey.value());
+        await Promise.all([lastCur.advance(), currentCur.advance()]);
       }
     }
   }
 
   for (; lastCur.valid; await lastCur.advance()) {
-    removed.push(lastCur.getCurrentKey());
+    removed.push(lastCur.getCurrentKey().value());
   }
   for (; currentCur.valid; await currentCur.advance()) {
-    added.push(currentCur.getCurrentKey());
+    added.push(currentCur.getCurrentKey().value());
   }
 
   return [added, removed, modified];

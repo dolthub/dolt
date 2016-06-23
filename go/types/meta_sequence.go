@@ -4,7 +4,10 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
+)
 
 const (
 	objectWindowSize          = 8
@@ -12,44 +15,74 @@ const (
 	objectPattern             = uint32(1<<6 - 1) // Average size of 64 elements
 )
 
-// metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
+var emptyKey = orderedKey{}
+
+// metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a Prolly Tree, which results from the chunking of an ordered or unordered sequence of values.
 type metaSequence interface {
 	sequence
 	getChildSequence(idx int) sequence
 }
 
-func newMetaTuple(ref Ref, value Value, numLeaves uint64, child Collection) metaTuple {
+func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64, child Collection) metaTuple {
 	d.Chk.True(Ref{} != ref)
-	return metaTuple{ref, value, numLeaves, child}
+	return metaTuple{ref, key, numLeaves, child}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	ref       Ref
-	value     Value
+	key       orderedKey
 	numLeaves uint64
 	child     Collection // may be nil
 }
 
-func (mt metaTuple) uint64Value() uint64 {
-	return uint64(mt.value.(Number))
+// orderedKey is a key in a Prolly Tree level, which is a metaTuple in a metaSequence, or a value in a leaf sequence.
+// |v| may be nil or |h| may be empty, but not both.
+type orderedKey struct {
+	isOrderedByValue bool
+	v                Value
+	h                hash.Hash
+}
+
+func newOrderedKey(v Value) orderedKey {
+	d.Chk.NotNil(v)
+	if isKindOrderedByValue(v.Type().Kind()) {
+		return orderedKey{true, v, hash.Hash{}}
+	}
+	return orderedKey{false, v, v.Hash()}
+}
+
+func orderedKeyFromHash(h hash.Hash) orderedKey {
+	return orderedKey{false, nil, h}
+}
+
+func orderedKeyFromInt(n int) orderedKey {
+	return newOrderedKey(Number(n))
+}
+
+func orderedKeyFromUint64(n uint64) orderedKey {
+	return newOrderedKey(Number(n))
+}
+
+func (key orderedKey) uint64Value() uint64 {
+	return uint64(key.v.(Number))
+}
+
+func (key orderedKey) Less(mk2 orderedKey) bool {
+	switch {
+	case key.isOrderedByValue && mk2.isOrderedByValue:
+		return key.v.Less(mk2.v)
+	case key.isOrderedByValue:
+		return true
+	case mk2.isOrderedByValue:
+		return false
+	default:
+		d.Chk.False(key.h.IsEmpty() || mk2.h.IsEmpty())
+		return key.h.Less(mk2.h)
+	}
 }
 
 type metaSequenceData []metaTuple
-
-func (msd metaSequenceData) uint64ValuesSum() (sum uint64) {
-	for _, mt := range msd {
-		sum += mt.uint64Value()
-	}
-	return
-}
-
-func (msd metaSequenceData) numLeavesSum() (sum uint64) {
-	for _, mt := range msd {
-		sum += mt.numLeaves
-	}
-	return
-}
 
 func (msd metaSequenceData) last() metaTuple {
 	return msd[len(msd)-1]

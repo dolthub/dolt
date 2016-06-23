@@ -9,12 +9,11 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type orderedSequence interface {
 	sequence
-	getKey(idx int) Value
+	getKey(idx int) orderedKey
 }
 
 type orderedMetaSequence struct {
@@ -55,8 +54,8 @@ func newOrderedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) or
 	}
 }
 
-func (oms orderedMetaSequence) getKey(idx int) Value {
-	return oms.tuples[idx].value
+func (oms orderedMetaSequence) getKey(idx int) orderedKey {
+	return oms.tuples[idx].key
 }
 
 func (oms orderedMetaSequence) getCompareFn(other sequence) compareFn {
@@ -66,7 +65,15 @@ func (oms orderedMetaSequence) getCompareFn(other sequence) compareFn {
 	}
 }
 
-func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
+	var key orderedKey
+	if val != nil {
+		key = newOrderedKey(val)
+	}
+	return newCursorAt(seq, key, forInsertion, last)
+}
+
+func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		idx := 0
@@ -75,7 +82,7 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 		}
 		seqIsMeta := isMetaSequence(seq)
 		cur = newSequenceCursor(cur, seq, idx)
-		if key != nil {
+		if key != emptyKey {
 			if !seekTo(cur, key, forInsertion && seqIsMeta) {
 				return cur
 			}
@@ -92,36 +99,12 @@ func newCursorAtKey(seq orderedSequence, key Value, forInsertion bool, last bool
 	return cur
 }
 
-func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
+func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bool {
 	seq := cur.seq.(orderedSequence)
-	keyIsOrderedByValue := isKindOrderedByValue(key.Type().Kind())
-	seqIsMeta := isMetaSequence(seq)
-	var keyRef hash.Hash
 
-	var searchFn func(i int) bool
-
-	if seqIsMeta {
-		if !keyIsOrderedByValue {
-			keyRef = key.Hash()
-		}
-		// For non-native values, meta sequences will hold types.Ref rather than the value
-		searchFn = func(i int) bool {
-			sk := seq.getKey(i)
-			if sr, ok := sk.(Ref); ok {
-				if keyIsOrderedByValue {
-					return true // Values > ordered
-				}
-				return !sr.TargetHash().Less(keyRef)
-			}
-			return !sk.Less(key)
-		}
-	} else {
-		searchFn = func(i int) bool {
-			return !seq.getKey(i).Less(key)
-		}
-	}
-
-	cur.idx = sort.Search(seq.seqLen(), searchFn)
+	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
+		return !seq.getKey(i).Less(key)
+	})
 
 	if cur.idx == seq.seqLen() && lastPositionIfNotFound {
 		d.Chk.True(cur.idx > 0)
@@ -132,7 +115,7 @@ func seekTo(cur *sequenceCursor, key Value, lastPositionIfNotFound bool) bool {
 }
 
 // Gets the key used for ordering the sequence at current index.
-func getCurrentKey(cur *sequenceCursor) Value {
+func getCurrentKey(cur *sequenceCursor) orderedKey {
 	seq, ok := cur.seq.(orderedSequence)
 	d.Chk.True(ok, "need an ordered sequence here")
 	return seq.getKey(cur.idx)
@@ -167,6 +150,6 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 			col = newMap(metaSeq)
 		}
 
-		return newMetaTuple(NewRef(col), tuples.last().value, numLeaves, col), metaSeq
+		return newMetaTuple(NewRef(col), tuples.last().key, numLeaves, col), metaSeq
 	}
 }

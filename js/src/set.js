@@ -9,15 +9,18 @@ import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
-import {ValueBase} from './value.js';
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
-import {MetaTuple, newOrderedMetaSequenceBoundaryChecker, newOrderedMetaSequenceChunkFn} from
-  './meta-sequence.js';
+import {
+  OrderedKey,
+  MetaTuple,
+  newOrderedMetaSequenceBoundaryChecker,
+  newOrderedMetaSequenceChunkFn,
+} from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
@@ -33,17 +36,10 @@ const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
-    let indexValue: ?(T | Ref) = null;
-    if (items.length > 0) {
-      indexValue = items[items.length - 1];
-      if (indexValue instanceof ValueBase) {
-        indexValue = new Ref(indexValue);
-      }
-    }
-
+    const key = new OrderedKey(items.length > 0 ? items[items.length - 1] : false);
     const seq = newSetLeafSequence(vr, items);
     const ns = Set.fromSequence(seq);
-    const mt = new MetaTuple(new Ref(ns), indexValue, items.length, ns);
+    const mt = new MetaTuple(new Ref(ns), key, items.length, ns);
     return [mt, seq];
   };
 }
@@ -80,8 +76,8 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
   }
 
   async has(key: T): Promise<boolean> {
-    const cursor = await this.sequence.newCursorAt(key);
-    return cursor.valid && equals(cursor.getCurrentKey(), key);
+    const cursor = await this.sequence.newCursorAtValue(key);
+    return cursor.valid && equals(cursor.getCurrentKey().value(), key);
   }
 
   async _firstOrLast(last: boolean): Promise<?T> {
@@ -111,7 +107,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
   }
 
   iteratorAt(v: T): AsyncIterator<T> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(v));
+    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(v));
   }
 
   _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
@@ -124,8 +120,8 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
   }
 
   async add(value: T): Promise<Set<T>> {
-    const cursor = await this.sequence.newCursorAt(value, true);
-    if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
+    const cursor = await this.sequence.newCursorAtValue(value, true);
+    if (cursor.valid && equals(cursor.getCurrentKey().value(), value)) {
       return this;
     }
 
@@ -133,8 +129,8 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
   }
 
   async delete(value: T): Promise<Set<T>> {
-    const cursor = await this.sequence.newCursorAt(value);
-    if (cursor.valid && equals(cursor.getCurrentKey(), value)) {
+    const cursor = await this.sequence.newCursorAtValue(value);
+    if (cursor.valid && equals(cursor.getCurrentKey().value(), value)) {
       return this._splice(cursor, [], 1);
     }
 
@@ -169,8 +165,8 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
 }
 
 export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
-  getKey(idx: number): K {
-    return this.items[idx];
+  getKey(idx: number): OrderedKey {
+    return new OrderedKey(this.items[idx]);
   }
 
   getCompareFn(other: OrderedSequence): EqualsFn {

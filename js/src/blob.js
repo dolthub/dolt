@@ -10,8 +10,12 @@ import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
 import type {ValueReader, ValueWriter, ValueReadWriter} from './value-store.js';
 import {blobType} from './type.js';
-import {MetaTuple, newIndexedMetaSequenceChunkFn, newIndexedMetaSequenceBoundaryChecker} from
-  './meta-sequence.js';
+import {
+  OrderedKey,
+  MetaTuple,
+  newIndexedMetaSequenceChunkFn,
+  newIndexedMetaSequenceBoundaryChecker,
+} from './meta-sequence.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import Ref from './ref.js';
 import SequenceChunker from './sequence-chunker.js';
@@ -150,11 +154,12 @@ function newBlobLeafChunkFn(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, Bytes.fromValues(items));
     const blob = Blob.fromSequence(blobLeaf);
+    const key = new OrderedKey(items.length);
     let mt;
     if (vw) {
-      mt = new MetaTuple(vw.writeValue(blob), items.length, items.length, null);
+      mt = new MetaTuple(vw.writeValue(blob), key, items.length, null);
     } else {
-      mt = new MetaTuple(new Ref(blob), items.length, items.length, blob);
+      mt = new MetaTuple(new Ref(blob), key, items.length, blob);
     }
     return [mt, blobLeaf];
   };

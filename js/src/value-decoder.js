@@ -19,7 +19,7 @@ import {
   StructDesc,
   Type,
 } from './type.js';
-import {MetaTuple} from './meta-sequence.js';
+import {OrderedKey, MetaTuple} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 import List, {ListLeafSequence} from './list.js';
@@ -126,8 +126,9 @@ export default class ValueDecoder {
     for (let i = 0; i < count; i++) {
       const ref = this.readValue();
       const v = this.readValue();
+      const key = v instanceof Ref ? OrderedKey.fromHash(v.targetHash) : new OrderedKey(v);
       const numLeaves = this._r.readUint64();
-      data.push(new MetaTuple(ref, v, numLeaves, null));
+      data.push(new MetaTuple(ref, key, numLeaves, null));
     }
 
     return data;

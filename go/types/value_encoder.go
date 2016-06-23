@@ -103,7 +103,13 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 			w.vw.WriteValue(tuple.child)
 		}
 		w.writeValue(tuple.ref)
-		w.writeValue(tuple.value)
+		v := tuple.key.v
+		if !tuple.key.isOrderedByValue {
+			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+			d.Chk.False(tuple.key.h.IsEmpty())
+			v = constructRef(MakeRefType(BoolType), tuple.key.h, 0)
+		}
+		w.writeValue(v)
 		w.writeUint64(tuple.numLeaves)
 	}
 	return true

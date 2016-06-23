@@ -75,8 +75,8 @@ func (ml mapLeafSequence) Type() *Type {
 }
 
 // orderedSequence interface
-func (ml mapLeafSequence) getKey(idx int) Value {
-	return ml.data[idx].key
+func (ml mapLeafSequence) getKey(idx int) orderedKey {
+	return newOrderedKey(ml.data[idx].key)
 }
 
 func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {

@@ -15,8 +15,8 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added [
 	added = make([]Value, 0)
 	removed = make([]Value, 0)
 	modified = make([]Value, 0)
-	lastCur := newCursorAtKey(last, nil, false, false)
-	currentCur := newCursorAtKey(current, nil, false, false)
+	lastCur := newCursorAt(last, emptyKey, false, false)
+	currentCur := newCursorAt(current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
 		fastForward(lastCur, currentCur)
@@ -25,26 +25,26 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added [
 			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
-			if lastKey.Equals(currentKey) {
-				modified = append(modified, lastKey)
-				lastCur.advance()
+			if currentKey.Less(lastKey) {
+				added = append(added, currentKey.v)
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				removed = append(removed, lastKey)
+				removed = append(removed, lastKey.v)
 				lastCur.advance()
 			} else {
-				added = append(added, currentKey)
+				modified = append(modified, lastKey.v)
+				lastCur.advance()
 				currentCur.advance()
 			}
 		}
 	}
 
 	for lastCur.valid() {
-		removed = append(removed, getCurrentKey(lastCur))
+		removed = append(removed, getCurrentKey(lastCur).v)
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		added = append(added, getCurrentKey(currentCur))
+		added = append(added, getCurrentKey(currentCur).v)
 		currentCur.advance()
 	}
 

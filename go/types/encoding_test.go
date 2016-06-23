@@ -6,6 +6,8 @@ package types
 
 import (
 	"bytes"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -139,8 +141,8 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence([]metaTuple{
-		newMetaTuple(NewRef(listLeaf), Number(10), 10, nil),
-		newMetaTuple(NewRef(listLeaf), Number(20), 20, nil),
+		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(10), 10, nil),
+		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(20), 20, nil),
 	}, nil)))
 }
 
@@ -274,9 +276,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 			uint8(RefKind), uint8(BlobKind), r3.String(), uint64(33), uint8(NumberKind), float64(60), uint64(60),
 		},
 		newBlob(newBlobMetaSequence([]metaTuple{
-			newMetaTuple(constructRef(RefOfBlobType, r1, 11), Number(20), 20, nil),
-			newMetaTuple(constructRef(RefOfBlobType, r2, 22), Number(40), 40, nil),
-			newMetaTuple(constructRef(RefOfBlobType, r3, 33), Number(60), 60, nil),
+			newMetaTuple(constructRef(RefOfBlobType, r1, 11), orderedKeyFromInt(20), 20, nil),
+			newMetaTuple(constructRef(RefOfBlobType, r2, 22), orderedKeyFromInt(40), 40, nil),
+			newMetaTuple(constructRef(RefOfBlobType, r3, 33), orderedKeyFromInt(60), 60, nil),
 		}, NewTestValueStore())),
 	)
 }
@@ -357,11 +359,11 @@ func TestWriteCompoundList(t *testing.T) {
 			uint8(ListKind), uint8(NumberKind), true,
 			uint32(2), // len,
 			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list1.Hash().String(), uint64(1), uint8(NumberKind), float64(1), uint64(1),
-			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(4),
+			uint8(RefKind), uint8(ListKind), uint8(NumberKind), list2.Hash().String(), uint64(1), uint8(NumberKind), float64(3), uint64(3),
 		},
 		newList(newListMetaSequence([]metaTuple{
-			newMetaTuple(NewRef(list1), Number(1), 1, list1),
-			newMetaTuple(NewRef(list2), Number(4), 4, list2),
+			newMetaTuple(NewRef(list1), orderedKeyFromInt(1), 1, list1),
+			newMetaTuple(NewRef(list2), orderedKeyFromInt(3), 3, list2),
 		}, nil)),
 	)
 }
@@ -378,8 +380,38 @@ func TestWriteCompoundSet(t *testing.T) {
 			uint8(RefKind), uint8(SetKind), uint8(NumberKind), set2.Hash().String(), uint64(1), uint8(NumberKind), float64(4), uint64(3),
 		},
 		newSet(newSetMetaSequence([]metaTuple{
-			newMetaTuple(NewRef(set1), Number(1), 2, set1),
-			newMetaTuple(NewRef(set2), Number(4), 3, set2),
+			newMetaTuple(NewRef(set1), orderedKeyFromInt(1), 2, set1),
+			newMetaTuple(NewRef(set2), orderedKeyFromInt(4), 3, set2),
+		}, nil)),
+	)
+}
+
+func TestWriteCompoundSetOfBlobs(t *testing.T) {
+	// Blobs are interesting because unlike the numbers used in TestWriteCompondSet, refs are sorted by their hashes, not their value.
+	newBlobOfInt := func(i int) Blob {
+		return NewBlob(strings.NewReader(strconv.Itoa(i)))
+	}
+
+	blob0 := newBlobOfInt(0)
+	blob1 := newBlobOfInt(1)
+	blob2 := newBlobOfInt(2)
+	blob3 := newBlobOfInt(3)
+	blob4 := newBlobOfInt(4)
+
+	set1 := newSet(newSetLeafSequence(nil, blob0, blob1))
+	set2 := newSet(newSetLeafSequence(nil, blob2, blob3, blob4))
+
+	assertEncoding(t,
+		[]interface{}{
+			uint8(SetKind), uint8(BlobKind), true,
+			uint32(2), // len,
+			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+			uint8(RefKind), uint8(SetKind), uint8(BlobKind), set1.Hash().String(), uint64(1), uint8(RefKind), uint8(BoolKind), blob1.Hash().String(), uint64(0), uint64(2),
+			uint8(RefKind), uint8(SetKind), uint8(BlobKind), set2.Hash().String(), uint64(1), uint8(RefKind), uint8(BoolKind), blob4.Hash().String(), uint64(0), uint64(3),
+		},
+		newSet(newSetMetaSequence([]metaTuple{
+			newMetaTuple(NewRef(set1), newOrderedKey(blob1), 2, set1),
+			newMetaTuple(NewRef(set2), newOrderedKey(blob4), 3, set2),
 		}, nil)),
 	)
 }

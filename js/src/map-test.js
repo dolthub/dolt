@@ -7,7 +7,9 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
+import Blob from './blob.js';
 import Ref from './ref.js';
+import Set from './set.js';
 import Struct, {newStruct} from './struct.js';
 import {
   assertChunkCountAndType,
@@ -23,8 +25,9 @@ import {
 import {getTypeOfValue} from './type.js';
 import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
+import List from './list.js';
 import Map, {MapLeafSequence} from './map.js';
-import {MetaTuple, newMapMetaSequence} from './meta-sequence.js';
+import {OrderedKey, MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
@@ -92,11 +95,11 @@ suite('BuildMap', () => {
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Map 1K structs', async () => {
-    await mapTestSuite(10, 'sha1-a9fb9df66b63d1a74a1d1a486d05d34b30d84441', 18, newNumberStruct);
+    await mapTestSuite(10, 'sha1-73ab90e854ea52001e59ea4b097c9f3b40565d8c', 18, newNumberStruct);
   });
 
   test('LONG: Map 4K structs', async () => {
-    await mapTestSuite(12, 'sha1-c6256462bb26942e33e4b9e5ece3136a458b8ae8', 76, newNumberStruct);
+    await mapTestSuite(12, 'sha1-b48765e4423ec48eb5925276794b2864a4b48928', 76, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -151,7 +154,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.hash.toString(), 'sha1-b119c8145a3ed519d1271a35a4b25723ed0b61d2');
+    assert.strictEqual(m.hash.toString(), 'sha1-c43b17db2fa433aa1842b8b0b25acfd10e035be3');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -265,7 +268,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.hash.toString(), 'sha1-c4b291de9dfb466f3afbd0c9bd0afb0ce5f33c70');
+    assert.strictEqual(m.hash.toString(), 'sha1-96504f677dae417f0714af77b3e313ca1c3764e6');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);
@@ -454,19 +457,19 @@ suite('CompoundMap', () => {
     const r4 = vwr.writeValue(l4);
 
     const m1 = Map.fromSequence(newMapMetaSequence(vwr, [
-      new MetaTuple(r1, 'b', 2, null),
-      new MetaTuple(r2, 'f', 2, null),
+      new MetaTuple(r1, new OrderedKey('b'), 2, null),
+      new MetaTuple(r2, new OrderedKey('f'), 2, null),
     ]));
     const rm1 = vwr.writeValue(m1);
     const m2 = Map.fromSequence(newMapMetaSequence(vwr, [
-      new MetaTuple(r3, 'i', 2, null),
-      new MetaTuple(r4, 'n', 2, null),
+      new MetaTuple(r3, new OrderedKey('i'), 2, null),
+      new MetaTuple(r4, new OrderedKey('n'), 2, null),
     ]));
     const rm2 = vwr.writeValue(m2);
 
     const c = Map.fromSequence(newMapMetaSequence(vwr, [
-      new MetaTuple(rm1, 'f', 4, null),
-      new MetaTuple(rm2, 'n', 4, null),
+      new MetaTuple(rm1, new OrderedKey('f'), 4, null),
+      new MetaTuple(rm2, new OrderedKey('n'), 4, null),
     ]));
     return [c, m1, m2];
   }
@@ -724,5 +727,53 @@ suite('CompoundMap', () => {
 
     await t(10, MapLeafSequence);
     await t(100, OrderedMetaSequence);
+  });
+
+  test('compound map with values of every type', async () => {
+    const v = 42;
+    const kvs = [
+      // Values
+      [true, v],
+      [0, v],
+      ['hello', v],
+      [new Blob(new Uint8Array([0])), v],
+      [new Set([true]), v],
+      [new List([true]), v],
+      [new Map([[true, true]]), v],
+      [newStruct('', {field: true}), v],
+      // Refs of values
+      [new Ref(true), v],
+      [new Ref(0), v],
+      [new Ref('hello'), v],
+      [new Ref(new Blob(new Uint8Array([0]))), v],
+      [new Ref(new Set([true])), v],
+      [new Ref(new List([true])), v],
+      [new Ref(new Map([[true, true]])), v],
+      [new Ref(newStruct('', {field: true})), v],
+    ];
+
+    let m = new Map(kvs);
+    for (let i = 1; !m.sequence.isMeta; i++) {
+      kvs.push([i, v]);
+      m = await m.set(i, v);
+    }
+
+    assert.strictEqual(kvs.length, m.size);
+    const [fk, fv] = notNull(await m.first());
+    assert.strictEqual(true, fk);
+    assert.strictEqual(v, fv);
+
+    for (const kv of kvs) {
+      assert.isTrue(await m.has(kv[0]));
+      assert.strictEqual(v, await m.get(kv[0]));
+      assert.strictEqual(v, kv[1]);
+    }
+
+    while (kvs.length > 0) {
+      const kv = kvs.shift();
+      m = await m.delete(kv[0]);
+      assert.isFalse(await m.has(kv[0]));
+      assert.strictEqual(kvs.length, m.size);
+    }
   });
 });

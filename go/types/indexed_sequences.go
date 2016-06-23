@@ -39,7 +39,7 @@ func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) in
 	var offsets []uint64
 	cum := uint64(0)
 	for _, mt := range tuples {
-		cum += mt.uint64Value()
+		cum += mt.key.uint64Value()
 		offsets = append(offsets, cum)
 	}
 	leafCount := offsets[len(offsets)-1]
@@ -54,7 +54,7 @@ func (ims indexedMetaSequence) getOffset(idx int) uint64 {
 	offsets := []uint64{}
 	cum := uint64(0)
 	for _, mt := range ims.tuples {
-		cum += mt.uint64Value()
+		cum += mt.key.uint64Value()
 		offsets = append(offsets, cum)
 	}
 
@@ -131,8 +131,16 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink Value
 			col = newBlob(metaSeq)
 		}
 		if sink != nil {
-			return newMetaTuple(sink.WriteValue(col), Number(tuples.uint64ValuesSum()), numLeaves, nil), metaSeq
+			return newMetaTuple(sink.WriteValue(col), orderedKeyFromSum(tuples), numLeaves, nil), metaSeq
 		}
-		return newMetaTuple(NewRef(col), Number(tuples.uint64ValuesSum()), numLeaves, col), metaSeq
+		return newMetaTuple(NewRef(col), orderedKeyFromSum(tuples), numLeaves, col), metaSeq
 	}
+}
+
+func orderedKeyFromSum(msd metaSequenceData) orderedKey {
+	sum := uint64(0)
+	for _, mt := range msd {
+		sum += mt.key.uint64Value()
+	}
+	return orderedKeyFromUint64(sum)
 }

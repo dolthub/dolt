@@ -94,7 +94,7 @@ func (s Set) Type() *Type {
 }
 
 func (s Set) First() Value {
-	cur := newCursorAtKey(s.seq, nil, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -151,20 +151,20 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 }
 
 func (s Set) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtKey(s.seq, v, true, false)
+	cur = newCursorAtValue(s.seq, v, true, false)
 	found = cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
 	return
 }
 
-func (s Set) Has(key Value) bool {
-	cur := newCursorAtKey(s.seq, key, false, false)
-	return cur.valid() && cur.current().(Value).Equals(key)
+func (s Set) Has(v Value) bool {
+	cur := newCursorAtValue(s.seq, v, false, false)
+	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAtKey(s.seq, nil, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		return cb(v.(Value))
 	})
@@ -173,7 +173,7 @@ func (s Set) Iter(cb setIterCallback) {
 type setIterAllCallback func(v Value)
 
 func (s Set) IterAll(cb setIterAllCallback) {
-	cur := newCursorAtKey(s.seq, nil, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		cb(v.(Value))
 		return false
@@ -221,14 +221,11 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 		seq := newSetLeafSequence(vr, setData...)
 		set := newSet(seq)
 
-		var indexValue Value
+		var key orderedKey
 		if len(setData) > 0 {
-			indexValue = setData[len(setData)-1]
-			if !isKindOrderedByValue(indexValue.Type().Kind()) {
-				indexValue = NewRef(indexValue)
-			}
+			key = newOrderedKey(setData[len(setData)-1])
 		}
 
-		return newMetaTuple(NewRef(set), indexValue, uint64(len(items)), set), seq
+		return newMetaTuple(NewRef(set), key, uint64(len(items)), set), seq
 	}
 }

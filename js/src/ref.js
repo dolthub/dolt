@@ -18,7 +18,6 @@ import {ValueBase, getChunksOfValue} from './value.js';
 export function constructRef(t: Type, targetHash: Hash, height: number): Ref {
   invariant(t.kind === Kind.Ref, () => `Not a Ref type: ${describeType(t)}`);
   invariant(!targetHash.isEmpty());
-  invariant(height > 0);
   const rv = Object.create(Ref.prototype);
   rv._type = t;
   rv.targetHash = targetHash;
