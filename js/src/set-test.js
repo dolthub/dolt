@@ -509,6 +509,7 @@ suite('CompoundSet', () => {
 
     // Randomly populate nums1/nums2 which will be the contents of s1/s2 respectively, and record
     // which numbers were added/removed.
+    // TODO: Version of test which uses structs instead of numbers.
     for (let i = 0; i < setSize; i++) {
       const r = Math.random();
       if (r <= inS1) {

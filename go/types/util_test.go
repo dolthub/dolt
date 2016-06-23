@@ -14,7 +14,7 @@ var generateNumbersAsValues = func(n int) []Value {
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
-var generateNumbersAsValuesFromToBy = func(from int, to int, by int) []Value {
+var generateNumbersAsValuesFromToBy = func(from, to, by int) []Value {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
@@ -25,9 +25,13 @@ var generateNumbersAsValuesFromToBy = func(from int, to int, by int) []Value {
 }
 
 var generateNumbersAsStructs = func(n int) []Value {
-	d.Chk.True(n > 0, "must be an integer greater than zero")
+	return generateNumbersAsValuesFromToBy(0, n, 1)
+}
+var generateNumbersAsStructsFromToBy = func(from, to, by int) []Value {
+	d.Chk.True(to > from, "to must be greater than from")
+	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
-	for i := 0; i < n; i++ {
+	for i := from; i < to; i += by {
 		nums = append(nums, NewStruct("num", structData{"n": Number(i)}))
 	}
 	return nums
