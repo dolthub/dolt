@@ -7,6 +7,7 @@ package chunks
 import (
 	"github.com/attic-labs/testify/suite"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -80,4 +81,13 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreGetNonExisting() {
 	h := hash.Parse("sha1-1111111111111111111111111111111111111111")
 	c := suite.Store.Get(h)
 	suite.True(c.IsEmpty())
+}
+
+func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
+	oldRoot := suite.Store.Root()
+	suite.True(oldRoot.IsEmpty())
+	newRoot := hash.Parse("sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd") // sha1("Hello, World")
+	suite.True(suite.Store.UpdateRoot(newRoot, oldRoot))
+
+	suite.Equal(constants.NomsVersion, suite.Store.Version())
 }
