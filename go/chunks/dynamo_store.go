@@ -407,7 +407,7 @@ func (s *DynamoStore) Version() string {
 	d.Chk.True(itemLen == 2, "Version should have 2 attributes on it: %+v", result.Item)
 	d.Chk.True(result.Item[numAttr] != nil)
 	d.Chk.True(result.Item[numAttr].S != nil)
-	return aws.StringValue(result.Item[chunkAttr].S)
+	return aws.StringValue(result.Item[numAttr].S)
 }
 
 func (s *DynamoStore) setVersIfUnset() {
