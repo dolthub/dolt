@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 export const sha1Size = 20;
 const pattern = /^sha1-[0-9a-f]{40}$/;

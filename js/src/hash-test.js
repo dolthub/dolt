@@ -6,7 +6,7 @@
 
 import Hash, {emptyHash} from './hash.js';
 import {assert} from 'chai';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 import {notNull} from './assert.js';
 import {suite, test} from 'mocha';
 

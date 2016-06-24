@@ -7,92 +7,90 @@
 import crypto from 'crypto';
 
 // Note: Flow doesn't know that Buffer extends Uint8Array, thus all of the FlowIssues.
-export default class Bytes {
 
-  static alloc(size: number): Uint8Array {
+export function alloc(size: number): Uint8Array {
+  // $FlowIssue
+  return Buffer.alloc(size);
+}
+
+export function fromValues(values: number[]): Uint8Array {
+  // $FlowIssue
+  return Buffer.from(values);
+}
+
+export function fromString(s: string): Uint8Array {
+  // $FlowIssue
+  return Buffer.from(s);
+}
+
+export function toString(buff: Uint8Array): string {
+  return buff.toString();
+}
+
+export function fromHexString(str: string): Uint8Array {
+  // $FlowIssue
+  return Buffer.from(str, 'hex');
+}
+
+export function toHexString(buff: Uint8Array): string {
+  return buff.toString('hex');
+}
+
+export function grow(buff: Uint8Array, size: number): Uint8Array {
+  const b = alloc(size);
+  // $FlowIssue
+  buff.copy(b);
+  return b;
+}
+
+export function copy(source: Uint8Array, target: Uint8Array, targetStart: number = 0) {
+  // $FlowIssue
+  if (source instanceof Buffer) {
     // $FlowIssue
-    return Buffer.alloc(size);
+    source.copy(target, targetStart);
+    return;
   }
 
-  static fromValues(values: number[]): Uint8Array {
-    // $FlowIssue
-    return Buffer.from(values);
+  for (let i = 0; i < source.length; i++) {
+    target[targetStart++] = source[i];
   }
+}
 
-  static fromString(s: string): Uint8Array {
-    // $FlowIssue
-    return Buffer.from(s);
-  }
+export function slice(buff: Uint8Array, start: number, end: number): Uint8Array {
+  const v = alloc(end - start);
+  // $FlowIssue
+  buff.copy(v, 0, start, end);
+  return v;
+}
 
-  static toString(buff: Uint8Array): string {
-    return buff.toString();
-  }
+export function subarray(buff: Uint8Array, start: number, end: number): Uint8Array {
+  // $FlowIssue
+  return Buffer.from(buff.buffer, buff.byteOffset + start, end - start);
+}
 
-  static fromHexString(str: string): Uint8Array {
-    // $FlowIssue
-    return Buffer.from(str, 'hex');
-  }
+export function readUtf8(buff: Uint8Array, start: number, end: number): string {
+  return buff.toString('utf8', start, end);
+}
 
-  static toHexString(buff: Uint8Array): string {
-    return buff.toString('hex');
-  }
+export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
+  const size = Buffer.byteLength(str);
+  // $FlowIssue
+  buff.writeUInt32LE(size, offset);
+  offset += 4;
 
-  static grow(buff: Uint8Array, size: number): Uint8Array {
-    const b = Bytes.alloc(size);
-    // $FlowIssue
-    buff.copy(b);
-    return b;
-  }
+  // $FlowIssue
+  buff.write(str, offset);
+  offset += size;
+  return offset;
+}
 
-  static copy(source: Uint8Array, target: Uint8Array, targetStart: number = 0) {
-    // $FlowIssue
-    if (source instanceof Buffer) {
-      // $FlowIssue
-      source.copy(target, targetStart);
-      return;
-    }
+export function compare(b1: Uint8Array, b2: Uint8Array): number {
+  // $FlowIssue
+  return b1.compare(b2);
+}
 
-    for (let i = 0; i < source.length; i++) {
-      target[targetStart++] = source[i];
-    }
-  }
-
-  static slice(buff: Uint8Array, start: number, end: number): Uint8Array {
-    const v = Bytes.alloc(end - start);
-    // $FlowIssue
-    buff.copy(v, 0, start, end);
-    return v;
-  }
-
-  static subarray(buff: Uint8Array, start: number, end: number): Uint8Array {
-    // $FlowIssue
-    return Buffer.from(buff.buffer, buff.byteOffset + start, end - start);
-  }
-
-  static readUtf8(buff: Uint8Array, start: number, end: number): string {
-    return buff.toString('utf8', start, end);
-  }
-
-  static encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
-    const size = Buffer.byteLength(str);
-    // $FlowIssue
-    buff.writeUInt32LE(size, offset);
-    offset += 4;
-
-    // $FlowIssue
-    buff.write(str, offset);
-    offset += size;
-    return offset;
-  }
-
-  static compare(b1: Uint8Array, b2: Uint8Array): number {
-    // $FlowIssue
-    return b1.compare(b2);
-  }
-
-  static sha1(data: Uint8Array): Uint8Array {
-    const hash = crypto.createHash('sha1');
-    hash.update(data);
-    return hash.digest();
-  }
+export function sha1(data: Uint8Array): Uint8Array {
+  const hash = crypto.createHash('sha1');
+  hash.update(data);
+  return hash.digest();
 }

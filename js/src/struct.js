@@ -14,7 +14,7 @@ import {equals} from './compare.js';
 import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 type StructData = {[key: string]: Value};
 

@@ -5,7 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import Hash from './hash.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 export default class Chunk {
   data: Uint8Array;

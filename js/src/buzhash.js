@@ -6,7 +6,7 @@
 
 // This a javascript port of github.com/kch42/buzhash.
 
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 const bytehash: Array<number> = [
   0x12bd9527, 0xf4140cea, 0x987bd6e1, 0x79079850, 0xafbfd539, 0xd350ce0a,

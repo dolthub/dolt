@@ -12,105 +12,103 @@ const encoder = new TextEncoder();
 const r = new Rusha();
 const littleEndian = true;
 
-export default class Bytes {
-  static alloc(size: number): Uint8Array {
-    return new Uint8Array(size);
+export function alloc(size: number): Uint8Array {
+  return new Uint8Array(size);
+}
+
+export function fromValues(values: number[]): Uint8Array {
+  return new Uint8Array(values);
+}
+
+export function fromString(s: string): Uint8Array {
+  return encoder.encode(s);
+}
+
+export function toString(buff: Uint8Array): string {
+  return decoder.decode(buff);
+}
+
+export function fromHexString(s: string): Uint8Array {
+  const length = s.length / 2;
+  const buff = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    const hc = asciiToBinary(s.charCodeAt(2 * i));
+    const lc = asciiToBinary(s.charCodeAt(2 * i + 1));
+    buff[i] = hc << 4 | lc;
   }
+  return buff;
+}
 
-  static fromValues(values: number[]): Uint8Array {
-    return new Uint8Array(values);
+export function toHexString(buff: Uint8Array): string {
+  const hex = new Array(buff.byteLength * 2);
+  for (let i = 0; i < buff.length; i++) {
+    hex[i] = byteToAscii[buff[i]];
   }
+  return hex.join('');
+}
 
-  static fromString(s: string): Uint8Array {
-    return encoder.encode(s);
-  }
+export function grow(buff: Uint8Array, size: number): Uint8Array {
+  const b = new Uint8Array(size);
+  b.set(buff);
+  return b;
+}
 
-  static toString(buff: Uint8Array): string {
-    return decoder.decode(buff);
-  }
+export function copy(source: Uint8Array, target: Uint8Array, targetStart: number = 0) {
+  target.set(source, targetStart);
+}
 
-  static fromHexString(s: string): Uint8Array {
-    const length = s.length / 2;
-    const buff = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      const hc = asciiToBinary(s.charCodeAt(2 * i));
-      const lc = asciiToBinary(s.charCodeAt(2 * i + 1));
-      buff[i] = hc << 4 | lc;
-    }
-    return buff;
-  }
+export function slice(buff: Uint8Array, start: number, end: number): Uint8Array {
+  return buff.slice(start, end);
+}
 
-  static toHexString(buff: Uint8Array): string {
-    const hex = new Array(buff.byteLength * 2);
-    for (let i = 0; i < buff.length; i++) {
-      hex[i] = byteToAscii[buff[i]];
-    }
-    return hex.join('');
-  }
+export function subarray(buff: Uint8Array, start: number, end: number): Uint8Array {
+  return buff.subarray(start, end);
+}
 
-  static grow(buff: Uint8Array, size: number): Uint8Array {
-    const b = new Uint8Array(size);
-    b.set(buff);
-    return b;
-  }
+export function readUtf8(buff: Uint8Array, start: number, end: number): string {
+  return toString(buff.subarray(start, end));
+}
 
-  static copy(source: Uint8Array, target: Uint8Array, targetStart: number = 0) {
-    target.set(source, targetStart);
-  }
+export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
+  const strBuff = fromString(str);
+  const size = strBuff.byteLength;
 
-  static slice(buff: Uint8Array, start: number, end: number): Uint8Array {
-    return buff.slice(start, end);
-  }
+  dv.setUint32(offset, size, littleEndian);
+  offset += 4;
 
-  static subarray(buff: Uint8Array, start: number, end: number): Uint8Array {
-    return buff.subarray(start, end);
-  }
+  buff.set(strBuff, offset);
+  offset += size;
 
-  static readUtf8(buff: Uint8Array, start: number, end: number): string {
-    return Bytes.toString(buff.subarray(start, end));
-  }
+  return offset;
+}
 
-  static encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
-    const strBuff = Bytes.fromString(str);
-    const size = strBuff.byteLength;
+export function compare(b1: Uint8Array, b2: Uint8Array): number {
+  const b1Len = b1.byteLength;
+  const b2Len = b2.byteLength;
 
-    dv.setUint32(offset, size, littleEndian);
-    offset += 4;
-
-    buff.set(strBuff, offset);
-    offset += size;
-
-    return offset;
-  }
-
-  static compare(b1: Uint8Array, b2: Uint8Array): number {
-    const b1Len = b1.byteLength;
-    const b2Len = b2.byteLength;
-
-    for (let i = 0; i < b1Len && i < b2Len; i++) {
-      if (b1[i] < b2[i]) {
-        return -1;
-      }
-
-      if (b1[i] > b2[i]) {
-        return 1;
-      }
-    }
-
-    if (b1Len < b2Len) {
+  for (let i = 0; i < b1Len && i < b2Len; i++) {
+    if (b1[i] < b2[i]) {
       return -1;
     }
-    if (b1Len > b2Len) {
+
+    if (b1[i] > b2[i]) {
       return 1;
     }
-
-    return 0;
   }
 
-  static sha1(data: Uint8Array): Uint8Array {
-    const ta = r.rawDigest(data);
-    return new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength);
+  if (b1Len < b2Len) {
+    return -1;
   }
+  if (b1Len > b2Len) {
+    return 1;
+  }
+
+  return 0;
+}
+
+export function sha1(data: Uint8Array): Uint8Array {
+  const ta = r.rawDigest(data);
+  return new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength);
 }
 
 function asciiToBinary(cc: number): number {

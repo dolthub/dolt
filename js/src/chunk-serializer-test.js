@@ -10,7 +10,7 @@ import Chunk from './chunk.js';
 import type Hash from './hash.js';
 import {deserialize, serialize} from './chunk-serializer.js';
 import type {ChunkStream} from './chunk-serializer.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 suite('ChunkSerializer', () => {
 

@@ -7,7 +7,7 @@
 import Chunk from './chunk.js';
 import Hash from './hash.js';
 import {invariant} from './assert.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 const headerSize = 4; // uint32
 const bigEndian = false; // Passing false to DataView methods makes them use big-endian byte order.

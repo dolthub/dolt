@@ -22,7 +22,7 @@ import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {

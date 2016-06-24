@@ -6,7 +6,7 @@
 
 import {request} from 'http';
 import {parse} from 'url';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 export type FetchOptions = {
   method?: string,

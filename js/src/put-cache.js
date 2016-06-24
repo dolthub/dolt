@@ -9,7 +9,7 @@ import type {tcoll as Collection} from 'tingodb';
 import fs from 'fs';
 import Chunk, {emptyChunk} from './chunk.js';
 import {invariant} from './assert.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 const __tingodb = tingodb();
 

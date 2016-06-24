@@ -9,7 +9,7 @@ import {suite, test} from 'mocha';
 import {assert} from 'chai';
 
 import Blob from './blob.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 import Hash from './hash.js';
 import List, {newListLeafSequence} from './list.js';
 import Map from './map.js';

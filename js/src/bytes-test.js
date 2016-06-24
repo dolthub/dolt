@@ -7,8 +7,8 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import {default as NodeBytes} from './bytes.js';
-import {default as BrowserBytes} from './browser/bytes.js';
+import * as NodeBytes from './bytes.js';
+import * as BrowserBytes from './browser/bytes.js';
 
 function assertUint8Equal(ar1: Uint8Array, ar2: Uint8Array) {
   assert.equal(ar1.length, ar2.length);

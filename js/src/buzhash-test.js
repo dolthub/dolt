@@ -7,7 +7,7 @@
 import {suite, test} from 'mocha';
 import {assert} from 'chai';
 import BuzHash from './buzhash.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 const loremipsum1 = `Lorem ipsum dolor sit amet, consectetuer adipiscing elit.
 Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et

@@ -9,7 +9,7 @@ import {assert} from 'chai';
 import Chunk from './chunk.js';
 import Hash from './hash.js';
 import {notNull} from './assert.js';
-import Bytes from './bytes.js';
+import * as Bytes from './bytes.js';
 
 suite('Chunk', () => {
   test('construct', () => {
