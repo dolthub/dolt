@@ -58,15 +58,18 @@ func (s *remoteDatabaseServer) Run() {
 
 	router := httprouter.New()
 
-	router.POST(constants.GetRefsPath, s.makeHandle(HandleGetRefs))
-	router.POST(constants.HasRefsPath, s.makeHandle(HandleHasRefs))
-	router.GET(constants.RootPath, s.makeHandle(HandleRootGet))
-	router.POST(constants.RootPath, s.makeHandle(HandleRootPost))
-	router.POST(constants.WriteValuePath, s.makeHandle(HandleWriteValue))
+	router.POST(constants.GetRefsPath, s.corsHandle(s.makeHandle(HandleGetRefs)))
+	router.OPTIONS(constants.GetRefsPath, s.corsHandle(noopHandle))
+	router.POST(constants.HasRefsPath, s.corsHandle(s.makeHandle(HandleHasRefs)))
+	router.OPTIONS(constants.HasRefsPath, s.corsHandle(noopHandle))
+	router.GET(constants.RootPath, s.corsHandle(s.makeHandle(HandleRootGet)))
+	router.POST(constants.RootPath, s.corsHandle(s.makeHandle(HandleRootPost)))
+	router.OPTIONS(constants.RootPath, s.corsHandle(noopHandle))
+	router.POST(constants.WriteValuePath, s.corsHandle(s.makeHandle(HandleWriteValue)))
+	router.OPTIONS(constants.WriteValuePath, s.corsHandle(noopHandle))
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Add("Access-Control-Allow-Origin", "*")
 			router.ServeHTTP(w, req)
 		}),
 		ConnState: s.connState,
@@ -94,6 +97,23 @@ func (s *remoteDatabaseServer) Run() {
 func (s *remoteDatabaseServer) makeHandle(hndlr Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		hndlr(w, req, ps, s.cs)
+	}
+}
+
+func noopHandle(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+}
+
+func (s *remoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle {
+	// TODO: Implement full pre-flighting?
+	// See: http://www.html5rocks.com/static/images/cors_server_flowchart.png
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		// Can't use * when clients are using cookies.
+		w.Header().Add("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Add("Access-Control-Allow-Methods", "GET, POST")
+		w.Header().Add("Access-Control-Allow-Headers", NomsVersionHeader)
+		w.Header().Add("Access-Control-Expose-Headers", NomsVersionHeader)
+		w.Header().Add(NomsVersionHeader, constants.NomsVersion)
+		f(w, r, ps)
 	}
 }
 
