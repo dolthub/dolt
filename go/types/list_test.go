@@ -625,14 +625,36 @@ func TestListModifyAfterRead(t *testing.T) {
 	assert.Equal(llen, list.Len())
 }
 
+func accumulateDiffSplices(l1, l2 List) []Splice {
+	var diff []Splice
+	diffChan := make(chan Splice)
+	l1.Diff(l2, diffChan)
+	for splice := range diffChan {
+		diff = append(diff, splice)
+	}
+	return diff
+}
+
+func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) []Splice {
+	var diff []Splice
+	diffChan := make(chan Splice)
+	l1.DiffWithLimit(l2, diffChan, maxSpliceMatrixSize)
+	for splice := range diffChan {
+		diff = append(diff, splice)
+	}
+	return diff
+}
+
 func TestListDiffIdentical(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
 	l1 := NewList(nums...)
 	l2 := NewList(nums...)
-	diff1 := l1.Diff(l2)
-	diff2 := l2.Diff(l1)
+
+	diff1 := accumulateDiffSplices(l1, l2)
+	diff2 := accumulateDiffSplices(l2, l1)
+
 	assert.Equal(0, len(diff1))
 	assert.Equal(0, len(diff2))
 }
@@ -643,8 +665,9 @@ func TestListDiffVersusEmpty(t *testing.T) {
 	nums1 := generateNumbersAsValues(5)
 	l1 := NewList(nums1...)
 	l2 := NewList()
-	diff1 := l1.Diff(l2)
-	diff2 := l2.Diff(l1)
+
+	diff1 := accumulateDiffSplices(l1, l2)
+	diff2 := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(len(diff2), len(diff1))
 	diffExpected := []Splice{
@@ -663,11 +686,13 @@ func TestListDiffReverse(t *testing.T) {
 	nums2 := reverseValues(nums1)
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1 := l1.Diff(l2)
-	diff2 := l2.Diff(l1)
+
+	diff1 := accumulateDiffSplices(l1, l2)
+	diff2 := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{0, 5000, 5000, 0},
+		Splice{0, 2499, 2500, 0},
+		Splice{2500, 2500, 2499, 2501},
 	}
 	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 	assert.Equal(diffExpected, diff2, "expected diff is wrong")
@@ -683,8 +708,9 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	nums2 := reverseValues(nums1)
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1 := l1.DiffWithLimit(l2, 27e6)
-	diff2 := l2.DiffWithLimit(l1, 27e6)
+
+	diff1 := accumulateDiffSplicesWithLimit(l1, l2, 27e6)
+	diff2 := accumulateDiffSplicesWithLimit(l2, l1, 27e6)
 
 	assert.Equal(len(diff2), len(diff1))
 	diffExpected := []Splice{
@@ -708,8 +734,9 @@ func TestListDiffRemove5x100(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1 := l1.Diff(l2)
-	diff2 := l2.Diff(l1)
+
+	diff1 := accumulateDiffSplices(l1, l2)
+	diff2 := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
@@ -735,8 +762,9 @@ func TestListDiffAdd5x5(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff1 := l1.Diff(l2)
-	diff2 := l2.Diff(l1)
+
+	diff1 := accumulateDiffSplices(l1, l2)
+	diff2 := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
@@ -763,7 +791,7 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff := l2.Diff(l1)
+	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
 		Splice{0, 49, 50, 0},
@@ -787,7 +815,8 @@ func TestListDiffString1(t *testing.T) {
 	nums2 := []Value{String("one"), String("two"), String("three")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff := l2.Diff(l1)
+	diff := accumulateDiffSplices(l2, l1)
+
 	assert.Equal(0, len(diff))
 }
 
@@ -798,7 +827,7 @@ func TestListDiffString2(t *testing.T) {
 	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff := l2.Diff(l1)
+	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
 		Splice{3, 0, 1, 3},
@@ -813,7 +842,7 @@ func TestListDiffString3(t *testing.T) {
 	nums2 := []Value{String("one"), String("two"), String("four")}
 	l1 := NewList(nums1...)
 	l2 := NewList(nums2...)
-	diff := l2.Diff(l1)
+	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
 		Splice{2, 1, 1, 2},
@@ -843,11 +872,11 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	refList2 := vs2.ReadValue(ref2).(List)
 
 	// diff lists without value store
-	diff1 := l2.Diff(l1)
+	diff1 := accumulateDiffSplices(l2, l1)
 	assert.Equal(2, len(diff1))
 
 	// diff lists from value stores
-	diff2 := refList2.Diff(refList1)
+	diff2 := accumulateDiffSplices(refList2, refList1)
 	assert.Equal(2, len(diff2))
 
 	// diff without and with value store should be same

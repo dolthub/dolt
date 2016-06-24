@@ -193,24 +193,33 @@ func (l List) IterAll(f listIterAllFunc) {
 	})
 }
 
-func (l List) Diff(last List) []Splice {
-	return l.DiffWithLimit(last, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
+func (l List) Diff(last List, changes chan<- Splice) {
+	l.DiffWithLimit(last, changes, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
-func (l List) DiffWithLimit(last List, maxSpliceMatrixSize uint64) []Splice {
-	if l.Equals(last) {
-		return []Splice{} // nothing changed
-	}
-	lLen, lastLen := l.Len(), last.Len()
-	if lLen == 0 {
-		return []Splice{Splice{0, lastLen, 0, 0}} // everything removed
-	}
-	if lastLen == 0 {
-		return []Splice{Splice{0, 0, lLen, 0}} // everything added
-	}
-	lastCur := newCursorAtIndex(last.seq, 0)
-	lCur := newCursorAtIndex(l.seq, 0)
-	return indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, maxSpliceMatrixSize)
+func (l List) DiffWithLimit(last List, changes chan<- Splice, maxSpliceMatrixSize uint64) {
+	go func() {
+		if l.Equals(last) {
+			close(changes) // nothing changed
+			return
+		}
+		lLen, lastLen := l.Len(), last.Len()
+		if lLen == 0 {
+			changes <- Splice{0, lastLen, 0, 0} // everything removed
+			close(changes)
+			return
+		}
+		if lastLen == 0 {
+			changes <- Splice{0, 0, lLen, 0} // everything added
+			close(changes)
+			return
+		}
+
+		lastCur := newCursorAtIndex(last.seq, 0)
+		lCur := newCursorAtIndex(l.seq, 0)
+		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, DEFAULT_MAX_SPLICE_MATRIX_SIZE*3000, changes)
+		close(changes)
+	}()
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {

@@ -68,8 +68,11 @@ func Diff(w io.Writer, v1, v2 types.Value) (err error) {
 
 func diffLists(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.List) {
 	wroteHeader := false
-	splices := v2.Diff(v1)
-	for _, splice := range splices {
+
+	splices := make(chan types.Splice)
+	v2.Diff(v1, splices)
+
+	for splice := range splices {
 		if splice.SpRemoved == splice.SpAdded {
 			for i := uint64(0); i < splice.SpRemoved; i++ {
 				lastEl := v1.Get(splice.SpAt + i)
