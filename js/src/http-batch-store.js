@@ -159,8 +159,8 @@ export class Delegate {
   }
 }
 
-function checkVersion(headers: {[key: string]: string}): ?Error {
-  const version = headers[versionHeader];
+function checkVersion(headers: Map<string, string>): ?Error {
+  const version = headers.get(versionHeader);
   if (version !== nomsVersion) {
     return new Error(
       `SDK version ${nomsVersion} is not compatible with data of version ${version}.`);

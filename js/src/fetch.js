@@ -15,9 +15,17 @@ export type FetchOptions = {
   withCredentials? : boolean,
 };
 
-type Response<T> = {headers: {[key: string]: string}, buf: T};
+type Response<T> = {headers: Map<string, string>, buf: T};
 type TextResponse = Response<string>;
 type BufResponse = Response<Uint8Array>;
+
+function objectToMap<T>(object: {[key: string]: T}): Map<string, T> {
+  const m = new Map();
+  for (const k in object) {
+    m.set(k, object[k]);
+  }
+  return m;
+}
 
 function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   const opts: any = parse(url);
@@ -54,7 +62,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
         offset += size;
       });
       res.on('end', () => {
-        resolve({headers: res.headers, buf: Bytes.subarray(buf, 0, offset)});
+        resolve({headers: objectToMap(res.headers), buf: Bytes.subarray(buf, 0, offset)});
       });
     });
     req.on('error', err => {

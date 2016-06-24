@@ -4,6 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+import {notNull} from '../assert.js';
 
 export type FetchOptions = {
   method?: string,
@@ -12,7 +13,7 @@ export type FetchOptions = {
   withCredentials? : boolean,
 };
 
-type Response<T> = {headers: {[key: string]: string}, buf: T};
+type Response<T> = {headers: Map<string, string>, buf: T};
 type TextResponse = Response<string>;
 type BufResponse = Response<Uint8Array>;
 
@@ -22,12 +23,12 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
   xhr.responseType = responseType;
   const method = options.method || 'GET';
   xhr.open(method, url, true);
-  const p = new Promise((res, rej) => {
+  const p = new Promise((resolve, reject) => {
     xhr.onloadend = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        res({headers: res.headers, buf: xhr.response});
+        resolve({headers: makeHeaders(xhr), buf: xhr.response});
       } else {
-        rej(new Error(`HTTP Error: ${xhr.status}`));
+        reject(new Error(`HTTP Error: ${xhr.status}`));
       }
     };
   });
@@ -46,6 +47,7 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
 export function fetchText(url: string, options: FetchOptions = {}): Promise<TextResponse> {
   if (self.fetch) {
     return self.fetch(url, options)
+      // resp.headers is a Headers which is a multi map, which is similar enough for now.
       .then(resp => ({headers: resp.headers, buf: resp.text()}));
   }
 
@@ -55,8 +57,19 @@ export function fetchText(url: string, options: FetchOptions = {}): Promise<Text
 export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   if (self.fetch) {
     return self.fetch(url, options)
+      // resp.headers is a Headers which is a multi map, which is similar enough for now.
       .then(resp => ({headers: resp.headers, buf: new Uint8Array(resp.arrayBuffer())}));
   }
 
   return fetch(url, 'arraybuffer', options);
+}
+
+function makeHeaders(xhr: XMLHttpRequest): Map<string, string> {
+  const m = new Map();
+  const headers = xhr.getAllResponseHeaders().split(/\r\n/);  // spec requires \r\n
+  for (const header of headers) {
+    const [, name, value] = notNull(header.match(/([^:]+): (.*)/));
+    m.set(name, value);
+  }
+  return m;
 }
