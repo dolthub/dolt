@@ -691,8 +691,7 @@ func TestListDiffReverse(t *testing.T) {
 	diff2 := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{0, 2499, 2500, 0},
-		Splice{2500, 2500, 2499, 2501},
+		Splice{0, 5000, 5000, 0},
 	}
 	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 	assert.Equal(diffExpected, diff2, "expected diff is wrong")

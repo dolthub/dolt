@@ -217,7 +217,7 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, maxSpliceMatrixSiz
 
 		lastCur := newCursorAtIndex(last.seq, 0)
 		lCur := newCursorAtIndex(l.seq, 0)
-		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, DEFAULT_MAX_SPLICE_MATRIX_SIZE*3000, changes)
+		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, maxSpliceMatrixSize, changes)
 		close(changes)
 	}()
 }
