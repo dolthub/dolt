@@ -193,11 +193,11 @@ func (l List) IterAll(f listIterAllFunc) {
 	})
 }
 
-func (l List) Diff(last List, changes chan<- Splice) {
-	l.DiffWithLimit(last, changes, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
+func (l List) Diff(last List, changes chan<- Splice, closeChan <-chan struct{}) {
+	l.DiffWithLimit(last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
-func (l List) DiffWithLimit(last List, changes chan<- Splice, maxSpliceMatrixSize uint64) {
+func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
 	go func() {
 		if l.Equals(last) {
 			close(changes) // nothing changed
@@ -217,7 +217,7 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, maxSpliceMatrixSiz
 
 		lastCur := newCursorAtIndex(last.seq, 0)
 		lCur := newCursorAtIndex(l.seq, 0)
-		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, maxSpliceMatrixSize, changes)
+		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
 		close(changes)
 	}()
 }

@@ -70,33 +70,39 @@ func diffLists(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.List) {
 	wroteHeader := false
 
 	splices := make(chan types.Splice)
-	v2.Diff(v1, splices)
+	closeChan := make(chan struct{})
+	v2.Diff(v1, splices, closeChan)
 
-	for splice := range splices {
-		if splice.SpRemoved == splice.SpAdded {
-			for i := uint64(0); i < splice.SpRemoved; i++ {
-				lastEl := v1.Get(splice.SpAt + i)
-				newEl := v2.Get(splice.SpFrom + i)
-				if canCompare(lastEl, newEl) {
-					idx := types.Number(splice.SpAt + i)
-					p1 := p.AddIndex(idx)
-					dq.PushBack(diffInfo{p1, idx, lastEl, newEl})
-				} else {
+	err := d.Try(func() {
+		for splice := range splices {
+			if splice.SpRemoved == splice.SpAdded {
+				for i := uint64(0); i < splice.SpRemoved; i++ {
+					lastEl := v1.Get(splice.SpAt + i)
+					newEl := v2.Get(splice.SpFrom + i)
+					if canCompare(lastEl, newEl) {
+						idx := types.Number(splice.SpAt + i)
+						p1 := p.AddIndex(idx)
+						dq.PushBack(diffInfo{p1, idx, lastEl, newEl})
+					} else {
+						wroteHeader = writeHeader(w, wroteHeader, p)
+						line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
+						line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
+					}
+				}
+			} else {
+				for i := uint64(0); i < splice.SpRemoved; i++ {
 					wroteHeader = writeHeader(w, wroteHeader, p)
 					line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
+				}
+				for i := uint64(0); i < splice.SpAdded; i++ {
+					wroteHeader = writeHeader(w, wroteHeader, p)
 					line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
 				}
 			}
-		} else {
-			for i := uint64(0); i < splice.SpRemoved; i++ {
-				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
-			}
-			for i := uint64(0); i < splice.SpAdded; i++ {
-				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
-			}
 		}
+	})
+	if err != nil {
+		closeChan <- struct{}{}
 	}
 	writeFooter(w, wroteHeader)
 }
