@@ -10,6 +10,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
 // ValueReader is an interface that knows how to read Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value reading.
@@ -34,10 +35,13 @@ type ValueReadWriter interface {
 // - all Refs in v point to a Value that can be read from this ValueStore
 // - all Refs in v point to a Value of the correct Type
 type ValueStore struct {
-	bs    BatchStore
-	cache map[hash.Hash]chunkCacheEntry
-	mu    *sync.Mutex
+	bs         BatchStore
+	cache      map[hash.Hash]chunkCacheEntry
+	mu         *sync.Mutex
+	valueCache *sizecache.SizeCache
 }
+
+const defaultValueCacheSize = 1 << 25 // 32MB
 
 type chunkCacheEntry interface {
 	Present() bool
@@ -56,7 +60,11 @@ func newLocalValueStore(cs chunks.ChunkStore) *ValueStore {
 
 // NewValueStore returns a ValueStore instance that owns the provided BatchStore and manages its lifetime. Calling Close on the returned ValueStore will Close bs.
 func NewValueStore(bs BatchStore) *ValueStore {
-	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}}
+	return NewValueStoreWithCache(bs, defaultValueCacheSize)
+}
+
+func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
+	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}, sizecache.New(cacheSize)}
 }
 
 func (lvs *ValueStore) BatchStore() BatchStore {
@@ -65,11 +73,16 @@ func (lvs *ValueStore) BatchStore() BatchStore {
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
 func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
+	if v, ok := lvs.valueCache.Get(r); ok {
+		return v.(Value)
+	}
 	chunk := lvs.bs.Get(r)
 	if chunk.IsEmpty() {
+		lvs.valueCache.Add(r, 0, nil)
 		return nil
 	}
 	v := DecodeValue(chunk, lvs)
+	lvs.valueCache.Add(r, uint64(len(chunk.Data())), v)
 
 	var entry chunkCacheEntry = absentChunk{}
 	if v != nil {

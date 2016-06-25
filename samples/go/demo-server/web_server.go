@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"regexp"
 	"runtime/debug"
@@ -15,7 +16,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/julienschmidt/httprouter"
-	"os"
 )
 
 const (

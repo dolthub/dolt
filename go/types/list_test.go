@@ -883,9 +883,9 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 
 	// should only read/write a "small & reasonably sized portion of the total"
 	assert.Equal(95, cs1.Writes)
-	assert.Equal(18, cs1.Reads)
+	assert.Equal(16, cs1.Reads)
 	assert.Equal(85, cs2.Writes)
-	assert.Equal(8, cs2.Reads)
+	assert.Equal(6, cs2.Reads)
 }
 
 func TestListTypeAfterMutations(t *testing.T) {
