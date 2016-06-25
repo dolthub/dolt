@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
 	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/mgutz/ansi"
@@ -28,6 +30,8 @@ var (
 	showHelp, showGraph, showValue *bool
 	useColor                       = false
 )
+
+const parallelism = 16
 
 func main() {
 	color = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
@@ -79,11 +83,24 @@ func main() {
 	if *maxCommits <= 0 {
 		*maxCommits = math.MaxInt32
 	}
-	for ln, ok := iter.Next(); ok && displayed < *maxCommits; ln, ok = iter.Next() {
-		if printCommit(ln, database) != nil {
-			break
+
+	inChan := make(chan interface{}, parallelism)
+	outChan := orderedparallel.New(inChan, func(node interface{}) interface{} {
+		buff := &bytes.Buffer{}
+		printCommit(node.(LogNode), buff, database)
+		return buff.Bytes()
+	}, parallelism)
+
+	go func() {
+		for ln, ok := iter.Next(); ok && displayed < *maxCommits; ln, ok = iter.Next() {
+			inChan <- ln
+			displayed++
 		}
-		displayed++
+		close(inChan)
+	}()
+
+	for commitBuff := range outChan {
+		io.Copy(os.Stdout, bytes.NewReader(commitBuff.([]byte)))
 	}
 
 	if waitChan != nil {
@@ -94,14 +111,14 @@ func main() {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(node LogNode, db datas.Database) (err error) {
+func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 	lineno := 0
 	doColor := func(s string) string { return s }
 	if useColor {
 		doColor = ansi.ColorFunc("red+h")
 	}
 
-	fmt.Printf("%s%s\n", genGraph(node, lineno), doColor(node.commit.Hash().String()))
+	fmt.Fprintf(w, "%s%s\n", genGraph(node, lineno), doColor(node.commit.Hash().String()))
 	parents := commitRefsFromSet(node.commit.Get(datas.ParentsField).(types.Set))
 	lineno++
 	if len(parents) > 1 {
@@ -109,18 +126,18 @@ func printCommit(node LogNode, db datas.Database) (err error) {
 		for _, cr := range parents {
 			pstrings = append(pstrings, cr.TargetHash().String())
 		}
-		fmt.Printf("%sMerge: %s\n", genGraph(node, lineno), strings.Join(pstrings, " "))
+		fmt.Fprintf(w, "%sMerge: %s\n", genGraph(node, lineno), strings.Join(pstrings, " "))
 	} else if len(parents) == 1 {
-		fmt.Printf("%sParent: %s\n", genGraph(node, lineno), parents[0].TargetHash().String())
+		fmt.Fprintf(w, "%sParent: %s\n", genGraph(node, lineno), parents[0].TargetHash().String())
 	} else {
-		fmt.Printf("%sParent: None\n", genGraph(node, lineno))
+		fmt.Fprintf(w, "%sParent: None\n", genGraph(node, lineno))
 	}
 	if *maxLines != 0 {
 		var n int
 		if *showValue {
-			n, err = writeCommitLines(node, *maxLines, lineno, os.Stdout)
+			n, err = writeCommitLines(node, *maxLines, lineno, w)
 		} else {
-			n, err = writeDiffLines(node, db, *maxLines, lineno, os.Stdout)
+			n, err = writeDiffLines(node, db, *maxLines, lineno, w)
 		}
 		lineno += n
 	}
