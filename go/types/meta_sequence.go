@@ -7,6 +7,7 @@ package types
 import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/util/orderedparallel"
 )
 
 const (
@@ -144,8 +145,24 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 	childIsMeta := false
 	metaItems := []metaTuple{}
 	valueItems := []Value{}
-	for i := start; i < start+length; i++ {
-		seq := ms.getChildSequence(int(i))
+
+	input := make(chan interface{})
+	output := orderedparallel.New(input, func(item interface{}) interface{} {
+		i := item.(int)
+		return ms.getChildSequence(i)
+	}, int(length))
+
+	go func() {
+		for i := start; i < start+length; i++ {
+			input <- int(i)
+		}
+
+		close(input)
+	}()
+
+	i := uint64(start)
+	for item := range output {
+		seq := item.(sequence)
 		if i == start {
 			if idxSeq, ok := seq.(indexedSequence); ok {
 				childIsMeta = isMetaSequence(idxSeq)
@@ -154,11 +171,14 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 		if childIsMeta {
 			childMs, _ := seq.(indexedMetaSequence)
 			metaItems = append(metaItems, childMs.metaSequenceObject.tuples...)
-		} else {
-			if ll, ok := seq.(listLeafSequence); ok {
-				valueItems = append(valueItems, ll.values...)
-			}
+			continue
 		}
+
+		if ll, ok := seq.(listLeafSequence); ok {
+			valueItems = append(valueItems, ll.values...)
+		}
+
+		i++
 	}
 
 	if childIsMeta {
