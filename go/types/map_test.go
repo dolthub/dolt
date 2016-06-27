@@ -216,18 +216,21 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	}
 }
 
-func (suite *mapTestSuite) TestMapMx() {
+func (suite *mapTestSuite) TestStreamingMap() {
 	randomized := make(mapEntrySlice, len(suite.elems.entries))
 	for i, j := range rand.Perm(len(randomized)) {
 		randomized[j] = suite.elems.entries[i]
 	}
 	vs := NewTestValueStore()
 
-	mx := NewMap().Mx(vs)
+	kvChan := make(chan Value)
+	mapChan := NewStreamingMap(vs, kvChan)
 	for _, entry := range randomized {
-		mx = mx.Set(entry.key, entry.value)
+		kvChan <- entry.key
+		kvChan <- entry.value
 	}
-	suite.validate(mx.Finish())
+	close(kvChan)
+	suite.validate(<-mapChan)
 }
 
 func TestMapSuite1K(t *testing.T) {

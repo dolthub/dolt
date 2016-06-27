@@ -120,7 +120,8 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 		kindMap[name] = t.Kind()
 	})
 
-	mx := types.NewMap().Mx(vrw)
+	kvChan := make(chan types.Value, 128)
+	mapChan := types.NewStreamingMap(vrw, kvChan)
 	fields := map[string]types.Value{}
 	var pk types.Value
 	for {
@@ -141,7 +142,10 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 				fieldIndex++
 			}
 		}
-		mx = mx.Set(pk, types.NewStructWithType(t, fields))
+		kvChan <- pk
+		kvChan <- types.NewStructWithType(t, fields)
 	}
-	return mx.Finish()
+
+	close(kvChan)
+	return <-mapChan
 }

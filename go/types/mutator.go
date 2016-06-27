@@ -6,22 +6,22 @@ package types
 
 import "github.com/attic-labs/noms/go/d"
 
-type MapMutator struct {
+type mapMutator struct {
 	oc  *opCache
 	vrw ValueReadWriter
 }
 
-func newMutator(vrw ValueReadWriter) *MapMutator {
-	return &MapMutator{newOpCache(vrw), vrw}
+func newMutator(vrw ValueReadWriter) *mapMutator {
+	return &mapMutator{newOpCache(vrw), vrw}
 }
 
-func (mx *MapMutator) Set(key Value, val Value) *MapMutator {
+func (mx *mapMutator) Set(key Value, val Value) *mapMutator {
 	d.Chk.True(mx.oc != nil, "Can't call Set() again after Finish()")
 	mx.oc.Set(key, val)
 	return mx
 }
 
-func (mx *MapMutator) Finish() Map {
+func (mx *mapMutator) Finish() Map {
 	d.Chk.True(mx.oc != nil, "Can only call Finish() once")
 	defer func() {
 		mx.oc.Destroy()
