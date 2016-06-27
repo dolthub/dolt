@@ -5,6 +5,8 @@
 package types
 
 import (
+	"bytes"
+	"crypto/sha1"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -41,4 +43,105 @@ func TestTotalOrdering(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestCompareEmpties(t *testing.T) {
+	assert := assert.New(t)
+	comp := opCacheComparer{}
+	assert.Equal(-1, comp.Compare(nil, []byte{0xff}))
+	assert.Equal(-1, comp.Compare([]byte{}, []byte{0xff}))
+
+	assert.Equal(0, comp.Compare(nil, nil))
+	assert.Equal(0, comp.Compare(nil, []byte{}))
+	assert.Equal(0, comp.Compare([]byte{}, []byte{}))
+	assert.Equal(0, comp.Compare([]byte{}, nil))
+
+	assert.Equal(1, comp.Compare([]byte{0xff}, nil))
+	assert.Equal(1, comp.Compare([]byte{0xff}, []byte{}))
+}
+
+func TestCompareDifferentPrimitiveTypes(t *testing.T) {
+	assert := assert.New(t)
+	comp := opCacheComparer{}
+
+	b := []byte{byte(BoolKind), 0x00}
+	n := []byte{byte(NumberKind), 0x00}
+	s := []byte{byte(StringKind), 'a'}
+
+	assert.Equal(-1, comp.Compare(b, n))
+	assert.Equal(-1, comp.Compare(b, s))
+	assert.Equal(-1, comp.Compare(n, s))
+
+	assert.Equal(1, comp.Compare(s, n))
+	assert.Equal(1, comp.Compare(s, b))
+	assert.Equal(1, comp.Compare(n, b))
+}
+
+func TestComparePrimitives(t *testing.T) {
+	assert := assert.New(t)
+	comp := opCacheComparer{}
+
+	tru := encode(Bool(true))
+	fls := encode(Bool(false))
+	one := encode(Number(1))
+	fortytwo := encode(Number(42))
+	hey := encode(String("hey"))
+	ya := encode(String("ya"))
+
+	assert.Equal(-1, comp.Compare(fls, tru))
+	assert.Equal(-1, comp.Compare(one, fortytwo))
+	assert.Equal(-1, comp.Compare(hey, ya))
+
+	assert.Equal(0, comp.Compare(tru, tru))
+	assert.Equal(0, comp.Compare(one, one))
+	assert.Equal(0, comp.Compare(hey, hey))
+
+	assert.Equal(1, comp.Compare(tru, fls))
+	assert.Equal(1, comp.Compare(fortytwo, one))
+	assert.Equal(1, comp.Compare(ya, hey))
+}
+
+func TestCompareHashes(t *testing.T) {
+	assert := assert.New(t)
+	comp := opCacheComparer{}
+
+	tru := encode(Bool(true))
+	one := encode(Number(1))
+	hey := encode(String("hey"))
+
+	minHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, sha1.Size)...)
+	maxHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, sha1.Size)...)
+	almostMaxHash := append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, sha1.Size-1), 0xfe)...)
+
+	assert.Equal(-1, comp.Compare(tru, minHash))
+	assert.Equal(-1, comp.Compare(one, minHash))
+	assert.Equal(-1, comp.Compare(hey, minHash))
+	assert.Equal(-1, comp.Compare(minHash, almostMaxHash))
+	assert.Equal(-1, comp.Compare(almostMaxHash, maxHash))
+
+	assert.Equal(0, comp.Compare(minHash, minHash))
+	assert.Equal(0, comp.Compare(almostMaxHash, almostMaxHash))
+	assert.Equal(0, comp.Compare(maxHash, maxHash))
+
+	assert.Equal(1, comp.Compare(minHash, tru))
+	assert.Equal(1, comp.Compare(minHash, one))
+	assert.Equal(1, comp.Compare(minHash, hey))
+	assert.Equal(1, comp.Compare(almostMaxHash, tru))
+	assert.Equal(1, comp.Compare(almostMaxHash, one))
+	assert.Equal(1, comp.Compare(almostMaxHash, hey))
+	assert.Equal(1, comp.Compare(maxHash, tru))
+	assert.Equal(1, comp.Compare(maxHash, one))
+	assert.Equal(1, comp.Compare(maxHash, hey))
+	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
+	assert.Equal(1, comp.Compare(almostMaxHash, minHash))
+
+	almostMaxHash[0]++
+	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
+
+}
+
+func encode(v Value) []byte {
+	w := &binaryNomsWriter{make([]byte, 128, 128), 0}
+	newValueEncoder(w, nil).writeValue(v)
+	return w.data()
 }

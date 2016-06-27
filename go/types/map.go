@@ -28,7 +28,7 @@ func newMap(seq orderedSequence) Map {
 
 func NewMap(kv ...Value) Map {
 	entries := buildMapData(kv)
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(makeMapLeafChunkFn(nil, nil), newOrderedMetaSequenceChunkFn(MapKind, nil, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
 		seq.Append(entry)
@@ -112,6 +112,11 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 	return entry.value, true
 }
 
+func (m Map) Mx(vrw ValueReadWriter) *MapMutator {
+	d.Chk.True(m.Empty(), "Mx() currently only works on empty Maps")
+	return newMutator(vrw)
+}
+
 func (m Map) Set(key Value, val Value) Map {
 	return m.SetM(key, val)
 }
@@ -140,7 +145,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.valueReader(), nil), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader(), nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -233,7 +238,9 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
+// If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
+// written when the root is written.
+func makeMapLeafChunkFn(vr ValueReader, vw ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (metaTuple, sequence) {
 		mapData := make([]mapEntry, len(items), len(items))
 
@@ -245,10 +252,20 @@ func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 		m := newMap(seq)
 
 		var key orderedKey
+		var ref Ref
+		var child Collection
+		if vw != nil {
+			// Eagerly write chunks
+			ref = vw.WriteValue(m)
+			child = nil
+		} else {
+			ref = NewRef(m)
+			child = m
+		}
 		if len(mapData) > 0 {
 			key = newOrderedKey(mapData[len(mapData)-1].key)
 		}
 
-		return newMetaTuple(NewRef(m), key, uint64(len(items)), m), seq
+		return newMetaTuple(ref, key, uint64(len(items)), child), seq
 	}
 }

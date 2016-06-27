@@ -17,7 +17,7 @@ func (v Number) Equals(other Value) bool {
 
 func (v Number) Less(other Value) bool {
 	if v2, ok := other.(Number); ok {
-		return float64(v) < float64(v2)
+		return v < v2
 	}
 	return NumberKind < other.Type().Kind()
 }

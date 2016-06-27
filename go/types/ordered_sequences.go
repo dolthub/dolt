@@ -128,7 +128,9 @@ func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
+// If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
+// written when the root is written.
+func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader, vw ValueWriter) makeChunkFn {
 	return func(items []sequenceItem) (metaTuple, sequence) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
@@ -150,6 +152,9 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 			col = newMap(metaSeq)
 		}
 
+		if vw != nil {
+			return newMetaTuple(vw.WriteValue(col), tuples.last().key, numLeaves, nil), metaSeq
+		}
 		return newMetaTuple(NewRef(col), tuples.last().key, numLeaves, col), metaSeq
 	}
 }

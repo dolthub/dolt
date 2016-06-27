@@ -216,8 +216,18 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 	}
 }
 
-func newNumberStruct(i int) Value {
-	return NewStruct("", structData{"n": Number(i)})
+func (suite *mapTestSuite) TestMapMx() {
+	randomized := make(mapEntrySlice, len(suite.elems.entries))
+	for i, j := range rand.Perm(len(randomized)) {
+		randomized[j] = suite.elems.entries[i]
+	}
+	vs := NewTestValueStore()
+
+	mx := NewMap().Mx(vs)
+	for _, entry := range randomized {
+		mx = mx.Set(entry.key, entry.value)
+	}
+	suite.validate(mx.Finish())
 }
 
 func TestMapSuite1K(t *testing.T) {
@@ -237,6 +247,10 @@ func TestMapSuite4KStructs(t *testing.T) {
 
 func newNumber(i int) Value {
 	return Number(i)
+}
+
+func newNumberStruct(i int) Value {
+	return NewStruct("", structData{"n": Number(i)})
 }
 
 func getTestNativeOrderMap(scale int) testMap {

@@ -61,9 +61,9 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func ReadToList(r *csv.Reader, structName string, headers_raw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
-	headers := make([]string, len(headers_raw))
-	for i, h := range headers_raw {
+func ReadToList(r *csv.Reader, structName string, headersRaw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
+	headers := make([]string, len(headersRaw))
+	for i, h := range headersRaw {
 		headers[i] = types.EscapeStructField(h)
 	}
 
@@ -98,9 +98,9 @@ func ReadToList(r *csv.Reader, structName string, headers_raw []string, kinds Ki
 	return <-listChan, t
 }
 
-func ReadToMap(r *csv.Reader, headers_raw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) (m types.Map) {
-	headers := make([]string, 0, len(headers_raw)-1)
-	for i, h := range headers_raw {
+func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
+	headers := make([]string, 0, len(headersRaw)-1)
+	for i, h := range headersRaw {
 		if i != pkIdx {
 			headers = append(headers, types.EscapeStructField(h))
 		}
@@ -120,7 +120,7 @@ func ReadToMap(r *csv.Reader, headers_raw []string, pkIdx int, kinds KindSlice, 
 		kindMap[name] = t.Kind()
 	})
 
-	m = types.NewMap()
+	mx := types.NewMap().Mx(vrw)
 	fields := map[string]types.Value{}
 	var pk types.Value
 	for {
@@ -141,7 +141,7 @@ func ReadToMap(r *csv.Reader, headers_raw []string, pkIdx int, kinds KindSlice, 
 				fieldIndex++
 			}
 		}
-		m = m.Set(pk, types.NewStructWithType(t, fields))
+		mx = mx.Set(pk, types.NewStructWithType(t, fields))
 	}
-	return
+	return mx.Finish()
 }

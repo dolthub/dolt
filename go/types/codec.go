@@ -13,7 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var initialBufferSize = 2048
+const initialBufferSize = 2048
 
 func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 	w := &binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
