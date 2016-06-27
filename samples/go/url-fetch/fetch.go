@@ -81,7 +81,7 @@ func main() {
 		pr = progressreader.New(f, getStatusPrinter(s.Size()))
 	}
 
-	b := types.NewBlob(pr)
+	b := types.NewStreamingBlob(pr, ds.Database())
 	ds, err = ds.Commit(b)
 	if err != nil {
 		d.Chk.True(datas.ErrMergeNeeded == err)
