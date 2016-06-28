@@ -94,48 +94,60 @@ func TestPathHashIndex(t *testing.T) {
 	b := Bool(true)
 	br := NewRef(b)
 	i := Number(0)
-	s := String("foo")
-	l := NewList(b, i, s)
+	str := String("foo")
+	l := NewList(b, i, str)
 	lr := NewRef(l)
 	m := NewMap(
 		b, br,
 		br, i,
-		i, s,
+		i, str,
 		l, lr,
 		lr, b,
 	)
+	s := NewSet(b, br, i, str, l, lr)
 
 	hashStr := func(v Value) string {
 		return fmt.Sprintf("[#%s]", v.Hash())
 	}
 
+	resolvesTo := func(col, exp, val Value) {
+		assertPathResolvesTo(assert, exp, col, NewPath().AddHashIndex(val.Hash()))
+		assertPathStringResolvesTo(assert, exp, col, hashStr(val))
+	}
+
 	// Primitives are only addressable by their values.
-	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(b.Hash()))
-	assertPathStringResolvesTo(assert, nil, m, hashStr(b))
-	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(i.Hash()))
-	assertPathStringResolvesTo(assert, nil, m, hashStr(i))
-	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(s.Hash()))
-	assertPathStringResolvesTo(assert, nil, m, hashStr(s))
+	resolvesTo(m, nil, b)
+	resolvesTo(m, nil, i)
+	resolvesTo(m, nil, str)
+	resolvesTo(s, nil, b)
+	resolvesTo(s, nil, i)
+	resolvesTo(s, nil, str)
 
 	// Other values are only addressable by their hashes.
-	assertPathResolvesTo(assert, i, m, NewPath().AddHashIndex(br.Hash()))
-	assertPathStringResolvesTo(assert, i, m, hashStr(br))
-	assertPathResolvesTo(assert, lr, m, NewPath().AddHashIndex(l.Hash()))
-	assertPathStringResolvesTo(assert, lr, m, hashStr(l))
-	assertPathResolvesTo(assert, b, m, NewPath().AddHashIndex(lr.Hash()))
-	assertPathStringResolvesTo(assert, b, m, hashStr(lr))
+
+	resolvesTo(m, i, br)
+	resolvesTo(m, lr, l)
+	resolvesTo(m, b, lr)
+	resolvesTo(s, br, br)
+	resolvesTo(s, l, l)
+	resolvesTo(s, lr, lr)
 
 	// Lists cannot be addressed by hashes, obviously.
-	assertPathResolvesTo(assert, nil, l, NewPath().AddHashIndex(i.Hash()))
-	assertPathStringResolvesTo(assert, nil, l, hashStr(i))
+	resolvesTo(l, nil, i)
 }
 
-func TestPathHashIndexOfSingletonMap(t *testing.T) {
+func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	// This test is to make sure we don't accidentally return |b| if it's the only element.
 	assert := assert.New(t)
+
+	resolvesToNil := func(col, val Value) {
+		assertPathResolvesTo(assert, nil, col, NewPath().AddHashIndex(val.Hash()))
+		assertPathStringResolvesTo(assert, nil, col, fmt.Sprintf("[#%s]", val.Hash()))
+	}
+
 	b := Bool(true)
-	m := NewMap(b, b)
-	assertPathResolvesTo(assert, nil, m, NewPath().AddHashIndex(b.Hash()))
+	resolvesToNil(NewMap(b, b), b)
+	resolvesToNil(NewSet(b), b)
 }
 
 func TestPathMulti(t *testing.T) {

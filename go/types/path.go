@@ -180,22 +180,30 @@ func newHashIndexPart(h hash.Hash) hashIndexPart {
 }
 
 func (hip hashIndexPart) Resolve(v Value) (res Value) {
-	m, ok := v.(Map)
-	if !ok {
+	var seq orderedSequence
+	var getCurrentValue func(cur *sequenceCursor) Value
+
+	switch v := v.(type) {
+	case Set:
+		seq = v.seq
+		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(Value) }
+	case Map:
+		seq = v.seq
+		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).value }
+	default:
 		return nil
 	}
 
-	cur := newCursorAt(m.seq, orderedKeyFromHash(hip.h), false, false)
+	cur := newCursorAt(seq, orderedKeyFromHash(hip.h), false, false)
 	if !cur.valid() {
 		return nil
 	}
 
-	entry := cur.current().(mapEntry)
-	if entry.key.Hash() != hip.h {
+	if getCurrentKey(cur).h != hip.h {
 		return nil
 	}
 
-	return entry.value
+	return getCurrentValue(cur)
 }
 
 func (hip hashIndexPart) String() string {
