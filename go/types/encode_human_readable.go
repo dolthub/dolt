@@ -6,7 +6,6 @@ package types
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"strconv"
@@ -54,6 +53,31 @@ func (w *hrsWriter) newLine() {
 	w.lineLength = 0
 }
 
+// hexWriter is used to write blob byte data as "00 01 ... 0f\n10 11 .."
+// hexWriter is an io.Writer that writes to an underlying hrsWriter.
+type hexWriter struct {
+	hrs   *hrsWriter
+	count uint
+}
+
+func (w *hexWriter) Write(p []byte) (n int, err error) {
+	for _, v := range p {
+		if w.count == 16 {
+			w.hrs.newLine()
+			w.count = 0
+		} else if w.count != 0 {
+			w.hrs.write(" ")
+		}
+		if v < 0x10 {
+			w.hrs.write("0")
+		}
+		w.hrs.write(strconv.FormatUint(uint64(v), 16))
+		n++
+		w.count++
+	}
+	return
+}
+
 func (w *hrsWriter) Write(v Value) {
 	switch v.Type().Kind() {
 	case BoolKind:
@@ -67,9 +91,7 @@ func (w *hrsWriter) Write(v Value) {
 	case BlobKind:
 		w.maybeWriteIndentation()
 		blob := v.(Blob)
-		// TODO: Use RawStdEncoding
-		encoder := base64.NewEncoder(base64.StdEncoding, w.w)
-		defer encoder.Close()
+		encoder := &hexWriter{hrs: w}
 		_, w.err = io.Copy(encoder, blob.Reader())
 
 	case ListKind:
