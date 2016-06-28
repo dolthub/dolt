@@ -24,7 +24,7 @@ func newOpCache(vrw ValueReadWriter) *opCache {
 		Comparer:               opCacheComparer{},
 		OpenFilesCacheCapacity: 24,
 		NoSync:                 true,    // We don't need this data to be durable. LDB is acting as temporary storage that can be larger than main memory.
-		WriteBuffer:            1 << 28, // 256MiB
+		WriteBuffer:            1 << 27, // 128MiB
 	})
 	d.Chk.NoError(err, "opening put cache in %s", dir)
 	return &opCache{ops: db, dbDir: dir, vrw: vrw}

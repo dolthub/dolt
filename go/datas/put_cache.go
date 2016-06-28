@@ -29,7 +29,7 @@ func newOrderedChunkCache() *orderedChunkCache {
 		Filter:                 filter.NewBloomFilter(10), // 10 bits/key
 		OpenFilesCacheCapacity: 24,
 		NoSync:                 true,    // We dont need this data to be durable. LDB is acting as sorting temporary storage that can be larger than main memory.
-		WriteBuffer:            1 << 28, // 256MiB
+		WriteBuffer:            1 << 27, // 128MiB
 	})
 	d.Chk.NoError(err, "opening put cache in %s", dir)
 	return &orderedChunkCache{
