@@ -8,13 +8,30 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-//
-// Returns a 3-tuple [added, removed, modified] sorted keys.
-//
-func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added []Value, removed []Value, modified []Value) {
-	added = make([]Value, 0)
-	removed = make([]Value, 0)
-	modified = make([]Value, 0)
+type DiffChangeType uint8
+
+const (
+	DiffChangeAdded DiffChangeType = iota
+	DiffChangeRemoved
+	DiffChangeModified
+)
+
+type ValueChanged struct {
+	ChangeType DiffChangeType
+	V          Value
+}
+
+func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change ValueChanged) error {
+	select {
+	case changes <- change:
+	case <-closeChan:
+		close(changes)
+		return ChangeChanClosedErr
+	}
+	return nil
+}
+
+func orderedSequenceDiff(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
 	lastCur := newCursorAt(last, emptyKey, false, false)
 	currentCur := newCursorAt(current, emptyKey, false, false)
 
@@ -26,13 +43,19 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added [
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(lastKey) {
-				added = append(added, currentKey.v)
+				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}); err != nil {
+					return err
+				}
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				removed = append(removed, lastKey.v)
+				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}); err != nil {
+					return err
+				}
 				lastCur.advance()
 			} else {
-				modified = append(modified, lastKey.v)
+				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}); err != nil {
+					return err
+				}
 				lastCur.advance()
 				currentCur.advance()
 			}
@@ -40,15 +63,19 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence) (added [
 	}
 
 	for lastCur.valid() {
-		removed = append(removed, getCurrentKey(lastCur).v)
+		if err := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}); err != nil {
+			return err
+		}
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		added = append(added, getCurrentKey(currentCur).v)
+		if err := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}); err != nil {
+			return err
+		}
 		currentCur.advance()
 	}
-
-	return added, removed, modified
+	close(changes)
+	return nil
 }
 
 /**

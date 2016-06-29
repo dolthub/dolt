@@ -49,10 +49,6 @@ func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
 func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified []Value) {
 	// Note: this could be use tm.toMap/last.toMap and then tmMap.Diff(lastMap) but the
 	// purpose of this method is to be redundant.
-	added = make([]Value, 0)
-	removed = make([]Value, 0)
-	modified = make([]Value, 0)
-
 	if len(tm.entries) == 0 && len(last.entries) == 0 {
 		return // nothing changed
 	}
@@ -276,8 +272,23 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 	})
 }
 
+func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value) {
+	changes := make(chan ValueChanged)
+	m1.Diff(m2, changes, nil)
+	for change := range changes {
+		if change.ChangeType == DiffChangeAdded {
+			added = append(added, change.V)
+		} else if change.ChangeType == DiffChangeRemoved {
+			removed = append(removed, change.V)
+		} else {
+			modified = append(modified, change.V)
+		}
+	}
+	return
+}
+
 func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int, numRemovesExpected int, numModifiedExpected int) (added []Value, removed []Value, modified []Value) {
-	added, removed, modified = m1.Diff(m2)
+	added, removed, modified = accumulateMapDiffChanges(m1, m2)
 	assert.Equal(numAddsExpected, len(added), "num added is not as expected")
 	assert.Equal(numRemovesExpected, len(removed), "num removed is not as expected")
 	assert.Equal(numModifiedExpected, len(modified), "num modified is not as expected")
@@ -302,7 +313,8 @@ func TestMapDiff(t *testing.T) {
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap()
 	map2 := testMap2.toMap()
-	mapDiffAdded, mapDiffRemoved, mapDiffModified := map1.Diff(map2)
+
+	mapDiffAdded, mapDiffRemoved, mapDiffModified := accumulateMapDiffChanges(map1, map2)
 	assert.Equal(t, testMapAdded, mapDiffAdded, "testMap.diff != map.diff")
 	assert.Equal(t, testMapRemoved, mapDiffRemoved, "testMap.diff != map.diff")
 	assert.Equal(t, testMapModified, mapDiffModified, "testMap.diff != map.diff")

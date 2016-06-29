@@ -36,6 +36,23 @@ func newDiffTestSuite(from1, to1, by1, from2, to2, by2, numAddsExpected, numRemo
 	}
 }
 
+func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence) (added []Value, removed []Value, modified []Value) {
+	changes := make(chan ValueChanged)
+	closeChan := make(chan struct{})
+
+	go orderedSequenceDiff(o1, o2, changes, closeChan)
+	for change := range changes {
+		if change.ChangeType == DiffChangeAdded {
+			added = append(added, change.V)
+		} else if change.ChangeType == DiffChangeRemoved {
+			removed = append(removed, change.V)
+		} else {
+			modified = append(modified, change.V)
+		}
+	}
+	return
+}
+
 func (suite *diffTestSuite) TestDiff() {
 	type valFn func(int, int, int) []Value
 	type colFn func([]Value) Collection
@@ -52,7 +69,7 @@ func (suite *diffTestSuite) TestDiff() {
 	runTest := func(name string, vf valFn, cf colFn) {
 		col1 := cf(vf(suite.from1, suite.to1, suite.by1))
 		col2 := cf(vf(suite.from2, suite.to2, suite.by2))
-		suite.added, suite.removed, suite.modified = orderedSequenceDiff(
+		suite.added, suite.removed, suite.modified = accumulateOrderedSequenceDiffChanges(
 			col1.sequence().(orderedSequence),
 			col2.sequence().(orderedSequence))
 		suite.Equal(suite.numAddsExpected, len(suite.added), "test %s: num added is not as expected", name)

@@ -37,8 +37,6 @@ func (ts testSet) Has(key Value) bool {
 func (ts testSet) Diff(last testSet) (added []Value, removed []Value) {
 	// Note: this could be use ts.toSet/last.toSet and then tsSet.Diff(lastSet) but the
 	// purpose of this method is to be redundant.
-	added = make([]Value, 0)
-	removed = make([]Value, 0)
 	if len(ts) == 0 && len(last) == 0 {
 		return // nothing changed
 	}
@@ -194,8 +192,21 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 	})
 }
 
+func accumulateSetDiffChanges(s1, s2 Set) (added []Value, removed []Value) {
+	changes := make(chan ValueChanged)
+	s1.Diff(s2, changes, nil)
+	for change := range changes {
+		if change.ChangeType == DiffChangeAdded {
+			added = append(added, change.V)
+		} else if change.ChangeType == DiffChangeRemoved {
+			removed = append(removed, change.V)
+		}
+	}
+	return
+}
+
 func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int, numRemovesExpected int) (added []Value, removed []Value) {
-	added, removed = s1.Diff(s2)
+	added, removed = accumulateSetDiffChanges(s1, s2)
 	assert.Equal(numAddsExpected, len(added), "num added is not as expected")
 	assert.Equal(numRemovesExpected, len(removed), "num removed is not as expected")
 

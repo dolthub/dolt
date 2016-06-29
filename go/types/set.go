@@ -37,11 +37,10 @@ func NewSet(v ...Value) Set {
 	return newSet(seq.Done().(orderedSequence))
 }
 
-func (s Set) Diff(last Set) (added []Value, removed []Value) {
-	// Set diff shouldn't return modified since it's not possible a value in a set of "changes".
-	// Elements can only enter and exit a set
-	added, removed, _ = orderedSequenceDiff(last.sequence().(orderedSequence), s.sequence().(orderedSequence))
-	return
+func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	go func() {
+		orderedSequenceDiff(last.sequence().(orderedSequence), s.sequence().(orderedSequence), changes, closeChan)
+	}()
 }
 
 // Collection interface
