@@ -27,6 +27,10 @@ func NewPath() Path {
 	return Path{}
 }
 
+func ParsePath(path string) (Path, error) {
+	return NewPath().AddPath(path)
+}
+
 func (p Path) AddField(name string) Path {
 	return p.appendPart(newFieldPart(name))
 }
@@ -40,9 +44,9 @@ func (p Path) AddHashIndex(h hash.Hash) Path {
 }
 
 func (p Path) appendPart(part pathPart) Path {
-	p1 := make(Path, len(p), len(p)+1)
-	copy(p1, p)
-	return append(p1, part)
+	p2 := make([]pathPart, len(p), len(p)+1)
+	copy(p2, p)
+	return append(p2, part)
 }
 
 func (p Path) AddPath(str string) (Path, error) {
@@ -64,7 +68,7 @@ func (p Path) addPath(str string) (Path, error) {
 	case '.':
 		idx := fieldNameComponentRe.FindIndex([]byte(tail))
 		if idx == nil {
-			return Path{}, errors.New("Invalid field " + tail)
+			return Path{}, errors.New("Invalid field: " + tail)
 		}
 
 		return p.AddField(tail[:idx[1]]).addPath(tail[idx[1]:])
@@ -90,7 +94,7 @@ func (p Path) addPath(str string) (Path, error) {
 		return Path{}, errors.New("] is missing opening [")
 
 	default:
-		return Path{}, errors.New(fmt.Sprintf("%c is not a valid operator", op))
+		return Path{}, fmt.Errorf("Invalid operator: %c", op)
 	}
 }
 
@@ -107,11 +111,10 @@ func (p Path) Resolve(v Value) (resolved Value) {
 }
 
 func (p Path) String() string {
-	strs := make([]string, len(p))
+	strs := make([]string, 0, len(p))
 	for _, part := range p {
 		strs = append(strs, part.String())
 	}
-
 	return strings.Join(strs, "")
 }
 
@@ -257,7 +260,7 @@ Switch:
 			hashStr := idxStr[1:]
 			h, _ = hash.MaybeParse(hashStr)
 			if h.IsEmpty() {
-				err = errors.New("Invalid hash " + hashStr)
+				err = errors.New("Invalid hash: " + hashStr)
 			}
 		} else if idxStr == "true" {
 			idx = Bool(true)
@@ -267,7 +270,7 @@ Switch:
 			// Should we be more strict here? ParseFloat allows leading and trailing dots, and exponents.
 			idx = Number(i)
 		} else {
-			err = errors.New("Invalid index " + idxStr)
+			err = errors.New("Invalid index: " + idxStr)
 		}
 	}
 

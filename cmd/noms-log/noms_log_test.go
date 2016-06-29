@@ -40,9 +40,7 @@ type nomsShowTestSuite struct {
 }
 
 func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
-	sp, err := spec.ParseDatasetSpec(str)
-	s.NoError(err)
-	ds, err := sp.Dataset()
+	ds, err := spec.GetDataset(str)
 	s.NoError(err)
 	ds, err = ds.Commit(types.Number(i))
 	s.NoError(err)
@@ -54,11 +52,9 @@ func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
 func (s *nomsShowTestSuite) TestNomsLog() {
 	datasetName := "dsTest"
 	str := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	sp, err := spec.ParseDatasetSpec(str)
+	ds, err := spec.GetDataset(str)
 	s.NoError(err)
 
-	ds, err := sp.Dataset()
-	s.NoError(err)
 	ds.Database().Close()
 	s.Panics(func() { s.Run(main, []string{str}) })
 
@@ -85,9 +81,7 @@ func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) 
 func (s *nomsShowTestSuite) TestNArg() {
 	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
-	dbSpec, err := spec.ParseDatabaseSpec(str)
-	s.NoError(err)
-	db, err := dbSpec.Database()
+	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
 	ds := dataset.NewDataset(db, dsName)
@@ -110,7 +104,7 @@ func (s *nomsShowTestSuite) TestNArg() {
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 
-	vSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, h3.String())
+	vSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "#"+h3.String())
 	s.NotContains(s.Run(main, []string{"-n=1", vSpec}), h1.String())
 	res = s.Run(main, []string{"-n=0", vSpec})
 	s.Contains(res, h3.String())
@@ -120,9 +114,7 @@ func (s *nomsShowTestSuite) TestNArg() {
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
 	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := spec.ParseDatabaseSpec(str)
-	s.NoError(err)
-	db, err := dbSpec.Database()
+	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
 	b1 := dataset.NewDataset(db, "b1")
@@ -173,9 +165,7 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 
 func (s *nomsShowTestSuite) TestNomsGraph2() {
 	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := spec.ParseDatabaseSpec(str)
-	s.NoError(err)
-	db, err := dbSpec.Database()
+	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
 	ba := dataset.NewDataset(db, "ba")
@@ -204,9 +194,7 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 
 func (s *nomsShowTestSuite) TestNomsGraph3() {
 	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := spec.ParseDatabaseSpec(str)
-	s.NoError(err)
-	db, err := dbSpec.Database()
+	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
 	w := dataset.NewDataset(db, "w")
@@ -253,9 +241,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	}
 
 	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
-	dbSpec, err := spec.ParseDatabaseSpec(str)
-	s.NoError(err)
-	db, err := dbSpec.Database()
+	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
 	t := dataset.NewDataset(db, "truncate")

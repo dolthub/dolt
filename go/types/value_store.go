@@ -74,6 +74,9 @@ func (lvs *ValueStore) BatchStore() BatchStore {
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
 func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
 	if v, ok := lvs.valueCache.Get(r); ok {
+		if v == nil {
+			return nil
+		}
 		return v.(Value)
 	}
 	chunk := lvs.bs.Get(r)

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -39,15 +38,8 @@ func main() {
 		return
 	}
 
-	spec, err := spec.ParseDatabaseSpec(flag.Arg(0))
+	cs, err := spec.GetChunkStore(flag.Arg(0))
 	util.CheckError(err)
-	if spec.Protocol != "mem" && spec.Protocol != "ldb" {
-		err := errors.New("Illegal database spec for server, must be 'mem' or 'ldb'")
-		util.CheckError(err)
-	}
-	cs, err := spec.ChunkStore()
-	util.CheckError(err)
-
 	server := datas.NewRemoteDatabaseServer(cs, *port)
 
 	// Shutdown server gracefully so that profile may be written

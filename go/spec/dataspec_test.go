@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -32,11 +31,11 @@ func TestLDBDatabase(t *testing.T) {
 	ds := datas.NewDatabase(cs)
 
 	s1 := types.String("A String")
-	s1Ref := ds.WriteValue(s1)
-	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, s1Ref))
+	s1Hash := ds.WriteValue(s1)
+	ds.Commit("testDs", datas.NewCommit().Set(datas.ValueField, s1Hash))
 	ds.Close()
 
-	sp, errRead := ParseDatabaseSpec(spec)
+	sp, errRead := parseDatabaseSpec(spec)
 	assert.NoError(errRead)
 	store, err := sp.Database()
 	assert.NoError(err)
@@ -49,7 +48,7 @@ func TestMemDatabase(t *testing.T) {
 	assert := assert.New(t)
 
 	spec := "mem"
-	sp, err := ParseDatabaseSpec(spec)
+	sp, err := parseDatabaseSpec(spec)
 	assert.NoError(err)
 	store, err := sp.Database()
 	assert.NoError(err)
@@ -63,7 +62,7 @@ func TestMemDataset(t *testing.T) {
 	assert := assert.New(t)
 
 	spec := "mem::datasetTest"
-	sp1, err := ParseDatasetSpec(spec)
+	sp1, err := parseDatasetSpec(spec)
 	assert.NoError(err)
 	dataset1, err := sp1.Dataset()
 	assert.NoError(err)
@@ -90,7 +89,7 @@ func TestLDBDataset(t *testing.T) {
 	ds.Close()
 
 	spec := fmt.Sprintf("ldb:%s::%s", ldbPath, id)
-	sp, err := ParseDatasetSpec(spec)
+	sp, err := parseDatasetSpec(spec)
 	assert.NoError(err)
 	dataset, err := sp.Dataset()
 	assert.NoError(err)
@@ -117,7 +116,7 @@ func TestLDBObject(t *testing.T) {
 
 	spec2 := fmt.Sprintf("ldb:%s::%s", ldbpath, dsId)
 	assert.NoError(err)
-	sp1, err := ParseDatasetSpec(spec2)
+	sp1, err := parseDatasetSpec(spec2)
 	assert.NoError(err)
 	dataset2, err := sp1.Dataset()
 	assert.NoError(err)
@@ -126,14 +125,16 @@ func TestLDBObject(t *testing.T) {
 	assert.Equal(s1, s2)
 	dataset2.Database().Close()
 
-	spec3 := fmt.Sprintf("ldb:%s::%s", ldbpath, s1.Hash().String())
-	sp3, err := ParsePathSpec(spec3)
+	spec3 := fmt.Sprintf("ldb:%s::#%s", ldbpath, s1.Hash().String())
+	sp3, err := parsePathSpec(spec3)
+	assert.NoError(err)
 	database, v3, err := sp3.Value()
+	assert.NoError(err)
 	assert.Equal(s1, v3)
 	database.Close()
 }
 
-func TestReadRef(t *testing.T) {
+func TestReadHash(t *testing.T) {
 	assert := assert.New(t)
 
 	dir, err := ioutil.TempDir(os.TempDir(), "")
@@ -150,8 +151,8 @@ func TestReadRef(t *testing.T) {
 	r1 := dataset1.Head().Hash()
 	dataset1.Database().Close()
 
-	spec2 := fmt.Sprintf("ldb:%s::%s", ldbPath, r1.String())
-	sp2, err := ParsePathSpec(spec2)
+	spec2 := fmt.Sprintf("ldb:%s::#%s", ldbPath, r1.String())
+	sp2, err := parsePathSpec(spec2)
 	assert.NoError(err)
 	database, v2, err := sp2.Value()
 	assert.NoError(err)
@@ -163,108 +164,107 @@ func TestReadRef(t *testing.T) {
 func TestDatabaseSpecs(t *testing.T) {
 	assert := assert.New(t)
 
-	badSpecs := []string{"mem:stuff", "mem:", "http:", "https:", "random:", "random:random", "http://some.com/wi::rd/path", "/file/ba:d"}
+	badSpecs := []string{"mem:stuff", "mem:", "http:", "https:", "random:", "random:random", "/file/ba:d"}
 	for _, spec := range badSpecs {
-		_, err := ParseDatabaseSpec(spec)
-		assert.Error(err)
+		_, err := parseDatabaseSpec(spec)
+		assert.Error(err, spec)
 	}
 
-	testCases := []map[string]string{
-		map[string]string{"spec": "http://localhost:8000", "scheme": "http", "path": "//localhost:8000"},
-		map[string]string{"spec": "http://localhost:8000/fff", "scheme": "http", "path": "//localhost:8000/fff"},
-		map[string]string{"spec": "https://local.attic.io/john/doe", "scheme": "https", "path": "//local.attic.io/john/doe"},
-		map[string]string{"spec": "ldb:/filesys/john/doe", "scheme": "ldb", "path": "/filesys/john/doe"},
-		map[string]string{"spec": "./john/doe", "scheme": "ldb", "path": "./john/doe"},
-		map[string]string{"spec": "john/doe", "scheme": "ldb", "path": "john/doe"},
-		map[string]string{"spec": "/john/doe", "scheme": "ldb", "path": "/john/doe"},
-		map[string]string{"spec": "mem", "scheme": "mem", "path": ""},
-		map[string]string{"spec": "http://server.com/john/doe?access_token=jane", "scheme": "http", "path": "//server.com/john/doe?access_token=jane", "accessToken": "jane"},
-		map[string]string{"spec": "https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "scheme": "https", "path": "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", "accessToken": "jane"},
+	type testCase struct {
+		spec, scheme, path, accessToken string
+	}
+
+	testCases := []testCase{
+		testCase{"http://localhost:8000", "http", "//localhost:8000", ""},
+		testCase{"http://localhost:8000/fff", "http", "//localhost:8000/fff", ""},
+		testCase{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe", ""},
+		testCase{"ldb:/filesys/john/doe", "ldb", "/filesys/john/doe", ""},
+		testCase{"./john/doe", "ldb", "./john/doe", ""},
+		testCase{"john/doe", "ldb", "john/doe", ""},
+		testCase{"/john/doe", "ldb", "/john/doe", ""},
+		testCase{"mem", "mem", "", ""},
+		testCase{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane", "jane"},
+		testCase{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", "jane"},
 	}
 
 	for _, tc := range testCases {
-		dbSpec, err := ParseDatabaseSpec(tc["spec"])
+		dbSpec, err := parseDatabaseSpec(tc.spec)
 		assert.NoError(err)
-		assert.Equal(DatabaseSpec{Protocol: tc["scheme"], Path: tc["path"], accessToken: tc["accessToken"]}, dbSpec)
+		assert.Equal(databaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}, dbSpec)
 	}
 }
 
 func TestDatasetSpecs(t *testing.T) {
 	assert := assert.New(t)
-	badSpecs := []string{"mem", "mem:", "mem:::ds", "http", "http:", "http://foo", "monkey", "monkey:balls", "http::dsname", "mem:/a/bogus/path:dsname", "http://localhost:8000/one"}
+	badSpecs := []string{"mem", "mem:", "mem:::ds", "http", "http:", "http://foo", "monkey", "monkey:balls", "mem:/a/bogus/path:dsname", "http://localhost:8000/one"}
 
 	for _, spec := range badSpecs {
-		_, err := ParseDatasetSpec(spec)
-		assert.Error(err)
+		_, err := parseDatasetSpec(spec)
+		assert.Error(err, spec)
 	}
 
 	invalidDatasetNames := []string{" ", "", "$", "#", ":", "\n", "💩"}
 	for _, s := range invalidDatasetNames {
-		_, err := ParseDatasetSpec("mem::" + s)
+		_, err := parseDatasetSpec("mem::" + s)
 		assert.Error(err)
 	}
 
 	validDatasetNames := []string{"a", "Z", "0", "/", "-", "_"}
 	for _, s := range validDatasetNames {
-		_, err := ParseDatasetSpec("mem::" + s)
+		_, err := parseDatasetSpec("mem::" + s)
 		assert.NoError(err)
 	}
 
-	testCases := []map[string]string{
-		map[string]string{"spec": "http://localhost:8000::ds1", "scheme": "http", "path": "//localhost:8000", "ds": "ds1"},
-		map[string]string{"spec": "http://localhost:8000/john/doe/::ds2", "scheme": "http", "path": "//localhost:8000/john/doe/", "ds": "ds2"},
-		map[string]string{"spec": "https://local.attic.io/john/doe::ds3", "scheme": "https", "path": "//local.attic.io/john/doe", "ds": "ds3"},
-		map[string]string{"spec": "http://local.attic.io/john/doe::ds1", "scheme": "http", "path": "//local.attic.io/john/doe", "ds": "ds1"},
-		map[string]string{"spec": "ldb:/filesys/john/doe::ds/one", "scheme": "ldb", "path": "/filesys/john/doe", "ds": "ds/one"},
-		map[string]string{"spec": "http://localhost:8000/john/doe?access_token=abc::ds/one", "scheme": "http", "path": "//localhost:8000/john/doe?access_token=abc", "accessToken": "abc", "ds": "ds/one"},
-		map[string]string{"spec": "https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "scheme": "https", "path": "//localhost:8000?qp1=x&access_token=abc&qp2=y", "accessToken": "abc", "ds": "ds/one"},
+	type testCase struct {
+		spec, scheme, path, ds, accessToken string
+	}
+
+	testCases := []testCase{
+		testCase{"http://localhost:8000::ds1", "http", "//localhost:8000", "ds1", ""},
+		testCase{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2", ""},
+		testCase{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3", ""},
+		testCase{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1", ""},
+		testCase{"ldb:/filesys/john/doe::ds/one", "ldb", "/filesys/john/doe", "ds/one", ""},
+		testCase{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one", "abc"},
+		testCase{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one", "abc"},
 	}
 
 	for _, tc := range testCases {
-		dsSpec, err := ParseDatasetSpec(tc["spec"])
+		dsSpec, err := parseDatasetSpec(tc.spec)
 		assert.NoError(err)
-		dbSpec1 := DatabaseSpec{Protocol: tc["scheme"], Path: tc["path"], accessToken: tc["accessToken"]}
-		assert.Equal(DatasetSpec{DbSpec: dbSpec1, DatasetName: tc["ds"]}, dsSpec)
-	}
-}
-
-func TestRefSpec(t *testing.T) {
-	assert := assert.New(t)
-
-	testCases := []map[string]string{
-		map[string]string{"spec": "http://local.attic.io/john/doe::sha1-0123456789012345678901234567890123456789", "scheme": "http", "path": "//local.attic.io/john/doe", "ref": "sha1-0123456789012345678901234567890123456789"},
-		map[string]string{"spec": "ldb:/filesys/john/doe::sha1-0123456789012345678901234567890123456789", "scheme": "ldb", "path": "/filesys/john/doe", "ref": "sha1-0123456789012345678901234567890123456789"},
-		map[string]string{"spec": "mem::sha1-0123456789012345678901234567890123456789", "scheme": "mem", "ref": "sha1-0123456789012345678901234567890123456789"},
-	}
-
-	for _, tc := range testCases {
-		refSpec, err := ParseRefSpec(tc["spec"])
-		assert.NoError(err)
-		dbSpec1 := DatabaseSpec{Protocol: tc["scheme"], Path: tc["path"], accessToken: tc["accessToken"]}
-		assert.Equal(RefSpec{DbSpec: dbSpec1, Ref: hash.Parse(tc["ref"])}, refSpec)
+		dbSpec1 := databaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}
+		assert.Equal(datasetSpec{DbSpec: dbSpec1, DatasetName: tc.ds}, dsSpec)
 	}
 }
 
 func TestPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	testCases := []map[string]string{
-		map[string]string{"spec": "http://local.attic.io/john/doe::sha1-0123456789012345678901234567890123456789", "scheme": "http", "path": "//local.attic.io/john/doe", "ref": "sha1-0123456789012345678901234567890123456789"},
-		map[string]string{"spec": "http://localhost:8000/john/doe/::ds1", "scheme": "http", "path": "//localhost:8000/john/doe/", "ds": "ds1"},
+	badSpecs := []string{"mem::#", "mem::#s", "mem::#sha1-foobarbaz", "mem::#sha1-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}
+	for _, bs := range badSpecs {
+		_, err := parsePathSpec(bs)
+		assert.Error(err)
+	}
+
+	type testCase struct {
+		spec, scheme, dbPath, pathStr string
+	}
+
+	testCases := []testCase{
+		testCase{"http://local.attic.io/john/doe::#sha1-0123456789012345678901234567890123456789", "http", "//local.attic.io/john/doe", "#sha1-0123456789012345678901234567890123456789"},
+		testCase{"ldb:/filesys/john/doe::#sha1-0123456789012345678901234567890123456789", "ldb", "/filesys/john/doe", "#sha1-0123456789012345678901234567890123456789"},
+		testCase{"mem::#sha1-0123456789012345678901234567890123456789", "mem", "", "#sha1-0123456789012345678901234567890123456789"},
+		testCase{"http://local.attic.io/john/doe::#sha1-0123456789012345678901234567890123456789", "http", "//local.attic.io/john/doe", "#sha1-0123456789012345678901234567890123456789"},
+		testCase{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
 	}
 
 	for _, tc := range testCases {
-		pathSpec, err := ParsePathSpec(tc["spec"])
+		dbSpec := databaseSpec{Protocol: tc.scheme, Path: tc.dbPath, accessToken: ""}
+		path, err := NewAbsolutePath(tc.pathStr)
 		assert.NoError(err)
-		dbSpec1 := DatabaseSpec{Protocol: tc["scheme"], Path: tc["path"], accessToken: tc["accessToken"]}
-		if tc["ref"] != "" {
-			assert.Equal(&RefSpec{DbSpec: dbSpec1, Ref: hash.Parse(tc["ref"])}, pathSpec.(*RefSpec))
-		} else {
-			assert.Equal(&DatasetSpec{DbSpec: dbSpec1, DatasetName: tc["ds"]}, pathSpec.(*DatasetSpec))
-		}
+		expected := pathSpec{dbSpec, path}
+		actual, err := parsePathSpec(tc.spec)
+		assert.NoError(err)
+		assert.Equal(expected, actual)
 	}
-
-	_, err := ParsePathSpec("http://local.attic.io")
-	assert.Error(err)
-
 }

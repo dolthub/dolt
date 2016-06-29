@@ -14,25 +14,39 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 )
 
 var (
-	databaseRegex = regexp.MustCompile("^([^:]+)(:.+)?$")
-	pathRegex     = regexp.MustCompile(`^(.+)::([a-zA-Z0-9\-_/]+)$`)
+	datasetRe = regexp.MustCompile("^" + dataset.DatasetRe.String() + "$")
 )
 
 func GetDatabase(str string) (datas.Database, error) {
-	sp, err := ParseDatabaseSpec(str)
+	sp, err := parseDatabaseSpec(str)
 	if err != nil {
 		return nil, err
 	}
 	return sp.Database()
 }
 
+func GetChunkStore(str string) (chunks.ChunkStore, error) {
+	sp, err := parseDatabaseSpec(str)
+	if err != nil {
+		return nil, err
+	}
+
+	switch sp.Protocol {
+	case "ldb":
+		return chunks.NewLevelDBStoreUseFlags(sp.Path, ""), nil
+	case "mem":
+		return chunks.NewMemoryStore(), nil
+	default:
+		return nil, fmt.Errorf("Unable to create chunkstore for protocol: %s", str)
+	}
+}
+
 func GetDataset(str string) (dataset.Dataset, error) {
-	sp, err := ParseDatasetSpec(str)
+	sp, err := parseDatasetSpec(str)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -40,120 +54,117 @@ func GetDataset(str string) (dataset.Dataset, error) {
 }
 
 func GetPath(str string) (datas.Database, types.Value, error) {
-	sp, err := ParsePathSpec(str)
+	sp, err := parsePathSpec(str)
 	if err != nil {
 		return nil, nil, err
 	}
 	return sp.Value()
 }
 
-type DatabaseSpec struct {
+type databaseSpec struct {
 	Protocol    string
 	Path        string
 	accessToken string
 }
 
-type DatasetSpec struct {
-	DbSpec      DatabaseSpec
+type datasetSpec struct {
+	DbSpec      databaseSpec
 	DatasetName string
 }
 
-type RefSpec struct {
-	DbSpec DatabaseSpec
-	Ref    hash.Hash
+type pathSpec struct {
+	DbSpec databaseSpec
+	Path   AbsolutePath
 }
 
-type PathSpec interface {
-	Value() (datas.Database, types.Value, error)
-}
+func parseDatabaseSpec(spec string) (databaseSpec, error) {
+	ldbDatabaseSpec := func(path string) (databaseSpec, error) {
+		if len(path) == 0 {
+			return databaseSpec{}, fmt.Errorf("Empty file system path")
+		}
+		return databaseSpec{Protocol: "ldb", Path: path}, nil
+	}
 
-func ParseDatabaseSpec(spec string) (DatabaseSpec, error) {
-	parts := databaseRegex.FindStringSubmatch(spec)
-	if len(parts) != 3 {
-		return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
+	parts := strings.SplitN(spec, ":", 2) // [protocol] [, path]?
+	protocol := parts[0]
+
+	// If there was no ":" then this is either a mem spec, or a filesystem path.
+	// This is ambiguous if the file system path is "mem" but that just means the path needs to be explicitly "ldb:mem".
+	if len(parts) == 1 {
+		if protocol == "mem" {
+			return databaseSpec{Protocol: "mem"}, nil
+		}
+		return ldbDatabaseSpec(protocol)
 	}
-	protocol, path := parts[1], parts[2]
-	if strings.Contains(path, "::") {
-		return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
-	}
+
+	path := parts[1]
+
 	switch protocol {
 	case "http", "https":
-		if strings.HasPrefix(path, ":") {
-			path = path[1:]
-		}
-		if len(path) == 0 {
-			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
-		}
-		u, err := url.Parse(protocol + ":" + path)
-		if err != nil {
-			return DatabaseSpec{}, fmt.Errorf("Invalid path for %s protocol, spec: %s\n", protocol, spec)
+		u, err := url.Parse(spec)
+		if err != nil || len(u.Host) == 0 {
+			return databaseSpec{}, fmt.Errorf("Invalid URL: %s", spec)
 		}
 		token := u.Query().Get("access_token")
-		return DatabaseSpec{Protocol: protocol, Path: path, accessToken: token}, nil
+		return databaseSpec{Protocol: protocol, Path: path, accessToken: token}, nil
+
 	case "ldb":
-		if strings.HasPrefix(path, ":") {
-			path = path[1:]
-		}
-		if len(path) == 0 {
-			return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
-		}
-		return DatabaseSpec{Protocol: protocol, Path: path}, nil
+		return ldbDatabaseSpec(path)
+
 	case "mem":
-		if len(path) > 0 && path != ":" {
-			return DatabaseSpec{}, fmt.Errorf("Invalid database spec (mem path must be empty): %s", spec)
-		}
-		return DatabaseSpec{Protocol: protocol, Path: ""}, nil
+		return databaseSpec{}, fmt.Errorf(`In-memory database must be specified as "mem", not "mem:%s"`, path)
+
 	default:
-		if len(path) != 0 {
-			return DatabaseSpec{}, fmt.Errorf("Invalid protocol for spec: %s", spec)
-		}
-		return DatabaseSpec{Protocol: "ldb", Path: protocol}, nil
+		return databaseSpec{}, fmt.Errorf("Invalid database protocol: %s", spec)
 	}
-	return DatabaseSpec{}, fmt.Errorf("Invalid database spec: %s", spec)
 }
 
-func ParseDatasetSpec(spec string) (DatasetSpec, error) {
-	parts := pathRegex.FindStringSubmatch(spec)
-	if len(parts) != 3 {
-		return DatasetSpec{}, fmt.Errorf("Invalid dataset spec: %s", spec)
+func splitAndParseDatabaseSpec(spec string) (databaseSpec, string, error) {
+	parts := strings.SplitN(spec, "::", 2)
+	if len(parts) != 2 {
+		return databaseSpec{}, "", fmt.Errorf("Missing :: separator between database and dataset: %s", spec)
 	}
-	dbSpec, err := ParseDatabaseSpec(parts[1])
+
+	dbSpec, err := parseDatabaseSpec(parts[0])
 	if err != nil {
-		return DatasetSpec{}, err
+		return databaseSpec{}, "", err
 	}
-	return DatasetSpec{DbSpec: dbSpec, DatasetName: parts[2]}, nil
+
+	return dbSpec, parts[1], nil
 }
 
-func ParseRefSpec(spec string) (RefSpec, error) {
-	dspec, err := ParseDatasetSpec(spec)
+func parseDatasetSpec(spec string) (datasetSpec, error) {
+	dbSpec, dsName, err := splitAndParseDatabaseSpec(spec)
 	if err != nil {
-		return RefSpec{}, err
+		return datasetSpec{}, err
 	}
 
-	if r, ok := hash.MaybeParse(dspec.DatasetName); ok {
-		return RefSpec{DbSpec: dspec.DbSpec, Ref: r}, nil
+	if !datasetRe.MatchString(dsName) {
+		return datasetSpec{}, fmt.Errorf("Invalid dataset, must match %s: %s", dataset.DatasetRe.String(), dsName)
 	}
 
-	return RefSpec{}, fmt.Errorf("Invalid path spec: %s", spec)
+	return datasetSpec{dbSpec, dsName}, nil
 }
 
-func ParsePathSpec(spec string) (PathSpec, error) {
-	var pathSpec PathSpec
-	if rspec, err := ParseRefSpec(spec); err == nil {
-		pathSpec = &rspec
-	} else if dspec, err := ParseDatasetSpec(spec); err == nil {
-		pathSpec = &dspec
-	} else {
-		return nil, fmt.Errorf("Invalid path spec: %s", spec)
+func parsePathSpec(spec string) (pathSpec, error) {
+	dbSpec, pathStr, err := splitAndParseDatabaseSpec(spec)
+	if err != nil {
+		return pathSpec{}, err
 	}
-	return pathSpec, nil
+
+	path, err := NewAbsolutePath(pathStr)
+	if err != nil {
+		return pathSpec{}, err
+	}
+
+	return pathSpec{dbSpec, path}, nil
 }
 
-func (s DatabaseSpec) String() string {
+func (s databaseSpec) String() string {
 	return s.Protocol + ":" + s.Path
 }
 
-func (spec DatabaseSpec) Database() (ds datas.Database, err error) {
+func (spec databaseSpec) Database() (ds datas.Database, err error) {
 	switch spec.Protocol {
 	case "http", "https":
 		err = d.Unwrap(d.Try(func() {
@@ -171,20 +182,7 @@ func (spec DatabaseSpec) Database() (ds datas.Database, err error) {
 	return
 }
 
-func (spec DatabaseSpec) ChunkStore() (cs chunks.ChunkStore, err error) {
-	switch spec.Protocol {
-	case "ldb":
-		cs = chunks.NewLevelDBStoreUseFlags(spec.Path, "")
-	case "mem":
-		cs = chunks.NewMemoryStore()
-	default:
-		return nil, fmt.Errorf("Unable to create chunkstore for protocol: %s", spec)
-	}
-
-	return
-}
-
-func (spec DatasetSpec) Dataset() (dataset.Dataset, error) {
+func (spec datasetSpec) Dataset() (dataset.Dataset, error) {
 	store, err := spec.DbSpec.Database()
 	if err != nil {
 		return dataset.Dataset{}, err
@@ -193,11 +191,11 @@ func (spec DatasetSpec) Dataset() (dataset.Dataset, error) {
 	return dataset.NewDataset(store, spec.DatasetName), nil
 }
 
-func (s DatasetSpec) String() string {
+func (s datasetSpec) String() string {
 	return s.DbSpec.String() + "::" + s.DatasetName
 }
 
-func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
+func (spec datasetSpec) Value() (datas.Database, types.Value, error) {
 	dataset, err := spec.Dataset()
 	if err != nil {
 		return nil, nil, err
@@ -212,12 +210,14 @@ func (spec DatasetSpec) Value() (datas.Database, types.Value, error) {
 	return dataset.Database(), commit, nil
 }
 
-func (spec RefSpec) Value() (datas.Database, types.Value, error) {
-	db, err := spec.DbSpec.Database()
+func (spec pathSpec) Value() (db datas.Database, val types.Value, err error) {
+	db, err = spec.DbSpec.Database()
 	if err != nil {
-		return nil, nil, err
+		return
 	}
-	return db, db.ReadValue(spec.Ref), nil
+
+	val = spec.Path.Resolve(db)
+	return
 }
 
 func RegisterDatabaseFlags() {

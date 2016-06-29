@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/test_util"
@@ -31,40 +30,37 @@ const (
 	res5 = "struct Commit {\n  parents: Set<Ref<Cycle<0>>>,\n  value: Value,\n}({\n  parents: {\n    sha1-88ccdecaa410c101bfac396ed6a451aa14b5043b,\n  },\n  value: sha1-0ddf89c44a4ce4075714a4fc51d31a76e38f84ce,\n})\n"
 )
 
-func writeTestData(ds dataset.Dataset, value types.Value) types.Ref {
-	r1 := ds.Database().WriteValue(value)
-	ds, err := ds.Commit(r1)
-	d.Chk.NoError(err)
-	err = ds.Database().Close()
+func writeTestData(str string, value types.Value) types.Ref {
+	ds, err := spec.GetDataset(str)
 	d.Chk.NoError(err)
 
+	r1 := ds.Database().WriteValue(value)
+	ds, err = ds.Commit(r1)
+	d.Chk.NoError(err)
+
+	err = ds.Database().Close()
+	d.Chk.NoError(err)
 	return r1
 }
 
 func (s *nomsShowTestSuite) TestNomsShow() {
 	datasetName := "dsTest"
 	str := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	sp, err := spec.ParseDatasetSpec(str)
-	d.Chk.NoError(err)
-	ds, err := sp.Dataset()
-	d.Chk.NoError(err)
 
 	s1 := types.String("test string")
-	r := writeTestData(ds, s1)
+	r := writeTestData(str, s1)
 	s.Equal(res1, s.Run(main, []string{str}))
 
-	spec1 := test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
-	s.Equal(res2, s.Run(main, []string{spec1}))
+	str1 := test_util.CreateValueSpecString("ldb", s.LdbDir, "#"+r.TargetHash().String())
+	s.Equal(res2, s.Run(main, []string{str1}))
 
-	ds, err = sp.Dataset()
 	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
-	r = writeTestData(ds, list)
+	r = writeTestData(str, list)
 	s.Equal(res3, s.Run(main, []string{str}))
 
-	spec1 = test_util.CreateValueSpecString("ldb", s.LdbDir, r.TargetHash().String())
-	s.Equal(res4, s.Run(main, []string{spec1}))
+	str1 = test_util.CreateValueSpecString("ldb", s.LdbDir, "#"+r.TargetHash().String())
+	s.Equal(res4, s.Run(main, []string{str1}))
 
-	ds, err = sp.Dataset()
-	_ = writeTestData(ds, s1)
+	_ = writeTestData(str, s1)
 	s.Equal(res5, s.Run(main, []string{str}))
 }

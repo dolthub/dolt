@@ -14,6 +14,9 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+// The length of a stringified hash.
+const StringLen = len("sha1-") + 2*sha1.Size
+
 var (
 	// In the future we will allow different digest types, so this will get more complicated. For now sha1 is fine.
 	pattern   = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
