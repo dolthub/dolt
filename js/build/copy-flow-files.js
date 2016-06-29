@@ -15,6 +15,7 @@ commander
     .usage('[options] <input-dir>')
     .option('-w, --watch', 'Watch input directory')
     .option('-d, --out-dir <output-dir>', 'Directory to copy files to')
+    .option('-v, --verbose', 'Print copied file names')
     .parse(process.argv);
 
 if (commander.args.length !== 1 || !commander.outDir) {
@@ -41,16 +42,22 @@ function done(err) {
 function copyFile(f) {
   pending++;
   const nn = newName(f);
-  process.stdout.write(`${f} -> ${nn}\n`);
+  log(`${f} -> ${nn}\n`);
   fs.copy(f, nn, {clobber: true}, done);
 }
 
 function removeFile(f) {
   pending++;
-  process.stdout.write(`${f} -> /dev/null\n`);
+  log(`${f} -> /dev/null\n`);
   fs.remove(f, done);
 }
 
 function newName(f) {
   return f.replace(new RegExp('^' + commander.args[0], 'g'), commander.outDir) + '.flow';
+}
+
+function log(s) {
+  if (commander.verbose) {
+    process.stdout.write(s);
+  }
 }

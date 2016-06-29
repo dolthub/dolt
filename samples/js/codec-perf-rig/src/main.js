@@ -9,8 +9,6 @@ import humanize from 'humanize';
 
 import {
   Blob,
-  Database,
-  Dataset,
   DatasetSpec,
   List,
   Map,
@@ -22,11 +20,11 @@ import {
   numberType,
   stringType,
 } from '@attic/noms';
+import type {Collection, Value} from '@attic/noms';
 
 const numberSize = 8;
 const strPrefix = 'i am a 32 bytes.....'; // TODO
 const stringSize = 32;
-const boolSize = 1;
 const structSize = 64;
 
 const args = argv
@@ -67,8 +65,8 @@ async function main(): Promise<void> {
   const valueFns = [createNumber, createString, createStruct];
 
   for (let i = 0; i < collectionTypes.length; i++) {
-    const colType = collectionTypes[i];
-    console.log(`Testing ${collectionTypes[i]}: \t\tbuild ${buildCount} \t\t\t\scan ${buildCount}\t\t\t\insert ${insertCount}`);
+    console.log(`Testing ${collectionTypes[i]}: \t\tbuild ${buildCount} \t\t\t\scan ${
+      buildCount}\t\t\t\insert ${insertCount}`);
 
     for (let j = 0; j < elementTypes.length; j++) {
       const elementType = elementTypes[j];
@@ -83,9 +81,9 @@ async function main(): Promise<void> {
       const buildDuration = Date.now() - t1;
 
       // Read
-      t1 = Date.now()
+      t1 = Date.now();
       col = notNull(await ds.head()).value;
-      await readFns[i](col)
+      await readFns[i](col);
       const readDuration = Date.now() - t1;
 
       // Build Incrementally
@@ -99,13 +97,14 @@ async function main(): Promise<void> {
       const buildSize = elementSize * buildCount;
       const incrSize = elementSize * insertCount;
 
-      console.log(`${elementType}\t\t${rate(buildDuration, buildSize)}\t\t${rate(readDuration, buildSize)}\t\t${rate(incrDuration, incrSize)}`);
+      console.log(`${elementType}\t\t${rate(buildDuration, buildSize)}\t\t${
+        rate(readDuration, buildSize)}\t\t${rate(incrDuration, incrSize)}`);
     }
     console.log();
   }
 
-  const blobSizeStr = humanize.numberFormat(blobSize/1000000);
-	console.log(`Testing Blob: \t\tbuild ${blobSizeStr} MB\t\t\tscan ${blobSizeStr} MB`);
+  const blobSizeStr = humanize.numberFormat(blobSize / 1000000);
+  console.log(`Testing Blob: \t\tbuild ${blobSizeStr} MB\t\t\tscan ${blobSizeStr} MB`);
 
   let ds = notNull(DatasetSpec.parse('mem::csv')).dataset();
   const blobBytes = makeBlobBytes(blobSize);
@@ -116,9 +115,9 @@ async function main(): Promise<void> {
   const buildDuration = Date.now() - t1;
 
   t1 = Date.now();
-  blob = (await ds.head()).value;
+  blob = notNull(await ds.head()).value;
   const reader = blob.getReader();
-  for (let next = await reader.read(); !next.done; next = await reader.read()) {}
+  for (let next = await reader.read(); !next.done; next = await reader.read());
   const readDuration = Date.now() - t1;
 
   console.log(`\t\t\t${rate(buildDuration, blobSize)}\t\t${rate(readDuration, blobSize)}\n`);
@@ -211,7 +210,7 @@ function readSet(l: Set): Promise<void> {
 function buildMap(count: number, createFn: createValueFn): Collection {
   const values = new Array(count);
   for (let i = 0; i < count * 2; i += 2) {
-    values[i] = [createFn(i), createFn(i+1)];
+    values[i] = [createFn(i), createFn(i + 1)];
   }
 
   return new Map(values);
@@ -220,7 +219,7 @@ function buildMap(count: number, createFn: createValueFn): Collection {
 async function buildMapIncrementally(count: number, createFn: createValueFn): Promise<Collection> {
   let m = new Map();
   for (let i = 0; i < count * 2; i += 2) {
-    m = await m.set(createFn(i), createFn(i+1));
+    m = await m.set(createFn(i), createFn(i + 1));
   }
 
   return m;

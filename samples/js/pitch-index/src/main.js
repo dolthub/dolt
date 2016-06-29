@@ -41,6 +41,7 @@ async function main(): Promise<void> {
   const pitchers = new Map();
   const inningPs = [];
   const playerPs = [];
+  invariant(hv instanceof NomsMap);
   await hv.forEach((ref: Ref<XMLElement>) => {
     // We force elemP to be 'any' here because the 'inning' entry and the 'Player' entry have
     // different types that involve multiple levels of nested maps OR strings.

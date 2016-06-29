@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "49.0.0",
+  "version": "49.1.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
@@ -44,7 +44,7 @@
     "test": "mocha --ui tdd --timeout=6000 --reporter dot --compilers js:babel-core/register src/*-test.js",
     "prepublish": "rm -rf dist/ && npm run compile && npm run copy-flow-files",
     "compile": "npm run compile-to-commonjs",
-    "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/",
+    "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/ > /dev/null",
     "copy-flow-files": "npm run copy-flow-files-commonjs",
     "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/"
   },
