@@ -9,12 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
+
+var annotationRe = regexp.MustCompile("^@([a-z]+)")
 
 type Path []pathPart
 
@@ -36,11 +39,19 @@ func (p Path) AddField(name string) Path {
 }
 
 func (p Path) AddIndex(idx Value) Path {
-	return p.appendPart(newIndexPart(idx))
+	return p.appendPart(newIndexPart(idx, false))
+}
+
+func (p Path) AddKeyIndex(idx Value) Path {
+	return p.appendPart(newIndexPart(idx, true))
 }
 
 func (p Path) AddHashIndex(h hash.Hash) Path {
-	return p.appendPart(newHashIndexPart(h))
+	return p.appendPart(newHashIndexPart(h, false))
+}
+
+func (p Path) AddHashKeyIndex(h hash.Hash) Path {
+	return p.appendPart(newHashIndexPart(h, true))
 }
 
 func (p Path) appendPart(part pathPart) Path {
@@ -83,10 +94,26 @@ func (p Path) addPath(str string) (Path, error) {
 			return Path{}, err
 		}
 
+		key := false
+		if annParts := annotationRe.FindStringSubmatch(rem); annParts != nil {
+			ann := annParts[1]
+			if ann != "key" {
+				return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
+			}
+			key = true
+			rem = rem[len(annParts[0]):]
+		}
+
 		d.Chk.NotEqual(idx == nil, h.IsEmpty())
-		if idx != nil {
+
+		switch {
+		case idx != nil && key:
+			return p.AddKeyIndex(idx).addPath(rem)
+		case idx != nil:
 			return p.AddIndex(idx).addPath(rem)
-		} else {
+		case key:
+			return p.AddHashKeyIndex(h).addPath(rem)
+		default:
 			return p.AddHashIndex(h).addPath(rem)
 		}
 
@@ -142,44 +169,58 @@ func (fp fieldPart) String() string {
 
 type indexPart struct {
 	idx Value
+	key bool
 }
 
-func newIndexPart(idx Value) indexPart {
+func newIndexPart(idx Value, key bool) indexPart {
 	k := idx.Type().Kind()
 	d.Chk.True(k == StringKind || k == BoolKind || k == NumberKind)
-	return indexPart{idx}
+	return indexPart{idx, key}
 }
 
 func (ip indexPart) Resolve(v Value) Value {
-	if l, ok := v.(List); ok {
+	switch v := v.(type) {
+	case List:
 		if n, ok := ip.idx.(Number); ok {
 			f := float64(n)
 			if f == math.Trunc(f) && f >= 0 {
 				u := uint64(f)
-				if u < l.Len() {
-					return l.Get(u)
+				if u < v.Len() {
+					if ip.key {
+						return ip.idx
+					}
+					return v.Get(u)
 				}
 			}
 		}
-	}
 
-	if m, ok := v.(Map); ok {
-		return m.Get(ip.idx)
+	case Map:
+		if ip.key && v.Has(ip.idx) {
+			return ip.idx
+		}
+		if !ip.key {
+			return v.Get(ip.idx)
+		}
 	}
 
 	return nil
 }
 
-func (ip indexPart) String() string {
-	return fmt.Sprintf("[%s]", EncodedValue(ip.idx))
+func (ip indexPart) String() (str string) {
+	ann := ""
+	if ip.key {
+		ann = "@key"
+	}
+	return fmt.Sprintf("[%s]%s", EncodedValue(ip.idx), ann)
 }
 
 type hashIndexPart struct {
-	h hash.Hash
+	h   hash.Hash
+	key bool
 }
 
-func newHashIndexPart(h hash.Hash) hashIndexPart {
-	return hashIndexPart{h}
+func newHashIndexPart(h hash.Hash, key bool) hashIndexPart {
+	return hashIndexPart{h, key}
 }
 
 func (hip hashIndexPart) Resolve(v Value) (res Value) {
@@ -188,11 +229,16 @@ func (hip hashIndexPart) Resolve(v Value) (res Value) {
 
 	switch v := v.(type) {
 	case Set:
+		// Unclear what the behavior should be if |hip.key| is true, but ignoring it for sets is arguably correct.
 		seq = v.seq
 		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(Value) }
 	case Map:
 		seq = v.seq
-		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).value }
+		if hip.key {
+			getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).key }
+		} else {
+			getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).value }
+		}
 	default:
 		return nil
 	}
@@ -210,7 +256,11 @@ func (hip hashIndexPart) Resolve(v Value) (res Value) {
 }
 
 func (hip hashIndexPart) String() string {
-	return fmt.Sprintf("[#%s]", hip.h.String())
+	ann := ""
+	if hip.key {
+		ann = "@key"
+	}
+	return fmt.Sprintf("[#%s]%s", hip.h.String(), ann)
 }
 
 func parsePathIndex(str string) (idx Value, h hash.Hash, rem string, err error) {

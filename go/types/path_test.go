@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -47,45 +48,43 @@ func TestPathStruct(t *testing.T) {
 	assertPathStringResolvesTo(assert, nil, v, `.notHere`)
 }
 
-func TestPathList(t *testing.T) {
+func TestPathIndex(t *testing.T) {
 	assert := assert.New(t)
 
-	v := NewList(Number(1), Number(3), String("foo"), Bool(false))
+	var v Value
+	resolvesTo := func(exp, val Value, str string) {
+		// Indices resolve to |exp|.
+		assertPathResolvesTo(assert, exp, v, NewPath().AddIndex(val))
+		assertPathStringResolvesTo(assert, exp, v, str)
+		// Keys resolve to themselves.
+		if exp != nil {
+			exp = val
+		}
+		assertPathResolvesTo(assert, exp, v, NewPath().AddKeyIndex(val))
+		assertPathStringResolvesTo(assert, exp, v, str+"@key")
+	}
 
-	assertPathResolvesTo(assert, Number(1), v, NewPath().AddIndex(Number(0)))
-	assertPathStringResolvesTo(assert, Number(1), v, `[0]`)
-	assertPathResolvesTo(assert, Number(3), v, NewPath().AddIndex(Number(1)))
-	assertPathStringResolvesTo(assert, Number(3), v, `[1]`)
-	assertPathResolvesTo(assert, String("foo"), v, NewPath().AddIndex(Number(2)))
-	assertPathStringResolvesTo(assert, String("foo"), v, `[2]`)
-	assertPathResolvesTo(assert, Bool(false), v, NewPath().AddIndex(Number(3)))
-	assertPathStringResolvesTo(assert, Bool(false), v, `[3]`)
-	assertPathResolvesTo(assert, nil, v, NewPath().AddIndex(Number(4)))
-	assertPathStringResolvesTo(assert, nil, v, `[4]`)
-	assertPathResolvesTo(assert, nil, v, NewPath().AddIndex(Number(-4)))
-	assertPathStringResolvesTo(assert, nil, v, `[-4]`)
-}
+	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
 
-func TestPathMap(t *testing.T) {
-	assert := assert.New(t)
+	resolvesTo(Number(1), Number(0), "[0]")
+	resolvesTo(Number(3), Number(1), "[1]")
+	resolvesTo(String("foo"), Number(2), "[2]")
+	resolvesTo(Bool(false), Number(3), "[3]")
+	resolvesTo(nil, Number(4), "[4]")
+	resolvesTo(nil, Number(-4), "[-4]")
 
-	v := NewMap(
+	v = NewMap(
 		Number(1), String("foo"),
 		String("two"), String("bar"),
 		Bool(false), Number(23),
 		Number(2.3), Number(4.5),
 	)
 
-	assertPathResolvesTo(assert, String("foo"), v, NewPath().AddIndex(Number(1)))
-	assertPathStringResolvesTo(assert, String("foo"), v, `[1]`)
-	assertPathResolvesTo(assert, String("bar"), v, NewPath().AddIndex(String("two")))
-	assertPathStringResolvesTo(assert, String("bar"), v, `["two"]`)
-	assertPathResolvesTo(assert, Number(23), v, NewPath().AddIndex(Bool(false)))
-	assertPathStringResolvesTo(assert, Number(23), v, `[false]`)
-	assertPathResolvesTo(assert, Number(4.5), v, NewPath().AddIndex(Number(2.3)))
-	assertPathStringResolvesTo(assert, Number(4.5), v, `[2.3]`)
-	assertPathResolvesTo(assert, nil, v, NewPath().AddIndex(Number(4)))
-	assertPathStringResolvesTo(assert, nil, v, `[4]`)
+	resolvesTo(String("foo"), Number(1), "[1]")
+	resolvesTo(String("bar"), String("two"), `["two"]`)
+	resolvesTo(Number(23), Bool(false), "[false]")
+	resolvesTo(Number(4.5), Number(2.3), "[2.3]")
+	resolvesTo(nil, Number(4), "[4]")
 }
 
 func TestPathHashIndex(t *testing.T) {
@@ -111,8 +110,15 @@ func TestPathHashIndex(t *testing.T) {
 	}
 
 	resolvesTo := func(col, exp, val Value) {
+		// Values resolve to |exp|.
 		assertPathResolvesTo(assert, exp, col, NewPath().AddHashIndex(val.Hash()))
 		assertPathStringResolvesTo(assert, exp, col, hashStr(val))
+		// Keys resolve to themselves.
+		if exp != nil {
+			exp = val
+		}
+		assertPathResolvesTo(assert, exp, col, NewPath().AddHashKeyIndex(val.Hash()))
+		assertPathStringResolvesTo(assert, exp, col, hashStr(val)+"@key")
 	}
 
 	// Primitives are only addressable by their values.
@@ -124,7 +130,6 @@ func TestPathHashIndex(t *testing.T) {
 	resolvesTo(s, nil, str)
 
 	// Other values are only addressable by their hashes.
-
 	resolvesTo(m, i, br)
 	resolvesTo(m, lr, l)
 	resolvesTo(m, b, lr)
@@ -195,23 +200,12 @@ func TestPathMulti(t *testing.T) {
 	assertPathStringResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
 	assertPathResolvesTo(assert, String("fire"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddHashIndex(m1.Hash()))
 	assertPathStringResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1][#%s]`, m1.Hash().String()))
-}
-
-func TestPathToAndFromString(t *testing.T) {
-	assert := assert.New(t)
-
-	test := func(str string, p Path) {
-		assert.Equal(str, p.String())
-		p2, err := NewPath().AddPath(str)
-		assert.NoError(err)
-		assert.Equal(p, p2)
-	}
-
-	test("[0]", NewPath().AddIndex(Number(0)))
-	test("[\"0\"][\"1\"][\"100\"]", NewPath().AddIndex(String("0")).AddIndex(String("1")).AddIndex(String("100")))
-	test(".foo[0].bar[4.5][false]", NewPath().AddField("foo").AddIndex(Number(0)).AddField("bar").AddIndex(Number(4.5)).AddIndex(Bool(false)))
-	h := Number(42).Hash() // arbitrary hash
-	test(fmt.Sprintf(".foo[#%s]", h.String()), NewPath().AddField("foo").AddHashIndex(h))
+	assertPathResolvesTo(assert, m1, s, NewPath().AddField("foo").AddIndex(Number(1)).AddHashKeyIndex(m1.Hash()))
+	assertPathStringResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1][#%s]@key`, m1.Hash().String()))
+	assertPathResolvesTo(assert, String("car"), s,
+		NewPath().AddField("foo").AddIndex(Number(1)).AddHashKeyIndex(m1.Hash()).AddIndex(String("c")))
+	assertPathStringResolvesTo(assert, String("car"), s,
+		fmt.Sprintf(`.foo[1][#%s]@key["c"]`, m1.Hash().String()))
 }
 
 func TestPathImmutability(t *testing.T) {
@@ -233,6 +227,16 @@ func TestPathParseSuccess(t *testing.T) {
 		p, err := NewPath().AddPath(str)
 		assert.NoError(err)
 		assert.Equal(expectPath, p)
+		expectStr := str
+		switch expectStr { // Human readable serialization special cases.
+		case "[1e4]":
+			expectStr = "[10000]"
+		case "[1.]":
+			expectStr = "[1]"
+		case "[\"line\nbreak\rreturn\"]":
+			expectStr = `["line\nbreak\rreturn"]`
+		}
+		assert.Equal(expectStr, p.String())
 	}
 
 	test(".foo", NewPath().AddField("foo"))
@@ -240,26 +244,34 @@ func TestPathParseSuccess(t *testing.T) {
 	test(".QQ", NewPath().AddField("QQ"))
 	test("[true]", NewPath().AddIndex(Bool(true)))
 	test("[false]", NewPath().AddIndex(Bool(false)))
+	test("[false]@key", NewPath().AddKeyIndex(Bool(false)))
 	test("[42]", NewPath().AddIndex(Number(42)))
+	test("[42]@key", NewPath().AddKeyIndex(Number(42)))
 	test("[1e4]", NewPath().AddIndex(Number(1e4)))
 	test("[1.]", NewPath().AddIndex(Number(1.)))
 	test("[1.345]", NewPath().AddIndex(Number(1.345)))
 	test(`[""]`, NewPath().AddIndex(String("")))
 	test(`["42"]`, NewPath().AddIndex(String("42")))
+	test(`["42"]@key`, NewPath().AddKeyIndex(String("42")))
 	test("[\"line\nbreak\rreturn\"]", NewPath().AddIndex(String("line\nbreak\rreturn")))
 	test(`["qu\\ote\""]`, NewPath().AddIndex(String(`qu\ote"`)))
 	test(`["π"]`, NewPath().AddIndex(String("π")))
 	test(`["[[br][]acke]]ts"]`, NewPath().AddIndex(String("[[br][]acke]]ts")))
 	test(`["xπy✌z"]`, NewPath().AddIndex(String("xπy✌z")))
 	test(`["ಠ_ಠ"]`, NewPath().AddIndex(String("ಠ_ಠ")))
-	test(`["ಠ_ಠ"]`, NewPath().AddIndex(String("ಠ_ಠ")))
+	test("[\"0\"][\"1\"][\"100\"]", NewPath().AddIndex(String("0")).AddIndex(String("1")).AddIndex(String("100")))
+	test(".foo[0].bar[4.5][false]", NewPath().AddField("foo").AddIndex(Number(0)).AddField("bar").AddIndex(Number(4.5)).AddIndex(Bool(false)))
+
+	h := Number(42).Hash() // arbitrary hash
+	test(fmt.Sprintf(".foo[#%s]", h.String()), NewPath().AddField("foo").AddHashIndex(h))
+	test(fmt.Sprintf(".bar[#%s]@key", h.String()), NewPath().AddField("bar").AddHashKeyIndex(h))
 }
 
 func TestPathParseErrors(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(str, expectError string) {
-		p, err := NewPath().AddPath(str)
+		p, err := ParsePath(str)
 		assert.Equal(Path{}, p)
 		if err != nil {
 			assert.Equal(expectError, err.Error())
@@ -271,6 +283,7 @@ func TestPathParseErrors(t *testing.T) {
 	test("", "Empty path")
 	test(".", "Invalid field: ")
 	test("[", "Path ends in [")
+	test("]", "] is missing opening [")
 	test(".#", "Invalid field: #")
 	test(". ", "Invalid field:  ")
 	test(". invalid.field", "Invalid field:  invalid.field")
@@ -304,4 +317,7 @@ func TestPathParseErrors(t *testing.T) {
 	test(".foo[42]bar", "Invalid operator: b")
 	test("#foo", "Invalid operator: #")
 	test("!foo", "Invalid operator: !")
+	test("@foo", "Invalid operator: @")
+	test("@key", "Invalid operator: @")
+	test(fmt.Sprintf(".foo[#%s]@soup", hash.FromData([]byte{42}).String()), "Unsupported annotation: @soup")
 }
