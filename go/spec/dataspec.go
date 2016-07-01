@@ -223,3 +223,12 @@ func (spec pathSpec) Value() (db datas.Database, val types.Value, err error) {
 func RegisterDatabaseFlags() {
 	chunks.RegisterLevelDBFlags()
 }
+
+// Utility functions to create specs
+func CreateDatabaseSpecString(protocol, path string) string {
+	return fmt.Sprintf("%s:%s", protocol, path)
+}
+
+func CreateValueSpecString(protocol, path, value string) string {
+	return fmt.Sprintf("%s:%s::%s", protocol, path, value)
+}

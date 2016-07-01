@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -36,7 +36,7 @@ func TestNomsShow(t *testing.T) {
 }
 
 type nomsShowTestSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
@@ -51,7 +51,7 @@ func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
 
 func (s *nomsShowTestSuite) TestNomsLog() {
 	datasetName := "dsTest"
-	str := test_util.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
 	ds, err := spec.GetDataset(str)
 	s.NoError(err)
 
@@ -79,7 +79,7 @@ func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) 
 }
 
 func (s *nomsShowTestSuite) TestNArg() {
-	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
@@ -97,14 +97,14 @@ func (s *nomsShowTestSuite) TestNArg() {
 	h3 := ds.Head().Hash()
 	db.Close()
 
-	dsSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, dsName)
+	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsName)
 	s.NotContains(s.Run(main, []string{"-n=1", dsSpec}), h1.String())
 	res := s.Run(main, []string{"-n=0", dsSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 
-	vSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "#"+h3.String())
+	vSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+h3.String())
 	s.NotContains(s.Run(main, []string{"-n=1", vSpec}), h1.String())
 	res = s.Run(main, []string{"-n=0", vSpec})
 	s.Contains(res, h3.String())
@@ -113,7 +113,7 @@ func (s *nomsShowTestSuite) TestNArg() {
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph1() {
-	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
@@ -159,12 +159,12 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b1.Database().Close()
-	s.Equal(graphRes1, s.Run(main, []string{"-graph", "-show-value=true", test_util.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
-	s.Equal(diffRes1, s.Run(main, []string{"-graph", "-show-value=false", test_util.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
+	s.Equal(graphRes1, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
+	s.Equal(diffRes1, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph2() {
-	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
@@ -188,12 +188,12 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes2, s.Run(main, []string{"-graph", "-show-value=true", test_util.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
-	s.Equal(diffRes2, s.Run(main, []string{"-graph", "-show-value=false", test_util.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
+	s.Equal(graphRes2, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
+	s.Equal(diffRes2, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
 }
 
 func (s *nomsShowTestSuite) TestNomsGraph3() {
-	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
@@ -227,8 +227,8 @@ func (s *nomsShowTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes3, s.Run(main, []string{"-graph", "-show-value=true", test_util.CreateValueSpecString("ldb", s.LdbDir, "w")}))
-	s.Equal(diffRes3, s.Run(main, []string{"-graph", "-show-value=false", test_util.CreateValueSpecString("ldb", s.LdbDir, "w")}))
+	s.Equal(graphRes3, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")}))
+	s.Equal(diffRes3, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")}))
 }
 
 func (s *nomsShowTestSuite) TestTruncation() {
@@ -240,7 +240,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 		return types.NewList(nv...)
 	}
 
-	str := test_util.CreateDatabaseSpecString("ldb", s.LdbDir)
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
 
@@ -254,7 +254,7 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	s.NoError(err)
 	db.Close()
 
-	dsSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "truncate")
+	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "truncate")
 	s.Equal(truncRes1, s.Run(main, []string{"-graph", "-show-value=true", dsSpec}))
 	s.Equal(diffTrunc1, s.Run(main, []string{"-graph", "-show-value=false", dsSpec}))
 

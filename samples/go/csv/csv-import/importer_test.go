@@ -14,8 +14,9 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -24,7 +25,7 @@ func TestCSVImporter(t *testing.T) {
 }
 
 type testSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func (s *testSuite) TestCSVImporter() {
@@ -43,7 +44,7 @@ func (s *testSuite) TestCSVImporter() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", out)
 
@@ -81,7 +82,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number,Number", "-dest-type", "map:1", dataspec, input.Name()})
 	s.Equal("", out)
 
@@ -111,7 +112,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-delimiter", "|", dataspec, input.Name()})
 	s.Equal("", out)
 
@@ -138,7 +139,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-header", "x,y", dataspec, input.Name()})
 	s.Equal("", out)
 

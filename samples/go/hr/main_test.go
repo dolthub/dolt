@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -21,7 +21,7 @@ func TestBasics(t *testing.T) {
 }
 
 type testSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func (s *testSuite) TestRoundTrip() {

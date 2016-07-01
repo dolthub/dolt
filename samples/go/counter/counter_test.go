@@ -7,7 +7,8 @@ package main
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -16,11 +17,11 @@ func TestCounter(t *testing.T) {
 }
 
 type counterTestSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func (s *counterTestSuite) TestCounter() {
-	spec := test_util.CreateValueSpecString("ldb", s.LdbDir, "counter")
+	spec := spec.CreateValueSpecString("ldb", s.LdbDir, "counter")
 	args := []string{spec}
 	s.Equal("1\n", s.Run(main, args))
 	s.Equal("2\n", s.Run(main, args))

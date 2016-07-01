@@ -10,8 +10,9 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -20,7 +21,7 @@ func TestDs(t *testing.T) {
 }
 
 type testSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func (s *testSuite) TestEmptyNomsDs() {
@@ -31,7 +32,7 @@ func (s *testSuite) TestEmptyNomsDs() {
 
 	ds.Close()
 
-	dbSpec := test_util.CreateDatabaseSpecString("ldb", dir+"/name")
+	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")
 	rtnVal := s.Run(main, []string{dbSpec})
 	s.Equal("", rtnVal)
 }
@@ -55,9 +56,9 @@ func (s *testSuite) TestNomsDs() {
 	err = ds.Close()
 	s.NoError(err)
 
-	dbSpec := test_util.CreateDatabaseSpecString("ldb", dir+"/name")
-	datasetName := test_util.CreateValueSpecString("ldb", dir+"/name", id)
-	dataset2Name := test_util.CreateValueSpecString("ldb", dir+"/name", id2)
+	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")
+	datasetName := spec.CreateValueSpecString("ldb", dir+"/name", id)
+	dataset2Name := spec.CreateValueSpecString("ldb", dir+"/name", id2)
 
 	// both datasets show up
 	rtnVal := s.Run(main, []string{dbSpec})

@@ -14,8 +14,9 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -24,7 +25,7 @@ func TestCSVExporter(t *testing.T) {
 }
 
 type testSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 // FIXME: run with pipe
@@ -65,7 +66,7 @@ func (s *testSuite) TestCSVExporter() {
 	ds.Database().Close()
 
 	// Run exporter
-	dataspec := test_util.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
 	out := s.Run(main, []string{dataspec})
 
 	// Verify output

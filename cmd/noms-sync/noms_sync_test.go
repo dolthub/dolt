@@ -11,8 +11,9 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/test_util"
+	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -21,7 +22,7 @@ func TestSync(t *testing.T) {
 }
 
 type testSuite struct {
-	test_util.ClientTestSuite
+	clienttest.ClientTestSuite
 }
 
 func (s *testSuite) TestSync() {
@@ -33,9 +34,9 @@ func (s *testSuite) TestSync() {
 	source1HeadRef := source1.Head().Hash()
 	source2.Database().Close() // Close Database backing both Datasets
 
-	sourceSpec := test_util.CreateValueSpecString("ldb", s.LdbDir, "#"+source1HeadRef.String())
+	sourceSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+source1HeadRef.String())
 	ldb2dir := path.Join(s.TempDir, "ldb2")
-	sinkDatasetSpec := test_util.CreateValueSpecString("ldb", ldb2dir, "bar")
+	sinkDatasetSpec := spec.CreateValueSpecString("ldb", ldb2dir, "bar")
 	out := s.Run(main, []string{sourceSpec, sinkDatasetSpec})
 	s.Equal("", out)
 
@@ -43,7 +44,7 @@ func (s *testSuite) TestSync() {
 	s.True(types.Number(42).Equals(dest.HeadValue()))
 	dest.Database().Close()
 
-	sourceDataset := test_util.CreateValueSpecString("ldb", s.LdbDir, "foo")
+	sourceDataset := spec.CreateValueSpecString("ldb", s.LdbDir, "foo")
 	out = s.Run(main, []string{sourceDataset, sinkDatasetSpec})
 	s.Equal("", out)
 
