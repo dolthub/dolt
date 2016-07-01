@@ -15,7 +15,6 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/util"
 )
 
 var (
@@ -39,7 +38,7 @@ func main() {
 	}
 
 	cs, err := spec.GetChunkStore(flag.Arg(0))
-	util.CheckError(err)
+	d.CheckError(err)
 	server := datas.NewRemoteDatabaseServer(cs, *port)
 
 	// Shutdown server gracefully so that profile may be written

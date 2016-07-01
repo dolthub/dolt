@@ -2,13 +2,12 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package test_util
+package jsontonoms
 
 import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -21,23 +20,23 @@ type LibTestSuite struct {
 }
 
 func (suite *LibTestSuite) TestPrimitiveTypes() {
-	suite.EqualValues(types.String("expected"), util.NomsValueFromDecodedJSON("expected", false))
-	suite.EqualValues(types.Bool(false), util.NomsValueFromDecodedJSON(false, false))
-	suite.EqualValues(types.Number(1.7), util.NomsValueFromDecodedJSON(1.7, false))
-	suite.False(util.NomsValueFromDecodedJSON(1.7, false).Equals(types.Bool(true)))
+	suite.EqualValues(types.String("expected"), NomsValueFromDecodedJSON("expected", false))
+	suite.EqualValues(types.Bool(false), NomsValueFromDecodedJSON(false, false))
+	suite.EqualValues(types.Number(1.7), NomsValueFromDecodedJSON(1.7, false))
+	suite.False(NomsValueFromDecodedJSON(1.7, false).Equals(types.Bool(true)))
 }
 
 func (suite *LibTestSuite) TestCompositeTypes() {
 	// [false true]
 	suite.EqualValues(
 		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
-		util.NomsValueFromDecodedJSON([]interface{}{false, true}, false))
+		NomsValueFromDecodedJSON([]interface{}{false, true}, false))
 
 	// [[false true]]
 	suite.EqualValues(
 		types.NewList().Append(
 			types.NewList().Append(types.Bool(false)).Append(types.Bool(true))),
-		util.NomsValueFromDecodedJSON([]interface{}{[]interface{}{false, true}}, false))
+		NomsValueFromDecodedJSON([]interface{}{[]interface{}{false, true}}, false))
 
 	// {"string": "string",
 	//  "list": [false true],
@@ -52,7 +51,7 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 		types.NewMap(
 			types.String("nested"),
 			types.String("string")))
-	o := util.NomsValueFromDecodedJSON(map[string]interface{}{
+	o := NomsValueFromDecodedJSON(map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"map":    map[string]interface{}{"nested": "string"},
@@ -73,7 +72,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 			"nested": types.String("string"),
 		}),
 	})
-	o := util.NomsValueFromDecodedJSON(map[string]interface{}{
+	o := NomsValueFromDecodedJSON(map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"struct": map[string]interface{}{"nested": "string"},
@@ -83,5 +82,5 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 }
 
 func (suite *LibTestSuite) TestPanicOnUnsupportedType() {
-	suite.Panics(func() { util.NomsValueFromDecodedJSON(map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
+	suite.Panics(func() { NomsValueFromDecodedJSON(map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
 }

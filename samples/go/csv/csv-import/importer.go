@@ -22,7 +22,6 @@ import (
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/samples/go/csv"
-	"github.com/attic-labs/noms/samples/go/util"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -58,7 +57,7 @@ func main() {
 
 	if flag.NArg() != 2 {
 		err := fmt.Errorf("Expected exactly two parameters (dataset and path) after flags, but you have %d. Maybe you put a flag after the path?", flag.NArg())
-		util.CheckError(err)
+		d.CheckError(err)
 	}
 
 	path := flag.Arg(1)
@@ -71,7 +70,7 @@ func main() {
 
 	comma, err := csv.StringToRune(*delimiter)
 	if err != nil {
-		util.CheckError(err)
+		d.CheckError(err)
 		return
 	}
 
@@ -106,7 +105,7 @@ func main() {
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(0))
-	util.CheckError(err)
+	d.CheckError(err)
 	defer ds.Database().Close()
 
 	kinds := []types.NomsKind{}

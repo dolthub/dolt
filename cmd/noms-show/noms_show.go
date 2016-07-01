@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/util"
 )
 
 var (
@@ -36,11 +36,11 @@ func main() {
 	}
 
 	if len(flag.Args()) != 1 {
-		util.CheckErrorNoUsage(errors.New("expected exactly one argument"))
+		d.CheckErrorNoUsage(errors.New("expected exactly one argument"))
 	}
 
 	database, value, err := spec.GetPath(flag.Arg(0))
-	util.CheckErrorNoUsage(err)
+	d.CheckErrorNoUsage(err)
 
 	if value == nil {
 		fmt.Fprintf(os.Stderr, "Object not found: %s\n", flag.Arg(0))

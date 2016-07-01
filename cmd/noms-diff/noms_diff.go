@@ -12,9 +12,9 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/cmd/noms-diff/diff"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/util"
 )
 
 const (
@@ -41,20 +41,20 @@ func main() {
 	}
 
 	if len(flag.Args()) != 2 {
-		util.CheckErrorNoUsage(errors.New("Expected exactly two arguments"))
+		d.CheckErrorNoUsage(errors.New("Expected exactly two arguments"))
 	}
 
 	db1, value1, err := spec.GetPath(flag.Arg(0))
-	util.CheckErrorNoUsage(err)
+	d.CheckErrorNoUsage(err)
 	if value1 == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
+		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
 	}
 	defer db1.Close()
 
 	db2, value2, err := spec.GetPath(flag.Arg(1))
-	util.CheckErrorNoUsage(err)
+	d.CheckErrorNoUsage(err)
 	if value2 == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(1)))
+		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(1)))
 	}
 	defer db2.Close()
 

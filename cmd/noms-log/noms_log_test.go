@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/test_util"
-	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -31,7 +31,7 @@ func (testExiter) Exit(code int) {
 }
 
 func TestNomsShow(t *testing.T) {
-	util.UtilExiter = testExiter{}
+	d.UtilExiter = testExiter{}
 	suite.Run(t, &nomsShowTestSuite{})
 }
 

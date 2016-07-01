@@ -20,7 +20,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
-	"github.com/attic-labs/noms/samples/go/util"
 	human "github.com/dustin/go-humanize"
 )
 
@@ -38,11 +37,11 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		util.CheckError(errors.New("expected dataset and url arguments"))
+		d.CheckError(errors.New("expected dataset and url arguments"))
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(0))
-	util.CheckError(err)
+	d.CheckError(err)
 	defer ds.Database().Close()
 
 	url := flag.Arg(1)

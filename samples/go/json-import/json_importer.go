@@ -15,7 +15,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/samples/go/util"
+	"github.com/attic-labs/noms/go/util/jsontonoms"
 )
 
 func main() {
@@ -28,11 +28,11 @@ func main() {
 	flag.Parse()
 
 	if len(flag.Args()) != 2 {
-		util.CheckError(errors.New("expected url and dataset flags"))
+		d.CheckError(errors.New("expected url and dataset flags"))
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(1))
-	util.CheckError(err)
+	d.CheckError(err)
 
 	url := flag.Arg(0)
 	if url == "" {
@@ -53,7 +53,7 @@ func main() {
 		log.Fatalln("Error decoding JSON: ", err)
 	}
 
-	_, err = ds.Commit(util.NomsValueFromDecodedJSON(jsonObject, true))
+	_, err = ds.Commit(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
 	d.PanicIfError(err)
 	ds.Database().Close()
 }

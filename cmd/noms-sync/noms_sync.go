@@ -16,7 +16,6 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/util"
 )
 
 var (
@@ -38,15 +37,15 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		util.CheckError(errors.New("expected a source object and destination dataset"))
+		d.CheckError(errors.New("expected a source object and destination dataset"))
 	}
 
 	sourceStore, sourceObj, err := spec.GetPath(flag.Arg(0))
-	util.CheckError(err)
+	d.CheckError(err)
 	defer sourceStore.Close()
 
 	sinkDataset, err := spec.GetDataset(flag.Arg(1))
-	util.CheckError(err)
+	d.CheckError(err)
 	defer sinkDataset.Database().Close()
 
 	err = d.Try(func() {

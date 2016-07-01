@@ -22,7 +22,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/mgutz/ansi"
 )
 
@@ -57,26 +56,26 @@ func main() {
 	}
 
 	if len(flag.Args()) != 1 {
-		util.CheckError(errors.New("expected exactly one argument"))
+		d.CheckError(errors.New("expected exactly one argument"))
 	}
 
 	useColor = shouldUseColor()
 
 	database, value, err := spec.GetPath(flag.Arg(0))
 	if err != nil {
-		util.CheckErrorNoUsage(err)
+		d.CheckErrorNoUsage(err)
 	}
 	defer database.Close()
 
 	if value == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
+		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
 	}
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
 
 	origCommit, ok := value.(types.Struct)
 	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
-		util.CheckError(fmt.Errorf("%s does not reference a Commit object", flag.Arg(0)))
+		d.CheckError(fmt.Errorf("%s does not reference a Commit object", flag.Arg(0)))
 	}
 
 	iter := NewCommitIterator(database, origCommit)

@@ -18,8 +18,8 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/jsontonoms"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/samples/go/util"
 	"github.com/clbanning/mxj"
 )
 
@@ -56,11 +56,11 @@ func main() {
 		flag.Parse()
 
 		if flag.NArg() != 2 {
-			util.CheckError(errors.New("Expected dataset followed by directory path"))
+			d.CheckError(errors.New("Expected dataset followed by directory path"))
 		}
 		dir := flag.Arg(1)
 		ds, err := spec.GetDataset(flag.Arg(0))
-		util.CheckError(err)
+		d.CheckError(err)
 
 		defer profile.MaybeStartProfile().Stop()
 
@@ -97,7 +97,7 @@ func main() {
 				object := xmlObject.Old()
 				file.Close()
 
-				nomsObj := util.NomsValueFromDecodedJSON(object, false)
+				nomsObj := jsontonoms.NomsValueFromDecodedJSON(object, false)
 				d.Chk.IsType(expectedType, nomsObj)
 
 				var r types.Ref

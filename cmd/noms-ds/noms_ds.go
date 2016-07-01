@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/samples/go/util"
 )
 
 func main() {
@@ -28,15 +28,15 @@ func main() {
 
 	if *toDelete != "" {
 		set, err := spec.GetDataset(*toDelete)
-		util.CheckError(err)
+		d.CheckError(err)
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
 		if !errBool {
-			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
+			d.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
 
 		store, err := set.Database().Delete(set.ID())
-		util.CheckError(err)
+		d.CheckError(err)
 		defer store.Close()
 
 		fmt.Printf("Deleted dataset %v (was %v)\n\n", set.ID(), oldCommitRef.TargetHash().String())
@@ -47,7 +47,7 @@ func main() {
 		}
 
 		store, err := spec.GetDatabase(flag.Arg(0))
-		util.CheckError(err)
+		d.CheckError(err)
 		defer store.Close()
 
 		store.Datasets().IterAll(func(k, v types.Value) {
