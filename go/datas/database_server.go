@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
@@ -38,10 +39,15 @@ func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *remoteDatabaseServ
 
 // Run blocks while the remoteDatabaseServer is listening. Running on a separate go routine is supported.
 func (s *remoteDatabaseServer) Run() {
-	fmt.Printf("Listening on port %d...\n", s.port)
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
 	s.l = &l
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	d.Chk.NoError(err)
+	s.port, err = strconv.Atoi(port)
+	d.Chk.NoError(err)
+	fmt.Printf("Listening on port %d...\n", s.port)
 
 	router := httprouter.New()
 
