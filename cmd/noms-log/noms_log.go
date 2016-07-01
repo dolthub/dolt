@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"flag"
@@ -99,9 +100,11 @@ func main() {
 		close(inChan)
 	}()
 
+	w := bufio.NewWriter(os.Stdout)
 	for commitBuff := range outChan {
-		io.Copy(os.Stdout, bytes.NewReader(commitBuff.([]byte)))
+		io.Copy(w, bytes.NewReader(commitBuff.([]byte)))
 	}
+	w.Flush()
 
 	if waitChan != nil {
 		os.Stdout.Close()

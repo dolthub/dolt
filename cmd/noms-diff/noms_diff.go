@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -59,8 +60,10 @@ func main() {
 
 	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
 
-	diff.Diff(os.Stdout, value1, value2)
-	fmt.Fprintf(os.Stdout, "\n")
+	w := bufio.NewWriter(os.Stdout)
+	diff.Diff(w, value1, value2)
+	fmt.Fprintf(w, "\n")
+	w.Flush()
 
 	if waitChan != nil {
 		os.Stdout.Close()
