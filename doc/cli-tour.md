@@ -92,7 +92,7 @@ Note that Noms is a typed system. What is being shown here for each entry is not
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
-> noms show http://demo.noms.io/cli-tour::sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1
+> noms show 'http://demo.noms.io/cli-tour::#sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1'
 
 struct Commit {
   parents: Set<Ref<Cycle<0>>>
