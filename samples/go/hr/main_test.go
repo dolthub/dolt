@@ -54,3 +54,8 @@ func (s *testSuite) TestReadCanned() {
 Samuel Boodman (id: 13, title: VP, Culture)
 `, out)
 }
+
+func (s *testSuite) TestInvalidDatasetSpec() {
+	// Should not crash
+	_ = s.Run(main, []string{"-ds", "invalid-dataset", "list-persons"})
+}

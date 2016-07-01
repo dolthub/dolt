@@ -40,11 +40,11 @@ func main() {
 	}
 
 	ds, err := spec.GetDataset(*dsStr)
-	defer ds.Database().Close()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
 	}
+	defer ds.Database().Close()
 
 	switch flag.Arg(0) {
 	case "add-person":
@@ -74,7 +74,11 @@ func addPerson(ds dataset.Dataset) {
 		"title": types.String(flag.Arg(3)),
 	})
 
-	ds.Commit(getPersons(ds).Set(types.Number(id), np))
+	_, err = ds.Commit(getPersons(ds).Set(types.Number(id), np))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
+		return
+	}
 }
 
 func listPersons(ds dataset.Dataset) {
