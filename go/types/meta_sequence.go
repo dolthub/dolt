@@ -46,7 +46,6 @@ type orderedKey struct {
 }
 
 func newOrderedKey(v Value) orderedKey {
-	d.Chk.NotNil(v)
 	if isKindOrderedByValue(v.Type().Kind()) {
 		return orderedKey{true, v, hash.Hash{}}
 	}

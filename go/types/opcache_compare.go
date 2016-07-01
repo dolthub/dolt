@@ -24,9 +24,9 @@ func (opCacheComparer) Compare(a, b []byte) int {
 			return 1
 		}
 		a, b = a[1:], b[1:]
-		d.Chk.True(len(a) == sha1.Size && len(b) == sha1.Size, "Compared objects should be %d bytes long, not %d and %d", sha1.Size, len(a), len(b))
+		d.Chk.True(len(a) == sha1.Size && len(b) == sha1.Size)
 		res := bytes.Compare(a, b)
-		d.Chk.True(res != 0 || aKind == bKind, "%d != %d, but Values with the same hash MUST be the same Kind", aKind, bKind)
+		d.Chk.True(res != 0 || aKind == bKind)
 		return res
 	case BoolKind:
 		return bytes.Compare(a, b)

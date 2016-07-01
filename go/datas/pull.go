@@ -148,7 +148,7 @@ func planWork(srcQ, sinkQ *types.RefHeap) (srcRefs, sinkRefs, comRefs types.RefS
 		sinkRefs, comRefs = burnDown(sinkQ, srcQ, sinkHt, srcHt)
 		return
 	}
-	d.Chk.True(srcHt == sinkHt, "%d != %d", srcHt, sinkHt)
+	d.Chk.True(srcHt == sinkHt)
 	srcRefs, comRefs = burnDown(srcQ, sinkQ, srcHt, sinkHt)
 	sinkRefs, _ = burnDown(sinkQ, srcQ, sinkHt, srcHt)
 	return
@@ -169,7 +169,7 @@ func burnDown(taller, shorter *types.RefHeap, tall, short uint64) (tallRefs, com
 			shortIdx++
 			continue
 		}
-		d.Chk.True(tallRef.Equals(shortPeek), "Refs should be equal: %s != %s", tallRef.TargetHash(), shortPeek.TargetHash())
+		d.Chk.True(tallRef.Equals(shortPeek))
 		heap.Remove(shorter, shortIdx)
 		comRefs = append(comRefs, tallRef)
 	}
