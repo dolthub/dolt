@@ -65,7 +65,6 @@ func main() {
 		defer profile.MaybeStartProfile().Stop()
 
 		cpuCount := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpuCount)
 
 		filesChan := make(chan fileIndex, 1024)
 		refsChan := make(chan refIndex, 1024)

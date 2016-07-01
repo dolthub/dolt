@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -45,8 +44,6 @@ func main() {
 	)
 
 	spec.RegisterDatabaseFlags()
-	cpuCount := runtime.NumCPU()
-	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>\n\n")

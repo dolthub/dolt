@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
@@ -23,9 +22,6 @@ var (
 )
 
 func main() {
-	cpuCount := runtime.NumCPU()
-	runtime.GOMAXPROCS(cpuCount)
-
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Moves datasets between or within databases\n\n")
 		fmt.Fprintf(os.Stderr, "noms sync [options] <source-object> <dest-dataset>\n\n")

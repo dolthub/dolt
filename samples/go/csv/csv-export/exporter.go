@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
@@ -25,8 +24,6 @@ var (
 
 func main() {
 	spec.RegisterDatabaseFlags()
-	cpuCount := runtime.NumCPU()
-	runtime.GOMAXPROCS(cpuCount)
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: csv-export [options] dataset > filename")
