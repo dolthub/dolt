@@ -23,8 +23,6 @@ const (
 	blobWindowSize = 64
 )
 
-var RefOfBlobType = MakeRefType(BlobType)
-
 // Blob represents a list of Blobs.
 type Blob struct {
 	seq indexedSequence

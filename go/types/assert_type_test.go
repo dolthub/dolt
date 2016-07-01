@@ -205,9 +205,8 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	t11 := MakeStructType("Commit", TypeMap{
 		"value":   NumberType,
-		"parents": NumberType, // placeholder MakeSetType(MakeRefType(NumberType /* placeholder */)),
+		"parents": MakeSetType(MakeRefType(t1)),
 	})
-	t11.Desc.(StructDesc).SetField("parents", MakeSetType(MakeRefType(t1)))
 	assertSubtype(t11, c1)
 
 	c2 := NewStruct("Commit", structData{
@@ -215,6 +214,4 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 		"parents": NewSet(NewRef(c1)),
 	})
 	assertSubtype(t11, c2)
-
-	// t3 :=
 }

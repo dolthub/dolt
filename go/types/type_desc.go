@@ -4,16 +4,13 @@
 
 package types
 
-import (
-	"sort"
-
-	"github.com/attic-labs/noms/go/d"
-)
+import "sort"
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
 	Equals(other TypeDesc) bool
+	HasUnresolvedCycle(visited []*Type) bool
 }
 
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
@@ -32,6 +29,10 @@ func (p PrimitiveDesc) Kind() NomsKind {
 
 func (p PrimitiveDesc) Equals(other TypeDesc) bool {
 	return p.Kind() == other.Kind()
+}
+
+func (p PrimitiveDesc) HasUnresolvedCycle(visited []*Type) bool {
+	return false
 }
 
 var KindToString = map[NomsKind]string{
@@ -53,7 +54,7 @@ var KindToString = map[NomsKind]string{
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
 	kind      NomsKind
-	ElemTypes []*Type
+	ElemTypes typeSlice
 }
 
 func (c CompoundDesc) Kind() NomsKind {
@@ -70,6 +71,15 @@ func (c CompoundDesc) Equals(other TypeDesc) bool {
 		}
 	}
 	return true
+}
+
+func (c CompoundDesc) HasUnresolvedCycle(visited []*Type) bool {
+	for _, t := range c.ElemTypes {
+		if t.hasUnresolvedCycle(visited) {
+			return true
+		}
+	}
+	return false
 }
 
 type TypeMap map[string]*Type
@@ -109,6 +119,15 @@ func (s StructDesc) Equals(other TypeDesc) bool {
 	return true
 }
 
+func (s StructDesc) HasUnresolvedCycle(visited []*Type) bool {
+	for _, field := range s.fields {
+		if field.t.hasUnresolvedCycle(visited) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s StructDesc) IterFields(cb func(name string, t *Type)) {
 	for _, field := range s.fields {
 		cb(field.name, field.t)
@@ -123,12 +142,6 @@ func (s StructDesc) Field(name string) *Type {
 	return f.t
 }
 
-func (s StructDesc) SetField(name string, t *Type) {
-	f, i := s.findField(name)
-	d.Chk.True(i != -1, `No such field "%s"`, name)
-	f.t = t
-}
-
 func (s StructDesc) findField(name string) (*field, int) {
 	i := sort.Search(len(s.fields), func(i int) bool { return s.fields[i].name >= name })
 	if i == len(s.fields) || s.fields[i].name != name {
@@ -141,3 +154,23 @@ func (s StructDesc) findField(name string) (*field, int) {
 func (s StructDesc) Len() int {
 	return len(s.fields)
 }
+
+type CycleDesc uint32
+
+func (c CycleDesc) Kind() NomsKind {
+	return CycleKind
+}
+
+func (c CycleDesc) Equals(other TypeDesc) bool {
+	return c == other.(CycleDesc)
+}
+
+func (c CycleDesc) HasUnresolvedCycle(visited []*Type) bool {
+	return true
+}
+
+type typeSlice []*Type
+
+func (ts typeSlice) Len() int           { return len(ts) }
+func (ts typeSlice) Less(i, j int) bool { return ts[i].Hash().Less(ts[j].Hash()) }
+func (ts typeSlice) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }

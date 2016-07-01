@@ -16,10 +16,11 @@ type ValidatingBatchingSink struct {
 	cs    chunks.ChunkStore
 	batch [batchSize]chunks.Chunk
 	count int
+	tc    *TypeCache
 }
 
-func NewValidatingBatchingSink(cs chunks.ChunkStore) *ValidatingBatchingSink {
-	return &ValidatingBatchingSink{vs: newLocalValueStore(cs), cs: cs}
+func NewValidatingBatchingSink(cs chunks.ChunkStore, tc *TypeCache) *ValidatingBatchingSink {
+	return &ValidatingBatchingSink{vs: newLocalValueStore(cs), cs: cs, tc: tc}
 }
 
 // Prepare primes the type info cache used to validate Enqueued Chunks by reading the Chunks referenced by the provided hints.
@@ -35,7 +36,7 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureEr
 	if vbs.vs.isPresent(h) {
 		return nil
 	}
-	v := DecodeValue(c, vbs.vs)
+	v := DecodeFromBytes(c.Data(), vbs.vs, vbs.tc)
 	d.PanicIfTrue(getHash(v) != h, "Invalid hash found")
 	vbs.vs.ensureChunksInCache(v)
 	vbs.vs.set(h, hintedChunk{v.Type(), h})

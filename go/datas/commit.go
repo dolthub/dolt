@@ -15,19 +15,16 @@ const (
 )
 
 func init() {
-	structName := "Commit"
-
 	// struct Commit {
 	//   parents: Set<Ref<Commit>>
 	//   value: Value
 	// }
 
-	fieldTypes := types.TypeMap{
-		ParentsField: nil,
+	commitType = types.MakeStructType("Commit", types.TypeMap{
+		ParentsField: types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 		ValueField:   types.ValueType,
-	}
-	commitType = types.MakeStructType(structName, fieldTypes)
-	commitType.Desc.(types.StructDesc).SetField(ParentsField, types.MakeSetType(types.MakeRefType(commitType)))
+	})
+
 	refOfCommitType = types.MakeRefType(commitType)
 }
 

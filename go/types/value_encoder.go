@@ -117,7 +117,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 
 func (w *valueEncoder) writeValue(v Value) {
 	t := v.Type()
-	w.writeType(t, nil)
+	w.appendType(t)
 	switch t.Kind() {
 	case BlobKind:
 		seq := v.(Blob).sequence()
@@ -157,7 +157,7 @@ func (w *valueEncoder) writeValue(v Value) {
 		w.writeString(string(v.(String)))
 	case TypeKind:
 		vt := v.(*Type)
-		w.writeType(vt, nil)
+		w.appendType(vt)
 	case StructKind:
 		w.writeStruct(v, t)
 	case CycleKind, UnionKind, ValueKind:
@@ -167,31 +167,22 @@ func (w *valueEncoder) writeValue(v Value) {
 	}
 }
 
-func indexOfType(t *Type, ts []*Type) int {
-	for i, tt := range ts {
-		if t == tt {
-			return i
-		}
-	}
-	return -1
-}
-
 func (w *valueEncoder) writeStruct(v Value, t *Type) {
 	for _, v := range v.(Struct).values {
 		w.writeValue(v)
 	}
 }
 
-func (w *valueEncoder) writeCycle(i int) {
+func (w *valueEncoder) writeCycle(i uint32) {
 	w.writeKind(CycleKind)
-	w.writeUint32(uint32(i))
+	w.writeUint32(i)
 }
 
 func (w *valueEncoder) writeStructType(t *Type, parentStructTypes []*Type) {
 	// The runtime representaion of struct types can contain cycles. These cycles are broken when encoding and decoding using special "back ref" placeholders.
-	i := indexOfType(t, parentStructTypes)
-	if i != -1 {
-		w.writeCycle(len(parentStructTypes) - i - 1)
+	i, found := indexOfType(t, parentStructTypes)
+	if found {
+		w.writeCycle(uint32(len(parentStructTypes)) - i - 1)
 		return
 	}
 	parentStructTypes = append(parentStructTypes, t)

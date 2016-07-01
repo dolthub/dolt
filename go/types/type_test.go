@@ -21,9 +21,8 @@ func TestTypes(t *testing.T) {
 		"Field2": BoolType,
 	})
 	recType := MakeStructType("RecursiveStruct", TypeMap{
-		"self": nil,
+		"self": MakeCycleType(0),
 	})
-	recType.Desc.(StructDesc).SetField("self", recType)
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()

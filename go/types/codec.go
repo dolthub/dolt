@@ -28,13 +28,18 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 	return c
 }
 
+func DecodeFromBytes(data []byte, vr ValueReader, tc *TypeCache) Value {
+	tc.Lock()
+	defer tc.Unlock()
+	dec := newValueDecoder(&binaryNomsReader{data, 0}, vr, tc)
+	v := dec.readValue()
+	return v
+}
+
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
 func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
 	d.Chk.False(c.IsEmpty())
-	data := c.Data()
-	dec := newValueDecoder(&binaryNomsReader{data, 0}, vr)
-	v := dec.readValue()
-
+	v := DecodeFromBytes(c.Data(), vr, staticTypeCache)
 	if cacher, ok := v.(hashCacher); ok {
 		assignHash(cacher, c.Hash())
 	}
@@ -43,6 +48,8 @@ func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
 }
 
 type nomsReader interface {
+	pos() uint32
+	seek(pos uint32)
 	readBytes() []byte
 	readUint8() uint8
 	readUint32() uint32
@@ -50,6 +57,7 @@ type nomsReader interface {
 	readFloat64() float64
 	readBool() bool
 	readString() string
+	readIdent(tc *TypeCache) uint32
 	readHash() hash.Hash
 }
 
@@ -62,11 +70,20 @@ type nomsWriter interface {
 	writeBool(b bool)
 	writeString(v string)
 	writeHash(h hash.Hash)
+	appendType(t *Type)
 }
 
 type binaryNomsReader struct {
 	buff   []byte
 	offset uint32
+}
+
+func (b *binaryNomsReader) pos() uint32 {
+	return b.offset
+}
+
+func (b *binaryNomsReader) seek(pos uint32) {
+	b.offset = pos
 }
 
 func (b *binaryNomsReader) readBytes() []byte {
@@ -120,6 +137,20 @@ func (b *binaryNomsReader) readString() string {
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
 	return v
+}
+
+var createCount = uint64(0)
+
+// Note: It's somewhat of a layering violation that a nomsReaders knows about a TypeCache. The reason why the code is structured this way is that the go compiler can stack-allocate the string which is created from the byte slice, which is a fairly large perf gain.
+func (b *binaryNomsReader) readIdent(tc *TypeCache) uint32 {
+	size := b.readUint32()
+	id, ok := tc.identTable.entries[string(b.buff[b.offset:b.offset+size])]
+	if !ok {
+		id = tc.identTable.GetId(string(b.buff[b.offset : b.offset+size]))
+	}
+
+	b.offset += size
+	return id
 }
 
 func (b *binaryNomsReader) readHash() hash.Hash {
@@ -220,4 +251,13 @@ func (b *binaryNomsWriter) writeHash(h hash.Hash) {
 	digest := h.Digest()
 	copy(b.buff[b.offset:], digest[:])
 	b.offset += sha1.Size
+}
+
+func (b *binaryNomsWriter) appendType(t *Type) {
+	data := t.serialization
+	size := uint32(len(data))
+	b.ensureCapacity(size)
+
+	copy(b.buff[b.offset:], data)
+	b.offset += size
 }

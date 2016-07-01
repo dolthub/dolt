@@ -6,7 +6,6 @@ package types
 
 import (
 	"regexp"
-	"sort"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -22,11 +21,28 @@ import (
 // If Kind() refers to Struct, then Desc contains a []Field.
 
 type Type struct {
-	Desc TypeDesc
-	h    *hash.Hash
+	Desc          TypeDesc
+	h             *hash.Hash
+	id            uint32
+	serialization []byte
 }
 
-var typeForType = makePrimitiveType(TypeKind)
+const initialTypeBufferSize = 128
+
+func newType(desc TypeDesc, id uint32) *Type {
+	t := &Type{desc, &hash.Hash{}, id, nil}
+	if !t.HasUnresolvedCycle() {
+		serializeType(t)
+	}
+	return t
+}
+
+func serializeType(t *Type) {
+	w := &binaryNomsWriter{make([]byte, initialTypeBufferSize), 0}
+	enc := newValueEncoder(w, nil)
+	enc.writeType(t, nil)
+	t.serialization = w.data()
+}
 
 // Describe generate text that should parse into the struct being described.
 func (t *Type) Describe() (out string) {
@@ -39,8 +55,20 @@ func (t *Type) Kind() NomsKind {
 
 func (t *Type) Name() string {
 	// TODO: Remove from Type
-	d.Chk.IsType(StructDesc{}, t.Desc, "Name only works on Struct types")
 	return t.Desc.(StructDesc).Name
+}
+
+func (t *Type) hasUnresolvedCycle(visited []*Type) bool {
+	_, found := indexOfType(t, visited)
+	if found {
+		return false
+	}
+
+	return t.Desc.HasUnresolvedCycle(append(visited, t))
+}
+
+func (t *Type) HasUnresolvedCycle() bool {
+	return t.hasUnresolvedCycle(nil)
 }
 
 // Value interface
@@ -83,7 +111,7 @@ func (t *Type) Chunks() (chunks []Ref) {
 }
 
 func (t *Type) Type() *Type {
-	return typeForType
+	return TypeType
 }
 
 func MakePrimitiveType(k NomsKind) *Type {
@@ -106,7 +134,7 @@ func MakePrimitiveType(k NomsKind) *Type {
 }
 
 func makePrimitiveType(k NomsKind) *Type {
-	return buildType(PrimitiveDesc(k))
+	return newType(PrimitiveDesc(k), uint32(k))
 }
 
 func MakePrimitiveTypeByString(p string) *Type {
@@ -128,20 +156,6 @@ func MakePrimitiveTypeByString(p string) *Type {
 	return nil
 }
 
-func MakeStructType(name string, fields map[string]*Type) *Type {
-	verifyStructName(name)
-	fs := make(fieldSlice, len(fields))
-	i := 0
-	for fn, t := range fields {
-		verifyFieldName(fn)
-		fs[i] = field{fn, t}
-		i++
-	}
-
-	sort.Sort(fs)
-	return buildType(StructDesc{name, fs})
-}
-
 var fieldNameComponentRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*`)
 var fieldNameRe = regexp.MustCompile(fieldNameComponentRe.String() + "$")
 
@@ -158,66 +172,3 @@ func verifyStructName(name string) {
 		verifyName(name, "")
 	}
 }
-
-func MakeListType(elemType *Type) *Type {
-	return buildType(CompoundDesc{ListKind, []*Type{elemType}})
-}
-
-func MakeSetType(elemType *Type) *Type {
-	return buildType(CompoundDesc{SetKind, []*Type{elemType}})
-}
-
-func MakeMapType(keyType, valType *Type) *Type {
-	return buildType(CompoundDesc{MapKind, []*Type{keyType, valType}})
-}
-
-func MakeRefType(elemType *Type) *Type {
-	return buildType(CompoundDesc{RefKind, []*Type{elemType}})
-}
-
-type unionTypes []*Type
-
-func (uts unionTypes) Len() int           { return len(uts) }
-func (uts unionTypes) Less(i, j int) bool { return uts[i].Hash().Less(uts[j].Hash()) }
-func (uts unionTypes) Swap(i, j int)      { uts[i], uts[j] = uts[j], uts[i] }
-
-// MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
-func MakeUnionType(elemTypes ...*Type) *Type {
-	seenTypes := map[hash.Hash]bool{}
-	ts := flattenUnionTypes(elemTypes, &seenTypes)
-	if len(ts) == 1 {
-		return ts[0]
-	}
-	sort.Sort(unionTypes(ts))
-	return buildType(CompoundDesc{UnionKind, ts})
-}
-
-func flattenUnionTypes(ts []*Type, seenTypes *map[hash.Hash]bool) []*Type {
-	if len(ts) == 0 {
-		return ts
-	}
-
-	ts2 := make([]*Type, 0, len(ts))
-	for _, t := range ts {
-		if t.Kind() == UnionKind {
-			ts2 = append(ts2, flattenUnionTypes(t.Desc.(CompoundDesc).ElemTypes, seenTypes)...)
-		} else {
-			if !(*seenTypes)[t.Hash()] {
-				(*seenTypes)[t.Hash()] = true
-				ts2 = append(ts2, t)
-			}
-		}
-	}
-	return ts2
-}
-
-func buildType(desc TypeDesc) *Type {
-	return &Type{Desc: desc, h: &hash.Hash{}}
-}
-
-var NumberType = makePrimitiveType(NumberKind)
-var BoolType = makePrimitiveType(BoolKind)
-var StringType = makePrimitiveType(StringKind)
-var BlobType = makePrimitiveType(BlobKind)
-var TypeType = makePrimitiveType(TypeKind)
-var ValueType = makePrimitiveType(ValueKind)

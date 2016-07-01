@@ -111,15 +111,14 @@ func (i *opCacheIterator) Op() sequenceItem {
 	dataOffset := 0
 	switch NomsKind(ldbKey[0]) {
 	case BoolKind, NumberKind, StringKind:
-		entry.key = newValueDecoder(&binaryNomsReader{ldbKey, 0}, i.vr).readValue()
+		entry.key = DecodeFromBytes(ldbKey, i.vr, staticTypeCache)
 	default:
 		keyBytesLen := int(binary.LittleEndian.Uint32(data))
-		entry.key = newValueDecoder(&binaryNomsReader{data[uint32Size : uint32Size+keyBytesLen], 0}, i.vr).readValue()
+		entry.key = DecodeFromBytes(data[uint32Size:uint32Size+keyBytesLen], i.vr, staticTypeCache)
 		dataOffset = uint32Size + keyBytesLen
 	}
 
-	dec := newValueDecoder(&binaryNomsReader{data[dataOffset:], 0}, i.vr)
-	entry.value = dec.readValue()
+	entry.value = DecodeFromBytes(data[dataOffset:], i.vr, staticTypeCache)
 	return entry
 }
 

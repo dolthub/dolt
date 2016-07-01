@@ -82,7 +82,8 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		io.Copy(ioutil.Discard, reader)
 		reader.Close()
 	}()
-	vbs := types.NewValidatingBatchingSink(cs)
+	tc := types.NewTypeCache()
+	vbs := types.NewValidatingBatchingSink(cs, tc)
 	vbs.Prepare(deserializeHints(reader))
 
 	chunkChan := make(chan *chunks.Chunk, 16)

@@ -14,10 +14,12 @@ import (
 type valueDecoder struct {
 	nomsReader
 	vr ValueReader
+	tc *TypeCache
 }
 
-func newValueDecoder(nr nomsReader, vr ValueReader) *valueDecoder {
-	return &valueDecoder{nr, vr}
+// |tc| must be locked as long as the valueDecoder is being used
+func newValueDecoder(nr nomsReader, vr ValueReader, tc *TypeCache) *valueDecoder {
+	return &valueDecoder{nr, vr, tc}
 }
 
 func (r *valueDecoder) readKind() NomsKind {
@@ -30,30 +32,28 @@ func (r *valueDecoder) readRef(t *Type) Ref {
 	return constructRef(t, h, height)
 }
 
-func (r *valueDecoder) readType(parentStructTypes []*Type) *Type {
+func (r *valueDecoder) readType() *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind:
-		return MakeListType(r.readType(parentStructTypes))
+		return r.tc.getCompoundType(ListKind, r.readType())
 	case MapKind:
-		return MakeMapType(r.readType(parentStructTypes), r.readType(parentStructTypes))
+		return r.tc.getCompoundType(MapKind, r.readType(), r.readType())
 	case RefKind:
-		return MakeRefType(r.readType(parentStructTypes))
+		return r.tc.getCompoundType(RefKind, r.readType())
 	case SetKind:
-		return MakeSetType(r.readType(parentStructTypes))
+		return r.tc.getCompoundType(SetKind, r.readType())
 	case StructKind:
-		return r.readStructType(parentStructTypes)
+		return r.readStructType()
 	case UnionKind:
 		l := r.readUint32()
 		elemTypes := make([]*Type, l)
 		for i := uint32(0); i < l; i++ {
-			elemTypes[i] = r.readType(parentStructTypes)
+			elemTypes[i] = r.readType()
 		}
-		return MakeUnionType(elemTypes...)
+		return r.tc.getCompoundType(UnionKind, elemTypes...)
 	case CycleKind:
-		i := r.readUint32()
-		d.Chk.True(i < uint32(len(parentStructTypes)))
-		return parentStructTypes[len(parentStructTypes)-1-int(i)]
+		return r.tc.getCyclicType(r.readUint32())
 	}
 
 	d.Chk.True(IsPrimitiveKind(k))
@@ -129,7 +129,7 @@ func (r *valueDecoder) readOrderedMetaSequence(t *Type) orderedMetaSequence {
 }
 
 func (r *valueDecoder) readValue() Value {
-	t := r.readType(nil)
+	t := r.readType()
 	switch t.Kind() {
 	case BlobKind:
 		isMeta := r.readBool()
@@ -170,7 +170,7 @@ func (r *valueDecoder) readValue() Value {
 	case StructKind:
 		return r.readStruct(t)
 	case TypeKind:
-		return r.readType(nil)
+		return r.readType()
 	case CycleKind, UnionKind, ValueKind:
 		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
 	}
@@ -190,23 +190,36 @@ func (r *valueDecoder) readStruct(t *Type) Value {
 	return Struct{values, t, &hash.Hash{}}
 }
 
-func (r *valueDecoder) readStructType(parentStructTypes []*Type) *Type {
+func (r *valueDecoder) readCachedStructType() *Type {
+	trie := r.tc.trieRoots[StructKind].Traverse(r.readIdent(r.tc))
+	count := r.readUint32()
+
+	for i := uint32(0); i < count; i++ {
+		trie = trie.Traverse(r.readIdent(r.tc))
+		trie = trie.Traverse(r.readType().id)
+	}
+
+	return trie.t
+}
+
+func (r *valueDecoder) readStructType() *Type {
+	// Try to decode cached type without allocating
+	pos := r.pos()
+	t := r.readCachedStructType()
+	if t != nil {
+		return t
+	}
+
+	// Cache miss. Go back to read and create type
+	r.seek(pos)
+
 	name := r.readString()
 	count := r.readUint32()
 
-	fields := make(fieldSlice, count)
-	desc := StructDesc{name, fields}
-	st := buildType(desc)
-	parentStructTypes = append(parentStructTypes, st)
-
-	// HACK: If readType ends up referring to this type it is possible that we still have a null pointer for the type. Initialize all of the types to a valid (dummy) type.
+	fields := make(map[string]*Type, count)
 	for i := uint32(0); i < count; i++ {
-		fields[i].t = ValueType
+		fields[r.readString()] = r.readType()
 	}
 
-	for i := uint32(0); i < count; i++ {
-		fields[i] = field{name: r.readString(), t: r.readType(parentStructTypes)}
-	}
-	st.Desc = desc
-	return st
+	return r.tc.makeStructType(name, fields)
 }

@@ -268,15 +268,17 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
 	case CycleKind:
+		// This can happen for types which have unresolved cyclic refs
+		w.write(fmt.Sprintf("Cycle<%d>", int(t.Desc.(CycleDesc))))
 	default:
 		panic("unreachable")
 	}
 }
 
 func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
-	idx := indexOfType(t, parentStructTypes)
-	if idx != -1 {
-		w.writeCycle(uint8(len(parentStructTypes) - 1 - idx))
+	idx, found := indexOfType(t, parentStructTypes)
+	if found {
+		w.writeCycle(uint8(uint32(len(parentStructTypes)) - 1 - idx))
 		return
 	}
 	parentStructTypes = append(parentStructTypes, t)

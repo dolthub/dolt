@@ -309,18 +309,14 @@ func TestRecursiveStruct(t *testing.T) {
 	// }
 
 	a := MakeStructType("A", TypeMap{
-		"b": nil,
-		"c": nil,
-		"d": nil,
+		"b": MakeCycleType(0),
+		"c": MakeListType(MakeCycleType(0)),
+		"d": MakeStructType("D", TypeMap{
+			"e": MakeCycleType(0),
+			"f": MakeCycleType(1),
+		}),
 	})
-	d := MakeStructType("D", TypeMap{
-		"e": nil,
-		"f": a,
-	})
-	a.Desc.(StructDesc).SetField("b", a)
-	a.Desc.(StructDesc).SetField("c", MakeListType(a))
-	a.Desc.(StructDesc).SetField("d", d)
-	d.Desc.(StructDesc).SetField("e", d)
+
 	assertWriteHRSEqual(t, `struct A {
   b: Cycle<0>,
   c: List<Cycle<0>>,
@@ -338,6 +334,9 @@ func TestRecursiveStruct(t *testing.T) {
   },
 })`, a)
 
+	f, _ := a.Desc.(StructDesc).findField("d")
+	d := f.t
+
 	assertWriteHRSEqual(t, `struct D {
   e: Cycle<0>,
   f: struct A {
@@ -354,6 +353,27 @@ func TestRecursiveStruct(t *testing.T) {
     d: Cycle<1>,
   },
 })`, d)
+}
+
+func TestUnserolvedRecursiveStruct(t *testing.T) {
+	// struct A {
+	//   a: A
+	//   b: Cycle<1> (unresolved)
+	// }
+
+	a := MakeStructType("A", TypeMap{
+		"a": MakeCycleType(0),
+		"b": MakeCycleType(1),
+	})
+
+	assertWriteHRSEqual(t, `struct A {
+  a: Cycle<0>,
+  b: Cycle<1>,
+}`, a)
+	assertWriteTaggedHRSEqual(t, `Type(struct A {
+  a: Cycle<0>,
+  b: Cycle<1>,
+})`, a)
 }
 
 type errorWriter struct {

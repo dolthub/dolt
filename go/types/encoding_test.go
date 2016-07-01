@@ -19,6 +19,24 @@ type nomsTestReader struct {
 	i int
 }
 
+func (r *nomsTestReader) pos() uint32 {
+	return uint32(r.i)
+}
+
+func (r *nomsTestReader) seek(pos uint32) {
+	r.i = int(pos)
+}
+
+func (r *nomsTestReader) readIdent(tc *TypeCache) uint32 {
+	s := r.readString()
+	id, ok := tc.identTable.entries[s]
+	if !ok {
+		id = tc.identTable.GetId(s)
+	}
+
+	return id
+}
+
 func (r *nomsTestReader) read() interface{} {
 	v := r.a[r.i]
 	r.i++
@@ -101,6 +119,11 @@ func (w *nomsTestWriter) writeHash(h hash.Hash) {
 	w.writeString(h.String())
 }
 
+func (w *nomsTestWriter) appendType(t *Type) {
+	enc := valueEncoder{w, nil}
+	enc.writeType(t, nil)
+}
+
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	vs := NewTestValueStore()
 	tw := &nomsTestWriter{}
@@ -109,7 +132,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	assert.EqualValues(t, expect, tw.a)
 
 	ir := &nomsTestReader{expect, 0}
-	dec := valueDecoder{ir, vs}
+	dec := valueDecoder{ir, vs, staticTypeCache}
 	v2 := dec.readValue()
 	assert.True(t, ir.atEnd())
 	assert.True(t, v.Equals(v2))
@@ -276,9 +299,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 			uint8(RefKind), uint8(BlobKind), r3.String(), uint64(33), uint8(NumberKind), float64(60), uint64(60),
 		},
 		newBlob(newBlobMetaSequence([]metaTuple{
-			newMetaTuple(constructRef(RefOfBlobType, r1, 11), orderedKeyFromInt(20), 20, nil),
-			newMetaTuple(constructRef(RefOfBlobType, r2, 22), orderedKeyFromInt(40), 40, nil),
-			newMetaTuple(constructRef(RefOfBlobType, r3, 33), orderedKeyFromInt(60), 60, nil),
+			newMetaTuple(constructRef(MakeRefType(BlobType), r1, 11), orderedKeyFromInt(20), 20, nil),
+			newMetaTuple(constructRef(MakeRefType(BlobType), r2, 22), orderedKeyFromInt(40), 40, nil),
+			newMetaTuple(constructRef(MakeRefType(BlobType), r3, 33), orderedKeyFromInt(60), 60, nil),
 		}, NewTestValueStore())),
 	)
 }
@@ -489,12 +512,8 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 
 	structType := MakeStructType("A6", TypeMap{
 		"v":  NumberType,
-		"cs": nil,
+		"cs": MakeListType(MakeCycleType(0)),
 	})
-	listType := MakeListType(structType)
-	// Mutate...
-
-	structType.Desc.(StructDesc).SetField("cs", listType)
 
 	assertEncoding(t,
 		[]interface{}{
