@@ -47,7 +47,9 @@ func NewStructWithType(t *Type, data structData) Struct {
 	values := make([]Value, desc.Len())
 	for i, field := range desc.fields {
 		v, ok := data[field.name]
-		d.Chk.True(ok)
+		if !ok {
+			d.Chk.Fail("Missing required field: %s", field.name)
+		}
 		assertSubtype(field.t, v)
 		values[i] = v
 	}
@@ -106,13 +108,17 @@ func (s Struct) MaybeGet(n string) (Value, bool) {
 
 func (s Struct) Get(n string) Value {
 	_, i := s.desc().findField(n)
-	d.Chk.True(i != -1, "Struct has no such field")
+	if i == -1 {
+		d.Chk.Fail(`Struct has no field "%s"`, n)
+	}
 	return s.values[i]
 }
 
 func (s Struct) Set(n string, v Value) Struct {
 	f, i := s.desc().findField(n)
-	d.Chk.True(i != -1, "Struct has no such field")
+	if i == -1 {
+		d.Chk.Fail(`Struct has no field "%s"`, n)
+	}
 	assertSubtype(f.t, v)
 	values := make([]Value, len(s.values))
 	copy(values, s.values)
