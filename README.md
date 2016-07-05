@@ -4,8 +4,6 @@
 
 In other words, Noms is Git for data.
 
-In *other*, other words, Noms is Programmable Git.
-
 This repository contains two reference implementations of the database—one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
 
 
