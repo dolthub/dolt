@@ -7,21 +7,44 @@ package status
 
 import (
 	"fmt"
+	"time"
 )
 
 const (
 	clearLine = "\x1b[2K\r"
+	rate      = 100 * time.Millisecond
+)
+
+var (
+	lastTime   time.Time
+	lastFormat string
+	lastArgs   []interface{}
 )
 
 func Clear() {
 	fmt.Print(clearLine)
+	reset(time.Time{})
 }
 
 func Printf(format string, args ...interface{}) {
-	// Can't call Clear() here because it causes flicker
-	fmt.Printf(clearLine+format, args...)
+	now := time.Now()
+	if now.Sub(lastTime) < rate {
+		lastFormat, lastArgs = format, args
+	} else {
+		fmt.Printf(clearLine+format, args...)
+		reset(now)
+	}
 }
 
 func Done() {
-	fmt.Println("")
+	if lastArgs != nil {
+		fmt.Printf(clearLine+lastFormat, lastArgs...)
+	}
+	fmt.Println()
+	reset(time.Time{})
+}
+
+func reset(time time.Time) {
+	lastTime = time
+	lastFormat, lastArgs = "", nil
 }
