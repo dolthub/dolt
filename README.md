@@ -11,7 +11,7 @@ This repository contains two reference implementations of the database—one in 
 
 ## Setup
 
-Noms works on Mac OS X and Linux. It probably works on other Unixen, but that's not tested. Windows is not currently supported.
+Noms is supported on Mac OS X and Linux. Windows is not currently supported.
 
 1. Install [Go 1.6+](https://golang.org/dl/)
 2. Ensure your [$GOPATH](https://github.com/golang/go/wiki/GOPATH) is configured
