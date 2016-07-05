@@ -77,7 +77,7 @@ async function main(): Promise<void> {
       if (isSubtype(placeType, v.type)) {
         photo.geoposition = getGeo(v);
       }
-      result = result.then(r => r.add(newStruct('Photo', photo)));
+      result = result.then(r => r.insert(newStruct('Photo', photo)));
       return true;
     }
   });

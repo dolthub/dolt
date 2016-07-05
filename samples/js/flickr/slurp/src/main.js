@@ -76,11 +76,13 @@ async function main(): Promise<void> {
   const photosetsJSON = await getPhotosetsJSON();
   let seen = 0;
 
-  const photosets = await Promise.all(photosetsJSON.map(p => getPhotoset(p.id).then(p => {
-    process.stdout.write(
-      `${clearLine}${++seen} of ${photosetsJSON.length} photosets imported...`);
-    return p;
-  }))).then(sets => new Set(sets));
+  const photosets = await Promise.all(photosetsJSON.map(p => {
+    return getPhotoset(p.id).then(p => {
+      process.stdout.write(
+        `${clearLine}${++seen} of ${photosetsJSON.length} photosets imported...`);
+      return p;
+    });
+  })).then(sets => new Set(sets));
 
   process.stdout.write(clearLine);
   return out.commit(newStruct('', {

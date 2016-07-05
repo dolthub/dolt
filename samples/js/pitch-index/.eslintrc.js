@@ -5,5 +5,3 @@
 module.exports = require('@attic/eslintrc');
 // Allow console
 module.exports.rules['no-console'] = 0;
-// Used to distinguish between user errors and exceptions.
-module.exports.rules['no-throw-literal'] = 0;

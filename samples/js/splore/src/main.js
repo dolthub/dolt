@@ -97,7 +97,7 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
-      const kid = process(hash, formatKeyString(tuple.child), id);
+      const kid = process(hash, formatKeyString(tuple.value), id);
       if (kid) {
         data.nodes[kid].isOpen = true;
 

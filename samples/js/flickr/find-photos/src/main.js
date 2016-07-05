@@ -49,19 +49,13 @@ const sizeTypes = sizes.map(s =>
 //   } |
 //   ... for all the image size suffixes ...
 // }
-const imageType = makeUnionType(sizeTypes.map(st => {
-  const newFields = {
-    title: stringType,
-    tags: stringType,
-    latitude: flickrNum,
-    longitude: flickrNum,
-  };
-  st.desc.forEachField((name, type) => {
-    newFields[name] = type;
-  });
-
-  return makeStructType('', newFields);
-}));
+const imageType = makeUnionType(sizeTypes.map(st =>
+    makeStructType('', Object.assign(({
+      title: stringType,
+      tags: stringType,
+      latitude: flickrNum,
+      longitude: flickrNum,
+    }:Object), st.desc.fields))));
 
 main().catch(ex => {
   console.error(ex);
@@ -97,7 +91,7 @@ async function main(): Promise<void> {
         photo.geoposition = geo;
       }
 
-      result = result.then(r => r.add(newStruct('Photo', photo)));
+      result = result.then(r => r.insert(newStruct('Photo', photo)));
       return true;
     }
     return false;
