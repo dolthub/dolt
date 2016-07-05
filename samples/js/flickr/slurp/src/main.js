@@ -54,7 +54,9 @@ main().catch(ex => {
   process.exit(1);
 });
 
-var authToken, authSecret, authURL: string;  // eslint-disable-line no-var
+var authToken: ?string;  // eslint-disable-line no-var
+var authSecret: ?string;  // eslint-disable-line no-var
+var authURL: ?string;  // eslint-disable-line no-var
 var out: Dataset;  // eslint-disable-line no-var
 
 async function main(): Promise<void> {
@@ -76,13 +78,11 @@ async function main(): Promise<void> {
   const photosetsJSON = await getPhotosetsJSON();
   let seen = 0;
 
-  const photosets = await Promise.all(photosetsJSON.map(p => {
-    return getPhotoset(p.id).then(p => {
-      process.stdout.write(
-        `${clearLine}${++seen} of ${photosetsJSON.length} photosets imported...`);
-      return p;
-    });
-  })).then(sets => new Set(sets));
+  const photosets = await Promise.all(photosetsJSON.map(p => getPhotoset(p.id).then(p => {
+    process.stdout.write(
+      `${clearLine}${++seen} of ${photosetsJSON.length} photosets imported...`);
+    return p;
+  }))).then(sets => new Set(sets));
 
   process.stdout.write(clearLine);
   return out.commit(newStruct('', {
@@ -133,6 +133,7 @@ function getAuthToken(): Promise<[string, string]> {
 function promptForAuth(url: string): Promise<void> {
   return new Promise((res) => {
     process.stdout.write(`Go to ${url} to grant permissions to access Flickr...\n`);
+    // $FlowIssue: Flow does not know about createInterface.
     const rl = readline.createInterface({input: process.stdin, output: process.stdout});
     rl.question('Press enter when done\n', () => {
       process.stdout.write('Authenticated. Next time run:\n' +

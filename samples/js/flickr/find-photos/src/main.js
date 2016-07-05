@@ -31,8 +31,11 @@ const sizes = ['t', 's', 'm', 'l', 'o'];
 const flickrNum = makeUnionType([stringType, numberType]);
 const sizeTypes = sizes.map(s =>
   makeStructType('', {
+    // $FlowIssue: computed property keys not supported
     ['url_' + s]: stringType,
+    // $FlowIssue: computed property keys not supported
     ['width_' + s]: flickrNum,
+    // $FlowIssue: computed property keys not supported
     ['height_' + s]: flickrNum,
   }));
 
@@ -49,13 +52,19 @@ const sizeTypes = sizes.map(s =>
 //   } |
 //   ... for all the image size suffixes ...
 // }
-const imageType = makeUnionType(sizeTypes.map(st =>
-    makeStructType('', Object.assign(({
-      title: stringType,
-      tags: stringType,
-      latitude: flickrNum,
-      longitude: flickrNum,
-    }:Object), st.desc.fields))));
+const imageType = makeUnionType(sizeTypes.map(st => {
+  const newFields = {
+    title: stringType,
+    tags: stringType,
+    latitude: flickrNum,
+    longitude: flickrNum,
+  };
+  st.desc.forEachField((name, type) => {
+    newFields[name] = type;
+  });
+
+  return makeStructType('', newFields);
+}));
 
 main().catch(ex => {
   console.error(ex);
@@ -91,7 +100,7 @@ async function main(): Promise<void> {
         photo.geoposition = geo;
       }
 
-      result = result.then(r => r.insert(newStruct('Photo', photo)));
+      result = result.then(r => r.add(newStruct('Photo', photo)));
       return true;
     }
     return false;
@@ -111,7 +120,6 @@ function getSizes(input: Object): Map<Struct, string> {
   return new Map(
     sizes.map((s, i) => {
       if (!isSubtype(sizeTypes[i], input.type)) {
-        // $FlowIssue - Flow doesn't realize that filter will return only non-nulls.
         return null;
       }
       const url = input['url_' + s];

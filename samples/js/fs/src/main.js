@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 
 }
 
-async function processPath(p: string, store: Database): Promise<null|Directory|File> {
+async function processPath(p: string, store: Database): Promise<void|Directory|File> {
   numFilesFound++;
   const st = await fs.stat(p);
   sizeFilesFound += st.size;

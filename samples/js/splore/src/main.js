@@ -34,7 +34,7 @@ let rootHash: Hash;
 let database: Database;
 
 let renderNode: ?HTMLElement;
-let params;
+let params = {};
 
 window.onload = load;
 window.onpopstate = load;
@@ -97,7 +97,7 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
-      const kid = process(hash, formatKeyString(tuple.value), id);
+      const kid = process(hash, formatKeyString(tuple.child), id);
       if (kid) {
         data.nodes[kid].isOpen = true;
 
@@ -237,7 +237,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-class Prompt extends React.Component<void, {}, void> {
+class Prompt extends React.Component<{}, {}, void> {
   render(): React.Element {
     const fontStyle: {[key: string]: any} = {
       fontFamily: 'Menlo',

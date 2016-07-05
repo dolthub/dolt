@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   await hv.forEach((ref: Ref<XMLElement>) => {
     // We force elemP to be 'any' here because the 'inning' entry and the 'Player' entry have
     // different types that involve multiple levels of nested maps OR strings.
-    const elemP: any = ref.targetValue(input.database);
+    const elemP = ref.targetValue(input.database);
     inningPs.push(maybeProcessInning(elemP));
     playerPs.push(maybeProcessPitcher(elemP, pitchers));
   });
@@ -93,7 +93,8 @@ function maybeProcessInning(ep: Promise<XMLElement>): Promise<?Map<string, Array
   return ep.then(elem => elem.get('inning')).then(inn => inn && processInning(inn));
 }
 
-function processInning(inning: NomsMap<string, NomsMap>): Promise<Map<string, Array<Struct>>> {
+function processInning(inning: NomsMap<string, NomsMap<*, *>>):
+    Promise<Map<string, Array<Struct>>> {
   return Promise.all([inning.get('top'), inning.get('bottom')])
     .then(halves => {
       const halfPs = [];
@@ -112,7 +113,8 @@ function processInning(inning: NomsMap<string, NomsMap>): Promise<Map<string, Ar
       return Promise.all(abPs);
     })
     .then(pitcherPitchList => {
-      const ret = new Map();
+      // any because of Flow.
+      const ret: any = new Map();
       for (const pitcherPitches of pitcherPitchList) {
         mergeInto(ret, pitcherPitches);
       }
@@ -140,7 +142,7 @@ function processAbs(abs: List): Promise<PitcherPitches> {
   });
 }
 
-function extendArray<T>(a: Array<T> = [], b: Array<T> = []): Array<T> {
+function extendArray(a = [], b = []) {
   b.forEach(e => a.push(e));
   return a;
 }

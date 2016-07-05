@@ -19,6 +19,7 @@ def pushd(path):
 
 def main():
   lsfiles = subprocess.check_output(['git', 'ls-files']).split('\n')
+  lsfiles.sort(key = len) # Sort by shortest first to make sure we deal with parents first
   for f in lsfiles:
     path, name = os.path.split(f)
     if name == 'package.json':

@@ -59,11 +59,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const commit = await rv.targetValue(input.store);
+  const commit = await rv.targetValue(input.database);
 
   let out = Promise.resolve(new Map());
 
-  await walk(commit.value, input.store, cv => {
+  await walk(commit.value, input.database, cv => {
     if (!(cv instanceof Struct) || cv.type.name !== args.struct) {
       return;
     }
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
     return true;
   });
 
-  await outSpec.set().commit(await out);
+  await outSpec.dataset().commit(await out);
 }
 
 function quit(err: string): Function {

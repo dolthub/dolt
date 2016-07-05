@@ -29,7 +29,7 @@ type State = {
   y: number,
 };
 
-export default class Node extends React.Component<void, Props, State> {
+export default class Node extends React.Component<{}, Props, State> {
   state: State;
 
   constructor(props: Props) {
