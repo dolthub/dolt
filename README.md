@@ -16,7 +16,7 @@ Noms is supported on Mac OS X and Linux. Windows is not currently supported.
 3. Type type type:
 ```
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
-go install github.com/attic-labs/noms/cmd/...
+go install github.com/attic-labs/noms/cmd/noms
 
 noms log http://demo.noms.io/cli-tour::film-locations
 ```
