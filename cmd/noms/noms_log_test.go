@@ -30,33 +30,34 @@ func (testExiter) Exit(code int) {
 	panic(exitError{code})
 }
 
-func TestNomsShow(t *testing.T) {
+func TestNomsLog(t *testing.T) {
 	d.UtilExiter = testExiter{}
-	suite.Run(t, &nomsShowTestSuite{})
+	suite.Run(t, &nomsLogTestSuite{})
 }
 
-type nomsShowTestSuite struct {
+type nomsLogTestSuite struct {
 	clienttest.ClientTestSuite
 }
 
-func testCommitInResults(s *nomsShowTestSuite, str string, i int) {
+func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	ds, err := spec.GetDataset(str)
 	s.NoError(err)
 	ds, err = ds.Commit(types.Number(i))
 	s.NoError(err)
 	commit := ds.Head()
 	ds.Database().Close()
-	s.Contains(s.Run(main, []string{str}), commit.Hash().String())
+	res, _ := s.Run(main, []string{"log", str})
+	s.Contains(res, commit.Hash().String())
 }
 
-func (s *nomsShowTestSuite) TestNomsLog() {
+func (s *nomsLogTestSuite) TestNomsLog() {
 	datasetName := "dsTest"
 	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
 	ds, err := spec.GetDataset(str)
 	s.NoError(err)
 
 	ds.Database().Close()
-	s.Panics(func() { s.Run(main, []string{str}) })
+	s.Panics(func() { s.Run(main, []string{"log", str}) })
 
 	testCommitInResults(s, str, 1)
 	testCommitInResults(s, str, 2)
@@ -78,7 +79,7 @@ func mergeDatasets(ds1, ds2 dataset.Dataset, v string) (dataset.Dataset, error) 
 	return ds1.CommitWithParents(types.String(v), types.NewSet(ds1.HeadRef(), ds2.HeadRef()))
 }
 
-func (s *nomsShowTestSuite) TestNArg() {
+func (s *nomsLogTestSuite) TestNArg() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
 	db, err := spec.GetDatabase(str)
@@ -98,21 +99,23 @@ func (s *nomsShowTestSuite) TestNArg() {
 	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsName)
-	s.NotContains(s.Run(main, []string{"-n=1", dsSpec}), h1.String())
-	res := s.Run(main, []string{"-n=0", dsSpec})
+	res, _ := s.Run(main, []string{"log", "-n=1", dsSpec})
+	s.NotContains(res, h1.String())
+	res, _ = s.Run(main, []string{"log", "-n=0", dsSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 
 	vSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+h3.String())
-	s.NotContains(s.Run(main, []string{"-n=1", vSpec}), h1.String())
-	res = s.Run(main, []string{"-n=0", vSpec})
+	res, _ = s.Run(main, []string{"log", "-n=1", vSpec})
+	s.NotContains(res, h1.String())
+	res, _ = s.Run(main, []string{"log", "-n=0", vSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 }
 
-func (s *nomsShowTestSuite) TestNomsGraph1() {
+func (s *nomsLogTestSuite) TestNomsGraph1() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
@@ -159,11 +162,13 @@ func (s *nomsShowTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b1.Database().Close()
-	s.Equal(graphRes1, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
-	s.Equal(diffRes1, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")}))
+	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
+	s.Equal(graphRes1, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
+	s.Equal(diffRes1, res)
 }
 
-func (s *nomsShowTestSuite) TestNomsGraph2() {
+func (s *nomsLogTestSuite) TestNomsGraph2() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
@@ -188,11 +193,14 @@ func (s *nomsShowTestSuite) TestNomsGraph2() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes2, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
-	s.Equal(diffRes2, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")}))
+
+	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
+	s.Equal(graphRes2, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
+	s.Equal(diffRes2, res)
 }
 
-func (s *nomsShowTestSuite) TestNomsGraph3() {
+func (s *nomsLogTestSuite) TestNomsGraph3() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
 	s.NoError(err)
@@ -227,11 +235,13 @@ func (s *nomsShowTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 
 	db.Close()
-	s.Equal(graphRes3, s.Run(main, []string{"-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")}))
-	s.Equal(diffRes3, s.Run(main, []string{"-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")}))
+	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
+	s.Equal(graphRes3, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
+	s.Equal(diffRes3, res)
 }
 
-func (s *nomsShowTestSuite) TestTruncation() {
+func (s *nomsLogTestSuite) TestTruncation() {
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}
 		for _, v := range l {
@@ -255,14 +265,20 @@ func (s *nomsShowTestSuite) TestTruncation() {
 	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "truncate")
-	s.Equal(truncRes1, s.Run(main, []string{"-graph", "-show-value=true", dsSpec}))
-	s.Equal(diffTrunc1, s.Run(main, []string{"-graph", "-show-value=false", dsSpec}))
+	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", dsSpec})
+	s.Equal(truncRes1, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", dsSpec})
+	s.Equal(diffTrunc1, res)
 
-	s.Equal(truncRes2, s.Run(main, []string{"-graph", "-show-value=true", "-max-lines=-1", dsSpec}))
-	s.Equal(diffTrunc2, s.Run(main, []string{"-graph", "-show-value=false", "-max-lines=-1", dsSpec}))
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=true", "-max-lines=-1", dsSpec})
+	s.Equal(truncRes2, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", "-max-lines=-1", dsSpec})
+	s.Equal(diffTrunc2, res)
 
-	s.Equal(truncRes3, s.Run(main, []string{"-graph", "-show-value=true", "-max-lines=0", dsSpec}))
-	s.Equal(diffTrunc3, s.Run(main, []string{"-graph", "-show-value=false", "-max-lines=0", dsSpec}))
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=true", "-max-lines=0", dsSpec})
+	s.Equal(truncRes3, res)
+	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", "-max-lines=0", dsSpec})
+	s.Equal(diffTrunc3, res)
 }
 
 func TestBranchlistSplice(t *testing.T) {

@@ -7,27 +7,31 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 )
 
-func main() {
-	toDelete := flag.String("d", "", "dataset to delete")
+var toDelete string
 
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Noms dataset management\n")
-		fmt.Fprintln(os.Stderr, "Usage: noms ds [<database> | -d <dataset>]")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nFor detailed information on spelling datastores and datasets, see: at https://github.com/attic-labs/noms/blob/master/doc/spelling.md.\n\n")
-	}
+var nomsDs = &nomsCommand{
+	Run:       runDs,
+	UsageLine: "ds [<database> | -d <dataset>]",
+	Short:     "Noms dataset management",
+	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the database and dataset arguments.",
+	Flags:     setupDsFlags,
+}
 
-	flag.Parse()
+func setupDsFlags() *flag.FlagSet {
+	dsFlagSet := flag.NewFlagSet("ds", flag.ExitOnError)
+	dsFlagSet.StringVar(&toDelete, "d", "", "dataset to delete")
+	return dsFlagSet
+}
 
-	if *toDelete != "" {
-		set, err := spec.GetDataset(*toDelete)
+func runDs(args []string) int {
+	if toDelete != "" {
+		set, err := spec.GetDataset(toDelete)
 		d.CheckError(err)
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
@@ -41,12 +45,11 @@ func main() {
 
 		fmt.Printf("Deleted dataset %v (was %v)\n\n", set.ID(), oldCommitRef.TargetHash().String())
 	} else {
-		if flag.NArg() != 1 {
-			flag.Usage()
-			return
+		if len(args) != 1 {
+			d.CheckError(fmt.Errorf("Database arg missing"))
 		}
 
-		store, err := spec.GetDatabase(flag.Arg(0))
+		store, err := spec.GetDatabase(args[0])
 		d.CheckError(err)
 		defer store.Close()
 
@@ -54,5 +57,5 @@ func main() {
 			fmt.Println(k)
 		})
 	}
-
+	return 0
 }

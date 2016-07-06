@@ -49,18 +49,23 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	s1 := types.String("test string")
 	r := writeTestData(str, s1)
-	s.Equal(res1, s.Run(main, []string{str}))
+	res, _ := s.Run(main, []string{"show", str})
+	s.Equal(res1, res)
 
 	str1 := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+r.TargetHash().String())
-	s.Equal(res2, s.Run(main, []string{str1}))
+	res, _ = s.Run(main, []string{"show", str1})
+	s.Equal(res2, res)
 
 	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
 	r = writeTestData(str, list)
-	s.Equal(res3, s.Run(main, []string{str}))
+	res, _ = s.Run(main, []string{"show", str})
+	s.Equal(res3, res)
 
 	str1 = spec.CreateValueSpecString("ldb", s.LdbDir, "#"+r.TargetHash().String())
-	s.Equal(res4, s.Run(main, []string{str1}))
+	res, _ = s.Run(main, []string{"show", str1})
+	s.Equal(res4, res)
 
 	_ = writeTestData(str, s1)
-	s.Equal(res5, s.Run(main, []string{str}))
+	res, _ = s.Run(main, []string{"show", str})
+	s.Equal(res5, res)
 }

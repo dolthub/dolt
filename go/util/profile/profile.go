@@ -15,30 +15,40 @@ import (
 )
 
 var (
-	cpuProfile   = flag.String("cpuprofile", "", "write cpu profile to file")
-	memProfile   = flag.String("memprofile", "", "write memory profile to this file")
-	blockProfile = flag.String("blockprofile", "", "write block profile to this file")
+	cpuProfile      string
+	memProfile      string
+	blockProfile    string
+	flagsRegistered = false
 )
+
+func RegisterProfileFlags(flags *flag.FlagSet) {
+	if !flagsRegistered {
+		flagsRegistered = true
+		flags.StringVar(&cpuProfile, "cpuprofile", "", "write cpu profile to file")
+		flags.StringVar(&memProfile, "memprofile", "", "write memory profile to this file")
+		flags.StringVar(&blockProfile, "blockprofile", "", "write block profile to this file")
+	}
+}
 
 // MaybeStartProfile checks the -blockProfile, -cpuProfile, and -memProfile flag and, for each that is set, attempts to start gathering profiling data into the appropriate files. It returns an object with one method, Stop(), that must be called in order to flush profile data to disk before the process terminates.
 func MaybeStartProfile() interface {
 	Stop()
 } {
 	p := &prof{}
-	if *blockProfile != "" {
-		f, err := os.Create(*blockProfile)
+	if blockProfile != "" {
+		f, err := os.Create(blockProfile)
 		d.PanicIfError(err)
 		runtime.SetBlockProfileRate(1)
 		p.bp = f
 	}
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
+	if cpuProfile != "" {
+		f, err := os.Create(cpuProfile)
 		d.PanicIfError(err)
 		pprof.StartCPUProfile(f)
 		p.cpu = f
 	}
-	if *memProfile != "" {
-		f, err := os.Create(*memProfile)
+	if memProfile != "" {
+		f, err := os.Create(memProfile)
 		d.PanicIfError(err)
 		p.mem = f
 	}

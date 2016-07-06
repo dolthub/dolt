@@ -36,11 +36,11 @@ var (
 	flagsRegistered = false
 )
 
-func RegisterLevelDBFlags() {
+func RegisterLevelDBFlags(flags *flag.FlagSet) {
 	if !flagsRegistered {
 		flagsRegistered = true
-		flag.IntVar(&ldbFlags.maxFileHandles, "ldb-max-file-handles", 24, "max number of open file handles")
-		flag.BoolVar(&ldbFlags.dumpStats, "ldb-dump-stats", false, "print get/has/put counts on close")
+		flags.IntVar(&ldbFlags.maxFileHandles, "ldb-max-file-handles", 24, "max number of open file handles")
+		flags.BoolVar(&ldbFlags.dumpStats, "ldb-dump-stats", false, "print get/has/put counts on close")
 	}
 }
 

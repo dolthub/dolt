@@ -32,6 +32,7 @@ const boolSize = uint64(1)
 const structSize = uint64(64)
 
 func main() {
+	profile.RegisterProfileFlags(flag.CommandLine)
 	flag.Parse()
 
 	buildCount := *count

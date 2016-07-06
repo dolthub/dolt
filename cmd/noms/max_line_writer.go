@@ -24,6 +24,7 @@ type maxLineWriter struct {
 	node        LogNode
 	dest        io.Writer
 	needsPrefix bool
+	showGraph   bool
 }
 
 func (w *maxLineWriter) writeMax(data []byte, enforceMax bool) (byteCnt int, err error) {
@@ -31,7 +32,7 @@ func (w *maxLineWriter) writeMax(data []byte, enforceMax bool) (byteCnt int, err
 		if w.needsPrefix {
 			w.needsPrefix = false
 			w.numLines++
-			if *showGraph {
+			if w.showGraph {
 				s := genGraph(w.node, w.numLines)
 				_, err = w.dest.Write([]byte(s))
 			}

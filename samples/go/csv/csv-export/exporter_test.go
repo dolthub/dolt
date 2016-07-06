@@ -67,10 +67,11 @@ func (s *testSuite) TestCSVExporter() {
 
 	// Run exporter
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{dataspec})
+	stdout, stderr := s.Run(main, []string{dataspec})
+	s.Equal("", stderr)
 
 	// Verify output
-	csvReader := csv.NewReader(strings.NewReader(out))
+	csvReader := csv.NewReader(strings.NewReader(stdout))
 
 	row, err := csvReader.Read()
 	d.Chk.NoError(err)

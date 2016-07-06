@@ -24,7 +24,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	spec.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags(flag.CommandLine)
 	flag.Parse()
 
 	if len(flag.Args()) != 2 {

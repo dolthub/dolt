@@ -19,31 +19,37 @@ type ClientTestSuite struct {
 	TempDir string
 	LdbDir  string
 	out     *os.File
+	err     *os.File
 }
 
 func (suite *ClientTestSuite) SetupSuite() {
 	dir, err := ioutil.TempDir(os.TempDir(), "nomstest")
 	d.Chk.NoError(err)
-	out, err := ioutil.TempFile(dir, "out")
+	stdOutput, err := ioutil.TempFile(dir, "out")
+	d.Chk.NoError(err)
+	errOutput, err := ioutil.TempFile(dir, "err")
 	d.Chk.NoError(err)
 
 	suite.TempDir = dir
 	suite.LdbDir = path.Join(dir, "ldb")
-	suite.out = out
+	suite.out = stdOutput
+	suite.err = errOutput
 }
 
 func (suite *ClientTestSuite) TearDownSuite() {
 	suite.out.Close()
+	suite.err.Close()
 	defer d.Chk.NoError(os.RemoveAll(suite.TempDir))
 }
 
-func (suite *ClientTestSuite) Run(m func(), args []string) string {
+func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stderr string) {
 	origArgs := os.Args
 	origOut := os.Stdout
 	origErr := os.Stderr
 
 	os.Args = append([]string{"cmd"}, args...)
 	os.Stdout = suite.out
+	os.Stderr = suite.err
 
 	defer func() {
 		os.Args = origArgs
@@ -56,7 +62,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 
 	_, err := suite.out.Seek(0, 0)
 	d.Chk.NoError(err)
-	b, err := ioutil.ReadAll(os.Stdout)
+	capturedOut, err := ioutil.ReadAll(os.Stdout)
 	d.Chk.NoError(err)
 
 	_, err = suite.out.Seek(0, 0)
@@ -64,5 +70,15 @@ func (suite *ClientTestSuite) Run(m func(), args []string) string {
 	err = suite.out.Truncate(0)
 	d.Chk.NoError(err)
 
-	return string(b)
+	_, err = suite.err.Seek(0, 0)
+	d.Chk.NoError(err)
+	capturedErr, err := ioutil.ReadAll(os.Stderr)
+	d.Chk.NoError(err)
+
+	_, err = suite.err.Seek(0, 0)
+	d.Chk.NoError(err)
+	err = suite.err.Truncate(0)
+	d.Chk.NoError(err)
+
+	return string(capturedOut), string(capturedErr)
 }

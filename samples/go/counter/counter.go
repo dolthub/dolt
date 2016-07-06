@@ -18,6 +18,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "usage: %s [options] <dataset>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+
+	spec.RegisterDatabaseFlags(flag.CommandLine)
+
 	flag.Parse()
 
 	if flag.NArg() != 1 {

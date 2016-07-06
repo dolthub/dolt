@@ -45,8 +45,9 @@ func (s *testSuite) TestCSVImporter() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
-	s.Equal("", out)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
@@ -83,8 +84,9 @@ func (s *testSuite) TestCSVImporterToMap() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number,Number", "-dest-type", "map:1", dataspec, input.Name()})
-	s.Equal("", out)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number,Number", "-dest-type", "map:1", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
@@ -113,8 +115,9 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-delimiter", "|", dataspec, input.Name()})
-	s.Equal("", out)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-delimiter", "|", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
@@ -140,8 +143,9 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	out := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-header", "x,y", dataspec, input.Name()})
-	s.Equal("", out)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-header", "x,y", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)

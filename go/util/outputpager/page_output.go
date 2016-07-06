@@ -14,8 +14,16 @@ import (
 )
 
 var (
-	NoPager = flag.Bool("no-pager", false, "suppress paging functionality")
+	NoPager         bool
+	flagsRegistered = false
 )
+
+func RegisterOutputpagerFlags(flags *flag.FlagSet) {
+	if !flagsRegistered {
+		flagsRegistered = true
+		flags.BoolVar(&NoPager, "no-pager", false, "suppress paging functionality")
+	}
+}
 
 func PageOutput(usePager bool) <-chan struct{} {
 	if !usePager || !IsStdoutTty() {

@@ -26,19 +26,24 @@ type testSuite struct {
 
 func (s *testSuite) TestRoundTrip() {
 	spec := fmt.Sprintf("ldb:%s::hr", s.LdbDir)
-	out := s.Run(main, []string{"-ds", spec, "list-persons"})
-	s.Equal("No people found\n", out)
+	stdout, stderr := s.Run(main, []string{"-ds", spec, "list-persons"})
+	s.Equal("No people found\n", stdout)
+	s.Equal("", stderr)
 
-	out = s.Run(main, []string{"-ds", spec, "add-person", "42", "Benjamin Kalman", "Programmer, Barista"})
-	s.Equal("", out)
+	stdout, stderr = s.Run(main, []string{"-ds", spec, "add-person", "42", "Benjamin Kalman", "Programmer, Barista"})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
-	out = s.Run(main, []string{"-ds", spec, "add-person", "43", "Abigail Boodman", "Chief Architect"})
-	s.Equal("", out)
+	stdout, stderr = s.Run(main, []string{"-ds", spec, "add-person", "43", "Abigail Boodman", "Chief Architect"})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
 
-	out = s.Run(main, []string{"-ds", spec, "list-persons"})
+	stdout, stderr = s.Run(main, []string{"-ds", spec, "list-persons"})
 	s.Equal(`Benjamin Kalman (id: 42, title: Programmer, Barista)
 Abigail Boodman (id: 43, title: Chief Architect)
-`, out)
+`, stdout)
+	s.Equal("", stderr)
+
 }
 
 func (s *testSuite) TestReadCanned() {
@@ -49,13 +54,14 @@ func (s *testSuite) TestReadCanned() {
 	// Have to copy the canned data elsewhere because just reading the database modifies it.
 	_, err = exec.Command("cp", "-r", p, dst).Output()
 	s.NoError(err)
-	out := s.Run(main, []string{"-ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
+	stdout, stderr := s.Run(main, []string{"-ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
 	s.Equal(`Aaron Boodman (id: 7, title: Chief Evangelism Officer)
 Samuel Boodman (id: 13, title: VP, Culture)
-`, out)
+`, stdout)
+	s.Equal("", stderr)
 }
 
 func (s *testSuite) TestInvalidDatasetSpec() {
 	// Should not crash
-	_ = s.Run(main, []string{"-ds", "invalid-dataset", "list-persons"})
+	_, _ = s.Run(main, []string{"-ds", "invalid-dataset", "list-persons"})
 }

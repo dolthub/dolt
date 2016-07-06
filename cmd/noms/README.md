@@ -1,7 +1,3 @@
-# noms-serve
-
-noms-serve implements a noms database over HTTP.
-
 ## Example
 
 ```

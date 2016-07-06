@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,7 +14,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/attic-labs/noms/cmd/noms-diff/diff"
+	"github.com/attic-labs/noms/cmd/noms/diff"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -26,62 +25,60 @@ import (
 )
 
 var (
-	color, maxLines, maxCommits    *int
-	showHelp, showGraph, showValue *bool
-	useColor                       = false
+	useColor   = false
+	color      int
+	maxLines   int
+	maxCommits int
+	showGraph  bool
+	showValue  bool
 )
 
 const parallelism = 16
 
-func main() {
-	color = flag.Int("color", -1, "value of 1 forces color on, 2 forces color off")
-	maxLines = flag.Int("max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
-	maxCommits = flag.Int("n", 0, "max number of commits to display (0 for all commits)")
-	showHelp = flag.Bool("help", false, "show help text")
-	showGraph = flag.Bool("graph", false, "show ascii-based commit hierarcy on left side of output")
-	showValue = flag.Bool("show-value", false, "show commit value rather than diff information -- this is temporary")
+var nomsLog = &nomsCommand{
+	Run:       runLog,
+	UsageLine: "log [options] <commitObject>",
+	Short:     "Displays the history of a Noms dataset",
+	Long:      "commitObject must be a dataset or object spec that refers to a commit. See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details.",
+	Flags:     setupLogFlags,
+	Nargs:     1,
+}
 
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Displays the history of a Noms dataset\n")
-		fmt.Fprintln(os.Stderr, "Usage: noms log <commitObject>")
-		fmt.Fprintln(os.Stderr, "commitObject must be a dataset or object spec that refers to a commit.")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nSee \"Spelling Objects\" at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.\n\n")
-	}
+func setupLogFlags() *flag.FlagSet {
+	logFlagSet := flag.NewFlagSet("log", flag.ExitOnError)
+	logFlagSet.IntVar(&color, "color", -1, "value of 1 forces color on, 2 forces color off")
+	logFlagSet.IntVar(&maxLines, "max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
+	logFlagSet.IntVar(&maxCommits, "n", 0, "max number of commits to display (0 for all commits)")
+	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarcy on left side of output")
+	logFlagSet.BoolVar(&showValue, "show-value", false, "show commit value rather than diff information -- this is temporary")
+	outputpager.RegisterOutputpagerFlags(logFlagSet)
+	return logFlagSet
+}
 
-	flag.Parse()
-	if *showHelp {
-		flag.Usage()
-		return
-	}
-
-	if len(flag.Args()) != 1 {
-		d.CheckError(errors.New("expected exactly one argument"))
-	}
-
+func runLog(args []string) int {
 	useColor = shouldUseColor()
 
-	database, value, err := spec.GetPath(flag.Arg(0))
+	database, value, err := spec.GetPath(args[0])
 	if err != nil {
 		d.CheckErrorNoUsage(err)
 	}
 	defer database.Close()
 
 	if value == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", flag.Arg(0)))
+		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	waitChan := outputpager.PageOutput(!*outputpager.NoPager)
+	waitChan := outputpager.PageOutput(!outputpager.NoPager)
 
 	origCommit, ok := value.(types.Struct)
 	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
-		d.CheckError(fmt.Errorf("%s does not reference a Commit object", flag.Arg(0)))
+		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 
 	iter := NewCommitIterator(database, origCommit)
 	displayed := 0
-	if *maxCommits <= 0 {
-		*maxCommits = math.MaxInt32
+	if maxCommits <= 0 {
+		maxCommits = math.MaxInt32
 	}
 
 	inChan := make(chan interface{}, parallelism)
@@ -92,7 +89,7 @@ func main() {
 	}, parallelism)
 
 	go func() {
-		for ln, ok := iter.Next(); ok && displayed < *maxCommits; ln, ok = iter.Next() {
+		for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
 			inChan <- ln
 			displayed++
 		}
@@ -109,6 +106,7 @@ func main() {
 		os.Stdout.Close()
 		<-waitChan
 	}
+	return 0
 }
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
@@ -134,12 +132,12 @@ func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 	} else {
 		fmt.Fprintf(w, "%sParent: None\n", genGraph(node, lineno))
 	}
-	if *maxLines != 0 {
+	if maxLines != 0 {
 		var n int
-		if *showValue {
-			n, err = writeCommitLines(node, *maxLines, lineno, w)
+		if showValue {
+			n, err = writeCommitLines(node, maxLines, lineno, w)
 		} else {
-			n, err = writeDiffLines(node, db, *maxLines, lineno, w)
+			n, err = writeDiffLines(node, db, maxLines, lineno, w)
 		}
 		lineno += n
 	}
@@ -148,7 +146,7 @@ func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 
 // Generates ascii graph chars to display on the left side of the commit info if -graph arg is true.
 func genGraph(node LogNode, lineno int) string {
-	if !*showGraph {
+	if !showGraph {
 		return ""
 	}
 
@@ -200,7 +198,7 @@ func genGraph(node LogNode, lineno int) string {
 }
 
 func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
-	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true}
+	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
 	err = types.WriteEncodedValueWithTags(mlw, node.commit.Get(datas.ValueField))
 	d.PanicIfNotType(err, MaxLinesErr)
 	if err != nil {
@@ -216,7 +214,7 @@ func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt 
 }
 
 func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
-	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true}
+	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
 	parents := node.commit.Get(datas.ParentsField).(types.Set)
 	var parent types.Value = nil
 	if parents.Len() > 0 {
@@ -242,10 +240,10 @@ func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.
 }
 
 func shouldUseColor() bool {
-	if *color != 1 && *color != 0 {
+	if color != 1 && color != 0 {
 		return outputpager.IsStdoutTty()
 	}
-	return *color == 1
+	return color == 1
 }
 
 func max(i, j int) int {

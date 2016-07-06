@@ -43,7 +43,8 @@ func main() {
 		destTypePattern = regexp.MustCompile("^(list|map):(\\d+)$")
 	)
 
-	spec.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags(flag.CommandLine)
+	profile.RegisterProfileFlags(flag.CommandLine)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>\n\n")

@@ -23,7 +23,8 @@ var (
 )
 
 func main() {
-	spec.RegisterDatabaseFlags()
+	spec.RegisterDatabaseFlags(flag.CommandLine)
+	profile.RegisterProfileFlags(flag.CommandLine)
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: csv-export [options] dataset > filename")
