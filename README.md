@@ -33,7 +33,7 @@ Noms gives you the entire Git workflow, but for large-scale structured (or unstr
 *[`noms diff` and `noms log` on large datasets](https://www.youtube.com/watch?v=ONByMptWa2A)*
 
 
-#### A Versioned Database
+#### An Application Database with History
 
 A database where every change is automatically and efficiently preserved. Instantly revert to, fork, or work from any historical commit.
 
