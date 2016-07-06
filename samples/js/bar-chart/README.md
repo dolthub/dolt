@@ -7,8 +7,10 @@ This renders noms data as a bar chart using Plotly (https://plot.ly/javascript/)
 ## Build
 
 ```
+pushd ..
 npm install
-npm run build
+popd
+npm install
 ```
 
 ## Run
