@@ -20,6 +20,7 @@ import (
 
 var (
 	datasetRe = regexp.MustCompile("^" + dataset.DatasetRe.String() + "$")
+	ldbStores = map[string]*refCountingLdbStore{}
 )
 
 func GetDatabase(str string) (datas.Database, error) {
@@ -38,7 +39,7 @@ func GetChunkStore(str string) (chunks.ChunkStore, error) {
 
 	switch sp.Protocol {
 	case "ldb":
-		return chunks.NewLevelDBStoreUseFlags(sp.Path, ""), nil
+		return getLDBStore(sp.Path), nil
 	case "mem":
 		return chunks.NewMemoryStore(), nil
 	default:
@@ -173,7 +174,7 @@ func (spec databaseSpec) Database() (ds datas.Database, err error) {
 		}))
 	case "ldb":
 		err = d.Unwrap(d.Try(func() {
-			ds = datas.NewDatabase(chunks.NewLevelDBStoreUseFlags(spec.Path, ""))
+			ds = datas.NewDatabase(getLDBStore(spec.Path))
 		}))
 	case "mem":
 		ds = datas.NewDatabase(chunks.NewMemoryStore())
@@ -225,11 +226,23 @@ func RegisterDatabaseFlags(flags *flag.FlagSet) {
 	chunks.RegisterLevelDBFlags(flags)
 }
 
-// Utility functions to create specs
 func CreateDatabaseSpecString(protocol, path string) string {
 	return fmt.Sprintf("%s:%s", protocol, path)
 }
 
 func CreateValueSpecString(protocol, path, value string) string {
 	return fmt.Sprintf("%s:%s::%s", protocol, path, value)
+}
+
+func getLDBStore(path string) chunks.ChunkStore {
+	if store, ok := ldbStores[path]; ok {
+		store.AddRef()
+		return store
+	}
+
+	store := newRefCountingLdbStore(path, func() {
+		delete(ldbStores, path)
+	})
+	ldbStores[path] = store
+	return store
 }
