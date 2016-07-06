@@ -21,7 +21,7 @@ type Props = {
   spaceX: number,
   hash: ?Hash,
   nomsStore: string,
-  onClick: (e: Event, s: String) => void,
+  onClick: (e: MouseEvent, s: String) => void,
 };
 
 type State = {
@@ -29,7 +29,7 @@ type State = {
   y: number,
 };
 
-export default class Node extends React.Component<{}, Props, State> {
+export default class Node extends React.Component<void, Props, State> {
   state: State;
 
   constructor(props: Props) {

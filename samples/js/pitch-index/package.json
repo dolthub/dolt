@@ -5,10 +5,11 @@
   "version": "1.0.1",
   "description": "noms example javascript thing",
   "scripts": {
+    "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
     "prepublish": "npm run build",
-    "start": "PATH=../node_modules/.bin/:$PATH babel -d dist -w src",
-    "build": "PATH=../node_modules/.bin/:$PATH BABEL_ENV=production babel -d dist src",
-    "test": "PATH=../node_modules/.bin/:$PATH eslint src/ && flow src/"
+    "start": "babel -d dist -w src",
+    "build": "BABEL_ENV=production babel -d dist src",
+    "test": "eslint src/ && flow src/"
   },
   "keywords": [
     "noms",

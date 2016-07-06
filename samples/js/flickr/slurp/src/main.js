@@ -133,7 +133,6 @@ function getAuthToken(): Promise<[string, string]> {
 function promptForAuth(url: string): Promise<void> {
   return new Promise((res) => {
     process.stdout.write(`Go to ${url} to grant permissions to access Flickr...\n`);
-    // $FlowIssue: Flow does not know about createInterface.
     const rl = readline.createInterface({input: process.stdin, output: process.stdout});
     rl.question('Press enter when done\n', () => {
       process.stdout.write('Authenticated. Next time run:\n' +

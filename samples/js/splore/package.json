@@ -1,12 +1,11 @@
 {
   "name": "noms-splore",
   "license": "Apache-2.0",
-  "dependencies": {
-    "@attic/webpack-config": "^2.1.0"
-  },
   "scripts": {
-    "start": "PATH=../node_modules/.bin/:$PATH python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
-    "build": "PATH=../node_modules/.bin/:$PATH python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
-    "test": "PATH=../node_modules/.bin/:$PATH eslint src/ && flow src/"
+    "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
+    "prepublish": "npm run build",
+    "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
+    "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
+    "test": "eslint src/ && flow src/"
   }
 }

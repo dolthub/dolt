@@ -6,6 +6,7 @@
   "dependencies": {
     "@attic/eslintrc": "^3.1.0",
     "@attic/noms": "file:../../js",
+    "@attic/webpack-config": "^2.1.0",
     "babel-cli": "^6.10.1",
     "babel-core": "^6.10.4",
     "babel-generator": "^6.11.0",

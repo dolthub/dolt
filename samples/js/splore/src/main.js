@@ -237,7 +237,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-class Prompt extends React.Component<{}, {}, void> {
+class Prompt extends React.Component<void, {}, void> {
   render(): React.Element {
     const fontStyle: {[key: string]: any} = {
       fontFamily: 'Menlo',

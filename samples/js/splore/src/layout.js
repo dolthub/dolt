@@ -11,7 +11,7 @@ import {TreeNode} from './buchheim.js';
 
 type Props = {
   data: NodeGraph,
-  onNodeClick: (e: Event, s: string) => void,
+  onNodeClick: (e: MouseEvent, s: string) => void,
   tree: TreeNode,
   nomsStore: string,
 }
