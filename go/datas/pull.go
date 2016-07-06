@@ -13,9 +13,12 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
+type PullProgress struct {
+	DoneCount, KnownCount uint64
+}
+
 // Pull objects that descends from sourceRef from srcDB to sinkDB. sinkHeadRef should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This allows the algorithm to figure out which portions of data are already present in sinkDB and skip copying them.
-// TODO: Figure out how to add concurrency.
-func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int) {
+func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	srcQ, sinkQ := types.RefHeap{sourceRef}, types.RefHeap{sinkHeadRef}
 	heap.Init(&srcQ)
 	heap.Init(&sinkQ)
@@ -74,12 +77,24 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		traverseWorker()
 	}
 
+	var doneCount, knownCount uint64
+	updateProgress := func(moreDone, moreKnown uint64) {
+		if progressCh == nil {
+			return
+		}
+		doneCount, knownCount = doneCount+moreDone, knownCount+moreKnown
+		progressCh <- PullProgress{doneCount, knownCount + uint64(len(srcQ))}
+	}
+
 	// hc and reachableChunks aren't goroutine-safe, so only write them here.
 	hc := hintCache{}
 	reachableChunks := hashSet{}
 	for !srcQ.Empty() {
 		srcRefs, sinkRefs, comRefs := planWork(&srcQ, &sinkQ)
 		srcWork, sinkWork, comWork := len(srcRefs), len(sinkRefs), len(comRefs)
+		if srcWork+comWork > 0 {
+			updateProgress(0, uint64(srcWork+comWork))
+		}
 
 		// These goroutines send work to traverseWorkers, blocking when all are busy. They self-terminate when they've sent all they have.
 		go sendWork(srcChan, srcRefs)
@@ -98,6 +113,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					reachableChunks.Remove(res.readHash)
 				}
 				srcWork--
+				updateProgress(1, 0)
 			case res := <-sinkResChan:
 				for _, reachable := range res.reachables {
 					heap.Push(&sinkQ, reachable)
@@ -114,9 +130,11 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					hc[reachable.TargetHash()] = res.readHash
 				}
 				comWork--
+				updateProgress(1, 0)
 			}
 		}
 	}
+
 	hints := types.Hints{}
 	for hash := range reachableChunks {
 		if hint, present := hc[hash]; present {

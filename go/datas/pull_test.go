@@ -99,6 +99,48 @@ func (suite *PullSuite) TearDownTest() {
 	suite.sourceCS.Close()
 }
 
+type progressTracker struct {
+	Ch     chan PullProgress
+	doneCh chan []PullProgress
+}
+
+func startProgressTracker() *progressTracker {
+	pt := &progressTracker{make(chan PullProgress), make(chan []PullProgress)}
+	go func() {
+		progress := []PullProgress{}
+		for info := range pt.Ch {
+			progress = append(progress, info)
+		}
+		pt.doneCh <- progress
+	}()
+	return pt
+}
+
+func (pt *progressTracker) Validate(suite *PullSuite) {
+	close(pt.Ch)
+	progress := <-pt.doneCh
+
+	// Expecting exact progress would be unreliable and not necessary meaningful. Instead, just validate that it's useful and consistent.
+	suite.NotEmpty(progress)
+
+	first := progress[0]
+	suite.Zero(first.DoneCount)
+	suite.True(first.KnownCount > 0)
+
+	last := progress[len(progress)-1]
+	suite.True(last.DoneCount > 0)
+	suite.Equal(last.DoneCount, last.KnownCount)
+
+	for i, prog := range progress {
+		suite.True(prog.KnownCount >= prog.DoneCount)
+		if i > 0 {
+			prev := progress[i-1]
+			suite.True(prog.DoneCount >= prev.DoneCount)
+			suite.True(prog.KnownCount >= prev.KnownCount)
+		}
+	}
+}
+
 // Source: -3-> C(L2) -1-> N
 //                 \  -2-> L1 -1-> N
 //                          \ -1-> L0
@@ -107,9 +149,11 @@ func (suite *PullSuite) TearDownTest() {
 func (suite *PullSuite) TestPullEverything() {
 	l := buildListOfHeight(2, suite.source)
 	sourceRef := suite.commitToSource(l, types.NewSet())
+	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, types.Ref{}, 2)
+	Pull(suite.source, suite.sink, sourceRef, types.Ref{}, 2, pt.Ch)
 	suite.Equal(0, suite.sinkCS.Reads)
+	pt.Validate(suite)
 
 	suite.sink.batchStore().Flush()
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
@@ -148,12 +192,15 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	srcL = buildListOfHeight(5, suite.source)
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
+	pt := startProgressTracker()
+
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
 	if suite.sinkIsLocal() {
 		// C1 gets read from most-local DB
 		expectedReads++
 	}
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
+	pt.Validate(suite)
 
 	suite.sink.batchStore().Flush()
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
@@ -195,10 +242,13 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 	preReads := suite.sinkCS.Reads
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
+	pt := startProgressTracker()
+
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
 
 	// No objects read from sink, since sink Head is not an ancestor of source HEAD.
 	suite.Equal(preReads, suite.sinkCS.Reads)
+	pt.Validate(suite)
 
 	suite.sink.batchStore().Flush()
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
@@ -236,13 +286,16 @@ func (suite *PullSuite) TestPullUpdates() {
 	srcL = srcL.Set(1, suite.source.WriteValue(L3))
 	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2)
+	pt := startProgressTracker()
+
+	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
 
 	if suite.sinkIsLocal() {
 		// 3 objects read from sink: L3, L2 and C1 (when considering the shared commit).
 		expectedReads += 3
 	}
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
+	pt.Validate(suite)
 
 	suite.sink.batchStore().Flush()
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)

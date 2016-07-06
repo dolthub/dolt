@@ -37,16 +37,14 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sourceSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+source1HeadRef.String())
 	ldb2dir := path.Join(s.TempDir, "ldb2")
 	sinkDatasetSpec := spec.CreateValueSpecString("ldb", ldb2dir, "bar")
-	out, _ := s.Run(main, []string{"sync", sourceSpec, sinkDatasetSpec})
-	s.Equal("", out)
+	s.Run(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 
 	dest := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
 	s.True(types.Number(42).Equals(dest.HeadValue()))
 	dest.Database().Close()
 
 	sourceDataset := spec.CreateValueSpecString("ldb", s.LdbDir, "foo")
-	out, _ = s.Run(main, []string{"sync", sourceDataset, sinkDatasetSpec})
-	s.Equal("", out)
+	s.Run(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 
 	dest = dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
 	s.True(types.Number(43).Equals(dest.HeadValue()))

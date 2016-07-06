@@ -91,11 +91,7 @@ func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
-	return ds.pull(sourceStore, sourceRef, concurrency)
-}
-
-func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency int) (Dataset, error) {
+func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int, progressCh chan datas.PullProgress) (Dataset, error) {
 	sink := *ds
 
 	sinkHeadRef := types.Ref{}
@@ -107,7 +103,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 		return sink, nil
 	}
 
-	datas.Pull(source, sink.Database(), sourceRef, sinkHeadRef, concurrency)
+	datas.Pull(sourceStore, sink.Database(), sourceRef, sinkHeadRef, concurrency, progressCh)
 	err := datas.ErrOptimisticLockFailed
 	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.setNewHead(sourceRef) {
 	}
@@ -118,8 +114,12 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	v := ds.store.ReadValue(r.TargetHash())
 
-	d.PanicIfTrue(v == nil, "%v cannot be found", r)
-	d.PanicIfTrue(!v.Type().Equals(datas.NewCommit().Type()), "Not a Commit: %+v", v)
+	if v == nil {
+		panic(r.TargetHash().String() + " not found")
+	}
+	if !v.Type().Equals(datas.CommitType()) {
+		panic("Not a commit: " + types.EncodedValue(v))
+	}
 	return v.(types.Struct)
 }
 

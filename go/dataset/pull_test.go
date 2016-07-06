@@ -73,7 +73,7 @@ func TestPullTopDown(t *testing.T) {
 	source, err = source.Commit(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
+	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -94,7 +94,7 @@ func TestPullFirstCommitTopDown(t *testing.T) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
+	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -113,7 +113,7 @@ func TestPullDeepRefTopDown(t *testing.T) {
 	source, err := source.Commit(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.pull(source.Database(), types.NewRef(source.Head()), 1)
+	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }

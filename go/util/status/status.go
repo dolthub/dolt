@@ -26,6 +26,10 @@ func Clear() {
 	reset(time.Time{})
 }
 
+func WillPrint() bool {
+	return time.Now().Sub(lastTime) >= rate
+}
+
 func Printf(format string, args ...interface{}) {
 	now := time.Now()
 	if now.Sub(lastTime) < rate {

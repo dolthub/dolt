@@ -6,12 +6,16 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
+	"github.com/attic-labs/noms/go/util/status"
 )
 
 var (
@@ -45,16 +49,48 @@ func runSync(args []string) int {
 	d.CheckError(err)
 	defer sinkDataset.Database().Close()
 
+	progressCh := make(chan datas.PullProgress)
+	lastProgressCh := make(chan datas.PullProgress)
+
+	go func() {
+		var last datas.PullProgress
+
+		for info := range progressCh {
+			if info.KnownCount == 1 {
+				// It's better to print "up to date" than "0% (0/1); 100% (1/1)".
+				continue
+			}
+
+			last = info
+			if status.WillPrint() {
+				pct := 100.0 * float64(info.DoneCount) / float64(info.KnownCount)
+				status.Printf("Syncing - %.2f%% (%d/%d chunks)", pct, info.DoneCount, info.KnownCount)
+			}
+		}
+
+		lastProgressCh <- last
+	}()
+
+	start := time.Now()
+
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-
 		var err error
-		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), p)
+		sinkDataset, err = sinkDataset.Pull(sourceStore, types.NewRef(sourceObj), p, progressCh)
 		d.PanicIfError(err)
 	})
 
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	close(progressCh)
+	if last := <-lastProgressCh; last.DoneCount > 0 {
+		status.Printf("Done - Synced %d chunks in %s", last.DoneCount, time.Since(start).String())
+		status.Done()
+	} else {
+		fmt.Println(flag.Arg(1), "is up to date.")
+	}
+
 	return 0
 }
