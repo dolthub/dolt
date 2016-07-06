@@ -16,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
+	humanize "github.com/dustin/go-humanize"
 )
 
 var (
@@ -49,6 +50,7 @@ func runSync(args []string) int {
 	d.CheckError(err)
 	defer sinkDataset.Database().Close()
 
+	start := time.Now()
 	progressCh := make(chan datas.PullProgress)
 	lastProgressCh := make(chan datas.PullProgress)
 
@@ -64,14 +66,13 @@ func runSync(args []string) int {
 			last = info
 			if status.WillPrint() {
 				pct := 100.0 * float64(info.DoneCount) / float64(info.KnownCount)
-				status.Printf("Syncing - %.2f%% (%d/%d chunks)", pct, info.DoneCount, info.KnownCount)
+				bytesPerSec := float64(info.DoneBytes) / float64(time.Since(start).Seconds())
+				status.Printf("Syncing - %.2f%% (%d/%d chunks) - %s/s", pct, info.DoneCount, info.KnownCount, humanize.Bytes(uint64(bytesPerSec)))
 			}
 		}
 
 		lastProgressCh <- last
 	}()
-
-	start := time.Now()
 
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
@@ -86,7 +87,7 @@ func runSync(args []string) int {
 
 	close(progressCh)
 	if last := <-lastProgressCh; last.DoneCount > 0 {
-		status.Printf("Done - Synced %d chunks in %s", last.DoneCount, time.Since(start).String())
+		status.Printf("Done - Synced %s (%d chunks) in %s", humanize.Bytes(last.DoneBytes), last.DoneCount, time.Since(start).String())
 		status.Done()
 	} else {
 		fmt.Println(flag.Arg(1), "is up to date.")

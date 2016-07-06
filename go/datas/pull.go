@@ -14,7 +14,7 @@ import (
 )
 
 type PullProgress struct {
-	DoneCount, KnownCount uint64
+	DoneCount, KnownCount, DoneBytes uint64
 }
 
 // Pull objects that descends from sourceRef from srcDB to sinkDB. sinkHeadRef should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This allows the algorithm to figure out which portions of data are already present in sinkDB and skip copying them.
@@ -77,13 +77,13 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		traverseWorker()
 	}
 
-	var doneCount, knownCount uint64
-	updateProgress := func(moreDone, moreKnown uint64) {
+	var doneCount, knownCount, doneBytes uint64
+	updateProgress := func(moreDone, moreKnown, moreBytes uint64) {
 		if progressCh == nil {
 			return
 		}
-		doneCount, knownCount = doneCount+moreDone, knownCount+moreKnown
-		progressCh <- PullProgress{doneCount, knownCount + uint64(len(srcQ))}
+		doneCount, knownCount, doneBytes = doneCount+moreDone, knownCount+moreKnown, doneBytes+moreBytes
+		progressCh <- PullProgress{doneCount, knownCount + uint64(len(srcQ)), doneBytes}
 	}
 
 	// hc and reachableChunks aren't goroutine-safe, so only write them here.
@@ -93,7 +93,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		srcRefs, sinkRefs, comRefs := planWork(&srcQ, &sinkQ)
 		srcWork, sinkWork, comWork := len(srcRefs), len(sinkRefs), len(comRefs)
 		if srcWork+comWork > 0 {
-			updateProgress(0, uint64(srcWork+comWork))
+			updateProgress(0, uint64(srcWork+comWork), 0)
 		}
 
 		// These goroutines send work to traverseWorkers, blocking when all are busy. They self-terminate when they've sent all they have.
@@ -113,7 +113,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					reachableChunks.Remove(res.readHash)
 				}
 				srcWork--
-				updateProgress(1, 0)
+				updateProgress(1, 0, uint64(res.readBytes))
 			case res := <-sinkResChan:
 				for _, reachable := range res.reachables {
 					heap.Push(&sinkQ, reachable)
@@ -130,7 +130,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					hc[reachable.TargetHash()] = res.readHash
 				}
 				comWork--
-				updateProgress(1, 0)
+				updateProgress(1, 0, uint64(res.readBytes))
 			}
 		}
 	}
@@ -147,6 +147,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 type traverseResult struct {
 	readHash   hash.Hash
 	reachables types.RefSlice
+	readBytes  int
 }
 
 // planWork deals with three possible situations:
@@ -214,14 +215,14 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database) traverseResult {
 		v := types.DecodeValue(c, srcDB)
 		d.Chk.True(v != nil, "Expected decoded chunk to be non-nil.")
 		sinkDB.batchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
-		return traverseResult{h, v.Chunks()}
+		return traverseResult{h, v.Chunks(), len(c.Data())}
 	}
 	return traverseResult{}
 }
 
 func traverseSink(sinkRef types.Ref, db Database) traverseResult {
 	if sinkRef.Height() > 1 {
-		return traverseResult{sinkRef.TargetHash(), sinkRef.TargetValue(db).Chunks()}
+		return traverseResult{sinkRef.TargetHash(), sinkRef.TargetValue(db).Chunks(), 0}
 	}
 	return traverseResult{}
 }
@@ -244,7 +245,7 @@ func traverseCommon(comRef, sinkHead types.Ref, db Database) traverseResult {
 			}
 			i++
 		}
-		return traverseResult{comRef.TargetHash(), chunks}
+		return traverseResult{comRef.TargetHash(), chunks, 0}
 	}
 	return traverseResult{}
 }
