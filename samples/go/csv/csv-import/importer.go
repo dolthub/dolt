@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -38,6 +39,7 @@ func main() {
 		header          = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
 		name            = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 		columnTypes     = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
+		path            = flag.String("p", "", "noms path to blob to import")
 		noProgress      = flag.Bool("no-progress", false, "prevents progress from being output if true")
 		destType        = flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the index position (0-based) of the column that is a the unique identifier for the column")
 		destTypePattern = regexp.MustCompile("^(list|map):(\\d+)$")
@@ -47,30 +49,59 @@ func main() {
 	profile.RegisterProfileFlags(flag.CommandLine)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>?\n\n")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 
-	if flag.NArg() != 2 {
-		err := fmt.Errorf("Expected exactly two parameters (dataset and path) after flags, but you have %d. Maybe you put a flag after the path?", flag.NArg())
-		d.CheckError(err)
+	var err error
+	switch {
+	case flag.NArg() == 0:
+		err = errors.New("Maybe you put options after the dataset?")
+	case flag.NArg() == 1 && *path == "":
+		err = errors.New("If <csvfile> isn't specified, you must specify a noms path with -p")
+	case flag.NArg() == 2 && *path != "":
+		err = errors.New("Cannot specify both <csvfile> and a noms path with -p")
+	case flag.NArg() > 2:
+		err = errors.New("Too many arguments")
 	}
-
-	path := flag.Arg(1)
+	d.CheckError(err)
 
 	defer profile.MaybeStartProfile().Stop()
 
-	res, err := os.Open(path)
-	d.PanicIfError(err)
-	defer res.Close()
+	var r io.Reader
+	var size uint64
+
+	if *path != "" {
+		db, val, err := spec.GetPath(*path)
+		d.CheckError(err)
+		if val == nil {
+			d.CheckError(fmt.Errorf("Path %s not found\n", *path))
+		}
+		blob, ok := val.(types.Blob)
+		if !ok {
+			d.CheckError(fmt.Errorf("Path %s not a Blob: %s\n", *path, types.EncodedValue(val.Type())))
+		}
+		defer db.Close()
+		r = blob.Reader()
+		size = blob.Len()
+	} else {
+		res, err := os.Open(flag.Arg(1))
+		d.CheckError(err)
+		defer res.Close()
+		fi, err := res.Stat()
+		d.CheckError(err)
+		r = res
+		size = uint64(fi.Size())
+	}
+
+	if !*noProgress {
+		r = progressreader.New(r, getStatusPrinter(size))
+	}
 
 	comma, err := csv.StringToRune(*delimiter)
-	if err != nil {
-		d.CheckError(err)
-		return
-	}
+	d.CheckErrorNoUsage(err)
 
 	var dest int
 	var pk int
@@ -79,19 +110,12 @@ func main() {
 	} else if match := destTypePattern.FindStringSubmatch(*destType); match != nil {
 		dest = destMap
 		pk, err = strconv.Atoi(match[2])
-		d.Chk.NoError(err)
+		d.CheckErrorNoUsage(err)
 	} else {
 		fmt.Println("Invalid dest-type: ", *destType)
 		return
 	}
 
-	fi, err := res.Stat()
-	d.Chk.NoError(err)
-
-	var r io.Reader = res
-	if !*noProgress {
-		r = progressreader.New(r, getStatusPrinter(uint64(fi.Size())))
-	}
 	cr := csv.NewCSVReader(r, comma)
 
 	var headers []string
@@ -128,7 +152,7 @@ func getStatusPrinter(expected uint64) progressreader.Callback {
 	startTime := time.Now()
 	return func(seen uint64) {
 		percent := float64(seen) / float64(expected) * 100
-		elapsed := time.Now().Sub(startTime)
+		elapsed := time.Since(startTime)
 		rate := float64(seen) / elapsed.Seconds()
 
 		status.Printf("%.2f%% of %s (%s/s)...",
