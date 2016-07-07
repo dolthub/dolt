@@ -27,14 +27,21 @@ type remoteDatabaseServer struct {
 	l       *net.Listener
 	csChan  chan *connectionState
 	closing bool
+	// Called just before the server is started.
+	Ready func()
 }
 
 func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *remoteDatabaseServer {
 	dataVersion := cs.Version()
 	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	return &remoteDatabaseServer{
-		cs, port, nil, make(chan *connectionState, 16), false,
+		cs, port, nil, make(chan *connectionState, 16), false, func() {},
 	}
+}
+
+// Port is the actual port used. This may be different than the port passed in to NewRemoteDatabaseServer.
+func (s *remoteDatabaseServer) Port() int {
+	return s.port
 }
 
 // Run blocks while the remoteDatabaseServer is listening. Running on a separate go routine is supported.
@@ -80,6 +87,7 @@ func (s *remoteDatabaseServer) Run() {
 		}
 	}()
 
+	go s.Ready()
 	srv.Serve(l)
 }
 
