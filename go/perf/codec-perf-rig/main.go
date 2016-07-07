@@ -133,17 +133,19 @@ func createNumber(i uint64) types.Value {
 	return types.Number(i)
 }
 
-var structType = types.MakeStructType("S1", map[string]*types.Type{
-	"str":  types.StringType,
-	"num":  types.NumberType,
-	"bool": types.BoolType,
-})
+var structType = types.MakeStructType("S1",
+	[]string{"bool", "num", "str"},
+	[]*types.Type{
+		types.BoolType,
+		types.NumberType,
+		types.StringType,
+	})
 
 func createStruct(i uint64) types.Value {
-	return types.NewStructWithType(structType, map[string]types.Value{
-		"str":  types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
-		"num":  types.Number(i),
-		"bool": types.Bool(i%2 == 0),
+	return types.NewStructWithType(structType, types.ValueSlice{
+		types.Bool(i%2 == 0),
+		types.Number(i),
+		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
 	})
 }
 

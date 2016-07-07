@@ -43,21 +43,16 @@ func (s *testSuite) TestCSVExporter() {
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 
-	// Build Struct fields based on header
-	f := make(types.TypeMap, len(header))
-	for _, key := range header {
-		f[key] = types.StringType
-	}
-
-	typ := types.MakeStructType(structName, f)
+	typ := types.MakeStructType(structName, header, []*types.Type{
+		types.StringType, types.StringType, types.StringType,
+	})
 
 	// Build data rows
 	structs := make([]types.Value, len(payload))
 	for i, row := range payload {
-		fields := make(map[string]types.Value)
+		fields := make(types.ValueSlice, len(header))
 		for j, v := range row {
-			name := header[j]
-			fields[name] = types.String(v)
+			fields[j] = types.String(v)
 		}
 		structs[i] = types.NewStructWithType(typ, fields)
 	}

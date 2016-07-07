@@ -13,15 +13,13 @@ import (
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", TypeMap{
-		"x": BoolType,
-		"s": StringType,
-	})
+	typ := MakeStructType("S1",
+		[]string{"s", "x"},
+		[]*Type{StringType, BoolType},
+	)
 
-	data1 := structData{"x": Bool(true), "s": String("hi")}
-	s1 := newStructFromData(data1, typ)
-	data2 := structData{"x": Bool(true), "s": String("hi")}
-	s2 := newStructFromData(data2, typ)
+	s1 := NewStructWithType(typ, ValueSlice{String("hi"), Bool(true)})
+	s2 := NewStructWithType(typ, ValueSlice{String("hi"), Bool(true)})
 
 	assert.True(s1.Equals(s2))
 	assert.True(s2.Equals(s1))
@@ -30,14 +28,11 @@ func TestGenericStructEquals(t *testing.T) {
 func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", TypeMap{
-		"r": MakeRefType(BoolType),
-	})
+	typ := MakeStructType("S1", []string{"r"}, []*Type{MakeRefType(BoolType)})
 
 	b := Bool(true)
 
-	data1 := structData{"r": NewRef(b)}
-	s1 := newStructFromData(data1, typ)
+	s1 := NewStructWithType(typ, ValueSlice{NewRef(b)})
 
 	assert.Len(s1.Chunks(), 1)
 	assert.Equal(b.Hash(), s1.Chunks()[0].TargetHash())
@@ -57,12 +52,12 @@ func TestGenericStructNew(t *testing.T) {
 	assert.True(ok)
 	assert.True(String("hi").Equals(o))
 
-	typ := MakeStructType("S2", TypeMap{
-		"b": BoolType,
-		"o": StringType,
-	})
+	typ := MakeStructType("S2",
+		[]string{"b", "o"},
+		[]*Type{BoolType, StringType},
+	)
 	assert.Panics(func() { NewStructWithType(typ, nil) })
-	assert.Panics(func() { NewStructWithType(typ, map[string]Value{"o": String("hi")}) })
+	assert.Panics(func() { NewStructWithType(typ, ValueSlice{String("hi")}) })
 }
 
 func TestGenericStructSet(t *testing.T) {

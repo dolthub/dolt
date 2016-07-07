@@ -26,11 +26,13 @@ suite('Type', () => {
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
-    const mahType = makeStructType('MahStruct', {
-      'Field1': stringType,
-      'Field2': boolType,
-    });
-
+    const mahType = makeStructType('MahStruct',
+      ['Field1', 'Field2'],
+      [
+        stringType,
+        boolType,
+      ]
+    );
     const mapRef = db.writeValue(mapType).targetHash;
     const setRef = db.writeValue(setType).targetHash;
     const mahRef = db.writeValue(mahType).targetHash;
@@ -76,7 +78,7 @@ suite('Type', () => {
   test('verify struct field name', () => {
     function assertInvalid(n: string) {
       assert.throw(() => {
-        makeStructType('S', {[n]: stringType});
+        makeStructType('S', [n], [stringType]);
       });
     }
     assertInvalid('');
@@ -90,7 +92,7 @@ suite('Type', () => {
     assertInvalid('💩');
 
     function assertValid(n: string) {
-      makeStructType('S', {[n]: stringType});
+      makeStructType('S', [n], [stringType]);
     }
     assertValid('a');
     assertValid('A');
@@ -102,7 +104,7 @@ suite('Type', () => {
   test('verify struct name', () => {
     function assertInvalid(n: string) {
       assert.throw(() => {
-        makeStructType(n, {});
+        makeStructType(n, [], []);
       });
     }
     assertInvalid(' ');
@@ -115,7 +117,7 @@ suite('Type', () => {
     assertInvalid('💩');
 
     function assertValid(n: string) {
-      makeStructType(n, {});
+      makeStructType(n, [], []);
     }
     assertValid('');
     assertValid('a');

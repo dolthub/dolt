@@ -43,17 +43,9 @@ export default class Struct extends ValueBase {
   _type: Type;
   _values: Value[];
 
-  constructor(type: Type<StructDesc>, data: StructData) {
+  constructor(type: Type<StructDesc>, values: Value[]) {
     super();
-
     invariant(type.kind === Kind.Struct);
-
-    const {fields} = type.desc;
-    const values = new Array(fields.length);
-    for (let i = 0; i < fields.length; i++) {
-      values[i] = data[fields[i].name];
-    }
-
     init(this, type, values);
   }
 
@@ -78,10 +70,12 @@ export default class Struct extends ValueBase {
   }
 }
 
-function validate(type: Type, data: StructData): void {
+function validate(type: Type, values: Value[]): void {
+  let i = 0;
   type.desc.forEachField((name: string, type: Type) => {
-    const value = data[name];
+    const value = values[i];
     assertSubtype(type, value);
+    i++;
   });
 }
 
@@ -133,7 +127,7 @@ export class StructMirror<T: Struct> {
 
   set(name: string, value: ?Value): T {
     const values = setValue(this._values, this.desc.fields, name, value);
-    return newStructWithValues(this.type, values);
+    return newStructWithType(this.type, values);
   }
 }
 
@@ -151,8 +145,14 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
 
   const c: any = class extends Struct {
     constructor(data: StructData) {
-      validate(type, data);
-      super(type, data);
+      const {fields} = type.desc;
+      const values = new Array(fields.length);
+      for (let i = 0; i < fields.length; i++) {
+        values[i] = data[fields[i].name];
+      }
+
+      validate(type, values);
+      super(type, values);
     }
   };
 
@@ -179,7 +179,7 @@ function getSetter(i: number) {
   return function(value) {
     const values = this._values.concat();  // clone
     values[i] = value;
-    return newStructWithValues(this.type, values);
+    return newStructWithType(this.type, values);
   };
 }
 
@@ -197,9 +197,9 @@ export function newStruct<T: Struct>(name: string, data: StructData): T {
   return new (createStructClass(type))(data);
 }
 
-export function newStructWithType<T: Struct>(type: Type<StructDesc>, data: StructData): T {
-  validate(type, data);
-  return new (createStructClass(type))(data);
+export function newStructWithType<T: Struct>(type: Type<StructDesc>, values: Value[]): T {
+  validate(type, values);
+  return newStructWithValues(type, values);
 }
 
 function init<T: Struct>(s: T, type: Type, values: Value[]) {
@@ -217,14 +217,13 @@ export function newStructWithValues<T: Struct>(type: Type, values: Value[]): T {
 }
 
 function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> {
-  const keys = Object.keys(data);
-  keys.sort();
-  const fields = Object.create(null);
-  for (let i = 0; i < keys.length; i++) {
-    const k = keys[i];
-    fields[k] = getTypeOfValue(data[k]);
+  const fieldNames = Object.keys(data);
+  const fieldTypes = new Array(fieldNames.length);
+  fieldNames.sort();
+  for (let i = 0; i < fieldNames.length; i++) {
+    fieldTypes[i] = getTypeOfValue(data[fieldNames[i]]);
   }
-  return makeStructType(name, fields);
+  return makeStructType(name, fieldNames, fieldTypes);
 }
 
 // s1 & s2 must be of the same type. Returns the set of field names which have different values in

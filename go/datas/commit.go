@@ -20,18 +20,21 @@ func init() {
 	//   value: Value
 	// }
 
-	commitType = types.MakeStructType("Commit", types.TypeMap{
-		ParentsField: types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-		ValueField:   types.ValueType,
-	})
+	commitType = types.MakeStructType("Commit",
+		[]string{ParentsField, ValueField},
+		[]*types.Type{
+			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+			types.ValueType,
+		},
+	)
 
 	refOfCommitType = types.MakeRefType(commitType)
 }
 
 func NewCommit() types.Struct {
-	initialFields := map[string]types.Value{
-		ValueField:   types.String(""),
-		ParentsField: types.NewSet(),
+	initialFields := types.ValueSlice{
+		types.NewSet(),   // parents
+		types.String(""), // value
 	}
 
 	return types.NewStructWithType(commitType, initialFields)

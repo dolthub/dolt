@@ -30,11 +30,15 @@ const args = argv
 const sizes = ['t', 's', 'm', 'l', 'o'];
 const flickrNum = makeUnionType([stringType, numberType]);
 const sizeTypes = sizes.map(s =>
-  makeStructType('', {
-    ['url_' + s]: stringType,
-    ['width_' + s]: flickrNum,
-    ['height_' + s]: flickrNum,
-  }));
+  makeStructType('',
+    ['height_' + s, 'url_' + s, 'width_' + s],
+    [
+      flickrNum,
+      stringType,
+      flickrNum,
+    ]
+  )
+);
 
 // This is effectively:
 // union {
@@ -60,7 +64,11 @@ const imageType = makeUnionType(sizeTypes.map(st => {
     newFields[name] = type;
   });
 
-  return makeStructType('', newFields);
+  const fieldNames = Object.keys(newFields);
+  fieldNames.sort();
+  const fieldTypes = fieldNames.map(fn => newFields[fn]);
+
+  return makeStructType('', fieldNames, fieldTypes);
 }));
 
 main().catch(ex => {

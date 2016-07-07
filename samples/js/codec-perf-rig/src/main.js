@@ -139,18 +139,23 @@ function createNumber(i: number): Value {
   return i;
 }
 
-const structType = makeStructType('S1', {
-  'str': stringType,
-  'num': numberType,
-  'bool': boolType,
-});
+const structType = makeStructType('S1',
+  ['bool', 'num', 'str'],
+  [
+    boolType,
+    numberType,
+    stringType,
+  ]
+);
 
 function createStruct(i: number): Value {
-  return newStructWithType(structType, {
-    'str': 'i am a 55 bytes..................................' + i,
-    'num': i,
-    'bool': (i % 2) === 0,
-  });
+  return newStructWithType(structType,
+    [
+      (i % 2) === 0,
+      i,
+      'i am a 55 bytes..................................' + i,
+    ]
+  );
 }
 
 function makeBlobBytes(byteLength: number): Uint8Array {

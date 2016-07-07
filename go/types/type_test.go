@@ -16,13 +16,14 @@ func TestTypes(t *testing.T) {
 
 	mapType := MakeMapType(StringType, NumberType)
 	setType := MakeSetType(StringType)
-	mahType := MakeStructType("MahStruct", TypeMap{
-		"Field1": StringType,
-		"Field2": BoolType,
-	})
-	recType := MakeStructType("RecursiveStruct", TypeMap{
-		"self": MakeCycleType(0),
-	})
+	mahType := MakeStructType("MahStruct",
+		[]string{"Field1", "Field2"},
+		[]*Type{
+			StringType,
+			BoolType,
+		},
+	)
+	recType := MakeStructType("RecursiveStruct", []string{"self"}, []*Type{MakeCycleType(0)})
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()
@@ -50,10 +51,13 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Map<String, Number>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
-	mahType := MakeStructType("MahStruct", TypeMap{
-		"Field1": StringType,
-		"Field2": BoolType,
-	})
+	mahType := MakeStructType("MahStruct",
+		[]string{"Field1", "Field2"},
+		[]*Type{
+			StringType,
+			BoolType,
+		},
+	)
 	assert.Equal("struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe())
 }
 
@@ -91,7 +95,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType("S", TypeMap{n: StringType})
+			MakeStructType("S", []string{n}, []*Type{StringType})
 		})
 	}
 	assertInvalid("")
@@ -105,7 +109,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType("S", TypeMap{n: StringType})
+		MakeStructType("S", []string{n}, []*Type{StringType})
 	}
 	assertValid("a")
 	assertValid("A")
@@ -119,7 +123,7 @@ func TestVerifyStructName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType(n, TypeMap{})
+			MakeStructType(n, []string{}, []*Type{})
 		})
 	}
 
@@ -133,7 +137,7 @@ func TestVerifyStructName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType(n, TypeMap{})
+		MakeStructType(n, []string{}, []*Type{})
 	}
 	assertValid("")
 	assertValid("a")

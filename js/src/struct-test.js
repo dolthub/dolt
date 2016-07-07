@@ -83,10 +83,13 @@ suite('Struct', () => {
   });
 
   test('createStructClass', () => {
-    const typeA = makeStructType('A', {
-      'b': numberType,
-      'c': stringType,
-    });
+    const typeA = makeStructType('A',
+      ['b', 'c'],
+      [
+        numberType,
+        stringType,
+      ]
+    );
     const A = createStructClass(typeA);
     const a = new A({b: 1, c: 'hi'});
     assert.instanceOf(a, Struct);
@@ -96,19 +99,22 @@ suite('Struct', () => {
   });
 
   test('type validation', () => {
-    const type = makeStructType('S1', {
-      'x': boolType,
-      'o': stringType,
-    });
+    const type = makeStructType('S1',
+      ['o', 'x'],
+      [
+        stringType,
+        boolType,
+      ]
+    );
 
     assert.throws(() => {
-      newStructWithType(type, {x: 1, o: 'hi'});
+      newStructWithType(type, ['hi', 1]);
     });
     assert.throws(() => {
-      newStructWithType(type, {o: 1});
+      newStructWithType(type, [1]);
     });
 
-    newStructWithType(type, {x: true, o: 'hi'});
+    newStructWithType(type, ['hi', true]);
   });
 
   test('type validation cyclic', () => {
@@ -116,24 +122,30 @@ suite('Struct', () => {
     //   b: Bool
     //   l: List<S>
     // }
-    const type = makeStructType('S', {
-      'b': boolType,
-      'l': valueType, // placeholder
-    });
+    const type = makeStructType('S',
+      ['b', 'l'],
+      [
+        boolType,
+        valueType, // placeholder
+      ]
+    );
     const listType = makeListType(type);
     type.desc.setField('l', listType);
 
     const emptyList = new List([], listType);
-    newStructWithType(type, {b: true, l: emptyList});
-    newStructWithType(type, {b: true, l: new List([
-      newStructWithType(type, {b: false, l: emptyList}),
-    ], listType)});
+    newStructWithType(type, [true, emptyList]);
+    newStructWithType(type,
+      [
+        true,
+        new List([newStructWithType(type, [false, emptyList])]),
+      ]
+    );
 
     assert.throws(() => {
-      newStructWithType(type, {b: 1});
+      newStructWithType(type, [1]);
     });
     assert.throws(() => {
-      newStructWithType(type, {b: true, o: 1});
+      newStructWithType(type, [true, 1]);
     });
   });
 

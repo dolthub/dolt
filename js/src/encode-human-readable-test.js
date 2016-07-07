@@ -57,18 +57,19 @@ suite('Encode human readable types', () => {
   });
 
   test('struct', () => {
-    const type = makeStructType('S1', {
-      'x': numberType,
-      'y': stringType,
-    });
+    const type = makeStructType('S1',
+      ['x', 'y'],
+      [
+        numberType,
+        stringType,
+      ]
+    );
     assertWriteType('struct S1 {\n  x: Number,\n  y: String,\n}', type);
   });
 
 
   test('list of struct', () => {
-    const type = makeStructType('S3', {
-      'x': numberType,
-    });
+    const type = makeStructType('S3', ['x'], [numberType]);
     assertWriteType('List<struct S3 {\n  x: Number,\n}>', makeListType(type));
   });
 
@@ -82,15 +83,21 @@ suite('Encode human readable types', () => {
     //   }
     // }
 
-    const a = makeStructType('A', {
-      'b': valueType,  // placeholder
-      'c': valueType,  // placeholder
-      'd': valueType,  // placeholder
-    });
-    const d = makeStructType('D', {
-      'e': valueType,  // placeholder
-      'f': a,
-    });
+    const a = makeStructType('A',
+      ['b', 'c', 'd'],
+      [
+        valueType,  // placeholder
+        valueType,  // placeholder
+        valueType,  // placeholder
+      ]
+    );
+    const d = makeStructType('D',
+      ['e', 'f'],
+      [
+        valueType,  // placeholder
+        a,
+      ]
+    );
     a.desc.setField('b', a);
     a.desc.setField('d', d);
     d.desc.setField('e', d);

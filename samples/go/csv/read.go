@@ -7,6 +7,7 @@ package csv
 import (
 	"encoding/csv"
 	"io"
+	"sort"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
@@ -42,39 +43,51 @@ func KindsToStrings(kinds KindSlice) []string {
 }
 
 // MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
-func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) *types.Type {
+func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typ *types.Type, fieldOrder []int, kindMap []types.NomsKind) {
 	useStringType := len(kinds) == 0
 	d.Chk.True(useStringType || len(headers) == len(kinds))
-	fields := make(types.TypeMap, len(headers))
+
+	fieldMap := make(types.TypeMap, len(headers))
+	origOrder := make(map[string]int, len(headers))
+	fieldNames := make(sort.StringSlice, len(headers))
+
 	for i, key := range headers {
+		fn := types.EscapeStructField(key)
+		origOrder[fn] = i
 		kind := types.StringKind
 		if !useStringType {
 			kind = kinds[i]
 		}
-		_, ok := fields[key]
+		_, ok := fieldMap[fn]
 		d.PanicIfTrue(ok, `Duplicate field name "%s"`, key)
-		fields[key] = types.MakePrimitiveType(kind)
+		fieldMap[fn] = types.MakePrimitiveType(kind)
+		fieldNames[i] = fn
 	}
-	return types.MakeStructType(structName, fields)
+
+	sort.Sort(fieldNames)
+
+	kindMap = make([]types.NomsKind, len(fieldMap))
+	fieldOrder = make([]int, len(fieldMap))
+	fieldTypes := make([]*types.Type, len(fieldMap))
+
+	for i, fn := range fieldNames {
+		typ := fieldMap[fn]
+		fieldTypes[i] = typ
+		kindMap[i] = typ.Kind()
+		fieldOrder[origOrder[fn]] = i
+	}
+
+	typ = types.MakeStructType(structName, fieldNames, fieldTypes)
+	return
 }
 
 // Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
-func ReadToList(r *csv.Reader, structName string, headersRaw []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
-	headers := make([]string, len(headersRaw))
-	for i, h := range headersRaw {
-		headers[i] = types.EscapeStructField(h)
-	}
-
-	t = MakeStructTypeFromHeaders(headers, structName, kinds)
+func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
+	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listChan := types.NewStreamingList(vrw, valueChan)
-
-	kindMap := make(map[string]types.NomsKind, len(headers))
-	t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
-		kindMap[name] = t.Kind()
-	})
 
 	for {
 		row, err := r.Read()
@@ -85,11 +98,10 @@ func ReadToList(r *csv.Reader, structName string, headersRaw []string, kinds Kin
 			panic(err)
 		}
 
-		fields := make(map[string]types.Value)
+		fields := make(types.ValueSlice, len(headers))
 		for i, v := range row {
 			if i < len(headers) {
-				name := headers[i]
-				fields[name] = StringToType(v, kindMap[name])
+				fields[fieldOrder[i]] = StringToType(v, kindMap[i])
 			}
 		}
 		valueChan <- types.NewStructWithType(t, fields)
@@ -114,16 +126,10 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 		kinds = append(kinds[:pkIdx], kinds[pkIdx+1:]...)
 	}
 
-	t := MakeStructTypeFromHeaders(headers, "", kinds)
-	kindMap := make(map[string]types.NomsKind, len(headers))
-	t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
-		kindMap[name] = t.Kind()
-	})
+	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headers, "", kinds)
 
 	kvChan := make(chan types.Value, 128)
 	mapChan := types.NewStreamingMap(vrw, kvChan)
-	fields := map[string]types.Value{}
-	var pk types.Value
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -133,12 +139,13 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 		}
 
 		fieldIndex := 0
+		var pk types.Value
+		fields := make(types.ValueSlice, len(headers))
 		for x, v := range row {
 			if x == pkIdx {
 				pk = StringToType(v, pkKind)
 			} else if fieldIndex < len(headers) {
-				name := headers[fieldIndex]
-				fields[name] = StringToType(v, kindMap[name])
+				fields[fieldOrder[fieldIndex]] = StringToType(v, kindMap[fieldIndex])
 				fieldIndex++
 			}
 		}

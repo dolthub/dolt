@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"sort"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -21,39 +22,33 @@ type Struct struct {
 	h      *hash.Hash
 }
 
-func newStructFromData(data structData, t *Type) Struct {
-	d.Chk.True(t.Kind() == StructKind)
-	values := make([]Value, len(data))
-	for i, field := range t.Desc.(StructDesc).fields {
-		values[i] = data[field.name]
-	}
-	return Struct{values, t, &hash.Hash{}}
-}
-
 func NewStruct(name string, data structData) Struct {
-	fields := make(TypeMap, len(data))
-	newData := make(structData, len(data))
-	for k, v := range data {
-		fields[k] = v.Type()
-		newData[k] = v
+	fieldNames := make(sort.StringSlice, len(data))
+	i := 0
+	for fn, _ := range data {
+		fieldNames[i] = fn
+		i++
 	}
-	t := MakeStructType(name, fields)
-	return newStructFromData(newData, t)
+
+	sort.Sort(fieldNames)
+	fieldTypes := make([]*Type, len(data))
+	values := make(ValueSlice, len(data))
+	for i, fn := range fieldNames {
+		fieldTypes[i] = data[fn].Type()
+		values[i] = data[fn]
+	}
+
+	return Struct{values, MakeStructType(name, fieldNames, fieldTypes), &hash.Hash{}}
 }
 
-func NewStructWithType(t *Type, data structData) Struct {
+func NewStructWithType(t *Type, data ValueSlice) Struct {
 	desc := t.Desc.(StructDesc)
 	d.Chk.True(len(data) == len(desc.fields))
-	values := make([]Value, desc.Len())
 	for i, field := range desc.fields {
-		v, ok := data[field.name]
-		if !ok {
-			d.Chk.Fail("Missing required field: %s", field.name)
-		}
+		v := data[i]
 		assertSubtype(field.t, v)
-		values[i] = v
 	}
-	return Struct{values, t, &hash.Hash{}}
+	return Struct{data, t, &hash.Hash{}}
 }
 
 func (s Struct) hashPointer() *hash.Hash {

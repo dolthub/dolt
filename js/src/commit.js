@@ -15,7 +15,7 @@ import Set from './set.js';
 export default class Commit<T: Value> extends Struct {
   constructor(value: T, parents: Set<Ref<Commit>> = new Set()) {
     const {commitType} = getDatasTypes();
-    super(commitType, {parents, value});
+    super(commitType, [parents, value]);
   }
 
   get value(): T {

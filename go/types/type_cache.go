@@ -74,25 +74,25 @@ func (tc *TypeCache) getCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return trie.t
 }
 
-func (tc *TypeCache) makeStructType(name string, fields map[string]*Type) *Type {
+func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
+	d.Chk.True(len(fieldNames) == len(fieldTypes))
 	verifyStructName(name)
-	fs := make(fieldSlice, len(fields))
-	i := 0
-	for fn, t := range fields {
-		verifyFieldName(fn)
-		fs[i] = field{fn, t}
-		i++
-	}
-
-	sort.Sort(fs)
+	verifyFieldNames(fieldNames)
 
 	trie := tc.trieRoots[StructKind].Traverse(tc.identTable.GetId(name))
-	for _, f := range fs {
-		trie = trie.Traverse(tc.identTable.GetId(f.name))
-		trie = trie.Traverse(f.t.id)
+	for i, fn := range fieldNames {
+		ft := fieldTypes[i]
+		trie = trie.Traverse(tc.identTable.GetId(fn))
+		trie = trie.Traverse(ft.id)
 	}
 
 	if trie.t == nil {
+		fs := make(fieldSlice, len(fieldNames))
+		for i, fn := range fieldNames {
+			fs[i] = field{fn, fieldTypes[i]}
+			i++
+		}
+
 		t := newType(StructDesc{name, fs}, 0)
 		if t.serialization == nil {
 			// HasUnresolvedCycle
@@ -277,10 +277,10 @@ func MakeMapType(keyType, valType *Type) *Type {
 	return staticTypeCache.getCompoundType(MapKind, keyType, valType)
 }
 
-func MakeStructType(name string, fields map[string]*Type) *Type {
+func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
 	staticTypeCache.Lock()
 	defer staticTypeCache.Unlock()
-	return staticTypeCache.makeStructType(name, fields)
+	return staticTypeCache.makeStructType(name, fieldNames, fieldTypes)
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {

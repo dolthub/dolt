@@ -465,9 +465,7 @@ func TestWriteListOfStruct(t *testing.T) {
 }
 
 func TestWriteListOfUnionWithType(t *testing.T) {
-	structType := MakeStructType("S", TypeMap{
-		"x": NumberType,
-	})
+	structType := MakeStructType("S", []string{"x"}, []*Type{NumberType})
 
 	assertEncoding(t,
 		[]interface{}{
@@ -510,10 +508,12 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 	//   v: Number
 	// }
 
-	structType := MakeStructType("A6", TypeMap{
-		"v":  NumberType,
-		"cs": MakeListType(MakeCycleType(0)),
-	})
+	structType := MakeStructType("A6",
+		[]string{"cs", "v"},
+		[]*Type{
+			MakeListType(MakeCycleType(0)),
+			NumberType,
+		})
 
 	assertEncoding(t,
 		[]interface{}{
@@ -522,10 +522,7 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 			uint8(NumberKind), float64(42),
 		},
 		// {v: 42, cs: [{v: 555, cs: []}]}
-		NewStructWithType(structType, structData{
-			"v":  Number(42),
-			"cs": NewList(),
-		}),
+		NewStructWithType(structType, ValueSlice{NewList(), Number(42)}),
 	)
 }
 

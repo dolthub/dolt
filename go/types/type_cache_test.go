@@ -77,14 +77,14 @@ func TestTypeCacheRef(t *testing.T) {
 func TestTypeCacheStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeStructType("Foo", map[string]*Type{
-		"foo": NumberType,
-		"bar": StringType,
-	})
-	st2 := MakeStructType("Foo", map[string]*Type{
-		"foo": NumberType,
-		"bar": StringType,
-	})
+	st := MakeStructType("Foo",
+		[]string{"bar", "foo"},
+		[]*Type{StringType, NumberType},
+	)
+	st2 := MakeStructType("Foo",
+		[]string{"bar", "foo"},
+		[]*Type{StringType, NumberType},
+	)
 
 	assert.True(st == st2)
 	assert.NotNil(st.serialization)
@@ -109,16 +109,18 @@ func TestTypeCacheUnion(t *testing.T) {
 func TestTypeCacheCyclicStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeStructType("Foo", map[string]*Type{
-		"foo": MakeRefType(MakeCycleType(0)),
-	})
+	st := MakeStructType("Foo",
+		[]string{"foo"},
+		[]*Type{MakeRefType(MakeCycleType(0))},
+	)
 	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[0])
 	assert.False(st.HasUnresolvedCycle())
 	assert.NotNil(st.serialization)
 
-	st2 := MakeStructType("Foo", map[string]*Type{
-		"foo": MakeRefType(MakeCycleType(0)),
-	})
+	st2 := MakeStructType("Foo",
+		[]string{"foo"},
+		[]*Type{MakeRefType(MakeCycleType(0))},
+	)
 	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[0])
 	assert.True(st == st2)
 }
@@ -130,10 +132,13 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//   bar: Cycle<1>
 	//   foo: Cycle<0>
 	// }
-	st := MakeStructType("Foo", map[string]*Type{
-		"bar": MakeCycleType(1),
-		"foo": MakeCycleType(0),
-	})
+	st := MakeStructType("Foo",
+		[]string{"bar", "foo"},
+		[]*Type{
+			MakeCycleType(1),
+			MakeCycleType(0),
+		},
+	)
 	assert.True(st.HasUnresolvedCycle())
 	assert.Nil(st.serialization)
 	// foo ref is cyclic
@@ -146,10 +151,13 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//     foo: Cycle<0>
 	//   }
 	// }
-	st2 := MakeStructType("Bar", map[string]*Type{
-		"baz": MakeCycleType(1),
-		"foo": st,
-	})
+	st2 := MakeStructType("Bar",
+		[]string{"baz", "foo"},
+		[]*Type{
+			MakeCycleType(1),
+			st,
+		},
+	)
 	assert.True(st2.HasUnresolvedCycle())
 	assert.Nil(st2.serialization)
 	// foo ref is cyclic
@@ -167,10 +175,13 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//   }
 	//   baz: Cycle<0>
 	// }
-	st3 := MakeStructType("Baz", map[string]*Type{
-		"bar": st2,
-		"baz": MakeCycleType(0),
-	})
+	st3 := MakeStructType("Baz",
+		[]string{"bar", "baz"},
+		[]*Type{
+			st2,
+			MakeCycleType(0),
+		},
+	)
 	assert.False(st3.HasUnresolvedCycle())
 	assert.NotNil(st3.serialization)
 

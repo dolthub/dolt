@@ -94,14 +94,37 @@ func TestAssertTypeType(tt *testing.T) {
 }
 
 func TestAssertTypeStruct(tt *testing.T) {
-	t := MakeStructType("Struct", TypeMap{
-		"x": BoolType,
-	})
+	t := MakeStructType("Struct",
+		[]string{"x"}, []*Type{BoolType},
+	)
 
 	v := NewStruct("Struct", structData{"x": Bool(true)})
 	assertSubtype(t, v)
 	assertAll(tt, t, v)
 	assertSubtype(ValueType, v)
+
+	t2 := MakeStructType("Struct",
+		[]string{"x", "y"}, []*Type{BoolType, StringType},
+	)
+
+	assert.Panics(tt, func() {
+		NewStructWithType(t2, ValueSlice{Bool(true)})
+	})
+	assert.Panics(tt, func() {
+		NewStructWithType(t2, ValueSlice{String("foo")})
+	})
+
+	assert.Panics(tt, func() {
+		NewStructWithType(t2, ValueSlice{String("foo"), Bool(true)})
+	})
+
+	assert.Panics(tt, func() {
+		NewStructWithType(t2, ValueSlice{Number(1), String("foo")})
+	})
+
+	assert.Panics(tt, func() {
+		NewStructWithType(t2, ValueSlice{Bool(true), String("foo"), Number(1)})
+	})
 }
 
 func TestAssertTypeUnion(tt *testing.T) {
@@ -156,8 +179,8 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
-	namedT := MakeStructType("Name", TypeMap{"x": NumberType})
-	anonT := MakeStructType("", TypeMap{"x": NumberType})
+	namedT := MakeStructType("Name", []string{"x"}, []*Type{NumberType})
+	anonT := MakeStructType("", []string{"x"}, []*Type{NumberType})
 	namedV := NewStruct("Name", structData{"x": Number(42)})
 	name2V := NewStruct("foo", structData{"x": Number(42)})
 	anonV := NewStruct("", structData{"x": Number(42)})
@@ -172,9 +195,9 @@ func TestAssertTypeStructSubtypeByName(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
-	at := MakeStructType("", TypeMap{})
-	bt := MakeStructType("", TypeMap{"x": NumberType})
-	ct := MakeStructType("", TypeMap{"x": NumberType, "s": StringType})
+	at := MakeStructType("", []string{}, []*Type{})
+	bt := MakeStructType("", []string{"x"}, []*Type{NumberType})
+	ct := MakeStructType("", []string{"s", "x"}, []*Type{StringType, NumberType})
 	av := NewStruct("", structData{})
 	bv := NewStruct("", structData{"x": Number(1)})
 	cv := NewStruct("", structData{"x": Number(2), "s": String("hi")})
@@ -197,16 +220,16 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 		"value":   Number(1),
 		"parents": NewSet(),
 	})
-	t1 := MakeStructType("Commit", TypeMap{
-		"value":   NumberType,
-		"parents": MakeSetType(MakeUnionType()),
-	})
+	t1 := MakeStructType("Commit",
+		[]string{"parents", "value"},
+		[]*Type{MakeSetType(MakeUnionType()), NumberType},
+	)
 	assertSubtype(t1, c1)
 
-	t11 := MakeStructType("Commit", TypeMap{
-		"value":   NumberType,
-		"parents": MakeSetType(MakeRefType(t1)),
-	})
+	t11 := MakeStructType("Commit",
+		[]string{"parents", "value"},
+		[]*Type{MakeSetType(MakeRefType(t1)), NumberType},
+	)
 	assertSubtype(t11, c1)
 
 	c2 := NewStruct("Commit", structData{

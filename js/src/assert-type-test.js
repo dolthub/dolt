@@ -119,9 +119,7 @@ suite('validate type', () => {
   });
 
   test('struct', () => {
-    const type = makeStructType('Struct', {
-      'x': boolType,
-    });
+    const type = makeStructType('Struct', ['x'], [boolType]);
 
     const v = newStruct('Struct', {x: true});
     assertSubtype(type, v);
@@ -182,8 +180,8 @@ suite('validate type', () => {
   });
 
   test('struct subtype by name', () => {
-    const namedT = makeStructType('Name', {x: numberType});
-    const anonT = makeStructType('', {x: numberType});
+    const namedT = makeStructType('Name', ['x'], [numberType]);
+    const anonT = makeStructType('', ['x'], [numberType]);
     const namedV = newStruct('Name', {x: 42});
     const name2V = newStruct('foo', {x: 42});
     const anonV = newStruct('', {x: 42});
@@ -198,9 +196,9 @@ suite('validate type', () => {
   });
 
   test('struct subtype extra fields', () => {
-    const at = makeStructType('', {});
-    const bt = makeStructType('', {x: numberType});
-    const ct = makeStructType('', {x: numberType, s: stringType});
+    const at = makeStructType('', [], []);
+    const bt = makeStructType('', ['x'], [numberType]);
+    const ct = makeStructType('', ['s', 'x'], [stringType, numberType]);
     const av = newStruct('', {});
     const bv = newStruct('', {x: 1});
     const cv = newStruct('', {x: 2, s: 'hi'});
@@ -223,16 +221,22 @@ suite('validate type', () => {
       value: 1,
       parents: new Set(),
     });
-    const t1 = makeStructType('Commit', {
-      value: numberType,
-      parents: makeSetType(makeUnionType([])),
-    });
+    const t1 = makeStructType('Commit',
+      ['parents', 'value'],
+      [
+        makeSetType(makeUnionType([])),
+        numberType,
+      ]
+    );
     assertSubtype(t1, c1);
 
-    const t11 = makeStructType('Commit', {
-      value: numberType,
-      parents: numberType,  // placeholder
-    });
+    const t11 = makeStructType('Commit',
+      ['parents', 'value'],
+      [
+        numberType,
+        numberType,  // placeholder
+      ]
+    );
     t11.desc.setField('parents', makeSetType(makeRefType(t11)));
     assertSubtype(t11, c1);
 

@@ -210,17 +210,15 @@ export function makeRefType(elemType: Type): Type<CompoundDesc> {
   return buildType(new CompoundDesc(Kind.Ref, [elemType]));
 }
 
-export function makeStructType(name: string, fields: {[key: string]: Type}): Type<StructDesc> {
+export function makeStructType(name: string, fieldNames: string[], fieldTypes: Type[]):
+    Type<StructDesc> {
   verifyStructName(name);
-  const keys = Object.keys(fields);
-  keys.sort();
-  const fs = new Array(keys.length);
-  for (let i = 0; i < keys.length; i++) {
-    const name = keys[i];
-    verifyFieldName(name);
-    const type = fields[name];
-    fs[i] = {name, type};
-  }
+  verifyFieldNames(fieldNames);
+
+  const fs = fieldNames.map((name, i) => {
+    const type = fieldTypes[i];
+    return {name, type};
+  });
 
   return buildType(new StructDesc(name, fs));
 }
@@ -239,6 +237,23 @@ export function makeUnionType(types: Type[]): Type {
 }
 
 const fieldNameRe = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+
+function verifyFieldNames(names: string[]) {
+  if (names.length === 0) {
+    return;
+  }
+
+  let last = names[0];
+  verifyFieldName(last);
+
+  for (let i = 1; i < names.length; i++) {
+    verifyFieldName(names[i]);
+    if (last >= names[i]) {
+      throw new Error('Field names must be unique and ordered alphabetically');
+    }
+    last = names[i];
+  }
+}
 
 function verifyName(name: string, kind: '' | ' field') {
   if (!fieldNameRe.test(name)) {

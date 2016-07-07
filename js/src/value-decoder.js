@@ -6,7 +6,7 @@
 
 import Blob, {BlobLeafSequence} from './blob.js';
 import Ref, {constructRef} from './ref.js';
-import {newStructWithValues} from './struct.js';
+import {newStructWithType} from './struct.js';
 import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {
@@ -205,7 +205,7 @@ export default class ValueDecoder {
       values[i] = this.readValue();
     }
 
-    return newStructWithValues(type, values);
+    return newStructWithType(type, values);
   }
 
   readStructType(parentStructTypes: Type[]): Type {

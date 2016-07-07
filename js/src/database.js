@@ -38,10 +38,13 @@ export function getDatasTypes(): DatasTypes {
     //   value: Value
     //   parents: Set<Ref<Commit>>
     // }
-    const commitType = makeStructType('Commit', {
-      'value': valueType,
-      'parents': valueType, // placeholder
-    });
+    const commitType = makeStructType('Commit',
+      ['parents', 'value'],
+      [
+        valueType,
+        valueType,
+      ]
+    );
     const refOfCommitType = makeRefType(commitType);
     const commitSetType = makeSetType(refOfCommitType);
     commitType.desc.setField('parents', commitSetType);

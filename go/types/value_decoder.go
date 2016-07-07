@@ -216,10 +216,12 @@ func (r *valueDecoder) readStructType() *Type {
 	name := r.readString()
 	count := r.readUint32()
 
-	fields := make(map[string]*Type, count)
+	fieldNames := make([]string, count)
+	fieldTypes := make([]*Type, count)
 	for i := uint32(0); i < count; i++ {
-		fields[r.readString()] = r.readType()
+		fieldNames[i] = r.readString()
+		fieldTypes[i] = r.readType()
 	}
 
-	return r.tc.makeStructType(name, fields)
+	return r.tc.makeStructType(name, fieldNames, fieldTypes)
 }

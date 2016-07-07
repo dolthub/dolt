@@ -468,7 +468,7 @@ suite('Encoding', () => {
   });
 
   test('list of union with type', () => {
-    const structType = makeStructType('S', {x: numberType});
+    const structType = makeStructType('S', ['x'], [numberType]);
 
     assertEncoding([
       uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(TypeKind), false,
@@ -495,10 +495,13 @@ suite('Encoding', () => {
   });
 
   test('recursive struct', () => {
-    const structType = makeStructType('A6', {
-      v: numberType,
-      cs: numberType, // placeholder
-    });
+    const structType = makeStructType('A6',
+      ['cs', 'v'],
+      [
+        numberType, // placeholder
+        numberType,
+      ]
+    );
     const listType = makeListType(structType);
     structType.desc.setField('cs', listType);
 
@@ -508,7 +511,7 @@ suite('Encoding', () => {
       uint8(NumberKind), float64(42),
     ],
     // {v: 42, cs: [{v: 555, cs: []}]}
-    newStructWithType(structType, {v: 42, cs: new List()}));
+    newStructWithType(structType, [new List(), 42]));
   });
 
   test('union list', () => {

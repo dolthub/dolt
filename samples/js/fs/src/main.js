@@ -42,12 +42,8 @@ const args = argv
 //   entries: Map<String, Cycle<0> | File>,
 // }
 
-const fileType = makeStructType('File', {
-  content: makeRefType(blobType),
-});
-const directoryType = makeStructType('Directory', {
-  entries: blobType,
-});
+const fileType = makeStructType('File', ['content'], [makeRefType(blobType)]);
+const directoryType = makeStructType('Directory', ['entries'], [blobType]);
 const entriesType = makeMapType(stringType,
     makeUnionType([fileType, directoryType]));
 directoryType.desc.setField('entries', entriesType);
