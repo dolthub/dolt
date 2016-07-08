@@ -40,5 +40,6 @@
   },
   "scripts": {
     "test": "exit 0"
-  }
+  },
+  "preinstall": "ln -sf ../../js/.babelrc && ln -sf ../../js/.flowconfig"
 }
