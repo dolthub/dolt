@@ -39,7 +39,7 @@
     "yargs": "^4.7.1"
   },
   "scripts": {
+    "preinstall": "ln -sf ../../js/.babelrc && ln -sf ../../js/.flowconfig",
     "test": "exit 0"
-  },
-  "preinstall": "ln -sf ../../js/.babelrc && ln -sf ../../js/.flowconfig"
+  }
 }
