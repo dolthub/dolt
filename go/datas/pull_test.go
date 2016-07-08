@@ -5,10 +5,12 @@
 package datas
 
 import (
+	"container/heap"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -331,4 +333,29 @@ func buildListOfHeight(height int, vw types.ValueWriter) types.List {
 		l = types.NewList(r1, r2)
 	}
 	return l
+}
+
+// Note: This test is asserting that burnDown correctly separates refs which are exclusive to |taller| from those which are |common|.
+func TestBurnDown(t *testing.T) {
+	taller := &types.RefHeap{}
+	shorter := &types.RefHeap{}
+
+	for i := 0; i < 50; i++ {
+		heap.Push(shorter, types.NewRef(types.Number(i)))
+	}
+
+	for i := 50; i < 250; i++ {
+		heap.Push(shorter, types.NewRef(types.Number(i)))
+		heap.Push(taller, types.NewRef(types.Number(i)))
+	}
+
+	for i := 250; i < 275; i++ {
+		heap.Push(taller, types.NewRef(types.Number(i)))
+	}
+
+	tallRefs, comRefs := burnDown(taller, shorter, 1, 1)
+	assert.Equal(t, 25, len(tallRefs))
+	assert.Equal(t, 200, len(comRefs))
+	assert.Equal(t, 0, len(*taller))
+	assert.Equal(t, 50, len(*shorter))
 }

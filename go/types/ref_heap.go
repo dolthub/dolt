@@ -36,14 +36,20 @@ func (h RefHeap) Empty() bool {
 }
 
 func (h RefHeap) Peek() (head Ref) {
-	return h.PeekAt(0)
-}
-
-func (h RefHeap) PeekAt(idx int) (peek Ref) {
-	if idx < len(h) {
-		peek = h[idx]
+	if len(h) > 0 {
+		head = h[0]
 	}
 	return
+}
+
+func (h RefHeap) IndexOf(t Ref) (int, bool) {
+	for i, r := range h {
+		if r.Equals(t) {
+			return i, true
+		}
+	}
+
+	return -1, false
 }
 
 // HeapOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.

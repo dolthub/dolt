@@ -173,23 +173,20 @@ func planWork(srcQ, sinkQ *types.RefHeap) (srcRefs, sinkRefs, comRefs types.RefS
 	return
 }
 
+// Removes and returns in |tallRefs| all Refs from |taller| whose height is >= |short| and are not contained in |shorter|. Removes and returns in |comRefs| all Refs from |taller| & |shorter| whose height == |short| and are contained in both heaps.x
 func burnDown(taller, shorter *types.RefHeap, tall, short uint64) (tallRefs, comRefs types.RefSlice) {
 	for ht := tall; ht > short; ht = headHeight(taller) {
 		tallRefs = append(tallRefs, heap.Pop(taller).(types.Ref))
 	}
-	for shortIdx := 0; !taller.Empty() && headHeight(taller) == short; {
+	for !taller.Empty() && headHeight(taller) == short {
 		tallRef := heap.Pop(taller).(types.Ref)
-		shortPeek := shorter.PeekAt(shortIdx)
-		if types.HeapOrder(tallRef, shortPeek) {
+		shortIdx, ok := shorter.IndexOf(tallRef)
+		if !ok {
 			tallRefs = append(tallRefs, tallRef)
 			continue
 		}
-		if types.HeapOrder(shortPeek, tallRef) {
-			shortIdx++
-			continue
-		}
-		d.Chk.True(tallRef.Equals(shortPeek))
-		heap.Remove(shorter, shortIdx)
+		shortRef := heap.Remove(shorter, shortIdx).(types.Ref)
+		d.Chk.True(tallRef.Equals(shortRef))
 		comRefs = append(comRefs, tallRef)
 	}
 	return
