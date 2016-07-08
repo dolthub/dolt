@@ -19,8 +19,13 @@ def pushd(path):
     os.chdir(currentDir)
 
 def main():
-    with pushd('../'):
+    with pushd('../../../js'):
+        print('Now running npm install in %s' % os.getcwd())
         subprocess.check_call(['npm', 'install'], shell=False)
+    with pushd('../'):
+        print('Now running npm install in %s' % os.getcwd())
+        subprocess.check_call(['npm', 'install'], shell=False)
+    print('Now running npm install in %s' % os.getcwd())
     subprocess.check_call(['npm', 'install'], shell=False)
 
 if __name__ == "__main__":
