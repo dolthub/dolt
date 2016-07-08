@@ -69,12 +69,8 @@ export default class Node extends React.Component<void, Props, State> {
       <g className='node' onClick={this.props.onClick} style={{transform:translate}}>
         {this.getShape()}
         <foreignObject x={-this.props.spaceX + 10} y='-.35em'
-          width={this.props.spaceX - 20} height='0.7em'
-          requiredExtensions='http://www.w3.org/1999/xhtml'>
-          <p xmlns='http://www.w3.org/1999/xhtml' title={this.props.title || this.props.text}
-            style={paraStyle}>
-            {text}
-          </p>
+          width={this.props.spaceX - 20} height='0.7em'>
+          <p title={this.props.title || this.props.text} style={paraStyle}>{text}</p>
         </foreignObject>
       </g>
     );

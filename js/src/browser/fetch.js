@@ -48,7 +48,10 @@ export function fetchText(url: string, options: FetchOptions = {}): Promise<Text
   if (self.fetch) {
     return self.fetch(url, options)
       // resp.headers is a Headers which is a multi map, which is similar enough for now.
-      .then(resp => ({headers: resp.headers, buf: resp.text()}));
+      .then(resp => {
+        const {headers} = resp;
+        return resp.text().then(text => ({headers, buf: text}));
+      });
   }
 
   return fetch(url, 'text', options);
@@ -58,7 +61,10 @@ export function fetchUint8Array(url: string, options: FetchOptions = {}): Promis
   if (self.fetch) {
     return self.fetch(url, options)
       // resp.headers is a Headers which is a multi map, which is similar enough for now.
-      .then(resp => ({headers: resp.headers, buf: new Uint8Array(resp.arrayBuffer())}));
+      .then(resp => {
+        const {headers} = resp;
+        return resp.arrayBuffer().then(buf => ({headers, buf: new Uint8Array(buf)}));
+      });
   }
 
   return fetch(url, 'arraybuffer', options);
