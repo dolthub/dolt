@@ -20,12 +20,14 @@ def pushd(path):
 
 def main():
     with pushd('../../../js'):
-        print('Now running npm install in %s' % os.getcwd())
         subprocess.check_call(['npm', 'install'], shell=False)
+
     with pushd('../'):
-        print('Now running npm install in %s' % os.getcwd())
+        # Symlinks do not get deployed
+        symlink.Force('../../js/.babelrc', os.path.abspath('.babelrc'))
+        symlink.Force('../../js/.flowconfig', os.path.abspath('.flowconfig'))
         subprocess.check_call(['npm', 'install'], shell=False)
-    print('Now running npm install in %s' % os.getcwd())
+
     subprocess.check_call(['npm', 'install'], shell=False)
 
 if __name__ == "__main__":
