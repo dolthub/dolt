@@ -24,7 +24,7 @@ func TestSerialRunnerTestSuite(t *testing.T) {
 
 type FileTestSuite struct {
 	suite.Suite
-	dir, src string
+	dir, src, exc string
 }
 
 func (suite *FileTestSuite) SetupTest() {
@@ -32,7 +32,9 @@ func (suite *FileTestSuite) SetupTest() {
 	suite.dir, err = ioutil.TempDir(os.TempDir(), "")
 	suite.NoError(err)
 	suite.src = filepath.Join(suite.dir, "srcfile")
+	suite.exc = filepath.Join(suite.dir, "excfile")
 	suite.NoError(ioutil.WriteFile(suite.src, []byte(contents), 0644))
+	suite.NoError(ioutil.WriteFile(suite.exc, []byte(contents), 0755))
 }
 
 func (suite *FileTestSuite) TearDownTest() {
@@ -41,11 +43,21 @@ func (suite *FileTestSuite) TearDownTest() {
 
 func (suite *FileTestSuite) TestCopyFile() {
 	dst := filepath.Join(suite.dir, "dstfile")
-	DumbCopy(suite.src, dst)
 
-	out, err := ioutil.ReadFile(dst)
-	suite.NoError(err)
-	suite.Equal(contents, string(out))
+	test := func(src string, mode int) {
+		DumbCopy(src, dst)
+
+		info, err := os.Stat(src)
+		suite.NoError(err)
+		suite.Equal(mode, int(info.Mode()))
+
+		out, err := ioutil.ReadFile(dst)
+		suite.NoError(err)
+		suite.Equal(contents, string(out))
+	}
+
+	test(suite.src, 0644)
+	test(suite.exc, 0755)
 }
 
 func (suite *FileTestSuite) TestCopyLink() {
