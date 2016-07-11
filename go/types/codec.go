@@ -144,8 +144,6 @@ func (b *binaryNomsReader) readString() string {
 	return v
 }
 
-var createCount = uint64(0)
-
 // Note: It's somewhat of a layering violation that a nomsReaders knows about a TypeCache. The reason why the code is structured this way is that the go compiler can stack-allocate the string which is created from the byte slice, which is a fairly large perf gain.
 func (b *binaryNomsReader) readIdent(tc *TypeCache) uint32 {
 	size := b.readUint32()

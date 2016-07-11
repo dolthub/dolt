@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {getTypeOfValue, CompoundDesc} from './type.js';
+import {getTypeOfValue, CompoundDesc, CycleDesc} from './type.js';
 import type {Type} from './type.js';
 import {Kind, kindToString} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -109,6 +109,9 @@ export class TypeWriter {
         this._writeStructType(t, parentStructTypes);
         break;
       case Kind.Cycle:
+        invariant(t.desc instanceof CycleDesc);
+        this._w.write(`Cycle<${t.desc.level}>`);
+        break;
       default:
         throw new Error('unreachable');
     }

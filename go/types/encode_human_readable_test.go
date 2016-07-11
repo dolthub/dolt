@@ -360,7 +360,7 @@ func TestRecursiveStruct(t *testing.T) {
 })`, d)
 }
 
-func TestUnserolvedRecursiveStruct(t *testing.T) {
+func TestUnresolvedRecursiveStruct(t *testing.T) {
 	// struct A {
 	//   a: A
 	//   b: Cycle<1> (unresolved)
