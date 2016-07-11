@@ -152,3 +152,15 @@ func TestEscStructField(t *testing.T) {
 		assert.Equal(expected, EscapeStructField(orig))
 	}
 }
+
+func TestCycles(t *testing.T) {
+	// Success is this not recursing infinitely and blowing the stack
+	fileType := MakeStructType("File", []string{"data"}, []*Type{BlobType})
+	directoryType := MakeStructType("Directory", []string{"entries"}, []*Type{MakeMapType(StringType, MakeCycleType(1))})
+	inodeType := MakeStructType("Inode", []string{"contents"}, []*Type{MakeUnionType(directoryType, fileType)})
+	fsType := MakeStructType("Filesystem", []string{"root"}, []*Type{inodeType})
+
+	rootDir := NewStructWithType(directoryType, ValueSlice{NewMap()})
+	rootInode := NewStruct("Inode", map[string]Value{"contents": rootDir})
+	NewStructWithType(fsType, ValueSlice{rootInode})
+}

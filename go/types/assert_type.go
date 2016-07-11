@@ -7,19 +7,28 @@ package types
 import "github.com/attic-labs/noms/go/d"
 
 func assertSubtype(t *Type, v Value) {
-	if !isSubtype(t, v.Type()) {
-		d.Chk.Fail("Invalid type")
+	if !isSubtype(t, v.Type(), nil) {
+		d.Chk.Fail("Invalid type", "%s is not a subtype of %s", v.Type().Describe(), t.Describe())
 	}
 }
 
-func isSubtype(requiredType, concreteType *Type) bool {
+func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool {
 	if requiredType.Equals(concreteType) {
 		return true
 	}
 
 	if requiredType.Kind() == UnionKind {
+		// If we're comparing two unions all component types must be compatible
+		if concreteType.Kind() == UnionKind {
+			for _, t := range concreteType.Desc.(CompoundDesc).ElemTypes {
+				if !isSubtype(requiredType, t, parentStructTypes) {
+					return false
+				}
+			}
+			return true
+		}
 		for _, t := range requiredType.Desc.(CompoundDesc).ElemTypes {
-			if isSubtype(t, concreteType) {
+			if isSubtype(t, concreteType, parentStructTypes) {
 				return true
 			}
 		}
@@ -33,7 +42,7 @@ func isSubtype(requiredType, concreteType *Type) bool {
 	if desc, ok := requiredType.Desc.(CompoundDesc); ok {
 		concreteElemTypes := concreteType.Desc.(CompoundDesc).ElemTypes
 		for i, t := range desc.ElemTypes {
-			if !compoundSubtype(t, concreteElemTypes[i]) {
+			if !compoundSubtype(t, concreteElemTypes[i], parentStructTypes) {
 				return false
 			}
 		}
@@ -46,6 +55,13 @@ func isSubtype(requiredType, concreteType *Type) bool {
 		if requiredDesc.Name != "" && requiredDesc.Name != concreteDesc.Name {
 			return false
 		}
+
+		// We may already be computing the subtype for this type if we have a cycle. In that case we exit the recursive check. We may still find that the type is not a subtype but that will be handled at a higher level in the callstack.
+		_, found := indexOfType(requiredType, parentStructTypes)
+		if found {
+			return true
+		}
+
 		j := 0
 		for _, field := range requiredDesc.fields {
 			for ; j < concreteDesc.Len() && concreteDesc.fields[j].name != field.name; j++ {
@@ -55,7 +71,7 @@ func isSubtype(requiredType, concreteType *Type) bool {
 			}
 
 			f := concreteDesc.fields[j]
-			if !isSubtype(field.t, f.t) {
+			if !isSubtype(field.t, f.t, append(parentStructTypes, requiredType)) {
 				return false
 			}
 		}
@@ -66,10 +82,10 @@ func isSubtype(requiredType, concreteType *Type) bool {
 	panic("unreachable")
 }
 
-func compoundSubtype(requiredType, concreteType *Type) bool {
+func compoundSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool {
 	// In a compound type it is OK to have an empty union.
 	if concreteType.Kind() == UnionKind && len(concreteType.Desc.(CompoundDesc).ElemTypes) == 0 {
 		return true
 	}
-	return isSubtype(requiredType, concreteType)
+	return isSubtype(requiredType, concreteType, parentStructTypes)
 }
