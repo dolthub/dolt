@@ -41,8 +41,8 @@ suite('compare.js', () => {
       assert.equal(compare(listA, listA), 0);
       assert.equal(compare(listA, listB), 0);
       // These two are ordered by hash
-      assert.isAbove(compare(listC, listA), 0);
-      assert.isBelow(compare(listA, listC), 0);
+      assert.isAbove(compare(listA, listC), 0);
+      assert.isBelow(compare(listC, listA), 0);
     });
 
     test('union', () => {

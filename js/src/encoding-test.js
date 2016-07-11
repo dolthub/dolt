@@ -154,7 +154,7 @@ suite('Encoding', () => {
       return tagged.value;
     }
 
-    readFloat64(): number {
+    readNumber(): number {
       const tagged = this.read();
       invariant(tagged.type === 'float64');
       return tagged.value;
@@ -205,7 +205,7 @@ suite('Encoding', () => {
       this.write(uint64(v));
     }
 
-    writeFloat64(v: number): void {
+    writeNumber(v: number): void {
       this.write(float64(v));
     }
 

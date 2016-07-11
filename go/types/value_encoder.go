@@ -129,7 +129,7 @@ func (w *valueEncoder) writeValue(v Value) {
 	case BoolKind:
 		w.writeBool(bool(v.(Bool)))
 	case NumberKind:
-		w.writeFloat64(float64(v.(Number)))
+		w.writeNumber(v.(Number))
 	case ListKind:
 		seq := v.(List).sequence()
 		if w.maybeWriteMetaSequence(seq) {

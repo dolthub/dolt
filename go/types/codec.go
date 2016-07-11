@@ -6,7 +6,7 @@ package types
 
 import (
 	"crypto/sha1"
-	"math"
+	"encoding/binary"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -54,7 +54,7 @@ type nomsReader interface {
 	readUint8() uint8
 	readUint32() uint32
 	readUint64() uint64
-	readFloat64() float64
+	readNumber() Number
 	readBool() bool
 	readString() string
 	readIdent(tc *TypeCache) uint32
@@ -66,7 +66,7 @@ type nomsWriter interface {
 	writeUint8(v uint8)
 	writeUint32(v uint32)
 	writeUint64(v uint64)
-	writeFloat64(v float64)
+	writeNumber(v Number)
 	writeBool(b bool)
 	writeString(v string)
 	writeHash(h hash.Hash)
@@ -123,8 +123,13 @@ func (b *binaryNomsReader) readUint64() uint64 {
 	return v
 }
 
-func (b *binaryNomsReader) readFloat64() float64 {
-	return math.Float64frombits(b.readUint64())
+func (b *binaryNomsReader) readNumber() Number {
+	// b.assertCanRead(binary.MaxVarintLen64 * 2)
+	i, count := binary.Varint(b.buff[b.offset:])
+	b.offset += uint32(count)
+	exp, count2 := binary.Varint(b.buff[b.offset:])
+	b.offset += uint32(count2)
+	return Number(intExpToFloat64(i, int(exp)))
 }
 
 func (b *binaryNomsReader) readBool() bool {
@@ -212,7 +217,6 @@ func (b *binaryNomsWriter) writeUint32(v uint32) {
 
 func (b *binaryNomsWriter) writeUint64(v uint64) {
 	b.ensureCapacity(8)
-
 	// Little-Endian: TODO: Need Big
 	b.buff[b.offset] = byte(v)
 	b.buff[b.offset+1] = byte(v >> 8)
@@ -225,8 +229,13 @@ func (b *binaryNomsWriter) writeUint64(v uint64) {
 	b.offset += 8
 }
 
-func (b *binaryNomsWriter) writeFloat64(v float64) {
-	b.writeUint64(math.Float64bits(v))
+func (b *binaryNomsWriter) writeNumber(v Number) {
+	b.ensureCapacity(binary.MaxVarintLen64 * 2)
+	i, exp := float64ToIntExp(float64(v))
+	count := binary.PutVarint(b.buff[b.offset:], i)
+	b.offset += uint32(count)
+	count = binary.PutVarint(b.buff[b.offset:], int64(exp))
+	b.offset += uint32(count)
 }
 
 func (b *binaryNomsWriter) writeBool(v bool) {

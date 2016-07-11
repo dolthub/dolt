@@ -141,7 +141,7 @@ func (r *valueDecoder) readValue() Value {
 	case BoolKind:
 		return Bool(r.readBool())
 	case NumberKind:
-		return Number(r.readFloat64())
+		return r.readNumber()
 	case StringKind:
 		return String(r.readString())
 	case ListKind:

@@ -14,6 +14,8 @@ import {setHash, ValueBase} from './value.js';
 import type Value from './value.js';
 import type {ValueReader, ValueWriter} from './value-store.js';
 import * as Bytes from './bytes.js';
+import {floatToIntExp, intExpToFloat} from './number-util.js';
+import svarint from 'signed-varint';
 
 export function encodeValue(v: Value, vw: ?ValueWriter): Chunk {
   const w = new BinaryNomsWriter();
@@ -50,7 +52,7 @@ export interface NomsReader {
   readUint8(): number;
   readUint32(): number;
   readUint64(): number;
-  readFloat64(): number;
+  readNumber(): number;
   readBool(): boolean;
   readString(): string;
   readHash(): Hash;
@@ -61,7 +63,7 @@ export interface NomsWriter {
   writeUint8(v: number): void;
   writeUint32(v: number): void;
   writeUint64(v: number): void;
-  writeFloat64(v: number): void;
+  writeNumber(v: number): void;
   writeBool(v:boolean): void;
   writeString(v: string): void;
   writeHash(h: Hash): void;
@@ -106,10 +108,12 @@ export class BinaryNomsReader {
     return v;
   }
 
-  readFloat64(): number {
-    const v = this.dv.getFloat64(this.offset, littleEndian);
-    this.offset += 8;
-    return v;
+  readNumber(): number {
+    const intVal = svarint.decode(this.buff, this.offset);
+    this.offset += svarint.decode.bytes;
+    const expVal = svarint.decode(this.buff, this.offset);
+    this.offset += svarint.decode.bytes;
+    return intExpToFloat(intVal, expVal);
   }
 
   readBool(): boolean {
@@ -194,10 +198,16 @@ export class BinaryNomsWriter {
     this.writeUint32(v2);
   }
 
-  writeFloat64(v: number): void {
-    this.ensureCapacity(8);
-    this.dv.setFloat64(this.offset, v, littleEndian);
-    this.offset += 8;
+  writeNumber(v: number): void {
+    const [intVal, expVal] = floatToIntExp(v);
+    const intLen = svarint.encodingLength(intVal);
+    const expLen = svarint.encodingLength(expVal);
+    this.ensureCapacity(intLen + expLen);
+
+    svarint.encode(intVal, this.buff, this.offset);
+    this.offset += intLen;
+    svarint.encode(expVal, this.buff, this.offset);
+    this.offset += expLen;
   }
 
   writeBool(v:boolean): void {

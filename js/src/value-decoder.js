@@ -156,7 +156,7 @@ export default class ValueDecoder {
       case Kind.Bool:
         return this._r.readBool();
       case Kind.Number:
-        return this._r.readFloat64();
+        return this._r.readNumber();
       case Kind.String:
         return this._r.readString();
       case Kind.List: {

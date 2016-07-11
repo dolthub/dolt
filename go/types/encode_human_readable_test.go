@@ -63,8 +63,8 @@ func TestWriteHumanReadableRef(t *testing.T) {
 
 	x := Number(42)
 	rv := vs.WriteValue(x)
-	assertWriteHRSEqual(t, "sha1-c47f695d492ba4a218281aa7c0269d304af48b9e", rv)
-	assertWriteTaggedHRSEqual(t, "Ref<Number>(sha1-c47f695d492ba4a218281aa7c0269d304af48b9e)", rv)
+	assertWriteHRSEqual(t, "sha1-f76a38165c9408b5cafa7e67006ba7e697756072", rv)
+	assertWriteTaggedHRSEqual(t, "Ref<Number>(sha1-f76a38165c9408b5cafa7e67006ba7e697756072)", rv)
 }
 
 func TestWriteHumanReadableCollections(t *testing.T) {

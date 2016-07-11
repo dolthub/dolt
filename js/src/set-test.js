@@ -37,7 +37,7 @@ import {
 } from './type.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-1fc97c4e369770b643e013569c68687765601514';
+const setOfNRef = 'sha1-ae7716c21164c7095686610371fd8e4af7b4e7c2';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -72,21 +72,21 @@ suite('BuildSet', () => {
   }
 
   test('Set 1K', async () => {
-    await setTestSuite(10, 'sha1-5e5eda1a8813f19d0e5e68e6725cb6b3d9b63daa', 14, i => i);
+    await setTestSuite(10, 'sha1-1520836622fd7cd2964c3d49c3076a270422e255', 16, i => i);
   });
 
   test('LONG: Set 4K', async () => {
-    await setTestSuite(12, 'sha1-d32df81dba427a00d949f3dbca477a5d2d8057a9', 2, i => i);
+    await setTestSuite(12, 'sha1-874d250b19dab05ddc63feb301ba95bdafcf8a7d', 2, i => i);
   });
 
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Set 1K structs', async () => {
-    await setTestSuite(10, 'sha1-9d904bcb2b06b0361a73f9ccbdfeca53f081030f', 18, newNumberStruct);
+    await setTestSuite(10, 'sha1-217eba8e53962c0efea24f4c22e6a525bb1663dd', 14, newNumberStruct);
   });
 
   test('LONG: Set 4K structs', async () => {
-    await setTestSuite(12, 'sha1-a8f3b3362cde66638e6e1fb8359ad5675b7b5292', 2, newNumberStruct);
+    await setTestSuite(12, 'sha1-3ac7ebc9123028d1ade619f539ad4d488a3ab6ea', 2, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -124,7 +124,7 @@ suite('BuildSet', () => {
     const nums = intSequence(testSetSize);
     const structs = nums.map(n => newStruct('num', {n}));
     const s = new Set(structs);
-    assert.strictEqual('sha1-4f207ac30b7922b5c2181769ce827d9a3cbc8b9b', s.hash.toString());
+    assert.strictEqual('sha1-dd51e00ce152fbcab72d625ec2c2895f9264ec8f', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);
@@ -139,7 +139,7 @@ suite('BuildSet', () => {
     const nums = intSequence(testSetSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new Set(refs);
-    assert.strictEqual('sha1-084c21ccfb81d18d1b6da8bae6b5de1f52d1bd00', s.hash.toString());
+    assert.strictEqual('sha1-73ceda53a24ffc2d76d17a34b772468cfe84576f', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -231,7 +231,7 @@ suite('BuildSet', () => {
     vals.sort(compare);
 
     const s = new Set(vals);
-    assert.strictEqual('sha1-b40b9337b0a87c1c0233a415e28bd5294cab6abb', s.hash.toString());
+    assert.strictEqual('sha1-7b6b734e9cb67af9a93dd82ae82a60a2d4ae8ad5', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);

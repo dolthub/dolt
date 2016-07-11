@@ -26,9 +26,9 @@ func newTestSuite() *testSuite {
 	testValues := []*testValue{
 		&testValue{Bool(true), "sha1-3f29546453678b855931c174a97d6c0894b8f546", "bool - true"},
 		&testValue{Bool(false), "sha1-1489f923c4dca729178b3e3233458550d8dddf29", "bool - false"},
-		&testValue{Number(-1), "sha1-cd243416f913f4a81d020a866266316b30200e34", "num - -1"},
-		&testValue{Number(0), "sha1-80e331473af6cb0cd7ae6f75793070cfbc4d642b", "num - 0"},
-		&testValue{Number(1), "sha1-9f34f68652a49c4b7cc5e25951311e92c61d46d0", "num - 1"},
+		&testValue{Number(-1), "sha1-47ec8d98366433dc002e7721c9e37d5067547937", "num - -1"},
+		&testValue{Number(0), "sha1-9508e90548b0440a4a61e5743b76c1e309b23b7f", "num - 0"},
+		&testValue{Number(1), "sha1-9f36f27018671b24dcdf70c9eb857d5ea2a064c8", "num - 1"},
 		&testValue{String(""), "sha1-e1bc1dae59f116abb43f9dafbb2acc9b141aa6b0", "str - empty"},
 		&testValue{String("0"), "sha1-a1c90c71d1ffdb51138677c578e6f2e8a011070d", "str - 0"},
 		&testValue{String("false"), "sha1-e15d53dc6c9d3aa6eca4eea28382c9c45ba8fd9e", "str - false"},

@@ -230,18 +230,19 @@ func (suite *mapTestSuite) TestStreamingMap() {
 }
 
 func TestMapSuite1K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "sha1-b4dfda98cac31acfb42c42bbe7692d576855e520", 2, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(10, "sha1-ccda04ba3961a70124e029c2e9af7b0537e726db", 16, 1, 2, newNumber))
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f", 4, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, "sha1-80e91e9538aeaabe75793c6c29d03954ac81d221", 2, 2, 2, newNumber))
 }
+
 func TestMapSuite1KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "sha1-73ab90e854ea52001e59ea4b097c9f3b40565d8c", 18, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(10, "sha1-17a96ed265da91aa992be70dba34cd9c3b9000df", 2, 2, 2, newNumberStruct))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "sha1-b48765e4423ec48eb5925276794b2864a4b48928", 76, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, "sha1-ed658ef24dbc4fa2fecefa1e215bc06887199935", 2, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -948,7 +949,7 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("sha1-9fce950ce2606ced8681a695b608384c642ffb53", m.Hash().String())
+	assert.Equal("sha1-0ce27caa55f6fec82da76e1bc84fe459b7387791", m.Hash().String())
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
@@ -969,7 +970,7 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("sha1-c43b17db2fa433aa1842b8b0b25acfd10e035be3", m.Hash().String())
+	assert.Equal("sha1-5c36c25f8d62e72b3d02089febab440049236631", m.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }

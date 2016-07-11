@@ -40,7 +40,7 @@ import {
 } from './type.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-9fce950ce2606ced8681a695b608384c642ffb53';
+const mapOfNRef = 'sha1-0ce27caa55f6fec82da76e1bc84fe459b7387791';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -85,21 +85,21 @@ suite('BuildMap', () => {
   }
 
   test('Map 1K', async () => {
-    await mapTestSuite(10, 'sha1-b4dfda98cac31acfb42c42bbe7692d576855e520', 2, i => i);
+    await mapTestSuite(10, 'sha1-ccda04ba3961a70124e029c2e9af7b0537e726db', 16, i => i);
   });
 
   test('LONG: Map 4K', async () => {
-    await mapTestSuite(12, 'sha1-7d650134fa9c0424a4c5ff93f377b8e8d54dbd0f', 4, i => i);
+    await mapTestSuite(12, 'sha1-80e91e9538aeaabe75793c6c29d03954ac81d221', 2, i => i);
   });
 
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Map 1K structs', async () => {
-    await mapTestSuite(10, 'sha1-73ab90e854ea52001e59ea4b097c9f3b40565d8c', 18, newNumberStruct);
+    await mapTestSuite(10, 'sha1-17a96ed265da91aa992be70dba34cd9c3b9000df', 2, newNumberStruct);
   });
 
   test('LONG: Map 4K structs', async () => {
-    await mapTestSuite(12, 'sha1-b48765e4423ec48eb5925276794b2864a4b48928', 76, newNumberStruct);
+    await mapTestSuite(12, 'sha1-ed658ef24dbc4fa2fecefa1e215bc06887199935', 2, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -154,7 +154,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.hash.toString(), 'sha1-c43b17db2fa433aa1842b8b0b25acfd10e035be3');
+    assert.strictEqual(m.hash.toString(), 'sha1-5c36c25f8d62e72b3d02089febab440049236631');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -268,7 +268,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.hash.toString(), 'sha1-96504f677dae417f0714af77b3e313ca1c3764e6');
+    assert.strictEqual(m.hash.toString(), 'sha1-4e3eb68ff102c74aa7305753ee2ebcc4ebdebf62');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);

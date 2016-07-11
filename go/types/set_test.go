@@ -157,19 +157,19 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 }
 
 func TestSetSuite1K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, "sha1-5e5eda1a8813f19d0e5e68e6725cb6b3d9b63daa", 14, 2, 2, newNumber))
+	suite.Run(t, newSetTestSuite(10, "sha1-1520836622fd7cd2964c3d49c3076a270422e255", 16, 1, 2, newNumber))
 }
 
 func TestSetSuite4K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, "sha1-d32df81dba427a00d949f3dbca477a5d2d8057a9", 2, 2, 2, newNumber))
+	suite.Run(t, newSetTestSuite(12, "sha1-874d250b19dab05ddc63feb301ba95bdafcf8a7d", 2, 2, 2, newNumber))
 }
 
 func TestSetSuite1KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, "sha1-9d904bcb2b06b0361a73f9ccbdfeca53f081030f", 18, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(10, "sha1-217eba8e53962c0efea24f4c22e6a525bb1663dd", 14, 1, 2, newNumberStruct))
 }
 
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, "sha1-a8f3b3362cde66638e6e1fb8359ad5675b7b5292", 2, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, "sha1-3ac7ebc9123028d1ade619f539ad4d488a3ab6ea", 2, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {
@@ -785,7 +785,7 @@ func TestSetFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("sha1-1fc97c4e369770b643e013569c68687765601514", s.Hash().String())
+	assert.Equal("sha1-ae7716c21164c7095686610371fd8e4af7b4e7c2", s.Hash().String())
 	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
 }
 
@@ -797,7 +797,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("sha1-084c21ccfb81d18d1b6da8bae6b5de1f52d1bd00", s.Hash().String())
+	assert.Equal("sha1-73ceda53a24ffc2d76d17a34b772468cfe84576f", s.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }

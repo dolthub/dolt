@@ -35,9 +35,9 @@ func (opCacheComparer) Compare(a, b []byte) int {
 			return res
 		}
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readFloat64()
+		aNum := reader.readNumber()
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readFloat64()
+		bNum := reader.readNumber()
 		if aNum == bNum {
 			return 0
 		}

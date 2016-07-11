@@ -153,7 +153,7 @@ export default class ValueEncoder {
       case Kind.Number:
         invariant(typeof v === 'number',
                   () => `Failed to write Number. Invalid type: ${describeTypeOfValue(v)}`);
-        this._w.writeFloat64(v);
+        this._w.writeNumber(v);
         break;
       case Kind.List: {
         invariant(v instanceof List,
