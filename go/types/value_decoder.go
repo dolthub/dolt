@@ -53,7 +53,7 @@ func (r *valueDecoder) readType() *Type {
 		}
 		return r.tc.getCompoundType(UnionKind, elemTypes...)
 	case CycleKind:
-		return r.tc.getCycleType(r.readUint32())
+		return r.tc.getCyclicType(r.readUint32())
 	}
 
 	d.Chk.True(IsPrimitiveKind(k))

@@ -16,13 +16,16 @@ import type {Type} from './type.js';
 import {
   blobType,
   boolType,
+  listOfValueType,
   makeListType,
   makeMapType,
   makeRefType,
   makeSetType,
   makeStructType,
   makeUnionType,
+  mapOfValueType,
   numberType,
+  setOfValueType,
   stringType,
   typeType,
   valueType,
@@ -86,7 +89,7 @@ suite('validate type', () => {
     assertSubtype(listOfNumberType, l);
     assertAll(listOfNumberType, l);
 
-    assertSubtype(makeListType(valueType), l);
+    assertSubtype(listOfValueType, l);
   });
 
   test('map', () => {
@@ -95,7 +98,7 @@ suite('validate type', () => {
     assertSubtype(mapOfNumberToStringType, m);
     assertAll(mapOfNumberToStringType, m);
 
-    assertSubtype(makeMapType(valueType, valueType), m);
+    assertSubtype(mapOfValueType, m);
   });
 
   test('set', () => {
@@ -104,7 +107,7 @@ suite('validate type', () => {
     assertSubtype(setOfNumberType, s);
     assertAll(setOfNumberType, s);
 
-    assertSubtype(makeSetType(valueType), s);
+    assertSubtype(setOfValueType, s);
   });
 
   test('type', () => {
@@ -230,10 +233,11 @@ suite('validate type', () => {
     const t11 = makeStructType('Commit',
       ['parents', 'value'],
       [
-        makeSetType(makeRefType(t1)),
         numberType,
+        numberType,  // placeholder
       ]
     );
+    t11.desc.setField('parents', makeSetType(makeRefType(t11)));
     assertSubtype(t11, c1);
 
     const c2 = newStruct('Commit', {

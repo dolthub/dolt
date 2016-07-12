@@ -7,13 +7,11 @@
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
-import {invariant, notNull} from './assert.js';
 import {TypeWriter} from './encode-human-readable.js';
 import {
   blobType,
   boolType,
   numberType,
-  makeCycleType,
   makeRefType,
   makeListType,
   makeMapType,
@@ -21,7 +19,7 @@ import {
   makeStructType,
   makeUnionType,
   stringType,
-  StructDesc,
+  valueType,
   Type,
 } from './type.js';
 
@@ -88,17 +86,23 @@ suite('Encode human readable types', () => {
     const a = makeStructType('A',
       ['b', 'c', 'd'],
       [
-        makeCycleType(0),
-        makeListType(makeCycleType(0)),
-        makeStructType('D',
-          ['e', 'f'],
-          [
-            makeCycleType(0),
-            makeCycleType(1),
-          ]
-        ),
+        valueType,  // placeholder
+        valueType,  // placeholder
+        valueType,  // placeholder
       ]
     );
+    const d = makeStructType('D',
+      ['e', 'f'],
+      [
+        valueType,  // placeholder
+        a,
+      ]
+    );
+    a.desc.setField('b', a);
+    a.desc.setField('d', d);
+    d.desc.setField('e', d);
+    d.desc.setField('f', a);
+    a.desc.setField('c', makeListType(a));
 
     assertWriteType(`struct A {
   b: Cycle<0>,
@@ -109,9 +113,6 @@ suite('Encode human readable types', () => {
   },
 }`, a);
 
-    invariant(a.desc instanceof StructDesc);
-    const d = notNull(a.desc.getField('d'));
-
     assertWriteType(`struct D {
   e: Cycle<0>,
   f: struct A {
@@ -120,25 +121,5 @@ suite('Encode human readable types', () => {
     d: Cycle<1>,
   },
 }`, d);
-  });
-
-  test('recursive unresolved struct', () => {
-    // struct A {
-    //   a: A
-    //   b: Cycle<1>
-    // }
-
-    const a = makeStructType('A',
-      ['a', 'b'],
-      [
-        makeCycleType(0),
-        makeCycleType(1),
-      ]
-    );
-
-    assertWriteType(`struct A {
-  a: Cycle<0>,
-  b: Cycle<1>,
-}`, a);
   });
 });

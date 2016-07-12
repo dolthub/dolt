@@ -34,18 +34,16 @@ import {
 } from './meta-sequence.js';
 import {
   boolType,
-  blobType,
-  makeCycleType,
   makeListType,
   makeMapType,
   makeRefType,
   makeSetType,
   makeStructType,
   numberType,
+  refOfBlobType,
   stringType,
   typeType,
 } from './type.js';
-import {staticTypeCache} from './type-cache.js';
 
 function assertRoundTrips(v: Value) {
   const db = new TestDatabase();
@@ -123,14 +121,6 @@ suite('Encoding', () => {
       this.i = 0;
     }
 
-    pos(): number {
-      return this.i;
-    }
-
-    seek(pos: number): void {
-      this.i = pos;
-    }
-
     atEnd(): boolean {
       return this.i === this.a.length;
     }
@@ -182,16 +172,6 @@ suite('Encoding', () => {
       return v;
     }
 
-    readIdent(tc: TypeCache): number {
-      const s = this.readString();
-      let id = tc.identTable.entries.get(s);
-      if (id === undefined) {
-        id = tc.identTable.getId(s);
-      }
-
-      return id;
-    }
-
     readHash(): Hash {
       return Hash.parse(this.readString());
     }
@@ -241,11 +221,6 @@ suite('Encoding', () => {
       this.writeString(h.toString());
     }
 
-    appendType(t: Type): void {
-      const enc = new ValueEncoder(this, null);
-      enc.writeType(t, []);
-    }
-
     toArray(): any[] {
       return this.a;
     }
@@ -271,7 +246,7 @@ suite('Encoding', () => {
     assert.deepEqual(encoding, w.toArray());
 
     const r = new TestReader(encoding);
-    const dec = new ValueDecoder(r, null, staticTypeCache);
+    const dec = new ValueDecoder(r, null);
     const v2 = dec.readValue();
     assert.isTrue(equals(v, v2));
   }
@@ -365,9 +340,9 @@ suite('Encoding', () => {
         uint8(RefKind), uint8(BlobKind), r3.toString(), uint64(33), uint8(NumberKind), float64(60), uint64(60),
       ],
       Blob.fromSequence(newBlobMetaSequence(null, [
-        new MetaTuple(constructRef(makeRefType(blobType), r1, 11), new OrderedKey(20), 20, null),
-        new MetaTuple(constructRef(makeRefType(blobType), r2, 22), new OrderedKey(40), 40, null),
-        new MetaTuple(constructRef(makeRefType(blobType), r3, 33), new OrderedKey(60), 60, null),
+        new MetaTuple(constructRef(refOfBlobType, r1, 11), new OrderedKey(20), 20, null),
+        new MetaTuple(constructRef(refOfBlobType, r2, 22), new OrderedKey(40), 40, null),
+        new MetaTuple(constructRef(refOfBlobType, r3, 33), new OrderedKey(60), 60, null),
       ]))
     );
   });
@@ -523,10 +498,12 @@ suite('Encoding', () => {
     const structType = makeStructType('A6',
       ['cs', 'v'],
       [
-        makeListType(makeCycleType(0)),
+        numberType, // placeholder
         numberType,
       ]
     );
+    const listType = makeListType(structType);
+    structType.desc.setField('cs', listType);
 
     assertEncoding([
       uint8(StructKind), 'A6', uint32(2) /* len */, 'cs', uint8(ListKind), uint8(CycleKind), uint32(0), 'v', uint8(NumberKind),

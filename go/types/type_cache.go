@@ -15,15 +15,12 @@ import (
 type TypeCache struct {
 	identTable *identTable
 	trieRoots  map[NomsKind]*typeTrie
+	typeBytes  map[uint32][]byte
 	nextId     uint32
 	mu         *sync.Mutex
 }
 
 var staticTypeCache = NewTypeCache()
-
-func makePrimitiveType(k NomsKind) *Type {
-	return buildType(PrimitiveDesc(k), uint32(k))
-}
 
 var BoolType = makePrimitiveType(BoolKind)
 var NumberType = makePrimitiveType(NumberKind)
@@ -44,6 +41,7 @@ func NewTypeCache() *TypeCache {
 			CycleKind:  newTypeTrie(),
 			UnionKind:  newTypeTrie(),
 		},
+		map[uint32][]byte{},
 		256, // The first 255 type ids are reserved for the 8bit space of NomsKinds.
 		&sync.Mutex{},
 	}
@@ -70,7 +68,7 @@ func (tc *TypeCache) getCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	}
 
 	if trie.t == nil {
-		trie.t = buildType(CompoundDesc{kind, elemTypes}, tc.nextTypeId())
+		trie.t = newType(CompoundDesc{kind, elemTypes}, tc.nextTypeId())
 	}
 
 	return trie.t
@@ -95,7 +93,7 @@ func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes
 			i++
 		}
 
-		t := buildType(StructDesc{name, fs}, 0)
+		t := newType(StructDesc{name, fs}, 0)
 		if t.serialization == nil {
 			// HasUnresolvedCycle
 			t, _ = toUnresolvedType(t, tc, -1, nil)
@@ -124,7 +122,8 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Type) (*Type, bool) {
 	i, found := indexOfType(t, parentStructTypes)
 	if found {
-		return newType(CycleDesc(uint32(len(parentStructTypes))-i-1), 0), true // This type is just a placeholder. It doesn't need an id
+		cycle := CycleDesc(uint32(len(parentStructTypes)) - i - 1)
+		return &Type{cycle, &hash.Hash{}, 0, nil}, true // This type is just a placeholder. It doesn't need an id
 	}
 
 	switch desc := t.Desc.(type) {
@@ -141,7 +140,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return newType(CompoundDesc{t.Kind(), ts}, tc.nextTypeId()), true
+		return &Type{CompoundDesc{t.Kind(), ts}, &hash.Hash{}, tc.nextTypeId(), nil}, true
 	case StructDesc:
 		fs := make(fieldSlice, len(desc.fields))
 		didChange := false
@@ -156,7 +155,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return newType(StructDesc{desc.Name, fs}, tc.nextTypeId()), true
+		return &Type{StructDesc{desc.Name, fs}, &hash.Hash{}, tc.nextTypeId(), nil}, true
 	case CycleDesc:
 		cycleLevel := int(desc)
 		return t, cycleLevel <= level // Only cycles which can be resolved in the current struct.
@@ -225,11 +224,11 @@ func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
 	return tc.getCompoundType(UnionKind, ts...)
 }
 
-func (tc *TypeCache) getCycleType(level uint32) *Type {
+func (tc *TypeCache) getCyclicType(level uint32) *Type {
 	trie := tc.trieRoots[CycleKind].Traverse(level)
 
 	if trie.t == nil {
-		trie.t = buildType(CycleDesc(level), tc.nextTypeId())
+		trie.t = newType(CycleDesc(level), tc.nextTypeId())
 	}
 
 	return trie.t
@@ -293,7 +292,7 @@ func MakeUnionType(elemTypes ...*Type) *Type {
 func MakeCycleType(level uint32) *Type {
 	staticTypeCache.Lock()
 	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCycleType(level)
+	return staticTypeCache.getCyclicType(level)
 }
 
 // All types in noms are created in a deterministic order. A typeTrie stores types within a typeCache and allows construction of a prexisting type to return the already existing one rather than allocate a new one.
@@ -307,12 +306,13 @@ func newTypeTrie() *typeTrie {
 }
 
 func (tct *typeTrie) Traverse(typeId uint32) *typeTrie {
-	next, ok := tct.entries[typeId]
-	if !ok {
-		// Insert edge
-		next = newTypeTrie()
-		tct.entries[typeId] = next
+	if t, ok := tct.entries[typeId]; ok {
+		return t
 	}
+
+	// Insert edge
+	next := newTypeTrie()
+	tct.entries[typeId] = next
 	return next
 }
 
@@ -326,12 +326,12 @@ func newIdentTable() *identTable {
 }
 
 func (it *identTable) GetId(ident string) uint32 {
-	id, ok := it.entries[ident]
-	if !ok {
-		id = it.nextId
-		it.nextId++
-		it.entries[ident] = id
+	if id, ok := it.entries[ident]; ok {
+		return id
 	}
 
+	id := it.nextId
+	it.nextId++
+	it.entries[ident] = id
 	return id
 }
