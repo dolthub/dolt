@@ -66,6 +66,6 @@ We are working toward a 1.0, after which time we will remove this warning and gu
 <br>
 ## Get Involved
 
+- [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
-- [Slack](atticlabs.slack.com/messages/dev)
 - [Twitter](https://twitter.com/nomsdb)
