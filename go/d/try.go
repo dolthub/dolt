@@ -37,7 +37,7 @@ func PanicIfError(err error) {
 func PanicIfTrue(b bool, msg string, args ...interface{}) {
 	if b {
 		var err error
-		if len(args) > 1 {
+		if len(args) > 0 {
 			err = fmt.Errorf(msg, args...)
 		} else {
 			err = errors.New(msg)

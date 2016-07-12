@@ -121,6 +121,32 @@ func TestUnwrap(t *testing.T) {
 	assert.Equal(err, Unwrap(we))
 }
 
+func TestPanicIfTrue(t *testing.T) {
+	assert := assert.New(t)
+
+	arg := "arg value"
+	format := "could be a format: %s"
+	formatted := fmt.Sprintf(format, arg)
+
+	assert.Panics(func() {
+		PanicIfTrue(true, "Panicking!!!!")
+	})
+
+	assert.NotPanics(func() {
+		PanicIfTrue(false, "Not panicking")
+	})
+
+	err := Try(func() {
+		PanicIfTrue(true, format)
+	})
+	assert.Equal(errors.New(format), Unwrap(err))
+
+	err = Try(func() {
+		PanicIfTrue(true, format, arg)
+	})
+	assert.Equal(errors.New(formatted), Unwrap(err))
+}
+
 func TestPanicIfNotType(t *testing.T) {
 	assert := assert.New(t)
 

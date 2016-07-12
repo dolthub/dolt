@@ -118,15 +118,15 @@ func noopHandle(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func corsHandle(f httprouter.Handle) httprouter.Handle {
+	// TODO: Implement full pre-flighting?
+	// See: http://www.html5rocks.com/static/images/cors_server_flowchart.png
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		// Can't use * when clients are using cookies.
 		w.Header().Add("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-
-		// TODO: Implement full pre-flighting?
-		// See: http://www.html5rocks.com/static/images/cors_server_flowchart.png
-
 		w.Header().Add("Access-Control-Allow-Methods", "GET, POST")
-		w.Header().Add("Access-Control-Allow-Headers", "Cache-Control, Authorization")
+		w.Header().Add("Access-Control-Allow-Headers", datas.NomsVersionHeader)
+		w.Header().Add("Access-Control-Expose-Headers", datas.NomsVersionHeader)
+		w.Header().Add(datas.NomsVersionHeader, constants.NomsVersion)
 		f(w, r, ps)
 	}
 }
