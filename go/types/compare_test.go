@@ -6,9 +6,9 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"testing"
 
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -22,8 +22,8 @@ func TestTotalOrdering(t *testing.T) {
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		BoolType,
 		NewSet(Number(0), Number(1), Number(2), Number(3)),
+		BoolType,
 
 		// Value - values cannot be value
 		// Cycle - values cannot be cycle
@@ -109,9 +109,9 @@ func TestCompareHashes(t *testing.T) {
 	one := encode(Number(1))
 	hey := encode(String("hey"))
 
-	minHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, sha1.Size)...)
-	maxHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, sha1.Size)...)
-	almostMaxHash := append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, sha1.Size-1), 0xfe)...)
+	minHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, hash.ByteLen)...)
+	maxHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, hash.ByteLen)...)
+	almostMaxHash := append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, hash.ByteLen-1), 0xfe)...)
 
 	assert.Equal(-1, comp.Compare(tru, minHash))
 	assert.Equal(-1, comp.Compare(one, minHash))

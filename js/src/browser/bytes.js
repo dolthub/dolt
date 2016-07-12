@@ -5,11 +5,10 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {TextEncoder, TextDecoder} from './text-encoding.js';
-import Rusha from 'rusha';
+import {SHA512} from 'asmcrypto.js-sha512';
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
-const r = new Rusha();
 const littleEndian = true;
 
 export function alloc(size: number): Uint8Array {
@@ -106,9 +105,13 @@ export function compare(b1: Uint8Array, b2: Uint8Array): number {
   return 0;
 }
 
-export function sha1(data: Uint8Array): Uint8Array {
-  const ta = r.rawDigest(data);
-  return new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength);
+// This should be imported but this prevents the cyclic dependency.
+const byteLength = 20;
+
+export function sha512(data: Uint8Array): Uint8Array {
+  const full: Uint8Array = SHA512.bytes(data);
+  // Safari does not have slice on Uint8Array yet.
+  return new Uint8Array(full.buffer, full.byteOffset, byteLength);
 }
 
 function asciiToBinary(cc: number): number {

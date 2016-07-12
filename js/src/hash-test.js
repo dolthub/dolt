@@ -17,26 +17,28 @@ suite('Hash', () => {
     }
 
     assertParseError('foo');
-    assertParseError('sha1');
-    assertParseError('sha1-0');
+
+    // too few digits
+    assertParseError('0000000000000000000000000000000');
 
     // too many digits
-    assertParseError('sha1-00000000000000000000000000000000000000000');
+    assertParseError('000000000000000000000000000000000');
 
-    // 'g' not valid hex
-    assertParseError('sha1- 000000000000000000000000000000000000000g');
+    // 'w' not valid base32
+    assertParseError('00000000000000000000000000000000w');
 
-    // sha2 not supported
-    assertParseError('sha2-0000000000000000000000000000000000000000');
+    // no prefix
+    assertParseError('sha1-00000000000000000000000000000000');
+    assertParseError('sha2-00000000000000000000000000000000');
 
-    const valid = 'sha1-0000000000000000000000000000000000000000';
+    const valid = '00000000000000000000000000000000';
     assert.isNotNull(Hash.parse(valid));
   });
 
   test('equals', () => {
-    const r0 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000000'));
-    const r01 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000000'));
-    const r1 = notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'));
+    const r0 = notNull(Hash.parse('00000000000000000000000000000000'));
+    const r01 = notNull(Hash.parse('00000000000000000000000000000000'));
+    const r1 = notNull(Hash.parse('00000000000000000000000000000001'));
 
     assert.isTrue(r0.equals(r01));
     assert.isTrue(r01.equals(r0));
@@ -45,15 +47,14 @@ suite('Hash', () => {
   });
 
   test('toString', () => {
-    const s = 'sha1-0123456789abcdef0123456789abcdef01234567';
+    const s = '0123456789abcdefghijklmnopqrstuv';
     const r = notNull(Hash.parse(s));
     assert.strictEqual(s, r.toString());
   });
 
   test('fromData', () => {
     const r = Hash.fromData(Bytes.fromString('abc'));
-
-    assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', r.toString());
+    assert.strictEqual('rmnjb8cjc5tblj21ed4qs821649eduie', r.toString());
   });
 
   test('isEmpty', () => {

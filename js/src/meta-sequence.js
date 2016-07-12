@@ -6,7 +6,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {compare} from './compare.js';
-import {default as Hash, sha1Size} from './hash.js';
+import Hash, {byteLength} from './hash.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader, ValueWriter} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -299,7 +299,7 @@ const orderedSequenceWindowSize = 1;
 const objectPattern = ((1 << 6) | 0) - 1;
 
 export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
-  return new BuzHashBoundaryChecker(orderedSequenceWindowSize, sha1Size, objectPattern,
+  return new BuzHashBoundaryChecker(orderedSequenceWindowSize, byteLength, objectPattern,
     (mt: MetaTuple) => mt.ref.targetHash.digest
   );
 }
@@ -334,7 +334,7 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
 }
 
 export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
-  return new BuzHashBoundaryChecker(objectWindowSize, sha1Size, objectPattern,
+  return new BuzHashBoundaryChecker(objectWindowSize, byteLength, objectPattern,
     (mt: MetaTuple) => mt.ref.targetHash.digest
   );
 }

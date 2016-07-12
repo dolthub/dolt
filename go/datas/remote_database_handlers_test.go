@@ -102,8 +102,8 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	}
 
 	hints := map[hash.Hash]struct{}{
-		hash.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
-		hash.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
+		hash.Parse("00000000000000000000000000000002"): struct{}{},
+		hash.Parse("00000000000000000000000000000003"): struct{}{},
 	}
 	compressed := buildWriteValueRequest(serializeChunks(chnx, assert), hints)
 	gr := snappy.NewReader(compressed)
@@ -138,8 +138,8 @@ func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
 func TestBuildHashesRequest(t *testing.T) {
 	assert := assert.New(t)
 	hashes := map[hash.Hash]struct{}{
-		hash.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
-		hash.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
+		hash.Parse("00000000000000000000000000000002"): struct{}{},
+		hash.Parse("00000000000000000000000000000003"): struct{}{},
 	}
 	r := buildHashesRequest(hashes)
 	b, err := ioutil.ReadAll(r)
@@ -202,7 +202,7 @@ func TestHandleHasRefs(t *testing.T) {
 	err := cs.PutMany(chnx)
 	assert.NoError(err)
 
-	absent := hash.Parse("sha1-0000000000000000000000000000000000000002")
+	absent := hash.Parse("00000000000000000000000000000002")
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
 
 	w := httptest.NewRecorder()

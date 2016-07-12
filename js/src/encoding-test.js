@@ -303,8 +303,8 @@ suite('Encoding', () => {
     assertEncoding([
       uint8(SetKind), uint8(SetKind), uint8(NumberKind), false,
       uint32(2), // len
-      uint8(SetKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(NumberKind), float64(0),
       uint8(SetKind), uint8(NumberKind), false, uint32(3) /* len */, uint8(NumberKind), float64(1), uint8(NumberKind), float64(2), uint8(NumberKind), float64(3),
+      uint8(SetKind), uint8(NumberKind), false, uint32(1) /* len */, uint8(NumberKind), float64(0),
     ],
     new Set([new Set([0]), new Set([1, 2, 3])]));
   });
@@ -327,9 +327,9 @@ suite('Encoding', () => {
   });
 
   test('compound blob', () => {
-    const r1 = Hash.parse('sha1-0000000000000000000000000000000000000001');
-    const r2 = Hash.parse('sha1-0000000000000000000000000000000000000002');
-    const r3 = Hash.parse('sha1-0000000000000000000000000000000000000003');
+    const r1 = Hash.parse('00000000000000000000000000000001');
+    const r2 = Hash.parse('00000000000000000000000000000002');
+    const r3 = Hash.parse('00000000000000000000000000000003');
 
     assertEncoding(
       [
@@ -453,7 +453,7 @@ suite('Encoding', () => {
 
   test('list of union', () => {
     assertEncoding([
-      uint8(ListKind), uint8(UnionKind), uint32(3) /* len */, uint8(BoolKind), uint8(StringKind), uint8(NumberKind), false,
+      uint8(ListKind), uint8(UnionKind), uint32(3) /* len */, uint8(BoolKind), uint8(NumberKind), uint8(StringKind), false,
       uint32(4) /* len */, uint8(StringKind), '0', uint8(NumberKind), float64(1), uint8(StringKind), '2', uint8(BoolKind), true,
     ],
     new List(['0', 1, '2', true]));
@@ -471,7 +471,7 @@ suite('Encoding', () => {
     const structType = makeStructType('S', ['x'], [numberType]);
 
     assertEncoding([
-      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(TypeKind), false,
+      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(TypeKind), uint8(BoolKind), false,
       uint32(4) /* len */, uint8(BoolKind), true, uint8(TypeKind), uint8(NumberKind), uint8(TypeKind), uint8(TypeKind), uint8(TypeKind), uint8(StructKind), 'S', uint32(1) /* len */, 'x', uint8(NumberKind),
     ],
     new List([true, numberType, typeType, structType]));
@@ -479,7 +479,7 @@ suite('Encoding', () => {
 
   test('ref', () => {
     const type = makeRefType(numberType);
-    const r = Hash.parse('sha1-0123456789abcdef0123456789abcdef01234567');
+    const r = Hash.parse('0123456789abcdefghijklmnopqrstuv');
 
     assertEncoding([
       uint8(RefKind), uint8(NumberKind), r.toString(), uint64(4),
@@ -516,7 +516,7 @@ suite('Encoding', () => {
 
   test('union list', () => {
     assertEncoding([
-      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(StringKind), uint8(NumberKind),
+      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(NumberKind), uint8(StringKind),
       false, uint32(2) /* len */, uint8(StringKind), 'hi', uint8(NumberKind), float64(42),
     ],
     new List(['hi', 42]));

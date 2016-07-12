@@ -16,7 +16,7 @@ func TestEnsureHash(t *testing.T) {
 	vs := NewTestValueStore()
 	count := byte(1)
 	mockGetRef := func(v Value) hash.Hash {
-		d := hash.Sha1Digest{}
+		d := hash.Digest{}
 		d[0] = count
 		count++
 		return hash.New(d)
@@ -70,7 +70,7 @@ func TestEnsureHash(t *testing.T) {
 
 	for _, v := range values {
 		expected := byte(0x42)
-		assignHash(v.(hashCacher), hash.New(hash.Sha1Digest{0: expected}))
+		assignHash(v.(hashCacher), hash.New(hash.Digest{0: expected}))
 		testRef(v.Hash(), expected)
 	}
 

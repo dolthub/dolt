@@ -168,11 +168,11 @@ suite('Bytes', () => {
     test(BrowserBytes, -1, [0, 2, 3], [1, 2, 3]);
   });
 
-  test('sha1', () => {
+  test('sha512', () => {
     function test(arr: number[]) {
       // Node uses a Buffer, browser uses a Uint8Array
-      const n = NodeBytes.sha1(NodeBytes.fromValues(arr));
-      const b = BrowserBytes.sha1(BrowserBytes.fromValues(arr));
+      const n = NodeBytes.sha512(NodeBytes.fromValues(arr));
+      const b = BrowserBytes.sha512(BrowserBytes.fromValues(arr));
       assertUint8Equal(n, b);
     }
 

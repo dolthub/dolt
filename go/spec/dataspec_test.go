@@ -240,7 +240,7 @@ func TestDatasetSpecs(t *testing.T) {
 func TestPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	badSpecs := []string{"mem::#", "mem::#s", "mem::#sha1-foobarbaz", "mem::#sha1-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}
+	badSpecs := []string{"mem::#", "mem::#s", "mem::#foobarbaz", "mem::#wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"}
 	for _, bs := range badSpecs {
 		_, err := parsePathSpec(bs)
 		assert.Error(err)
@@ -251,10 +251,10 @@ func TestPathSpec(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{"http://local.attic.io/john/doe::#sha1-0123456789012345678901234567890123456789", "http", "//local.attic.io/john/doe", "#sha1-0123456789012345678901234567890123456789"},
-		testCase{"ldb:/filesys/john/doe::#sha1-0123456789012345678901234567890123456789", "ldb", "/filesys/john/doe", "#sha1-0123456789012345678901234567890123456789"},
-		testCase{"mem::#sha1-0123456789012345678901234567890123456789", "mem", "", "#sha1-0123456789012345678901234567890123456789"},
-		testCase{"http://local.attic.io/john/doe::#sha1-0123456789012345678901234567890123456789", "http", "//local.attic.io/john/doe", "#sha1-0123456789012345678901234567890123456789"},
+		testCase{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
+		testCase{"ldb:/filesys/john/doe::#0123456789abcdefghijklmnopqrstuv", "ldb", "/filesys/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
+		testCase{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv"},
+		testCase{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
 		testCase{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
 	}
 

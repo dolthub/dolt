@@ -5,15 +5,14 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import Chunk from './chunk.js';
-import Hash from './hash.js';
+import Hash, {byteLength as hashByteLength} from './hash.js';
 import {invariant} from './assert.js';
 import * as Bytes from './bytes.js';
 
 const headerSize = 4; // uint32
 const bigEndian = false; // Passing false to DataView methods makes them use big-endian byte order.
-const sha1Size = 20;
 const chunkLengthSize = 4; // uint32
-const chunkHeaderSize = sha1Size + chunkLengthSize;
+const chunkHeaderSize = hashByteLength + chunkLengthSize;
 
 export type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
 
@@ -50,7 +49,7 @@ function serializeChunk(chunk: Chunk, buffer: Uint8Array, dv: DataView, offset: 
     'Invalid chunk buffer');
 
   Bytes.copy(chunk.hash.digest, buffer, offset);
-  offset += sha1Size;
+  offset += hashByteLength;
 
   const chunkLength = chunk.data.length;
   dv.setUint32(offset, chunkLength, bigEndian);
@@ -68,14 +67,14 @@ function serializeHints(hints: Set<Hash>, buff: Uint8Array, dv: DataView): numbe
 
   hints.forEach(hash => {
     Bytes.copy(hash.digest, buff, offset);
-    offset += sha1Size;
+    offset += hashByteLength;
   });
 
   return offset;
 }
 
 function serializedHintsLength(hints: Set<Hash>): number {
-  return headerSize + sha1Size * hints.size;
+  return headerSize + hashByteLength * hints.size;
 }
 
 function serializedChunkLength(chunk: Chunk): number {
@@ -95,10 +94,10 @@ function deserializeHints(buff: Uint8Array, dv: DataView): {hints: Array<Hash>, 
   const numHints = dv.getUint32(offset, bigEndian);
   offset += headerSize;
 
-  invariant(buff.byteLength - offset >= sha1Size * numHints, 'Invalid hint buffer');
+  invariant(buff.byteLength - offset >= hashByteLength * numHints, 'Invalid hint buffer');
   for (let i = 0; i < numHints; i++) {
-    const hash = new Hash(Bytes.slice(buff, offset, offset + sha1Size)); // copy
-    offset += sha1Size;
+    const hash = new Hash(Bytes.slice(buff, offset, offset + hashByteLength)); // copy
+    offset += hashByteLength;
     hints.push(hash);
   }
 
@@ -114,8 +113,8 @@ export function deserializeChunks(buff: Uint8Array, dv: DataView, offset: number
     invariant(buff.byteLength - offset >= chunkHeaderSize, 'Invalid chunk buffer');
 
     // No need to copy the data out since we are not holding on to the hash object.
-    const hash = new Hash(Bytes.subarray(buff, offset, offset + sha1Size));
-    offset += sha1Size;
+    const hash = new Hash(Bytes.subarray(buff, offset, offset + hashByteLength));
+    offset += hashByteLength;
 
     const chunkLength = dv.getUint32(offset, bigEndian);
     offset += chunkLengthSize;

@@ -36,7 +36,7 @@ import {TestDatabase} from './test-util.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 
 const testListSize = 5000;
-const listOfNRef = 'sha1-cb53c5de1ccef77930f19fce6c425998a763b231';
+const listOfNRef = 'pe9nceojcmtq2972kqhkmhqu40ckhvbh';
 
 async function assertToJS(list: List, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -148,18 +148,18 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, 'sha1-d797568943812c45ec530c80d3a2654a77649890', 17, 5, 1);
+    await listTestSuite(10, '6a50jldrfobup4j0d0a55hk7i86iu3re', 15, 17, 2);
   });
 
   test('LONG: List 4K', async () => {
-    await listTestSuite(12, 'sha1-be2dbb48eaee147211a3f57da879feefd3e44269', 2, 2, 2);
+    await listTestSuite(12, 'g77lk69og8i9gmu6l211rtia4dhkrmge', 2, 3, 2);
   });
 
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = intSequence(testListSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new List(refs);
-    assert.strictEqual('sha1-6a02619eb8074f89ee2f0453837140f6e796609f', s.hash.toString());
+    assert.strictEqual('l185tn53r279itlmhfud2f56jopivtnj', s.hash.toString());
     assert.strictEqual(testListSize, s.length);
 
     const height = deriveCollectionHeight(s);
@@ -623,7 +623,7 @@ suite('ListWriter', () => {
   });
 
   test('ListWriter with ValueReadWriter', async () => {
-    const values = intSequence(75);
+    const values = intSequence(150);
     const l = new List(values);
 
     // The number of writes depends on how many chunks we've encountered.
@@ -669,7 +669,7 @@ suite('ListWriter', () => {
       assert.isTrue(equals(l.type, makeListType(numberType)));
     }
 
-    await t(10, ListLeafSequence);
-    await t(100, IndexedMetaSequence);
+    await t(15, ListLeafSequence);
+    await t(150, IndexedMetaSequence);
   });
 });

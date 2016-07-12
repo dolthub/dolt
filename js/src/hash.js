@@ -4,10 +4,13 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import * as Bytes from './bytes.js';
+import {alloc, compare, sha512} from './bytes.js';
+import {encode, decode} from './base32';
 
-export const sha1Size = 20;
-const pattern = /^sha1-[0-9a-f]{40}$/;
+export const byteLength = 20;
+export const stringLength = 32
+;
+const pattern = /^[0-9a-v]{32}$/;
 
 export default class Hash {
   _digest: Uint8Array;
@@ -33,23 +36,23 @@ export default class Hash {
   }
 
   compare(other: Hash): number {
-    return Bytes.compare(this._digest, other._digest);
+    return compare(this._digest, other._digest);
   }
 
   toString(): string {
-    return 'sha1-' + Bytes.toHexString(this._digest);
+    return encode(this._digest);
   }
 
   static parse(s: string): ?Hash {
     if (pattern.test(s)) {
-      return new Hash(Bytes.fromHexString(s.substring(5)));
+      return new Hash(decode(s));
     }
     return null;
   }
 
   static fromData(data: Uint8Array): Hash {
-    return new Hash(Bytes.sha1(data));
+    return new Hash(sha512(data));
   }
 }
 
-export const emptyHash = new Hash(Bytes.alloc(sha1Size));
+export const emptyHash = new Hash(alloc(byteLength));

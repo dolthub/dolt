@@ -6,7 +6,6 @@ package datas
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"encoding/binary"
 	"io"
 
@@ -31,11 +30,11 @@ func serializeHashes(w io.Writer, hashes hash.HashSlice) {
 	}
 }
 
-func serializeHash(w io.Writer, hash hash.Hash) {
-	digest := hash.Digest()
+func serializeHash(w io.Writer, h hash.Hash) {
+	digest := h.Digest()
 	n, err := io.Copy(w, bytes.NewReader(digest[:]))
 	d.Chk.NoError(err)
-	d.Chk.True(int64(sha1.Size) == n)
+	d.Chk.True(int64(hash.ByteLen) == n)
 }
 
 func deserializeHints(reader io.Reader) types.Hints {
@@ -63,9 +62,9 @@ func deserializeHashes(reader io.Reader) hash.HashSlice {
 }
 
 func deserializeHash(reader io.Reader) hash.Hash {
-	digest := hash.Sha1Digest{}
+	digest := hash.Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	d.Chk.NoError(err)
-	d.Chk.True(int(sha1.Size) == n)
+	d.Chk.True(int(hash.ByteLen) == n)
 	return hash.New(digest)
 }

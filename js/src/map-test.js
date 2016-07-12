@@ -40,7 +40,7 @@ import {
 } from './type.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-0ce27caa55f6fec82da76e1bc84fe459b7387791';
+const mapOfNRef = '7t3bkoj5tnc3vlv03fgupmvtgtc4i1na';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -85,21 +85,21 @@ suite('BuildMap', () => {
   }
 
   test('Map 1K', async () => {
-    await mapTestSuite(10, 'sha1-ccda04ba3961a70124e029c2e9af7b0537e726db', 16, i => i);
+    await mapTestSuite(10, 'trvmij0jsl2o647qko06r6furo0lnkj0', 2, i => i);
   });
 
   test('LONG: Map 4K', async () => {
-    await mapTestSuite(12, 'sha1-80e91e9538aeaabe75793c6c29d03954ac81d221', 2, i => i);
+    await mapTestSuite(12, 'vnff1ufe5isqsam9vof6vmfgf37jdk3l', 2, i => i);
   });
 
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Map 1K structs', async () => {
-    await mapTestSuite(10, 'sha1-17a96ed265da91aa992be70dba34cd9c3b9000df', 2, newNumberStruct);
+    await mapTestSuite(10, '0afm8gkghskk18hhbcuiljfdemqskoj5', 21, newNumberStruct);
   });
 
   test('LONG: Map 4K structs', async () => {
-    await mapTestSuite(12, 'sha1-ed658ef24dbc4fa2fecefa1e215bc06887199935', 2, newNumberStruct);
+    await mapTestSuite(12, 't2t6vjr9nodu9k024ufnugj5qeahmgol', 2, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -154,7 +154,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.hash.toString(), 'sha1-5c36c25f8d62e72b3d02089febab440049236631');
+    assert.strictEqual(m.hash.toString(), 'ck8vuj44jp52kllgo39s30u49i1s8bl8');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -268,7 +268,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.hash.toString(), 'sha1-4e3eb68ff102c74aa7305753ee2ebcc4ebdebf62');
+    assert.strictEqual(m.hash.toString(), 'a75m96ff3ta1poibue3uri7veluap4g4');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);
@@ -423,10 +423,11 @@ suite('MapLeaf', () => {
   });
 
   test('chunks', () => {
-    const r1 = db.writeValue('x');
-    const r2 = db.writeValue(true);
-    const r3 = db.writeValue('b');
-    const r4 = db.writeValue(false);
+    const r1 = db.writeValue('b');
+    const r2 = db.writeValue(false);
+    const r3 = db.writeValue('x');
+    const r4 = db.writeValue(true);
+
     const m = new Map([[r1, r2], [r3, r4]]);
     assert.strictEqual(4, m.chunks.length);
     assert.isTrue(equals(r1, m.chunks[0]));
@@ -434,7 +435,6 @@ suite('MapLeaf', () => {
     assert.isTrue(equals(r3, m.chunks[2]));
     assert.isTrue(equals(r4, m.chunks[3]));
   });
-
 });
 
 suite('CompoundMap', () => {

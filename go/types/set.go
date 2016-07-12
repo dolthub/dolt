@@ -5,7 +5,6 @@
 package types
 
 import (
-	"crypto/sha1"
 	"sort"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -203,7 +202,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 }
 
 func newSetLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(setWindowSize, sha1.Size, setPattern, func(item sequenceItem) []byte {
+	return newBuzHashBoundaryChecker(setWindowSize, hash.ByteLen, setPattern, func(item sequenceItem) []byte {
 		digest := item.(Value).Hash().Digest()
 		return digest[:]
 	})

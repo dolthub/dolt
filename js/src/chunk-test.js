@@ -15,15 +15,15 @@ suite('Chunk', () => {
   test('construct', () => {
     const c = Chunk.fromString('abc');
     assert.isTrue(c.hash.equals(
-        notNull(Hash.parse('sha1-a9993e364706816aba3e25717850c26c9cd0d89d'))));
+        notNull(Hash.parse('rmnjb8cjc5tblj21ed4qs821649eduie'))));
     assert.isFalse(c.isEmpty());
   });
 
   test('construct with hash', () => {
-    const hash = notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'));
+    const hash = notNull(Hash.parse('00000000000000000000000000000001'));
     const c = Chunk.fromString('abc', hash);
     assert.isTrue(c.hash.equals(
-        notNull(Hash.parse('sha1-0000000000000000000000000000000000000001'))));
+        notNull(Hash.parse('00000000000000000000000000000001'))));
     assert.isFalse(c.isEmpty());
   });
 

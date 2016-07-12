@@ -6,7 +6,6 @@ package chunks
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"encoding/binary"
 	"io"
 	"sync"
@@ -23,7 +22,7 @@ import (
     Chunk N
 
   Chunk:
-    Hash  // 20-byte sha1 hash
+    Hash  // 20-byte hash
     Len   // 4-byte int
     Data  // len(Data) == Len
 */
@@ -53,7 +52,7 @@ func Serialize(chunk Chunk, writer io.Writer) {
 	digest := chunk.Hash().Digest()
 	n, err := io.Copy(writer, bytes.NewReader(digest[:]))
 	d.Chk.NoError(err)
-	d.Chk.True(int64(sha1.Size) == n)
+	d.Chk.True(int64(hash.ByteLen) == n)
 
 	// Because of chunking at higher levels, no chunk should never be more than 4GB
 	chunkSize := uint32(len(chunk.Data()))
@@ -127,13 +126,13 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- *Chunk) {
 }
 
 func deserializeChunk(reader io.Reader) (Chunk, bool) {
-	digest := hash.Sha1Digest{}
+	digest := hash.Digest{}
 	n, err := io.ReadFull(reader, digest[:])
 	if err == io.EOF {
 		return EmptyChunk, false
 	}
 	d.Chk.NoError(err)
-	d.Chk.True(int(sha1.Size) == n)
+	d.Chk.True(int(hash.ByteLen) == n)
 	h := hash.New(digest)
 
 	chunkSize := uint32(0)

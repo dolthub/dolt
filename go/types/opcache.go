@@ -5,12 +5,12 @@
 package types
 
 import (
-	"crypto/sha1"
 	"encoding/binary"
 	"io/ioutil"
 	"os"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -34,7 +34,7 @@ type opCache struct {
 	ops           *leveldb.DB
 	dbDir         string
 	vrw           ValueReadWriter
-	ldbKeyScratch [1 + sha1.Size]byte
+	ldbKeyScratch [1 + hash.ByteLen]byte
 	keyScratch    [initialBufferSize]byte
 	valScratch    [initialBufferSize]byte
 }

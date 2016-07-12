@@ -5,7 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import Chunk from './chunk.js';
-import Hash, {sha1Size} from './hash.js';
+import Hash, {byteLength as hashByteLength} from './hash.js';
 import ValueDecoder from './value-decoder.js';
 import ValueEncoder from './value-encoder.js';
 import {invariant} from './assert.js';
@@ -45,7 +45,7 @@ export function decodeValue(chunk: Chunk, vr: ValueReader): Value {
 
 
 const maxUInt32 = Math.pow(2, 32);
-const littleEndian = true;
+const bigEndian = false;
 
 export interface NomsReader {
   readBytes(): Uint8Array;
@@ -95,14 +95,15 @@ export class BinaryNomsReader {
   }
 
   readUint32(): number {
-    const v = this.dv.getUint32(this.offset, littleEndian);
+    const v = this.dv.getUint32(this.offset, bigEndian);
     this.offset += 4;
     return v;
   }
 
   readUint64(): number {
-    const lsi = this.readUint32();
+    // Big endian
     const msi = this.readUint32();
+    const lsi = this.readUint32();
     const v = msi * maxUInt32 + lsi;
     invariant(v <= Number.MAX_SAFE_INTEGER);
     return v;
@@ -131,8 +132,8 @@ export class BinaryNomsReader {
 
   readHash(): Hash {
     // Make a copy of the data.
-    const digest = Bytes.slice(this.buff, this.offset, this.offset + sha1Size);
-    this.offset += sha1Size;
+    const digest = Bytes.slice(this.buff, this.offset, this.offset + hashByteLength);
+    this.offset += hashByteLength;
     return new Hash(digest);
   }
 }
@@ -186,16 +187,17 @@ export class BinaryNomsWriter {
 
   writeUint32(v: number): void {
     this.ensureCapacity(4);
-    this.dv.setUint32(this.offset, v, littleEndian);
+    this.dv.setUint32(this.offset, v, bigEndian);
     this.offset += 4;
   }
 
   writeUint64(v: number): void {
     invariant(v <= Number.MAX_SAFE_INTEGER);
-    const v2 = (v / maxUInt32) | 0;
-    const v1 = v % maxUInt32;
-    this.writeUint32(v1);
-    this.writeUint32(v2);
+    const msi = (v / maxUInt32) | 0;
+    const lsi = v % maxUInt32;
+    // Big endian
+    this.writeUint32(msi);
+    this.writeUint32(lsi);
   }
 
   writeNumber(v: number): void {
@@ -221,8 +223,8 @@ export class BinaryNomsWriter {
   }
 
   writeHash(h: Hash): void {
-    this.ensureCapacity(sha1Size);
+    this.ensureCapacity(hashByteLength);
     Bytes.copy(h.digest, this.buff, this.offset);
-    this.offset += sha1Size;
+    this.offset += hashByteLength;
   }
 }

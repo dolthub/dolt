@@ -158,19 +158,19 @@ suite('Blob', () => {
   }
 
   test('Blob 1K', () =>
-    blobTestSuite(10, 'sha1-225cb62f282db9950802a8a0dce55b577af16e86', 3, 2, 2));
+    blobTestSuite(10, 'drbq98mhjfhgsvb7kl2ijg71eoiqnbqf', 3, 2, 2));
 
   test('LONG: Blob 4K', () =>
-    blobTestSuite(12, 'sha1-5171d9ff4c8b7420a22cdec5c1282b6fbcafa0d5', 9, 2, 2));
+    blobTestSuite(12, '7hlg5p73koq5o2r67rmaqockgoths01c', 9, 2, 2));
 
   test('LONG: Blob 16K', () =>
-    blobTestSuite(14, 'sha1-8741539c258f9c464b08d099cb2521f19138eae7', 2, 2, 2));
+    blobTestSuite(14, '32tqt716moooai9i7fhb2louq7ik49du', 2, 2, 2));
 
   test('LONG: Blob 64K', () =>
-    blobTestSuite(16, 'sha1-f2563df4e20835fb3402837272a24f58e9e48bd8', 3, 2, 2));
+    blobTestSuite(16, '5d355t85ru7vidao5r26rv8ba5r2ftb0', 4, 2, 2));
 
   test('LONG: Blob 256K', () =>
-    blobTestSuite(18, 'sha1-f97d8d77fb1e3ef21f2ccccbde810151b4e8c4e9', 8, 2, 2));
+    blobTestSuite(18, 'g491n4skkncon9o951shu67u92iajjkj', 10, 2, 2));
 
   suite('BlobWriter', () => {
     let db;

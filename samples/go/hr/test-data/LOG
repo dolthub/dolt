@@ -1,10 +1,10 @@
-=============== Jul 11, 2016 (PDT) ===============
-10:20:40.754716 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-10:20:40.755153 db@open opening
-10:20:40.755212 journal@recovery F·1
-10:20:40.755854 journal@recovery recovering @1
-10:20:40.758518 memdb@flush created L0@2 N·4 S·558B "/ch..\xe7\x0f8,v3":"/vers,v1"
-10:20:40.759925 db@janitor F·3 G·0
-10:20:40.759947 db@open done T·4.782632ms
-10:20:40.760616 db@close closing
-10:20:40.760702 db@close done T·84.005µs
+=============== Jul 12, 2016 (PDT) ===============
+11:15:59.155834 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+11:15:59.158102 db@open opening
+11:15:59.158720 journal@recovery F·1
+11:15:59.162707 journal@recovery recovering @1
+11:15:59.165885 memdb@flush created L0@2 N·4 S·530B "/ch..\xb4{\xbc,v3":"/vers,v1"
+11:15:59.173907 db@janitor F·3 G·0
+11:15:59.174126 db@open done T·15.903559ms
+11:15:59.178735 db@close closing
+11:15:59.179415 db@close done T·637.521µs

@@ -6,9 +6,9 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha1"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type opCacheComparer struct{}
@@ -24,7 +24,7 @@ func (opCacheComparer) Compare(a, b []byte) int {
 			return 1
 		}
 		a, b = a[1:], b[1:]
-		d.Chk.True(len(a) == sha1.Size && len(b) == sha1.Size)
+		d.Chk.True(len(a) == hash.ByteLen && len(b) == hash.ByteLen)
 		res := bytes.Compare(a, b)
 		d.Chk.True(res != 0 || aKind == bKind)
 		return res

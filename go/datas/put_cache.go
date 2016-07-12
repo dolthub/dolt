@@ -143,7 +143,7 @@ func fromDbKey(key []byte) (uint64, hash.Hash) {
 	r := bytes.NewReader(key)
 	err := binary.Read(r, binary.BigEndian, &refHeight)
 	d.Chk.NoError(err)
-	digest := hash.Sha1Digest{}
+	digest := hash.Digest{}
 	err = binary.Read(r, binary.BigEndian, &digest)
 	d.Chk.NoError(err)
 	return refHeight, hash.New(digest)

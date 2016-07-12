@@ -75,7 +75,7 @@ export function readUtf8(buff: Uint8Array, start: number, end: number): string {
 export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
   const size = Buffer.byteLength(str);
   // $FlowIssue
-  buff.writeUInt32LE(size, offset);
+  buff.writeUInt32BE(size, offset);
   offset += 4;
 
   // $FlowIssue
@@ -89,8 +89,11 @@ export function compare(b1: Uint8Array, b2: Uint8Array): number {
   return b1.compare(b2);
 }
 
-export function sha1(data: Uint8Array): Uint8Array {
-  const hash = crypto.createHash('sha1');
+/**
+ * Returns the first 20 bytes of the sha512 of data.
+ */
+export function sha512(data: Uint8Array): Uint8Array {
+  const hash = crypto.createHash('sha512');
   hash.update(data);
-  return hash.digest();
+  return hash.digest().slice(0, 20);
 }
