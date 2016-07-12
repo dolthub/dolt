@@ -64,8 +64,8 @@ suite('compare.js', () => {
         'a', 'b', 'c',
 
         // The order of these are done by the hash.
-        boolType,
         new Set([0, 1, 2, 3]),
+        boolType,
 
         // Value - values cannot be value
         // Cycle - values cannot be cycle

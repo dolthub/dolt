@@ -26,7 +26,7 @@ suite('MemoryStore', () => {
     ms.put(c);
 
     // See http://www.di-mgt.com.au/sha_testvectors.html
-    assert.strictEqual('sha1-a9993e364706816aba3e25717850c26c9cd0d89d', c.hash.toString());
+    assert.strictEqual('rmnjb8cjc5tblj21ed4qs821649eduie', c.hash.toString());
 
     const oldRoot = await ms.getRoot();
     await ms.updateRoot(c.hash, oldRoot);
@@ -43,10 +43,10 @@ suite('MemoryStore', () => {
     const oldRoot = await ms.getRoot();
     assert.isTrue(oldRoot.isEmpty());
 
-    // sha1('Bogus, Dude')
-    const bogusRoot = notNull(Hash.parse('sha1-81c870618113ba29b6f2b396ea3a69c6f1d626c5'));
-     // sha1('Hello, World')
-    const newRoot = notNull(Hash.parse('sha1-907d14fb3af2b0d4f18c2d46abe8aedce17367bd'));
+    // sha512 'Bogus, Dude'
+    const bogusRoot = notNull(Hash.parse('8habda5skfek1265pc5d5l1orptn5dr0'));
+     // sha512 'Hello, World'
+    const newRoot = notNull(Hash.parse('8la6qjbh81v85r6q67lqbfrkmpds14lg'));
 
     // Try to update root with bogus oldRoot
     let result = await ms.updateRoot(newRoot, bogusRoot);
@@ -59,7 +59,7 @@ suite('MemoryStore', () => {
 
   test('get non-existing', async () => {
     const ms = new MemoryStore();
-    const hash = notNull(Hash.parse('sha1-1111111111111111111111111111111111111111'));
+    const hash = notNull(Hash.parse('11111111111111111111111111111111'));
     const c = await ms.get(hash);
     assert.isTrue(c.isEmpty());
   });

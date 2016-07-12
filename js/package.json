@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "50.0.1",
+  "version": "51.0.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
@@ -10,9 +10,9 @@
     "npm": ">=3"
   },
   "dependencies": {
+    "asmcrypto.js-sha512": "^0.0.1",
     "babel-regenerator-runtime": "^6.5.0",
     "babel-runtime": "^6.9.2",
-    "rusha": "^0.8.3",
     "text-encoding-utf-8": "^1.0.1",
     "tingodb": "^0.4.2",
     "signed-varint": "2.0.0"

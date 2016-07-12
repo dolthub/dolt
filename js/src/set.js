@@ -25,7 +25,7 @@ import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {makeSetType, makeUnionType, getTypeOfValue} from './type.js';
-import {sha1Size} from './hash.js';
+import {byteLength} from './hash.js';
 import {removeDuplicateFromOrdered} from './map.js';
 import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
@@ -45,7 +45,7 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
 }
 
 function newSetLeafBoundaryChecker<T:Value>(): BoundaryChecker<T> {
-  return new BuzHashBoundaryChecker(setWindowSize, sha1Size, setPattern, (v: T) => {
+  return new BuzHashBoundaryChecker(setWindowSize, byteLength, setPattern, (v: T) => {
     const hash = getHashOfValue(v);
     return hash.digest;
   });

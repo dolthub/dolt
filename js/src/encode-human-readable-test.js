@@ -49,10 +49,10 @@ suite('Encode human readable types', () => {
     assertWriteType('Ref<Number>', makeRefType(numberType));
     assertWriteType('Map<Number, String>', makeMapType(numberType, stringType));
 
-    assertWriteType('String | Number', makeUnionType([numberType, stringType]));
+    assertWriteType('Number | String', makeUnionType([numberType, stringType]));
     assertWriteType('Bool', makeUnionType([boolType]));
     assertWriteType('', makeUnionType([]));
-    assertWriteType('List<String | Number>', makeListType(makeUnionType([numberType, stringType])));
+    assertWriteType('List<Number | String>', makeListType(makeUnionType([numberType, stringType])));
     assertWriteType('List<>', makeListType(makeUnionType([])));
   });
 

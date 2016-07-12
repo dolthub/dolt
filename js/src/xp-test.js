@@ -44,14 +44,14 @@ suite('cross platform test', () => {
   async function testSuite(): Promise<void> {
     // please update Go and JS to keep them in sync - see types/xp_test.go
     const testValues = [
-      new TestValue(true, 'sha1-3f29546453678b855931c174a97d6c0894b8f546', 'bool - true'),
-      new TestValue(false, 'sha1-1489f923c4dca729178b3e3233458550d8dddf29', 'bool - false'),
-      new TestValue(-1, 'sha1-47ec8d98366433dc002e7721c9e37d5067547937', 'num - -1'),
-      new TestValue(0, 'sha1-9508e90548b0440a4a61e5743b76c1e309b23b7f', 'num - 0'),
-      new TestValue(1, 'sha1-9f36f27018671b24dcdf70c9eb857d5ea2a064c8', 'num - 1'),
-      new TestValue('', 'sha1-e1bc1dae59f116abb43f9dafbb2acc9b141aa6b0', 'str - empty'),
-      new TestValue('0', 'sha1-a1c90c71d1ffdb51138677c578e6f2e8a011070d', 'str - 0'),
-      new TestValue('false', 'sha1-e15d53dc6c9d3aa6eca4eea28382c9c45ba8fd9e', 'str - false'),
+      new TestValue(true, 'g19moobgrm32dn083bokhksuobulq28c', 'bool - true'),
+      new TestValue(false, 'bqjhrhmgmjqnnssqln87o84c6no6pklq', 'bool - false'),
+      new TestValue(-1, 'hq0jvv1enraehfggfk8s27ll1rmirt96', 'num - -1'),
+      new TestValue(0, 'elie88b5iouak7onvi2mpkcgoqqr771l', 'num - 0'),
+      new TestValue(1, '6h9ldndhjoq0r5sbn1955gaearq5dovc', 'num - 1'),
+      new TestValue('', 'ssfs0o2eq3kg50p37q2crhhqhjcs2391', 'str - empty'),
+      new TestValue('0', 'jngc7d11d2h0c6s2f15l10rckvu753rb', 'str - 0'),
+      new TestValue('false', '1v3a1t4to25kkohm1bhh2thebmls0lp0', 'str - false'),
     ];
 
     await testTypes(testValues);

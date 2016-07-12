@@ -65,8 +65,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 	oldRoot := suite.Store.Root()
 	suite.True(oldRoot.IsEmpty())
 
-	bogusRoot := hash.Parse("8888899999aaaaabbbbbcccccdddddee")
-	newRoot := hash.Parse("11111222223333344444555556666677")
+	bogusRoot := hash.Parse("8habda5skfek1265pc5d5l1orptn5dr0")
+	newRoot := hash.Parse("8la6qjbh81v85r6q67lqbfrkmpds14lg")
 
 	// Try to update root with bogus oldRoot
 	result := suite.Store.UpdateRoot(newRoot, bogusRoot)

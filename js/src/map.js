@@ -14,7 +14,7 @@ import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';
-import {sha1Size} from './hash.js';
+import {byteLength} from './hash.js';
 import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import {
@@ -54,7 +54,7 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
 
 function newMapLeafBoundaryChecker<K: Value, V: Value>():
     BoundaryChecker<MapEntry<K, V>> {
-  return new BuzHashBoundaryChecker(mapWindowSize, sha1Size, mapPattern,
+  return new BuzHashBoundaryChecker(mapWindowSize, byteLength, mapPattern,
     (entry: MapEntry<K, V>) => getHashOfValue(entry[KEY]).digest);
 }
 

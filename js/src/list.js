@@ -22,7 +22,7 @@ import {
   newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn,
 } from './meta-sequence.js';
-import {sha1Size} from './hash.js';
+import {byteLength} from './hash.js';
 import Ref from './ref.js';
 import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
@@ -50,7 +50,7 @@ function newListLeafChunkFn<T: Value>(vr: ?ValueReader, vw: ?ValueWriter): makeC
 }
 
 function newListLeafBoundaryChecker<T: Value>(): BoundaryChecker<T> {
-  return new BuzHashBoundaryChecker(listWindowSize, sha1Size, listPattern,
+  return new BuzHashBoundaryChecker(listWindowSize, byteLength, listPattern,
     (v: T) => getHashOfValue(v).digest
   );
 }
