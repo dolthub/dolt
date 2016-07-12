@@ -10,7 +10,6 @@ import {assert} from 'chai';
 
 import Blob from './blob.js';
 import * as Bytes from './bytes.js';
-import Chunk from './chunk.js';
 import Hash from './hash.js';
 import List, {newListLeafSequence} from './list.js';
 import Map from './map.js';
@@ -386,17 +385,6 @@ suite('Encoding', () => {
       uint8(BoolKind), true, uint8(NumberKind), float64(42),
     ],
     newStruct('S', {x: 42, b: true}));
-  });
-
-  test('struct too much data', async () => {
-    const s = newStruct('S', {x: 42, b: true});
-    const c = encodeValue(s, null);
-    const data = c.data;
-    const buff = Bytes.alloc(data.byteLength + 1);
-    Bytes.copy(data, buff);
-    buff[data.byteLength] = 5; // Add a bogus extra byte
-    const c2 = new Chunk(buff);
-    assert.throws(() => decodeValue(c2, null));
   });
 
   test('struct with list', () => {

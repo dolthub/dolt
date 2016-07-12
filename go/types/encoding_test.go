@@ -349,18 +349,6 @@ func TestWriteStruct(t *testing.T) {
 	)
 }
 
-func TestWriteStructTooMuchData(t *testing.T) {
-	s := NewStruct("S", structData{"x": Number(42), "b": Bool(true)})
-	c := EncodeValue(s, nil)
-	data := c.Data()
-	buff := make([]byte, len(data)+1)
-	copy(buff, data)
-	buff[len(data)] = 5 // Add a bogus extrabyte
-	assert.Panics(t, func() {
-		DecodeFromBytes(buff, nil, staticTypeCache)
-	})
-}
-
 func TestWriteStructWithList(t *testing.T) {
 	// struct S {l: List<String>}({l: ["a", "b"]})
 	assertEncoding(t,
