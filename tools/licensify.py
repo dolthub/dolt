@@ -65,7 +65,7 @@ def buildLicensePattern(ext):
   prefix = ''
   # The first line must include the copyright string to avoid picking up random
   # other comment blocks at head of file.
-  head = mark + r'Copyright \d+ The Noms Authors.*\n'
+  head = mark + r'Copyright \d+ (The Noms Authors|Attic Labs).*\n'
   body = '(' + mark + r'.*\n)*'
   suffix = ''
 
@@ -75,10 +75,10 @@ def buildLicensePattern(ext):
     suffix = last + r'\n'
 
   # We want to make sure shebang files stay at head of file.
-  shebang = r'(\#\!.+\n\n?|)'
+  shebang = r'(\#\!.+\n+|)'
 
   # Allow flow annotations
-  flowAnotation = r'(// @flow\n\n?|)'
+  flowAnotation = r'(// @flow\n+|)'
 
   return '^' + shebang + flowAnotation + '(' + prefix + head + body + suffix + r'\n)?'
 
