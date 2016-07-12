@@ -192,22 +192,6 @@ func isMetaSequence(seq sequence) bool {
 	return seqIsMeta
 }
 
-// Creates a sequenceCursor pointing to the first metaTuple in a metaSequence, and returns that cursor plus the leaf Value referenced from that metaTuple.
-func newMetaSequenceCursor(root metaSequence, vr ValueReader) (*sequenceCursor, Value) {
-	d.Chk.True(root != nil)
-
-	cursors := []*sequenceCursor{newSequenceCursor(nil, root, 0)}
-	for {
-		cursor := cursors[len(cursors)-1]
-		val := readMetaTupleValue(cursor.current(), vr)
-		if ms, ok := val.(metaSequence); ok {
-			cursors = append(cursors, newSequenceCursor(cursor, ms, 0))
-		} else {
-			return cursor, val
-		}
-	}
-}
-
 func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	mt := item.(metaTuple)
 	if mt.child != nil {
@@ -217,15 +201,4 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	r := mt.ref.TargetHash()
 	d.Chk.False(r.IsEmpty())
 	return vr.ReadValue(r)
-}
-
-func iterateMetaSequenceLeaf(ms metaSequence, vr ValueReader, cb func(Value) bool) {
-	cursor, v := newMetaSequenceCursor(ms, vr)
-	for {
-		if cb(v) || !cursor.advance() {
-			return
-		}
-
-		v = readMetaTupleValue(cursor.current(), vr)
-	}
 }
