@@ -5,8 +5,6 @@
 package types
 
 import (
-	"crypto/sha1"
-
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -223,7 +221,7 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(listWindowSize, sha1.Size, listPattern, func(item sequenceItem) []byte {
+	return newBuzHashBoundaryChecker(listWindowSize, hash.ByteLen, listPattern, func(item sequenceItem) []byte {
 		digest := item.(Value).Hash().Digest()
 		return digest[:]
 	})

@@ -90,17 +90,6 @@ func TestNomsSetDiff(t *testing.T) {
 	assert.Equal(expected, buf.String())
 
 	expected = `./ {
--   {  // 4 items
--     "m1": "m-one",
--     "m3": "m-three",
--     "m4": {  // 4 items
--       "a1": "a-one",
--       "a2": "a-two",
--       "a3": "a-three",
--       "a4": "a-four",
--     },
--     "v2": "m-two",
--   }
 +   {  // 4 items
 +     "m1": "m-one",
 +     "m3": "m-three-diff",
@@ -112,6 +101,17 @@ func TestNomsSetDiff(t *testing.T) {
 +     },
 +     "v2": "m-two",
 +   }
+-   {  // 4 items
+-     "m1": "m-one",
+-     "m3": "m-three",
+-     "m4": {  // 4 items
+-       "a1": "a-one",
+-       "a2": "a-two",
+-       "a3": "a-three",
+-       "a4": "a-four",
+-     },
+-     "v2": "m-two",
+-   }
   }
 `
 	s1 = createSet(mm1, mm2, mm3, mm4)

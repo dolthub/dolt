@@ -13,7 +13,7 @@ import (
 
 func TestGetRequestBatch(t *testing.T) {
 	assert := assert.New(t)
-	r0 := hash.Parse("sha1-0000000000000000000000000000000000000000")
+	r0 := hash.Parse("00000000000000000000000000000000")
 	c1 := NewChunk([]byte("abc"))
 	r1 := c1.Hash()
 	c2 := NewChunk([]byte("123"))

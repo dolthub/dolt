@@ -5,10 +5,10 @@
 package types
 
 import (
-	"crypto/sha1"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type indexedSequence interface {
@@ -101,7 +101,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 }
 
 func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
+	return newBuzHashBoundaryChecker(objectWindowSize, hash.ByteLen, objectPattern, func(item sequenceItem) []byte {
 		digest := item.(metaTuple).ref.TargetHash().Digest()
 		return digest[:]
 	})

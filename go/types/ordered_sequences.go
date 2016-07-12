@@ -5,10 +5,10 @@
 package types
 
 import (
-	"crypto/sha1"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type orderedSequence interface {
@@ -122,7 +122,7 @@ func getCurrentKey(cur *sequenceCursor) orderedKey {
 }
 
 func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, sha1.Size, objectPattern, func(item sequenceItem) []byte {
+	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, hash.ByteLen, objectPattern, func(item sequenceItem) []byte {
 		digest := item.(metaTuple).ref.TargetHash().Digest()
 		return digest[:]
 	})

@@ -6,32 +6,56 @@ package hash
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
+	"crypto/sha512"
 	"fmt"
 	"regexp"
 
 	"github.com/attic-labs/noms/go/d"
 )
 
-// The length of a stringified hash.
-const StringLen = len("sha1-") + 2*sha1.Size
+const (
+	ByteLen   = 20
+	StringLen = 32
+)
+
+// The hash of a Noms value.
+//
+// Noms serialization from version 5-onward uses the first 20 bytes of sha-512 for hashes.
+//
+// sha-512 was chosen because:
+//
+// - sha-1 is no longer recommended.
+// - sha-3 is brand new, not a lot of platform support.
+// - blake is not commonly used, not a lot of platform support.
+// - within sha-2, sha-512 is faster than sha-256 on 64 bit.
+//
+// Our specific truncation scheme (first 20 bytes) was chosen because:
+//
+// - The "standard" truncation schemes are not widely supported. For example, at time of writing, there is no fast native implementation of sha512/256 on Node.
+// - The smallest standard truncation of sha512 is 28 bytes, but we don't need this many. And because we are a database, the size of the hashes matters. Bigger hashes mean less data in each chunk, which means less tree fan-out, which means slower iteration and searching. 20 bytes is a good balance between collision resistance and wide trees.
+// - 20 bytes leads to a nice round number of base32 digits: 32.
+//
+// The textual serialization of hashes uses big-endian base32 with the alphabet {0-9,a-v}. This scheme was chosen because:
+//
+// - It's easy to convert to and from base32 without bignum arithemetic.
+// - No special chars: you can double-click to select in GUIs.
+// - Sorted hashes will be sorted textually, making it easy to scan for humans.
+//
+// In Noms, the hash function is a component of the serialization version, which is constant over the entire lifetime of a single database. So clients do not need to worry about encountering multiple hash functions in the same database.
 
 var (
-	// In the future we will allow different digest types, so this will get more complicated. For now sha1 is fine.
-	pattern   = regexp.MustCompile("^sha1-([0-9a-f]{40})$")
+	pattern   = regexp.MustCompile("^([0-9a-v]{32})$")
 	emptyHash = Hash{}
 )
 
-type Sha1Digest [sha1.Size]byte
-
 type Hash struct {
-	// In the future, we will also store the algorithm, and digest will thus probably have to be a slice (because it can vary in size)
-	digest Sha1Digest
+	digest Digest
 }
 
+type Digest [ByteLen]byte
+
 // Digest returns a *copy* of the digest that backs Hash.
-func (r Hash) Digest() Sha1Digest {
+func (r Hash) Digest() Digest {
 	return r.digest
 }
 
@@ -45,39 +69,34 @@ func (r Hash) DigestSlice() []byte {
 }
 
 func (r Hash) String() string {
-	return fmt.Sprintf("sha1-%s", hex.EncodeToString(r.digest[:]))
+	return encode(r.digest[:])
 }
 
-func New(digest Sha1Digest) Hash {
+func New(digest Digest) Hash {
 	return Hash{digest}
 }
 
 func FromData(data []byte) Hash {
-	return New(sha1.Sum(data))
+	r := sha512.Sum512(data)
+	d := Digest{}
+	copy(d[:], r[:ByteLen])
+	return New(d)
 }
 
 // FromSlice creates a new Hash backed by data, ensuring that data is an acceptable length.
 func FromSlice(data []byte) Hash {
-	d.Chk.True(len(data) == sha1.Size)
-	digest := Sha1Digest{}
+	d.Chk.True(len(data) == ByteLen)
+	digest := Digest{}
 	copy(digest[:], data)
 	return New(digest)
 }
 
-func MaybeParse(s string) (r Hash, ok bool) {
+func MaybeParse(s string) (Hash, bool) {
 	match := pattern.FindStringSubmatch(s)
 	if match == nil {
-		return
+		return emptyHash, false
 	}
-
-	// TODO: The new temp byte array is kinda bummer. Would be better to walk the string and decode each byte into result.digest. But can't find stdlib functions to do that.
-	n, err := hex.Decode(r.digest[:], []byte(match[1]))
-	d.Chk.NoError(err) // The regexp above should have validated the input
-
-	// If there was no error, we should have decoded exactly one digest worth of bytes.
-	d.Chk.True(sha1.Size == n)
-	ok = true
-	return
+	return FromSlice(decode(s)), true
 }
 
 func Parse(s string) Hash {

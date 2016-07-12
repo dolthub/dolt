@@ -15,10 +15,10 @@ import (
 func TestHintRoundTrip(t *testing.T) {
 	b := &bytes.Buffer{}
 	input := map[hash.Hash]struct{}{
-		hash.Parse("sha1-0000000000000000000000000000000000000000"): struct{}{},
-		hash.Parse("sha1-0000000000000000000000000000000000000001"): struct{}{},
-		hash.Parse("sha1-0000000000000000000000000000000000000002"): struct{}{},
-		hash.Parse("sha1-0000000000000000000000000000000000000003"): struct{}{},
+		hash.Parse("00000000000000000000000000000000"): struct{}{},
+		hash.Parse("00000000000000000000000000000001"): struct{}{},
+		hash.Parse("00000000000000000000000000000002"): struct{}{},
+		hash.Parse("00000000000000000000000000000003"): struct{}{},
 	}
 	serializeHints(b, input)
 	output := deserializeHints(b)

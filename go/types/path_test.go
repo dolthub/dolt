@@ -312,7 +312,7 @@ func TestPathParseErrors(t *testing.T) {
 	test(`.foo["\`, "[ is missing closing ]")
 	test(`.foo["]`, "[ is missing closing ]")
 	test(".foo[#]", "Invalid hash: ")
-	test(".foo[#sha1-invalid]", "Invalid hash: sha1-invalid")
+	test(".foo[#invalid]", "Invalid hash: invalid")
 	test(`.foo["hello\nworld"]`, `Only " and \ can be escaped`)
 	test(".foo[42]bar", "Invalid operator: b")
 	test("#foo", "Invalid operator: #")

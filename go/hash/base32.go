@@ -9,7 +9,7 @@ import "encoding/base32"
 var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
 
 func encode(data []byte) string {
-	return encoding.EncodeToString(data[:20]) // We only use the first remove trailing padding
+	return encoding.EncodeToString(data)
 }
 
 func decode(s string) []byte {

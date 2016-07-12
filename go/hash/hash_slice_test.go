@@ -17,7 +17,7 @@ func TestHashSliceSort(t *testing.T) {
 	rs := HashSlice{}
 	for i := 1; i <= 3; i++ {
 		for j := 1; j <= 3; j++ {
-			d := Sha1Digest{}
+			d := Digest{}
 			for k := 1; k <= j; k++ {
 				d[k-1] = byte(i)
 			}
