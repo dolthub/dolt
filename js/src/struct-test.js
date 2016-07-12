@@ -16,11 +16,11 @@ import Struct, {
 import {assert} from 'chai';
 import {
   boolType,
-  makeCycleType,
   makeListType,
   makeStructType,
   numberType,
   stringType,
+  valueType,
 } from './type.js';
 import {suite, test} from 'mocha';
 import {equals} from './compare.js';
@@ -126,11 +126,13 @@ suite('Struct', () => {
       ['b', 'l'],
       [
         boolType,
-        makeListType(makeCycleType(0)),
+        valueType, // placeholder
       ]
     );
+    const listType = makeListType(type);
+    type.desc.setField('l', listType);
 
-    const emptyList = new List([]);
+    const emptyList = new List([], listType);
     newStructWithType(type, [true, emptyList]);
     newStructWithType(type,
       [

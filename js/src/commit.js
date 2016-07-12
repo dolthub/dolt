@@ -5,28 +5,16 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {invariant} from './assert.js';
+import {getDatasTypes} from './database.js';
 import Struct from './struct.js';
 import type Value from './value.js';
 import type Ref from './ref.js';
 import Set from './set.js';
-import {
-  makeCycleType,
-  makeRefType,
-  makeStructType,
-  makeSetType,
-  valueType,
-} from './type.js';
 
-export const commitType = makeStructType('Commit',
-  ['parents', 'value'],
-  [
-    makeSetType(makeRefType(makeCycleType(0))),
-    valueType,
-  ]
-);
 
 export default class Commit<T: Value> extends Struct {
   constructor(value: T, parents: Set<Ref<Commit>> = new Set()) {
+    const {commitType} = getDatasTypes();
     super(commitType, [parents, value]);
   }
 

@@ -30,11 +30,7 @@ type Type struct {
 const initialTypeBufferSize = 128
 
 func newType(desc TypeDesc, id uint32) *Type {
-	return &Type{desc, &hash.Hash{}, id, nil}
-}
-
-func buildType(desc TypeDesc, id uint32) *Type {
-	t := newType(desc, id)
+	t := &Type{desc, &hash.Hash{}, id, nil}
 	if !t.HasUnresolvedCycle() {
 		serializeType(t)
 	}
@@ -135,6 +131,10 @@ func MakePrimitiveType(k NomsKind) *Type {
 	}
 	d.Chk.Fail("invalid NomsKind: %d", k)
 	return nil
+}
+
+func makePrimitiveType(k NomsKind) *Type {
+	return newType(PrimitiveDesc(k), uint32(k))
 }
 
 func MakePrimitiveTypeByString(p string) *Type {

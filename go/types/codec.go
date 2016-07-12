@@ -31,10 +31,8 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 func DecodeFromBytes(data []byte, vr ValueReader, tc *TypeCache) Value {
 	tc.Lock()
 	defer tc.Unlock()
-	br := &binaryNomsReader{data, 0}
-	dec := newValueDecoder(br, vr, tc)
+	dec := newValueDecoder(&binaryNomsReader{data, 0}, vr, tc)
 	v := dec.readValue()
-	d.Chk.True(br.pos() == uint32(len(data)))
 	return v
 }
 
@@ -145,6 +143,8 @@ func (b *binaryNomsReader) readString() string {
 	b.offset += size
 	return v
 }
+
+var createCount = uint64(0)
 
 // Note: It's somewhat of a layering violation that a nomsReaders knows about a TypeCache. The reason why the code is structured this way is that the go compiler can stack-allocate the string which is created from the byte slice, which is a fairly large perf gain.
 func (b *binaryNomsReader) readIdent(tc *TypeCache) uint32 {

@@ -12,8 +12,53 @@ import type Value from './value.js';
 import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
 import type {BatchStore} from './batch-store.js';
+import {
+  makeRefType,
+  makeStructType,
+  makeSetType,
+  makeMapType,
+  Type,
+  stringType,
+  valueType,
+} from './type.js';
 import Commit from './commit.js';
 import {equals} from './compare.js';
+
+type DatasTypes = {
+  commitType: Type,
+  commitSetType: Type,
+  refOfCommitType: Type,
+  commitMapType: Type,
+};
+
+let datasTypes: DatasTypes;
+export function getDatasTypes(): DatasTypes {
+  if (!datasTypes) {
+    // struct Commit {
+    //   value: Value
+    //   parents: Set<Ref<Commit>>
+    // }
+    const commitType = makeStructType('Commit',
+      ['parents', 'value'],
+      [
+        valueType,
+        valueType,
+      ]
+    );
+    const refOfCommitType = makeRefType(commitType);
+    const commitSetType = makeSetType(refOfCommitType);
+    commitType.desc.setField('parents', commitSetType);
+    const commitMapType = makeMapType(stringType, refOfCommitType);
+    datasTypes = {
+      commitType,
+      refOfCommitType,
+      commitSetType,
+      commitMapType,
+    };
+  }
+
+  return datasTypes;
+}
 
 export default class Database {
   _vs: ValueStore;

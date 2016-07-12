@@ -68,15 +68,10 @@ func TestTypeCacheRef(t *testing.T) {
 	lst := MakeRefType(StringType)
 	lnt := MakeRefType(NumberType)
 	assert.False(lst == lnt)
+	assert.NotNil(lnt.serialization)
 
 	lst2 := MakeRefType(StringType)
 	assert.True(lst == lst2)
-
-	lnt2 := MakeRefType(NumberType)
-	assert.True(lnt == lnt2)
-
-	lbt3 := MakeRefType(BoolType)
-	assert.True(lbt == lbt3)
 }
 
 func TestTypeCacheStruct(t *testing.T) {
