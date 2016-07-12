@@ -194,3 +194,30 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	// baz top-level ref is cyclic
 	assert.True(st3 == st3.Desc.(StructDesc).fields[1].t)
 }
+
+func TestTypeCacheCyclicUnions(t *testing.T) {
+	assert := assert.New(t)
+
+	ut := MakeUnionType(MakeCycleType(0), NumberType, StringType, BoolType, BlobType, ValueType, TypeType)
+	st := MakeStructType("Foo",
+		[]string{"foo"},
+		[]*Type{ut},
+	)
+
+	assert.True(ut.Desc.(CompoundDesc).ElemTypes[5].Kind() == CycleKind)
+	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
+	assert.False(ut.Equals(st.Desc.(StructDesc).fields[0].t))
+
+	// Note that the union in this second case has a different provided ordering of it's element types.
+	ut2 := MakeUnionType(NumberType, StringType, BoolType, BlobType, ValueType, TypeType, MakeCycleType(0))
+	st2 := MakeStructType("Foo",
+		[]string{"foo"},
+		[]*Type{ut2},
+	)
+	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[5].Kind() == CycleKind)
+	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
+	assert.False(ut2.Equals(st2.Desc.(StructDesc).fields[0].t))
+
+	assert.True(ut == ut2)
+	assert.True(st == st2)
+}

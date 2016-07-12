@@ -47,7 +47,7 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
 	case CycleKind:
-		panic("unreached")
+		w.writeCycle(uint32(t.Desc.(CycleDesc)))
 	default:
 		w.writeKind(k)
 		d.Chk.True(IsPrimitiveKind(k))
@@ -156,8 +156,7 @@ func (w *valueEncoder) writeValue(v Value) {
 	case StringKind:
 		w.writeString(string(v.(String)))
 	case TypeKind:
-		vt := v.(*Type)
-		w.appendType(vt)
+		w.writeType(v.(*Type), nil)
 	case StructKind:
 		w.writeStruct(v, t)
 	case CycleKind, UnionKind, ValueKind:

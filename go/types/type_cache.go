@@ -94,12 +94,11 @@ func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes
 		}
 
 		t := newType(StructDesc{name, fs}, 0)
-		if t.serialization == nil {
-			// HasUnresolvedCycle
+		if t.HasUnresolvedCycle() {
 			t, _ = toUnresolvedType(t, tc, -1, nil)
 			resolveStructCycles(t, nil)
 			if !t.HasUnresolvedCycle() {
-				ensureSerialization(t, nil)
+				normalize(t, nil)
 			}
 		}
 		t.id = tc.nextTypeId()
@@ -187,8 +186,8 @@ func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
 	return t
 }
 
-// Traverses a fully resolved cyclic type and ensures all types have serializations
-func ensureSerialization(t *Type, parentStructTypes []*Type) {
+// Traverses a fully resolved cyclic type and ensures all types have serializations and all union types are sorted correctly
+func normalize(t *Type, parentStructTypes []*Type) {
 	idx, found := indexOfType(t, parentStructTypes)
 	if found {
 		d.Chk.True(parentStructTypes[idx].serialization != nil)
@@ -202,12 +201,18 @@ func ensureSerialization(t *Type, parentStructTypes []*Type) {
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		for _, et := range desc.ElemTypes {
-			ensureSerialization(et, parentStructTypes)
+			normalize(et, parentStructTypes)
+		}
+
+		if t.Kind() == UnionKind {
+			ud := t.Desc.(CompoundDesc)
+			ts := typeSlice(ud.ElemTypes)
+			sort.Sort(ts)
 		}
 
 	case StructDesc:
 		for _, f := range desc.fields {
-			ensureSerialization(f.t, append(parentStructTypes, t))
+			normalize(f.t, append(parentStructTypes, t))
 		}
 	}
 }

@@ -568,3 +568,21 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		NewList(),
 	)
 }
+
+type bogusType int
+
+func (bg bogusType) Equals(other Value) bool { return false }
+func (bg bogusType) Less(other Value) bool   { return false }
+func (bg bogusType) Hash() hash.Hash         { return hash.Hash{} }
+func (bg bogusType) ChildValues() []Value    { return ValueSlice{} }
+func (bg bogusType) Chunks() []Ref           { return RefSlice{} }
+func (bg bogusType) Type() *Type {
+	return MakeCycleType(0)
+}
+
+func TestBogusValueWithUnresolvedCycle(t *testing.T) {
+	g := bogusType(1)
+	assert.Panics(t, func() {
+		EncodeValue(g, nil)
+	})
+}
