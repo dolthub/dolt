@@ -1,7 +1,9 @@
 package integrationtest
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 
@@ -85,9 +87,13 @@ func runNode(s IntegrationSuiteInterface) {
 	if ns, ok := s.(NodeArgsSuite); ok {
 		args = append(args, ns.NodeArgs()...)
 	}
-	out, err := exec.Command("node", args...).Output()
+	cmd := exec.Command("node", args...)
+	cmd.Stderr = os.Stderr
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	err := cmd.Run()
 	assert.NoError(s.T(), err)
-	s.setNodeOut(string(out))
+	s.setNodeOut(buf.String())
 }
 
 func (s *IntegrationSuite) setPort(port int) {
