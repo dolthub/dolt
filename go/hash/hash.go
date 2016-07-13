@@ -2,23 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package hash
-
-import (
-	"bytes"
-	"crypto/sha512"
-	"fmt"
-	"regexp"
-
-	"github.com/attic-labs/noms/go/d"
-)
-
-const (
-	ByteLen   = 20
-	StringLen = 32
-)
-
-// The hash of a Noms value.
+// Package hash implements the hash function used throughout Noms.
 //
 // Noms serialization from version 5-onward uses the first 20 bytes of sha-512 for hashes.
 //
@@ -42,9 +26,25 @@ const (
 // - Sorted hashes will be sorted textually, making it easy to scan for humans.
 //
 // In Noms, the hash function is a component of the serialization version, which is constant over the entire lifetime of a single database. So clients do not need to worry about encountering multiple hash functions in the same database.
+package hash
+
+import (
+	"bytes"
+	"crypto/sha512"
+	"fmt"
+	"regexp"
+	"strconv"
+
+	"github.com/attic-labs/noms/go/d"
+)
+
+const (
+	ByteLen   = 20
+	StringLen = 32 // 20 * 8 / log2(32)
+)
 
 var (
-	pattern   = regexp.MustCompile("^([0-9a-v]{32})$")
+	pattern   = regexp.MustCompile("^([0-9a-v]{" + strconv.Itoa(StringLen) + "})$")
 	emptyHash = Hash{}
 )
 
