@@ -12,6 +12,11 @@ func assertSubtype(t *Type, v Value) {
 	}
 }
 
+// IsSubtype determines whether concreteType is a subtype is requiredType. For example, `Number` is a subtype of `Number | String`.
+func IsSubtype(requiredType, concreteType *Type) bool {
+	return isSubtype(requiredType, concreteType, nil)
+}
+
 func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool {
 	if requiredType.Equals(concreteType) {
 		return true

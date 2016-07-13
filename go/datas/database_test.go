@@ -183,8 +183,8 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.ds, err = suite.ds.Delete(datasetID1)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID2).Get(ValueField).Equals(b))
-	h, present := suite.ds.MaybeHead(datasetID1)
-	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID1, h.Get(ValueField))
+	_, present := suite.ds.MaybeHead(datasetID1)
+	suite.False(present, "Dataset %s should not be present", datasetID1)
 
 	// Get a fresh database, and verify that only ds1 is present
 	newDs := suite.makeDs(suite.cs)
@@ -216,9 +216,9 @@ func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 
 	suite.ds, err = suite.ds.Delete(datasetID)
 	suite.NoError(err)
-	h, present := suite.ds.MaybeHead(datasetID)
-	suite.False(present, "Dataset %s should not be present, but head is %v", datasetID, h.Get(ValueField))
-	h, present = ds2.MaybeHead(datasetID)
+	_, present := suite.ds.MaybeHead(datasetID)
+	suite.False(present, "Dataset %s should not be present", datasetID)
+	_, present = ds2.MaybeHead(datasetID)
 	suite.True(present, "Dataset %s should be present", datasetID)
 
 	// Get a fresh database, and verify that no databases are present

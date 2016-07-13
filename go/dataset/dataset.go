@@ -117,7 +117,7 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
 	}
-	if !v.Type().Equals(datas.CommitType()) {
+	if !datas.IsCommitType(v.Type()) {
 		panic("Not a commit: " + types.EncodedValue(v))
 	}
 	return v.(types.Struct)
