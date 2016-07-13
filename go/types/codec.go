@@ -30,8 +30,10 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 func DecodeFromBytes(data []byte, vr ValueReader, tc *TypeCache) Value {
 	tc.Lock()
 	defer tc.Unlock()
-	dec := newValueDecoder(&binaryNomsReader{data, 0}, vr, tc)
+	br := &binaryNomsReader{data, 0}
+	dec := newValueDecoder(br, vr, tc)
 	v := dec.readValue()
+	d.Chk.True(br.pos() == uint32(len(data)))
 	return v
 }
 

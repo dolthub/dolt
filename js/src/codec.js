@@ -35,9 +35,12 @@ setEncodeValue(encodeValue);
 
 export function decodeValue(chunk: Chunk, vr: ValueReader): Value {
   const data = chunk.data;
-  const dec = new ValueDecoder(new BinaryNomsReader(data), vr, staticTypeCache);
+  const br = new BinaryNomsReader(data);
+  const dec = new ValueDecoder(br, vr, staticTypeCache);
   const v = dec.readValue();
-
+  if (br.pos() !== data.byteLength) {
+    throw new Error('Invalid chunk data: not all bytes consumed');
+  }
   if (v instanceof ValueBase) {
     setHash(v, chunk.hash);
   }
