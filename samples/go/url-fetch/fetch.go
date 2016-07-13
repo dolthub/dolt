@@ -83,7 +83,7 @@ func main() {
 	b := types.NewStreamingBlob(pr, ds.Database())
 	ds, err = ds.Commit(b)
 	if err != nil {
-		d.Chk.True(datas.ErrMergeNeeded == err)
+		d.Chk.Equal(datas.ErrMergeNeeded, err)
 		fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
 		return
 	}
