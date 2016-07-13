@@ -16,12 +16,12 @@ func (e ChangeChannelClosedError) Error() string { return e.msg }
 
 func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64, current indexedSequence, currentHeight int, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) error {
 	if lastHeight > currentHeight {
-		lastChild := last.(indexedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen()))
+		lastChild := last.(indexedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(indexedSequence)
 		return indexedSequenceDiff(lastChild, lastHeight-1, lastOffset, current, currentHeight, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	if currentHeight > lastHeight {
-		currentChild := current.(indexedMetaSequence).getCompositeChildSequence(0, uint64(current.seqLen()))
+		currentChild := current.(indexedMetaSequence).getCompositeChildSequence(0, uint64(current.seqLen())).(indexedSequence)
 		return indexedSequenceDiff(last, lastHeight, lastOffset, currentChild, currentHeight-1, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
@@ -43,8 +43,8 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 			}
 
 		} else {
-			lastChild := last.(indexedMetaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved)
-			currentChild := current.(indexedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded)
+			lastChild := last.(indexedMetaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(indexedSequence)
+			currentChild := current.(indexedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(indexedSequence)
 			lastChildOffset := lastOffset
 			if splice.SpAt > 0 {
 				lastChildOffset += last.getOffset(int(splice.SpAt)-1) + 1

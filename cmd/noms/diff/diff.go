@@ -34,8 +34,6 @@ func Diff(w io.Writer, v1, v2 types.Value) (err error) {
 	err = d.Try(func() {
 		for di, ok := dq.PopFront(); ok; di, ok = dq.PopFront() {
 			p, key, v1, v2 := di.path, di.key, di.v1, di.v2
-
-			v1.Type().Kind()
 			if v1 == nil && v2 != nil {
 				line(w, addPrefix, key, v2)
 			}
@@ -132,8 +130,8 @@ func diffMaps(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Map) {
 					dq.PushBack(diffInfo{path: p1, key: change.V, v1: c1, v2: c2})
 				} else {
 					wroteHeader = writeHeader(w, wroteHeader, p)
-					line(w, subPrefix, change.V, v1.Get(change.V))
-					line(w, addPrefix, change.V, v2.Get(change.V))
+					line(w, subPrefix, change.V, c1)
+					line(w, addPrefix, change.V, c2)
 				}
 			default:
 				panic("unknown change type")

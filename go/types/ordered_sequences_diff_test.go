@@ -40,7 +40,12 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence) (added []Value
 	changes := make(chan ValueChanged)
 	closeChan := make(chan struct{})
 
-	go orderedSequenceDiff(o1, o2, changes, closeChan)
+	go func() {
+		err := orderedSequenceDiffLeafItems(o1, o2, changes, closeChan)
+		if err == nil {
+			close(changes)
+		}
+	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
 			added = append(added, change.V)
