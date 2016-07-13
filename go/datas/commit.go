@@ -31,13 +31,8 @@ func init() {
 	refOfCommitType = types.MakeRefType(commitType)
 }
 
-func NewCommit() types.Struct {
-	initialFields := types.ValueSlice{
-		types.NewSet(),   // parents
-		types.String(""), // value
-	}
-
-	return types.NewStructWithType(commitType, initialFields)
+func NewCommit(value types.Value, parents types.Set) types.Struct {
+	return types.NewStructWithType(commitType, types.ValueSlice{parents, value})
 }
 
 func typeForMapOfStringToRefOfCommit() *types.Type {

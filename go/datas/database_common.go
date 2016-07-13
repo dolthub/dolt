@@ -34,7 +34,7 @@ func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
 	if r, ok := ds.MaybeHeadRef(datasetID); ok {
 		return r.TargetValue(ds).(types.Struct), true
 	}
-	return NewCommit(), false
+	return NewCommit(types.String(""), types.NewSet()), false
 }
 
 func (ds *databaseCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
