@@ -17,7 +17,7 @@ import type {NomsWriter} from './codec.js';
 import type {ValueWriter} from './value-store.js';
 import type {primitive} from './primitives.js';
 import {MetaTuple} from './meta-sequence.js';
-import {boolType, getTypeOfValue, makeRefType, StructDesc, Type} from './type.js';
+import {boolType, CycleDesc, getTypeOfValue, makeRefType, StructDesc, Type} from './type.js';
 import {describeTypeOfValue} from './encode-human-readable.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
@@ -61,8 +61,9 @@ export default class ValueEncoder {
         this.writeStructType(t, parentStructTypes);
         break;
       case Kind.Cycle:
-        throw new Error('unreached');
-
+        invariant(t.desc instanceof CycleDesc);
+        this.writeCycle(t.desc.level);
+        break;
       default:
         invariant(isPrimitiveKind(k));
         this.writeKind(k);
@@ -131,7 +132,7 @@ export default class ValueEncoder {
 
   writeValue(v: Value) {
     const t = getTypeOfValue(v);
-    this.writeType(t, []);
+    this._w.appendType(t);
     switch (t.kind) {
       case Kind.Blob: {
         invariant(v instanceof Blob,

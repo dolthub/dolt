@@ -11,16 +11,11 @@ import type Struct from './struct.js';
 import type {NomsKind} from './noms-kind.js';
 import {
   getPrimitiveType,
-  makeListType,
-  makeMapType,
-  makeRefType,
-  makeSetType,
-  makeUnionType,
   StructDesc,
   Type,
 } from './type.js';
 import {OrderedKey, MetaTuple} from './meta-sequence.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
@@ -29,14 +24,17 @@ import {IndexedMetaSequence, OrderedMetaSequence} from './meta-sequence.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
 import type {NomsReader} from './codec.js';
+import type TypeCache from './type-cache.js';
 
 export default class ValueDecoder {
   _r: NomsReader;
   _ds: ValueReader;
+  _tc: TypeCache;
 
-  constructor(r: NomsReader, ds: ValueReader) {
+  constructor(r: NomsReader, ds: ValueReader, tc: TypeCache) {
     this._r = r;
     this._ds = ds;
+    this._tc = tc;
   }
 
   readKind(): NomsKind {
@@ -49,31 +47,29 @@ export default class ValueDecoder {
     return constructRef(t, hash, height);
   }
 
-  readType(parentStructTypes: Type[]): Type {
+  readType(): Type {
     const k = this.readKind();
     switch (k) {
       case Kind.List:
-        return makeListType(this.readType(parentStructTypes));
+        return this._tc.getCompoundType(k, this.readType());
       case Kind.Map:
-        return makeMapType(this.readType(parentStructTypes),
-                           this.readType(parentStructTypes));
+        return this._tc.getCompoundType(k, this.readType(), this.readType());
       case Kind.Set:
-        return makeSetType(this.readType(parentStructTypes));
+        return this._tc.getCompoundType(k, this.readType());
       case Kind.Ref:
-        return makeRefType(this.readType(parentStructTypes));
+        return this._tc.getCompoundType(k, this.readType());
       case Kind.Struct:
-        return this.readStructType(parentStructTypes);
+        return this.readStructType();
       case Kind.Union: {
         const len = this._r.readUint32();
         const types: Type[] = new Array(len);
         for (let i = 0; i < len; i++) {
-          types[i] = this.readType(parentStructTypes);
+          types[i] = this.readType();
         }
-        return makeUnionType(types);
+        return this._tc.getCompoundType(k, ...types);
       }
       case Kind.Cycle: {
-        const i = this._r.readUint32();
-        return parentStructTypes[parentStructTypes.length - 1 - i];
+        return this._tc.getCycleType(this._r.readUint32());
       }
     }
 
@@ -143,7 +139,7 @@ export default class ValueDecoder {
   }
 
   readValue(): any {
-    const t = this.readType([]);
+    const t = this.readType();
     switch (t.kind) {
       case Kind.Blob: {
         const isMeta = this._r.readBool();
@@ -185,7 +181,7 @@ export default class ValueDecoder {
       case Kind.Struct:
         return this.readStruct(t);
       case Kind.Type:
-        return this.readType([]);
+        return this.readType();
       case Kind.Cycle:
       case Kind.Union:
       case Kind.Value:
@@ -208,24 +204,34 @@ export default class ValueDecoder {
     return newStructWithType(type, values);
   }
 
-  readStructType(parentStructTypes: Type[]): Type {
+  readCachedStructType(): Type {
+    let trie = notNull(this._tc.trieRoots.get(Kind.Struct)).traverse(this._r.readIdent(this._tc));
+    const count = this._r.readUint32();
+    for (let i = 0; i < count; i++) {
+      trie = trie.traverse(this._r.readIdent(this._tc));
+      trie = trie.traverse(this.readType().id);
+    }
+
+    return trie.t;
+  }
+
+  readStructType(): Type {
+    const pos = this._r.pos();
+    const t = this.readCachedStructType();
+    if (t) {
+      return t;
+    }
+    this._r.seek(pos);
+
     const name = this._r.readString();
     const count = this._r.readUint32();
 
-    const fields = new Array(count);
-    const desc = new StructDesc(name, fields);
-    const structType = new Type(desc);
-    parentStructTypes.push(structType);
-
+    const fieldNames = new Array(count);
+    const fieldTypes = new Array(count);
     for (let i = 0; i < count; i++) {
-      const name = this._r.readString();
-      const type = this.readType(parentStructTypes);
-      // Mutate the already created structType since when looking for the cycle we compare
-      // by identity.
-      fields[i] = {name, type};
+      fieldNames[i] = this._r.readString();
+      fieldTypes[i] = this.readType();
     }
-
-    parentStructTypes.pop();
-    return structType;
+    return this._tc.makeStructType(name, fieldNames, fieldTypes);
   }
 }

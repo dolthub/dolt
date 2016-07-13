@@ -4,20 +4,21 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import type Hash from './hash.js';
 import Ref from './ref.js';
 import type {NomsKind} from './noms-kind.js';
 import {invariant} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 import type Value from './value.js';
-import {compare, equals} from './compare.js';
+import {equals} from './compare.js';
 import {describeType} from './encode-human-readable.js';
 import search from './binary-search.js';
+import {staticTypeCache} from './type-cache.js';
 
 export interface TypeDesc {
   kind: NomsKind;
   equals(other: TypeDesc): boolean;
+  hasUnresolvedCycle(visited: Type[]): boolean;
 }
 
 export class PrimitiveDesc {
@@ -30,6 +31,10 @@ export class PrimitiveDesc {
   equals(other: TypeDesc): boolean {
     return other instanceof PrimitiveDesc && other.kind === this.kind;
   }
+
+  hasUnresolvedCycle(visited: Type[]): boolean { // eslint-disable-line no-unused-vars
+    return false;
+  }
 }
 
 export class CompoundDesc {
@@ -40,7 +45,6 @@ export class CompoundDesc {
     this.kind = kind;
     this.elemTypes = elemTypes;
   }
-
 
   equals(other: TypeDesc): boolean {
     if (other instanceof CompoundDesc) {
@@ -58,6 +62,10 @@ export class CompoundDesc {
     }
 
     return false;
+  }
+
+  hasUnresolvedCycle(visited: Type[]): boolean {
+    return this.elemTypes.some(t => t.hasUnresolvedCycle(visited));
   }
 }
 
@@ -109,6 +117,10 @@ export class StructDesc {
     return true;
   }
 
+  hasUnresolvedCycle(visited: Type[]): boolean {
+    return this.fields.some(f => f.type.hasUnresolvedCycle(visited));
+  }
+
   forEachField(cb: (name: string, type: Type) => void) {
     const fields = this.fields;
     for (let i = 0; i < fields.length; i++) {
@@ -119,14 +131,6 @@ export class StructDesc {
   getField(name: string): ?Type {
     const f = findField(name, this.fields);
     return f && f.type;
-  }
-
-  setField(name: string, type: Type) {
-    const f = findField(name, this.fields);
-    if (!f) {
-      throw new Error(`No such field "${name}"`);
-    }
-    f.type = type;
   }
 }
 
@@ -146,13 +150,36 @@ export function findFieldIndex(name: string, fields: Field[]): number {
   return i === fields.length || fields[i].name !== name ? -1 : i;
 }
 
+export class CycleDesc {
+  level: number;
+
+  constructor(level: number) {
+    this.level = level;
+  }
+
+  get kind(): NomsKind {
+    return Kind.Cycle;
+  }
+
+  equals(other: TypeDesc): boolean {
+    return other instanceof CycleDesc && other.level === this.level;
+  }
+
+  hasUnresolvedCycle(visited: Type[]): boolean { // eslint-disable-line no-unused-vars
+    return true;
+  }
+}
 
 export class Type<T: TypeDesc> extends ValueBase {
   _desc: T;
+  id: number;
+  serialization: ?Uint8Array;
 
-  constructor(desc: T) {
+  constructor(desc: T, id: number) {
     super();
     this._desc = desc;
+    this.id = id;
+    this.serialization = null;
   }
 
   get type(): Type {
@@ -176,6 +203,15 @@ export class Type<T: TypeDesc> extends ValueBase {
     return this._desc.name;
   }
 
+  hasUnresolvedCycle(visited: Type[]): boolean {
+    if (visited.indexOf(this) >= 0) {
+      return false;
+    }
+
+    visited.push(this);
+    return this._desc.hasUnresolvedCycle(visited);
+  }
+
   get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
@@ -186,122 +222,38 @@ export class Type<T: TypeDesc> extends ValueBase {
   }
 }
 
-function buildType<T: TypeDesc>(desc: T): Type<T> {
-  return new Type(desc);
-}
-
 function makePrimitiveType(k: NomsKind): Type<PrimitiveDesc> {
-  return buildType(new PrimitiveDesc(k));
+  return new Type(new PrimitiveDesc(k), k);
 }
 
 export function makeListType(elemType: Type): Type<CompoundDesc> {
-  return buildType(new CompoundDesc(Kind.List, [elemType]));
+  return staticTypeCache.getCompoundType(Kind.List, elemType);
 }
 
 export function makeSetType(elemType: Type): Type<CompoundDesc> {
-  return buildType(new CompoundDesc(Kind.Set, [elemType]));
+  return staticTypeCache.getCompoundType(Kind.Set, elemType);
 }
 
 export function makeMapType(keyType: Type, valueType: Type): Type<CompoundDesc> {
-  return buildType(new CompoundDesc(Kind.Map, [keyType, valueType]));
+  return staticTypeCache.getCompoundType(Kind.Map, keyType, valueType);
 }
 
 export function makeRefType(elemType: Type): Type<CompoundDesc> {
-  return buildType(new CompoundDesc(Kind.Ref, [elemType]));
+  return staticTypeCache.getCompoundType(Kind.Ref, elemType);
 }
 
 export function makeStructType(name: string, fieldNames: string[], fieldTypes: Type[]):
     Type<StructDesc> {
-  verifyStructName(name);
-  verifyFieldNames(fieldNames);
-
-  const fs = fieldNames.map((name, i) => {
-    const type = fieldTypes[i];
-    return {name, type};
-  });
-
-  return buildType(new StructDesc(name, fs));
+  return staticTypeCache.makeStructType(name, fieldNames, fieldTypes);
 }
 
-/**
- * makeUnionType creates a new union type unless the elemTypes can be folded into a single non
- * union type.
- */
 export function makeUnionType(types: Type[]): Type {
-  types = flattenUnionTypes(types, Object.create(null));
-  if (types.length === 1) {
-    return types[0];
-  }
-  types.sort(compare);
-  return buildType(new CompoundDesc(Kind.Union, types));
+  return staticTypeCache.makeUnionType(types);
 }
 
-const fieldNameRe = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-
-function verifyFieldNames(names: string[]) {
-  if (names.length === 0) {
-    return;
-  }
-
-  let last = names[0];
-  verifyFieldName(last);
-
-  for (let i = 1; i < names.length; i++) {
-    verifyFieldName(names[i]);
-    if (last >= names[i]) {
-      throw new Error('Field names must be unique and ordered alphabetically');
-    }
-    last = names[i];
-  }
+export function makeCycleType(level: number): Type {
+  return staticTypeCache.getCycleType(level);
 }
-
-function verifyName(name: string, kind: '' | ' field') {
-  if (!fieldNameRe.test(name)) {
-    throw new Error(`Invalid struct${kind} name: "${name}"`);
-  }
-}
-
-function verifyFieldName(name: string) {
-  verifyName(name, ' field');
-}
-
-function verifyStructName(name: string) {
-  if (name !== '') {
-    verifyName(name, '');
-  }
-}
-
-function flattenUnionTypes(types: Type[], seenTypes: {[key: Hash]: boolean}): Type[] {
-  if (types.length === 0) {
-    return types;
-  }
-
-  const newTypes = [];
-  for (let i = 0; i < types.length; i++) {
-    if (types[i].kind === Kind.Union) {
-      newTypes.push(...flattenUnionTypes(types[i].desc.elemTypes, seenTypes));
-    } else {
-      if (!seenTypes[types[i].hash]) {
-        seenTypes[types[i].hash] = true;
-        newTypes.push(types[i]);
-      }
-    }
-  }
-  return newTypes;
-}
-
-export const boolType = makePrimitiveType(Kind.Bool);
-export const numberType = makePrimitiveType(Kind.Number);
-export const stringType = makePrimitiveType(Kind.String);
-export const blobType = makePrimitiveType(Kind.Blob);
-export const typeType = makePrimitiveType(Kind.Type);
-export const valueType = makePrimitiveType(Kind.Value);
-
-export const refOfBlobType = makeRefType(blobType);
-export const refOfValueType = makeRefType(valueType);
-export const listOfValueType = makeListType(valueType);
-export const setOfValueType = makeSetType(valueType);
-export const mapOfValueType = makeMapType(valueType, valueType);
 
 /**
  * Gives the existing primitive Type value for a NomsKind.
@@ -344,3 +296,10 @@ export function getTypeOfValue(v: Value): Type {
       throw new Error('Unknown type');
   }
 }
+
+export const boolType = makePrimitiveType(Kind.Bool);
+export const numberType = makePrimitiveType(Kind.Number);
+export const stringType = makePrimitiveType(Kind.String);
+export const blobType = makePrimitiveType(Kind.Blob);
+export const typeType = makePrimitiveType(Kind.Type);
+export const valueType = makePrimitiveType(Kind.Value);

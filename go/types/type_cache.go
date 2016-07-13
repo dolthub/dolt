@@ -15,12 +15,15 @@ import (
 type TypeCache struct {
 	identTable *identTable
 	trieRoots  map[NomsKind]*typeTrie
-	typeBytes  map[uint32][]byte
 	nextId     uint32
 	mu         *sync.Mutex
 }
 
 var staticTypeCache = NewTypeCache()
+
+func makePrimitiveType(k NomsKind) *Type {
+	return newType(PrimitiveDesc(k), uint32(k))
+}
 
 var BoolType = makePrimitiveType(BoolKind)
 var NumberType = makePrimitiveType(NumberKind)
@@ -41,7 +44,6 @@ func NewTypeCache() *TypeCache {
 			CycleKind:  newTypeTrie(),
 			UnionKind:  newTypeTrie(),
 		},
-		map[uint32][]byte{},
 		256, // The first 255 type ids are reserved for the 8bit space of NomsKinds.
 		&sync.Mutex{},
 	}
@@ -229,7 +231,7 @@ func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
 	return tc.getCompoundType(UnionKind, ts...)
 }
 
-func (tc *TypeCache) getCyclicType(level uint32) *Type {
+func (tc *TypeCache) getCycleType(level uint32) *Type {
 	trie := tc.trieRoots[CycleKind].Traverse(level)
 
 	if trie.t == nil {
@@ -297,7 +299,7 @@ func MakeUnionType(elemTypes ...*Type) *Type {
 func MakeCycleType(level uint32) *Type {
 	staticTypeCache.Lock()
 	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCyclicType(level)
+	return staticTypeCache.getCycleType(level)
 }
 
 // All types in noms are created in a deterministic order. A typeTrie stores types within a typeCache and allows construction of a prexisting type to return the already existing one rather than allocate a new one.
@@ -311,13 +313,12 @@ func newTypeTrie() *typeTrie {
 }
 
 func (tct *typeTrie) Traverse(typeId uint32) *typeTrie {
-	if t, ok := tct.entries[typeId]; ok {
-		return t
+	next, ok := tct.entries[typeId]
+	if !ok {
+		// Insert edge
+		next = newTypeTrie()
+		tct.entries[typeId] = next
 	}
-
-	// Insert edge
-	next := newTypeTrie()
-	tct.entries[typeId] = next
 	return next
 }
 
@@ -331,12 +332,12 @@ func newIdentTable() *identTable {
 }
 
 func (it *identTable) GetId(ident string) uint32 {
-	if id, ok := it.entries[ident]; ok {
-		return id
+	id, ok := it.entries[ident]
+	if !ok {
+		id = it.nextId
+		it.nextId++
+		it.entries[ident] = id
 	}
 
-	id := it.nextId
-	it.nextId++
-	it.entries[ident] = id
 	return id
 }

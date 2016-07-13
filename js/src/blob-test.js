@@ -4,7 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {blobType, refOfBlobType} from './type.js';
+import {blobType, makeRefType} from './type.js';
 import {assert} from 'chai';
 import Blob, {BlobReader, BlobWriter} from './blob.js';
 import {suite, test, setup, teardown} from 'mocha';
@@ -118,7 +118,7 @@ suite('Blob', () => {
     assertValueHash(expectHashStr, blob);
     assertValueType(blobType, blob);
     assert.strictEqual(length, blob.length);
-    assertChunkCountAndType(expectChunkCount, refOfBlobType, blob);
+    assertChunkCountAndType(expectChunkCount, makeRefType(blobType), blob);
 
     await testRoundTripAndValidate(blob, async(b2) => {
       await assertReadFull(buff, b2.getReader());

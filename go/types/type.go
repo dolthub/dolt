@@ -133,10 +133,6 @@ func MakePrimitiveType(k NomsKind) *Type {
 	return nil
 }
 
-func makePrimitiveType(k NomsKind) *Type {
-	return newType(PrimitiveDesc(k), uint32(k))
-}
-
 func MakePrimitiveTypeByString(p string) *Type {
 	switch p {
 	case "Bool":

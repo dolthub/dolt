@@ -38,6 +38,7 @@ export {
   blobType,
   boolType,
   CompoundDesc,
+  makeCycleType,
   makeListType,
   makeMapType,
   makeRefType,

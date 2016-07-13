@@ -15,6 +15,7 @@ import {
   createStructClass,
   DatasetSpec,
   Database,
+  makeCycleType,
   makeMapType,
   makeRefType,
   makeStructType,
@@ -43,10 +44,11 @@ const args = argv
 // }
 
 const fileType = makeStructType('File', ['content'], [makeRefType(blobType)]);
-const directoryType = makeStructType('Directory', ['entries'], [blobType]);
-const entriesType = makeMapType(stringType,
-    makeUnionType([fileType, directoryType]));
-directoryType.desc.setField('entries', entriesType);
+const directoryType = makeStructType('Directory',
+  ['entries'],
+  [
+    makeMapType(stringType, makeUnionType([fileType, makeCycleType(0)])),
+  ]);
 
 const File = createStructClass(fileType);
 const Directory = createStructClass(directoryType);
