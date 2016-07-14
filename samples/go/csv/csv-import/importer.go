@@ -42,6 +42,7 @@ func main() {
 		path            = flag.String("p", "", "noms path to blob to import")
 		noProgress      = flag.Bool("no-progress", false, "prevents progress from being output if true")
 		destType        = flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the index position (0-based) of the column that is a the unique identifier for the column")
+		skipRecords     = flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
 		destTypePattern = regexp.MustCompile("^(list|map):(\\d+)$")
 	)
 
@@ -117,6 +118,9 @@ func main() {
 	}
 
 	cr := csv.NewCSVReader(r, comma)
+	for i := uint(0); i < *skipRecords; i++ {
+		cr.Read()
+	}
 
 	var headers []string
 	if *header == "" {

@@ -194,3 +194,71 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	s.Equal(types.String("7"), st.Get("x"))
 	s.Equal(types.Number(8), st.Get("y"))
 }
+
+func (s *testSuite) TestCSVImportSkipRecords() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	defer os.Remove(input.Name())
+
+	_, err = input.WriteString("garbage foo\n")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("garbage bar\n")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("a,b\n")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("7,8\n")
+	d.Chk.NoError(err)
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-skip-records", "2", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	l := ds.HeadValue().(types.List)
+	s.Equal(uint64(1), l.Len())
+	v := l.Get(0)
+	st := v.(types.Struct)
+	s.Equal(types.String("7"), st.Get("a"))
+	s.Equal(types.String("8"), st.Get("b"))
+}
+
+func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	defer os.Remove(input.Name())
+
+	_, err = input.WriteString("a,b\n")
+	d.Chk.NoError(err)
+
+	_, err = input.WriteString("7,8\n")
+	d.Chk.NoError(err)
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.Run(main, []string{"-no-progress", "-skip-records", "1", "-header", "x,y", dataspec, input.Name()})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	l := ds.HeadValue().(types.List)
+	s.Equal(uint64(1), l.Len())
+	v := l.Get(0)
+	st := v.(types.Struct)
+	s.Equal(types.String("7"), st.Get("x"))
+	s.Equal(types.String("8"), st.Get("y"))
+}
