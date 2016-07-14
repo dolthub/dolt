@@ -4,7 +4,7 @@
 
 // Package hash implements the hash function used throughout Noms.
 //
-// Noms serialization from version 5-onward uses the first 20 bytes of sha-512 for hashes.
+// Noms serialization from version 4-onward uses the first 20 bytes of sha-512 for hashes.
 //
 // sha-512 was chosen because:
 //
