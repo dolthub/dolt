@@ -80,6 +80,10 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 			w.hrs.write("0")
 		}
 		w.hrs.write(strconv.FormatUint(uint64(v), 16))
+		if w.hrs.err != nil {
+			err = w.hrs.err
+			return
+		}
 		n++
 		w.count++
 	}
