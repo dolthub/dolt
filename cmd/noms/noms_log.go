@@ -29,6 +29,7 @@ var (
 	color      int
 	maxLines   int
 	maxCommits int
+	oneline    bool
 	showGraph  bool
 	showValue  bool
 )
@@ -49,6 +50,7 @@ func setupLogFlags() *flag.FlagSet {
 	logFlagSet.IntVar(&color, "color", -1, "value of 1 forces color on, 2 forces color off")
 	logFlagSet.IntVar(&maxLines, "max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
 	logFlagSet.IntVar(&maxCommits, "n", 0, "max number of commits to display (0 for all commits)")
+	logFlagSet.BoolVar(&oneline, "oneline", false, "show a summary of each commit on a single line")
 	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarcy on left side of output")
 	logFlagSet.BoolVar(&showValue, "show-value", false, "show commit value rather than diff information -- this is temporary")
 	outputpager.RegisterOutputpagerFlags(logFlagSet)
@@ -112,34 +114,39 @@ func runLog(args []string) int {
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
 func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
-	lineno := 0
-	doColor := func(s string) string { return s }
+	hashStr := node.commit.Hash().String()
 	if useColor {
-		doColor = ansi.ColorFunc("red+h")
+		hashStr = ansi.Color(hashStr, "red+h")
 	}
 
-	fmt.Fprintf(w, "%s%s\n", genGraph(node, lineno), doColor(node.commit.Hash().String()))
+	var parentStr string
 	parents := commitRefsFromSet(node.commit.Get(datas.ParentsField).(types.Set))
-	lineno++
 	if len(parents) > 1 {
-		pstrings := []string{}
-		for _, cr := range parents {
-			pstrings = append(pstrings, cr.TargetHash().String())
+		pstrings := make([]string, len(parents))
+		for i, p := range parents {
+			pstrings[i] = p.TargetHash().String()
 		}
-		fmt.Fprintf(w, "%sMerge: %s\n", genGraph(node, lineno), strings.Join(pstrings, " "))
+		parentStr = fmt.Sprintf("Merge: %s", strings.Join(pstrings, " "))
 	} else if len(parents) == 1 {
-		fmt.Fprintf(w, "%sParent: %s\n", genGraph(node, lineno), parents[0].TargetHash().String())
+		parentStr = fmt.Sprintf("Parent: %s", parents[0].TargetHash().String())
 	} else {
-		fmt.Fprintf(w, "%sParent: None\n", genGraph(node, lineno))
+		parentStr = "Parent: None"
 	}
+
+	if oneline {
+		fmt.Fprintf(w, "%s (%s)\n", hashStr, parentStr)
+		return
+	}
+
+	fmt.Fprintf(w, "%s%s\n", genGraph(node, 0), hashStr)
+	fmt.Fprintf(w, "%s%s\n", genGraph(node, 1), parentStr)
+
 	if maxLines != 0 {
-		var n int
 		if showValue {
-			n, err = writeCommitLines(node, maxLines, lineno, w)
+			_, err = writeCommitLines(node, maxLines, 1, w)
 		} else {
-			n, err = writeDiffLines(node, db, maxLines, lineno, w)
+			_, err = writeDiffLines(node, db, maxLines, 1, w)
 		}
-		lineno += n
 	}
 	return
 }
