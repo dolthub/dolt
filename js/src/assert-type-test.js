@@ -11,11 +11,12 @@ import Map from './map.js';
 import Set from './set.js';
 import {newStruct} from './struct.js';
 import {suite, test} from 'mocha';
-import assertSubtype from './assert-type.js';
+import assertSubtype, {isSubtype} from './assert-type.js';
 import type {Type} from './type.js';
 import {
   blobType,
   boolType,
+  makeCycleType,
   makeListType,
   makeMapType,
   makeRefType,
@@ -246,4 +247,85 @@ suite('validate type', () => {
     // struct { v: V, p: Set<Ref<...>> }
     assertInvalid(t1, c2);
   });
+
+  test('CycleUnion', () => {
+    // struct {
+    //   x: Cycle<0>,
+    //   y: Number,
+    // }
+    const t1 = makeStructType('', ['x', 'y'], [
+      makeCycleType(0),
+      numberType,
+    ]);
+    // struct {
+    //   x: Cycle<0>,
+    //   y: Number | String,
+    // }
+    const t2 = makeStructType('', ['x', 'y'], [
+      makeCycleType(0),
+      makeUnionType([numberType, stringType]),
+    ]);
+
+    assert.isTrue(isSubtype(t2, t1, []));
+    assert.isFalse(isSubtype(t1, t2, []));
+
+    // struct {
+    //   x: Cycle<0> | Number,
+    //   y: Number | String,
+    // }
+    const t3 = makeStructType('', ['x', 'y'], [
+      makeUnionType([makeCycleType(0), numberType]),
+      makeUnionType([numberType, stringType]),
+    ]);
+
+    assert.isTrue(isSubtype(t3, t1, []));
+    assert.isFalse(isSubtype(t1, t3, []));
+
+    assert.isTrue(isSubtype(t3, t2, []));
+    assert.isFalse(isSubtype(t2, t3, []));
+
+    // struct {
+    //   x: Cycle<0> | Number,
+    //   y: Number,
+    // }
+    const t4 = makeStructType('', ['x', 'y'], [
+      makeUnionType([makeCycleType(0), numberType]),
+      numberType,
+    ]);
+
+    assert.isTrue(isSubtype(t4, t1, []));
+    assert.isFalse(isSubtype(t1, t4, []));
+
+    assert.isFalse(isSubtype(t4, t2, []));
+    assert.isFalse(isSubtype(t2, t4, []));
+
+    assert.isTrue(isSubtype(t3, t4, []));
+    assert.isFalse(isSubtype(t4, t3, []));
+
+    // struct B {
+    //   b: struct C {
+    //     c: Cycle<1>,
+    //   },
+    // }
+
+    // struct C {
+    //   c: struct B {
+    //     b: Cycle<1>,
+    //   },
+    // }
+    const tb = makeStructType('', ['b'], [
+      makeStructType('', ['c'], [
+        makeCycleType(1),
+      ]),
+    ]);
+    const tc = makeStructType('', ['c'], [
+      makeStructType('', ['b'], [
+        makeCycleType(1),
+      ]),
+    ]);
+
+    assert.isFalse(isSubtype(tb, tc, []));
+    assert.isFalse(isSubtype(tc, tb, []));
+  });
+
 });

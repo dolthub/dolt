@@ -32,11 +32,12 @@ class IdentTable {
 }
 
 class TypeTrie {
-  t: Type;
+  t: ?Type;
   entries: Map<number, TypeTrie>;
 
   constructor() {
     this.entries = new Map();
+    this.t = undefined;
   }
 
   traverse(typeId: number): TypeTrie {
@@ -80,7 +81,7 @@ export default class TypeCache {
       trie.t = new Type(new CompoundDesc(kind, elemTypes), this.nextTypeId());
     }
 
-    return trie.t;
+    return notNull(trie.t);
   }
 
   makeStructType(name: string, fieldNames: string[], fieldTypes: Type[]): Type<StructDesc> {
@@ -105,82 +106,18 @@ export default class TypeCache {
 
       let t = new Type(new StructDesc(name, fs), 0);
       if (t.hasUnresolvedCycle([])) {
-        t = notNull(this._toUnresolvedType(t, -1));
-        t = this._normalize(t);
+        [t] = toUnresolvedType(t, this, -1, []);
+        resolveStructCycles(t, []);
+        if (!t.hasUnresolvedCycle([])) {
+          normalize(t, []);
+        }
       }
       t.id = this.nextTypeId();
       trie.t = t;
     }
 
-    return trie.t;
+    return notNull(trie.t);
   }
-
-  _toUnresolvedType(t: Type, level: number, parentStructTypes: Type[] = []): ?Type {
-    const idx = parentStructTypes.indexOf(t);
-    if (idx >= 0) {
-      // This type is just a placeholder. It doesn't need an id
-      return new Type(new CycleDesc(parentStructTypes.length - idx - 1), 0);
-    }
-
-    const desc = t.desc;
-    if (desc instanceof CompoundDesc) {
-      const elemTypes = desc.elemTypes;
-      let sts = elemTypes.map(t => this._toUnresolvedType(t, level, parentStructTypes));
-      if (sts.some(t => t)) {
-        sts = sts.map((t, i) => t ? t : elemTypes[i]);
-        return new Type(new CompoundDesc(t.kind, sts), this.nextTypeId());
-      }
-      return;
-    }
-
-    if (desc instanceof StructDesc) {
-      const fields = desc.fields;
-      const outerType = t; // TODO: Stupid babel bug.
-      const sts = fields.map(f => {
-        parentStructTypes.push(outerType);
-        const t = this._toUnresolvedType(f.type, level + 1, parentStructTypes);
-        parentStructTypes.pop();
-        return t ? t : undefined;
-      });
-      if (sts.some(t => t)) {
-        const fs = sts.map((t, i) => ({name: fields[i].name, type: t ? t : fields[i].type}));
-        return new Type(new StructDesc(desc.name, fs), this.nextTypeId());
-      }
-      return;
-    }
-
-    if (desc instanceof CycleDesc) {
-      const cycleLevel = desc.level;
-      return cycleLevel <= level ? t : undefined;
-    }
-  }
-
-  _normalize(t: Type, parentStructTypes: Type[] = []): Type {
-    const desc = t.desc;
-    if (desc instanceof CompoundDesc) {
-      for (let i = 0; i < desc.elemTypes.length; i++) {
-        desc.elemTypes[i] = this._normalize(desc.elemTypes[i], parentStructTypes);
-      }
-      if (t.kind === Kind.Union) {
-        desc.elemTypes.sort(compare);
-      }
-
-    } else if (desc instanceof StructDesc) {
-      for (let i = 0; i < desc.fields.length; i++) {
-        parentStructTypes.push(t);
-        desc.fields[i].type = this._normalize(desc.fields[i].type, parentStructTypes);
-        parentStructTypes.pop();
-      }
-    } else if (desc instanceof CycleDesc) {
-      const level = desc.level;
-      if (level < parentStructTypes.length) {
-        return parentStructTypes[parentStructTypes.length - 1 - level];
-      }
-    }
-
-    return t;
-  }
-
 
   // Creates a new union type unless the elemTypes can be folded into a single non union type.
   makeUnionType(types: Type[]): Type {
@@ -195,11 +132,11 @@ export default class TypeCache {
   getCycleType(level: number): Type {
     const trie = notNull(this.trieRoots.get(Kind.Cycle)).traverse(level);
 
-    if (trie.t === undefined) {
+    if (!trie.t) {
       trie.t = new Type(new CycleDesc(level), this.nextTypeId());
     }
 
-    return trie.t;
+    return notNull(trie.t);
   }
 }
 
@@ -259,3 +196,101 @@ function verifyStructName(name: string) {
   }
 }
 
+function resolveStructCycles(t: Type, parentStructTypes: Type[]): Type {
+  const desc = t.desc;
+  if (desc instanceof CompoundDesc) {
+    desc.elemTypes.forEach((et, i) => {
+      desc.elemTypes[i] = resolveStructCycles(et, parentStructTypes);
+    });
+  } else if (desc instanceof StructDesc) {
+    desc.fields.forEach((f, i) => {
+      parentStructTypes.push(t);
+      desc.fields[i].type = resolveStructCycles(f.type, parentStructTypes);
+      parentStructTypes.pop();
+    });
+  } else if (desc instanceof CycleDesc) {
+    const idx = desc.level;
+    if (idx < parentStructTypes.length) {
+      return parentStructTypes[parentStructTypes.length - 1 - idx];
+    }
+  }
+  return t;
+}
+
+/**
+ * Traverses a fully resolved cyclic type and ensures all union types are sorted correctly.
+ */
+function normalize(t: Type, parentStructTypes: Type[]) {
+  const idx = parentStructTypes.indexOf(t);
+  if (idx >= 0) {
+    return;
+  }
+
+  // Note: The JS & Go impls differ here. The Go impl eagerly serializes types as they are
+  // constructed. The JS does it lazily so as to avoid cyclic package dependencies.
+
+  const desc = t.desc;
+  if (desc instanceof CompoundDesc) {
+    for (let i = 0; i < desc.elemTypes.length; i++) {
+      normalize(desc.elemTypes[i], parentStructTypes);
+    }
+    if (t.kind === Kind.Union) {
+      desc.elemTypes.sort(compare);
+    }
+
+  } else if (desc instanceof StructDesc) {
+    for (let i = 0; i < desc.fields.length; i++) {
+      parentStructTypes.push(t);
+      normalize(desc.fields[i].type, parentStructTypes);
+      parentStructTypes.pop();
+    }
+  }
+}
+
+function toUnresolvedType(t: Type, tc: TypeCache, level: number,
+                          parentStructTypes: Type[]): [Type, boolean] {
+  const idx = parentStructTypes.indexOf(t);
+  if (idx >= 0) {
+    // This type is just a placeholder. It doesn't need an id
+    return [new Type(new CycleDesc(parentStructTypes.length - idx - 1), 0), true];
+  }
+
+  const desc = t.desc;
+  if (desc instanceof CompoundDesc) {
+    let didChange = false;
+    const elemTypes = desc.elemTypes;
+    const ts = elemTypes.map(t => {
+      const [st, changed] = toUnresolvedType(t, tc, level, parentStructTypes);
+      didChange = didChange || changed;
+      return st;
+    });
+    if (!didChange) {
+      return [t, false];
+    }
+    return [new Type(new CompoundDesc(t.kind, ts), tc.nextTypeId()), true];
+  }
+
+  if (desc instanceof StructDesc) {
+    let didChange = false;
+    const fields = desc.fields;
+    const outerType = t; // TODO: Stupid babel bug.
+    const fs = fields.map(f => {
+      const {name} = f;
+      parentStructTypes.push(outerType);
+      const [type, changed] = toUnresolvedType(f.type, tc, level + 1, parentStructTypes);
+      parentStructTypes.pop();
+      didChange = didChange || changed;
+      return {name, type};
+    });
+    if (!didChange) {
+      return [t, false];
+    }
+    return [new Type(new StructDesc(desc.name, fs), tc.nextTypeId()), true];
+  }
+
+  if (desc instanceof CycleDesc) {
+    return [t, desc.level <= level];
+  }
+
+  return [t, false];
+}

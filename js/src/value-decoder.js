@@ -212,7 +212,7 @@ export default class ValueDecoder {
       trie = trie.traverse(this.readType().id);
     }
 
-    return trie.t;
+    return notNull(trie.t);
   }
 
   readStructType(): Type {

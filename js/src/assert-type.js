@@ -40,14 +40,26 @@ export default function assertSubtype(requiredType: Type, v: Value): void {
 }
 
 export function isSubtype(requiredType: Type, concreteType: Type): boolean {
+  return isSubtypeInternal(requiredType, concreteType, []);
+}
+
+export function isSubtypeInternal(requiredType: Type, concreteType: Type,
+                                  parentStructTypes: Type[]): boolean {
   if (equals(requiredType, concreteType)) {
     return true;
   }
 
   if (requiredType.kind === Kind.Union) {
+
+    // If we're comparing two unions all component types must be compatible
+    if (concreteType.kind === Kind.Union) {
+      const {desc} = concreteType;
+      invariant(desc instanceof CompoundDesc);
+      return desc.elemTypes.every(t => isSubtypeInternal(requiredType, t, parentStructTypes));
+    }
     const {desc} = requiredType;
     invariant(desc instanceof CompoundDesc);
-    return desc.elemTypes.some(t => isSubtype(t, concreteType));
+    return desc.elemTypes.some(t => isSubtypeInternal(t, concreteType, parentStructTypes));
   }
 
   if (requiredType.kind !== concreteType.kind) {
@@ -58,7 +70,8 @@ export function isSubtype(requiredType: Type, concreteType: Type): boolean {
   const concreteDesc = concreteType.desc;
   if (requiredDesc instanceof CompoundDesc) {
     const concreteTypeElemTypes = concreteDesc.elemTypes;
-    return requiredDesc.elemTypes.every((t, i) => compoundSubtype(t, concreteTypeElemTypes[i]));
+    return requiredDesc.elemTypes.every(
+      (t, i) => compoundSubtype(t, concreteTypeElemTypes[i], parentStructTypes));
   }
 
   if (requiredType.kind === Kind.Struct) {
@@ -66,17 +79,29 @@ export function isSubtype(requiredType: Type, concreteType: Type): boolean {
       return false;
     }
 
+    // We may already be computing the subtype for this type if we have a cycle. In that case we
+    // exit the recursive check. We may still find that the type is not a subtype but that will be
+    // handled at a higher level in the callstack.
+    const idx = parentStructTypes.indexOf(requiredType);
+    if (idx !== -1) {
+      return true;
+    }
+
     let j = 0;
     const requiredFields = requiredDesc.fields;
     const concreteFields = concreteDesc.fields;
     for (let i = 0; i < requiredFields.length; i++) {
-      const name = requiredFields[i].name;
+      const requiredField = requiredFields[i];
+      const {name} = requiredField;
       for (; j < concreteFields.length && concreteFields[j].name !== name; j++);
       if (j === concreteFields.length) {
         return false;
       }
 
-      if (!isSubtype(requiredFields[i].type, concreteFields[j].type)) {
+      parentStructTypes.push(requiredType);
+      const b = isSubtypeInternal(requiredField.type, concreteFields[j].type, parentStructTypes);
+      parentStructTypes.pop();
+      if (!b) {
         return false;
       }
     }
@@ -86,12 +111,13 @@ export function isSubtype(requiredType: Type, concreteType: Type): boolean {
   invariant(false);
 }
 
-function compoundSubtype(requiredType: Type, concreteType: Type): boolean {
+function compoundSubtype(requiredType: Type, concreteType: Type,
+                         parentStructTypes: Type[]): boolean {
   // In a compound type it is OK to have an empty union.
   if (concreteType.kind === Kind.Union && concreteType.desc.elemTypes.length === 0) {
     return true;
   }
-  return isSubtype(requiredType, concreteType);
+  return isSubtypeInternal(requiredType, concreteType, parentStructTypes);
 }
 
 function assert(b, v, t) {
