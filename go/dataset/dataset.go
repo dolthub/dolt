@@ -78,8 +78,9 @@ func (ds *Dataset) CommitValue(v types.Value) (Dataset, error) {
 	return ds.Commit(v, CommitOptions{})
 }
 
-// Commit updates the commit that a dataset points at. The new Commit struct is constructed using `v` and `opts.Parents`.
+// Commit updates the commit that a dataset points at. The new Commit struct is constructed using `v`, `opts.Parents`, and `opts.Meta`.
 // If `opts.Parents` is the zero value (`types.Set{}`) then the current head is used.
+// If `opts.Meta is the zero value (`types.Struct{}`) then a fully initialized empty Struct is passed to NewCommit.
 // If the update cannot be performed, e.g., because of a conflict, CommitWith returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) Commit(v types.Value, opts CommitOptions) (Dataset, error) {
 	parents := opts.Parents
@@ -90,7 +91,14 @@ func (ds *Dataset) Commit(v types.Value, opts CommitOptions) (Dataset, error) {
 			parents = parents.Insert(headRef)
 		}
 	}
-	newCommit := datas.NewCommit(v, parents)
+
+	meta := opts.Meta
+	// Ideally, would like to do 'if meta == types.Struct{}' but types.Struct is not comparable in Go
+	// since it contains a slice.
+	if meta.Type() == nil && len(meta.ChildValues()) == 0 {
+		meta = types.EmptyStruct
+	}
+	newCommit := datas.NewCommit(v, parents, meta)
 	store, err := ds.Database().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }

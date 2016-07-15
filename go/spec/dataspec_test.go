@@ -32,7 +32,7 @@ func TestLDBDatabase(t *testing.T) {
 
 	s1 := types.String("A String")
 	s1Hash := ds.WriteValue(s1)
-	ds.Commit("testDs", datas.NewCommit(s1Hash, types.NewSet()))
+	ds.Commit("testDs", datas.NewCommit(s1Hash, types.NewSet(), types.EmptyStruct))
 	ds.Close()
 
 	sp, errRead := parseDatabaseSpec(spec)

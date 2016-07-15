@@ -10,4 +10,5 @@ import "github.com/attic-labs/noms/go/types"
 type CommitOptions struct {
 	// Parents, if provided is the parent commits of the commit we are creating.
 	Parents types.Set
+	Meta    types.Struct
 }

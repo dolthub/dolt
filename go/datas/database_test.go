@@ -63,7 +63,7 @@ func (suite *DatabaseSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(hash.Hash{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v).TargetHash()
-	commit := NewCommit(v, types.NewSet())
+	commit := NewCommit(v, types.NewSet(), types.EmptyStruct)
 	newDs, err := suite.ds.Commit("foo", commit)
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
@@ -77,12 +77,12 @@ func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	var v types.Value = types.Bool(true)
 	suite.NotEqual(hash.Hash{}, suite.ds.WriteValue(v))
 	r := suite.ds.WriteValue(v)
-	commit := NewCommit(v, types.NewSet())
+	commit := NewCommit(v, types.NewSet(), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit("foo", commit)
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
-	newCommit := NewCommit(r, types.NewSet(types.NewRef(commit)))
+	newCommit := NewCommit(r, types.NewSet(types.NewRef(commit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit("foo", newCommit)
 	suite.NoError(err)
 }
@@ -102,7 +102,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a|
 	a := types.String("a")
-	aCommit := NewCommit(a, types.NewSet())
+	aCommit := NewCommit(a, types.NewSet(), types.EmptyStruct)
 	ds2, err := suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
@@ -122,7 +122,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a| <- |b|
 	b := types.String("b")
-	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)))
+	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -132,14 +132,14 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.String("c")
-	cCommit := NewCommit(c, types.NewSet(types.NewRef(aCommit)))
+	cCommit := NewCommit(c, types.NewSet(types.NewRef(aCommit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.Error(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
 
 	// |a| <- |b| <- |d|
 	d := types.String("d")
-	dCommit := NewCommit(d, types.NewSet(types.NewRef(bCommit)))
+	dCommit := NewCommit(d, types.NewSet(types.NewRef(bCommit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, dCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(d))
@@ -170,13 +170,13 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	// |a|
 	var err error
 	a := types.String("a")
-	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit(a, types.NewSet()))
+	suite.ds, err = suite.ds.Commit(datasetID1, NewCommit(a, types.NewSet(), types.EmptyStruct))
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID1).Get(ValueField).Equals(a))
 
 	// ds1; |a|, ds2: |b|
 	b := types.String("b")
-	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit(b, types.NewSet()))
+	suite.ds, err = suite.ds.Commit(datasetID2, NewCommit(b, types.NewSet(), types.EmptyStruct))
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID2).Get(ValueField).Equals(b))
 
@@ -202,13 +202,13 @@ func (suite *DatabaseSuite) TestDatabaseDeleteConcurrent() {
 
 	// |a|
 	a := types.String("a")
-	aCommit := NewCommit(a, types.NewSet())
+	aCommit := NewCommit(a, types.NewSet(), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	suite.NoError(err)
 
 	// |a| <- |b|
 	b := types.String("b")
-	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)))
+	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)), types.EmptyStruct)
 	ds2, err := suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(a))
@@ -234,10 +234,10 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// Setup:
 	// |a| <- |b|
 	a := types.String("a")
-	aCommit := NewCommit(a, types.NewSet())
+	aCommit := NewCommit(a, types.NewSet(), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, aCommit)
 	b := types.String("b")
-	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)))
+	bCommit := NewCommit(b, types.NewSet(types.NewRef(aCommit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, bCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(b))
@@ -248,7 +248,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// Change 1:
 	// |a| <- |b| <- |c|
 	c := types.String("c")
-	cCommit := NewCommit(c, types.NewSet(types.NewRef(bCommit)))
+	cCommit := NewCommit(c, types.NewSet(types.NewRef(bCommit)), types.EmptyStruct)
 	suite.ds, err = suite.ds.Commit(datasetID, cCommit)
 	suite.NoError(err)
 	suite.True(suite.ds.Head(datasetID).Get(ValueField).Equals(c))
@@ -257,7 +257,7 @@ func (suite *DatabaseSuite) TestDatabaseConcurrency() {
 	// |a| <- |b| <- |e|
 	// Should be disallowed, Database returned by Commit() should have |c| as Head.
 	e := types.String("e")
-	eCommit := NewCommit(e, types.NewSet(types.NewRef(bCommit)))
+	eCommit := NewCommit(e, types.NewSet(types.NewRef(bCommit)), types.EmptyStruct)
 	ds2, err = ds2.Commit(datasetID, eCommit)
 	suite.Error(err)
 	suite.True(ds2.Head(datasetID).Get(ValueField).Equals(c))
