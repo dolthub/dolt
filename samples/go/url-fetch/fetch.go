@@ -29,7 +29,7 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Fetches a URL into a noms blob\n\nUsage: %s <dataset> <url>:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Fetches a URL (or file) into a noms blob\n\nUsage: %s <dataset> <url-or-local-path>:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
@@ -37,11 +37,11 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() != 2 {
-		d.CheckError(errors.New("expected dataset and url arguments"))
+		d.CheckErrorNoUsage(errors.New("expected dataset and url arguments"))
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(0))
-	d.CheckError(err)
+	d.CheckErrorNoUsage(err)
 	defer ds.Database().Close()
 
 	url := flag.Arg(1)
