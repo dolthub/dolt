@@ -70,7 +70,7 @@ func runLog(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	waitChan := outputpager.PageOutput(!outputpager.NoPager)
+	waitChan := outputpager.PageOutput()
 
 	origCommit, ok := value.(types.Struct)
 	if !ok || !origCommit.Type().Equals(datas.CommitType()) {

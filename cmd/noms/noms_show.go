@@ -40,7 +40,7 @@ func runShow(args []string) int {
 		return 0
 	}
 
-	waitChan := outputpager.PageOutput(!outputpager.NoPager)
+	waitChan := outputpager.PageOutput()
 
 	w := bufio.NewWriter(os.Stdout)
 	types.WriteEncodedValueWithTags(w, value)

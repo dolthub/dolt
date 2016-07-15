@@ -51,16 +51,16 @@ func runDiff(args []string) int {
 	}
 	defer db2.Close()
 
-	waitChan := outputpager.PageOutput(!outputpager.NoPager)
-
+	waitChan := outputpager.PageOutput()
 	w := bufio.NewWriter(os.Stdout)
-	diff.Diff(w, value1, value2)
-	fmt.Fprintf(w, "\n")
-	w.Flush()
 
 	if waitChan != nil {
-		os.Stdout.Close()
-		<-waitChan
+		go func() {
+			<-waitChan
+			os.Exit(0)
+		}()
 	}
+
+	diff.Diff(w, value1, value2)
 	return 0
 }
