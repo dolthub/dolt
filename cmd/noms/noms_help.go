@@ -8,19 +8,34 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"strings"
 	"text/template"
+	"time"
 )
 
-var usageTemplate = `Noms is a tool for iterating with Noms data.
+var actions = []string{
+	"interacting with",
+	"poking at",
+	"goofing with",
+	"dancing with",
+	"playing with",
+	"contemplation of",
+	"showing off",
+	"jiggerypokery of",
+	"singing to",
+	"nomming on",
+}
+
+var usageTemplate = `Noms is a tool for {{.Action}} Noms data.
 
 Usage:
 
 	noms command [arguments]
 
 The commands are:
-{{range .}}
+{{range .Commands}}
 	{{.Name | printf "%-11s"}} {{.Short}}{{end}}
 
 Use "noms help [command]" for more information about a command.
@@ -44,7 +59,14 @@ func tmpl(w io.Writer, text string, data interface{}) {
 
 func printUsage(w io.Writer) {
 	bw := bufio.NewWriter(w)
-	tmpl(bw, usageTemplate, commands)
+	data := struct {
+		Commands []*nomsCommand
+		Action   string
+	}{
+		commands,
+		actions[rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(actions))],
+	}
+	tmpl(bw, usageTemplate, data)
 	bw.Flush()
 }
 
