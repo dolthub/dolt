@@ -498,8 +498,9 @@ func expectVersion(res *http.Response) {
 
 // In order for keep alive to work we must read to EOF on every response. We may want to add a timeout so that a server that left its connection open can't cause all of ports to be eaten up.
 func closeResponse(rc io.ReadCloser) error {
-	data, err := ioutil.ReadAll(rc)
-	d.Chk.NoError(err)
-	d.Chk.True(0 == len(data), string(data))
+	ioutil.ReadAll(rc)
+	// Bug #2069. It's not clear what the behavior is here. These checks are currently not enabled because they are shadowing information about a failure which occurs earlier.
+	// d.Chk.NoError(err)
+	// d.Chk.True(0 == len(data), string(data))
 	return rc.Close()
 }
