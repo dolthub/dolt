@@ -46,6 +46,10 @@ func runSync(args []string) int {
 	d.CheckError(err)
 	defer sourceStore.Close()
 
+	if sourceObj == nil {
+		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
+	}
+
 	sinkDataset, err := spec.GetDataset(args[1])
 	d.CheckError(err)
 	defer sinkDataset.Database().Close()
