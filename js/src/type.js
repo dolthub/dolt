@@ -247,7 +247,11 @@ export function makeStructType(name: string, fieldNames: string[], fieldTypes: T
   return staticTypeCache.makeStructType(name, fieldNames, fieldTypes);
 }
 
-export function makeUnionType(types: Type[]): Type {
+/**
+ * Creates a union type unless the number of distinct types is 1, in which case that type is
+ * returned.
+ */
+export function makeUnionType(types: Type<*>[]): Type<*> {
   return staticTypeCache.makeUnionType(types);
 }
 
