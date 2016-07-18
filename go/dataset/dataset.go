@@ -86,7 +86,7 @@ func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
 // CommitWithParents updates the commit that a dataset points at. The new Commit is constructed using v and p.
 // If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
 func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
-	newCommit := datas.NewCommit().Set(datas.ParentsField, p).Set(datas.ValueField, v)
+	newCommit := datas.NewCommit(v, p)
 	store, err := ds.Database().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }
@@ -117,7 +117,7 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
 	}
-	if !v.Type().Equals(datas.CommitType()) {
+	if !datas.IsCommitType(v.Type()) {
 		panic("Not a commit: " + types.EncodedValue(v))
 	}
 	return v.(types.Struct)

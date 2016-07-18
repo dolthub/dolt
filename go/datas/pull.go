@@ -225,7 +225,7 @@ func traverseSink(sinkRef types.Ref, db Database) traverseResult {
 }
 
 func traverseCommon(comRef, sinkHead types.Ref, db Database) traverseResult {
-	if comRef.Height() > 1 && comRef.Type().Equals(refOfCommitType) {
+	if comRef.Height() > 1 && isRefOfCommitType(comRef.Type()) {
 		commit := comRef.TargetValue(db).(types.Struct)
 		// We don't want to traverse the parents of sinkHead, but we still want to traverse its Value on the sinkDB side. We also still want to traverse all children, in both the srcDB and sinkDB, of any common Commit that is not at the Head of sinkDB.
 		exclusionSet := types.NewSet()

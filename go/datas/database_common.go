@@ -34,7 +34,7 @@ func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
 	if r, ok := ds.MaybeHeadRef(datasetID); ok {
 		return r.TargetValue(ds).(types.Struct), true
 	}
-	return NewCommit(), false
+	return types.Struct{}, false
 }
 
 func (ds *databaseCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
@@ -59,7 +59,7 @@ func (ds *databaseCommon) HeadRef(datasetID string) types.Ref {
 func (ds *databaseCommon) Datasets() types.Map {
 	if ds.datasets == nil {
 		if ds.rootRef.IsEmpty() {
-			emptyMap := NewMapOfStringToRefOfCommit()
+			emptyMap := types.NewMap()
 			ds.datasets = &emptyMap
 		} else {
 			ds.datasets = ds.datasetsFromRef(ds.rootRef)

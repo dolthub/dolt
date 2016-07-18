@@ -73,7 +73,7 @@ func runLog(args []string) int {
 	waitChan := outputpager.PageOutput()
 
 	origCommit, ok := value.(types.Struct)
-	if !ok || !origCommit.Type().Equals(datas.CommitType()) {
+	if !ok || !datas.IsCommitType(origCommit.Type()) {
 		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 

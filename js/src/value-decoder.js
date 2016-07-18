@@ -204,7 +204,7 @@ export default class ValueDecoder {
     return newStructWithType(type, values);
   }
 
-  readCachedStructType(): Type {
+  readCachedStructType(): ?Type<StructDesc> {
     let trie = notNull(this._tc.trieRoots.get(Kind.Struct)).traverse(this._r.readIdent(this._tc));
     const count = this._r.readUint32();
     for (let i = 0; i < count; i++) {
@@ -212,10 +212,10 @@ export default class ValueDecoder {
       trie = trie.traverse(this.readType().id);
     }
 
-    return notNull(trie.t);
+    return trie.t;
   }
 
-  readStructType(): Type {
+  readStructType(): Type<StructDesc> {
     const pos = this._r.pos();
     const t = this.readCachedStructType();
     if (t) {
