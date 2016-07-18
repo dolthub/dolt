@@ -93,6 +93,10 @@ func makeHTTPClient(requestLimit int) *http.Client {
 	return &http.Client{Transport: &t}
 }
 
+func (bhcs *httpBatchStore) IsValidating() bool {
+	return true
+}
+
 func (bhcs *httpBatchStore) Flush() {
 	bhcs.flushChan <- struct{}{}
 	bhcs.requestWg.Wait()
@@ -143,7 +147,7 @@ func (bhcs *httpBatchStore) batchHasRequests() {
 	bhcs.batchReadRequests(bhcs.hasQueue, bhcs.hasRefs)
 }
 
-type batchGetter func(hashes hashSet, batch chunks.ReadBatch)
+type batchGetter func(hashes hash.HashSet, batch chunks.ReadBatch)
 
 func (bhcs *httpBatchStore) batchReadRequests(queue <-chan chunks.ReadRequest, getter batchGetter) {
 	bhcs.workerWg.Add(1)
@@ -170,7 +174,7 @@ func (bhcs *httpBatchStore) batchReadRequests(queue <-chan chunks.ReadRequest, g
 
 func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
 	batch := chunks.ReadBatch{}
-	hashes := hashSet{}
+	hashes := hash.HashSet{}
 
 	count := 0
 	addReq := func(req chunks.ReadRequest) {
@@ -202,7 +206,7 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 	}()
 }
 
-func (bhcs *httpBatchStore) getRefs(hashes hashSet, batch chunks.ReadBatch) {
+func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
 	// POST http://<host>/getRefs/. Post body: ref=hash0&ref=hash1& Response will be chunk data if present, 404 if absent.
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
@@ -254,7 +258,7 @@ func (rb *readBatchChunkSink) Close() error {
 	return rb.batch.Close()
 }
 
-func (bhcs *httpBatchStore) hasRefs(hashes hashSet, batch chunks.ReadBatch) {
+func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
 	// POST http://<host>/hasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|".
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.HasRefsPath)
@@ -323,7 +327,7 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 		defer bhcs.workerWg.Done()
 
 		hints := types.Hints{}
-		hashes := hashSet{}
+		hashes := hash.HashSet{}
 		handleRequest := func(wr writeRequest) {
 			if !wr.justHints {
 				if hashes.Has(wr.hash) {
@@ -357,7 +361,7 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 						drained = true
 						bhcs.sendWriteRequests(hashes, hints) // Takes ownership of hashes, hints
 						hints = types.Hints{}
-						hashes = hashSet{}
+						hashes = hash.HashSet{}
 					}
 				}
 			}
@@ -365,7 +369,7 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 	}()
 }
 
-func (bhcs *httpBatchStore) sendWriteRequests(hashes hashSet, hints types.Hints) {
+func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.Hints) {
 	if len(hashes) == 0 {
 		return
 	}
@@ -435,6 +439,7 @@ func (bhcs *httpBatchStore) Root() hash.Hash {
 	return hash.Parse(string(data))
 }
 
+// UpdateRoot flushes outstanding writes to the backing ChunkStore before updating its Root, because it's almost certainly the case that the caller wants to point that root at some recently-Put Chunk.
 func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	bhcs.Flush()

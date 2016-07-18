@@ -88,7 +88,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 
 	// hc and reachableChunks aren't goroutine-safe, so only write them here.
 	hc := hintCache{}
-	reachableChunks := hashSet{}
+	reachableChunks := hash.HashSet{}
 	for !srcQ.Empty() {
 		srcRefs, sinkRefs, comRefs := planWork(&srcQ, &sinkQ)
 		srcWork, sinkWork, comWork := len(srcRefs), len(sinkRefs), len(comRefs)
@@ -141,7 +141,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			hints[hint] = struct{}{}
 		}
 	}
-	sinkDB.batchStore().AddHints(hints)
+	sinkDB.validatingBatchStore().AddHints(hints)
 }
 
 type traverseResult struct {
@@ -207,11 +207,11 @@ type hintCache map[hash.Hash]hash.Hash
 func traverseSource(srcRef types.Ref, srcDB, sinkDB Database) traverseResult {
 	h := srcRef.TargetHash()
 	if !sinkDB.has(h) {
-		srcBS := srcDB.batchStore()
+		srcBS := srcDB.validatingBatchStore()
 		c := srcBS.Get(h)
 		v := types.DecodeValue(c, srcDB)
 		d.Chk.True(v != nil, "Expected decoded chunk to be non-nil.")
-		sinkDB.batchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
+		sinkDB.validatingBatchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
 		return traverseResult{h, v.Chunks(), len(c.Data())}
 	}
 	return traverseResult{}

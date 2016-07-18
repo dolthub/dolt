@@ -41,7 +41,7 @@ type Database interface {
 	Delete(datasetID string) (Database, error)
 
 	has(hash hash.Hash) bool
-	batchStore() types.BatchStore
+	validatingBatchStore() types.BatchStore
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {

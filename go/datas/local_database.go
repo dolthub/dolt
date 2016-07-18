@@ -6,32 +6,41 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
 // Database provides versioned storage for noms values. Each Database instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new Database, representing a new moment in history.
 type LocalDatabase struct {
 	databaseCommon
+	cs chunks.ChunkStore
 }
 
 func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
+	bs := types.NewBatchStoreAdaptor(cs)
 	return &LocalDatabase{
-		newDatabaseCommon(newCachingChunkHaver(cs), types.NewValueStore(types.NewBatchStoreAdaptor(cs)), cs),
+		newDatabaseCommon(newCachingChunkHaver(cs), types.NewValueStore(bs), bs),
+		cs,
 	}
 }
 
 func (lds *LocalDatabase) Commit(datasetID string, commit types.Struct) (Database, error) {
 	err := lds.commit(datasetID, commit)
-	lds.vs.Flush()
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt)}, err
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
 }
 
 func (lds *LocalDatabase) Delete(datasetID string) (Database, error) {
 	err := lds.doDelete(datasetID)
-	lds.vs.Flush()
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt)}, err
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
 }
 
-func (lds *LocalDatabase) batchStore() types.BatchStore {
-	return lds.vs.BatchStore()
+func (lds *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
+	bs = lds.vs.BatchStore()
+	if !bs.IsValidating() {
+		bs = newLocalBatchStore(lds.cs)
+		lds.vs = types.NewValueStore(bs)
+		lds.rt = bs
+	}
+	d.Chk.True(bs.IsValidating())
+	return bs
 }

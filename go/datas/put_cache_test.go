@@ -93,7 +93,7 @@ func (suite *LevelDBPutCacheSuite) TestGetParallel() {
 
 func (suite *LevelDBPutCacheSuite) TestClearParallel() {
 	keepIdx := 2
-	toClear1, toClear2 := hashSet{}, hashSet{}
+	toClear1, toClear2 := hash.HashSet{}, hash.HashSet{}
 	for i, v := range suite.values {
 		suite.cache.Insert(types.EncodeValue(v, nil), 1)
 		if i < keepIdx {
@@ -105,7 +105,7 @@ func (suite *LevelDBPutCacheSuite) TestClearParallel() {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	clear := func(hs hashSet) {
+	clear := func(hs hash.HashSet) {
 		suite.cache.Clear(hs)
 		wg.Done()
 	}
@@ -124,7 +124,7 @@ func (suite *LevelDBPutCacheSuite) TestClearParallel() {
 }
 
 func (suite *LevelDBPutCacheSuite) TestReaderSubset() {
-	toExtract := hashSet{}
+	toExtract := hash.HashSet{}
 	for hash, c := range suite.chnx {
 		if len(toExtract) < 2 {
 			toExtract.Insert(hash)
@@ -144,7 +144,7 @@ func (suite *LevelDBPutCacheSuite) TestReaderSubset() {
 }
 
 func (suite *LevelDBPutCacheSuite) TestReaderSnapshot() {
-	hashes := hashSet{}
+	hashes := hash.HashSet{}
 	for h, c := range suite.chnx {
 		hashes.Insert(h)
 		suite.cache.Insert(c, 1)
@@ -163,7 +163,7 @@ func (suite *LevelDBPutCacheSuite) TestReaderSnapshot() {
 func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 	maxHeight := len(suite.chnx)
 	orderedHashes := make(hash.HashSlice, maxHeight)
-	toExtract := hashSet{}
+	toExtract := hash.HashSet{}
 	heights := rand.Perm(maxHeight)
 	for hash, c := range suite.chnx {
 		toExtract.Insert(hash)
@@ -180,7 +180,7 @@ func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 	suite.Len(orderedHashes, 0)
 }
 
-func (suite *LevelDBPutCacheSuite) extractChunks(hashes hashSet) <-chan *chunks.Chunk {
+func (suite *LevelDBPutCacheSuite) extractChunks(hashes hash.HashSet) <-chan *chunks.Chunk {
 	buf := &bytes.Buffer{}
 	err := suite.cache.ExtractChunks(hashes, buf)
 	suite.NoError(err)
