@@ -5,6 +5,8 @@
 package types
 
 import (
+	"sync"
+
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -33,19 +35,29 @@ func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change V
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
 func orderedSequenceDiff(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
-	lastCur := newCursorAt(last, emptyKey, false, false)
-	currentCur := newCursorAt(current, emptyKey, false, false)
-	lastHeight := lastCur.depth()
-	currentHeight := currentCur.depth()
+	var lastHeight, currentHeight int
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	getHeight := func(seq orderedSequence, out *int) {
+		cur := newCursorAt(seq, emptyKey, false, false)
+		*out = cur.depth()
+		wg.Done()
+	}
+	go getHeight(last, &lastHeight)
+	go getHeight(current, &currentHeight)
+	wg.Wait()
+	return orderedSequenceDiffInternalNodes(last, current, changes, closeChan, lastHeight, currentHeight)
+}
 
+func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}, lastHeight, currentHeight int) error {
 	if lastHeight > currentHeight {
 		lastChild := last.(orderedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
-		return orderedSequenceDiff(lastChild, current, changes, closeChan)
+		return orderedSequenceDiffInternalNodes(lastChild, current, changes, closeChan, lastHeight-1, currentHeight)
 	}
 
 	if currentHeight > lastHeight {
 		currentChild := current.(orderedMetaSequence).getCompositeChildSequence(0, uint64(current.seqLen())).(orderedSequence)
-		return orderedSequenceDiff(last, currentChild, changes, closeChan)
+		return orderedSequenceDiffInternalNodes(last, currentChild, changes, closeChan, lastHeight, currentHeight-1)
 	}
 
 	if !isMetaSequence(last) && !isMetaSequence(current) {
@@ -56,9 +68,19 @@ func orderedSequenceDiff(last orderedSequence, current orderedSequence, changes 
 			func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
 
 		for _, splice := range initialSplices {
-			lastChild := last.(orderedMetaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
-			currentChild := current.(orderedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
-			err := orderedSequenceDiff(lastChild, currentChild, changes, closeChan)
+			var lastChild, currentChild orderedSequence
+			wg := &sync.WaitGroup{}
+			wg.Add(2)
+			go func() {
+				lastChild = last.(orderedMetaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
+				wg.Done()
+			}()
+			go func() {
+				currentChild = current.(orderedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
+				wg.Done()
+			}()
+			wg.Wait()
+			err := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, closeChan, lastHeight-1, currentHeight-1)
 			if err != nil {
 				return err
 			}

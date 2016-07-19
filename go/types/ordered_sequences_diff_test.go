@@ -14,6 +14,8 @@ const (
 	lengthOfNumbersTest = 1000
 )
 
+type diffFn func(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) error
+
 type diffTestSuite struct {
 	suite.Suite
 	from1, to1, by1     int
@@ -36,12 +38,12 @@ func newDiffTestSuite(from1, to1, by1, from2, to2, by2, numAddsExpected, numRemo
 	}
 }
 
-func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence) (added []Value, removed []Value, modified []Value) {
+func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (added []Value, removed []Value, modified []Value) {
 	changes := make(chan ValueChanged)
 	closeChan := make(chan struct{})
 
 	go func() {
-		err := orderedSequenceDiffLeafItems(o1, o2, changes, closeChan)
+		err := df(o1, o2, changes, closeChan)
 		if err == nil {
 			close(changes)
 		}
@@ -71,18 +73,24 @@ func (suite *diffTestSuite) TestDiff() {
 		return true
 	}
 
-	runTest := func(name string, vf valFn, cf colFn) {
+	runTestDf := func(name string, vf valFn, cf colFn, df diffFn) {
 		col1 := cf(vf(suite.from1, suite.to1, suite.by1))
 		col2 := cf(vf(suite.from2, suite.to2, suite.by2))
 		suite.added, suite.removed, suite.modified = accumulateOrderedSequenceDiffChanges(
 			col1.sequence().(orderedSequence),
-			col2.sequence().(orderedSequence))
+			col2.sequence().(orderedSequence),
+			df)
 		suite.Equal(suite.numAddsExpected, len(suite.added), "test %s: num added is not as expected", name)
 		suite.Equal(suite.numRemovesExpected, len(suite.removed), "test %s: num removed is not as expected", name)
 		suite.Equal(suite.numModifiedExpected, len(suite.modified), "test %s: num modified is not as expected", name)
 		suite.True(notNil(suite.added), "test %s: added has nil values", name)
 		suite.True(notNil(suite.removed), "test %s: removed has nil values", name)
 		suite.True(notNil(suite.modified), "test %s: modified has nil values", name)
+	}
+
+	runTest := func(name string, vf valFn, cf colFn) {
+		runTestDf(name, vf, cf, orderedSequenceDiff)
+		runTestDf(name, vf, cf, orderedSequenceDiffLeafItems)
 	}
 
 	newSetAsCol := func(vs []Value) Collection { return NewSet(vs...) }
