@@ -114,3 +114,18 @@ func (r Hash) Less(other Hash) bool {
 func (r Hash) Greater(other Hash) bool {
 	return bytes.Compare(r.digest[:], other.digest[:]) > 0
 }
+
+type HashSet map[Hash]struct{}
+
+func (hs HashSet) Insert(hash Hash) {
+	hs[hash] = struct{}{}
+}
+
+func (hs HashSet) Has(hash Hash) (has bool) {
+	_, has = hs[hash]
+	return
+}
+
+func (hs HashSet) Remove(hash Hash) {
+	delete(hs, hash)
+}

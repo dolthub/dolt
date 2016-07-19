@@ -48,21 +48,6 @@ type orderedChunkCache struct {
 	mu            *sync.RWMutex
 }
 
-type hashSet map[hash.Hash]struct{}
-
-func (hs hashSet) Insert(hash hash.Hash) {
-	hs[hash] = struct{}{}
-}
-
-func (hs hashSet) Has(hash hash.Hash) (has bool) {
-	_, has = hs[hash]
-	return
-}
-
-func (hs hashSet) Remove(hash hash.Hash) {
-	delete(hs, hash)
-}
-
 // Insert can be called from any goroutine to store c in the cache. If c is successfully added to the cache, Insert returns true. If c was already in the cache, Insert returns false.
 func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 	hash := c.Hash()
@@ -113,7 +98,7 @@ func (p *orderedChunkCache) Get(hash hash.Hash) chunks.Chunk {
 }
 
 // Clear can be called from any goroutine to remove chunks referenced by the given hashes from the cache.
-func (p *orderedChunkCache) Clear(hashes hashSet) {
+func (p *orderedChunkCache) Clear(hashes hash.HashSet) {
 	deleteBatch := &leveldb.Batch{}
 	p.mu.Lock()
 	for hash := range hashes {
@@ -150,7 +135,7 @@ func fromDbKey(key []byte) (uint64, hash.Hash) {
 }
 
 // ExtractChunks can be called from any goroutine to write Chunks referenced by the given hashes to w. The chunks are ordered by ref-height. Chunks of the same height are written in an unspecified order, relative to one another.
-func (p *orderedChunkCache) ExtractChunks(hashes hashSet, w io.Writer) error {
+func (p *orderedChunkCache) ExtractChunks(hashes hash.HashSet, w io.Writer) error {
 	iter := p.orderedChunks.NewIterator(nil, nil)
 	defer iter.Release()
 	for iter.Next() {

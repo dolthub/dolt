@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -19,19 +20,19 @@ func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
 	return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(httpBS), types.NewValueStore(httpBS), httpBS)}
 }
 
-func (rds *RemoteDatabaseClient) batchStore() types.BatchStore {
-	return rds.vs.BatchStore()
+func (rds *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
+	bs = rds.vs.BatchStore()
+	d.Chk.True(bs.IsValidating())
+	return
 }
 
 func (rds *RemoteDatabaseClient) Commit(datasetID string, commit types.Struct) (Database, error) {
 	err := rds.commit(datasetID, commit)
-	rds.vs.Flush()
 	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
 }
 
 func (rds *RemoteDatabaseClient) Delete(datasetID string) (Database, error) {
 	err := rds.doDelete(datasetID)
-	rds.vs.Flush()
 	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
 }
 
