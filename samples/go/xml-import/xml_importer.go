@@ -135,7 +135,7 @@ func main() {
 		rl := types.NewList(refs...)
 
 		if !*noIO {
-			_, err := ds.Commit(rl)
+			_, err := ds.CommitValue(rl)
 			d.PanicIfError(err)
 		}
 	})

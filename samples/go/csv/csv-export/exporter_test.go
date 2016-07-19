@@ -57,7 +57,7 @@ func (s *testSuite) TestCSVExporter() {
 		structs[i] = types.NewStructWithType(typ, fields)
 	}
 
-	ds.Commit(types.NewList(structs...))
+	ds.CommitValue(types.NewList(structs...))
 	ds.Database().Close()
 
 	// Run exporter

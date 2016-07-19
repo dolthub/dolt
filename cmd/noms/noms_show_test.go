@@ -35,7 +35,7 @@ func writeTestData(str string, value types.Value) types.Ref {
 	d.Chk.NoError(err)
 
 	r1 := ds.Database().WriteValue(value)
-	ds, err = ds.Commit(r1)
+	ds, err = ds.CommitValue(r1)
 	d.Chk.NoError(err)
 
 	err = ds.Database().Close()

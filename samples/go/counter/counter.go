@@ -40,7 +40,7 @@ func main() {
 		newVal = uint64(lastVal.(types.Number)) + 1
 	}
 
-	_, err = ds.Commit(types.Number(newVal))
+	_, err = ds.CommitValue(types.Number(newVal))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return

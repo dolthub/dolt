@@ -72,21 +72,25 @@ func (ds *Dataset) MaybeHeadValue() (types.Value, bool) {
 	return c.Get(datas.ValueField), true
 }
 
-// Commit updates the commit that a dataset points at. The new Commit is constructed using v and the current Head.
+// CommitValue updates the commit that a dataset points at. The new Commit struct is constructed using v and the current Head.
 // If the update cannot be performed, e.g., because of a conflict, Commit returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
-func (ds *Dataset) Commit(v types.Value) (Dataset, error) {
-	p := types.NewSet()
-	if headRef, ok := ds.MaybeHeadRef(); ok {
-		headRef.TargetValue(ds.Database()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
-		p = p.Insert(headRef)
-	}
-	return ds.CommitWithParents(v, p)
+func (ds *Dataset) CommitValue(v types.Value) (Dataset, error) {
+	return ds.Commit(v, CommitOptions{})
 }
 
-// CommitWithParents updates the commit that a dataset points at. The new Commit is constructed using v and p.
-// If the update cannot be performed, e.g., because of a conflict, CommitWithParents returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
-func (ds *Dataset) CommitWithParents(v types.Value, p types.Set) (Dataset, error) {
-	newCommit := datas.NewCommit(v, p)
+// Commit updates the commit that a dataset points at. The new Commit struct is constructed using `v` and `opts.Parents`.
+// If `opts.Parents` is the zero value (`types.Set{}`) then the current head is used.
+// If the update cannot be performed, e.g., because of a conflict, CommitWith returns an 'ErrMergeNeeded' error and the current snapshot of the dataset so that the client can merge the changes and try again.
+func (ds *Dataset) Commit(v types.Value, opts CommitOptions) (Dataset, error) {
+	parents := opts.Parents
+	if (parents == types.Set{}) {
+		parents = types.NewSet()
+		if headRef, ok := ds.MaybeHeadRef(); ok {
+			headRef.TargetValue(ds.Database()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
+			parents = parents.Insert(headRef)
+		}
+	}
+	newCommit := datas.NewCommit(v, parents)
 	store, err := ds.Database().Commit(ds.id, newCommit)
 	return Dataset{store, ds.id}, err
 }
@@ -131,5 +135,6 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 // again using this new Dataset.
 func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
-	return ds.CommitWithParents(commit.Get(datas.ValueField), commit.Get(datas.ParentsField).(types.Set))
+	p := commit.Get(datas.ParentsField).(types.Set)
+	return ds.Commit(commit.Get(datas.ValueField), CommitOptions{Parents: p})
 }

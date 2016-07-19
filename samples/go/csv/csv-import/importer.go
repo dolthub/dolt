@@ -145,7 +145,7 @@ func main() {
 	} else {
 		value = csv.ReadToMap(cr, headers, pk, kinds, ds.Database())
 	}
-	_, err = ds.Commit(value)
+	_, err = ds.CommitValue(value)
 	if !*noProgress {
 		status.Clear()
 	}

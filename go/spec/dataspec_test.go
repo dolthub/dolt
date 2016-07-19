@@ -67,7 +67,7 @@ func TestMemDataset(t *testing.T) {
 	dataset1, err := sp1.Dataset()
 	assert.NoError(err)
 	commit := types.String("Commit Value")
-	dsTest, err := dataset1.Commit(commit)
+	dsTest, err := dataset1.CommitValue(commit)
 	assert.NoError(err)
 	assert.EqualValues(commit, dsTest.HeadValue())
 }
@@ -84,7 +84,7 @@ func TestLDBDataset(t *testing.T) {
 
 	set := dataset.NewDataset(ds, id)
 	commit := types.String("Commit Value")
-	set, err = set.Commit(commit)
+	set, err = set.CommitValue(commit)
 	assert.NoError(err)
 	ds.Close()
 
@@ -110,7 +110,7 @@ func TestLDBObject(t *testing.T) {
 	dataset1 := dataset.NewDataset(store1, dsId)
 	s1 := types.String("Commit Value")
 	r1 := store1.WriteValue(s1)
-	_, err = dataset1.Commit(r1)
+	_, err = dataset1.CommitValue(r1)
 	assert.NoError(err)
 	store1.Close()
 
@@ -146,7 +146,7 @@ func TestReadHash(t *testing.T) {
 	database1 := datas.NewDatabase(cs1)
 	dataset1 := dataset.NewDataset(database1, datasetId)
 	commit := types.String("Commit Value")
-	dataset1, err = dataset1.Commit(commit)
+	dataset1, err = dataset1.CommitValue(commit)
 	assert.NoError(err)
 	r1 := dataset1.Head().Hash()
 	dataset1.Database().Close()

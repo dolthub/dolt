@@ -74,7 +74,7 @@ func addPerson(ds dataset.Dataset) {
 		"title": types.String(flag.Arg(3)),
 	})
 
-	_, err = ds.Commit(getPersons(ds).Set(types.Number(id), np))
+	_, err = ds.CommitValue(getPersons(ds).Set(types.Number(id), np))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return

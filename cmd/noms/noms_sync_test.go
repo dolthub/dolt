@@ -29,7 +29,7 @@ type nomsSyncTestSuite struct {
 
 func (s *nomsSyncTestSuite) TestSyncValidation() {
 	source1 := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "src")
-	source1, err := source1.Commit(types.Number(42))
+	source1, err := source1.CommitValue(types.Number(42))
 	s.NoError(err)
 	source1HeadRef := source1.Head().Hash()
 	source1.Database().Close()
@@ -48,9 +48,9 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 
 func (s *nomsSyncTestSuite) TestSync() {
 	source1 := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
-	source1, err := source1.Commit(types.Number(42))
+	source1, err := source1.CommitValue(types.Number(42))
 	s.NoError(err)
-	source2, err := source1.Commit(types.Number(43))
+	source2, err := source1.CommitValue(types.Number(43))
 	s.NoError(err)
 	source1HeadRef := source1.Head().Hash()
 	source2.Database().Close() // Close Database backing both Datasets

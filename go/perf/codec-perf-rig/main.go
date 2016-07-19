@@ -59,7 +59,7 @@ func main() {
 			ds := dataset.NewDataset(datas.NewDatabase(ms), "test")
 			t1 := time.Now()
 			col := buildFns[i](buildCount, valueFn)
-			ds, err := ds.Commit(col)
+			ds, err := ds.CommitValue(col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -74,7 +74,7 @@ func main() {
 			ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
 			t1 = time.Now()
 			col = buildIncrFns[i](insertCount, valueFn)
-			ds, err = ds.Commit(col)
+			ds, err = ds.CommitValue(col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -95,7 +95,7 @@ func main() {
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
 	blob := types.NewBlob(bytes.NewReader(blobBytes))
-	ds.Commit(blob)
+	ds.CommitValue(blob)
 	buildDuration := time.Since(t1)
 
 	ds = dataset.NewDataset(datas.NewDatabase(ms), "test")

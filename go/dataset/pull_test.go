@@ -56,21 +56,21 @@ func TestPullTopDown(t *testing.T) {
 		types.String("second"), NewList(sink, types.Number(2)))
 
 	var err error
-	source, err = source.Commit(sourceInitialValue)
+	source, err = source.CommitValue(sourceInitialValue)
 	assert.NoError(err)
-	sink, err = sink.Commit(sinkInitialValue)
+	sink, err = sink.CommitValue(sinkInitialValue)
 	assert.NoError(err)
 
 	// Add some new stuff to source.
 	updatedValue := sourceInitialValue.Set(
 		types.String("third"), NewList(source, types.Number(3)))
-	source, err = source.Commit(updatedValue)
+	source, err = source.CommitValue(updatedValue)
 	assert.NoError(err)
 
 	// Add some more stuff, so that source isn't directly ahead of sink.
 	updatedValue = updatedValue.Set(
 		types.String("fourth"), NewList(source, types.Number(4)))
-	source, err = source.Commit(updatedValue)
+	source, err = source.CommitValue(updatedValue)
 	assert.NoError(err)
 
 	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
@@ -91,7 +91,7 @@ func TestPullFirstCommitTopDown(t *testing.T) {
 	NewList(sink)
 	NewList(sink, types.Number(2))
 
-	source, err := source.Commit(sourceInitialValue)
+	source, err := source.CommitValue(sourceInitialValue)
 	assert.NoError(err)
 
 	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
@@ -110,7 +110,7 @@ func TestPullDeepRefTopDown(t *testing.T) {
 		types.NewSet(NewSet(source)),
 		types.NewMap(NewMap(source), NewMap(source)))
 
-	source, err := source.Commit(sourceInitialValue)
+	source, err := source.CommitValue(sourceInitialValue)
 	assert.NoError(err)
 
 	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)

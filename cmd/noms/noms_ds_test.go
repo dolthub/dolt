@@ -47,12 +47,12 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	id := "testdataset"
 	set := dataset.NewDataset(ds, id)
-	set, err := set.Commit(types.String("Commit Value"))
+	set, err := set.CommitValue(types.String("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
 	set2 := dataset.NewDataset(ds, id2)
-	set2, err = set2.Commit(types.String("Commit Value2"))
+	set2, err = set2.CommitValue(types.String("Commit Value2"))
 	s.NoError(err)
 
 	err = ds.Close()

@@ -26,7 +26,7 @@ func (s *testSuite) Setup() {
 	db := s.Database()
 	defer db.Close()
 	ds := dataset.NewDataset(db, dsName)
-	_, err := ds.Commit(types.Number(42))
+	_, err := ds.CommitValue(types.Number(42))
 	s.NoError(err)
 }
 
