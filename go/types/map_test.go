@@ -275,7 +275,10 @@ func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
 
 func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value) {
 	changes := make(chan ValueChanged)
-	m1.Diff(m2, changes, nil)
+	go func() {
+		m1.Diff(m2, changes, nil)
+		close(changes)
+	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
 			added = append(added, change.V)

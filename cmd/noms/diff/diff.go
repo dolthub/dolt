@@ -69,7 +69,10 @@ func diffLists(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.List) {
 
 	splices := make(chan types.Splice)
 	closeChan := make(chan struct{})
-	v2.Diff(v1, splices, closeChan)
+	go func() {
+		v2.Diff(v1, splices, closeChan)
+		close(splices)
+	}()
 
 	err := d.Try(func() {
 		for splice := range splices {
@@ -110,7 +113,10 @@ func diffMaps(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Map) {
 
 	changes := make(chan types.ValueChanged)
 	closeChan := make(chan struct{})
-	v2.Diff(v1, changes, closeChan)
+	go func() {
+		v2.Diff(v1, changes, closeChan)
+		close(changes)
+	}()
 
 	err := d.Try(func() {
 		for change := range changes {
@@ -166,7 +172,10 @@ func diffSets(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Set) {
 
 	changes := make(chan types.ValueChanged)
 	closeChan := make(chan struct{})
-	v2.Diff(v1, changes, closeChan)
+	go func() {
+		v2.Diff(v1, changes, closeChan)
+		close(changes)
+	}()
 
 	err := d.Try(func() {
 		for change := range changes {

@@ -194,7 +194,10 @@ func getTestRefToValueOrderSet(scale int, vw ValueWriter) testSet {
 
 func accumulateSetDiffChanges(s1, s2 Set) (added []Value, removed []Value) {
 	changes := make(chan ValueChanged)
-	s1.Diff(s2, changes, nil)
+	go func() {
+		s1.Diff(s2, changes, nil)
+		close(changes)
+	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
 			added = append(added, change.V)

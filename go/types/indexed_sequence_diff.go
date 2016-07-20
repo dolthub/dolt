@@ -4,17 +4,7 @@
 
 package types
 
-var (
-	ChangeChanClosedErr = ChangeChannelClosedError{"Change channel closed"}
-)
-
-type ChangeChannelClosedError struct {
-	msg string
-}
-
-func (e ChangeChannelClosedError) Error() string { return e.msg }
-
-func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64, current indexedSequence, currentHeight int, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) error {
+func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64, current indexedSequence, currentHeight int, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
 	if lastHeight > currentHeight {
 		lastChild := last.(indexedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(indexedSequence)
 		return indexedSequenceDiff(lastChild, lastHeight-1, lastOffset, current, currentHeight, currentOffset, changes, closeChan, maxSpliceMatrixSize)
@@ -39,7 +29,7 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 			select {
 			case changes <- splice:
 			case <-closeChan:
-				return ChangeChanClosedErr
+				return false
 			}
 
 		} else {
@@ -53,12 +43,11 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 			if splice.SpFrom > 0 {
 				currentChildOffset += current.getOffset(int(splice.SpFrom)-1) + 1
 			}
-			err := indexedSequenceDiff(lastChild, lastHeight-1, lastChildOffset, currentChild, currentHeight-1, currentChildOffset, changes, closeChan, maxSpliceMatrixSize)
-			if err != nil {
-				return err
+			if ok := indexedSequenceDiff(lastChild, lastHeight-1, lastChildOffset, currentChild, currentHeight-1, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
+				return false
 			}
 		}
 	}
 
-	return nil
+	return true
 }

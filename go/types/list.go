@@ -196,28 +196,22 @@ func (l List) Diff(last List, changes chan<- Splice, closeChan <-chan struct{}) 
 }
 
 func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
-	go func() {
-		if l.Equals(last) {
-			close(changes) // nothing changed
-			return
-		}
-		lLen, lastLen := l.Len(), last.Len()
-		if lLen == 0 {
-			changes <- Splice{0, lastLen, 0, 0} // everything removed
-			close(changes)
-			return
-		}
-		if lastLen == 0 {
-			changes <- Splice{0, 0, lLen, 0} // everything added
-			close(changes)
-			return
-		}
+	if l.Equals(last) {
+		return
+	}
+	lLen, lastLen := l.Len(), last.Len()
+	if lLen == 0 {
+		changes <- Splice{0, lastLen, 0, 0} // everything removed
+		return
+	}
+	if lastLen == 0 {
+		changes <- Splice{0, 0, lLen, 0} // everything added
+		return
+	}
 
-		lastCur := newCursorAtIndex(last.seq, 0)
-		lCur := newCursorAtIndex(l.seq, 0)
-		indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
-		close(changes)
-	}()
+	lastCur := newCursorAtIndex(last.seq, 0)
+	lCur := newCursorAtIndex(l.seq, 0)
+	indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {

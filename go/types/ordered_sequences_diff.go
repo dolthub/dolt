@@ -5,9 +5,8 @@
 package types
 
 import (
-	"sync"
-
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/functions"
 )
 
 type DiffChangeType uint8
@@ -23,33 +22,28 @@ type ValueChanged struct {
 	V          Value
 }
 
-func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change ValueChanged) error {
+func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change ValueChanged) bool {
 	select {
 	case changes <- change:
+		return true
 	case <-closeChan:
-		close(changes)
-		return ChangeChanClosedErr
+		return false
 	}
-	return nil
 }
 
-// TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiff(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
+// Streams the diff from |last| to |current| into |changes|, using a top-down approach.
+// Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
+func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
 	var lastHeight, currentHeight int
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-	getHeight := func(seq orderedSequence, out *int) {
-		cur := newCursorAt(seq, emptyKey, false, false)
-		*out = cur.depth()
-		wg.Done()
-	}
-	go getHeight(last, &lastHeight)
-	go getHeight(current, &currentHeight)
-	wg.Wait()
+	functions.All(
+		func() { lastHeight = newCursorAt(last, emptyKey, false, false).depth() },
+		func() { currentHeight = newCursorAt(current, emptyKey, false, false).depth() },
+	)
 	return orderedSequenceDiffInternalNodes(last, current, changes, closeChan, lastHeight, currentHeight)
 }
 
-func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}, lastHeight, currentHeight int) error {
+// TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
+func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}, lastHeight, currentHeight int) bool {
 	if lastHeight > currentHeight {
 		lastChild := last.(orderedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
 		return orderedSequenceDiffInternalNodes(lastChild, current, changes, closeChan, lastHeight-1, currentHeight)
@@ -61,36 +55,34 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 	}
 
 	if !isMetaSequence(last) && !isMetaSequence(current) {
-		return orderedSequenceDiffLeafItems(last, current, changes, closeChan)
-	} else {
-		compareFn := last.getCompareFn(current)
-		initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-			func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
+		return orderedSequenceDiffLeftRight(last, current, changes, closeChan)
+	}
 
-		for _, splice := range initialSplices {
-			var lastChild, currentChild orderedSequence
-			wg := &sync.WaitGroup{}
-			wg.Add(2)
-			go func() {
+	compareFn := last.getCompareFn(current)
+	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+		func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
+
+	for _, splice := range initialSplices {
+		var lastChild, currentChild orderedSequence
+		functions.All(
+			func() {
 				lastChild = last.(orderedMetaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
-				wg.Done()
-			}()
-			go func() {
+			},
+			func() {
 				currentChild = current.(orderedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
-				wg.Done()
-			}()
-			wg.Wait()
-			err := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, closeChan, lastHeight-1, currentHeight-1)
-			if err != nil {
-				return err
-			}
+			},
+		)
+		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, closeChan, lastHeight-1, currentHeight-1); !ok {
+			return false
 		}
 	}
 
-	return nil
+	return true
 }
 
-func orderedSequenceDiffLeafItems(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
+// Streams the diff from |last| to |current| into |changes|, using a left-right approach.
+// Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
+func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
 	lastCur := newCursorAt(last, emptyKey, false, false)
 	currentCur := newCursorAt(current, emptyKey, false, false)
 
@@ -102,18 +94,18 @@ func orderedSequenceDiffLeafItems(last orderedSequence, current orderedSequence,
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(lastKey) {
-				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}); err != nil {
-					return err
+				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}); !ok {
+					return false
 				}
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}); err != nil {
-					return err
+				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}); !ok {
+					return false
 				}
 				lastCur.advance()
 			} else {
-				if err := sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}); err != nil {
-					return err
+				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}); !ok {
+					return false
 				}
 				lastCur.advance()
 				currentCur.advance()
@@ -122,18 +114,19 @@ func orderedSequenceDiffLeafItems(last orderedSequence, current orderedSequence,
 	}
 
 	for lastCur.valid() {
-		if err := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}); err != nil {
-			return err
+		if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}); !ok {
+			return false
 		}
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		if err := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}); err != nil {
-			return err
+		if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}); !ok {
+			return false
 		}
 		currentCur.advance()
 	}
-	return nil
+
+	return true
 }
 
 /**
