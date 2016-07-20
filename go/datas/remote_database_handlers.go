@@ -5,7 +5,6 @@
 package datas
 
 import (
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -113,12 +112,20 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 }
 
 // Contents of the returned io.Reader are snappy-compressed.
-func buildWriteValueRequest(serializedChunks io.Reader, hints map[hash.Hash]struct{}) io.Reader {
-	body := &bytes.Buffer{}
-	gw := snappy.NewBufferedWriter(body)
-	serializeHints(gw, hints)
-	d.Chk.NoError(gw.Close())
-	return io.MultiReader(body, serializedChunks)
+func buildWriteValueRequest(chunkChan chan *chunks.Chunk, hints map[hash.Hash]struct{}) io.Reader {
+	body, pw := io.Pipe()
+
+	go func() {
+		gw := snappy.NewBufferedWriter(pw)
+		serializeHints(gw, hints)
+		for c := range chunkChan {
+			chunks.Serialize(*c, gw)
+		}
+		d.Chk.NoError(gw.Close())
+		d.Chk.NoError(pw.Close())
+	}()
+
+	return body
 }
 
 func bodyReader(req *http.Request) (reader io.ReadCloser) {

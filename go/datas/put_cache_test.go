@@ -5,7 +5,6 @@
 package datas
 
 import (
-	"bytes"
 	"math/rand"
 	"sync"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/suite"
-	"github.com/golang/snappy"
 )
 
 func TestLevelDBPutCacheSuite(t *testing.T) {
@@ -143,23 +141,6 @@ func (suite *LevelDBPutCacheSuite) TestReaderSubset() {
 	suite.Equal(len(toExtract), count)
 }
 
-func (suite *LevelDBPutCacheSuite) TestReaderSnapshot() {
-	hashes := hash.HashSet{}
-	for h, c := range suite.chnx {
-		hashes.Insert(h)
-		suite.cache.Insert(c, 1)
-	}
-
-	chunkChan := suite.extractChunks(hashes)
-	// Clear chunks from suite.cache. Should still be enumerated by reader
-	suite.cache.Clear(hashes)
-
-	for c := range chunkChan {
-		delete(suite.chnx, c.Hash())
-	}
-	suite.Len(suite.chnx, 0)
-}
-
 func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 	maxHeight := len(suite.chnx)
 	orderedHashes := make(hash.HashSlice, maxHeight)
@@ -181,11 +162,11 @@ func (suite *LevelDBPutCacheSuite) TestExtractChunksOrder() {
 }
 
 func (suite *LevelDBPutCacheSuite) extractChunks(hashes hash.HashSet) <-chan *chunks.Chunk {
-	buf := &bytes.Buffer{}
-	err := suite.cache.ExtractChunks(hashes, buf)
-	suite.NoError(err)
-
 	chunkChan := make(chan *chunks.Chunk)
-	go chunks.DeserializeToChan(snappy.NewReader(buf), chunkChan)
+	go func() {
+		err := suite.cache.ExtractChunks(hashes, chunkChan)
+		suite.NoError(err)
+		close(chunkChan)
+	}()
 	return chunkChan
 }

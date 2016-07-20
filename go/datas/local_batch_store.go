@@ -5,7 +5,6 @@
 package datas
 
 import (
-	"io"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -13,7 +12,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/golang/snappy"
 )
 
 type localBatchStore struct {
@@ -96,30 +94,22 @@ func (lbs *localBatchStore) AddHints(hints types.Hints) {
 func (lbs *localBatchStore) Flush() {
 	lbs.once.Do(lbs.expectVersion)
 
-	serializedChunks, pw := io.Pipe()
-	errChan := make(chan error)
+	chunkChan := make(chan *chunks.Chunk, 128)
 	go func() {
-		err := lbs.unwrittenPuts.ExtractChunks(lbs.hashes, pw)
-		// The ordering of these is important. Close the pipe, and only THEN block on errChan.
-		pw.Close()
-		errChan <- err
-		close(errChan)
+		err := lbs.unwrittenPuts.ExtractChunks(lbs.hashes, chunkChan)
+		d.Chk.NoError(err)
+		close(chunkChan)
 	}()
 
 	lbs.vbs.Prepare(lbs.hints)
 	var bpe chunks.BackpressureError
-	chunkChan := make(chan *chunks.Chunk, 16)
-	go chunks.DeserializeToChan(snappy.NewReader(serializedChunks), chunkChan)
 	for c := range chunkChan {
 		if bpe == nil {
 			bpe = lbs.vbs.Enqueue(*c)
 		} else {
 			bpe = append(bpe, c.Hash())
 		}
-		// If a previous Enqueue() errored, we still need to drain chunkChan
-		// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 	}
-	d.PanicIfError(<-errChan)
 	if bpe == nil {
 		bpe = lbs.vbs.Flush()
 	}

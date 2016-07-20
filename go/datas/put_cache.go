@@ -7,7 +7,6 @@ package datas
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -62,11 +61,8 @@ func (p *orderedChunkCache) Insert(c chunks.Chunk, refHeight uint64) bool {
 	}()
 
 	if !present {
-		buf := &bytes.Buffer{}
-		gw := snappy.NewBufferedWriter(buf)
-		chunks.Serialize(c, gw)
-		gw.Close()
-		d.Chk.NoError(p.orderedChunks.Put(dbKey, buf.Bytes(), nil))
+		compressed := snappy.Encode(nil, c.Data())
+		d.Chk.NoError(p.orderedChunks.Put(dbKey, compressed, nil))
 		return true
 	}
 	return false
@@ -89,12 +85,11 @@ func (p *orderedChunkCache) Get(hash hash.Hash) chunks.Chunk {
 	if !ok {
 		return chunks.EmptyChunk
 	}
-	data, err := p.orderedChunks.Get(dbKey, nil)
+	compressed, err := p.orderedChunks.Get(dbKey, nil)
 	d.Chk.NoError(err)
-	reader := snappy.NewReader(bytes.NewReader(data))
-	chunkChan := make(chan *chunks.Chunk)
-	go chunks.DeserializeToChan(reader, chunkChan)
-	return *(<-chunkChan)
+	data, err := snappy.Decode(nil, compressed)
+	d.Chk.NoError(err)
+	return chunks.NewChunkWithHash(hash, data)
 }
 
 // Clear can be called from any goroutine to remove chunks referenced by the given hashes from the cache.
@@ -135,7 +130,7 @@ func fromDbKey(key []byte) (uint64, hash.Hash) {
 }
 
 // ExtractChunks can be called from any goroutine to write Chunks referenced by the given hashes to w. The chunks are ordered by ref-height. Chunks of the same height are written in an unspecified order, relative to one another.
-func (p *orderedChunkCache) ExtractChunks(hashes hash.HashSet, w io.Writer) error {
+func (p *orderedChunkCache) ExtractChunks(hashes hash.HashSet, chunkChan chan *chunks.Chunk) error {
 	iter := p.orderedChunks.NewIterator(nil, nil)
 	defer iter.Release()
 	for iter.Next() {
@@ -143,10 +138,11 @@ func (p *orderedChunkCache) ExtractChunks(hashes hash.HashSet, w io.Writer) erro
 		if !hashes.Has(hash) {
 			continue
 		}
-		_, err := w.Write(iter.Value())
-		if err != nil {
-			return err
-		}
+		compressed := iter.Value()
+		data, err := snappy.Decode(nil, compressed)
+		d.Chk.NoError(err)
+		c := chunks.NewChunkWithHash(hash, data)
+		chunkChan <- &c
 	}
 	return nil
 }
