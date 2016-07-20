@@ -34,12 +34,7 @@ func Diff(w io.Writer, v1, v2 types.Value) (err error) {
 	err = d.Try(func() {
 		for di, ok := dq.PopFront(); ok; di, ok = dq.PopFront() {
 			p, key, v1, v2 := di.path, di.key, di.v1, di.v2
-			if v1 == nil && v2 != nil {
-				line(w, addPrefix, key, v2)
-			}
-			if v1 != nil && v2 == nil {
-				line(w, subPrefix, key, v1)
-			}
+			d.Chk.True(v1 != nil && v2 != nil) // nil is not a valid types.Value and we should never get one
 			if !v1.Equals(v2) {
 				if !canCompare(v1, v2) {
 					line(w, subPrefix, key, v1)
