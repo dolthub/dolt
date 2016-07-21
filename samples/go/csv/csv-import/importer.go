@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
@@ -36,6 +37,7 @@ func main() {
 		// Actually the delimiter uses runes, which can be multiple characters long.
 		// https://blog.golang.org/strings
 		delimiter       = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+		comment         = flag.String("comment", "", "comment to add to commit's meta data")
 		header          = flag.String("header", "", "header row. If empty, we'll use the first row of the file")
 		name            = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 		columnTypes     = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
@@ -73,6 +75,7 @@ func main() {
 
 	var r io.Reader
 	var size uint64
+	var filePath string
 
 	if *path != "" {
 		db, val, err := spec.GetPath(*path)
@@ -88,7 +91,8 @@ func main() {
 		r = blob.Reader()
 		size = blob.Len()
 	} else {
-		res, err := os.Open(flag.Arg(1))
+		filePath = flag.Arg(1)
+		res, err := os.Open(filePath)
 		d.CheckError(err)
 		defer res.Close()
 		fi, err := res.Stat()
@@ -145,11 +149,30 @@ func main() {
 	} else {
 		value = csv.ReadToMap(cr, headers, pk, kinds, ds.Database())
 	}
-	_, err = ds.CommitValue(value)
+	mi := metaInfoForCommit(filePath, *path, *comment)
+	_, err = ds.Commit(value, dataset.CommitOptions{Meta: mi})
 	if !*noProgress {
 		status.Clear()
 	}
 	d.PanicIfError(err)
+}
+
+func metaInfoForCommit(filePath, nomsPath string, comment string) types.Struct {
+	date := time.Now().UTC().Format("2006-01-02T15:04:05-0700")
+	fileOrNomsPath := "inputPath"
+	path := nomsPath
+	if path == "" {
+		path = filePath
+		fileOrNomsPath = "inputFile"
+	}
+	metaValues := map[string]types.Value{
+		"date":         types.String(date),
+		fileOrNomsPath: types.String(path),
+	}
+	if comment != "" {
+		metaValues["comment"] = types.String(comment)
+	}
+	return types.NewStruct("Meta", metaValues)
 }
 
 func getStatusPrinter(expected uint64) progressreader.Callback {

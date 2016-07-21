@@ -310,14 +310,14 @@ func (suite *PullSuite) TestPullUpdates() {
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {
 	var err error
-	suite.source, err = suite.source.Commit(dsID, NewCommit(v, p))
+	suite.source, err = suite.source.Commit(dsID, NewCommit(v, p, types.EmptyStruct))
 	suite.NoError(err)
 	return suite.source.HeadRef(dsID)
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
 	var err error
-	suite.sink, err = suite.sink.Commit(dsID, NewCommit(v, p))
+	suite.sink, err = suite.sink.Commit(dsID, NewCommit(v, p, types.EmptyStruct))
 	suite.NoError(err)
 	return suite.sink.HeadRef(dsID)
 }

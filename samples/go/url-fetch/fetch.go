@@ -16,6 +16,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
@@ -28,12 +29,13 @@ var (
 )
 
 func main() {
+	comment := flag.String("comment", "", "comment to add to commit's meta data")
+	spec.RegisterDatabaseFlags(flag.CommandLine)
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Fetches a URL (or file) into a noms blob\n\nUsage: %s <dataset> <url-or-local-path>:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-
-	spec.RegisterDatabaseFlags(flag.CommandLine)
 	flag.Parse()
 
 	if flag.NArg() != 2 {
@@ -45,6 +47,7 @@ func main() {
 	defer ds.Database().Close()
 
 	url := flag.Arg(1)
+	fileOrUrl := "file"
 	start = time.Now()
 
 	var pr io.Reader
@@ -63,6 +66,7 @@ func main() {
 		}
 
 		pr = progressreader.New(resp.Body, getStatusPrinter(resp.ContentLength))
+		fileOrUrl = "url"
 	} else {
 		// assume it's a file
 		f, err := os.Open(url)
@@ -78,10 +82,12 @@ func main() {
 		}
 
 		pr = progressreader.New(f, getStatusPrinter(s.Size()))
+		fileOrUrl = "file"
 	}
 
 	b := types.NewStreamingBlob(pr, ds.Database())
-	ds, err = ds.CommitValue(b)
+	mi := metaInfoForCommit(fileOrUrl, url, *comment)
+	ds, err = ds.Commit(b, dataset.CommitOptions{Meta: mi})
 	if err != nil {
 		d.Chk.Equal(datas.ErrMergeNeeded, err)
 		fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
@@ -90,6 +96,18 @@ func main() {
 
 	status.Done()
 	fmt.Println("Done")
+}
+
+func metaInfoForCommit(fileOrUrl, source, comment string) types.Struct {
+	date := time.Now().UTC().Format("2006-01-02T15:04:05-0700")
+	metaValues := map[string]types.Value{
+		"date":    types.String(date),
+		fileOrUrl: types.String(source),
+	}
+	if comment != "" {
+		metaValues["comment"] = types.String(comment)
+	}
+	return types.NewStruct("Meta", metaValues)
 }
 
 func getStatusPrinter(expectedLen int64) progressreader.Callback {

@@ -14,6 +14,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
+var EmptyStructType = MakeStructType("", []string{}, []*Type{})
+var EmptyStruct = Struct{ValueSlice{}, EmptyStructType, &hash.Hash{}}
+
 type structData map[string]Value
 
 type Struct struct {
