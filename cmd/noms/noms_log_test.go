@@ -202,6 +202,32 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	s.Equal(diffRes2, res)
 }
 
+func (s *nomsLogTestSuite) TestNoMetaCommit() {
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
+	db, err := spec.GetDatabase(str)
+	s.NoError(err)
+
+	ds := dataset.NewDataset(db, "ds1")
+
+	meta := types.NewStruct("Meta", map[string]types.Value{
+		"test1": types.String("Yoo"),
+		"test2": types.String("Hoo"),
+	})
+	ds, err = ds.Commit(types.String("1"), dataset.CommitOptions{Meta: meta})
+	s.NoError(err)
+	r1 := ds.HeadRef()
+
+	noMetaCommit := types.NewStruct("Commit", map[string]types.Value{
+		"value":   types.String("2"),
+		"parents": types.NewSet(r1),
+	})
+	ds.Database().Commit("ds1", noMetaCommit)
+	db.Close()
+
+	res, _ := s.Run(main, []string{"log", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ds1")})
+	s.Equal(metaRes1, res)
+}
+
 func (s *nomsLogTestSuite) TestNomsGraph3() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
@@ -324,4 +350,6 @@ const (
 
 	truncRes3  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
 	diffTrunc3 = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
+
+	metaRes1 = "82pdg48mjv5noo1bn0k6mhbqe2daunt8\nParent: pv77djqjgu33b5lko9l3f7s3i15me2k2\n-   \"1\"\n+   \"2\"\n\npv77djqjgu33b5lko9l3f7s3i15me2k2\nParent: None\nTest1:  \"Yoo\"\nTest2:  \"Hoo\"\n\n"
 )
