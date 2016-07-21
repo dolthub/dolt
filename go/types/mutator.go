@@ -28,7 +28,7 @@ func (mx *mapMutator) Finish() Map {
 		mx.oc = nil
 	}()
 
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(mx.vrw, mx.vrw), newOrderedMetaSequenceChunkFn(MapKind, mx.vrw, mx.vrw), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(mx.vrw, makeMapLeafChunkFn(mx.vrw), newOrderedMetaSequenceChunkFn(MapKind, mx.vrw), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	// I tried splitting this up so that the iteration ran in a separate goroutine from the Append'ing, but it actually made things a bit slower when I ran a test.
 	iter := mx.oc.NewIterator()
@@ -36,5 +36,5 @@ func (mx *mapMutator) Finish() Map {
 	for iter.Next() {
 		seq.Append(iter.Op())
 	}
-	return newMap(seq.Done().(orderedSequence))
+	return newMap(seq.Done(mx.vrw).(orderedSequence))
 }

@@ -135,7 +135,7 @@ async function processFile(p: string, store: Database): Promise<File> {
 }
 
 function processBlob(p: string, store: Database): Promise<Ref<Blob>> {
-  const w = new BlobWriter();
+  const w = new BlobWriter(store);
   const s = fs.createReadStream(p);
   return new Promise((res, rej) => {
     s.on('data', chunk => {
@@ -144,9 +144,10 @@ function processBlob(p: string, store: Database): Promise<Ref<Blob>> {
       updateProgress();
     });
     s.on('end', async () => {
-      await w.close();
       try {
-        res(store.writeValue(w.blob));
+        w.close();
+        const blob = await w.blob;
+        res(store.writeValue(blob));
       } catch (ex) {
         rej(ex);
       }

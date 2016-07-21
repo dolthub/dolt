@@ -8,10 +8,10 @@ import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {compare} from './compare.js';
 import Hash, {byteLength} from './hash.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ValueReader, ValueWriter} from './value-store.js';
+import type {ValueReader} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {ValueBase} from './value.js';
-import type Collection from './collection.js';
+import Collection from './collection.js';
 import type {Type} from './type.js';
 import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
@@ -42,7 +42,7 @@ export class MetaTuple<T: Value> {
     this.child = child;
   }
 
-  getSequence(vr: ?ValueReader): Promise<Sequence> {
+  getChildSequence(vr: ?ValueReader): Promise<Sequence> {
     return this.child ?
         Promise.resolve(this.child.sequence) :
         notNull(vr).readValue(this.ref.targetHash).then((c: Collection) => {
@@ -51,7 +51,7 @@ export class MetaTuple<T: Value> {
         });
   }
 
-  getSequenceSync(): Sequence {
+  getChildSequenceSync(): Sequence {
     return notNull(this.child).sequence;
   }
 }
@@ -175,7 +175,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(this.vr);
+    return mt.getChildSequence(this.vr);
   }
 
   getChildSequenceSync(idx: number): ?Sequence {
@@ -184,7 +184,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
     }
 
     const mt = this.items[idx];
-    return mt.getSequenceSync();
+    return mt.getChildSequenceSync();
   }
 
   // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
@@ -193,7 +193,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
       Promise<IndexedSequence> {
     const childrenP = [];
     for (let i = start; i < start + length; i++) {
-      childrenP.push(this.items[i].getSequence(this.vr));
+      childrenP.push(this.items[i].getChildSequence(this.vr));
     }
 
     return Promise.all(childrenP).then(children => {
@@ -254,7 +254,7 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple>
     }
 
     const mt = this.items[idx];
-    return mt.getSequence(this.vr);
+    return mt.getChildSequence(this.vr);
   }
 
   getChildSequenceSync(idx: number): ?Sequence {
@@ -263,7 +263,7 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple>
     }
 
     const mt = this.items[idx];
-    return mt.getSequenceSync();
+    return mt.getChildSequenceSync();
   }
 
   getKey(idx: number): OrderedKey {
@@ -290,7 +290,7 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
       seq = newSetMetaSequence(vr, tuples);
       col = Set.fromSequence(seq);
     }
-    return [new MetaTuple(new Ref(col), last.key, numLeaves, col), seq];
+    return [col, last.key, numLeaves];
   };
 }
 
@@ -304,8 +304,7 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
   );
 }
 
-export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
-                                              vw: ?ValueWriter): makeChunkFn {
+export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
       const nv = mt.key.numberValue();
@@ -323,13 +322,7 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader,
       col = Blob.fromSequence(seq);
     }
     const key = new OrderedKey(sum);
-    let mt;
-    if (vw) {
-      mt = new MetaTuple(vw.writeValue(col), key, sum, null);
-    } else {
-      mt = new MetaTuple(new Ref(col), key, sum, col);
-    }
-    return [mt, seq];
+    return [col, key, sum];
   };
 }
 

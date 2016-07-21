@@ -181,7 +181,7 @@ suite('Blob', () => {
 
     teardown((): Promise<void> => db.close());
 
-    test('BlobWriter', () => {
+    test('BlobWriter', async () => {
       const a = randomBuff(15);
       const b1 = new Blob(a);
       const w = new BlobWriter();
@@ -189,8 +189,8 @@ suite('Blob', () => {
       w.write(new Uint8Array(a.buffer, 5, 5));
       w.write(new Uint8Array(a.buffer, 10, 5));
       w.close();
-      const b2 = w.blob;
-      const b3 = w.blob;
+      const b2 = await w.blob;
+      const b3 = await w.blob;
       assert.strictEqual(b2, b3);
       assert.isTrue(equals(b1, b2));
     });
@@ -225,7 +225,7 @@ suite('Blob', () => {
       assert.instanceOf(ex, TypeError);
     });
 
-    test('BlobWriter with ValueReadWriter', () => {
+    test('BlobWriter with ValueReadWriter', async () => {
       const a = randomBuff(1500);
       const b1 = new Blob(a);
       const w = new BlobWriter(db);
@@ -249,8 +249,8 @@ suite('Blob', () => {
       writes += 2;  // one for the last leaf chunk and one for the meta chunk.
       assert.equal(db.writeCount, writes);
 
-      const b2 = w.blob;
-      const b3 = w.blob;
+      const b2 = await w.blob;
+      const b3 = await w.blob;
       assert.strictEqual(b2, b3);
       assert.isTrue(equals(b1, b2));
     });

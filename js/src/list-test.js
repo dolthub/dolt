@@ -582,8 +582,8 @@ suite('ListWriter', () => {
     }
 
     w.close();
-    const l2 = w.list;
-    const l3 = w.list;
+    const l2 = await w.list;
+    const l3 = await w.list;
     assert.isTrue(equals(l, l2));
     assert.strictEqual(l2, l3);
   });
@@ -643,8 +643,8 @@ suite('ListWriter', () => {
     writes += 2;  // one for the last leaf chunk and one for the meta chunk.
     assert.equal(db.writeCount, writes);
 
-    const l2 = w.list;
-    const l3 = w.list;
+    const l2 = await w.list;
+    const l3 = await w.list;
     assert.isTrue(equals(l, l2));
     assert.strictEqual(l2, l3);
   });

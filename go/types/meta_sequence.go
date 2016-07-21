@@ -37,6 +37,14 @@ type metaTuple struct {
 	child     Collection // may be nil
 }
 
+func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
+	if mt.child != nil {
+		return mt.child.sequence()
+	}
+
+	return mt.ref.TargetValue(vr).(Collection).sequence()
+}
+
 // orderedKey is a key in a Prolly Tree level, which is a metaTuple in a metaSequence, or a value in a leaf sequence.
 // |v| may be nil or |h| may be empty, but not both.
 type orderedKey struct {
@@ -131,11 +139,7 @@ func (ms metaSequenceObject) numLeaves() uint64 {
 // metaSequence interface
 func (ms metaSequenceObject) getChildSequence(idx int) sequence {
 	mt := ms.tuples[idx]
-	if mt.child != nil {
-		return mt.child.sequence()
-	}
-
-	return mt.ref.TargetValue(ms.vr).(Collection).sequence()
+	return mt.getChildSequence(ms.vr)
 }
 
 func (ms metaSequenceObject) beginFetchingChildSequences(start, length uint64) chan interface{} {

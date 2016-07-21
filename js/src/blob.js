@@ -8,16 +8,14 @@ import Collection from './collection.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {invariant} from './assert.js';
-import type {ValueReader, ValueWriter, ValueReadWriter} from './value-store.js';
+import type {ValueReader, ValueReadWriter} from './value-store.js';
 import {blobType} from './type.js';
 import {
   OrderedKey,
-  MetaTuple,
   newIndexedMetaSequenceChunkFn,
   newIndexedMetaSequenceBoundaryChecker,
 } from './meta-sequence.js';
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import Ref from './ref.js';
 import SequenceChunker from './sequence-chunker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
 import {Kind} from './noms-kind.js';
@@ -26,10 +24,17 @@ import * as Bytes from './bytes.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {
-    const w = new BlobWriter();
-    w.write(bytes);
-    w.close();
-    super(w.blob.sequence);
+    const chunker = new SequenceChunker(null, null, newBlobLeafChunkFn(null),
+        newIndexedMetaSequenceChunkFn(Kind.Blob, null), newBlobLeafBoundaryChecker(),
+        newIndexedMetaSequenceBoundaryChecker);
+
+    for (let i = 0; i < bytes.length; i++) {
+      chunker.append(bytes[i]);
+    }
+
+    const seq = chunker.doneSync();
+    invariant(seq instanceof IndexedSequence);
+    super(seq);
   }
 
   getReader(): BlobReader {
@@ -150,18 +155,12 @@ export class BlobLeafSequence extends IndexedSequence<number> {
 const blobWindowSize = 64;
 const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
 
-function newBlobLeafChunkFn(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
+function newBlobLeafChunkFn(vr: ?ValueReader): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, Bytes.fromValues(items));
     const blob = Blob.fromSequence(blobLeaf);
     const key = new OrderedKey(items.length);
-    let mt;
-    if (vw) {
-      mt = new MetaTuple(vw.writeValue(blob), key, items.length, null);
-    } else {
-      mt = new MetaTuple(new Ref(blob), key, items.length, blob);
-    }
-    return [mt, blobLeaf];
+    return [blob, key, items.length];
   };
 }
 
@@ -173,14 +172,16 @@ type BlobWriterState = 'writable' | 'closed';
 
 export class BlobWriter {
   _state: BlobWriterState;
-  _blob: ?Blob;
+  _blob: ?Promise<Blob>;
   _chunker: SequenceChunker;
+  _vrw: ?ValueReadWriter;
 
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
-    this._chunker = new SequenceChunker(null, newBlobLeafChunkFn(vrw, vrw),
-        newIndexedMetaSequenceChunkFn(Kind.Blob, vrw, vrw), newBlobLeafBoundaryChecker(),
+    this._chunker = new SequenceChunker(null, vrw, newBlobLeafChunkFn(vrw),
+        newIndexedMetaSequenceChunkFn(Kind.Blob, vrw), newBlobLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
+    this._vrw = vrw;
   }
 
   write(chunk: Uint8Array) {
@@ -192,11 +193,11 @@ export class BlobWriter {
 
   close() {
     assert(this._state === 'writable');
-    this._blob = Blob.fromSequence(this._chunker.doneSync());
+    this._blob = this._chunker.done(this._vrw).then(seq => Blob.fromSequence(seq));
     this._state = 'closed';
   }
 
-  get blob(): Blob {
+  get blob(): Promise<Blob> {
     assert(this._state === 'closed');
     invariant(this._blob);
     return this._blob;

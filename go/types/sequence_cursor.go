@@ -125,21 +125,3 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 		cur.advance()
 	}
 }
-
-// Returns a slice of the previous |n| items in |cur|, excluding the current item in |cur|. Does not modify |cur|.
-func (cur *sequenceCursor) maxNPrevItems(n int) []sequenceItem {
-	prev := []sequenceItem{}
-
-	retreater := cur.clone()
-	for i := 0; i < n && retreater.retreat(); i++ {
-		prev = append(prev, retreater.current())
-	}
-
-	for i := 0; i < len(prev)/2; i++ {
-		t := prev[i]
-		prev[i] = prev[len(prev)-i-1]
-		prev[len(prev)-i-1] = t
-	}
-
-	return prev
-}

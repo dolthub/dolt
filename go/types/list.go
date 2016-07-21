@@ -26,22 +26,22 @@ func newList(seq indexedSequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated with values, chunking if and when needed.
 func NewList(values ...Value) List {
-	seq := newEmptySequenceChunker(makeListLeafChunkFn(nil, nil), newIndexedMetaSequenceChunkFn(ListKind, nil, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeListLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(ListKind, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for _, v := range values {
 		seq.Append(v)
 	}
-	return newList(seq.Done().(indexedSequence))
+	return newList(seq.Done(nil).(indexedSequence))
 }
 
 // NewStreamingList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to vrw -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
 func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
-		seq := newEmptySequenceChunker(makeListLeafChunkFn(vrw, vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw, vrw), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+		seq := newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 		for v := range values {
 			seq.Append(v)
 		}
-		out <- newList(seq.Done().(indexedSequence))
+		out <- newList(seq.Done(vrw).(indexedSequence))
 		close(out)
 	}()
 	return out
@@ -140,7 +140,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	d.Chk.True(idx+deleteCount <= l.Len())
 
 	cur := newCursorAtIndex(l.seq, idx)
-	ch := newSequenceChunker(cur, makeListLeafChunkFn(l.seq.valueReader(), nil), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader(), nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -149,7 +149,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return newList(ch.Done().(indexedSequence))
+	return newList(ch.Done(nil).(indexedSequence))
 }
 
 func (l List) Insert(idx uint64, vs ...Value) List {
@@ -223,28 +223,15 @@ func newListLeafBoundaryChecker() boundaryChecker {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func makeListLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, sequence) {
+func makeListLeafChunkFn(vr ValueReader) makeChunkFn {
+	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		values := make([]Value, len(items))
 
 		for i, v := range items {
 			values[i] = v.(Value)
 		}
 
-		seq := newListLeafSequence(vr, values...)
-		list := newList(seq)
-
-		var ref Ref
-		var child Collection
-		if sink != nil {
-			// Eagerly write chunks
-			ref = sink.WriteValue(list)
-			child = nil
-		} else {
-			ref = NewRef(list)
-			child = list
-		}
-
-		return newMetaTuple(ref, orderedKeyFromInt(len(values)), uint64(len(values)), child), seq
+		list := newList(newListLeafSequence(vr, values...))
+		return list, orderedKeyFromInt(len(values)), uint64(len(values))
 	}
 }

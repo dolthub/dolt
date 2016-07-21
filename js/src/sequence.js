@@ -198,17 +198,6 @@ export class SequenceCursor<T, S: Sequence> {
     return false;
   }
 
-  async maxNPrevItems(n: number): Promise<Array<T>> {
-    const prev = [];
-    const retreater = this.clone();
-    for (let i = 0; i < n && await retreater.retreat(); i++) {
-      prev.push(retreater.getCurrent());
-    }
-
-    prev.reverse();
-    return prev;
-  }
-
   async iter(cb: (v: T, i: number) => boolean): Promise<void> {
     let idx = 0;
     while (this.valid) {

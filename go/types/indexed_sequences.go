@@ -109,8 +109,8 @@ func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, sequence) {
+func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkFn {
+	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make(metaSequenceData, len(items))
 		numLeaves := uint64(0)
 
@@ -121,19 +121,13 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader, sink Value
 		}
 
 		var col Collection
-		var metaSeq indexedMetaSequence
 		if kind == ListKind {
-			metaSeq = newListMetaSequence(tuples, source)
-			col = newList(metaSeq)
+			col = newList(newListMetaSequence(tuples, source))
 		} else {
 			d.Chk.True(BlobKind == kind)
-			metaSeq = newBlobMetaSequence(tuples, source)
-			col = newBlob(metaSeq)
+			col = newBlob(newBlobMetaSequence(tuples, source))
 		}
-		if sink != nil {
-			return newMetaTuple(sink.WriteValue(col), orderedKeyFromSum(tuples), numLeaves, nil), metaSeq
-		}
-		return newMetaTuple(NewRef(col), orderedKeyFromSum(tuples), numLeaves, col), metaSeq
+		return col, orderedKeyFromSum(tuples), numLeaves
 	}
 }
 

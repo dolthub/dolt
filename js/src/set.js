@@ -17,7 +17,6 @@ import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {
   OrderedKey,
-  MetaTuple,
   newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn,
 } from './meta-sequence.js';
@@ -39,8 +38,7 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
     const key = new OrderedKey(items.length > 0 ? items[items.length - 1] : false);
     const seq = newSetLeafSequence(vr, items);
     const ns = Set.fromSequence(seq);
-    const mt = new MetaTuple(new Ref(ns), key, items.length, ns);
-    return [mt, seq];
+    return [ns, key, items.length];
   };
 }
 

@@ -27,13 +27,13 @@ func newSet(seq orderedSequence) Set {
 
 func NewSet(v ...Value) Set {
 	data := buildSetData(v)
-	seq := newEmptySequenceChunker(makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, v := range data {
 		seq.Append(v)
 	}
 
-	return newSet(seq.Done().(orderedSequence))
+	return newSet(seq.Done(nil).(orderedSequence))
 }
 
 func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
@@ -132,7 +132,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	ch := newSequenceChunker(cur, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader(), nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -142,7 +142,7 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 		ch.Append(v)
 	}
 
-	ns := newSet(ch.Done().(orderedSequence))
+	ns := newSet(ch.Done(nil).(orderedSequence))
 	return ns
 }
 
@@ -207,21 +207,19 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 }
 
 func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, sequence) {
+	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		setData := make([]Value, len(items), len(items))
 
 		for i, v := range items {
 			setData[i] = v.(Value)
 		}
 
-		seq := newSetLeafSequence(vr, setData...)
-		set := newSet(seq)
-
+		set := newSet(newSetLeafSequence(vr, setData...))
 		var key orderedKey
 		if len(setData) > 0 {
 			key = newOrderedKey(setData[len(setData)-1])
 		}
 
-		return newMetaTuple(NewRef(set), key, uint64(len(items)), set), seq
+		return set, key, uint64(len(items))
 	}
 }

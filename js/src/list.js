@@ -6,7 +6,7 @@
 
 import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import type {ValueReader, ValueWriter, ValueReadWriter} from './value-store.js';
+import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
@@ -18,7 +18,6 @@ import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {
   OrderedKey,
-  MetaTuple,
   newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn,
 } from './meta-sequence.js';
@@ -34,18 +33,12 @@ import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
-function newListLeafChunkFn<T: Value>(vr: ?ValueReader, vw: ?ValueWriter): makeChunkFn {
+function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
     const seq = newListLeafSequence(vr, items);
     const list = List.fromSequence(seq);
     const key = new OrderedKey(items.length);
-    let mt;
-    if (vw) {
-      mt = new MetaTuple(vw.writeValue(list), key, items.length, null);
-    } else {
-      mt = new MetaTuple(new Ref(list), key, items.length, list);
-    }
-    return [mt, seq];
+    return [list, key, items.length];
   };
 }
 
@@ -59,7 +52,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
         values,
-        newListLeafChunkFn(null, null),
+        newListLeafChunkFn(null),
         newIndexedMetaSequenceChunkFn(Kind.List, null, null),
         newListLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
@@ -75,7 +68,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
     return this.sequence.newCursorAt(idx).then(cursor =>
-      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr, null),
+      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
                     newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
                     newListLeafBoundaryChecker(),
                     newIndexedMetaSequenceBoundaryChecker)).then(s => List.fromSequence(s));
@@ -178,14 +171,16 @@ type ListWriterState = 'writable' | 'closed';
 
 export class ListWriter<T: Value> {
   _state: ListWriterState;
-  _list: ?List<T>;
+  _list: ?Promise<List<T>>;
   _chunker: SequenceChunker<T, ListLeafSequence<T>>;
+  _vrw: ?ValueReadWriter;
 
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
-    this._chunker = new SequenceChunker(null, newListLeafChunkFn(vrw, vrw),
+    this._chunker = new SequenceChunker(null, vrw, newListLeafChunkFn(vrw),
         newIndexedMetaSequenceChunkFn(Kind.List, vrw, vrw), newListLeafBoundaryChecker(),
         newIndexedMetaSequenceBoundaryChecker);
+    this._vrw = vrw;
   }
 
   write(item: T) {
@@ -195,11 +190,11 @@ export class ListWriter<T: Value> {
 
   close() {
     assert(this._state === 'writable');
-    this._list = List.fromSequence(this._chunker.doneSync());
+    this._list = this._chunker.done(this._vrw).then(seq => List.fromSequence(seq));
     this._state = 'closed';
   }
 
-  get list(): List {
+  get list(): Promise<List> {
     assert(this._state === 'closed');
     invariant(this._list);
     return this._list;

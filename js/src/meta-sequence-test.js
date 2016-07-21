@@ -28,12 +28,14 @@ suite('MetaSequence', () => {
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
 
-    const oseq1 = newOrderedMetaSequenceChunkFn(Kind.Set, null)([mt1, mt2])[0];
+    let [col, key, numLeaves] = newOrderedMetaSequenceChunkFn(Kind.Set, null)([mt1, mt2]);
+    const oseq1 = new MetaTuple(new Ref(col), key, numLeaves, null);
     assert.strictEqual(2, oseq1.ref.height);
 
     // At this point the sequence isn't really valid because I'm reusing a MetaNode, which isn't
     // allowed (the values are now out of order). For the purpose of testing height, it's fine.
-    const oseq2 = newOrderedMetaSequenceChunkFn(Kind.Set, null)([oseq1, oseq1])[0];
+    [col, key, numLeaves] = newOrderedMetaSequenceChunkFn(Kind.Set, null)([oseq1, oseq1]);
+    const oseq2 = new MetaTuple(new Ref(col), key, numLeaves, null);
     assert.strictEqual(3, oseq2.ref.height);
   });
 
@@ -46,9 +48,11 @@ suite('MetaSequence', () => {
     assert.strictEqual(1, mt1.ref.height);
     assert.strictEqual(1, mt2.ref.height);
 
-    const iseq1 = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([mt1, mt2])[0];
+    let [col, key, numLeaves] = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([mt1, mt2]);
+    const iseq1 = new MetaTuple(new Ref(col), key, numLeaves, null);
     assert.strictEqual(2, iseq1.ref.height);
-    const iseq2 = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([iseq1, iseq1])[0];
+    [col, key, numLeaves] = newIndexedMetaSequenceChunkFn(Kind.List, null, null)([iseq1, iseq1]);
+    const iseq2 = new MetaTuple(new Ref(col), key, numLeaves, null);
     assert.strictEqual(3, iseq2.ref.height);
   });
 });

@@ -52,9 +52,8 @@ function main() {
 
   parser.on('finish', () => {
     w.close();
-    const list = w.list;
     process.stdout.write(`${clearLine}Committing ${i} rows`);
-    ds.commit(list).then(() => {
+    w.list.then(list => ds.commit(list)).then(() => {
       const elapsed = (Date.now() - startTime) / 1000;
       process.stdout.write(`${clearLine}Wrote ${i} rows in ${elapsed}s\n`);
       process.exit(0);

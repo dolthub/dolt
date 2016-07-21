@@ -149,47 +149,29 @@ func newBlobLeafBoundaryChecker() boundaryChecker {
 	})
 }
 
-func newBlobLeafChunkFn(vr ValueReader, sink ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, sequence) {
+func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
+	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		buff := make([]byte, len(items))
 
 		for i, v := range items {
 			buff[i] = v.(byte)
 		}
 
-		return chunkBlobLeaf(vr, sink, buff)
+		return chunkBlobLeaf(vr, buff)
 	}
 }
 
-func chunkBlobLeaf(vr ValueReader, sink ValueWriter, buff []byte) (metaTuple, sequence) {
-	seq := newBlobLeafSequence(vr, buff)
-	blob := newBlob(seq)
-
-	var ref Ref
-	var child Collection
-	if sink != nil {
-		// Eagerly write chunks
-		ref = sink.WriteValue(blob)
-		child = nil
-	} else {
-		ref = NewRef(blob)
-		child = blob
-	}
-
-	return newMetaTuple(ref, orderedKeyFromInt(len(buff)), uint64(len(buff)), child), seq
+func chunkBlobLeaf(vr ValueReader, buff []byte) (Collection, orderedKey, uint64) {
+	blob := newBlob(newBlobLeafSequence(vr, buff))
+	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
 }
 
 func NewBlob(r io.Reader) Blob {
 	return NewStreamingBlob(r, nil)
 }
 
-type tempBlob struct {
-	seq sequence
-	mt  metaTuple
-}
-
 func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(newBlobLeafChunkFn(nil, vrw), newIndexedMetaSequenceChunkFn(BlobKind, nil, vrw), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	sc := newEmptySequenceChunker(vrw, newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
 
 	// TODO: The code below is a temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
@@ -211,8 +193,15 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 	input := make(chan interface{}, 16)
 	output := orderedparallel.New(input, func(item interface{}) interface{} {
 		cp := item.([]byte)
-		mt, seq := chunkBlobLeaf(vrw, vrw, cp)
-		return tempBlob{seq, mt}
+		col, key, numLeaves := chunkBlobLeaf(vrw, cp)
+		var ref Ref
+		if vrw != nil {
+			ref = vrw.WriteValue(col)
+			col = nil
+		} else {
+			ref = NewRef(col)
+		}
+		return newMetaTuple(ref, key, numLeaves, col)
 	}, 16)
 
 	makeChunk := func() {
@@ -243,13 +232,11 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 	}()
 
 	for b := range output {
-		tb := b.(tempBlob)
-		sc.lastSeq = tb.seq
 		if sc.parent == nil {
 			sc.createParent()
 		}
-		sc.parent.Append(tb.mt)
+		sc.parent.Append(b.(metaTuple))
 	}
 
-	return newBlob(sc.Done().(indexedSequence))
+	return newBlob(sc.Done(vrw).(indexedSequence))
 }

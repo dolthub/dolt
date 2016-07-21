@@ -27,13 +27,13 @@ func newMap(seq orderedSequence) Map {
 
 func NewMap(kv ...Value) Map {
 	entries := buildMapData(kv)
-	seq := newEmptySequenceChunker(makeMapLeafChunkFn(nil, nil), newOrderedMetaSequenceChunkFn(MapKind, nil, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 
 	for _, entry := range entries {
 		seq.Append(entry)
 	}
 
-	return newMap(seq.Done().(orderedSequence))
+	return newMap(seq.Done(nil).(orderedSequence))
 }
 
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
@@ -161,7 +161,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, makeMapLeafChunkFn(m.seq.valueReader(), nil), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader(), nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -170,7 +170,7 @@ func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return newMap(ch.Done().(orderedSequence))
+	return newMap(ch.Done(nil).(orderedSequence))
 }
 
 func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
@@ -256,32 +256,19 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func makeMapLeafChunkFn(vr ValueReader, vw ValueWriter) makeChunkFn {
-	return func(items []sequenceItem) (metaTuple, sequence) {
+func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
+	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		mapData := make([]mapEntry, len(items), len(items))
 
 		for i, v := range items {
 			mapData[i] = v.(mapEntry)
 		}
 
-		seq := newMapLeafSequence(vr, mapData...)
-		m := newMap(seq)
-
+		m := newMap(newMapLeafSequence(vr, mapData...))
 		var key orderedKey
-		var ref Ref
-		var child Collection
-		if vw != nil {
-			// Eagerly write chunks
-			ref = vw.WriteValue(m)
-			child = nil
-		} else {
-			ref = NewRef(m)
-			child = m
-		}
 		if len(mapData) > 0 {
 			key = newOrderedKey(mapData[len(mapData)-1].key)
 		}
-
-		return newMetaTuple(ref, key, uint64(len(items)), child), seq
+		return m, key, uint64(len(items))
 	}
 }
