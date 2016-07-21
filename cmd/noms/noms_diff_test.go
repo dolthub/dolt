@@ -7,6 +7,8 @@ package main
 import (
 	"testing"
 
+	"strings"
+
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
@@ -36,7 +38,5 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 
 	ds.Database().Close()
 	out, _ := s.Run(main, []string{"diff", r1, r2})
-	if s.True(len(out) > 3) {
-		s.Equal(out[len(out)-2:], "}\n")
-	}
+	s.True(strings.HasSuffix(out, "\"second commit\"\n"))
 }
