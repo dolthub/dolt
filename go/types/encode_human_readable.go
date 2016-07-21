@@ -16,10 +16,11 @@ import (
 
 // Human Readable Serialization
 type hrsWriter struct {
-	ind        int
-	w          io.Writer
-	lineLength int
-	err        error
+	ind         int
+	w           io.Writer
+	lineLength  int
+	floatFormat byte
+	err         error
 }
 
 func (w *hrsWriter) maybeWriteIndentation() {
@@ -95,7 +96,7 @@ func (w *hrsWriter) Write(v Value) {
 	case BoolKind:
 		w.write(strconv.FormatBool(bool(v.(Bool))))
 	case NumberKind:
-		w.write(strconv.FormatFloat(float64(v.(Number)), 'g', -1, 64))
+		w.write(strconv.FormatFloat(float64(v.(Number)), w.floatFormat, -1, 64))
 
 	case StringKind:
 		w.write(strconv.Quote(string(v.(String))))
@@ -319,24 +320,32 @@ func (w *hrsWriter) writeCycle(i uint8) {
 	_, w.err = fmt.Fprintf(w.w, "Cycle<%d>", i)
 }
 
-func EncodedValue(v Value) string {
+func encodedValueFormat(v Value, floatFormat byte) string {
 	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf}
+	w := &hrsWriter{w: &buf, floatFormat: floatFormat}
 	w.Write(v)
 	d.Chk.NoError(w.err)
 	return buf.String()
 }
 
+func EncodedIndexValue(v Value) string {
+	return encodedValueFormat(v, 'f')
+}
+
+func EncodedValue(v Value) string {
+	return encodedValueFormat(v, 'g')
+}
+
 // WriteEncodedValue writes the serialization of a value
 func WriteEncodedValue(w io.Writer, v Value) error {
-	hrs := &hrsWriter{w: w}
+	hrs := &hrsWriter{w: w, floatFormat: 'g'}
 	hrs.Write(v)
 	return hrs.err
 }
 
 func EncodedValueWithTags(v Value) string {
 	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf}
+	w := &hrsWriter{w: &buf, floatFormat: 'g'}
 	w.WriteTagged(v)
 	d.Chk.NoError(w.err)
 	return buf.String()
@@ -344,7 +353,7 @@ func EncodedValueWithTags(v Value) string {
 
 // WriteEncodedValueWithTags writes the serialization of a value prefixed by its type.
 func WriteEncodedValueWithTags(w io.Writer, v Value) error {
-	hrs := &hrsWriter{w: w}
+	hrs := &hrsWriter{w: w, floatFormat: 'g'}
 	hrs.WriteTagged(v)
 	return hrs.err
 }

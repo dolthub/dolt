@@ -208,6 +208,12 @@ func TestPathMulti(t *testing.T) {
 		fmt.Sprintf(`.foo[1][#%s]@key["c"]`, m1.Hash().String()))
 }
 
+func TestPathStringSerialization(t *testing.T) {
+	assert := assert.New(t)
+	p1 := NewPath().AddField("/").AddField("value").AddField("data").AddIndex(Number(1000001)).AddField("data")
+	assert.Equal("./.value.data[1000001].data", p1.String())
+}
+
 func TestPathImmutability(t *testing.T) {
 	assert := assert.New(t)
 	p1 := NewPath().AddField("/").AddField("value").AddField("data").AddIndex(Number(1)).AddField("data")

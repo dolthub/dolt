@@ -16,7 +16,7 @@ import (
 func assertWriteHRSEqual(t *testing.T, expected string, v Value) {
 	assert := assert.New(t)
 	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf}
+	w := &hrsWriter{w: &buf, floatFormat: 'g'}
 	w.Write(v)
 	assert.Equal(expected, buf.String())
 }
@@ -24,7 +24,7 @@ func assertWriteHRSEqual(t *testing.T, expected string, v Value) {
 func assertWriteTaggedHRSEqual(t *testing.T, expected string, v Value) {
 	assert := assert.New(t)
 	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf}
+	w := &hrsWriter{w: &buf, floatFormat: 'g'}
 	w.WriteTagged(v)
 	assert.Equal(expected, buf.String())
 }

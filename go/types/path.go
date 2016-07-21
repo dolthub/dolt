@@ -211,7 +211,7 @@ func (ip indexPart) String() (str string) {
 	if ip.key {
 		ann = "@key"
 	}
-	return fmt.Sprintf("[%s]%s", EncodedValue(ip.idx), ann)
+	return fmt.Sprintf("[%s]%s", EncodedIndexValue(ip.idx), ann)
 }
 
 type hashIndexPart struct {
