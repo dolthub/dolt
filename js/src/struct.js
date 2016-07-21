@@ -247,7 +247,7 @@ export function structDiff(s1: Struct, s2: Struct): [string] {
 
 const escapeChar = 'Q';
 const headPattern = /[a-zA-PR-Z]/;
-const tailPattern = /[a-zA-PR-Z1-9_]/;
+const tailPattern = /[a-zA-PR-Z0-9_]/;
 const completePattern = new RegExp('^' + headPattern.source + tailPattern.source + '*$');
 
 /**

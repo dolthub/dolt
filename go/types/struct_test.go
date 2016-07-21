@@ -140,6 +140,7 @@ func TestEscStructField(t *testing.T) {
 		"AaZz19_", "AaZz19_",
 		"Q", "Q51",
 		"AQ1", "AQ511",
+		"INSPECTIONQ20STATUS", "INSPECTIONQ5120STATUS",
 		"$", "Q24",
 		"_content", "Q5Fcontent",
 		"Few ¢ents Short", "FewQ20QC2A2entsQ20Short",
