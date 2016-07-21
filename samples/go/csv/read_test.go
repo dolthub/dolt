@@ -159,11 +159,17 @@ func TestDuplicateHeaderName(t *testing.T) {
 func TestEscapeFieldNames(t *testing.T) {
 	assert := assert.New(t)
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
-	dataString := "1\n"
+	dataString := "1,2\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
-	headers := []string{"A A"}
-	kinds := KindSlice{types.NumberKind}
+	headers := []string{"A A", "B"}
+	kinds := KindSlice{types.NumberKind, types.NumberKind}
+
 	l, _ := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
+
+	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
+	m := ReadToMap(r, headers, 1, kinds, ds)
+	assert.Equal(uint64(1), l.Len())
+	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(types.EscapeStructField("A A")))
 }

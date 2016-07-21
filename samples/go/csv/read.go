@@ -115,7 +115,7 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 	headers := make([]string, 0, len(headersRaw)-1)
 	for i, h := range headersRaw {
 		if i != pkIdx {
-			headers = append(headers, types.EscapeStructField(h))
+			headers = append(headers, h)
 		}
 	}
 
