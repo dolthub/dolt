@@ -1,7 +1,7 @@
-=============== Jul 12, 2016 (PDT) ===============
-11:15:59.117309 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-11:15:59.118173 db@open opening
-11:15:59.120152 db@janitor F·2 G·0
-11:15:59.120196 db@open done T·2.00235ms
-11:15:59.121187 db@close closing
-11:15:59.121293 db@close done T·102.816µs
+=============== Jul 21, 2016 (PDT) ===============
+17:11:33.730161 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:11:33.731468 db@open opening
+17:11:33.738966 db@janitor F·2 G·0
+17:11:33.739028 db@open done T·7.525784ms
+17:11:33.740040 db@close closing
+17:11:33.740180 db@close done T·136.355µs

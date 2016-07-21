@@ -15,7 +15,7 @@ const (
 	MetaField    = "meta"
 )
 
-var valueCommitType = makeValueCommitType()
+var valueCommitType = makeCommitType(types.ValueType)
 
 // NewCommit creates a new commit object. The type of Commit is computed based on the type of the value and the type of the parents.
 // It also includes a Meta field whose type is always the empty struct
@@ -38,6 +38,7 @@ var valueCommitType = makeValueCommitType()
 // struct Commit {
 //   meta: struct {},
 //   parents: Set<Ref<struct Commit {
+//     meta: struct {},
 //     parents: Set<Ref<Cycle<0>>>,
 //     value: T | U
 //   }>>,
@@ -52,39 +53,29 @@ func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.St
 	return types.NewStructWithType(t, types.ValueSlice{meta, parents, value})
 }
 
-func makeValueCommitType() *types.Type {
-	fieldNames := []string{ParentsField, ValueField}
-	return types.MakeStructType("Commit", fieldNames, []*types.Type{
-		types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-		types.ValueType,
-	})
-}
-
 func makeCommitType(valueType *types.Type, parentsValueTypes ...*types.Type) *types.Type {
 	tmp := make([]*types.Type, len(parentsValueTypes)+1)
 	copy(tmp, parentsValueTypes)
 	tmp[len(tmp)-1] = valueType
 	parentsValueUnionType := types.MakeUnionType(tmp...)
 	fieldNames := []string{MetaField, ParentsField, ValueField}
-
+	var parentsType *types.Type
 	if parentsValueUnionType.Equals(valueType) {
-		return types.MakeStructType("Commit", fieldNames, []*types.Type{
-			types.EmptyStructType,
-			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-			valueType,
-		})
-	}
-
-	fieldTypes := []*types.Type{
-		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(
+		parentsType = types.MakeSetType(types.MakeRefType(types.MakeCycleType(0)))
+	} else {
+		parentsType = types.MakeSetType(types.MakeRefType(
 			types.MakeStructType("Commit", fieldNames, []*types.Type{
 				types.EmptyStructType,
 				types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 				parentsValueUnionType,
-			}))),
+			})))
+	}
+	fieldTypes := []*types.Type{
+		types.EmptyStructType,
+		parentsType,
 		valueType,
 	}
+
 	return types.MakeStructType("Commit", fieldNames, fieldTypes)
 }
 

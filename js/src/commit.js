@@ -5,7 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {invariant, notNull} from './assert.js';
-import Struct from './struct.js';
+import Struct, {newStruct} from './struct.js';
 import type Value from './value.js';
 import type Ref from './ref.js';
 import Set from './set.js';
@@ -16,6 +16,7 @@ import {
   makeSetType,
   makeStructType,
   makeUnionType,
+  valueType,
 } from './type.js';
 import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
@@ -24,17 +25,33 @@ import type {
   StructDesc,
   Type,
 } from './type.js';
+import {isSubtype} from './assert-type.js';
+
+
+// Work around npm cyclic dependencies.
+let emptyStruct;
+
+function getEmptyStruct() {
+  if (emptyStruct) {
+    return emptyStruct;
+  }
+  return emptyStruct = newStruct('', {});
+}
+
+const metaIndex = 0;
+const parentsIndex = 1;
+const valueIndex = 2;
 
 export default class Commit<T: Value> extends Struct {
-  constructor(value: T, parents: Set<Ref<Commit>> = new Set()) {
+  constructor(value: T, parents: Set<Ref<Commit>> = new Set(), meta: Struct = getEmptyStruct()) {
     const t = makeCommitType(getTypeOfValue(value), valueTypesFromParents(parents));
-    super(t, [parents, value]);
+    super(t, [meta, parents, value]);
   }
 
   get value(): T {
-    invariant(this.type.desc.fields[1].name === 'value');
+    invariant(this.type.desc.fields[valueIndex].name === 'value');
     // $FlowIssue: _values is private.
-    const value: T = this._values[1];
+    const value: T = this._values[valueIndex];
     return value;
   }
 
@@ -42,37 +59,48 @@ export default class Commit<T: Value> extends Struct {
     return new Commit(value, this.parents);
   }
 
-  get parents(): Set<Ref<Commit>> {
-    invariant(this.type.desc.fields[0].name === 'parents');
+  get parents(): Set<Ref<Commit<*>>> {
+    invariant(this.type.desc.fields[parentsIndex].name === 'parents');
     // $FlowIssue: _values is private.
-    const parents: Set<Ref<Commit>> = this._values[0];
+    const parents: Set<Ref<Commit>> = this._values[parentsIndex];
     invariant(parents instanceof Set);
     return parents;
   }
 
-  setParents(parents: Set<Ref<Commit>>): Commit<T> {
+  setParents(parents: Set<Ref<Commit<*>>>): Commit<T> {
     return new Commit(this.value, parents);
+  }
+
+  get meta(): Struct {
+    invariant(this.type.desc.fields[metaIndex].name === 'meta');
+    // $FlowIssue: _values is private.
+    const meta: Struct = this._values[metaIndex];
+    invariant(meta instanceof Struct);
+    return meta;
+  }
+
+  setMeta(meta: Struct): Commit<T> {
+    return new Commit(this.value, this.parents, meta);
   }
 }
 
 function makeCommitType(valueType: Type<*>, parentsValueTypes: Type<*>[]): Type<StructDesc> {
+  const fieldNames = ['meta', 'parents', 'value'];
   const tmp = parentsValueTypes.concat(valueType);
   const parentsValueUnionType = makeUnionType(tmp);
+  let parentsType;
   if (equals(parentsValueUnionType, valueType)) {
-    return makeStructType('Commit', [
-      'parents', 'value',
-    ], [
-      makeSetType(makeRefType(makeCycleType(0))),
-      valueType,
-    ]);
-  }
-  return makeStructType('Commit', ['parents', 'value'], [
-    makeSetType(makeRefType(makeStructType('Commit', [
-      'parents', 'value',
-    ], [
+    parentsType = makeSetType(makeRefType(makeCycleType(0)));
+  } else {
+    parentsType = makeSetType(makeRefType(makeStructType('Commit', fieldNames, [
+      getEmptyStruct().type,
       makeSetType(makeRefType(makeCycleType(0))),
       parentsValueUnionType,
-    ]))),
+    ])));
+  }
+  return makeStructType('Commit', fieldNames, [
+    getEmptyStruct().type,
+    parentsType,
     valueType,
   ]);
 }
@@ -104,4 +132,10 @@ function getRefElementType(t: Type<CompoundDesc>): Type<*> {
 function valueTypeFromCommit(t: Type<StructDesc>): Type<*> {
   invariant(t.name === 'Commit');
   return notNull(t.desc.getField('value'));
+}
+
+const valueCommitType = makeCommitType(valueType, []);
+
+export function isCommitType(t: Type<StructDesc>): boolean {
+  return isSubtype(valueCommitType, t);
 }

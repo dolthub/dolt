@@ -11,6 +11,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
+	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -59,7 +60,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
 	r = writeTestData(str, list)
 	res, _ = s.Run(main, []string{"show", str})
-	s.Equal(res3, res)
+	test.EqualsIgnoreHashes(s.T(), res3, res)
 
 	str1 = spec.CreateValueSpecString("ldb", s.LdbDir, "#"+r.TargetHash().String())
 	res, _ = s.Run(main, []string{"show", str1})
@@ -67,5 +68,5 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	_ = writeTestData(str, s1)
 	res, _ = s.Run(main, []string{"show", str})
-	s.Equal(res5, res)
+	test.EqualsIgnoreHashes(s.T(), res5, res)
 }

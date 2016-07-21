@@ -131,8 +131,10 @@ export class TypeWriter {
 
     const desc = t.desc;
     this._w.write('struct ');
-    this._w.write(desc.name);
-    this._w.write(' {');
+    if (desc.name !== '') {
+      this._w.write(`${desc.name} `);
+    }
+    this._w.write('{');
     this._w.indent();
 
     let first = true;
