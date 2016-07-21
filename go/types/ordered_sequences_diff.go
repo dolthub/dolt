@@ -31,6 +31,61 @@ func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change V
 	}
 }
 
+// Streams the diff from |last| to |current| into |changes|, using both left-right and top-down approach in parallel.
+// The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
+// - early results from left-right are sent to |changes|.
+// - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
+func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
+	lrChanges := make(chan ValueChanged)
+	lrCloseChan := make(chan struct{})
+	tdChanges := make(chan ValueChanged)
+
+	// This is thread safe because it's only written to before closing |tdChanges|, and only read after |tdChanges| has closed.
+	wasCanceled := false
+
+	// The left-right diff gets a separate close channel so that if/when the top-down diff overtakes it, it can be aborted.
+	go func() {
+		orderedSequenceDiffLeftRight(last, current, lrChanges, lrCloseChan)
+		close(lrChanges)
+	}()
+
+	// The top-down diff uses the default close channel. Detect if it was called via the result of |wasCanceled|.
+	go func() {
+		wasCanceled = orderedSequenceDiffTopDown(last, current, tdChanges, closeChan)
+		close(tdChanges)
+	}()
+
+	// Stream left-right changes while the top-down diff algorithm catches up.
+	var lrChangeCount, tdChangeCount int
+
+	for multiplexing := true; multiplexing; {
+		select {
+		case c, ok := <-lrChanges:
+			if !ok {
+				return true // the only way |lrChanges| can be done is if the diff completed.
+			}
+			lrChangeCount++
+			changes <- c
+		case c, ok := <-tdChanges:
+			if !ok {
+				return wasCanceled
+			}
+			tdChangeCount++
+			if tdChangeCount > lrChangeCount {
+				// Top-down changes have overtaken left-right changes.
+				changes <- c
+				lrCloseChan <- struct{}{}
+				multiplexing = false
+			}
+		}
+	}
+
+	for c := range tdChanges {
+		changes <- c
+	}
+	return wasCanceled
+}
+
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
 func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {

@@ -59,7 +59,7 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 }
 
 func (m Map) Diff(last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	orderedSequenceDiffTopDown(last.sequence().(orderedSequence), m.sequence().(orderedSequence), changes, closeChan)
+	orderedSequenceDiffBest(last.sequence().(orderedSequence), m.sequence().(orderedSequence), changes, closeChan)
 }
 
 // Collection interface

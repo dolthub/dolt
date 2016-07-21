@@ -37,7 +37,7 @@ func NewSet(v ...Value) Set {
 }
 
 func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	orderedSequenceDiffTopDown(last.sequence().(orderedSequence), s.sequence().(orderedSequence), changes, closeChan)
+	orderedSequenceDiffBest(last.sequence().(orderedSequence), s.sequence().(orderedSequence), changes, closeChan)
 }
 
 // Collection interface
