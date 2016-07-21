@@ -15,7 +15,7 @@ const (
 	MetaField    = "meta"
 )
 
-var valueCommitType = makeCommitType(types.ValueType, types.EmptyStructType)
+var valueCommitType = makeValueCommitType()
 
 // NewCommit creates a new commit object. The type of Commit is computed based on the type of the value and the type of the parents.
 // It also includes a Meta field whose type is always the empty struct
@@ -50,6 +50,14 @@ var valueCommitType = makeCommitType(types.ValueType, types.EmptyStructType)
 func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
 	t := makeCommitType(value.Type(), valueTypesFromParents(parents)...)
 	return types.NewStructWithType(t, types.ValueSlice{meta, parents, value})
+}
+
+func makeValueCommitType() *types.Type {
+	fieldNames := []string{ParentsField, ValueField}
+	return types.MakeStructType("Commit", fieldNames, []*types.Type{
+		types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+		types.ValueType,
+	})
 }
 
 func makeCommitType(valueType *types.Type, parentsValueTypes ...*types.Type) *types.Type {

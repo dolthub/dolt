@@ -116,10 +116,12 @@ func runLog(args []string) int {
 func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
-		meta := commit.Get(datas.MetaField).(types.Struct)
-		meta.Type().Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
-			maxLen = max(maxLen, len(name))
-		})
+		if m, ok := commit.MaybeGet(datas.MetaField); ok {
+			meta := m.(types.Struct)
+			meta.Type().Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
+				maxLen = max(maxLen, len(name))
+			})
+		}
 		return maxLen
 	}
 
@@ -226,17 +228,20 @@ func genGraph(node LogNode, lineno int) string {
 }
 
 func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer) (int, error) {
-	meta := node.commit.Get(datas.MetaField).(types.Struct)
-	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
-	err := d.Try(func() {
-		meta.Type().Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type) {
-			v := meta.Get(fieldName)
-			fmt.Fprintf(mlw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
-			types.WriteEncodedValue(mlw, v)
-			fmt.Fprintf(mlw, "\n")
+	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
+		meta := m.(types.Struct)
+		mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
+		err := d.Try(func() {
+			meta.Type().Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type) {
+				v := meta.Get(fieldName)
+				fmt.Fprintf(mlw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
+				types.WriteEncodedValue(mlw, v)
+				fmt.Fprintf(mlw, "\n")
+			})
 		})
-	})
-	return mlw.numLines, err
+		return mlw.numLines, err
+	}
+	return lineno, nil
 }
 
 func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
