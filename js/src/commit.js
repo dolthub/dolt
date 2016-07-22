@@ -27,17 +27,6 @@ import type {
 } from './type.js';
 import {isSubtype} from './assert-type.js';
 
-
-// Work around npm cyclic dependencies.
-let emptyStruct;
-
-function getEmptyStruct() {
-  if (emptyStruct) {
-    return emptyStruct;
-  }
-  return emptyStruct = newStruct('', {});
-}
-
 const metaIndex = 0;
 const parentsIndex = 1;
 const valueIndex = 2;
@@ -134,8 +123,23 @@ function valueTypeFromCommit(t: Type<StructDesc>): Type<*> {
   return notNull(t.desc.getField('value'));
 }
 
-const valueCommitType = makeCommitType(valueType, []);
+// Work around npm cyclic dependencies.
+let valueCommitType;
+function getValueCommitType() {
+  if (!valueCommitType) {
+    valueCommitType = makeCommitType(valueType, []);
+  }
+  return valueCommitType;
+}
+
+let emptyStruct;
+function getEmptyStruct() {
+  if (!emptyStruct) {
+    emptyStruct = newStruct('', {});
+  }
+  return emptyStruct;
+}
 
 export function isCommitType(t: Type<StructDesc>): boolean {
-  return isSubtype(valueCommitType, t);
+  return isSubtype(getValueCommitType(), t);
 }
