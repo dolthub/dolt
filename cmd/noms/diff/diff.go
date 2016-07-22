@@ -29,11 +29,7 @@ func Diff(w io.Writer, v1, v2 types.Value) error {
 }
 
 func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) {
-	if v1 == nil && v2 != nil {
-		line(w, addPrefix, key, v2)
-	} else if v1 != nil && v2 == nil {
-		line(w, subPrefix, key, v1)
-	} else if !v1.Equals(v2) {
+	if !v1.Equals(v2) {
 		if shouldDescend(v1, v2) {
 			switch v1.Type().Kind() {
 			case types.ListKind:
@@ -137,21 +133,29 @@ func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
 }
 
 func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
+	changed := types.StructDiff(v1, v2)
 	wroteHeader := false
-
-	for _, field := range types.StructDiff(v1, v2) {
-		f1 := v1.Get(field)
-		f2 := v2.Get(field)
-		if shouldDescend(f1, f2) {
-			diff(w, p.AddField(field), types.String(field), f1, f2)
-		} else {
+	for _, change := range changed {
+		fn := string(change.V.(types.String))
+		switch change.ChangeType {
+		case types.DiffChangeAdded:
 			wroteHeader = writeHeader(w, wroteHeader, p)
-			line(w, subPrefix, types.String(field), f1)
-			line(w, addPrefix, types.String(field), f2)
+			line(w, addPrefix, change.V, v2.Get(fn))
+		case types.DiffChangeRemoved:
+			wroteHeader = writeHeader(w, wroteHeader, p)
+			line(w, subPrefix, change.V, v1.Get(fn))
+		case types.DiffChangeModified:
+			f1 := v1.Get(fn)
+			f2 := v2.Get(fn)
+			if shouldDescend(f1, f2) {
+				diff(w, p.AddField(fn), types.String(fn), f1, f2)
+			} else {
+				wroteHeader = writeHeader(w, wroteHeader, p)
+				line(w, subPrefix, change.V, f1)
+				line(w, addPrefix, change.V, f2)
+			}
 		}
 	}
-
-	writeFooter(w, wroteHeader)
 }
 
 func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {

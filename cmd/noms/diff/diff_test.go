@@ -124,7 +124,7 @@ func TestNomsSetDiff(t *testing.T) {
 
 func TestNomsStructDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./ {\n-   \"four\": \"four\"\n+   \"four\": \"four-diff\"\n./.\"three\" {\n-   \"field3\": \"field3-data\"\n+   \"field3\": \"field3-data-diff\"\n  }\n  }\n"
+	expected := "./ {\n-   \"four\": \"four\"\n+   \"four\": \"four-diff\"\n./.\"three\" {\n-   \"field3\": \"field3-data\"\n+   \"field3\": \"field3-data-diff\"\n  }\n"
 
 	fieldData := []interface{}{
 		"field1", "field1-data",

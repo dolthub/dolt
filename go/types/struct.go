@@ -125,19 +125,46 @@ func (s Struct) Set(n string, v Value) Struct {
 	return Struct{values, s.t, &hash.Hash{}}
 }
 
-// s1 & s2 must be of the same type. Returns the set of field names which have different values in the respective structs
-func StructDiff(s1, s2 Struct) (changed []string) {
-	d.Chk.True(s1.Type().Equals(s2.Type()))
+func StructDiff(s1, s2 Struct) (changes []ValueChanged) {
+	unionFieldNames := func(s1, s2 Struct) []string {
+		fieldNames := sort.StringSlice{}
+		if s1.Type().Equals(s2.Type()) {
+			for _, f := range s1.desc().fields {
+				fieldNames = append(fieldNames, f.name)
+			}
+			return fieldNames
+		}
 
-	fields := s1.desc().fields
-	for i, v1 := range s1.values {
-		v2 := s2.values[i]
-		if !v1.Equals(v2) {
-			changed = append(changed, fields[i].name)
+		nameMap := map[string]struct{}{}
+		for _, f := range s1.desc().fields {
+			nameMap[f.name] = struct{}{}
+		}
+		for _, f := range s2.desc().fields {
+			nameMap[f.name] = struct{}{}
+		}
+		for k, _ := range nameMap {
+			fieldNames = append(fieldNames, k)
+		}
+		sort.Sort(fieldNames)
+		return fieldNames
+	}
+
+	for _, fn := range unionFieldNames(s1, s2) {
+		v1, ok1 := s1.MaybeGet(fn)
+		v2, ok2 := s2.MaybeGet(fn)
+
+		if ok1 && ok2 {
+			if !v1.Equals(v2) {
+				changes = append(changes, ValueChanged{ChangeType: DiffChangeModified, V: String(fn)})
+			}
+		} else if ok1 {
+			changes = append(changes, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn)})
+		} else {
+			changes = append(changes, ValueChanged{ChangeType: DiffChangeAdded, V: String(fn)})
 		}
 	}
 
-	return
+	return changes
 }
 
 var escapeChar = "Q"
