@@ -13,6 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
+	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -202,32 +203,6 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	s.Equal(diffRes2, res)
 }
 
-func (s *nomsLogTestSuite) TestNoMetaCommit() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
-	s.NoError(err)
-
-	ds := dataset.NewDataset(db, "ds1")
-
-	meta := types.NewStruct("Meta", map[string]types.Value{
-		"test1": types.String("Yoo"),
-		"test2": types.String("Hoo"),
-	})
-	ds, err = ds.Commit(types.String("1"), dataset.CommitOptions{Meta: meta})
-	s.NoError(err)
-	r1 := ds.HeadRef()
-
-	noMetaCommit := types.NewStruct("Commit", map[string]types.Value{
-		"value":   types.String("2"),
-		"parents": types.NewSet(r1),
-	})
-	ds.Database().Commit("ds1", noMetaCommit)
-	db.Close()
-
-	res, _ := s.Run(main, []string{"log", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ds1")})
-	s.Equal(metaRes1, res)
-}
-
 func (s *nomsLogTestSuite) TestNomsGraph3() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
@@ -294,19 +269,19 @@ func (s *nomsLogTestSuite) TestTruncation() {
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "truncate")
 	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", dsSpec})
-	s.Equal(truncRes1, res)
+	test.EqualsIgnoreHashes(s.T(), truncRes1, res)
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", dsSpec})
-	s.Equal(diffTrunc1, res)
+	test.EqualsIgnoreHashes(s.T(), diffTrunc1, res)
 
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=true", "-max-lines=-1", dsSpec})
-	s.Equal(truncRes2, res)
+	test.EqualsIgnoreHashes(s.T(), truncRes2, res)
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", "-max-lines=-1", dsSpec})
-	s.Equal(diffTrunc2, res)
+	test.EqualsIgnoreHashes(s.T(), diffTrunc2, res)
 
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=true", "-max-lines=0", dsSpec})
-	s.Equal(truncRes3, res)
+	test.EqualsIgnoreHashes(s.T(), truncRes3, res)
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", "-max-lines=0", dsSpec})
-	s.Equal(diffTrunc3, res)
+	test.EqualsIgnoreHashes(s.T(), diffTrunc3, res)
 }
 
 func TestBranchlistSplice(t *testing.T) {

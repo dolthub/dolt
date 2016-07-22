@@ -15,6 +15,7 @@ func TestNewCommit(t *testing.T) {
 	assert := assert.New(t)
 
 	commitFieldNames := []string{MetaField, ParentsField, ValueField}
+
 	assertTypeEquals := func(e, a *types.Type) {
 		assert.True(a.Equals(e), "Actual: %s\nExpected %s", a.Describe(), e.Describe())
 	}
@@ -77,18 +78,5 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"value":   types.Number(9),
 		"parents": types.NewSet(),
 	})
-	assert.True(IsCommitType(noMetaCommit.Type()))
-
-	badCommit := types.NewStruct("Commit", map[string]types.Value{
-		"value":    types.Number(9),
-		"parents1": types.NewSet(),
-	})
-	assert.False(IsCommitType(badCommit.Type()))
-
-	badMetaCommit := types.NewStruct("Commit", map[string]types.Value{
-		"value":    types.Number(9),
-		"parents1": types.NewSet(),
-		"meta":     types.String("one"),
-	})
-	assert.False(IsCommitType(badMetaCommit.Type()))
+	assert.False(IsCommitType(noMetaCommit.Type()))
 }
