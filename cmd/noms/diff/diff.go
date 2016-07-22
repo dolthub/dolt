@@ -17,179 +17,169 @@ const (
 	subPrefix = "-   "
 )
 
-func isPrimitiveOrRef(v1 types.Value) bool {
+func shouldDescend(v1, v2 types.Value) bool {
 	kind := v1.Type().Kind()
-	return types.IsPrimitiveKind(kind) || kind == types.RefKind
+	return !types.IsPrimitiveKind(kind) && kind == v2.Type().Kind()
 }
 
-func canCompare(v1, v2 types.Value) bool {
-	return !isPrimitiveOrRef(v1) && v1.Type().Kind() == v2.Type().Kind()
-}
-
-func Diff(w io.Writer, v1, v2 types.Value) (err error) {
-	dq := NewDiffQueue()
-	di := diffInfo{path: types.NewPath().AddField("/"), v1: v1, v2: v2}
-	dq.PushBack(di)
-
-	err = d.Try(func() {
-		for di, ok := dq.PopFront(); ok; di, ok = dq.PopFront() {
-			p, key, v1, v2 := di.path, di.key, di.v1, di.v2
-			d.Chk.True(v1 != nil && v2 != nil) // nil is not a valid types.Value and we should never get one
-			if !v1.Equals(v2) {
-				if !canCompare(v1, v2) {
-					line(w, subPrefix, key, v1)
-					line(w, addPrefix, key, v2)
-				} else {
-					switch v1.Type().Kind() {
-					case types.ListKind:
-						diffLists(dq, w, p, v1.(types.List), v2.(types.List))
-					case types.MapKind:
-						diffMaps(dq, w, p, v1.(types.Map), v2.(types.Map))
-					case types.SetKind:
-						diffSets(dq, w, p, v1.(types.Set), v2.(types.Set))
-					case types.StructKind:
-						diffStructs(dq, w, p, v1.(types.Struct), v2.(types.Struct))
-					default:
-						panic("Unrecognized type in diff function")
-					}
-				}
-			}
-		}
+func Diff(w io.Writer, v1, v2 types.Value) error {
+	return d.Try(func() {
+		diff(w, types.NewPath().AddField("/"), nil, v1, v2)
 	})
-	return
 }
 
-func diffLists(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.List) {
+func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) {
+	if v1 == nil && v2 != nil {
+		line(w, addPrefix, key, v2)
+	} else if v1 != nil && v2 == nil {
+		line(w, subPrefix, key, v1)
+	} else if !v1.Equals(v2) {
+		if shouldDescend(v1, v2) {
+			switch v1.Type().Kind() {
+			case types.ListKind:
+				diffLists(w, p, v1.(types.List), v2.(types.List))
+			case types.MapKind:
+				diffMaps(w, p, v1.(types.Map), v2.(types.Map))
+			case types.SetKind:
+				diffSets(w, p, v1.(types.Set), v2.(types.Set))
+			case types.StructKind:
+				diffStructs(w, p, v1.(types.Struct), v2.(types.Struct))
+			default:
+				panic("Unrecognized type in diff function")
+			}
+		} else {
+			line(w, subPrefix, key, v1)
+			line(w, addPrefix, key, v2)
+		}
+	}
+}
+
+func diffLists(w io.Writer, p types.Path, v1, v2 types.List) {
+	spliceChan := make(chan types.Splice)
+	closeChan := make(chan struct{})
+	doneChan := make(chan struct{})
+
+	go func() {
+		v2.Diff(v1, spliceChan, closeChan)
+		close(spliceChan)
+		doneChan <- struct{}{}
+	}()
+	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
+
 	wroteHeader := false
 
-	splices := make(chan types.Splice)
-	closeChan := make(chan struct{})
-	go func() {
-		v2.Diff(v1, splices, closeChan)
-		close(splices)
-	}()
-
-	err := d.Try(func() {
-		for splice := range splices {
-			if splice.SpRemoved == splice.SpAdded {
-				for i := uint64(0); i < splice.SpRemoved; i++ {
-					lastEl := v1.Get(splice.SpAt + i)
-					newEl := v2.Get(splice.SpFrom + i)
-					if canCompare(lastEl, newEl) {
-						idx := types.Number(splice.SpAt + i)
-						p1 := p.AddIndex(idx)
-						dq.PushBack(diffInfo{p1, idx, lastEl, newEl})
-					} else {
-						wroteHeader = writeHeader(w, wroteHeader, p)
-						line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
-						line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
-					}
-				}
-			} else {
-				for i := uint64(0); i < splice.SpRemoved; i++ {
+	for splice := range spliceChan {
+		if splice.SpRemoved == splice.SpAdded {
+			for i := uint64(0); i < splice.SpRemoved; i++ {
+				lastEl := v1.Get(splice.SpAt + i)
+				newEl := v2.Get(splice.SpFrom + i)
+				if shouldDescend(lastEl, newEl) {
+					idx := types.Number(splice.SpAt + i)
+					diff(w, p.AddIndex(idx), idx, lastEl, newEl)
+				} else {
 					wroteHeader = writeHeader(w, wroteHeader, p)
 					line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
-				}
-				for i := uint64(0); i < splice.SpAdded; i++ {
-					wroteHeader = writeHeader(w, wroteHeader, p)
 					line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
 				}
 			}
-		}
-	})
-	if err != nil {
-		closeChan <- struct{}{}
-	}
-	writeFooter(w, wroteHeader)
-}
-
-func diffMaps(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Map) {
-	wroteHeader := false
-
-	changes := make(chan types.ValueChanged)
-	closeChan := make(chan struct{})
-	go func() {
-		v2.Diff(v1, changes, closeChan)
-		close(changes)
-	}()
-
-	err := d.Try(func() {
-		for change := range changes {
-			switch change.ChangeType {
-			case types.DiffChangeAdded:
+		} else {
+			for i := uint64(0); i < splice.SpRemoved; i++ {
 				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, addPrefix, change.V, v2.Get(change.V))
-			case types.DiffChangeRemoved:
+				line(w, subPrefix, nil, v1.Get(splice.SpAt+i))
+			}
+			for i := uint64(0); i < splice.SpAdded; i++ {
 				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, subPrefix, change.V, v1.Get(change.V))
-			case types.DiffChangeModified:
-				c1, c2 := v1.Get(change.V), v2.Get(change.V)
-				if canCompare(c1, c2) {
-					buf := bytes.NewBuffer(nil)
-					d.PanicIfError(types.WriteEncodedValueWithTags(buf, change.V))
-					p1 := p.AddField(buf.String())
-					dq.PushBack(diffInfo{path: p1, key: change.V, v1: c1, v2: c2})
-				} else {
-					wroteHeader = writeHeader(w, wroteHeader, p)
-					line(w, subPrefix, change.V, c1)
-					line(w, addPrefix, change.V, c2)
-				}
-			default:
-				panic("unknown change type")
+				line(w, addPrefix, nil, v2.Get(splice.SpFrom+i))
 			}
 		}
-	})
-	if err != nil {
-		closeChan <- struct{}{}
 	}
+
 	writeFooter(w, wroteHeader)
 }
 
-func diffStructs(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Struct) {
-	changed := types.StructDiff(v1, v2)
+func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
+	changeChan := make(chan types.ValueChanged)
+	closeChan := make(chan struct{})
+	doneChan := make(chan struct{})
+
+	go func() {
+		v2.Diff(v1, changeChan, closeChan)
+		close(changeChan)
+		doneChan <- struct{}{}
+	}()
+	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
+
 	wroteHeader := false
-	for _, field := range changed {
+
+	for change := range changeChan {
+		switch change.ChangeType {
+		case types.DiffChangeAdded:
+			line(w, addPrefix, change.V, v2.Get(change.V))
+		case types.DiffChangeRemoved:
+			line(w, subPrefix, change.V, v1.Get(change.V))
+		case types.DiffChangeModified:
+			c1, c2 := v1.Get(change.V), v2.Get(change.V)
+			if shouldDescend(c1, c2) {
+				buf := &bytes.Buffer{}
+				writeEncodedValueWithTags(buf, change.V)
+				diff(w, p.AddField(buf.String()), change.V, c1, c2)
+			} else {
+				wroteHeader = writeHeader(w, wroteHeader, p)
+				line(w, subPrefix, change.V, c1)
+				line(w, addPrefix, change.V, c2)
+			}
+		default:
+			panic("unknown change type")
+		}
+	}
+
+	writeFooter(w, wroteHeader)
+}
+
+func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
+	wroteHeader := false
+
+	for _, field := range types.StructDiff(v1, v2) {
 		f1 := v1.Get(field)
 		f2 := v2.Get(field)
-		if canCompare(f1, f2) {
-			p1 := p.AddField(field)
-			dq.PushBack(diffInfo{path: p1, key: types.String(field), v1: f1, v2: f2})
+		if shouldDescend(f1, f2) {
+			diff(w, p.AddField(field), types.String(field), f1, f2)
 		} else {
 			wroteHeader = writeHeader(w, wroteHeader, p)
 			line(w, subPrefix, types.String(field), f1)
 			line(w, addPrefix, types.String(field), f2)
 		}
 	}
+
+	writeFooter(w, wroteHeader)
 }
 
-func diffSets(dq *diffQueue, w io.Writer, p types.Path, v1, v2 types.Set) {
+func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {
+	changeChan := make(chan types.ValueChanged)
+	closeChan := make(chan struct{})
+	doneChan := make(chan struct{})
+
+	go func() {
+		v2.Diff(v1, changeChan, closeChan)
+		close(changeChan)
+		doneChan <- struct{}{}
+	}()
+	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
+
 	wroteHeader := false
 
-	changes := make(chan types.ValueChanged)
-	closeChan := make(chan struct{})
-	go func() {
-		v2.Diff(v1, changes, closeChan)
-		close(changes)
-	}()
-
-	err := d.Try(func() {
-		for change := range changes {
-			switch change.ChangeType {
-			case types.DiffChangeAdded:
-				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, addPrefix, nil, change.V)
-			case types.DiffChangeRemoved:
-				wroteHeader = writeHeader(w, wroteHeader, p)
-				line(w, subPrefix, nil, change.V)
-			default:
-				// sets should not have any DiffChangeModified or unknown change types
-				panic("unknown change type")
-			}
+	for change := range changeChan {
+		wroteHeader = writeHeader(w, wroteHeader, p)
+		switch change.ChangeType {
+		case types.DiffChangeAdded:
+			line(w, addPrefix, nil, change.V)
+		case types.DiffChangeRemoved:
+			line(w, subPrefix, nil, change.V)
+		default:
+			panic("unknown change type")
 		}
-	})
-	if err != nil {
-		closeChan <- struct{}{}
 	}
+
 	writeFooter(w, wroteHeader)
 }
 
@@ -198,54 +188,80 @@ type prefixWriter struct {
 	prefix []byte
 }
 
-// todo: Not sure if we want to use a writer to do this for the longterm but, if so, we can
+// TODO: Not sure if we want to use a writer to do this for the longterm but, if so, we can
 // probably do better than writing byte by byte
-func (pw prefixWriter) Write(bytes []byte) (n int, err error) {
+func (pw prefixWriter) Write(bytes []byte) (int, error) {
 	for i, b := range bytes {
-		_, err = pw.w.Write([]byte{b})
+		_, err := pw.w.Write([]byte{b})
+		if err == nil && b == '\n' {
+			_, err = pw.w.Write(pw.prefix)
+		}
 		if err != nil {
 			return i, err
-		}
-		if b == '\n' {
-			_, err := pw.w.Write(pw.prefix)
-			if err != nil {
-				return i, err
-			}
 		}
 	}
 	return len(bytes), nil
 }
 
-func line(w io.Writer, start string, key, v2 types.Value) {
-	var err error
-	pw := prefixWriter{w: w, prefix: []byte(start)}
-	_, err = w.Write([]byte(start))
-	d.PanicIfError(err)
+func line(w io.Writer, startStr string, key, val types.Value) {
+	start := []byte(startStr)
+	pw := prefixWriter{w, []byte(start)}
+
+	write(w, start)
 	if key != nil {
-		d.PanicIfError(types.WriteEncodedValue(pw, key))
-		_, err = w.Write([]byte(": "))
-		d.PanicIfError(err)
+		writeEncodedValue(pw, key)
+		write(w, []byte(": "))
 	}
-	d.PanicIfError((types.WriteEncodedValue(pw, v2)))
-	_, err = w.Write([]byte("\n"))
-	d.PanicIfError(err)
+	writeEncodedValue(pw, val)
+	write(w, []byte("\n"))
 }
 
 func writeHeader(w io.Writer, wroteHeader bool, p types.Path) bool {
-	var err error
 	if !wroteHeader {
-		_, err = w.Write([]byte(p.String()))
-		d.PanicIfError(err)
-		_, err = w.Write([]byte(" {\n"))
-		d.PanicIfError(err)
-		wroteHeader = true
+		write(w, []byte(p.String()))
+		write(w, []byte(" {\n"))
 	}
-	return wroteHeader
+	return true
 }
 
 func writeFooter(w io.Writer, wroteHeader bool) {
 	if wroteHeader {
-		_, err := w.Write([]byte("  }\n"))
-		d.PanicIfError(err)
+		write(w, []byte("  }\n"))
+	}
+}
+
+func write(w io.Writer, b []byte) {
+	_, err := w.Write(b)
+	d.PanicIfError(err)
+}
+
+func writeEncodedValue(w io.Writer, v types.Value) {
+	d.PanicIfError(types.WriteEncodedValue(w, v))
+}
+
+func writeEncodedValueWithTags(w io.Writer, v types.Value) {
+	d.PanicIfError(types.WriteEncodedValueWithTags(w, v))
+}
+
+// This is intended to be used
+// - when called as deferred,
+// - with a separate goroutine running a Diff, cancelable by |closeChan|, which writes to |doneChan| when it's finished.
+// I.e.
+//
+// go func() {
+//   Diff(...)
+//   doneChan <- struct{}{}
+// }()
+// defer waitForCloseOrDone()
+//
+// It's designed to handle 2 cases: (1) the outer function panic'd so Diff didn't finish, or (2) the Diff finished and the outer function exited normally.
+// If (1) we try to cancel the diff by sending to |closeChan|.
+// If (2) we wait for the Diff to finish by blocking on |doneChan|.
+// In both cases this deferred function will be unblocked.
+func waitForCloseOrDone(closeChan, doneChan chan struct{}) {
+	select {
+	case closeChan <- struct{}{}:
+		<-doneChan // after cancelling, Diff will exit then block on |doneChan|, so unblock it
+	case <-doneChan:
 	}
 }

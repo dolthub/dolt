@@ -70,12 +70,13 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 
 func TestNomsMapdiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./.\"map-3\" {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./.\"map-3\".\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
+	expected := "./.\"map-3\" {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n./.\"map-3\".\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n  }\n"
 
 	m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 	m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
 	buf := util.NewBuffer(nil)
 	Diff(buf, m1, m2)
+
 	assert.Equal(expected, buf.String())
 }
 
@@ -123,7 +124,7 @@ func TestNomsSetDiff(t *testing.T) {
 
 func TestNomsStructDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./ {\n-   \"four\": \"four\"\n+   \"four\": \"four-diff\"\n  }\n./.\"three\" {\n-   \"field3\": \"field3-data\"\n+   \"field3\": \"field3-data-diff\"\n"
+	expected := "./ {\n-   \"four\": \"four\"\n+   \"four\": \"four-diff\"\n./.\"three\" {\n-   \"field3\": \"field3-data\"\n+   \"field3\": \"field3-data-diff\"\n  }\n  }\n"
 
 	fieldData := []interface{}{
 		"field1", "field1-data",
@@ -159,10 +160,11 @@ func TestNomsListDiff(t *testing.T) {
 	Diff(buf, l1, l2)
 	assert.Equal(expected, buf.String())
 
-	expected = "./[2] {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n  }\n./[2].\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n"
+	expected = "./[2] {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n./[2].\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n  }\n"
 	l1 = createList(mm1, mm2, mm3, mm4)
 	l2 = createList(mm1, mm2, mm3x, mm4)
 	buf = util.NewBuffer(nil)
 	Diff(buf, l1, l2)
+
 	assert.Equal(expected, buf.String())
 }
