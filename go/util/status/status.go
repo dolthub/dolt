@@ -12,7 +12,7 @@ import (
 
 const (
 	clearLine = "\x1b[2K\r"
-	rate      = 100 * time.Millisecond
+	Rate      = 100 * time.Millisecond
 )
 
 var (
@@ -27,12 +27,12 @@ func Clear() {
 }
 
 func WillPrint() bool {
-	return time.Now().Sub(lastTime) >= rate
+	return time.Now().Sub(lastTime) >= Rate
 }
 
 func Printf(format string, args ...interface{}) {
 	now := time.Now()
-	if now.Sub(lastTime) < rate {
+	if now.Sub(lastTime) < Rate {
 		lastFormat, lastArgs = format, args
 	} else {
 		fmt.Printf(clearLine+format, args...)

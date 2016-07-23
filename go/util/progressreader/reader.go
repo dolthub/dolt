@@ -7,36 +7,31 @@ package progressreader
 
 import (
 	"io"
+	"time"
+
+	"github.com/attic-labs/noms/go/util/status"
 )
 
 type Callback func(seen uint64)
 
 func New(inner io.Reader, cb Callback) io.Reader {
-	return &reader{
-		inner,
-		uint64(0),
-		uint64(0),
-		cb,
-	}
+	return &reader{inner, uint64(0), time.Time{}, cb}
 }
 
 type reader struct {
 	inner    io.Reader
 	seen     uint64
-	lastMult uint64
+	lastTime time.Time
 	cb       Callback
 }
 
-const reportFreq = 2 << 19 // 1 MB
-
 func (r *reader) Read(p []byte) (n int, err error) {
-	mult := uint64(r.seen / reportFreq)
-	if mult > r.lastMult {
-		r.cb(r.seen)
-		r.lastMult = mult
-	}
-
 	n, err = r.inner.Read(p)
 	r.seen += uint64(n)
+
+	if now := time.Now(); now.Sub(r.lastTime) >= status.Rate {
+		r.cb(r.seen)
+		r.lastTime = now
+	}
 	return
 }
