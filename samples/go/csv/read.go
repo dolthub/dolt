@@ -6,6 +6,7 @@ package csv
 
 import (
 	"encoding/csv"
+	"fmt"
 	"io"
 	"sort"
 
@@ -102,7 +103,11 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 		for i, v := range row {
 			if i < len(headers) {
 				fieldOrigIndex := fieldOrder[i]
-				fields[fieldOrigIndex] = StringToType(v, kindMap[fieldOrigIndex])
+				val, err := StringToType(v, kindMap[fieldOrigIndex])
+				if err != nil {
+					d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[i], err))
+				}
+				fields[fieldOrigIndex] = val
 			}
 		}
 		valueChan <- types.NewStructWithType(t, fields)
@@ -144,11 +149,14 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 		fields := make(types.ValueSlice, len(headers))
 		for x, v := range row {
 			if x == pkIdx {
-				pk = StringToType(v, pkKind)
+				pk, err = StringToType(v, pkKind)
 			} else if fieldIndex < len(headers) {
 				fieldOrigIndex := fieldOrder[fieldIndex]
-				fields[fieldOrigIndex] = StringToType(v, kindMap[fieldOrigIndex])
+				fields[fieldOrigIndex], err = StringToType(v, kindMap[fieldOrigIndex])
 				fieldIndex++
+			}
+			if err != nil {
+				d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[x], err))
 			}
 		}
 		kvChan <- pk

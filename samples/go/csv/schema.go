@@ -5,6 +5,7 @@
 package csv
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 
@@ -86,18 +87,29 @@ func (tc *typeCanFit) testBool(value string) {
 }
 
 // StringToType takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
-func StringToType(s string, k types.NomsKind) types.Value {
+func StringToType(s string, k types.NomsKind) (types.Value, error) {
 	switch k {
 	case types.NumberKind:
+		if s == "" {
+			return types.Number(float64(0)), nil
+		}
 		fval, err := strconv.ParseFloat(s, 64)
-		d.Chk.NoError(err)
-		return types.Number(fval)
+		if err != nil {
+			return nil, fmt.Errorf("Could not parse '%s' into number (%s)", s, err)
+		}
+		return types.Number(fval), nil
 	case types.BoolKind:
-		bval, err := strconv.ParseBool(s)
-		d.Chk.NoError(err)
-		return types.Bool(bval)
+		// TODO: This should probably be configurable.
+		switch s {
+		case "true", "1", "y", "Y":
+			return types.Bool(true), nil
+		case "false", "0", "n", "N", "":
+			return types.Bool(false), nil
+		default:
+			return nil, fmt.Errorf("Could not parse '%s' into bool", s)
+		}
 	case types.StringKind:
-		return types.String(s)
+		return types.String(s), nil
 	default:
 		d.PanicIfTrue(true, "Invalid column type kind:", k)
 	}
