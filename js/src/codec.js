@@ -57,7 +57,7 @@ function ensureTypeSerialization(t: Type) {
   }
 }
 
-const maxUInt32 = Math.pow(2, 32);
+export const maxUint32 = Math.pow(2, 32);
 const bigEndian = false;
 
 export interface NomsReader {
@@ -129,7 +129,7 @@ export class BinaryNomsReader {
     // Big endian
     const msi = this.readUint32();
     const lsi = this.readUint32();
-    const v = msi * maxUInt32 + lsi;
+    const v = msi * maxUint32 + lsi;
     invariant(v <= Number.MAX_SAFE_INTEGER);
     return v;
   }
@@ -228,8 +228,8 @@ export class BinaryNomsWriter {
 
   writeUint64(v: number): void {
     invariant(v <= Number.MAX_SAFE_INTEGER);
-    const msi = (v / maxUInt32) | 0;
-    const lsi = v % maxUInt32;
+    const msi = (v / maxUint32) | 0;
+    const lsi = v % maxUint32;
     // Big endian
     this.writeUint32(msi);
     this.writeUint32(lsi);

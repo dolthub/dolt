@@ -7,7 +7,7 @@
 import {blobType, makeRefType} from './type.js';
 import {assert} from 'chai';
 import Blob, {BlobReader, BlobWriter} from './blob.js';
-import {suite, test, setup, teardown} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test, setup, teardown} from 'mocha';
 import {
   assertChunkCountAndType,
   assertValueHash,
@@ -18,6 +18,7 @@ import {
 import {invariant} from './assert.js';
 import {equals} from './compare.js';
 import {TestDatabase} from './test-util.js';
+import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go
@@ -157,23 +158,25 @@ suite('Blob', () => {
     }
   }
 
-  test('Blob 1K', () =>
-    blobTestSuite(10, 'drbq98mhjfhgsvb7kl2ijg71eoiqnbqf', 3, 2, 2));
-
   test('LONG: Blob 4K', () =>
-    blobTestSuite(12, '7hlg5p73koq5o2r67rmaqockgoths01c', 9, 2, 2));
-
-  test('LONG: Blob 16K', () =>
-    blobTestSuite(14, '32tqt716moooai9i7fhb2louq7ik49du', 2, 2, 2));
+    blobTestSuite(12, '5bkejsg826116lmjv13qb2bcp42bntb8', 0, 0, 0));
 
   test('LONG: Blob 64K', () =>
-    blobTestSuite(16, '5d355t85ru7vidao5r26rv8ba5r2ftb0', 4, 2, 2));
+    blobTestSuite(16, 'k7pjegmih3lf4mp35vt8prk808c4itcs', 2, 2, 2));
 
   test('LONG: Blob 256K', () =>
-    blobTestSuite(18, 'g491n4skkncon9o951shu67u92iajjkj', 10, 2, 2));
+    blobTestSuite(18, '9c7kamht186iaomc0pnrojkd8jli6qdf', 8, 2, 2));
 
   suite('BlobWriter', () => {
     let db;
+
+    suiteSetup(() => {
+      smallTestChunks();
+    });
+
+    suiteTeardown(() => {
+      normalProductionChunks();
+    });
 
     setup(() => {
       db = new TestDatabase();
@@ -235,18 +238,19 @@ suite('Blob', () => {
       assert.equal(db.writeCount, writes);
 
       w.write(new Uint8Array(a.buffer, 0, 500));
+      writes += 3;
       assert.equal(db.writeCount, writes);
 
       w.write(new Uint8Array(a.buffer, 500, 500));
-      writes++;
+      writes += 3;
       assert.equal(db.writeCount, writes);
 
       w.write(new Uint8Array(a.buffer, 1000, 500));
-      writes++;
+      writes += 4;
       assert.equal(db.writeCount, writes);
 
       w.close();
-      writes += 2;  // one for the last leaf chunk and one for the meta chunk.
+      writes += 3;
       assert.equal(db.writeCount, writes);
 
       const b2 = await w.blob;

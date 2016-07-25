@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type indexedSequence interface {
@@ -98,13 +97,6 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 		return 0
 	}
 	return seq.getOffset(cur.idx-1) + 1
-}
-
-func newIndexedMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(objectWindowSize, hash.ByteLen, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ref.TargetHash().Digest()
-		return digest[:]
-	})
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are

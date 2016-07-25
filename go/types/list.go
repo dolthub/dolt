@@ -9,12 +9,6 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-const (
-	// The window size to use for computing the rolling hash.
-	listWindowSize = 64
-	listPattern    = uint32(1<<6 - 1) // Average size of 64 elements
-)
-
 type List struct {
 	seq indexedSequence
 	h   *hash.Hash
@@ -26,7 +20,7 @@ func newList(seq indexedSequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated with values, chunking if and when needed.
 func NewList(values ...Value) List {
-	seq := newEmptySequenceChunker(nil, makeListLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(ListKind, nil), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeListLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(ListKind, nil), hashValueBytes)
 	for _, v := range values {
 		seq.Append(v)
 	}
@@ -37,7 +31,7 @@ func NewList(values ...Value) List {
 func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
-		seq := newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+		seq := newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		for v := range values {
 			seq.Append(v)
 		}
@@ -140,7 +134,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	d.Chk.True(idx+deleteCount <= l.Len())
 
 	cur := newCursorAtIndex(l.seq, idx)
-	ch := newSequenceChunker(cur, nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), newListLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), hashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -212,13 +206,6 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 	lastCur := newCursorAtIndex(last.seq, 0)
 	lCur := newCursorAtIndex(l.seq, 0)
 	indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
-}
-
-func newListLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(listWindowSize, hash.ByteLen, listPattern, func(item sequenceItem) []byte {
-		digest := item.(Value).Hash().Digest()
-		return digest[:]
-	})
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are

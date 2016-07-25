@@ -12,15 +12,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
-
-	"github.com/kch42/buzhash"
-)
-
-const (
-	blobPattern = uint32(1<<11 - 1) // Avg Chunk Size of 2k
-
-	// The window size to use for computing the rolling hash.
-	blobWindowSize = 64
 )
 
 // Blob represents a list of Blobs.
@@ -143,12 +134,6 @@ func (cbr *BlobReader) updateReader() {
 	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
 }
 
-func newBlobLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, func(item sequenceItem) []byte {
-		return []byte{item.(byte)}
-	})
-}
-
 func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		buff := make([]byte, len(items))
@@ -171,12 +156,14 @@ func NewBlob(r io.Reader) Blob {
 }
 
 func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(vrw, newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), newBlobLeafBoundaryChecker(), newIndexedMetaSequenceBoundaryChecker)
+	sc := newEmptySequenceChunker(vrw, newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), func(item sequenceItem, rv *rollingValueHasher) {
+		rv.HashByte(item.(byte))
+	})
 
 	// TODO: The code below is a temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]
-	bh := buzhash.NewBuzHash(blobWindowSize)
+	rv := newRollingValueHasher()
 	offset := 0
 	addByte := func(b byte) bool {
 		if offset >= len(chunkBytes) {
@@ -186,8 +173,8 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 		}
 		chunkBytes[offset] = b
 		offset++
-		bh.HashByte(b)
-		return bh.Sum32()&blobPattern == blobPattern
+		rv.HashByte(b)
+		return rv.crossedBoundary
 	}
 
 	input := make(chan interface{}, 16)
@@ -217,6 +204,7 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 			n, err := r.Read(readBuff[:])
 			for i := 0; i < n; i++ {
 				if addByte(readBuff[i]) {
+					rv.ClearLastBoundary()
 					makeChunk()
 				}
 			}

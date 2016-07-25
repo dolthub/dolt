@@ -5,21 +5,17 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {invariant} from './assert.js';
-import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';
-import {byteLength} from './hash.js';
-import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import {
   OrderedKey,
-  newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn,
 } from './meta-sequence.js';
 import {
@@ -31,14 +27,12 @@ import diff from './ordered-sequence-diff.js';
 import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
+import RollingValueHasher, {hashValueBytes} from './rolling-value-hasher.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
 
 const KEY = 0;
 const VALUE = 1;
-
-const mapWindowSize = 1;
-const mapPattern = ((1 << 6) | 0) - 1;
 
 function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
     makeChunkFn {
@@ -50,10 +44,9 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
   };
 }
 
-function newMapLeafBoundaryChecker<K: Value, V: Value>():
-    BoundaryChecker<MapEntry<K, V>> {
-  return new BuzHashBoundaryChecker(mapWindowSize, byteLength, mapPattern,
-    (entry: MapEntry<K, V>) => getHashOfValue(entry[KEY]).digest);
+function mapHashValueBytes(entry: MapEntry, rv: RollingValueHasher) {
+  hashValueBytes(entry[KEY], rv);
+  hashValueBytes(entry[VALUE], rv);
 }
 
 export function removeDuplicateFromOrdered<T>(elems: Array<T>,
@@ -92,8 +85,7 @@ export default class Map<K: Value, V: Value> extends
         buildMapData(kvs),
         newMapLeafChunkFn(null),
         newOrderedMetaSequenceChunkFn(Kind.Map, null),
-        newMapLeafBoundaryChecker(),
-        newOrderedMetaSequenceBoundaryChecker);
+        mapHashValueBytes);
     invariant(seq instanceof OrderedSequence);
     super(seq);
   }
@@ -152,8 +144,7 @@ export default class Map<K: Value, V: Value> extends
     const vr = this.sequence.vr;
     return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Map, vr),
-                         newMapLeafBoundaryChecker(),
-                         newOrderedMetaSequenceBoundaryChecker).then(s => Map.fromSequence(s));
+                         mapHashValueBytes).then(s => Map.fromSequence(s));
   }
 
   async set(key: K, value: V): Promise<Map<K, V>> {

@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type orderedSequence interface {
@@ -119,13 +118,6 @@ func getCurrentKey(cur *sequenceCursor) orderedKey {
 	seq, ok := cur.seq.(orderedSequence)
 	d.Chk.True(ok, "need an ordered sequence here")
 	return seq.getKey(cur.idx)
-}
-
-func newOrderedMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(orderedSequenceWindowSize, hash.ByteLen, objectPattern, func(item sequenceItem) []byte {
-		digest := item.(metaTuple).ref.TargetHash().Digest()
-		return digest[:]
-	})
 }
 
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are

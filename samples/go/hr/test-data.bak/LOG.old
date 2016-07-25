@@ -1,0 +1,7 @@
+=============== Jul 21, 2016 (PDT) ===============
+17:11:33.730161 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+17:11:33.731468 db@open opening
+17:11:33.738966 db@janitor F·2 G·0
+17:11:33.739028 db@open done T·7.525784ms
+17:11:33.740040 db@close closing
+17:11:33.740180 db@close done T·136.355µs

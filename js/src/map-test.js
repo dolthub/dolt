@@ -40,7 +40,7 @@ import {
 } from './type.js';
 
 const testMapSize = 1000;
-const mapOfNRef = '7t3bkoj5tnc3vlv03fgupmvtgtc4i1na';
+const mapOfNRef = 'jmtmv5mjipjrt5s6s6d80louisqhnj62';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -85,21 +85,21 @@ suite('BuildMap', () => {
   }
 
   test('Map 1K', async () => {
-    await mapTestSuite(10, 'trvmij0jsl2o647qko06r6furo0lnkj0', 2, i => i);
+    await mapTestSuite(10, 'chqe8pkmi2lhn2buvqai357pgp3sg3t6', 3, i => i);
   });
 
   test('LONG: Map 4K', async () => {
-    await mapTestSuite(12, 'vnff1ufe5isqsam9vof6vmfgf37jdk3l', 2, i => i);
+    await mapTestSuite(12, 'v6qlscpd5j6ba89v5ebkijgci2djcpls', 7, i => i);
   });
 
   const newNumberStruct = i => newStruct('', {n: i});
 
   test('Map 1K structs', async () => {
-    await mapTestSuite(10, '0afm8gkghskk18hhbcuiljfdemqskoj5', 21, newNumberStruct);
+    await mapTestSuite(10, '20b1927mnjqa0aqsn4lf5rv80rdnebru', 3, newNumberStruct);
   });
 
   test('LONG: Map 4K structs', async () => {
-    await mapTestSuite(12, 't2t6vjr9nodu9k024ufnugj5qeahmgol', 2, newNumberStruct);
+    await mapTestSuite(12, 'q2kgo4jonhgfeoblvlovh2eo7kqjel54', 7, newNumberStruct);
   });
 
   test('unique keys - strings', async () => {
@@ -154,7 +154,7 @@ suite('BuildMap', () => {
 
     const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
     const m = new Map(kvRefs);
-    assert.strictEqual(m.hash.toString(), 'ck8vuj44jp52kllgo39s30u49i1s8bl8');
+    assert.strictEqual(m.hash.toString(), 'g49bom2pq40n2v927846vpmc3injuf5a');
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     // height + 1 because the leaves are Ref values (with height 1).
@@ -268,7 +268,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual(m.hash.toString(), 'a75m96ff3ta1poibue3uri7veluap4g4');
+    assert.strictEqual('d4kj4t158jfba9dtqi6s49rst403bkg8', m.hash.toString());
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);
@@ -726,7 +726,7 @@ suite('CompoundMap', () => {
     }
 
     await t(10, MapLeafSequence);
-    await t(100, OrderedMetaSequence);
+    await t(1000, OrderedMetaSequence);
   });
 
   test('compound map with values of every type', async () => {

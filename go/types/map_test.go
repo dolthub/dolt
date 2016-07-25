@@ -230,19 +230,19 @@ func (suite *mapTestSuite) TestStreamingMap() {
 }
 
 func TestMapSuite1K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "trvmij0jsl2o647qko06r6furo0lnkj0", 2, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(10, "chqe8pkmi2lhn2buvqai357pgp3sg3t6", 3, 2, 2, newNumber))
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "vnff1ufe5isqsam9vof6vmfgf37jdk3l", 2, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, "v6qlscpd5j6ba89v5ebkijgci2djcpls", 7, 2, 2, newNumber))
 }
 
 func TestMapSuite1KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "0afm8gkghskk18hhbcuiljfdemqskoj5", 21, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(10, "20b1927mnjqa0aqsn4lf5rv80rdnebru", 3, 2, 2, newNumberStruct))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "t2t6vjr9nodu9k024ufnugj5qeahmgol", 2, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, "q2kgo4jonhgfeoblvlovh2eo7kqjel54", 7, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -254,21 +254,21 @@ func newNumberStruct(i int) Value {
 }
 
 func getTestNativeOrderMap(scale int) testMap {
-	return newRandomTestMap(int(mapPattern)*scale, newNumber)
+	return newRandomTestMap(64*scale, newNumber)
 }
 
 func getTestRefValueOrderMap(scale int) testMap {
-	return newRandomTestMap(int(mapPattern)*scale, newNumber)
+	return newRandomTestMap(64*scale, newNumber)
 }
 
 func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
-	return newRandomTestMap(int(mapPattern)*scale, func(i int) Value {
+	return newRandomTestMap(64*scale, func(i int) Value {
 		return vw.WriteValue(Number(i))
 	})
 }
 
 func getTestRefToValueOrderMap(scale int, vw ValueWriter) testMap {
-	return newRandomTestMap(int(mapPattern)*scale, func(i int) Value {
+	return newRandomTestMap(64*scale, func(i int) Value {
 		return vw.WriteValue(NewSet(Number(i)))
 	})
 }
@@ -311,9 +311,11 @@ func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int,
 }
 
 func TestMapDiff(t *testing.T) {
-	t.Parallel()
-	testMap1 := newRandomTestMap(int(mapPattern)*2, newNumber)
-	testMap2 := newRandomTestMap(int(mapPattern)*2, newNumber)
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	testMap1 := newRandomTestMap(64*2, newNumber)
+	testMap2 := newRandomTestMap(64*2, newNumber)
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap()
 	map2 := testMap2.toMap()
@@ -365,6 +367,10 @@ func TestMapHas(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	vs := NewTestValueStore()
@@ -404,7 +410,10 @@ func TestMapRemove(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	doTest := func(incr int, tm testMap) {
@@ -431,6 +440,9 @@ func TestMapRemove(t *testing.T) {
 func TestMapRemoveNonexistentKey(t *testing.T) {
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	tm := getTestNativeOrderMap(2)
 	original := tm.toMap()
 	actual := original.Remove(Number(-1)) // rand.Int63 returns non-negative numbers.
@@ -441,6 +453,10 @@ func TestMapRemoveNonexistentKey(t *testing.T) {
 
 func TestMapFirst(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	m1 := NewMap()
 	k, v := m1.First()
 	assert.Nil(k)
@@ -466,6 +482,9 @@ func TestMapFirst2(t *testing.T) {
 	}
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	doTest := func(tm testMap) {
 		m := tm.toMap()
 		sort.Stable(tm.entries)
@@ -482,6 +501,10 @@ func TestMapFirst2(t *testing.T) {
 
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	m1 := NewMap()
 	assert.Nil(m1.Get(String("foo")))
 	m2 := m1.Set(String("foo"), Number(42))
@@ -511,6 +534,9 @@ func TestMapValidateInsertAscending(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	validateMapInsertion(t, newSortedTestMap(300, newNumber))
 }
 
@@ -518,7 +544,10 @@ func TestMapSet(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	doTest := func(incr, offset int, tm testMap) {
@@ -546,6 +575,10 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	tm := getTestNativeOrderMap(2)
@@ -591,6 +624,10 @@ func TestMapMaybeGet(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -657,11 +694,14 @@ func TestMapIter(t *testing.T) {
 func TestMapIter2(t *testing.T) {
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	doTest := func(tm testMap) {
 		m := tm.toMap()
 		sort.Sort(tm.entries)
 		idx := uint64(0)
-		endAt := uint64(mapPattern)
+		endAt := uint64(64)
 
 		m.Iter(func(k, v Value) (done bool) {
 			assert.True(tm.entries[idx].key.Equals(k))
@@ -686,6 +726,10 @@ func TestMapIterAll(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	doTest := func(tm testMap) {
@@ -776,6 +820,9 @@ func testMapOrder(assert *assert.Assertions, keyType, valueType *Type, tuples []
 
 func TestMapOrdering(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	testMapOrder(assert,
 		StringType, StringType,
@@ -952,7 +999,7 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("7t3bkoj5tnc3vlv03fgupmvtgtc4i1na", m.Hash().String())
+	assert.Equal("jmtmv5mjipjrt5s6s6d80louisqhnj62", m.Hash().String())
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
@@ -973,13 +1020,17 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("ck8vuj44jp52kllgo39s30u49i1s8bl8", m.Hash().String())
+	assert.Equal("g49bom2pq40n2v927846vpmc3injuf5a", m.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
 
 func TestMapModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	vs := NewTestValueStore()
 	m := getTestNativeOrderMap(2).toMap()
 	// Drop chunk values.
@@ -1023,7 +1074,7 @@ func TestMapTypeAfterMutations(t *testing.T) {
 	}
 
 	test(10, mapLeafSequence{})
-	test(100, orderedMetaSequence{})
+	test(1000, orderedMetaSequence{})
 }
 
 func TestCompoundMapWithValuesOfEveryType(t *testing.T) {

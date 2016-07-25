@@ -4,34 +4,28 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {makeChunkFn} from './sequence-chunker.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';
-import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {
   OrderedKey,
-  newOrderedMetaSequenceBoundaryChecker,
   newOrderedMetaSequenceChunkFn,
 } from './meta-sequence.js';
 import {OrderedSequence, OrderedSequenceCursor, OrderedSequenceIterator} from
   './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {makeSetType, makeUnionType, getTypeOfValue} from './type.js';
-import {byteLength} from './hash.js';
 import {removeDuplicateFromOrdered} from './map.js';
 import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
-
-const setWindowSize = 1;
-const setPattern = ((1 << 6) | 0) - 1;
+import {hashValueBytes} from './rolling-value-hasher.js';
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
@@ -40,13 +34,6 @@ function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
     const ns = Set.fromSequence(seq);
     return [ns, key, items.length];
   };
-}
-
-function newSetLeafBoundaryChecker<T:Value>(): BoundaryChecker<T> {
-  return new BuzHashBoundaryChecker(setWindowSize, byteLength, setPattern, (v: T) => {
-    const hash = getHashOfValue(v);
-    return hash.digest;
-  });
 }
 
 function buildSetData<T: Value>(values: Array<any>): Array<T> {
@@ -67,8 +54,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
         buildSetData(values),
         newSetLeafChunkFn(null),
         newOrderedMetaSequenceChunkFn(Kind.Set, null),
-        newSetLeafBoundaryChecker(),
-        newOrderedMetaSequenceBoundaryChecker);
+        hashValueBytes);
     invariant(seq instanceof OrderedSequence);
     super(seq);
   }
@@ -113,8 +99,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, insert, remove, newSetLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Set, vr),
-                         newSetLeafBoundaryChecker(),
-                         newOrderedMetaSequenceBoundaryChecker).then(s => Set.fromSequence(s));
+                         hashValueBytes).then(s => Set.fromSequence(s));
   }
 
   async add(value: T): Promise<Set<T>> {

@@ -5,6 +5,6 @@
 package constants
 
 // TODO: generate this from some central thing with go generate, so that JS and Go can be easily kept in sync
-const NomsVersion = "5"
+const NomsVersion = "6"
 
 var NomsGitSHA = "<developer build>"

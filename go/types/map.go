@@ -11,11 +11,6 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-const (
-	mapWindowSize = 1
-	mapPattern    = uint32(1<<6 - 1) // Average size of 64 elements
-)
-
 type Map struct {
 	seq orderedSequence
 	h   *hash.Hash
@@ -25,9 +20,15 @@ func newMap(seq orderedSequence) Map {
 	return Map{seq, &hash.Hash{}}
 }
 
+func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
+	entry := item.(mapEntry)
+	hashValueBytes(entry.key, rv)
+	hashValueBytes(entry.value, rv)
+}
+
 func NewMap(kv ...Value) Map {
 	entries := buildMapData(kv)
-	seq := newEmptySequenceChunker(nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), mapHashValueBytes)
 
 	for _, entry := range entries {
 		seq.Append(entry)
@@ -161,7 +162,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), newMapLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -245,13 +246,6 @@ func buildMapData(values []Value) mapEntrySlice {
 	}
 
 	return append(uniqueSorted, last)
-}
-
-func newMapLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(mapWindowSize, hash.ByteLen, mapPattern, func(item sequenceItem) []byte {
-		digest := item.(mapEntry).key.Hash().Digest()
-		return digest[:]
-	})
 }
 
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are

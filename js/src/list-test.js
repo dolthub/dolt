@@ -36,7 +36,7 @@ import {TestDatabase} from './test-util.js';
 import {IndexedMetaSequence} from './meta-sequence.js';
 
 const testListSize = 5000;
-const listOfNRef = 'pe9nceojcmtq2972kqhkmhqu40ckhvbh';
+const listOfNRef = 'tqpbqlu036sosdq9kg3lka7sjaklgslg';
 
 async function assertToJS(list: List, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
@@ -148,18 +148,18 @@ suite('List', () => {
   }
 
   test('List 1K', async () => {
-    await listTestSuite(10, '6a50jldrfobup4j0d0a55hk7i86iu3re', 15, 17, 2);
+    await listTestSuite(10, '1md2squldk4fo7sg179pbqvdd6a3aa4p', 0, 0, 0);
   });
 
   test('LONG: List 4K', async () => {
-    await listTestSuite(12, 'g77lk69og8i9gmu6l211rtia4dhkrmge', 2, 3, 2);
+    await listTestSuite(12, '8h3s3pjmp2ihbr7270iqe446ij3bfmqr', 2, 2, 2);
   });
 
   test('LONG: list of ref, set of n numbers, length', async () => {
     const nums = intSequence(testListSize);
     const refs = nums.map(n => new Ref(newStruct('num', {n})));
     const s = new List(refs);
-    assert.strictEqual('l185tn53r279itlmhfud2f56jopivtnj', s.hash.toString());
+    assert.strictEqual('6l8ivdkncvks19rsmtempkoklc3s1n2q', s.hash.toString());
     assert.strictEqual(testListSize, s.length);
 
     const height = deriveCollectionHeight(s);
@@ -623,7 +623,7 @@ suite('ListWriter', () => {
   });
 
   test('ListWriter with ValueReadWriter', async () => {
-    const values = intSequence(150);
+    const values = intSequence(6000);
     const l = new List(values);
 
     // The number of writes depends on how many chunks we've encountered.
@@ -670,6 +670,6 @@ suite('ListWriter', () => {
     }
 
     await t(15, ListLeafSequence);
-    await t(150, IndexedMetaSequence);
+    await t(1500, IndexedMetaSequence);
   });
 });

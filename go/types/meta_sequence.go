@@ -228,3 +228,16 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	d.Chk.False(r.IsEmpty())
 	return vr.ReadValue(r)
 }
+
+func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
+	mt := item.(metaTuple)
+	v := mt.key.v
+	if !mt.key.isOrderedByValue {
+		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+		d.Chk.False(mt.key.h.IsEmpty())
+		v = constructRef(MakeRefType(BoolType), mt.key.h, 0)
+	}
+
+	hashValueBytes(mt.ref, rv)
+	hashValueBytes(v, rv)
+}

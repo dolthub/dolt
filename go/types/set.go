@@ -10,12 +10,6 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-const (
-	// The window size to use for computing the rolling hash.
-	setWindowSize = 1
-	setPattern    = uint32(1<<6 - 1) // Average size of 64 elements
-)
-
 type Set struct {
 	seq orderedSequence
 	h   *hash.Hash
@@ -27,7 +21,7 @@ func newSet(seq orderedSequence) Set {
 
 func NewSet(v ...Value) Set {
 	data := buildSetData(v)
-	seq := newEmptySequenceChunker(nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	seq := newEmptySequenceChunker(nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), hashValueBytes)
 
 	for _, v := range data {
 		seq.Append(v)
@@ -132,7 +126,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	ch := newSequenceChunker(cur, nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), newSetLeafBoundaryChecker(), newOrderedMetaSequenceBoundaryChecker)
+	ch := newSequenceChunker(cur, nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -197,13 +191,6 @@ func buildSetData(values ValueSlice) ValueSlice {
 	}
 
 	return append(uniqueSorted, last)
-}
-
-func newSetLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(setWindowSize, hash.ByteLen, setPattern, func(item sequenceItem) []byte {
-		digest := item.(Value).Hash().Digest()
-		return digest[:]
-	})
 }
 
 func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {

@@ -153,17 +153,24 @@ func (suite *listTestSuite) TestMap() {
 }
 
 func TestListSuite1K(t *testing.T) {
-	suite.Run(t, newListTestSuite(10, "6a50jldrfobup4j0d0a55hk7i86iu3re", 15, 17, 2))
+	suite.Run(t, newListTestSuite(10, "1md2squldk4fo7sg179pbqvdd6a3aa4p", 0, 0, 0))
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, "g77lk69og8i9gmu6l211rtia4dhkrmge", 2, 3, 2))
+	suite.Run(t, newListTestSuite(12, "8h3s3pjmp2ihbr7270iqe446ij3bfmqr", 2, 2, 2))
+}
+
+func TestListSuite8K(t *testing.T) {
+	suite.Run(t, newListTestSuite(14, "v936b655mg56lb9jh7951ielec80et15", 5, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
-	tl := newTestList(512)
+	tl := newTestList(1024)
 	list := tl.toList()
 
 	for i := 0; i < len(tl); i += 16 {
@@ -175,9 +182,12 @@ func TestListInsert(t *testing.T) {
 }
 
 func TestListRemove(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
-	tl := newTestList(512)
+	tl := newTestList(1024)
 	list := tl.toList()
 
 	for i := len(tl) - 16; i >= 0; i -= 16 {
@@ -204,7 +214,7 @@ func TestListRemoveAt(t *testing.T) {
 }
 
 func getTestListLen() uint64 {
-	return uint64(listPattern) * 50
+	return uint64(64) * 50
 }
 
 func getTestList() testList {
@@ -244,6 +254,9 @@ func testListFromNomsList(list List) testList {
 }
 
 func TestStreamingListCreation(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -268,6 +281,9 @@ func TestStreamingListCreation(t *testing.T) {
 }
 
 func TestListAppend(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
@@ -322,7 +338,16 @@ func TestListAppend(t *testing.T) {
 	assert.True(newList(expected).Equals(cl6))
 }
 
-func validateListInsertion(t *testing.T, values ValueSlice) {
+func TestListValidateInsertAscending(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	values := generateNumbersAsValues(1000)
+
 	s := NewList()
 	for i, v := range values {
 		s = s.Insert(uint64(i), v)
@@ -330,16 +355,30 @@ func validateListInsertion(t *testing.T, values ValueSlice) {
 	}
 }
 
-func TestListValidateInsertAscending(t *testing.T) {
+func TestListValidateInsertAtZero(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	validateListInsertion(t, generateNumbersAsValues(300))
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	values := generateNumbersAsValues(1000)
+	s := NewList()
+	count := len(values)
+	for count > 0 {
+		count--
+		v := values[count]
+		s = s.Insert(uint64(0), v)
+		validateList(t, s, values[count:len(values)])
+	}
 }
 
 func TestListInsertNothing(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	cl := getTestList().toList()
 
@@ -356,6 +395,9 @@ func TestListInsertStart(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	cl := getTestList().toList()
 	cl2 := cl.Insert(0, Number(42))
@@ -400,6 +442,9 @@ func TestListInsertMiddle(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	cl := getTestList().toList()
 	cl2 := cl.Insert(100, Number(42))
@@ -451,6 +496,9 @@ func TestListInsertRanges(t *testing.T) {
 	}
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	testList := getTestList()
 	whole := testList.toList()
 
@@ -473,6 +521,9 @@ func TestListInsertRanges(t *testing.T) {
 func TestListRemoveNothing(t *testing.T) {
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	cl := getTestList().toList()
 
 	assert.True(cl.Equals(cl.Remove(0, 0)))
@@ -486,6 +537,9 @@ func TestListRemoveNothing(t *testing.T) {
 func TestListRemoveEverything(t *testing.T) {
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	cl := getTestList().toList().Remove(0, getTestListLen())
 
 	assert.True(NewList().Equals(cl))
@@ -497,6 +551,9 @@ func TestListRemoveAtMiddle(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	cl := getTestList().toList()
 	cl2 := cl.RemoveAt(100)
@@ -524,6 +581,9 @@ func TestListRemoveRanges(t *testing.T) {
 	}
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	testList := getTestList()
 	whole := testList.toList()
 
@@ -550,6 +610,9 @@ func TestListRemoveAtEnd(t *testing.T) {
 	}
 	assert := assert.New(t)
 
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	tl := getTestListWithLen(testListSize / 10)
 	cl := tl.toList()
 
@@ -565,6 +628,9 @@ func TestListSet(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
 
 	testList := getTestList()
 	cl := testList.toList()
@@ -595,7 +661,7 @@ func TestListFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testListSize)
 	s := NewList(nums...)
-	assert.Equal("pe9nceojcmtq2972kqhkmhqu40ckhvbh", s.Hash().String())
+	assert.Equal("tqpbqlu036sosdq9kg3lka7sjaklgslg", s.Hash().String())
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -606,11 +672,15 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testListSize)
 	s := NewList(nums...)
-	assert.Equal("l185tn53r279itlmhfud2f56jopivtnj", s.Hash().String())
+	assert.Equal("6l8ivdkncvks19rsmtempkoklc3s1n2q", s.Hash().String())
 }
 
 func TestListModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	vs := NewTestValueStore()
 
 	list := getTestList().toList()
@@ -650,7 +720,9 @@ func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) (di
 }
 
 func TestListDiffIdentical(t *testing.T) {
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
 	l1 := NewList(nums...)
@@ -664,7 +736,9 @@ func TestListDiffIdentical(t *testing.T) {
 }
 
 func TestListDiffVersusEmpty(t *testing.T) {
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
 	l1 := NewList(nums1...)
@@ -684,7 +758,9 @@ func TestListDiffReverse(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
@@ -705,7 +781,10 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
@@ -728,7 +807,10 @@ func TestListDiffRemove5x100(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -756,7 +838,10 @@ func TestListDiffAdd5x5(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -781,10 +866,13 @@ func TestListDiffAdd5x5(t *testing.T) {
 }
 
 func TestListDiffReplaceReverse5x100(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -812,7 +900,9 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 }
 
 func TestListDiffString1(t *testing.T) {
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three")}
@@ -824,7 +914,9 @@ func TestListDiffString1(t *testing.T) {
 }
 
 func TestListDiffString2(t *testing.T) {
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
@@ -839,7 +931,9 @@ func TestListDiffString2(t *testing.T) {
 }
 
 func TestListDiffString3(t *testing.T) {
-	t.Parallel()
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("four")}
@@ -857,19 +951,19 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	t.Parallel()
+
 	assert := assert.New(t)
 
 	cs1 := chunks.NewTestStore()
 	vs1 := newLocalValueStore(cs1)
-	nums1 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(nums1...)
 	ref1 := vs1.WriteValue(l1).TargetHash()
 	refList1 := vs1.ReadValue(ref1).(List)
 
 	cs2 := chunks.NewTestStore()
 	vs2 := newLocalValueStore(cs2)
-	nums2 := generateNumbersAsValuesFromToBy(5, 4550, 1)
+	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(nums2...)
 	ref2 := vs2.WriteValue(l2).TargetHash()
 	refList2 := vs2.ReadValue(ref2).(List)
@@ -886,13 +980,16 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	assert.Equal(diff1, diff2)
 
 	// should only read/write a "small & reasonably sized portion of the total"
-	assert.Equal(73, cs1.Writes)
-	assert.Equal(13, cs1.Reads)
-	assert.Equal(68, cs2.Writes)
-	assert.Equal(8, cs2.Reads)
+	assert.Equal(3, cs1.Writes)
+	assert.Equal(3, cs1.Reads)
+	assert.Equal(3, cs2.Writes)
+	assert.Equal(3, cs2.Reads)
 }
 
 func TestListTypeAfterMutations(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
 	assert := assert.New(t)
 
 	test := func(n int, c interface{}) {
@@ -915,5 +1012,5 @@ func TestListTypeAfterMutations(t *testing.T) {
 	}
 
 	test(15, listLeafSequence{})
-	test(150, indexedMetaSequence{})
+	test(1500, indexedMetaSequence{})
 }

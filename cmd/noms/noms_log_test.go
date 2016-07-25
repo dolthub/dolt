@@ -239,9 +239,9 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 
 	db.Close()
 	res, _ := s.Run(main, []string{"log", "-graph", "-show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
-	s.Equal(graphRes3, res)
+	test.EqualsIgnoreHashes(s.T(), graphRes3, res)
 	res, _ = s.Run(main, []string{"log", "-graph", "-show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
-	s.Equal(diffRes3, res)
+	test.EqualsIgnoreHashes(s.T(), diffRes3, res)
 }
 
 func (s *nomsLogTestSuite) TestTruncation() {

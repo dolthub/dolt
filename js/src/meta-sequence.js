@@ -4,20 +4,27 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
 import {compare} from './compare.js';
-import Hash, {byteLength} from './hash.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import Hash from './hash.js';
+import type {makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader} from './value-store.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {ValueBase} from './value.js';
 import Collection from './collection.js';
 import type {Type} from './type.js';
-import {makeListType, makeUnionType, blobType, makeSetType, makeMapType} from './type.js';
+import {
+  boolType,
+  blobType,
+  makeMapType,
+  makeListType,
+  makeRefType,
+  makeSetType,
+  makeUnionType,
+} from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
 import {OrderedSequence} from './ordered-sequence.js';
-import Ref from './ref.js';
+import Ref, {constructRef} from './ref.js';
 import Sequence from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
@@ -26,6 +33,8 @@ import Map from './map.js';
 import Set from './set.js';
 import Blob from './blob.js';
 import type {EqualsFn} from './edit-distance.js';
+import {hashValueBytes} from './rolling-value-hasher.js';
+import RollingValueHasher from './rolling-value-hasher.js';
 
 export type MetaSequence = Sequence<MetaTuple>;
 
@@ -54,6 +63,19 @@ export class MetaTuple<T: Value> {
   getChildSequenceSync(): Sequence {
     return notNull(this.child).sequence;
   }
+}
+
+export function metaHashValueBytes(tuple: MetaTuple, rv: RollingValueHasher) {
+  let val = tuple.key.v;
+  if (!tuple.key.isOrderedByValue) {
+    // See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+    val = constructRef(makeRefType(boolType), notNull(tuple.key.h), 0);
+  } else {
+    val = notNull(val);
+  }
+
+  hashValueBytes(tuple.ref, rv);
+  hashValueBytes(val, rv);
 }
 
 export class OrderedKey<T: Value> {
@@ -294,16 +316,6 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
   };
 }
 
-const objectWindowSize = 8;
-const orderedSequenceWindowSize = 1;
-const objectPattern = ((1 << 6) | 0) - 1;
-
-export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
-  return new BuzHashBoundaryChecker(orderedSequenceWindowSize, byteLength, objectPattern,
-    (mt: MetaTuple) => mt.ref.targetHash.digest
-  );
-}
-
 export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader): makeChunkFn {
   return (tuples: Array<MetaTuple>) => {
     const sum = tuples.reduce((l, mt) => {
@@ -324,12 +336,6 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
     const key = new OrderedKey(sum);
     return [col, key, sum];
   };
-}
-
-export function newIndexedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTuple> {
-  return new BuzHashBoundaryChecker(objectWindowSize, byteLength, objectPattern,
-    (mt: MetaTuple) => mt.ref.targetHash.digest
-  );
 }
 
 function getMetaSequenceChunks(ms: MetaSequence): Array<Ref> {

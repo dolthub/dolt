@@ -4,8 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
+import type {makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
@@ -14,14 +13,11 @@ import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
-import {getHashOfValue} from './get-hash.js';
 import {invariant} from './assert.js';
 import {
   OrderedKey,
-  newIndexedMetaSequenceBoundaryChecker,
   newIndexedMetaSequenceChunkFn,
 } from './meta-sequence.js';
-import {byteLength} from './hash.js';
 import Ref from './ref.js';
 import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
@@ -29,9 +25,7 @@ import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
 import SequenceChunker from './sequence-chunker.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
-
-const listWindowSize = 64;
-const listPattern = ((1 << 6) | 0) - 1;
+import {hashValueBytes} from './rolling-value-hasher.js';
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   return (items: Array<T>) => {
@@ -42,20 +36,13 @@ function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   };
 }
 
-function newListLeafBoundaryChecker<T: Value>(): BoundaryChecker<T> {
-  return new BuzHashBoundaryChecker(listWindowSize, byteLength, listPattern,
-    (v: T) => getHashOfValue(v).digest
-  );
-}
-
 export default class List<T: Value> extends Collection<IndexedSequence> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
         values,
         newListLeafChunkFn(null),
         newIndexedMetaSequenceChunkFn(Kind.List, null, null),
-        newListLeafBoundaryChecker(),
-        newIndexedMetaSequenceBoundaryChecker);
+        hashValueBytes);
     invariant(seq instanceof IndexedSequence);
     super(seq);
   }
@@ -70,8 +57,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
     return this.sequence.newCursorAt(idx).then(cursor =>
       chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
                     newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
-                    newListLeafBoundaryChecker(),
-                    newIndexedMetaSequenceBoundaryChecker)).then(s => List.fromSequence(s));
+                    hashValueBytes)).then(s => List.fromSequence(s));
   }
 
   insert(idx: number, ...values: Array<T>): Promise<List<T>> {
@@ -178,8 +164,7 @@ export class ListWriter<T: Value> {
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
     this._chunker = new SequenceChunker(null, vrw, newListLeafChunkFn(vrw),
-        newIndexedMetaSequenceChunkFn(Kind.List, vrw, vrw), newListLeafBoundaryChecker(),
-        newIndexedMetaSequenceBoundaryChecker);
+        newIndexedMetaSequenceChunkFn(Kind.List, vrw, vrw), hashValueBytes);
     this._vrw = vrw;
   }
 

@@ -4,29 +4,24 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import Collection from './collection.js';
-import {IndexedSequence} from './indexed-sequence.js';
-import {SequenceCursor} from './sequence.js';
-import {invariant} from './assert.js';
-import type {ValueReader, ValueReadWriter} from './value-store.js';
-import {blobType} from './type.js';
-import {
-  OrderedKey,
-  newIndexedMetaSequenceChunkFn,
-  newIndexedMetaSequenceBoundaryChecker,
-} from './meta-sequence.js';
-import BuzHashBoundaryChecker from './buzhash-boundary-checker.js';
-import SequenceChunker from './sequence-chunker.js';
-import type {BoundaryChecker, makeChunkFn} from './sequence-chunker.js';
-import {Kind} from './noms-kind.js';
-import type {EqualsFn} from './edit-distance.js';
 import * as Bytes from './bytes.js';
+import Collection from './collection.js';
+import RollingValueHasher from './rolling-value-hasher.js';
+import SequenceChunker from './sequence-chunker.js';
+import type {EqualsFn} from './edit-distance.js';
+import type {ValueReader, ValueReadWriter} from './value-store.js';
+import type {makeChunkFn} from './sequence-chunker.js';
+import {IndexedSequence} from './indexed-sequence.js';
+import {Kind} from './noms-kind.js';
+import {OrderedKey, newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
+import {SequenceCursor} from './sequence.js';
+import {blobType} from './type.js';
+import {invariant} from './assert.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {
     const chunker = new SequenceChunker(null, null, newBlobLeafChunkFn(null),
-        newIndexedMetaSequenceChunkFn(Kind.Blob, null), newBlobLeafBoundaryChecker(),
-        newIndexedMetaSequenceBoundaryChecker);
+        newIndexedMetaSequenceChunkFn(Kind.Blob, null), blobHashValueBytes);
 
     for (let i = 0; i < bytes.length; i++) {
       chunker.append(bytes[i]);
@@ -152,9 +147,6 @@ export class BlobLeafSequence extends IndexedSequence<number> {
   }
 }
 
-const blobWindowSize = 64;
-const blobPattern = ((1 << 11) | 0) - 1; // Avg Chunk Size: 2k
-
 function newBlobLeafChunkFn(vr: ?ValueReader): makeChunkFn {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, Bytes.fromValues(items));
@@ -164,8 +156,8 @@ function newBlobLeafChunkFn(vr: ?ValueReader): makeChunkFn {
   };
 }
 
-function newBlobLeafBoundaryChecker(): BoundaryChecker<number> {
-  return new BuzHashBoundaryChecker(blobWindowSize, 1, blobPattern, (v: number) => v);
+function blobHashValueBytes(b: number, rv: RollingValueHasher) {
+  rv.hashByte(b);
 }
 
 type BlobWriterState = 'writable' | 'closed';
@@ -179,8 +171,7 @@ export class BlobWriter {
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
     this._chunker = new SequenceChunker(null, vrw, newBlobLeafChunkFn(vrw),
-        newIndexedMetaSequenceChunkFn(Kind.Blob, vrw), newBlobLeafBoundaryChecker(),
-        newIndexedMetaSequenceBoundaryChecker);
+        newIndexedMetaSequenceChunkFn(Kind.Blob, vrw), blobHashValueBytes);
     this._vrw = vrw;
   }
 

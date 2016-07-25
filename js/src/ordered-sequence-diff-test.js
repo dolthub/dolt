@@ -4,12 +4,21 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {suite, test} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
 import {assert} from 'chai';
 import {fastForward} from './ordered-sequence-diff.js';
 import Set from './set.js';
+import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 
 suite('OrderedSequenceCursor', () => {
+  suiteSetup(() => {
+    smallTestChunks();
+  });
+
+  suiteTeardown(() => {
+    normalProductionChunks();
+  });
+
   test('LONG: fastForward', async () => {
     const numbersFromToBy = (from, to, by) => {
       const res = [];

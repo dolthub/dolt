@@ -6,22 +6,17 @@
 
 import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
 import type {MetaSequence, OrderedKey} from './meta-sequence.js';
-import {MetaTuple} from './meta-sequence.js';
+import {metaHashValueBytes, MetaTuple} from './meta-sequence.js';
 import type {SequenceCursor} from './sequence.js';
 import type {ValueReader, ValueWriter} from './value-store.js';
 import {invariant, notNull} from './assert.js';
 import type Collection from './collection.js';
+import RollingValueHasher from './rolling-value-hasher.js';
 
 import Ref from './ref.js';
 
-export type BoundaryChecker<T> = {
-  write: (item: T) => boolean;
-  windowSize: number;
-};
-
-export type NewBoundaryCheckerFn = () => BoundaryChecker<MetaTuple>;
-
 export type makeChunkFn<T, S: Sequence> = (items: Array<T>) => [Collection<S>, OrderedKey, number];
+export type hashValueBytesFn<T> = (item: T, rv: RollingValueHasher) => void;
 
 export async function chunkSequence<T, S: Sequence<T>>(
     cursor: SequenceCursor,
@@ -29,11 +24,9 @@ export async function chunkSequence<T, S: Sequence<T>>(
     remove: number,
     makeChunk: makeChunkFn<T, S>,
     parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
-    boundaryChecker: BoundaryChecker<T>,
-    newBoundaryChecker: NewBoundaryCheckerFn): Promise<Sequence> {
+    hashValueBytes: hashValueBytesFn): Promise<Sequence> {
 
-  const chunker = new SequenceChunker(cursor, null, makeChunk, parentMakeChunk, boundaryChecker,
-                                      newBoundaryChecker);
+  const chunker = new SequenceChunker(cursor, null, makeChunk, parentMakeChunk, hashValueBytes);
   if (cursor) {
     await chunker.resume();
   }
@@ -57,11 +50,9 @@ export function chunkSequenceSync<T, S: Sequence<T>>(
     insert: Array<T>,
     makeChunk: makeChunkFn<T, S>,
     parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
-    boundaryChecker: BoundaryChecker<T>,
-    newBoundaryChecker: NewBoundaryCheckerFn): Sequence {
+    hashValueBytes: hashValueBytesFn): Sequence {
 
-  const chunker = new SequenceChunker(null, null, makeChunk, parentMakeChunk, boundaryChecker,
-                                      newBoundaryChecker);
+  const chunker = new SequenceChunker(null, null, makeChunk, parentMakeChunk, hashValueBytes);
 
   insert.forEach(i => chunker.append(i));
 
@@ -73,28 +64,24 @@ export default class SequenceChunker<T, S: Sequence<T>> {
   _vw: ?ValueWriter;
   _parent: ?SequenceChunker<MetaTuple, MetaSequence>;
   _current: Array<T>;
-  _isLeaf: boolean;
-  _lastSeq: ?S;
   _makeChunk: makeChunkFn<T, S>;
   _parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>;
-  _boundaryChecker: BoundaryChecker<T>;
-  _newBoundaryChecker: NewBoundaryCheckerFn;
+  _isLeaf: boolean;
+  _hashValueBytes: hashValueBytesFn;
+  _rv: RollingValueHasher;
   _done: boolean;
 
   constructor(cursor: ?SequenceCursor, vw: ?ValueWriter, makeChunk: makeChunkFn,
-              parentMakeChunk: makeChunkFn,
-              boundaryChecker: BoundaryChecker<T>,
-              newBoundaryChecker: NewBoundaryCheckerFn) {
+              parentMakeChunk: makeChunkFn, hashValueBytes: hashValueBytesFn) {
     this._cursor = cursor;
     this._vw = vw;
     this._parent = null;
     this._current = [];
-    this._isLeaf = true;
-    this._lastSeq = null;
     this._makeChunk = makeChunk;
     this._parentMakeChunk = parentMakeChunk;
-    this._boundaryChecker = boundaryChecker;
-    this._newBoundaryChecker = newBoundaryChecker;
+    this._isLeaf = true;
+    this._hashValueBytes = hashValueBytes;
+    this._rv = new RollingValueHasher();
     this._done = false;
   }
 
@@ -106,7 +93,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     }
 
     // Number of previous items which must be hashed into the boundary checker.
-    let primeHashWindow = this._boundaryChecker.windowSize - 1;
+    let primeHashBytes = this._rv.window;
 
     const retreater = cursor.clone();
     let appendCount = 0;
@@ -124,20 +111,26 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     }
 
     // Walk backwards to the start of the existing chunk.
+    this._rv.lengthOnly = true;
     while (retreater.indexInChunk > 0 && await retreater._retreatMaybeAllowBeforeStart(false)) {
       appendCount++;
-      if (primeHashWindow > 0) {
+      if (primeHashBytes > 0) {
         primeHashCount++;
-        primeHashWindow--;
+        this._rv.clearLastBoundary();
+        this._hashValueBytes(retreater.getCurrent(), this._rv);
+        primeHashBytes -= this._rv.bytesHashed;
       }
     }
 
     // If the hash window won't be filled by the preceeding items in the current chunk, walk
     // further back until they will.
-    while (primeHashWindow > 0 && await retreater._retreatMaybeAllowBeforeStart(false)) {
+    while (primeHashBytes > 0 && await retreater._retreatMaybeAllowBeforeStart(false)) {
       primeHashCount++;
-      primeHashWindow--;
+      this._rv.clearLastBoundary();
+      this._hashValueBytes(retreater.getCurrent(), this._rv);
+      primeHashBytes -= this._rv.bytesHashed;
     }
+    this._rv.lengthOnly = false;
 
     while (primeHashCount > 0 || appendCount > 0) {
       const item = retreater.getCurrent();
@@ -145,7 +138,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
       if (primeHashCount > appendCount) {
         // Before the start of the current chunk: just hash value bytes into window.
-        this._boundaryChecker.write(item);
+        this._hashValueBytes(item, this._rv);
         primeHashCount--;
         continue;
       }
@@ -157,13 +150,14 @@ export default class SequenceChunker<T, S: Sequence<T>> {
         continue;
       }
 
-      // Within current chunk and hash window: append item & hash value bytes into window.
-      const isBoundary = this._boundaryChecker.write(item);
+      this._rv.clearLastBoundary();
+      this._hashValueBytes(item, this._rv);
       this._current.push(item);
 
-      if (isBoundary && cursorBeyondFinal && appendCount === 1) {
-        // It's ONLY correct Append immediately preceeding the cursor position because only after
-        // its insertion into the hash will the window be filled.
+      // Within current chunk and hash window: append item & hash value bytes into window.
+      if (this._rv.crossedBoundary && cursorBeyondFinal && appendCount === 1) {
+        // The cursor is positioned immediately after the final item in the sequence and it *was*
+        // an *explicit* chunk boundary: create a chunk.
         this.handleChunkBoundary();
       }
 
@@ -174,7 +168,9 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
   append(item: T) {
     this._current.push(item);
-    if (this._boundaryChecker.write(item)) {
+    this._rv.clearLastBoundary();
+    this._hashValueBytes(item, this._rv);
+    if (this._rv.crossedBoundary) {
       this.handleChunkBoundary();
     }
   }
@@ -200,8 +196,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
         this._vw,
         this._parentMakeChunk,
         this._parentMakeChunk,
-        this._newBoundaryChecker(),
-        this._newBoundaryChecker);
+        metaHashValueBytes);
     this._parent._isLeaf = false;
   }
 
@@ -355,11 +350,16 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     // Append the rest of the values in the sequence, up to the window size, plus the rest of that
     // chunk. It needs to be the full window size because anything that was appended/skipped
     // between chunker construction and finalization will have changed the hash state.
-    let hashWindow = this._boundaryChecker.windowSize;
+    let hashWindow = this._rv.window;
     const fzr = cursor.clone();
 
+    let isBoundary = this._current.length === 0;
+
+    // We can terminate when: (1) we hit the end input in this sequence or (2) we process beyond
+    // the hash window and encounter an item which is boundary in both the old and new state of the
+    // sequence.
     let i = 0;
-    for (; hashWindow > 0 || fzr.indexInChunk > 0; i++) {
+    for (; fzr.valid && (hashWindow > 0 || fzr.indexInChunk > 0 || !isBoundary); i++) {
       if (i === 0 || fzr.indexInChunk === 0) {
         // Every time we step into a chunk from the original sequence, that chunk will no longer
         // exist in the new sequence. The parent must be instructed to skip it.
@@ -367,15 +367,18 @@ export default class SequenceChunker<T, S: Sequence<T>> {
       }
 
       const item = fzr.getCurrent();
-      const didAdvance = await fzr.advance();
       this._current.push(item);
-      let isBoundary = false;
+      isBoundary = false;
+
+      await fzr.advance();
 
       if (hashWindow > 0) {
         // While we are within the hash window, append items (which explicit checks the hash value
         // for chunk boundaries).
-        isBoundary = this._boundaryChecker.write(item);
-        hashWindow--;
+        this._rv.clearLastBoundary();
+        this._hashValueBytes(item, this._rv);
+        isBoundary = this._rv.crossedBoundary;
+        hashWindow -= this._rv.bytesHashed;
       } else if (fzr.indexInChunk === 0) {
         // Once we are beyond the hash window, we know that boundaries can only occur in the same
         // place they did within the existing sequence.
@@ -384,10 +387,6 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
       if (isBoundary) {
         this.handleChunkBoundary();
-      }
-
-      if (!didAdvance) {
-        break;
       }
     }
   }

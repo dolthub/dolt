@@ -23,14 +23,19 @@ import Map from './map.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
 import walk from './walk.js';
 import type Value from './value.js';
+import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 
 suite('walk', () => {
   let ds;
   suiteSetup(() => {
+    smallTestChunks();
     ds = new Database(new BatchStoreAdaptor(new MemoryStore()));
   });
 
-  suiteTeardown((): Promise<void> => ds.close());
+  suiteTeardown((): Promise<void> => {
+    normalProductionChunks();
+    return ds.close();
+  });
 
   test('primitives', async () => {
     await Promise.all([true, false, 42, 88.8, 'hello!', ''].map(async v => {
