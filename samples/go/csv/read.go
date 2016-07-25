@@ -103,7 +103,7 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 		for i, v := range row {
 			if i < len(headers) {
 				fieldOrigIndex := fieldOrder[i]
-				val, err := StringToType(v, kindMap[fieldOrigIndex])
+				val, err := StringToValue(v, kindMap[fieldOrigIndex])
 				if err != nil {
 					d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[i], err))
 				}
@@ -149,10 +149,10 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 		fields := make(types.ValueSlice, len(headers))
 		for x, v := range row {
 			if x == pkIdx {
-				pk, err = StringToType(v, pkKind)
+				pk, err = StringToValue(v, pkKind)
 			} else if fieldIndex < len(headers) {
 				fieldOrigIndex := fieldOrder[fieldIndex]
-				fields[fieldOrigIndex], err = StringToType(v, kindMap[fieldOrigIndex])
+				fields[fieldOrigIndex], err = StringToValue(v, kindMap[fieldOrigIndex])
 				fieldIndex++
 			}
 			if err != nil {

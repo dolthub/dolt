@@ -86,8 +86,8 @@ func (tc *typeCanFit) testBool(value string) {
 	tc.boolType = err == nil
 }
 
-// StringToType takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
-func StringToType(s string, k types.NomsKind) (types.Value, error) {
+// StringToValue takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
+func StringToValue(s string, k types.NomsKind) (types.Value, error) {
 	switch k {
 	case types.NumberKind:
 		if s == "" {
