@@ -144,5 +144,6 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
 	p := commit.Get(datas.ParentsField).(types.Set)
-	return ds.Commit(commit.Get(datas.ValueField), CommitOptions{Parents: p})
+	m := commit.Get(datas.MetaField).(types.Struct)
+	return ds.Commit(commit.Get(datas.ValueField), CommitOptions{Meta: m, Parents: p})
 }

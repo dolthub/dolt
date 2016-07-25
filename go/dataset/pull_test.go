@@ -117,3 +117,47 @@ func TestPullDeepRefTopDown(t *testing.T) {
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
+
+func TestPullWithMeta(t *testing.T) {
+	assert := assert.New(t)
+
+	sink := createTestDataset("sink")
+	source := createTestDataset("source")
+
+	v1 := types.Number(1)
+	m1 := types.NewStruct("Meta", map[string]types.Value{
+		"name": types.String("one"),
+	})
+	source, err := source.Commit(v1, CommitOptions{Meta: m1})
+	assert.NoError(err)
+
+	v2 := types.Number(2)
+	m2 := types.NewStruct("Meta", map[string]types.Value{
+		"name": types.String("two"),
+	})
+	source, err = source.Commit(v2, CommitOptions{Meta: m2})
+	assert.NoError(err)
+	h2 := source.Head()
+
+	v3 := types.Number(3)
+	m3 := types.NewStruct("Meta", map[string]types.Value{
+		"name": types.String("three"),
+	})
+	source, err = source.Commit(v3, CommitOptions{Meta: m3})
+	assert.NoError(err)
+
+	v4 := types.Number(4)
+	m4 := types.NewStruct("Meta", map[string]types.Value{
+		"name": types.String("three"),
+	})
+	source, err = source.Commit(v4, CommitOptions{Meta: m4})
+	assert.NoError(err)
+	h4 := source.Head()
+
+	sink, err = sink.Pull(source.Database(), types.NewRef(h2), 1, nil)
+	assert.NoError(err)
+
+	sink, err = sink.Pull(source.Database(), types.NewRef(h4), 1, nil)
+	assert.NoError(err)
+	assert.True(source.Head().Equals(sink.Head()))
+}
