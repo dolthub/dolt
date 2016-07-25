@@ -64,7 +64,7 @@ But we must crawl before we run. Right now, we are putting the basics in place: 
 We are working toward a 1.0, after which time we will remove this warning and guarantee format stability.
 
 <br>
-## Get Involved
+## Talk
 
 - [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
