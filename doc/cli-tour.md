@@ -17,7 +17,7 @@ Now you should be able to run `noms`:
 
 usage: noms [-no-pager] [command] [command-args]
 
-Available commands:
+The commands are:
 
   diff
   ds
@@ -25,7 +25,7 @@ Available commands:
   serve
   show
   sync
-  ui
+  version
 
 See noms <command> -h for information on each available command.
 ```
@@ -49,8 +49,10 @@ The `noms ds` command lists the _datasets_ within a particular database:
 
 ```
 > noms ds http://demo.noms.io/cli-tour
-
-film-locations
+...
+sf-film-locations/raw
+sf-film-locations
+...
 ```
 
 ## noms log
@@ -58,30 +60,30 @@ film-locations
 Noms datasets are versioned. You can see the history with `log`:
 
 ```
-> noms log http://demo.noms.io/cli-tour::film-locations
+> noms log http://demo.noms.io/cli-tour::sf-film-locations
 
-sha1-bd662ff9bc708c0bed11cf5609d3a2ab644c7c6d
-Parent: sha1-31a5cc0997fc4053e25ebbb40c0a9fbcc5c942d5
+commit pckdvpvr9br1fie6c3pjudrlthe7na18
+Parent:    c506ta03786j48a07he83ju669u78qa2
+Date:      "2016-07-25T18:34:00+0000"
+InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
 ./[213] {
 -   "Locations": "Mission Delores Park (Mission District) via J-Church MUNI Train"
 +   "Locations": "Mission Dolores Park (Mission District) via J-Church MUNI Train"
 ./[221] {
--   "FunFacts": "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest building in San Francisco, built in 1791, and has survived two major earthquakes."
-+   "FunFacts": "Mission Dolores' official name is Mission San Francisco de Assis. It is the oldest building in San Francisco, built in 1791, and has survived two major earthquakes."
--   "Locations": "Mission Delores (3321 16th Street, Mission District)"
-+   "Locations": "Mission Dolores (3321 16th Street, Mission District)"
+-   "FunFacts": "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest building in San
++   "FunFacts": "Mission Dolores' official name is Mission San Francisco de Assis. It is the oldest building in San
 ...
 
-sha1-31a5cc0997fc4053e25ebbb40c0a9fbcc5c942d5
-Parent: sha1-a3a49c4f9910a982ec5f58aa0e33f26cecdf26bc
+commit c506ta03786j48a07he83ju669u78qa2
+Parent:    dl0j63uouu3e64tqrcnqokmisgkdoarb
+Date:      "2016-07-25T18:34:00+0000"
+InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
+./[6] {
+-   "Locations": "Randall Musuem"
++   "Locations": "Randall Museum"
 ./ {
-+   struct Row {
-+     Actor1: String,
-+     Actor2: String,
-+     Actor3: String,
-+     Director: String,
-+     Distributor: String,
-+     FunFacts: String,
++   Row {
++     Actor1: "Charles Chaplin",
 ...
 ```
 
@@ -92,30 +94,36 @@ Note that Noms is a typed system. What is being shown here for each entry is not
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
-> noms show 'http://demo.noms.io/cli-tour::#sha1-20e6020b3f0b2728935e23f0e4c2d942e26b7ae1'
+> noms show 'http://demo.noms.io/cli-tour::#pckdvpvr9br1fie6c3pjudrlthe7na18'
 
 struct Commit {
-  parents: Set<Ref<Cycle<0>>>
-  value: Value
+  meta: struct {},
+  parents: Set<Ref<Cycle<0>>>,
+  value: List<struct Row {
+    Actor1: String,
+    Actor2: String,
+    Actor3: String,
+    Director: String,
+    Distributor: String,
+    FunFacts: String,
+    Locations: String,
+    ProductionCompany: String,
+    ReleaseYear: Number,
+    Title: String,
+    Writer: String,
+  }>,
 }({
-  parents: {
-    sha1-b50c323c568bfff07a13fe276236cbdf40b5d846,
+  meta: Meta {
+    date: "2016-07-25T18:51:23+0000",
+    inputPath: "http://demo.noms.io/cli-tour::sf-film-locations/raw.value",
   },
-  value: [
+  parents: {
+    pckdvpvr9br1fie6c3pjudrlthe7na18,
+  },
+  value: [  // 1,241 items
     Row {
-      ActorQ201: "Siddarth",
-      ActorQ202: "Nithya Menon",
-      ActorQ203: "Priya Anand",
-      Director: "Jayendra",
-      Distributor: "",
-      FunQ20Facts: "",
-      Locations: "Epic Roasthouse (399 Embarcadero)",
-      ProductionQ20Company: "SPI Cinemas",
-      ReleaseQ20Year: "2011",
-      SmileQ20AgainQ2CQ20JennyQ20Lee: "",
-      Title: "180",
-      Writer: "Umarji Anuradha, Jayendra, Aarthi Sriram, & Suba ",
-    },
+      Actor1: "Siddarth",
+...
 ```
 
 ## noms sync
@@ -125,8 +133,8 @@ You can work with Noms databases that are remote exactly the same as you work wi
 Moving data in Noms is done with the `sync` command. Note that unlike Git, we do not make a distinction between _push_ and _pull_. It's the same operation in both directions:
 
 ```
-> noms sync http://demo.noms.io/cli-tour::film-locations ldb:/tmp/noms::films
-> noms ds ldb:/tmp/noms
+> noms sync http://demo.noms.io/cli-tour::sf-film-locations /tmp/noms::films
+> noms ds /tmp/noms
 films
 ```
 
@@ -134,13 +142,14 @@ We can now make an edit locally:
 
 ```
 > go install github.com/attic-labs/noms/samples/go/csv/...
-> csv-export ldb:/tmp/noms::films > /tmp/film-locations.csv
+> csv-export /tmp/noms::films > /tmp/film-locations.csv
 ```
 
 open /tmp/film-location.csv and edit it, then:
 
 ```
-> csv-import ldb:/tmp/noms::films /tmp/film-locations.csv
+> csv-import -column-types=String,String,String,String,String,String,String,Number,String,String,String \
+    /tmp/noms::films /tmp/film-locations.csv
 ```
 
 #noms diff
@@ -148,20 +157,19 @@ open /tmp/film-location.csv and edit it, then:
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
 ```
-> noms diff http://demo.noms.io/cli-tour::film-locations ldb:/tmp/noms::films
+> noms diff http://demo.noms.io/cli-tour::sf-film-locations /tmp/noms::films
 
+./.meta {
+-   "date": "2016-07-25T18:51:23+0000"
++   "date": "2016-07-25T22:51:14+0000"
++   "inputFile": "/tmp/film-locations.csv"
+-   "inputPath": "http://demo.noms.io/cli-tour::sf-film-locations/raw.value"
 ./.parents {
--   Ref<struct Commit {
--     parents: Set<Ref<Cycle<0>>>
--     value: Value
--   }>(sha1-4883ff49f930718f7aafede265b51f83c99cf7bc)
-+   Ref<struct Commit {
-+     parents: Set<Ref<Cycle<0>>>
-+     value: Value
-+   }>(sha1-b50c323c568bfff07a13fe276236cbdf40b5d846)
+-   pckdvpvr9br1fie6c3pjudrlthe7na18
++   q4jcc2i7kntkjiipvjgpr5r02ldroj0g
   }
-./.value[213] {
--   "Locations": "Mission Delores Park (Mission District) via J-Church MUNI Train"
-+   "Locations": "Mission Dolores Park (Mission District) via J-Church MUNI Train"
-...
+./.value[0] {
+-   "Locations": "Epic Roasthouse (399 Embarcadero)"
++   "Locations": "Epic Roadhouse (399 Embarcadero)"
 ```
+  
