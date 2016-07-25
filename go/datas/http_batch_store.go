@@ -490,9 +490,14 @@ func formatErrorResponse(res *http.Response) string {
 func expectVersion(res *http.Response) {
 	dataVersion := res.Header.Get(NomsVersionHeader)
 	if constants.NomsVersion != dataVersion {
-		ioutil.ReadAll(res.Body)
+		b, _ := ioutil.ReadAll(res.Body)
 		res.Body.Close()
-		d.PanicIfError(fmt.Errorf("Version mismatch\n\r\tSDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion))
+		d.PanicIfError(fmt.Errorf(
+			"Version mismatch\n\r"+
+				"\tSDK version '%s' is incompatible with data of version: '%s'\n\r"+
+				"\tHTTP Response: %d (%s): %s\n",
+			constants.NomsVersion, dataVersion,
+			res.StatusCode, res.Status, string(b)))
 	}
 }
 
