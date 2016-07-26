@@ -80,13 +80,9 @@ type DynamoStore struct {
 	showStats       bool
 }
 
-// NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace. If key and secret are empty, the DynamoStore will attempt to inherit AWS credentials from the environment.
-func NewDynamoStore(table, namespace, region, key, secret string, showStats bool) *DynamoStore {
-	config := aws.NewConfig().WithRegion(region)
-	if key != "" {
-		config = config.WithCredentials(credentials.NewStaticCredentials(key, secret, ""))
-	}
-
+// NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace.
+// Uses credential from the AWS config parameter.
+func NewDynamoStore(table, namespace string, config *aws.Config, showStats bool) *DynamoStore {
 	sess := session.New(config)
 
 	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess), showStats)
@@ -525,7 +521,11 @@ func DynamoFlags(prefix string) DynamoStoreFlags {
 
 func (f DynamoStoreFlags) CreateStore(ns string) ChunkStore {
 	if f.check() {
-		return NewDynamoStore(*f.dynamoTable, ns, *f.awsRegion, *f.awsKey, *f.awsSecret, *f.dynamoStats)
+		config := aws.NewConfig().WithRegion(*f.awsRegion)
+		if *f.awsKey != "" {
+			config = config.WithCredentials(credentials.NewStaticCredentials(*f.awsKey, *f.awsSecret, ""))
+		}
+		return NewDynamoStore(*f.dynamoTable, ns, config, *f.dynamoStats)
 	}
 	return nil
 }
