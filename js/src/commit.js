@@ -119,7 +119,7 @@ function getRefElementType(t: Type<CompoundDesc>): Type<*> {
 }
 
 function valueTypeFromCommit(t: Type<StructDesc>): Type<*> {
-  invariant(t.name === 'Commit');
+  invariant(t.desc.name === 'Commit');
   return notNull(t.desc.getField('value'));
 }
 

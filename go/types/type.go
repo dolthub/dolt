@@ -53,11 +53,6 @@ func (t *Type) Kind() NomsKind {
 	return t.Desc.Kind()
 }
 
-func (t *Type) Name() string {
-	// TODO: Remove from Type
-	return t.Desc.(StructDesc).Name
-}
-
 func (t *Type) hasUnresolvedCycle(visited []*Type) bool {
 	_, found := indexOfType(t, visited)
 	if found {

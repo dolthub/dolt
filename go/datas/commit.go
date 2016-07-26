@@ -108,7 +108,7 @@ func getRefElementType(t *types.Type) *types.Type {
 }
 
 func valueTypeFromCommit(t *types.Type) *types.Type {
-	d.Chk.True(t.Kind() == types.StructKind && t.Name() == "Commit")
+	d.Chk.True(t.Kind() == types.StructKind && t.Desc.(types.StructDesc).Name == "Commit")
 	return t.Desc.(types.StructDesc).Field(ValueField)
 }
 

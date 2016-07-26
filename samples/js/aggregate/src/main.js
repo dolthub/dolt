@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   let out = Promise.resolve(new Map());
 
   await walk(commit.value, input.database, cv => {
-    if (!(cv instanceof Struct) || cv.type.name !== args.struct) {
+    if (!(cv instanceof Struct) || cv.type.desc.name !== args.struct) {
       return;
     }
 

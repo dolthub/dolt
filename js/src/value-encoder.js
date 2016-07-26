@@ -242,12 +242,11 @@ export default class ValueEncoder {
     }
 
     parentStructTypes.push(t);
-    const desc = t.desc;
+    const {desc} = t;
     this.writeKind(t.kind);
-    this._w.writeString(t.name);
+    this._w.writeString(desc.name);
 
-    const count = desc.fieldCount;
-    this._w.writeUint32(count);
+    this._w.writeUint32(desc.fieldCount);
 
     desc.forEachField((name: string, type: Type) => {
       this._w.writeString(name);

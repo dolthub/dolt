@@ -113,7 +113,7 @@ export class StructMirror<T: Struct> {
   }
 
   get name(): string {
-    return this.type.name;
+    return this.desc.name;
   }
 
   get(name: string): ?Value {

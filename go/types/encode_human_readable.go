@@ -180,7 +180,7 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 
 	desc := t.Desc.(StructDesc)
 	if printStructName {
-		w.write(t.Name())
+		w.write(desc.Name)
 		w.write(" ")
 	}
 	w.write("{")
@@ -288,15 +288,14 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	}
 	parentStructTypes = append(parentStructTypes, t)
 
-	w.write("struct ")
-	w.write(t.Name())
-	openBrace := "{"
-	if t.Name() != "" {
-		openBrace = " {"
-	}
-	w.write(openBrace)
-	w.indent()
 	desc := t.Desc.(StructDesc)
+	w.write("struct ")
+	if desc.Name != "" {
+		w.write(desc.Name + " ")
+	}
+	w.write("{")
+	w.indent()
+
 	first := true
 	desc.IterFields(func(name string, t *Type) {
 		if first {

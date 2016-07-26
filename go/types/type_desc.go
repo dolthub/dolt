@@ -96,7 +96,6 @@ func (s fieldSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s fieldSlice) Less(i, j int) bool { return s[i].name < s[j].name }
 
 // StructDesc describes a custom Noms Struct.
-// Structs can contain at most one anonymous union, so Union may be nil.
 type StructDesc struct {
 	Name   string
 	fields []field
