@@ -37,21 +37,17 @@ func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change V
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
 func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
 	lrChanges := make(chan ValueChanged)
-	lrCloseChan := make(chan struct{})
 	tdChanges := make(chan ValueChanged)
+	// Give the close channels a buffer size of 1 so that they won't block, see call sites.
+	lrCloseChan := make(chan struct{}, 1)
+	tdCloseChan := make(chan struct{}, 1)
 
-	// This is thread safe because it's only written to before closing |tdChanges|, and only read after |tdChanges| has closed.
-	wasCanceled := false
-
-	// The left-right diff gets a separate close channel so that if/when the top-down diff overtakes it, it can be aborted.
 	go func() {
 		orderedSequenceDiffLeftRight(last, current, lrChanges, lrCloseChan)
 		close(lrChanges)
 	}()
-
-	// The top-down diff uses the default close channel. Detect if it was called via the result of |wasCanceled|.
 	go func() {
-		wasCanceled = orderedSequenceDiffTopDown(last, current, tdChanges, closeChan)
+		orderedSequenceDiffTopDown(last, current, tdChanges, tdCloseChan)
 		close(tdChanges)
 	}()
 
@@ -60,20 +56,33 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 	for multiplexing := true; multiplexing; {
 		select {
+		case <-closeChan:
+			// The buffer size of 1 makes these non-blocking.
+			lrCloseChan <- struct{}{}
+			tdCloseChan <- struct{}{}
+			return false
 		case c, ok := <-lrChanges:
 			if !ok {
-				return true // the only way |lrChanges| can be done is if the diff completed.
+				// Left-right diff completed, try to stop top-down. The close chan has a buffer size of 1, so it won't block if it already finished.
+				tdCloseChan <- struct{}{}
+				return true
 			}
 			lrChangeCount++
-			changes <- c
+			if !sendChange(changes, closeChan, c) {
+				return false
+			}
 		case c, ok := <-tdChanges:
 			if !ok {
-				return wasCanceled
+				// Top-down diff completed, try to stop left-right. The close chan has a buffer size of 1, so it won't block if it already finished.
+				lrCloseChan <- struct{}{}
+				return true
 			}
 			tdChangeCount++
 			if tdChangeCount > lrChangeCount {
 				// Top-down changes have overtaken left-right changes.
-				changes <- c
+				if !sendChange(changes, closeChan, c) {
+					return false
+				}
 				lrCloseChan <- struct{}{}
 				multiplexing = false
 			}
@@ -81,9 +90,11 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 	}
 
 	for c := range tdChanges {
-		changes <- c
+		if !sendChange(changes, closeChan, c) {
+			return false
+		}
 	}
-	return wasCanceled
+	return true
 }
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.

@@ -151,3 +151,27 @@ func TestOrderedSequencesDisjoint(t *testing.T) {
 	ts1.Equal(ts1.added, ts2.removed, "added and removed in disjoint diff")
 	ts1.Equal(ts1.removed, ts2.added, "removed and added in disjoint diff")
 }
+
+func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
+	runTest := func(df diffFn) {
+		s1 := NewSet().seq
+		// A single item should be enough, but generate lots anyway.
+		s2 := NewSet(generateNumbersAsValuesFromToBy(0, 1000, 1)...).seq
+
+		changeChan := make(chan ValueChanged)
+		closeChan := make(chan struct{})
+		stopChan := make(chan struct{})
+
+		go func() {
+			df(s1, s2, changeChan, closeChan)
+			stopChan <- struct{}{}
+		}()
+
+		closeChan <- struct{}{}
+		<-stopChan
+	}
+
+	runTest(orderedSequenceDiffBest)
+	runTest(orderedSequenceDiffLeftRight)
+	runTest(orderedSequenceDiffTopDown)
+}
