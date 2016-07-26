@@ -70,7 +70,15 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 
 func TestNomsMapdiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./.\"map-3\" {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n./.\"map-3\".\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n  }\n"
+	expected := `["map-3"] {
+-   "m3": "m-three"
++   "m3": "m-three-diff"
+  }
+["map-3"]["m4"] {
+-   "a1": "a-one"
++   "a1": "a-one-diff"
+  }
+`
 
 	m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 	m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
@@ -83,14 +91,18 @@ func TestNomsMapdiff(t *testing.T) {
 func TestNomsSetDiff(t *testing.T) {
 	assert := assert.New(t)
 
-	expected := "./ {\n-   \"five\"\n+   \"five-diff\"\n  }\n"
+	expected := `(root) {
+-   "five"
++   "five-diff"
+  }
+`
 	s1 := createSet("one", "three", "five", "seven", "nine")
 	s2 := createSet("one", "three", "five-diff", "seven", "nine")
 	buf := util.NewBuffer(nil)
 	Diff(buf, s1, s2)
 	assert.Equal(expected, buf.String())
 
-	expected = `./ {
+	expected = `(root) {
 +   {  // 4 items
 +     "m1": "m-one",
 +     "m3": "m-three-diff",
@@ -124,7 +136,14 @@ func TestNomsSetDiff(t *testing.T) {
 
 func TestNomsStructDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := "./ {\n-   \"four\": \"four\"\n+   \"four\": \"four-diff\"\n./.\"three\" {\n-   \"field3\": \"field3-data\"\n+   \"field3\": \"field3-data-diff\"\n  }\n"
+	expected := `(root) {
+-   "four": "four"
++   "four": "four-diff"
+  }
+["three"] {
+-   "field3": "field3-data"
++   "field3": "field3-data-diff"
+`
 
 	fieldData := []interface{}{
 		"field1", "field1-data",
@@ -146,21 +165,37 @@ func TestNomsStructDiff(t *testing.T) {
 func TestNomsListDiff(t *testing.T) {
 	assert := assert.New(t)
 
-	expected := "./ {\n-   2\n+   22\n-   44\n  }\n"
+	expected := `(root) {
+-   2
++   22
+-   44
+  }
+`
 	l1 := createList(1, 2, 3, 4, 44, 5, 6)
 	l2 := createList(1, 22, 3, 4, 5, 6)
 	buf := util.NewBuffer(nil)
 	Diff(buf, l1, l2)
 	assert.Equal(expected, buf.String())
 
-	expected = "./ {\n+   \"seven\"\n  }\n"
+	expected = `(root) {
++   "seven"
+  }
+`
 	l1 = createList("one", "two", "three", "four", "five", "six")
 	l2 = createList("one", "two", "three", "four", "five", "six", "seven")
 	buf = util.NewBuffer(nil)
 	Diff(buf, l1, l2)
 	assert.Equal(expected, buf.String())
 
-	expected = "./[2] {\n-   \"m3\": \"m-three\"\n+   \"m3\": \"m-three-diff\"\n./[2].\"m4\" {\n-   \"a1\": \"a-one\"\n+   \"a1\": \"a-one-diff\"\n  }\n  }\n"
+	expected = `[2] {
+-   "m3": "m-three"
++   "m3": "m-three-diff"
+  }
+[2]["m4"] {
+-   "a1": "a-one"
++   "a1": "a-one-diff"
+  }
+`
 	l1 = createList(mm1, mm2, mm3, mm4)
 	l2 = createList(mm1, mm2, mm3x, mm4)
 	buf = util.NewBuffer(nil)
