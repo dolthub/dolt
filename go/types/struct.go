@@ -125,46 +125,47 @@ func (s Struct) Set(n string, v Value) Struct {
 	return Struct{values, s.t, &hash.Hash{}}
 }
 
-func StructDiff(s1, s2 Struct) (changes []ValueChanged) {
-	unionFieldNames := func(s1, s2 Struct) []string {
-		fieldNames := sort.StringSlice{}
-		if s1.Type().Equals(s2.Type()) {
-			for _, f := range s1.desc().fields {
-				fieldNames = append(fieldNames, f.name)
-			}
-			return fieldNames
-		}
-
-		nameMap := map[string]struct{}{}
-		for _, f := range s1.desc().fields {
-			nameMap[f.name] = struct{}{}
-		}
-		for _, f := range s2.desc().fields {
-			nameMap[f.name] = struct{}{}
-		}
-		for k, _ := range nameMap {
-			fieldNames = append(fieldNames, k)
-		}
-		sort.Sort(fieldNames)
-		return fieldNames
+func (s1 Struct) Diff(s2 Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	if s1.Equals(s2) {
+		return
 	}
+	fs1, fs2 := s1.Type().Desc.(StructDesc).fields, s2.Type().Desc.(StructDesc).fields
+	i1, i2 := 0, 0
+	for i1 < len(fs1) && i2 < len(fs2) {
+		f1, f2 := fs1[i1], fs2[i2]
+		fn1, fn2 := f1.name, f2.name
 
-	for _, fn := range unionFieldNames(s1, s2) {
-		v1, ok1 := s1.MaybeGet(fn)
-		v2, ok2 := s2.MaybeGet(fn)
-
-		if ok1 && ok2 {
-			if !v1.Equals(v2) {
-				changes = append(changes, ValueChanged{ChangeType: DiffChangeModified, V: String(fn)})
+		var change ValueChanged
+		if fn1 == fn2 {
+			if !s1.values[i1].Equals(s2.values[i2]) {
+				change = ValueChanged{ChangeType: DiffChangeModified, V: String(fn1)}
 			}
-		} else if ok1 {
-			changes = append(changes, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn)})
+			i1++
+			i2++
+		} else if fn1 < fn2 {
+			change = ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn1)}
+			i1++
 		} else {
-			changes = append(changes, ValueChanged{ChangeType: DiffChangeAdded, V: String(fn)})
+			change = ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1)}
+			i2++
+		}
+
+		if change != (ValueChanged{}) && !sendChange(changes, closeChan, change) {
+			return
 		}
 	}
 
-	return changes
+	for ; i1 < len(fs1); i1++ {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs1[i1].name)}) {
+			return
+		}
+	}
+
+	for ; i2 < len(fs2); i2++ {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs2[i2].name)}) {
+			return
+		}
+	}
 }
 
 var escapeChar = "Q"

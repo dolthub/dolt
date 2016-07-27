@@ -160,17 +160,17 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(lastKey) {
-				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}); !ok {
+				if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}) {
 					return false
 				}
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}); !ok {
+				if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}) {
 					return false
 				}
 				lastCur.advance()
 			} else {
-				if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}); !ok {
+				if !sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}) {
 					return false
 				}
 				lastCur.advance()
@@ -180,13 +180,13 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 	}
 
 	for lastCur.valid() {
-		if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}); !ok {
+		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}) {
 			return false
 		}
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		if ok := sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}); !ok {
+		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}) {
 			return false
 		}
 		currentCur.advance()

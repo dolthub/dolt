@@ -77,10 +77,17 @@ func TestStructDiff(t *testing.T) {
 	assert := assert.New(t)
 
 	assertDiff := func(expect []ValueChanged, s1, s2 Struct) {
-		actual := StructDiff(s1, s2)
-		for i, _ := range actual {
-			assert.Equal(expect[i], actual[i])
+		changes := make(chan ValueChanged)
+		go func() {
+			s1.Diff(s2, changes, nil)
+			close(changes)
+		}()
+		i := 0
+		for change := range changes {
+			assert.Equal(expect[i], change)
+			i++
 		}
+		assert.Equal(len(expect), i, "Wrong number of changes")
 	}
 
 	vc := func(ct DiffChangeType, fieldName string) ValueChanged {

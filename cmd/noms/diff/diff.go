@@ -128,9 +128,20 @@ func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
 }
 
 func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
-	changed := types.StructDiff(v1, v2)
+	changeChan := make(chan types.ValueChanged)
+	closeChan := make(chan struct{})
+	doneChan := make(chan struct{})
+
+	go func() {
+		v2.Diff(v1, changeChan, closeChan)
+		close(changeChan)
+		doneChan <- struct{}{}
+	}()
+	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
+
 	wroteHeader := false
-	for _, change := range changed {
+
+	for change := range changeChan {
 		fn := string(change.V.(types.String))
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
