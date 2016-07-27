@@ -55,7 +55,7 @@ type ddbsvc interface {
 	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 }
 
-// DynamoStore implements ChunkStore by storing data to DynamoDB and, if needed, S3.
+// DynamoStore implements ChunkStore by storing data to DynamoDB and, if needed, S3. It assumes the existence of a DynamoDB table whose primary partition key is in Binary format and named `ref`.
 type DynamoStore struct {
 	table           string
 	namespace       []byte
