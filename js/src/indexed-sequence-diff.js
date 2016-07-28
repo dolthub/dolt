@@ -54,11 +54,11 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
 
     let lastChildOffset = lastOffset;
     if (splice[SPLICE_AT] > 0) {
-      lastChildOffset += last.getOffset(splice[SPLICE_AT] - 1) + 1;
+      lastChildOffset += last.cumulativeNumberOfLeaves(splice[SPLICE_AT] - 1);
     }
     let currentChildOffset = currentOffset;
     if (splice[SPLICE_FROM] > 0) {
-      currentChildOffset += current.getOffset(splice[SPLICE_FROM] - 1) + 1;
+      currentChildOffset += current.cumulativeNumberOfLeaves(splice[SPLICE_FROM] - 1);
     }
 
     return Promise.all([lastChildP, currentChildP]).then(childSequences =>

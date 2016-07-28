@@ -37,11 +37,11 @@ func indexedSequenceDiff(last indexedSequence, lastHeight int, lastOffset uint64
 			currentChild := current.(indexedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(indexedSequence)
 			lastChildOffset := lastOffset
 			if splice.SpAt > 0 {
-				lastChildOffset += last.getOffset(int(splice.SpAt)-1) + 1
+				lastChildOffset += last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
 			}
 			currentChildOffset := currentOffset
 			if splice.SpFrom > 0 {
-				currentChildOffset += current.getOffset(int(splice.SpFrom)-1) + 1
+				currentChildOffset += current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
 			}
 			if ok := indexedSequenceDiff(lastChild, lastHeight-1, lastChildOffset, currentChild, currentHeight-1, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
 				return false

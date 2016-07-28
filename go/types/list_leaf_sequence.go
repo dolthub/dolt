@@ -20,8 +20,8 @@ func newListLeafSequence(vr ValueReader, v ...Value) indexedSequence {
 }
 
 // indexedSequence interface
-func (ll listLeafSequence) getOffset(idx int) uint64 {
-	return uint64(idx)
+func (ll listLeafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	return uint64(idx) + 1
 }
 
 func (ll listLeafSequence) getCompareFn(other sequence) compareFn {

@@ -14,8 +14,8 @@ func newBlobLeafSequence(vr ValueReader, data []byte) indexedSequence {
 }
 
 // indexedSequence interface
-func (bl blobLeafSequence) getOffset(idx int) uint64 {
-	return uint64(idx)
+func (bl blobLeafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	return uint64(idx) + 1
 }
 
 func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {

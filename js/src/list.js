@@ -129,8 +129,8 @@ export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
     return getValueChunks(this.items);
   }
 
-  getOffset(idx: number): number {
-    return idx;
+  cumulativeNumberOfLeaves(idx: number): number {
+    return idx + 1;
   }
 
   range(start: number, end: number): Promise<Array<T>> {

@@ -12,7 +12,7 @@ import (
 
 type indexedSequence interface {
 	sequence
-	getOffset(idx int) uint64
+	cumulativeNumberOfLeaves(idx int) uint64 // returns the total number of leaf values reachable from this sequence for all sub-trees from 0 to |idx|
 }
 
 type indexedMetaSequence struct {
@@ -48,16 +48,8 @@ func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) in
 	}
 }
 
-func (ims indexedMetaSequence) getOffset(idx int) uint64 {
-	// TODO: precompute these on the construction
-	offsets := []uint64{}
-	cum := uint64(0)
-	for _, mt := range ims.tuples {
-		cum += mt.key.uint64Value()
-		offsets = append(offsets, cum)
-	}
-
-	return ims.offsets[idx] - 1
+func (ims indexedMetaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	return ims.offsets[idx]
 }
 
 func (ims indexedMetaSequence) getCompareFn(other sequence) compareFn {
@@ -86,7 +78,7 @@ func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
 func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	seq := cur.seq.(indexedSequence)
 	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
-		return uint64(idx) <= seq.getOffset(i)
+		return uint64(idx) < seq.cumulativeNumberOfLeaves(i)
 	})
 	if _, ok := seq.(metaSequence); ok {
 		if cur.idx == seq.seqLen() {
@@ -96,7 +88,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	if cur.idx == 0 {
 		return 0
 	}
-	return seq.getOffset(cur.idx-1) + 1
+	return seq.cumulativeNumberOfLeaves(cur.idx - 1)
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are

@@ -171,7 +171,7 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
 
     const childRanges = [];
     for (let i = 0; i < this.items.length && end > start; i++) {
-      const cum = this.getOffset(i) + 1;
+      const cum = this.cumulativeNumberOfLeaves(i);
       const seqLength = this.items[i].key.numberValue();
       if (start < cum) {
         const seqStart = cum - seqLength;
@@ -230,8 +230,8 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
     });
   }
 
-  getOffset(idx: number): number {
-    return this._offsets[idx] - 1;
+  cumulativeNumberOfLeaves(idx: number): number {
+    return this._offsets[idx];
   }
 
   getCompareFn(other: IndexedSequence): EqualsFn {

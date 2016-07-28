@@ -13,7 +13,7 @@ import {equals} from './compare.js';
 import {notNull} from './assert.js';
 
 export class IndexedSequence<T> extends Sequence<T> {
-  getOffset(idx: number): number { // eslint-disable-line no-unused-vars
+  cumulativeNumberOfLeaves(idx: number): number { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 
@@ -43,13 +43,13 @@ export class IndexedSequence<T> extends Sequence<T> {
 
 export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence> {
   advanceToOffset(idx: number): number {
-    this.idx = search(this.length, (i: number) => idx <= this.sequence.getOffset(i));
+    this.idx = search(this.length, (i: number) => idx < this.sequence.cumulativeNumberOfLeaves(i));
 
     if (this.sequence.isMeta && this.idx === this.length) {
       this.idx = this.length - 1;
     }
 
-    return this.idx > 0 ? this.sequence.getOffset(this.idx - 1) + 1 : 0;
+    return this.idx > 0 ? this.sequence.cumulativeNumberOfLeaves(this.idx - 1) : 0;
   }
 
   clone(): IndexedSequenceCursor<T> {

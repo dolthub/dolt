@@ -137,8 +137,8 @@ export class BlobLeafSequence extends IndexedSequence<number> {
     super(vr, blobType, items);
   }
 
-  getOffset(idx: number): number {
-    return idx;
+  cumulativeNumberOfLeaves(idx: number): number {
+    return idx + 1;
   }
 
   getCompareFn(other: IndexedSequence): EqualsFn {

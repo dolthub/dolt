@@ -280,6 +280,6 @@ func (es emptySequence) getKey(idx int) orderedKey {
 	panic("empty sequence")
 }
 
-func (es emptySequence) getOffset(idx int) uint64 {
+func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("empty sequence")
 }
