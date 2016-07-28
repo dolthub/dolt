@@ -162,6 +162,7 @@ func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
 			}
 		}
 	}
+	writeFooter(w, wroteHeader)
 }
 
 func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {

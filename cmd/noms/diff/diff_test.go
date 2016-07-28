@@ -143,6 +143,7 @@ func TestNomsStructDiff(t *testing.T) {
 ["three"] {
 -   field3: "field3-data"
 +   field3: "field3-data-diff"
+  }
 `
 
 	fieldData := []interface{}{

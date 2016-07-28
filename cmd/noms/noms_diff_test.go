@@ -38,5 +38,5 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 
 	ds.Database().Close()
 	out, _ := s.Run(main, []string{"diff", r1, r2})
-	s.True(strings.HasSuffix(out, "\"second commit\"\n"))
+	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
 }
