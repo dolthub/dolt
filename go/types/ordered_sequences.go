@@ -101,6 +101,7 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bool {
 	seq := cur.seq.(orderedSequence)
 
+	// Find smallest idx in seq where key(idx) >= key
 	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
 		return !seq.getKey(i).Less(key)
 	})

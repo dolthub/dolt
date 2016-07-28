@@ -4,11 +4,10 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-/**
- * Searches between 0 and `length` until the compare function returns 0 (equal). If no match is
- * found then this returns `length`.
- */
-export default function search(length: number, compare: (i: number) => number): number {
+// Ported from golang code. Search uses binary search to find and return the smallest index i in
+// [0, n) at which f(i) is true, assuming that on the range [0, n), f(i) == true implies
+// f(i+1) == true.
+export default function search(length: number, f: (i: number) => boolean): number {
   // f = i => compare(i) >= 0
   // Define f(-1) == false and f(n) == true.
   // Invariant: f(i-1) == false, f(j) == true.
@@ -16,12 +15,8 @@ export default function search(length: number, compare: (i: number) => number): 
   let hi = length;
   while (lo < hi) {
     const h = lo + (((hi - lo) / 2) | 0); // avoid overflow when computing h
-    const c = compare(h);
-    if (c === 0) {
-      return h;
-    }
     // i ≤ h < j
-    if (c < 0) {
+    if (!f(h)) {
       lo = h + 1; // preserves f(i-1) == false
     } else {
       hi = h; // preserves f(j) == true

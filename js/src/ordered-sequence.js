@@ -76,7 +76,8 @@ export class OrderedSequenceCursor<T, K: Value> extends
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
   _seekTo(key: OrderedKey, lastPositionIfNotfound: boolean = false): boolean {
-    this.idx = search(this.length, i => this.sequence.getKey(i).compare(key));
+    // Find smallest idx where key(idx) >= key
+    this.idx = search(this.length, i => this.sequence.getKey(i).compare(key) >= 0);
 
     if (this.idx === this.length && lastPositionIfNotfound) {
       invariant(this.idx > 0);

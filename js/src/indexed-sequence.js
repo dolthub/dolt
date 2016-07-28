@@ -4,12 +4,13 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {AsyncIterator} from './async-iterator.js';
+import Sequence, {SequenceCursor} from './sequence.js';
+import search from './binary-search.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
-import {notNull} from './assert.js';
-import Sequence, {search, SequenceCursor} from './sequence.js';
 import type {EqualsFn} from './edit-distance.js';
+import {AsyncIterator} from './async-iterator.js';
 import {equals} from './compare.js';
+import {notNull} from './assert.js';
 
 export class IndexedSequence<T> extends Sequence<T> {
   getOffset(idx: number): number { // eslint-disable-line no-unused-vars
@@ -42,7 +43,7 @@ export class IndexedSequence<T> extends Sequence<T> {
 
 export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence> {
   advanceToOffset(idx: number): number {
-    this.idx = search(this.length, (i: number) => this.sequence.getOffset(i) - idx);
+    this.idx = search(this.length, (i: number) => idx <= this.sequence.getOffset(i));
 
     if (this.sequence.isMeta && this.idx === this.length) {
       this.idx = this.length - 1;

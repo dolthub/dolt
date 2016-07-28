@@ -143,10 +143,7 @@ function findField(name: string, fields: Field[]): ?Field {
  * Finds the index of the `Field` or `-1` if not found.
  */
 export function findFieldIndex(name: string, fields: Field[]): number {
-  const i = search(fields.length, i => {
-    const n = fields[i].name;
-    return n === name ? 0 : n > name ? 1 : -1;
-  });
+  const i = search(fields.length, i => fields[i].name >= name);
   return i === fields.length || fields[i].name !== name ? -1 : i;
 }
 
