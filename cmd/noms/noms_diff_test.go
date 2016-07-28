@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
@@ -39,4 +40,38 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	ds.Database().Close()
 	out, _ := s.Run(main, []string{"diff", r1, r2})
 	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
+}
+
+func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
+	datasetName := "diffSummarizeTest"
+	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	ds, err := spec.GetDataset(str)
+	s.NoError(err)
+	defer ds.Database().Close()
+
+	ds, err = addCommit(ds, "first commit")
+	s.NoError(err)
+	r1 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash())
+
+	ds, err = addCommit(ds, "second commit")
+	s.NoError(err)
+	r2 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash())
+
+	out, _ := s.Run(main, []string{"diff", "--summarize", r1, r2})
+	s.Contains(out, "Comparing commit values")
+	s.Contains(out, "1 insertion, 1 deletion, 0 changes, (1 value vs 1 value)")
+
+	out, _ = s.Run(main, []string{"diff", "--summarize", r1 + ".value", r2 + ".value"})
+	s.NotContains(out, "Comparing commit values")
+
+	ds, err = ds.CommitValue(types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
+	s.NoError(err)
+	r3 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
+
+	ds, err = ds.CommitValue(types.NewList(types.Number(1), types.Number(222), types.Number(4)))
+	s.NoError(err)
+	r4 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
+
+	out, _ = s.Run(main, []string{"diff", "--summarize", r3, r4})
+	s.Contains(out, "1 insertion, 2 deletions, 0 changes, (4 values vs 3 values)")
 }

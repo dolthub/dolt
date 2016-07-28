@@ -21,9 +21,11 @@ const (
 	subPrefix = "-   "
 )
 
+var summarize bool
+
 var nomsDiff = &nomsCommand{
 	Run:       runDiff,
-	UsageLine: "diff <object1> <object2>",
+	UsageLine: "diff [-summarize] <object1> <object2>",
 	Short:     "Shows the difference between two objects",
 	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object arguments.",
 	Flags:     setupDiffFlags,
@@ -32,6 +34,7 @@ var nomsDiff = &nomsCommand{
 
 func setupDiffFlags() *flag.FlagSet {
 	diffFlagSet := flag.NewFlagSet("diff", flag.ExitOnError)
+	diffFlagSet.BoolVar(&summarize, "summarize", false, "Writes a summary of the changes instead")
 	outputpager.RegisterOutputpagerFlags(diffFlagSet)
 	return diffFlagSet
 }
@@ -50,6 +53,11 @@ func runDiff(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[1]))
 	}
 	defer db2.Close()
+
+	if summarize {
+		diff.Summary(value1, value2)
+		return 0
+	}
 
 	waitChan := outputpager.PageOutput()
 	if waitChan != nil {

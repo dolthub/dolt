@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -232,6 +233,10 @@ func CreateDatabaseSpecString(protocol, path string) string {
 
 func CreateValueSpecString(protocol, path, value string) string {
 	return fmt.Sprintf("%s:%s::%s", protocol, path, value)
+}
+
+func CreateHashSpecString(protocol, path string, h hash.Hash) string {
+	return fmt.Sprintf("%s:%s::#%s", protocol, path, h.String())
 }
 
 func getLDBStore(path string) chunks.ChunkStore {
