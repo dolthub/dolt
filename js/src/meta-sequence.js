@@ -20,6 +20,7 @@ import {
   makeRefType,
   makeSetType,
   makeUnionType,
+  valueType,
 } from './type.js';
 import {IndexedSequence} from './indexed-sequence.js';
 import {invariant, notNull} from './assert.js';
@@ -211,8 +212,11 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
 
   // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
   // concatentation as one long composite sequence
-  getCompositeChildSequence(start: number, length: number):
-      Promise<IndexedSequence> {
+  getCompositeChildSequence(start: number, length: number): Promise<IndexedSequence> {
+    if (length === 0) {
+      return Promise.resolve(new EmptySequence());
+    }
+
     const childrenP = [];
     for (let i = start; i < start + length; i++) {
       childrenP.push(this.items[i].getChildSequence(this.vr));
@@ -340,4 +344,10 @@ export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
 
 function getMetaSequenceChunks(ms: MetaSequence): Array<Ref> {
   return ms.items.map(mt => mt.ref);
+}
+
+class EmptySequence extends IndexedSequence {
+  constructor() {
+    super(null, valueType, []);
+  }
 }

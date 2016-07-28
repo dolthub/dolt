@@ -6,11 +6,13 @@
 
 import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
 import {assert} from 'chai';
-import {fastForward} from './ordered-sequence-diff.js';
-import Set from './set.js';
+import {MetaTuple, newSetMetaSequence, OrderedKey} from './meta-sequence.js';
+import {default as diff, fastForward} from './ordered-sequence-diff.js';
+import {default as Set, newSetLeafSequence} from './set.js';
+import Ref from './ref.js';
 import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 
-suite('OrderedSequenceCursor', () => {
+suite('OrderedSequence', () => {
   suiteSetup(() => {
     smallTestChunks();
   });
@@ -90,5 +92,31 @@ suite('OrderedSequenceCursor', () => {
       assert.deepEqual(600, cur1.getCurrent());
       assert.isFalse(cur2.valid);
     }
+  });
+
+  test('diff with meta node gap', async () => {
+    const newSetSequenceMt = values => {
+      const seq = newSetLeafSequence(null, values);
+      const set = Object.create(Set.prototype);
+      set.sequence = seq;
+      return new MetaTuple(
+          new Ref(set), new OrderedKey(values[values.length - 1]), values.length, set);
+    };
+
+    const m1 = newSetSequenceMt([1, 2]);
+    const m2 = newSetSequenceMt([3, 4]);
+    const m3 = newSetSequenceMt([5, 6]);
+    const s1 = newSetMetaSequence(null, [m1, m3]);
+    const s2 = newSetMetaSequence(null, [m1, m2, m3]);
+
+    let [add, rem, mod] = await diff(s1, s2);
+    assert.deepEqual([3, 4], add);
+    assert.deepEqual([], rem);
+    assert.deepEqual([], mod);
+
+    [add, rem, mod] = await diff(s2, s1);
+    assert.deepEqual([], add);
+    assert.deepEqual([3, 4], rem);
+    assert.deepEqual([], mod);
   });
 });

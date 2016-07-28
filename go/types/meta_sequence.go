@@ -162,6 +162,10 @@ func (ms metaSequenceObject) beginFetchingChildSequences(start, length uint64) c
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint64) sequence {
+	if length == 0 {
+		return emptySequence{}
+	}
+
 	metaItems := []metaTuple{}
 	mapItems := []mapEntry{}
 	valueItems := []Value{}
@@ -240,4 +244,42 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 
 	hashValueBytes(mt.ref, rv)
 	hashValueBytes(v, rv)
+}
+
+type emptySequence struct{}
+
+func (es emptySequence) getItem(idx int) sequenceItem {
+	panic("empty sequence")
+}
+
+func (es emptySequence) seqLen() int {
+	return 0
+}
+
+func (es emptySequence) numLeaves() uint64 {
+	return 0
+}
+
+func (es emptySequence) valueReader() ValueReader {
+	return nil
+}
+
+func (es emptySequence) Chunks() (chunks []Ref) {
+	return
+}
+
+func (es emptySequence) Type() *Type {
+	panic("empty sequence")
+}
+
+func (es emptySequence) getCompareFn(other sequence) compareFn {
+	return func(idx, otherIdx int) bool { panic("empty sequence") }
+}
+
+func (es emptySequence) getKey(idx int) orderedKey {
+	panic("empty sequence")
+}
+
+func (es emptySequence) getOffset(idx int) uint64 {
+	panic("empty sequence")
 }

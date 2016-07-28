@@ -7,6 +7,7 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -169,6 +170,51 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 
 		closeChan <- struct{}{}
 		<-stopChan
+	}
+
+	runTest(orderedSequenceDiffBest)
+	runTest(orderedSequenceDiffLeftRight)
+	runTest(orderedSequenceDiffTopDown)
+}
+
+func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
+	assert := assert.New(t)
+
+	newSetSequenceMt := func(v ...Value) metaTuple {
+		seq := newSetLeafSequence(nil, v...)
+		set := newSet(seq)
+		return newMetaTuple(NewRef(set), newOrderedKey(v[len(v)-1]), uint64(len(v)), set)
+	}
+
+	m1 := newSetSequenceMt(Number(1), Number(2))
+	m2 := newSetSequenceMt(Number(3), Number(4))
+	m3 := newSetSequenceMt(Number(5), Number(6))
+	s1 := newSetMetaSequence([]metaTuple{m1, m3}, nil)
+	s2 := newSetMetaSequence([]metaTuple{m1, m2, m3}, nil)
+
+	runTest := func(df diffFn) {
+		changes := make(chan ValueChanged)
+		go func() {
+			df(s1, s2, changes, nil)
+			changes <- ValueChanged{}
+			df(s2, s1, changes, nil)
+			close(changes)
+		}()
+
+		expected := []ValueChanged{
+			{DiffChangeAdded, Number(3)},
+			{DiffChangeAdded, Number(4)},
+			{},
+			{DiffChangeRemoved, Number(3)},
+			{DiffChangeRemoved, Number(4)},
+		}
+
+		i := 0
+		for c := range changes {
+			assert.Equal(expected[i], c)
+			i++
+		}
+		assert.Equal(len(expected), i)
 	}
 
 	runTest(orderedSequenceDiffBest)
