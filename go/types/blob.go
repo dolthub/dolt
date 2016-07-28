@@ -53,7 +53,7 @@ func (b Blob) hashPointer() *hash.Hash {
 
 // Value interface
 func (b Blob) Equals(other Value) bool {
-	return other != nil && b.Hash() == other.Hash()
+	return b.Hash() == other.Hash()
 }
 
 func (b Blob) Less(other Value) bool {

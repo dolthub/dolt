@@ -60,7 +60,7 @@ func (s Struct) hashPointer() *hash.Hash {
 
 // Value interface
 func (s Struct) Equals(other Value) bool {
-	return other != nil && s.Hash() == other.Hash()
+	return s.Hash() == other.Hash()
 }
 
 func (s Struct) Less(other Value) bool {

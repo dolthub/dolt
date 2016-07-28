@@ -56,7 +56,7 @@ func (s Set) hashPointer() *hash.Hash {
 
 // Value interface
 func (s Set) Equals(other Value) bool {
-	return other != nil && s.Hash() == other.Hash()
+	return s.Hash() == other.Hash()
 }
 
 func (s Set) Less(other Value) bool {

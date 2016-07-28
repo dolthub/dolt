@@ -52,7 +52,7 @@ func (r Ref) TargetValue(vr ValueReader) Value {
 
 // Value interface
 func (r Ref) Equals(other Value) bool {
-	return other != nil && r.Hash() == other.Hash()
+	return r.Hash() == other.Hash()
 }
 
 func (r Ref) Less(other Value) bool {

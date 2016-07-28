@@ -60,7 +60,7 @@ func (l List) hashPointer() *hash.Hash {
 
 // Value interface
 func (l List) Equals(other Value) bool {
-	return other != nil && l.Hash() == other.Hash()
+	return l.Hash() == other.Hash()
 }
 
 func (l List) Less(other Value) bool {

@@ -15,7 +15,6 @@ func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
 
 	values := []func() Value{
-		func() Value { return nil },
 		func() Value { return Bool(false) },
 		func() Value { return Bool(true) },
 		func() Value { return Number(0) },
@@ -69,9 +68,6 @@ func TestValueEquals(t *testing.T) {
 
 	for i, f1 := range values {
 		for j, f2 := range values {
-			if f1() == nil {
-				continue
-			}
 			if i == j {
 				assert.True(f1().Equals(f2()))
 			} else {

@@ -68,7 +68,7 @@ func (t *Type) HasUnresolvedCycle() bool {
 
 // Value interface
 func (t *Type) Equals(other Value) (res bool) {
-	return other != nil && t.Hash() == other.Hash()
+	return t == other || t.Hash() == other.Hash()
 }
 
 func (t *Type) Less(other Value) (res bool) {
