@@ -42,10 +42,8 @@ func TestHandleWriteValue(t *testing.T) {
 
 	body := &bytes.Buffer{}
 	serializeHints(body, map[hash.Hash]struct{}{hint: struct{}{}})
-	sz := chunks.NewSerializer(body)
-	sz.Put(itemChunk)
-	sz.Put(listChunk)
-	sz.Close()
+	chunks.Serialize(itemChunk, body)
+	chunks.Serialize(listChunk, body)
 
 	w := httptest.NewRecorder()
 	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
@@ -78,10 +76,8 @@ func TestHandleWriteValueBackpressure(t *testing.T) {
 
 	body := &bytes.Buffer{}
 	serializeHints(body, map[hash.Hash]struct{}{hint: struct{}{}})
-	sz := chunks.NewSerializer(body)
-	sz.Put(itemChunk)
-	sz.Put(listChunk)
-	sz.Close()
+	chunks.Serialize(itemChunk, body)
+	chunks.Serialize(listChunk, body)
 
 	w := httptest.NewRecorder()
 	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
@@ -132,11 +128,11 @@ func TestBuildWriteValueRequest(t *testing.T) {
 
 func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
 	body := &bytes.Buffer{}
-	gw := snappy.NewBufferedWriter(body)
-	sz := chunks.NewSerializer(gw)
-	assert.NoError(sz.PutMany(chnx))
-	assert.NoError(sz.Close())
-	assert.NoError(gw.Close())
+	sw := snappy.NewBufferedWriter(body)
+	for _, chunk := range chnx {
+		chunks.Serialize(chunk, sw)
+	}
+	assert.NoError(sw.Close())
 	return body
 }
 

@@ -87,11 +87,9 @@ func TestWriteValue(t *testing.T) {
 	err = binary.Write(body, binary.BigEndian, uint32(0))
 	assert.NoError(err)
 
-	sz := chunks.NewSerializer(body)
-	sz.Put(chunk1)
-	sz.Put(chunk2)
-	sz.Put(chunk3)
-	sz.Close()
+	chunks.Serialize(chunk1, body)
+	chunks.Serialize(chunk2, body)
+	chunks.Serialize(chunk3, body)
 
 	w = httptest.NewRecorder()
 	r, err = newRequest("POST", dbName+constants.WriteValuePath+"?access_token="+authKey, ioutil.NopCloser(body))

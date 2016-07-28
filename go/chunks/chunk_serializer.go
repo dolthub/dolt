@@ -27,24 +27,6 @@ import (
     Data  // len(Data) == Len
 */
 
-// NewSerializer creates a serializer which is a ChunkSink. Put() chunks will be serialized to |writer|. Close() must be called when no more chunks will be serialized.
-func NewSerializer(writer io.Writer) ChunkSink {
-	s := &serializer{
-		writer,
-		make(chan Chunk, 64),
-		make(chan struct{}),
-	}
-
-	go func() {
-		for chunk := range s.chs {
-			Serialize(chunk, s.writer)
-		}
-		close(s.done)
-	}()
-
-	return s
-}
-
 // Serialize a single Chunk to writer.
 func Serialize(chunk Chunk, writer io.Writer) {
 	d.Chk.True(chunk.data != nil)
@@ -62,29 +44,6 @@ func Serialize(chunk Chunk, writer io.Writer) {
 	n, err = io.Copy(writer, bytes.NewReader(chunk.Data()))
 	d.Chk.NoError(err)
 	d.Chk.True(uint32(n) == chunkSize)
-}
-
-type serializer struct {
-	writer io.Writer
-	chs    chan Chunk
-	done   chan struct{}
-}
-
-func (sz *serializer) Put(c Chunk) {
-	sz.chs <- c
-}
-
-func (sz *serializer) PutMany(chunks []Chunk) (e BackpressureError) {
-	for _, c := range chunks {
-		sz.chs <- c
-	}
-	return
-}
-
-func (sz *serializer) Close() error {
-	close(sz.chs)
-	<-sz.done
-	return nil
 }
 
 // Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If |rateLimit| is non-nill, concurrency will be limited to the available capacity of the channel.
