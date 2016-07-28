@@ -194,7 +194,7 @@ func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {
 	writeFooter(w, wroteHeader)
 }
 
-func line(w io.Writer, op int, key, val types.Value) {
+func line(w io.Writer, op prefixOp, key, val types.Value) {
 	pw := newPrefixWriter(w, op)
 	if key != nil {
 		writeEncodedValue(pw, key)
@@ -204,7 +204,7 @@ func line(w io.Writer, op int, key, val types.Value) {
 	write(w, []byte("\n"))
 }
 
-func field(w io.Writer, op int, name, val types.Value) {
+func field(w io.Writer, op prefixOp, name, val types.Value) {
 	pw := newPrefixWriter(w, op)
 	write(pw, []byte(name.(types.String)))
 	write(w, []byte(": "))

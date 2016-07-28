@@ -11,27 +11,19 @@ import (
 
 type prefixWriter struct {
 	w      io.Writer
-	prefix []byte
+	prefix prefixOp
 	start  bool
 }
 
+type prefixOp string
+
 const (
-	ADD = 0
-	DEL = 1
+	ADD prefixOp = "+   "
+	DEL prefixOp = "-   "
 )
 
-func newPrefixWriter(w io.Writer, op int) io.Writer {
-	var prefix []byte
-	switch op {
-	case ADD:
-		prefix = []byte("+   ")
-	case DEL:
-		prefix = []byte("-   ")
-	default:
-		panic("invalid operation")
-	}
-
-	return &prefixWriter{w, prefix, true}
+func newPrefixWriter(w io.Writer, op prefixOp) io.Writer {
+	return &prefixWriter{w, op, true}
 }
 
 func (pw *prefixWriter) Write(bs []byte) (n int, err error) {
@@ -43,7 +35,7 @@ func (pw *prefixWriter) Write(bs []byte) (n int, err error) {
 	}
 
 	writePrefix := func() bool {
-		_, err2 := pw.w.Write(pw.prefix)
+		_, err2 := pw.w.Write([]byte(pw.prefix))
 		err = err2
 		return err == nil
 	}

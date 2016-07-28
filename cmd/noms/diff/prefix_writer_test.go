@@ -21,7 +21,7 @@ func TestPrefixWriterEmpty(t *testing.T) {
 func TestPrefixWriterNoLineBreak(t *testing.T) {
 	assert := assert.New(t)
 
-	test := func(op int, prefix string) {
+	test := func(op prefixOp, prefix string) {
 		b := &bytes.Buffer{}
 		w := newPrefixWriter(b, op)
 		s := "hello world"
@@ -44,7 +44,7 @@ func TestPrefixWriterNoLineBreak(t *testing.T) {
 func TestPrefixWriterMultipleLines(t *testing.T) {
 	assert := assert.New(t)
 
-	test := func(op int, prefix string) {
+	test := func(op prefixOp, prefix string) {
 		b := &bytes.Buffer{}
 		w := newPrefixWriter(b, op)
 		s := "hello\nworld\n"

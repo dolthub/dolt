@@ -16,11 +16,6 @@ import (
 	"github.com/attic-labs/noms/go/util/outputpager"
 )
 
-const (
-	addPrefix = "+   "
-	subPrefix = "-   "
-)
-
 var summarize bool
 
 var nomsDiff = &nomsCommand{
