@@ -5,6 +5,8 @@
 package types
 
 import (
+	"sync"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/util/functions"
 )
@@ -22,11 +24,11 @@ type ValueChanged struct {
 	V          Value
 }
 
-func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change ValueChanged) bool {
+func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change ValueChanged) bool {
 	select {
 	case changes <- change:
 		return true
-	case <-closeChan:
+	case <-stopChan:
 		return false
 	}
 }
@@ -35,19 +37,32 @@ func sendChange(changes chan<- ValueChanged, closeChan <-chan struct{}, change V
 // The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
 // - early results from left-right are sent to |changes|.
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
+func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
-	// Give the close channels a buffer size of 1 so that they won't block, see call sites.
-	lrCloseChan := make(chan struct{}, 1)
-	tdCloseChan := make(chan struct{}, 1)
+	// Give the stop channels a buffer size of 1 so that they won't block (see below).
+	lrStopChan := make(chan struct{}, 1)
+	tdStopChan := make(chan struct{}, 1)
 
+	// Ensure all diff functions have finished doing work by the time this function returns, otherwise database reads might cause deadlock - e.g. https://github.com/attic-labs/noms/issues/2165.
+	wg := &sync.WaitGroup{}
+
+	defer func() {
+		// Stop diffing. The left-right or top-down diff might have already finished, but sending to the stop channels won't block due to the buffer.
+		lrStopChan <- struct{}{}
+		tdStopChan <- struct{}{}
+		wg.Wait()
+	}()
+
+	wg.Add(2)
 	go func() {
-		orderedSequenceDiffLeftRight(last, current, lrChanges, lrCloseChan)
+		defer wg.Done()
+		orderedSequenceDiffLeftRight(last, current, lrChanges, lrStopChan)
 		close(lrChanges)
 	}()
 	go func() {
-		orderedSequenceDiffTopDown(last, current, tdChanges, tdCloseChan)
+		defer wg.Done()
+		orderedSequenceDiffTopDown(last, current, tdChanges, tdStopChan)
 		close(tdChanges)
 	}()
 
@@ -56,41 +71,36 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 	for multiplexing := true; multiplexing; {
 		select {
-		case <-closeChan:
-			// The buffer size of 1 makes these non-blocking.
-			lrCloseChan <- struct{}{}
-			tdCloseChan <- struct{}{}
+		case <-stopChan:
 			return false
 		case c, ok := <-lrChanges:
 			if !ok {
-				// Left-right diff completed, try to stop top-down. The close chan has a buffer size of 1, so it won't block if it already finished.
-				tdCloseChan <- struct{}{}
+				// Left-right diff completed.
 				return true
 			}
 			lrChangeCount++
-			if !sendChange(changes, closeChan, c) {
+			if !sendChange(changes, stopChan, c) {
 				return false
 			}
 		case c, ok := <-tdChanges:
 			if !ok {
-				// Top-down diff completed, try to stop left-right. The close chan has a buffer size of 1, so it won't block if it already finished.
-				lrCloseChan <- struct{}{}
+				// Top-down diff completed.
 				return true
 			}
 			tdChangeCount++
 			if tdChangeCount > lrChangeCount {
-				// Top-down changes have overtaken left-right changes.
-				if !sendChange(changes, closeChan, c) {
+				// Top-down diff has overtaken left-right diff.
+				if !sendChange(changes, stopChan, c) {
 					return false
 				}
-				lrCloseChan <- struct{}{}
+				lrStopChan <- struct{}{}
 				multiplexing = false
 			}
 		}
 	}
 
 	for c := range tdChanges {
-		if !sendChange(changes, closeChan, c) {
+		if !sendChange(changes, stopChan, c) {
 			return false
 		}
 	}
@@ -99,29 +109,29 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
+func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	var lastHeight, currentHeight int
 	functions.All(
 		func() { lastHeight = newCursorAt(last, emptyKey, false, false).depth() },
 		func() { currentHeight = newCursorAt(current, emptyKey, false, false).depth() },
 	)
-	return orderedSequenceDiffInternalNodes(last, current, changes, closeChan, lastHeight, currentHeight)
+	return orderedSequenceDiffInternalNodes(last, current, changes, stopChan, lastHeight, currentHeight)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}, lastHeight, currentHeight int) bool {
+func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}, lastHeight, currentHeight int) bool {
 	if lastHeight > currentHeight {
 		lastChild := last.(orderedMetaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(lastChild, current, changes, closeChan, lastHeight-1, currentHeight)
+		return orderedSequenceDiffInternalNodes(lastChild, current, changes, stopChan, lastHeight-1, currentHeight)
 	}
 
 	if currentHeight > lastHeight {
 		currentChild := current.(orderedMetaSequence).getCompositeChildSequence(0, uint64(current.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(last, currentChild, changes, closeChan, lastHeight, currentHeight-1)
+		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan, lastHeight, currentHeight-1)
 	}
 
 	if !isMetaSequence(last) && !isMetaSequence(current) {
-		return orderedSequenceDiffLeftRight(last, current, changes, closeChan)
+		return orderedSequenceDiffLeftRight(last, current, changes, stopChan)
 	}
 
 	compareFn := last.getCompareFn(current)
@@ -138,7 +148,7 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 				currentChild = current.(orderedMetaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
 			},
 		)
-		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, closeChan, lastHeight-1, currentHeight-1); !ok {
+		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, stopChan, lastHeight-1, currentHeight-1); !ok {
 			return false
 		}
 	}
@@ -148,7 +158,7 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
-func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool {
+func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lastCur := newCursorAt(last, emptyKey, false, false)
 	currentCur := newCursorAt(current, emptyKey, false, false)
 
@@ -160,17 +170,17 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(lastKey) {
-				if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, currentKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v}) {
 					return false
 				}
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, lastKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v}) {
 					return false
 				}
 				lastCur.advance()
 			} else {
-				if !sendChange(changes, closeChan, ValueChanged{DiffChangeModified, lastKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v}) {
 					return false
 				}
 				lastCur.advance()
@@ -180,13 +190,13 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 	}
 
 	for lastCur.valid() {
-		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}) {
+		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}) {
 			return false
 		}
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}) {
+		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}) {
 			return false
 		}
 		currentCur.advance()
