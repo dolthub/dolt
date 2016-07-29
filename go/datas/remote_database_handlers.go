@@ -172,14 +172,12 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	writer := respWriter(req, w)
 	defer writer.Close()
 
-	sz := chunks.NewSerializer(writer)
 	for _, h := range hashes {
 		c := cs.Get(h)
 		if !c.IsEmpty() {
-			sz.Put(c)
+			chunks.Serialize(c, writer)
 		}
 	}
-	sz.Close()
 }
 
 func extractHashes(req *http.Request) hash.HashSlice {
