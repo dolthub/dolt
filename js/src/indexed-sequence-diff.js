@@ -38,7 +38,8 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
     last.getCompareFn(current));
 
   const splicesP = splices.map(splice => {
-    if (!last.isMeta || splice[SPLICE_REMOVED] === 0 || splice[SPLICE_ADDED] === 0) {
+    if (!last.isMeta) {
+      // This is a leaf sequence, we can just report the splice, but it's indices must be offset.
       splice[SPLICE_AT] += lastOffset;
       if (splice[SPLICE_ADDED] > 0) {
         splice[SPLICE_FROM] += currentOffset;
@@ -47,6 +48,40 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
       return [splice];
     }
 
+    if (splice[SPLICE_REMOVED] === 0 || splice[SPLICE_ADDED] === 0) {
+      // An entire subtree was removed at a meta level. We must do some math to map the splice from
+      // the meta level into the leaf coordinates.
+      let beginRemoveIndex = 0;
+      if (splice[SPLICE_AT] > 0) {
+        beginRemoveIndex = last.cumulativeNumberOfLeaves(splice[SPLICE_AT] - 1);
+      }
+      let endRemoveIndex = 0;
+      if (splice[SPLICE_AT] + splice[SPLICE_REMOVED] > 0) {
+        endRemoveIndex =
+            last.cumulativeNumberOfLeaves(splice[SPLICE_AT] + splice[SPLICE_REMOVED] - 1);
+      }
+      let beginAddIndex = 0;
+      if (splice[SPLICE_FROM] > 0) {
+        beginAddIndex = current.cumulativeNumberOfLeaves(splice[SPLICE_FROM] - 1);
+      }
+      let endAddIndex = 0;
+      if (splice[SPLICE_FROM] + splice[SPLICE_ADDED] > 0) {
+        endAddIndex =
+            current.cumulativeNumberOfLeaves(splice[SPLICE_FROM] + splice[SPLICE_ADDED] - 1);
+      }
+
+      splice[SPLICE_AT] = lastOffset + beginRemoveIndex;
+      splice[SPLICE_REMOVED] = endRemoveIndex - beginRemoveIndex;
+
+      splice[SPLICE_ADDED] = endAddIndex - beginAddIndex;
+      if (splice[SPLICE_ADDED] > 0) {
+        splice[SPLICE_FROM] = currentOffset + beginAddIndex;
+      }
+
+      return [splice];
+    }
+
+    // Meta sequence splice which includes removed & added sub-sequences. Must recurse down.
     invariant(last instanceof IndexedMetaSequence && current instanceof IndexedMetaSequence);
     const lastChildP = last.getCompositeChildSequence(splice[SPLICE_AT], splice[SPLICE_REMOVED]);
     const currentChildP = current.getCompositeChildSequence(splice[SPLICE_FROM],
@@ -62,7 +97,8 @@ export function diff(last: IndexedSequence, lastHeight: number, lastOffset: numb
     }
 
     return Promise.all([lastChildP, currentChildP]).then(childSequences =>
-      diff(childSequences[0], lastHeight - 1, lastChildOffset, childSequences[1], currentHeight - 1,
+      diff(childSequences[0], lastHeight - 1, lastChildOffset, childSequences[1],
+           currentHeight - 1,
            currentChildOffset,
            maxSpliceMatrixSize));
   });

@@ -29,7 +29,7 @@ import Ref, {constructRef} from './ref.js';
 import Sequence from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {NomsKind} from './noms-kind.js';
-import List from './list.js';
+import List, {ListLeafSequence} from './list.js';
 import Map from './map.js';
 import Set from './set.js';
 import Blob from './blob.js';
@@ -225,8 +225,12 @@ export class IndexedMetaSequence extends IndexedSequence<MetaTuple> {
     return Promise.all(childrenP).then(children => {
       const items = [];
       children.forEach(child => items.push(...child.items));
-      return children[0].isMeta ? new IndexedMetaSequence(this.vr, this.type, items)
-        : new IndexedSequence(this.vr, this.type, items);
+      if (!children[0].isMeta) {
+        // Any because our type params are all screwy and FlowIssue didn't suppress the error.
+        return new ListLeafSequence(this.vr, this.type, (items: any));
+      }
+
+      return new IndexedMetaSequence(this.vr, this.type, items);
     });
   }
 

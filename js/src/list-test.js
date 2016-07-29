@@ -7,13 +7,14 @@
 import {assert} from 'chai';
 import {suite, setup, teardown, test} from 'mocha';
 
-import List, {ListWriter, ListLeafSequence} from './list.js';
+import List, {ListWriter, ListLeafSequence, newListLeafSequence} from './list.js';
 import Ref from './ref.js';
 import {OrderedKey, MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
+import type Value from './value.js';
 import {
   makeListType,
   makeRefType,
@@ -561,6 +562,29 @@ suite('Diff List', () => {
     assert.deepEqual(expectedDiff, directDiff);
   });
 
+
+  test('All values in sequence removed', async () => {
+    function newSequenceMetaTuple(vs: Value[]) {
+      const seq = newListLeafSequence(null, vs);
+      const list = List.fromSequence(seq);
+      return new MetaTuple(new Ref(list), new OrderedKey(vs.length), vs.length, list);
+    }
+
+    const m1 = newSequenceMetaTuple([1, 2, 3]);
+    const m2 = newSequenceMetaTuple([4, 5, 6, 7, 8]);
+    const m3 = newSequenceMetaTuple([9, 10, 11, 12, 13, 14, 15]);
+
+    // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
+    const l1 = List.fromSequence(newListMetaSequence(null, [m1, m3]));
+
+    // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
+    const l2 = List.fromSequence(newListMetaSequence(null, [m1, m2, m3]));
+
+    const listDiff = await l2.diff(l1);
+    assert.deepEqual(listDiff, [
+      [3,0,5,3],
+    ]);
+  });
 });
 
 suite('ListWriter', () => {
