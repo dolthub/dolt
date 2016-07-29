@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	destList = iota
-	destMap  = iota
+	dateFormat = "2006-01-02T15:04:05-0700"
+	destList   = iota
+	destMap    = iota
 )
 
 func main() {
@@ -42,6 +43,7 @@ func main() {
 		name            = flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 		columnTypes     = flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
 		path            = flag.String("p", "", "noms path to blob to import")
+		dateFlag        = flag.String("date", "", fmt.Sprintf(`date of commit in ISO 8601 format ("%s"). By default, the current date is used.`, dateFormat))
 		noProgress      = flag.Bool("no-progress", false, "prevents progress from being output if true")
 		destType        = flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the index position (0-based) of the column that is a the unique identifier for the column")
 		skipRecords     = flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
@@ -70,6 +72,14 @@ func main() {
 		err = errors.New("Too many arguments")
 	}
 	d.CheckError(err)
+
+	var date = *dateFlag
+	if date == "" {
+		date = time.Now().UTC().Format(dateFormat)
+	} else {
+		_, err := time.Parse(dateFormat, date)
+		d.CheckErrorNoUsage(err)
+	}
 
 	defer profile.MaybeStartProfile().Stop()
 
@@ -149,7 +159,7 @@ func main() {
 	} else {
 		value = csv.ReadToMap(cr, headers, pk, kinds, ds.Database())
 	}
-	mi := metaInfoForCommit(filePath, *path, *comment)
+	mi := metaInfoForCommit(date, filePath, *path, *comment)
 	_, err = ds.Commit(value, dataset.CommitOptions{Meta: mi})
 	if !*noProgress {
 		status.Clear()
@@ -157,8 +167,7 @@ func main() {
 	d.PanicIfError(err)
 }
 
-func metaInfoForCommit(filePath, nomsPath string, comment string) types.Struct {
-	date := time.Now().UTC().Format("2006-01-02T15:04:05-0700")
+func metaInfoForCommit(date, filePath, nomsPath, comment string) types.Struct {
 	fileOrNomsPath := "inputPath"
 	path := nomsPath
 	if path == "" {
