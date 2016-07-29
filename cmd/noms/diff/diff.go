@@ -46,15 +46,13 @@ func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) {
 
 func diffLists(w io.Writer, p types.Path, v1, v2 types.List) {
 	spliceChan := make(chan types.Splice)
-	closeChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
-		v2.Diff(v1, spliceChan, closeChan)
+		v2.Diff(v1, spliceChan, stopChan)
 		close(spliceChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
 
 	wroteHeader := false
 
@@ -89,15 +87,13 @@ func diffLists(w io.Writer, p types.Path, v1, v2 types.List) {
 
 func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
 	changeChan := make(chan types.ValueChanged)
-	closeChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
-		v2.Diff(v1, changeChan, closeChan)
+		v2.Diff(v1, changeChan, stopChan)
 		close(changeChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
 
 	wroteHeader := false
 
@@ -129,15 +125,13 @@ func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) {
 
 func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
 	changeChan := make(chan types.ValueChanged)
-	closeChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
-		v2.Diff(v1, changeChan, closeChan)
+		v2.Diff(v1, changeChan, stopChan)
 		close(changeChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
 
 	wroteHeader := false
 
@@ -167,15 +161,13 @@ func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) {
 
 func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) {
 	changeChan := make(chan types.ValueChanged)
-	closeChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
-		v2.Diff(v1, changeChan, closeChan)
+		v2.Diff(v1, changeChan, stopChan)
 		close(changeChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(closeChan, doneChan) // see comment for explanation
 
 	wroteHeader := false
 
@@ -244,25 +236,6 @@ func writeEncodedValueWithTags(w io.Writer, v types.Value) {
 	d.PanicIfError(types.WriteEncodedValueWithTags(w, v))
 }
 
-// This is intended to be used
-// - when called as deferred,
-// - with a separate goroutine running a Diff, cancelable by |closeChan|, which writes to |doneChan| when it's finished.
-// I.e.
-//
-// go func() {
-//   Diff(...)
-//   doneChan <- struct{}{}
-// }()
-// defer waitForCloseOrDone()
-//
-// It's designed to handle 2 cases: (1) the outer function panic'd so Diff didn't finish, or (2) the Diff finished and the outer function exited normally.
-// If (1) we try to cancel the diff by sending to |closeChan|.
-// If (2) we wait for the Diff to finish by blocking on |doneChan|.
-// In both cases this deferred function will be unblocked.
-func waitForCloseOrDone(closeChan, doneChan chan struct{}) {
-	select {
-	case closeChan <- struct{}{}:
-		<-doneChan // after cancelling, Diff will exit then block on |doneChan|, so unblock it
-	case <-doneChan:
-	}
+func stop(ch chan<- struct{}) {
+	ch <- struct{}{}
 }

@@ -82,15 +82,13 @@ func diffSummaryList(ch chan<- diffSummaryProgress, v1, v2 types.List) {
 	ch <- diffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
 
 	spliceChan := make(chan types.Splice)
-	stopChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
 		v2.Diff(v1, spliceChan, stopChan)
 		close(spliceChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(stopChan, doneChan) // see comment for explanation
 
 	for splice := range spliceChan {
 		if splice.SpRemoved == splice.SpAdded {
@@ -127,15 +125,13 @@ func diffSummaryValueChanged(ch chan<- diffSummaryProgress, oldSize, newSize uin
 	ch <- diffSummaryProgress{OldSize: oldSize, NewSize: newSize}
 
 	changeChan := make(chan types.ValueChanged)
-	stopChan := make(chan struct{})
-	doneChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	defer stop(stopChan)
 	go func() {
 		f(changeChan, stopChan)
 		close(changeChan)
-		doneChan <- struct{}{}
 	}()
-	defer waitForCloseOrDone(stopChan, doneChan) // see comment for explanation
 	reportChanges(ch, changeChan)
 }
 
