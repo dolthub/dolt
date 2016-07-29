@@ -14,29 +14,32 @@ Now you should be able to run `noms`:
 
 ```
 > noms
+Noms is a tool for goofing with Noms data.
 
-usage: noms [-no-pager] [command] [command-args]
+Usage:
+
+  noms command [arguments]
 
 The commands are:
 
-  diff
-  ds
-  log
-  serve
-  show
-  sync
-  version
+  diff        Shows the difference between two objects
+  ds          Noms dataset management
+  log         Displays the history of a Noms dataset
+  serve       Serves a Noms database over HTTP
+  show        Shows a serialization of a Noms object
+  sync        Moves datasets between or within databases
+  version     Display noms version
 
-See noms <command> -h for information on each available command.
+Use "noms help [command]" for more information about a command.
 ```
 
-Without any arguments, `noms` lists out all available commands. To get information on a specific command, we can suffix it with `-h`:
+Without any arguments, `noms` lists out all available commands. To get information on a specific command, we can use `noms help [command]`:
 
 ```
-> noms sync -h
-Moves datasets between or within databases.
+> noms help sync
+usage: noms sync [options] <source-object> <dest-dataset>
 
-noms sync [options] <source-object> <dest-dataset>
+See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object and dataset arguments.
 
 ...
 ```
@@ -62,26 +65,32 @@ Noms datasets are versioned. You can see the history with `log`:
 ```
 > noms log http://demo.noms.io/cli-tour::sf-film-locations
 
+commit q4jcc2i7kntkjiipvjgpr5r02ldroj0g
+Parent:    pckdvpvr9br1fie6c3pjudrlthe7na18
+Date:      "2016-07-25T18:51:23+0000"
+InputPath: "http://demo.noms.io/cli-tour::sf-film-locations/raw.value"
+
 commit pckdvpvr9br1fie6c3pjudrlthe7na18
 Parent:    c506ta03786j48a07he83ju669u78qa2
 Date:      "2016-07-25T18:34:00+0000"
 InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
-./[213] {
--   "Locations": "Mission Delores Park (Mission District) via J-Church MUNI Train"
-+   "Locations": "Mission Dolores Park (Mission District) via J-Church MUNI Train"
-./[221] {
--   "FunFacts": "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest building in San
-+   "FunFacts": "Mission Dolores' official name is Mission San Francisco de Assis. It is the oldest building in San
+[213] {
+-   Locations: "Mission Delores Park (Mission District) via J-Church MUNI Train"
++   Locations: "Mission Dolores Park (Mission District) via J-Church MUNI Train"
+  }
+[221] {
+-   FunFacts: "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest bu
 ...
 
 commit c506ta03786j48a07he83ju669u78qa2
 Parent:    dl0j63uouu3e64tqrcnqokmisgkdoarb
 Date:      "2016-07-25T18:34:00+0000"
 InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
-./[6] {
--   "Locations": "Randall Musuem"
-+   "Locations": "Randall Museum"
-./ {
+[6] {
+-   Locations: "Randall Musuem"
++   Locations: "Randall Museum"
+  }
+(root) {
 +   Row {
 +     Actor1: "Charles Chaplin",
 ...
@@ -114,11 +123,11 @@ struct Commit {
   }>,
 }({
   meta: Meta {
-    date: "2016-07-25T18:51:23+0000",
-    inputPath: "http://demo.noms.io/cli-tour::sf-film-locations/raw.value",
+    date: "2016-07-25T18:34:00+0000",
+    inputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value",
   },
   parents: {
-    pckdvpvr9br1fie6c3pjudrlthe7na18,
+    c506ta03786j48a07he83ju669u78qa2,
   },
   value: [  // 1,241 items
     Row {
