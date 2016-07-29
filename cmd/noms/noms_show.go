@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -34,23 +33,17 @@ func setupShowFlags() *flag.FlagSet {
 func runShow(args []string) int {
 	database, value, err := spec.GetPath(args[0])
 	d.CheckErrorNoUsage(err)
+	defer database.Close()
 
 	if value == nil {
 		fmt.Fprintf(os.Stderr, "Object not found: %s\n", args[0])
 		return 0
 	}
 
-	waitChan := outputpager.PageOutput()
+	pgr := outputpager.Start()
+	defer pgr.Stop()
 
-	w := bufio.NewWriter(os.Stdout)
-	types.WriteEncodedValueWithTags(w, value)
-	fmt.Fprintf(w, "\n")
-	w.Flush()
-	database.Close()
-
-	if waitChan != nil {
-		os.Stdout.Close()
-		<-waitChan
-	}
+	types.WriteEncodedValueWithTags(pgr.Writer, value)
+	fmt.Fprintln(pgr.Writer)
 	return 0
 }

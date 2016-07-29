@@ -6,8 +6,10 @@ package outputpager
 
 import (
 	"flag"
+	"io"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	goisatty "github.com/mattn/go-isatty"
@@ -18,42 +20,67 @@ var (
 	flagsRegistered = false
 )
 
+type Pager struct {
+	Writer        io.Writer
+	stdin, stdout *os.File
+	mtx           *sync.Mutex
+	doneCh        chan struct{}
+}
+
+func Start() *Pager {
+	if noPager || !IsStdoutTty() {
+		return &Pager{os.Stdout, nil, nil, nil, nil}
+	}
+
+	lessPath, err := exec.LookPath("less")
+	d.Chk.NoError(err)
+
+	// -F ... Quit if entire file fits on first screen.
+	// -S ... Chop (truncate) long lines rather than wrapping.
+	// -R ... Output "raw" control characters.
+	// -X ... Don't use termcap init/deinit strings.
+	cmd := exec.Command(lessPath, "-FSRX")
+
+	stdin, stdout, err := os.Pipe()
+	d.Chk.NoError(err)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = stdin
+
+	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
+	go func() {
+		err := cmd.Run()
+		d.Chk.NoError(err)
+		p.closePipe()
+		p.doneCh <- struct{}{}
+	}()
+	return p
+}
+
+func (p *Pager) Stop() {
+	if p.Writer != os.Stdout {
+		p.closePipe()
+		// Wait until less has fully exited, otherwise it might not have printed the terminal restore characters.
+		<-p.doneCh
+	}
+}
+
+func (p *Pager) closePipe() {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	if p.stdin != nil {
+		// Closing the pipe will cause any outstanding writes to stdout fail, and fail from now on.
+		p.stdin.Close()
+		p.stdout.Close()
+		p.stdin, p.stdout = nil, nil
+	}
+}
+
 func RegisterOutputpagerFlags(flags *flag.FlagSet) {
 	if !flagsRegistered {
 		flagsRegistered = true
 		flags.BoolVar(&noPager, "no-pager", false, "suppress paging functionality")
 	}
-}
-
-func PageOutput() <-chan struct{} {
-	if noPager || !IsStdoutTty() {
-		return nil
-	}
-
-	lessExecutable, err := exec.LookPath("less")
-	d.Chk.NoError(err, "unable to find 'less' utility: %s", err)
-
-	lessStdin, newStdout, err := os.Pipe()
-	d.Chk.NoError(err, "os.Pipe() failed: %s\n", err)
-
-	cmd := exec.Command(lessExecutable, []string{"-FSRX"}...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	os.Stdout = newStdout
-	cmd.Stdin = lessStdin
-
-	err = cmd.Start()
-	d.Chk.NoError(err, "cmd execution failed: %s\n", err)
-
-	ch := make(chan struct{})
-	go func() {
-		err := cmd.Wait()
-		d.Chk.NoError(err, "pager exited with error: %s\n", err)
-		os.Stdout.Close()
-		ch <- struct{}{}
-	}()
-
-	return ch
 }
 
 func IsStdoutTty() bool {

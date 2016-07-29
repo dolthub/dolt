@@ -5,13 +5,11 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"strings"
 
 	"github.com/attic-labs/noms/cmd/noms/diff"
@@ -70,8 +68,6 @@ func runLog(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	waitChan := outputpager.PageOutput()
-
 	origCommit, ok := value.(types.Struct)
 	if !ok || !datas.IsCommitType(origCommit.Type()) {
 		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
@@ -98,15 +94,11 @@ func runLog(args []string) int {
 		close(inChan)
 	}()
 
-	w := bufio.NewWriter(os.Stdout)
-	for commitBuff := range outChan {
-		io.Copy(w, bytes.NewReader(commitBuff.([]byte)))
-	}
-	w.Flush()
+	pgr := outputpager.Start()
+	defer pgr.Stop()
 
-	if waitChan != nil {
-		os.Stdout.Close()
-		<-waitChan
+	for commitBuff := range outChan {
+		io.Copy(pgr.Writer, bytes.NewReader(commitBuff.([]byte)))
 	}
 	return 0
 }
