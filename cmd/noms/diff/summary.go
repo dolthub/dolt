@@ -168,5 +168,5 @@ func formatStatus(acc diffSummaryProgress, singular, plural string) {
 	oldValues := pluralize(singular, plural, acc.OldSize)
 	newValues := pluralize(singular, plural, acc.NewSize)
 
-	status.Printf("%s, %s, %s, (%s vs %s)", insertions, deletions, changes, oldValues, newValues)
+	status.Printf("%s (%.2f%%), %s (%.2f%%), %s (%.2f%%), (%s vs %s)", insertions, (float64(100*acc.Adds) / float64(acc.OldSize)), deletions, (float64(100*acc.Removes) / float64(acc.OldSize)), changes, (float64(100*acc.Changes) / float64(acc.OldSize)), oldValues, newValues)
 }
