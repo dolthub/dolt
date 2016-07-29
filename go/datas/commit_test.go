@@ -51,12 +51,14 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String with MetaInfo
 	meta := types.NewStruct("Meta", map[string]types.Value{"date": types.String("some date"), "number": types.Number(9)})
+	metaType := types.MakeStructType("Meta", []string{"date", "number"}, []*types.Type{types.StringType, types.NumberType})
+	assertTypeEquals(metaType, meta.Type())
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
 	at4 := commit4.Type()
 	et4 := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
-		types.EmptyStructType,
+		metaType,
 		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
-			types.EmptyStructType,
+			types.MakeUnionType(types.EmptyStructType, metaType),
 			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 			types.MakeUnionType(types.NumberType, types.StringType),
 		}))),

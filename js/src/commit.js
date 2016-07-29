@@ -33,7 +33,8 @@ const valueIndex = 2;
 
 export default class Commit<T: Value> extends Struct {
   constructor(value: T, parents: Set<Ref<Commit>> = new Set(), meta: Struct = getEmptyStruct()) {
-    const t = makeCommitType(getTypeOfValue(value), valueTypesFromParents(parents));
+    const t = makeCommitType(getTypeOfValue(value), valueTypesFromParents(parents, 'value'),
+                             getTypeOfValue(meta), valueTypesFromParents(parents, 'meta'));
     super(t, [meta, parents, value]);
   }
 
@@ -73,34 +74,36 @@ export default class Commit<T: Value> extends Struct {
   }
 }
 
-function makeCommitType(valueType: Type<*>, parentsValueTypes: Type<*>[]): Type<StructDesc> {
+// ../../go/datas/commit.go for the motivation for how this is computed.
+function makeCommitType(valueType: Type<*>, parentsValueTypes: Type<*>[],
+                        metaType: Type<*>, parentsMetaTypes: Type<*>[]): Type<StructDesc> {
   const fieldNames = ['meta', 'parents', 'value'];
-  const tmp = parentsValueTypes.concat(valueType);
-  const parentsValueUnionType = makeUnionType(tmp);
+  const parentsValueUnionType = makeUnionType(parentsValueTypes.concat(valueType));
+  const parentsMetaUnionType = makeUnionType(parentsMetaTypes.concat(metaType));
   let parentsType;
-  if (equals(parentsValueUnionType, valueType)) {
+  if (equals(parentsValueUnionType, valueType) && equals(parentsMetaUnionType, metaType)) {
     parentsType = makeSetType(makeRefType(makeCycleType(0)));
   } else {
     parentsType = makeSetType(makeRefType(makeStructType('Commit', fieldNames, [
-      getEmptyStruct().type,
+      parentsMetaUnionType,
       makeSetType(makeRefType(makeCycleType(0))),
       parentsValueUnionType,
     ])));
   }
   return makeStructType('Commit', fieldNames, [
-    getEmptyStruct().type,
+    metaType,
     parentsType,
     valueType,
   ]);
 }
 
-function valueTypesFromParents(parents: Set): Type<*>[] {
+function valueTypesFromParents(parents: Set, fieldName: string): Type<*>[] {
   const elemType = getSetElementType(parents.type);
   switch (elemType.kind) {
     case Kind.Union:
-      return elemType.desc.elemTypes.map(valueFromRefOfCommit);
+      return elemType.desc.elemTypes.map(t => fieldTypeFromRefOfCommit(t, fieldName));
     default:
-      return [valueFromRefOfCommit(elemType)];
+      return [fieldTypeFromRefOfCommit(elemType, fieldName)];
   }
 }
 
@@ -109,8 +112,8 @@ function getSetElementType(t: Type<CompoundDesc>): Type<*> {
   return t.desc.elemTypes[0];
 }
 
-function valueFromRefOfCommit(t: Type<CompoundDesc>): Type<*> {
-  return valueTypeFromCommit(getRefElementType(t));
+function fieldTypeFromRefOfCommit(t: Type<CompoundDesc>, fieldName: string): Type<*> {
+  return fieldTypeFromCommit(getRefElementType(t), fieldName);
 }
 
 function getRefElementType(t: Type<CompoundDesc>): Type<*> {
@@ -118,16 +121,16 @@ function getRefElementType(t: Type<CompoundDesc>): Type<*> {
   return t.desc.elemTypes[0];
 }
 
-function valueTypeFromCommit(t: Type<StructDesc>): Type<*> {
+function fieldTypeFromCommit(t: Type<StructDesc>, fieldName: string): Type<*> {
   invariant(t.desc.name === 'Commit');
-  return notNull(t.desc.getField('value'));
+  return notNull(t.desc.getField(fieldName));
 }
 
 // Work around npm cyclic dependencies.
 let valueCommitType;
 function getValueCommitType() {
   if (!valueCommitType) {
-    valueCommitType = makeCommitType(valueType, []);
+    valueCommitType = makeCommitType(valueType, [], getEmptyStruct().type, []);
   }
   return valueCommitType;
 }

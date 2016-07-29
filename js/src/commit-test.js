@@ -61,12 +61,13 @@ suite('commit.js', () => {
 
     // Now commit a String with MetaInfo
     const meta = newStruct('Meta', {date: 'some date', number: 9});
+    const metaType = makeStructType('Meta', ['date', 'number'], [stringType, numberType]);
     const commit4 = new Commit('Hi', new Set([new Ref(commit2)]), meta);
     const at4 = commit4.type;
     const et4 = makeStructType('Commit', commitFieldNames, [
-      emptyStructType,
+      metaType,
       makeSetType(makeRefType(makeStructType('Commit', commitFieldNames, [
-        emptyStructType,
+        makeUnionType([emptyStructType, metaType]),
         makeSetType(makeRefType(makeCycleType(0))),
         makeUnionType([numberType, stringType]),
       ]))),
