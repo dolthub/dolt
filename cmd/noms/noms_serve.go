@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (

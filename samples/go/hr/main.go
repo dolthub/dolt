@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\tlist-persons")
 	}
 
-	flag.Parse()
+	flag.Parse(true)
 
 	if flag.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments")
@@ -35,7 +35,7 @@ func main() {
 	}
 
 	if *dsStr == "" {
-		fmt.Fprintln(os.Stderr, "Required flag '-ds' not set")
+		fmt.Fprintln(os.Stderr, "Required flag '--ds' not set")
 		return
 	}
 

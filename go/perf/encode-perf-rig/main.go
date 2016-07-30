@@ -6,13 +6,13 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"math/big"
 	"os"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	flag "github.com/tsuru/gnuflag"
 )
 
 // used to ensure all of the big.Floats end up with the same precision
@@ -70,7 +70,7 @@ func main() {
 	nBy := flag.Uint64("by", 1, "increment each iteration by this number")
 	nIncrements := flag.Uint64("iterations", 0, "number of iterations to execute")
 	encodingType := flag.String("encoding", "string", "encode/decode as 'string', 'binary', 'binary-int', 'binary-varint'")
-	flag.Parse()
+	flag.Parse(true)
 
 	flag.Usage = func() {
 		fmt.Printf("%s\n", os.Args[0])

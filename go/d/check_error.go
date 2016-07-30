@@ -5,9 +5,10 @@
 package d
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	flag "github.com/tsuru/gnuflag"
 )
 
 type Exiter interface {

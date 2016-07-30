@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 
@@ -14,15 +13,14 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/csv"
-)
-
-var (
-	// Actually the delimiter uses runes, which can be multiple characters long.
-	// https://blog.golang.org/strings
-	delimiter = flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
+	// Actually the delimiter uses runes, which can be multiple characters long.
+	// https://blog.golang.org/strings
+	delimiter := flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
+
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 	profile.RegisterProfileFlags(flag.CommandLine)
 
@@ -31,7 +29,7 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	flag.Parse()
+	flag.Parse(true)
 
 	if flag.NArg() != 1 {
 		d.CheckError(errors.New("expected dataset arg"))

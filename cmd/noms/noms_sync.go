@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
 	humanize "github.com/dustin/go-humanize"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (

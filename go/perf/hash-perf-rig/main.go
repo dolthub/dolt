@@ -8,7 +8,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"flag"
 	"fmt"
 	"hash"
 	"io"
@@ -18,12 +17,13 @@ import (
 	"github.com/codahale/blake2"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/kch42/buzhash"
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
 	useSHA := flag.String("use-sha", "", "<default>=no hashing, 1=sha1, 256=sha256, 512=sha512, blake=blake2b")
 	useBH := flag.Bool("use-bh", false, "whether we buzhash the bytes")
-	flag.Parse()
+	flag.Parse(true)
 
 	flag.Usage = func() {
 		fmt.Printf("%s <big-file>\n", os.Args[0])

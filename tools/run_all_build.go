@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/tools/runner"
+	flag "github.com/tsuru/gnuflag"
 )
 
 const (
@@ -27,7 +27,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n  %s path/to/staging/dir\n", os.Args[0], os.Args[0])
 	}
-	flag.Parse()
+	flag.Parse(true)
 	if flag.Arg(0) == "" {
 		flag.Usage()
 		os.Exit(1)

@@ -5,9 +5,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	flag "github.com/tsuru/gnuflag"
 )
 
 var commands = []*nomsCommand{
@@ -22,7 +23,7 @@ var commands = []*nomsCommand{
 
 func main() {
 	flag.Usage = usage
-	flag.Parse()
+	flag.Parse(false)
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -40,7 +41,7 @@ func main() {
 			flags := cmd.Flags()
 			flags.Usage = cmd.Usage
 
-			flags.Parse(args[1:])
+			flags.Parse(true, args[1:])
 			args = flags.Args()
 			if cmd.Nargs != 0 && len(args) < cmd.Nargs {
 				cmd.Usage()

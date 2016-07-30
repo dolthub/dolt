@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	human "github.com/dustin/go-humanize"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (
@@ -36,7 +36,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Fetches a URL (or file) into a noms blob\n\nUsage: %s <dataset> <url-or-local-path>:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	flag.Parse()
+	flag.Parse(true)
 
 	if flag.NArg() != 2 {
 		d.CheckErrorNoUsage(errors.New("expected dataset and url arguments"))

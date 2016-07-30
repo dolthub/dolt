@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	humanize "github.com/dustin/go-humanize"
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 	}
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
-	flag.Parse()
+	flag.Parse(true)
 
 	if len(flag.Args()) != 2 {
 		d.CheckError(errors.New("expected dataset and file flags"))

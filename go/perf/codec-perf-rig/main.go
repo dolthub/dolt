@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (
@@ -33,7 +33,7 @@ const structSize = uint64(64)
 
 func main() {
 	profile.RegisterProfileFlags(flag.CommandLine)
-	flag.Parse()
+	flag.Parse(true)
 
 	buildCount := *count
 	insertCount := buildCount / 50

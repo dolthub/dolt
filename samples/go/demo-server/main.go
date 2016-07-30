@@ -5,10 +5,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/chunks"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (
@@ -27,7 +27,7 @@ func main() {
 	dynFlags := chunks.DynamoFlags("")
 
 	flag.Usage = usage
-	flag.Parse()
+	flag.Parse(true)
 
 	if *portFlag == 0 || *authKeyFlag == "" {
 		usage()

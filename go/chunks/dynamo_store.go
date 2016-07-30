@@ -7,7 +7,6 @@ package chunks
 import (
 	"bytes"
 	"compress/gzip"
-	"flag"
 	"fmt"
 	"io"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	flag "github.com/tsuru/gnuflag"
 )
 
 const (

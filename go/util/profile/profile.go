@@ -5,13 +5,13 @@
 package profile
 
 import (
-	"flag"
 	"io"
 	"os"
 	"runtime"
 	"runtime/pprof"
 
 	"github.com/attic-labs/noms/go/d"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (

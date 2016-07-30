@@ -5,12 +5,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var toDelete string

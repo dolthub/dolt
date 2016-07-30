@@ -5,12 +5,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 
-	flag.Parse()
+	flag.Parse(true)
 
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "Missing required dataset argument")

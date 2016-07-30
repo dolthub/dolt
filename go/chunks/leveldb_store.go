@@ -5,7 +5,6 @@
 package chunks
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"sync"
@@ -18,6 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	flag "github.com/tsuru/gnuflag"
 )
 
 const (

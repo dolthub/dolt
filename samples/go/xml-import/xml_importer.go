@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +20,7 @@ import (
 	"github.com/attic-labs/noms/go/util/jsontonoms"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/clbanning/mxj"
+	flag "github.com/tsuru/gnuflag"
 )
 
 var (
@@ -54,7 +54,7 @@ func main() {
 		spec.RegisterDatabaseFlags(flag.CommandLine)
 		profile.RegisterProfileFlags(flag.CommandLine)
 		flag.Usage = customUsage
-		flag.Parse()
+		flag.Parse(true)
 
 		if flag.NArg() != 2 {
 			d.CheckError(errors.New("Expected dataset followed by directory path"))

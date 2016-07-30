@@ -61,7 +61,7 @@ func (s *testSuite) TestCSVImporter() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -74,32 +74,36 @@ func (s *testSuite) TestCSVImporter() {
 }
 
 func (s *testSuite) TestCSVImporterFromBlob() {
-	defer os.RemoveAll(s.LdbDir)
+	test := func(pathFlag string) {
+		defer os.RemoveAll(s.LdbDir)
 
-	newDB := func() datas.Database {
-		cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-		return datas.NewDatabase(cs)
+		newDB := func() datas.Database {
+			cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+			return datas.NewDatabase(cs)
+		}
+
+		db := newDB()
+		rawDS := dataset.NewDataset(db, "raw")
+		csv := &bytes.Buffer{}
+		writeCSV(csv)
+		rawDS.CommitValue(types.NewBlob(csv))
+		db.Close()
+
+		stdout, stderr := s.Run(main, []string{
+			"--no-progress", "--column-types", "String,Number",
+			pathFlag, spec.CreateValueSpecString("ldb", s.LdbDir, "raw.value"),
+			spec.CreateValueSpecString("ldb", s.LdbDir, "csv"),
+		})
+		s.Equal("", stdout)
+		s.Equal("", stderr)
+
+		db = newDB()
+		defer db.Close()
+		csvDS := dataset.NewDataset(db, "csv")
+		validateCSV(s, csvDS.HeadValue().(types.List))
 	}
-
-	db := newDB()
-	rawDS := dataset.NewDataset(db, "raw")
-	csv := &bytes.Buffer{}
-	writeCSV(csv)
-	rawDS.CommitValue(types.NewBlob(csv))
-	db.Close()
-
-	stdout, stderr := s.Run(main, []string{
-		"-no-progress", "-column-types", "String,Number",
-		"-p", spec.CreateValueSpecString("ldb", s.LdbDir, "raw.value"),
-		spec.CreateValueSpecString("ldb", s.LdbDir, "csv"),
-	})
-	s.Equal("", stdout)
-	s.Equal("", stderr)
-
-	db = newDB()
-	defer db.Close()
-	csvDS := dataset.NewDataset(db, "csv")
-	validateCSV(s, csvDS.HeadValue().(types.List))
+	test("--path")
+	test("-p")
 }
 
 func (s *testSuite) TestCSVImporterToMap() {
@@ -119,7 +123,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number,Number", "-dest-type", "map:1", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number,Number", "--dest-type", "map:1", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -150,7 +154,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-delimiter", "|", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -178,7 +182,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-column-types", "String,Number", "-header", "x,y", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -215,7 +219,7 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-skip-records", "2", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "2", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -246,7 +250,7 @@ func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"-no-progress", "-skip-records", "1", "-header", "x,y", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", dataspec, input.Name()})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 

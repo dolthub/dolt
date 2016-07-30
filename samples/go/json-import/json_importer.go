@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/jsontonoms"
+	flag "github.com/tsuru/gnuflag"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 	}
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
-	flag.Parse()
+	flag.Parse(true)
 
 	if len(flag.Args()) != 2 {
 		d.CheckError(errors.New("expected url and dataset flags"))
