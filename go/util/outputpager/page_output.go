@@ -46,10 +46,11 @@ func Start() *Pager {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = stdin
+	cmd.Start()
 
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
 	go func() {
-		err := cmd.Run()
+		err := cmd.Wait()
 		d.Chk.NoError(err)
 		p.closePipe()
 		p.doneCh <- struct{}{}
