@@ -294,19 +294,27 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	suite.Equal(uint64(1), suite.ds.WriteValue(l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(types.MakeListType(types.MakeRefType(setOfStringType)),
-		suite.ds.WriteValue(s1), suite.ds.WriteValue(s3))
+	l2 := types.NewList(suite.ds.WriteValue(s1), suite.ds.WriteValue(s3))
 	suite.Equal(uint64(2), suite.ds.WriteValue(l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
 	s4 := types.NewSet(suite.ds.WriteValue(v3), suite.ds.WriteValue(v4))
-	l3 := types.NewList(types.MakeListType(types.MakeRefType(setOfRefOfStringType)),
-		suite.ds.WriteValue(s4))
+	l3 := types.NewList(suite.ds.WriteValue(s4))
 	suite.Equal(uint64(3), suite.ds.WriteValue(l3).Height())
 
-	// List<Set<String> | RefValue<Set<String>>>.
+	// List<Set<String> | RefValue<Set<String>>>
 	l4 := types.NewList(s1, suite.ds.WriteValue(s3))
 	suite.Equal(uint64(2), suite.ds.WriteValue(l4).Height())
 	l5 := types.NewList(suite.ds.WriteValue(s1), s3)
 	suite.Equal(uint64(2), suite.ds.WriteValue(l5).Height())
+
+	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
+	everything := []types.Value{v1, v2, s1, s2, v3, v4, s3, l1, l2, s4, l3, l4, l5}
+	andMore := make([]types.Value, 0, len(everything)*3+2)
+	for _, v := range everything {
+		andMore = append(andMore, v, v.Type(), suite.ds.WriteValue(v))
+	}
+	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
+
+	suite.ds.WriteValue(types.NewList(andMore...))
 }

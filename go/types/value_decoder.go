@@ -227,5 +227,5 @@ func (r *valueDecoder) readUnionType() *Type {
 	for i := uint32(0); i < l; i++ {
 		ts[i] = r.readType()
 	}
-	return r.tc.makeUnionType(ts...)
+	return r.tc.getCompoundType(UnionKind, ts...)
 }
