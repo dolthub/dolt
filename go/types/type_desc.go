@@ -9,7 +9,6 @@ import "sort"
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
-	Equals(other TypeDesc) bool
 	HasUnresolvedCycle(visited []*Type) bool
 }
 
@@ -27,10 +26,6 @@ func (p PrimitiveDesc) Kind() NomsKind {
 	return NomsKind(p)
 }
 
-func (p PrimitiveDesc) Equals(other TypeDesc) bool {
-	return p.Kind() == other.Kind()
-}
-
 func (p PrimitiveDesc) HasUnresolvedCycle(visited []*Type) bool {
 	return false
 }
@@ -38,19 +33,20 @@ func (p PrimitiveDesc) HasUnresolvedCycle(visited []*Type) bool {
 var KindToString = map[NomsKind]string{
 	BlobKind:   "Blob",
 	BoolKind:   "Bool",
+	CycleKind:  "Cycle",
 	ListKind:   "List",
 	MapKind:    "Map",
 	NumberKind: "Number",
 	RefKind:    "Ref",
 	SetKind:    "Set",
+	StructKind: "Struct",
 	StringKind: "String",
 	TypeKind:   "Type",
-	ValueKind:  "Value",
-	CycleKind:  "Cycle",
 	UnionKind:  "Union",
+	ValueKind:  "Value",
 }
 
-// CompoundDesc describes a List, Map, Set or Ref type.
+// CompoundDesc describes a List, Map, Set, Ref, or Union type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
 	kind      NomsKind
@@ -59,18 +55,6 @@ type CompoundDesc struct {
 
 func (c CompoundDesc) Kind() NomsKind {
 	return c.kind
-}
-
-func (c CompoundDesc) Equals(other TypeDesc) bool {
-	if c.Kind() != other.Kind() {
-		return false
-	}
-	for i, e := range other.(CompoundDesc).ElemTypes {
-		if !e.Equals(c.ElemTypes[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 func (c CompoundDesc) HasUnresolvedCycle(visited []*Type) bool {
@@ -103,19 +87,6 @@ type StructDesc struct {
 
 func (s StructDesc) Kind() NomsKind {
 	return StructKind
-}
-
-func (s StructDesc) Equals(other TypeDesc) bool {
-	if s.Kind() != other.Kind() || len(s.fields) != len(other.(StructDesc).fields) {
-		return false
-	}
-	otherDesc := other.(StructDesc)
-	for i, field := range s.fields {
-		if field.name != otherDesc.fields[i].name || !field.t.Equals(otherDesc.fields[i].t) {
-			return false
-		}
-	}
-	return true
 }
 
 func (s StructDesc) HasUnresolvedCycle(visited []*Type) bool {
@@ -160,10 +131,6 @@ func (c CycleDesc) Kind() NomsKind {
 	return CycleKind
 }
 
-func (c CycleDesc) Equals(other TypeDesc) bool {
-	return c == other.(CycleDesc)
-}
-
 func (c CycleDesc) HasUnresolvedCycle(visited []*Type) bool {
 	return true
 }
@@ -171,5 +138,5 @@ func (c CycleDesc) HasUnresolvedCycle(visited []*Type) bool {
 type typeSlice []*Type
 
 func (ts typeSlice) Len() int           { return len(ts) }
-func (ts typeSlice) Less(i, j int) bool { return ts[i].Hash().Less(ts[j].Hash()) }
+func (ts typeSlice) Less(i, j int) bool { return ts[i].oid.Less(*ts[j].oid) }
 func (ts typeSlice) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }

@@ -501,7 +501,7 @@ suite('Encoding', () => {
 
   test('list of union', () => {
     assertEncoding([
-      uint8(ListKind), uint8(UnionKind), uint32(3) /* len */, uint8(BoolKind), uint8(NumberKind), uint8(StringKind), false,
+      uint8(ListKind), uint8(UnionKind), uint32(3) /* len */, uint8(NumberKind), uint8(BoolKind), uint8(StringKind), false,
       uint32(4) /* len */, uint8(StringKind), '0', uint8(NumberKind), float64(1), uint8(StringKind), '2', uint8(BoolKind), true,
     ],
     new List(['0', 1, '2', true]));
@@ -519,7 +519,7 @@ suite('Encoding', () => {
     const structType = makeStructType('S', ['x'], [numberType]);
 
     assertEncoding([
-      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(TypeKind), uint8(BoolKind), false,
+      uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(TypeKind), false,
       uint32(4) /* len */, uint8(BoolKind), true, uint8(TypeKind), uint8(NumberKind), uint8(TypeKind), uint8(TypeKind), uint8(TypeKind), uint8(StructKind), 'S', uint32(1) /* len */, 'x', uint8(NumberKind),
     ],
     new List([true, numberType, typeType, structType]));

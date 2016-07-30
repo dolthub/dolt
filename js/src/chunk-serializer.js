@@ -8,9 +8,9 @@ import Chunk from './chunk.js';
 import Hash, {byteLength as hashByteLength} from './hash.js';
 import {invariant} from './assert.js';
 import * as Bytes from './bytes.js';
+import {dvBigEndian} from './binary-rw.js';
 
 const headerSize = 4; // uint32
-const bigEndian = false; // Passing false to DataView methods makes them use big-endian byte order.
 const chunkLengthSize = 4; // uint32
 const chunkHeaderSize = hashByteLength + chunkLengthSize;
 
@@ -52,7 +52,7 @@ function serializeChunk(chunk: Chunk, buffer: Uint8Array, dv: DataView, offset: 
   offset += hashByteLength;
 
   const chunkLength = chunk.data.length;
-  dv.setUint32(offset, chunkLength, bigEndian);
+  dv.setUint32(offset, chunkLength, dvBigEndian);
   offset += chunkLengthSize;
 
   Bytes.copy(chunk.data, buffer, offset);
@@ -62,7 +62,7 @@ function serializeChunk(chunk: Chunk, buffer: Uint8Array, dv: DataView, offset: 
 
 function serializeHints(hints: Set<Hash>, buff: Uint8Array, dv: DataView): number {
   let offset = 0;
-  dv.setUint32(offset, hints.size, bigEndian);
+  dv.setUint32(offset, hints.size, dvBigEndian);
   offset += headerSize;
 
   hints.forEach(hash => {
@@ -91,7 +91,7 @@ function deserializeHints(buff: Uint8Array, dv: DataView): {hints: Array<Hash>, 
   const hints:Array<Hash> = [];
 
   let offset = 0;
-  const numHints = dv.getUint32(offset, bigEndian);
+  const numHints = dv.getUint32(offset, dvBigEndian);
   offset += headerSize;
 
   invariant(buff.byteLength - offset >= hashByteLength * numHints, 'Invalid hint buffer');
@@ -116,7 +116,7 @@ export function deserializeChunks(buff: Uint8Array, dv: DataView, offset: number
     const hash = new Hash(Bytes.subarray(buff, offset, offset + hashByteLength));
     offset += hashByteLength;
 
-    const chunkLength = dv.getUint32(offset, bigEndian);
+    const chunkLength = dv.getUint32(offset, dvBigEndian);
     offset += chunkLengthSize;
 
     invariant(offset + chunkLength <= totalLength, 'Invalid chunk buffer');

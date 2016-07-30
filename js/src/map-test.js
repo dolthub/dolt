@@ -268,7 +268,7 @@ suite('BuildMap', () => {
     const sortedKeys = numbers.concat(strings, structs);
 
     const m = new Map(kvs);
-    assert.strictEqual('d4kj4t158jfba9dtqi6s49rst403bkg8', m.hash.toString());
+    assert.strictEqual('qkamb8o40k3kib3ufjlevgtr92oorppd', m.hash.toString());
     const height = deriveCollectionHeight(m);
     assert.isTrue(height > 0);
     assert.strictEqual(height, m.sequence.items[0].ref.height);

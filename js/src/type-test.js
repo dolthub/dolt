@@ -7,7 +7,9 @@
 import {TestDatabase} from './test-util.js';
 import {assert} from 'chai';
 import {
+  blobType,
   boolType,
+  makeCycleType,
   makeMapType,
   makeSetType,
   makeStructType,
@@ -19,6 +21,8 @@ import {
 } from './type.js';
 import {suite, test} from 'mocha';
 import {equals} from './compare.js';
+import {encodeValue, decodeValue} from './codec.js';
+import {notNull} from './assert.js';
 
 suite('Type', () => {
   test('types', async () => {
@@ -137,5 +141,29 @@ suite('Type', () => {
     ].forEach(([t, desc]) => {
       assert.equal(t.describe(), desc);
     });
+  });
+
+  test('union with cycle', () => {
+    const inodeType = makeStructType('Inode', ['attr', 'contents'], [
+      makeStructType('Attr', ['ctime', 'mode', 'mtime'], [numberType, numberType, numberType]),
+      makeUnionType([
+        makeStructType('Directory', ['entries'], [
+          makeMapType(stringType, makeCycleType(1)),
+        ]),
+        makeStructType('File', ['data'], [blobType]),
+        makeStructType('Symlink', ['targetPath'], [stringType]),
+      ]),
+    ]);
+
+    const vr: any = null;
+    const t1 = notNull(inodeType.desc.getField('contents'));
+    const t2 = decodeValue(encodeValue(t1, null), vr);
+    assert.isTrue(equals(t1, t2));
+    /*
+     * Note that we cannot ensure pointer equality between t1 and t2 because the types used to the
+     * construct the Unions, while eventually equivalent, are not identical due to the potentially
+     * differing placement of the Cycle type. We do not remake Union types after putting their
+     * component types into their canonical ordering.
+     */
   });
 });

@@ -6,7 +6,8 @@
 
 import Ref from './ref.js';
 import type {NomsKind} from './noms-kind.js';
-import {invariant} from './assert.js';
+import type Hash from './hash.js';
+import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 import type Value from './value.js';
@@ -167,14 +168,20 @@ export class CycleDesc {
   }
 }
 
+/**
+ * A Type is created with a descriptor that defines the type and an id. Its OID (order id) is an
+ * intermediate hash used to order composite types of a union.
+ */
 export class Type<T: TypeDesc> extends ValueBase {
   _desc: T;
+  _oid: ?Hash;
   id: number;
   serialization: ?Uint8Array;
 
   constructor(desc: T, id: number) {
     super();
     this._desc = desc;
+    this._oid = null;
     this.id = id;
     this.serialization = null;
   }
@@ -195,6 +202,10 @@ export class Type<T: TypeDesc> extends ValueBase {
     return this._desc;
   }
 
+  updateOID(o: Hash) {
+    this._oid = o;
+  }
+
   hasUnresolvedCycle(visited: Type[]): boolean {
     if (visited.indexOf(this) >= 0) {
       return false;
@@ -207,6 +218,10 @@ export class Type<T: TypeDesc> extends ValueBase {
   get elemTypes(): Array<Type> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
+  }
+
+  oidCompare(other: Type): number {
+    return notNull(this._oid).compare(notNull(other._oid));
   }
 
   describe(): string {

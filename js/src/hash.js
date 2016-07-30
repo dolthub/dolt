@@ -8,8 +8,7 @@ import {alloc, compare, sha512} from './bytes.js';
 import {encode, decode} from './base32';
 
 export const byteLength = 20;
-export const stringLength = 32
-;
+export const stringLength = 32;
 const pattern = /^[0-9a-v]{32}$/;
 
 export default class Hash {

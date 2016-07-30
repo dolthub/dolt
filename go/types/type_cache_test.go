@@ -209,20 +209,32 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 		[]*Type{ut},
 	)
 
-	assert.True(ut.Desc.(CompoundDesc).ElemTypes[5].Kind() == CycleKind)
-	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
-	assert.False(ut.Equals(st.Desc.(StructDesc).fields[0].t))
+	assert.True(ut.Desc.(CompoundDesc).ElemTypes[0].Kind() == CycleKind)
+	// That the Struct / Cycle landed in index 1 was found empirically.
+	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[1])
+	// ut contains an explicit Cycle type; noms must not surrepticiously change existing types so we can be sure that the Union within st is different in that the cycle has been resolved.
+	assert.False(ut == st.Desc.(StructDesc).fields[0].t)
 
-	// Note that the union in this second case has a different provided ordering of it's element types.
+	// Note that the union in this second case is created with a different ordering of its type arguments.
 	ut2 := MakeUnionType(NumberType, StringType, BoolType, BlobType, ValueType, TypeType, MakeCycleType(0))
 	st2 := MakeStructType("Foo",
 		[]string{"foo"},
 		[]*Type{ut2},
 	)
-	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[5].Kind() == CycleKind)
-	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
-	assert.False(ut2.Equals(st2.Desc.(StructDesc).fields[0].t))
+	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[0].Kind() == CycleKind)
+	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[1])
+	assert.False(ut2 == st2.Desc.(StructDesc).fields[0].t)
 
 	assert.True(ut == ut2)
 	assert.True(st == st2)
+}
+
+func TestInvalidCyclesAndUnions(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Panics(func() {
+		MakeStructType("A",
+			[]string{"a"},
+			[]*Type{MakeStructType("A", []string{"a"}, []*Type{MakeCycleType(1)})})
+	})
 }

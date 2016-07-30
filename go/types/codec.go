@@ -15,7 +15,7 @@ import (
 const initialBufferSize = 2048
 
 func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
-	w := &binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
+	w := newBinaryNomsWriter()
 	enc := newValueEncoder(w, vw)
 	enc.writeValue(v)
 
@@ -171,8 +171,16 @@ type binaryNomsWriter struct {
 	offset uint32
 }
 
+func newBinaryNomsWriter() *binaryNomsWriter {
+	return &binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
+}
+
 func (b *binaryNomsWriter) data() []byte {
 	return b.buff[0:b.offset]
+}
+
+func (b *binaryNomsWriter) reset() {
+	b.offset = 0
 }
 
 func (b *binaryNomsWriter) ensureCapacity(n uint32) {

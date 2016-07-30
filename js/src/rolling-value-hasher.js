@@ -13,7 +13,7 @@ import type Value from './value.js';
 import type {Type} from './type.js';
 import {floatToIntExp} from './number-util.js';
 import {invariant} from './assert.js';
-import {maxUint32} from './codec.js';
+import {maxUint32} from './binary-rw.js';
 
 const defaultChunkPattern = ((1 << 12) | 0) - 1; // Avg Chunk Size of 4k
 

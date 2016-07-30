@@ -46,12 +46,7 @@ func (r *valueDecoder) readType() *Type {
 	case StructKind:
 		return r.readStructType()
 	case UnionKind:
-		l := r.readUint32()
-		elemTypes := make([]*Type, l)
-		for i := uint32(0); i < l; i++ {
-			elemTypes[i] = r.readType()
-		}
-		return r.tc.getCompoundType(UnionKind, elemTypes...)
+		return r.readUnionType()
 	case CycleKind:
 		return r.tc.getCycleType(r.readUint32())
 	}
@@ -224,4 +219,13 @@ func (r *valueDecoder) readStructType() *Type {
 	}
 
 	return r.tc.makeStructType(name, fieldNames, fieldTypes)
+}
+
+func (r *valueDecoder) readUnionType() *Type {
+	l := r.readUint32()
+	ts := make(typeSlice, l)
+	for i := uint32(0); i < l; i++ {
+		ts[i] = r.readType()
+	}
+	return r.tc.makeUnionType(ts...)
 }

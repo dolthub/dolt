@@ -100,7 +100,7 @@ func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes
 			t, _ = toUnresolvedType(t, tc, -1, nil)
 			resolveStructCycles(t, nil)
 			if !t.HasUnresolvedCycle() {
-				normalize(t, nil)
+				normalize(t)
 			}
 		}
 		t.id = tc.nextTypeId()
@@ -124,7 +124,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 	i, found := indexOfType(t, parentStructTypes)
 	if found {
 		cycle := CycleDesc(uint32(len(parentStructTypes)) - i - 1)
-		return &Type{cycle, &hash.Hash{}, 0, nil}, true // This type is just a placeholder. It doesn't need an id
+		return newType(cycle, 0xfa15e), true // This type is just a placeholder. It doesn't need a real id.
 	}
 
 	switch desc := t.Desc.(type) {
@@ -141,7 +141,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return &Type{CompoundDesc{t.Kind(), ts}, &hash.Hash{}, tc.nextTypeId(), nil}, true
+		return newType(CompoundDesc{t.Kind(), ts}, tc.nextTypeId()), true
 	case StructDesc:
 		fs := make(fieldSlice, len(desc.fields))
 		didChange := false
@@ -156,7 +156,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return &Type{StructDesc{desc.Name, fs}, &hash.Hash{}, tc.nextTypeId(), nil}, true
+		return newType(StructDesc{desc.Name, fs}, tc.nextTypeId()), true
 	case CycleDesc:
 		cycleLevel := int(desc)
 		return t, cycleLevel <= level // Only cycles which can be resolved in the current struct.
@@ -188,33 +188,129 @@ func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
 	return t
 }
 
-// Traverses a fully resolved cyclic type and ensures all types have serializations and all union types are sorted correctly
-func normalize(t *Type, parentStructTypes []*Type) {
-	idx, found := indexOfType(t, parentStructTypes)
-	if found {
-		d.Chk.True(parentStructTypes[idx].serialization != nil)
-		return
+// We normalize structs during their construction iff they have no unresolved cycles. Normalizing applies a canonical ordering to the composite types of a union and serializes all types under the struct. To ensure a consistent ordering of the composite types of a union, we generate a unique "order id" or OID for each of those types. The OID is the hash of a unique type encoding that is independant of the extant order of types within any subordinate unions. This encoding for most types is a straightforward serialization of its components; for unions the encoding is a bytewise XOR of the hashes of each of its composite type encodings.
+// We require a consistent order of types within a union to ensure that equivalent types have a single persistent encoding and, therefore, a single hash. The method described above fails for "unrolled" cycles whereby two equivalent, but uniquely described structures, would have different OIDs. Consider for example the following two types that, while equivalent, do not yeild the same OID:
+//	Struct A { a: Cycle<0> }
+//	Struct A { a: Struct A { a: Cycle<1> } }
+// We explicitly disallow this sort of redundantly expressed type. If a non-Byzantine use of such a construction arises, we can attempt to simplify the expansive type or find another means of comparison.
+func normalize(t *Type) {
+	walkType(t, nil, func(tt *Type, _ []*Type) {
+		generateOID(tt, false)
+	})
+
+	walkType(t, nil, func(tt *Type, parentStructTypes []*Type) {
+		if tt.Kind() == StructKind {
+			for _, ttt := range parentStructTypes {
+				if *tt.oid == *ttt.oid {
+					panic("unrolled cycle types are not supported; ahl owes you a beer")
+				}
+			}
+		}
+	})
+
+	walkType(t, nil, func(tt *Type, _ []*Type) {
+		if tt.Kind() == UnionKind {
+			sort.Sort(tt.Desc.(CompoundDesc).ElemTypes)
+		}
+	})
+
+	walkType(t, nil, func(tt *Type, _ []*Type) {
+		serializeType(tt)
+	})
+}
+
+func walkType(t *Type, parentStructTypes []*Type, do func(*Type, []*Type)) {
+	if t.Kind() == StructKind {
+		if _, found := indexOfType(t, parentStructTypes); found {
+			return
+		}
 	}
 
-	if t.serialization == nil {
-		serializeType(t)
-	}
+	do(t, parentStructTypes)
 
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
-		for _, et := range desc.ElemTypes {
-			normalize(et, parentStructTypes)
+		for _, tt := range desc.ElemTypes {
+			walkType(tt, parentStructTypes, do)
 		}
-
-		if t.Kind() == UnionKind {
-			ud := t.Desc.(CompoundDesc)
-			ts := typeSlice(ud.ElemTypes)
-			sort.Sort(ts)
-		}
-
 	case StructDesc:
 		for _, f := range desc.fields {
-			normalize(f.t, append(parentStructTypes, t))
+			walkType(f.t, append(parentStructTypes, t), do)
+		}
+	}
+}
+
+func generateOID(t *Type, allowUnresolvedCycles bool) {
+	buf := newBinaryNomsWriter()
+	encodeForOID(t, buf, allowUnresolvedCycles, t, nil)
+	oid := hash.FromData(buf.data())
+	t.oid = &oid
+}
+
+func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Type, parentStructTypes []*Type) {
+	// Most types are encoded in a straightforward fashion
+	switch desc := t.Desc.(type) {
+	case CycleDesc:
+		if allowUnresolvedCycles {
+			buf.writeUint8(uint8(desc.Kind()))
+			buf.writeUint32(uint32(desc))
+		} else {
+			panic("found an unexpected unresolved cycle")
+		}
+	case PrimitiveDesc:
+		buf.writeUint8(uint8(desc.Kind()))
+	case CompoundDesc:
+		switch k := desc.Kind(); k {
+		case ListKind, MapKind, RefKind, SetKind:
+			buf.writeUint8(uint8(k))
+			buf.writeUint32(uint32(len(desc.ElemTypes)))
+			for _, tt := range desc.ElemTypes {
+				encodeForOID(tt, buf, allowUnresolvedCycles, root, parentStructTypes)
+			}
+		case UnionKind:
+			buf.writeUint8(uint8(k))
+			if t == root {
+				// If this is where we started we don't need to keep going
+				return
+			}
+
+			buf.writeUint32(uint32(len(desc.ElemTypes)))
+
+			// This is the only subtle case: encode each subordinate type, generate the hash, remove duplicates, and xor the results together to form an order indepedant encoding.
+			mbuf := newBinaryNomsWriter()
+			oids := make(map[hash.Hash]struct{})
+			for _, tt := range desc.ElemTypes {
+				mbuf.reset()
+				encodeForOID(tt, mbuf, allowUnresolvedCycles, root, parentStructTypes)
+				oids[hash.FromData(mbuf.data())] = struct{}{}
+			}
+
+			data := make([]byte, hash.ByteLen)
+			for o, _ := range oids {
+				digest := o.Digest()
+				for i := 0; i < len(data); i++ {
+					data[i] ^= digest[i]
+				}
+			}
+			buf.writeBytes(data)
+		default:
+			panic("unknown compound type")
+		}
+	case StructDesc:
+		idx, found := indexOfType(t, parentStructTypes)
+		if found {
+			buf.writeUint8(uint8(CycleKind))
+			buf.writeUint32(uint32(len(parentStructTypes)) - 1 - idx)
+			return
+		}
+
+		buf.writeUint8(uint8(StructKind))
+		buf.writeString(desc.Name)
+
+		parentStructTypes = append(parentStructTypes, t)
+		for _, field := range desc.fields {
+			buf.writeString(field.name)
+			encodeForOID(field.t, buf, allowUnresolvedCycles, root, parentStructTypes)
 		}
 	}
 }
@@ -226,7 +322,10 @@ func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
 	if len(ts) == 1 {
 		return ts[0]
 	}
-
+	for _, tt := range ts {
+		generateOID(tt, true)
+	}
+	// We sort the contituent types to dedup equivalent types in memory; we may need to sort again after cycles are resolved for final encoding.
 	sort.Sort(ts)
 	return tc.getCompoundType(UnionKind, ts...)
 }

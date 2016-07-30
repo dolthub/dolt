@@ -231,7 +231,7 @@ suite('BuildSet', () => {
     vals.sort(compare);
 
     const s = new Set(vals);
-    assert.strictEqual('07h6blc4ag8g0alq6rloeki5630pjpvb', s.hash.toString());
+    assert.strictEqual('gd5q2a0vo1f5okfm57b3l02qn49u3ov8', s.hash.toString());
     const height = deriveCollectionHeight(s);
     assert.isTrue(height > 0);
     assert.strictEqual(height, s.sequence.items[0].ref.height);

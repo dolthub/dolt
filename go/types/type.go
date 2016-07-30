@@ -11,18 +11,19 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-// Type defines and describes Noms types, both custom and built-in.
-// Desc provides more details of the type. It may contain only a types.NomsKind, in the case of
+// Type defines and describes Noms types, both built-in and user-defined.
+// Desc provides the composition of the type. It may contain only a types.NomsKind, in the case of
 //     primitives, or it may contain additional information -- e.g. element Types for compound type
 //     specializations, field descriptions for structs, etc. Either way, checking Kind() allows code
 //     to understand how to interpret the rest of the data.
 // If Kind() refers to a primitive, then Desc has no more info.
-// If Kind() refers to List, Map, Set or Ref, then Desc is a list of Types describing the element type(s).
-// If Kind() refers to Struct, then Desc contains a []Field.
+// If Kind() refers to List, Map, Ref, Set, or Union, then Desc is a list of Types describing the element type(s).
+// If Kind() refers to Struct, then Desc contains a []field.
 
 type Type struct {
 	Desc          TypeDesc
 	h             *hash.Hash
+	oid           *hash.Hash
 	id            uint32
 	serialization []byte
 }
@@ -30,7 +31,7 @@ type Type struct {
 const initialTypeBufferSize = 128
 
 func newType(desc TypeDesc, id uint32) *Type {
-	t := &Type{desc, &hash.Hash{}, id, nil}
+	t := &Type{desc, &hash.Hash{}, &hash.Hash{}, id, nil}
 	if !t.HasUnresolvedCycle() {
 		serializeType(t)
 	}

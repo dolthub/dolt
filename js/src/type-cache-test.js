@@ -132,8 +132,8 @@ suite('TypeCache', () => {
                               valueType, typeType]);
     const st = makeStructType('Foo', ['foo'], [ut]);
 
-    assert.strictEqual(ut.desc.elemTypes[5].kind, Kind.Cycle);
-    assert.strictEqual(st, st.desc.fields[0].type.desc.elemTypes[5]);
+    assert.strictEqual(ut.desc.elemTypes[0].kind, Kind.Cycle);
+    assert.strictEqual(st, st.desc.fields[0].type.desc.elemTypes[1]);
     assert.isFalse(equals(ut, st.desc.fields[0].type));
 
     // Note that the union in this second case has a different provided ordering of it's element
@@ -142,11 +142,38 @@ suite('TypeCache', () => {
                                makeCycleType(0)]);
     const st2 = makeStructType('Foo', ['foo'], [ut]);
 
-    assert.strictEqual(ut2.desc.elemTypes[5].kind, Kind.Cycle);
-    assert.strictEqual(st2, st2.desc.fields[0].type.desc.elemTypes[5]);
+    assert.strictEqual(ut2.desc.elemTypes[0].kind, Kind.Cycle);
+    assert.strictEqual(st2, st2.desc.fields[0].type.desc.elemTypes[1]);
     assert.isFalse(equals(ut2, st2.desc.fields[0].type));
 
     assert.strictEqual(ut, ut2);
     assert.strictEqual(st, st2);
+  });
+
+  test('Invalid Cycles and Unions', () => {
+    assert.throws(() => {
+      makeStructType('A', ['a'], [makeStructType('A', ['a'], [makeCycleType(1)])]);
+    });
+  });
+
+  test('Invalid Crazy Cycles and Unions', () => {
+    /*
+     * struct A {
+     *   a: Union {
+     *     Cycle <0> |
+     *     Struct A {
+     *       a: Union {
+     *         Cycle <0> |
+     *         Cycle <1>
+     *       }
+     *     }
+     *   }
+     * }
+     */
+    assert.throws(() => {
+      makeStructType('A', ['a'], [makeUnionType(
+        [makeCycleType(0), makeStructType('A', ['a'], [makeCycleType(0), makeCycleType(1)])]
+      )]);
+    });
   });
 });
