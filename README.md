@@ -1,4 +1,9 @@
-# Store All the Things  [![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer)
+
+<img src='doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
+<p align='right'>
+[![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer)
+
+<br clear='all'/>
 
 *Noms* is a content-addressed, immutable, decentralized, strongly-typed database.
 
