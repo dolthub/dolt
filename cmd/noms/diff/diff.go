@@ -9,11 +9,12 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/dustin/go-humanize"
 )
 
 func shouldDescend(v1, v2 types.Value) bool {
 	kind := v1.Type().Kind()
-	return !types.IsPrimitiveKind(kind) && kind == v2.Type().Kind()
+	return !types.IsPrimitiveKind(kind) && kind == v2.Type().Kind() && kind != types.RefKind
 }
 
 func Diff(w io.Writer, v1, v2 types.Value) error {
@@ -229,7 +230,13 @@ func write(w io.Writer, b []byte) {
 }
 
 func writeEncodedValue(w io.Writer, v types.Value) {
-	d.PanicIfError(types.WriteEncodedValue(w, v))
+	if v.Type().Kind() == types.BlobKind {
+		w.Write([]byte("Blob ("))
+		w.Write([]byte(humanize.Bytes(v.(types.Blob).Len())))
+		w.Write([]byte(")"))
+	} else {
+		d.PanicIfError(types.WriteEncodedValue(w, v))
+	}
 }
 
 func writeEncodedValueWithTags(w io.Writer, v types.Value) {

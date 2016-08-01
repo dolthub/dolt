@@ -5,9 +5,11 @@
 package diff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -203,4 +205,45 @@ func TestNomsListDiff(t *testing.T) {
 	Diff(buf, l1, l2)
 
 	assert.Equal(expected, buf.String())
+}
+
+func TestNomsBlobDiff(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
+	b1 := types.NewBlob(strings.NewReader(strings.Repeat("x", 2*1024)))
+	b2 := types.NewBlob(strings.NewReader("Hello World"))
+	buf := util.NewBuffer(nil)
+	Diff(buf, b1, b2)
+	assert.Equal(expected, buf.String())
+}
+
+func TestNomsTypeDiff(t *testing.T) {
+	assert := assert.New(t)
+
+	expected := "-   List<Number>\n+   List<String>\n"
+	t1 := types.MakeListType(types.NumberType)
+	t2 := types.MakeListType(types.StringType)
+	buf := util.NewBuffer(nil)
+	Diff(buf, t1, t2)
+	assert.Equal(expected, buf.String())
+
+	expected = "-   List<Number>\n+   Set<String>\n"
+	t1 = types.MakeListType(types.NumberType)
+	t2 = types.MakeSetType(types.StringType)
+	buf = util.NewBuffer(nil)
+	Diff(buf, t1, t2)
+	assert.Equal(expected, buf.String())
+}
+
+func TestNomsRefDiff(t *testing.T) {
+	expected := "-   fckcbt7nk5jl4arco2dk7r9nj7abb6ci\n+   i7d3u5gekm48ot419t2cot6cnl7ltcah\n"
+	l1 := createList(1)
+	l2 := createList(2)
+	r1 := types.NewRef(l1)
+	r2 := types.NewRef(l2)
+	buf := util.NewBuffer(nil)
+	Diff(buf, r1, r2)
+
+	test.EqualsIgnoreHashes(t, expected, buf.String())
 }
