@@ -250,7 +250,7 @@ class Prompt extends React.Component<void, {}, void> {
         Can haz database?
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
           <input type='text' ref='db' autoFocus={true} style={inputStyle}
-            defaultValue={params.db || 'http://api.noms.io/-/ds/[user]'}
+            defaultValue={params.db || 'https://demo.noms.io/cli-tour'}
             placeholder='noms database URL'
           />
           <input type='text' ref='token' style={inputStyle}
