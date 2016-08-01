@@ -118,6 +118,31 @@ func (s *nomsLogTestSuite) TestNArg() {
 	s.Contains(res, h1.String())
 }
 
+func (s *nomsLogTestSuite) TestEmptyCommit() {
+	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
+	db, err := spec.GetDatabase(str)
+	s.NoError(err)
+
+	ds := dataset.NewDataset(db, "ds1")
+
+	meta := types.NewStruct("Meta", map[string]types.Value{
+		"longNameForTest": types.String("Yoo"),
+		"test2":           types.String("Hoo"),
+	})
+	ds, err = ds.Commit(types.String("1"), dataset.CommitOptions{Meta: meta})
+	s.NoError(err)
+
+	ds.Commit(types.String("2"), dataset.CommitOptions{})
+	db.Close()
+
+	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "ds1")
+	res, _ := s.Run(main, []string{"log", "--show-value=false", dsSpec})
+	test.EqualsIgnoreHashes(s.T(), metaRes1, res)
+
+	res, _ = s.Run(main, []string{"log", "--show-value=false", "--oneline", dsSpec})
+	test.EqualsIgnoreHashes(s.T(), metaRes2, res)
+}
+
 func (s *nomsLogTestSuite) TestNomsGraph1() {
 	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	db, err := spec.GetDatabase(str)
@@ -326,5 +351,6 @@ const (
 	truncRes3  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
 	diffTrunc3 = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
 
-	metaRes1 = "82pdg48mjv5noo1bn0k6mhbqe2daunt8\nParent: pv77djqjgu33b5lko9l3f7s3i15me2k2\n-   \"1\"\n+   \"2\"\n\npv77djqjgu33b5lko9l3f7s3i15me2k2\nParent: None\nTest1:  \"Yoo\"\nTest2:  \"Hoo\"\n\n"
+	metaRes1 = "p7jmuh67vhfccnqk1bilnlovnms1m67o\nParent: f8gjiv5974ojir9tnrl2k393o4s1tf0r\n-   \"1\"\n+   \"2\"\n\nf8gjiv5974ojir9tnrl2k393o4s1tf0r\nParent:          None\nLongNameForTest: \"Yoo\"\nTest2:           \"Hoo\"\n\n"
+	metaRes2 = "p7jmuh67vhfccnqk1bilnlovnms1m67o (Parent: f8gjiv5974ojir9tnrl2k393o4s1tf0r)\nf8gjiv5974ojir9tnrl2k393o4s1tf0r (Parent: None)\n"
 )
