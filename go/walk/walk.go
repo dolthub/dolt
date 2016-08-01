@@ -51,8 +51,24 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 			wg.Add(1)
 			rq.tail() <- sr
 		} else {
-			for _, c := range v.ChildValues() {
-				processVal(c, nil)
+			switch coll := v.(type) {
+			case types.List:
+				coll.IterAll(func(c types.Value, index uint64) {
+					processVal(c, nil)
+				})
+			case types.Set:
+				coll.IterAll(func(c types.Value) {
+					processVal(c, nil)
+				})
+			case types.Map:
+				coll.IterAll(func(k, c types.Value) {
+					processVal(k, nil)
+					processVal(c, nil)
+				})
+			default:
+				for _, c := range v.ChildValues() {
+					processVal(c, nil)
+				}
 			}
 		}
 	}
