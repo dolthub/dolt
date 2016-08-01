@@ -238,12 +238,12 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	c := cs.Get(current)
 	d.PanicIfTrue(c.IsEmpty(), "Can't set Root to a non-present Chunk")
 
-	// Ensure that proposed new Root is a Map and, if it has anything in it, that it's <String, RefOfCommit>
+	// Ensure that proposed new Root is a Map and, if it has anything in it, that it's <String, <RefCommit>>
 	v := types.DecodeValue(c, nil)
 	d.PanicIfTrue(v.Type().Kind() != types.MapKind, "Root of a Database must be a Map")
 	m := v.(types.Map)
 	if !m.Empty() && !isMapOfStringToRefOfCommit(m) {
-		panic(d.Wrap(fmt.Errorf("Root of a Database must be a Map<String, RefOfCommit>, not %s", m.Type().Describe())))
+		panic(d.Wrap(fmt.Errorf("Root of a Database must be a Map<String, Ref<Commit>>, not %s", m.Type().Describe())))
 	}
 
 	if !cs.UpdateRoot(current, last) {
