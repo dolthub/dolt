@@ -182,7 +182,7 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("AINT NO THANG"))
 	assertRoundTrips(String("💩"))
 
-	assertRoundTrips(NewStruct("", structData{"a": Bool(true), "b": String("foo"), "c": Number(2.3)}))
+	assertRoundTrips(NewStruct("", StructData{"a": Bool(true), "b": String("foo"), "c": Number(2.3)}))
 
 	listLeaf := newList(newListLeafSequence(nil, Number(4), Number(5), Number(6), Number(7)))
 	assertRoundTrips(listLeaf)
@@ -345,12 +345,12 @@ func TestWriteStruct(t *testing.T) {
 			uint8(StructKind), "S", uint32(2) /* len */, "b", uint8(BoolKind), "x", uint8(NumberKind),
 			uint8(BoolKind), true, uint8(NumberKind), Number(42),
 		},
-		NewStruct("S", structData{"x": Number(42), "b": Bool(true)}),
+		NewStruct("S", StructData{"x": Number(42), "b": Bool(true)}),
 	)
 }
 
 func TestWriteStructTooMuchData(t *testing.T) {
-	s := NewStruct("S", structData{"x": Number(42), "b": Bool(true)})
+	s := NewStruct("S", StructData{"x": Number(42), "b": Bool(true)})
 	c := EncodeValue(s, nil)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
@@ -368,7 +368,7 @@ func TestWriteStructWithList(t *testing.T) {
 			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(StringKind),
 			uint8(ListKind), uint8(StringKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
 		},
-		NewStruct("S", structData{"l": NewList(String("a"), String("b"))}),
+		NewStruct("S", StructData{"l": NewList(String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -377,7 +377,7 @@ func TestWriteStructWithList(t *testing.T) {
 			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(UnionKind), uint32(0),
 			uint8(ListKind), uint8(UnionKind), uint32(0), false, uint32(0), /* len */
 		},
-		NewStruct("S", structData{"l": NewList()}),
+		NewStruct("S", StructData{"l": NewList()}),
 	)
 }
 
@@ -397,7 +397,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 			uint8(NumberKind), Number(42),
 		},
 		// {s: {x: 42}}
-		NewStruct("S", structData{"s": NewStruct("S2", structData{"x": Number(42)})}),
+		NewStruct("S", StructData{"s": NewStruct("S2", StructData{"x": Number(42)})}),
 	)
 }
 
@@ -406,7 +406,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 		[]interface{}{
 			uint8(StructKind), "S", uint32(1) /* len */, "b", uint8(BlobKind), uint8(BlobKind), false, []byte{0x00, 0x01},
 		},
-		NewStruct("S", structData{"b": NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))}),
+		NewStruct("S", StructData{"b": NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))}),
 	)
 }
 
@@ -497,7 +497,7 @@ func TestWriteListOfStruct(t *testing.T) {
 			uint8(ListKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
 			uint32(1) /* len */, uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), uint8(NumberKind), Number(42),
 		},
-		NewList(NewStruct("S", structData{"x": Number(42)})),
+		NewList(NewStruct("S", StructData{"x": Number(42)})),
 	)
 }
 

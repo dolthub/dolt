@@ -173,7 +173,7 @@ func metaInfoForCommit(date, filePath, nomsPath, comment string) types.Struct {
 		path = filePath
 		fileOrNomsPath = "inputFile"
 	}
-	metaValues := map[string]types.Value{
+	metaValues := types.StructData{
 		"date":         types.String(date),
 		fileOrNomsPath: types.String(path),
 	}

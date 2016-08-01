@@ -892,7 +892,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewSet(Bool(true)),
 		NewList(Bool(true)),
 		NewMap(Bool(true), Number(0)),
-		NewStruct("", structData{"field": Bool(true)}),
+		NewStruct("", StructData{"field": Bool(true)}),
 		// Refs of values
 		NewRef(Bool(true)),
 		NewRef(Number(0)),
@@ -901,7 +901,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewRef(NewSet(Bool(true))),
 		NewRef(NewList(Bool(true))),
 		NewRef(NewMap(Bool(true), Number(0))),
-		NewRef(NewStruct("", structData{"field": Bool(true)})),
+		NewRef(NewStruct("", StructData{"field": Bool(true)})),
 	}
 
 	s := NewSet(vs...)

@@ -41,12 +41,12 @@ func TestGenericStructChunks(t *testing.T) {
 func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStruct("S2", map[string]Value{"b": Bool(true), "o": String("hi")})
+	s := NewStruct("S2", StructData{"b": Bool(true), "o": String("hi")})
 	assert.True(s.Get("b").Equals(Bool(true)))
 	_, ok := s.MaybeGet("missing")
 	assert.False(ok)
 
-	s2 := NewStruct("S2", map[string]Value{"b": Bool(false), "o": String("hi")})
+	s2 := NewStruct("S2", StructData{"b": Bool(false), "o": String("hi")})
 	assert.True(s2.Get("b").Equals(Bool(false)))
 	o, ok := s2.MaybeGet("o")
 	assert.True(ok)
@@ -63,7 +63,7 @@ func TestGenericStructNew(t *testing.T) {
 func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStruct("S3", map[string]Value{"b": Bool(true), "o": String("hi")})
+	s := NewStruct("S3", StructData{"b": Bool(true), "o": String("hi")})
 	s2 := s.Set("b", Bool(false))
 
 	assert.Panics(func() { s.Set("b", Number(1)) })
@@ -94,55 +94,55 @@ func TestStructDiff(t *testing.T) {
 		return ValueChanged{ChangeType: ct, V: String(fieldName)}
 	}
 
-	s1 := NewStruct("", map[string]Value{"a": Bool(true), "b": String("hi"), "c": Number(4)})
+	s1 := NewStruct("", StructData{"a": Bool(true), "b": String("hi"), "c": Number(4)})
 
 	assertDiff([]ValueChanged{}, s1,
-		NewStruct("", map[string]Value{"a": Bool(true), "b": String("hi"), "c": Number(4)}))
+		NewStruct("", StructData{"a": Bool(true), "b": String("hi"), "c": Number(4)}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")}, s1,
-		NewStruct("", map[string]Value{"a": Bool(false), "b": String("bye"), "c": Number(4)}))
+		NewStruct("", StructData{"a": Bool(false), "b": String("bye"), "c": Number(4)}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")}, s1,
-		NewStruct("", map[string]Value{"a": Bool(true), "b": String("bye"), "c": Number(5)}))
+		NewStruct("", StructData{"a": Bool(true), "b": String("bye"), "c": Number(5)}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")}, s1,
-		NewStruct("", map[string]Value{"a": Bool(false), "b": String("hi"), "c": Number(10)}))
+		NewStruct("", StructData{"a": Bool(false), "b": String("hi"), "c": Number(10)}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "b")}, s1,
-		NewStruct("NewType", map[string]Value{"a": Bool(true), "c": Number(4)}))
+		NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4)}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "b"), vc(DiffChangeAdded, "d")}, s1,
-		NewStruct("NewType", map[string]Value{"a": Bool(true), "c": Number(4), "d": Number(5)}))
+		NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4), "d": Number(5)}))
 
-	s2 := NewStruct("", map[string]Value{
+	s2 := NewStruct("", StructData{
 		"a": NewList(Number(0), Number(1)),
 		"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
 		"c": NewSet(Number(0), Number(1), String("foo")),
 	})
 
 	assertDiff([]ValueChanged{}, s2,
-		NewStruct("", map[string]Value{
+		NewStruct("", StructData{
 			"a": NewList(Number(0), Number(1)),
 			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")}, s2,
-		NewStruct("", map[string]Value{
+		NewStruct("", StructData{
 			"a": NewList(Number(1), Number(1)),
 			"b": NewMap(String("foo"), Bool(true), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")}, s2,
-		NewStruct("", map[string]Value{
+		NewStruct("", StructData{
 			"a": NewList(Number(0)),
 			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(2), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")}, s2,
-		NewStruct("", map[string]Value{
+		NewStruct("", StructData{
 			"a": NewList(Number(0), Number(1)),
 			"b": NewMap(String("boo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("bar")),
@@ -178,6 +178,6 @@ func TestCycles(t *testing.T) {
 	fsType := MakeStructType("Filesystem", []string{"root"}, []*Type{inodeType})
 
 	rootDir := NewStructWithType(directoryType, ValueSlice{NewMap()})
-	rootInode := NewStruct("Inode", map[string]Value{"contents": rootDir})
+	rootInode := NewStruct("Inode", StructData{"contents": rootDir})
 	NewStructWithType(fsType, ValueSlice{rootInode})
 }

@@ -50,7 +50,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et3, at3)
 
 	// Now commit a String with MetaInfo
-	meta := types.NewStruct("Meta", map[string]types.Value{"date": types.String("some date"), "number": types.Number(9)})
+	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
 	metaType := types.MakeStructType("Meta", []string{"date", "number"}, []*types.Type{types.StringType, types.NumberType})
 	assertTypeEquals(metaType, meta.Type())
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
@@ -69,14 +69,14 @@ func TestNewCommit(t *testing.T) {
 
 func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
-	metaCommit := types.NewStruct("Commit", map[string]types.Value{
+	metaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
 		"parents": types.NewSet(),
 		"meta":    types.EmptyStruct,
 	})
 	assert.True(IsCommitType(metaCommit.Type()))
 
-	noMetaCommit := types.NewStruct("Commit", map[string]types.Value{
+	noMetaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
 		"parents": types.NewSet(),
 	})

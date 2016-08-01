@@ -136,7 +136,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 	s.Equal(uint64(20), m.Len())
 
 	for i := 0; i < 20; i++ {
-		m.Get(types.Number(i)).(types.Struct).Equals(types.NewStruct("", map[string]types.Value{
+		m.Get(types.Number(i)).(types.Struct).Equals(types.NewStruct("", types.StructData{
 			"a": types.String(fmt.Sprintf("a%d", i)),
 			"c": types.Number(i * 2),
 		}))

@@ -65,10 +65,10 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 	//  "list": [false true],
 	//  "struct": {"nested": "string"}
 	// }
-	tstruct := types.NewStruct("", map[string]types.Value{
+	tstruct := types.NewStruct("", types.StructData{
 		"string": types.String("string"),
 		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
-		"struct": types.NewStruct("", map[string]types.Value{
+		"struct": types.NewStruct("", types.StructData{
 			"nested": types.String("string"),
 		}),
 	})

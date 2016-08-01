@@ -47,7 +47,7 @@ func NomsValueFromDecodedJSON(o interface{}, useStruct bool) types.Value {
 	case map[string]interface{}:
 		var v types.Value
 		if useStruct {
-			fields := make(map[string]types.Value, len(o))
+			fields := make(types.StructData, len(o))
 			for k, v := range o {
 				nv := NomsValueFromDecodedJSON(v, useStruct)
 				if nv != nil {

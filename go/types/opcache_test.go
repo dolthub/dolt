@@ -40,7 +40,7 @@ func (suite *OpCacheSuite) TestSet() {
 		{Bool(false), Number(1)},
 		{NewBlob(bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap()},
 		{Bool(true), Number(42)},
-		{NewStruct("thing1", structData{"a": Number(7)}), Number(42)},
+		{NewStruct("thing1", StructData{"a": Number(7)}), Number(42)},
 		{String("struct"), NewStruct("thing2", nil)},
 		{Number(42), String("other")},
 	}

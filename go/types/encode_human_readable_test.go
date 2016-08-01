@@ -139,7 +139,7 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	str := NewStruct("S1", map[string]Value{
+	str := NewStruct("S1", StructData{
 		"x": Number(1),
 		"y": Number(2),
 	})
@@ -148,13 +148,13 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 }
 
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
-	str1 := NewStruct("S3", map[string]Value{
+	str1 := NewStruct("S3", StructData{
 		"x": Number(1),
 	})
-	str2 := NewStruct("S3", map[string]Value{
+	str2 := NewStruct("S3", StructData{
 		"x": Number(2),
 	})
-	str3 := NewStruct("S3", map[string]Value{
+	str3 := NewStruct("S3", StructData{
 		"x": Number(3),
 	})
 	l := NewList(str1, str2, str3)

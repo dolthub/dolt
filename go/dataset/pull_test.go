@@ -125,14 +125,14 @@ func TestPullWithMeta(t *testing.T) {
 	source := createTestDataset("source")
 
 	v1 := types.Number(1)
-	m1 := types.NewStruct("Meta", map[string]types.Value{
+	m1 := types.NewStruct("Meta", types.StructData{
 		"name": types.String("one"),
 	})
 	source, err := source.Commit(v1, CommitOptions{Meta: m1})
 	assert.NoError(err)
 
 	v2 := types.Number(2)
-	m2 := types.NewStruct("Meta", map[string]types.Value{
+	m2 := types.NewStruct("Meta", types.StructData{
 		"name": types.String("two"),
 	})
 	source, err = source.Commit(v2, CommitOptions{Meta: m2})
@@ -140,14 +140,14 @@ func TestPullWithMeta(t *testing.T) {
 	h2 := source.Head()
 
 	v3 := types.Number(3)
-	m3 := types.NewStruct("Meta", map[string]types.Value{
+	m3 := types.NewStruct("Meta", types.StructData{
 		"name": types.String("three"),
 	})
 	source, err = source.Commit(v3, CommitOptions{Meta: m3})
 	assert.NoError(err)
 
 	v4 := types.Number(4)
-	m4 := types.NewStruct("Meta", map[string]types.Value{
+	m4 := types.NewStruct("Meta", types.StructData{
 		"name": types.String("three"),
 	})
 	source, err = source.Commit(v4, CommitOptions{Meta: m4})

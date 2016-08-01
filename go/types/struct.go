@@ -17,7 +17,7 @@ import (
 var EmptyStructType = MakeStructType("", []string{}, []*Type{})
 var EmptyStruct = Struct{ValueSlice{}, EmptyStructType, &hash.Hash{}}
 
-type structData map[string]Value
+type StructData map[string]Value
 
 type Struct struct {
 	values []Value
@@ -25,7 +25,7 @@ type Struct struct {
 	h      *hash.Hash
 }
 
-func NewStruct(name string, data structData) Struct {
+func NewStruct(name string, data StructData) Struct {
 	fieldNames := make(sort.StringSlice, len(data))
 	i := 0
 	for fn, _ := range data {

@@ -106,7 +106,7 @@ import (
 )
 
 func newPerson(givenName string, male bool) types.Struct {
-  return types.NewStruct("Person", map[string]types.Value{
+  return types.NewStruct("Person", types.StructData{
     "given": types.String(givenName),
     "male":  types.Bool(male),
   })
@@ -241,7 +241,7 @@ func main() {
     // type assertion to convert Head to List
     personList := headValue.(types.List)
     data := personList.Append(
-      types.NewStruct("Person", map[string]types.Value{
+      types.NewStruct("Person", types.StructData{
         "given":  types.String("Jon"),
         "family": types.String("Snow"),
         "male":   types.Bool(true),

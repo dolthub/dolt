@@ -100,7 +100,7 @@ func main() {
 
 func metaInfoForCommit(fileOrUrl, source, comment string) types.Struct {
 	date := time.Now().UTC().Format("2006-01-02T15:04:05-0700")
-	metaValues := map[string]types.Value{
+	metaValues := types.StructData{
 		"date":    types.String(date),
 		fileOrUrl: types.String(source),
 	}

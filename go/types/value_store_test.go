@@ -98,7 +98,7 @@ func TestHintsOnCache(t *testing.T) {
 
 	cr1 := cvs.WriteValue(Number(1))
 	cr2 := cvs.WriteValue(Number(2))
-	s1 := NewStruct("", structData{
+	s1 := NewStruct("", StructData{
 		"a": cr1,
 		"b": cr2,
 	})
@@ -107,7 +107,7 @@ func TestHintsOnCache(t *testing.T) {
 
 	if assert.True(v.Equals(s1)) {
 		cr3 := cvs.WriteValue(Number(3))
-		s2 := NewStruct("", structData{
+		s2 := NewStruct("", StructData{
 			"a": cr1,
 			"b": cr2,
 			"c": cr3,

@@ -71,11 +71,11 @@ b,2,false
 				types.BoolType,
 			}))))
 
-	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("", map[string]types.Value{
+	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("", types.StructData{
 		"B": types.Number(1),
 		"C": types.Bool(true),
 	})))
-	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("", map[string]types.Value{
+	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("", types.StructData{
 		"B": types.Number(2),
 		"C": types.Bool(false),
 	})))

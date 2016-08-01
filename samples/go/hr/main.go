@@ -68,7 +68,7 @@ func addPerson(ds dataset.Dataset) {
 		return
 	}
 
-	np := types.NewStruct("Person", map[string]types.Value{
+	np := types.NewStruct("Person", types.StructData{
 		"id":    types.Number(id),
 		"name":  types.String(flag.Arg(2)),
 		"title": types.String(flag.Arg(3)),

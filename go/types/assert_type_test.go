@@ -98,7 +98,7 @@ func TestAssertTypeStruct(tt *testing.T) {
 		[]string{"x"}, []*Type{BoolType},
 	)
 
-	v := NewStruct("Struct", structData{"x": Bool(true)})
+	v := NewStruct("Struct", StructData{"x": Bool(true)})
 	assertSubtype(t, v)
 	assertAll(tt, t, v)
 	assertSubtype(ValueType, v)
@@ -181,9 +181,9 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
 	namedT := MakeStructType("Name", []string{"x"}, []*Type{NumberType})
 	anonT := MakeStructType("", []string{"x"}, []*Type{NumberType})
-	namedV := NewStruct("Name", structData{"x": Number(42)})
-	name2V := NewStruct("foo", structData{"x": Number(42)})
-	anonV := NewStruct("", structData{"x": Number(42)})
+	namedV := NewStruct("Name", StructData{"x": Number(42)})
+	name2V := NewStruct("foo", StructData{"x": Number(42)})
+	anonV := NewStruct("", StructData{"x": Number(42)})
 
 	assertSubtype(namedT, namedV)
 	assertInvalid(tt, namedT, name2V)
@@ -198,9 +198,9 @@ func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
 	at := MakeStructType("", []string{}, []*Type{})
 	bt := MakeStructType("", []string{"x"}, []*Type{NumberType})
 	ct := MakeStructType("", []string{"s", "x"}, []*Type{StringType, NumberType})
-	av := NewStruct("", structData{})
-	bv := NewStruct("", structData{"x": Number(1)})
-	cv := NewStruct("", structData{"x": Number(2), "s": String("hi")})
+	av := NewStruct("", StructData{})
+	bv := NewStruct("", StructData{"x": Number(1)})
+	cv := NewStruct("", StructData{"x": Number(2), "s": String("hi")})
 
 	assertSubtype(at, av)
 	assertInvalid(tt, bt, av)
@@ -216,7 +216,7 @@ func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtype(tt *testing.T) {
-	c1 := NewStruct("Commit", structData{
+	c1 := NewStruct("Commit", StructData{
 		"value":   Number(1),
 		"parents": NewSet(),
 	})
@@ -232,7 +232,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 	)
 	assertSubtype(t11, c1)
 
-	c2 := NewStruct("Commit", structData{
+	c2 := NewStruct("Commit", StructData{
 		"value":   Number(2),
 		"parents": NewSet(NewRef(c1)),
 	})

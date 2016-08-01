@@ -61,7 +61,7 @@ func createList(kv ...interface{}) types.List {
 }
 
 func createStruct(name string, kv ...interface{}) types.Struct {
-	fields := map[string]types.Value{}
+	fields := types.StructData{}
 	for i := 0; i < len(kv); i += 2 {
 		fields[kv[i].(string)] = valToTypesValue(kv[i+1])
 	}

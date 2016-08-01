@@ -32,7 +32,7 @@ func assertPathStringResolvesTo(assert *assert.Assertions, expect, ref Value, st
 func TestPathStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	v := NewStruct("", structData{
+	v := NewStruct("", StructData{
 		"foo": String("foo"),
 		"bar": Bool(false),
 		"baz": Number(203),
@@ -172,7 +172,7 @@ func TestPathMulti(t *testing.T) {
 
 	l := NewList(m1, m2)
 
-	s := NewStruct("", structData{
+	s := NewStruct("", StructData{
 		"foo": l,
 	})
 

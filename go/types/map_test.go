@@ -250,7 +250,7 @@ func newNumber(i int) Value {
 }
 
 func newNumberStruct(i int) Value {
-	return NewStruct("", structData{"n": Number(i)})
+	return NewStruct("", StructData{"n": Number(i)})
 }
 
 func getTestNativeOrderMap(scale int) testMap {
@@ -1012,8 +1012,8 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
-		k := vs.WriteValue(NewStruct("num", structData{"n": Number(i)}))
-		v := vs.WriteValue(NewStruct("num", structData{"n": Number(i + 1)}))
+		k := vs.WriteValue(NewStruct("num", StructData{"n": Number(i)}))
+		v := vs.WriteValue(NewStruct("num", StructData{"n": Number(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
@@ -1090,7 +1090,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewSet(Bool(true)), v,
 		NewList(Bool(true)), v,
 		NewMap(Bool(true), Number(0)), v,
-		NewStruct("", structData{"field": Bool(true)}), v,
+		NewStruct("", StructData{"field": Bool(true)}), v,
 		// Refs of values
 		NewRef(Bool(true)), v,
 		NewRef(Number(0)), v,
@@ -1099,7 +1099,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewRef(NewSet(Bool(true))), v,
 		NewRef(NewList(Bool(true))), v,
 		NewRef(NewMap(Bool(true), Number(0))), v,
-		NewRef(NewStruct("", structData{"field": Bool(true)})), v,
+		NewRef(NewStruct("", StructData{"field": Bool(true)})), v,
 	}
 
 	m := NewMap(kvs...)
