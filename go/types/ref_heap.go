@@ -4,26 +4,33 @@
 
 package types
 
-// RefHeap implements heap.Interface (which includes sort.Interface) as a height based priority queue.
-type RefHeap []Ref
+import (
+	"sort"
 
-func (h RefHeap) Len() int {
+	"github.com/attic-labs/noms/go/hash"
+)
+
+// RefByHeight implements sort.Interface to order by increasing HeightOrder(). It uses increasing order because this causes repeated pushes and pops of the 'tallest' Refs to re-use memory, avoiding reallocations.
+// We might consider making this a firmer abstraction boundary as a part of BUG 2182
+type RefByHeight []Ref
+
+func (h RefByHeight) Len() int {
 	return len(h)
 }
 
-func (h RefHeap) Less(i, j int) bool {
-	return HeapOrder(h[i], h[j])
+func (h RefByHeight) Less(i, j int) bool {
+	return !HeightOrder(h[i], h[j])
 }
 
-func (h RefHeap) Swap(i, j int) {
+func (h RefByHeight) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 }
 
-func (h *RefHeap) Push(r interface{}) {
-	*h = append(*h, r.(Ref))
+func (h *RefByHeight) PushBack(r Ref) {
+	*h = append(*h, r)
 }
 
-func (h *RefHeap) Pop() interface{} {
+func (h *RefByHeight) PopBack() Ref {
 	old := *h
 	n := len(old)
 	x := old[n-1]
@@ -31,29 +38,56 @@ func (h *RefHeap) Pop() interface{} {
 	return x
 }
 
-func (h RefHeap) Empty() bool {
-	return len(h) == 0
+// DropIndices takes a slice of integer indices into h and splices out the Refs at those indices.
+func (h *RefByHeight) DropIndices(indices []int) {
+	sort.Ints(indices)
+	old := *h
+	numIdx := len(indices)
+	for i, j := 0, 0; i < old.Len(); i++ {
+		if len(indices) > 0 && i == indices[0] {
+			indices = indices[1:]
+			continue
+		}
+		if i != j {
+			old[j] = old[i]
+		}
+		j++
+	}
+	*h = old[:old.Len()-numIdx]
 }
 
-func (h RefHeap) Peek() (head Ref) {
-	if len(h) > 0 {
-		head = h[0]
+func (h *RefByHeight) Unique() {
+	seen := hash.HashSet{}
+	result := make(RefByHeight, 0, cap(*h))
+	for _, r := range *h {
+		target := r.TargetHash()
+		if !seen.Has(target) {
+			result = append(result, r)
+		}
+		seen.Insert(target)
+	}
+	*h = result
+}
+
+func (h RefByHeight) Empty() bool {
+	return h.Len() == 0
+}
+
+// PeekEnd returns, but does not Pop the tallest Ref in h.
+func (h RefByHeight) PeekEnd() (head Ref) {
+	return h.PeekAt(h.Len() - 1)
+}
+
+// PeekAt returns, but does not remove, the Ref at h[idx]. If the index is out of range, returns the empty Ref.
+func (h RefByHeight) PeekAt(idx int) (peek Ref) {
+	if idx >= 0 && idx < h.Len() {
+		peek = h[idx]
 	}
 	return
 }
 
-func (h RefHeap) IndexOf(t Ref) (int, bool) {
-	for i, r := range h {
-		if r.Equals(t) {
-			return i, true
-		}
-	}
-
-	return -1, false
-}
-
-// HeapOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
-func HeapOrder(a, b Ref) bool {
+// HeightOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
+func HeightOrder(a, b Ref) bool {
 	if a.Height() == b.Height() {
 		return a.TargetHash().Less(b.TargetHash())
 	}

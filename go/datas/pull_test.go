@@ -5,7 +5,7 @@
 package datas
 
 import (
-	"container/heap"
+	"sort"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -140,7 +140,6 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 		if i > 0 {
 			prev := progress[i-1]
 			suite.True(prog.DoneCount >= prev.DoneCount)
-			suite.True(prog.KnownCount >= prev.KnownCount)
 			suite.True(prog.DoneBytes >= prev.DoneBytes)
 		}
 	}
@@ -335,25 +334,28 @@ func buildListOfHeight(height int, vw types.ValueWriter) types.List {
 	return l
 }
 
-// Note: This test is asserting that burnDown correctly separates refs which are exclusive to |taller| from those which are |common|.
-func TestBurnDown(t *testing.T) {
-	taller := &types.RefHeap{}
-	shorter := &types.RefHeap{}
+// Note: This test is asserting that findCommon correctly separates refs which are exclusive to |taller| from those which are |common|.
+func TestFindCommon(t *testing.T) {
+	taller := &types.RefByHeight{}
+	shorter := &types.RefByHeight{}
 
 	for i := 0; i < 50; i++ {
-		heap.Push(shorter, types.NewRef(types.Number(i)))
+		shorter.PushBack(types.NewRef(types.Number(i)))
 	}
 
 	for i := 50; i < 250; i++ {
-		heap.Push(shorter, types.NewRef(types.Number(i)))
-		heap.Push(taller, types.NewRef(types.Number(i)))
+		shorter.PushBack(types.NewRef(types.Number(i)))
+		taller.PushBack(types.NewRef(types.Number(i)))
 	}
 
 	for i := 250; i < 275; i++ {
-		heap.Push(taller, types.NewRef(types.Number(i)))
+		taller.PushBack(types.NewRef(types.Number(i)))
 	}
 
-	tallRefs, comRefs := burnDown(taller, shorter, 1, 1)
+	sort.Sort(shorter)
+	sort.Sort(taller)
+
+	tallRefs, comRefs := findCommon(taller, shorter, 1)
 	assert.Equal(t, 25, len(tallRefs))
 	assert.Equal(t, 200, len(comRefs))
 	assert.Equal(t, 0, len(*taller))

@@ -5,7 +5,7 @@
 package datas
 
 import (
-	"container/heap"
+	"sort"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -19,13 +19,11 @@ type PullProgress struct {
 
 // Pull objects that descends from sourceRef from srcDB to sinkDB. sinkHeadRef should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This allows the algorithm to figure out which portions of data are already present in sinkDB and skip copying them.
 func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
-	srcQ, sinkQ := types.RefHeap{sourceRef}, types.RefHeap{sinkHeadRef}
-	heap.Init(&srcQ)
-	heap.Init(&sinkQ)
+	srcQ, sinkQ := &types.RefByHeight{sourceRef}, &types.RefByHeight{sinkHeadRef}
 
 	// We generally expect that sourceRef descends from sinkHeadRef, so that walking down from sinkHeadRef yields useful hints. If it's not even in the srcDB, then just clear out sinkQ right now and don't bother.
 	if !srcDB.has(sinkHeadRef.TargetHash()) {
-		heap.Pop(&sinkQ)
+		sinkQ.PopBack()
 	}
 
 	// Since we expect sourceRef to descend from sinkHeadRef, we assume srcDB has a superset of the data in sinkDB. There are some cases where, logically, the code wants to read data it knows to be in sinkDB. In this case, it doesn't actually matter which Database the data comes from, so as an optimization we use whichever is a LocalDatabase -- if either is.
@@ -83,14 +81,14 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			return
 		}
 		doneCount, knownCount, doneBytes = doneCount+moreDone, knownCount+moreKnown, doneBytes+moreBytes
-		progressCh <- PullProgress{doneCount, knownCount + uint64(len(srcQ)), doneBytes}
+		progressCh <- PullProgress{doneCount, knownCount + uint64(srcQ.Len()), doneBytes}
 	}
 
 	// hc and reachableChunks aren't goroutine-safe, so only write them here.
 	hc := hintCache{}
 	reachableChunks := hash.HashSet{}
 	for !srcQ.Empty() {
-		srcRefs, sinkRefs, comRefs := planWork(&srcQ, &sinkQ)
+		srcRefs, sinkRefs, comRefs := planWork(srcQ, sinkQ)
 		srcWork, sinkWork, comWork := len(srcRefs), len(sinkRefs), len(comRefs)
 		if srcWork+comWork > 0 {
 			updateProgress(0, uint64(srcWork+comWork), 0)
@@ -106,7 +104,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			select {
 			case res := <-srcResChan:
 				for _, reachable := range res.reachables {
-					heap.Push(&srcQ, reachable)
+					srcQ.PushBack(reachable)
 					reachableChunks.Insert(reachable.TargetHash())
 				}
 				if !res.readHash.IsEmpty() {
@@ -116,16 +114,16 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 				updateProgress(1, 0, uint64(res.readBytes))
 			case res := <-sinkResChan:
 				for _, reachable := range res.reachables {
-					heap.Push(&sinkQ, reachable)
+					sinkQ.PushBack(reachable)
 					hc[reachable.TargetHash()] = res.readHash
 				}
 				sinkWork--
 			case res := <-comResChan:
 				isHeadOfSink := res.readHash == sinkHeadRef.TargetHash()
 				for _, reachable := range res.reachables {
-					heap.Push(&sinkQ, reachable)
+					sinkQ.PushBack(reachable)
 					if !isHeadOfSink {
-						heap.Push(&srcQ, reachable)
+						srcQ.PushBack(reachable)
 					}
 					hc[reachable.TargetHash()] = res.readHash
 				}
@@ -133,6 +131,10 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 				updateProgress(1, 0, uint64(res.readBytes))
 			}
 		}
+		sort.Sort(sinkQ)
+		sort.Sort(srcQ)
+		sinkQ.Unique()
+		srcQ.Unique()
 	}
 
 	hints := types.Hints{}
@@ -157,43 +159,55 @@ type traverseResult struct {
 //
 // As we build up lists of refs to be processed in parallel, we need to avoid blowing past potential common refs. When processing a given Ref, we enumerate Refs of all Chunks that are directly reachable, which must _by definition_ be shorter than the given Ref. This means that, for example, if the queues are the same height we know that nothing can happen that will put more Refs of that height on either queue. In general, if you look at the height of the Ref at the head of a queue, you know that all Refs of that height in the current graph under consideration are already in the queue. Conversely, for any height less than that of the head of the queue, it's possible that Refs of that height remain to be discovered. Given this, we can figure out which Refs are safe to pull off the 'taller' queue in the cases where the heights of the two queues are not equal.
 // If one queue is 'taller' than the other, it's clear that we can process all refs from the taller queue with height greater than the height of the 'shorter' queue. We should also be able to process refs from the taller queue that are of the same height as the shorter queue, as long as we also check to see if they're common to both queues. It is not safe, however, to pull unique items off the shorter queue at this point. It's possible that, in processing some of the Refs from the taller queue, that these Refs will be discovered to be common after all.
-func planWork(srcQ, sinkQ *types.RefHeap) (srcRefs, sinkRefs, comRefs types.RefSlice) {
-	srcHt, sinkHt := headHeight(srcQ), headHeight(sinkQ)
+// TODO: Bug 2203
+func planWork(srcQ, sinkQ *types.RefByHeight) (srcRefs, sinkRefs, comRefs types.RefSlice) {
+	srcHt, sinkHt := tallestHeight(srcQ), tallestHeight(sinkQ)
 	if srcHt > sinkHt {
-		srcRefs, comRefs = burnDown(srcQ, sinkQ, srcHt, sinkHt)
+		srcRefs = popRefsOfHeight(srcQ, srcHt)
 		return
 	}
 	if sinkHt > srcHt {
-		sinkRefs, comRefs = burnDown(sinkQ, srcQ, sinkHt, srcHt)
+		sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
 		return
 	}
 	d.Chk.True(srcHt == sinkHt)
-	srcRefs, comRefs = burnDown(srcQ, sinkQ, srcHt, sinkHt)
-	sinkRefs, _ = burnDown(sinkQ, srcQ, sinkHt, srcHt)
+	srcRefs, comRefs = findCommon(srcQ, sinkQ, srcHt)
+	sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
 	return
 }
 
-// Removes and returns in |tallRefs| all Refs from |taller| whose height is >= |short| and are not contained in |shorter|. Removes and returns in |comRefs| all Refs from |taller| & |shorter| whose height == |short| and are contained in both heaps.x
-func burnDown(taller, shorter *types.RefHeap, tall, short uint64) (tallRefs, comRefs types.RefSlice) {
-	for ht := tall; ht > short; ht = headHeight(taller) {
-		tallRefs = append(tallRefs, heap.Pop(taller).(types.Ref))
+func popRefsOfHeight(q *types.RefByHeight, height uint64) (refs types.RefSlice) {
+	for tallestHeight(q) == height {
+		r := q.PopBack()
+		refs = append(refs, r)
 	}
-	for !taller.Empty() && headHeight(taller) == short {
-		tallRef := heap.Pop(taller).(types.Ref)
-		shortIdx, ok := shorter.IndexOf(tallRef)
-		if !ok {
-			tallRefs = append(tallRefs, tallRef)
+	return
+}
+
+func findCommon(taller, shorter *types.RefByHeight, height uint64) (tallRefs, comRefs types.RefSlice) {
+	d.Chk.True(tallestHeight(taller) == height)
+	d.Chk.True(tallestHeight(shorter) == height)
+	comIndices := []int{}
+	// Walk through shorter and taller in tandem from the back (where the tallest Refs are). Refs from taller that go into a work queue are popped off directly, but doing so to shorter would mess up shortIdx. So, instead just keep track of the indices of common refs and drop them from shorter at the end.
+	for shortIdx := shorter.Len() - 1; !taller.Empty() && tallestHeight(taller) == height; {
+		tallPeek := taller.PeekEnd()
+		shortPeek := shorter.PeekAt(shortIdx)
+		if types.HeightOrder(tallPeek, shortPeek) {
+			tallRefs = append(tallRefs, taller.PopBack())
 			continue
 		}
-		shortRef := heap.Remove(shorter, shortIdx).(types.Ref)
-		d.Chk.True(tallRef.Equals(shortRef))
-		comRefs = append(comRefs, tallRef)
+		if shortPeek.Equals(tallPeek) {
+			comIndices = append(comIndices, shortIdx)
+			comRefs = append(comRefs, taller.PopBack())
+		}
+		shortIdx--
 	}
+	shorter.DropIndices(comIndices)
 	return
 }
 
-func headHeight(h *types.RefHeap) uint64 {
-	return h.Peek().Height()
+func tallestHeight(h *types.RefByHeight) uint64 {
+	return h.PeekEnd().Height()
 }
 
 func sendWork(ch chan<- types.Ref, refs types.RefSlice) {

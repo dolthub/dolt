@@ -5,13 +5,13 @@
 package types
 
 import (
-	"container/heap"
+	"sort"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestRefHeap(t *testing.T) {
+func TestRefByHeight(t *testing.T) {
 	unique := 0
 	newRefWithHeight := func(height uint64) Ref {
 		r := NewRef(Number(unique))
@@ -22,28 +22,30 @@ func TestRefHeap(t *testing.T) {
 
 	assert := assert.New(t)
 
-	h := RefHeap{}
-	heap.Init(&h)
+	h := RefByHeight{}
 
 	r1 := newRefWithHeight(1)
 	r2 := newRefWithHeight(2)
 	r3 := newRefWithHeight(3)
 	r4 := newRefWithHeight(2)
 
-	heap.Push(&h, r1)
-	assert.Equal(r1, h[0])
+	h.PushBack(r1)
+	assert.Equal(r1, h.PeekEnd())
 	assert.Equal(1, len(h))
 
-	heap.Push(&h, r3)
-	assert.Equal(r3, h[0])
+	h.PushBack(r3)
+	sort.Sort(&h)
+	assert.Equal(r3, h.PeekEnd())
 	assert.Equal(2, len(h))
 
-	heap.Push(&h, r2)
-	assert.Equal(r3, h[0])
+	h.PushBack(r2)
+	sort.Sort(&h)
+	assert.Equal(r3, h.PeekEnd())
 	assert.Equal(3, len(h))
 
-	heap.Push(&h, r4)
-	assert.Equal(r3, h[0])
+	h.PushBack(r4)
+	sort.Sort(&h)
+	assert.Equal(r3, h.PeekEnd())
 	assert.Equal(4, len(h))
 
 	expectedSecond, expectedThird := func() (Ref, Ref) {
@@ -53,18 +55,34 @@ func TestRefHeap(t *testing.T) {
 		return r4, r2
 	}()
 
-	assert.Equal(r3, heap.Pop(&h).(Ref))
-	assert.Equal(expectedSecond, h[0])
+	assert.Equal(r3, h.PopBack())
+	assert.Equal(expectedSecond, h.PeekEnd())
 	assert.Equal(3, len(h))
 
-	assert.Equal(expectedSecond, heap.Pop(&h).(Ref))
-	assert.Equal(expectedThird, h[0])
+	assert.Equal(expectedSecond, h.PopBack())
+	assert.Equal(expectedThird, h.PeekEnd())
 	assert.Equal(2, len(h))
 
-	assert.Equal(expectedThird, heap.Pop(&h).(Ref))
-	assert.Equal(r1, h[0])
+	assert.Equal(expectedThird, h.PopBack())
+	assert.Equal(r1, h.PeekEnd())
 	assert.Equal(1, len(h))
 
-	assert.Equal(r1, heap.Pop(&h).(Ref))
+	assert.Equal(r1, h.PopBack())
 	assert.Equal(0, len(h))
+}
+
+func TestDropIndices(t *testing.T) {
+	h := &RefByHeight{}
+	for i := 0; i < 10; i++ {
+		h.PushBack(NewRef(Number(i)))
+	}
+	sort.Sort(h)
+
+	toDrop := []int{2, 4, 7}
+	expected := RefSlice{h.PeekAt(2), h.PeekAt(4), h.PeekAt(7)}
+	h.DropIndices(toDrop)
+	assert.Len(t, *h, 7)
+	for i, dropped := range expected {
+		assert.NotContains(t, *h, dropped, "Should not contain %d", toDrop[i])
+	}
 }
