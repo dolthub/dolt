@@ -16,18 +16,16 @@ import (
 type MemoryStore struct {
 	data map[hash.Hash]Chunk
 	memoryRootTracker
-	mu *sync.Mutex
+	mu sync.RWMutex
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
-		mu: &sync.Mutex{},
-	}
+	return &MemoryStore{}
 }
 
 func (ms *MemoryStore) Get(h hash.Hash) Chunk {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
 		return c
 	}
@@ -35,8 +33,8 @@ func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 }
 
 func (ms *MemoryStore) Has(r hash.Hash) bool {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 	if ms.data == nil {
 		return false
 	}
@@ -65,8 +63,8 @@ func (ms *MemoryStore) PutMany(chunks []Chunk) (e BackpressureError) {
 }
 
 func (ms *MemoryStore) Len() int {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 	return len(ms.data)
 }
 
