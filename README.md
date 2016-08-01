@@ -19,7 +19,7 @@ Noms is different from other databases. It is:
 
 * *Strongly-typed*. Noms doesn't have schemas that you design up front. Instead, each version of a Noms database has a *type*, which is generated automatically as you add data. You can write code against the type of a Noms database, confident that you've handled all the cases you need to.
 
-* *Decentralized*. Every instance of the database is a peer. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
+* *Decentralized*. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
 
 - *Incomplete*. This is a beta software. Major features like queries, concurrency, and GC are not yet implemented.
 
