@@ -138,14 +138,14 @@ func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 		parentValue = parents[0].TargetHash().String()
 	}
 
-	maxFieldNameLen = max(maxFieldNameLen, len(parentLabel))
-	parentStr := fmt.Sprintf("%-*s %s", maxFieldNameLen+1, parentLabel+":", parentValue)
-
 	if oneline {
+		parentStr := fmt.Sprintf("%s %s", parentLabel+":", parentValue)
 		fmt.Fprintf(w, "%s (%s)\n", hashStr, parentStr)
 		return
 	}
 
+	maxFieldNameLen = max(maxFieldNameLen, len(parentLabel))
+	parentStr := fmt.Sprintf("%-*s %s", maxFieldNameLen+1, parentLabel+":", parentValue)
 	fmt.Fprintf(w, "%s%s\n", genGraph(node, 0), hashStr)
 	fmt.Fprintf(w, "%s%s\n", genGraph(node, 1), parentStr)
 	lineno := 1
