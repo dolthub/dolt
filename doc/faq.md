@@ -2,7 +2,7 @@
 
 ## How is this a database? There's not even a query language!
 
-First, not all databases have query languages (but we do plan to have one someday).
+First, we do plan to have one someday, but a general query system is sort of like the last step of a long journey that we are just at the beginning of. Right now we are working on the underlying primitives that would allow a query system to be built and work well.
 
 Second, the term *database* isn't well-defined. There are a lot of different systems that call themselves databases.
 
