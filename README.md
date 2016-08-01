@@ -21,7 +21,7 @@ Noms is different from other databases. It is:
 
 * *Decentralized*. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
 
-- *Incomplete*. This is a beta software. Major features like queries, concurrency, and GC are not yet implemented.
+- *Incomplete*. This is a somewhere between alpha and beta software. We are fairly confident in the core format, but major features like queries, concurrency, and GC are not yet implemented. Please keep a separate backup of data outside of Noms until we reach 1.0.
 
 ## Setup
 
