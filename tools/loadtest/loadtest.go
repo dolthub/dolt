@@ -6,10 +6,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -31,7 +33,7 @@ type runner struct {
 }
 
 func main() {
-	rand.Seed(time.Now().Unix())
+	rand.Seed(time.Now().UnixNano() + bestEffortGetIP())
 
 	if len(os.Args) != 2 {
 		fmt.Println("Usage: loadtest <database>")
@@ -57,6 +59,23 @@ func main() {
 	}
 }
 
+func bestEffortGetIP() (asNum int64) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return
+	}
+
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				asNum = int64(binary.BigEndian.Uint32([]byte(ipnet.IP.To4())))
+				break
+			}
+		}
+	}
+	return
+}
+
 func runDiff(db, ds string) {
 	if parent := getParent(db, ds); parent != "" {
 		call(nil, "noms", "diff", ds, parent)
@@ -70,7 +89,7 @@ func runLogDiff(db, ds string) {
 }
 
 func runLogShow(db, ds string) {
-	call(nil, "noms", "log", "-show-value", ds)
+	call(nil, "noms", "log", "--show-value", ds)
 }
 
 func runShow(db, ds string) {
@@ -100,7 +119,7 @@ func runSync(db, ds string) {
 
 func getParent(db, ds string) string {
 	buf := &bytes.Buffer{}
-	call(buf, "noms", "log", "-n", "2", "-oneline", ds)
+	call(buf, "noms", "log", "-n", "2", "--oneline", ds)
 	// Output will look like:
 	// abc (Parent def)
 	// def (Parent None)
