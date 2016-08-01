@@ -33,7 +33,7 @@ func main() {
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Fetches a URL (or file) into a noms blob\n\nUsage: %s <dataset> <url-or-local-path>:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Fetches a URL (or file) into a noms blob\n\nUsage: %s <url-or-local-path> <dataset>:\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse(true)
@@ -42,11 +42,11 @@ func main() {
 		d.CheckErrorNoUsage(errors.New("expected dataset and url arguments"))
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(0))
+	ds, err := spec.GetDataset(flag.Arg(1))
 	d.CheckErrorNoUsage(err)
 	defer ds.Database().Close()
 
-	url := flag.Arg(1)
+	url := flag.Arg(0)
 	fileOrUrl := "file"
 	start = time.Now()
 

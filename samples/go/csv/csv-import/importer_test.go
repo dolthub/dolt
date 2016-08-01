@@ -61,7 +61,7 @@ func (s *testSuite) TestCSVImporter() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -123,7 +123,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number,Number", "--dest-type", "map:1", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number,Number", "--dest-type", "map:1", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -154,7 +154,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -182,7 +182,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -219,7 +219,7 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "2", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "2", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -250,7 +250,7 @@ func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", dataspec, input.Name()})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 

@@ -28,7 +28,7 @@ var (
 	customUsage = func() {
 		fmtString := `%s walks the given directory, looking for .xml files. When it finds one, the entity inside is parsed into nested Noms maps/lists and committed to the dataset indicated on the command line.`
 		fmt.Fprintf(os.Stderr, fmtString, os.Args[0])
-		fmt.Fprintf(os.Stderr, "\n\nUsage: %s [options] <dataset> <path/to/root/directory>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n\nUsage: %s [options] <path/to/root/directory> <dataset>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 )
@@ -57,10 +57,10 @@ func main() {
 		flag.Parse(true)
 
 		if flag.NArg() != 2 {
-			d.CheckError(errors.New("Expected dataset followed by directory path"))
+			d.CheckError(errors.New("Expected directory path followed by dataset"))
 		}
-		dir := flag.Arg(1)
-		ds, err := spec.GetDataset(flag.Arg(0))
+		dir := flag.Arg(0)
+		ds, err := spec.GetDataset(flag.Arg(1))
 		d.CheckError(err)
 
 		defer profile.MaybeStartProfile().Stop()

@@ -158,7 +158,7 @@ open /tmp/film-location.csv and edit it, then:
 
 ```
 > csv-import -column-types=String,String,String,String,String,String,String,Number,String,String,String \
-    /tmp/noms::films /tmp/film-locations.csv
+    /tmp/film-locations.csv /tmp/noms::films
 ```
 
 #noms diff

@@ -53,7 +53,7 @@ func main() {
 	profile.RegisterProfileFlags(flag.CommandLine)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <dataset> <csvfile>?\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: csv-import [options] <csvfile> <dataset>\n\n")
 		flag.PrintDefaults()
 	}
 
@@ -85,6 +85,7 @@ func main() {
 	var r io.Reader
 	var size uint64
 	var filePath string
+	var dataSetArgN int
 
 	if *path != "" {
 		db, val, err := spec.GetPath(*path)
@@ -99,8 +100,9 @@ func main() {
 		defer db.Close()
 		r = blob.Reader()
 		size = blob.Len()
+		dataSetArgN = 0
 	} else {
-		filePath = flag.Arg(1)
+		filePath = flag.Arg(0)
 		res, err := os.Open(filePath)
 		d.CheckError(err)
 		defer res.Close()
@@ -108,6 +110,7 @@ func main() {
 		d.CheckError(err)
 		r = res
 		size = uint64(fi.Size())
+		dataSetArgN = 1
 	}
 
 	if !*noProgress {
@@ -143,7 +146,7 @@ func main() {
 		headers = strings.Split(*header, string(comma))
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(0))
+	ds, err := spec.GetDataset(flag.Arg(dataSetArgN))
 	d.CheckError(err)
 	defer ds.Database().Close()
 

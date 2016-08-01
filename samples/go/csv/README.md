@@ -7,7 +7,7 @@ Imports a CSV file as `List<T>` where `T` is a struct with fields corresponding 
 ```
 $ cd csv-import
 $ go build
-$ ./csv-import http://localhost:8000:foo <PATH>
+$ ./csv-import <PATH> http://localhost:8000:foo
 ```
 
 ## Some places for CSV files
