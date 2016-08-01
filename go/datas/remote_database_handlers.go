@@ -223,7 +223,7 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 	w.Header().Add("content-type", "text/plain")
 }
 
-func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
+func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
 
 	params := req.URL.Query()
@@ -234,8 +234,38 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, rt c
 	d.PanicIfTrue(len(tokens) != 1, `Expected "current" query param value`)
 	current := hash.Parse(tokens[0])
 
-	if !rt.UpdateRoot(current, last) {
+	// Ensure that proposed new Root is present in cs
+	c := cs.Get(current)
+	d.PanicIfTrue(c.IsEmpty(), "Can't set Root to a non-present Chunk")
+
+	// Ensure that proposed new Root is a Map and, if it has anything in it, that it's <String, RefOfCommit>
+	v := types.DecodeValue(c, nil)
+	d.PanicIfTrue(v.Type().Kind() != types.MapKind, "Root of a Database must be a Map")
+	m := v.(types.Map)
+	if !m.Empty() && !isMapOfStringToRefOfCommit(m) {
+		panic(d.Wrap(fmt.Errorf("Root of a Database must be a Map<String, RefOfCommit>, not %s", m.Type().Describe())))
+	}
+
+	if !cs.UpdateRoot(current, last) {
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
+}
+
+func isMapOfStringToRefOfCommit(m types.Map) bool {
+	mapTypes := m.Type().Desc.(types.CompoundDesc).ElemTypes
+	keyType, valType := mapTypes[0], mapTypes[1]
+	return keyType.Kind() == types.StringKind && (isRefOfCommitType(valType) || isUnionOfRefOfCommitType(valType))
+}
+
+func isUnionOfRefOfCommitType(t *types.Type) bool {
+	if t.Kind() != types.UnionKind {
+		return false
+	}
+	for _, et := range t.Desc.(types.CompoundDesc).ElemTypes {
+		if !isRefOfCommitType(et) {
+			return false
+		}
+	}
+	return true
 }

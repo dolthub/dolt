@@ -91,6 +91,7 @@ func (ds *databaseCommon) datasetsFromRef(datasetsRef hash.Hash) *types.Map {
 }
 
 func (ds *databaseCommon) commit(datasetID string, commit types.Struct) error {
+	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 	return ds.doCommit(datasetID, commit)
 }
 
