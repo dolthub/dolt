@@ -19,7 +19,7 @@ type BatchStore interface {
 	// IsValidating indicates whether this implementation can internally enforce chunk validity & completeness. If a BatchStore supports this, it must also support "staging" of writes -- that is, allowing chunks to be written which reference chunks which have yet to be written.
 	IsValidating() bool
 
-	// Get returns from the store the Value Chunk by r. If r is absent from the store, chunks.EmptyChunk is returned.
+	// Get returns from the store the Value Chunk by h. If h is absent from the store, chunks.EmptyChunk is returned.
 	Get(h hash.Hash) chunks.Chunk
 
 	// SchedulePut enqueues a write for the Chunk c with the given refHeight. Typically, the Value which was encoded to provide c can also be queried for its refHeight. The call may or may not block until c is persisted. The provided hints are used to assist in validation. Validation requires checking that all refs embedded in c are themselves valid, which could naively be done by resolving each one. Instead, hints provides a (smaller) set of refs that point to Chunks that themselves contain many of c's refs. Thus, by checking only the hinted Chunks, c can be validated with fewer read operations.

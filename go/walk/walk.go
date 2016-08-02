@@ -88,7 +88,7 @@ func doTreeWalkP(v types.Value, vr types.ValueReader, cb SomeCallback, concurren
 		target := r.TargetHash()
 		v := vr.ReadValue(target)
 		if v == nil {
-			f.fail(fmt.Errorf("Attempt to copy absent ref:%s", target.String()))
+			f.fail(fmt.Errorf("Attempt to visit absent ref:%s", target.String()))
 			return
 		}
 		processVal(v, &r)
