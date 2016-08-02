@@ -218,9 +218,10 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestRoot() {
-	c := chunks.NewChunk([]byte("abc"))
-	suite.True(suite.cs.UpdateRoot(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.store.Root())
+	c := types.EncodeValue(types.NewMap(), nil)
+	suite.cs.Put(c)
+	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
 func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
@@ -230,7 +231,8 @@ func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
 }
 
 func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
-	c := chunks.NewChunk([]byte("abc"))
+	c := types.EncodeValue(types.NewMap(), nil)
+	suite.cs.Put(c)
 	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.cs.Root())
 }
@@ -238,7 +240,8 @@ func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
 	store := newAuthenticatingHTTPBatchStoreForTest(suite, u)
-	c := chunks.NewChunk([]byte("abc"))
+	c := types.EncodeValue(types.NewMap(), nil)
+	suite.cs.Put(c)
 	suite.True(store.UpdateRoot(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.cs.Root())
 }

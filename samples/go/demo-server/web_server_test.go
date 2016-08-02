@@ -75,12 +75,18 @@ func TestWriteValue(t *testing.T) {
 	lastRoot := w.Body
 	assert.Equal(http.StatusOK, w.Code)
 
-	tval := types.Bool(true)
-	wval := types.String(testString)
+	craftCommit := func(v types.Value) types.Struct {
+		return datas.NewCommit(v, types.NewSet(), types.NewStruct("Meta", types.StructData{}))
+	}
+
+	tval := craftCommit(types.Bool(true))
+	wval := craftCommit(types.String(testString))
 	chunk1 := types.EncodeValue(tval, nil)
 	chunk2 := types.EncodeValue(wval, nil)
-	refList := types.NewList(types.NewRef(tval), types.NewRef(wval))
-	chunk3 := types.EncodeValue(refList, nil)
+	refMap := types.NewMap(
+		types.String("ds1"), types.NewRef(tval),
+		types.String("ds2"), types.NewRef(wval))
+	chunk3 := types.EncodeValue(refMap, nil)
 
 	body := &bytes.Buffer{}
 	// we would use this func, but it's private so use next line instead: serializeHints(body, map[ref.Ref]struct{}{hint: struct{}{}})
@@ -98,10 +104,10 @@ func TestWriteValue(t *testing.T) {
 	assert.Equal(http.StatusCreated, w.Code)
 
 	w = httptest.NewRecorder()
-	args := fmt.Sprintf("&last=%s&current=%s", lastRoot, types.NewRef(refList).TargetHash())
+	args := fmt.Sprintf("&last=%s&current=%s", lastRoot, types.NewRef(refMap).TargetHash())
 	r, _ = newRequest("POST", dbName+constants.RootPath+"?access_token="+authKey+args, ioutil.NopCloser(body))
 	router.ServeHTTP(w, r)
-	assert.Equal(http.StatusOK, w.Code)
+	assert.Equal(http.StatusOK, w.Code, string(w.Body.Bytes()))
 
 	whash := wval.Hash()
 	hints := map[hash.Hash]struct{}{whash: struct{}{}}
@@ -109,12 +115,12 @@ func TestWriteValue(t *testing.T) {
 	r, _ = newRequest("POST", dbName+constants.GetRefsPath, rdr)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	router.ServeHTTP(w, r)
-	assert.Equal(http.StatusOK, w.Code)
+	assert.Equal(http.StatusOK, w.Code, string(w.Body.Bytes()))
 
 	ms := chunks.NewMemoryStore()
 	chunks.Deserialize(w.Body, ms, nil)
 	v := types.DecodeValue(ms.Get(whash), datas.NewDatabase(ms))
-	assert.Equal(testString, string(v.(types.String)))
+	assert.Equal(testString, string(v.(types.Struct).Get(datas.ValueField).(types.String)))
 }
 
 func newRequest(method, url string, body io.Reader) (req *http.Request, err error) {

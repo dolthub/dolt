@@ -252,10 +252,13 @@ func TestHandleGetRoot(t *testing.T) {
 func TestHandlePostRoot(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
-	input1, input2 := "abc", "def"
+	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+
+	commit := NewCommit(types.String("head"), types.NewSet(), types.NewStruct("Meta", types.StructData{}))
+	newHead := types.NewMap(types.String("dataset1"), vs.WriteValue(commit))
 	chnx := []chunks.Chunk{
-		chunks.NewChunk([]byte(input1)),
-		chunks.NewChunk([]byte(input2)),
+		chunks.NewChunk([]byte("abc")),
+		types.EncodeValue(newHead, nil),
 	}
 	err := cs.PutMany(chnx)
 	assert.NoError(err)
@@ -277,6 +280,27 @@ func TestHandlePostRoot(t *testing.T) {
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+}
+
+func TestRejectPostRoot(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+
+	newHead := types.NewMap(types.String("dataset1"), types.String("Not a Head"))
+	chunk := types.EncodeValue(newHead, nil)
+	cs.Put(chunk)
+
+	// First attempt should fail, as 'last' won't match.
+	u := &url.URL{}
+	queryParams := url.Values{}
+	queryParams.Add("last", chunks.EmptyChunk.Hash().String())
+	queryParams.Add("current", chunk.Hash().String())
+	u.RawQuery = queryParams.Encode()
+	url := u.String()
+
+	w := httptest.NewRecorder()
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
+	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 
 type params map[string]string
