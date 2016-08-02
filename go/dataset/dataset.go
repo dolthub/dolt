@@ -87,7 +87,6 @@ func (ds *Dataset) Commit(v types.Value, opts CommitOptions) (Dataset, error) {
 	if (parents == types.Set{}) {
 		parents = types.NewSet()
 		if headRef, ok := ds.MaybeHeadRef(); ok {
-			headRef.TargetValue(ds.Database()) // TODO: This is a hack to deconfuse the validation code, which doesn't hold onto validation state between commits.
 			parents = parents.Insert(headRef)
 		}
 	}
@@ -135,15 +134,9 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	return v.(types.Struct)
 }
 
-// setNewHead takes the Ref of the desired new Head of ds, the chunk for which should already exist
-// in the Dataset. It validates that the Ref points to an existing chunk that decodes to the correct
-// type of value and then commits it to ds, returning a new Dataset with newHeadRef set and ok set
-// to true. In the event that the commit fails, ok is set to false and a new up-to-date Dataset is
-// returned WITHOUT newHeadRef in it. The caller should take any necessary corrective action and try
-// again using this new Dataset.
+// setNewHead attempts to make the object pointed to by newHeadRef the new Head of ds. First, it checks that the object exists in ds and validates that it decodes to the correct type of value. Next, it attempts to commit the object to ds.Database(). This may fail if, for instance, the Head of ds has been changed by another goroutine or process. In the event that the commit fails, the error from Database().Commit() is returned along with a new Dataset that's at it's proper, current Head. The caller should take any necessary corrective action and try again using this new Dataset.
 func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
-	p := commit.Get(datas.ParentsField).(types.Set)
-	m := commit.Get(datas.MetaField).(types.Struct)
-	return ds.Commit(commit.Get(datas.ValueField), CommitOptions{Meta: m, Parents: p})
+	store, err := ds.Database().Commit(ds.id, commit)
+	return Dataset{store, ds.id}, err
 }
