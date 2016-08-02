@@ -43,8 +43,8 @@ noms log http://demo.noms.io/cli-tour::sf-film-locations
 
 Noms gives you the entire Git workflow, but for large-scale structured (or unstructured) data. Fork, merge, track history, efficiently synchronize changes, etc.
 
-[<img src="doc/data-version-control.png" width="320" height="180">](https://www.youtube.com/watch?v=ONByMptWa2A)<br/>
-*[`noms diff` and `noms log` on large datasets](https://www.youtube.com/watch?v=ONByMptWa2A)*
+[<img src="doc/data-version-control.png" width="320" height="180">](https://www.youtube.com/watch?v=Zeg9CY3BMes)<br/>
+*[`noms diff` and `noms log` on large datasets](https://www.youtube.com/watch?v=Zeg9CY3BMes)*
 
 
 #### An Application Database with History
