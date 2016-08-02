@@ -21,6 +21,7 @@ Noms is different from other databases. It is:
 
 * *Decentralized*. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
 
+<br/>
 ## Setup
 
 Noms is supported on Mac OS X and Linux. Windows usually works, but isn't officially supported.
@@ -35,6 +36,10 @@ go install github.com/attic-labs/noms/cmd/noms
 noms log http://demo.noms.io/cli-tour::sf-film-locations
 ```
 [Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)
+
+<br/>
+## Explore
+<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms.</a>
 
 <br/>
 ## What Noms is Good For
