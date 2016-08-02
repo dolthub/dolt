@@ -44,18 +44,18 @@ Value specifications take the form:
 
 See [spelling databases](#spelling-databases) for how to build the database part of the name.
 
-The `value-name` part can be either a hash or a dataset name. If  `value-name` matches the pattern `^#sha1-[0-9a-fA-F]{40}$`, it will be interpreted as a hash. Otherwise it will be interpreted as a dataset name.
+The `value-name` part can be either a hash or a dataset name. If  `value-name` matches the pattern `^#[0-9a-v]{32}$`, it will be interpreted as a hash. Otherwise it will be interpreted as a dataset name.
 
 The `path` part is relative to the value at `value-name`. See [#1399](https://github.com/attic-labs/noms/issues/1399) for spelling.
 
 ### Examples
 
 ```sh
-# “foo” dataset at http://api.noms.io/-/aa
-http://api.noms.io/-/aa::foo
+# “sf-crime” dataset at http://demo.noms.io/cli-tour
+http://demo.noms.io/cli-tour::sf-crume
 
-# value sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041 at http://localhost:8000
-http://localhost:8000/monkey::#sha1-e7219f3603e1a20a9fabaa43b3f3a7c443ae1041
+# value o38hugtf3l1e8rqtj89mijj1dq57eh4m at http://localhost:8000
+http://localhost:8000/monkey::#o38hugtf3l1e8rqtj89mijj1dq57eh4m
 
 # “bonk” dataset at ldb:/foo/bar
 ldb:/foo/bar::bonk
