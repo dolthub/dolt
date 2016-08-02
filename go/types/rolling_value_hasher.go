@@ -58,6 +58,10 @@ func hashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	rv.HashValue(item.(Value))
 }
 
+func hashValueByte(item sequenceItem, rv *rollingValueHasher) {
+	rv.HashByte(item.(byte))
+}
+
 func newRollingValueHasher() *rollingValueHasher {
 	pattern, window := chunkingConfig()
 	rv := &rollingValueHasher{

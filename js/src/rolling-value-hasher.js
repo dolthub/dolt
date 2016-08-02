@@ -43,6 +43,10 @@ export function hashValueBytes(item: Value, rv: RollingValueHasher) {
   rv.hashValue(item);
 }
 
+export function hashValueByte(b: number, rv: RollingValueHasher) {
+  rv.hashByte(b);
+}
+
 export default class RollingValueHasher {
   bz: BuzHash;
   enc: ValueEncoder;

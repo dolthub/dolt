@@ -258,5 +258,22 @@ suite('Blob', () => {
       assert.strictEqual(b2, b3);
       assert.isTrue(equals(b1, b2));
     });
+
+    test('Blob Splicing', async () => {
+      const a = new Blob(new Uint8Array([1, 2, 3]));
+      await assertReadFull(new Uint8Array([1, 2, 3]), a.getReader());
+
+      const b = await a.splice(3, 0, new Uint8Array([4, 5, 6]));
+      await assertReadFull(new Uint8Array([1, 2, 3, 4]), b.getReader());
+
+      const c = await b.splice(1, 2, new Uint8Array([23]));
+      await assertReadFull(new Uint8Array([1, 23, 4, 5, 6]), c.getReader());
+
+      const d = await c.splice(0, 0, new Uint8Array([254, 255, 0]));
+      await assertReadFull(new Uint8Array([254, 255, 0, 1, 23, 4, 5, 6]), d.getReader());
+
+      const e = await d.splice(6, 2, new Uint8Array([]));
+      await assertReadFull(new Uint8Array([254, 255, 0, 1, 23, 4]), e.getReader());
+    });
   });
 });

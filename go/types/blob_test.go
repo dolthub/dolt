@@ -204,3 +204,30 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	assert.True(bytes.Equal(actual.Bytes(), tr.buf.Bytes()))
 	assert.Equal(byte(2), actual.Bytes()[len(actual.Bytes())-1])
 }
+
+func TestBlobSplice(t *testing.T) {
+	assert := assert.New(t)
+
+	blob := NewEmptyBlob()
+	buf := new(bytes.Buffer)
+
+	blob = blob.Splice(0, 0, []byte("I'll do anything"))
+	buf.Reset()
+	buf.ReadFrom(blob.Reader())
+	assert.Equal(buf.String(), "I'll do anything")
+
+	blob = blob.Splice(16, 0, []byte(" for arv"))
+	buf.Reset()
+	buf.ReadFrom(blob.Reader())
+	assert.Equal(buf.String(), "I'll do anything for arv")
+
+	blob = blob.Splice(0, 0, []byte("Yes, "))
+	buf.Reset()
+	buf.ReadFrom(blob.Reader())
+	assert.Equal(buf.String(), "Yes, I'll do anything for arv")
+
+	blob = blob.Splice(5, 20, []byte("it's hard to satisfy"))
+	buf.Reset()
+	buf.ReadFrom(blob.Reader())
+	assert.Equal(buf.String(), "Yes, it's hard to satisfy arv")
+}

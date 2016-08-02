@@ -34,6 +34,27 @@ func (b Blob) Reader() io.ReadSeeker {
 	return &BlobReader{b.seq, cursor, nil, 0}
 }
 
+func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
+	if deleteCount == 0 && len(data) == 0 {
+		return b
+	}
+
+	d.Chk.True(idx <= b.Len())
+	d.Chk.True(idx+deleteCount <= b.Len())
+
+	cur := newCursorAtIndex(b.seq, idx)
+	ch := newSequenceChunker(cur, nil, makeBlobLeafChunkFn(b.seq.valueReader()), newIndexedMetaSequenceChunkFn(BlobKind, b.seq.valueReader()), hashValueByte)
+	for deleteCount > 0 {
+		ch.Skip()
+		deleteCount--
+	}
+
+	for _, v := range data {
+		ch.Append(v)
+	}
+	return newBlob(ch.Done(nil).(indexedSequence))
+}
+
 // Collection interface
 func (b Blob) Len() uint64 {
 	return b.seq.numLeaves()
@@ -134,7 +155,7 @@ func (cbr *BlobReader) updateReader() {
 	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
 }
 
-func newBlobLeafChunkFn(vr ValueReader) makeChunkFn {
+func makeBlobLeafChunkFn(vr ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
 		buff := make([]byte, len(items))
 
@@ -156,7 +177,7 @@ func NewBlob(r io.Reader) Blob {
 }
 
 func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(vrw, newBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), func(item sequenceItem, rv *rollingValueHasher) {
+	sc := newEmptySequenceChunker(vrw, makeBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
 

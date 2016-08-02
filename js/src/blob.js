@@ -8,6 +8,7 @@ import * as Bytes from './bytes.js';
 import Collection from './collection.js';
 import RollingValueHasher from './rolling-value-hasher.js';
 import SequenceChunker from './sequence-chunker.js';
+import {chunkSequence} from './sequence-chunker.js';
 import type {EqualsFn} from './edit-distance.js';
 import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
@@ -17,6 +18,7 @@ import {OrderedKey, newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
 import {SequenceCursor} from './sequence.js';
 import {blobType} from './type.js';
 import {invariant} from './assert.js';
+import {hashValueByte} from './rolling-value-hasher.js';
 
 export default class Blob extends Collection<IndexedSequence> {
   constructor(bytes: Uint8Array) {
@@ -38,6 +40,14 @@ export default class Blob extends Collection<IndexedSequence> {
 
   get length(): number {
     return this.sequence.numLeaves;
+  }
+
+  splice(idx: number, deleteCount: number, insert: Uint8Array): Promise<Blob> {
+    const vr = this.sequence.vr;
+    return this.sequence.newCursorAt(idx).then(cursor =>
+      chunkSequence(cursor, Array.from(insert), deleteCount, newBlobLeafChunkFn(vr),
+                    newIndexedMetaSequenceChunkFn(Kind.Blob, vr, null),
+                    hashValueByte)).then(s => Blob.fromSequence(s));
   }
 }
 
