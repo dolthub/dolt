@@ -39,7 +39,7 @@ noms log http://demo.noms.io/cli-tour::sf-film-locations
 
 <br/>
 ## Explore
-<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms.</a>
+<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms</a>
 
 <br/>
 ## What Noms is Good For
