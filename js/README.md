@@ -1,4 +1,6 @@
-# Store All the Things
+<img src='../doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
+
+<br clear='all'/>
 
 *[Noms](https://github.com/attic-labs/noms/)* is a content-addressed, immutable, decentralized, strongly-typed database.
 
