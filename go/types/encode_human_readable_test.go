@@ -375,11 +375,11 @@ func TestUnresolvedRecursiveStruct(t *testing.T) {
 
 	assertWriteHRSEqual(t, `struct A {
   a: Cycle<0>,
-  b: Cycle<1>,
+  b: UnresolvedCycle<1>,
 }`, a)
 	assertWriteTaggedHRSEqual(t, `Type(struct A {
   a: Cycle<0>,
-  b: Cycle<1>,
+  b: UnresolvedCycle<1>,
 })`, a)
 }
 
@@ -396,4 +396,19 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 	err := errors.New("test")
 	w := &errorWriter{err}
 	assert.Equal(err, WriteEncodedValueWithTags(w, Number(42)))
+}
+
+func TestEmptyCollections(t *testing.T) {
+	a := MakeStructType("Nothing", []string{}, []*Type{})
+	assertWriteTaggedHRSEqual(t, "Type(struct Nothing {})", a)
+	b := NewStruct("Rien", StructData{})
+	assertWriteTaggedHRSEqual(t, "struct Rien {}({})", b)
+	c := MakeMapType(BlobType, NumberType)
+	assertWriteTaggedHRSEqual(t, "Type(Map<Blob, Number>)", c)
+	d := NewMap()
+	assertWriteTaggedHRSEqual(t, "Map<, >({})", d)
+	e := MakeSetType(StringType)
+	assertWriteTaggedHRSEqual(t, "Type(Set<String>)", e)
+	f := NewSet()
+	assertWriteTaggedHRSEqual(t, "Set<>({})", f)
 }

@@ -127,12 +127,10 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("{")
 		w.writeSize(v)
 		w.indent()
-		first := true
+		if !v.(Map).Empty() {
+			w.newLine()
+		}
 		v.(Map).Iter(func(key, val Value) bool {
-			if first {
-				w.newLine()
-				first = false
-			}
 			w.Write(key)
 			w.write(": ")
 			w.Write(val)
@@ -150,12 +148,10 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("{")
 		w.writeSize(v)
 		w.indent()
-		first := true
+		if !v.(Set).Empty() {
+			w.newLine()
+		}
 		v.(Set).Iter(func(v Value) bool {
-			if first {
-				w.newLine()
-				first = false
-			}
 			w.Write(v)
 			w.write(",")
 			w.newLine()
@@ -186,13 +182,11 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	w.write("{")
 	w.indent()
 
-	first := true
+	if desc.Len() > 0 {
+		w.newLine()
+	}
 	desc.IterFields(func(name string, t *Type) {
 		fv := v.Get(name)
-		if first {
-			w.newLine()
-			first = false
-		}
 		w.write(name)
 		w.write(": ")
 		w.Write(fv)
@@ -273,8 +267,11 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	case StructKind:
 		w.writeStructType(t, parentStructTypes)
 	case CycleKind:
-		// This can happen for types which have unresolved cyclic refs
-		w.write(fmt.Sprintf("Cycle<%d>", int(t.Desc.(CycleDesc))))
+		// This can happen for types that have unresolved cyclic refs
+		w.write(fmt.Sprintf("UnresolvedCycle<%d>", uint32(t.Desc.(CycleDesc))))
+		if w.err != nil {
+			return
+		}
 	default:
 		panic("unreachable")
 	}
@@ -283,7 +280,7 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	idx, found := indexOfType(t, parentStructTypes)
 	if found {
-		w.writeCycle(uint8(uint32(len(parentStructTypes)) - 1 - idx))
+		w.write(fmt.Sprintf("Cycle<%d>", uint32(len(parentStructTypes))-1-idx))
 		return
 	}
 	parentStructTypes = append(parentStructTypes, t)
@@ -295,13 +292,10 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	}
 	w.write("{")
 	w.indent()
-
-	first := true
+	if desc.Len() > 0 {
+		w.newLine()
+	}
 	desc.IterFields(func(name string, t *Type) {
-		if first {
-			first = false
-			w.newLine()
-		}
 		w.write(name)
 		w.write(": ")
 		w.writeType(t, parentStructTypes)
@@ -310,13 +304,6 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	})
 	w.outdent()
 	w.write("}")
-}
-
-func (w *hrsWriter) writeCycle(i uint8) {
-	if w.err != nil {
-		return
-	}
-	_, w.err = fmt.Fprintf(w.w, "Cycle<%d>", i)
 }
 
 func encodedValueFormat(v Value, floatFormat byte) string {
