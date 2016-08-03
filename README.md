@@ -1,8 +1,8 @@
 
 <img src='doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
 <p align='right'>
-[![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer)
-
+[![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer) 
+[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 <br clear='all'/>
 
 *Noms* is a decentralized database based on ideas from Git.
