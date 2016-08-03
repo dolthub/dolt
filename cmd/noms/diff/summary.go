@@ -6,7 +6,7 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/status"
-	"github.com/dustin/go-humanize"
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Summary prints a summary of the diff between two values to stdout.
@@ -31,7 +31,7 @@ func Summary(value1, value2 types.Value) {
 			plural = "values"
 		}
 	}
-	// waitChan := make(chan struct{})
+
 	ch := make(chan diffSummaryProgress)
 	go func() {
 		diffSummary(ch, value1, value2)
@@ -84,7 +84,6 @@ func diffSummaryList(ch chan<- diffSummaryProgress, v1, v2 types.List) {
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	defer stop(stopChan)
 	go func() {
 		v2.Diff(v1, spliceChan, stopChan)
 		close(spliceChan)
@@ -119,15 +118,12 @@ func diffSummaryStructs(ch chan<- diffSummaryProgress, v1, v2 types.Struct) {
 	})
 }
 
-type diffFunc func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
-
 func diffSummaryValueChanged(ch chan<- diffSummaryProgress, oldSize, newSize uint64, f diffFunc) {
 	ch <- diffSummaryProgress{OldSize: oldSize, NewSize: newSize}
 
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	defer stop(stopChan)
 	go func() {
 		f(changeChan, stopChan)
 		close(changeChan)

@@ -30,11 +30,20 @@ func NewSet(v ...Value) Set {
 	return newSet(seq.Done(nil).(orderedSequence))
 }
 
+// Computes the diff from |last| to |s| using "best" algorithm, which balances returning results early vs completing quickly.
 func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
 	orderedSequenceDiffBest(last.seq, s.seq, changes, closeChan)
+}
+
+// Like Diff() but uses a left-to-right streaming approach, optimised for returning results early, but not completing quickly.
+func (s Set) DiffLeftRight(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	if s.Equals(last) {
+		return
+	}
+	orderedSequenceDiffLeftRight(last.seq, s.seq, changes, closeChan)
 }
 
 // Collection interface
