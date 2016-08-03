@@ -107,7 +107,7 @@ func (s Struct) MaybeGet(n string) (Value, bool) {
 func (s Struct) Get(n string) Value {
 	_, i := s.desc().findField(n)
 	if i == -1 {
-		d.Chk.Fail(`Struct has no field "%s"`, n)
+		d.Chk.Fail(fmt.Sprintf(`Struct has no field "%s"`, n))
 	}
 	return s.values[i]
 }
@@ -115,7 +115,7 @@ func (s Struct) Get(n string) Value {
 func (s Struct) Set(n string, v Value) Struct {
 	f, i := s.desc().findField(n)
 	if i == -1 {
-		d.Chk.Fail(`Struct has no field "%s"`, n)
+		d.Chk.Fail(fmt.Sprintf(`Struct has no field "%s"`, n))
 	}
 	assertSubtype(f.t, v)
 	values := make([]Value, len(s.values))
