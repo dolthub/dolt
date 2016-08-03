@@ -1,0 +1,22 @@
+
+Before sending a patch or Pull request, please fill out a Google CLA, using the following form:
+
+  https://cla.developers.google.com/clas
+
+For complex changes, please use Gerrit:
+
+* Connect your github account with gerrithub, at
+
+  https://review.gerrithub.io/static/intro.html
+
+* The signup will setup your SSH keys from Github.
+
+* Create your change as a commit
+
+* Add an ID to the commit message:
+
+  echo "Change-Id: I"$(head -c 20 /dev/urandom | sha1sum | awk '{print $1}')
+
+* Push the change for review,
+
+  git push ssh://$USER@review.gerrithub.io:29418/hanwen/go-fuse HEAD:refs/for/master
