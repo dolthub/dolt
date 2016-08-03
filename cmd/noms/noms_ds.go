@@ -43,7 +43,7 @@ func runDs(args []string) int {
 		d.CheckError(err)
 		defer store.Close()
 
-		fmt.Printf("Deleted dataset %v (was %v)\n\n", set.ID(), oldCommitRef.TargetHash().String())
+		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
 	} else {
 		if len(args) != 1 {
 			d.CheckError(fmt.Errorf("Database arg missing"))
