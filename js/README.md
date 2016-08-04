@@ -1,4 +1,4 @@
-<img src='../doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
+<img src='https://github.com/attic-labs/noms/raw/master/doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
 
 <br clear='all'/>
 
