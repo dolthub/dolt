@@ -146,9 +146,8 @@ func (l *LevelDBStore) setVersIfUnset() {
 }
 
 type internalLevelDBStore struct {
-	db                                     *leveldb.DB
-	mu                                     *sync.Mutex
-	concurrentWriteLimit                   chan struct{}
+	db                                     *rateLimitedLevelDB
+	mu                                     sync.Mutex
 	getCount, hasCount, putCount, putBytes int64
 	dumpStats                              bool
 }
@@ -164,10 +163,8 @@ func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLe
 	})
 	d.Chk.NoError(err, "opening internalLevelDBStore in %s", dir)
 	return &internalLevelDBStore{
-		db:                   db,
-		mu:                   &sync.Mutex{},
-		concurrentWriteLimit: make(chan struct{}, maxFileHandles),
-		dumpStats:            dumpStats,
+		db:        &rateLimitedLevelDB{db, make(chan struct{}, maxFileHandles)},
+		dumpStats: dumpStats,
 	}
 }
 
@@ -223,29 +220,23 @@ func (l *internalLevelDBStore) versByKey(key []byte) string {
 }
 
 func (l *internalLevelDBStore) setVersByKey(key []byte) {
-	l.concurrentWriteLimit <- struct{}{}
 	err := l.db.Put(key, []byte(constants.NomsVersion), nil)
 	d.Chk.NoError(err)
-	<-l.concurrentWriteLimit
 }
 
 func (l *internalLevelDBStore) putByKey(key []byte, c Chunk) {
-	l.concurrentWriteLimit <- struct{}{}
 	data := snappy.Encode(nil, c.Data())
 	err := l.db.Put(key, data, nil)
 	d.Chk.NoError(err)
 	l.putCount++
 	l.putBytes += int64(len(data))
-	<-l.concurrentWriteLimit
 }
 
 func (l *internalLevelDBStore) putBatch(b *leveldb.Batch, numBytes int) {
-	l.concurrentWriteLimit <- struct{}{}
 	err := l.db.Write(b, nil)
 	d.Chk.NoError(err)
 	l.putCount += int64(b.Len())
 	l.putBytes += int64(numBytes)
-	<-l.concurrentWriteLimit
 }
 
 func (l *internalLevelDBStore) Close() error {
