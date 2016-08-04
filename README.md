@@ -1,4 +1,6 @@
+[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)
 
+<p>
 <img src='doc/nommy_cropped_smaller.png' align='left' width='350' title='Nommy, the snacky otter'>
 <p align='right'>
 [![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer) 
@@ -36,7 +38,7 @@ go install github.com/attic-labs/noms/cmd/noms
 
 noms log http://demo.noms.io/cli-tour::sf-film-locations
 ```
-[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)
+
 
 <br/>
 ## Explore
