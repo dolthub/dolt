@@ -2,7 +2,7 @@
 
 ### How is this a database? There's not even a query language!
 
-First, we do plan to have one someday, but a general query system is sort of like the last step of a long journey that we are just at the beginning of. Right now we are working on the underlying primitives that would allow a query system to be built and work well.
+First, we do plan to have some sort query language one day. But such a thing is sort of like the last step of a long journey that we are just at the beginning of. Right now we are working on the underlying primitives that would allow a query system to be built and work well.
 
 Second, the term *database* isn't well-defined. There are a lot of different systems that call themselves databases.
 
@@ -17,6 +17,16 @@ No, decentralized like Git.
 Specifically, Noms isn't itself a peer-to-peer network. If you can get two instances to share data, somehow, then they can synchronize. Noms doesn't define how this should happen though. 
 
 Currently, instances mainly share data via either HTTP/DNS or a filesystem. But it should be easy to add other mechanisms. For example, it seems like Noms could run well on top of BitTorrent, or IPFS. You should [look into it](https://github.com/attic-labs/noms/issues/2123).
+
+### Isn't it wasteful to store every version?
+
+Noms deduplicates chunks of data that are identical within one database. So if multiple versions of one dataset share a lot of data, or if the same data is present in multiple datasets, Noms only stores one copy.
+
+That said, it is definitely possible to have write patterns that defeat this. Deduplication is done at the chunk level, and chunks are currently set to an average size of 4KB. So if you change about 1 byte in every 4096 in a single commit, and those changed bytes are well-distributed throughout the dataset, then we will end up making a complete copy of the dataset.
+
+### Is there a way to not store the entire history?
+
+Theoretically, definitely. In Git, for example, the concept of "shallow clones" exists, and we could do something similar in Noms. This has not been implemented yet.
 
 ### Why is it called Noms?
 
