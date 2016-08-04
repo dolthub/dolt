@@ -143,19 +143,23 @@ func TestNomsStructDiff(t *testing.T) {
 +   "four": "four-diff"
   }
 ["three"] {
+-   field1: "field1-data"
 -   field3: "field3-data"
 +   field3: "field3-data-diff"
++   field4: "field4-data"
   }
 `
 
-	fieldData := []interface{}{
+	s1 := createStruct("TestData",
 		"field1", "field1-data",
 		"field2", "field2-data",
 		"field3", "field3-data",
+	)
+	s2 := createStruct("TestData",
+		"field2", "field2-data",
+		"field3", "field3-data-diff",
 		"field4", "field4-data",
-	}
-	s1 := createStruct("TestData", fieldData...)
-	s2 := s1.Set("field3", types.String("field3-data-diff"))
+	)
 
 	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
 	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")

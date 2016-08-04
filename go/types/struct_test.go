@@ -96,23 +96,29 @@ func TestStructDiff(t *testing.T) {
 
 	s1 := NewStruct("", StructData{"a": Bool(true), "b": String("hi"), "c": Number(4)})
 
-	assertDiff([]ValueChanged{}, s1,
-		NewStruct("", StructData{"a": Bool(true), "b": String("hi"), "c": Number(4)}))
+	assertDiff([]ValueChanged{},
+		s1, NewStruct("", StructData{"a": Bool(true), "b": String("hi"), "c": Number(4)}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")}, s1,
-		NewStruct("", StructData{"a": Bool(false), "b": String("bye"), "c": Number(4)}))
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")},
+		s1, NewStruct("", StructData{"a": Bool(false), "b": String("bye"), "c": Number(4)}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")}, s1,
-		NewStruct("", StructData{"a": Bool(true), "b": String("bye"), "c": Number(5)}))
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")},
+		s1, NewStruct("", StructData{"a": Bool(true), "b": String("bye"), "c": Number(5)}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")}, s1,
-		NewStruct("", StructData{"a": Bool(false), "b": String("hi"), "c": Number(10)}))
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")},
+		s1, NewStruct("", StructData{"a": Bool(false), "b": String("hi"), "c": Number(10)}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "b")}, s1,
-		NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4)}))
+	assertDiff([]ValueChanged{vc(DiffChangeAdded, "a")},
+		s1, NewStruct("NewType", StructData{"b": String("hi"), "c": Number(4)}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "b"), vc(DiffChangeAdded, "d")}, s1,
-		NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4), "d": Number(5)}))
+	assertDiff([]ValueChanged{vc(DiffChangeAdded, "b")},
+		s1, NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4)}))
+
+	assertDiff([]ValueChanged{vc(DiffChangeRemoved, "Z")},
+		s1, NewStruct("NewType", StructData{"Z": Number(17), "a": Bool(true), "b": String("hi"), "c": Number(4)}))
+
+	assertDiff([]ValueChanged{vc(DiffChangeAdded, "b"), vc(DiffChangeRemoved, "d")},
+		s1, NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4), "d": Number(5)}))
 
 	s2 := NewStruct("", StructData{
 		"a": NewList(Number(0), Number(1)),
@@ -120,29 +126,29 @@ func TestStructDiff(t *testing.T) {
 		"c": NewSet(Number(0), Number(1), String("foo")),
 	})
 
-	assertDiff([]ValueChanged{}, s2,
-		NewStruct("", StructData{
+	assertDiff([]ValueChanged{},
+		s2, NewStruct("", StructData{
 			"a": NewList(Number(0), Number(1)),
 			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")}, s2,
-		NewStruct("", StructData{
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "b")},
+		s2, NewStruct("", StructData{
 			"a": NewList(Number(1), Number(1)),
 			"b": NewMap(String("foo"), Bool(true), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("foo")),
 		}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")}, s2,
-		NewStruct("", StructData{
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "a"), vc(DiffChangeModified, "c")},
+		s2, NewStruct("", StructData{
 			"a": NewList(Number(0)),
 			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(2), String("foo")),
 		}))
 
-	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")}, s2,
-		NewStruct("", StructData{
+	assertDiff([]ValueChanged{vc(DiffChangeModified, "b"), vc(DiffChangeModified, "c")},
+		s2, NewStruct("", StructData{
 			"a": NewList(Number(0), Number(1)),
 			"b": NewMap(String("boo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(Number(0), Number(1), String("bar")),

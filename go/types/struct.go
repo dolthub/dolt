@@ -143,10 +143,10 @@ func (s1 Struct) Diff(s2 Struct, changes chan<- ValueChanged, closeChan <-chan s
 			i1++
 			i2++
 		} else if fn1 < fn2 {
-			change = ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn1)}
+			change = ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1)}
 			i1++
 		} else {
-			change = ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1)}
+			change = ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn2)}
 			i2++
 		}
 
@@ -156,13 +156,13 @@ func (s1 Struct) Diff(s2 Struct, changes chan<- ValueChanged, closeChan <-chan s
 	}
 
 	for ; i1 < len(fs1); i1++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs1[i1].name)}) {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs1[i1].name)}) {
 			return
 		}
 	}
 
 	for ; i2 < len(fs2); i2++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs2[i2].name)}) {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs2[i2].name)}) {
 			return
 		}
 	}
