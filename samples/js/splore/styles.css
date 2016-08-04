@@ -39,11 +39,6 @@ a:hover {
 	fill: rgb(255, 255, 255);
 }
 
-.node p {
-	font-size: 11px;
-	font-family: "Menlo", monospace;
-}
-
 .link {
 	fill: none;
 	stroke: #ccc;

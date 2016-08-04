@@ -58,19 +58,25 @@ export default class Node extends React.Component<void, Props, State> {
       text = <a href={url}>{text}</a>;
     }
 
+    const foreignObjStyle = {
+      overflow: 'visible', // Firefox like
+    };
+
     const paraStyle = {
       overflow: 'hidden',
       textAlign: 'right',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
+      fontSize: '11px',
+      fontFamily: '"Menlo", monospace',
     };
 
     return (
       <g className='node' onClick={this.props.onClick} style={{transform:translate}}>
         {this.getShape()}
-        <foreignObject x={-this.props.spaceX + 10} y='-.35em'
+        <foreignObject style={foreignObjStyle} x={-this.props.spaceX + 10} y='-.35em'
           width={this.props.spaceX - 20} height='0.7em'>
-          <p title={this.props.title || this.props.text} style={paraStyle}>{text}</p>
+          <div title={this.props.title || this.props.text} style={paraStyle}>{text}</div>
         </foreignObject>
       </g>
     );
