@@ -82,6 +82,6 @@ However, many important features are not yet implemented including a query syste
 <br>
 ## Talk
 
-- [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
+- [Slack](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
 - [Twitter](https://twitter.com/nomsdb)
