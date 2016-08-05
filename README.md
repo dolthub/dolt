@@ -12,7 +12,7 @@ This repository contains two reference implementations of the database—one in 
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
-<br><br>
+<br>
 
 ## About Noms
 
