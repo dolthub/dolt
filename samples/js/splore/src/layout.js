@@ -13,7 +13,7 @@ type Props = {
   data: NodeGraph,
   onNodeClick: (e: MouseEvent, s: string) => void,
   tree: TreeNode,
-  nomsStore: string,
+  db: string,
 }
 
 export default function Layout(props: Props) : React.Element {
@@ -21,7 +21,7 @@ export default function Layout(props: Props) : React.Element {
   const edges = [];
   const lookup = {};
 
-  const spaceX = 75;
+  const spaceX = 100;
   const spaceY = 20;
   const paddingRight = 250;
   const getX = d => d.y * spaceX;
@@ -56,7 +56,7 @@ export default function Layout(props: Props) : React.Element {
         canOpen={hasChildren}
         isOpen={!hasChildren || Boolean(treeNode.data.isOpen)}
         hash={hash}
-        nomsStore={props.nomsStore}
+        db={props.db}
         onClick={(e) => props.onNodeClick(e, treeNode.id)}/>);
     children.push(n);
     lookup[treeNode.id] = treeNode;

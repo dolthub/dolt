@@ -20,7 +20,7 @@ type Props = {
   y: number,
   spaceX: number,
   hash: ?Hash,
-  nomsStore: string,
+  db: string,
   onClick: (e: MouseEvent, s: String) => void,
 };
 
@@ -54,7 +54,7 @@ export default class Node extends React.Component<void, Props, State> {
 
     let text = this.props.text;
     if (this.props.hash) {
-      const url = `${this.props.nomsStore}/ref/${this.props.hash.toString()}`;
+      const url = `/?db=${this.props.db}&hash=${this.props.hash.toString()}`;
       text = <a href={url}>{text}</a>;
     }
 

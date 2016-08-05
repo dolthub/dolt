@@ -9,25 +9,25 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import {
   Blob,
+  Collection,
   Database,
   Hash,
   HttpBatchStore,
   IndexedMetaSequence,
   invariant,
+  kindToString,
   List,
-  ListLeafSequence,
   Map,
-  MapLeafSequence,
   OrderedMetaSequence,
   Ref,
   Set,
-  SetLeafSequence,
   Struct,
   StructMirror,
 } from '@attic/noms';
-import type {StructFieldMirror} from '@attic/noms';
+import type {StructFieldMirror, Value} from '@attic/noms';
 import {layout, TreeNode} from './buchheim.js';
 import type {NodeGraph} from './buchheim.js';
+import {filesize} from 'humanize';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootHash: Hash;
@@ -71,7 +71,7 @@ function load() {
   };
 
   if (params.hash) {
-    const hash = Hash.parse(params.ref);
+    const hash = Hash.parse(params.hash);
     invariant(hash);
     setRootHash(hash);
   } else {
@@ -84,7 +84,7 @@ function formatKeyString(v: any): string {
     v = v.targetHash;
   }
   if (v instanceof Hash) {
-    return v.toString().substring(5, 11);
+    return v.toString().substring(0, 10);
   }
 
   return String(v);
@@ -100,7 +100,6 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
       const kid = process(hash, formatKeyString(tuple.ref), id);
       if (kid) {
         data.nodes[kid].isOpen = true;
-
         process(hash, tuple.ref, kid);
       } else {
         throw new Error('No kid id.');
@@ -135,51 +134,40 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
 
     if (t === 'boolean' || t === 'number' || t === 'string') {
       data.nodes[id] = {name: String(val)};
-    } else if (val instanceof Blob) {
-      data.nodes[id] = {name: `Blob (${val.length})`};
-    } else if (val instanceof List) {
-      const sequence = val.sequence;
-      if (sequence instanceof ListLeafSequence) {
-        data.nodes[id] = {name: `List (${val.length})`};
-        sequence.items.forEach(c => process(hash, c, id));
+    } else if (val instanceof Collection) {
+      const {sequence} = val;
+      const ks = kindToString(val.type.kind);
+      const size = getSize(val);
+      if (sequence instanceof IndexedMetaSequence) {
+        const name = `${ks}Node (${size})`;
+        processMetaSequence(id, sequence, name);
+      } else if (sequence instanceof OrderedMetaSequence) {
+        const name = `${ks}Node (${size})`;
+        processMetaSequence(id, sequence, name);
       } else {
-        invariant(sequence instanceof IndexedMetaSequence);
-        processMetaSequence(id, sequence, 'ListNode');
-      }
-    } else if (val instanceof Set) {
-      const sequence = val.sequence;
-      if (sequence instanceof SetLeafSequence) {
-        data.nodes[id] = {name: `Set (${val.size})`};
-        sequence.items.forEach(c => process(hash, c, id));
-      } else {
-        invariant(sequence instanceof OrderedMetaSequence);
-        processMetaSequence(id, sequence, 'SetNode');
-      }
-    } else if (val instanceof Map) {
-      const sequence = val.sequence;
-      if (sequence instanceof MapLeafSequence) {
-        data.nodes[id] = {name: `Map (${val.size})`};
-        sequence.items.forEach(entry => {
-          const [k, v] = entry;
-          // TODO: handle non-string keys
-          const kid = process(hash, k, id);
-          if (kid) {
-            data.nodes[kid].isOpen = true;
-
-            process(hash, v, kid);
-          } else {
-            throw new Error('No kid id.');
-          }
-        });
-      } else {
-        invariant(sequence instanceof OrderedMetaSequence);
-        processMetaSequence(id, sequence, 'MapNode');
+        const name = `${ks} (${size})`;
+        data.nodes[id] = {name};
+        if (val instanceof Map) {
+          sequence.items.forEach(entry => {
+            const [k, v] = entry;
+            // TODO: handle non-string keys
+            const kid = process(hash, k, id);
+            if (kid) {
+              data.nodes[kid].isOpen = true;
+              process(hash, v, kid);
+            } else {
+              throw new Error('No kid id.');
+            }
+          });
+        } else {
+          sequence.items.forEach(c => process(hash, c, id));
+        }
       }
     } else if (val instanceof Hash) {
       const refStr = val.toString();
       data.nodes[id] = {
         canOpen: true,
-        name: refStr.substr(5, 6),
+        name: refStr.substr(0, 10),
         hash: val,
       };
     } else if (val instanceof Struct) {
@@ -257,9 +245,9 @@ class Prompt extends React.Component<void, {}, void> {
             defaultValue={params.token}
             placeholder='auth token'
           />
-          <input type='text' ref='ref' style={inputStyle}
-            defaultValue={params.ref}
-            placeholder='sha1-xyz (ref to jump to)'
+          <input type='text' ref='hash' style={inputStyle}
+            defaultValue={params.hash}
+            placeholder='0123456789abcdefghijklmnopqrstuv (hash to jump to)'
           />
           <button type='submit'>OK</button>
         </form>
@@ -269,13 +257,13 @@ class Prompt extends React.Component<void, {}, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const {db, token, ref} = this.refs;
+    const {db, token, hash} = this.refs;
     let qs = '?db=' + db.value;
     if (token.value) {
       qs += '&token=' + token.value;
     }
-    if (ref.value) {
-      qs += '&ref=' + ref.value;
+    if (hash.value) {
+      qs += '&hash=' + hash.value;
     }
     window.history.pushState({}, undefined, qs);
     load();
@@ -290,6 +278,20 @@ function render() {
   const dt = new TreeNode(data, rootHash.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(
-    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} nomsStore={params.db}/>,
+    <Layout tree={dt} data={data} onNodeClick={handleNodeClick} db={params.db}/>,
     renderNode);
+}
+
+function getSize(val: Value): string | number {
+  // This was extracted into a function to work around a bug in Flow.
+  if (val instanceof List) {
+    return val.length;
+  }
+  if (val instanceof Map || val instanceof Set) {
+    return val.size;
+  }
+  if (val instanceof Blob) {
+    return filesize(val.length);
+  }
+  throw new Error('unreachable');
 }
