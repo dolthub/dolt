@@ -73,7 +73,9 @@ func TestPullTopDown(t *testing.T) {
 	source, err = source.CommitValue(updatedValue)
 	assert.NoError(err)
 
-	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
+	srcHeadRef := types.NewRef(source.Head())
+	sink.Pull(source.Database(), srcHeadRef, 1, nil)
+	sink, err = sink.FastForward(srcHeadRef)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -94,7 +96,9 @@ func TestPullFirstCommitTopDown(t *testing.T) {
 	source, err := source.CommitValue(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
+	srcHeadRef := types.NewRef(source.Head())
+	sink.Pull(source.Database(), srcHeadRef, 1, nil)
+	sink, err = sink.FastForward(srcHeadRef)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -113,7 +117,9 @@ func TestPullDeepRefTopDown(t *testing.T) {
 	source, err := source.CommitValue(sourceInitialValue)
 	assert.NoError(err)
 
-	sink, err = sink.Pull(source.Database(), types.NewRef(source.Head()), 1, nil)
+	srcHeadRef := types.NewRef(source.Head())
+	sink.Pull(source.Database(), srcHeadRef, 1, nil)
+	sink, err = sink.FastForward(srcHeadRef)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }
@@ -154,10 +160,14 @@ func TestPullWithMeta(t *testing.T) {
 	assert.NoError(err)
 	h4 := source.Head()
 
-	sink, err = sink.Pull(source.Database(), types.NewRef(h2), 1, nil)
+	srcHeadRef := types.NewRef(h2)
+	sink.Pull(source.Database(), srcHeadRef, 1, nil)
+	sink, err = sink.FastForward(srcHeadRef)
 	assert.NoError(err)
 
-	sink, err = sink.Pull(source.Database(), types.NewRef(h4), 1, nil)
+	srcHeadRef = types.NewRef(h4)
+	sink.Pull(source.Database(), srcHeadRef, 1, nil)
+	sink, err = sink.FastForward(srcHeadRef)
 	assert.NoError(err)
 	assert.True(source.Head().Equals(sink.Head()))
 }

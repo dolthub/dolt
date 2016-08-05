@@ -34,11 +34,14 @@ type Database interface {
 	// Datasets returns the root of the database which is a MapOfStringToRefOfCommit where string is a datasetID.
 	Datasets() types.Map
 
-	// Commit updates the Commit that datasetID in this database points at. All Values that have been written to this Database are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the database is always returned.
+	// Commit updates the Commit that datasetID in this database points at. All Values that have been written to this Database are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will be non-nil. The newest snapshot of the database is always returned.
 	Commit(datasetID string, commit types.Struct) (Database, error)
 
 	// Delete removes the Dataset named datasetID from the map at the root of the Database. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the database is always returned.
 	Delete(datasetID string) (Database, error)
+
+	// SetHead sets the Commit that datasetID in this database points at. All Values that have been written to this Database are guaranteed to be persistent after SetHead(). If the update cannot be performed, e.g., because of a conflict, error will be non-nil. The newest snapshot of the database is always returned.
+	SetHead(datasetID string, commit types.Struct) (Database, error)
 
 	has(hash hash.Hash) bool
 	validatingBatchStore() types.BatchStore

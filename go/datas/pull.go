@@ -21,12 +21,17 @@ type PullProgress struct {
 func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	srcQ, sinkQ := &types.RefByHeight{sourceRef}, &types.RefByHeight{sinkHeadRef}
 
+	// If the sourceRef points to an object already in sinkDB, there's nothing to do.
+	if sinkDB.has(sourceRef.TargetHash()) {
+		return
+	}
+
 	// We generally expect that sourceRef descends from sinkHeadRef, so that walking down from sinkHeadRef yields useful hints. If it's not even in the srcDB, then just clear out sinkQ right now and don't bother.
 	if !srcDB.has(sinkHeadRef.TargetHash()) {
 		sinkQ.PopBack()
 	}
 
-	// Since we expect sourceRef to descend from sinkHeadRef, we assume srcDB has a superset of the data in sinkDB. There are some cases where, logically, the code wants to read data it knows to be in sinkDB. In this case, it doesn't actually matter which Database the data comes from, so as an optimization we use whichever is a LocalDatabase -- if either is.
+	// Since we expect sinkHeadRef to descend from sourceRef, we assume srcDB has a superset of the data in sinkDB. There are some cases where, logically, the code wants to read data it knows to be in sinkDB. In this case, it doesn't actually matter which Database the data comes from, so as an optimization we use whichever is a LocalDatabase -- if either is.
 	mostLocalDB := srcDB
 	if _, ok := sinkDB.(*LocalDatabase); ok {
 		mostLocalDB = sinkDB
@@ -239,7 +244,7 @@ func traverseSink(sinkRef types.Ref, db Database) traverseResult {
 }
 
 func traverseCommon(comRef, sinkHead types.Ref, db Database) traverseResult {
-	if comRef.Height() > 1 && isRefOfCommitType(comRef.Type()) {
+	if comRef.Height() > 1 && IsRefOfCommitType(comRef.Type()) {
 		commit := comRef.TargetValue(db).(types.Struct)
 		// We don't want to traverse the parents of sinkHead, but we still want to traverse its Value on the sinkDB side. We also still want to traverse all children, in both the srcDB and sinkDB, of any common Commit that is not at the Head of sinkDB.
 		exclusionSet := types.NewSet()

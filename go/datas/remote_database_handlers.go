@@ -255,7 +255,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 func isMapOfStringToRefOfCommit(m types.Map) bool {
 	mapTypes := m.Type().Desc.(types.CompoundDesc).ElemTypes
 	keyType, valType := mapTypes[0], mapTypes[1]
-	return keyType.Kind() == types.StringKind && (isRefOfCommitType(valType) || isUnionOfRefOfCommitType(valType))
+	return keyType.Kind() == types.StringKind && (IsRefOfCommitType(valType) || isUnionOfRefOfCommitType(valType))
 }
 
 func isUnionOfRefOfCommitType(t *types.Type) bool {
@@ -263,7 +263,7 @@ func isUnionOfRefOfCommitType(t *types.Type) bool {
 		return false
 	}
 	for _, et := range t.Desc.(types.CompoundDesc).ElemTypes {
-		if !isRefOfCommitType(et) {
+		if !IsRefOfCommitType(et) {
 			return false
 		}
 	}

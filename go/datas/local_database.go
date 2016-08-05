@@ -25,12 +25,17 @@ func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
 }
 
 func (lds *LocalDatabase) Commit(datasetID string, commit types.Struct) (Database, error) {
-	err := lds.commit(datasetID, commit)
+	err := lds.doCommit(datasetID, commit)
 	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
 }
 
 func (lds *LocalDatabase) Delete(datasetID string) (Database, error) {
 	err := lds.doDelete(datasetID)
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
+}
+
+func (lds *LocalDatabase) SetHead(datasetID string, commit types.Struct) (Database, error) {
+	err := lds.doSetHead(datasetID, commit)
 	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
 }
 

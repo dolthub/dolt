@@ -27,12 +27,17 @@ func (rds *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
 }
 
 func (rds *RemoteDatabaseClient) Commit(datasetID string, commit types.Struct) (Database, error) {
-	err := rds.commit(datasetID, commit)
+	err := rds.doCommit(datasetID, commit)
 	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
 }
 
 func (rds *RemoteDatabaseClient) Delete(datasetID string) (Database, error) {
 	err := rds.doDelete(datasetID)
+	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
+}
+
+func (rds *RemoteDatabaseClient) SetHead(datasetID string, commit types.Struct) (Database, error) {
+	err := rds.doSetHead(datasetID, commit)
 	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
 }
 

@@ -70,5 +70,23 @@ func (s *nomsSyncTestSuite) TestSync() {
 	dest = dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(ldb2dir, "", 1, false)), "bar")
 	s.True(types.Number(43).Equals(dest.HeadValue()))
 	dest.Database().Close()
+}
 
+func (s *nomsSyncTestSuite) TestRewind() {
+	var err error
+	source1 := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
+	source1, err = source1.CommitValue(types.Number(42))
+	s.NoError(err)
+	rewindRef := source1.HeadRef().TargetHash()
+	source1, err = source1.CommitValue(types.Number(43))
+	s.NoError(err)
+	source1.Database().Close() // Close Database backing both Datasets
+
+	sourceSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+rewindRef.String())
+	sinkDatasetSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "foo")
+	s.Run(main, []string{"sync", sourceSpec, sinkDatasetSpec})
+
+	dest := dataset.NewDataset(datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false)), "foo")
+	s.True(types.Number(42).Equals(dest.HeadValue()))
+	dest.Database().Close()
 }

@@ -102,28 +102,43 @@ func (ds *Dataset) Commit(v types.Value, opts CommitOptions) (Dataset, error) {
 	return Dataset{store, ds.id}, err
 }
 
-func (ds *Dataset) Pull(sourceStore datas.Database, sourceRef types.Ref, concurrency int, progressCh chan datas.PullProgress) (Dataset, error) {
-	sink := *ds
-
+// Pull objects that descend from sourceRef in srcDB into sinkDB, using at most the given degree of concurrency. Progress will be reported over progressCh as the algorithm works. Objects that are already present in ds will not be pulled over.
+func (ds *Dataset) Pull(sourceDB datas.Database, sourceRef types.Ref, concurrency int, progressCh chan datas.PullProgress) {
 	sinkHeadRef := types.Ref{}
-	if currentHeadRef, ok := sink.MaybeHeadRef(); ok {
+	if currentHeadRef, ok := ds.MaybeHeadRef(); ok {
 		sinkHeadRef = currentHeadRef
 	}
+	datas.Pull(sourceDB, ds.Database(), sourceRef, sinkHeadRef, concurrency, progressCh)
+}
 
-	if sourceRef == sinkHeadRef {
-		return sink, nil
+// FastForward takes a types.Ref to a Commit object and makes it the new Head of ds iff it is a descendant of the current Head. Intended to be used e.g. after a call to Pull(). If the update cannot be performed, e.g., because another process moved the current Head out from under you, err will be non-nil. The newest snapshot of the Dataset is always returned, so the caller an easily retry using the latest.
+func (ds *Dataset) FastForward(newHeadRef types.Ref) (sink Dataset, err error) {
+	sink = *ds
+	if currentHeadRef, ok := sink.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
+		return
+	} else if newHeadRef.Height() <= currentHeadRef.Height() {
+		return sink, datas.ErrMergeNeeded
 	}
 
-	datas.Pull(sourceStore, sink.Database(), sourceRef, sinkHeadRef, concurrency, progressCh)
-	err := datas.ErrOptimisticLockFailed
-	for ; err == datas.ErrOptimisticLockFailed; sink, err = sink.setNewHead(sourceRef) {
+	for err = datas.ErrOptimisticLockFailed; err == datas.ErrOptimisticLockFailed; sink, err = sink.commitNewHead(newHeadRef) {
+	}
+	return
+}
+
+// SetHead takes a types.Ref to a Commit object and makes it the new Head of ds. Intended to be used e.g. when rewinding in ds' Commit history. If the update cannot be performed, e.g., because the state of ds.Database() changed out from under you, err will be non-nil. The newest snapshot of the Dataset is always returned, so the caller an easily retry using the latest.
+func (ds *Dataset) SetHead(newHeadRef types.Ref) (sink Dataset, err error) {
+	sink = *ds
+	if currentHeadRef, ok := sink.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
+		return
 	}
 
-	return sink, err
+	commit := sink.validateRefAsCommit(newHeadRef)
+	store, err := sink.Database().SetHead(sink.id, commit)
+	return Dataset{store, sink.id}, err
 }
 
 func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
-	v := ds.store.ReadValue(r.TargetHash())
+	v := ds.Database().ReadValue(r.TargetHash())
 
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
@@ -134,8 +149,8 @@ func (ds *Dataset) validateRefAsCommit(r types.Ref) types.Struct {
 	return v.(types.Struct)
 }
 
-// setNewHead attempts to make the object pointed to by newHeadRef the new Head of ds. First, it checks that the object exists in ds and validates that it decodes to the correct type of value. Next, it attempts to commit the object to ds.Database(). This may fail if, for instance, the Head of ds has been changed by another goroutine or process. In the event that the commit fails, the error from Database().Commit() is returned along with a new Dataset that's at it's proper, current Head. The caller should take any necessary corrective action and try again using this new Dataset.
-func (ds *Dataset) setNewHead(newHeadRef types.Ref) (Dataset, error) {
+// commitNewHead attempts to make the object pointed to by newHeadRef the new Head of ds. First, it checks that the object exists in ds and validates that it decodes to the correct type of value. Next, it attempts to commit the object to ds.Database(). This may fail if, for instance, the Head of ds has been changed by another goroutine or process. In the event that the commit fails, the error from Database().Commit() is returned along with a new Dataset that's at it's proper, current Head. The caller should take any necessary corrective action and try again using this new Dataset.
+func (ds *Dataset) commitNewHead(newHeadRef types.Ref) (Dataset, error) {
 	commit := ds.validateRefAsCommit(newHeadRef)
 	store, err := ds.Database().Commit(ds.id, commit)
 	return Dataset{store, ds.id}, err

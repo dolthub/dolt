@@ -69,6 +69,11 @@ func (ds *databaseCommon) Datasets() types.Map {
 	return *ds.datasets
 }
 
+func (ds *databaseCommon) datasetsFromRef(datasetsRef hash.Hash) *types.Map {
+	c := ds.ReadValue(datasetsRef).(types.Map)
+	return &c
+}
+
 func (ds *databaseCommon) has(h hash.Hash) bool {
 	return ds.cch.Has(h)
 }
@@ -85,22 +90,22 @@ func (ds *databaseCommon) Close() error {
 	return ds.vs.Close()
 }
 
-func (ds *databaseCommon) datasetsFromRef(datasetsRef hash.Hash) *types.Map {
-	c := ds.ReadValue(datasetsRef).(types.Map)
-	return &c
-}
-
-func (ds *databaseCommon) commit(datasetID string, commit types.Struct) error {
+func (ds *databaseCommon) doSetHead(datasetID string, commit types.Struct) error {
 	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
-	return ds.doCommit(datasetID, commit)
+
+	currentRootRef, currentDatasets := ds.getRootAndDatasets()
+	commitRef := ds.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
+
+	currentDatasets = currentDatasets.Set(types.String(datasetID), commitRef)
+	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootRef is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
-	currentRootRef, currentDatasets := ds.getRootAndDatasets()
+	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 
-	// TODO: This Commit will be orphaned if the tryUpdateRoot() below fails
-	commitRef := ds.WriteValue(commit)
+	currentRootRef, currentDatasets := ds.getRootAndDatasets()
+	commitRef := ds.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
 
 	// First commit in store is always fast-foward.
 	if !currentRootRef.IsEmpty() {
