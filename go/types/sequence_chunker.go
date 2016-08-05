@@ -10,6 +10,7 @@ type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher)
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
+	vr                         ValueReader
 	vw                         ValueWriter
 	parent                     *sequenceChunker
 	current                    []sequenceItem
@@ -23,11 +24,11 @@ type sequenceChunker struct {
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
 type makeChunkFn func(values []sequenceItem) (Collection, orderedKey, uint64)
 
-func newEmptySequenceChunker(vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
-	return newSequenceChunker(nil, vw, makeChunk, parentMakeChunk, hashValueBytes)
+func newEmptySequenceChunker(vr ValueReader, vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+	return newSequenceChunker(nil, vr, vw, makeChunk, parentMakeChunk, hashValueBytes)
 }
 
-func newSequenceChunker(cur *sequenceCursor, vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+func newSequenceChunker(cur *sequenceCursor, vr ValueReader, vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
 	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 	d.Chk.True(makeChunk != nil)
 	d.Chk.True(parentMakeChunk != nil)
@@ -35,6 +36,7 @@ func newSequenceChunker(cur *sequenceCursor, vw ValueWriter, makeChunk, parentMa
 
 	sc := &sequenceChunker{
 		cur,
+		vr,
 		vw,
 		nil,
 		[]sequenceItem{},
@@ -156,7 +158,7 @@ func (sc *sequenceChunker) createParent() {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
 		parent = sc.cur.parent.clone()
 	}
-	sc.parent = newSequenceChunker(parent, sc.vw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
+	sc.parent = newSequenceChunker(parent, sc.vr, sc.vw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
 	sc.parent.isLeaf = false
 }
 
@@ -201,8 +203,7 @@ func (sc *sequenceChunker) anyPending() bool {
 }
 
 // Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (sc *sequenceChunker) Done(vr ValueReader) sequence {
-	d.Chk.True((vr == nil) == (sc.vw == nil))
+func (sc *sequenceChunker) Done() sequence {
 	d.Chk.False(sc.done)
 	sc.done = true
 
@@ -217,7 +218,7 @@ func (sc *sequenceChunker) Done(vr ValueReader) sequence {
 			sc.handleChunkBoundary()
 		}
 
-		return sc.parent.Done(vr)
+		return sc.parent.Done()
 	}
 
 	// At this point, we know this chunker contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a chunker can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent chunker's |current| is if this chunker began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this chunker's current must contain all items within the current sequence.
@@ -235,7 +236,7 @@ func (sc *sequenceChunker) Done(vr ValueReader) sequence {
 	mt := sc.current[0].(metaTuple)
 
 	for {
-		child := mt.getChildSequence(vr)
+		child := mt.getChildSequence(sc.vr)
 		if _, ok := child.(metaSequence); !ok || child.seqLen() > 1 {
 			return child
 		}

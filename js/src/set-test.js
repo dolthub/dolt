@@ -28,6 +28,7 @@ import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct} from './struct.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
+import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 import {
   makeRefType,
   makeSetType,
@@ -356,10 +357,14 @@ suite('CompoundSet', () => {
   let db;
 
   setup(() => {
+    smallTestChunks();
     db = new TestDatabase();
   });
 
-  teardown((): Promise<void> => db.close());
+  teardown(async () => {
+    normalProductionChunks();
+    await db.close();
+  });
 
   function build(vwr: ValueReadWriter, values: Array<string>): Set {
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
@@ -646,5 +651,23 @@ suite('CompoundSet', () => {
 
     await t(10, SetLeafSequence);
     await t(2000, OrderedMetaSequence);
+  });
+
+  test('Remove last when not loaded', async () => {
+    const reload = async (s: Set): Promise<Set> => {
+      const s2 = await db.readValue(db.writeValue(s).targetHash);
+      invariant(s2 instanceof Set);
+      return s2;
+    };
+
+    let vals = intSequence(64);
+    let set = new Set(vals);
+
+    while (vals.length > 0) {
+      const last = vals[vals.length - 1];
+      vals = vals.slice(0, vals.length - 1);
+      set = await set.delete(last).then(reload);
+      assert.isTrue(equals(new Set(vals), set));
+    }
   });
 });

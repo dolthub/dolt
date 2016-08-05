@@ -31,6 +31,7 @@ import {OrderedKey, MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
 import {OrderedMetaSequence} from './meta-sequence.js';
+import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 import {
   makeMapType,
   makeRefType,
@@ -441,10 +442,14 @@ suite('CompoundMap', () => {
   let db;
 
   setup(() => {
+    smallTestChunks();
     db = new TestDatabase();
   });
 
-  teardown((): Promise<void> => db.close());
+  teardown(async () => {
+    normalProductionChunks();
+    await db.close();
+  });
 
   function build(vwr: ValueReadWriter): Array<Map> {
     const l1 = new Map([['a', false], ['b', false]]);
@@ -725,7 +730,14 @@ suite('CompoundMap', () => {
       assert.isTrue(equals(m.type, makeMapType(numberType, numberType)));
     }
 
-    await t(10, MapLeafSequence);
+    try {
+      // This test shouldn't rely on a specific chunk size producing a leaf sequence, but it does.
+      normalProductionChunks();
+      await t(10, MapLeafSequence);
+    } finally {
+      smallTestChunks();
+    }
+
     await t(1000, OrderedMetaSequence);
   });
 
@@ -774,6 +786,24 @@ suite('CompoundMap', () => {
       m = await m.delete(kv[0]);
       assert.isFalse(await m.has(kv[0]));
       assert.strictEqual(kvs.length, m.size);
+    }
+  });
+
+  test('Remove last when not loaded', async () => {
+    const reload = async (m: Map): Promise<Map> => {
+      const m2 = await db.readValue(db.writeValue(m).targetHash);
+      invariant(m2 instanceof Map);
+      return m2;
+    };
+
+    let kvs = intSequence(64).map(n => [n, n]);
+    let map = new Map(kvs);
+
+    while (kvs.length > 0) {
+      const lastKey = kvs[kvs.length - 1][0];
+      kvs = kvs.slice(0, kvs.length - 1);
+      map = await map.delete(lastKey).then(reload);
+      assert.isTrue(equals(new Map(kvs), map));
     }
   });
 });

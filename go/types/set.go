@@ -21,13 +21,13 @@ func newSet(seq orderedSequence) Set {
 
 func NewSet(v ...Value) Set {
 	data := buildSetData(v)
-	seq := newEmptySequenceChunker(nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), hashValueBytes)
+	seq := newEmptySequenceChunker(nil, nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), hashValueBytes)
 
 	for _, v := range data {
 		seq.Append(v)
 	}
 
-	return newSet(seq.Done(nil).(orderedSequence))
+	return newSet(seq.Done().(orderedSequence))
 }
 
 // Computes the diff from |last| to |s| using "best" algorithm, which balances returning results early vs completing quickly.
@@ -138,7 +138,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	ch := newSequenceChunker(cur, nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
+	ch := newSequenceChunker(cur, s.seq.valueReader(), nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -148,7 +148,7 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 		ch.Append(v)
 	}
 
-	ns := newSet(ch.Done(nil).(orderedSequence))
+	ns := newSet(ch.Done().(orderedSequence))
 	return ns
 }
 

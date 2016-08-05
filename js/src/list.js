@@ -9,7 +9,7 @@ import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {Splice} from './edit-distance.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
-import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
+import {default as SequenceChunker, chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
@@ -23,7 +23,6 @@ import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
-import SequenceChunker from './sequence-chunker.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
 
@@ -55,7 +54,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
     return this.sequence.newCursorAt(idx).then(cursor =>
-      chunkSequence(cursor, insert, deleteCount, newListLeafChunkFn(vr),
+      chunkSequence(cursor, vr, insert, deleteCount, newListLeafChunkFn(vr),
                     newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
                     hashValueBytes)).then(s => List.fromSequence(s));
   }
@@ -163,7 +162,7 @@ export class ListWriter<T: Value> {
 
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
-    this._chunker = new SequenceChunker(null, vrw, newListLeafChunkFn(vrw),
+    this._chunker = new SequenceChunker(null, vrw, vrw, newListLeafChunkFn(vrw),
         newIndexedMetaSequenceChunkFn(Kind.List, vrw, vrw), hashValueBytes);
     this._vrw = vrw;
   }

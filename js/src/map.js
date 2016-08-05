@@ -142,7 +142,7 @@ export default class Map<K: Value, V: Value> extends
   _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
       Promise<Map<K, V>> {
     const vr = this.sequence.vr;
-    return chunkSequence(cursor, insert, remove, newMapLeafChunkFn(vr),
+    return chunkSequence(cursor, vr, insert, remove, newMapLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Map, vr),
                          mapHashValueBytes).then(s => Map.fromSequence(s));
   }

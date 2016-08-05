@@ -20,13 +20,14 @@ export type hashValueBytesFn<T> = (item: T, rv: RollingValueHasher) => void;
 
 export async function chunkSequence<T, S: Sequence<T>>(
     cursor: SequenceCursor,
+    vr: ?ValueReader,
     insert: Array<T>,
     remove: number,
     makeChunk: makeChunkFn<T, S>,
     parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
     hashValueBytes: hashValueBytesFn): Promise<Sequence> {
 
-  const chunker = new SequenceChunker(cursor, null, makeChunk, parentMakeChunk, hashValueBytes);
+  const chunker = new SequenceChunker(cursor, vr, null, makeChunk, parentMakeChunk, hashValueBytes);
   if (cursor) {
     await chunker.resume();
   }
@@ -40,7 +41,7 @@ export async function chunkSequence<T, S: Sequence<T>>(
 
   insert.forEach(i => chunker.append(i));
 
-  return chunker.done(null);
+  return chunker.done();
 }
 
 // Like |chunkSequence|, but without an existing cursor (implying this is a new collection), so it
@@ -52,7 +53,7 @@ export function chunkSequenceSync<T, S: Sequence<T>>(
     parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
     hashValueBytes: hashValueBytesFn): Sequence {
 
-  const chunker = new SequenceChunker(null, null, makeChunk, parentMakeChunk, hashValueBytes);
+  const chunker = new SequenceChunker(null, null, null, makeChunk, parentMakeChunk, hashValueBytes);
 
   insert.forEach(i => chunker.append(i));
 
@@ -61,6 +62,7 @@ export function chunkSequenceSync<T, S: Sequence<T>>(
 
 export default class SequenceChunker<T, S: Sequence<T>> {
   _cursor: ?SequenceCursor<T, S>;
+  _vr: ?ValueReader;
   _vw: ?ValueWriter;
   _parent: ?SequenceChunker<MetaTuple, MetaSequence>;
   _current: Array<T>;
@@ -71,9 +73,10 @@ export default class SequenceChunker<T, S: Sequence<T>> {
   _rv: RollingValueHasher;
   _done: boolean;
 
-  constructor(cursor: ?SequenceCursor, vw: ?ValueWriter, makeChunk: makeChunkFn,
+  constructor(cursor: ?SequenceCursor, vr: ?ValueReader, vw: ?ValueWriter, makeChunk: makeChunkFn,
               parentMakeChunk: makeChunkFn, hashValueBytes: hashValueBytesFn) {
     this._cursor = cursor;
+    this._vr = vr;
     this._vw = vw;
     this._parent = null;
     this._current = [];
@@ -193,6 +196,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     invariant(!this._parent);
     this._parent = new SequenceChunker(
         this._cursor && this._cursor.parent ? this._cursor.parent.clone() : null,
+        this._vr,
         this._vw,
         this._parentMakeChunk,
         this._parentMakeChunk,
@@ -242,8 +246,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
   // Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully
   // correct and understandable. See comments inline.
-  async done(vr: ?ValueReader): Promise<Sequence> {
-    invariant(!vr === !this._vw);
+  async done(): Promise<Sequence> {
     invariant(!this._done);
     this._done = true;
 
@@ -261,7 +264,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
         this.handleChunkBoundary();
       }
 
-      return notNull(this._parent).done(vr);
+      return notNull(this._parent).done();
     }
 
     // At this point, we know this chunker contains, in |current| every item at this level of the
@@ -292,7 +295,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     invariant(!this._isLeaf && this._current.length === 1);
     const mt = this._current[0];
     invariant(mt instanceof MetaTuple);
-    let seq = await mt.getChildSequence(vr);
+    let seq = await mt.getChildSequence(this._vr);
 
     while (seq.isMeta && seq.length === 1) {
       seq = await seq.getChildSequence(0);

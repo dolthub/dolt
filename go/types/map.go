@@ -28,13 +28,13 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 
 func NewMap(kv ...Value) Map {
 	entries := buildMapData(kv)
-	seq := newEmptySequenceChunker(nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), mapHashValueBytes)
+	seq := newEmptySequenceChunker(nil, nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), mapHashValueBytes)
 
 	for _, entry := range entries {
 		seq.Append(entry)
 	}
 
-	return newMap(seq.Done(nil).(orderedSequence))
+	return newMap(seq.Done().(orderedSequence))
 }
 
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
@@ -174,7 +174,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
+	ch := newSequenceChunker(cur, m.seq.valueReader(), nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -183,7 +183,7 @@ func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return newMap(ch.Done(nil).(orderedSequence))
+	return newMap(ch.Done().(orderedSequence))
 }
 
 func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {

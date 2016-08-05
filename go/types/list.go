@@ -20,22 +20,22 @@ func newList(seq indexedSequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated with values, chunking if and when needed.
 func NewList(values ...Value) List {
-	seq := newEmptySequenceChunker(nil, makeListLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(ListKind, nil), hashValueBytes)
+	seq := newEmptySequenceChunker(nil, nil, makeListLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(ListKind, nil), hashValueBytes)
 	for _, v := range values {
 		seq.Append(v)
 	}
-	return newList(seq.Done(nil).(indexedSequence))
+	return newList(seq.Done().(indexedSequence))
 }
 
 // NewStreamingList creates a new List with type t, populated with values, chunking if and when needed. As chunks are created, they're written to vrw -- including the root chunk of the list. Once the caller has closed values, she can read the completed List from the returned channel.
 func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
-		seq := newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+		seq := newEmptySequenceChunker(vrw, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		for v := range values {
 			seq.Append(v)
 		}
-		out <- newList(seq.Done(vrw).(indexedSequence))
+		out <- newList(seq.Done().(indexedSequence))
 		close(out)
 	}()
 	return out
@@ -134,7 +134,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	d.Chk.True(idx+deleteCount <= l.Len())
 
 	cur := newCursorAtIndex(l.seq, idx)
-	ch := newSequenceChunker(cur, nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), hashValueBytes)
+	ch := newSequenceChunker(cur, l.seq.valueReader(), nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), hashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -143,7 +143,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return newList(ch.Done(nil).(indexedSequence))
+	return newList(ch.Done().(indexedSequence))
 }
 
 func (l List) Insert(idx uint64, vs ...Value) List {
