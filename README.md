@@ -2,14 +2,18 @@
 <br>
 [Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md) | &nbsp;[Project Status](#status)
 
-<br>
-
 *Noms* is a decentralized database based on ideas from Git.
 
 This repository contains two reference implementations of the database—one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
 
 <br>
 
+[![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer) 
+[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
+[![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
+
+<br>
+ 
 ## About Noms
 
 Noms is different from other databases. It is:
