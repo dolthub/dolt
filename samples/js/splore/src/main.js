@@ -138,10 +138,7 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
       const {sequence} = val;
       const ks = kindToString(val.type.kind);
       const size = getSize(val);
-      if (sequence instanceof IndexedMetaSequence) {
-        const name = `${ks}Node (${size})`;
-        processMetaSequence(id, sequence, name);
-      } else if (sequence instanceof OrderedMetaSequence) {
+      if (sequence instanceof IndexedMetaSequence || sequence instanceof OrderedMetaSequence) {
         const name = `${ks}Node (${size})`;
         processMetaSequence(id, sequence, name);
       } else {
@@ -174,7 +171,7 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
       // Struct
       // Make a variable to the struct to work around Flow bug.
       const mirror = new StructMirror(val);
-      const structName = mirror.name;
+      const structName = mirror.name || 'Struct';
       data.nodes[id] = {name: structName};
 
       mirror.forEachField((f: StructFieldMirror) => {
