@@ -73,11 +73,28 @@ suite('Encoding - roundtrip', () => {
   });
 
   test('numbers', () => {
+    assertRoundTrips(17179869184 + 2);
+    assertRoundTrips(128);
     assertRoundTrips(1);
     assertRoundTrips(-0);
     assertRoundTrips(0);
     assertRoundTrips(-1);
+    assertRoundTrips(42);
+    assertRoundTrips(-255);
+    assertRoundTrips(256);
+    assertRoundTrips(257);
+    assertRoundTrips(-42);
+    assertRoundTrips(-0.42);
+    assertRoundTrips(0xffffffff);
+    assertRoundTrips(0xffffffff + Math.pow(2, 33));
+    assertRoundTrips(Number.MAX_SAFE_INTEGER);
+    assertRoundTrips(Number.MIN_SAFE_INTEGER);
+    assertRoundTrips(Number.EPSILON);
+    // Go math.MaxFloat64
+    assertRoundTrips(1.7976931348623157e+308);
+    assertRoundTrips(-122.411912027329);
   });
+
 
   test('strings', () => {
     assertRoundTrips('');

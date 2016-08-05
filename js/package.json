@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "56.2.0",
+  "version": "56.2.1",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
@@ -14,8 +14,7 @@
     "babel-regenerator-runtime": "^6.5.0",
     "babel-runtime": "^6.9.2",
     "text-encoding-utf-8": "^1.0.1",
-    "tingodb": "^0.4.2",
-    "signed-varint": "2.0.0"
+    "tingodb": "^0.4.2"
   },
   "devDependencies": {
     "@attic/eslintrc": "^3.1.0",

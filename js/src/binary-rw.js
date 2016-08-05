@@ -6,9 +6,9 @@
 
 import * as Bytes from './bytes.js';
 import Hash, {byteLength as hashByteLength} from './hash.js';
-import svarint from 'signed-varint';
 import {floatToIntExp, intExpToFloat} from './number-util.js';
 import {invariant} from './assert.js';
+import {encode as encodeVarint, decode as decodeVarint, maxVarintLength} from './signed-varint.js';
 
 /**
  * For methods of DataView 'false' means 'big endian', our default.
@@ -65,11 +65,11 @@ export class BinaryReader {
   }
 
   readNumber(): number {
-    const intVal = svarint.decode(this.buff, this.offset);
-    this.offset += svarint.decode.bytes;
-    const expVal = svarint.decode(this.buff, this.offset);
-    this.offset += svarint.decode.bytes;
-    return intExpToFloat(intVal, expVal);
+    const intRes = decodeVarint(this.buff, this.offset);
+    this.offset += intRes[1];
+    const expRes = decodeVarint(this.buff, this.offset);
+    this.offset += expRes[1];
+    return intExpToFloat(intRes[0], expRes[0]);
   }
 
   readBool(): boolean {
@@ -161,14 +161,9 @@ export class BinaryWriter {
 
   writeNumber(v: number): void {
     const [intVal, expVal] = floatToIntExp(v);
-    const intLen = svarint.encodingLength(intVal);
-    const expLen = svarint.encodingLength(expVal);
-    this.ensureCapacity(intLen + expLen);
-
-    svarint.encode(intVal, this.buff, this.offset);
-    this.offset += intLen;
-    svarint.encode(expVal, this.buff, this.offset);
-    this.offset += expLen;
+    this.ensureCapacity(2 * maxVarintLength);
+    this.offset += encodeVarint(intVal, this.buff, this.offset);
+    this.offset += encodeVarint(expVal, this.buff, this.offset);
   }
 
   writeBool(v:boolean): void {

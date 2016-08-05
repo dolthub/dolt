@@ -8,12 +8,12 @@ import * as Bytes from './bytes.js';
 import BuzHash from './buzhash.js';
 import Hash from './hash.js';
 import ValueEncoder from './value-encoder.js';
-import svarint from 'signed-varint';
 import type Value from './value.js';
 import type {Type} from './type.js';
 import {floatToIntExp} from './number-util.js';
 import {invariant} from './assert.js';
 import {maxUint32} from './binary-rw.js';
+import {encode as encodeVarint, encodingLength as varintEncodingLength} from './signed-varint.js';
 
 const defaultChunkPattern = ((1 << 12) | 0) - 1; // Avg Chunk Size of 4k
 
@@ -116,13 +116,12 @@ export default class RollingValueHasher {
   }
 
   hashVarint(n: number) {
-    const count = svarint.encodingLength(n);
     if (this.lengthOnly) {
-      this.bytesHashed += count;
+      this.bytesHashed += varintEncodingLength(n);
       return;
     }
 
-    svarint.encode(n, varintBuff, 0);
+    const count = encodeVarint(n, varintBuff, 0);
     for (let i = 0; i < count; i++) {
       this.hashByte(varintBuff[i]);
     }

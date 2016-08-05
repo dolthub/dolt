@@ -4,20 +4,16 @@
 
 package types
 
-import (
-	"math"
-)
+import "math"
 
-func float64IsInt(f, machineEpsilon float64) bool {
-	_, frac := math.Modf(math.Abs(f))
-	if frac < machineEpsilon || frac > 1.0-machineEpsilon {
-		return true
-	}
-	return false
+const maxSafeInteger = float64(9007199254740991) // 2 ** 53 -1
+
+func float64IsInt(f float64) bool {
+	return math.Trunc(f) == f
 }
 
 // convert float64 to int64 where f == i / 2^exp
-func float64ToIntExp(f float64) (i int64, exp int) {
+func float64ToIntExp(f float64) (int64, int) {
 	if f == 0 {
 		return 0, 0
 	}
@@ -25,15 +21,14 @@ func float64ToIntExp(f float64) (i int64, exp int) {
 	isNegative := math.Signbit(f)
 	f = math.Abs(f)
 
-	machineEpsilon := math.Nextafter(1, 2) - 1
-	exp = 0
-	// really large float, bring down to within MaxInt64
-	for f > float64(math.MaxInt64) {
+	exp := 0
+	// Really large float, bring down to max safe integer so that it can be correctly represented by float64.
+	for f > maxSafeInteger {
 		f /= 2
 		exp--
 	}
 
-	for !float64IsInt(f, machineEpsilon) {
+	for !float64IsInt(f) {
 		f *= 2
 		exp++
 	}
@@ -47,7 +42,7 @@ func float64ToIntExp(f float64) (i int64, exp int) {
 func intExpToFloat64(i int64, exp int) float64 {
 	if exp == 0 {
 		return float64(i)
-	} else {
-		return float64(i) / math.Pow(2, float64(exp))
 	}
+
+	return float64(i) / math.Pow(2, float64(exp))
 }
