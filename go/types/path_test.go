@@ -12,7 +12,9 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func assertPathResolvesTo(assert *assert.Assertions, expect, ref Value, p Path) {
+func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
+	p, err := ParsePath(str)
+	assert.NoError(err)
 	actual := p.Resolve(ref)
 	if expect == nil {
 		assert.Nil(actual)
@@ -21,12 +23,6 @@ func assertPathResolvesTo(assert *assert.Assertions, expect, ref Value, p Path) 
 	} else {
 		assert.True(expect.Equals(actual), "Expected %s, but got %s", EncodedValue(expect), EncodedValue(actual))
 	}
-}
-
-func assertPathStringResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
-	p, err := NewPath().AddPath(str)
-	assert.NoError(err)
-	assertPathResolvesTo(assert, expect, ref, p)
 }
 
 func TestPathStruct(t *testing.T) {
@@ -38,14 +34,10 @@ func TestPathStruct(t *testing.T) {
 		"baz": Number(203),
 	})
 
-	assertPathResolvesTo(assert, String("foo"), v, NewPath().AddField("foo"))
-	assertPathStringResolvesTo(assert, String("foo"), v, `.foo`)
-	assertPathResolvesTo(assert, Bool(false), v, NewPath().AddField("bar"))
-	assertPathStringResolvesTo(assert, Bool(false), v, `.bar`)
-	assertPathResolvesTo(assert, Number(203), v, NewPath().AddField("baz"))
-	assertPathStringResolvesTo(assert, Number(203), v, `.baz`)
-	assertPathResolvesTo(assert, nil, v, NewPath().AddField("notHere"))
-	assertPathStringResolvesTo(assert, nil, v, `.notHere`)
+	assertResolvesTo(assert, String("foo"), v, `.foo`)
+	assertResolvesTo(assert, Bool(false), v, `.bar`)
+	assertResolvesTo(assert, Number(203), v, `.baz`)
+	assertResolvesTo(assert, nil, v, `.notHere`)
 }
 
 func TestPathIndex(t *testing.T) {
@@ -54,14 +46,12 @@ func TestPathIndex(t *testing.T) {
 	var v Value
 	resolvesTo := func(exp, val Value, str string) {
 		// Indices resolve to |exp|.
-		assertPathResolvesTo(assert, exp, v, NewPath().AddIndex(val))
-		assertPathStringResolvesTo(assert, exp, v, str)
+		assertResolvesTo(assert, exp, v, str)
 		// Keys resolve to themselves.
 		if exp != nil {
 			exp = val
 		}
-		assertPathResolvesTo(assert, exp, v, NewPath().AddKeyIndex(val))
-		assertPathStringResolvesTo(assert, exp, v, str+"@key")
+		assertResolvesTo(assert, exp, v, str+"@key")
 	}
 
 	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
@@ -111,14 +101,12 @@ func TestPathHashIndex(t *testing.T) {
 
 	resolvesTo := func(col, exp, val Value) {
 		// Values resolve to |exp|.
-		assertPathResolvesTo(assert, exp, col, NewPath().AddHashIndex(val.Hash()))
-		assertPathStringResolvesTo(assert, exp, col, hashStr(val))
+		assertResolvesTo(assert, exp, col, hashStr(val))
 		// Keys resolve to themselves.
 		if exp != nil {
 			exp = val
 		}
-		assertPathResolvesTo(assert, exp, col, NewPath().AddHashKeyIndex(val.Hash()))
-		assertPathStringResolvesTo(assert, exp, col, hashStr(val)+"@key")
+		assertResolvesTo(assert, exp, col, hashStr(val)+"@key")
 	}
 
 	// Primitives are only addressable by their values.
@@ -146,8 +134,7 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	assert := assert.New(t)
 
 	resolvesToNil := func(col, val Value) {
-		assertPathResolvesTo(assert, nil, col, NewPath().AddHashIndex(val.Hash()))
-		assertPathStringResolvesTo(assert, nil, col, fmt.Sprintf("[#%s]", val.Hash()))
+		assertResolvesTo(assert, nil, col, fmt.Sprintf("[#%s]", val.Hash()))
 	}
 
 	b := Bool(true)
@@ -176,63 +163,28 @@ func TestPathMulti(t *testing.T) {
 		"foo": l,
 	})
 
-	assertPathResolvesTo(assert, l, s, NewPath().AddField("foo"))
-	assertPathStringResolvesTo(assert, l, s, `.foo`)
-	assertPathResolvesTo(assert, m1, s, NewPath().AddField("foo").AddIndex(Number(0)))
-	assertPathStringResolvesTo(assert, m1, s, `.foo[0]`)
-	assertPathResolvesTo(assert, String("foo"), s, NewPath().AddField("foo").AddIndex(Number(0)).AddIndex(String("a")))
-	assertPathStringResolvesTo(assert, String("foo"), s, `.foo[0]["a"]`)
-	assertPathResolvesTo(assert, String("bar"), s, NewPath().AddField("foo").AddIndex(Number(0)).AddIndex(String("b")))
-	assertPathStringResolvesTo(assert, String("bar"), s, `.foo[0]["b"]`)
-	assertPathResolvesTo(assert, String("car"), s, NewPath().AddField("foo").AddIndex(Number(0)).AddIndex(String("c")))
-	assertPathStringResolvesTo(assert, String("car"), s, `.foo[0]["c"]`)
-	assertPathResolvesTo(assert, nil, s, NewPath().AddField("foo").AddIndex(Number(0)).AddIndex(String("x")))
-	assertPathStringResolvesTo(assert, nil, s, `.foo[0]["x"]`)
-	assertPathResolvesTo(assert, nil, s, NewPath().AddField("foo").AddIndex(Number(2)).AddIndex(String("c")))
-	assertPathStringResolvesTo(assert, nil, s, `.foo[2]["c"]`)
-	assertPathResolvesTo(assert, nil, s, NewPath().AddField("notHere").AddIndex(Number(0)).AddIndex(String("c")))
-	assertPathStringResolvesTo(assert, nil, s, `.notHere[0]["c"]`)
-	assertPathResolvesTo(assert, m2, s, NewPath().AddField("foo").AddIndex(Number(1)))
-	assertPathStringResolvesTo(assert, m2, s, `.foo[1]`)
-	assertPathResolvesTo(assert, String("dar"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddIndex(String("d")))
-	assertPathStringResolvesTo(assert, String("dar"), s, `.foo[1]["d"]`)
-	assertPathResolvesTo(assert, String("earth"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddIndex(Bool(false)))
-	assertPathStringResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
-	assertPathResolvesTo(assert, String("fire"), s, NewPath().AddField("foo").AddIndex(Number(1)).AddHashIndex(m1.Hash()))
-	assertPathStringResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1][#%s]`, m1.Hash().String()))
-	assertPathResolvesTo(assert, m1, s, NewPath().AddField("foo").AddIndex(Number(1)).AddHashKeyIndex(m1.Hash()))
-	assertPathStringResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1][#%s]@key`, m1.Hash().String()))
-	assertPathResolvesTo(assert, String("car"), s,
-		NewPath().AddField("foo").AddIndex(Number(1)).AddHashKeyIndex(m1.Hash()).AddIndex(String("c")))
-	assertPathStringResolvesTo(assert, String("car"), s,
-		fmt.Sprintf(`.foo[1][#%s]@key["c"]`, m1.Hash().String()))
-}
-
-func TestPathStringSerialization(t *testing.T) {
-	assert := assert.New(t)
-	p1 := NewPath().AddField("/").AddField("value").AddField("data").AddIndex(Number(1000001)).AddField("data")
-	assert.Equal("./.value.data[1000001].data", p1.String())
-}
-
-func TestPathImmutability(t *testing.T) {
-	assert := assert.New(t)
-	p1 := NewPath().AddField("/").AddField("value").AddField("data").AddIndex(Number(1)).AddField("data")
-	p2 := p1.AddField("x")
-	p3 := p1.AddField("y")
-	p4 := p3.AddIndex(Number(19))
-	assert.Equal("./.value.data[1].data", p1.String())
-	assert.Equal("./.value.data[1].data.x", p2.String())
-	assert.Equal("./.value.data[1].data.y", p3.String())
-	assert.Equal("./.value.data[1].data.y[19]", p4.String())
+	assertResolvesTo(assert, l, s, `.foo`)
+	assertResolvesTo(assert, m1, s, `.foo[0]`)
+	assertResolvesTo(assert, String("foo"), s, `.foo[0]["a"]`)
+	assertResolvesTo(assert, String("bar"), s, `.foo[0]["b"]`)
+	assertResolvesTo(assert, String("car"), s, `.foo[0]["c"]`)
+	assertResolvesTo(assert, nil, s, `.foo[0]["x"]`)
+	assertResolvesTo(assert, nil, s, `.foo[2]["c"]`)
+	assertResolvesTo(assert, nil, s, `.notHere[0]["c"]`)
+	assertResolvesTo(assert, m2, s, `.foo[1]`)
+	assertResolvesTo(assert, String("dar"), s, `.foo[1]["d"]`)
+	assertResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
+	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1][#%s]`, m1.Hash().String()))
+	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1][#%s]@key`, m1.Hash().String()))
+	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1][#%s]@key["c"]`, m1.Hash().String()))
 }
 
 func TestPathParseSuccess(t *testing.T) {
 	assert := assert.New(t)
 
-	test := func(str string, expectPath Path) {
-		p, err := NewPath().AddPath(str)
+	test := func(str string) {
+		p, err := ParsePath(str)
 		assert.NoError(err)
-		assert.Equal(expectPath, p)
 		expectStr := str
 		switch expectStr { // Human readable serialization special cases.
 		case "[1e4]":
@@ -245,32 +197,32 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String())
 	}
 
-	test(".foo", NewPath().AddField("foo"))
-	test(".Q", NewPath().AddField("Q"))
-	test(".QQ", NewPath().AddField("QQ"))
-	test("[true]", NewPath().AddIndex(Bool(true)))
-	test("[false]", NewPath().AddIndex(Bool(false)))
-	test("[false]@key", NewPath().AddKeyIndex(Bool(false)))
-	test("[42]", NewPath().AddIndex(Number(42)))
-	test("[42]@key", NewPath().AddKeyIndex(Number(42)))
-	test("[1e4]", NewPath().AddIndex(Number(1e4)))
-	test("[1.]", NewPath().AddIndex(Number(1.)))
-	test("[1.345]", NewPath().AddIndex(Number(1.345)))
-	test(`[""]`, NewPath().AddIndex(String("")))
-	test(`["42"]`, NewPath().AddIndex(String("42")))
-	test(`["42"]@key`, NewPath().AddKeyIndex(String("42")))
-	test("[\"line\nbreak\rreturn\"]", NewPath().AddIndex(String("line\nbreak\rreturn")))
-	test(`["qu\\ote\""]`, NewPath().AddIndex(String(`qu\ote"`)))
-	test(`["π"]`, NewPath().AddIndex(String("π")))
-	test(`["[[br][]acke]]ts"]`, NewPath().AddIndex(String("[[br][]acke]]ts")))
-	test(`["xπy✌z"]`, NewPath().AddIndex(String("xπy✌z")))
-	test(`["ಠ_ಠ"]`, NewPath().AddIndex(String("ಠ_ಠ")))
-	test("[\"0\"][\"1\"][\"100\"]", NewPath().AddIndex(String("0")).AddIndex(String("1")).AddIndex(String("100")))
-	test(".foo[0].bar[4.5][false]", NewPath().AddField("foo").AddIndex(Number(0)).AddField("bar").AddIndex(Number(4.5)).AddIndex(Bool(false)))
-
 	h := Number(42).Hash() // arbitrary hash
-	test(fmt.Sprintf(".foo[#%s]", h.String()), NewPath().AddField("foo").AddHashIndex(h))
-	test(fmt.Sprintf(".bar[#%s]@key", h.String()), NewPath().AddField("bar").AddHashKeyIndex(h))
+
+	test(".foo")
+	test(".Q")
+	test(".QQ")
+	test("[true]")
+	test("[false]")
+	test("[false]@key")
+	test("[42]")
+	test("[42]@key")
+	test("[1e4]")
+	test("[1.]")
+	test("[1.345]")
+	test(`[""]`)
+	test(`["42"]`)
+	test(`["42"]@key`)
+	test("[\"line\nbreak\rreturn\"]")
+	test(`["qu\\ote\""]`)
+	test(`["π"]`)
+	test(`["[[br][]acke]]ts"]`)
+	test(`["xπy✌z"]`)
+	test(`["ಠ_ಠ"]`)
+	test(`["0"]["1"]["100"]`)
+	test(".foo[0].bar[4.5][false]")
+	test(fmt.Sprintf(".foo[#%s]", h.String()))
+	test(fmt.Sprintf(".bar[#%s]@key", h.String()))
 }
 
 func TestPathParseErrors(t *testing.T) {

@@ -23,7 +23,7 @@ func shouldDescend(v1, v2 types.Value) bool {
 }
 
 func Diff(w io.Writer, v1, v2 types.Value) error {
-	return diff(w, types.NewPath(), nil, v1, v2)
+	return diff(w, types.Path{}, nil, v1, v2)
 }
 
 func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) error {
@@ -74,7 +74,7 @@ func diffLists(w io.Writer, p types.Path, v1, v2 types.List) (err error) {
 				if shouldDescend(lastEl, newEl) {
 					idx := types.Number(splice.SpAt + i)
 					writeFooter(w, &wroteHdr)
-					err = diff(w, p.AddIndex(idx), idx, lastEl, newEl)
+					err = diff(w, append(p, types.NewIndexPath(idx)), idx, lastEl, newEl)
 				} else {
 					writeHeader(w, p, &wroteHdr)
 					line(w, DEL, nil, v1.Get(splice.SpAt+i))
@@ -165,7 +165,7 @@ func diffOrdered(w io.Writer, p types.Path, lf lineFunc, df diffFunc, kf, v1, v2
 			c1, c2 := v1(change.V), v2(change.V)
 			if shouldDescend(c1, c2) {
 				writeFooter(w, &wroteHdr)
-				err = diff(w, p.AddIndex(k), change.V, c1, c2)
+				err = diff(w, append(p, types.NewIndexPath(k)), change.V, c1, c2)
 			} else {
 				writeHeader(w, p, &wroteHdr)
 				lf(w, DEL, k, c1)
