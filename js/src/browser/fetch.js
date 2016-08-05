@@ -74,8 +74,10 @@ function makeHeaders(xhr: XMLHttpRequest): Map<string, string> {
   const m = new Map();
   const headers = xhr.getAllResponseHeaders().split(/\r\n/);  // spec requires \r\n
   for (const header of headers) {
-    const [, name, value] = notNull(header.match(/([^:]+): (.*)/));
-    m.set(name, value);
+    if (header) {
+      const [, name, value] = notNull(header.match(/([^:]+): (.*)/));
+      m.set(name, value);
+    }
   }
   return m;
 }
