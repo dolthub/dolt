@@ -7,7 +7,7 @@
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
 <br clear='all'/>
-[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)
+[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md) | &nbsp;[Project Status](#status)
 
 *Noms* is a decentralized database based on ideas from Git.
 
@@ -74,10 +74,18 @@ Trivially import snapshots from any format or API. Data is automatically version
 <br>
 ## Status
 
-We are fairly confident in the core data format, and plan to support Noms database version `7` and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
+#### Data Format
 
-However, many important features are not yet implemented including a query system, concurrency, auto-merging, and GC.
+We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/master/go/constants/version.go#L8) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
 
+
+#### Completeness
+
+We're just getting started. Some important features are not yet implemented including a query system, concurrency, auto-merging, and GC.
+
+#### API
+
+The Public API will continue to evolve. Pull requests which represent breaking API changes should be marked with `APIChange` and sent to the slack channel and mailing list below for advance warning and feedback.
 
 <br>
 ## Talk
