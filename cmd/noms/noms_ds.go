@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -15,7 +16,7 @@ import (
 
 var toDelete string
 
-var nomsDs = &nomsCommand{
+var nomsDs = &util.Command{
 	Run:       runDs,
 	UsageLine: "ds [<database> | -d <dataset>]",
 	Short:     "Noms dataset management",

@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/cmd/noms/diff"
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/outputpager"
@@ -16,7 +17,7 @@ import (
 
 var summarize bool
 
-var nomsDiff = &nomsCommand{
+var nomsDiff = &util.Command{
 	Run:       runDiff,
 	UsageLine: "diff [--summarize] <object1> <object2>",
 	Short:     "Shows the difference between two objects",

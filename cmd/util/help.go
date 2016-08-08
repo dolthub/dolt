@@ -2,50 +2,48 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package main
+// This is the Help facility used by the noms utility. It is packaged in a separate util can be used by other programs as well.
+package util
 
 import (
 	"bufio"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"strings"
 	"text/template"
-	"time"
 )
 
-var actions = []string{
-	"interacting with",
-	"poking at",
-	"goofing with",
-	"dancing with",
-	"playing with",
-	"contemplation of",
-	"showing off",
-	"jiggerypokery of",
-	"singing to",
-	"nomming on",
-}
-
-var usageTemplate = `Noms is a tool for {{.Action}} Noms data.
+var usageTemplate = `{{.UsageLine}}
 
 Usage:
 
-	noms command [arguments]
+	{{.ProgName}} command [arguments]
 
 The commands are:
 {{range .Commands}}
 	{{.Name | printf "%-11s"}} {{.Short}}{{end}}
 
-Use "noms help [command]" for more information about a command.
+Use "{{.ProgName}} help [command]" for more information about a command.
 
 `
 
-var helpTemplate = `usage: noms {{.UsageLine}}
+var helpTemplate = `usage: {{.ProgName}} {{.Cmd.UsageLine}}
 
-{{.Long | trim}}
+{{.Cmd.Long | trim}}
 `
+
+var (
+	commands  = []*Command{}
+	usageLine = ""
+	progName  = ""
+)
+
+func InitHelp(name string, cmds []*Command, usage string) {
+	progName = name
+	commands = cmds
+	usageLine = usage
+}
 
 // tmpl executes the given template text on data, writing the result to w.
 func tmpl(w io.Writer, text string, data interface{}) {
@@ -60,48 +58,57 @@ func tmpl(w io.Writer, text string, data interface{}) {
 func printUsage(w io.Writer) {
 	bw := bufio.NewWriter(w)
 	data := struct {
-		Commands []*nomsCommand
-		Action   string
+		ProgName  string
+		Commands  []*Command
+		UsageLine string
 	}{
+		progName,
 		commands,
-		actions[rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(actions))],
+		usageLine,
 	}
 	tmpl(bw, usageTemplate, data)
 	bw.Flush()
 }
 
-func usage() {
+func Usage() {
 	printUsage(os.Stderr)
 	os.Exit(1)
 }
 
 // help implements the 'help' command.
-func help(args []string) {
+func Help(args []string) {
 	if len(args) == 0 {
 		printUsage(os.Stdout)
-		// not exit 2: succeeded at 'noms help'.
+		// not exit 2: succeeded at 'help'.
 		return
 	}
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "usage: noms help command\n\nToo many arguments given.\n")
-		os.Exit(1) // failed at 'noms help'
+		fmt.Fprintf(os.Stderr, "usage: %s help command\n\nToo many arguments given.\n", progName)
+		os.Exit(1) // failed at 'help'
 	}
 
 	arg := args[0]
 
 	for _, cmd := range commands {
 		if cmd.Name() == arg {
-			tmpl(os.Stdout, helpTemplate, cmd)
+			data := struct {
+				ProgName string
+				Cmd      *Command
+			}{
+				progName,
+				cmd,
+			}
+			tmpl(os.Stdout, helpTemplate, data)
 			flags := cmd.Flags()
 			if countFlags(flags) > 0 {
 				fmt.Fprintf(os.Stdout, "\noptions:\n")
 				flags.PrintDefaults()
 			}
-			// not exit 2: succeeded at 'noms help cmd'.
+			// not exit 2: succeeded at 'help cmd'.
 			return
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "Unknown help topic %#q\n", arg)
-	usage() // failed at 'noms help cmd'
+	Usage() // failed at 'help cmd'
 }
