@@ -27,6 +27,7 @@ type ValueWriter interface {
 type ValueReadWriter interface {
 	ValueReader
 	ValueWriter
+	opCache() opCache
 }
 
 // ValueStore provides methods to read and write Noms Values to a BatchStore. It validates Values as they are written, but does not guarantee that these Values are persisted to the BatchStore until a subsequent Flush. or Close.
@@ -39,6 +40,8 @@ type ValueStore struct {
 	cache      map[hash.Hash]chunkCacheEntry
 	mu         *sync.Mutex
 	valueCache *sizecache.SizeCache
+	opcStore   opCacheStore
+	once       sync.Once
 }
 
 const defaultValueCacheSize = 1 << 25 // 32MB
@@ -64,7 +67,7 @@ func NewValueStore(bs BatchStore) *ValueStore {
 }
 
 func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
-	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}, sizecache.New(cacheSize)}
+	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}, sizecache.New(cacheSize), nil, sync.Once{}}
 }
 
 func (lvs *ValueStore) BatchStore() BatchStore {
@@ -125,6 +128,11 @@ func (lvs *ValueStore) Flush() {
 // Close closes the underlying BatchStore
 func (lvs *ValueStore) Close() error {
 	lvs.Flush()
+	if lvs.opcStore != nil {
+		err := lvs.opcStore.destroy()
+		d.Chk.NoError(err, "Attempt to clean up opCacheStore failed, error: %s\n", err)
+		lvs.opcStore = nil
+	}
 	return lvs.bs.Close()
 }
 
@@ -169,6 +177,13 @@ func (lvs *ValueStore) chunkHintsFromCache(v Value) Hints {
 
 func (lvs *ValueStore) ensureChunksInCache(v Value) {
 	lvs.checkChunksInCache(v, true)
+}
+
+func (lvs *ValueStore) opCache() opCache {
+	lvs.once.Do(func() {
+		lvs.opcStore = newLdbOpCacheStore(lvs)
+	})
+	return lvs.opcStore.opCache()
 }
 
 func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {

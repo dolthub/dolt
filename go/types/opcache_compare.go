@@ -14,6 +14,11 @@ import (
 type opCacheComparer struct{}
 
 func (opCacheComparer) Compare(a, b []byte) int {
+	if res := bytes.Compare(a[:uint32Size], b[:uint32Size]); res != 0 {
+		return res
+	}
+	a, b = a[uint32Size:], b[uint32Size:]
+
 	if compared, res := compareEmpties(a, b); compared {
 		return res
 	}

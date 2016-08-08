@@ -8,15 +8,55 @@ import (
 	"encoding/binary"
 	"io/ioutil"
 	"os"
+	"sync/atomic"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-func newOpCache(vrw ValueReadWriter) *opCache {
+const uint32Size = 4
+
+type opCacheStore interface {
+	opCache() opCache
+	destroy() error
+}
+
+type opCache interface {
+	MapSet(mapKey Value, mapVal Value)
+	SetInsert(val Value)
+	NewIterator() opCacheIterator
+}
+
+type opCacheIterator interface {
+	MapOp() sequenceItem
+	SetOp() sequenceItem
+	Next() bool
+	Release()
+}
+
+type ldbOpCacheStore struct {
+	ldb          *leveldb.DB
+	dbDir        string
+	collectionId uint32
+	vrw          ValueReadWriter
+}
+
+type ldbOpCache struct {
+	vrw   ValueReadWriter
+	colId uint32
+	ldb   *leveldb.DB
+}
+
+type ldbOpCacheIterator struct {
+	iter iterator.Iterator
+	vr   ValueReader
+}
+
+func newLdbOpCacheStore(vrw ValueReadWriter) *ldbOpCacheStore {
 	dir, err := ioutil.TempDir("", "")
 	d.Chk.NoError(err)
 	db, err := leveldb.OpenFile(dir, &opt.Options{
@@ -27,62 +67,56 @@ func newOpCache(vrw ValueReadWriter) *opCache {
 		WriteBuffer:            1 << 27, // 128MiB
 	})
 	d.Chk.NoError(err, "opening put cache in %s", dir)
-	return &opCache{ops: db, dbDir: dir, vrw: vrw}
+	return &ldbOpCacheStore{ldb: db, dbDir: dir, vrw: vrw}
 }
 
-type opCache struct {
-	ops           *leveldb.DB
-	dbDir         string
-	vrw           ValueReadWriter
-	ldbKeyScratch [1 + hash.ByteLen]byte
-	keyScratch    [initialBufferSize]byte
-	valScratch    [initialBufferSize]byte
+func (store *ldbOpCacheStore) destroy() error {
+	d.Chk.NoError(store.ldb.Close())
+	return os.RemoveAll(store.dbDir)
 }
 
-type opCacheIterator struct {
-	iter iterator.Iterator
-	vr   ValueReader
+func (store *ldbOpCacheStore) opCache() opCache {
+	colId := atomic.AddUint32(&store.collectionId, 1)
+	return &ldbOpCache{vrw: store.vrw, colId: colId, ldb: store.ldb}
 }
-
-var uint32Size = binary.Size(uint32(0))
 
 // Set can be called from any goroutine
-func (p *opCache) Set(mapKey Value, mapVal Value) {
+func (opc *ldbOpCache) MapSet(mapKey Value, mapVal Value) {
+	mapKeyArray := [initialBufferSize]byte{}
+	mapValArray := [initialBufferSize]byte{}
+
 	switch mapKey.Type().Kind() {
 	default:
-		// This is the complicated case. For non-primitives, we want the ldb key to be the hash of mapKey, but we obviously need to get both mapKey and mapVal into ldb somehow. The simplest thing is just to do this:
+		ldbKey := ldbKeyFromValueHash(mapKey, opc.colId)
+
+		// Since we've used the ref of keyValue as our ldbKey. We need to store mapKey and mapVal in the ldb value. We use the following format for that:
 		//
 		//     uint32 (4 bytes)             bytes                 bytes
 		// +-----------------------+---------------------+----------------------+
 		// | key serialization len |    serialized key   |   serialized value   |
 		// +-----------------------+---------------------+----------------------+
 
-		// Note that, if mapKey and/or mapVal are prolly trees, any in-memory child chunks will be written to vrw at this time.
-		p.ldbKeyScratch[0] = byte(mapKey.Type().Kind())
-		copy(p.ldbKeyScratch[1:], mapKey.Hash().DigestSlice())
-		mapKeyData := encToSlice(mapKey, p.keyScratch[:], p.vrw)
-		mapValData := encToSlice(mapVal, p.valScratch[:], p.vrw)
+		encodedMapKey := encToSlice(mapKey, mapKeyArray[:], opc.vrw)
+		encodedMapVal := encToSlice(mapVal, mapValArray[:], opc.vrw)
+		ldbValueArray := [initialBufferSize * 2]byte{}
+		binary.LittleEndian.PutUint32(ldbValueArray[:], uint32(len(encodedMapKey)))
+		ldbValue := ldbValueArray[0:4]
+		ldbValue = append(ldbValue, encodedMapKey...)
+		ldbValue = append(ldbValue, encodedMapVal...)
 
-		mapKeyByteLen := len(mapKeyData)
-		data := make([]byte, uint32Size+mapKeyByteLen+len(mapValData))
-		binary.LittleEndian.PutUint32(data, uint32(mapKeyByteLen))
-		copy(data[uint32Size:], mapKeyData)
-		copy(data[uint32Size+mapKeyByteLen:], mapValData)
-
-		// TODO: Will manually batching these help?
-		err := p.ops.Put(p.ldbKeyScratch[:], data, nil)
+		// TODO: Will manually batching calls to ldb.Put() help?
+		err := opc.ldb.Put(ldbKey, ldbValue, nil)
 		d.Chk.NoError(err)
 
 	case BoolKind, NumberKind, StringKind:
-		// In this case, we can just serialize mapKey and use it as the ldb key, so we can also just serialize mapVal and dump that into the DB.
-		keyData := encToSlice(mapKey, p.keyScratch[:], p.vrw)
-		valData := encToSlice(mapVal, p.valScratch[:], p.vrw)
-		// TODO: Will manually batching these help?
-		err := p.ops.Put(keyData, valData, nil)
+		ldbKey := ldbKeyFromValue(mapKey, opc.colId, opc.vrw)
+		encodedMapVal := encToSlice(mapVal, mapValArray[:], opc.vrw)
+		err := opc.ldb.Put(ldbKey, encodedMapVal, nil)
 		d.Chk.NoError(err)
 	}
 }
 
+// Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
 func encToSlice(v Value, initBuf []byte, vw ValueWriter) []byte {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter and valueEncoder?
 	w := &binaryNomsWriter{initBuf, 0}
@@ -91,37 +125,99 @@ func encToSlice(v Value, initBuf []byte, vw ValueWriter) []byte {
 	return w.data()
 }
 
-func (p *opCache) NewIterator() *opCacheIterator {
-	return &opCacheIterator{p.ops.NewIterator(nil, nil), p.vrw}
+func (opc *ldbOpCache) NewIterator() opCacheIterator {
+	prefix := [4]byte{}
+	binary.LittleEndian.PutUint32(prefix[:], opc.colId)
+	return &ldbOpCacheIterator{iter: opc.ldb.NewIterator(util.BytesPrefix(prefix[:]), nil), vr: opc.vrw}
 }
 
-func (p *opCache) Destroy() error {
-	d.Chk.NoError(p.ops.Close())
-	return os.RemoveAll(p.dbDir)
-}
-
-func (i *opCacheIterator) Next() bool {
+func (i *ldbOpCacheIterator) Next() bool {
 	return i.iter.Next()
 }
 
-func (i *opCacheIterator) Op() sequenceItem {
+func (i *ldbOpCacheIterator) MapOp() sequenceItem {
 	entry := mapEntry{}
 	ldbKey := i.iter.Key()
-	data := i.iter.Value()
-	dataOffset := 0
-	switch NomsKind(ldbKey[0]) {
+	ldbValue := i.iter.Value()
+	switch NomsKind(ldbKey[uint32Size]) {
 	case BoolKind, NumberKind, StringKind:
-		entry.key = DecodeFromBytes(ldbKey, i.vr, staticTypeCache)
+		entry.key = DecodeFromBytes(ldbKey[uint32Size:], i.vr, staticTypeCache)
+		entry.value = DecodeFromBytes(ldbValue, i.vr, staticTypeCache)
 	default:
-		keyBytesLen := int(binary.LittleEndian.Uint32(data))
-		entry.key = DecodeFromBytes(data[uint32Size:uint32Size+keyBytesLen], i.vr, staticTypeCache)
-		dataOffset = uint32Size + keyBytesLen
+		keyBytesLen := int(binary.LittleEndian.Uint32(ldbValue))
+		entry.key = DecodeFromBytes(ldbValue[uint32Size:uint32Size+keyBytesLen], i.vr, staticTypeCache)
+		entry.value = DecodeFromBytes(ldbValue[uint32Size+keyBytesLen:], i.vr, staticTypeCache)
 	}
 
-	entry.value = DecodeFromBytes(data[dataOffset:], i.vr, staticTypeCache)
 	return entry
 }
 
-func (i *opCacheIterator) Release() {
+// Insert can be called from any goroutine
+func (opc *ldbOpCache) SetInsert(val Value) {
+	switch val.Type().Kind() {
+	default:
+		ldbKey := ldbKeyFromValueHash(val, opc.colId)
+		valArray := [initialBufferSize]byte{}
+		encodedVal := encToSlice(val, valArray[:], opc.vrw)
+		err := opc.ldb.Put(ldbKey, encodedVal, nil)
+		d.Chk.NoError(err)
+
+	case BoolKind, NumberKind, StringKind:
+		ldbKey := ldbKeyFromValue(val, opc.colId, opc.vrw)
+		// Since the ldbKey contains the val, there's no reason to store anything in the ldbValue
+		err := opc.ldb.Put(ldbKey, nil, nil)
+		d.Chk.NoError(err)
+	}
+}
+
+func (i *ldbOpCacheIterator) SetOp() sequenceItem {
+	ldbKey := i.iter.Key()
+
+	switch NomsKind(ldbKey[uint32Size]) {
+	case BoolKind, NumberKind, StringKind:
+		return DecodeFromBytes(ldbKey[uint32Size:], i.vr, staticTypeCache)
+	default:
+		data := i.iter.Value()
+		return DecodeFromBytes(data, i.vr, staticTypeCache)
+	}
+}
+
+func (i *ldbOpCacheIterator) Release() {
 	i.iter.Release()
+}
+
+// writeLdbKeyHeaderBytes writes the first 4 or 5 bytes into the ldbKey. The first 4 bytes in every
+// ldbKey are the colId. This identifies all the keys for a particular opCache and allows this opStore
+// to cache values for multiple collections. The optional 5th byte is the NomsKind of the value. In
+// cases where we're encoding the hash of an object we need to write the nomsKind manually because the
+// hash doesn't contain it. In cases were we are encoding a primitive value into the key, the first byte
+// of the value is the nomsKind so there is no reason to write it again.
+func writeLdbKeyHeaderBytes(ldbKey []byte, colId uint32, v Value) []byte {
+	binary.LittleEndian.PutUint32(ldbKey, colId)
+	length := uint32Size
+	if v != nil {
+		ldbKey[length] = byte(v.Type().Kind())
+		length++
+	}
+	return ldbKey[0:length]
+}
+
+// ldbKeys for non-primitive Nom Values (e.g. blobs, structs, lists, maps, etc) use a serialization of the values hash:
+// colId(4 bytes) + nomsKind(val)(1 byte) + val.Hash()(20 bytes).
+
+func ldbKeyFromValueHash(val Value, colId uint32) []byte {
+	ldbKeyArray := [uint32Size + 1 + hash.ByteLen]byte{}
+	ldbKey := writeLdbKeyHeaderBytes(ldbKeyArray[:], colId, val)
+	return append(ldbKey, val.Hash().DigestSlice()...)
+}
+
+// ldbKeys for primitive Noms Values (e.g. bool, number, & string) consist of a byte string that encodes:
+// colId(4 bytes) + serialized value(n bytes)
+// Note: the first byte of the serialized value is the NomsKind.
+func ldbKeyFromValue(val Value, colId uint32, vrw ValueReadWriter) []byte {
+	valArray := [initialBufferSize]byte{}
+	ldbKeyArray := [initialBufferSize]byte{}
+	ldbKey := writeLdbKeyHeaderBytes(ldbKeyArray[:], colId, nil)
+	encodedVal := encToSlice(val, valArray[:], vrw)
+	return append(ldbKey, encodedVal...)
 }

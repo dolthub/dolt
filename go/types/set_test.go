@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"math/rand"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -154,6 +155,43 @@ func newSetTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 		},
 		elems: elems,
 	}
+}
+
+func (suite *setTestSuite) createStreamingSet(vs *ValueStore) {
+	randomized := make(ValueSlice, len(suite.elems))
+	for i, j := range rand.Perm(len(randomized)) {
+		randomized[j] = suite.elems[i]
+	}
+
+	vChan := make(chan Value)
+	setChan := NewStreamingSet(vs, vChan)
+	for _, entry := range randomized {
+		vChan <- entry
+	}
+	close(vChan)
+	suite.True(suite.validate(<-setChan))
+}
+
+func (suite *setTestSuite) TestStreamingSet() {
+	vs := NewTestValueStore()
+	defer vs.Close()
+	suite.createStreamingSet(vs)
+}
+
+func (suite *setTestSuite) TestStreamingSet2() {
+	vs := NewTestValueStore()
+	defer vs.Close()
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		suite.createStreamingSet(vs)
+		wg.Done()
+	}()
+	go func() {
+		suite.createStreamingSet(vs)
+		wg.Done()
+	}()
+	wg.Wait()
 }
 
 func TestSetSuite1K(t *testing.T) {

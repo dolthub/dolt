@@ -42,7 +42,7 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 
 	outChan := make(chan Map)
 	go func() {
-		mx := newMutator(vrw)
+		mx := newMapMutator(vrw)
 
 		for v := range kvs {
 			if k == nil {

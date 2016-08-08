@@ -30,6 +30,20 @@ func NewSet(v ...Value) Set {
 	return newSet(seq.Done().(orderedSequence))
 }
 
+func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
+	outChan := make(chan Set)
+	go func() {
+		mx := newSetMutator(vrw)
+
+		for v := range vals {
+			mx.Insert(v)
+		}
+
+		outChan <- mx.Finish()
+	}()
+	return outChan
+}
+
 // Computes the diff from |last| to |s| using "best" algorithm, which balances returning results early vs completing quickly.
 func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
