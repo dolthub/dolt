@@ -16,8 +16,7 @@ import (
 )
 
 var (
-	noPager         bool
-	flagsRegistered = false
+	noPager bool
 )
 
 type Pager struct {
@@ -78,10 +77,7 @@ func (p *Pager) closePipe() {
 }
 
 func RegisterOutputpagerFlags(flags *flag.FlagSet) {
-	if !flagsRegistered {
-		flagsRegistered = true
-		flags.BoolVar(&noPager, "no-pager", false, "suppress paging functionality")
-	}
+	flags.BoolVar(&noPager, "no-pager", false, "suppress paging functionality")
 }
 
 func IsStdoutTty() bool {
