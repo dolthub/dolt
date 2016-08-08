@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -20,7 +21,7 @@ var (
 	port int
 )
 
-var nomsServe = &nomsCommand{
+var nomsServe = &util.Command{
 	Run:       runServe,
 	UsageLine: "serve [options] <database>",
 	Short:     "Serves a Noms database over HTTP",

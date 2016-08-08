@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/cmd/noms/diff"
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -34,7 +35,7 @@ var (
 
 const parallelism = 16
 
-var nomsLog = &nomsCommand{
+var nomsLog = &util.Command{
 	Run:       runLog,
 	UsageLine: "log [options] <commitObject>",
 	Short:     "Displays the history of a Noms dataset",

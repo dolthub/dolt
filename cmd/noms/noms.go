@@ -6,12 +6,16 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
+	"path"
+	"time"
 
+	"github.com/attic-labs/noms/cmd/util"
 	flag "github.com/tsuru/gnuflag"
 )
 
-var commands = []*nomsCommand{
+var commands = []*util.Command{
 	nomsDiff,
 	nomsDs,
 	nomsLog,
@@ -21,18 +25,38 @@ var commands = []*nomsCommand{
 	nomsVersion,
 }
 
+var actions = []string{
+	"interacting with",
+	"poking at",
+	"goofing with",
+	"dancing with",
+	"playing with",
+	"contemplation of",
+	"showing off",
+	"jiggerypokery of",
+	"singing to",
+	"nomming on",
+}
+
+func usageString() string {
+	i := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(actions))
+	return fmt.Sprintf(`Noms is a tool for %s Noms data.`, actions[i])
+}
+
 func main() {
-	flag.Usage = usage
+	util.InitHelp(path.Base(os.Args[0]), commands, usageString())
+
+	flag.Usage = util.Usage
 	flag.Parse(false)
 
 	args := flag.Args()
 	if len(args) < 1 {
-		usage()
+		util.Usage()
 		return
 	}
 
 	if args[0] == "help" {
-		help(args[1:])
+		util.Help(args[1:])
 		return
 	}
 
@@ -55,5 +79,5 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "noms: unknown command %q\n", args[0])
-	usage()
+	util.Usage()
 }

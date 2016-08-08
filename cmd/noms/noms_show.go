@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -15,7 +16,7 @@ import (
 	flag "github.com/tsuru/gnuflag"
 )
 
-var nomsShow = &nomsCommand{
+var nomsShow = &util.Command{
 	Run:       runShow,
 	UsageLine: "show <object>",
 	Short:     "Shows a serialization of a Noms object",

@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/constants"
 	flag "github.com/tsuru/gnuflag"
 )
 
-var nomsVersion = &nomsCommand{
+var nomsVersion = &util.Command{
 	Run:       runVersion,
 	UsageLine: "version ",
 	Short:     "Display noms version",

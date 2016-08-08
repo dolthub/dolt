@@ -2,7 +2,8 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package main
+// This is the Command struct used by the noms utility. It is packaged in a separate util can be used by other programs as well.
+package util
 
 import (
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	flag "github.com/tsuru/gnuflag"
 )
 
-type nomsCommand struct {
+type Command struct {
 	// Run runs the command.
 	// The args are the arguments after the command name.
 	Run func(args []string) int
@@ -21,10 +22,10 @@ type nomsCommand struct {
 	// The first word in the line is taken to be the command name.
 	UsageLine string
 
-	// Short is the short description shown in the 'noms help' output.
+	// Short is the short description shown in the 'help' output.
 	Short string
 
-	// Long is the long message shown in the 'noms help <this-command>' output.
+	// Long is the long message shown in the 'help <this-command>' output.
 	Long string
 
 	// Flag is a set of flags specific to this command.
@@ -35,7 +36,7 @@ type nomsCommand struct {
 }
 
 // Name returns the command's name: the first word in the usage line.
-func (nc *nomsCommand) Name() string {
+func (nc *Command) Name() string {
 	name := nc.UsageLine
 	i := strings.Index(name, " ")
 	if i >= 0 {
@@ -56,7 +57,7 @@ func countFlags(flags *flag.FlagSet) int {
 	}
 }
 
-func (nc *nomsCommand) Usage() {
+func (nc *Command) Usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s\n\n", nc.UsageLine)
 	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(nc.Long))
 	flags := nc.Flags()

@@ -9,6 +9,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -23,7 +24,7 @@ var (
 	p int
 )
 
-var nomsSync = &nomsCommand{
+var nomsSync = &util.Command{
 	Run:       runSync,
 	UsageLine: "sync [options] <source-object> <dest-dataset>",
 	Short:     "Moves datasets between or within databases",
