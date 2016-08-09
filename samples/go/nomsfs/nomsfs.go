@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
@@ -150,7 +152,10 @@ func start(dataset string, mount mount) {
 	})
 }
 
+var debug bool
+
 func main() {
+	flag.BoolVar(&debug, "d", false, "debug")
 	flag.Parse()
 	if len(flag.Args()) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s dataset mount_point\n", path.Base(os.Args[0]))
@@ -160,13 +165,30 @@ func main() {
 	start(flag.Arg(0), func(fs pathfs.FileSystem) {
 		nfs := pathfs.NewPathNodeFs(fs, nil)
 
-		server, _, err := nodefs.MountRoot(flag.Arg(1), nfs.Root(), &nodefs.Options{Debug: false})
+		server, _, err := nodefs.MountRoot(flag.Arg(1), nfs.Root(), &nodefs.Options{Debug: debug})
+		if err != nil {
+			fmt.Println("Mount failed; attempting unmount")
+			syscall.Unmount(flag.Arg(1), 0)
+			server, _, err = nodefs.MountRoot(flag.Arg(1), nfs.Root(), &nodefs.Options{Debug: debug})
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Mount failed: %s\n", err)
 			return
 		}
+
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT)
+		go func() {
+			<-sig
+			fmt.Println("unmounting...")
+			server.Unmount()
+			// Ignore any subsequent ^C
+			signal.Reset(syscall.SIGINT)
+		}()
+
 		fmt.Println("running...")
 		server.Serve()
+		fmt.Println("done.")
 	})
 }
 
@@ -242,7 +264,7 @@ func (fs *nomsFS) Truncate(path string, size uint64, context *fuse.Context) fuse
 	attr := inode.Get("attr").(types.Struct)
 	file := inode.Get("contents").(types.Struct)
 	ref := file.Get("data").(types.Ref)
-	blob := fs.ds.Database().ReadValue(ref.TargetHash()).(types.Blob)
+	blob := ref.TargetValue(fs.ds.Database()).(types.Blob)
 
 	blob = blob.Splice(size, blob.Len()-size, nil)
 	ref = fs.ds.Database().WriteValue(blob)
@@ -390,7 +412,7 @@ func (nfile nomsFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	d.Chk.Equal(nodeType(nfile.node.inode), "File")
 
 	ref := file.(types.Struct).Get("data").(types.Ref)
-	blob := nfile.fs.ds.Database().ReadValue(ref.TargetHash()).(types.Blob)
+	blob := ref.TargetValue(nfile.fs.ds.Database()).(types.Blob)
 
 	br := blob.Reader()
 
@@ -416,7 +438,7 @@ func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	attr := inode.Get("attr").(types.Struct)
 	file := inode.Get("contents").(types.Struct)
 	ref := file.Get("data").(types.Ref)
-	blob := nfile.fs.ds.Database().ReadValue(ref.TargetHash()).(types.Blob)
+	blob := ref.TargetValue(nfile.fs.ds.Database()).(types.Blob)
 
 	ll := uint64(blob.Len())
 	oo := uint64(off)
@@ -724,7 +746,7 @@ func (fs *nomsFS) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.
 
 	switch contents.Type().Desc.(types.StructDesc).Name {
 	case "File":
-		blob := fs.ds.Database().ReadValue(contents.Get("data").(types.Ref).TargetHash()).(types.Blob)
+		blob := contents.Get("data").(types.Ref).TargetValue(fs.ds.Database()).(types.Blob)
 		at.Mode |= fuse.S_IFREG
 		at.Size = blob.Len()
 	case "Directory":
@@ -744,6 +766,9 @@ func (fs *nomsFS) Chown(path string, uid uint32, gid uint32, context *fuse.Conte
 }
 
 func (fs *nomsFS) Utimens(path string, atime *time.Time, mtime *time.Time, context *fuse.Context) fuse.Status {
+	if mtime == nil {
+		return fuse.OK
+	}
 	return fs.setAttr(path, func(attr types.Struct) types.Struct {
 		return attr.Set("mtime", types.Number(float64(mtime.Unix())+float64(mtime.Nanosecond())/1000000000))
 	})
@@ -787,7 +812,7 @@ func (fs *nomsFS) GetXAttr(path string, attribute string, context *fuse.Context)
 
 	v, found := xattr.MaybeGet(types.String(attribute))
 	if !found {
-		return nil, fuse.Status(93) // syscall.ENOATTR
+		return nil, fuse.ENODATA
 	}
 
 	blob := v.(types.Blob)

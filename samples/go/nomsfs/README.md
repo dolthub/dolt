@@ -1,29 +1,39 @@
+# nomsfs
 
-# Getting Started on Mac OS X
+Nomsfs is a [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace) filesystem built on Noms. To use it you'll need FUSE:
 
-1. Install [FUSE for OS X](https://osxfuse.github.io/)
-2. Load FUSE for OS X:
+* *Linux* -- built-in; you should be good to go
+* *Mac OS X* -- Install [FUSE for OS X](https://osxfuse.github.io/)
+
+Development and testing have been done exclusively on Mac OS X using FUSE for OS X.
+Nomsfs builds on the [Go FUSE imlementation](https://github.com/hanwen/go-fuse) from Han-Wen Nienhuys.
+
+## Usage
+
+Make sure FUSE is installed. On Mac OS X remember to run `/Library/Filesystems/osxfusefs.fs/Support/load_osxfusefs`.
+
+
+Build with `go build` (or just run with `go run nomsfs.go`); test with `go test`.
+
+Mount an existing or new dataset by executing `nomsfs`:
+
 ```
-> sudo /Library/Filesystems/osxfusefs.fs/Support/load_osxfusefs
-```
-3. Create a local database:
-```
-> noms serve ldb:/tmp/nomsfs &
-```
-4. Build and run `nomsfs`:
-```
-> go run nomsfs.go http://localhost:8000::nomsfs directoryForMount
+$ mkdir /var/tmp/mnt
+$ go run nomsfs.go /var/tmp/nomsfs::fs /var/tmp/mnt
+running...
 ```
 
-# Exploring `nomsfs`
+Use ^C to stop `nomsfs`
 
-1. Once you have a mount point and `nomfs` is running you can add/delete/rename files and directories using Finder or the command line as you would with any other file system.
-2. Stop `nomfs` with `Ctrl+C`
+### Exploring The Data
+
+1. Once you have a mount point and `nomsfs` is running you can add/delete/rename files and directories using the Finder or the command line as you would with any other file system.
+2. Stop `nomsfs` with ^C
 3. Let's look around the dataset:
 ```
-> noms ds http://localhost:8000
-nomsfs
-> noms show http://localhost:8000::nomsfs
+> noms ds /var/tmp/nomsfs
+fs
+> noms show /var/tmp/nomsfs::fs
 struct Commit {
   meta: struct {},
   parents: Set<Ref<Cycle<0>>>,
@@ -99,4 +109,18 @@ struct Commit {
           },
 ...
 ```
+
+## Limitations
+
+Hard links are not supported at this time, but may be added in the future.
+Mounting a dataset in multiple locations is not supported, but may be added in the future.
+
+## Troubleshooting
+
+`Mount failed: no FUSE devices found`
+Make sure FUSE is installed. If you're on Mac OS X make sure the kernel module is loaded by executing `/Library/Filesystems/osxfusefs.fs/Support/load_osxfusefs`.
+
+## Contributing
+
+Issues welcome; testing welcome; code welcome. Feel free to pitch in!
 
