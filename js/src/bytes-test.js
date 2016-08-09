@@ -110,14 +110,16 @@ suite('Bytes', () => {
 
   test('slice', () => {
     function test(bytes: any) {
-      const buff = bytes.alloc(3);
+      const buff = bytes.alloc(4);
       buff[0] = 1;
       buff[1] = 2;
       buff[2] = 3;
+      buff[3] = 4;
 
       const b2 = bytes.slice(buff, 1, 3);
       buff[2] = 4;
 
+      assert.equal(b2.length, 2);
       assert.strictEqual(2, b2[0]);
       assert.strictEqual(3, b2[1]);
     }

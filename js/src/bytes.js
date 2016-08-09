@@ -56,6 +56,9 @@ export function copy(source: Uint8Array, target: Uint8Array, targetStart: number
   }
 }
 
+/**
+ * Slice returns a copy of parts of the bytes starting at `start` ending at `end` (exclusive).
+ */
 export function slice(buff: Uint8Array, start: number, end: number): Uint8Array {
   const v = alloc(end - start);
   // $FlowIssue
