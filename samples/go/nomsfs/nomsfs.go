@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -812,6 +813,9 @@ func (fs *nomsFS) GetXAttr(path string, attribute string, context *fuse.Context)
 
 	v, found := xattr.MaybeGet(types.String(attribute))
 	if !found {
+		if runtime.GOOS == "darwin" {
+			return nil, fuse.Status(93) // syscall.ENOATTR
+		}
 		return nil, fuse.ENODATA
 	}
 
