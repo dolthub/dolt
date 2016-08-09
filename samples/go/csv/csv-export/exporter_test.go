@@ -26,37 +26,71 @@ func TestCSVExporter(t *testing.T) {
 
 type testSuite struct {
 	clienttest.ClientTestSuite
+	header  []string
+	payload [][]string
+}
+
+func createTestData(s *testSuite, buildAsMap bool) []types.Value {
+	s.header = []string{"a", "b", "c"}
+	structName := "SomeStruct"
+	s.payload = [][]string{
+		[]string{"4", "10", "255"},
+		[]string{"5", "7", "100"},
+		[]string{"512", "12", "55"},
+	}
+
+	sliceLen := len(s.payload)
+	if buildAsMap {
+		sliceLen *= 2
+	}
+
+	typ := types.MakeStructType(structName, s.header, []*types.Type{
+		types.StringType, types.StringType, types.StringType,
+	})
+
+	structs := make([]types.Value, sliceLen)
+	for i, row := range s.payload {
+		fields := make(types.ValueSlice, len(s.header))
+		for j, v := range row {
+			fields[j] = types.String(v)
+		}
+		if buildAsMap {
+			structs[i*2] = fields[0]
+			structs[i*2+1] = types.NewStructWithType(typ, fields)
+		} else {
+			structs[i] = types.NewStructWithType(typ, fields)
+		}
+	}
+	return structs
+}
+
+func verifyOutput(s *testSuite, stdout string) {
+	csvReader := csv.NewReader(strings.NewReader(stdout))
+
+	row, err := csvReader.Read()
+	d.Chk.NoError(err)
+	s.Equal(s.header, row)
+
+	for i := 0; i < len(s.payload); i++ {
+		row, err := csvReader.Read()
+		d.Chk.NoError(err)
+		s.Equal(s.payload[i], row)
+	}
+
+	_, err = csvReader.Read()
+	s.Equal(io.EOF, err)
 }
 
 // FIXME: run with pipe
-func (s *testSuite) TestCSVExporter() {
-	setName := "csv"
-	header := []string{"a", "b", "c"}
-	payload := [][]string{
-		[]string{"5", "7", "100"},
-		[]string{"4", "10", "255"},
-		[]string{"512", "12", "55"},
-	}
-	structName := "SomeStruct"
+func (s *testSuite) TestCSVExportFromList() {
+	setName := "csvlist"
 
 	// Setup data store
 	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
 	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 
-	typ := types.MakeStructType(structName, header, []*types.Type{
-		types.StringType, types.StringType, types.StringType,
-	})
-
 	// Build data rows
-	structs := make([]types.Value, len(payload))
-	for i, row := range payload {
-		fields := make(types.ValueSlice, len(header))
-		for j, v := range row {
-			fields[j] = types.String(v)
-		}
-		structs[i] = types.NewStructWithType(typ, fields)
-	}
-
+	structs := createTestData(s, false)
 	ds.CommitValue(types.NewList(structs...))
 	ds.Database().Close()
 
@@ -65,19 +99,25 @@ func (s *testSuite) TestCSVExporter() {
 	stdout, stderr := s.Run(main, []string{dataspec})
 	s.Equal("", stderr)
 
-	// Verify output
-	csvReader := csv.NewReader(strings.NewReader(stdout))
+	verifyOutput(s, stdout)
+}
 
-	row, err := csvReader.Read()
-	d.Chk.NoError(err)
-	s.Equal(header, row)
+func (s *testSuite) TestCSVExportFromMap() {
+	setName := "csvmap"
 
-	for i := 0; i < len(payload); i++ {
-		row, err := csvReader.Read()
-		d.Chk.NoError(err)
-		s.Equal(payload[i], row)
-	}
+	// Setup data store
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
 
-	_, err = csvReader.Read()
-	s.Equal(io.EOF, err)
+	// Build data rows
+	structs := createTestData(s, true)
+	ds.CommitValue(types.NewMap(structs...))
+	ds.Database().Close()
+
+	// Run exporter
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.Run(main, []string{dataspec})
+	s.Equal("", stderr)
+
+	verifyOutput(s, stdout)
 }

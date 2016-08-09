@@ -11,6 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/samples/go/csv"
 	flag "github.com/tsuru/gnuflag"
@@ -46,8 +47,16 @@ func main() {
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
 
-		nomsList, structDesc := csv.ValueToListAndElemDesc(ds.HeadValue(), ds.Database())
-		csv.Write(nomsList, structDesc, comma, os.Stdout)
+		hv := ds.HeadValue()
+		if l, ok := hv.(types.List); ok {
+			structDesc := csv.GetListElemDesc(l, ds.Database())
+			csv.WriteList(l, structDesc, comma, os.Stdout)
+		} else if m, ok := hv.(types.Map); ok {
+			structDesc := csv.GetMapElemDesc(m, ds.Database())
+			csv.WriteMap(m, structDesc, comma, os.Stdout)
+		} else {
+			panic(fmt.Sprintf("Expected ListKind or MapKind, found %s", types.KindToString[hv.Type().Kind()]))
+		}
 	})
 	if err != nil {
 		fmt.Println("Failed to export dataset as CSV:")
