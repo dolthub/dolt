@@ -28,6 +28,18 @@ That said, it is definitely possible to have write patterns that defeat this. De
 
 Theoretically, definitely. In Git, for example, the concept of "shallow clones" exists, and we could do something similar in Noms. This has not been implemented yet.
 
+### Why don't you support Windows?
+
+We are a tiny team and we all personally use Macs as our development machines, and we use Linux in production. These two platforms are very close to identical, and so we can generally test on Mac and assume it will work on Linux. Adding Windows would add significant complexity to our code and build processes which we're not willing to take on.
+
+### But you'll accept patches for Windows, right?
+
+No, because then we'll have to maintain those patches.
+
+### Are there any workaround for Windows?
+
+You can use it in a virtual machine. We have also heard Noms works OK with gitbash or cygwin, but that's coincidence.
+
 ### Why is it called Noms?
 
 1. It's insert-only. OMNOMNOM.
