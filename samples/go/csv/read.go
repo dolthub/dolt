@@ -82,9 +82,9 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 	return
 }
 
-// Read takes a CSV reader and reads it into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
+// ReadToList takes a CSV reader and reads data into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
-// In addition to the list, Read returns the typeRef for the structs in the list, and last the typeDef of the structs.
+// In addition to the list, ReadToList returns the typeDef of the structs in the list.
 func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
 	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
@@ -116,23 +116,10 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 	return <-listChan, t
 }
 
-func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
-	headers := make([]string, 0, len(headersRaw)-1)
-	for i, h := range headersRaw {
-		if i != pkIdx {
-			headers = append(headers, h)
-		}
-	}
-
-	var pkKind types.NomsKind
-	if len(kinds) == 0 {
-		pkKind = types.StringKind
-	} else {
-		pkKind = kinds[pkIdx]
-		kinds = append(kinds[:pkIdx], kinds[pkIdx+1:]...)
-	}
-
-	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headers, "", kinds)
+// ReadToMap takes a CSV reader and reads data into a typed Map of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
+// If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
+func ReadToMap(r *csv.Reader, structName string, headersRaw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
+	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headersRaw, structName, kinds)
 
 	kvChan := make(chan types.Value, 128)
 	mapChan := types.NewStreamingMap(vrw, kvChan)
@@ -144,19 +131,18 @@ func ReadToMap(r *csv.Reader, headersRaw []string, pkIdx int, kinds KindSlice, v
 			panic(err)
 		}
 
-		fieldIndex := 0
 		var pk types.Value
-		fields := make(types.ValueSlice, len(headers))
-		for x, v := range row {
-			if x == pkIdx {
-				pk, err = StringToValue(v, pkKind)
-			} else if fieldIndex < len(headers) {
-				fieldOrigIndex := fieldOrder[fieldIndex]
+		fields := make(types.ValueSlice, len(headersRaw))
+		for i, v := range row {
+			if i < len(headersRaw) {
+				fieldOrigIndex := fieldOrder[i]
 				fields[fieldOrigIndex], err = StringToValue(v, kindMap[fieldOrigIndex])
-				fieldIndex++
-			}
-			if err != nil {
-				d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[x], err))
+				if i == pkIdx {
+					pk = fields[fieldOrigIndex]
+				}
+				if err != nil {
+					d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headersRaw[i], err))
+				}
 			}
 		}
 		kvChan <- pk

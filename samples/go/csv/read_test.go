@@ -60,22 +60,25 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	m := ReadToMap(r, headers, 0, kinds, ds)
+	m := ReadToMap(r, "test", headers, 0, kinds, ds)
 
 	assert.Equal(uint64(2), m.Len())
 	assert.True(m.Type().Equals(
-		types.MakeMapType(types.StringType, types.MakeStructType("",
-			[]string{"B", "C"},
+		types.MakeMapType(types.StringType, types.MakeStructType("test",
+			[]string{"A", "B", "C"},
 			[]*types.Type{
+				types.StringType,
 				types.NumberType,
 				types.BoolType,
 			}))))
 
-	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("", types.StructData{
+	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("test", types.StructData{
+		"A": types.String("a"),
 		"B": types.Number(1),
 		"C": types.Bool(true),
 	})))
-	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("", types.StructData{
+	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("test", types.StructData{
+		"A": types.String("b"),
 		"B": types.Number(2),
 		"C": types.Bool(false),
 	})))
@@ -83,16 +86,15 @@ b,2,false
 
 func testTrailingHelper(t *testing.T, dataString string) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	ds1 := datas.NewDatabase(chunks.NewMemoryStore())
+	defer ds1.Close()
 
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l, typ := ReadToList(r, "test", headers, kinds, ds)
-
+	l, typ := ReadToList(r, "test", headers, kinds, ds1)
 	assert.Equal(uint64(3), l.Len())
-
 	assert.Equal(types.StructKind, typ.Kind())
 
 	desc, ok := typ.Desc.(types.StructDesc)
@@ -100,6 +102,12 @@ func testTrailingHelper(t *testing.T, dataString string) {
 	assert.Equal(desc.Len(), 2)
 	assert.Equal(types.StringKind, desc.Field("A").Kind())
 	assert.Equal(types.StringKind, desc.Field("B").Kind())
+
+	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
+	defer ds2.Close()
+	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
+	m := ReadToMap(r, "test", headers, 0, kinds, ds2)
+	assert.Equal(uint64(3), m.Len())
 }
 
 func TestReadTrailingHole(t *testing.T) {
@@ -169,7 +177,7 @@ func TestEscapeFieldNames(t *testing.T) {
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
 
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
-	m := ReadToMap(r, headers, 1, kinds, ds)
+	m := ReadToMap(r, "test", headers, 1, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(types.EscapeStructField("A A")))
 }

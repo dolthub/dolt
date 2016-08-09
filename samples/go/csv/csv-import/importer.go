@@ -159,7 +159,7 @@ func main() {
 	if dest == destList {
 		value, _ = csv.ReadToList(cr, *name, headers, kinds, ds.Database())
 	} else {
-		value = csv.ReadToMap(cr, headers, pk, kinds, ds.Database())
+		value = csv.ReadToMap(cr, *name, headers, pk, kinds, ds.Database())
 	}
 	mi := metaInfoForCommit(date, filePath, *path, *comment)
 	_, err = ds.Commit(value, dataset.CommitOptions{Meta: mi})
