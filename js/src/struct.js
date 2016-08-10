@@ -18,6 +18,9 @@ import * as Bytes from './bytes.js';
 
 type StructData = {[key: string]: Value};
 
+export const fieldNameComponentRe = /^[a-zA-Z][a-zA-Z0-9_]*/;
+export const fieldNameRe = new RegExp(fieldNameComponentRe.source + '$');
+
 /**
  * Base class for all Noms structs. The decoder creates sub classes of this for Noms struct.
  * These have the form of:
@@ -246,9 +249,9 @@ export function structDiff(s1: Struct, s2: Struct): [string] {
 }
 
 const escapeChar = 'Q';
-const headPattern = /[a-zA-PR-Z]/;
-const tailPattern = /[a-zA-PR-Z0-9_]/;
-const completePattern = new RegExp('^' + headPattern.source + tailPattern.source + '*$');
+const escapedHeadRe = /[a-zA-PR-Z]/;
+const escapedTailRe = /[a-zA-PR-Z0-9_]/;
+const escapedCompleteRe = new RegExp('^' + escapedHeadRe.source + escapedTailRe.source + '*$');
 
 /**
  * Escapes names for use as noms structs. Disallow characters are encoded as
@@ -256,7 +259,7 @@ const completePattern = new RegExp('^' + headPattern.source + tailPattern.source
  * the escape character.
  */
 export function escapeStructField(input: string): string {
-  if (completePattern.test(input)) {
+  if (escapedCompleteRe.test(input)) {
     return input;
   }
 
@@ -281,10 +284,10 @@ export function escapeStructField(input: string): string {
   };
 
   let output = '';
-  let pattern = headPattern;
+  let pattern = escapedHeadRe;
   for (const c of input) {
     output += encode(c, pattern);
-    pattern = tailPattern;
+    pattern = escapedTailRe;
   }
 
   return output;

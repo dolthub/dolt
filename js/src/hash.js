@@ -42,7 +42,7 @@ export default class Hash {
     return encode(this._digest);
   }
 
-  static parse(s: string): ?Hash {
+  static parse(s: string): Hash | null {
     if (pattern.test(s)) {
       return new Hash(decode(s));
     }

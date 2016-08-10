@@ -28,14 +28,14 @@ type PathPart interface {
 	String() string
 }
 
-func ParsePath(path string) (Path, error) {
-	if path == "" {
+func ParsePath(str string) (Path, error) {
+	if str == "" {
 		return Path{}, errors.New("Empty path")
 	}
-	return appendPath(Path{}, path)
+	return constructPath(Path{}, str)
 }
 
-func appendPath(p Path, str string) (Path, error) {
+func constructPath(p Path, str string) (Path, error) {
 	if len(str) == 0 {
 		return p, nil
 	}
@@ -49,7 +49,7 @@ func appendPath(p Path, str string) (Path, error) {
 			return Path{}, errors.New("Invalid field: " + tail)
 		}
 		p = append(p, FieldPath{tail[:idx[1]]})
-		return appendPath(p, tail[idx[1]:])
+		return constructPath(p, tail[idx[1]:])
 
 	case '[':
 		if len(tail) == 0 {
@@ -62,13 +62,12 @@ func appendPath(p Path, str string) (Path, error) {
 		}
 
 		intoKey := false
-		if annParts := annotationRe.FindStringSubmatch(rem); annParts != nil {
-			ann := annParts[1]
+		if ann, rem2 := getAnnotation(rem); ann != "" {
 			if ann != "key" {
 				return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
 			}
 			intoKey = true
-			rem = rem[len(annParts[0]):]
+			rem = rem2
 		}
 
 		d.Chk.NotEqual(idx == nil, h.IsEmpty())
@@ -85,7 +84,7 @@ func appendPath(p Path, str string) (Path, error) {
 			part = NewHashIndexPath(h)
 		}
 		p = append(p, Path{part})
-		return appendPath(p, rem)
+		return constructPath(p, rem)
 
 	case ']':
 		return Path{}, errors.New("] is missing opening [")
@@ -323,5 +322,13 @@ Switch:
 		}
 	}
 
+	return
+}
+
+func getAnnotation(str string) (ann, rem string) {
+	if parts := annotationRe.FindStringSubmatch(str); parts != nil {
+		ann = parts[1]
+		rem = str[len(parts[0]):]
+	}
 	return
 }

@@ -11,6 +11,7 @@ import {CompoundDesc, CycleDesc, PrimitiveDesc, StructDesc, Type} from './type.j
 import {invariant, notNull} from './assert.js';
 import {alloc} from './bytes.js';
 import {BinaryWriter} from './binary-rw.js';
+import {fieldNameRe} from './struct.js';
 
 class IdentTable {
   entries: Map<string, number>;
@@ -168,8 +169,6 @@ function flattenUnionTypes(types: Type[], seenTypes: {[key: Hash]: boolean}): Ty
   }
   return newTypes;
 }
-
-const fieldNameRe = /^[a-zA-Z][a-zA-Z0-9_]*$/;
 
 function verifyFieldNames(names: string[]) {
   if (names.length === 0) {

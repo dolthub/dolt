@@ -12,12 +12,18 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
+func hashIdx(v Value) string {
+	return fmt.Sprintf("[#%s]", v.Hash().String())
+}
+
 func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
 	p, err := ParsePath(str)
 	assert.NoError(err)
 	actual := p.Resolve(ref)
 	if expect == nil {
-		assert.Nil(actual)
+		if actual != nil {
+			assert.Fail("", "Expected nil, but got %s", EncodedValue(actual))
+		}
 	} else if actual == nil {
 		assert.Fail("", "Expected %s, but got nil", EncodedValue(expect))
 	} else {
@@ -38,6 +44,16 @@ func TestPathStruct(t *testing.T) {
 	assertResolvesTo(assert, Bool(false), v, `.bar`)
 	assertResolvesTo(assert, Number(203), v, `.baz`)
 	assertResolvesTo(assert, nil, v, `.notHere`)
+
+	v2 := NewStruct("", StructData{
+		"v1": v,
+	})
+
+	assertResolvesTo(assert, String("foo"), v2, `.v1.foo`)
+	assertResolvesTo(assert, Bool(false), v2, `.v1.bar`)
+	assertResolvesTo(assert, Number(203), v2, `.v1.baz`)
+	assertResolvesTo(assert, nil, v2, `.v1.notHere`)
+	assertResolvesTo(assert, nil, v2, `.notHere.v1`)
 }
 
 func TestPathIndex(t *testing.T) {
@@ -95,18 +111,14 @@ func TestPathHashIndex(t *testing.T) {
 	)
 	s := NewSet(b, br, i, str, l, lr)
 
-	hashStr := func(v Value) string {
-		return fmt.Sprintf("[#%s]", v.Hash())
-	}
-
 	resolvesTo := func(col, exp, val Value) {
 		// Values resolve to |exp|.
-		assertResolvesTo(assert, exp, col, hashStr(val))
+		assertResolvesTo(assert, exp, col, hashIdx(val))
 		// Keys resolve to themselves.
 		if exp != nil {
 			exp = val
 		}
-		assertResolvesTo(assert, exp, col, hashStr(val)+"@key")
+		assertResolvesTo(assert, exp, col, hashIdx(val)+"@key")
 	}
 
 	// Primitives are only addressable by their values.
@@ -134,7 +146,7 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	assert := assert.New(t)
 
 	resolvesToNil := func(col, val Value) {
-		assertResolvesTo(assert, nil, col, fmt.Sprintf("[#%s]", val.Hash()))
+		assertResolvesTo(assert, nil, col, hashIdx(val))
 	}
 
 	b := Bool(true)
@@ -174,9 +186,9 @@ func TestPathMulti(t *testing.T) {
 	assertResolvesTo(assert, m2, s, `.foo[1]`)
 	assertResolvesTo(assert, String("dar"), s, `.foo[1]["d"]`)
 	assertResolvesTo(assert, String("earth"), s, `.foo[1][false]`)
-	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1][#%s]`, m1.Hash().String()))
-	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1][#%s]@key`, m1.Hash().String()))
-	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1][#%s]@key["c"]`, m1.Hash().String()))
+	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1]%s`, hashIdx(m1)))
+	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1]%s@key`, hashIdx(m1)))
+	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1]%s@key["c"]`, hashIdx(m1)))
 }
 
 func TestPathParseSuccess(t *testing.T) {
