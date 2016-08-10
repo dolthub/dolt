@@ -14,7 +14,7 @@ var generateNumbersAsValues = func(n int) []Value {
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
-var generateNumbersAsValuesFromToBy = func(from, to, by int) []Value {
+var generateNumbersAsValuesFromToBy = func(from, to, by int) ValueSlice {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
@@ -24,10 +24,10 @@ var generateNumbersAsValuesFromToBy = func(from, to, by int) []Value {
 	return nums
 }
 
-var generateNumbersAsStructs = func(n int) []Value {
+var generateNumbersAsStructs = func(n int) ValueSlice {
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
-var generateNumbersAsStructsFromToBy = func(from, to, by int) []Value {
+var generateNumbersAsStructsFromToBy = func(from, to, by int) ValueSlice {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}

@@ -1178,3 +1178,31 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 		assert.True(tm.toMap().Equals(nm))
 	}
 }
+
+func TestMapIterFrom(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(m Map, start, end Value) ValueSlice {
+		res := ValueSlice{}
+		m.IterFrom(start, func(k, v Value) bool {
+			if end.Less(k) {
+				return true
+			}
+			res = append(res, k, v)
+			return false
+		})
+		return res
+	}
+
+	kvs := generateNumbersAsValuesFromToBy(-50, 50, 1)
+	m1 := NewMap(kvs...)
+	assert.True(kvs.Equals(test(m1, nil, Number(1000))))
+	assert.True(kvs.Equals(test(m1, Number(-1000), Number(1000))))
+	assert.True(kvs.Equals(test(m1, Number(-50), Number(1000))))
+	assert.True(kvs[2:].Equals(test(m1, Number(-49), Number(1000))))
+	assert.True(kvs[2:].Equals(test(m1, Number(-48), Number(1000))))
+	assert.True(kvs[4:].Equals(test(m1, Number(-47), Number(1000))))
+	assert.True(kvs[98:].Equals(test(m1, Number(48), Number(1000))))
+	assert.True(kvs[0:0].Equals(test(m1, Number(100), Number(1000))))
+	assert.True(kvs[50:60].Equals(test(m1, Number(0), Number(8))))
+}
