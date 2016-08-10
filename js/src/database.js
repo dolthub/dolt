@@ -44,10 +44,12 @@ export default class Database {
     });
   }
 
+  // TODO: This should return Promise<Ref<Commit> | null>.
   headRef(datasetID: string): Promise<?Ref<Commit>> {
     return this._datasets.then(datasets => datasets.get(datasetID));
   }
 
+  // TODO: This should return Promise<Commit | null>
   head(datasetID: string): Promise<?Commit> {
     return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetHash) : null);
   }
@@ -56,7 +58,7 @@ export default class Database {
     return this._datasets;
   }
 
-  // TODO: This should return Promise<?Value>
+  // TODO: This should return Promise<Value | null>
   async readValue(hash: Hash): Promise<any> {
     return this._vs.readValue(hash);
   }

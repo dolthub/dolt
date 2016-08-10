@@ -18,7 +18,10 @@ import * as Bytes from './bytes.js';
 
 type StructData = {[key: string]: Value};
 
+/** Matches the first valid field name in a string. */
 export const fieldNameComponentRe = /^[a-zA-Z][a-zA-Z0-9_]*/;
+
+/** Matches if an entire string is a valid field name. */
 export const fieldNameRe = new RegExp(fieldNameComponentRe.source + '$');
 
 /**

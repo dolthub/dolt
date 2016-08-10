@@ -10,7 +10,11 @@ import type Database from './database.js';
 import Ref from './ref.js';
 import Set from './set.js';
 
-const idRe = /^[a-zA-Z0-9\-_/]+$/;
+/** Matches any valid dataset name in a string. */
+export const datasetRe = /^[a-zA-Z0-9\-_/]+/;
+
+/** Matches if an entire string is a valid dataset name. */
+const idRe = new RegExp('^' + datasetRe.source + '$');
 
 export default class Dataset {
   _database: Database;

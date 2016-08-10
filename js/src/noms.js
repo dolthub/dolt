@@ -4,6 +4,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+export {default as AbsolutePath} from './absolute-path.js';
 export {AsyncIterator} from './async-iterator.js';
 export {default as BuzHash} from './buzhash.js';
 export {default as Commit} from './commit.js';

@@ -230,12 +230,14 @@ suite('Path', () => {
 
   test('parse errors', () => {
     const t = (s: string, expectErr: string) => {
+      let actualErr = '';
       try {
         Path.parse(s);
-        assert.isOk(false, 'Expected error: ' + expectErr);
       } catch (e) {
-        assert.strictEqual(expectErr, e.message);
+        assert.instanceOf(e, SyntaxError);
+        actualErr = e.message;
       }
+      assert.strictEqual(expectErr, actualErr);
     };
 
     t('', 'Empty path');
