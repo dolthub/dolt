@@ -14,8 +14,8 @@ import (
 )
 
 type databaseCommon struct {
+	*types.ValueStore
 	cch      *cachingChunkHaver
-	vs       *types.ValueStore
 	rt       chunks.RootTracker
 	rootRef  hash.Hash
 	datasets *types.Map
@@ -27,7 +27,7 @@ var (
 )
 
 func newDatabaseCommon(cch *cachingChunkHaver, vs *types.ValueStore, rt chunks.RootTracker) databaseCommon {
-	return databaseCommon{cch: cch, vs: vs, rt: rt, rootRef: rt.Root()}
+	return databaseCommon{ValueStore: vs, cch: cch, rt: rt, rootRef: rt.Root()}
 }
 
 func (ds *databaseCommon) MaybeHead(datasetID string) (types.Struct, bool) {
@@ -78,16 +78,8 @@ func (ds *databaseCommon) has(h hash.Hash) bool {
 	return ds.cch.Has(h)
 }
 
-func (ds *databaseCommon) ReadValue(r hash.Hash) types.Value {
-	return ds.vs.ReadValue(r)
-}
-
-func (ds *databaseCommon) WriteValue(v types.Value) types.Ref {
-	return ds.vs.WriteValue(v)
-}
-
 func (ds *databaseCommon) Close() error {
-	return ds.vs.Close()
+	return ds.ValueStore.Close()
 }
 
 func (ds *databaseCommon) doSetHead(datasetID string, commit types.Struct) error {

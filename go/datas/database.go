@@ -15,8 +15,7 @@ import (
 // Database provides versioned storage for noms values. Each Database instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new Database, representing a new moment in history.
 type Database interface {
 	// To implement types.ValueWriter, Database implementations provide WriteValue(). WriteValue() writes v to this Database, though v is not guaranteed to be be persistent until after a subsequent Commit(). The return value is the Ref of v.
-	types.ValueWriter
-	types.ValueReader
+	types.ValueReadWriter
 	io.Closer
 
 	// MaybeHead returns the current Head Commit of this Database, which contains the current root of the Database's value tree, if available. If not, it returns a new Commit and 'false'.
