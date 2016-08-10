@@ -21,24 +21,24 @@ func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
 }
 
 func (rds *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
-	bs = rds.vs.BatchStore()
+	bs = rds.ValueStore.BatchStore()
 	d.Chk.True(bs.IsValidating())
 	return
 }
 
 func (rds *RemoteDatabaseClient) Commit(datasetID string, commit types.Struct) (Database, error) {
 	err := rds.doCommit(datasetID, commit)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
+	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
 }
 
 func (rds *RemoteDatabaseClient) Delete(datasetID string) (Database, error) {
 	err := rds.doDelete(datasetID)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
+	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
 }
 
 func (rds *RemoteDatabaseClient) SetHead(datasetID string, commit types.Struct) (Database, error) {
 	err := rds.doSetHead(datasetID, commit)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.vs, rds.rt)}, err
+	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
 }
 
 func (f RemoteStoreFactory) CreateStore(ns string) Database {

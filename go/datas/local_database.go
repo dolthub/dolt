@@ -26,24 +26,24 @@ func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
 
 func (lds *LocalDatabase) Commit(datasetID string, commit types.Struct) (Database, error) {
 	err := lds.doCommit(datasetID, commit)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
 }
 
 func (lds *LocalDatabase) Delete(datasetID string) (Database, error) {
 	err := lds.doDelete(datasetID)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
 }
 
 func (lds *LocalDatabase) SetHead(datasetID string, commit types.Struct) (Database, error) {
 	err := lds.doSetHead(datasetID, commit)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.vs, lds.rt), lds.cs}, err
+	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
 }
 
 func (lds *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
-	bs = lds.vs.BatchStore()
+	bs = lds.ValueStore.BatchStore()
 	if !bs.IsValidating() {
 		bs = newLocalBatchStore(lds.cs)
-		lds.vs = types.NewValueStore(bs)
+		lds.ValueStore = types.NewValueStore(bs)
 		lds.rt = bs
 	}
 	d.Chk.True(bs.IsValidating())
