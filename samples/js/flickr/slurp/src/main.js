@@ -24,7 +24,7 @@ const args = argv
     '[--auth-token=<token> --auth-secret=<secret>] <dest-dataset>\n\n' +
     'You can create a Flickr API key at: ' +
     'https://www.flickr.com/services/apps/create/apply\n\n' +
-    '--api-token and --api-secret are optional, but include them to avoid having\n' +
+    '--auth-token and --auth-secret are optional, but include them to avoid having\n' +
     'to reauth over and over if you are calling this repeatedly.')
   .demand(1)
   .option('api-key', {
