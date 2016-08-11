@@ -10,7 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/constants"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 var nomsVersion = &util.Command{

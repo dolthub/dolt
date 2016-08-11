@@ -11,7 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/testify/suite"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 type ClientTestSuite struct {

@@ -16,7 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 var (

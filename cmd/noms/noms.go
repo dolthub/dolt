@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 var commands = []*util.Command{

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 type Exiter interface {

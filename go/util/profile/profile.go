@@ -11,7 +11,7 @@ import (
 	"runtime/pprof"
 
 	"github.com/attic-labs/noms/go/d"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 var (

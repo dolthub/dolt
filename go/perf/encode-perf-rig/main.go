@@ -12,7 +12,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 // used to ensure all of the big.Floats end up with the same precision

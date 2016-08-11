@@ -23,7 +23,7 @@ import (
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/samples/go/csv"
 	humanize "github.com/dustin/go-humanize"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 const (

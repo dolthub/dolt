@@ -12,7 +12,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	goisatty "github.com/mattn/go-isatty"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 var (

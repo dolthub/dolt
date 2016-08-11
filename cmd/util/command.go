@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 type Command struct {

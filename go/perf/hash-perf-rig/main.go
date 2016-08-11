@@ -17,7 +17,7 @@ import (
 	"github.com/codahale/blake2"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/kch42/buzhash"
-	flag "github.com/tsuru/gnuflag"
+	flag "github.com/juju/gnuflag"
 )
 
 func main() {
