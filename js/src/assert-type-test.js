@@ -33,7 +33,7 @@ import Ref from './ref.js';
 
 suite('validate type', () => {
 
-  function assertInvalid(t: Type, v) {
+  function assertInvalid(t: Type<any>, v) {
     assert.throws(() => { assertSubtype(t, v); });
   }
 
@@ -46,7 +46,7 @@ suite('validate type', () => {
     valueType,
   ];
 
-  function assertAll(t: Type, v) {
+  function assertAll(t: Type<any>, v) {
     for (const at of allTypes) {
       if (at === valueType || equals(t, at)) {
         assertSubtype(at, v);

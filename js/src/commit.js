@@ -32,7 +32,8 @@ const parentsIndex = 1;
 const valueIndex = 2;
 
 export default class Commit<T: Value> extends Struct {
-  constructor(value: T, parents: Set<Ref<Commit>> = new Set(), meta: Struct = getEmptyStruct()) {
+  constructor(value: T, parents: Set<Ref<Commit<any>>> = new Set(),
+              meta: Struct = getEmptyStruct()) {
     const t = makeCommitType(getTypeOfValue(value), valueTypesFromParents(parents, 'value'),
                              getTypeOfValue(meta), valueTypesFromParents(parents, 'meta'));
     super(t, [meta, parents, value]);
@@ -49,7 +50,7 @@ export default class Commit<T: Value> extends Struct {
     return new Commit(value, this.parents);
   }
 
-  get parents(): Set<Ref<Commit<*>>> {
+  get parents(): Set<Ref<Commit<any>>> {
     invariant(this.type.desc.fields[parentsIndex].name === 'parents');
     // $FlowIssue: _values is private.
     const parents: Set<Ref<Commit>> = this._values[parentsIndex];
@@ -57,7 +58,7 @@ export default class Commit<T: Value> extends Struct {
     return parents;
   }
 
-  setParents(parents: Set<Ref<Commit<*>>>): Commit<T> {
+  setParents(parents: Set<Ref<Commit<any>>>): Commit<T> {
     return new Commit(this.value, parents);
   }
 
@@ -75,8 +76,8 @@ export default class Commit<T: Value> extends Struct {
 }
 
 // ../../go/datas/commit.go for the motivation for how this is computed.
-function makeCommitType(valueType: Type<*>, parentsValueTypes: Type<*>[],
-                        metaType: Type<*>, parentsMetaTypes: Type<*>[]): Type<StructDesc> {
+function makeCommitType(valueType: Type<any>, parentsValueTypes: Type<any>[],
+                        metaType: Type<any>, parentsMetaTypes: Type<any>[]): Type<StructDesc> {
   const fieldNames = ['meta', 'parents', 'value'];
   const parentsValueUnionType = makeUnionType(parentsValueTypes.concat(valueType));
   const parentsMetaUnionType = makeUnionType(parentsMetaTypes.concat(metaType));
@@ -97,7 +98,7 @@ function makeCommitType(valueType: Type<*>, parentsValueTypes: Type<*>[],
   ]);
 }
 
-function valueTypesFromParents(parents: Set, fieldName: string): Type<*>[] {
+function valueTypesFromParents(parents: Set<any>, fieldName: string): Type<any>[] {
   const elemType = getSetElementType(parents.type);
   switch (elemType.kind) {
     case Kind.Union:
@@ -107,21 +108,21 @@ function valueTypesFromParents(parents: Set, fieldName: string): Type<*>[] {
   }
 }
 
-function getSetElementType(t: Type<CompoundDesc>): Type<*> {
+function getSetElementType(t: Type<CompoundDesc>): Type<any> {
   invariant(t.kind === Kind.Set);
   return t.desc.elemTypes[0];
 }
 
-function fieldTypeFromRefOfCommit(t: Type<CompoundDesc>, fieldName: string): Type<*> {
+function fieldTypeFromRefOfCommit(t: Type<CompoundDesc>, fieldName: string): Type<any> {
   return fieldTypeFromCommit(getRefElementType(t), fieldName);
 }
 
-function getRefElementType(t: Type<CompoundDesc>): Type<*> {
+function getRefElementType(t: Type<CompoundDesc>): Type<any> {
   invariant(t.kind === Kind.Ref);
   return t.desc.elemTypes[0];
 }
 
-function fieldTypeFromCommit(t: Type<StructDesc>, fieldName: string): Type<*> {
+function fieldTypeFromCommit(t: Type<StructDesc>, fieldName: string): Type<any> {
   invariant(t.desc.name === 'Commit');
   return notNull(t.desc.getField(fieldName));
 }

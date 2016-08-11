@@ -47,7 +47,7 @@ export function decodeValue(chunk: Chunk, vr: ValueReader): Value {
   return v;
 }
 
-function ensureTypeSerialization(t: Type) {
+function ensureTypeSerialization(t: Type<any>) {
   if (!t.serialization) {
     const w = new BinaryNomsWriter();
     const enc = new ValueEncoder(w, null);
@@ -79,7 +79,7 @@ export interface NomsWriter {
   writeBool(v:boolean): void;
   writeString(v: string): void;
   writeHash(h: Hash): void;
-  appendType(t: Type): void;
+  appendType(t: Type<any>): void;
 }
 
 export class BinaryNomsReader extends BinaryReader {
@@ -116,7 +116,7 @@ export class BinaryNomsWriter extends BinaryWriter {
     this.offset += hashByteLength;
   }
 
-  appendType(t: Type): void {
+  appendType(t: Type<any>): void {
     // Note: The JS & Go impls differ here. The Go impl eagerly serializes types as they are
     // constructed. The JS does it lazily so as to avoid cyclic package dependencies.
     ensureTypeSerialization(t);

@@ -26,7 +26,7 @@ import {
 } from './type.js';
 
 suite('Encode human readable types', () => {
-  function assertWriteType(expected: string, t: Type) {
+  function assertWriteType(expected: string, t: Type<any>) {
     let actual = '';
     const w = {
       write(s: string) {

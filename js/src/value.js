@@ -17,7 +17,7 @@ export class ValueBase {
     init(this);
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     throw new Error('abstract');
   }
 
@@ -25,7 +25,7 @@ export class ValueBase {
     return this._hash = ensureHash(this._hash, this);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return [];
   }
 }
@@ -33,7 +33,7 @@ export class ValueBase {
 type Value = primitive | ValueBase;
 export type {Value as default};
 
-export function getChunksOfValue(v: Value): Array<Ref> {
+export function getChunksOfValue(v: Value): Array<Ref<any>> {
   if (v instanceof ValueBase) {
     return v.chunks;
   }

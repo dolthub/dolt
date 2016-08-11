@@ -11,7 +11,7 @@ import {ValueBase} from './value.js';
 import {invariant} from './assert.js';
 import {init as initValueBase} from './value.js';
 
-export default class Collection<S: Sequence> extends ValueBase {
+export default class Collection<S: Sequence<any>> extends ValueBase {
   sequence: S;
 
   constructor(sequence: S) {
@@ -19,7 +19,7 @@ export default class Collection<S: Sequence> extends ValueBase {
     this.sequence = sequence;
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return this.sequence.type;
   }
 
@@ -27,14 +27,14 @@ export default class Collection<S: Sequence> extends ValueBase {
     return !this.sequence.isMeta && this.sequence.items.length === 0;
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return this.sequence.chunks;
   }
 
   /**
    * Creates a new Collection from a sequence.
    */
-  static fromSequence<T: Collection, S: Sequence>(s: S): T {
+  static fromSequence<T: Collection<any>, S: Sequence<any>>(s: S): T {
     const col = Object.create(this.prototype);
     invariant(col instanceof this);
     initValueBase(col);

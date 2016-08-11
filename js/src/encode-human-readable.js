@@ -66,11 +66,11 @@ export class TypeWriter {
     this._w = new Writer(w);
   }
 
-  writeType(t: Type) {
+  writeType(t: Type<any>) {
     this._writeType(t, []);
   }
 
-  _writeType(t: Type, parentStructTypes: Type[]) {
+  _writeType(t: Type<any>, parentStructTypes: Type<any>[]) {
     switch (t.kind) {
       case Kind.Blob:
       case Kind.Bool:
@@ -121,7 +121,7 @@ export class TypeWriter {
     this._w.write(`Cycle<${i}>`);
   }
 
-  _writeStructType(t: Type, parentStructTypes: Type[]) {
+  _writeStructType(t: Type<any>, parentStructTypes: Type<any>[]) {
     const idx = parentStructTypes.indexOf(t);
     if (idx !== -1) {
       this._writeCycle(parentStructTypes.length - idx - 1);
@@ -138,7 +138,7 @@ export class TypeWriter {
     this._w.indent();
 
     let first = true;
-    desc.forEachField((name: string, type: Type) => {
+    desc.forEachField((name: string, type: Type<any>) => {
       if (first) {
         this._w.newLine();
         first = false;
@@ -156,7 +156,7 @@ export class TypeWriter {
   }
 }
 
-export function describeType(t: Type): string {
+export function describeType(t: Type<any>): string {
   let s = '';
   const w = new TypeWriter({
     write(s2: string) {

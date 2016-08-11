@@ -19,7 +19,7 @@ import {staticTypeCache} from './type-cache.js';
 export interface TypeDesc {
   kind: NomsKind;
   equals(other: TypeDesc): boolean;
-  hasUnresolvedCycle(visited: Type[]): boolean;
+  hasUnresolvedCycle(visited: Type<any>[]): boolean;
 }
 
 export class PrimitiveDesc {
@@ -33,16 +33,16 @@ export class PrimitiveDesc {
     return other instanceof PrimitiveDesc && other.kind === this.kind;
   }
 
-  hasUnresolvedCycle(visited: Type[]): boolean { // eslint-disable-line no-unused-vars
+  hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars
     return false;
   }
 }
 
 export class CompoundDesc {
   kind: NomsKind;
-  elemTypes: Array<Type>;
+  elemTypes: Array<Type<any>>;
 
-  constructor(kind: NomsKind, elemTypes: Array<Type>) {
+  constructor(kind: NomsKind, elemTypes: Array<Type<any>>) {
     this.kind = kind;
     this.elemTypes = elemTypes;
   }
@@ -65,14 +65,14 @@ export class CompoundDesc {
     return false;
   }
 
-  hasUnresolvedCycle(visited: Type[]): boolean {
+  hasUnresolvedCycle(visited: Type<any>[]): boolean {
     return this.elemTypes.some(t => t.hasUnresolvedCycle(visited));
   }
 }
 
 export type Field = {
   name: string;
-  type: Type;
+  type: Type<any>;
 };
 
 export class StructDesc {
@@ -118,18 +118,18 @@ export class StructDesc {
     return true;
   }
 
-  hasUnresolvedCycle(visited: Type[]): boolean {
+  hasUnresolvedCycle(visited: Type<any>[]): boolean {
     return this.fields.some(f => f.type.hasUnresolvedCycle(visited));
   }
 
-  forEachField(cb: (name: string, type: Type) => void) {
+  forEachField(cb: (name: string, type: Type<any>) => void) {
     const fields = this.fields;
     for (let i = 0; i < fields.length; i++) {
       cb(fields[i].name, fields[i].type);
     }
   }
 
-  getField(name: string): ?Type {
+  getField(name: string): ?Type<any> {
     const f = findField(name, this.fields);
     return f && f.type;
   }
@@ -163,7 +163,7 @@ export class CycleDesc {
     return other instanceof CycleDesc && other.level === this.level;
   }
 
-  hasUnresolvedCycle(visited: Type[]): boolean { // eslint-disable-line no-unused-vars
+  hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars
     return true;
   }
 }
@@ -186,11 +186,11 @@ export class Type<T: TypeDesc> extends ValueBase {
     this.serialization = null;
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return typeType;
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return [];
   }
 
@@ -206,7 +206,7 @@ export class Type<T: TypeDesc> extends ValueBase {
     this._oid = o;
   }
 
-  hasUnresolvedCycle(visited: Type[]): boolean {
+  hasUnresolvedCycle(visited: Type<any>[]): boolean {
     if (visited.indexOf(this) >= 0) {
       return false;
     }
@@ -215,12 +215,12 @@ export class Type<T: TypeDesc> extends ValueBase {
     return this._desc.hasUnresolvedCycle(visited);
   }
 
-  get elemTypes(): Array<Type> {
+  get elemTypes(): Array<Type<any>> {
     invariant(this._desc instanceof CompoundDesc);
     return this._desc.elemTypes;
   }
 
-  oidCompare(other: Type): number {
+  oidCompare(other: Type<any>): number {
     return notNull(this._oid).compare(notNull(other._oid));
   }
 
@@ -233,23 +233,23 @@ function makePrimitiveType(k: NomsKind): Type<PrimitiveDesc> {
   return new Type(new PrimitiveDesc(k), k);
 }
 
-export function makeListType(elemType: Type): Type<CompoundDesc> {
+export function makeListType(elemType: Type<any>): Type<CompoundDesc> {
   return staticTypeCache.getCompoundType(Kind.List, elemType);
 }
 
-export function makeSetType(elemType: Type): Type<CompoundDesc> {
+export function makeSetType(elemType: Type<any>): Type<CompoundDesc> {
   return staticTypeCache.getCompoundType(Kind.Set, elemType);
 }
 
-export function makeMapType(keyType: Type, valueType: Type): Type<CompoundDesc> {
+export function makeMapType(keyType: Type<any>, valueType: Type<any>): Type<CompoundDesc> {
   return staticTypeCache.getCompoundType(Kind.Map, keyType, valueType);
 }
 
-export function makeRefType(elemType: Type): Type<CompoundDesc> {
+export function makeRefType(elemType: Type<any>): Type<CompoundDesc> {
   return staticTypeCache.getCompoundType(Kind.Ref, elemType);
 }
 
-export function makeStructType(name: string, fieldNames: string[], fieldTypes: Type[]):
+export function makeStructType(name: string, fieldNames: string[], fieldTypes: Type<any>[]):
     Type<StructDesc> {
   return staticTypeCache.makeStructType(name, fieldNames, fieldTypes);
 }
@@ -258,18 +258,18 @@ export function makeStructType(name: string, fieldNames: string[], fieldTypes: T
  * Creates a union type unless the number of distinct types is 1, in which case that type is
  * returned.
  */
-export function makeUnionType(types: Type<*>[]): Type<*> {
+export function makeUnionType(types: Type<any>[]): Type<any> {
   return staticTypeCache.makeUnionType(types);
 }
 
-export function makeCycleType(level: number): Type {
+export function makeCycleType(level: number): Type<any> {
   return staticTypeCache.getCycleType(level);
 }
 
 /**
  * Gives the existing primitive Type value for a NomsKind.
  */
-export function getPrimitiveType(k: NomsKind): Type {
+export function getPrimitiveType(k: NomsKind): Type<any> {
   invariant(isPrimitiveKind(k));
   switch (k) {
     case Kind.Bool:
@@ -291,7 +291,7 @@ export function getPrimitiveType(k: NomsKind): Type {
 
 // Returns the Noms type of any value. This will throw if you pass in an object that cannot be
 // represented by noms.
-export function getTypeOfValue(v: Value): Type {
+export function getTypeOfValue(v: Value): Type<any> {
   if (v instanceof ValueBase) {
     return v.type;
   }

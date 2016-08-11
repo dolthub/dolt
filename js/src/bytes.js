@@ -97,6 +97,8 @@ export function compare(b1: Uint8Array, b2: Uint8Array): number {
  */
 export function sha512(data: Uint8Array): Uint8Array {
   const hash = crypto.createHash('sha512');
+  // $FlowIssue
   hash.update(data);
+  // $FlowIssue
   return hash.digest().slice(0, 20);
 }

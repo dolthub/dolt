@@ -31,9 +31,9 @@ export default class ValueDecoder {
   _ds: ValueReader;
   _tc: TypeCache;
 
-  constructor(r: NomsReader, ds: ValueReader, tc: TypeCache) {
+  constructor(r: NomsReader, vr: ValueReader, tc: TypeCache) {
     this._r = r;
-    this._ds = ds;
+    this._ds = vr;
     this._tc = tc;
   }
 
@@ -41,13 +41,13 @@ export default class ValueDecoder {
     return this._r.readUint8();
   }
 
-  readRef(t: Type): Ref {
+  readRef(t: Type<any>): Ref<any> {
     const hash = this._r.readHash();
     const height = this._r.readUint64();
     return constructRef(t, hash, height);
   }
 
-  readType(): Type {
+  readType(): Type<any> {
     const k = this.readKind();
     switch (k) {
       case Kind.List:
@@ -62,7 +62,7 @@ export default class ValueDecoder {
         return this.readStructType();
       case Kind.Union: {
         const len = this._r.readUint32();
-        const types: Type[] = new Array(len);
+        const types: Type<any>[] = new Array(len);
         for (let i = 0; i < len; i++) {
           types[i] = this.readType();
         }
@@ -93,17 +93,17 @@ export default class ValueDecoder {
     return list;
   }
 
-  readListLeafSequence(t: Type): ListLeafSequence {
+  readListLeafSequence(t: Type<any>): ListLeafSequence<any> {
     const data = this.readValueSequence();
     return new ListLeafSequence(this._ds, t, data);
   }
 
-  readSetLeafSequence(t: Type): SetLeafSequence {
+  readSetLeafSequence(t: Type<any>): SetLeafSequence<any> {
     const data = this.readValueSequence();
     return new SetLeafSequence(this._ds, t, data);
   }
 
-  readMapLeafSequence(t: Type): MapLeafSequence {
+  readMapLeafSequence(t: Type<any>): MapLeafSequence<any, any> {
     const count = this._r.readUint32();
     const data = [];
     for (let i = 0; i < count; i++) {
@@ -115,10 +115,10 @@ export default class ValueDecoder {
     return new MapLeafSequence(this._ds, t, data);
   }
 
-  readMetaSequence(): Array<MetaTuple> {
+  readMetaSequence(): Array<MetaTuple<any>> {
     const count = this._r.readUint32();
 
-    const data: Array<MetaTuple> = [];
+    const data: Array<MetaTuple<any>> = [];
     for (let i = 0; i < count; i++) {
       const ref = this.readValue();
       const v = this.readValue();
@@ -130,11 +130,11 @@ export default class ValueDecoder {
     return data;
   }
 
-  readIndexedMetaSequence(t: Type): IndexedMetaSequence {
+  readIndexedMetaSequence(t: Type<any>): IndexedMetaSequence {
     return new IndexedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
-  readOrderedMetaSequence(t: Type): OrderedMetaSequence {
+  readOrderedMetaSequence(t: Type<any>): OrderedMetaSequence<any> {
     return new OrderedMetaSequence(this._ds, t, this.readMetaSequence());
   }
 
@@ -191,7 +191,7 @@ export default class ValueDecoder {
     throw new Error('Unreached');
   }
 
-  readStruct<T: Struct>(type: Type): T {
+  readStruct<T: Struct>(type: Type<any>): T {
     const {desc} = type;
     invariant(desc instanceof StructDesc);
 

@@ -41,7 +41,7 @@ export default class Node extends React.Component<void, Props, State> {
     };
   }
 
-  render(): React.Element {
+  render(): React.Element<any> {
     if (this.state.x !== this.props.x ||
         this.state.y !== this.props.y) {
       window.requestAnimationFrame(() => this.setState({
@@ -82,7 +82,7 @@ export default class Node extends React.Component<void, Props, State> {
     );
   }
 
-  getShape() : React.Element {
+  getShape() : React.Element<any> {
     const className = classNames('icon', {open:this.props.isOpen});
     switch (this.props.shape) {
       case 'circle':

@@ -142,7 +142,7 @@ export class Delegate {
 
   async updateRoot(current: Hash, last: Hash): Promise<boolean> {
     const ch = this._rpc.root.indexOf('?') >= 0 ? '&' : '?';
-    const params = `${ch}current=${current}&last=${last}`;
+    const params = `${ch}current=${current.toString()}&last=${last.toString()}`;
     try {
       const {headers} = await fetchText(this._rpc.root + params, {method: 'POST'});
       const versionErr = checkVersion(headers);
@@ -163,7 +163,7 @@ function checkVersion(headers: Map<string, string>): ?Error {
   const version = headers.get(versionHeader);
   if (version !== nomsVersion) {
     return new Error(
-      `SDK version ${nomsVersion} is not compatible with data of version ${version}.`);
+      `SDK version ${nomsVersion} is not compatible with data of version ${String(version)}.`);
   }
   return null;
 }

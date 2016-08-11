@@ -40,14 +40,14 @@ import {IndexedMetaSequence} from './meta-sequence.js';
 const testListSize = 5000;
 const listOfNRef = 'tqpbqlu036sosdq9kg3lka7sjaklgslg';
 
-async function assertToJS(list: List, nums: Array<any>, start: number = 0,
+async function assertToJS(list: List<any>, nums: Array<any>, start: number = 0,
     end: number = nums.length): Promise<void> {
   const jsArray = await list.toJS(start, end);
   const expect = nums.slice(start, end);
   assert.deepEqual(expect, jsArray);
 }
 
-async function validateList(l: List, values: number[]): Promise<void> {
+async function validateList(l: List<any>, values: number[]): Promise<void> {
   assert.isTrue(equals(new List(values), l));
   const out = [];
   await l.forEach(v => void(out.push(v)));
@@ -59,7 +59,7 @@ async function validateList(l: List, values: number[]): Promise<void> {
 
 suite('List', () => {
 
-  function testPrependChunkDiff(nums: Array<any>, list: List, expectCount: number) {
+  function testPrependChunkDiff(nums: Array<any>, list: List<any>, expectCount: number) {
     const nn = new Array(nums.length + 1);
     nn[0] = 0;
     for (let i = 0; i < nums.length; i++) {
@@ -70,7 +70,7 @@ suite('List', () => {
     assert.strictEqual(expectCount, chunkDiffCount(list, v2));
   }
 
-  function testAppendChunkDiff(nums: Array<any>, list: List, expectCount: number) {
+  function testAppendChunkDiff(nums: Array<any>, list: List<any>, expectCount: number) {
     const nn = new Array(nums.length + 1);
     nn[0] = 0;
     for (let i = 0; i < nums.length; i++) {
@@ -82,7 +82,7 @@ suite('List', () => {
     assert.strictEqual(expectCount, chunkDiffCount(list, v2));
   }
 
-  async function testToJS(expect: Array<any>, list: List): Promise<void> {
+  async function testToJS(expect: Array<any>, list: List<any>): Promise<void> {
     const length = expect.length;
     let start = 0;
 
@@ -93,7 +93,7 @@ suite('List', () => {
     }
   }
 
-  async function testGet(nums: Array<any>, list: List): Promise<void> {
+  async function testGet(nums: Array<any>, list: List<any>): Promise<void> {
     const incr = Math.round(nums.length / 256); // test 256 indices
 
     for (let i = 0; i < nums.length; i += incr) {
@@ -101,7 +101,7 @@ suite('List', () => {
     }
   }
 
-  async function testForEach(nums: Array<any>, list: List): Promise<void> {
+  async function testForEach(nums: Array<any>, list: List<any>): Promise<void> {
     const out = [];
     await list.forEach(v => {
       out.push(v);
@@ -110,7 +110,7 @@ suite('List', () => {
     assert.deepEqual(nums, out);
   }
 
-  async function testForEachAsyncCB(nums: Array<any>, list: List): Promise<void> {
+  async function testForEachAsyncCB(nums: Array<any>, list: List<any>): Promise<void> {
     let resolver = null;
     const p = new Promise(resolve => resolver = resolve);
 
@@ -307,7 +307,7 @@ suite('CompoundList', () => {
     await db.close();
   });
 
-  function build(): List {
+  function build(): List<any> {
     const l1 = new List(['a', 'b']);
     const r1 = db.writeValue(l1);
     const l2 = new List(['e', 'f']);
@@ -372,7 +372,7 @@ suite('CompoundList', () => {
   });
 
   test('Remove last when not loaded', async () => {
-    const reload = async (l: List): Promise<List> => {
+    const reload = async (l: List<any>): Promise<List<any>> => {
       const l2 = await db.readValue(db.writeValue(l).targetHash);
       invariant(l2 instanceof List);
       return l2;

@@ -75,14 +75,14 @@ suite('Specs', () => {
     invariant(testHash);
     const invalid = [
       'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
-      'mem:not-hash', 'mem:0000', `mem:::${testHash}`,
+      'mem:not-hash', 'mem:0000', `mem:::${testHash.toString()}`,
       'http://foo:blah',
     ];
     invalid.forEach(s => assert.isNull(HashSpec.parse(s)));
 
     const valid = [
-      {spec: `mem::${testHash}`, protocol: 'mem', path: '', hash: testHash.toString()},
-      {spec: `http://someserver.com/some/path::${testHash}`,
+      {spec: `mem::${testHash.toString()}`, protocol: 'mem', path: '', hash: testHash.toString()},
+      {spec: `http://someserver.com/some/path::${testHash.toString()}`,
         protocol: 'http', path: '//someserver.com/some/path', hash: testHash.toString()},
     ];
     valid.forEach(tc => {
@@ -105,7 +105,7 @@ suite('Specs', () => {
 
     const testHash = Hash.parse('00000000000000000000000000000000');
     invariant(testHash);
-    spec = parseObjectSpec(`http://foo:8000/test::${testHash}`);
+    spec = parseObjectSpec(`http://foo:8000/test::${testHash.toString()}`);
     invariant(spec);
     assert.isNotNull(spec.value());
     invariant(spec instanceof HashSpec);

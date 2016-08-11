@@ -17,15 +17,15 @@ export class IndexedSequence<T> extends Sequence<T> {
     throw new Error('override');
   }
 
-  getCompareFn(other: IndexedSequence): EqualsFn {
+  getCompareFn(other: IndexedSequence<any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
       // $FlowIssue
       equals(this.items[idx], other.items[otherIdx]);
   }
 
-  async newCursorAt(idx: number): Promise<IndexedSequenceCursor> {
-    let cursor: ?IndexedSequenceCursor = null;
-    let sequence: ?IndexedSequence = this;
+  async newCursorAt(idx: number): Promise<IndexedSequenceCursor<any>> {
+    let cursor: ?IndexedSequenceCursor<any> = null;
+    let sequence: ?IndexedSequence<any> = this;
 
     while (sequence) {
       cursor = new IndexedSequenceCursor(cursor, sequence, 0);
@@ -41,7 +41,7 @@ export class IndexedSequence<T> extends Sequence<T> {
   }
 }
 
-export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence> {
+export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence<any>> {
   advanceToOffset(idx: number): number {
     this.idx = search(this.length, (i: number) => idx < this.sequence.cumulativeNumberOfLeaves(i));
 

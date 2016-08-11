@@ -138,7 +138,7 @@ export class SizeCache<T> {
     this._size = 0;
   }
 
-  entry(hash: Hash): ?CacheEntry {
+  entry(hash: Hash): ?CacheEntry<any> {
     const key = hash.toString();
     const entry = this._cache.get(key);
     if (!entry) {
@@ -176,7 +176,7 @@ export class SizeCache<T> {
 }
 
 export class NoopCache<T> {
-  entry(hash: Hash): ?CacheEntry {}  // eslint-disable-line no-unused-vars
+  entry(hash: Hash): ?CacheEntry<any> {}  // eslint-disable-line no-unused-vars
 
   get(hash: Hash): ?T {}  // eslint-disable-line no-unused-vars
 
@@ -186,11 +186,12 @@ export class NoopCache<T> {
 
 class HashCacheEntry {
   present: boolean;
-  type: ?Type;
+  type: ?Type<any>;
   provenance: Hash;
 
-  constructor(present: boolean = false, type: ?Type = null, provenance: Hash = emptyHash) {
-    invariant((!present && !type) || (present && type), `present = ${present}, type = ${type}`);
+  constructor(present: boolean = false, type: ?Type<any> = null, provenance: Hash = emptyHash) {
+    invariant((!present && !type) || (present && type),
+        `present = ${String(present)}, type = ${String(type)}`);
     this.present = present;
     this.type = type;
     this.provenance = provenance;
@@ -265,7 +266,7 @@ class HashCache {
   }
 }
 
-function getTargetType(refVal: Ref): Type {
+function getTargetType(refVal: Ref<any>): Type<any> {
   invariant(refVal.type.kind === Kind.Ref, refVal.type.kind);
   return refVal.type.elemTypes[0];
 }

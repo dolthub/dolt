@@ -66,7 +66,7 @@ async function getUser(): Promise<Struct> {
   return result;
 }
 
-async function getPhotos(): Promise<List> {
+async function getPhotos(): Promise<List<any>> {
   // Calculate the number of expected fetches via the list of albums, so that we can show progress.
   // This appears to be the fastest way (photos only let you paginate).
   const batchSize = 1000;

@@ -20,12 +20,11 @@ import ValueDecoder from './value-decoder.js';
 import ValueEncoder from './value-encoder.js';
 import type Value from './value.js';
 import {ValueBase} from './value.js';
-import type {NomsKind} from './noms-kind.js';
 import {Kind} from './noms-kind.js';
 import {TestDatabase} from './test-util.js';
 import {encodeValue, decodeValue} from './codec.js';
 import {equals} from './compare.js';
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import {newStruct, newStructWithType} from './struct.js';
 import {
   OrderedKey,
@@ -47,7 +46,9 @@ import {
   stringType,
   typeType,
 } from './type.js';
+import type {Type} from './type.js';
 import {staticTypeCache} from './type-cache.js';
+import type TypeCache from './type-cache.js';
 
 function assertRoundTrips(v: Value) {
   const db = new TestDatabase();
@@ -61,7 +62,7 @@ class Bogus extends ValueBase {
     super();
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return makeCycleType(0);
   }
 }
@@ -126,19 +127,19 @@ suite('Encoding - roundtrip', () => {
 });
 
 suite('Encoding', () => {
-  function uint8(v: NomsKind): NomsKind {
+  function uint8(v) {
     return {type: 'uint8', value: v};
   }
 
-  function uint32(v: NomsKind): NomsKind {
+  function uint32(v) {
     return {type: 'uint32', value: v};
   }
 
-  function uint64(v: NomsKind): NomsKind {
+  function uint64(v) {
     return {type: 'uint64', value: v};
   }
 
-  function float64(v: NomsKind): NomsKind {
+  function float64(v) {
     return {type: 'float64', value: v};
   }
 
@@ -222,7 +223,7 @@ suite('Encoding', () => {
     }
 
     readHash(): Hash {
-      return Hash.parse(this.readString());
+      return notNull(Hash.parse(this.readString()));
     }
   }
 
@@ -270,7 +271,7 @@ suite('Encoding', () => {
       this.writeString(h.toString());
     }
 
-    appendType(t: Type): void {
+    appendType(t: Type<any>): void {
       const enc = new ValueEncoder(this, null);
       enc.writeType(t, []);
     }
@@ -300,7 +301,7 @@ suite('Encoding', () => {
     assert.deepEqual(encoding, w.toArray());
 
     const r = new TestReader(encoding);
-    const dec = new ValueDecoder(r, null, staticTypeCache);
+    const dec = new ValueDecoder(r, new TestDatabase(), staticTypeCache);
     const v2 = dec.readValue();
     assert.isTrue(equals(v, v2));
   }
@@ -385,6 +386,8 @@ suite('Encoding', () => {
     const r2 = Hash.parse('00000000000000000000000000000002');
     const r3 = Hash.parse('00000000000000000000000000000003');
 
+    invariant(r1 && r2 && r3);
+
     assertEncoding(
       [
         uint8(BlobKind), true,
@@ -424,7 +427,7 @@ suite('Encoding', () => {
     Bytes.copy(data, buff);
     buff[data.byteLength] = 5; // Add a bogus extra byte
     const c2 = new Chunk(buff);
-    assert.throws(() => decodeValue(c2, null));
+    assert.throws(() => decodeValue(c2, new TestDatabase()));
   });
 
   test('struct with list', () => {
@@ -545,6 +548,7 @@ suite('Encoding', () => {
   test('ref', () => {
     const type = makeRefType(numberType);
     const r = Hash.parse('0123456789abcdefghijklmnopqrstuv');
+    invariant(r);
 
     assertEncoding([
       uint8(RefKind), uint8(NumberKind), r.toString(), uint64(4),

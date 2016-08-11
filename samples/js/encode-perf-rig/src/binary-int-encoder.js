@@ -11,13 +11,13 @@ export class BinaryIntEncoderDecoder {
   // write n to buf, return number of bytes written
   encode(buf: Buffer, n: number): number {
     if (Number.isInteger(n)) {
-      buf.writeInt8(0);
+      buf.writeInt8(0, 0);
       buf.writeInt32BE(n, 1);
       return 5;
     } else {
       const [mantissa, exponent] = frexp(n);
       // console.log(`${n} = ${mantissa} * 2^${exponent}`);
-      buf.writeInt8(1);
+      buf.writeInt8(1, 0);
       buf.writeDoubleBE(mantissa, 1);
       buf.writeInt32BE(exponent, 9);
       return 12;

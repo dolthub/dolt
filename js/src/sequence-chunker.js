@@ -15,17 +15,18 @@ import RollingValueHasher from './rolling-value-hasher.js';
 
 import Ref from './ref.js';
 
-export type makeChunkFn<T, S: Sequence> = (items: Array<T>) => [Collection<S>, OrderedKey, number];
+export type makeChunkFn<T, S: Sequence<any>> = (items: Array<T>) =>
+    [Collection<S>, OrderedKey<any>, number];
 export type hashValueBytesFn<T> = (item: T, rv: RollingValueHasher) => void;
 
 export async function chunkSequence<T, S: Sequence<T>>(
-    cursor: SequenceCursor,
+    cursor: SequenceCursor<any, any>,
     vr: ?ValueReader,
     insert: Array<T>,
     remove: number,
     makeChunk: makeChunkFn<T, S>,
-    parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
-    hashValueBytes: hashValueBytesFn): Promise<Sequence> {
+    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>,
+    hashValueBytes: hashValueBytesFn<any>): Promise<Sequence<any>> {
 
   const chunker = new SequenceChunker(cursor, vr, null, makeChunk, parentMakeChunk, hashValueBytes);
   if (cursor) {
@@ -50,8 +51,8 @@ export async function chunkSequence<T, S: Sequence<T>>(
 export function chunkSequenceSync<T, S: Sequence<T>>(
     insert: Array<T>,
     makeChunk: makeChunkFn<T, S>,
-    parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>,
-    hashValueBytes: hashValueBytesFn): Sequence {
+    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>,
+    hashValueBytes: hashValueBytesFn<any>): Sequence<any> {
 
   const chunker = new SequenceChunker(null, null, null, makeChunk, parentMakeChunk, hashValueBytes);
 
@@ -64,17 +65,18 @@ export default class SequenceChunker<T, S: Sequence<T>> {
   _cursor: ?SequenceCursor<T, S>;
   _vr: ?ValueReader;
   _vw: ?ValueWriter;
-  _parent: ?SequenceChunker<MetaTuple, MetaSequence>;
+  _parent: ?SequenceChunker<MetaTuple<any>, MetaSequence<any>>;
   _current: Array<T>;
   _makeChunk: makeChunkFn<T, S>;
-  _parentMakeChunk: makeChunkFn<MetaTuple, MetaSequence>;
+  _parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>;
   _isLeaf: boolean;
-  _hashValueBytes: hashValueBytesFn;
+  _hashValueBytes: hashValueBytesFn<any>;
   _rv: RollingValueHasher;
   _done: boolean;
 
-  constructor(cursor: ?SequenceCursor, vr: ?ValueReader, vw: ?ValueWriter, makeChunk: makeChunkFn,
-              parentMakeChunk: makeChunkFn, hashValueBytes: hashValueBytesFn) {
+  constructor(cursor: ?SequenceCursor<any, any>, vr: ?ValueReader, vw: ?ValueWriter,
+              makeChunk: makeChunkFn<any, any>, parentMakeChunk: makeChunkFn<any, any>,
+              hashValueBytes: hashValueBytesFn<any>) {
     this._cursor = cursor;
     this._vr = vr;
     this._vw = vw;
@@ -204,11 +206,11 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     this._parent._isLeaf = false;
   }
 
-  createSequence(): [Sequence, MetaTuple] {
+  createSequence(): [Sequence<any>, MetaTuple<any>] {
     // If the sequence chunker has a ValueWriter, eagerly write sequences.
     let [col, key, numLeaves] = this._makeChunk(this._current); // eslint-disable-line prefer-const
     const seq = col.sequence;
-    let ref: Ref;
+    let ref: Ref<any>;
     if (this._vw) {
       ref = this._vw.writeValue(col);
       col = null;
@@ -246,7 +248,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
   // Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully
   // correct and understandable. See comments inline.
-  async done(): Promise<Sequence> {
+  async done(): Promise<Sequence<any>> {
     invariant(!this._done);
     this._done = true;
 
@@ -307,7 +309,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
   // Like |done|, but assumes there is no cursor, so it can be synchronous. Necessary for
   // constructing collections without Promises or async/await. There is no equivalent in the Go
   // code because Go is already synchronous.
-  doneSync(): Sequence {
+  doneSync(): Sequence<any> {
     invariant(!this._vw);
     invariant(!this._cursor);
     invariant(!this._done);

@@ -93,7 +93,7 @@ function maybeProcessInning(ep: Promise<XMLElement>): Promise<?Map<string, Array
   return ep.then(elem => elem.get('inning')).then(inn => inn && processInning(inn));
 }
 
-function processInning(inning: NomsMap<string, NomsMap<*, *>>):
+function processInning(inning: NomsMap<string, NomsMap<any, any>>):
     Promise<Map<string, Array<Struct>>> {
   return Promise.all([inning.get('top'), inning.get('bottom')])
     .then(halves => {
@@ -122,7 +122,7 @@ function processInning(inning: NomsMap<string, NomsMap<*, *>>):
     });
 }
 
-function processAbs(abs: List): Promise<PitcherPitches> {
+function processAbs(abs: List<any>): Promise<PitcherPitches> {
   const ps = [];
   return abs.forEach(ab => {
     ps.push(
@@ -160,13 +160,12 @@ function normalize<T: Value>(d: ?T | List<T>): List<T> {
 type PitchData = NomsMap<string, string>;
 
 function processPitches(d: List<PitchData>): Promise<Array<Struct>> {
-  const pitchPs = [];
+  const pitchPs: Array<Promise<?Struct>> = [];
   return d.forEach((p: PitchData) => {
     pitchPs.push(getPitch(p));
   })
-  .then(() => pitchPs)
-  .then(pitchPs => Promise.all(pitchPs))
-  .then(pitches => pitches.filter((e: ?Struct): boolean => !!e));
+  .then(() => Promise.all(pitchPs))
+  .then(pitches => pitches.filter(Boolean));
 }
 
 function getPitch(p: PitchData): Promise<?Struct> {

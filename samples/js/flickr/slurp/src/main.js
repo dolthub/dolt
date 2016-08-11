@@ -135,8 +135,8 @@ function promptForAuth(url: string): Promise<void> {
     process.stdout.write(`Go to ${url} to grant permissions to access Flickr...\n`);
     const rl = readline.createInterface({input: process.stdin, output: process.stdout});
     rl.question('Press enter when done\n', () => {
-      process.stdout.write('Authenticated. Next time run:\n' +
-        `${process.argv.join(' ')} --auth-token=${authToken} --auth-secret=${authSecret}\n\n`);
+      process.stdout.write(`Authenticated. Next time run:\n${process.argv.join(' ')
+          } --auth-token=${String(authToken)} --auth-secret=${String(authSecret)}\n\n`);
       res();
       rl.close();
     });

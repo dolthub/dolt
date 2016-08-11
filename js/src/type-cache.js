@@ -34,7 +34,7 @@ class IdentTable {
 }
 
 class TypeTrie {
-  t: ?Type;
+  t: ?Type<any>;
   entries: Map<number, TypeTrie>;
 
   constructor() {
@@ -76,7 +76,7 @@ export default class TypeCache {
     return this.nextId++;
   }
 
-  getCompoundType(kind: NomsKind, ...elemTypes: Type[]): Type {
+  getCompoundType(kind: NomsKind, ...elemTypes: Type<any>[]): Type<any> {
     let trie = notNull(this.trieRoots.get(kind));
     elemTypes.forEach(t => trie = notNull(trie).traverse(t.id));
     if (!notNull(trie).t) {
@@ -86,7 +86,7 @@ export default class TypeCache {
     return notNull(trie.t);
   }
 
-  makeStructType(name: string, fieldNames: string[], fieldTypes: Type[]): Type<StructDesc> {
+  makeStructType(name: string, fieldNames: string[], fieldTypes: Type<any>[]): Type<StructDesc> {
     if (fieldNames.length !== fieldTypes.length) {
       throw new Error('Field names and types must be of equal length');
     }
@@ -122,7 +122,7 @@ export default class TypeCache {
   }
 
   // Creates a new union type unless the elemTypes can be folded into a single non union type.
-  makeUnionType(types: Type[]): Type {
+  makeUnionType(types: Type<any>[]): Type<any> {
     types = flattenUnionTypes(types, Object.create(null));
     if (types.length === 1) {
       return types[0];
@@ -134,11 +134,11 @@ export default class TypeCache {
      * We sort the contituent types to dedup equivalent types in memory; we may need to sort again
      * after cycles are resolved for final encoding.
      */
-    types.sort((t1: Type, t2: Type): number => t1.oidCompare(t2));
+    types.sort((t1: Type<any>, t2: Type<any>): number => t1.oidCompare(t2));
     return this.getCompoundType(Kind.Union, ...types);
   }
 
-  getCycleType(level: number): Type {
+  getCycleType(level: number): Type<any> {
     const trie = notNull(this.trieRoots.get(Kind.Cycle)).traverse(level);
 
     if (!trie.t) {
@@ -151,7 +151,7 @@ export default class TypeCache {
 
 export const staticTypeCache = new TypeCache();
 
-function flattenUnionTypes(types: Type[], seenTypes: {[key: Hash]: boolean}): Type[] {
+function flattenUnionTypes(types: Type<any>[], seenTypes: {[key: Hash]: boolean}): Type<any>[] {
   if (types.length === 0) {
     return types;
   }
@@ -203,7 +203,7 @@ function verifyStructName(name: string) {
   }
 }
 
-function resolveStructCycles(t: Type, parentStructTypes: Type[]): Type {
+function resolveStructCycles(t: Type<any>, parentStructTypes: Type<any>[]): Type<any> {
   const desc = t.desc;
   if (desc instanceof CompoundDesc) {
     desc.elemTypes.forEach((et, i) => {
@@ -247,12 +247,12 @@ function resolveStructCycles(t: Type, parentStructTypes: Type[]): Type {
  * construction arises, we can attempt to simplify the expansive type or find another means of
  * comparison.
  */
-function normalize(t: Type) {
-  walkType(t, [], (tt: Type) => {
+function normalize(t: Type<any>) {
+  walkType(t, [], (tt: Type<any>) => {
     generateOID(tt, false);
   });
 
-  walkType(t, [], (tt: Type, parentStructTypes: Type[]) => {
+  walkType(t, [], (tt: Type<any>, parentStructTypes: Type<any>[]) => {
     if (tt.kind === Kind.Struct) {
       for (let i = 0; i < parentStructTypes.length; i++) {
         invariant(tt.oidCompare(parentStructTypes[i]) !== 0,
@@ -261,14 +261,15 @@ function normalize(t: Type) {
     }
   });
 
-  walkType(t, [], (tt: Type) => {
+  walkType(t, [], (tt: Type<any>) => {
     if (tt.kind === Kind.Union) {
-      tt.desc.elemTypes.sort((t1: Type, t2: Type): number => t1.oidCompare(t2));
+      tt.desc.elemTypes.sort((t1: Type<any>, t2: Type<any>): number => t1.oidCompare(t2));
     }
   });
 }
 
-function walkType(t: Type, parentStructTypes: Type[], cb: (tt: Type, parents: Type[]) => void) {
+function walkType(t: Type<any>, parentStructTypes: Type<any>[],
+    cb: (tt: Type<any>, parents: Type<any>[]) => void) {
   const desc = t.desc;
   if (desc instanceof StructDesc && parentStructTypes.indexOf(t) >= 0) {
     return;
@@ -282,19 +283,19 @@ function walkType(t: Type, parentStructTypes: Type[], cb: (tt: Type, parents: Ty
     }
   } else if (desc instanceof StructDesc) {
     parentStructTypes.push(t);
-    desc.forEachField((_: string, tt: Type) => walkType(tt, parentStructTypes, cb));
+    desc.forEachField((_: string, tt: Type<any>) => walkType(tt, parentStructTypes, cb));
     parentStructTypes.pop(t);
   }
 }
 
-function generateOID(t: Type, allowUnresolvedCycles: boolean) {
+function generateOID(t: Type<any>, allowUnresolvedCycles: boolean) {
   const buf = new BinaryWriter();
   encodeForOID(t, buf, allowUnresolvedCycles, t, []);
   t.updateOID(Hash.fromData(buf.data));
 }
 
-function encodeForOID(t: Type, buf: BinaryWriter, allowUnresolvedCycles: boolean, root: Type,
-  parentStructTypes: Type[]) {
+function encodeForOID(t: Type<any>, buf: BinaryWriter, allowUnresolvedCycles: boolean,
+    root: Type<any>, parentStructTypes: Type<any>[]) {
   const desc = t.desc;
 
   if (desc instanceof CycleDesc) {
@@ -369,8 +370,8 @@ function encodeForOID(t: Type, buf: BinaryWriter, allowUnresolvedCycles: boolean
   }
 }
 
-function toUnresolvedType(t: Type, tc: TypeCache, level: number,
-                          parentStructTypes: Type[]): [Type, boolean] {
+function toUnresolvedType(t: Type<any>, tc: TypeCache, level: number,
+                          parentStructTypes: Type<any>[]): [Type<any>, boolean] {
   const idx = parentStructTypes.indexOf(t);
   if (idx >= 0) {
     // This type is just a placeholder. It doesn't need an id

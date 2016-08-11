@@ -37,12 +37,12 @@ export default class ValueEncoder {
     this._w.writeUint8(k);
   }
 
-  writeRef(r: Ref) {
+  writeRef(r: Ref<any>) {
     this._w.writeHash(r.targetHash);
     this._w.writeUint64(r.height);
   }
 
-  writeType(t: Type, parentStructTypes: Type<StructDesc>[]) {
+  writeType(t: Type<any>, parentStructTypes: Type<StructDesc>[]) {
     const k = t.kind;
     switch (k) {
       case Kind.List:
@@ -81,15 +81,15 @@ export default class ValueEncoder {
     values.forEach(sv => this.writeValue(sv));
   }
 
-  writeListLeafSequence(seq: ListLeafSequence) {
+  writeListLeafSequence(seq: ListLeafSequence<any>) {
     this.writeValueList(seq.items);
   }
 
-  writeSetLeafSequence(seq: SetLeafSequence) {
+  writeSetLeafSequence(seq: SetLeafSequence<any>) {
     this.writeValueList(seq.items);
   }
 
-  writeMapLeafSequence(seq: MapLeafSequence) {
+  writeMapLeafSequence(seq: MapLeafSequence<any, any>) {
     const count = seq.items.length;
     this._w.writeUint32(count);
 
@@ -99,7 +99,7 @@ export default class ValueEncoder {
     });
   }
 
-  maybeWriteMetaSequence(v: Sequence): boolean {
+  maybeWriteMetaSequence(v: Sequence<any>): boolean {
     if (!v.isMeta) {
       this._w.writeBool(false); // not a meta sequence
       return false;
@@ -110,7 +110,7 @@ export default class ValueEncoder {
     const count = v.items.length;
     this._w.writeUint32(count);
     for (let i = 0; i < count; i++) {
-      const tuple: MetaTuple = v.items[i];
+      const tuple: MetaTuple<any> = v.items[i];
       invariant(tuple instanceof MetaTuple);
       const child = tuple.child;
       if (child && this._vw) {
@@ -218,7 +218,7 @@ export default class ValueEncoder {
       case Kind.Value:
         throw new Error('A value instance can never have type ' + kindToString[t.kind]);
       default:
-        throw new Error(`Not implemented: ${t.kind} ${v}`);
+        throw new Error(`Not implemented: ${t.kind} ${String(v)}`);
     }
   }
 
@@ -248,7 +248,7 @@ export default class ValueEncoder {
 
     this._w.writeUint32(desc.fieldCount);
 
-    desc.forEachField((name: string, type: Type) => {
+    desc.forEachField((name: string, type: Type<any>) => {
       this._w.writeString(name);
       this.writeType(type, parentStructTypes);
     });

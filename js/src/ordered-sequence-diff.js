@@ -57,16 +57,16 @@ export default async function diff<K: Value, T>(
 /**
  * Advances |a| and |b| past their common sequence of equal values.
  */
-export function fastForward(a: OrderedSequenceCursor, b: OrderedSequenceCursor): Promise<void> {
+export function fastForward(a: OrderedSequenceCursor<any, any>, b: OrderedSequenceCursor<any, any>):
+    Promise<void> {
   return a.valid && b.valid ? doFastForward(true, a, b).then() : Promise.resolve();
 }
 
 /*
  * Returns an array matching |a| and |b| respectively to whether that cursor has more values.
  */
-async function doFastForward(allowPastEnd: boolean,
-                             a: OrderedSequenceCursor, b: OrderedSequenceCursor):
-                             Promise<[boolean, boolean]> {
+async function doFastForward(allowPastEnd: boolean, a: OrderedSequenceCursor<any, any>,
+    b: OrderedSequenceCursor<any, any>): Promise<[boolean, boolean]> {
   invariant(a.valid && b.valid);
   let aHasMore = true, bHasMore = true;
 
@@ -107,6 +107,6 @@ async function doFastForward(allowPastEnd: boolean,
   return [aHasMore, bHasMore];
 }
 
-function isCurrentEqual(a: SequenceCursor, b: SequenceCursor): boolean {
+function isCurrentEqual(a: SequenceCursor<any, any>, b: SequenceCursor<any, any>): boolean {
   return a.sequence.getCompareFn(b.sequence)(a.idx, b.idx);
 }

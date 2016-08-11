@@ -16,7 +16,7 @@ type Props = {
   db: string,
 }
 
-export default function Layout(props: Props) : React.Element {
+export default function Layout(props: Props) : React.Element<any> {
   const children = [];
   const edges = [];
   const lookup = {};

@@ -9,10 +9,11 @@ export class StringEncoderDecoder {
   // write n to buf, return number of bytes written
   encode(buf: Buffer, n: number): number {
     if (n < 1e20) {
+      // $FlowIssue: Buffer.prototype.write returns a number
       return buf.write(n.toString(10));
-    } else {
-      return buf.write(n.toExponential());
     }
+    // $FlowIssue: Buffer.prototype.write returns a number
+    return buf.write(n.toExponential());
   }
 
   // read from buf to return number

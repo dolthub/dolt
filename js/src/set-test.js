@@ -42,7 +42,7 @@ const setOfNRef = 'hius38tca4nfd5lveqe3h905ass99uq2';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
-async function validateSet(s: Set, values: number[]): Promise<void> {
+async function validateSet(s: Set<any>, values: number[]): Promise<void> {
   assert.isTrue(equals(new Set(values), s));
 
   const out = [];
@@ -366,7 +366,7 @@ suite('CompoundSet', () => {
     await db.close();
   });
 
-  function build(vwr: ValueReadWriter, values: Array<string>): Set {
+  function build(vwr: ValueReadWriter, values: Array<string>): Set<any> {
     assert.isTrue(values.length > 1 && Math.log2(values.length) % 1 === 0);
 
     let tuples = [];
@@ -376,7 +376,7 @@ suite('CompoundSet', () => {
       tuples.push(new MetaTuple(r, new OrderedKey(values[i + 1]), 2, null));
     }
 
-    let last: ?Set = null;
+    let last: ?Set<any> = null;
     while (tuples.length > 1) {
       const next = [];
       for (let i = 0; i < tuples.length; i += 2) {
@@ -654,7 +654,7 @@ suite('CompoundSet', () => {
   });
 
   test('Remove last when not loaded', async () => {
-    const reload = async (s: Set): Promise<Set> => {
+    const reload = async (s: Set<any>): Promise<Set<any>> => {
       const s2 = await db.readValue(db.writeValue(s).targetHash);
       invariant(s2 instanceof Set);
       return s2;

@@ -35,16 +35,16 @@ import type Value from './value.js';
  * newStruct("S", {x: 42, y: true}) < struct S {x: Number}, extra fields OK.
  * ```
  */
-export default function assertSubtype(requiredType: Type, v: Value): void {
+export default function assertSubtype(requiredType: Type<any>, v: Value): void {
   assert(isSubtype(requiredType, getTypeOfValue(v)), v, requiredType);
 }
 
-export function isSubtype(requiredType: Type, concreteType: Type): boolean {
+export function isSubtype(requiredType: Type<any>, concreteType: Type<any>): boolean {
   return isSubtypeInternal(requiredType, concreteType, []);
 }
 
-export function isSubtypeInternal(requiredType: Type, concreteType: Type,
-                                  parentStructTypes: Type[]): boolean {
+export function isSubtypeInternal(requiredType: Type<any>, concreteType: Type<any>,
+                                  parentStructTypes: Type<any>[]): boolean {
   if (equals(requiredType, concreteType)) {
     return true;
   }
@@ -111,8 +111,8 @@ export function isSubtypeInternal(requiredType: Type, concreteType: Type,
   invariant(false);
 }
 
-function compoundSubtype(requiredType: Type, concreteType: Type,
-                         parentStructTypes: Type[]): boolean {
+function compoundSubtype(requiredType: Type<any>, concreteType: Type<any>,
+                         parentStructTypes: Type<any>[]): boolean {
   // In a compound type it is OK to have an empty union.
   if (concreteType.kind === Kind.Union && concreteType.desc.elemTypes.length === 0) {
     return true;
@@ -122,6 +122,6 @@ function compoundSubtype(requiredType: Type, concreteType: Type,
 
 function assert(b, v, t) {
   if (!b) {
-    throw new TypeError(`${v} is not a valid ${kindToString(t.kind)}`);
+    throw new TypeError(`${String(v)} is not a valid ${kindToString(t.kind)}`);
   }
 }

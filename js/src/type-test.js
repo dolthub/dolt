@@ -19,6 +19,7 @@ import {
   typeType,
   getTypeOfValue,
 } from './type.js';
+import type {Type} from './type.js';
 import {suite, test} from 'mocha';
 import {equals} from './compare.js';
 import {encodeValue, decodeValue} from './codec.js';
@@ -138,7 +139,7 @@ suite('Type', () => {
       [numberType, 'Number'],
       [stringType, 'String'],
       [makeSetType(numberType), 'Set<Number>'],
-    ].forEach(([t, desc]) => {
+    ].forEach(([t, desc]: [Type<any>, string]) => {
       assert.equal(t.describe(), desc);
     });
   });

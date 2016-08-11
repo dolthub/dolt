@@ -36,11 +36,11 @@ export default class Dataset {
     return this._id;
   }
 
-  headRef(): Promise<?Ref<Commit>> {
+  headRef(): Promise<?Ref<Commit<any>>> {
     return this._database.headRef(this._id);
   }
 
-  head(): Promise<?Commit> {
+  head(): Promise<?Commit<any>> {
     return this._database.head(this._id);
   }
 
@@ -51,7 +51,7 @@ export default class Dataset {
   // Commit updates the commit that a dataset points at. If parents is provided then an the promise
   // is rejected if the commit does not descend from the parents.
   async commit(v: Value,
-               parents: ?Array<Ref<Commit>> = undefined): Promise<Dataset> {
+               parents: ?Array<Ref<Commit<any>>> = undefined): Promise<Dataset> {
     if (!parents) {
       const headRef = await this.headRef();
       parents = headRef ? [headRef] : [];

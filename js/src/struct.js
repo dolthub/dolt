@@ -46,7 +46,7 @@ export const fieldNameRe = new RegExp(fieldNameComponentRe.source + '$');
  * To reflect over structs you can create a new StructMirror.
  */
 export default class Struct extends ValueBase {
-  _type: Type;
+  _type: Type<any>;
   _values: Value[];
 
   constructor(type: Type<StructDesc>, values: Value[]) {
@@ -55,11 +55,11 @@ export default class Struct extends ValueBase {
     init(this, type, values);
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return this._type;
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     const mirror = new StructMirror(this);
     const chunks = [];
 
@@ -76,9 +76,9 @@ export default class Struct extends ValueBase {
   }
 }
 
-function validate(type: Type, values: Value[]): void {
+function validate(type: Type<any>, values: Value[]): void {
   let i = 0;
-  type.desc.forEachField((name: string, type: Type) => {
+  type.desc.forEachField((name: string, type: Type<any>) => {
     const value = values[i];
     assertSubtype(type, value);
     i++;
@@ -88,9 +88,9 @@ function validate(type: Type, values: Value[]): void {
 export class StructFieldMirror {
   value: Value;
   name: string;
-  type: Type;
+  type: Type<any>;
 
-  constructor(value: Value, name: string, type: Type) {
+  constructor(value: Value, name: string, type: Type<any>) {
     this.value = value;
     this.name = name;
     this.type = type;
@@ -131,7 +131,7 @@ export class StructMirror<T: Struct> {
     return findFieldIndex(name, this.desc.fields) !== -1;
   }
 
-  set(name: string, value: ?Value): T {
+  set(name: string, value: Value): T {
     const values = setValue(this._values, this.desc.fields, name, value);
     return newStructWithType(this.type, values);
   }
@@ -189,7 +189,7 @@ function getSetter(i: number) {
   };
 }
 
-function setValue(values: Value[], fields: Field[], name: string, value: ?Value): Value[] {
+function setValue(values: Value[], fields: Field[], name: string, value: Value): Value[] {
   const i = findFieldIndex(name, fields);
   invariant(i !== -1);
   const newValues = values.concat();  // shallow clone
@@ -208,12 +208,12 @@ export function newStructWithType<T: Struct>(type: Type<StructDesc>, values: Val
   return newStructWithValues(type, values);
 }
 
-function init<T: Struct>(s: T, type: Type, values: Value[]) {
+function init<T: Struct>(s: T, type: Type<any>, values: Value[]) {
   s._type = type;
   s._values = values;
 }
 
-export function newStructWithValues<T: Struct>(type: Type, values: Value[]): T {
+export function newStructWithValues<T: Struct>(type: Type<any>, values: Value[]): T {
   const c = createStructClass(type);
   const s = Object.create(c.prototype);
   invariant(s instanceof c);

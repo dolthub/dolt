@@ -11,8 +11,8 @@ import {IndexedMetaSequence} from './meta-sequence.js';
 import {invariant} from './assert.js';
 import type {IndexedSequence} from './indexed-sequence.js';
 
-export function diff(last: IndexedSequence, lastHeight: number, lastOffset: number,
-                     current: IndexedSequence, currentHeight: number, currentOffset: number,
+export function diff(last: IndexedSequence<any>, lastHeight: number, lastOffset: number,
+                     current: IndexedSequence<any>, currentHeight: number, currentOffset: number,
                      maxSpliceMatrixSize: number): Promise<Array<Splice>> {
 
   if (lastHeight > currentHeight) {

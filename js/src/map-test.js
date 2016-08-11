@@ -53,7 +53,7 @@ function intKVs(count: number): [number, number][] {
   return kvs;
 }
 
-async function validateMap(m: Map, kvs: [[number, number]]): Promise<void> {
+async function validateMap(m: Map<any, any>, kvs: [[number, number]]): Promise<void> {
   assert.isTrue(equals(new Map(kvs), m));
 
   const out = [];
@@ -451,7 +451,7 @@ suite('CompoundMap', () => {
     await db.close();
   });
 
-  function build(vwr: ValueReadWriter): Array<Map> {
+  function build(vwr: ValueReadWriter): Array<Map<any, any>> {
     const l1 = new Map([['a', false], ['b', false]]);
     const r1 = vwr.writeValue(l1);
     const l2 = new Map([['e', true], ['f', true]]);
@@ -790,7 +790,7 @@ suite('CompoundMap', () => {
   });
 
   test('Remove last when not loaded', async () => {
-    const reload = async (m: Map): Promise<Map> => {
+    const reload = async (m: Map<any, any>): Promise<Map<any, any>> => {
       const m2 = await db.readValue(db.writeValue(m).targetHash);
       invariant(m2 instanceof Map);
       return m2;

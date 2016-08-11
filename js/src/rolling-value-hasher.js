@@ -158,7 +158,7 @@ export default class RollingValueHasher {
     }
   }
 
-  appendType(t: Type): void { // eslint-disable-line no-unused-vars
+  appendType(t: Type<any>): void { // eslint-disable-line no-unused-vars
     // Type bytes aren't included in the byte stream we chunk over
   }
 }

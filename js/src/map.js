@@ -35,7 +35,7 @@ const KEY = 0;
 const VALUE = 1;
 
 function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
-    makeChunkFn {
+    makeChunkFn<any, any> {
   return (items: Array<MapEntry<K, V>>) => {
     const key = new OrderedKey(items.length > 0 ? items[items.length - 1][KEY] : false);
     const seq = newMapLeafSequence(vr, items);
@@ -44,7 +44,7 @@ function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
   };
 }
 
-function mapHashValueBytes(entry: MapEntry, rv: RollingValueHasher) {
+function mapHashValueBytes(entry: MapEntry<any, any>, rv: RollingValueHasher) {
   hashValueBytes(entry[KEY], rv);
   hashValueBytes(entry[VALUE], rv);
 }
@@ -79,7 +79,7 @@ function buildMapData<K: Value, V: Value>(
 }
 
 export default class Map<K: Value, V: Value> extends
-    Collection<OrderedSequence> {
+    Collection<OrderedSequence<any, any>> {
   constructor(kvs: Array<MapEntry<K, V>> = []) {
     const seq = chunkSequenceSync(
         buildMapData(kvs),
@@ -139,7 +139,7 @@ export default class Map<K: Value, V: Value> extends
     return new OrderedSequenceIterator(this.sequence.newCursorAtValue(k));
   }
 
-  _splice(cursor: OrderedSequenceCursor, insert: Array<MapEntry<K, V>>, remove: number):
+  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<MapEntry<K, V>>, remove: number):
       Promise<Map<K, V>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, vr, insert, remove, newMapLeafChunkFn(vr),
@@ -185,17 +185,17 @@ export default class Map<K: Value, V: Value> extends
 
 export class MapLeafSequence<K: Value, V: Value> extends
     OrderedSequence<K, MapEntry<K, V>> {
-  getKey(idx: number): OrderedKey {
+  getKey(idx: number): OrderedKey<any> {
     return new OrderedKey(this.items[idx][KEY]);
   }
 
-  getCompareFn(other: OrderedSequence): EqualsFn {
+  getCompareFn(other: OrderedSequence<any, any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
       equals(this.items[idx][KEY], other.items[otherIdx][KEY]) &&
       equals(this.items[idx][VALUE], other.items[otherIdx][VALUE]);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     const chunks = [];
     for (const entry of this.items) {
       if (entry[KEY] instanceof ValueBase) {

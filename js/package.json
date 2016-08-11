@@ -34,7 +34,7 @@
     "chai": "^3.5.0",
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
-    "flow-bin": "0.27.0",
+    "flow-bin": "0.30.0",
     "fs-extra": "^0.30.0",
     "mocha": "^2.5.3"
   },

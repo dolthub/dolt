@@ -15,7 +15,7 @@ import {invariant} from './assert.js';
 import {getTypeOfValue, makeRefType} from './type.js';
 import {ValueBase, getChunksOfValue} from './value.js';
 
-export function constructRef(t: Type, targetHash: Hash, height: number): Ref {
+export function constructRef(t: Type<any>, targetHash: Hash, height: number): Ref<any> {
   invariant(t.kind === Kind.Ref, () => `Not a Ref type: ${describeType(t)}`);
   invariant(!targetHash.isEmpty());
   const rv = Object.create(Ref.prototype);
@@ -30,7 +30,7 @@ export function maxChunkHeight(v: Value): number {
 }
 
 export default class Ref<T: Value> extends ValueBase {
-  _type: Type;
+  _type: Type<any>;
   // Hash of the value this points to.
   targetHash: Hash;
   // The length of the longest path of Refs to find any leaf in the graph.
@@ -44,7 +44,7 @@ export default class Ref<T: Value> extends ValueBase {
     this.targetHash = getHashOfValue(val);
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return this._type;
   }
 
@@ -52,7 +52,7 @@ export default class Ref<T: Value> extends ValueBase {
     return vr.readValue(this.targetHash);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return [this];
   }
 }

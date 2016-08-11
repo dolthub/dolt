@@ -16,7 +16,7 @@ import Sequence, {SequenceCursor} from './sequence.js';
 export class OrderedSequence<K: Value, T> extends Sequence<T> {
   // See newCursorAt().
   newCursorAtValue(val: ?K, forInsertion: boolean = false, last: boolean = false):
-      Promise<OrderedSequenceCursor> {
+      Promise<OrderedSequenceCursor<any, any>> {
     let key;
     if (val !== null && val !== undefined) {
       key = new OrderedKey(val);
@@ -30,10 +30,10 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(key: ?OrderedKey, forInsertion: boolean = false, last: boolean = false):
-      Promise<OrderedSequenceCursor> {
-    let cursor: ?OrderedSequenceCursor = null;
-    let sequence: ?OrderedSequence = this;
+  async newCursorAt(key: ?OrderedKey<any>, forInsertion: boolean = false, last: boolean = false):
+      Promise<OrderedSequenceCursor<any, any>> {
+    let cursor: ?OrderedSequenceCursor<any, any> = null;
+    let sequence: ?OrderedSequence<any, any> = this;
 
     while (sequence) {
       cursor = new OrderedSequenceCursor(cursor, sequence, last ? -1 : 0);
@@ -53,18 +53,18 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
   /**
    * Gets the key used for ordering the sequence at index |idx|.
    */
-  getKey(idx: number): OrderedKey { // eslint-disable-line no-unused-vars
+  getKey(idx: number): OrderedKey<any> { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 
-  getCompareFn(other: OrderedSequence): EqualsFn { // eslint-disable-line no-unused-vars
+  getCompareFn(other: OrderedSequence<any, any>): EqualsFn { // eslint-disable-line no-unused-vars
     throw new Error('override');
   }
 }
 
 export class OrderedSequenceCursor<T, K: Value> extends
-    SequenceCursor<T, OrderedSequence> {
-  getCurrentKey(): OrderedKey {
+    SequenceCursor<T, OrderedSequence<any, any>> {
+  getCurrentKey(): OrderedKey<any> {
     invariant(this.idx >= 0 && this.idx < this.length);
     return this.sequence.getKey(this.idx);
   }
@@ -75,7 +75,7 @@ export class OrderedSequenceCursor<T, K: Value> extends
 
   // Moves the cursor to the first value in sequence >= key and returns true.
   // If none exists, returns false.
-  _seekTo(key: OrderedKey, lastPositionIfNotfound: boolean = false): boolean {
+  _seekTo(key: OrderedKey<any>, lastPositionIfNotfound: boolean = false): boolean {
     // Find smallest idx where key(idx) >= key
     this.idx = search(this.length, i => this.sequence.getKey(i).compare(key) >= 0);
 

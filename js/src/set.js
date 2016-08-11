@@ -27,7 +27,7 @@ import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
 
-function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn {
+function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
     const key = new OrderedKey(items.length > 0 ? items[items.length - 1] : false);
     const seq = newSetLeafSequence(vr, items);
@@ -43,12 +43,12 @@ function buildSetData<T: Value>(values: Array<any>): Array<T> {
 }
 
 export function newSetLeafSequence<K: Value>(
-    vr: ?ValueReader, items: K[]): SetLeafSequence {
+    vr: ?ValueReader, items: K[]): SetLeafSequence<any> {
   const t = makeSetType(makeUnionType(items.map(getTypeOfValue)));
   return new SetLeafSequence(vr, t, items);
 }
 
-export default class Set<T: Value> extends Collection<OrderedSequence> {
+export default class Set<T: Value> extends Collection<OrderedSequence<any, any>> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
         buildSetData(values),
@@ -94,7 +94,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
     return new OrderedSequenceIterator(this.sequence.newCursorAtValue(v));
   }
 
-  _splice(cursor: OrderedSequenceCursor, insert: Array<T>, remove: number):
+  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<T>, remove: number):
       Promise<Set<T>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, vr, insert, remove, newSetLeafChunkFn(vr),
@@ -148,16 +148,16 @@ export default class Set<T: Value> extends Collection<OrderedSequence> {
 }
 
 export class SetLeafSequence<K: Value> extends OrderedSequence<K, K> {
-  getKey(idx: number): OrderedKey {
+  getKey(idx: number): OrderedKey<any> {
     return new OrderedKey(this.items[idx]);
   }
 
-  getCompareFn(other: OrderedSequence): EqualsFn {
+  getCompareFn(other: OrderedSequence<any, any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
       equals(this.items[idx], other.items[otherIdx]);
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return getValueChunks(this.items);
   }
 }

@@ -26,7 +26,7 @@ import {Kind} from './noms-kind.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
 
-function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
+function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
     const seq = newListLeafSequence(vr, items);
     const list = List.fromSequence(seq);
@@ -35,7 +35,7 @@ function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn {
   };
 }
 
-export default class List<T: Value> extends Collection<IndexedSequence> {
+export default class List<T: Value> extends Collection<IndexedSequence<any>> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
         values,
@@ -124,7 +124,7 @@ export default class List<T: Value> extends Collection<IndexedSequence> {
 }
 
 export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return getValueChunks(this.items);
   }
 
@@ -178,7 +178,7 @@ export class ListWriter<T: Value> {
     this._state = 'closed';
   }
 
-  get list(): Promise<List> {
+  get list(): Promise<List<any>> {
     assert(this._state === 'closed');
     invariant(this._list);
     return this._list;

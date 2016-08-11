@@ -14,16 +14,16 @@ import {ValueBase} from './value.js';
 
 export default class Sequence<T> {
   vr: ?ValueReader;
-  _type: Type;
+  _type: Type<any>;
   _items: Array<T>;
 
-  constructor(vr: ?ValueReader, type: Type, items: Array<T>) {
+  constructor(vr: ?ValueReader, type: Type<any>, items: Array<T>) {
     this.vr = vr;
     this._type = type;
     this._items = items;
   }
 
-  get type(): Type {
+  get type(): Type<any> {
     return this._type;
   }
 
@@ -39,15 +39,15 @@ export default class Sequence<T> {
     return this._items.length;
   }
 
-  getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
+  getChildSequence(idx: number): Promise<?Sequence<any>> { // eslint-disable-line no-unused-vars
     return Promise.resolve(null);
   }
 
-  getChildSequenceSync(idx: number): ?Sequence { // eslint-disable-line no-unused-vars
+  getChildSequenceSync(idx: number): ?Sequence<any> { // eslint-disable-line no-unused-vars
     return null;
   }
 
-  get chunks(): Array<Ref> {
+  get chunks(): Array<Ref<any>> {
     return [];
   }
 
@@ -56,12 +56,12 @@ export default class Sequence<T> {
   }
 }
 
-export class SequenceCursor<T, S: Sequence> {
-  parent: ?SequenceCursor;
+export class SequenceCursor<T, S: Sequence<any>> {
+  parent: ?SequenceCursor<any, any>;
   sequence: S;
   idx: number;
 
-  constructor(parent: ?SequenceCursor, sequence: S, idx: number) {
+  constructor(parent: ?SequenceCursor<any, any>, sequence: S, idx: number) {
     this.parent = parent;
     this.sequence = sequence;
     this.idx = idx;
@@ -213,7 +213,7 @@ export class SequenceCursor<T, S: Sequence> {
   }
 }
 
-export class SequenceIterator<T, S: Sequence> extends AsyncIterator<T> {
+export class SequenceIterator<T, S: Sequence<any>> extends AsyncIterator<T> {
   _cursor: SequenceCursor<T, S>;
   _advance: Promise<boolean>;
   _closed: boolean;
@@ -264,7 +264,7 @@ export class SequenceIterator<T, S: Sequence> extends AsyncIterator<T> {
   }
 }
 
-export function getValueChunks<T>(items: Array<T>): Array<Ref> {
+export function getValueChunks<T>(items: Array<T>): Array<Ref<any>> {
   const chunks = [];
   for (const item of items) {
     if (item instanceof ValueBase) {

@@ -19,7 +19,7 @@ import {blobType} from './type.js';
 import {invariant} from './assert.js';
 import {hashValueByte} from './rolling-value-hasher.js';
 
-export default class Blob extends Collection<IndexedSequence> {
+export default class Blob extends Collection<IndexedSequence<any>> {
   constructor(bytes: Uint8Array) {
     const chunker = new SequenceChunker(null, null, null, newBlobLeafChunkFn(null),
         newIndexedMetaSequenceChunkFn(Kind.Blob, null), blobHashValueBytes);
@@ -51,12 +51,12 @@ export default class Blob extends Collection<IndexedSequence> {
 }
 
 export class BlobReader {
-  _sequence: IndexedSequence;
+  _sequence: IndexedSequence<any>;
   _cursor: Promise<SequenceCursor<number, IndexedSequence<number>>>;
   _pos: number;
   _lock: string;
 
-  constructor(sequence: IndexedSequence) {
+  constructor(sequence: IndexedSequence<any>) {
     this._sequence = sequence;
     this._cursor = sequence.newCursorAt(0);
     this._pos = 0;
@@ -83,7 +83,7 @@ export class BlobReader {
     });
   }
 
-  _readCur(cur: SequenceCursor): Promise<Uint8Array> {
+  _readCur(cur: SequenceCursor<any, any>): Promise<Uint8Array> {
     let arr = cur.sequence.items;
     invariant(arr instanceof Uint8Array);
 
@@ -150,13 +150,13 @@ export class BlobLeafSequence extends IndexedSequence<number> {
     return idx + 1;
   }
 
-  getCompareFn(other: IndexedSequence): EqualsFn {
+  getCompareFn(other: IndexedSequence<any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
       this.items[idx] === other.items[otherIdx];
   }
 }
 
-function newBlobLeafChunkFn(vr: ?ValueReader): makeChunkFn {
+function newBlobLeafChunkFn(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<number>) => {
     const blobLeaf = new BlobLeafSequence(vr, Bytes.fromValues(items));
     const blob = Blob.fromSequence(blobLeaf);
@@ -174,7 +174,7 @@ type BlobWriterState = 'writable' | 'closed';
 export class BlobWriter {
   _state: BlobWriterState;
   _blob: ?Promise<Blob>;
-  _chunker: SequenceChunker;
+  _chunker: SequenceChunker<any, any>;
   _vrw: ?ValueReadWriter;
 
   constructor(vrw: ?ValueReadWriter) {

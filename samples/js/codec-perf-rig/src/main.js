@@ -168,7 +168,7 @@ function makeBlobBytes(byteLength: number): Uint8Array {
   return new Uint8Array(ar);
 }
 
-function buildList(count: number, createFn: createValueFn): Collection {
+function buildList(count: number, createFn: createValueFn): Collection<any> {
   const values = new Array(count);
   for (let i = 0; i < count; i++) {
     values[i] = createFn(i);
@@ -177,7 +177,8 @@ function buildList(count: number, createFn: createValueFn): Collection {
   return new List(values);
 }
 
-async function buildListIncrementally(count: number, createFn: createValueFn): Promise<Collection> {
+async function buildListIncrementally(count: number, createFn: createValueFn):
+    Promise<Collection<any>> {
   let l = new List();
   for (let i = 0; i < count; i++) {
     l = await l.insert(i, createFn(i));
@@ -186,11 +187,11 @@ async function buildListIncrementally(count: number, createFn: createValueFn): P
   return l;
 }
 
-function readList(l: List): Promise<void> {
+function readList(l: List<any>): Promise<void> {
   return l.forEach(() => {});
 }
 
-function buildSet(count: number, createFn: createValueFn): Collection {
+function buildSet(count: number, createFn: createValueFn): Collection<any> {
   const values = new Array(count);
   for (let i = 0; i < count; i++) {
     values[i] = createFn(i);
@@ -199,7 +200,8 @@ function buildSet(count: number, createFn: createValueFn): Collection {
   return new Set(values);
 }
 
-async function buildSetIncrementally(count: number, createFn: createValueFn): Promise<Collection> {
+async function buildSetIncrementally(count: number, createFn: createValueFn):
+    Promise<Collection<any>> {
   let s = new Set();
   for (let i = 0; i < count; i++) {
     s = await s.add(createFn(i));
@@ -208,11 +210,11 @@ async function buildSetIncrementally(count: number, createFn: createValueFn): Pr
   return s;
 }
 
-function readSet(l: Set): Promise<void> {
+function readSet(l: Set<any>): Promise<void> {
   return l.forEach(() => {});
 }
 
-function buildMap(count: number, createFn: createValueFn): Collection {
+function buildMap(count: number, createFn: createValueFn): Collection<any> {
   const values = new Array(count);
   for (let i = 0; i < count * 2; i += 2) {
     values[i] = [createFn(i), createFn(i + 1)];
@@ -221,7 +223,8 @@ function buildMap(count: number, createFn: createValueFn): Collection {
   return new Map(values);
 }
 
-async function buildMapIncrementally(count: number, createFn: createValueFn): Promise<Collection> {
+async function buildMapIncrementally(count: number, createFn: createValueFn):
+    Promise<Collection<any>> {
   let m = new Map();
   for (let i = 0; i < count * 2; i += 2) {
     m = await m.set(createFn(i), createFn(i + 1));
@@ -230,6 +233,6 @@ async function buildMapIncrementally(count: number, createFn: createValueFn): Pr
   return m;
 }
 
-function readMap(l: Map): Promise<void> {
+function readMap(l: Map<any, any>): Promise<void> {
   return l.forEach(() => {});
 }

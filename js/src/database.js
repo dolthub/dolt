@@ -18,7 +18,7 @@ import {equals} from './compare.js';
 export default class Database {
   _vs: ValueStore;
   _rt: RootTracker;
-  _datasets: Promise<Map<string, Ref<Commit>>>;
+  _datasets: Promise<Map<string, Ref<Commit<any>>>>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
     this._vs = new ValueStore(bs, cacheSize);
@@ -34,7 +34,7 @@ export default class Database {
     return ds;
   }
 
-  _datasetsFromRootRef(rootRef: Promise<Hash>): Promise<Map<string, Ref<Commit>>> {
+  _datasetsFromRootRef(rootRef: Promise<Hash>): Promise<Map<string, Ref<Commit<any>>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
         return Promise.resolve(new Map());
@@ -45,16 +45,16 @@ export default class Database {
   }
 
   // TODO: This should return Promise<Ref<Commit> | null>.
-  headRef(datasetID: string): Promise<?Ref<Commit>> {
+  headRef(datasetID: string): Promise<?Ref<Commit<any>>> {
     return this._datasets.then(datasets => datasets.get(datasetID));
   }
 
   // TODO: This should return Promise<Commit | null>
-  head(datasetID: string): Promise<?Commit> {
+  head(datasetID: string): Promise<?Commit<any>> {
     return this.headRef(datasetID).then(hr => hr ? this.readValue(hr.targetHash) : null);
   }
 
-  datasets(): Promise<Map<string, Ref<Commit>>> {
+  datasets(): Promise<Map<string, Ref<Commit<any>>>> {
     return this._datasets;
   }
 
@@ -67,7 +67,7 @@ export default class Database {
     return this._vs.writeValue(v);
   }
 
-  async _descendsFrom(commit: Commit, currentHeadRef: Ref<Commit>): Promise<boolean> {
+  async _descendsFrom(commit: Commit<any>, currentHeadRef: Ref<Commit<any>>): Promise<boolean> {
     let ancestors = commit.parents;
     while (!(await ancestors.has(currentHeadRef))) {
       if (ancestors.isEmpty()) {
@@ -78,10 +78,10 @@ export default class Database {
     return true;
   }
 
-  async commit(datasetId: string, commit: Commit): Promise<Database> {
+  async commit(datasetId: string, commit: Commit<any>): Promise<Database> {
     const currentRootRefP = this._rt.getRoot();
     const datasetsP = this._datasetsFromRootRef(currentRootRefP);
-    let currentDatasets = await (datasetsP:Promise<Map>);
+    let currentDatasets = await (datasetsP:Promise<Map<any, any>>);
     const currentRootRef = await currentRootRefP;
     const commitRef = this.writeValue(commit);
 
@@ -111,8 +111,8 @@ export default class Database {
   }
 }
 
-async function getAncestors(commits: Set<Ref<Commit>>, database: Database):
-    Promise<Set<Ref<Commit>>> {
+async function getAncestors(commits: Set<Ref<Commit<any>>>, database: Database):
+    Promise<Set<Ref<Commit<any>>>> {
   let ancestors = new Set();
   await commits.map(async (commitRef) => {
     const commit = await database.readValue(commitRef.targetHash);

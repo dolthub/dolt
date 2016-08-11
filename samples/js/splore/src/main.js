@@ -93,7 +93,7 @@ function formatKeyString(v: any): string {
 function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
   let counter = 0;
 
-  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence,
+  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence<any>,
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
@@ -223,7 +223,7 @@ function handleNodeClick(e: MouseEvent, id: string) {
 }
 
 class Prompt extends React.Component<void, {}, void> {
-  render(): React.Element {
+  render(): React.Element<any> {
     const fontStyle: {[key: string]: any} = {
       fontFamily: 'Menlo',
       fontSize: 14,

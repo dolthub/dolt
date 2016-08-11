@@ -54,12 +54,12 @@ export function assertValueHash(expectHashStr: string, v: Value) {
   assert.strictEqual(expectHashStr, getHashOfValue(v).toString());
 }
 
-export function assertValueType(expectType: Type, v: Value) {
+export function assertValueType(expectType: Type<any>, v: Value) {
   assert.isTrue(equals(expectType, getTypeOfValue(v)));
 }
 
-export function assertChunkCountAndType(expectCount: number, expectType: Type,
-    v: Collection) {
+export function assertChunkCountAndType(expectCount: number, expectType: Type<any>,
+    v: Collection<any>) {
   const chunks = v.chunks;
   assert.strictEqual(expectCount, chunks.length);
   v.chunks.forEach(r => assert.isTrue(equals(expectType, r.type)));
@@ -122,7 +122,7 @@ export function intSequence(count: number, start: number = 0): Array<number> {
   return nums;
 }
 
-export function deriveCollectionHeight(col: Collection): number {
+export function deriveCollectionHeight(col: Collection<any>): number {
   // Note: not using seq.items[0].ref.height because the purpose of this method is to
   // be redundant.
   return col.sequence.isMeta ? 1 + deriveCollectionHeight(notNull(col.sequence.items[0].child)) : 0;

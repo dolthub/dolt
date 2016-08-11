@@ -48,7 +48,7 @@ main().catch(ex => {
   process.exit(1);
 });
 
-function getEncoder(name: string): EncoderDecoder {
+function getEncoder(name) {
   if (name === 'string') {
     return new StringEncoderDecoder();
   } else if (name === 'binary') {
@@ -61,6 +61,7 @@ function getEncoder(name: string): EncoderDecoder {
     console.error(`unknown encoding option: ${args.encoding}`);
     process.exit(1);
   }
+  throw new Error('unreachable');
 }
 
 async function main(): Promise<void> {

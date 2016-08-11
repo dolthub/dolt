@@ -342,7 +342,7 @@ export class HashIndexPath {
   }
 
   async resolve(value: Value): Promise<Value | null> {
-    let seq: OrderedSequence;
+    let seq: OrderedSequence<any, any>;
     let getCurrentValue; // (cur: sequenceCursor): Value
 
     if (value instanceof Set) {

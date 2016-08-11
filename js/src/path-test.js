@@ -19,7 +19,7 @@ import type Value from './value.js';
 import {newStruct} from './struct.js';
 
 function hashIdx(v: Value): string {
-  return `[#${getHash(v)}]`;
+  return `[#${getHash(v).toString()}]`;
 }
 
 async function assertResolvesTo(expect: Value | null, ref: Value, str: string) {
