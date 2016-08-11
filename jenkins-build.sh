@@ -57,16 +57,16 @@ echoBuildEnv () {
 # remove previous build if present
 rm -rf $GOOS-$GOARCH.tar.gz
 
-echobuildenv
+echoBuildEnv
 
 # run tests, only build binaries if test succeeds
-gotest
+goTest
 
 # perform the actual builds
 binaries=""
 for bin in "${BINARIES_TO_BUILD[@]}"
 do
-	gobuild $bin
+	goBuild $bin
 	binaries+=" "
 	binaries+=`basename $bin`
 done
