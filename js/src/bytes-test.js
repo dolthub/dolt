@@ -183,4 +183,24 @@ suite('Bytes', () => {
     test([1, 2, 3, 4, 5]);
     test([2, 3, 4, 5, 10]);
   });
+
+  test('encodeUtf8', () => {
+    function t(str) {
+      const nb = NodeBytes.alloc(100);
+      const ndv = new DataView(nb.buffer, nb.byteOffset, nb.byteLength);
+      const no = NodeBytes.encodeUtf8(str, nb, ndv, 0);
+
+      const bb = BrowserBytes.alloc(100);
+      const bdv = new DataView(bb.buffer, bb.byteOffset, bb.byteLength);
+      const bo = BrowserBytes.encodeUtf8(str, bb, bdv, 0);
+
+      assert.equal(no, bo);
+      for (let i = 0; i < no; i++) {
+        assert.equal(nb[i], bb[i]);
+      }
+    }
+    t('');
+    t('hello');
+    t('💩');
+  });
 });

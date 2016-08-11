@@ -9,7 +9,7 @@ import {SHA512} from 'asmcrypto.js-sha512';
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
-const littleEndian = true;
+const dvBigEndian = false;
 
 export function alloc(size: number): Uint8Array {
   return new Uint8Array(size);
@@ -76,7 +76,7 @@ export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: 
   const strBuff = fromString(str);
   const size = strBuff.byteLength;
 
-  dv.setUint32(offset, size, littleEndian);
+  dv.setUint32(offset, size, dvBigEndian);
   offset += 4;
 
   buff.set(strBuff, offset);
