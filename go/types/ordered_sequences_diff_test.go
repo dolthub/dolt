@@ -59,7 +59,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 }
 
 func (suite *diffTestSuite) TestDiff() {
-	type valFn func(int, int, int) []Value
+	type valFn func(int, int, int) ValueSlice
 	type colFn func([]Value) Collection
 
 	notNil := func(vs []Value) bool {

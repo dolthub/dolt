@@ -227,6 +227,14 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 	})
 }
 
+func (m Map) IterFrom(start Value, cb mapIterCallback) {
+	cur := newCursorAtValue(m.seq, start, false, false)
+	cur.iter(func(v interface{}) bool {
+		entry := v.(mapEntry)
+		return cb(entry.key, entry.value)
+	})
+}
+
 func (m Map) elemTypes() []*Type {
 	return m.Type().Desc.(CompoundDesc).ElemTypes
 }
