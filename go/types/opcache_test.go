@@ -19,20 +19,17 @@ func TestOpCache(t *testing.T) {
 type OpCacheSuite struct {
 	suite.Suite
 	vs *ValueStore
-	oc *opCache
 }
 
 func (suite *OpCacheSuite) SetupTest() {
 	suite.vs = NewTestValueStore()
-	suite.oc = newOpCache(suite.vs)
 }
 
 func (suite *OpCacheSuite) TearDownTest() {
 	suite.vs.Close()
-	suite.oc.Destroy()
 }
 
-func (suite *OpCacheSuite) TestSet() {
+func (suite *OpCacheSuite) TestMapSet() {
 	entries := mapEntrySlice{
 		{NewList(Number(8), Number(0)), String("ahoy")},
 		{String("A key"), NewBlob(bytes.NewBufferString("A value"))},
@@ -44,16 +41,48 @@ func (suite *OpCacheSuite) TestSet() {
 		{String("struct"), NewStruct("thing2", nil)},
 		{Number(42), String("other")},
 	}
+	oc := suite.vs.opCache()
 	for _, entry := range entries {
-		suite.oc.Set(entry.key, entry.value)
+		oc.MapSet(entry.key, entry.value)
 	}
 	sort.Sort(entries)
 
 	iterated := mapEntrySlice{}
-	iter := suite.oc.NewIterator()
+	iter := oc.NewIterator()
 	defer iter.Release()
 	for iter.Next() {
-		iterated = append(iterated, iter.Op().(mapEntry))
+		iterated = append(iterated, iter.MapOp().(mapEntry))
+	}
+	suite.True(entries.Equals(iterated))
+}
+
+func (suite *OpCacheSuite) TestSetInsert() {
+	entries := ValueSlice{
+		NewList(Number(8), Number(0)),
+		String("ahoy"),
+		NewBlob(bytes.NewBufferString("A value")),
+		Number(1),
+		Bool(true),
+		Bool(false),
+		NewBlob(bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewMap(),
+		Number(42),
+		NewStruct("thing1", StructData{"a": Number(7)}),
+		String("struct"),
+		NewStruct("thing2", nil),
+		String("other"),
+	}
+	oc := suite.vs.opCache()
+	for _, entry := range entries {
+		oc.SetInsert(entry)
+	}
+	sort.Sort(entries)
+
+	iterated := ValueSlice{}
+	iter := oc.NewIterator()
+	defer iter.Release()
+	for iter.Next() {
+		iterated = append(iterated, iter.SetOp().(Value))
 	}
 	suite.True(entries.Equals(iterated))
 }

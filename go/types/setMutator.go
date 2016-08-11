@@ -6,35 +6,34 @@ package types
 
 import "github.com/attic-labs/noms/go/d"
 
-type mapMutator struct {
-	oc  *opCache
+type setMutator struct {
+	oc  opCache
 	vrw ValueReadWriter
 }
 
-func newMutator(vrw ValueReadWriter) *mapMutator {
-	return &mapMutator{newOpCache(vrw), vrw}
+func newSetMutator(vrw ValueReadWriter) *setMutator {
+	return &setMutator{vrw.opCache(), vrw}
 }
 
-func (mx *mapMutator) Set(key Value, val Value) *mapMutator {
-	d.Chk.True(mx.oc != nil, "Can't call Set() again after Finish()")
-	mx.oc.Set(key, val)
+func (mx *setMutator) Insert(val Value) *setMutator {
+	d.Chk.True(mx.oc != nil, "Can't call Insert() again after Finish()")
+	mx.oc.SetInsert(val)
 	return mx
 }
 
-func (mx *mapMutator) Finish() Map {
+func (mx *setMutator) Finish() Set {
 	d.Chk.True(mx.oc != nil, "Can only call Finish() once")
 	defer func() {
-		mx.oc.Destroy()
 		mx.oc = nil
 	}()
 
-	seq := newEmptySequenceChunker(mx.vrw, mx.vrw, makeMapLeafChunkFn(mx.vrw), newOrderedMetaSequenceChunkFn(MapKind, mx.vrw), mapHashValueBytes)
+	seq := newEmptySequenceChunker(mx.vrw, mx.vrw, makeSetLeafChunkFn(mx.vrw), newOrderedMetaSequenceChunkFn(SetKind, mx.vrw), hashValueBytes)
 
 	// I tried splitting this up so that the iteration ran in a separate goroutine from the Append'ing, but it actually made things a bit slower when I ran a test.
 	iter := mx.oc.NewIterator()
 	defer iter.Release()
 	for iter.Next() {
-		seq.Append(iter.Op())
+		seq.Append(iter.SetOp())
 	}
-	return newMap(seq.Done().(orderedSequence))
+	return newSet(seq.Done().(orderedSequence))
 }

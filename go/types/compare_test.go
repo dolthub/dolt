@@ -12,6 +12,8 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
+var prefix = []byte{0x01, 0x02, 0x03, 0x04}
+
 func TestTotalOrdering(t *testing.T) {
 	assert := assert.New(t)
 
@@ -48,25 +50,18 @@ func TestTotalOrdering(t *testing.T) {
 func TestCompareEmpties(t *testing.T) {
 	assert := assert.New(t)
 	comp := opCacheComparer{}
-	assert.Equal(-1, comp.Compare(nil, []byte{0xff}))
-	assert.Equal(-1, comp.Compare([]byte{}, []byte{0xff}))
-
-	assert.Equal(0, comp.Compare(nil, nil))
-	assert.Equal(0, comp.Compare(nil, []byte{}))
-	assert.Equal(0, comp.Compare([]byte{}, []byte{}))
-	assert.Equal(0, comp.Compare([]byte{}, nil))
-
-	assert.Equal(1, comp.Compare([]byte{0xff}, nil))
-	assert.Equal(1, comp.Compare([]byte{0xff}, []byte{}))
+	assert.Equal(-1, comp.Compare(prefix, append(prefix, 0xff)))
+	assert.Equal(0, comp.Compare(prefix, prefix))
+	assert.Equal(1, comp.Compare(append(prefix, 0xff), prefix))
 }
 
 func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	assert := assert.New(t)
 	comp := opCacheComparer{}
 
-	b := []byte{byte(BoolKind), 0x00}
-	n := []byte{byte(NumberKind), 0x00}
-	s := []byte{byte(StringKind), 'a'}
+	b := append(prefix, byte(BoolKind), 0x00)
+	n := append(prefix, byte(NumberKind), 0x00)
+	s := append(prefix, byte(StringKind), 'a')
 
 	assert.Equal(-1, comp.Compare(b, n))
 	assert.Equal(-1, comp.Compare(b, s))
@@ -109,9 +104,9 @@ func TestCompareHashes(t *testing.T) {
 	one := encode(Number(1))
 	hey := encode(String("hey"))
 
-	minHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, hash.ByteLen)...)
-	maxHash := append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, hash.ByteLen)...)
-	almostMaxHash := append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, hash.ByteLen-1), 0xfe)...)
+	minHash := append(prefix, append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, hash.ByteLen)...)...)
+	maxHash := append(prefix, append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, hash.ByteLen)...)...)
+	almostMaxHash := append(prefix, append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, hash.ByteLen-1), 0xfe)...)...)
 
 	assert.Equal(-1, comp.Compare(tru, minHash))
 	assert.Equal(-1, comp.Compare(one, minHash))
@@ -135,13 +130,15 @@ func TestCompareHashes(t *testing.T) {
 	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
 	assert.Equal(1, comp.Compare(almostMaxHash, minHash))
 
-	almostMaxHash[0]++
+	almostMaxHash[5]++
 	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
 
+	almostMaxHash[0]++
+	assert.Equal(-1, comp.Compare(maxHash, almostMaxHash))
 }
 
 func encode(v Value) []byte {
 	w := &binaryNomsWriter{make([]byte, 128, 128), 0}
 	newValueEncoder(w, nil).writeValue(v)
-	return w.data()
+	return append(prefix, w.data()...)
 }
