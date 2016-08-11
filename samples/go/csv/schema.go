@@ -5,7 +5,9 @@
 package csv
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 
@@ -31,6 +33,14 @@ func (so schemaOptions) Test(fields []string) {
 	}
 }
 
+func (so schemaOptions) MostSpecificKinds() KindSlice {
+	kinds := make(KindSlice, len(so))
+	for i, t := range so {
+		kinds[i] = t.MostSpecificKind()
+	}
+	return kinds
+}
+
 func (so schemaOptions) ValidKinds() []KindSlice {
 	kinds := make([]KindSlice, len(so))
 	for i, t := range so {
@@ -45,6 +55,16 @@ type typeCanFit struct {
 	stringType bool
 }
 
+func (tc *typeCanFit) MostSpecificKind() types.NomsKind {
+	if tc.boolType {
+		return types.BoolKind
+	} else if tc.numberType {
+		return types.NumberKind
+	} else {
+		return types.StringKind
+	}
+}
+
 func (tc *typeCanFit) ValidKinds() (kinds KindSlice) {
 	if tc.numberType {
 		kinds = append(kinds, types.NumberKind)
@@ -52,7 +72,6 @@ func (tc *typeCanFit) ValidKinds() (kinds KindSlice) {
 	if tc.boolType {
 		kinds = append(kinds, types.BoolKind)
 	}
-
 	kinds = append(kinds, types.StringKind)
 	return kinds
 }
@@ -84,6 +103,18 @@ func (tc *typeCanFit) testBool(value string) {
 	}
 	_, err := strconv.ParseBool(value)
 	tc.boolType = err == nil
+}
+
+func GetSchema(r *csv.Reader, headers []string) KindSlice {
+	so := newSchemaOptions(len(headers))
+	for i := 0; i < 100; i++ {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		so.Test(row)
+	}
+	return so.MostSpecificKinds()
 }
 
 // StringToValue takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
