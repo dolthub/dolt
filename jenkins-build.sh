@@ -4,18 +4,13 @@
 # Licensed under the Apache License, version 2.0:
 # http://www.apache.org/licenses/LICENSE-2.0
 
-# jenkins-build.sh [GOOS] [GOARCH]
-# GOOS - darwin, linux
-# GOARCH - amd64, 386
+# jenkins-build.sh [GOOS-GOARCH] [GOOS-GOARCH] ...
+# e.g. darwin-amd64, linux-amd64 darwin-386, etc.
 # see https://golang.org/doc/install/source#environment for more options
 # This script assumes go, git, tar are in your $PATH already
-# If successful, a tar.gz file named $GOOS-$GOARCH.tar.gz is generated.
+# If successful, tar.gz files named $GOOS-$GOARCH.tar.gz are generated.
 
 set -euo pipefail
-
-# default to building for Mac OS X
-GOOS=${1:-darwin}
-GOARCH=${2:-amd64}
 
 NOMS_GIT_REV=`git describe --always`
 NOMS_GIT_REPO="github.com/attic-labs/noms"
@@ -39,38 +34,52 @@ goTest () {
 	go test ${NOMS_GIT_REPO}/cmd/... ${NOMS_GIT_REPO}/samples/go/... ${NOMS_GIT_REPO}/go/...
 }
 
-# execute `go build` with arg for package ($1), inserting the git sha1 into the binary
+# execute `go build` for binary, inserting the git sha1 into the binary
+# args: GOOS ($1), GOARCH ($2), package ($3)
 goBuild () {
-	echo Building ${NOMS_GIT_REPO}/$1...
-    GOOS=${GOOS} GOARCH=${GOARCH} go build \
+	echo Building ${NOMS_GIT_REPO}/$3 for $1-$2...
+    GOOS=$1 GOARCH=$2 go build \
   		-ldflags "-X github.com/attic-labs/noms/go/constants.NomsGitSHA=${NOMS_GIT_REV}" \
-  		${NOMS_GIT_REPO}/$1
+  		${NOMS_GIT_REPO}/$3
+}
+
+# execute `goBuild` for binaries to be built
+# args: GOOS ($1) and GOARCH ($2)
+# creates $GOOS-$GOARCH.tar.gz of binaries if successful
+goBuildPlatform () {
+	rm -rf $1-$2.tar.gz
+	binaries=""
+	for bin in "${BINARIES_TO_BUILD[@]}"
+	do
+		goBuild $1 $2 $bin
+		binaries+=" "
+		binaries+=`basename $bin`
+	done
+
+	# bundle the built files
+	tar czvf $1-$2.tar.gz ${binaries}
+	rm ${binaries}
 }
 
 echoBuildEnv () {
 	date
 	uname -a
 	go version
-	echo Building from $NOMS_GIT_REV for $GOOS/$GOARCH...
+	echo Building from $NOMS_GIT_REV...
 }
 
-# remove previous build if present
-rm -rf $GOOS-$GOARCH.tar.gz
-
 echoBuildEnv
-
-# run tests, only build binaries if test succeeds
 goTest
 
-# perform the actual builds
-binaries=""
-for bin in "${BINARIES_TO_BUILD[@]}"
-do
-	goBuild $bin
-	binaries+=" "
-	binaries+=`basename $bin`
-done
+# default to building for Mac OS X
+BUILD_TARGETS=(darwin-amd64)
+if [ $# -gt 0 ] ; then
+	BUILD_TARGETS=( "$@" )
+fi
 
-# bundle the built files
-tar czvf $GOOS-$GOARCH.tar.gz ${binaries}
-rm ${binaries}
+GOOS_GOARCH=""
+for target in "${BUILD_TARGETS[@]}" ; do
+	# split build target from GOOS-GOARCH into GOOS and GOARCH
+	IFS='-' read -ra GOOS_GOARCH <<< "$target"
+	goBuildPlatform "${GOOS_GOARCH[0]}" "${GOOS_GOARCH[1]}"
+done
