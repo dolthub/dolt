@@ -79,7 +79,7 @@ func runSync(args []string) int {
 	}()
 
 	sourceRef := types.NewRef(sourceObj)
-	sinkRef, _ := sinkDataset.MaybeHeadRef()
+	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
@@ -102,10 +102,12 @@ func runSync(args []string) int {
 	if last := <-lastProgressCh; last.DoneCount > 0 {
 		status.Printf("Done - Synced %s in %s (%s/s)", humanize.Bytes(last.DoneBytes), since(start), bytesPerSec(last, start))
 		status.Done()
+	} else if !sinkExists {
+		fmt.Printf("All chunks already exist at destination! Created new dataset %s.\n", args[1])
 	} else if nonFF && !sourceRef.Equals(sinkRef) {
 		fmt.Printf("Abandoning %s; new head is %s\n", sinkRef.TargetHash(), sourceRef.TargetHash())
 	} else {
-		fmt.Println(args[1], "is up to date.")
+		fmt.Printf("Dataset %s is already up to date.\n", args[1])
 	}
 
 	return 0
