@@ -4,89 +4,107 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+import AbsolutePath from './absolute-path.js';
+import {notNull} from './assert.js';
 import {BatchStoreAdaptor} from './batch-store.js';
-import Dataset from './dataset.js';
+import Dataset, {datasetRe} from './dataset.js';
 import Database from './database.js';
 import HttpBatchStore from './http-batch-store.js';
 import MemoryStore from './memory-store.js';
-import Hash from './hash.js';
+import type Value from './value.js';
 
-// A parsed specification for the location of a Noms database.
-// For example: 'mem:' or 'https://ds.noms.io/aa/music'
-//
-// See "spelling databases" for details on supported syntaxes:
-// https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
+/**
+ * A parsed specification for the location of a Noms database.
+ * For example: 'mem' or 'https://demo.noms.io/cli-tour'.
+ *
+ * See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
+ */
 export class DatabaseSpec {
   scheme: string;
   path: string;
 
-  // Returns parsed spec, or null if the spec was invalid.
-  static parse(spec: string): ?DatabaseSpec {
-    const match = spec.match(/^(.+?)(:.+)?$/);
-    if (!match) {
-      return null;
+  _ms: MemoryStore | null;
+
+  /**
+   * Returns `spec` parsed as a DatabaseSpec. Throws a `SyntaxError` if `spec` isn't valid.
+   */
+  static parse(spec: string): DatabaseSpec {
+    // A common mistake is to accidentally use the "ldb" protocol thinking it works,
+    // because the Go SDK does.
+    const ldbNotSupported = 'The "ldb" protocol is not supported in the JS SDK. ' +
+      'Instead, use "noms serve" and point at "http://localhost:8000"';
+
+    const protoIdx = spec.indexOf(':');
+    if (protoIdx === -1) {
+      if (spec === 'mem') {
+        return new DatabaseSpec('mem', '');
+      }
+      // In the Go SDK this would be interpreted as "ldb", but JS doesn't support ldb.
+      throw new SyntaxError(ldbNotSupported);
     }
-    const [, scheme, p] = match;
-    if (p && p.indexOf('::') > 0) {
-      return null;
-    }
-    const path = p ? p.substr(1) : p;
-    switch (scheme) {
+
+    const protocol = spec.slice(0, protoIdx);
+    const path = spec.slice(protoIdx + 1);
+
+    switch (protocol) {
+      case 'ldb':
+        throw new SyntaxError(ldbNotSupported);
+      case 'mem':
+        throw new SyntaxError('In-memory database must be specified as "mem" not "mem:');
       case 'http':
       case 'https':
-        if (!path) {
-          return null;
+        // TODO: better validation, see https://github.com/attic-labs/noms/issues/2351.
+        if (path === '') {
+          throw new SyntaxError(`Invalid URL ${spec}`);
         }
-        break;
-      case 'mem':
-        if (path) {
-          return null;
-        }
-        break;
+        return new DatabaseSpec(protocol, path);
       default:
-        return null;
+        throw new SyntaxError(`Unsupported protocol ${protocol}`);
     }
-    return new this(scheme, path || '');
   }
 
   constructor(scheme: string, path: string) {
     this.scheme = scheme;
     this.path = path;
+    // Cache the MemoryStore for testing, or it will reset every time database() is called.
+    this._ms = scheme === 'mem' ? new MemoryStore() : null;
   }
 
-  // Constructs a new Database based on the parsed spec.
+  /**
+   * Constructs a new Database based on the parsed spec.
+   */
   database(): Database {
-    if (this.scheme === 'mem') {
-      return new Database(new BatchStoreAdaptor(new MemoryStore()));
+    switch (this.scheme) {
+      case 'mem':
+        return new Database(new BatchStoreAdaptor(notNull(this._ms)));
+      case 'http':
+      case 'https':
+        return new Database(new HttpBatchStore(`${this.scheme}:${this.path}`));
+      default:
+        throw new Error('Unreached');
     }
-    if (this.scheme === 'http') {
-      return new Database(new HttpBatchStore(`${this.scheme}:${this.path}`));
-    }
-    throw new Error('Unreached');
   }
 }
 
-// A parsed specification for the location of a Noms dataset.
-// For example: 'mem:photos' or 'https://ds.noms.io/aa/music:funk'
-//
-// See "spelling datasets" for details on supported syntaxes:
-// https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
+/**
+ * A parsed specification for the location of a Noms dataset.
+ * For example: 'mem::photos' or 'https://demo.noms.io/cli-tour::sf-crime'.
+ *
+ * See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
+ */
 export class DatasetSpec {
   database: DatabaseSpec;
   name: string;
 
-  // Returns a parsed spec, or null if the spec was invalid.
-  static parse(spec: string): ?DatasetSpec {
-    const match = spec.match(/^(.+)\:\:([a-zA-Z0-9\-_/]+)$/);
-    if (!match) {
-      return null;
+  /**
+   * Returns `spec` parsed as a DatasetSpec. Throws a `SyntaxError` if `spec` isn't valid.
+   */
+  static parse(spec: string): DatasetSpec {
+    const [database, name] = splitAndParseDatabaseSpec(spec);
+    if (!datasetRe.test(name)) {
+      throw new SyntaxError(`Invalid dataset ${name}, must match ${datasetRe.source}`);
     }
-    const [, dbSpec, dsName] = match;
-    const database = DatabaseSpec.parse(dbSpec);
-    if (!database) {
-      return null;
-    }
-    return new this(database, dsName);
+    return new DatasetSpec(database, name);
   }
 
   constructor(database: DatabaseSpec, name: string) {
@@ -94,65 +112,67 @@ export class DatasetSpec {
     this.name = name;
   }
 
-  // Returns a new DataSet based on the parsed spec.
+  /**
+   * Returns a new Dataset based on this DatasetSpec.
+   */
   dataset(): Dataset {
     return new Dataset(this.database.database(), this.name);
   }
 
-  // Returns the value at the HEAD of this dataset, if any, or null otherwise.
-  value(): Promise<any> {
-    // Hm. Calling dataset() creates a Database that we then toss into the ether, which means we
-    // can't call close() on it. Ideally, we'd fix that.
-    return this.dataset().head()
-      .then(commit => commit && commit.value);
+  /**
+   * Returns a tuple of the database backed by this dataset, and value at the HEAD of this
+   * dataset. If this dataset doesn't have a HEAD, the value will be `null`.
+   *
+   * The caller should always call `close()` when done.
+   */
+  value(): Promise<[Database, Value | null]> {
+    const db = this.database.database();
+    return this.dataset().head().then(commit => [db, commit ? commit.value : null]);
   }
 }
 
-
-// A parsed specification for the location of a Noms hash.
-// For example: 'mem:sha1-5ba4be791d336d3184be7ee7dc598037f410ef96' or
-// 'https://ds.noms.io/aa/music:sha1-3ff6ee6add3490621a8886608cc8423dba3cf7ca'
-//
-// See "spelling objects" for details on supported syntaxes:
-// https://docs.google.com/document/d/1QgKcRS304llwU0ECahKtn8lGBFmT5zXzWr-5tah1S_4/edit
-export class HashSpec {
+/**
+ * A path to a Noms value within a database.
+ *
+ * E.g. the entirety of a spec like `http://demo.noms.io::foo.bar` or
+ * `http://demo.noms.io::#abcdef.bar`.
+ */
+export class PathSpec {
   database: DatabaseSpec;
-  hash: Hash;
+  path: AbsolutePath;
 
-  // Returns a parsed spec, or null if the spec was invalid.
-  static parse(spec: string): ?HashSpec {
-    const match = spec.match(/^(.+)\:\:([\-sh0-9a-fA-F]+)$/);
-    if (!match) {
-      return null;
-    }
-
-    const [, dbSpec, hashPart] = match;
-    const hash = Hash.parse(hashPart);
-    if (!hash) {
-      return null;
-    }
-
-    const database = DatabaseSpec.parse(dbSpec);
-    if (!database) {
-      return null;
-    }
-
-    return new this(database, hash);
+  /**
+   * Parses `str` as a PathSpec. Throws a SyntaxError if `str` isn't valid.
+   */
+  static parse(str: string): PathSpec {
+    const [database, pathStr] = splitAndParseDatabaseSpec(str);
+    const path = AbsolutePath.parse(pathStr);
+    return new PathSpec(database, path);
   }
 
-  constructor(database: DatabaseSpec, hash: Hash) {
+  constructor(database: DatabaseSpec, path: AbsolutePath) {
     this.database = database;
-    this.hash = hash;
+    this.path = path;
   }
 
-  // Returns the value for the spec'd reference, if any, or null otherwise.
-  value(): Promise<any> {
-    const database = this.database.database();
-    return database.readValue(this.hash).then(v => database.close().then(() => v));
+  /**
+   * Resolves this PathSpec, and returns the database it was resolved in, and the value it
+   * resolved to. If the value wasn't found, it will be `null`.
+   *
+   * The caller should always call `close()` when done.
+   */
+  value(): Promise<[Database, Value|null]> {
+    const db = this.database.database();
+    return this.path.resolve(db).then(value => [db, value]);
   }
 }
 
-// Parses and returns the provided hash or dataset spec.
-export function parseObjectSpec(spec: string): ?(DatasetSpec | HashSpec) {
-  return HashSpec.parse(spec) || DatasetSpec.parse(spec);
+function splitAndParseDatabaseSpec(str: string): [DatabaseSpec, string] {
+  const sep = '::';
+  const sepIdx = str.lastIndexOf(sep);
+  if (sepIdx === -1) {
+    throw new SyntaxError(`Missing ${sep} separator between database and dataset: ${str}`);
+  }
+  const dbSpec = DatabaseSpec.parse(str.slice(0, sepIdx));
+  return [dbSpec, str.slice(sepIdx + sep.length)];
 }

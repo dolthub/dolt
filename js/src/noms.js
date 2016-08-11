@@ -57,7 +57,7 @@ export {
   getTypeOfValue,
 } from './type.js';
 export {equals, less} from './compare.js';
-export {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
+export {DatabaseSpec, DatasetSpec, PathSpec} from './specs.js';
 export {default as walk} from './walk.js';
 export {default as jsonToNoms} from './json-convert.js';
 export {isSubtype} from './assert-type.js';

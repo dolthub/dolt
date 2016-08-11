@@ -35,9 +35,11 @@ export interface Part {
 
 /**
  * A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they can address inlined
- * values. See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
+ * values.
  *
  * E.g. in a spec like `http://demo.noms.io::foo.bar` this is the `.bar` component.
+ *
+ * See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
  */
 export default class Path {
   _parts: Array<Part>;

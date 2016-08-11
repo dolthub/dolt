@@ -18,6 +18,8 @@ const datasetCapturePrefixRe = new RegExp('^(' + datasetRe.source + ')');
  *
  * E.g. in a spec like `http://demo.noms.io::foo.bar` this is the `foo.bar` component, or in
  * `http://demo.noms.io::#abcdef.bar` the `#abcdef.bar` component.
+ *
+ * See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
  */
 export default class AbsolutePath {
   /** The dataset ID that `path` is in, or `''` if none. */

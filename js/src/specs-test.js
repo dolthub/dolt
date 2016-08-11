@@ -4,111 +4,192 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {invariant} from './assert.js';
-import Database from './database.js';
-import Hash from './hash.js';
-import {DatabaseSpec, DatasetSpec, HashSpec, parseObjectSpec} from './specs.js';
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
+import Dataset from './dataset.js';
+import {getHash} from './get-hash.js';
+import List from './list.js';
+import {DatabaseSpec, DatasetSpec, PathSpec} from './specs.js';
+
+const assertThrowsSyntaxError = (parse, s) => {
+  let msg = '';
+  try {
+    parse(s);
+  } catch (e) {
+    assert.instanceOf(e, SyntaxError,
+                      `${s} did not produce a SyntaxError, instead ${e.constructor.name}`);
+    msg = e.message;
+  }
+  assert.notEqual('', msg, `${s} did not produce an error`);
+};
+
 suite('Specs', () => {
+  test('mem database', async () => {
+    const spec = DatabaseSpec.parse('mem');
+    assert.strictEqual('mem', spec.scheme);
+    assert.strictEqual('', spec.path);
+
+    const db = spec.database();
+    db.writeValue(true);
+    assert.strictEqual(true, await spec.database().readValue(getHash(true)));
+  });
+
+  test('mem dataset', async () => {
+    const spec = DatasetSpec.parse('mem::test');
+    assert.strictEqual('test', spec.name);
+
+    let [, head] = await spec.value();
+    assert.strictEqual(null, head);
+
+    await spec.dataset().commit('Commit Value');
+    [, head] = await spec.value();
+    assert.strictEqual('Commit Value', head);
+  });
+
+  test('mem hash path', async () => {
+    const trueHash = getHash(true).toString();
+    const spec = PathSpec.parse(`mem::#${trueHash}`);
+
+    let [db, value] = await spec.value();
+    assert.strictEqual(null, value);
+
+    db.writeValue(true);
+    [db, value] = await spec.value();
+    assert.strictEqual(true, value);
+  });
+
+  test('mem dataset path', async () => {
+    const spec = PathSpec.parse('mem::test.value[0]');
+
+    let [db, value] = await spec.value();
+    assert.strictEqual(null, value);
+
+    const ds = new Dataset(db, 'test');
+    await ds.commit(new List([42]));
+    [db, value] = await spec.value();
+    assert.strictEqual(42, value);
+  });
+
   test('DatabaseSpec', async () => {
-    const invalid = ['mem:stuff', 'mem::', 'mem:', 'http:', 'https:', 'random:', 'random:random',
-      'http://some/::/one',
+    const invalid = [
+      'mem:stuff', 'mem::', 'mem:', 'http:', 'https:', 'random:', 'random:random',
+      'local', './local', 'ldb', 'ldb:', 'ldb:local',
     ];
-    invalid.forEach(s => assert.isNull(DatabaseSpec.parse(s)));
+    invalid.forEach(s => assertThrowsSyntaxError(DatabaseSpec.parse, s));
 
     const valid = [
+      {spec: 'http://localhost:8000', scheme: 'http', path: '//localhost:8000'},
+      {spec: 'http://localhost:8000/fff', scheme: 'http', path: '//localhost:8000/fff'},
+      {spec: 'https://local.attic.io/john/doe', scheme: 'https', path: '//local.attic.io/john/doe'},
       {spec: 'mem', scheme: 'mem', path: ''},
-      {spec: 'https://foo/path', scheme: 'https', path: '//foo/path'},
+      {spec: 'http://server.com/john/doe?access_token=jane', scheme: 'http',
+        path: '//server.com/john/doe?access_token=jane'},
+      {spec: 'https://server.com/john/doe/?arg=2&qp1=true&access_token=jane', scheme: 'https',
+        path: '//server.com/john/doe/?arg=2&qp1=true&access_token=jane'},
+      // TODO: This isn't valid, see https://github.com/attic-labs/noms/issues/2351.
+      {spec: 'http://some/::/one', scheme: 'http', path: '//some/::/one'},
+      {spec: 'http://::1', scheme: 'http', path: '//::1'},
+      {spec: 'http://192.30.252.154', scheme: 'http', path: '//192.30.252.154'},
+      {spec: 'http://::192.30.252.154', scheme: 'http', path: '//::192.30.252.154'},
+      {spec: 'http://0:0:0:0:0:ffff:c01e:fc9a', scheme: 'http', path: '//0:0:0:0:0:ffff:c01e:fc9a'},
+      {spec: 'http://::ffff:c01e:fc9a', scheme: 'http', path: '//::ffff:c01e:fc9a'},
+      {spec: 'http://::ffff::1e::9a', scheme: 'http', path: '//::ffff::1e::9a'},
     ];
 
-    valid.forEach(async (tc) => {
+    for (const tc of valid) {
       const spec = DatabaseSpec.parse(tc.spec);
-      invariant(spec);
-      assert.equal(spec.scheme, tc.scheme);
-      assert.equal(spec.path, tc.path);
-      const database = spec.database();
-      assert.instanceOf(database, Database);
-      await database.close();
-    });
+      assert.strictEqual(spec.scheme, tc.scheme);
+      assert.strictEqual(spec.path, tc.path);
+    }
   });
 
   test('DatasetSpec', async () => {
-    const invalid = ['mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
+    const assertInvalid = s => assertThrowsSyntaxError(DatasetSpec.parse, s);
+
+    const invalid = [
+      'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
       'http::dsname', 'http:::dsname', 'mem:/a/bogus/path::dsname',
-      'http://localhost:8000/pa::th/foo::ds',
+      'ldb:', 'ldb:hello',
     ];
-    invalid.forEach(s => assert.isNull(DatasetSpec.parse(s)));
+    invalid.forEach(assertInvalid);
 
     const invalidDatasetNames = [' ', '', '$', '#', ':', '\n', '💩'];
-    for (const s of invalidDatasetNames) {
-      assert.isNull(DatasetSpec.parse(`mem::${s}`));
-    }
+    invalidDatasetNames.map(s => `mem::${s}`).forEach(assertInvalid);
 
     const validDatasetNames = ['a', 'Z', '0','/', '-', '_'];
     for (const s of validDatasetNames) {
-      assert.isNotNull(DatasetSpec.parse(`mem::${s}`));
+      DatasetSpec.parse(`mem::${s}`);
     }
 
     const valid = [
-      {spec: 'mem::ds', scheme: 'mem', path: '', name: 'ds'},
-      {spec: 'mem:::ds', scheme: 'mem', path: '', name: 'ds'},
       {spec: 'http://localhost:8000/foo::ds', scheme: 'http', path: '//localhost:8000/foo',
         name: 'ds'},
+      {spec: 'http://localhost:8000::ds1', scheme: 'http', path: '//localhost:8000', name: 'ds1'},
+      {spec: 'http://localhost:8000/john/doe/::ds2', scheme: 'http',
+        path: '//localhost:8000/john/doe/', name: 'ds2'},
+      {spec: 'https://local.attic.io/john/doe::ds3', scheme: 'https',
+        path: '//local.attic.io/john/doe', name: 'ds3'},
+      {spec: 'http://local.attic.io/john/doe::ds1', scheme: 'http',
+        path: '//local.attic.io/john/doe', name: 'ds1'},
+      {spec: 'http://localhost:8000/john/doe?access_token=abc::ds/one', scheme: 'http',
+        path: '//localhost:8000/john/doe?access_token=abc', name: 'ds/one'},
+      {spec: 'https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one', scheme: 'https',
+        path: '//localhost:8000?qp1=x&access_token=abc&qp2=y', name: 'ds/one'},
+      {spec: 'http://localhost:8000/pa::th/foo::ds', scheme: 'http',
+        path: '//localhost:8000/pa::th/foo', name: 'ds'},
+      {spec: 'http://192.30.252.154::foo', scheme: 'http', path: '//192.30.252.154', name: 'foo'},
+      {spec: 'http://::1::foo', scheme: 'http', path: '//::1', name: 'foo'},
+      {spec: 'http://::192.30.252.154::foo', scheme: 'http', path: '//::192.30.252.154',
+        name: 'foo'},
+      {spec: 'http://0:0:0:0:0:ffff:c01e:fc9a::foo', scheme: 'http',
+        path: '//0:0:0:0:0:ffff:c01e:fc9a', name: 'foo'},
+      {spec: 'http://::ffff:c01e:fc9a::foo', scheme: 'http', path: '//::ffff:c01e:fc9a',
+        name: 'foo'},
+      {spec: 'http://::ffff::1e::9a::foo', scheme: 'http', path: '//::ffff::1e::9a', name: 'foo'},
     ];
 
-    valid.forEach(async (tc) => {
+    for (const tc of valid) {
       const spec = DatasetSpec.parse(tc.spec);
-      invariant(spec);
-      assert.equal(spec.database.scheme, tc.scheme);
-      assert.equal(spec.database.path, tc.path);
-      assert.equal(spec.name, 'ds');
-      const database = spec.database.database();
-      assert.instanceOf(database, Database);
-      await database.close();
-    });
+      const {scheme, path} = spec.database;
+      assert.strictEqual(tc.scheme, scheme);
+      assert.strictEqual(tc.path, path);
+      assert.strictEqual(tc.name, spec.name);
+    }
   });
 
-  test('HashSpec', async () => {
-    const testHash = Hash.parse('00000000000000000000000000000000');
-    invariant(testHash);
-    const invalid = [
-      'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
-      'mem:not-hash', 'mem:0000', `mem:::${testHash.toString()}`,
-      'http://foo:blah',
-    ];
-    invalid.forEach(s => assert.isNull(HashSpec.parse(s)));
+  test('PathSpec', async () => {
+    const badSpecs = ['mem::#', 'mem::#s', 'mem::#foobarbaz', 'mem::.hello', 'ldb:path::foo.bar'];
+    badSpecs.forEach(bs => assertThrowsSyntaxError(PathSpec.parse, bs));
 
     const valid = [
-      {spec: `mem::${testHash.toString()}`, protocol: 'mem', path: '', hash: testHash.toString()},
-      {spec: `http://someserver.com/some/path::${testHash.toString()}`,
-        protocol: 'http', path: '//someserver.com/some/path', hash: testHash.toString()},
+      {spec: 'http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv', scheme: 'http',
+        dbPath: '//local.attic.io/john/doe', pathStr: '#0123456789abcdefghijklmnopqrstuv'},
+      {spec: 'mem::#0123456789abcdefghijklmnopqrstuv', scheme: 'mem', dbPath: '',
+        pathStr: '#0123456789abcdefghijklmnopqrstuv'},
+      {spec: 'http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv', scheme: 'http',
+        dbPath: '//local.attic.io/john/doe', pathStr: '#0123456789abcdefghijklmnopqrstuv'},
+      {spec: 'http://localhost:8000/john/doe/::ds1', scheme: 'http',
+        dbPath: '//localhost:8000/john/doe/', pathStr: 'ds1'},
+      {spec: 'http://192.30.252.154::foo.bar', scheme: 'http', dbPath: '//192.30.252.154',
+        pathStr: 'foo.bar'},
+      {spec: 'http://::1::foo.bar.baz', scheme: 'http', dbPath: '//::1', pathStr: 'foo.bar.baz'},
+      {spec: 'http://::192.30.252.154::baz[42]', scheme: 'http', dbPath: '//::192.30.252.154',
+        pathStr: 'baz[42]'},
+      {spec: 'http://0:0:0:0:0:ffff:c01e:fc9a::foo[42].bar', scheme: 'http',
+        dbPath: '//0:0:0:0:0:ffff:c01e:fc9a', pathStr: 'foo[42].bar'},
+      {spec: 'http://::ffff:c01e:fc9a::foo.foo', scheme: 'http', dbPath: '//::ffff:c01e:fc9a',
+        pathStr: 'foo.foo'},
+      {spec: 'http://::ffff::1e::9a::hello["world"]', scheme: 'http', dbPath: '//::ffff::1e::9a',
+        pathStr: 'hello["world"]'},
     ];
-    valid.forEach(tc => {
-      const spec = HashSpec.parse(tc.spec);
-      invariant(spec, `${tc.spec} failed to parse`);
-      assert.equal(spec.hash.toString(), tc.hash);
-      assert.equal(spec.database.scheme, tc.protocol);
-      assert.equal(spec.database.path, tc.path);
-    });
-  });
 
-  test('ObjectSpec', () => {
-    let spec = parseObjectSpec('http://foo:8000/test::monkey');
-    invariant(spec);
-    assert.isNotNull(spec.value());
-    invariant(spec instanceof DatasetSpec);
-    assert.equal(spec.name, 'monkey');
-    assert.equal(spec.database.scheme, 'http');
-    assert.equal(spec.database.path, '//foo:8000/test');
-
-    const testHash = Hash.parse('00000000000000000000000000000000');
-    invariant(testHash);
-    spec = parseObjectSpec(`http://foo:8000/test::${testHash.toString()}`);
-    invariant(spec);
-    assert.isNotNull(spec.value());
-    invariant(spec instanceof HashSpec);
-    assert.equal(spec.hash.toString(), testHash.toString());
+    for (const tc of valid) {
+      const spec = PathSpec.parse(tc.spec);
+      const {scheme, path} = spec.database;
+      assert.strictEqual(tc.scheme, scheme);
+      assert.strictEqual(tc.dbPath, path);
+      assert.strictEqual(tc.pathStr, spec.path.toString());
+    }
   });
 });

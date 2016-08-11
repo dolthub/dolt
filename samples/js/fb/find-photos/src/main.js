@@ -69,20 +69,16 @@ const placeType = makeStructType('',
 
 async function main(): Promise<void> {
   const inSpec = DatasetSpec.parse(args._[0]);
+  const [db, input] = await inSpec.value();
+  if (!input) {
+    return db.close();
+  }
   const outSpec = DatasetSpec.parse(args._[1]);
-  if (!inSpec) {
-    throw 'invalid input object spec';
-  }
-  if (!outSpec) {
-    throw 'inalid output dataset spec';
-  }
-
-  const input = await inSpec.value();
   const output = outSpec.dataset();
   let result = Promise.resolve(new Set());
 
   // TODO: progress
-  await walk(input.photos, inSpec.database.database(), async (v: any) => {
+  await walk(input, db, async (v: any) => {
     if (v instanceof Struct && isSubtype(photoType, v.type)) {
       const photo: Object = {
         title: v.name || '',
@@ -97,7 +93,7 @@ async function main(): Promise<void> {
     }
   });
 
-  return output.commit(await result).then();
+  return output.commit(await result).then(() => db.close());
 }
 
 function getGeo(input: Struct): Struct {

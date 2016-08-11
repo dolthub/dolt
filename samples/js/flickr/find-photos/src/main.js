@@ -78,20 +78,16 @@ main().catch(ex => {
 
 async function main(): Promise<void> {
   const inSpec = DatasetSpec.parse(args._[0]);
+  const [db, input] = await inSpec.value();
+  if (!input) {
+    return db.close();
+  }
   const outSpec = DatasetSpec.parse(args._[1]);
-  if (!inSpec) {
-    throw 'invalid input object spec';
-  }
-  if (!outSpec) {
-    throw 'inalid output dataset spec';
-  }
-
-  const input = await inSpec.value();
   const output = outSpec.dataset();
   let result = Promise.resolve(new Set());
 
   // TODO: How to report progress?
-  await walk(input, inSpec.database.database(), (v: any) => {
+  await walk(input, db, (v: any) => {
     if (isSubtype(imageType, getTypeOfValue(v))) {
       const photo: Object = {
         title: v.title,
@@ -111,7 +107,7 @@ async function main(): Promise<void> {
     return false;
   });
 
-  return output.commit(await result).then();
+  return output.commit(await result).then(() => db.close());
 }
 
 function getGeo(input: Object): Struct {
