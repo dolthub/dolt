@@ -54,7 +54,7 @@ export default class Node extends React.Component<void, Props, State> {
 
     let text = this.props.text;
     if (this.props.hash) {
-      const url = `/?db=${this.props.db}&hash=${this.props.hash.toString()}`;
+      const url = `/?db=${this.props.db}&p=#${this.props.hash.toString()}`;
       text = <a href={url}>{text}</a>;
     }
 

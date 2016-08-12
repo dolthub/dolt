@@ -8,11 +8,14 @@ import Layout from './layout.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import {
+  AbsolutePath,
   Blob,
   Collection,
   Database,
+  DatabaseSpec,
+  emptyHash,
+  getHashOfValue,
   Hash,
-  HttpBatchStore,
   IndexedMetaSequence,
   invariant,
   kindToString,
@@ -41,8 +44,17 @@ window.onpopstate = load;
 window.onresize = render;
 
 function load() {
+  try {
+    loadUnsafe();
+  } catch (e) {
+    renderPrompt(e.message);
+  }
+}
+
+function loadUnsafe() {
   renderNode = document.getElementById('splore');
 
+  // Note: this way anything after the # will end up in `params`, which is what we want.
   params = {};
   const paramsIdx = location.href.indexOf('?');
   if (paramsIdx > -1) {
@@ -53,30 +65,35 @@ function load() {
   }
 
   if (!params.db) {
-    renderPrompt();
+    renderPrompt('Can haz database?');
     return;
   }
 
-  const opts = {};
-  if (params.token) {
-    opts['headers'] = {Authorization: `Bearer ${params.token}`};
-  }
+  const dbSpec = DatabaseSpec.parse(params.db);
+  database = dbSpec.database();
 
-  const httpStore = new HttpBatchStore(params.db, undefined, opts);
-  database = new Database(httpStore);
-
-  const setRootHash = (hash: Hash) => {
-    rootHash = hash;
-    handleChunkLoad(hash, hash);
-  };
-
-  if (params.hash) {
-    const hash = Hash.parse(params.hash);
-    invariant(hash);
-    setRootHash(hash);
+  let rootP: Promise<[Hash, Value]>;
+  if (params.p) {
+    const path = AbsolutePath.parse(params.p);
+    rootP = path.resolve(database).then(value => {
+      if (value === null) {
+        throw new Error('No value found at ' + params.p);
+      }
+      return [getHashOfValue(value), value];
+    });
   } else {
-    httpStore.getRoot().then(setRootHash);
+    // TODO: Don't access _rt directly: https://github.com/attic-labs/noms/issues/2363.
+    rootP = database._rt.getRoot().then(r => database.readValue(r).then(value => [r, value]));
   }
+
+  rootP.then(([r, value]) => {
+    rootHash = r;
+    handleChunkLoad(emptyHash, r);
+    // It's nice if the root starts open, the first thing anybody will do is click on it.
+    const id = r.toString();
+    data.nodes[id].isOpen = true;
+    handleChunkLoad(r, value, id);
+  }).catch(e => renderPrompt(e.message));
 }
 
 function formatKeyString(v: any): string {
@@ -222,29 +239,37 @@ function handleNodeClick(e: MouseEvent, id: string) {
   }
 }
 
-class Prompt extends React.Component<void, {}, void> {
+type PromptProps = {
+  msg: string,
+};
+
+class Prompt extends React.Component<void, PromptProps, void> {
   render(): React.Element<any> {
-    const fontStyle: {[key: string]: any} = {
+    const fontStyle: {[key: string]: string} = {
       fontFamily: 'Menlo',
-      fontSize: 14,
+      fontSize: '14px',
     };
-    const inputStyle = Object.assign(fontStyle, {}, {width: '50ex', marginBottom: '0.5em'});
-    return <div style={{display: 'flex', height: '100%', alignItems: 'center',
-      justifyContent: 'center'}}>
+    const divStyle = {
+      alignItems: 'center',
+      display: 'flex',
+      height: '100%',
+      justifyContent: 'center',
+    };
+    const inputStyle = Object.assign(fontStyle, {}, {
+      marginBottom: '0.5em',
+      width: '50ex',
+    });
+    const demoServer = 'https://demo.noms.io/cli-tour';
+
+    return <div style={divStyle}>
       <div style={fontStyle}>
-        Can haz database?
+        {this.props.msg}
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
           <input type='text' ref='db' autoFocus={true} style={inputStyle}
-            defaultValue={params.db || 'https://demo.noms.io/cli-tour'}
-            placeholder='noms database URL'
+            defaultValue={params.db || demoServer} placeholder={`database (e.g. ${demoServer})`}
           />
-          <input type='text' ref='token' style={inputStyle}
-            defaultValue={params.token}
-            placeholder='auth token'
-          />
-          <input type='text' ref='hash' style={inputStyle}
-            defaultValue={params.hash}
-            placeholder='0123456789abcdefghijklmnopqrstuv (hash to jump to)'
+          <input type='text' ref='p' style={inputStyle}
+            defaultValue={params.p} placeholder={'path (e.g. sf-film-locations)'}
           />
           <button type='submit'>OK</button>
         </form>
@@ -254,24 +279,25 @@ class Prompt extends React.Component<void, {}, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const {db, token, hash} = this.refs;
-    let qs = '?db=' + db.value;
-    if (token.value) {
-      qs += '&token=' + token.value;
-    }
-    if (hash.value) {
-      qs += '&hash=' + hash.value;
-    }
-    window.history.pushState({}, undefined, qs);
+    const qs = ['db', 'p']
+      .map(k => [k, this.refs[k].value])
+      .filter(([, v]) => !!v)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    window.history.pushState({}, undefined, qs === '' || ('?' + qs));
     load();
   }
 }
 
-function renderPrompt() {
-  ReactDOM.render(<Prompt/>, renderNode);
+function renderPrompt(msg: string) {
+  ReactDOM.render(<Prompt msg={msg}/>, renderNode);
 }
 
 function render() {
+  // TODO: Set up better Promise chaining. rootHash is loaded asynchronously elsewhere.
+  if (!rootHash) {
+    return;
+  }
   const dt = new TreeNode(data, rootHash.toString(), null, 0, 0, {});
   layout(dt);
   ReactDOM.render(
