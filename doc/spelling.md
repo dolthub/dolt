@@ -14,6 +14,7 @@ The `path` part of the name is interpreted differently depending on the protocol
 
 - **http(s)** specs describe a remote database to be accessed over HTTP. In this case, the entire database spec is a normal http(s) URL. For example: `https://dev.noms.io/aa`.
 - **ldb** specs describe a local [LevelDB](https://github.com/google/leveldb)-backed database. In this case, the path component should be a relative or absolute path on disk to a directory in which to store the LevelDB data. For example: `ldb:/tmp/noms-data`.
+  - In Go, `ldb:` can be ommitted (just `/tmp/noms-data` will work).
 - **mem** specs describe an ephemeral memory-backed database. In this case, the path component is not used and must be empty.
 
 ## Spelling Datasets
@@ -29,6 +30,7 @@ See [spelling databases](#spelling-databases) for how to build the `database` pa
 Example datasets:
 
 ```
+/tmp/test-db::my-dataset
 ldb:/tmp/test-db::my-dataset
 http://localhost:8000::registered-businesses
 https://demo.noms.io/aa::music
@@ -57,6 +59,6 @@ http://demo.noms.io/cli-tour::sf-crume
 # value o38hugtf3l1e8rqtj89mijj1dq57eh4m at http://localhost:8000
 http://localhost:8000/monkey::#o38hugtf3l1e8rqtj89mijj1dq57eh4m
 
-# “bonk” dataset at ldb:/foo/bar
-ldb:/foo/bar::bonk
+# “bonk” dataset at /foo/bar
+/foo/bar::bonk
 ```

@@ -10,8 +10,8 @@ Splore is a general-purpose debug UI for exploring noms data.
 # Create some data
 cd "$GOPATH/src/github.com/attic-labs/noms/samples/go/counter"
 go build
-./counter ldb:/tmp/sploretest:counter
-./counter ldb:/tmp/sploretest:counter
+./counter /tmp/sploretest::counter
+./counter /tmp/sploretest::counter
 
 # Build Splore
 cd ../../js/splore
@@ -20,7 +20,7 @@ cd ../../js/splore
 # Launch Splore with noms-ui
 cd ../../../cmd/noms-ui
 go build
-./noms-ui ../../samples/js/splore db="ldb:/tmp/sploretest"
+./noms-ui ../../samples/js/splore db="/tmp/sploretest"
 ```
 
 Then, navigate to the URL printed by `noms-ui`, e.g. http://127.0.0.1:12345?db=xyz.

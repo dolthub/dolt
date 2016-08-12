@@ -12,7 +12,7 @@ This is a short introduction to using Noms from JavaScript. It should only take 
 Let's create a local database to play with:
 
 ```sh
-noms serve ldb:/tmp/noms-js-tour
+noms serve /tmp/noms-js-tour
 ```
 
 ## Install Noms NPM Package

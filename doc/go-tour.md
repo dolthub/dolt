@@ -15,7 +15,7 @@ This is a short introduction to using Noms from Go. It should only take a few mi
 Let's create a local database to play with:
 
 ```sh
-> noms serve ldb:/tmp/noms-go-tour
+> noms serve /tmp/noms-go-tour
 ```
 
 ## [Database](https://github.com/attic-labs/noms/blob/master/go/datas/database.go)

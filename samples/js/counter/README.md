@@ -6,7 +6,7 @@ counter uses noms/js to read and write a simple incrementing counter.
 ## Getting Started
 
 ```
-noms serve ldb:/tmp/noms &
+noms serve /tmp/noms &
 cd ../../samples/js/counter
 pushd ..
 npm install
