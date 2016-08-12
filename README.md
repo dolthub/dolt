@@ -30,7 +30,7 @@ Noms is different from other databases. It is:
 Noms is supported on Mac OS X and Linux. Windows usually works, but isn't officially supported.
 
 1. Install [Go 1.6+](https://golang.org/dl/)
-2. Ensure your [$GOPATH](https://github.com/golang/go/wiki/GOPATH) is configured
+2. Ensure your [$GOPATH](https://github.com/golang/go/wiki/GOPATH) is configured, add `$GOPATH/bin` to your `$PATH`
 3. Type type type:
 ```
 git clone https://github.com/attic-labs/noms $GOPATH/src/github.com/attic-labs/noms
