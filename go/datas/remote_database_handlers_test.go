@@ -249,6 +249,21 @@ func TestHandleGetRoot(t *testing.T) {
 	}
 }
 
+func TestHandleGetBase(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	c := chunks.NewChunk([]byte("abc"))
+	cs.Put(c)
+	assert.True(cs.UpdateRoot(c.Hash(), hash.Hash{}))
+
+	w := httptest.NewRecorder()
+	HandleBaseGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
+
+	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+		assert.Equal([]byte(nomsBaseHtml), w.Body.Bytes())
+	}
+}
+
 func TestHandlePostRoot(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()

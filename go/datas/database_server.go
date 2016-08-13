@@ -67,6 +67,7 @@ func (s *remoteDatabaseServer) Run() {
 	router.OPTIONS(constants.RootPath, s.corsHandle(noopHandle))
 	router.POST(constants.WriteValuePath, s.corsHandle(s.makeHandle(HandleWriteValue)))
 	router.OPTIONS(constants.WriteValuePath, s.corsHandle(noopHandle))
+	router.GET(constants.BasePath, s.corsHandle(s.makeHandle(HandleBaseGet)))
 
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

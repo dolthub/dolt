@@ -9,4 +9,5 @@ const (
 	GetRefsPath    = "/getRefs/"
 	HasRefsPath    = "/hasRefs/"
 	WriteValuePath = "/writeValue/"
+	BasePath       = "/"
 )

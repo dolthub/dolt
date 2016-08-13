@@ -29,6 +29,7 @@ type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chu
 
 // NomsVersionHeader is the name of the header that Noms clients and servers must set in every request/response.
 const NomsVersionHeader = "x-noms-vers"
+const nomsBaseHtml = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our github project</a>.</p></body></html>"
 
 var (
 	// HandleWriteValue is meant to handle HTTP POST requests to the writeValue/ server endpoint. The payload should be an appropriately-ordered sequence of Chunks to be validated and stored on the server.
@@ -50,6 +51,10 @@ var (
 	// HandleWriteValue is meant to handle HTTP POST requests to the root/ server endpoint. This is used to update the Root to point to a new Chunk.
 	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
 	HandleRootPost = versionCheck(handleRootPost)
+
+	// HandleBaseGet is meant to handle HTTP GET requests to the / server endpoint. This is used to give a friendly message to users.
+	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
+	HandleBaseGet = handleBaseGet
 )
 
 func versionCheck(hndlr Handler) Handler {
@@ -250,6 +255,13 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
+}
+
+func handleBaseGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
+	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
+
+	fmt.Fprintf(w, nomsBaseHtml)
+	w.Header().Add("content-type", "text/html")
 }
 
 func isMapOfStringToRefOfCommit(m types.Map) bool {
