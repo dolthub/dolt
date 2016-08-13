@@ -216,7 +216,7 @@ func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 }
 
 func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "GET", "Expected post method.")
+	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
 
 	rootRef := rt.Root()
 	fmt.Fprintf(w, "%v", rootRef.String())
