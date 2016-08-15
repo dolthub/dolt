@@ -14,7 +14,7 @@ Noms can and should be a database, not merely a datastore. We're not quite there
 
 No, decentralized like Git.
 
-Specifically, Noms isn't itself a peer-to-peer network. If you can get two instances to share data, somehow, then they can synchronize. Noms doesn't define how this should happen though. 
+Specifically, Noms isn't itself a peer-to-peer network. If you can get two instances to share data, somehow, then they can synchronize. Noms doesn't define how this should happen though.
 
 Currently, instances mainly share data via either HTTP/DNS or a filesystem. But it should be easy to add other mechanisms. For example, it seems like Noms could run well on top of BitTorrent, or IPFS. You should [look into it](https://github.com/attic-labs/noms/issues/2123).
 
@@ -27,6 +27,20 @@ That said, it is definitely possible to have write patterns that defeat this. De
 ### Is there a way to not store the entire history?
 
 Theoretically, definitely. In Git, for example, the concept of "shallow clones" exists, and we could do something similar in Noms. This has not been implemented yet.
+
+### How does Noms handle conflicts?
+
+Currently, Noms doesn't handle them at all. But in the near future, we plan to add [automatic merge policies](https://github.com/attic-labs/noms/issues/148) for several common cases of conflicts.
+
+Similar to how Git uses simple heuristics to successfully merge many classes of edits to same same file/directory, we believe that we can use some simple heuristics to merge Noms data. In fact, we think we can even do better than Git, because in general Noms data is more granular than data in Git. We have structs, sets, lists, and maps, where Git just has directories and files.
+
+Whether to use an auto-merge policy will be something that developers choose on a case-by-case basis and can always opt-out of, or combine with custom code, for more complex scenarios.
+
+### Why don't you just use CRDTs?
+
+We want Noms to provide traditional data structures that programmers are familiar with, even if that means conflict resolution must be done manually in some cases. We think we can provide a few options of conflict resolution policies for each core data structure kind that should meet most needs.
+
+[Convergent (or Commutative) Replicated Data Types (CRDTs)](http://hal.upmc.fr/inria-00555588/document) are a class of distributed data structures that provably converge to some agreed-upon state with no synchronization. State-Based CRDTs operate by having nodes send the entirety of their local state to one another, which is something that Noms is designed to be very good at, so the inclination to put the two together is understandable. That said, the semantics of CRDT are generally unfamiliar to most users; e.g. a Set in which elements can only be added, removed, and then never added again (barring some synchronization-requiring “garbage collection” step). That said, we're still interested in perhaps using some form of sequence CRDT for merging lists -- this is still under investigation.
 
 ### Why don't you support Windows?
 
