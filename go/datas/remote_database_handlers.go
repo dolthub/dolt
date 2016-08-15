@@ -61,6 +61,7 @@ func versionCheck(hndlr Handler) Handler {
 	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
 		if req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
+			fmt.Println("Returning version mismatch error")
 			http.Error(
 				w,
 				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), constants.NomsVersion),
@@ -71,6 +72,7 @@ func versionCheck(hndlr Handler) Handler {
 
 		err := d.Try(func() { hndlr(w, req, ps, cs) })
 		if err != nil {
+			fmt.Printf("Returning bad request: %v\n", err)
 			http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
 			return
 		}

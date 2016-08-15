@@ -6,6 +6,7 @@ package datas
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -443,8 +444,21 @@ func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	expectVersion(res)
 	defer closeResponse(res.Body)
 
-	d.Chk.True(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusConflict, "Unexpected response: %s", http.StatusText(res.StatusCode))
-	return res.StatusCode == http.StatusOK
+	switch res.StatusCode {
+	case http.StatusOK:
+		return true
+	case http.StatusConflict:
+		return false
+	default:
+		buf := bytes.Buffer{}
+		buf.ReadFrom(res.Body)
+		body := buf.String()
+		d.Chk.Fail(
+			fmt.Sprintf("Unexpected response: %s: %s",
+				http.StatusText(res.StatusCode),
+				body))
+		return false
+	}
 }
 
 func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) *http.Response {
