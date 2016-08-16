@@ -11,7 +11,7 @@ Due to legal reasons, all contributors must sign a contributor license agreement
 
 ## Languages
 
-* Use Python, JS, or Go.
+* Use Go, JS, or Python.
 * Shell script is not allowed.
 
 ## Coding style
