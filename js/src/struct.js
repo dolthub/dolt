@@ -43,7 +43,12 @@ export const fieldNameRe = new RegExp(fieldNameComponentRe.source + '$');
  *   setS(value: string): MyStruct;
  * }
  *
- * To reflect over structs you can create a new StructMirror.
+ * With one major exception: if the field name conflicts with any of the properties in ValueBase (or
+ * Object), such as `chunks`, `hash` or `type` (or `toString`, `hasOwnProperty` etc.), then these
+ * are not reflected directly on the struct instance.
+ *
+ * To reflect over structs you can create a new `StructMirror`. This is also the only way to get the
+ * value of fields that conflict with `ValueBase` (`chunks`, `hash` and `type`).
  */
 export default class Struct extends ValueBase {
   _type: Type<any>;
@@ -85,6 +90,9 @@ function validate(type: Type<any>, values: Value[]): void {
   });
 }
 
+/**
+ * StructFieldMirror represents a field in a struct and it used by StructMirror.
+ */
 export class StructFieldMirror {
   value: Value;
   name: string;
@@ -99,6 +107,13 @@ export class StructFieldMirror {
 
 type FieldCallback = (f: StructFieldMirror) => void;
 
+/**
+ * A StructMirror allows reflection of a Noms struct.
+ * This allows you to get and set a field by its name. Normally a Noms Struct will have a
+ * properties `foo` and method `setFoo(v)` to get and set a struct field but if the field name
+ * conflicts with one of the properties provided by ValueBase then the only way to get and set them
+ * is by using a StructMirror.
+ */
 export class StructMirror<T: Struct> {
   _values: Value[];
   type: Type<StructDesc>;
@@ -112,6 +127,9 @@ export class StructMirror<T: Struct> {
     return this.type.desc;
   }
 
+  /**
+   * Iterates over all the fields in the struct and calls `cb`.
+   */
   forEachField(cb: FieldCallback) {
     this.desc.fields.forEach((f, i) => {
       cb(new StructFieldMirror(this._values[i], f.name, f.type));
@@ -131,6 +149,9 @@ export class StructMirror<T: Struct> {
     return findFieldIndex(name, this.desc.fields) !== -1;
   }
 
+  /**
+   * Returns a new struct where the field `name` has been set to `value`.
+   */
   set(name: string, value: Value): T {
     const values = setValue(this._values, this.desc.fields, name, value);
     return newStructWithType(this.type, values);
@@ -143,6 +164,9 @@ function setterName(name) {
   return `set${name[0].toUpperCase()}${name.slice(1)}`;
 }
 
+/**
+ * Creates a class (function) that can be used to create new instances of the class.
+ */
 export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
   const k = type.hash.toString();
   if (cache[k]) {
@@ -163,6 +187,9 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
   };
 
   type.desc.fields.forEach((f: Field, i: number) => {
+    if (f.name in Struct.prototype) {  // Don't shadow things in {Struct, Object}.prototype.
+      return;
+    }
     Object.defineProperty(c.prototype, f.name, {
       configurable: true,
       enumerable: false,
@@ -197,12 +224,20 @@ function setValue(values: Value[], fields: Field[], name: string, value: Value):
   return newValues;
 }
 
+/**
+ * Creates a new instance of a struct, computing the type based on the `name` and `data`.
+ */
 export function newStruct<T: Struct>(name: string, data: StructData): T {
   const type = computeTypeForStruct(name, data);
   // Skip validation since there is no way the type and data can mismatch.
   return new (createStructClass(type))(data);
 }
 
+/**
+ * Creates a new instance of a struct with a predetermined type. The `values` must come in the right
+ * order (same order as the field names which are always in alphabetic order) and have the correct
+ * type.
+ */
 export function newStructWithType<T: Struct>(type: Type<StructDesc>, values: Value[]): T {
   validate(type, values);
   return newStructWithValues(type, values);
@@ -213,6 +248,11 @@ function init<T: Struct>(s: T, type: Type<any>, values: Value[]) {
   s._values = values;
 }
 
+/**
+ * Creates a new instance of a struct with a predetermined type. The `values` must come in the right
+ * order (same order as the field names which are always in alphabetic order). This function does
+ * not type check its values and should be used with care.
+ */
 export function newStructWithValues<T: Struct>(type: Type<any>, values: Value[]): T {
   const c = createStructClass(type);
   const s = Object.create(c.prototype);
@@ -232,9 +272,12 @@ function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> 
   return makeStructType(name, fieldNames, fieldTypes);
 }
 
-// s1 & s2 must be of the same type. Returns the set of field names which have different values in
-// the respective structs
-export function structDiff(s1: Struct, s2: Struct): [string] {
+/**
+ * Computes the diff between two structs of the same struct type. If the types are not equal an
+ * exception is thrown.
+ * Returns the field names which have different values in the respective structs.
+ */
+export function structDiff(s1: Struct, s2: Struct): string[] {
   const desc1: StructDesc = s1.type.desc;
   const desc2: StructDesc = s2.type.desc;
   invariant(desc1.equals(desc2));

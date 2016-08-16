@@ -27,6 +27,7 @@ import {equals} from './compare.js';
 import List from './list.js';
 import Map from './map.js';
 import Set from './set.js';
+import Hash from './hash.js';
 
 suite('Struct', () => {
   test('equals', () => {
@@ -208,5 +209,41 @@ suite('Struct', () => {
       const [input, expected] = c;
       assert.equal(escapeStructField(input), expected);
     });
+  });
+
+  test('no override', () => {
+    const s = newStruct('', {type: 'type', chunks: 'chunks', hash: 'hash'});
+    assert.notEqual(s.type, 'type');
+    assert.notEqual(s.chunks, 'chunks');
+    assert.notEqual(s.hash, 'hash');
+
+    assert.isTrue(equals(s.type,
+        makeStructType('', ['chunks', 'hash', 'type'], [stringType, stringType, stringType])));
+    assert.deepEqual(s.chunks, []);
+    assert.instanceOf(s.hash, Hash);
+  });
+
+  test('no override - StructMirror', () => {
+    const s = newStruct('', {type: 'type', chunks: 'chunks', hash: 'hash'});
+    const m = new StructMirror(s);
+    const names = [];
+    const values = [];
+    m.forEachField(f => {
+      names.push(f.name);
+      values.push(f.value);
+      assert.isTrue(equals(f.type, stringType));
+    });
+
+    assert.deepEqual(names, ['chunks', 'hash', 'type']);
+    assert.deepEqual(values, ['chunks', 'hash', 'type']);
+
+    for (const n of names) {
+      assert.equal(m.get(n), n);
+    }
+
+    for (const n of names) {
+      const s2 = m.set(n, n);
+      assert.isTrue(equals(s, s2));
+    }
   });
 });
