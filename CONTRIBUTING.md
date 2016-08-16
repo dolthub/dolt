@@ -17,8 +17,8 @@ Due to legal reasons, all contributors must sign a contributor license agreement
 ## Coding style
 
 * JS follows the [Airbnb Style Guide](https://github.com/airbnb/javascript)
-* Go uses gofmt, advisable to hook into your editor
-* Tag PRs with either "toward: #<bug>" or "fixes: #<bug>" to help establish context for why a change is happening
+* Go uses `gofmt`, advisable to hook into your editor
+* Tag PRs with either `toward: #<bug>` or `fixes: #<bug>` to help establish context for why a change is happening
 
 ## Running the tests
 
