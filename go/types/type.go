@@ -168,8 +168,14 @@ func verifyFieldNames(names []string) {
 	}
 }
 
+// IsValidStructFieldName returns whether the name is valid without as a field name in a struct.
+// Valid names must start with `a-zA-Z` and after that `a-zA-Z0-9_`.
+func IsValidStructFieldName(name string) bool {
+	return fieldNameRe.MatchString(name)
+}
+
 func verifyName(name, kind string) {
-	d.PanicIfTrue(!fieldNameRe.MatchString(name), `Invalid struct%s name: "%s"`, kind, name)
+	d.PanicIfTrue(!IsValidStructFieldName(name), `Invalid struct%s name: "%s"`, kind, name)
 }
 
 func verifyFieldName(name string) {
