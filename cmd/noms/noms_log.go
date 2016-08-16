@@ -19,8 +19,8 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
-	"github.com/mgutz/ansi"
 	flag "github.com/juju/gnuflag"
+	"github.com/mgutz/ansi"
 )
 
 var (
@@ -266,7 +266,7 @@ func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.
 	}
 
 	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
-	err = diff.Diff(mlw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField))
+	err = diff.Diff(mlw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField), true)
 	d.PanicIfNotType(err, MaxLinesErr)
 	if err != nil {
 		mlw.forceWrite([]byte("...\n"))

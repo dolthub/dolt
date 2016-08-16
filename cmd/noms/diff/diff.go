@@ -17,16 +17,27 @@ type (
 	valueFunc func(k types.Value) types.Value
 )
 
+type diffWriter struct {
+	w         io.Writer
+	leftRight bool
+}
+
+func (w diffWriter) Write(p []byte) (n int, err error) {
+	return w.w.Write(p)
+}
+
 func shouldDescend(v1, v2 types.Value) bool {
 	kind := v1.Type().Kind()
 	return !types.IsPrimitiveKind(kind) && kind == v2.Type().Kind() && kind != types.RefKind
 }
 
-func Diff(w io.Writer, v1, v2 types.Value) error {
-	return diff(w, types.Path{}, nil, v1, v2)
+// Diff writes the diff from |v1| to |v2| to |w|.
+// If |leftRight| is true then the left-right diff is used for ordered sequences - see Diff vs DiffLeftRight in Set and Map.
+func Diff(w io.Writer, v1, v2 types.Value, leftRight bool) error {
+	return diff(diffWriter{w, leftRight}, types.Path{}, nil, v1, v2)
 }
 
-func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) error {
+func diff(w diffWriter, p types.Path, key, v1, v2 types.Value) error {
 	if v1.Equals(v2) {
 		return nil
 	}
@@ -50,7 +61,7 @@ func diff(w io.Writer, p types.Path, key, v1, v2 types.Value) error {
 	return line(w, ADD, key, v2)
 }
 
-func diffLists(w io.Writer, p types.Path, v1, v2 types.List) (err error) {
+func diffLists(w diffWriter, p types.Path, v1, v2 types.List) (err error) {
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
@@ -106,9 +117,13 @@ func diffLists(w io.Writer, p types.Path, v1, v2 types.List) (err error) {
 	return
 }
 
-func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) error {
+func diffMaps(w diffWriter, p types.Path, v1, v2 types.Map) error {
 	return diffOrdered(w, p, line, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-		v2.DiffLeftRight(v1, cc, sc)
+		if w.leftRight {
+			v2.DiffLeftRight(v1, cc, sc)
+		} else {
+			v2.Diff(v1, cc, sc)
+		}
 	},
 		func(k types.Value) types.Value { return k },
 		func(k types.Value) types.Value { return v1.Get(k) },
@@ -116,7 +131,7 @@ func diffMaps(w io.Writer, p types.Path, v1, v2 types.Map) error {
 	)
 }
 
-func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) error {
+func diffStructs(w diffWriter, p types.Path, v1, v2 types.Struct) error {
 	return diffOrdered(w, p, field, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 		v2.Diff(v1, cc, sc)
 	},
@@ -126,9 +141,13 @@ func diffStructs(w io.Writer, p types.Path, v1, v2 types.Struct) error {
 	)
 }
 
-func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) error {
+func diffSets(w diffWriter, p types.Path, v1, v2 types.Set) error {
 	return diffOrdered(w, p, line, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-		v2.DiffLeftRight(v1, cc, sc)
+		if w.leftRight {
+			v2.DiffLeftRight(v1, cc, sc)
+		} else {
+			v2.Diff(v1, cc, sc)
+		}
 	},
 		func(k types.Value) types.Value { return nil },
 		func(k types.Value) types.Value { return k },
@@ -136,7 +155,7 @@ func diffSets(w io.Writer, p types.Path, v1, v2 types.Set) error {
 	)
 }
 
-func diffOrdered(w io.Writer, p types.Path, lf lineFunc, df diffFunc, kf, v1, v2 valueFunc) (err error) {
+func diffOrdered(w diffWriter, p types.Path, lf lineFunc, df diffFunc, kf, v1, v2 valueFunc) (err error) {
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
