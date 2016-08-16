@@ -151,11 +151,24 @@ func TestNomsSetDiff(t *testing.T) {
 
 func TestNomsStructDiff(t *testing.T) {
 	assert := assert.New(t)
-	expected := `(root) {
+
+	expected1 := `(root) {
 -   "four": "four"
 +   "four": "four-diff"
   }
 ["three"] {
+-   field1: "field1-data"
+-   field3: "field3-data"
++   field3: "field3-data-diff"
++   field4: "field4-data"
+  }
+`
+
+	expected2 := `(root) {
+-   four: "four"
++   four: "four-diff"
+  }
+.three {
 -   field1: "field1-data"
 -   field3: "field3-data"
 +   field3: "field3-data-diff"
@@ -177,10 +190,17 @@ func TestNomsStructDiff(t *testing.T) {
 	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
 	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")
 
+	s3 := createStruct("", "one", 1, "two", 2, "three", s1, "four", "four")
+	s4 := createStruct("", "one", 1, "two", 2, "three", s2, "four", "four-diff")
+
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		Diff(buf, m1, m2, leftRight)
-		assert.Equal(expected, buf.String())
+		assert.Equal(expected1, buf.String())
+
+		buf = &bytes.Buffer{}
+		Diff(buf, s3, s4, leftRight)
+		assert.Equal(expected2, buf.String())
 	}
 
 	tf(true)

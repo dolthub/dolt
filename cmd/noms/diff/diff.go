@@ -12,9 +12,10 @@ import (
 )
 
 type (
-	diffFunc  func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
-	lineFunc  func(w io.Writer, op prefixOp, key, val types.Value) error
-	valueFunc func(k types.Value) types.Value
+	diffFunc     func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
+	lineFunc     func(w io.Writer, op prefixOp, key, val types.Value) error
+	pathPartFunc func(v types.Value) types.PathPart
+	valueFunc    func(k types.Value) types.Value
 )
 
 type diffWriter struct {
@@ -34,31 +35,33 @@ func shouldDescend(v1, v2 types.Value) bool {
 // Diff writes the diff from |v1| to |v2| to |w|.
 // If |leftRight| is true then the left-right diff is used for ordered sequences - see Diff vs DiffLeftRight in Set and Map.
 func Diff(w io.Writer, v1, v2 types.Value, leftRight bool) error {
-	return diff(diffWriter{w, leftRight}, types.Path{}, nil, v1, v2)
-}
-
-func diff(w diffWriter, p types.Path, key, v1, v2 types.Value) error {
 	if v1.Equals(v2) {
 		return nil
 	}
 
-	if shouldDescend(v1, v2) {
-		switch v1.Type().Kind() {
-		case types.ListKind:
-			return diffLists(w, p, v1.(types.List), v2.(types.List))
-		case types.MapKind:
-			return diffMaps(w, p, v1.(types.Map), v2.(types.Map))
-		case types.SetKind:
-			return diffSets(w, p, v1.(types.Set), v2.(types.Set))
-		case types.StructKind:
-			return diffStructs(w, p, v1.(types.Struct), v2.(types.Struct))
-		default:
-			panic("Unrecognized type in diff function")
-		}
+	dw := diffWriter{w, leftRight}
+
+	if !shouldDescend(v1, v2) {
+		line(dw, DEL, nil, v1)
+		return line(dw, ADD, nil, v2)
 	}
 
-	line(w, DEL, key, v1)
-	return line(w, ADD, key, v2)
+	return diff(dw, types.Path{}, nil, v1, v2)
+}
+
+func diff(w diffWriter, p types.Path, key, v1, v2 types.Value) error {
+	switch v1.Type().Kind() {
+	case types.ListKind:
+		return diffLists(w, p, v1.(types.List), v2.(types.List))
+	case types.MapKind:
+		return diffMaps(w, p, v1.(types.Map), v2.(types.Map))
+	case types.SetKind:
+		return diffSets(w, p, v1.(types.Set), v2.(types.Set))
+	case types.StructKind:
+		return diffStructs(w, p, v1.(types.Struct), v2.(types.Struct))
+	default:
+		panic("Unrecognized type in diff function")
+	}
 }
 
 func diffLists(w diffWriter, p types.Path, v1, v2 types.List) (err error) {
@@ -118,13 +121,15 @@ func diffLists(w diffWriter, p types.Path, v1, v2 types.List) (err error) {
 }
 
 func diffMaps(w diffWriter, p types.Path, v1, v2 types.Map) error {
-	return diffOrdered(w, p, line, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-		if w.leftRight {
-			v2.DiffLeftRight(v1, cc, sc)
-		} else {
-			v2.Diff(v1, cc, sc)
-		}
-	},
+	return diffOrdered(w, p, line,
+		func(v types.Value) types.PathPart { return types.NewIndexPath(v) },
+		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
+			if w.leftRight {
+				v2.DiffLeftRight(v1, cc, sc)
+			} else {
+				v2.Diff(v1, cc, sc)
+			}
+		},
 		func(k types.Value) types.Value { return k },
 		func(k types.Value) types.Value { return v1.Get(k) },
 		func(k types.Value) types.Value { return v2.Get(k) },
@@ -132,30 +137,37 @@ func diffMaps(w diffWriter, p types.Path, v1, v2 types.Map) error {
 }
 
 func diffStructs(w diffWriter, p types.Path, v1, v2 types.Struct) error {
-	return diffOrdered(w, p, field, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-		v2.Diff(v1, cc, sc)
-	},
+	str := func(v types.Value) string {
+		return string(v.(types.String))
+	}
+	return diffOrdered(w, p, field,
+		func(v types.Value) types.PathPart { return types.NewFieldPath(str(v)) },
+		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
+			v2.Diff(v1, cc, sc)
+		},
 		func(k types.Value) types.Value { return k },
-		func(k types.Value) types.Value { return v1.Get(string(k.(types.String))) },
-		func(k types.Value) types.Value { return v2.Get(string(k.(types.String))) },
+		func(k types.Value) types.Value { return v1.Get(str(k)) },
+		func(k types.Value) types.Value { return v2.Get(str(k)) },
 	)
 }
 
 func diffSets(w diffWriter, p types.Path, v1, v2 types.Set) error {
-	return diffOrdered(w, p, line, func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-		if w.leftRight {
-			v2.DiffLeftRight(v1, cc, sc)
-		} else {
-			v2.Diff(v1, cc, sc)
-		}
-	},
+	return diffOrdered(w, p, line,
+		func(v types.Value) types.PathPart { return types.NewIndexPath(v) },
+		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
+			if w.leftRight {
+				v2.DiffLeftRight(v1, cc, sc)
+			} else {
+				v2.Diff(v1, cc, sc)
+			}
+		},
 		func(k types.Value) types.Value { return nil },
 		func(k types.Value) types.Value { return k },
 		func(k types.Value) types.Value { return k },
 	)
 }
 
-func diffOrdered(w diffWriter, p types.Path, lf lineFunc, df diffFunc, kf, v1, v2 valueFunc) (err error) {
+func diffOrdered(w diffWriter, p types.Path, lf lineFunc, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) (err error) {
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
@@ -184,7 +196,7 @@ func diffOrdered(w diffWriter, p types.Path, lf lineFunc, df diffFunc, kf, v1, v
 			c1, c2 := v1(change.V), v2(change.V)
 			if shouldDescend(c1, c2) {
 				writeFooter(w, &wroteHdr)
-				err = diff(w, append(p, types.NewIndexPath(k)), change.V, c1, c2)
+				err = diff(w, append(p, ppf(k)), change.V, c1, c2)
 			} else {
 				writeHeader(w, p, &wroteHdr)
 				lf(w, DEL, k, c1)
