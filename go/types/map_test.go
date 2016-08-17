@@ -522,6 +522,54 @@ func TestMapFirst2(t *testing.T) {
 	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
+func TestMapLast(t *testing.T) {
+	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	m1 := NewMap()
+	k, v := m1.First()
+	assert.Nil(k)
+	assert.Nil(v)
+
+	m1 = m1.Set(String("foo"), String("bar"))
+	m1 = m1.Set(String("hot"), String("dog"))
+	ak, av := m1.Last()
+	var ek, ev Value
+
+	m1.Iter(func(k, v Value) (stop bool) {
+		ek, ev = k, v
+		return false
+	})
+
+	assert.True(ek.Equals(ak))
+	assert.True(ev.Equals(av))
+}
+
+func TestMapLast2(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	doTest := func(tm testMap) {
+		m := tm.toMap()
+		sort.Stable(tm.entries)
+		actualKey, actualValue := m.Last()
+		assert.True(tm.entries[len(tm.entries)-1].key.Equals(actualKey))
+		assert.True(tm.entries[len(tm.entries)-1].value.Equals(actualValue))
+	}
+
+	doTest(getTestNativeOrderMap(16))
+	doTest(getTestRefValueOrderMap(2))
+	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+}
+
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 

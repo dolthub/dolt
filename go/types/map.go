@@ -124,13 +124,21 @@ func (m Map) Type() *Type {
 	return m.seq.Type()
 }
 
-func (m Map) First() (Value, Value) {
-	cur := newCursorAt(m.seq, emptyKey, false, false)
+func (m Map) firstOrLast(last bool) (Value, Value) {
+	cur := newCursorAt(m.seq, emptyKey, false, last)
 	if !cur.valid() {
 		return nil, nil
 	}
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
+}
+
+func (m Map) First() (Value, Value) {
+	return m.firstOrLast(false)
+}
+
+func (m Map) Last() (Value, Value) {
+	return m.firstOrLast(true)
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
