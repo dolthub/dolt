@@ -226,12 +226,6 @@ func TestDecodeInvalidTypes(tt *testing.T) {
 		assertDecodeErrorMessage(tt, types.Number(42), p, "Type is not supported, type: "+ts)
 	}
 
-	var slice []bool
-	t(&slice, "[]bool")
-
-	var array [2]bool
-	t(&array, "[2]bool")
-
 	var m map[string]bool
 	t(&m, "map[string]bool")
 
@@ -382,4 +376,132 @@ func TestDecodeInvalidNomsType(t *testing.T) {
 	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"a": types.NewMap(types.String("A"), types.Number(1)),
 	}), &s, "Cannot unmarshal Map<String, Number> into Go value of type types.List")
+}
+
+func ExampleUnmarshal() {
+	type Person struct {
+		Given string
+		Male  bool
+	}
+	var rickon Person
+	err := Unmarshal(types.NewStruct("Person", types.StructData{
+		"given": types.String("Rickon"),
+		"male":  types.Bool(true),
+	}), &rickon)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("Given: %s, Male: %t\n", rickon.Given, rickon.Male)
+	// Output: Given: Rickon, Male: true
+}
+
+func TestDecodeSlice(t *testing.T) {
+	assert := assert.New(t)
+	var s []string
+
+	err := Unmarshal(types.NewList(types.String("a"), types.String("b"), types.String("c")), &s)
+	assert.NoError(err)
+	assert.Equal([]string{"a", "b", "c"}, s)
+}
+
+func TestDecodeSliceReuse(t *testing.T) {
+	assert := assert.New(t)
+	s := []string{"A", "B", "C", "D"}
+	s2 := s[1:3]
+	err := Unmarshal(types.NewList(types.String("a"), types.String("b")), &s)
+	assert.NoError(err)
+	assert.Equal([]string{"a", "b"}, s)
+	assert.Equal([]string{"b", "C"}, s2)
+}
+
+func TestDecodeArray(t *testing.T) {
+	assert := assert.New(t)
+	s := [3]string{"", "", ""}
+
+	err := Unmarshal(types.NewList(types.String("a"), types.String("b"), types.String("c")), &s)
+	assert.NoError(err)
+	assert.Equal([3]string{"a", "b", "c"}, s)
+}
+
+func TestDecodeStructWithSlice(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		List []int
+	}
+	var s S
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"list": types.NewList(types.Number(1), types.Number(2), types.Number(3)),
+	}), &s)
+	assert.NoError(err)
+	assert.Equal(S{[]int{1, 2, 3}}, s)
+}
+
+func TestDecodeStructWithArrayOfNomsValue(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		List [1]types.Set
+	}
+	var s S
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"list": types.NewList(types.NewSet(types.Bool(true))),
+	}), &s)
+	assert.NoError(err)
+	assert.Equal(S{[1]types.Set{types.NewSet(types.Bool(true))}}, s)
+}
+
+func TestDecodeWrongArrayLength(t *testing.T) {
+	var l [2]string
+	assertDecodeErrorMessage(t, types.NewList(types.String("hi")), &l, "Cannot unmarshal List<String> into Go value of type [2]string, length does not match")
+}
+
+func TestDecodeWrongArrayType(t *testing.T) {
+	var l [1]string
+	assertDecodeErrorMessage(t, types.NewList(types.Number(1)), &l, "Cannot unmarshal Number into Go value of type string")
+}
+
+func TestDecodeWrongSliceType(t *testing.T) {
+	var l []string
+	assertDecodeErrorMessage(t, types.NewList(types.Number(1)), &l, "Cannot unmarshal Number into Go value of type string")
+}
+
+func TestDecodeRecursive(t *testing.T) {
+	assert := assert.New(t)
+
+	type Node struct {
+		Value    int
+		Children []Node
+	}
+
+	typ := types.MakeStructType("Node", []string{"children", "value"}, []*types.Type{
+		types.MakeListType(types.MakeCycleType(0)),
+		types.NumberType,
+	})
+	v := types.NewStructWithType(typ, types.ValueSlice{
+		types.NewList(
+			types.NewStructWithType(typ, types.ValueSlice{
+				types.NewList(),
+				types.Number(2),
+			}),
+			types.NewStructWithType(typ, types.ValueSlice{
+				types.NewList(),
+				types.Number(3),
+			}),
+		),
+		types.Number(1),
+	})
+
+	var n Node
+	err := Unmarshal(v, &n)
+	assert.NoError(err)
+
+	assert.Equal(Node{
+		1, []Node{
+			Node{2, []Node(nil)},
+			Node{3, []Node(nil)},
+		},
+	}, n)
 }

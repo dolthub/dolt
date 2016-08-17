@@ -146,6 +146,13 @@ func assertEncodeErrorMessage(t *testing.T, v interface{}, expectedMessage strin
 	assert.Equal(t, expectedMessage, err.Error())
 }
 
+func TestInvalidTypes(t *testing.T) {
+	assertEncodeErrorMessage(t, map[int]int{}, "Type is not supported, type: map[int]int")
+	assertEncodeErrorMessage(t, make(chan int), "Type is not supported, type: chan int")
+	x := 42
+	assertEncodeErrorMessage(t, &x, "Type is not supported, type: *int")
+}
+
 func TestEncodeEmbeddedStruct(t *testing.T) {
 	type EmbeddedStruct struct{}
 	type TestStruct struct {
@@ -216,21 +223,78 @@ func ExampleMarshal() {
 	// Output: Given: Arya, Male: false
 }
 
-func ExampleUnmarshal() {
-	type Person struct {
-		Given string
-		Male  bool
-	}
-	var rickon Person
-	err := Unmarshal(types.NewStruct("Person", types.StructData{
-		"given": types.String("Rickon"),
-		"male":  types.Bool(true),
-	}), &rickon)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+func TestEncodeSlice(t *testing.T) {
+	assert := assert.New(t)
+	v, err := Marshal([]string{"a", "b", "c"})
+	assert.NoError(err)
+	assert.True(types.NewList(types.String("a"), types.String("b"), types.String("c")).Equals(v))
+}
 
-	fmt.Printf("Given: %s, Male: %t\n", rickon.Given, rickon.Male)
-	// Output: Given: Rickon, Male: true
+func TestEncodeArray(t *testing.T) {
+	assert := assert.New(t)
+	v, err := Marshal([3]int{1, 2, 3})
+	assert.NoError(err)
+	assert.True(types.NewList(types.Number(1), types.Number(2), types.Number(3)).Equals(v))
+}
+
+func TestEncodeStructWithSlice(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		List []int
+	}
+	v, err := Marshal(S{[]int{1, 2, 3}})
+	assert.NoError(err)
+	assert.True(types.NewStruct("S", types.StructData{
+		"list": types.NewList(types.Number(1), types.Number(2), types.Number(3)),
+	}).Equals(v))
+}
+
+func TestEncodeStructWithArrayOfNomsValue(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		List [1]types.Set
+	}
+	v, err := Marshal(S{[1]types.Set{types.NewSet(types.Bool(true))}})
+	assert.NoError(err)
+	assert.True(types.NewStruct("S", types.StructData{
+		"list": types.NewList(types.NewSet(types.Bool(true))),
+	}).Equals(v))
+}
+
+func TestEncodeRecursive(t *testing.T) {
+	assert := assert.New(t)
+
+	type Node struct {
+		Value    int
+		Children []Node
+	}
+	v, err := Marshal(Node{
+		1, []Node{
+			Node{2, []Node{}},
+			Node{3, []Node(nil)},
+		},
+	})
+	assert.NoError(err)
+
+	typ := types.MakeStructType("Node", []string{"children", "value"}, []*types.Type{
+		types.MakeListType(types.MakeCycleType(0)),
+		types.NumberType,
+	})
+	assert.True(typ.Equals(v.Type()))
+
+	assert.True(types.NewStructWithType(typ, types.ValueSlice{
+		types.NewList(
+			types.NewStructWithType(typ, types.ValueSlice{
+				types.NewList(),
+				types.Number(2),
+			}),
+			types.NewStructWithType(typ, types.ValueSlice{
+				types.NewList(),
+				types.Number(3),
+			}),
+		),
+		types.Number(1),
+	}).Equals(v))
 }

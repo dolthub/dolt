@@ -21,7 +21,14 @@ import (
 // fields to the fields used by Marshal (either the struct field name or its tag).
 // Unmarshal will only set exported fields of the struct.
 //
-// If a Noms value is not appropriate for a given target type, or if a Noms number overflows the target type, Unmarshal returns a UnmarshalTypeMismatchError.
+// To unmarshal a Noms list into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice.
+//
+// To unmarshal a Noms list into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
+//
+// Unmarshal returns an UnmarshalTypeMismatchError if:
+// - a Noms value is not appropriate for a given target type
+// - a Noms number overflows the target type
+// - a Noms list is decoded into a Go array of a different length
 //
 func Unmarshal(v types.Value, out interface{}) (err error) {
 	defer func() {
@@ -92,6 +99,10 @@ func typeDecoder(t reflect.Type) decoderFunc {
 		return stringDecoder
 	case reflect.Struct, reflect.Interface:
 		return structDecoder(t)
+	case reflect.Slice:
+		return sliceDecoder(t)
+	case reflect.Array:
+		return arrayDecoder(t)
 	default:
 		panic(&UnsupportedTypeError{Type: t})
 	}
@@ -144,9 +155,26 @@ func uintDecoder(v types.Value, rv reflect.Value) {
 	}
 }
 
-var structDecoderCache struct {
+type decoderCacheT struct {
 	sync.RWMutex
 	m map[reflect.Type]decoderFunc
+}
+
+var decoderCache = &decoderCacheT{}
+
+func (c *decoderCacheT) get(t reflect.Type) decoderFunc {
+	c.RLock()
+	defer c.RUnlock()
+	return c.m[t]
+}
+
+func (c *decoderCacheT) set(t reflect.Type, d decoderFunc) {
+	c.Lock()
+	defer c.Unlock()
+	if c.m == nil {
+		c.m = map[reflect.Type]decoderFunc{}
+	}
+	c.m[t] = d
 }
 
 type decField struct {
@@ -160,9 +188,7 @@ func structDecoder(t reflect.Type) decoderFunc {
 		return nomsValueDecoder
 	}
 
-	structDecoderCache.RLock()
-	d := structDecoderCache.m[t]
-	structDecoderCache.RUnlock()
+	d := decoderCache.get(t)
 	if d != nil {
 		return d
 	}
@@ -202,12 +228,7 @@ func structDecoder(t reflect.Type) decoderFunc {
 		}
 	}
 
-	structDecoderCache.Lock()
-	if structDecoderCache.m == nil {
-		structDecoderCache.m = map[reflect.Type]decoderFunc{}
-	}
-	structDecoderCache.m[t] = d
-	structDecoderCache.Unlock()
+	decoderCache.set(t, d)
 	return d
 }
 
@@ -216,4 +237,52 @@ func nomsValueDecoder(v types.Value, rv reflect.Value) {
 		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
 	}
 	rv.Set(reflect.ValueOf(v))
+}
+
+func sliceDecoder(t reflect.Type) decoderFunc {
+	d := decoderCache.get(t)
+	if d != nil {
+		return d
+	}
+
+	var decoder decoderFunc
+
+	d = func(v types.Value, rv reflect.Value) {
+		slice := rv.Slice(0, 0)
+		v.(types.List).IterAll(func(v types.Value, i uint64) {
+			elemRv := reflect.New(t.Elem()).Elem()
+			decoder(v, elemRv)
+			slice = reflect.Append(slice, elemRv)
+		})
+		rv.Set(slice)
+	}
+
+	decoderCache.set(t, d)
+	decoder = typeDecoder(t.Elem())
+	return d
+}
+
+func arrayDecoder(t reflect.Type) decoderFunc {
+	d := decoderCache.get(t)
+	if d != nil {
+		return d
+	}
+
+	var decoder decoderFunc
+
+	d = func(v types.Value, rv reflect.Value) {
+		size := t.Len()
+		list := v.(types.List)
+		l := int(list.Len())
+		if l != size {
+			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match"})
+		}
+		list.IterAll(func(v types.Value, i uint64) {
+			decoder(v, rv.Index(int(i)))
+		})
+	}
+
+	decoderCache.set(t, d)
+	decoder = typeDecoder(t.Elem())
+	return d
 }
