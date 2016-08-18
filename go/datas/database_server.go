@@ -21,7 +21,7 @@ type connectionState struct {
 	cs http.ConnState
 }
 
-type remoteDatabaseServer struct {
+type RemoteDatabaseServer struct {
 	cs      chunks.ChunkStore
 	port    int
 	l       *net.Listener
@@ -31,21 +31,21 @@ type remoteDatabaseServer struct {
 	Ready func()
 }
 
-func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *remoteDatabaseServer {
+func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *RemoteDatabaseServer {
 	dataVersion := cs.Version()
 	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
-	return &remoteDatabaseServer{
+	return &RemoteDatabaseServer{
 		cs, port, nil, make(chan *connectionState, 16), false, func() {},
 	}
 }
 
 // Port is the actual port used. This may be different than the port passed in to NewRemoteDatabaseServer.
-func (s *remoteDatabaseServer) Port() int {
+func (s *RemoteDatabaseServer) Port() int {
 	return s.port
 }
 
-// Run blocks while the remoteDatabaseServer is listening. Running on a separate go routine is supported.
-func (s *remoteDatabaseServer) Run() {
+// Run blocks while the RemoteDatabaseServer is listening. Running on a separate go routine is supported.
+func (s *RemoteDatabaseServer) Run() {
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	d.Chk.NoError(err)
@@ -95,7 +95,7 @@ func (s *remoteDatabaseServer) Run() {
 	srv.Serve(l)
 }
 
-func (s *remoteDatabaseServer) makeHandle(hndlr Handler) httprouter.Handle {
+func (s *RemoteDatabaseServer) makeHandle(hndlr Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		hndlr(w, req, ps, s.cs)
 	}
@@ -104,7 +104,7 @@ func (s *remoteDatabaseServer) makeHandle(hndlr Handler) httprouter.Handle {
 func noopHandle(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
-func (s *remoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle {
+func (s *RemoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle {
 	// TODO: Implement full pre-flighting?
 	// See: http://www.html5rocks.com/static/images/cors_server_flowchart.png
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -118,7 +118,7 @@ func (s *remoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle
 	}
 }
 
-func (s *remoteDatabaseServer) connState(c net.Conn, cs http.ConnState) {
+func (s *RemoteDatabaseServer) connState(c net.Conn, cs http.ConnState) {
 	if s.closing {
 		d.Chk.True(cs == http.StateClosed)
 		return
@@ -126,8 +126,8 @@ func (s *remoteDatabaseServer) connState(c net.Conn, cs http.ConnState) {
 	s.csChan <- &connectionState{c, cs}
 }
 
-// Will cause the remoteDatabaseServer to stop listening and an existing call to Run() to continue.
-func (s *remoteDatabaseServer) Stop() {
+// Will cause the RemoteDatabaseServer to stop listening and an existing call to Run() to continue.
+func (s *RemoteDatabaseServer) Stop() {
 	s.closing = true
 	(*s.l).Close()
 	(s.cs).Close()
