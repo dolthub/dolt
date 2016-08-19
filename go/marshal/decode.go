@@ -21,9 +21,11 @@ import (
 // fields to the fields used by Marshal (either the struct field name or its tag).
 // Unmarshal will only set exported fields of the struct.
 //
-// To unmarshal a Noms list into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice.
+// To unmarshal a Noms list into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice. If the Go slice was nil a new slice is created.
 //
 // To unmarshal a Noms list into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
+//
+// To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values into corresponding Go array elements.
 //
 // Unmarshal returns an UnmarshalTypeMismatchError if:
 // - a Noms value is not appropriate for a given target type
@@ -103,6 +105,8 @@ func typeDecoder(t reflect.Type) decoderFunc {
 		return sliceDecoder(t)
 	case reflect.Array:
 		return arrayDecoder(t)
+	case reflect.Map:
+		return mapDecoder(t)
 	default:
 		panic(&UnsupportedTypeError{Type: t})
 	}
@@ -248,8 +252,17 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 	var decoder decoderFunc
 
 	d = func(v types.Value, rv reflect.Value) {
-		slice := rv.Slice(0, 0)
-		v.(types.List).IterAll(func(v types.Value, i uint64) {
+		list, ok := v.(types.List)
+		if !ok {
+			panic(&UnmarshalTypeMismatchError{v, t, ""})
+		}
+		var slice reflect.Value
+		if rv.IsNil() {
+			slice = reflect.MakeSlice(t, 0, int(list.Len()))
+		} else {
+			slice = rv.Slice(0, 0)
+		}
+		list.IterAll(func(v types.Value, i uint64) {
 			elemRv := reflect.New(t.Elem()).Elem()
 			decoder(v, elemRv)
 			slice = reflect.Append(slice, elemRv)
@@ -272,7 +285,11 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 
 	d = func(v types.Value, rv reflect.Value) {
 		size := t.Len()
-		list := v.(types.List)
+		list, ok := v.(types.List)
+		if !ok {
+			panic(&UnmarshalTypeMismatchError{v, t, ""})
+		}
+
 		l := int(list.Len())
 		if l != size {
 			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match"})
@@ -284,5 +301,41 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 
 	decoderCache.set(t, d)
 	decoder = typeDecoder(t.Elem())
+	return d
+}
+
+func mapDecoder(t reflect.Type) decoderFunc {
+	d := decoderCache.get(t)
+	if d != nil {
+		return d
+	}
+
+	var keyDecoder decoderFunc
+	var valueDecoder decoderFunc
+
+	d = func(v types.Value, rv reflect.Value) {
+		m := rv
+		if m.IsNil() {
+			m = reflect.MakeMap(t)
+		}
+
+		nomsMap, ok := v.(types.Map)
+		if !ok {
+			panic(&UnmarshalTypeMismatchError{v, t, ""})
+		}
+
+		nomsMap.IterAll(func(k, v types.Value) {
+			keyRv := reflect.New(t.Key()).Elem()
+			keyDecoder(k, keyRv)
+			valueRv := reflect.New(t.Elem()).Elem()
+			valueDecoder(v, valueRv)
+			m.SetMapIndex(keyRv, valueRv)
+		})
+		rv.Set(m)
+	}
+
+	decoderCache.set(t, d)
+	keyDecoder = typeDecoder(t.Key())
+	valueDecoder = typeDecoder(t.Elem())
 	return d
 }

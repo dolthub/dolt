@@ -226,9 +226,6 @@ func TestDecodeInvalidTypes(tt *testing.T) {
 		assertDecodeErrorMessage(tt, types.Number(42), p, "Type is not supported, type: "+ts)
 	}
 
-	var m map[string]bool
-	t(&m, "map[string]bool")
-
 	var ptr *bool
 	t(&ptr, "*bool")
 
@@ -468,6 +465,16 @@ func TestDecodeWrongSliceType(t *testing.T) {
 	assertDecodeErrorMessage(t, types.NewList(types.Number(1)), &l, "Cannot unmarshal Number into Go value of type string")
 }
 
+func TestDecodeSliceWrongNomsType(t *testing.T) {
+	var l []string
+	assertDecodeErrorMessage(t, types.NewMap(types.String("a"), types.Number(1)), &l, "Cannot unmarshal Map<String, Number> into Go value of type []string")
+}
+
+func TestDecodeArrayWrongNomsType(t *testing.T) {
+	var l [1]string
+	assertDecodeErrorMessage(t, types.NewMap(types.String("a"), types.Number(1)), &l, "Cannot unmarshal Map<String, Number> into Go value of type [1]string")
+}
+
 func TestDecodeRecursive(t *testing.T) {
 	assert := assert.New(t)
 
@@ -500,8 +507,50 @@ func TestDecodeRecursive(t *testing.T) {
 
 	assert.Equal(Node{
 		1, []Node{
-			Node{2, []Node(nil)},
-			Node{3, []Node(nil)},
+			Node{2, []Node{}},
+			Node{3, []Node{}},
 		},
 	}, n)
+}
+
+func TestDecodeMap(t *testing.T) {
+	assert := assert.New(t)
+	var m map[string]int
+
+	testMap := types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("b"), types.Number(2),
+		types.String("c"), types.Number(3))
+	expectedMap := map[string]int{"a": 1, "b": 2, "c": 3}
+	err := Unmarshal(testMap, &m)
+	assert.NoError(err)
+	assert.Equal(expectedMap, m)
+
+	m = nil
+	err = Unmarshal(testMap, &m)
+	assert.NoError(err)
+	assert.Equal(expectedMap, m)
+
+	m = map[string]int{"b": 2, "c": 333}
+	err = Unmarshal(types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("c"), types.Number(3)), &m)
+	assert.NoError(err)
+	assert.Equal(expectedMap, m)
+
+	type S struct {
+		N string
+	}
+
+	var m2 map[S]bool
+	err = Unmarshal(types.NewMap(
+		types.NewStruct("S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
+		types.NewStruct("S", types.StructData{"n": types.String("No")}), types.Bool(false)), &m2)
+	assert.NoError(err)
+	assert.Equal(map[S]bool{S{"Yes"}: true, S{"No"}: false}, m2)
+}
+
+func TestDecodeMapWrongNomsType(t *testing.T) {
+	var m map[string]int
+	assertDecodeErrorMessage(t, types.NewList(types.String("a"), types.Number(1)), &m, "Cannot unmarshal List<Number | String> into Go value of type map[string]int")
 }

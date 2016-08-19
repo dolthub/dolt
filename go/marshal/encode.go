@@ -27,6 +27,8 @@ import (
 //
 // Slices and arrays are encoded as Noms types.List.
 //
+// Maps are encoded as Noms types.Map
+//
 // Struct values are encoded as Noms structs (types.Struct). Each exported Go struct field becomes a member of the Noms struct unless
 //   - the field's tag is "-"
 // The Noms struct default field name is the Go struct field name where the first character is lower cased,
@@ -50,7 +52,7 @@ import (
 //
 // Noms values (values implementing types.Value) are copied over without any change.
 //
-// Go maps, pointers, complex, interface (non types.Value), function are not supported. Attempting to encode such a value causes Marshal to return an UnsupportedTypeError.
+// Go pointers, complex, interface (non types.Value), function are not supported. Attempting to encode such a value causes Marshal to return an UnsupportedTypeError.
 //
 func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	defer func() {
@@ -136,6 +138,8 @@ func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 		return structEncoder(t, parentStructTypes)
 	case reflect.Slice, reflect.Array:
 		return listEncoder(t, parentStructTypes)
+	case reflect.Map:
+		return mapEncoder(t, parentStructTypes)
 	default:
 		panic(&UnsupportedTypeError{Type: t})
 	}
@@ -330,5 +334,29 @@ func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 
 	encoderCache.set(t, e)
 	elemEncoder = typeEncoder(t.Elem(), parentStructTypes)
+	return e
+}
+
+func mapEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
+	e := encoderCache.get(t)
+	if e != nil {
+		return e
+	}
+
+	var keyEncoder encoderFunc
+	var valueEncoder encoderFunc
+	e = func(v reflect.Value) types.Value {
+		keys := v.MapKeys()
+		kvs := make([]types.Value, 2*len(keys))
+		for i, k := range keys {
+			kvs[2*i] = keyEncoder(k)
+			kvs[2*i+1] = valueEncoder(v.MapIndex(k))
+		}
+		return types.NewMap(kvs...)
+	}
+
+	encoderCache.set(t, e)
+	keyEncoder = typeEncoder(t.Key(), parentStructTypes)
+	valueEncoder = typeEncoder(t.Elem(), parentStructTypes)
 	return e
 }

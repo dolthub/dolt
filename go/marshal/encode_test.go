@@ -147,7 +147,6 @@ func assertEncodeErrorMessage(t *testing.T, v interface{}, expectedMessage strin
 }
 
 func TestInvalidTypes(t *testing.T) {
-	assertEncodeErrorMessage(t, map[int]int{}, "Type is not supported, type: map[int]int")
 	assertEncodeErrorMessage(t, make(chan int), "Type is not supported, type: chan int")
 	x := 42
 	assertEncodeErrorMessage(t, &x, "Type is not supported, type: *int")
@@ -297,4 +296,32 @@ func TestEncodeRecursive(t *testing.T) {
 		),
 		types.Number(1),
 	}).Equals(v))
+}
+
+func TestEncodeMap(t *testing.T) {
+	assert := assert.New(t)
+
+	v, err := Marshal(map[string]int{"a": 1, "b": 2, "c": 3})
+	assert.NoError(err)
+	assert.True(types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("b"), types.Number(2),
+		types.String("c"), types.Number(3)).Equals(v))
+
+	type S struct {
+		N string
+	}
+	v, err = Marshal(map[S]bool{S{"Yes"}: true, S{"No"}: false})
+	assert.NoError(err)
+	assert.True(types.NewMap(
+		types.NewStruct("S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
+		types.NewStruct("S", types.StructData{"n": types.String("No")}), types.Bool(false)).Equals(v))
+
+	v, err = Marshal(map[string]int(nil))
+	assert.NoError(err)
+	assert.True(types.NewMap().Equals(v))
+
+	v, err = Marshal(map[string]int{})
+	assert.NoError(err)
+	assert.True(types.NewMap().Equals(v))
 }
