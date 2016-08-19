@@ -25,7 +25,7 @@ import (
 //
 // To unmarshal a Noms list into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
 //
-// To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values into corresponding Go array elements.
+// To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values into corresponding Go array elements. If the Go map was nil a new map is created.
 //
 // Unmarshal returns an UnmarshalTypeMismatchError if:
 // - a Noms value is not appropriate for a given target type

@@ -526,11 +526,6 @@ func TestDecodeMap(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(expectedMap, m)
 
-	m = nil
-	err = Unmarshal(testMap, &m)
-	assert.NoError(err)
-	assert.Equal(expectedMap, m)
-
 	m = map[string]int{"b": 2, "c": 333}
 	err = Unmarshal(types.NewMap(
 		types.String("a"), types.Number(1),
