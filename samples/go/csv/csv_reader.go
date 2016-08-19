@@ -32,7 +32,13 @@ func (r reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// NewCSVReader returns a new csv.Reader that splits on comma and asserts that all rows contain the same number of fields as the first.
+func SkipRecords(r *csv.Reader, n uint) {
+	for i := uint(0); i < n; i++ {
+		r.Read()
+	}
+}
+
+// NewCSVReader returns a new csv.Reader that splits on comma
 func NewCSVReader(res io.Reader, comma rune) *csv.Reader {
 	bufRes := bufio.NewReader(res)
 	r := csv.NewReader(reader{r: bufRes})

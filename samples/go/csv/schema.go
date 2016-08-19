@@ -105,9 +105,9 @@ func (tc *typeCanFit) testBool(value string) {
 	tc.boolType = err == nil
 }
 
-func GetSchema(r *csv.Reader, headers []string) KindSlice {
-	so := newSchemaOptions(len(headers))
-	for i := 0; i < 100; i++ {
+func GetSchema(r *csv.Reader, numSamples int, numFields int) KindSlice {
+	so := newSchemaOptions(numFields)
+	for i := 0; i < numSamples; i++ {
 		row, err := r.Read()
 		if err == io.EOF {
 			break
@@ -115,6 +115,103 @@ func GetSchema(r *csv.Reader, headers []string) KindSlice {
 		so.Test(row)
 	}
 	return so.MostSpecificKinds()
+}
+
+func GetFieldNamesFromIndices(headers []string, indices []int) []string {
+	result := make([]string, len(indices))
+	for i, idx := range indices {
+		result[i] = headers[idx]
+	}
+	return result
+}
+
+// combinations - n choose m combination without repeat - emit all possible `length` combinations from values
+func combinationsWithLength(values []int, length int, emit func([]int)) {
+	n := len(values)
+
+	if length > n {
+		return
+	}
+
+	indices := make([]int, length)
+	for i := range indices {
+		indices[i] = i
+	}
+
+	result := make([]int, length)
+	for i, l := range indices {
+		result[i] = values[l]
+	}
+	emit(result)
+
+	for {
+		i := length - 1
+		for ; i >= 0 && indices[i] == i+n-length; i -= 1 {
+		}
+
+		if i < 0 {
+			return
+		}
+
+		indices[i] += 1
+		for j := i + 1; j < length; j += 1 {
+			indices[j] = indices[j-1] + 1
+		}
+
+		for ; i < len(indices); i += 1 {
+			result[i] = values[indices[i]]
+		}
+		emit(result)
+	}
+}
+
+// combinationsLengthsFromTo - n choose m combination without repeat - emit all possible combinations of all lengths from smallestLength to largestLength (inclusive)
+func combinationsLengthsFromTo(values []int, smallestLength, largestLength int, emit func([]int)) {
+	for i := smallestLength; i <= largestLength; i++ {
+		combinationsWithLength(values, i, emit)
+	}
+}
+
+func makeKeyString(row []string, indices []int, separator string) string {
+	var result string
+	for _, i := range indices {
+		result += separator
+		result += row[i]
+	}
+	return result
+}
+
+// FindPrimaryKeys reads numSamples from r, using the first numFields and returns slices of []int indices that are primary keys for those samples
+func FindPrimaryKeys(r *csv.Reader, numSamples, maxLenPrimaryKeyList, numFields int) [][]int {
+	dataToTest := make([][]string, 0, numSamples)
+	for i := int(0); i < numSamples; i++ {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		dataToTest = append(dataToTest, row)
+	}
+
+	indices := make([]int, numFields)
+	for i := int(0); i < numFields; i++ {
+		indices[i] = i
+	}
+
+	pksFound := make([][]int, 0)
+	combinationsLengthsFromTo(indices, 1, maxLenPrimaryKeyList, func(combination []int) {
+		keys := make(map[string]bool, numSamples)
+		for _, row := range dataToTest {
+			key := makeKeyString(row, combination, "$&$")
+			if _, ok := keys[key]; ok {
+				return
+			} else {
+				keys[key] = true
+			}
+		}
+		// need to copy the combination because it will be changed by caller
+		pksFound = append(pksFound, append([]int{}, combination...))
+	})
+	return pksFound
 }
 
 // StringToValue takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.

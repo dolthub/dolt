@@ -47,7 +47,6 @@ func main() {
 	noProgress := flag.Bool("no-progress", false, "prevents progress from being output if true")
 	destType := flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the index position (0-based) of the column that is a the unique identifier for the column")
 	skipRecords := flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
-	detectColumnTypes := flag.Bool("detect-column-types", false, "detect column types by analyzing a portion of csv file")
 	destTypePattern := regexp.MustCompile("^(list|map):(\\d+)$")
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
@@ -64,7 +63,7 @@ func main() {
 	switch {
 	case flag.NArg() == 0:
 		err = errors.New("Maybe you put options after the dataset?")
-	case flag.NArg() == 1 && *path == "" && !*detectColumnTypes:
+	case flag.NArg() == 1 && *path == "":
 		err = errors.New("If <csvfile> isn't specified, you must specify a noms path with -p")
 	case flag.NArg() == 2 && *path != "":
 		err = errors.New("Cannot specify both <csvfile> and a noms path with -p")
@@ -114,10 +113,6 @@ func main() {
 		dataSetArgN = 1
 	}
 
-	if *detectColumnTypes {
-		*noProgress = true
-	}
-
 	if !*noProgress {
 		r = progressreader.New(r, getStatusPrinter(size))
 	}
@@ -131,6 +126,7 @@ func main() {
 		dest = destList
 	} else if match := destTypePattern.FindStringSubmatch(*destType); match != nil {
 		dest = destMap
+		// TODO - support multiple integer indices here for nested maps/compound primary key
 		pk, err = strconv.Atoi(match[2])
 		d.CheckErrorNoUsage(err)
 	} else {
@@ -139,9 +135,7 @@ func main() {
 	}
 
 	cr := csv.NewCSVReader(r, comma)
-	for i := uint(0); i < *skipRecords; i++ {
-		cr.Read()
-	}
+	csv.SkipRecords(cr, *skipRecords)
 
 	var headers []string
 	if *header == "" {
@@ -154,10 +148,6 @@ func main() {
 	kinds := []types.NomsKind{}
 	if *columnTypes != "" {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
-	} else if *detectColumnTypes {
-		kinds = csv.GetSchema(cr, headers)
-		fmt.Fprintf(os.Stdout, "kinds detected: %v", strings.Join(csv.KindsToStrings(kinds), ","))
-		return
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(dataSetArgN))

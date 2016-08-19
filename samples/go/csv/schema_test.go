@@ -239,7 +239,6 @@ func TestSchemaDetection(t *testing.T) {
 				types.StringKind},
 		},
 	)
-
 	test(
 		[][]string{
 			[]string{fmt.Sprintf("%d", uint64(1<<63))},
@@ -251,7 +250,6 @@ func TestSchemaDetection(t *testing.T) {
 				types.StringKind},
 		},
 	)
-
 	test(
 		[][]string{
 			[]string{fmt.Sprintf("%d", uint64(1<<32))},
@@ -263,4 +261,91 @@ func TestSchemaDetection(t *testing.T) {
 				types.StringKind},
 		},
 	)
+}
+
+func TestCombinationsWithLength(t *testing.T) {
+	assert := assert.New(t)
+	test := func(input []int, length int, expect [][]int) {
+		combinations := make([][]int, 0)
+		combinationsWithLength(input, length, func(combination []int) {
+			combinations = append(combinations, append([]int{}, combination...))
+		})
+
+		assert.Equal(expect, combinations)
+	}
+	test([]int{0}, 1, [][]int{
+		[]int{0},
+	})
+	test([]int{1}, 1, [][]int{
+		[]int{1},
+	})
+	test([]int{0, 1}, 1, [][]int{
+		[]int{0},
+		[]int{1},
+	})
+	test([]int{0, 1}, 2, [][]int{
+		[]int{0, 1},
+	})
+	test([]int{70, 80, 90, 100}, 1, [][]int{
+		[]int{70},
+		[]int{80},
+		[]int{90},
+		[]int{100},
+	})
+	test([]int{70, 80, 90, 100}, 2, [][]int{
+		[]int{70, 80},
+		[]int{70, 90},
+		[]int{70, 100},
+		[]int{80, 90},
+		[]int{80, 100},
+		[]int{90, 100},
+	})
+	test([]int{70, 80, 90, 100}, 3, [][]int{
+		[]int{70, 80, 90},
+		[]int{70, 80, 100},
+		[]int{70, 90, 100},
+		[]int{80, 90, 100},
+	})
+}
+
+func TestCombinationsWithLengthFromTo(t *testing.T) {
+	assert := assert.New(t)
+	test := func(input []int, smallestLength, largestLength int, expect [][]int) {
+		combinations := make([][]int, 0)
+		combinationsLengthsFromTo(input, smallestLength, largestLength, func(combination []int) {
+			combinations = append(combinations, append([]int{}, combination...))
+		})
+
+		assert.Equal(expect, combinations)
+	}
+	test([]int{0}, 1, 1, [][]int{
+		[]int{0},
+	})
+	test([]int{1}, 1, 1, [][]int{
+		[]int{1},
+	})
+	test([]int{0, 1}, 1, 2, [][]int{
+		[]int{0},
+		[]int{1},
+		[]int{0, 1},
+	})
+	test([]int{0, 1}, 2, 2, [][]int{
+		[]int{0, 1},
+	})
+	test([]int{70, 80, 90, 100}, 1, 3, [][]int{
+		[]int{70},
+		[]int{80},
+		[]int{90},
+		[]int{100},
+		[]int{70, 80},
+		[]int{70, 90},
+		[]int{70, 100},
+		[]int{80, 90},
+		[]int{80, 100},
+		[]int{90, 100},
+		[]int{70, 80, 90},
+		[]int{70, 80, 100},
+		[]int{70, 90, 100},
+		[]int{80, 90, 100},
+	})
 }
