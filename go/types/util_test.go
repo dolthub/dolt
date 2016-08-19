@@ -14,6 +14,11 @@ var generateNumbersAsValues = func(n int) []Value {
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
+var generateNumbersAsValueSlice = func(n int) ValueSlice {
+	d.Chk.True(n > 0, "must be an integer greater than zero")
+	return generateNumbersAsValuesFromToBy(0, n, 1)
+}
+
 var generateNumbersAsValuesFromToBy = func(from, to, by int) ValueSlice {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")

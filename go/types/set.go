@@ -196,6 +196,10 @@ func (s Set) IterAll(cb setIterAllCallback) {
 	})
 }
 
+func (s Set) Iterator() SetIterator {
+	return &setIterator{s: s, cursor: nil}
+}
+
 func (s Set) elemType() *Type {
 	return s.Type().Desc.(CompoundDesc).ElemTypes[0]
 }
