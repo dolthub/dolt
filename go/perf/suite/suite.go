@@ -132,6 +132,14 @@ type perfSuiteT interface {
 	Suite() *PerfSuite
 }
 
+type environment struct {
+	DiskUsages map[string]disk.UsageStat
+	Cpus       map[int]cpu.InfoStat
+	Mem        mem.VirtualMemoryStat
+	Host       host.InfoStat
+	Partitions map[string]disk.PartitionStat
+}
+
 type timeInfo struct {
 	elapsed, paused, total time.Duration
 }
@@ -351,50 +359,41 @@ func callSafe(name string, fun reflect.Value, args ...interface{}) (err interfac
 	return
 }
 
-func (suite *PerfSuite) getEnvironment() types.Struct {
+func (suite *PerfSuite) getEnvironment() types.Value {
 	assert := suite.NewAssert()
 
-	cpuInfos, err := cpu.Info()
-	assert.NoError(err)
-	cpus := make([]types.Value, 0, 2*len(cpuInfos))
-	for i, c := range cpuInfos {
-		cm, err := marshal.Marshal(c)
-		assert.NoError(err)
-		cpus = append(cpus, types.Number(i), cm)
+	env := environment{
+		DiskUsages: map[string]disk.UsageStat{},
+		Cpus:       map[int]cpu.InfoStat{},
+		Partitions: map[string]disk.PartitionStat{},
 	}
 
-	vmStat, err := mem.VirtualMemory()
+	partitions, err := disk.Partitions(false)
 	assert.NoError(err)
-	mem, err := marshal.Marshal(*vmStat)
+	for _, p := range partitions {
+		usage, err := disk.Usage(p.Mountpoint)
+		assert.NoError(err)
+		env.DiskUsages[p.Mountpoint] = *usage
+		env.Partitions[p.Device] = p
+	}
+
+	cpus, err := cpu.Info()
 	assert.NoError(err)
+	for i, c := range cpus {
+		env.Cpus[i] = c
+	}
+
+	mem, err := mem.VirtualMemory()
+	assert.NoError(err)
+	env.Mem = *mem
 
 	hostInfo, err := host.Info()
 	assert.NoError(err)
-	host, err := marshal.Marshal(*hostInfo)
-	assert.NoError(err)
+	env.Host = *hostInfo
 
-	partitionStats, err := disk.Partitions(false)
+	envStruct, err := marshal.Marshal(env)
 	assert.NoError(err)
-	partitions := make([]types.Value, 0, 2*len(partitionStats))
-	diskUsages := make([]types.Value, 0, 2*len(partitionStats))
-	for _, p := range partitionStats {
-		pm, err := marshal.Marshal(p)
-		assert.NoError(err)
-		partitions = append(partitions, types.String(p.Device), pm)
-		du, err := disk.Usage(p.Mountpoint)
-		assert.NoError(err)
-		dum, err := marshal.Marshal(*du)
-		assert.NoError(err)
-		diskUsages = append(diskUsages, types.String(p.Mountpoint), dum)
-	}
-
-	return types.NewStruct("", types.StructData{
-		"diskUsages": types.NewMap(diskUsages...),
-		"cpus":       types.NewMap(cpus...),
-		"mem":        mem,
-		"host":       host,
-		"partitions": types.NewMap(partitions...),
-	})
+	return envStruct
 }
 
 func (suite *PerfSuite) getGitHead(dir string) string {
