@@ -14,11 +14,21 @@ type SetIterator interface {
 	// Next returns subsequent values from a set. It returns nil, when no objects remain
 	Next() Value
 
-	// NextFrom(v) advances the cursor to a new position based on the following rules and returns the value at that position.
-	// * if v <= curValue, advances to the next value in the iteration.
-	// * if there are no values >= v, advances to end of the set and returns nil.
-	// * if there are values > v but but no values == v, advances to the first value > v.
-	NextFrom(v Value) Value
+	// SkipTo(v) advances to and returns the next value in the iterator >= v.
+	// Note: if the iterator has already returned the value being skipped to, it will return the next
+	// value (just as if Next() was called). For example, given the following set:
+	//   s = Set{ 0, 3, 6, 9, 12, 15, 18 }
+	// An iterator on the set would return:
+	//   i := s.Iterator()
+	//   i.Next()  return 0
+	//   i.SkipTo(4) -- returns 6
+	//   i.skipTo(3) -- returns 9 (this is the next value in the iterator >= 3)
+	//   i.skipTo(12) -- returns 12
+	//   i.skipTo(12) -- return 15 (this is the next value in the iterator >= 12)
+	//   i.skipTo(20) -- returns nil
+	// If there are no values left in the iterator that are >= v,
+	// the iterator will skip to the end of the sequence and return nil.
+	SkipTo(v Value) Value
 }
 
 type setIterator struct {
@@ -38,8 +48,8 @@ func (si *setIterator) Next() Value {
 	return nil
 }
 
-func (si *setIterator) NextFrom(v Value) Value {
-	d.Chk.NotNil(v, "setIterator.NextFrom() called with nil value")
+func (si *setIterator) SkipTo(v Value) Value {
+	d.Chk.NotNil(v, "setIterator.SkipTo() called with nil value")
 	first := false
 	if si.cursor == nil {
 		first = true
@@ -81,12 +91,12 @@ func (st *iterState) Next() Value {
 	return v
 }
 
-func (st *iterState) NextFrom(v Value) Value {
+func (st *iterState) SkipTo(v Value) Value {
 	if st.v == nil || v == nil {
 		st.v = nil
 		return nil
 	}
-	st.v = st.i.NextFrom(v)
+	st.v = st.i.SkipTo(v)
 	return st.v
 }
 
@@ -120,16 +130,16 @@ func (u *UnionIterator) Next() Value {
 	return nil
 }
 
-func (u *UnionIterator) NextFrom(v Value) Value {
+func (u *UnionIterator) SkipTo(v Value) Value {
 	d.Chk.NotNil(v)
 	didAdvance := false
 	if compareValue(u.aState.v, v) < 0 {
 		didAdvance = true
-		u.aState.NextFrom(v)
+		u.aState.SkipTo(v)
 	}
 	if compareValue(u.bState.v, v) < 0 {
 		didAdvance = true
-		u.bState.NextFrom(v)
+		u.bState.SkipTo(v)
 	}
 	if !didAdvance {
 		return u.Next()
@@ -167,11 +177,11 @@ func (i *IntersectionIterator) Next() Value {
 	for cont := true; cont; {
 		switch compareValue(i.aState.v, i.bState.v) {
 		case -1:
-			i.aState.NextFrom(i.bState.v)
+			i.aState.SkipTo(i.bState.v)
 		case 0:
 			cont = false
 		case 1:
-			i.bState.NextFrom(i.aState.v)
+			i.bState.SkipTo(i.aState.v)
 		}
 	}
 	// we only get here if aState and bState are equal
@@ -181,13 +191,13 @@ func (i *IntersectionIterator) Next() Value {
 	return res
 }
 
-func (i *IntersectionIterator) NextFrom(v Value) Value {
+func (i *IntersectionIterator) SkipTo(v Value) Value {
 	d.Chk.NotNil(v)
 	if compareValue(v, i.aState.v) >= 0 {
-		i.aState.NextFrom(v)
+		i.aState.SkipTo(v)
 	}
 	if compareValue(v, i.bState.v) >= 0 {
-		i.bState.NextFrom(v)
+		i.bState.SkipTo(v)
 	}
 	return i.Next()
 }

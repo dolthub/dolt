@@ -41,27 +41,27 @@ func TestSetIterator(t *testing.T) {
 	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i = s.Iterator()
-	assert.Panics(func() { i.NextFrom(nil) })
-	assert.Equal(Number(0), i.NextFrom(Number(-20)))
-	assert.Equal(Number(2), i.NextFrom(Number(2)))
-	assert.Equal(Number(3), i.NextFrom(Number(-20)))
-	assert.Equal(Number(5), i.NextFrom(Number(5)))
+	assert.Panics(func() { i.SkipTo(nil) })
+	assert.Equal(Number(0), i.SkipTo(Number(-20)))
+	assert.Equal(Number(2), i.SkipTo(Number(2)))
+	assert.Equal(Number(3), i.SkipTo(Number(-20)))
+	assert.Equal(Number(5), i.SkipTo(Number(5)))
 	assert.Equal(Number(6), i.Next())
-	assert.Equal(Number(7), i.NextFrom(Number(6)))
-	assert.Equal(Number(20), i.NextFrom(Number(15)))
-	assert.Nil(i.NextFrom(Number(30)))
-	assert.Nil(i.NextFrom(Number(30)))
-	assert.Nil(i.NextFrom(Number(1)))
+	assert.Equal(Number(7), i.SkipTo(Number(6)))
+	assert.Equal(Number(20), i.SkipTo(Number(15)))
+	assert.Nil(i.SkipTo(Number(30)))
+	assert.Nil(i.SkipTo(Number(30)))
+	assert.Nil(i.SkipTo(Number(1)))
 
 	i = s.Iterator()
 	assert.Equal(Number(0), i.Next())
 	assert.Equal(Number(1), i.Next())
-	assert.Equal(Number(3), i.NextFrom(Number(3)))
+	assert.Equal(Number(3), i.SkipTo(Number(3)))
 	assert.Equal(Number(4), i.Next())
 
 	empty := NewSet()
 	assert.Nil(empty.Iterator().Next())
-	assert.Nil(empty.Iterator().NextFrom(Number(-30)))
+	assert.Nil(empty.Iterator().SkipTo(Number(-30)))
 }
 
 func TestUnionIterator(t *testing.T) {
@@ -88,17 +88,17 @@ func TestUnionIterator(t *testing.T) {
 	ui2 = NewUnionIterator(set3.Iterator(), set2.Iterator())
 	ui3 = NewUnionIterator(ui1, ui2)
 
-	assert.Panics(func() { ui3.NextFrom(nil) })
-	assert.Equal(Number(0), ui3.NextFrom(Number(-5)))
-	assert.Equal(Number(5), ui3.NextFrom(Number(5)))
-	assert.Equal(Number(8), ui3.NextFrom(Number(8)))
-	assert.Equal(Number(9), ui3.NextFrom(Number(8)))
-	assert.Equal(Number(10), ui3.NextFrom(Number(8)))
-	assert.Equal(Number(11), ui3.NextFrom(Number(7)))
+	assert.Panics(func() { ui3.SkipTo(nil) })
+	assert.Equal(Number(0), ui3.SkipTo(Number(-5)))
+	assert.Equal(Number(5), ui3.SkipTo(Number(5)))
+	assert.Equal(Number(8), ui3.SkipTo(Number(8)))
+	assert.Equal(Number(9), ui3.SkipTo(Number(8)))
+	assert.Equal(Number(10), ui3.SkipTo(Number(8)))
+	assert.Equal(Number(11), ui3.SkipTo(Number(7)))
 	assert.Equal(Number(12), ui3.Next())
-	assert.Equal(Number(15), ui3.NextFrom(Number(15)))
-	assert.Equal(Number(24), ui3.NextFrom(Number(24)))
-	assert.Nil(ui3.NextFrom(Number(25)))
+	assert.Equal(Number(15), ui3.SkipTo(Number(15)))
+	assert.Equal(Number(24), ui3.SkipTo(Number(24)))
+	assert.Nil(ui3.SkipTo(Number(25)))
 
 	singleElemSet := NewSet(Number(4))
 	emptySet := NewSet()
@@ -132,13 +132,13 @@ func TestIntersectionIterator(t *testing.T) {
 	it1 = NewIntersectionIterator(byThrees.Iterator(), byFives.Iterator())
 	it2 = NewIntersectionIterator(it1, byTwos.Iterator())
 
-	assert.Panics(func() { it2.NextFrom(nil) })
-	assert.Equal(Number(30), it2.NextFrom(Number(5)))
-	assert.Equal(Number(60), it2.NextFrom(Number(60)))
-	assert.Equal(Number(90), it2.NextFrom(Number(5)))
+	assert.Panics(func() { it2.SkipTo(nil) })
+	assert.Equal(Number(30), it2.SkipTo(Number(5)))
+	assert.Equal(Number(60), it2.SkipTo(Number(60)))
+	assert.Equal(Number(90), it2.SkipTo(Number(5)))
 	assert.Equal(Number(120), it2.Next())
-	assert.Equal(Number(150), it2.NextFrom(Number(150)))
-	assert.Nil(it2.NextFrom(Number(40000)))
+	assert.Equal(Number(150), it2.SkipTo(Number(150)))
+	assert.Nil(it2.SkipTo(Number(40000)))
 }
 
 func TestCombinationIterator(t *testing.T) {
@@ -174,9 +174,9 @@ func (ui *UnionTestIterator) Next() Value {
 	return ui.UnionIterator.Next()
 }
 
-func (ui *UnionTestIterator) NextFrom(v Value) Value {
+func (ui *UnionTestIterator) SkipTo(v Value) Value {
 	*ui.cntr += 1
-	return ui.UnionIterator.NextFrom(v)
+	return ui.UnionIterator.SkipTo(v)
 }
 
 func NewUnionTestIterator(i1, i2 SetIterator, cntr *int) SetIterator {
@@ -221,9 +221,9 @@ func (i *IntersectionTestIterator) Next() Value {
 	return i.IntersectionIterator.Next()
 }
 
-func (i *IntersectionTestIterator) NextFrom(v Value) Value {
+func (i *IntersectionTestIterator) SkipTo(v Value) Value {
 	*i.cntr += 1
-	return i.IntersectionIterator.NextFrom(v)
+	return i.IntersectionIterator.SkipTo(v)
 }
 
 func NewIntersectionTestIterator(i1, i2 SetIterator, cntr *int) SetIterator {
