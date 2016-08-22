@@ -11,6 +11,9 @@ depend on. This takes a long time to install and it takes up a lot of disk space
 First run `npm install` in this directory, then in the subdirectory.
 
 ```
+cd js
+npm install
+cd ..
 cd samples/js
 npm install
 cd fs
