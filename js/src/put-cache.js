@@ -29,6 +29,9 @@ declare class CursorStream {
 
 type ChunkIndex = Map<string, number>;
 
+/**
+ * Caches puts and allows enumeration of chunks in insertion order.
+ */
 export default class OrderedPutCache {
   _chunkIndex: ChunkIndex;
   _folder: string;
@@ -52,6 +55,10 @@ export default class OrderedPutCache {
     });
   }
 
+  /**
+   * Appends a chunk to the cache. If the chunk is already in the cache this returns false and
+   * nothing is done to the cache.
+   */
   append(c: Chunk): boolean {
     const hash = c.hash.toString();
     if (this._chunkIndex.has(hash)) {
@@ -68,8 +75,13 @@ export default class OrderedPutCache {
     return true;
   }
 
-  get(hash: string): ?Promise<Chunk> {
+  /**
+   * Gets a chunk based on the hash.
+   * This returns null or a promise to the empty chunk if the cache does not contain the given hash.
+   */
+  get(hash: string): Promise<Chunk> | null {
     if (!this._chunkIndex.has(hash)) {
+      // TODO: This should be resolve(emptyChunk)
       return null;
     }
     //$FlowIssue
@@ -84,6 +96,10 @@ export default class OrderedPutCache {
       });
   }
 
+  /**
+   * Removes the leading chunks from the cache up until (and including) the chunk with the hash
+   * `limit`.
+   */
   dropUntil(limit: string): Promise<void> {
     if (!this._chunkIndex.has(limit)) {
       return Promise.reject(new Error('Tried to drop unknown chunk: ' + limit));
@@ -101,6 +117,9 @@ export default class OrderedPutCache {
     });
   }
 
+  /**
+   * Returns a stream that iterates over the chunks between `first` and `last` (inclusive).
+   */
   extractChunks(first: string, last: string): Promise<ChunkStream> {
     //$FlowIssue
     return Promise.all(this._appends)
@@ -118,6 +137,9 @@ export default class OrderedPutCache {
       });
   }
 
+  /**
+   * Removes the underlying backing store.
+   */
   destroy(): Promise<void> {
     return this._coll.then(() => removeDir(this._folder));
   }
