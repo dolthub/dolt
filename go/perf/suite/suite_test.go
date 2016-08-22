@@ -29,6 +29,7 @@ func (s *testSuite) TestInterestingStuff() {
 	assert.NotNil(s.T)
 	assert.NotNil(s.W)
 	assert.NotEqual("", s.AtticLabs)
+	assert.NotEqual("", s.Testdata)
 	assert.NotEqual("", s.DatabaseSpec)
 
 	val := types.Bool(true)

@@ -49,7 +49,7 @@ func (s *perfSuite) Test01ImportSfCrimeBlobFromTestdata() {
 
 	s.Pause(func() {
 		// The raw data is split into a bunch of files foo.a, foo.b, etc.
-		glob, err := filepath.Glob(path.Join(s.AtticLabs, "testdata", "sf-crime", "2016-07-28.*"))
+		glob, err := filepath.Glob(path.Join(s.Testdata, "sf-crime", "2016-07-28.*"))
 		assert.NoError(err)
 
 		raw = make([]io.Reader, len(glob))

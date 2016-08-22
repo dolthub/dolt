@@ -90,10 +90,11 @@ import (
 )
 
 var (
-	perfFlag        = flag.String("perf", "", "The database to write perf tests to. If this isn't specified, perf tests are skipped. If you want a dry run, use \"mem\" as a database")
-	perfRepeatFlag  = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
-	perfMemFlag     = flag.Bool("perf.mem", false, "Back the test database with a memory store, not leveldb. This will affect test timing, but it's provided in case you're low on disk space")
-	testNamePattern = regexp.MustCompile("^Test[0-9]*([A-Z].*$)")
+	perfFlag         = flag.String("perf", "", "The database to write perf tests to. If this isn't specified, perf tests are skipped. If you want a dry run, use \"mem\" as a database")
+	perfRepeatFlag   = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
+	perfMemFlag      = flag.Bool("perf.mem", false, "Back the test database by a memory store, not leveldb. This will affect test timing, but it's provided in case you're low on disk space")
+	perfTestdataFlag = flag.String("perf.testdata", "", "Path to the noms testdata directory. By default this is ../testdata relative to the noms directory")
+	testNamePattern  = regexp.MustCompile("^Test[0-9]*([A-Z].*$)")
 )
 
 // PerfSuite is the core of the perf testing suite. See package documentation for details.
@@ -106,6 +107,9 @@ type PerfSuite struct {
 
 	// AtticLabs is the path to the attic-labs directory (e.g. /path/to/go/src/github.com/attic-labs).
 	AtticLabs string
+
+	// Testdata is the path to the testdata directory - typically /path/to/go/src/github.com/attic-labs, but it can be overridden with the -perf.testdata flag.
+	Testdata string
 
 	// Database is a Noms database that tests can use for reading and writing. State is persisted across a single Run of a suite.
 	Database datas.Database
@@ -176,6 +180,10 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	gopath := os.Getenv("GOPATH")
 	assert.NotEmpty(gopath)
 	suite.AtticLabs = path.Join(gopath, "src", "github.com", "attic-labs")
+	suite.Testdata = *perfTestdataFlag
+	if suite.Testdata == "" {
+		suite.Testdata = path.Join(suite.AtticLabs, "testdata")
+	}
 
 	// Clean up temporary directories/files last.
 	defer func() {
@@ -242,7 +250,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		record := types.NewStruct("", map[string]types.Value{
 			"environment":      suite.getEnvironment(),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
-			"testdataRevision": types.String(suite.getGitHead(path.Join(suite.AtticLabs, "testdata"))),
+			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
 			"reps":             types.NewList(reps...),
 		})
 
