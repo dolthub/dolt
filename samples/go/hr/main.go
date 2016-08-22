@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	flag "github.com/juju/gnuflag"
@@ -56,6 +57,11 @@ func main() {
 	}
 }
 
+type Person struct {
+	Name, Title string
+	Id          uint64
+}
+
 func addPerson(ds dataset.Dataset) {
 	if flag.NArg() != 4 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments for command add-person")
@@ -68,11 +74,11 @@ func addPerson(ds dataset.Dataset) {
 		return
 	}
 
-	np := types.NewStruct("Person", types.StructData{
-		"id":    types.Number(id),
-		"name":  types.String(flag.Arg(2)),
-		"title": types.String(flag.Arg(3)),
-	})
+	np, err := marshal.Marshal(Person{flag.Arg(2), flag.Arg(3), id})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 
 	_, err = ds.CommitValue(getPersons(ds).Set(types.Number(id), np))
 	if err != nil {
@@ -89,11 +95,13 @@ func listPersons(ds dataset.Dataset) {
 	}
 
 	d.IterAll(func(k, v types.Value) {
-		s := v.(types.Struct)
-		fmt.Printf("%s (id: %d, title: %s)\n",
-			s.Get("name"),
-			uint64(s.Get("id").(types.Number)),
-			s.Get("title"))
+		var p Person
+		err := marshal.Unmarshal(v, &p)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		fmt.Printf("%s (id: %d, title: %s)\n", p.Name, p.Id, p.Title)
 	})
 }
 
