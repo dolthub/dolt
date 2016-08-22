@@ -325,3 +325,28 @@ func TestEncodeMap(t *testing.T) {
 	assert.NoError(err)
 	assert.True(types.NewMap().Equals(v))
 }
+
+func TestEncodeInterface(t *testing.T) {
+	assert := assert.New(t)
+
+	var i interface{}
+	i = []string{"a", "b"}
+	v, err := Marshal(i)
+	assert.NoError(err)
+	assert.True(types.NewList(types.String("a"), types.String("b")).Equals(v))
+
+	i = map[interface{}]interface{}{"a": true, struct{ Name string }{"b"}: 42}
+	v, err = Marshal(i)
+	assert.NoError(err)
+	assert.True(types.NewMap(
+		types.String("a"), types.Bool(true),
+		types.NewStruct("", types.StructData{"name": types.String("b")}), types.Number(42),
+	).Equals(v))
+}
+
+type TestInterface interface {
+	M()
+}
+type TestImpl int
+
+func (impl TestImpl) M() {}

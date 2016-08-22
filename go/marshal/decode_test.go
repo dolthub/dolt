@@ -549,3 +549,50 @@ func TestDecodeMapWrongNomsType(t *testing.T) {
 	var m map[string]int
 	assertDecodeErrorMessage(t, types.NewList(types.String("a"), types.Number(1)), &m, "Cannot unmarshal List<Number | String> into Go value of type map[string]int")
 }
+
+func TestDecodeOntoInterface(t *testing.T) {
+	assert := assert.New(t)
+
+	var i interface{}
+	err := Unmarshal(types.Number(1), &i)
+	assert.NoError(err)
+	assert.Equal(float64(1), i)
+
+	err = Unmarshal(types.String("abc"), &i)
+	assert.NoError(err)
+	assert.Equal("abc", i)
+
+	err = Unmarshal(types.Bool(true), &i)
+	assert.NoError(err)
+	assert.Equal(true, i)
+
+	err = Unmarshal(types.NewList(types.String("abc")), &i)
+	assert.NoError(err)
+	assert.Equal([]string{"abc"}, i)
+
+	err = Unmarshal(types.NewMap(types.String("abc"), types.Number(1)), &i)
+	assert.NoError(err)
+	assert.Equal(map[string]float64{"abc": float64(1)}, i)
+
+	err = Unmarshal(types.NewList(types.String("a"), types.Bool(true), types.Number(42)), &i)
+	assert.NoError(err)
+	assert.Equal([]interface{}{"a", true, float64(42)}, i)
+
+	err = Unmarshal(types.NewMap(types.String("a"), types.Bool(true), types.Number(42), types.NewList()), &i)
+	assert.NoError(err)
+	assert.Equal(map[interface{}]interface{}{"a": true, float64(42): []interface{}{}}, i)
+}
+
+func TestDecodeOntoNonSupportedInterface(t *testing.T) {
+	type I interface {
+		M() int
+	}
+	var i I
+	assertDecodeErrorMessage(t, types.Number(1), &i, "Type is not supported, type: marshal.I")
+}
+
+func TestDecodeOntoInterfaceStruct(t *testing.T) {
+	// Not implemented because it requires Go 1.7.
+	var i interface{}
+	assertDecodeErrorMessage(t, types.NewStruct("", types.StructData{}), &i, "Cannot unmarshal struct {} into Go value of type interface {}")
+}
