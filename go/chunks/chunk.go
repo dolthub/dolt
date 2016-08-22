@@ -2,6 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Package chunks provides facilities for representing, storing, and fetching content-addressed chunks of Noms data.
 package chunks
 
 import (

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Package datas defines and implements the database layer used in Noms.
 package datas
 
 import (

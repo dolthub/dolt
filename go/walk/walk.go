@@ -2,6 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Package walk implements an API for iterating on Noms values.
 package walk
 
 import (

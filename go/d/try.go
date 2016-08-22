@@ -2,6 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Package d implements several debug, error and assertion functions used throughout Noms.
 package d
 
 import (

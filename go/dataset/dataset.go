@@ -2,6 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Package dataset implements the dataset layer of Noms that sits above the database.
 package dataset
 
 import (
