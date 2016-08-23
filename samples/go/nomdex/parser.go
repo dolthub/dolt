@@ -12,21 +12,30 @@ import (
 	"unicode"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
 )
 
 /**** Query language BNF
   query := expr
-  expr := expr boolop relExpr | group
-  relExpr := index relOp value
-  group := '(' expr ')' | relExpr
+  expr := expr boolOp compExpr | group
+  compExpr := indexToken compOp value
+  group := '(' expr ')' | compExpr
   boolOp := 'and' | 'or'
-  relOp := '=' | '<' | '<=' | '>' | '>='
-  value := "<string>" | int | float
+  compOp := '=' | '<' | '<=' | '>' | '>='
+  value := "<string>" | number
+  number := '-' digits | digits
+  digits := int | float
+
 */
 
 type compOp string
 type boolOp string
+
+type indexManager struct {
+	db      datas.Database
+	indexes map[string]types.Map
+}
 
 const (
 	equals compOp = "="
@@ -41,9 +50,8 @@ const (
 )
 
 var (
-	reloperators  = []compOp{equals, gt, gte, lt, lte}
-	booloperators = []boolOp{and, or}
-	indexPath     = ""
+	compOps = []compOp{equals, gt, gte, lt, lte}
+	boolOps = []boolOp{and, or}
 )
 
 type qScanner struct {
@@ -90,11 +98,11 @@ func (qs *qScanner) Pos() scanner.Position {
 	return qs.s.Pos()
 }
 
-func parseQuery(q string) (expr, error) {
+func parseQuery(q string, im *indexManager) (expr, error) {
 	s := NewQueryScanner(q)
 	var expr expr
 	err := d.Try(func() {
-		expr = s.parseExpr(0)
+		expr = s.parseExpr(0, im)
 	})
 	return expr, err
 }
@@ -122,50 +130,52 @@ func NewQueryScanner(query string) *qScanner {
 	return &qs
 }
 
-func (s *qScanner) parseExpr(level int) expr {
+func (s *qScanner) parseExpr(level int, im *indexManager) expr {
 	tok := s.Scan()
 	switch tok {
 	case '(':
-		expr := s.parseExpr(level + 1)
+		expr1 := s.parseExpr(level+1, im)
 		tok := s.Scan()
 		if tok != ')' {
 			d.PanicIfError(fmt.Errorf("missing ending paren for expr"))
 		} else {
 			tok = s.Peek()
 			if tok == ')' {
-				return expr
+				return expr1
 			}
 			tok = s.Scan()
 			text := s.TokenText()
 			switch {
 			case tok == scanner.Ident && isBoolOp(text):
 				op := boolOp(text)
-				expr2 := s.parseExpr(level + 1)
-				return logExpr{op, expr, expr2}
+				expr2 := s.parseExpr(level+1, im)
+				return logExpr{op: op, expr1: expr1, expr2: expr2, idxName: idxNameIfSame(expr1, expr2)}
 			case tok == scanner.EOF:
-				return expr
+				return expr1
 			default:
 				d.PanicIfError(fmt.Errorf("extra text found at end of expr, tok: %d, text: %s", int(tok), s.TokenText()))
 			}
 		}
-	case '_':
-		rexpr := s.parseCompExpr(level+1, s.TokenText())
+	case scanner.Ident:
+		err := openIndex(s.TokenText(), im)
+		d.PanicIfError(err)
+		expr1 := s.parseCompExpr(level+1, s.TokenText(), im)
 		tok := s.Peek()
 		switch tok {
 		case ')':
-			return rexpr
+			return expr1
 		case rune(scanner.Ident):
 			tok = s.Scan()
 			text := s.TokenText()
 			if isBoolOp(text) {
 				op := boolOp(text)
-				expr2 := s.parseExpr(level + 1)
-				return logExpr{op, rexpr, expr2}
+				expr2 := s.parseExpr(level+1, im)
+				return logExpr{op: op, expr1: expr1, expr2: expr2, idxName: idxNameIfSame(expr1, expr2)}
 			} else {
 				d.PanicIfError(fmt.Errorf("expected boolean op, found: %s, level: %d", text, level))
 			}
 		case rune(scanner.EOF):
-			return rexpr
+			return expr1
 		default:
 			tok = s.Scan()
 		}
@@ -175,27 +185,48 @@ func (s *qScanner) parseExpr(level int) expr {
 	return logExpr{}
 }
 
-func (s *qScanner) parseCompExpr(level int, indexPath string) compExpr {
-	tok := s.Scan()
+func (s *qScanner) parseCompExpr(level int, indexName string, im *indexManager) compExpr {
+
+	s.Scan()
 	text := s.TokenText()
 	if !isCompOp(text) {
 		d.PanicIfError(fmt.Errorf("expected relop token but found: '%s'", text))
 	}
 	op := compOp(text)
-	tok = s.Scan()
-	text = s.TokenText()
+	value := s.parseValExpr()
+	return compExpr{indexName, op, value}
+}
+
+func (s *qScanner) parseValExpr() types.Value {
+	tok := s.Scan()
+	text := s.TokenText()
+	isNeg := false
+	if tok == '-' {
+		isNeg = true
+		tok = s.Scan()
+		text = s.TokenText()
+	}
 	switch tok {
 	case scanner.String:
-		return compExpr{indexPath, op, valueFromString(text)}
+		if isNeg {
+			d.PanicIfError(fmt.Errorf("expected number after '-', found string: %s", text))
+		}
+		return valueFromString(text)
 	case scanner.Float:
 		f, _ := strconv.ParseFloat(text, 64)
-		return compExpr{indexPath, op, types.Number(f)}
+		if isNeg {
+			f = -f
+		}
+		return types.Number(f)
 	case scanner.Int:
-		f, _ := strconv.ParseInt(text, 10, 64)
-		return compExpr{indexPath, op, types.Number(f)}
+		i, _ := strconv.ParseInt(text, 10, 64)
+		if isNeg {
+			i = -i
+		}
+		return types.Number(i)
 	}
 	d.PanicIfError(fmt.Errorf("expected value token, found: '%s'", text))
-	return compExpr{}
+	return nil // for compiler
 }
 
 func valueFromString(t string) types.Value {
@@ -207,7 +238,7 @@ func valueFromString(t string) types.Value {
 }
 
 func isCompOp(s string) bool {
-	for _, op := range reloperators {
+	for _, op := range compOps {
 		if s == string(op) {
 			return true
 		}
@@ -216,10 +247,17 @@ func isCompOp(s string) bool {
 }
 
 func isBoolOp(s string) bool {
-	for _, op := range booloperators {
+	for _, op := range boolOps {
 		if s == string(op) {
 			return true
 		}
 	}
 	return false
+}
+
+func idxNameIfSame(expr1, expr2 expr) string {
+	if expr1.indexName() == expr2.indexName() {
+		return expr1.indexName()
+	}
+	return ""
 }

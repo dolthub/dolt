@@ -11,7 +11,7 @@ import (
 // SetIterator defines methods that can be used to efficiently iterate through a set in 'Noms-defined'
 // sorted order.
 type SetIterator interface {
-	// Next returns subsequent values from a set. It returns nil, when no objects remain
+	// Next returns subsequent values from a set. It returns nil, when no objects remain.
 	Next() Value
 
 	// SkipTo(v) advances to and returns the next value in the iterator >= v.

@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/attic-labs/noms/cmd/util"
@@ -56,6 +57,15 @@ type Index struct {
 }
 
 func runUpdate(args []string) int {
+	requiredArgs := map[string]string{"in-path": inPathArg, "out-ds": outDsArg, "by": relPathArg}
+	for argName, argValue := range requiredArgs {
+		if argValue == "" {
+			fmt.Fprintf(os.Stderr, "Missing required '%s' arg\n", argName)
+			flag.Usage()
+			return 1
+		}
+	}
+
 	db, rootObject, err := spec.GetPath(inPathArg)
 	d.Chk.NoError(err)
 

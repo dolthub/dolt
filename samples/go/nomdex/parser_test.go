@@ -8,6 +8,8 @@ import (
 	"testing"
 	"text/scanner"
 
+	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -25,13 +27,16 @@ type parseResult struct {
 func TestQueryScanner(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewQueryScanner(`9 (99.9) "99.9" and or http://localhost:8000/cli-tour::yo <= >= < > = _`)
+	s := NewQueryScanner(`9 (99.9) -9 0x7F "99.9" and or http://localhost:8000/cli-tour::yo <= >= < > = _`)
 
 	scannerResults := []scannerResult{
 		scannerResult{tok: scanner.Int, text: "9"},
 		scannerResult{tok: int('('), text: "("},
 		scannerResult{tok: scanner.Float, text: "99.9"},
 		scannerResult{tok: int(')'), text: ")"},
+		scannerResult{tok: '-', text: "-"},
+		scannerResult{tok: scanner.Int, text: "9"},
+		scannerResult{tok: scanner.Int, text: "0x7F"},
 		scannerResult{tok: scanner.String, text: `"99.9"`},
 		scannerResult{tok: scanner.Ident, text: "and"},
 		scannerResult{tok: scanner.Ident, text: "or"},
@@ -75,44 +80,51 @@ func TestPeek(t *testing.T) {
 func TestParsing(t *testing.T) {
 	assert := assert.New(t)
 
-	re1 := compExpr{"_", equals, types.Number(2015)}
-	re2 := compExpr{"_", gte, types.Number(2020)}
-	re3 := compExpr{"_", lte, types.Number(2022)}
-	re4 := compExpr{"_", lt, types.Number(2030)}
+	re1 := compExpr{"index1", equals, types.Number(2015)}
+	re2 := compExpr{"index1", gte, types.Number(2020)}
+	re3 := compExpr{"index1", lte, types.Number(2022)}
+	re4 := compExpr{"index1", lt, types.Number(-2030)}
 
 	queries := []parseResult{
-		parseResult{`_ = 2015`, re1},
-		parseResult{`(_ = 2015 )`, re1},
-		parseResult{`(((_ = 2015 ) ))`, re1},
-		parseResult{`_ = 2015 or _ >= 2020`, logExpr{or, re1, re2}},
-		parseResult{`(_ = 2015) or _ >= 2020`, logExpr{or, re1, re2}},
-		parseResult{`_ = 2015 or (_ >= 2020)`, logExpr{or, re1, re2}},
-		parseResult{`(_ = 2015 or _ >= 2020)`, logExpr{or, re1, re2}},
-		parseResult{`(_ = 2015 or _ >= 2020) and _ <= 2022`, logExpr{and, logExpr{or, re1, re2}, re3}},
-		parseResult{`_ = 2015 or _ >= 2020 and _ <= 2022`, logExpr{or, re1, logExpr{and, re2, re3}}},
-		parseResult{`_ = 2015 or _ >= 2020 and _ <= 2022 or _ < 2030`, logExpr{or, re1, logExpr{and, re2, logExpr{or, re3, re4}}}},
-		parseResult{`(_ = 2015 or _ >= 2020) and (_ <= 2022 or _ < 2030)`, logExpr{and, logExpr{or, re1, re2}, logExpr{or, re3, re4}}},
+		parseResult{`index1 = 2015`, re1},
+		parseResult{`(index1 = 2015 )`, re1},
+		parseResult{`(((index1 = 2015 ) ))`, re1},
+		parseResult{`index1 = 2015 or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
+		parseResult{`(index1 = 2015) or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
+		parseResult{`index1 = 2015 or (index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
+		parseResult{`(index1 = 2015 or index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
+		parseResult{`(index1 = 2015 or index1 >= 2020) and index1 <= 2022`, logExpr{and, logExpr{or, re1, re2, "index1"}, re3, "index1"}},
+		parseResult{`index1 = 2015 or index1 >= 2020 and index1 <= 2022`, logExpr{or, re1, logExpr{and, re2, re3, "index1"}, "index1"}},
+		parseResult{`index1 = 2015 or index1 >= 2020 and index1 <= 2022 or index1 < -2030`, logExpr{or, re1, logExpr{and, re2, logExpr{or, re3, re4, "index1"}, "index1"}, "index1"}},
+		parseResult{`(index1 = 2015 or index1 >= 2020) and (index1 <= 2022 or index1 < -2030)`, logExpr{and, logExpr{or, re1, re2, "index1"}, logExpr{or, re3, re4, "index1"}, "index1"}},
 	}
 
+	db := datas.NewDatabase(chunks.NewMemoryStore())
+	db, err := db.Commit("index1", datas.NewCommit(types.NewMap(types.String("one"), types.NewSet(types.String("two"))), types.NewSet(), types.EmptyStruct))
+	assert.NoError(err)
+
+	im := &indexManager{db: db, indexes: map[string]types.Map{}}
 	for _, pr := range queries {
-		expr, err := parseQuery(pr.query)
+		expr, err := parseQuery(pr.query, im)
 		assert.NoError(err)
 		assert.Equal(pr.ex, expr, "bad query: %s", pr.query)
 	}
 
 	badQueries := []string{
 		`sdfsd = 2015`,
-		`_ = "unfinished string`,
-		`_ and 2015`,
-		`_ < `,
-		`_ < 2015 and ()`,
-		`_ < 2015 an _ > 2016`,
-		`(_ < 2015) what`,
-		`(_< 2015`,
+		`index1 = "unfinished string`,
+		`index1 and 2015`,
+		`index1 < `,
+		`index1 < 2015 and ()`,
+		`index1 < 2015 an index1 > 2016`,
+		`(index1 < 2015) what`,
+		`(index1< 2015`,
+		`(badIndexName < 2015)`,
 	}
 
+	im1 := &indexManager{db: db, indexes: map[string]types.Map{}}
 	for _, q := range badQueries {
-		expr, err := parseQuery(q)
+		expr, err := parseQuery(q, im1)
 		assert.Error(err)
 		assert.Nil(expr)
 	}

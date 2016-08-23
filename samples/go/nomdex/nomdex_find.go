@@ -26,28 +26,31 @@ var find = &util.Command{
 	Nargs:     1,
 }
 
+var dbPath = ""
+
 func setupFindFlags() *flag.FlagSet {
 	flagSet := flag.NewFlagSet("find", flag.ExitOnError)
-	flagSet.StringVar(&indexPath, "index", "", "dataset containing index")
+	flagSet.StringVar(&dbPath, "db", "", "database containing index")
 	outputpager.RegisterOutputpagerFlags(flagSet)
 	return flagSet
 }
 
 func runFind(args []string) int {
 	query := args[0]
-	if indexPath == "" {
+	if dbPath == "" {
 		fmt.Fprintf(os.Stderr, "Missing required 'index' arg\n")
 		flag.Usage()
 		return 1
 	}
 
-	db, index, err := openIndex(indexPath)
-	if printError(err, "Unable to open database/index\n\terror: ") {
+	db, err := spec.GetDatabase(dbPath)
+	if printError(err, "Unable to open database\n\terror: ") {
 		return 1
 	}
 	defer db.Close()
 
-	expr, err := parseQuery(query)
+	im := &indexManager{db: db, indexes: map[string]types.Map{}}
+	expr, err := parseQuery(query, im)
 	if err != nil {
 		fmt.Printf("err: %s\n", err)
 		return 1
@@ -56,8 +59,15 @@ func runFind(args []string) int {
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	ranges := expr.ranges()
-	printObjects(pgr.Writer, index, ranges)
+	iter := expr.iterator(im)
+	if iter != nil {
+		for v := iter.Next(); v != nil; v = iter.Next() {
+			types.WriteEncodedValue(pgr.Writer, v)
+			fmt.Fprintf(pgr.Writer, "\n")
+			cnt++
+		}
+	}
+	fmt.Fprintf(pgr.Writer, "Found %d objects\n", cnt)
 
 	return 0
 }
@@ -93,24 +103,19 @@ func printObjects(w io.Writer, index types.Map, ranges queryRangeSlice) {
 	fmt.Fprintf(w, "Found %d objects\n", cnt)
 }
 
-func openIndex(idxPath string) (datas.Database, types.Map, error) {
-	db, value, err := spec.GetPath(idxPath)
-	if err != nil {
-		return nil, types.Map{}, err
+func openIndex(idxName string, im *indexManager) error {
+	if _, hasIndex := im.indexes[idxName]; hasIndex {
+		return nil
 	}
 
-	var index types.Map
-	s, ok := value.(types.Struct)
-	if ok && datas.IsCommitType(s.Type()) {
-		index, ok = s.Get("value").(types.Map)
-		if !ok {
-			return nil, types.Map{}, fmt.Errorf("Value of commit is not a valid index")
-		}
-	} else {
-		index, ok = value.(types.Map)
-		if !ok {
-			return nil, types.Map{}, fmt.Errorf("%s is not a valid index", outDsArg)
-		}
+	commit, ok := im.db.MaybeHead(idxName)
+	if !ok {
+		return fmt.Errorf("index '%s' not found", idxName)
+	}
+
+	index, ok := commit.Get(datas.ValueField).(types.Map)
+	if !ok {
+		return fmt.Errorf("Value of commit at '%s' is not a valid index", idxName)
 	}
 
 	// Todo: make this type be Map<String | Number>, Set<Value>> once Issue #2326 gets resolved and
@@ -120,9 +125,9 @@ func openIndex(idxPath string) (datas.Database, types.Map, error) {
 		types.ValueType)
 
 	if !types.IsSubtype(typ, index.Type()) {
-		err := fmt.Errorf("%s does not point to a suitable index type:", idxPath)
-		return nil, types.Map{}, err
+		return fmt.Errorf("%s does not point to a suitable index type:", idxName)
 	}
 
-	return db, index, nil
+	im.indexes[idxName] = index
+	return nil
 }

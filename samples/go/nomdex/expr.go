@@ -16,20 +16,54 @@ import (
 type expr interface {
 	ranges() queryRangeSlice
 	dbgPrintTree(w io.Writer, level int)
+	indexName() string
+	iterator(im *indexManager) types.SetIterator
 }
 
-// logExpr represents a logical 'and' or 'or' expression between two other expressions. e.g.
+// logExpr represents a logical 'and' or 'or' expression between two other expressions.
+// e.g. logExpr would represent the and/or expressions in this query:
+// (index1 > 0 and index1 < 9) or (index1 > 100 and index < 109)
 type logExpr struct {
-	op    boolOp
-	expr1 expr
-	expr2 expr
+	op      boolOp
+	expr1   expr
+	expr2   expr
+	idxName string
 }
 
-// compExpr represents a comparison between index values and constants. e.g. model-year-index > 1999
 type compExpr struct {
-	idxPath string
+	idxName string
 	op      compOp
 	v1      types.Value
+}
+
+func (le logExpr) indexName() string {
+	return le.idxName
+}
+
+func (le logExpr) iterator(im *indexManager) types.SetIterator {
+	if le.idxName != "" {
+		return unionizeIters(iteratorsFromRanges(im.indexes[le.idxName], le.ranges()))
+	}
+
+	i1 := le.expr1.iterator(im)
+	i2 := le.expr2.iterator(im)
+	var iter types.SetIterator
+	switch le.op {
+	case and:
+		if i1 == nil || i2 == nil {
+			return nil
+		}
+		iter = types.NewIntersectionIterator(le.expr1.iterator(im), le.expr2.iterator(im))
+	case or:
+		if i1 == nil {
+			return i2
+		}
+		if i2 == nil {
+			return i1
+		}
+		iter = types.NewUnionIterator(le.expr1.iterator(im), le.expr2.iterator(im))
+	}
+	return iter
 }
 
 func (le logExpr) ranges() (ranges queryRangeSlice) {
@@ -77,6 +111,70 @@ func (le logExpr) dbgPrintTree(w io.Writer, level int) {
 	}
 }
 
+func (re compExpr) indexName() string {
+	return re.idxName
+}
+
+func iteratorsFromRange(index types.Map, rd queryRange) []types.SetIterator {
+	first := true
+	iterators := []types.SetIterator{}
+	index.IterFrom(rd.lower.value, func(k, v types.Value) bool {
+		if first && rd.lower.value != nil && !rd.lower.include && rd.lower.value.Equals(k) {
+			return false
+		}
+		if rd.upper.value != nil {
+			if !rd.upper.include && rd.upper.value.Equals(k) {
+				return true
+			}
+			if rd.upper.value.Less(k) {
+				return true
+			}
+		}
+		s := v.(types.Set)
+		iterators = append(iterators, s.Iterator())
+		return false
+	})
+	return iterators
+}
+
+func iteratorsFromRanges(index types.Map, ranges queryRangeSlice) []types.SetIterator {
+	iterators := []types.SetIterator{}
+	for _, r := range ranges {
+		iterators = append(iterators, iteratorsFromRange(index, r)...)
+	}
+	return iterators
+}
+
+func unionizeIters(iters []types.SetIterator) types.SetIterator {
+	if len(iters) == 0 {
+		return nil
+	}
+	if len(iters) <= 1 {
+		return iters[0]
+	}
+
+	unionIters := []types.SetIterator{}
+	var iter0 types.SetIterator
+	for i, iter := range iters {
+		if i%2 == 0 {
+			iter0 = iter
+		} else {
+			unionIters = append(unionIters, types.NewUnionIterator(iter0, iter))
+			iter0 = nil
+		}
+	}
+	if iter0 != nil {
+		unionIters = append(unionIters, iter0)
+	}
+	return unionizeIters(unionIters)
+}
+
+func (re compExpr) iterator(im *indexManager) types.SetIterator {
+	index := im.indexes[re.idxName]
+	iters := iteratorsFromRange(index, re.ranges()[0])
+	return unionizeIters(iters)
+}
+
 func (re compExpr) ranges() (ranges queryRangeSlice) {
 	var r queryRange
 	switch re.op {
@@ -98,5 +196,5 @@ func (re compExpr) ranges() (ranges queryRangeSlice) {
 func (re compExpr) dbgPrintTree(w io.Writer, level int) {
 	buf := bytes.Buffer{}
 	types.WriteEncodedValue(&buf, re.v1)
-	fmt.Fprintf(w, "%*s%s %s %s\n", 2*level, "", re.idxPath, re.op, buf.String())
+	fmt.Fprintf(w, "%*s%s %s %s\n", 2*level, "", re.idxName, re.op, buf.String())
 }
