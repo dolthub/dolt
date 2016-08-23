@@ -7,6 +7,7 @@ package marshal
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/attic-labs/noms/go/types"
@@ -20,6 +21,7 @@ import (
 // To unmarshal a Noms struct into a Go struct, Unmarshal matches incoming object
 // fields to the fields used by Marshal (either the struct field name or its tag).
 // Unmarshal will only set exported fields of the struct.
+// The name of the Go struct must match (ignoring case) the name of the Noms struct.
 //
 // To unmarshal a Noms list into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice. If the Go slice was nil a new slice is created.
 //
@@ -235,7 +237,7 @@ func structDecoder(t reflect.Type) decoderFunc {
 	d = func(v types.Value, rv reflect.Value) {
 		s := v.(types.Struct)
 		// If the name is empty then the Go struct has to be anonymous.
-		if s.Type().Desc.(types.StructDesc).Name != name {
+		if !strings.EqualFold(s.Type().Desc.(types.StructDesc).Name, name) {
 			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", names do not match"})
 		}
 

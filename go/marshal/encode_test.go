@@ -138,6 +138,15 @@ func TestEncode(tt *testing.T) {
 		},
 		C: 1234,
 	})
+
+	type testStruct struct {
+		Str string
+		Num float64
+	}
+	t(types.NewStruct("TestStruct", types.StructData{
+		"num": types.Number(42),
+		"str": types.String("Hello"),
+	}), testStruct{Str: "Hello", Num: 42})
 }
 
 func assertEncodeErrorMessage(t *testing.T, v interface{}, expectedMessage string) {

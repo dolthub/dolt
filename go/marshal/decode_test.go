@@ -180,6 +180,18 @@ func TestDecode(tt *testing.T) {
 		"b": types.String("abc"),
 		"a": types.Number(42),
 	}), &t3, T3{"abc"})
+
+	// Case of struct name is not relevant when unmarshalling.
+	type aBc struct {
+		E bool
+	}
+	var t4 aBc
+	t(types.NewStruct("abc", types.StructData{
+		"e": types.Bool(true),
+	}), &t4, aBc{true})
+	t(types.NewStruct("Abc", types.StructData{
+		"e": types.Bool(false),
+	}), &t4, aBc{false})
 }
 
 func TestDecodeNilPointer(t *testing.T) {
@@ -212,6 +224,10 @@ func TestDecodeTypeMismatch(t *testing.T) {
 	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"x": types.String("hi"),
 	}), &s, "Cannot unmarshal String into Go value of type int")
+
+	assertDecodeErrorMessage(t, types.NewStruct("T", types.StructData{
+		"x": types.Number(42),
+	}), &s, "Cannot unmarshal struct T {\n  x: Number,\n} into Go value of type marshal.S, names do not match")
 }
 
 func assertDecodeErrorMessage(t *testing.T, v types.Value, ptr interface{}, msg string) {

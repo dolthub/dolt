@@ -46,6 +46,8 @@ import (
 //
 // Unlike encoding/json Marshal, this does not support "omitempty".
 //
+// The name of the Noms struct is the name of the Go struct where the first character is changed to upper case.
+//
 // Anonymous struct fields are currently not supported.
 //
 // Embedded structs are currently not supported (which is the same as anonymous struct fields).
@@ -176,7 +178,7 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 		}
 	} else {
 		// Cannot precompute the Noms type since there are Noms collections.
-		name := t.Name()
+		name := strings.Title(t.Name())
 		e = func(v reflect.Value) types.Value {
 			data := make(types.StructData, len(fields))
 			for _, f := range fields {
@@ -273,7 +275,7 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 			fieldNames[i] = fs.name
 			fieldTypes[i] = fs.nomsType
 		}
-		structType = types.MakeStructType(t.Name(), fieldNames, fieldTypes)
+		structType = types.MakeStructType(strings.Title(t.Name()), fieldNames, fieldTypes)
 	}
 	return
 }
