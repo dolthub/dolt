@@ -113,16 +113,10 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.NoError(err)
 	defer os.RemoveAll(ldbDir)
 
-	perfFlagVal := *perfFlag
-	perfRepeatFlagVal := *perfRepeatFlag
-	perfMemFlagVal := *perfMemFlag
-	*perfFlag = ldbDir
-	*perfRepeatFlag = 3
-	*perfMemFlag = mem
+	flagVal, repeatFlagVal, memFlagVal := *perfFlag, *perfRepeatFlag, *perfMemFlag
+	*perfFlag, *perfRepeatFlag, *perfMemFlag = ldbDir, 3, mem
 	defer func() {
-		*perfFlag = perfFlagVal
-		*perfRepeatFlag = perfRepeatFlagVal
-		*perfMemFlag = perfMemFlagVal
+		*perfFlag, *perfRepeatFlag, *perfMemFlag = flagVal, repeatFlagVal, memFlagVal
 	}()
 
 	s := &testSuite{}
@@ -198,4 +192,32 @@ func runTestSuite(t *testing.T, mem bool) {
 
 		assert.Equal(i, len(expectedTests))
 	})
+}
+
+func TestPrefixFlag(t *testing.T) {
+	assert := assert.New(t)
+
+	// Write test results to a temporary database.
+	ldbDir, err := ioutil.TempDir("", "suite.TestSuite")
+	assert.NoError(err)
+	defer os.RemoveAll(ldbDir)
+
+	flagVal, prefixFlagVal := *perfFlag, *perfPrefixFlag
+	*perfFlag, *perfPrefixFlag = ldbDir, "foo/"
+	defer func() {
+		*perfFlag, *perfPrefixFlag = flagVal, prefixFlagVal
+	}()
+
+	Run("my-prefix/test", t, &PerfSuite{})
+
+	// The results should have been written to "foo/my-prefix/test" not "my-prefix/test".
+	ds, err := spec.GetDataset(ldbDir + "::my-prefix/test")
+	assert.NoError(err)
+	_, ok := ds.MaybeHead()
+	assert.False(ok)
+
+	ds, err = spec.GetDataset(ldbDir + "::foo/my-prefix/test")
+	assert.NoError(err)
+	_, ok = ds.HeadValue().(types.Struct)
+	assert.True(ok)
 }

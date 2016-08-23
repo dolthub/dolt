@@ -9,7 +9,13 @@
 // 1. Define a test suite struct which inherits from `suite.PerfSuite`.
 // 2. Define methods on that struct that start with the word "Test", optionally followed by digits, then followed a non-empty capitalized string.
 // 3. Call `suite.Run` with an instance of that struct.
-// 4. Run `go test` with the `-perf <path to noms db>` flag. Use `-perf.repeat` to set how many times tests are repeated.
+// 4. Run `go test` with the `-perf <path to noms db>` flag.
+//
+// Flags:
+//   - `-perf.mem` backs the database by a memory store, instead of a (temporary) leveldb.
+//   - `-perf.prefix` gives the dataset IDs for test results a prefix
+//   - `-perf.repeat` sets how many times tests are repeated ("reps").
+//   - `-perf.testdata` sets a custom path to the Noms testdata directory.
 //
 // `PerfSuite` also supports testify/suite style `Setup/TearDown` methods.
 // - `Setup/TearDownSuite` is called exactly once.
@@ -91,8 +97,9 @@ import (
 
 var (
 	perfFlag         = flag.String("perf", "", "The database to write perf tests to. If this isn't specified, perf tests are skipped. If you want a dry run, use \"mem\" as a database")
-	perfRepeatFlag   = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
 	perfMemFlag      = flag.Bool("perf.mem", false, "Back the test database by a memory store, not leveldb. This will affect test timing, but it's provided in case you're low on disk space")
+	perfPrefixFlag   = flag.String("perf.prefix", "", `Prefix for the dataset IDs where results are written. For example, a prefix of "foo/" will write test datasets like "foo/csv-import" instead of just "csv-import"`)
+	perfRepeatFlag   = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
 	perfTestdataFlag = flag.String("perf.testdata", "", "Path to the noms testdata directory. By default this is ../testdata relative to the noms directory")
 	testNamePattern  = regexp.MustCompile("^Test[0-9]*([A-Z].*$)")
 )
@@ -254,7 +261,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"reps":             types.NewList(reps...),
 		})
 
-		ds := dataset.NewDataset(db, datasetID)
+		ds := dataset.NewDataset(db, *perfPrefixFlag+datasetID)
 		var err error
 		ds, err = ds.CommitValue(record)
 		assert.NoError(err)
