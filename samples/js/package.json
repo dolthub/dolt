@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@attic/eslintrc": "^3.1.0",
-    "@attic/noms": "file:../../js",
+    "@attic/noms": "file:../../js/noms",
     "@attic/webpack-config": "^2.1.0",
     "babel-cli": "^6.10.1",
     "babel-core": "^6.10.4",
@@ -39,7 +39,7 @@
     "yargs": "^4.7.1"
   },
   "scripts": {
-    "preinstall": "ln -sf ../../js/.babelrc && ln -sf ../../js/.flowconfig",
+    "preinstall": "ln -sf ../../js/noms/.babelrc && ln -sf ../../js/noms/.flowconfig",
     "test": "exit 0"
   }
 }

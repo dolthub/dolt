@@ -8,7 +8,7 @@ import os, subprocess, json
 from distutils.version import LooseVersion
 
 def main():
-  os.chdir('js')
+  os.chdir(os.path.join('js', 'noms'))
   deployed_version = LooseVersion(
     subprocess.check_output(['npm', 'info', '@attic/noms', 'version']).strip())
   with open('package.json') as pkg:

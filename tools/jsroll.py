@@ -10,7 +10,7 @@
 #  1. Run "npm i".
 #  2. Update the code.
 #  3. Run "npm test". If it fails, goto 2.
-# 
+#
 # Of course, every checkout will still need to run "npm i" to pick up the changes.
 
 import collections
@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 packagepaths = {
-  '@attic/noms': 'js/package.json',
+  '@attic/noms': 'js/noms/package.json',
   '@attic/eslintc': 'jsmodules/eslintrc/package.json',
   '@attic/webpack-config': 'jsmodules/webpack-config/package.json',
 }

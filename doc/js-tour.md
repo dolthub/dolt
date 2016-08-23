@@ -32,7 +32,7 @@ Then launch Node so that we can have a play:
 node
 ```
 
-## [Database](https://github.com/attic-labs/noms/blob/master/js/src/database.js)
+## [Database](https://github.com/attic-labs/noms/blob/master/js/noms/src/database.js)
 
 To get started with Noms, first create a Database:
 
@@ -46,7 +46,7 @@ See [Spelling in Noms](spelling.md) for more information on database spec string
 
 
 
-## [Dataset](https://github.com/attic-labs/noms/blob/master/js/src/dataset.js)
+## [Dataset](https://github.com/attic-labs/noms/blob/master/js/noms/src/dataset.js)
 
 Datasets are the main interface you'll use to work with Noms. A dataset is just a named value in the database that you can update:
 
