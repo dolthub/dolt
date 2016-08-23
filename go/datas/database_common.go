@@ -99,11 +99,11 @@ func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error 
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
 	commitRef := ds.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
 
-	// First commit in store is always fast-foward.
+	// First commit in store is always fast-forward.
 	if !currentRootRef.IsEmpty() {
 		r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
 
-		// First commit in dataset is always fast-foward.
+		// First commit in dataset is always fast-forward.
 		if hasHead {
 			currentHeadRef := r.(types.Ref)
 			// Allow only fast-forward commits.

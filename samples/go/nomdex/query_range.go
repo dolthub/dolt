@@ -96,7 +96,7 @@ func (r queryRange) and(o queryRange) (rangeDescs queryRangeSlice) {
 
 	lower := r.lower.maxValue(o.lower)
 	upper := r.upper.minValue(o.upper)
-	return []queryRange{queryRange{lower, upper}}
+	return []queryRange{{lower, upper}}
 }
 
 func (r queryRange) or(o queryRange) (rSlice queryRangeSlice) {

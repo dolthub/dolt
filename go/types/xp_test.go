@@ -25,22 +25,22 @@ type testSuite struct {
 // please update Go and JS to keep them in sync - see js/src//xp-test.js
 func newTestSuite() *testSuite {
 	testValues := []*testValue{
-		&testValue{Bool(true), "g19moobgrm32dn083bokhksuobulq28c", "bool - true"},
-		&testValue{Bool(false), "bqjhrhmgmjqnnssqln87o84c6no6pklq", "bool - false"},
-		&testValue{Number(-1), "hq0jvv1enraehfggfk8s27ll1rmirt96", "num - -1"},
-		&testValue{Number(0), "elie88b5iouak7onvi2mpkcgoqqr771l", "num - 0"},
-		&testValue{Number(1), "6h9ldndhjoq0r5sbn1955gaearq5dovc", "num - 1"},
-		&testValue{Number(-122.411912027329), "hcdjnev3lccjplue6pb0fkhgeehv6oec", "num - -122.411912027329"},
+		{Bool(true), "g19moobgrm32dn083bokhksuobulq28c", "bool - true"},
+		{Bool(false), "bqjhrhmgmjqnnssqln87o84c6no6pklq", "bool - false"},
+		{Number(-1), "hq0jvv1enraehfggfk8s27ll1rmirt96", "num - -1"},
+		{Number(0), "elie88b5iouak7onvi2mpkcgoqqr771l", "num - 0"},
+		{Number(1), "6h9ldndhjoq0r5sbn1955gaearq5dovc", "num - 1"},
+		{Number(-122.411912027329), "hcdjnev3lccjplue6pb0fkhgeehv6oec", "num - -122.411912027329"},
 		// JS Number.MAX_SAFE_INTEGER
-		&testValue{Number(9007199254740991), "3fpnjghte4v4q8qogl4bga0qldetlo7b", "num - 9007199254740991"},
+		{Number(9007199254740991), "3fpnjghte4v4q8qogl4bga0qldetlo7b", "num - 9007199254740991"},
 		// JS Number.MIN_SAFE_INTEGER
-		&testValue{Number(-9007199254740991), "jd80frddd2fs3q567tledcgmfs85dvke", "num - -9007199254740991"},
+		{Number(-9007199254740991), "jd80frddd2fs3q567tledcgmfs85dvke", "num - -9007199254740991"},
 		// JS Number.EPSILON
-		&testValue{Number(2.220446049250313e-16), "qapetp8502l672v2vie52nd4qjviq5je", "num - 2.220446049250313e-16"},
-		&testValue{Number(math.MaxFloat64), "9bqr7ofsvhutqo5ue1iqpmsu70e85ll6", "num - 1.7976931348623157e+308"},
-		&testValue{String(""), "ssfs0o2eq3kg50p37q2crhhqhjcs2391", "str - empty"},
-		&testValue{String("0"), "jngc7d11d2h0c6s2f15l10rckvu753rb", "str - 0"},
-		&testValue{String("false"), "1v3a1t4to25kkohm1bhh2thebmls0lp0", "str - false"},
+		{Number(2.220446049250313e-16), "qapetp8502l672v2vie52nd4qjviq5je", "num - 2.220446049250313e-16"},
+		{Number(math.MaxFloat64), "9bqr7ofsvhutqo5ue1iqpmsu70e85ll6", "num - 1.7976931348623157e+308"},
+		{String(""), "ssfs0o2eq3kg50p37q2crhhqhjcs2391", "str - empty"},
+		{String("0"), "jngc7d11d2h0c6s2f15l10rckvu753rb", "str - 0"},
+		{String("false"), "1v3a1t4to25kkohm1bhh2thebmls0lp0", "str - false"},
 	}
 
 	// TODO: add these types too

@@ -63,7 +63,7 @@ func (ds *Dataset) HeadValue() types.Value {
 	return c.Get(datas.ValueField)
 }
 
-// MaybeHeadValue returns the Value field of the current head Commit, if avaliable. If not it
+// MaybeHeadValue returns the Value field of the current head Commit, if available. If not it
 // returns nil and 'false'.
 func (ds *Dataset) MaybeHeadValue() (types.Value, bool) {
 	c, ok := ds.Database().MaybeHead(ds.id)

@@ -43,11 +43,11 @@ func main() {
 	db := os.Args[1]
 
 	rs := []runner{
-		runner{"diff", runDiff},
-		runner{"log diff", runLogDiff},
-		runner{"log show", runLogShow},
-		runner{"show", runShow},
-		runner{"sync", runSync},
+		{"diff", runDiff},
+		{"log diff", runLogDiff},
+		{"log show", runLogShow},
+		{"show", runShow},
+		{"sync", runSync},
 	}
 
 	for ds := range streamDs(db) {

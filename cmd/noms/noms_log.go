@@ -50,7 +50,7 @@ func setupLogFlags() *flag.FlagSet {
 	logFlagSet.IntVar(&maxLines, "max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
 	logFlagSet.IntVar(&maxCommits, "n", 0, "max number of commits to display (0 for all commits)")
 	logFlagSet.BoolVar(&oneline, "oneline", false, "show a summary of each commit on a single line")
-	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarcy on left side of output")
+	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarchy on left side of output")
 	logFlagSet.BoolVar(&showValue, "show-value", false, "show commit value rather than diff information -- this is temporary")
 	outputpager.RegisterOutputpagerFlags(logFlagSet)
 	return logFlagSet

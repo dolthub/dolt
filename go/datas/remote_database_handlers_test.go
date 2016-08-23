@@ -41,7 +41,7 @@ func TestHandleWriteValue(t *testing.T) {
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}
-	serializeHints(body, map[hash.Hash]struct{}{hint: struct{}{}})
+	serializeHints(body, map[hash.Hash]struct{}{hint: {}})
 	chunks.Serialize(itemChunk, body)
 	chunks.Serialize(listChunk, body)
 
@@ -75,7 +75,7 @@ func TestHandleWriteValueBackpressure(t *testing.T) {
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}
-	serializeHints(body, map[hash.Hash]struct{}{hint: struct{}{}})
+	serializeHints(body, map[hash.Hash]struct{}{hint: {}})
 	chunks.Serialize(itemChunk, body)
 	chunks.Serialize(listChunk, body)
 
@@ -103,8 +103,8 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	close(inChunkChan)
 
 	hints := map[hash.Hash]struct{}{
-		hash.Parse("00000000000000000000000000000002"): struct{}{},
-		hash.Parse("00000000000000000000000000000003"): struct{}{},
+		hash.Parse("00000000000000000000000000000002"): {},
+		hash.Parse("00000000000000000000000000000003"): {},
 	}
 	compressed := buildWriteValueRequest(inChunkChan, hints)
 	gr := snappy.NewReader(compressed)
@@ -139,8 +139,8 @@ func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
 func TestBuildHashesRequest(t *testing.T) {
 	assert := assert.New(t)
 	hashes := map[hash.Hash]struct{}{
-		hash.Parse("00000000000000000000000000000002"): struct{}{},
-		hash.Parse("00000000000000000000000000000003"): struct{}{},
+		hash.Parse("00000000000000000000000000000002"): {},
+		hash.Parse("00000000000000000000000000000003"): {},
 	}
 	r := buildHashesRequest(hashes)
 	b, err := ioutil.ReadAll(r)

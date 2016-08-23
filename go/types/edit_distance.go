@@ -88,16 +88,16 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 	}
 
 	if currentStart == currentEnd {
-		return []Splice{Splice{previousStart, previousEnd - previousStart, 0, 0}}
+		return []Splice{{previousStart, previousEnd - previousStart, 0, 0}}
 	} else if previousStart == previousEnd {
-		return []Splice{Splice{previousStart, 0, currentEnd - currentStart, currentStart}}
+		return []Splice{{previousStart, 0, currentEnd - currentStart, currentStart}}
 	}
 
 	previousLength = previousEnd - previousStart
 	currentLength = currentEnd - currentStart
 
 	if previousLength*currentLength > maxSpliceMatrixSize {
-		return []Splice{Splice{0, previousLength, currentLength, 0}}
+		return []Splice{{0, previousLength, currentLength, 0}}
 	}
 
 	splices := make([]Splice, 0)

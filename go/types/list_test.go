@@ -370,7 +370,7 @@ func TestListValidateInsertAtZero(t *testing.T) {
 		count--
 		v := values[count]
 		s = s.Insert(uint64(0), v)
-		validateList(t, s, values[count:len(values)])
+		validateList(t, s, values[count:])
 	}
 }
 
@@ -749,7 +749,7 @@ func TestListDiffVersusEmpty(t *testing.T) {
 
 	assert.Equal(len(diff2), len(diff1))
 	diffExpected := []Splice{
-		Splice{0, 0, 5, 0},
+		{0, 0, 5, 0},
 	}
 	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 }
@@ -771,7 +771,7 @@ func TestListDiffReverse(t *testing.T) {
 	diff2 := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{0, 5000, 5000, 0},
+		{0, 5000, 5000, 0},
 	}
 	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 	assert.Equal(diffExpected, diff2, "expected diff is wrong")
@@ -796,8 +796,8 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 
 	assert.Equal(len(diff2), len(diff1))
 	diffExpected := []Splice{
-		Splice{0, 2499, 2500, 0},
-		Splice{2500, 2500, 2499, 2501},
+		{0, 2499, 2500, 0},
+		{2500, 2500, 2499, 2501},
 	}
 	assert.Equal(diffExpected, diff1, "expected diff is wrong")
 	assert.Equal(diffExpected, diff2, "expected diff is wrong")
@@ -825,11 +825,11 @@ func TestListDiffRemove5x100(t *testing.T) {
 
 	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
-		Splice{0, 100, 0, 0},
-		Splice{1000, 100, 0, 0},
-		Splice{2000, 100, 0, 0},
-		Splice{3000, 100, 0, 0},
-		Splice{4000, 100, 0, 0},
+		{0, 100, 0, 0},
+		{1000, 100, 0, 0},
+		{2000, 100, 0, 0},
+		{3000, 100, 0, 0},
+		{4000, 100, 0, 0},
 	}
 	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
 }
@@ -856,11 +856,11 @@ func TestListDiffAdd5x5(t *testing.T) {
 
 	assert.Equal(len(diff1), len(diff2))
 	diff2Expected := []Splice{
-		Splice{5, 0, 5, 5},
-		Splice{1000, 0, 5, 1005},
-		Splice{2000, 0, 5, 2010},
-		Splice{3000, 0, 5, 3015},
-		Splice{4000, 0, 5, 4020},
+		{5, 0, 5, 5},
+		{1000, 0, 5, 1005},
+		{2000, 0, 5, 2010},
+		{3000, 0, 5, 3015},
+		{4000, 0, 5, 4020},
 	}
 	assert.Equal(diff2Expected, diff2, "expected diff is wrong")
 }
@@ -885,16 +885,16 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{0, 49, 50, 0},
-		Splice{50, 50, 49, 51},
-		Splice{1000, 49, 50, 1000},
-		Splice{1050, 50, 49, 1051},
-		Splice{2000, 49, 50, 2000},
-		Splice{2050, 50, 49, 2051},
-		Splice{3000, 49, 50, 3000},
-		Splice{3050, 50, 49, 3051},
-		Splice{4000, 49, 50, 4000},
-		Splice{4050, 50, 49, 4051},
+		{0, 49, 50, 0},
+		{50, 50, 49, 51},
+		{1000, 49, 50, 1000},
+		{1050, 50, 49, 1051},
+		{2000, 49, 50, 2000},
+		{2050, 50, 49, 2051},
+		{3000, 49, 50, 3000},
+		{3050, 50, 49, 3051},
+		{4000, 49, 50, 4000},
+		{4050, 50, 49, 4051},
 	}
 	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
@@ -925,7 +925,7 @@ func TestListDiffString2(t *testing.T) {
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{3, 0, 1, 3},
+		{3, 0, 1, 3},
 	}
 	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
@@ -942,7 +942,7 @@ func TestListDiffString3(t *testing.T) {
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
-		Splice{2, 1, 1, 2},
+		{2, 1, 1, 2},
 	}
 	assert.Equal(diffExpected, diff, "expected diff is wrong")
 }
@@ -1005,7 +1005,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	diff := accumulateDiffSplices(l2, l1)
 
 	expected := []Splice{
-		Splice{3, 0, 5, 3},
+		{3, 0, 5, 3},
 	}
 
 	assert.Equal(expected, diff)

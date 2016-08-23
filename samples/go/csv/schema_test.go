@@ -24,16 +24,16 @@ func TestSchemaDetection(t *testing.T) {
 	}
 	test(
 		[][]string{
-			[]string{"foo", "1", "5"},
-			[]string{"bar", "0", "10"},
-			[]string{"true", "1", "23"},
-			[]string{"1", "1", "60"},
-			[]string{"1.1", "false", "75"},
+			{"foo", "1", "5"},
+			{"bar", "0", "10"},
+			{"true", "1", "23"},
+			{"1", "1", "60"},
+			{"1.1", "false", "75"},
 		},
 		[]KindSlice{
-			KindSlice{types.StringKind},
-			KindSlice{types.BoolKind, types.StringKind},
-			KindSlice{
+			{types.StringKind},
+			{types.BoolKind, types.StringKind},
+			{
 				types.NumberKind,
 				types.StringKind,
 			},
@@ -41,61 +41,61 @@ func TestSchemaDetection(t *testing.T) {
 	)
 	test(
 		[][]string{
-			[]string{"foo"},
-			[]string{"bar"},
-			[]string{"true"},
-			[]string{"1"},
-			[]string{"1.1"},
+			{"foo"},
+			{"bar"},
+			{"true"},
+			{"1"},
+			{"1.1"},
 		},
 		[]KindSlice{
-			KindSlice{types.StringKind},
+			{types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"true"},
-			[]string{"1"},
-			[]string{"1.1"},
+			{"true"},
+			{"1"},
+			{"1.1"},
 		},
 		[]KindSlice{
-			KindSlice{types.StringKind},
+			{types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"true"},
-			[]string{"false"},
-			[]string{"True"},
-			[]string{"False"},
-			[]string{"TRUE"},
-			[]string{"FALSE"},
-			[]string{"1"},
-			[]string{"0"},
+			{"true"},
+			{"false"},
+			{"True"},
+			{"False"},
+			{"TRUE"},
+			{"FALSE"},
+			{"1"},
+			{"0"},
 		},
 		[]KindSlice{
-			KindSlice{types.BoolKind, types.StringKind},
+			{types.BoolKind, types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"1.1"},
+			{"1"},
+			{"1.1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"1.1"},
-			[]string{"4.940656458412465441765687928682213723651e-50"},
-			[]string{"-4.940656458412465441765687928682213723651e-50"},
+			{"1"},
+			{"1.1"},
+			{"4.940656458412465441765687928682213723651e-50"},
+			{"-4.940656458412465441765687928682213723651e-50"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
@@ -103,36 +103,36 @@ func TestSchemaDetection(t *testing.T) {
 
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"1.1"},
-			[]string{"1.797693134862315708145274237317043567981e+102"},
-			[]string{"-1.797693134862315708145274237317043567981e+102"},
+			{"1"},
+			{"1.1"},
+			{"1.797693134862315708145274237317043567981e+102"},
+			{"-1.797693134862315708145274237317043567981e+102"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"1.1"},
-			[]string{"1.797693134862315708145274237317043567981e+309"},
-			[]string{"-1.797693134862315708145274237317043567981e+309"},
+			{"1"},
+			{"1.1"},
+			{"1.797693134862315708145274237317043567981e+309"},
+			{"-1.797693134862315708145274237317043567981e+309"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"0"},
+			{"1"},
+			{"0"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.BoolKind,
 				types.StringKind},
@@ -140,123 +140,123 @@ func TestSchemaDetection(t *testing.T) {
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"0"},
-			[]string{"-0"},
+			{"0"},
+			{"-0"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"280"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"280"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"-180"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"-180"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"33000"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"33000"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"-44000"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"-44000"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"2547483648"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"2547483648"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{"1"},
-			[]string{"-4347483648"},
-			[]string{"0"},
-			[]string{"-1"},
+			{"1"},
+			{"-4347483648"},
+			{"0"},
+			{"-1"},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{fmt.Sprintf("%d", uint64(1<<63))},
-			[]string{fmt.Sprintf("%d", uint64(1<<63)+1)},
+			{fmt.Sprintf("%d", uint64(1<<63))},
+			{fmt.Sprintf("%d", uint64(1<<63)+1)},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
 	)
 	test(
 		[][]string{
-			[]string{fmt.Sprintf("%d", uint64(1<<32))},
-			[]string{fmt.Sprintf("%d", uint64(1<<32)+1)},
+			{fmt.Sprintf("%d", uint64(1<<32))},
+			{fmt.Sprintf("%d", uint64(1<<32)+1)},
 		},
 		[]KindSlice{
-			KindSlice{
+			{
 				types.NumberKind,
 				types.StringKind},
 		},
@@ -274,37 +274,37 @@ func TestCombinationsWithLength(t *testing.T) {
 		assert.Equal(expect, combinations)
 	}
 	test([]int{0}, 1, [][]int{
-		[]int{0},
+		{0},
 	})
 	test([]int{1}, 1, [][]int{
-		[]int{1},
+		{1},
 	})
 	test([]int{0, 1}, 1, [][]int{
-		[]int{0},
-		[]int{1},
+		{0},
+		{1},
 	})
 	test([]int{0, 1}, 2, [][]int{
-		[]int{0, 1},
+		{0, 1},
 	})
 	test([]int{70, 80, 90, 100}, 1, [][]int{
-		[]int{70},
-		[]int{80},
-		[]int{90},
-		[]int{100},
+		{70},
+		{80},
+		{90},
+		{100},
 	})
 	test([]int{70, 80, 90, 100}, 2, [][]int{
-		[]int{70, 80},
-		[]int{70, 90},
-		[]int{70, 100},
-		[]int{80, 90},
-		[]int{80, 100},
-		[]int{90, 100},
+		{70, 80},
+		{70, 90},
+		{70, 100},
+		{80, 90},
+		{80, 100},
+		{90, 100},
 	})
 	test([]int{70, 80, 90, 100}, 3, [][]int{
-		[]int{70, 80, 90},
-		[]int{70, 80, 100},
-		[]int{70, 90, 100},
-		[]int{80, 90, 100},
+		{70, 80, 90},
+		{70, 80, 100},
+		{70, 90, 100},
+		{80, 90, 100},
 	})
 }
 
@@ -319,33 +319,33 @@ func TestCombinationsWithLengthFromTo(t *testing.T) {
 		assert.Equal(expect, combinations)
 	}
 	test([]int{0}, 1, 1, [][]int{
-		[]int{0},
+		{0},
 	})
 	test([]int{1}, 1, 1, [][]int{
-		[]int{1},
+		{1},
 	})
 	test([]int{0, 1}, 1, 2, [][]int{
-		[]int{0},
-		[]int{1},
-		[]int{0, 1},
+		{0},
+		{1},
+		{0, 1},
 	})
 	test([]int{0, 1}, 2, 2, [][]int{
-		[]int{0, 1},
+		{0, 1},
 	})
 	test([]int{70, 80, 90, 100}, 1, 3, [][]int{
-		[]int{70},
-		[]int{80},
-		[]int{90},
-		[]int{100},
-		[]int{70, 80},
-		[]int{70, 90},
-		[]int{70, 100},
-		[]int{80, 90},
-		[]int{80, 100},
-		[]int{90, 100},
-		[]int{70, 80, 90},
-		[]int{70, 80, 100},
-		[]int{70, 90, 100},
-		[]int{80, 90, 100},
+		{70},
+		{80},
+		{90},
+		{100},
+		{70, 80},
+		{70, 90},
+		{70, 100},
+		{80, 90},
+		{80, 100},
+		{90, 100},
+		{70, 80, 90},
+		{70, 80, 100},
+		{70, 90, 100},
+		{80, 90, 100},
 	})
 }

@@ -4,6 +4,7 @@
 <br><br>
 [![Build Status](http://jenkins.noms.io/job/NomsServer/badge/icon)](http://jenkins.noms.io/job/NomsServer) 
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
+[![Go Report Card](https://goreportcard.com/badge/github.com/attic-labs/noms)](https://goreportcard.com/report/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
 *Noms* is a decentralized database based on ideas from Git.

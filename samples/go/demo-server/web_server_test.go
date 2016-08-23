@@ -110,7 +110,7 @@ func TestWriteValue(t *testing.T) {
 	assert.Equal(http.StatusOK, w.Code, string(w.Body.Bytes()))
 
 	whash := wval.Hash()
-	hints := map[hash.Hash]struct{}{whash: struct{}{}}
+	hints := map[hash.Hash]struct{}{whash: {}}
 	rdr := buildGetRefsRequestBody(hints)
 	r, _ = newRequest("POST", dbName+constants.GetRefsPath, rdr)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")

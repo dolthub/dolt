@@ -30,23 +30,23 @@ func TestQueryScanner(t *testing.T) {
 	s := NewQueryScanner(`9 (99.9) -9 0x7F "99.9" and or http://localhost:8000/cli-tour::yo <= >= < > = _`)
 
 	scannerResults := []scannerResult{
-		scannerResult{tok: scanner.Int, text: "9"},
-		scannerResult{tok: int('('), text: "("},
-		scannerResult{tok: scanner.Float, text: "99.9"},
-		scannerResult{tok: int(')'), text: ")"},
-		scannerResult{tok: '-', text: "-"},
-		scannerResult{tok: scanner.Int, text: "9"},
-		scannerResult{tok: scanner.Int, text: "0x7F"},
-		scannerResult{tok: scanner.String, text: `"99.9"`},
-		scannerResult{tok: scanner.Ident, text: "and"},
-		scannerResult{tok: scanner.Ident, text: "or"},
-		scannerResult{tok: scanner.Ident, text: "http://localhost:8000/cli-tour::yo"},
-		scannerResult{tok: scanner.Ident, text: "<="},
-		scannerResult{tok: scanner.Ident, text: ">="},
-		scannerResult{tok: scanner.Ident, text: "<"},
-		scannerResult{tok: scanner.Ident, text: ">"},
-		scannerResult{tok: int('='), text: "="},
-		scannerResult{tok: int('_'), text: "_"},
+		{tok: scanner.Int, text: "9"},
+		{tok: int('('), text: "("},
+		{tok: scanner.Float, text: "99.9"},
+		{tok: int(')'), text: ")"},
+		{tok: '-', text: "-"},
+		{tok: scanner.Int, text: "9"},
+		{tok: scanner.Int, text: "0x7F"},
+		{tok: scanner.String, text: `"99.9"`},
+		{tok: scanner.Ident, text: "and"},
+		{tok: scanner.Ident, text: "or"},
+		{tok: scanner.Ident, text: "http://localhost:8000/cli-tour::yo"},
+		{tok: scanner.Ident, text: "<="},
+		{tok: scanner.Ident, text: ">="},
+		{tok: scanner.Ident, text: "<"},
+		{tok: scanner.Ident, text: ">"},
+		{tok: int('='), text: "="},
+		{tok: int('_'), text: "_"},
 	}
 
 	for _, sr := range scannerResults {
@@ -63,10 +63,10 @@ func TestPeek(t *testing.T) {
 
 	s := NewQueryScanner(`_ < "one"`)
 	scannerResults := []scannerResult{
-		scannerResult{tok: int('_'), text: "_"},
-		scannerResult{tok: scanner.Ident, text: "<"},
-		scannerResult{tok: scanner.String, text: `"one"`},
-		scannerResult{tok: scanner.EOF, text: ""},
+		{tok: int('_'), text: "_"},
+		{tok: scanner.Ident, text: "<"},
+		{tok: scanner.String, text: `"one"`},
+		{tok: scanner.EOF, text: ""},
 	}
 
 	for _, sr := range scannerResults {
@@ -86,17 +86,17 @@ func TestParsing(t *testing.T) {
 	re4 := compExpr{"index1", lt, types.Number(-2030)}
 
 	queries := []parseResult{
-		parseResult{`index1 = 2015`, re1},
-		parseResult{`(index1 = 2015 )`, re1},
-		parseResult{`(((index1 = 2015 ) ))`, re1},
-		parseResult{`index1 = 2015 or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
-		parseResult{`(index1 = 2015) or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
-		parseResult{`index1 = 2015 or (index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
-		parseResult{`(index1 = 2015 or index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
-		parseResult{`(index1 = 2015 or index1 >= 2020) and index1 <= 2022`, logExpr{and, logExpr{or, re1, re2, "index1"}, re3, "index1"}},
-		parseResult{`index1 = 2015 or index1 >= 2020 and index1 <= 2022`, logExpr{or, re1, logExpr{and, re2, re3, "index1"}, "index1"}},
-		parseResult{`index1 = 2015 or index1 >= 2020 and index1 <= 2022 or index1 < -2030`, logExpr{or, re1, logExpr{and, re2, logExpr{or, re3, re4, "index1"}, "index1"}, "index1"}},
-		parseResult{`(index1 = 2015 or index1 >= 2020) and (index1 <= 2022 or index1 < -2030)`, logExpr{and, logExpr{or, re1, re2, "index1"}, logExpr{or, re3, re4, "index1"}, "index1"}},
+		{`index1 = 2015`, re1},
+		{`(index1 = 2015 )`, re1},
+		{`(((index1 = 2015 ) ))`, re1},
+		{`index1 = 2015 or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
+		{`(index1 = 2015) or index1 >= 2020`, logExpr{or, re1, re2, "index1"}},
+		{`index1 = 2015 or (index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
+		{`(index1 = 2015 or index1 >= 2020)`, logExpr{or, re1, re2, "index1"}},
+		{`(index1 = 2015 or index1 >= 2020) and index1 <= 2022`, logExpr{and, logExpr{or, re1, re2, "index1"}, re3, "index1"}},
+		{`index1 = 2015 or index1 >= 2020 and index1 <= 2022`, logExpr{or, re1, logExpr{and, re2, re3, "index1"}, "index1"}},
+		{`index1 = 2015 or index1 >= 2020 and index1 <= 2022 or index1 < -2030`, logExpr{or, re1, logExpr{and, re2, logExpr{or, re3, re4, "index1"}, "index1"}, "index1"}},
+		{`(index1 = 2015 or index1 >= 2020) and (index1 <= 2022 or index1 < -2030)`, logExpr{and, logExpr{or, re1, re2, "index1"}, logExpr{or, re3, re4, "index1"}, "index1"}},
 	}
 
 	db := datas.NewDatabase(chunks.NewMemoryStore())

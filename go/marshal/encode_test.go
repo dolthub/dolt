@@ -280,8 +280,8 @@ func TestEncodeRecursive(t *testing.T) {
 	}
 	v, err := Marshal(Node{
 		1, []Node{
-			Node{2, []Node{}},
-			Node{3, []Node(nil)},
+			{2, []Node{}},
+			{3, []Node(nil)},
 		},
 	})
 	assert.NoError(err)

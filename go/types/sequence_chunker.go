@@ -86,7 +86,7 @@ func (sc *sequenceChunker) resume() {
 		}
 	}
 
-	// If the hash window won't be filled by the preceeding items in the current chunk, walk further back until they will.
+	// If the hash window won't be filled by the preceding items in the current chunk, walk further back until they will.
 	for primeHashBytes > 0 && retreater.retreatMaybeAllowBeforeStart(false) {
 		primeHashCount++
 		sc.rv.ClearLastBoundary()
@@ -243,7 +243,6 @@ func (sc *sequenceChunker) Done() sequence {
 
 		mt = child.getItem(0).(metaTuple)
 	}
-	panic("not reached")
 }
 
 // If we are mutating an existing sequence, appending subsequent items in the sequence until we reach a pre-existing chunk boundary or the end of the sequence.

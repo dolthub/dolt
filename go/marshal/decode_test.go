@@ -523,8 +523,8 @@ func TestDecodeRecursive(t *testing.T) {
 
 	assert.Equal(Node{
 		1, []Node{
-			Node{2, []Node{}},
-			Node{3, []Node{}},
+			{2, []Node{}},
+			{3, []Node{}},
 		},
 	}, n)
 }

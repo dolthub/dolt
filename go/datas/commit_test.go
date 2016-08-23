@@ -29,7 +29,7 @@ func TestNewCommit(t *testing.T) {
 	})
 	assertTypeEquals(et, at)
 
-	// Commiting another Number
+	// Committing another Number
 	commit2 := NewCommit(types.Number(2), types.NewSet(types.NewRef(commit)), types.EmptyStruct)
 	at2 := commit2.Type()
 	et2 := et

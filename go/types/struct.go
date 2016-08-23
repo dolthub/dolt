@@ -28,7 +28,7 @@ type Struct struct {
 func NewStruct(name string, data StructData) Struct {
 	fieldNames := make(sort.StringSlice, len(data))
 	i := 0
-	for fn, _ := range data {
+	for fn := range data {
 		fieldNames[i] = fn
 		i++
 	}

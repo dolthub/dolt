@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
-	goisatty "github.com/mattn/go-isatty"
 	flag "github.com/juju/gnuflag"
+	goisatty "github.com/mattn/go-isatty"
 )
 
 var (

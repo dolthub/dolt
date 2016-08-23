@@ -55,7 +55,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	source1HeadRef := source1.Head().Hash()
 	source2.Database().Close() // Close Database backing both Datasets
 
-	sourceSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#" + source1HeadRef.String())
+	sourceSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+source1HeadRef.String())
 	ldb2dir := path.Join(s.TempDir, "ldb2")
 	sinkDatasetSpec := spec.CreateValueSpecString("ldb", ldb2dir, "dest")
 	sout, _ := s.Run(main, []string{"sync", sourceSpec, sinkDatasetSpec})

@@ -189,7 +189,7 @@ func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
 }
 
 // We normalize structs during their construction iff they have no unresolved cycles. Normalizing applies a canonical ordering to the composite types of a union and serializes all types under the struct. To ensure a consistent ordering of the composite types of a union, we generate a unique "order id" or OID for each of those types. The OID is the hash of a unique type encoding that is independant of the extant order of types within any subordinate unions. This encoding for most types is a straightforward serialization of its components; for unions the encoding is a bytewise XOR of the hashes of each of its composite type encodings.
-// We require a consistent order of types within a union to ensure that equivalent types have a single persistent encoding and, therefore, a single hash. The method described above fails for "unrolled" cycles whereby two equivalent, but uniquely described structures, would have different OIDs. Consider for example the following two types that, while equivalent, do not yeild the same OID:
+// We require a consistent order of types within a union to ensure that equivalent types have a single persistent encoding and, therefore, a single hash. The method described above fails for "unrolled" cycles whereby two equivalent, but uniquely described structures, would have different OIDs. Consider for example the following two types that, while equivalent, do not yield the same OID:
 //	Struct A { a: Cycle<0> }
 //	Struct A { a: Struct A { a: Cycle<1> } }
 // We explicitly disallow this sort of redundantly expressed type. If a non-Byzantine use of such a construction arises, we can attempt to simplify the expansive type or find another means of comparison.
@@ -276,7 +276,7 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 
 			buf.writeUint32(uint32(len(desc.ElemTypes)))
 
-			// This is the only subtle case: encode each subordinate type, generate the hash, remove duplicates, and xor the results together to form an order indepedant encoding.
+			// This is the only subtle case: encode each subordinate type, generate the hash, remove duplicates, and xor the results together to form an order independent encoding.
 			mbuf := newBinaryNomsWriter()
 			oids := make(map[hash.Hash]struct{})
 			for _, tt := range desc.ElemTypes {
@@ -286,7 +286,7 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 			}
 
 			data := make([]byte, hash.ByteLen)
-			for o, _ := range oids {
+			for o := range oids {
 				digest := o.Digest()
 				for i := 0; i < len(data); i++ {
 					data[i] ^= digest[i]

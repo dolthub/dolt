@@ -13,7 +13,7 @@ import (
 
 type ProcessFn func(in interface{}) (out interface{})
 
-// Creates a pool of |parallelism| goroutines to process values off of |input| by calling |fn| and guarentees that results of each call will be sent on |out| in the order the corresponding input was received.
+// Creates a pool of |parallelism| goroutines to process values off of |input| by calling |fn| and guarantees that results of each call will be sent on |out| in the order the corresponding input was received.
 func New(input chan interface{}, fn ProcessFn, parallelism int) chan interface{} {
 	d.Chk.True(parallelism > 0)
 

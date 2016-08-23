@@ -34,9 +34,9 @@ func createTestData(s *testSuite, buildAsMap bool) []types.Value {
 	s.header = []string{"a", "b", "c"}
 	structName := "SomeStruct"
 	s.payload = [][]string{
-		[]string{"4", "10", "255"},
-		[]string{"5", "7", "100"},
-		[]string{"512", "12", "55"},
+		{"4", "10", "255"},
+		{"5", "7", "100"},
+		{"512", "12", "55"},
 	}
 
 	sliceLen := len(s.payload)

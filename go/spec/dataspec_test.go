@@ -175,16 +175,16 @@ func TestDatabaseSpecs(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{"http://localhost:8000", "http", "//localhost:8000", ""},
-		testCase{"http://localhost:8000/fff", "http", "//localhost:8000/fff", ""},
-		testCase{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe", ""},
-		testCase{"ldb:/filesys/john/doe", "ldb", "/filesys/john/doe", ""},
-		testCase{"./john/doe", "ldb", "./john/doe", ""},
-		testCase{"john/doe", "ldb", "john/doe", ""},
-		testCase{"/john/doe", "ldb", "/john/doe", ""},
-		testCase{"mem", "mem", "", ""},
-		testCase{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane", "jane"},
-		testCase{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", "jane"},
+		{"http://localhost:8000", "http", "//localhost:8000", ""},
+		{"http://localhost:8000/fff", "http", "//localhost:8000/fff", ""},
+		{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe", ""},
+		{"ldb:/filesys/john/doe", "ldb", "/filesys/john/doe", ""},
+		{"./john/doe", "ldb", "./john/doe", ""},
+		{"john/doe", "ldb", "john/doe", ""},
+		{"/john/doe", "ldb", "/john/doe", ""},
+		{"mem", "mem", "", ""},
+		{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane", "jane"},
+		{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", "jane"},
 	}
 
 	for _, tc := range testCases {
@@ -220,13 +220,13 @@ func TestDatasetSpecs(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{"http://localhost:8000::ds1", "http", "//localhost:8000", "ds1", ""},
-		testCase{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2", ""},
-		testCase{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3", ""},
-		testCase{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1", ""},
-		testCase{"ldb:/filesys/john/doe::ds/one", "ldb", "/filesys/john/doe", "ds/one", ""},
-		testCase{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one", "abc"},
-		testCase{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one", "abc"},
+		{"http://localhost:8000::ds1", "http", "//localhost:8000", "ds1", ""},
+		{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2", ""},
+		{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3", ""},
+		{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1", ""},
+		{"ldb:/filesys/john/doe::ds/one", "ldb", "/filesys/john/doe", "ds/one", ""},
+		{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one", "abc"},
+		{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one", "abc"},
 	}
 
 	for _, tc := range testCases {
@@ -251,11 +251,11 @@ func TestPathSpec(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		testCase{"ldb:/filesys/john/doe::#0123456789abcdefghijklmnopqrstuv", "ldb", "/filesys/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		testCase{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv"},
-		testCase{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		testCase{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
+		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
+		{"ldb:/filesys/john/doe::#0123456789abcdefghijklmnopqrstuv", "ldb", "/filesys/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
+		{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv"},
+		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
+		{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
 	}
 
 	for _, tc := range testCases {

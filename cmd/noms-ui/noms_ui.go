@@ -19,8 +19,8 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/julienschmidt/httprouter"
 	flag "github.com/juju/gnuflag"
+	"github.com/julienschmidt/httprouter"
 )
 
 const (

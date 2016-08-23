@@ -131,8 +131,8 @@ func (suite *SerialRunnerTestSuite) TestFailure() {
 		path, expected string
 	}
 	tests := []testCase{
-		testCase{suite.uniqueBuildFile(), "Scoobaz"},
-		testCase{suite.uniqueBuildFile(), "at the disco"},
+		{suite.uniqueBuildFile(), "Scoobaz"},
+		{suite.uniqueBuildFile(), "at the disco"},
 	}
 	goodOne := testCase{suite.uniqueBuildFile(), "All's well"}
 

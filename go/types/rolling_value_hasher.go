@@ -15,7 +15,7 @@ import (
 const (
 	defaultChunkPattern = uint32(1<<12 - 1) // Avg Chunk Size of 4k
 
-	// The window size to use for computing the rolling hash. This is way more than neccessary assuming random data (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off.
+	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off.
 	defaultChunkWindow = uint32(64)
 )
 
@@ -92,7 +92,7 @@ func (rv *rollingValueHasher) HashValue(v Value) {
 	rv.enc.writeValue(v)
 }
 
-// nomsWriter interface. Note: It's unfortunate to have another implimentation of nomsWriter and this one must be kept in sync with binaryNomsWriter, but hashing values is a red-hot code path and it's worth alot to avoid the allocations for literally encoding values.
+// nomsWriter interface. Note: It's unfortunate to have another implementation of nomsWriter and this one must be kept in sync with binaryNomsWriter, but hashing values is a red-hot code path and it's worth a lot to avoid the allocations for literally encoding values.
 func (rv *rollingValueHasher) writeBytes(v []byte) {
 	for _, b := range v {
 		rv.HashByte(b)
