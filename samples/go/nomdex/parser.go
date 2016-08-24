@@ -22,7 +22,7 @@ import (
   compExpr := indexToken compOp value
   group := '(' expr ')' | compExpr
   boolOp := 'and' | 'or'
-  compOp := '=' | '<' | '<=' | '>' | '>='
+  compOp := '=' | '<' | '<=' | '>' | '>=' | !=
   value := "<string>" | number
   number := '-' digits | digits
   digits := int | float
@@ -43,6 +43,7 @@ const (
 	gte    compOp = ">="
 	lt     compOp = "<"
 	lte    compOp = "<="
+	ne     compOp = "!="
 	openP         = "("
 	closeP        = ")"
 	and    boolOp = "and"
@@ -50,7 +51,7 @@ const (
 )
 
 var (
-	compOps = []compOp{equals, gt, gte, lt, lte}
+	compOps = []compOp{equals, gt, gte, lt, lte, ne}
 	boolOps = []boolOp{and, or}
 )
 
@@ -110,7 +111,7 @@ func parseQuery(q string, im *indexManager) (expr, error) {
 func NewQueryScanner(query string) *qScanner {
 	isIdentRune := func(r rune, i int) bool {
 		identChars := ":/.>=-"
-		startIdentChars := "><"
+		startIdentChars := "!><"
 		if i == 0 {
 			return unicode.IsLetter(r) || strings.ContainsRune(startIdentChars, r)
 		}

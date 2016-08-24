@@ -102,7 +102,15 @@ func (s *testSuite) TestNomdex() {
 	s.Contains(stdout, "Found 1 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx = "lady" or gender-idx = "f"`})
-	s.Contains(stdout, "Found 3 objects")
+	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and gender-idx != "m"`})
+	s.Contains(stdout, "Found 2 objects")
+	s.Equal("", stderr)
+
+	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and fname-idx != "john"`})
+	s.Contains(stdout, "Found 21 objects")
+	s.Equal("", stderr)
+
+	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" or gender-idx != "f"`})
+	s.Contains(stdout, "Found 23 objects")
 	s.Equal("", stderr)
 }

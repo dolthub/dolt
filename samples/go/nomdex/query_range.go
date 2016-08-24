@@ -23,13 +23,16 @@ func (b bound) isLessThanOrEqual(o bound) (res bool) {
 	return b.equals(o) || b.isLessThan(o)
 }
 
-//
 func (b bound) isLessThan(o bound) (res bool) {
 	if b.infinity < o.infinity {
 		return true
 	}
 
 	if b.infinity > o.infinity {
+		return false
+	}
+
+	if b.infinity == o.infinity && b.infinity != 0 {
 		return false
 	}
 

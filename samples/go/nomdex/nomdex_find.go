@@ -37,7 +37,7 @@ greater than 2000:
     nomdex find 'gender = "male" or personId > 2000'
    
 The query language is simple. It currently supports the following relational operators:
-    <, <=, >, >=, =
+    <, <=, >, >=, =, !=
 Relational expressions are always of the form: 
     <index> <relational operator> <constant>   e.g. personId >= 2000.
     

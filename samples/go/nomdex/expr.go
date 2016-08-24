@@ -171,7 +171,7 @@ func unionizeIters(iters []types.SetIterator) types.SetIterator {
 
 func (re compExpr) iterator(im *indexManager) types.SetIterator {
 	index := im.indexes[re.idxName]
-	iters := iteratorsFromRange(index, re.ranges()[0])
+	iters := iteratorsFromRanges(index, re.ranges())
 	return unionizeIters(iters)
 }
 
@@ -189,6 +189,11 @@ func (re compExpr) ranges() (ranges queryRangeSlice) {
 		r = queryRange{lower: bound{nil, true, -1}, upper: bound{re.v1, false, 0}}
 	case lte:
 		r = queryRange{lower: bound{nil, true, -1}, upper: bound{re.v1, true, 0}}
+	case ne:
+		return queryRangeSlice{
+			{lower: bound{nil, true, -1}, upper: bound{re.v1, false, 0}},
+			{lower: bound{re.v1, false, 0}, upper: bound{nil, true, 1}},
+		}
 	}
 	return queryRangeSlice{r}
 }

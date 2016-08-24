@@ -27,7 +27,7 @@ type parseResult struct {
 func TestQueryScanner(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewQueryScanner(`9 (99.9) -9 0x7F "99.9" and or http://localhost:8000/cli-tour::yo <= >= < > = _`)
+	s := NewQueryScanner(`9 (99.9) -9 0x7F "99.9" and or http://localhost:8000/cli-tour::yo <= >= < > = _ !=`)
 
 	scannerResults := []scannerResult{
 		{tok: scanner.Int, text: "9"},
@@ -47,6 +47,7 @@ func TestQueryScanner(t *testing.T) {
 		{tok: scanner.Ident, text: ">"},
 		{tok: int('='), text: "="},
 		{tok: int('_'), text: "_"},
+		{tok: scanner.Ident, text: "!="},
 	}
 
 	for _, sr := range scannerResults {
@@ -84,6 +85,9 @@ func TestParsing(t *testing.T) {
 	re2 := compExpr{"index1", gte, types.Number(2020)}
 	re3 := compExpr{"index1", lte, types.Number(2022)}
 	re4 := compExpr{"index1", lt, types.Number(-2030)}
+	re5 := compExpr{"index1", ne, types.Number(3.5)}
+	re6 := compExpr{"index1", ne, types.Number(-3500.4536632)}
+	re7 := compExpr{"index1", ne, types.String("whassup")}
 
 	queries := []parseResult{
 		{`index1 = 2015`, re1},
@@ -97,6 +101,9 @@ func TestParsing(t *testing.T) {
 		{`index1 = 2015 or index1 >= 2020 and index1 <= 2022`, logExpr{or, re1, logExpr{and, re2, re3, "index1"}, "index1"}},
 		{`index1 = 2015 or index1 >= 2020 and index1 <= 2022 or index1 < -2030`, logExpr{or, re1, logExpr{and, re2, logExpr{or, re3, re4, "index1"}, "index1"}, "index1"}},
 		{`(index1 = 2015 or index1 >= 2020) and (index1 <= 2022 or index1 < -2030)`, logExpr{and, logExpr{or, re1, re2, "index1"}, logExpr{or, re3, re4, "index1"}, "index1"}},
+		{`index1 != 3.5`, re5},
+		{`index1 != -3500.4536632`, re6},
+		{`index1 != "whassup"`, re7},
 	}
 
 	db := datas.NewDatabase(chunks.NewMemoryStore())
