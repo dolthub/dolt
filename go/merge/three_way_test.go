@@ -8,134 +8,206 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/testify/suite"
 )
+
+func TestThreeWayMapMerge(t *testing.T) {
+	suite.Run(t, &ThreeWayMapMergeSuite{})
+}
+
+func TestThreeWayStructMerge(t *testing.T) {
+	suite.Run(t, &ThreeWayStructMergeSuite{})
+}
+
+type kvs []interface{}
+
+func (kv kvs) remove(k interface{}) kvs {
+	out := make(kvs, 0, len(kv))
+	for i := 0; i < len(kv); i++ {
+		if kv[i] == k {
+			i++ // skip kv[i] and kv[i+1]
+			continue
+		}
+		out = append(out, kv[i])
+	}
+	return out
+}
+
+func (kv kvs) set(k, v interface{}) kvs {
+	out := make(kvs, len(kv))
+	for i := 0; i < len(kv); i++ {
+		out[i] = kv[i]
+		if kv[i] == k {
+			i++
+			out[i] = v
+		}
+	}
+	return out
+}
 
 var (
-	aa1      = createMap("a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
-	aa1a     = createMap("a1", "a-one", "a2", "a-two", "a3", "a-three-diff", "a4", "a-four", "a6", "a-six")
-	aa1b     = createMap("a1", "a-one", "a3", "a-three-diff", "a4", "a-four", "a5", "a-five")
-	aaMerged = createMap("a1", "a-one", "a3", "a-three-diff", "a4", "a-four", "a5", "a-five", "a6", "a-six")
+	aa1      = kvs{"a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four"}
+	aa1a     = kvs{"a1", "a-one", "a2", "a-two", "a3", "a-three-diff", "a4", "a-four", "a6", "a-six"}
+	aa1b     = kvs{"a1", "a-one", "a3", "a-three-diff", "a4", "a-four", "a5", "a-five"}
+	aaMerged = kvs{"a1", "a-one", "a3", "a-three-diff", "a4", "a-four", "a5", "a-five", "a6", "a-six"}
 
-	mm1       = createMap()
-	mm1a      = createMap("k1", createMap(0, "a"))
-	mm1b      = createMap("k1", createMap(1, "b"))
-	mm1Merged = createMap("k1", createMap(0, "a", 1, "b"))
+	mm1       = kvs{}
+	mm1a      = kvs{"k1", kvs{"a", 0}}
+	mm1b      = kvs{"k1", kvs{"b", 1}}
+	mm1Merged = kvs{"k1", kvs{"a", 0, "b", 1}}
 
-	mm2       = createMap("k2", aa1, "k3", "k-three")
-	mm2a      = createMap("k1", createMap(0, "a"), "k2", aa1a, "k3", "k-three", "k4", "k-four")
-	mm2b      = createMap("k1", createMap(1, "b"), "k2", aa1b)
-	mm2Merged = createMap("k1", createMap(0, "a", 1, "b"), "k2", aaMerged, "k4", "k-four")
+	mm2       = kvs{"k2", aa1, "k3", "k-three"}
+	mm2a      = kvs{"k1", kvs{"a", 0}, "k2", aa1a, "k3", "k-three", "k4", "k-four"}
+	mm2b      = kvs{"k1", kvs{"b", 1}, "k2", aa1b}
+	mm2Merged = kvs{"k1", kvs{"a", 0, "b", 1}, "k2", aaMerged, "k4", "k-four"}
 )
 
-func tryThreeWayMerge(t *testing.T, a, b, p, expected types.Value, vs types.ValueReadWriter) {
-	merged, err := ThreeWay(a, b, p, vs)
-	if assert.NoError(t, err) {
-		assert.True(t, expected.Equals(merged))
+type ThreeWayMergeSuite struct {
+	suite.Suite
+	create  func(kvs) types.Value
+	typeStr string
+}
+
+type ThreeWayMapMergeSuite struct {
+	ThreeWayMergeSuite
+}
+
+func (s *ThreeWayMapMergeSuite) SetupSuite() {
+	s.create = func(kv kvs) (val types.Value) {
+		if kv != nil {
+			keyValues := valsToTypesValues(s.create, kv...)
+			val = types.NewMap(keyValues...)
+		}
+		return
+	}
+	s.typeStr = "Map"
+}
+
+type ThreeWayStructMergeSuite struct {
+	ThreeWayMergeSuite
+}
+
+func (s *ThreeWayStructMergeSuite) SetupSuite() {
+	s.create = func(kv kvs) (val types.Value) {
+		if kv != nil {
+			fields := types.StructData{}
+			for i := 0; i < len(kv); i += 2 {
+				fields[kv[i].(string)] = valToTypesValue(s.create, kv[i+1])
+			}
+			val = types.NewStruct("TestStruct", fields)
+		}
+		return
+	}
+	s.typeStr = "struct"
+}
+
+func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp kvs, vs types.ValueReadWriter) {
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs)
+	if s.NoError(err) {
+		expected := s.create(exp)
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
 	}
 }
 
-func TestThreeWayMergeMap_DoNothing(t *testing.T) {
-	tryThreeWayMerge(t, nil, nil, aa1, aa1, nil)
+func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained string) {
+	_, err := ThreeWay(a, b, p, nil)
+	if s.Error(err) {
+		s.Contains(err.Error(), contained)
+	}
 }
 
-func TestThreeWayMergeMap_NoRecursion(t *testing.T) {
-	tryThreeWayMerge(t, aa1a, aa1b, aa1, aaMerged, nil)
-	tryThreeWayMerge(t, aa1b, aa1a, aa1, aaMerged, nil)
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_DoNothing() {
+	s.tryThreeWayMerge(nil, nil, aa1, aa1, nil)
 }
 
-func TestThreeWayMergeMap_RecursiveCreate(t *testing.T) {
-	tryThreeWayMerge(t, mm1a, mm1b, mm1, mm1Merged, nil)
-	tryThreeWayMerge(t, mm1b, mm1a, mm1, mm1Merged, nil)
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_NoRecursion() {
+	s.tryThreeWayMerge(aa1a, aa1b, aa1, aaMerged, nil)
+	s.tryThreeWayMerge(aa1b, aa1a, aa1, aaMerged, nil)
 }
 
-func TestThreeWayMergeMap_RecursiveCreateNil(t *testing.T) {
-	tryThreeWayMerge(t, mm1a, mm1b, nil, mm1Merged, nil)
-	tryThreeWayMerge(t, mm1b, mm1a, nil, mm1Merged, nil)
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_RecursiveCreate() {
+	s.tryThreeWayMerge(mm1a, mm1b, mm1, mm1Merged, nil)
+	s.tryThreeWayMerge(mm1b, mm1a, mm1, mm1Merged, nil)
 }
 
-func TestThreeWayMergeMap_RecursiveMerge(t *testing.T) {
-	tryThreeWayMerge(t, mm2a, mm2b, mm2, mm2Merged, nil)
-	tryThreeWayMerge(t, mm2b, mm2a, mm2, mm2Merged, nil)
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_RecursiveCreateNil() {
+	s.tryThreeWayMerge(mm1a, mm1b, nil, mm1Merged, nil)
+	s.tryThreeWayMerge(mm1b, mm1a, nil, mm1Merged, nil)
 }
 
-func TestThreeWayMergeMap_RefMerge(t *testing.T) {
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_RecursiveMerge() {
+	s.tryThreeWayMerge(mm2a, mm2b, mm2, mm2Merged, nil)
+	s.tryThreeWayMerge(mm2b, mm2a, mm2, mm2Merged, nil)
+}
+
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_RefMerge() {
 	vs := types.NewTestValueStore()
 
 	strRef := vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
 
-	m := createMap("r2", vs.WriteValue(aa1))
-	ma := createMap("r1", strRef, "r2", vs.WriteValue(aa1a))
-	mb := createMap("r1", strRef, "r2", vs.WriteValue(aa1b))
-	mMerged := createMap("r1", strRef, "r2", vs.WriteValue(aaMerged))
+	m := kvs{"r2", vs.WriteValue(s.create(aa1))}
+	ma := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aa1a))}
+	mb := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aa1b))}
+	mMerged := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aaMerged))}
 	vs.Flush()
 
-	tryThreeWayMerge(t, ma, mb, m, mMerged, vs)
-	tryThreeWayMerge(t, mb, ma, m, mMerged, vs)
+	s.tryThreeWayMerge(ma, mb, m, mMerged, vs)
+	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
 }
 
-func TestThreeWayMergeMap_RecursiveMultiLevelMerge(t *testing.T) {
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_RecursiveMultiLevelMerge() {
 	vs := types.NewTestValueStore()
 
-	m := createMap("mm1", mm1, "mm2", vs.WriteValue(mm2))
-	ma := createMap("mm1", mm1a, "mm2", vs.WriteValue(mm2a))
-	mb := createMap("mm1", mm1b, "mm2", vs.WriteValue(mm2b))
-	mMerged := createMap("mm1", mm1Merged, "mm2", vs.WriteValue(mm2Merged))
+	m := kvs{"mm1", mm1, "mm2", vs.WriteValue(s.create(mm2))}
+	ma := kvs{"mm1", mm1a, "mm2", vs.WriteValue(s.create(mm2a))}
+	mb := kvs{"mm1", mm1b, "mm2", vs.WriteValue(s.create(mm2b))}
+	mMerged := kvs{"mm1", mm1Merged, "mm2", vs.WriteValue(s.create(mm2Merged))}
 	vs.Flush()
 
-	tryThreeWayMerge(t, ma, mb, m, mMerged, vs)
-	tryThreeWayMerge(t, mb, ma, m, mMerged, vs)
+	s.tryThreeWayMerge(ma, mb, m, mMerged, vs)
+	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
 }
 
-func tryThreeWayConflict(t *testing.T, a, b, p types.Value, contained string) {
-	_, err := ThreeWay(a, b, p, nil)
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), contained)
-	}
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_NilConflict() {
+	s.tryThreeWayConflict(nil, s.create(mm2b), s.create(mm2), "Cannot merge nil Value with")
+	s.tryThreeWayConflict(s.create(mm2a), nil, s.create(mm2), "with nil value.")
 }
 
-func TestThreeWayMergeMap_NilConflict(t *testing.T) {
-	tryThreeWayConflict(t, nil, mm2b, mm2, "Cannot merge nil Value with")
-	tryThreeWayConflict(t, mm2a, nil, mm2, "with nil value.")
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_ImmediateConflict() {
+	s.tryThreeWayConflict(types.NewSet(), s.create(mm2b), s.create(mm2), "Cannot merge Set<> with "+s.typeStr)
+	s.tryThreeWayConflict(s.create(mm2b), types.NewSet(), s.create(mm2), "Cannot merge "+s.typeStr)
 }
 
-func TestThreeWayMergeMap_ImmediateConflict(t *testing.T) {
-	tryThreeWayConflict(t, types.NewSet(), mm2b, mm2, "Cannot merge Set<> with Map")
-	tryThreeWayConflict(t, mm2b, types.NewSet(), mm2, "Cannot merge Map")
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_NestedConflict() {
+	a := mm2a.set("k2", types.NewSet())
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(types.NewSet()))
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(s.create(aa1b)))
 }
 
-func TestThreeWayMergeMap_NestedConflict(t *testing.T) {
-	tryThreeWayConflict(t, mm2a.Set(types.String("k2"), types.NewSet()), mm2b, mm2, types.EncodedValue(types.NewSet()))
-	tryThreeWayConflict(t, mm2a.Set(types.String("k2"), types.NewSet()), mm2b, mm2, types.EncodedValue(aa1b))
+func (s *ThreeWayMergeSuite) TestThreeWayMergeMap_NestedConflictingOperation() {
+	a := mm2a.remove("k2")
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), `removed "k2"`)
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), `modded "k2"`)
 }
 
-func TestThreeWayMergeMap_NestedConflictingOperation(t *testing.T) {
-	key := types.String("k2")
-	tryThreeWayConflict(t, mm2a.Remove(key), mm2b, mm2, "removed "+types.EncodedValue(key))
-	tryThreeWayConflict(t, mm2a.Remove(key), mm2b, mm2, "modded "+types.EncodedValue(key))
-}
-
-func createMap(kv ...interface{}) types.Map {
-	keyValues := valsToTypesValues(kv...)
-	return types.NewMap(keyValues...)
-}
-
-func valsToTypesValues(kv ...interface{}) []types.Value {
+func valsToTypesValues(f func(kvs) types.Value, kv ...interface{}) []types.Value {
 	keyValues := []types.Value{}
 	for _, e := range kv {
-		v := valToTypesValue(e)
+		v := valToTypesValue(f, e)
 		keyValues = append(keyValues, v)
 	}
 	return keyValues
 }
 
-func valToTypesValue(v interface{}) types.Value {
+func valToTypesValue(f func(kvs) types.Value, v interface{}) types.Value {
 	var v1 types.Value
 	switch t := v.(type) {
 	case string:
 		v1 = types.String(t)
 	case int:
 		v1 = types.Number(t)
+	case kvs:
+		v1 = f(t)
 	case types.Value:
 		v1 = t
 	}

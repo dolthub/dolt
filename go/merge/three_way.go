@@ -108,107 +108,63 @@ func threeWayMerge(a, b, parent types.Value, vwr types.ValueReadWriter) (merged 
 	return parent, newTypeConflict()
 }
 
-func threeWayMapMerge(a, b, parent types.Map, vwr types.ValueReadWriter) (merged types.Map, err error) {
-	aChangeChan, bChangeChan := make(chan types.ValueChanged), make(chan types.ValueChanged)
-	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
-
-	go func() {
-		a.DiffLeftRight(parent, aChangeChan, aStopChan)
-		close(aChangeChan)
-	}()
-	go func() {
-		b.DiffLeftRight(parent, bChangeChan, bStopChan)
-		close(bChangeChan)
-	}()
-	stopAndDrain := func(stop chan<- struct{}, drain <-chan types.ValueChanged) {
-		close(stop)
-		for range drain {
+func threeWayMapMerge(a, b, parent types.Map, vwr types.ValueReadWriter) (merged types.Value, err error) {
+	aDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
+		a.DiffLeftRight(parent, change, stop)
+	}
+	bDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
+		b.DiffLeftRight(parent, change, stop)
+	}
+	apply := func(target types.Value, change types.ValueChanged, newVal types.Value) types.Value {
+		switch change.ChangeType {
+		case types.DiffChangeAdded, types.DiffChangeModified:
+			return target.(types.Map).Set(change.V, newVal)
+		case types.DiffChangeRemoved:
+			return target.(types.Map).Remove(change.V)
+		default:
+			panic("Not Reached")
 		}
 	}
-	defer stopAndDrain(aStopChan, aChangeChan)
-	defer stopAndDrain(bStopChan, bChangeChan)
+	return threeWayOrderedSequenceMerge(parent, aDiff, bDiff, a.Get, b.Get, parent.Get, apply, vwr)
+}
 
-	merged = parent
-	aChange, bChange := types.ValueChanged{}, types.ValueChanged{}
-	for {
-		// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
-		if aChange.V == nil {
-			aChange = <-aChangeChan
-		}
-		if bChange.V == nil {
-			bChange = <-bChangeChan
-		}
+func threeWayStructMerge(a, b, parent types.Struct, vwr types.ValueReadWriter) (merged types.Value, err error) {
+	aDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
+		a.Diff(parent, change, stop)
+	}
+	bDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
+		b.Diff(parent, change, stop)
+	}
 
-		// Both channels are producing zero values, so we're done.
-		if aChange.V == nil && bChange.V == nil {
-			break
-		}
-
-		// Since diff generates changes in key-order, and we never skip over a change without processing it, we can simply compare the keys at which aChange and bChange occurred to determine if either is safe to apply to the merge result without further processing. This is because if, e.g. aChange.V.Less(bChange.V), we know that the diff of b will never generate a change at that key. If it was going to, it would have done so on an earlier iteration of this loop and been processed at that time.
-		// It's also obviously OK to apply a change if only one diff is generating any changes, e.g. aChange.V is non-nil and bChange.V is nil.
-		if aChange.V != nil && (bChange.V == nil || aChange.V.Less(bChange.V)) {
-			merged = apply(merged, aChange, a.Get(aChange.V))
-			aChange = types.ValueChanged{}
-			continue
-		} else if bChange.V != nil && (aChange.V == nil || bChange.V.Less(aChange.V)) {
-			merged = apply(merged, bChange, b.Get(bChange.V))
-			bChange = types.ValueChanged{}
-			continue
-		}
-		d.PanicIfTrue(!aChange.V.Equals(bChange.V), "Diffs have skewed!") // Sanity check.
-
-		// If the two diffs generate different kinds of changes at the same key, conflict.
-		if aChange.ChangeType != bChange.ChangeType {
-			return parent, newMergeConflict("Conflict:\n%s\nvs\n%s\n", describeChange(aChange), describeChange(bChange))
-		}
-
-		aValue, bValue := a.Get(aChange.V), b.Get(bChange.V)
-		if aChange.ChangeType == types.DiffChangeRemoved || aValue.Equals(bValue) {
-			// If both diffs generated a remove, or if the new value is the same in both, merge is fine.
-			merged = apply(merged, aChange, aValue)
-		} else {
-			// There's one case that might still be OK even if aValue and bValue differ: different, but mergeable, compound values of the same type being added/modified at the same key, e.g. a Map being added to both a and b. If either is a primitive, or Values of different Kinds were added, though, we're in conflict.
-			if unmergeable(aValue, bValue) {
-				return parent, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(aValue), describeChange(bChange), types.EncodedValue(bValue))
+	makeGetFunc := func(s types.Struct) getFunc {
+		return func(key types.Value) types.Value {
+			if field, ok := key.(types.String); ok {
+				val, _ := s.MaybeGet(string(field))
+				return val
 			}
-			// TODO: Add concurrency.
-			mergedValue, err := threeWayMerge(aValue, bValue, parent.Get(aChange.V), vwr)
-			if err != nil {
-				return parent, err
-			}
-			merged = merged.Set(aChange.V, mergedValue)
+			panic(fmt.Errorf("Bad key type in diff: %s", key.Type().Describe()))
 		}
-		aChange, bChange = types.ValueChanged{}, types.ValueChanged{}
 	}
-	return merged, nil
-}
 
-func apply(target types.Map, change types.ValueChanged, newVal types.Value) types.Map {
-	switch change.ChangeType {
-	case types.DiffChangeAdded, types.DiffChangeModified:
-		return target.Set(change.V, newVal)
-	case types.DiffChangeRemoved:
-		return target.Remove(change.V)
-	default:
-		panic("Not Reached")
+	apply := func(target types.Value, change types.ValueChanged, newVal types.Value) types.Value {
+		// Right now, this always iterates over all fields to create a new Struct, because there's no API for adding/removing a field from an existing struct type.
+		if f, ok := change.V.(types.String); ok {
+			field := string(f)
+			data := types.StructData{}
+			desc := target.Type().Desc.(types.StructDesc)
+			desc.IterFields(func(name string, t *types.Type) {
+				if name != field {
+					data[name] = target.(types.Struct).Get(name)
+				}
+			})
+			if change.ChangeType == types.DiffChangeAdded || change.ChangeType == types.DiffChangeModified {
+				data[field] = newVal
+			}
+			return types.NewStruct(desc.Name, data)
+		}
+		panic(fmt.Errorf("Bad key type in diff: %s", change.V.Type().Describe()))
 	}
-}
-
-func describeChange(change types.ValueChanged) string {
-	op := ""
-	switch change.ChangeType {
-	case types.DiffChangeAdded:
-		op = "added"
-	case types.DiffChangeModified:
-		op = "modded"
-	case types.DiffChangeRemoved:
-		op = "removed"
-	}
-	return fmt.Sprintf("%s %s", op, types.EncodedValue(change.V))
-}
-
-func threeWayStructMerge(a, b, parent types.Struct, vwr types.ValueReadWriter) (merged types.Struct, err error) {
-	return parent, newMergeConflict("Cannot merge %s.", a.Type().Describe())
+	return threeWayOrderedSequenceMerge(parent, aDiff, bDiff, makeGetFunc(a), makeGetFunc(b), makeGetFunc(parent), apply, vwr)
 }
 
 func mapAssert(a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
@@ -249,11 +205,16 @@ func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Str
 	var aOk, bOk, pOk bool
 	aStruct, aOk = a.(types.Struct)
 	bStruct, bOk = b.(types.Struct)
-	if parent != nil {
-		pStruct, pOk = parent.(types.Struct)
-	} else {
-		pStruct, pOk = aStruct, true
+	if aOk && bOk {
+		aDesc, bDesc := a.Type().Desc.(types.StructDesc), b.Type().Desc.(types.StructDesc)
+		if aDesc.Name == bDesc.Name {
+			if parent != nil {
+				pStruct, pOk = parent.(types.Struct)
+			} else {
+				pStruct, pOk = types.NewStruct(aDesc.Name, nil), true
+			}
+			return aStruct, bStruct, pStruct, pOk
+		}
 	}
-	ok = aOk && bOk && pOk && aStruct.Type().Equals(bStruct.Type()) && aStruct.Type().Equals(pStruct.Type())
 	return
 }
