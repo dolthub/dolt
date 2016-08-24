@@ -17,11 +17,42 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
+var longHelp = `Find retrieves and prints objects that satisfy the 'query' argument.
+
+Indexes are built using the 'nomdex up' command. Once built, the indexes can be referenced
+in the 'query' arg to select objects matching certain criteria. For example, if there are 
+objects in the database that contain a personId and a gender field, 'nomdex up' can scan all
+the objects in a given dataset and build an index on the specified field with the following
+commands:
+   nomdex up --by gender --in-path <dsSpec> --out-ds gender-index
+   nomdex up --by personId --in-path <dsSpec> --out-ds personId-index
+
+Once these indexes are built, objects can be retrieved quickly and efficiently using the
+nomdex query language. For example, the followign query could be used to find all people 
+with with a personId between 1 and 2000 and who are female:
+    nomdex find '(personId >= 0 and personId <= 2000) and gender = "female"
+
+The next command would retrieve all people objects that were either male or had an personId
+greater than 2000:
+    nomdex find 'gender = "male" or personId > 2000'
+   
+The query language is simple. It currently supports the following relational operators:
+    <, <=, >, >=, =
+Relational expressions are always of the form: 
+    <index> <relational operator> <constant>   e.g. personId >= 2000.
+    
+Indexes are the name given by the --out-ds argument in the 'nomdex up' command. Constants are 
+either "strings" (in quotes) or numbers (e.g. 3, 3000, -2, -2.5, 3.147, etc).
+
+Relational expressions can be combined using the "and" and "or" operators. Parentheses can
+be used to ensure that the evaluation is done in the desired order.
+`
+
 var find = &util.Command{
 	Run:       runFind,
 	UsageLine: "find --db <database spec> <query>",
-	Short:     "Print objects from prebuilt indexes",
-	Long:      "Print object from prebuild indexes (long desc)",
+	Short:     "Print objects in index that satisfy 'query'",
+	Long:      longHelp,
 	Flags:     setupFindFlags,
 	Nargs:     1,
 }
