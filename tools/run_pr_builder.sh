@@ -6,7 +6,7 @@
 
 # This script runs on the Noms PR Builder (http://jenkins.noms.io/job/NomsPRBuilder).
 
-set -e
+set -eux
 
 export GOPATH=${WORKSPACE}
 export PATH=${PATH}:/usr/local/go/bin:/var/lib/jenkins/node-v5.11.1-linux-x64/bin
