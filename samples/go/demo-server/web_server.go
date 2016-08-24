@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	dbParam = "dbName"
+	dbParam      = "dbName"
+	nomsBaseHtml = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
 )
 
 var (
@@ -58,6 +59,8 @@ func setupWebServer(factory chunks.Factory) *httprouter.Router {
 
 	router.POST(constants.WriteValuePath, corsHandle(authorizeHandle(storeHandle(factory, datas.HandleWriteValue))))
 	router.OPTIONS(constants.WriteValuePath, corsHandle(noopHandle))
+
+	router.GET(constants.BasePath, handleBaseGet)
 
 	return router
 }
@@ -151,4 +154,11 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 	newParams := append(httprouter.Params{}, httprouter.Param{Key: dbParam, Value: databaseId})
 	newParams = append(newParams, params...)
 	hndl(w, r, newParams)
+}
+
+func handleBaseGet(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
+
+	w.Header().Add("content-type", "text/html")
+	fmt.Fprintf(w, nomsBaseHtml)
 }
