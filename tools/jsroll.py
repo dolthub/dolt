@@ -21,8 +21,8 @@ import sys
 
 packagepaths = {
   '@attic/noms': 'js/noms/package.json',
-  '@attic/eslintc': 'jsmodules/eslintrc/package.json',
-  '@attic/webpack-config': 'jsmodules/webpack-config/package.json',
+  '@attic/eslintc': 'js/eslintrc/package.json',
+  '@attic/webpack-config': 'js/webpack-config/package.json',
 }
 
 packageversions = {}
