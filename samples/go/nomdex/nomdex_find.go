@@ -60,6 +60,7 @@ func runFind(args []string) int {
 	defer pgr.Stop()
 
 	iter := expr.iterator(im)
+	cnt := 0
 	if iter != nil {
 		for v := iter.Next(); v != nil; v = iter.Next() {
 			types.WriteEncodedValue(pgr.Writer, v)

@@ -53,6 +53,7 @@ type IndexMap map[types.Value]StreamingSetEntry
 
 type Index struct {
 	m     IndexMap
+	cnt   int64
 	mutex sync.Mutex
 }
 
@@ -112,13 +113,11 @@ func runUpdate(args []string) int {
 	return 0
 }
 
-var cnt = int64(0)
-
 func (idx *Index) Add(db datas.Database, k, v types.Value) {
 	idx.mutex.Lock()
 	defer idx.mutex.Unlock()
 
-	cnt++
+	idx.cnt++
 	se, ok := idx.m[k]
 	if !ok {
 		valChan := make(chan types.Value)
@@ -127,7 +126,7 @@ func (idx *Index) Add(db datas.Database, k, v types.Value) {
 		idx.m[k] = se
 	}
 	se.valChan <- v
-	status.Printf("Indexed %s objects", humanize.Comma(cnt))
+	status.Printf("Indexed %s objects", humanize.Comma(idx.cnt))
 }
 
 func writeToStreamingMap(db datas.Database, indexMap IndexMap) types.Map {
