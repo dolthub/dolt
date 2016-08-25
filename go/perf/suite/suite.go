@@ -24,7 +24,7 @@
 //
 // Test results are written to Noms, along with a soup of the environment they were recorded in.
 //
-// Test names are derived from that "non-empty capitalized string": `"Test"` is ommitted because it's redundant, and leading digits are omitted to allow for manual test ordering. For example:
+// Test names are derived from that "non-empty capitalized string": `"Test"` is omitted because it's redundant, and leading digits are omitted to allow for manual test ordering. For example:
 //
 // ```
 // > cat ./samples/go/csv/csv-import/perf_test.go

@@ -39,11 +39,6 @@ func main() {
 
 		goPath := os.Getenv("GOPATH")
 		d.PanicIfTrue(goPath == "", "GOPATH must be set!")
-		workspace := os.Getenv("WORKSPACE")
-		if workspace == "" {
-			fmt.Printf("WORKSPACE not set in environment; using GOPATH (%s).\n", goPath)
-			workspace = goPath
-		}
 		pythonPath := filepath.Join(goPath, nomsCheckoutPath, "tools")
 		env := runner.Env{
 			"PYTHONPATH": pythonPath,

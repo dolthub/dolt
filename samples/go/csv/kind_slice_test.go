@@ -24,5 +24,6 @@ func TestKindSliceJSON(t *testing.T) {
 
 	var uks KindSlice
 	err = json.Unmarshal(b, &uks)
+	assert.NoError(err, "error with json.Unmarshal")
 	assert.Equal(ks, uks)
 }

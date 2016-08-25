@@ -178,7 +178,7 @@ func (s *qScanner) parseExpr(level int, im *indexManager) expr {
 		case rune(scanner.EOF):
 			return expr1
 		default:
-			tok = s.Scan()
+			_ = s.Scan()
 		}
 	default:
 		d.PanicIfError(fmt.Errorf("unexpected token in expr: %s, %d", s.TokenText(), tok))

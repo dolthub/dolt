@@ -32,6 +32,7 @@ func (s *fuseTestSuite) TestSimpleFile() {
 	file, code := testfs.Create("coconut", uint32(os.O_CREATE|os.O_RDWR), 0644, nil)
 	assert.Equal(s.T(), fuse.OK, code)
 	n, code := file.Write([]byte("Lime!"), 0)
+	assert.Equal(s.T(), fuse.OK, code)
 	assert.Equal(s.T(), uint32(5), n)
 	assertAttr(s, testfs, "coconut", 0644|fuse.S_IFREG, 5)
 
@@ -70,6 +71,7 @@ func (s *fuseTestSuite) TestBigFile() {
 	assert.Equal(s.T(), fuse.OK, code)
 
 	n, code := file.Write(buf.Bytes(), 0)
+	assert.Equal(s.T(), fuse.OK, code)
 	assert.Equal(s.T(), uint32(size), n)
 	assertAttr(s, testfs, "shining.txt", 0644|fuse.S_IFREG, size)
 }
@@ -86,9 +88,11 @@ func (s *fuseTestSuite) TestOverwrite() {
 	assert.Equal(s.T(), fuse.OK, code)
 
 	n, code := file.Write([]byte("Four score and seven years ago..."), 0)
+	assert.Equal(s.T(), fuse.OK, code)
 	assert.Equal(s.T(), uint32(33), n)
 	assertAttr(s, testfs, "proclamation", 0644|fuse.S_IFREG, 33)
 	n, code = file.Write([]byte("beers"), 21)
+	assert.Equal(s.T(), fuse.OK, code)
 	assert.Equal(s.T(), uint32(5), n)
 	assertAttr(s, testfs, "proclamation", 0644|fuse.S_IFREG, 33)
 

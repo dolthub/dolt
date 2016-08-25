@@ -56,7 +56,7 @@ func TestIncrementalLoadList(t *testing.T) {
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
-		v = actual.Get(i)
+		_ = actual.Get(i)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 	}
 }
