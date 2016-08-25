@@ -22,46 +22,93 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
+const (
+	TEST_DATA_SIZE = 100
+	TEST_YEAR      = 2012
+	TEST_FIELDS    = "Number,String,Number,Number"
+)
+
 func TestCSVImporter(t *testing.T) {
 	suite.Run(t, &testSuite{})
 }
 
 type testSuite struct {
 	clienttest.ClientTestSuite
+	tmpFileName string
+}
+
+func (s *testSuite) SetupTest() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	s.tmpFileName = input.Name()
+	writeCSV(input)
+}
+
+func (s *testSuite) TearDownTest() {
+	os.Remove(s.tmpFileName)
 }
 
 func writeCSV(w io.Writer) {
-	_, err := io.WriteString(w, "a,b\n")
+	_, err := io.WriteString(w, "year,a,b,c\n")
 	d.Chk.NoError(err)
-	for i := 0; i < 100; i++ {
-		_, err = io.WriteString(w, fmt.Sprintf("a%d,%d\n", i, i))
+	for i := 0; i < TEST_DATA_SIZE; i++ {
+		_, err = io.WriteString(w, fmt.Sprintf("%d,a%d,%d,%d\n", TEST_YEAR+i%3, i, i, i*2))
 		d.Chk.NoError(err)
 	}
 }
 
-func validateCSV(s *testSuite, l types.List) {
-	s.Equal(uint64(100), l.Len())
+func validateList(s *testSuite, l types.List) {
+	s.Equal(uint64(TEST_DATA_SIZE), l.Len())
 
 	i := uint64(0)
 	l.IterAll(func(v types.Value, j uint64) {
 		s.Equal(i, j)
 		st := v.(types.Struct)
+		s.Equal(types.Number(TEST_YEAR+i%3), st.Get("year"))
 		s.Equal(types.String(fmt.Sprintf("a%d", i)), st.Get("a"))
 		s.Equal(types.Number(i), st.Get("b"))
+		s.Equal(types.Number(i*2), st.Get("c"))
 		i++
 	})
 }
 
-func (s *testSuite) TestCSVImporter() {
-	input, err := ioutil.TempFile(s.TempDir, "")
-	d.Chk.NoError(err)
-	writeCSV(input)
-	defer input.Close()
-	defer os.Remove(input.Name())
+func validateMap(s *testSuite, m types.Map) {
+	// --dest-type=map:1 so key is field "a"
+	s.Equal(uint64(TEST_DATA_SIZE), m.Len())
 
+	for i := 0; i < TEST_DATA_SIZE; i++ {
+		v := m.Get(types.String(fmt.Sprintf("a%d", i))).(types.Struct)
+		s.True(v.Equals(
+			types.NewStruct("Row", types.StructData{
+				"year": types.Number(TEST_YEAR + i%3),
+				"a":    types.String(fmt.Sprintf("a%d", i)),
+				"b":    types.Number(i),
+				"c":    types.Number(i * 2),
+			})))
+	}
+}
+
+func validateNestedMap(s *testSuite, m types.Map) {
+	// --dest-type=map:0,1 so keys are fields "year", then field "a"
+	s.Equal(uint64(3), m.Len())
+
+	for i := 0; i < TEST_DATA_SIZE; i++ {
+		n := m.Get(types.Number(TEST_YEAR + i%3)).(types.Map)
+		o := n.Get(types.String(fmt.Sprintf("a%d", i))).(types.Struct)
+		s.True(o.Equals(types.NewStruct("Row", types.StructData{
+			"year": types.Number(TEST_YEAR + i%3),
+			"a":    types.String(fmt.Sprintf("a%d", i)),
+			"b":    types.Number(i),
+			"c":    types.Number(i * 2),
+		})))
+	}
+}
+
+func (s *testSuite) TestCSVImporter() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", input.Name(), dataspec})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -70,7 +117,7 @@ func (s *testSuite) TestCSVImporter() {
 	defer ds.Database().Close()
 	defer os.RemoveAll(s.LdbDir)
 
-	validateCSV(s, ds.HeadValue().(types.List))
+	validateList(s, ds.HeadValue().(types.List))
 }
 
 func (s *testSuite) TestCSVImporterFromBlob() {
@@ -90,7 +137,7 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 		db.Close()
 
 		stdout, stderr := s.Run(main, []string{
-			"--no-progress", "--column-types", "String,Number",
+			"--no-progress", "--column-types", TEST_FIELDS,
 			pathFlag, spec.CreateValueSpecString("ldb", s.LdbDir, "raw.value"),
 			spec.CreateValueSpecString("ldb", s.LdbDir, "csv"),
 		})
@@ -100,30 +147,16 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 		db = newDB()
 		defer db.Close()
 		csvDS := dataset.NewDataset(db, "csv")
-		validateCSV(s, csvDS.HeadValue().(types.List))
+		validateList(s, csvDS.HeadValue().(types.List))
 	}
 	test("--path")
 	test("-p")
 }
 
 func (s *testSuite) TestCSVImporterToMap() {
-	input, err := ioutil.TempFile(s.TempDir, "")
-	d.Chk.NoError(err)
-	defer input.Close()
-	defer os.Remove(input.Name())
-
-	_, err = input.WriteString("a,b,c\n")
-	d.Chk.NoError(err)
-	for i := 0; i < 20; i++ {
-		_, err = input.WriteString(fmt.Sprintf("a%d,%d,%d\n", i, i, i*2))
-		d.Chk.NoError(err)
-	}
-	_, err = input.Seek(0, 0)
-	d.Chk.NoError(err)
-
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number,Number", "--dest-type", "map:1", input.Name(), dataspec})
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:1", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -133,14 +166,39 @@ func (s *testSuite) TestCSVImporterToMap() {
 	defer os.RemoveAll(s.LdbDir)
 
 	m := ds.HeadValue().(types.Map)
-	s.Equal(uint64(20), m.Len())
+	validateMap(s, m)
+}
 
-	for i := 0; i < 20; i++ {
-		m.Get(types.Number(i)).(types.Struct).Equals(types.NewStruct("", types.StructData{
-			"a": types.String(fmt.Sprintf("a%d", i)),
-			"c": types.Number(i * 2),
-		}))
-	}
+func (s *testSuite) TestCSVImporterToNestedMap() {
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:0,1", s.tmpFileName, dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	m := ds.HeadValue().(types.Map)
+	validateNestedMap(s, m)
+}
+
+func (s *testSuite) TestCSVImporterToNestedMapByName() {
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:year,a", s.tmpFileName, dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	m := ds.HeadValue().(types.Map)
+	validateNestedMap(s, m)
 }
 
 func (s *testSuite) TestCSVImporterWithPipe() {

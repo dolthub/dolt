@@ -60,7 +60,7 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	m := ReadToMap(r, "test", headers, 0, kinds, ds)
+	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, ds)
 
 	assert.Equal(uint64(2), m.Len())
 	assert.True(m.Type().Equals(
@@ -106,7 +106,7 @@ func testTrailingHelper(t *testing.T, dataString string) {
 	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
 	defer ds2.Close()
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
-	m := ReadToMap(r, "test", headers, 0, kinds, ds2)
+	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, ds2)
 	assert.Equal(uint64(3), m.Len())
 }
 
@@ -177,7 +177,7 @@ func TestEscapeFieldNames(t *testing.T) {
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
 
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
-	m := ReadToMap(r, "test", headers, 1, kinds, ds)
+	m := ReadToMap(r, "test", headers, []string{"1"}, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(types.EscapeStructField("A A")))
 }

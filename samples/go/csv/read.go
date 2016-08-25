@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
@@ -99,27 +100,64 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 			panic(err)
 		}
 
-		fields := make(types.ValueSlice, len(headers))
-		for i, v := range row {
-			if i < len(headers) {
-				fieldOrigIndex := fieldOrder[i]
-				val, err := StringToValue(v, kindMap[fieldOrigIndex])
-				if err != nil {
-					d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[i], err))
-				}
-				fields[fieldOrigIndex] = val
-			}
-		}
+		fields := readFieldsFromRow(row, headers, fieldOrder, kindMap)
 		valueChan <- types.NewStructWithType(t, fields)
 	}
 
 	return <-listChan, t
 }
 
+// getFieldIndexByHeaderName takes the collection of headers and the name to search for and returns the index of name within the headers or -1 if not found
+func getFieldIndexByHeaderName(headers []string, name string) int {
+	for i, header := range headers {
+		if header == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// getPkIndices takes collection of primary keys as strings and determines if they are integers, if so then use those ints as the indices, otherwise it looks up the strings in the headers to find the indices; returning the collection of int indices representing the primary keys maintaining the order of strPks to the return collection
+func getPkIndices(strPks []string, headers []string) []int {
+	result := make([]int, len(strPks))
+	for i, pk := range strPks {
+		pkIdx, ok := strconv.Atoi(pk)
+		if ok == nil {
+			result[i] = pkIdx
+		} else {
+			result[i] = getFieldIndexByHeaderName(headers, pk)
+		}
+		if result[i] < 0 {
+			d.Chk.Fail(fmt.Sprintf("Invalid pk: %v", pk))
+		}
+	}
+	return result
+}
+
+func readFieldsFromRow(row []string, headers []string, fieldOrder []int, kindMap []types.NomsKind) types.ValueSlice {
+	fields := make(types.ValueSlice, len(headers))
+	for i, v := range row {
+		if i < len(headers) {
+			fieldOrigIndex := fieldOrder[i]
+			val, err := StringToValue(v, kindMap[fieldOrigIndex])
+			if err != nil {
+				d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headers[i], err))
+			}
+			fields[fieldOrigIndex] = val
+		}
+	}
+	return fields
+}
+
 // ReadToMap takes a CSV reader and reads data into a typed Map of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
-func ReadToMap(r *csv.Reader, structName string, headersRaw []string, pkIdx int, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
+func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKeys []string, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
 	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headersRaw, structName, kinds)
+	pkIndices := getPkIndices(primaryKeys, headersRaw)
+
+	if len(primaryKeys) > 1 {
+		return readToNestedMap(r, structName, headersRaw, pkIndices, t, fieldOrder, kindMap, vrw)
+	}
 
 	kvChan := make(chan types.Value, 128)
 	mapChan := types.NewStreamingMap(vrw, kvChan)
@@ -131,24 +169,75 @@ func ReadToMap(r *csv.Reader, structName string, headersRaw []string, pkIdx int,
 			panic(err)
 		}
 
-		var pk types.Value
-		fields := make(types.ValueSlice, len(headersRaw))
-		for i, v := range row {
-			if i < len(headersRaw) {
-				fieldOrigIndex := fieldOrder[i]
-				fields[fieldOrigIndex], err = StringToValue(v, kindMap[fieldOrigIndex])
-				if i == pkIdx {
-					pk = fields[fieldOrigIndex]
-				}
-				if err != nil {
-					d.Chk.Fail(fmt.Sprintf("Error parsing value for column '%s': %s", headersRaw[i], err))
-				}
-			}
-		}
-		kvChan <- pk
+		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
+		kvChan <- fields[fieldOrder[pkIndices[0]]]
 		kvChan <- types.NewStructWithType(t, fields)
 	}
-
 	close(kvChan)
 	return <-mapChan
+}
+
+type mapOrStruct struct {
+	goMap      map[types.Value]mapOrStruct
+	nomsStruct types.Struct
+}
+
+func goMaptoNomsMap(gm map[types.Value]mapOrStruct, vrw types.ValueReadWriter) types.Map {
+	var nomsValue types.Value
+	kvChan := make(chan types.Value, 128)
+	mapChan := types.NewStreamingMap(vrw, kvChan)
+	for k, v := range gm {
+		if v.goMap != nil {
+			nomsValue = goMaptoNomsMap(v.goMap, vrw)
+		} else {
+			nomsValue = v.nomsStruct
+		}
+		kvChan <- k
+		kvChan <- nomsValue
+	}
+	close(kvChan)
+	return <-mapChan
+}
+
+func readToNestedMap(r *csv.Reader, structName string, headersRaw []string, pkIndices []int, t *types.Type, fieldOrder []int, kindMap []types.NomsKind, vrw types.ValueReadWriter) types.Map {
+	goMap := make(map[types.Value]mapOrStruct)
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+
+		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
+		rowStruct := types.NewStructWithType(t, fields)
+
+		// needed to allow recursive calls to encloseInMap
+		var encloseInMapFunc func(m map[types.Value]mapOrStruct, keyLevel int) map[types.Value]mapOrStruct
+		encloseInMapFunc = func(m map[types.Value]mapOrStruct, keyLevel int) map[types.Value]mapOrStruct {
+			fieldOrigIndex := fieldOrder[pkIndices[keyLevel]]
+			key := fields[fieldOrigIndex]
+
+			// at end of our indices, set the final key to point to this row
+			if keyLevel == len(pkIndices)-1 {
+				m[key] = mapOrStruct{nil, rowStruct}
+				return m
+			}
+
+			// not at end of our indices, determine if we already have a map
+			// created for the next level and use it if so, otherwise create it
+			var subMap map[types.Value]mapOrStruct
+			if n, ok := m[key]; !ok {
+				subMap = make(map[types.Value]mapOrStruct)
+			} else {
+				subMap = n.goMap
+			}
+			m[key] = mapOrStruct{encloseInMapFunc(subMap, keyLevel+1), types.Struct{}}
+			return m
+		}
+
+		goMap = encloseInMapFunc(goMap, 0)
+	}
+
+	return goMaptoNomsMap(goMap, vrw)
 }

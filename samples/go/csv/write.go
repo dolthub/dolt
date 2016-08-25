@@ -25,8 +25,16 @@ func GetListElemDesc(l types.List, vr types.ValueReader) types.StructDesc {
 }
 
 // GetMapElemDesc ensures that m is a types.Map of structs, pulls the types.StructDesc that describes the elements of m out of vr, and returns the StructDesc.
+// If m is a nested types.Map of types.Map, then GetMapElemDesc will descend the levels of the enclosed types.Maps to get to a types.Struct
 func GetMapElemDesc(m types.Map, vr types.ValueReader) types.StructDesc {
-	return getElemDesc(m, 1)
+	t := m.Type().Desc.(types.CompoundDesc).ElemTypes[1]
+	if types.StructKind == t.Kind() {
+		return t.Desc.(types.StructDesc)
+	} else if types.MapKind == t.Kind() {
+		_, v := m.First()
+		return GetMapElemDesc(v.(types.Map), vr)
+	}
+	panic(fmt.Sprintf("Expected StructKind or MapKind, found %s", types.KindToString[t.Type().Kind()]))
 }
 
 func writeValuesFromChan(structChan chan types.Struct, sd types.StructDesc, comma rune, output io.Writer) {
@@ -58,13 +66,21 @@ func WriteList(l types.List, sd types.StructDesc, comma rune, output io.Writer) 
 	writeValuesFromChan(structChan, sd, comma, output)
 }
 
+func sendMapValuesToChan(m types.Map, structChan chan<- types.Struct) {
+	m.IterAll(func(k, v types.Value) {
+		if subMap, ok := v.(types.Map); ok {
+			sendMapValuesToChan(subMap, structChan)
+		} else {
+			structChan <- v.(types.Struct)
+		}
+	})
+}
+
 // Write takes a types.Map m of structs (described by sd) and writes it to output as comma-delineated values.
 func WriteMap(m types.Map, sd types.StructDesc, comma rune, output io.Writer) {
 	structChan := make(chan types.Struct, 1024)
 	go func() {
-		m.IterAll(func(k, v types.Value) {
-			structChan <- v.(types.Struct)
-		})
+		sendMapValuesToChan(m, structChan)
 		close(structChan)
 	}()
 	writeValuesFromChan(structChan, sd, comma, output)
