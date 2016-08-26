@@ -17,6 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/perf/suite"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/samples/go/csv"
 	"github.com/attic-labs/testify/assert"
 	humanize "github.com/dustin/go-humanize"
 )
@@ -45,26 +46,8 @@ func (s *perfSuite) SetupSuite() {
 func (s *perfSuite) Test01ImportSfCrimeBlobFromTestdata() {
 	assert := s.NewAssert()
 
-	var raw []io.Reader
-
-	s.Pause(func() {
-		// The raw data is split into a bunch of files foo.a, foo.b, etc.
-		glob, err := filepath.Glob(path.Join(s.Testdata, "sf-crime", "2016-07-28.*"))
-		assert.NoError(err)
-
-		raw = make([]io.Reader, len(glob))
-		for i, m := range glob {
-			r, err := os.Open(m)
-			assert.NoError(err)
-			raw[i] = r
-		}
-	})
-
-	defer s.Pause(func() {
-		for _, r := range raw {
-			assert.NoError(r.(io.ReadCloser).Close())
-		}
-	})
+	raw := s.openGlob(path.Join(s.Testdata, "sf-crime", "2016-07-28.*"))
+	defer s.closeGlob(raw)
 
 	blob := types.NewBlob(io.MultiReader(raw...))
 	fmt.Fprintf(s.W, "csv/raw is %s\n", humanize.Bytes(blob.Len()))
@@ -84,6 +67,50 @@ func (s *perfSuite) Test02ImportSfCrimeCSVFromBlob() {
 	importCmd.Stderr = os.Stderr
 
 	assert.NoError(importCmd.Run())
+}
+
+func (s *perfSuite) TestParseNyVehicleRegistrations() {
+	assert := s.NewAssert()
+
+	raw := s.openGlob(path.Join(s.Testdata, "ny-vehicle-registrations", "20150218.*"))
+	defer s.closeGlob(raw)
+
+	reader := csv.NewCSVReader(io.MultiReader(raw...), ',')
+	for {
+		_, err := reader.Read()
+		if err != nil {
+			assert.Equal(io.EOF, err)
+			break
+		}
+	}
+}
+
+// openGlob opens all files that match `pattern`. Large CSV files in testdata are broken up into foo.a, foo.b, etc to get around GitHub file size restrictions.
+func (s *perfSuite) openGlob(pattern string) (readers []io.Reader) {
+	assert := s.NewAssert()
+
+	s.Pause(func() {
+		glob, err := filepath.Glob(pattern)
+		assert.NoError(err)
+		readers = make([]io.Reader, len(glob))
+		for i, m := range glob {
+			r, err := os.Open(m)
+			assert.NoError(err)
+			readers[i] = r
+		}
+	})
+	return
+}
+
+// closeGlob closes `readers`. Intended to be used after `openGlob`.
+func (s *perfSuite) closeGlob(readers []io.Reader) {
+	assert := s.NewAssert()
+
+	s.Pause(func() {
+		for _, r := range readers {
+			assert.NoError(r.(io.ReadCloser).Close())
+		}
+	})
 }
 
 func TestPerf(t *testing.T) {
