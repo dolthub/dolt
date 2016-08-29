@@ -43,7 +43,7 @@ For very trivial fixes that are time-sensitive (e.g., to unbreak the build), we 
 
 You can use `go test` command, e.g:
 
-* `go test $(go list ./... | grep -v /vendor/)` should run every tests except from vendor packages.
+* `go test $(go list ./... | grep -v /vendor/)` should run every test except from vendor packages.
 
 For JS code, We have a python script to run all js tests.
 
