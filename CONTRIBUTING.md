@@ -37,6 +37,8 @@ We follow a code review protocol dervied from the one that the [Chromium team](h
   * *Important*: Please do not rebase on top of master until the end of the review for the same reason - you're trying to make it easy for the reviewer to see your changes in isolation.
 8. Comment on the review with 'PTAL' (please take another look) when you are ready for the next round of review comments.
 
+For very trivial fixes that are time-sensitive (e.g., to unbreak the build), we do review-after-land. In that case, assign someone to review the PR, and add the phrase 'TBR' (to be reviewed) to the PR description.
+
 ## Running the tests
 
 You can use `go test` command, e.g:
