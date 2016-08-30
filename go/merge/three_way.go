@@ -112,10 +112,10 @@ func threeWayMerge(a, b, parent types.Value, vwr types.ValueReadWriter) (merged 
 
 func threeWayMapMerge(a, b, parent types.Map, vwr types.ValueReadWriter) (merged types.Value, err error) {
 	aDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
-		a.DiffLeftRight(parent, change, stop)
+		a.Diff(parent, change, stop)
 	}
 	bDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
-		b.DiffLeftRight(parent, change, stop)
+		b.Diff(parent, change, stop)
 	}
 	apply := func(target types.Value, change types.ValueChanged, newVal types.Value) types.Value {
 		switch change.ChangeType {
@@ -132,10 +132,10 @@ func threeWayMapMerge(a, b, parent types.Map, vwr types.ValueReadWriter) (merged
 
 func threeWaySetMerge(a, b, parent types.Set, vwr types.ValueReadWriter) (merged types.Value, err error) {
 	aDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
-		a.DiffLeftRight(parent, change, stop)
+		a.Diff(parent, change, stop)
 	}
 	bDiff := func(change chan<- types.ValueChanged, stop <-chan struct{}) {
-		b.DiffLeftRight(parent, change, stop)
+		b.Diff(parent, change, stop)
 	}
 	getSelf := func(v types.Value) types.Value {
 		return v
