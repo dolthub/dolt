@@ -7,14 +7,16 @@ package walk
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/suite"
 )
 
 func TestWalkTestSuite(t *testing.T) {
-	suite.Run(t, &WalkAllTestSuite{})
 	suite.Run(t, &WalkTestSuite{})
+}
+
+func TestWalkAllTestSuite(t *testing.T) {
+	suite.Run(t, &WalkAllTestSuite{})
 }
 
 type WalkAllTestSuite struct {
@@ -34,43 +36,38 @@ func (suite *WalkAllTestSuite) walkWorker(r types.Ref, expected int) {
 	suite.Equal(expected, actual)
 }
 
-func (suite *WalkAllTestSuite) storeAndRef(v types.Value) types.Ref {
-	return suite.vs.WriteValue(v)
-}
-
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.walkWorker(suite.storeAndRef(types.Number(0.0)), 2)
-	suite.walkWorker(suite.storeAndRef(types.String("hello")), 2)
+	suite.walkWorker(suite.vs.WriteValue(types.Number(0.0)), 2)
+	suite.walkWorker(suite.vs.WriteValue(types.String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
-	suite.walkWorker(suite.storeAndRef(types.NewList()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewList(types.Bool(false), types.Number(8))), 4)
-	suite.walkWorker(suite.storeAndRef(types.NewSet()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(types.Bool(false), types.Number(8))), 4)
-	suite.walkWorker(suite.storeAndRef(types.NewMap()), 2)
-	suite.walkWorker(suite.storeAndRef(types.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false))), 6)
+	suite.walkWorker(suite.NewList(), 2)
+	suite.walkWorker(suite.NewList(types.Bool(false), types.Number(8)), 4)
+	suite.walkWorker(suite.NewSet(), 2)
+	suite.walkWorker(suite.NewSet(types.Bool(false), types.Number(8)), 4)
+	suite.walkWorker(suite.NewMap(), 2)
+	suite.walkWorker(suite.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false)), 6)
 }
 
-func (suite *WalkAllTestSuite) NewList(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewList(vs ...types.Value) types.Ref {
 	v := types.NewList(vs...)
 	return suite.vs.WriteValue(v)
 }
 
-func (suite *WalkAllTestSuite) NewMap(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewMap(vs ...types.Value) types.Ref {
 	v := types.NewMap(vs...)
 	return suite.vs.WriteValue(v)
 }
 
-func (suite *WalkAllTestSuite) NewSet(cs chunks.ChunkStore, vs ...types.Value) types.Ref {
+func (suite *WalkAllTestSuite) NewSet(vs ...types.Value) types.Ref {
 	v := types.NewSet(vs...)
 	return suite.vs.WriteValue(v)
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
-	cs := chunks.NewMemoryStore()
-	suite.walkWorker(suite.storeAndRef(types.NewList(suite.NewSet(cs), types.Number(8))), 5)
-	suite.walkWorker(suite.storeAndRef(types.NewSet(suite.NewList(cs), suite.NewSet(cs))), 6)
+	suite.walkWorker(suite.NewList(suite.NewSet(), types.Number(8)), 5)
+	suite.walkWorker(suite.NewSet(suite.NewList(), suite.NewSet()), 6)
 	// {"string": "string",
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
@@ -78,15 +75,15 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 	//  "set": [5 7 8]
 	//  []: "wow"
 	// }
-	nested := types.NewMap(
+	nested := suite.NewMap(
 		types.String("string"), types.String("string"),
-		types.String("list"), suite.NewList(cs, types.Bool(false), types.Bool(true)),
-		types.String("map"), suite.NewMap(cs, types.String("nested"), types.String("string")),
-		types.String("mtlist"), suite.NewList(cs),
-		types.String("set"), suite.NewSet(cs, types.Number(5), types.Number(7), types.Number(8)),
-		suite.NewList(cs), types.String("wow"), // note that the dupe list chunk is skipped
+		types.String("list"), suite.NewList(types.Bool(false), types.Bool(true)),
+		types.String("map"), suite.NewMap(types.String("nested"), types.String("string")),
+		types.String("mtlist"), suite.NewList(),
+		types.String("set"), suite.NewSet(types.Number(5), types.Number(7), types.Number(8)),
+		suite.NewList(), types.String("wow"), // note that the dupe list chunk is skipped
 	)
-	suite.walkWorker(suite.storeAndRef(nested), 25)
+	suite.walkWorker(nested, 25)
 }
 
 type WalkTestSuite struct {
