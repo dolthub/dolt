@@ -28,10 +28,12 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq, vs types.ValueRe
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained string) {
-	_, err := ThreeWay(a, b, p, nil)
+	m, err := ThreeWay(a, b, p, nil)
 	if s.Error(err) {
 		s.Contains(err.Error(), contained)
+		return
 	}
+	s.Fail("Expected error!", "Got successful merge: %s", types.EncodedValue(m))
 }
 
 func valsToTypesValues(f func(seq) types.Value, items ...interface{}) []types.Value {

@@ -75,8 +75,9 @@ func threeWayMerge(a, b, parent types.Value, vwr types.ValueReadWriter) (merged 
 
 	switch a.Type().Kind() {
 	case types.ListKind:
-		// TODO: Come up with a plan for List (BUG 148)
-		return parent, newMergeConflict("Cannot merge %s.", a.Type().Describe())
+		if aList, bList, pList, ok := listAssert(a, b, parent); ok {
+			return threeWayListMerge(aList, bList, pList)
+		}
 
 	case types.MapKind:
 		if aMap, bMap, pMap, ok := mapAssert(a, b, parent); ok {
@@ -191,6 +192,18 @@ func threeWayStructMerge(a, b, parent types.Struct, vwr types.ValueReadWriter) (
 	return threeWayOrderedSequenceMerge(parent, aDiff, bDiff, makeGetFunc(a), makeGetFunc(b), makeGetFunc(parent), apply, vwr)
 }
 
+func listAssert(a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
+	var aOk, bOk, pOk bool
+	aList, aOk = a.(types.List)
+	bList, bOk = b.(types.List)
+	if parent != nil {
+		pList, pOk = parent.(types.List)
+	} else {
+		pList, pOk = types.NewList(), true
+	}
+	return aList, bList, pList, aOk && bOk && pOk
+}
+
 func mapAssert(a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
 	var aOk, bOk, pOk bool
 	aMap, aOk = a.(types.Map)
@@ -200,8 +213,7 @@ func mapAssert(a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
 	} else {
 		pMap, pOk = types.NewMap(), true
 	}
-	ok = aOk && bOk && pOk
-	return
+	return aMap, bMap, pMap, aOk && bOk && pOk
 }
 
 func refAssert(a, b, parent types.Value, vwr types.ValueReadWriter) (aValue, bValue, pValue types.Value, ok bool) {
@@ -234,8 +246,7 @@ func setAssert(a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
 	} else {
 		pSet, pOk = types.NewSet(), true
 	}
-	ok = aOk && bOk && pOk
-	return
+	return aSet, bSet, pSet, aOk && bOk && pOk
 }
 
 func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Struct, ok bool) {
