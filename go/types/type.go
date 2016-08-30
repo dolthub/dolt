@@ -6,8 +6,6 @@
 package types
 
 import (
-	"regexp"
-
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -147,44 +145,4 @@ func MakePrimitiveTypeByString(p string) *Type {
 	}
 	d.Chk.Fail("invalid type string: %s", p)
 	return nil
-}
-
-var fieldNameComponentRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*`)
-var fieldNameRe = regexp.MustCompile(fieldNameComponentRe.String() + "$")
-
-func verifyFieldNames(names []string) {
-	if len(names) == 0 {
-		return
-	}
-
-	last := names[0]
-	verifyFieldName(last)
-
-	for i := 1; i < len(names); i++ {
-		verifyFieldName(names[i])
-		if names[i] <= last {
-			d.Chk.Fail("Field names must be unique and ordered alphabetically")
-		}
-		last = names[i]
-	}
-}
-
-// IsValidStructFieldName returns whether the name is valid without as a field name in a struct.
-// Valid names must start with `a-zA-Z` and after that `a-zA-Z0-9_`.
-func IsValidStructFieldName(name string) bool {
-	return fieldNameRe.MatchString(name)
-}
-
-func verifyName(name, kind string) {
-	d.PanicIfTrue(!IsValidStructFieldName(name), `Invalid struct%s name: "%s"`, kind, name)
-}
-
-func verifyFieldName(name string) {
-	verifyName(name, " field")
-}
-
-func verifyStructName(name string) {
-	if name != "" {
-		verifyName(name, "")
-	}
 }

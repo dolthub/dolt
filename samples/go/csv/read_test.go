@@ -134,6 +134,31 @@ g,h,i,j
 	testTrailingHelper(t, dataString)
 }
 
+func TestEscapeStructFieldFromCSV(t *testing.T) {
+	assert := assert.New(t)
+	cases := []string{
+		"a", "a",
+		"1a", "a",
+		"AaZz19_", "AaZz19_",
+		"Q", "Q",
+		"AQ", "AQ",
+		"_content", "content",
+		"Few ¢ents Short", "fewEntsShort",
+		"CAMEL💩case letTerS", "camelcaseLetters",
+		"https://picasaweb.google.com/data", "httpspicasawebgooglecomdata",
+		"💩", "",
+		"11 1💩", "",
+		"-- A B", "aB",
+		"-- A --", "a",
+		"-- A -- B", "aB",
+	}
+
+	for i := 0; i < len(cases); i += 2 {
+		orig, expected := cases[i], cases[i+1]
+		assert.Equal(expected, EscapeStructFieldFromCSV(orig))
+	}
+}
+
 func TestReadParseError(t *testing.T) {
 	assert := assert.New(t)
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
@@ -174,12 +199,12 @@ func TestEscapeFieldNames(t *testing.T) {
 
 	l, _ := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
-	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(types.EscapeStructField("A A")))
+	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
 	m := ReadToMap(r, "test", headers, []string{"1"}, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
-	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(types.EscapeStructField("A A")))
+	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 }
 
 func TestDefaults(t *testing.T) {
