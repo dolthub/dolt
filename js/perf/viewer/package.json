@@ -1,0 +1,10 @@
+{
+  "name": "perf-viewer",
+  "license": "Apache-2.0",
+  "scripts": {
+    "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
+    "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
+    "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
+    "test": "eslint src/ && flow src/"
+  }
+}

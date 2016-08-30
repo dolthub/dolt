@@ -8,11 +8,11 @@
     "preinstall": "pushd .. && npm install && popd && rm -rf node_modules && ln -sf ../node_modules/",
     "prepublish": "npm run build",
     "start": "babel -d dist -w src",
-    "build": "BABEL_ENV=production ../node_modules/.bin/babel -d dist src",
+    "build": "BABEL_ENV=production babel -d dist src",
     "test": "eslint src/ && flow src/"
   },
   "keywords": [
     "noms",
-    "example"
+    "sample"
   ]
 }
