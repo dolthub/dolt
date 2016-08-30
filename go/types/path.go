@@ -56,10 +56,14 @@ func constructPath(p Path, str string) (Path, error) {
 			return Path{}, errors.New("Path ends in [")
 		}
 
-		idx, h, rem, err := parsePathIndex(tail)
+		idx, h, rem, err := ParsePathIndex(tail)
 		if err != nil {
 			return Path{}, err
 		}
+		if !strings.HasPrefix(rem, "]") {
+			return Path{}, errors.New("[ is missing closing ]")
+		}
+		rem = rem[1:]
 
 		intoKey := false
 		if ann, rem2 := getAnnotation(rem); ann != "" {
@@ -83,7 +87,7 @@ func constructPath(p Path, str string) (Path, error) {
 		default:
 			part = NewHashIndexPath(h)
 		}
-		p = append(p, Path{part})
+		p = append(p, part)
 		return constructPath(p, rem)
 
 	case ']':
@@ -261,7 +265,12 @@ func (hip HashIndexPath) String() string {
 	return fmt.Sprintf("[#%s]%s", hip.Hash.String(), ann)
 }
 
-func parsePathIndex(str string) (idx Value, h hash.Hash, rem string, err error) {
+// Parse a Noms value from the path index syntax.
+// 4 ->          types.Number
+// "4" ->        types.String
+// true|false -> types.Boolean
+// #<chars> ->   hash.Hash
+func ParsePathIndex(str string) (idx Value, h hash.Hash, rem string, err error) {
 Switch:
 	switch str[0] {
 	case '"':
@@ -272,6 +281,7 @@ Switch:
 		for ; i < len(str); i++ {
 			c := str[i]
 			if c == '"' {
+				i++
 				break
 			}
 			if c == '\\' && i < len(str)-1 {
@@ -285,23 +295,16 @@ Switch:
 			stringBuf.WriteByte(c)
 		}
 
-		if i == len(str) {
-			err = errors.New("[ is missing closing ]")
-		} else {
-			idx = String(stringBuf.String())
-			rem = str[i+2:]
-		}
+		idx = String(stringBuf.String())
+		rem = str[i:]
 
 	default:
-		split := strings.SplitN(str, "]", 2)
-		if len(split) < 2 {
-			err = errors.New("[ is missing closing ]")
-			break Switch
+		idxStr := str
+		sepIdx := strings.Index(str, "]")
+		if sepIdx >= 0 {
+			idxStr = str[:sepIdx]
+			rem = str[sepIdx:]
 		}
-
-		idxStr := split[0]
-		rem = split[1]
-
 		if len(idxStr) == 0 {
 			err = errors.New("Empty index value")
 		} else if idxStr[0] == '#' {

@@ -14,8 +14,7 @@ import (
 )
 
 var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
-
-var idRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
+var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 type Dataset struct {
 	store datas.Database
@@ -23,7 +22,7 @@ type Dataset struct {
 }
 
 func NewDataset(db datas.Database, datasetID string) Dataset {
-	d.PanicIfTrue(!idRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
+	d.PanicIfTrue(!DatasetFullRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
 	return Dataset{db, datasetID}
 }
 
