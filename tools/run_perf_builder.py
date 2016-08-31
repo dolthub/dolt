@@ -21,14 +21,11 @@ PACKAGES = [
     './samples/go/csv/csv-import',
 ]
 
-# 'go test' timeout. Go's default is 10m, which ideally is long enough, but raise it a little.
-TIMEOUT = '15m'
+# 'go test' timeout. Go's default is 10m, which isn't long enough. These tests should only be run on commit to master + 
+TIMEOUT = '20m'
 
-# Number of perf test repetitions. Choose 4 because:
-# - Any less than 3 is not enough sample size.
-# - Any more than 4 will take too long.
-# - Typically the first test will take longer, so choosing 4 gives you 3 non-first samples.
-PERF_REPEAT = '4'
+# Number of perf test repetitions. 3 is a good sample size, any more will take too long.
+PERF_REPEAT = '3'
 
 def main():
     # Workspace is the root of the builder, e.g. "/var/lib/jenkins/workspace/NomsMasterPerf".
