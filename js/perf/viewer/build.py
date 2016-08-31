@@ -13,7 +13,7 @@ def main():
     with pushd('../../../js/noms'):
         subprocess.check_call(['npm', 'install'], shell=False)
 
-    with pushd('../'):
+    with pushd('..'):
         subprocess.check_call(['npm', 'install'], shell=False)
 
     subprocess.check_call(['npm', 'install'], shell=False)
