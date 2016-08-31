@@ -25,7 +25,7 @@ Due to legal reasons, all contributors must sign a contributor license agreement
 
 We follow a code review protocol dervied from the one that the [Chromium team](https://www.chromium.org/) uses:
 
-1. Create a fork of the repo you want to modify (e.g., fork `https://github.com/attic-labs/noms` to `https://github.com/<you>/noms`.
+1. Create a Github fork of the repo you want to modify (e.g., fork `https://github.com/attic-labs/noms` to `https://github.com/<you>/noms`).
 2. Push your changes to a branch at your fork
 3. Create a PR using that branch against, e.g., `noms/master`.
 4. When you're ready for review, use Github's _assign_ UI to assign someone to review. Typically nobody will review until you assign someone (because we assume you're still getting it ready for review).
