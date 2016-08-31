@@ -30,33 +30,16 @@ def main():
 
     noms_dir = os.path.join(workspace, 'src/github.com/attic-labs/noms')
     noms_js_dir = os.path.join(noms_dir, 'js/noms')
-    with open(os.path.join(noms_js_dir, 'package.json')) as pkg:
-        data = json.load(pkg)
-
-    version = data['version']
-
-    # This directory does not really matter
-    os.chdir(workspace)
 
     env = copy.copy(os.environ)
     env.update({
         'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
     })
 
-    call_with_env(['npm', 'install', 'documentation'], env)
+    os.chdir(noms_js_dir)
 
-    cmd = [
-        os.path.join(workspace, 'node_modules', '.bin', 'documentation'), 'build',
-        os.path.join(noms_js_dir, 'src', 'noms.js'),
-        '--name', 'Noms',
-        '--document-exported',
-        '--infer-private', '^_',
-        '--github',
-        '--format', 'html',
-        '--output', os.path.join(workspace, 'build', version),
-        '--project-version', version
-    ]
-    call_with_env(cmd, env)
+    call_with_env(['npm', 'install'], env)
+    call_with_env(['npm', 'run' 'build-docs'], env)
 
 if __name__ == '__main__':
     main()

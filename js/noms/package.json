@@ -34,6 +34,7 @@
     "chai": "^3.5.0",
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
+    "documentation": "^4.0.0-beta10",
     "flow-bin": "0.30.0",
     "fs-extra": "^0.30.0",
     "mocha": "^2.5.3"
@@ -46,7 +47,8 @@
     "compile": "npm run compile-to-commonjs",
     "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/ > /dev/null",
     "copy-flow-files": "npm run copy-flow-files-commonjs",
-    "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/"
+    "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/",
+    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --output generated-docs/$npm_package_version/ src/noms.js"
   },
   "browser": {
     "./src/bytes.js": "./src/browser/bytes.js",
