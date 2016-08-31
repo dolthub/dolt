@@ -19,7 +19,7 @@ def pushd(path):
     os.chdir(currentDir)
 
 def main():
-    with pushd('../../../js'):
+    with pushd('../../../js/noms'):
         subprocess.check_call(['npm', 'install'], shell=False)
 
     with pushd('../'):
