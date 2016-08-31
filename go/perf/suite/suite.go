@@ -2,68 +2,69 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-// Package suite implements a performance test suite for Noms, intended for measuring and reporting long running tests.
+// Package suite implements a performance test suite for Noms, intended for measuring and reporting
+// long running tests.
 //
 // Usage is similar to testify's suite:
-//
-// 1. Define a test suite struct which inherits from `suite.PerfSuite`.
-// 2. Define methods on that struct that start with the word "Test", optionally followed by digits, then followed a non-empty capitalized string.
-// 3. Call `suite.Run` with an instance of that struct.
-// 4. Run `go test` with the `-perf <path to noms db>` flag.
+//  1. Define a test suite struct which inherits from suite.PerfSuite.
+//  2. Define methods on that struct that start with the word "Test", optionally followed by
+//     digits, then followed a non-empty capitalized string.
+//  3. Call suite.Run with an instance of that struct.
+//  4. Run go test with the -perf <path to noms db> flag.
 //
 // Flags:
-//   - `-perf.mem` backs the database by a memory store, instead of a (temporary) leveldb.
-//   - `-perf.prefix` gives the dataset IDs for test results a prefix
-//   - `-perf.repeat` sets how many times tests are repeated ("reps").
-//   - `-perf.testdata` sets a custom path to the Noms testdata directory.
+//  -perf.mem      backs the database by a memory store, instead of a (temporary) leveldb.
+//  -perf.prefix   gives the dataset IDs for test results a prefix
+//  -perf.repeat   sets how many times tests are repeated ("reps").
+//  -perf.testdata sets a custom path to the Noms testdata directory.
 //
-// `PerfSuite` also supports testify/suite style `Setup/TearDown` methods.
-// - `Setup/TearDownSuite` is called exactly once.
-// - `Setup/TearDownRep` is called once for each repetition of the test runs, i.e. `-perf.repeat` times.
-// - `Setup/TearDownTest` is called for every test.
+// PerfSuite also supports testify/suite style Setup/TearDown methods:
+//  Setup/TearDownSuite is called exactly once.
+//  Setup/TearDownRep   is called for each repetition of the test runs, i.e. -perf.repeat times.
+//  Setup/TearDownTest  is called for every test.
 //
-// Test results are written to Noms, along with a soup of the environment they were recorded in.
+// Test results are written to Noms, along with a dump of the environment they were recorded in.
 //
-// Test names are derived from that "non-empty capitalized string": `"Test"` is omitted because it's redundant, and leading digits are omitted to allow for manual test ordering. For example:
+// Test names are derived from that "non-empty capitalized string": "Test" is omitted because it's
+// redundant, and leading digits are omitted to allow for manual test ordering. For example:
 //
-// ```
-// > cat ./samples/go/csv/csv-import/perf_test.go
-// type perfSuite {
-//   suite.PerfSuite
-// }
+//  > cat ./samples/go/csv/csv-import/perf_test.go
+//  type perfSuite {
+//    suite.PerfSuite
+//  }
 //
-// func (s *perfSuite) TestFoo() { ... }
-// func (s *perfSuite) TestZoo() { ... }
-// func (s *perfSuite) Test01Qux() { ... }
-// func (s *perfSuite) Test02Bar() { ... }
+//  func (s *perfSuite) TestFoo() { ... }
+//  func (s *perfSuite) TestZoo() { ... }
+//  func (s *perfSuite) Test01Qux() { ... }
+//  func (s *perfSuite) Test02Bar() { ... }
 //
-// func TestPerf(t *testing.T) {
-//   suite.Run("csv-import", t, &perfSuite{})
-// }
+//  func TestPerf(t *testing.T) {
+//    suite.Run("csv-import", t, &perfSuite{})
+//  }
 //
-// > go test -v ./samples/go/csv/... -perf http://localhost:8000 -perf.repeat 3
-// (perf) RUN(1/3) Test01Qux (recorded as "Qux")
-// (perf) PASS:    Test01Qux (5s, paused 15s, total 20s)
-// (perf) RUN(1/3) Test02Bar (recorded as "Bar")
-// (perf) PASS:    Test02Bar (15s, paused 2s, total 17s)
-// (perf) RUN(1/3) TestFoo (recorded as "Foo")
-// (perf) PASS:    TestFoo (10s, paused 1s, total 11s)
-// (perf) RUN(1/3) TestZoo (recorded as "Zoo")
-// (perf) PASS:    TestZoo (1s, paused 42s, total 43s)
-// ...
+//  > noms serve &
+//  > go test -v ./samples/go/csv/... -perf http://localhost:8000 -perf.repeat 3
+//  (perf) RUN(1/3) Test01Qux (recorded as "Qux")
+//  (perf) PASS:    Test01Qux (5s, paused 15s, total 20s)
+//  (perf) RUN(1/3) Test02Bar (recorded as "Bar")
+//  (perf) PASS:    Test02Bar (15s, paused 2s, total 17s)
+//  (perf) RUN(1/3) TestFoo (recorded as "Foo")
+//  (perf) PASS:    TestFoo (10s, paused 1s, total 11s)
+//  (perf) RUN(1/3) TestZoo (recorded as "Zoo")
+//  (perf) PASS:    TestZoo (1s, paused 42s, total 43s)
+//  ...
 //
-// > noms show http://localhost:8000::csv-import
-// {
-//   environment: ...
-//   tests: [{
-//     "Bar": {elapsed: 15s, paused: 2s,  total: 17s},
-//     "Foo": {elapsed: 10s, paused: 1s,  total: 11s},
-//     "Qux": {elapsed: 5s,  paused: 15s, total: 20s},
-//     "Zoo": {elapsed: 1s,  paused: 42s, total: 43s},
-//   }, ...]
-//   ...
-// }
-// ```
+//  > noms show http://localhost:8000::csv-import
+//  {
+//    environment: ...
+//    tests: [{
+//      "Bar": {elapsed: 15s, paused: 2s,  total: 17s},
+//      "Foo": {elapsed: 10s, paused: 1s,  total: 11s},
+//      "Qux": {elapsed: 5s,  paused: 15s, total: 20s},
+//      "Zoo": {elapsed: 1s,  paused: 42s, total: 43s},
+//    }, ...]
+//    ...
+//  }
 package suite
 
 import (
@@ -106,10 +107,10 @@ var (
 
 // PerfSuite is the core of the perf testing suite. See package documentation for details.
 type PerfSuite struct {
-	// T is the `testing.T` instance set when the suite is passed into `Run`.
+	// T is the testing.T instance set when the suite is passed into Run.
 	T *testing.T
 
-	// W is the `io.Writer` to write test output, which only outputs if the verbose flag is set.
+	// W is the io.Writer to write test output, which only outputs if the verbose flag is set.
 	W io.Writer
 
 	// AtticLabs is the path to the attic-labs directory (e.g. /path/to/go/src/github.com/attic-labs).
@@ -121,7 +122,7 @@ type PerfSuite struct {
 	// Database is a Noms database that tests can use for reading and writing. State is persisted across a single Run of a suite.
 	Database datas.Database
 
-	// DatabaseSpec is the Noms spec of `Database` (typically a localhost URL).
+	// DatabaseSpec is the Noms spec of Database (typically a localhost URL).
 	DatabaseSpec string
 
 	tempFiles []*os.File
@@ -129,12 +130,12 @@ type PerfSuite struct {
 	paused    time.Duration
 }
 
-// SetupRepSuite has a SetupRep method, which runs every repetition of the test, i.e. `-perf.repeat` times in total.
+// SetupRepSuite has a SetupRep method, which runs every repetition of the test, i.e. -perf.repeat times in total.
 type SetupRepSuite interface {
 	SetupRep()
 }
 
-// TearDownRepSuite has a TearDownRep method, which runs every repetition of the test, i.e. `-perf.repeat` times in total.
+// TearDownRepSuite has a TearDownRep method, which runs every repetition of the test, i.e. -perf.repeat times in total.
 type TearDownRepSuite interface {
 	TearDownRep()
 }
@@ -163,7 +164,7 @@ func (r nopWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// Run runs `suiteT` and writes results to dataset `datasetID` in the database given by the `-perf` command line flag.
+// Run runs suiteT and writes results to dataset datasetID in the database given by the -perf command line flag.
 func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	if *perfFlag == "" {
 		return
@@ -332,7 +333,7 @@ func (suite *PerfSuite) Suite() *PerfSuite {
 	return suite
 }
 
-// NewAssert returns the `assert.Assertions` instance for this test.
+// NewAssert returns the assert.Assertions instance for this test.
 func (suite *PerfSuite) NewAssert() *assert.Assertions {
 	return assert.New(suite.T)
 }
@@ -353,7 +354,7 @@ func (suite *PerfSuite) TempDir(prefix string) string {
 	return d
 }
 
-// Pause pauses the test timer while `fn` is executing. Useful for omitting long setup code (e.g. copying files) from the test elapsed time.
+// Pause pauses the test timer while fn is executing. Useful for omitting long setup code (e.g. copying files) from the test elapsed time.
 func (suite *PerfSuite) Pause(fn func()) {
 	start := time.Now()
 	fn()
