@@ -26,9 +26,9 @@ Due to legal reasons, all contributors must sign a contributor license agreement
 We follow a code review protocol dervied from the one that the [Chromium team](https://www.chromium.org/) uses:
 
 1. Create a Github fork of the repo you want to modify (e.g., fork `https://github.com/attic-labs/noms` to `https://github.com/<username>/noms`).
-2. Add your own fork as a remote to your github repo (e.g., `git remote add <username> https://github.com/<username>/noms`)
-3. Push your changes to a branch at your fork
-4. Create a PR using that branch against, e.g., `noms/master`.
+2. Add your own fork as a remote to your github repo: `git remote add <username> https://github.com/<username>/noms`.
+3. Push your changes to a branch at your fork: `git push <username> <branch>`
+4. Create a PR using the branch you just created. Usually you can do this by just navigating to https://github.com/attic-labs/noms in a browser - Github recognizes the new branch and offers to create a PR for you.
 5. When you're ready for review, use Github's _assign_ UI to assign someone to review. Typically nobody will review until you assign someone (because we assume you're still getting it ready for review).
 6. Reviewer will make comments, then say either 'LGTM' (looks good to me) or 'BTY' (back to you).
 7. If the reviewer said LGTM, it means it is ready to merge. If you have commit writes to the respository, go ahead and land the PR. Otherwise the reviewer will land it.
