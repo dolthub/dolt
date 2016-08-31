@@ -54,7 +54,7 @@ def main():
 
   # TODO: Should we also do Godeps?
   if os.path.isdir('vendor'):
-    deps = [dirName for dirName, subDirs, files in os.walk('vendor') if files]
+    deps = [dirName for dirName, _, files in os.walk('vendor') if files]
     if deps:
       print '\nWarning!'
       print ' %s contains one or more dependencies which will need to be vendored as well:' % args.url

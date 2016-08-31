@@ -15,7 +15,7 @@ import subprocess
 import shutil
 import tempfile
 
-license = [
+licenseRows = [
   'Copyright 2016 Attic Labs, Inc. All rights reserved.',
   'Licensed under the Apache License, version 2.0:',
   'http://www.apache.org/licenses/LICENSE-2.0',
@@ -86,7 +86,7 @@ def buildLicensePattern(ext):
 # Gets the license block for files with extension |ext|.
 def getLicense(ext):
   (first, mark, last) = comment_markers[ext]
-  result = '\n'.join([mark + line for line in license])
+  result = '\n'.join([mark + line for line in licenseRows])
   if first != '':
     result = first + '\n' + result
   if last != '':
