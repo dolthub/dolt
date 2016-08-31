@@ -18,6 +18,11 @@ import type {Value} from '@attic/noms';
 declare class Chart {
 }
 
+type DataPoint = {
+  median: number;
+  stddev: number;
+}
+
 window.onload = load;
 window.onpopstate = load;
 window.onresize = render;
@@ -28,7 +33,7 @@ window.onresize = render;
 // TODO: Implement paging mechanism.
 const MAX_PERF_HISTORY = 15;
 
-let chartDatasets: Map<string /* test name */, (number | null)[] /* elapsed, in seconds */>;
+let chartDatasets: Map<string /* test name */, (DataPoint | null)[]>;
 let chartLabels: string[];
 
 async function load() {
@@ -61,7 +66,7 @@ async function load() {
   }
   const testNames = Array.from(testNamesSet);
 
-  const getElapsed = async (testName: string, pd: Struct) => {
+  const getDataForTest = async (testName: string, pd: Struct) => {
     invariant(pd.reps instanceof List);
     const reps = await pd.reps.toJS();
     const elapsedOrNulls = await Promise.all(reps.map(rep => {
@@ -70,11 +75,11 @@ async function load() {
       // value, or none should. Ideally we'd be able to bail at this point.
       return rep.get(testName).then(d => d ? d.elapsed / 1e9 : null);
     }));
-    return elapsedOrNulls[0] !== null ? median(elapsedOrNulls) : null;
+    return elapsedOrNulls[0] !== null ? makeDataPoint(elapsedOrNulls) : null;
   };
 
   const getChartData = (testName: string) =>
-    Promise.all(perfData.map(pd => getElapsed(testName, pd)));
+    Promise.all(perfData.map(pd => getDataForTest(testName, pd)));
 
   // TODO: Scale the data to "max while < 1000" so that these all fit on the same graph (not 1e9)?
   const testChartData = await Promise.all(testNames.map(getChartData));
@@ -122,13 +127,14 @@ async function render() {
   }
 
   const datasets = [];
-  for (const [testName, elapsed] of chartDatasets) {
+  for (const [testName, dataPoints] of chartDatasets) {
     const [borderColor, backgroundColor] = await getSolidAndAlphaColors(testName);
     datasets.push({
       backgroundColor,
       borderColor,
       borderWidth: 1,
-      data: elapsed,
+      pointRadius: dataPoints.map(dp => dp !== null ? 1 + dp.stddev : 0),
+      data: dataPoints.map(dp => dp !== null ? dp.median : null),
       label: testName,
     });
   }
@@ -161,17 +167,22 @@ async function render() {
   });
 }
 
-// Returns the median of numbers in `nums`.
-function median(nums: number[]): number {
+// Returns the median and standard deviation of numbers in `nums`.
+function makeDataPoint(nums: number[]): DataPoint {
   const sorted = nums.slice();
   sorted.sort();
   const lenDiv2 = Math.floor(nums.length / 2);
-  let res = nums[lenDiv2];
+  let median = nums[lenDiv2];
   if (nums.length % 2 === 0) {
-    res += nums[lenDiv2 - 1];
-    res /= 2;
+    median += nums[lenDiv2 - 1];
+    median /= 2;
   }
-  return res;
+
+  const calcMean = ns => ns.reduce((t, n) => t + n, 0) / ns.length;
+  const mean = calcMean(nums);
+  const stddev = Math.sqrt(calcMean(nums.map(n => Math.pow(n - mean, 2))));
+
+  return {median, stddev};
 }
 
 // Generates a light and dark version of some color randomly (but stable) derived from `str`.
