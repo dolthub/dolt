@@ -15,7 +15,7 @@ type diffFunc func(chan<- types.ValueChanged, <-chan struct{})
 type applyFunc func(types.Value, types.ValueChanged, types.Value) types.Value
 type getFunc func(types.Value) types.Value
 
-func threeWayOrderedSequenceMerge(parent types.Value, aDiff, bDiff diffFunc, aGet, bGet, pGet getFunc, apply applyFunc, vwr types.ValueReadWriter) (merged types.Value, err error) {
+func threeWayOrderedSequenceMerge(parent types.Value, aDiff, bDiff diffFunc, aGet, bGet, pGet getFunc, apply applyFunc, vwr types.ValueReadWriter, progress chan struct{}) (merged types.Value, err error) {
 	aChangeChan, bChangeChan := make(chan types.ValueChanged), make(chan types.ValueChanged)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
@@ -75,7 +75,7 @@ func threeWayOrderedSequenceMerge(parent types.Value, aDiff, bDiff diffFunc, aGe
 				return parent, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(aValue), describeChange(bChange), types.EncodedValue(bValue))
 			}
 			// TODO: Add concurrency.
-			mergedValue, err := threeWayMerge(aValue, bValue, pGet(aChange.V), vwr)
+			mergedValue, err := threeWayMerge(aValue, bValue, pGet(aChange.V), vwr, progress)
 			if err != nil {
 				return parent, err
 			}

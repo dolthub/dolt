@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/status"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -29,6 +30,7 @@ func main() {
 func nomsMerge() error {
 	outDSStr := flag.String("out-ds-name", "", "output dataset to write to - if empty, defaults to <right-ds-name>")
 	parentStr := flag.String("parent", "", "common ancestor of <left-ds-name> and <right-ds-name> (currently required; soon to be optional)")
+	quiet := flag.Bool("quiet", false, "silence progress output")
 	flag.Usage = usage
 
 	return d.Unwrap(d.Try(func() {
@@ -66,11 +68,25 @@ func nomsMerge() error {
 			outDS = makeDS(*outDSStr)
 		}
 
-		merged, err := merge.ThreeWay(left, right, parent, db)
+		pc := make(chan struct{}, 128)
+		go func() {
+			count := 0
+			for _ = range pc {
+				if !*quiet {
+					count++
+					status.Printf("Applied %d changes...", count)
+				}
+			}
+		}()
+		merged, err := merge.ThreeWay(left, right, parent, db, pc)
 		d.PanicIfError(err)
 
 		_, err = outDS.Commit(merged, dataset.CommitOptions{Parents: types.NewSet(leftDS.HeadRef(), rightDS.HeadRef())})
 		d.PanicIfError(err)
+		if !*quiet {
+			status.Printf("Done")
+			status.Done()
+		}
 	}))
 }
 

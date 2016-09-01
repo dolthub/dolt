@@ -64,7 +64,7 @@ func (s *testSuite) TestWin() {
 	})
 
 	var mainErr error
-	stdout, stderr := s.Run(func() { mainErr = nomsMerge() }, []string{"--parent=" + p, s.LdbDir, l, r})
+	stdout, stderr := s.Run(func() { mainErr = nomsMerge() }, []string{"--quiet=true", "--parent=" + p, s.LdbDir, l, r})
 	if s.NoError(mainErr, "%s", mainErr) {
 		s.Equal("", stdout)
 		s.Equal("", stderr)
