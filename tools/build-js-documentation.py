@@ -6,7 +6,7 @@
 
 '''
 This script builds the JS SDK documentation and puts the generated files
-in $WORKSPACE/build.
+in $WORKSPACE/src/github.com/attic-labs/noms/js/noms/generated-docs.
 '''
 
 import copy
@@ -38,7 +38,7 @@ def main():
     })
 
     call_with_env_and_cwd(['npm', 'install'], env, noms_js_dir)
-    call_with_env_and_cwd(['npm', 'run' 'build-docs'], env, noms_js_dir)
+    call_with_env_and_cwd(['npm', 'run', 'build-docs'], env, noms_js_dir)
 
 if __name__ == '__main__':
     main()
