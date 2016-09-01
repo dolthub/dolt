@@ -13,10 +13,10 @@ import copy
 import json
 import os
 import subprocess
-from noms.pushd import pushd
 
-def call_with_env(cmd, env):
-    proc = subprocess.Popen(cmd, env=env)
+def call_with_env_and_cwd(cmd, env, cwd):
+    print(cmd)
+    proc = subprocess.Popen(cmd, env=env, cwd=cwd, shell=False)
     proc.wait()
     assert proc.returncode == 0
 
@@ -32,14 +32,13 @@ def main():
     noms_dir = os.path.join(workspace, 'src/github.com/attic-labs/noms')
     noms_js_dir = os.path.join(noms_dir, 'js/noms')
 
-    with pushd(noms_js_dir):
-        env = copy.copy(os.environ)
-        env.update({
-            'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
-        })
+    env = copy.copy(os.environ)
+    env.update({
+        'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
+    })
 
-        call_with_env(['npm', 'install'], env)
-        call_with_env(['npm', 'run-script' 'build-docs'], env)
+    call_with_env_and_cwd(['npm', 'install'], env, noms_js_dir)
+    call_with_env_and_cwd(['npm', 'run' 'build-docs'], env, noms_js_dir)
 
 if __name__ == '__main__':
     main()
