@@ -42,6 +42,7 @@ func nomsMerge() error {
 		}
 
 		d.PanicIfTrue(flag.NArg() != 3, "Incorrect number of arguments\n")
+		d.PanicIfTrue(*parentStr == "", "--parent is required\n")
 
 		db, err := spec.GetDatabase(flag.Arg(0))
 		defer db.Close()
@@ -57,11 +58,11 @@ func nomsMerge() error {
 		parentDS := makeDS(*parentStr)
 
 		parent, ok := parentDS.MaybeHeadValue()
-		d.PanicIfTrue(!ok, "Parent dataset has no data\n")
+		d.PanicIfTrue(!ok, "Dataset %s has no data\n", *parentStr)
 		left, ok := leftDS.MaybeHeadValue()
-		d.PanicIfTrue(!ok, "left dataset has no data\n")
+		d.PanicIfTrue(!ok, "Dataset %s has no data\n", flag.Arg(1))
 		right, ok := rightDS.MaybeHeadValue()
-		d.PanicIfTrue(!ok, "right dataset has no data\n")
+		d.PanicIfTrue(!ok, "Dataset %s has no data\n", flag.Arg(2))
 
 		outDS := rightDS
 		if *outDSStr != "" {
