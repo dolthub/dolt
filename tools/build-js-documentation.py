@@ -38,8 +38,9 @@ def main():
             'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
         })
 
-        call_with_env(['npm', 'install'], env)
-        call_with_env(['npm', 'run-script' 'build-docs'], env)
+        # Python Popen is broken and cannot handle an array of args.
+        call_with_env('npm install', env)
+        call_with_env('npm run-script build-docs', env)
 
 if __name__ == '__main__':
     main()
