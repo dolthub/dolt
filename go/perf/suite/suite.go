@@ -166,16 +166,19 @@ func (r nopWriter) Write(p []byte) (int, error) {
 
 // Run runs suiteT and writes results to dataset datasetID in the database given by the -perf command line flag.
 func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
-	if *perfFlag == "" {
-		return
-	}
-
 	assert := assert.New(t)
 
 	// Piggy-back off the go test -v flag.
 	verboseFlag := flag.Lookup("test.v")
 	assert.NotNil(verboseFlag)
 	verbose := verboseFlag.Value.(flag.Getter).Get().(bool)
+
+	if *perfFlag == "" {
+		if verbose {
+			fmt.Printf("(perf) Skipping %s, -perf flag not set\n", datasetID)
+		}
+		return
+	}
 
 	suite := suiteT.Suite()
 	suite.T = t
