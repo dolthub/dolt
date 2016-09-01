@@ -28,10 +28,11 @@ window.onpopstate = load;
 window.onresize = render;
 
 // The maximum number of git revisions to show in the perf history.
+//
 // The larger this number, the more screen real estate needed to render the graph - and the slower
 // it will take to render, since the entire parent commit chain must be walked to form the graph.
 // TODO: Implement paging mechanism.
-const MAX_PERF_HISTORY = 15;
+const MAX_PERF_HISTORY = 20;
 
 let chartDatasets: Map<string /* test name */, (DataPoint | null)[]>;
 let chartLabels: string[];
@@ -97,8 +98,8 @@ async function getPerfHistory(ds: Dataset): Promise<[Struct[], string[]]> {
   for (let head = await ds.head(), i = 0; head && i < MAX_PERF_HISTORY; i++) {
     const val = head.value;
     invariant(val instanceof Struct);
-    perfData.push(val);
-    gitRevs.push(val.nomsRevision);
+    perfData.unshift(val);
+    gitRevs.unshift(val.nomsRevision);
 
     const parentRef = await head.parents.first(); // TODO: how to deal with multiple parents?
     head = parentRef ? await parentRef.targetValue(ds.database) : null;
@@ -126,18 +127,37 @@ async function render() {
     return;
   }
 
+  // We use the point radius to indicate the standard deviation, for lack of any better option.
+  // Unfortunately chart.js doesn't provide any way to scale this relative to large the Y axis
+  // values are with respect to the graph pixel height.
+  //
+  // So, try to approximate it by taking into account: (a) the expected magnitude of the Y axis (the
+  // maximum value), and (b) and how much space the graph will take up on the screen (half of screen
+  // *width* - this does appear to be what chart.js does).
+  const maxElapsedTime = Array.from(chartDatasets.values()).reduce((max, dataPoints) => {
+    const medians = dataPoints.map(dp => dp !== null ? dp.median : 0);
+    return Math.max(max, ...medians);
+  }, 0);
+  const graphHeight = document.body.scrollWidth / 2;
+  const getStddevPointRadius = stddev => Math.ceil(stddev / maxElapsedTime * graphHeight);
+
   const datasets = [];
   for (const [testName, dataPoints] of chartDatasets) {
-    const [borderColor, backgroundColor] = await getSolidAndAlphaColors(testName);
+    const [borderColor, backgroundColor] = getSolidAndAlphaColors(testName);
     datasets.push({
       backgroundColor,
       borderColor,
       borderWidth: 1,
-      pointRadius: dataPoints.map(dp => dp !== null ? 1 + dp.stddev : 0),
+      pointRadius: dataPoints.map(dp => dp !== null ? getStddevPointRadius(dp.stddev) : 0),
       data: dataPoints.map(dp => dp !== null ? dp.median : null),
       label: testName,
+      _maxMedian: Math.max(...dataPoints.map(dp => dp !== null ? dp.median : 0)), // for our sorting
     });
   }
+
+  // Draw the datasets in order of largest to smallest, so that we (try not to) draw over the top of
+  // entire datasets.
+  datasets.sort((a, b) => a._maxMedian - b._maxMedian);
 
   new Chart(document.getElementById('chart'), {
     type: 'line',
@@ -150,7 +170,7 @@ async function render() {
         yAxes: [{
           scaleLabel: {
             display: true,
-            labelString: 'elapsed (seconds)',
+            labelString: 'elapsed seconds (point radius is standard deviation to scale)',
           },
           ticks: {
             beginAtZero: true,
@@ -178,19 +198,22 @@ function makeDataPoint(nums: number[]): DataPoint {
     median /= 2;
   }
 
-  const calcMean = ns => ns.reduce((t, n) => t + n, 0) / ns.length;
-  const mean = calcMean(nums);
-  const stddev = Math.sqrt(calcMean(nums.map(n => Math.pow(n - mean, 2))));
+  const mean = getMean(nums);
+  const stddev = Math.sqrt(getMean(nums.map(n => Math.pow(n - mean, 2))));
 
   return {median, stddev};
 }
 
 // Generates a light and dark version of some color randomly (but stable) derived from `str`.
-async function getSolidAndAlphaColors(str: string): Promise<[string, string]> {
+function getSolidAndAlphaColors(str: string): [string, string] {
   // getHashOfValue() returns a Uint8Array, so pull out the first 3 8-bit numbers - which will be in
   // the range [0, 255] - to generate a full RGB colour.
-  const [r, g, b] = getHashOfValue(str).digest;
-  return [`rgb(${r}, ${g}, ${b})`, `rgba(${r}, ${g}, ${b}, 0.25)`];
+  let [r, g, b] = getHashOfValue(str).digest;
+  // Invert if it's too light.
+  if (getMean([r, g, b]) > 127) {
+    [r, g, b] = [r, g, b].map(c => 255 - c);
+  }
+  return [`rgb(${r}, ${g}, ${b})`, `rgba(${r}, ${g}, ${b}, 0.2)`];
 }
 
 // Returns the keys of `map`.
@@ -199,4 +222,9 @@ function keys<K: Value, V: Value>(map: NomsMap<K, V>): Promise<K[]> {
   return map.forEach((_, key) => {
     keys.push(key);
   }).then(() => keys);
+}
+
+// Returns the mean of `nums`.
+function getMean(nums: number[]): number {
+  return nums.reduce((t, n) => t + n, 0) / nums.length;
 }
