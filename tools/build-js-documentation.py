@@ -13,6 +13,7 @@ import copy
 import json
 import os
 import subprocess
+from noms.pushd import pushd
 
 def call_with_env(cmd, env):
     proc = subprocess.Popen(cmd, env=env)
@@ -31,15 +32,14 @@ def main():
     noms_dir = os.path.join(workspace, 'src/github.com/attic-labs/noms')
     noms_js_dir = os.path.join(noms_dir, 'js/noms')
 
-    env = copy.copy(os.environ)
-    env.update({
-        'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
-    })
+    with pushd(noms_js_dir):
+        env = copy.copy(os.environ)
+        env.update({
+            'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
+        })
 
-    os.chdir(noms_js_dir)
-
-    call_with_env(['npm', 'install'], env)
-    call_with_env(['npm', 'run' 'build-docs'], env)
+        call_with_env(['npm', 'install'], env)
+        call_with_env(['npm', 'run-script' 'build-docs'], env)
 
 if __name__ == '__main__':
     main()
