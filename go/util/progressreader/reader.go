@@ -29,7 +29,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	n, err = r.inner.Read(p)
 	r.seen += uint64(n)
 
-	if now := time.Now(); now.Sub(r.lastTime) >= status.Rate {
+	if now := time.Now(); now.Sub(r.lastTime) >= status.Rate || err == io.EOF {
 		r.cb(r.seen)
 		r.lastTime = now
 	}
