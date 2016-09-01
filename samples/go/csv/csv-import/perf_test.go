@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/dataset"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/perf/suite"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/csv"
@@ -24,12 +23,9 @@ import (
 
 // CSV perf suites require the testdata directory to be checked out at $GOPATH/src/github.com/attic-labs/testdata (i.e. ../testdata relative to the noms directory).
 
-// TODO: Add ny-vehicle-registrations test when CSV importing is faster (testdata/ny-vehicle-registrations/20150218.*).
-
 type perfSuite struct {
 	suite.PerfSuite
 	csvImportExe string
-	sfcBlobHash  hash.Hash
 }
 
 func (s *perfSuite) SetupSuite() {
@@ -46,36 +42,57 @@ func (s *perfSuite) SetupSuite() {
 func (s *perfSuite) Test01ImportSfCrimeBlobFromTestdata() {
 	assert := s.NewAssert()
 
-	raw := s.openGlob(path.Join(s.Testdata, "sf-crime", "2016-07-28.*"))
-	defer s.closeGlob(raw)
+	files := s.openGlob(s.Testdata, "sf-crime", "2016-07-28.*")
+	defer s.closeGlob(files)
 
-	blob := types.NewBlob(io.MultiReader(raw...))
-	fmt.Fprintf(s.W, "csv/raw is %s\n", humanize.Bytes(blob.Len()))
+	blob := types.NewBlob(io.MultiReader(files...))
+	fmt.Fprintf(s.W, "\tsf-crime is %s\n", humanize.Bytes(blob.Len()))
 
-	ds := dataset.NewDataset(s.Database, "csv/raw")
+	ds := dataset.NewDataset(s.Database, "sf-crime/raw")
 	_, err := ds.CommitValue(blob)
 	assert.NoError(err)
 }
 
 func (s *perfSuite) Test02ImportSfCrimeCSVFromBlob() {
+	s.execCsvImportExe("sf-crime")
+}
+
+func (s *perfSuite) Test03ImportSfRegisteredBusinessesFromBlobAsMap() {
 	assert := s.NewAssert()
 
-	blobSpec := fmt.Sprintf("%s::csv/raw.value", s.DatabaseSpec)
-	destSpec := fmt.Sprintf("%s::csv", s.DatabaseSpec)
-	importCmd := exec.Command(s.csvImportExe, "-p", blobSpec, destSpec)
+	files := s.openGlob(s.Testdata, "sf-registered-businesses", "2016-07-25.csv")
+	defer s.closeGlob(files)
+
+	blob := types.NewBlob(io.MultiReader(files...))
+	fmt.Fprintf(s.W, "\tsf-reg-bus is %s\n", humanize.Bytes(blob.Len()))
+
+	ds := dataset.NewDataset(s.Database, "sf-reg-bus/raw")
+	_, err := ds.CommitValue(blob)
+	assert.NoError(err)
+
+	s.execCsvImportExe("sf-reg-bus", "--dest-type", "map:0")
+}
+
+func (s *perfSuite) execCsvImportExe(dsName string, args ...string) {
+	assert := s.NewAssert()
+
+	blobSpec := fmt.Sprintf("%s::%s/raw.value", s.DatabaseSpec, dsName)
+	destSpec := fmt.Sprintf("%s::%s", s.DatabaseSpec, dsName)
+	args = append(args, "-p", blobSpec, destSpec)
+	importCmd := exec.Command(s.csvImportExe, args...)
 	importCmd.Stdout = s.W
 	importCmd.Stderr = os.Stderr
 
 	assert.NoError(importCmd.Run())
 }
 
-func (s *perfSuite) TestParseNyVehicleRegistrations() {
+func (s *perfSuite) TestParseSfCrime() {
 	assert := s.NewAssert()
 
-	raw := s.openGlob(path.Join(s.Testdata, "ny-vehicle-registrations", "20150218.*"))
-	defer s.closeGlob(raw)
+	files := s.openGlob(path.Join(s.Testdata, "sf-crime", "2016-07-28.*"))
+	defer s.closeGlob(files)
 
-	reader := csv.NewCSVReader(io.MultiReader(raw...), ',')
+	reader := csv.NewCSVReader(io.MultiReader(files...), ',')
 	for {
 		_, err := reader.Read()
 		if err != nil {
@@ -85,32 +102,34 @@ func (s *perfSuite) TestParseNyVehicleRegistrations() {
 	}
 }
 
-// openGlob opens all files that match `pattern`. Large CSV files in testdata are broken up into foo.a, foo.b, etc to get around GitHub file size restrictions.
-func (s *perfSuite) openGlob(pattern string) (readers []io.Reader) {
+// openGlob opens the concatenation of all files that match `pattern`, returned
+// as []io.Reader so it can be used immediately with io.MultiReader.
+//
+// Large CSV files in testdata are broken up into foo.a, foo.b, etc to get
+// around GitHub file size restrictions.
+func (s *perfSuite) openGlob(pattern ...string) []io.Reader {
 	assert := s.NewAssert()
 
-	s.Pause(func() {
-		glob, err := filepath.Glob(pattern)
+	glob, err := filepath.Glob(path.Join(pattern...))
+	assert.NoError(err)
+
+	files := make([]io.Reader, len(glob))
+	for i, m := range glob {
+		f, err := os.Open(m)
 		assert.NoError(err)
-		readers = make([]io.Reader, len(glob))
-		for i, m := range glob {
-			r, err := os.Open(m)
-			assert.NoError(err)
-			readers[i] = r
-		}
-	})
-	return
+		files[i] = f
+	}
+
+	return files
 }
 
-// closeGlob closes `readers`. Intended to be used after `openGlob`.
-func (s *perfSuite) closeGlob(readers []io.Reader) {
+// closeGlob closes all of the files, designed to be used with openGlob.
+func (s *perfSuite) closeGlob(files []io.Reader) {
 	assert := s.NewAssert()
 
-	s.Pause(func() {
-		for _, r := range readers {
-			assert.NoError(r.(io.ReadCloser).Close())
-		}
-	})
+	for _, f := range files {
+		assert.NoError(f.(*os.File).Close())
+	}
 }
 
 func TestPerf(t *testing.T) {
