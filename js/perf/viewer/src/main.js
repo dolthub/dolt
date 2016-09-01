@@ -132,7 +132,7 @@ async function render() {
   // values are with respect to the graph pixel height.
   //
   // So, try to approximate it by taking into account: (a) the expected magnitude of the Y axis (the
-  // maximum value), and (b) and how much space the graph will take up on the screen (half of screen
+  // maximum value), and (b) how much space the graph will take up on the screen (half of screen
   // *width* - this does appear to be what chart.js does).
   const maxElapsedTime = Array.from(chartDatasets.values()).reduce((max, dataPoints) => {
     const medians = dataPoints.map(dp => dp !== null ? dp.median : 0);
