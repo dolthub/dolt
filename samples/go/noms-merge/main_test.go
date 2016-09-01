@@ -90,7 +90,7 @@ func (s *testSuite) TestLose() {
 		{[]string{"foo"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux"}, "Incorrect number of arguments\n"},
-		{[]string{"foo", "bar", "baz"}, "--parent is currently required\n"},
+		{[]string{"foo", "bar", "baz"}, "--parent is required\n"},
 		{[]string{"--parent=" + p, sp, l + "!!", r}, "Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
 		{[]string{"--parent=" + p, sp, l + "2", r}, "Dataset " + l + "2 has no data\n"},
 		{[]string{"--parent=" + p + "2", sp, l, r}, "Dataset " + p + "2 has no data\n"},
