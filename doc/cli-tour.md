@@ -157,7 +157,7 @@ We can now make an edit locally:
 open /tmp/film-location.csv and edit it, then:
 
 ```
-> csv-import --column-types=String,String,String,String,String,String,String,Number,String,String,String \
+> csv-import --column-types=String,String,String,String,String,String,String,String,Number,String,String \
     /tmp/film-locations.csv /tmp/noms::films
 ```
 
