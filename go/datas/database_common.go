@@ -110,7 +110,7 @@ func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error 
 			if commitRef.Equals(currentHeadRef) {
 				return nil
 			}
-			if !descendsFrom(commit, currentHeadRef, ds) {
+			if !CommitDescendsFrom(commit, currentHeadRef, ds) {
 				return ErrMergeNeeded
 			}
 		}
@@ -147,28 +147,4 @@ func (ds *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRe
 	return
 }
 
-func descendsFrom(commit types.Struct, currentHeadRef types.Ref, vr types.ValueReader) bool {
-	// BFS because the common case is that the ancestor is only a step or two away
-	ancestors := commit.Get(ParentsField).(types.Set)
-	for !ancestors.Has(currentHeadRef) {
-		if ancestors.Empty() {
-			return false
-		}
-		ancestors = getAncestors(ancestors, vr)
-	}
-	return true
-}
 
-func getAncestors(commits types.Set, vr types.ValueReader) types.Set {
-	ancestors := types.NewSet()
-	commits.IterAll(func(v types.Value) {
-		r := v.(types.Ref)
-		c := r.TargetValue(vr).(types.Struct)
-		next := []types.Value{}
-		c.Get(ParentsField).(types.Set).IterAll(func(v types.Value) {
-			next = append(next, v)
-		})
-		ancestors = ancestors.Insert(next...)
-	})
-	return ancestors
-}

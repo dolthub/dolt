@@ -5,8 +5,11 @@
 package datas
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -95,4 +98,88 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"parents": types.NewSet(),
 	})
 	assert.False(IsCommitType(noMetaCommit.Type()))
+}
+
+// Convert list of Struct's to Set<Ref>
+func toRefSet(commits ...types.Struct) types.Set {
+	set := types.NewSet()
+	for _, p := range commits {
+		set = set.Insert(types.NewRef(p))
+	}
+	return set
+}
+
+// Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s
+func toValuesString(refSet types.Set, vr types.ValueReader) string {
+	values := []string{}
+	refSet.IterAll(func(v types.Value) {
+		values = append(values, fmt.Sprintf("%v", v.(types.Ref).TargetValue(vr).(types.Struct).Get("value")))
+	})
+	return strings.Join(values, ",")
+}
+
+func TestCommitDescendsFrom(t *testing.T) {
+	assert := assert.New(t)
+	db := NewDatabase(chunks.NewTestStore())
+	defer db.Close()
+
+	// Add a commit and return it
+	addCommit := func(ds string, val string, parents ...types.Struct) types.Struct {
+		commit := NewCommit(types.String(val), toRefSet(parents...), types.EmptyStruct)
+		var err error
+		db, err = db.Commit(ds, commit)
+		assert.NoError(err)
+		return commit
+	}
+
+	// Assert that c does/doesn't descend from a
+	assertDescendsFrom := func(c types.Struct, a types.Struct, expected bool) {
+		assert.Equal(expected, CommitDescendsFrom(c, types.NewRef(a), db),
+			"Test: CommitDescendsFrom(%s, %s)", c.Get("value"), a.Get("value"))
+	}
+
+	// Assert that children have immediate ancestors with height >= minHeight
+	assertAncestors := func(children []types.Struct, minLevel uint64, expected []types.Struct) {
+		exp := toRefSet(expected...)
+		ancestors := getAncestors(toRefSet(children...), minLevel, db)
+		assert.True(exp.Equals(ancestors), "expected: [%s]; got: [%s]", toValuesString(exp, db), toValuesString(ancestors, db))
+	}
+
+	// Build commit DAG
+	//
+	// ds-a: a1<-a2<-a3<-a4<-a5<-a6
+	//        ^              /
+	//         \    /-------/
+	//          \  V
+	// ds-b:     b2
+	//
+	a := "ds-a"
+	b := "ds-b"
+	a1 := addCommit(a, "a1")
+	a2 := addCommit(a, "a2", a1)
+	b2 := addCommit(b, "b2", a1)
+	a3 := addCommit(a, "a3", a2)
+	a4 := addCommit(a, "a4", a3)
+	a5 := addCommit(a, "a5", a4, b2)
+	a6 := addCommit(a, "a6", a5)
+
+	// Positive tests
+	assertDescendsFrom(a3, a2, true) // parent
+	assertDescendsFrom(a3, a1, true) // grandparent
+	assertDescendsFrom(a3, a1, true) // origin
+	assertDescendsFrom(a6, b2, true) // merge ancestor
+	assertDescendsFrom(a5, a3, true) // exercise prune parent
+	assertDescendsFrom(a6, a3, true) // exercise prune grandparent
+
+	// Negative tests
+	assertDescendsFrom(a4, a5, false) // sanity
+	assertDescendsFrom(a6, a6, false) // self
+	assertDescendsFrom(a4, b2, false) // different branch
+
+	// Verify pruning
+	assertAncestors([]types.Struct{a6}, 5, []types.Struct{a5})     // no pruning; one parent
+	assertAncestors([]types.Struct{a5}, 2, []types.Struct{a4, b2}) // no pruning; 2 parents
+	assertAncestors([]types.Struct{a5}, 4, []types.Struct{a4})     // prune 1 parent
+	assertAncestors([]types.Struct{a5}, 5, []types.Struct{})       // prune child b/c child.Height <= minHeight
+	assertAncestors([]types.Struct{a4, b2}, 3, []types.Struct{a3}) // prune 1 child b/c child.Height <= minHeight
 }

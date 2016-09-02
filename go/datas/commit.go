@@ -53,6 +53,42 @@ func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.St
 	return types.NewStructWithType(t, types.ValueSlice{meta, parents, value})
 }
 
+// CommitDescendsFrom returns true if commit descends from ancestor
+func CommitDescendsFrom(commit types.Struct, ancestor types.Ref, vr types.ValueReader) bool {
+	// BFS because the common case is that the ancestor is only a step or two away
+	ancestors := commit.Get(ParentsField).(types.Set)
+	for !ancestors.Has(ancestor) {
+		if ancestors.Empty() {
+			return false
+		}
+		ancestors = getAncestors(ancestors, ancestor.Height(), vr)
+	}
+	return true
+}
+
+// getAncestors returns set of direct ancestors with height >= minHeight
+func getAncestors(commits types.Set, minHeight uint64, vr types.ValueReader) types.Set {
+	ancestors := types.NewSet()
+	commits.IterAll(func(v types.Value) {
+		r := v.(types.Ref)
+		c := r.TargetValue(vr).(types.Struct)
+		// only consider commit-refs greater than minHeight; commit-refs at same height
+		// can be ignored since their parent heights will be < minHeight
+		if r.Height() > minHeight {
+			next := []types.Value{}
+			c.Get(ParentsField).(types.Set).IterAll(func(v types.Value) {
+				r := v.(types.Ref)
+				// only consider parent commit-refs >= minHeight
+				if r.Height() >= minHeight {
+					next = append(next, v)
+				}
+			})
+			ancestors = ancestors.Insert(next...)
+		}
+	})
+	return ancestors
+}
+
 func makeCommitType(valueType *types.Type, parentsValueTypes []*types.Type, metaType *types.Type, parentsMetaTypes []*types.Type) *types.Type {
 	tmp := make([]*types.Type, len(parentsValueTypes), len(parentsValueTypes)+1)
 	copy(tmp, parentsValueTypes)
