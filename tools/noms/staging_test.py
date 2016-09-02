@@ -16,32 +16,32 @@ class TestStaging(unittest.TestCase):
 		shutil.rmtree(self.tempdir, ignore_errors=True)
 
 	def test_Nested(self):
-		self.assertTrue(staging._isSubDir(self.nested, self.tempdir))
+		self.assertTrue(staging._is_sub_dir(self.nested, self.tempdir))
 
 	def test_NotNested(self):
 		otherNested = tempfile.mkdtemp(dir=self.tempdir)
-		self.assertFalse(staging._isSubDir(self.nested, otherNested))
+		self.assertFalse(staging._is_sub_dir(self.nested, otherNested))
 
 	def test_DotDotNotReallyNested(self):
 		notReallyNested = os.path.join(self.tempdir, 'foo', os.pardir, 'bar')
-		self.assertFalse(staging._isSubDir(self.nested, notReallyNested))
+		self.assertFalse(staging._is_sub_dir(self.nested, notReallyNested))
 
 	def test_LinkNotReallyNested(self):
 		otherNested = tempfile.mkdtemp(dir=self.tempdir)
 		linkName = os.path.join(self.nested, 'link')
 		os.symlink(otherNested, linkName)
-		self.assertFalse(staging._isSubDir(linkName, self.nested))
+		self.assertFalse(staging._is_sub_dir(linkName, self.nested))
 
 	def test_DirPath(self):
 		linkName = os.path.join(self.tempdir, 'link')
 		os.symlink(self.nested, linkName)
-		norm = staging._dirPath(linkName)
+		norm = staging._dir_path(linkName)
 		self.assertEqual(self.nested, norm)
 
 	def test_DirPathFails(self):
 		f = tempfile.NamedTemporaryFile(dir=self.tempdir)
 		try:
-			staging._dirPath(f.name)
+			staging._dir_path(f.name)
 		except ValueError:
 			pass
 
