@@ -8,34 +8,34 @@ import os, os.path, shutil, tempfile, unittest
 import copy
 
 class TestCopy(unittest.TestCase):
-	def setUp(self):
-		self.tempdir = os.path.realpath(tempfile.mkdtemp())
+    def setUp(self):
+        self.tempdir = os.path.realpath(tempfile.mkdtemp())
 
 
-	def tearDown(self):
-		shutil.rmtree(self.tempdir, ignore_errors=True)
+    def tearDown(self):
+        shutil.rmtree(self.tempdir, ignore_errors=True)
 
 
-	def test_CopyPeers(self):
-		nested = tempfile.mkdtemp(dir=self.tempdir)
-		otherNested = tempfile.mkdtemp(dir=self.tempdir)
+    def test_CopyPeers(self):
+        nested = tempfile.mkdtemp(dir=self.tempdir)
+        otherNested = tempfile.mkdtemp(dir=self.tempdir)
 
-		def mkfile():
-			with tempfile.NamedTemporaryFile(dir=nested, delete=False) as f:
-				return f.name
+        def mkfile():
+            with tempfile.NamedTemporaryFile(dir=nested, delete=False) as f:
+                return f.name
 
-		me = mkfile()
-		peerFile = os.path.basename(mkfile())
-		peerDir = os.path.basename(tempfile.mkdtemp(dir=nested))
-		peerLink = 'link'
-		peerLinkAbs = os.path.join(nested, 'link')
-		os.symlink(peerFile, peerLinkAbs)
+        me = mkfile()
+        peerFile = os.path.basename(mkfile())
+        peerDir = os.path.basename(tempfile.mkdtemp(dir=nested))
+        peerLink = 'link'
+        peerLinkAbs = os.path.join(nested, 'link')
+        os.symlink(peerFile, peerLinkAbs)
 
-		copy.Peers(me, otherNested)
-		self.assertTrue(os.path.islink(os.path.join(otherNested, peerLink)))
-		self.assertTrue(os.path.isfile(os.path.join(otherNested, peerFile)))
-		self.assertTrue(os.path.isdir(os.path.join(otherNested, peerDir)))
-		self.assertFalse(os.path.lexists(os.path.join(otherNested, os.path.basename(me))))
+        copy.Peers(me, otherNested)
+        self.assertTrue(os.path.islink(os.path.join(otherNested, peerLink)))
+        self.assertTrue(os.path.isfile(os.path.join(otherNested, peerFile)))
+        self.assertTrue(os.path.isdir(os.path.join(otherNested, peerDir)))
+        self.assertFalse(os.path.lexists(os.path.join(otherNested, os.path.basename(me))))
 
 
 if __name__ == '__main__':
