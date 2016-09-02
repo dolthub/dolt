@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -83,7 +84,7 @@ func poke() (win bool) {
 		return
 	}
 
-	_, err = outDS.CommitValue(outRoot)
+	_, err = outDS.Commit(outRoot, dataset.CommitOptions{Meta: inDS.Head().Get(datas.MetaField).(types.Struct)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit: %s\n", err)
 		return
