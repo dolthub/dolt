@@ -340,3 +340,18 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	assert.False(tt, IsSubtype(t1, t2))
 	assert.True(tt, IsSubtype(t2, t1))
 }
+
+func TestIsSubtypeCompundUnion(tt *testing.T) {
+	rt := MakeListType(EmptyStructType)
+
+	st1 := MakeStructType("One", []string{"a"}, []*Type{NumberType})
+	st2 := MakeStructType("Two", []string{"b"}, []*Type{StringType})
+	ct := MakeListType(MakeUnionType(st1, st2))
+
+	assert.True(tt, IsSubtype(rt, ct))
+	assert.False(tt, IsSubtype(ct, rt))
+
+	ct2 := MakeListType(MakeUnionType(st1, st2, NumberType))
+	assert.False(tt, IsSubtype(rt, ct2))
+	assert.False(tt, IsSubtype(ct2, rt))
+}

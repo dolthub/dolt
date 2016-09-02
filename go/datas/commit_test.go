@@ -65,6 +65,20 @@ func TestNewCommit(t *testing.T) {
 		types.StringType,
 	})
 	assertTypeEquals(et4, at4)
+
+	// Merge-commit with different parent types
+	commit5 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
+	at5 := commit5.Type()
+	et5 := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+		types.EmptyStructType,
+		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+			types.EmptyStructType,
+			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+			types.MakeUnionType(types.NumberType, types.StringType),
+		}))),
+		types.StringType,
+	})
+	assertTypeEquals(et5, at5)
 }
 
 func TestCommitWithoutMetaField(t *testing.T) {
