@@ -46,7 +46,7 @@ var nomsLog = &util.Command{
 
 func setupLogFlags() *flag.FlagSet {
 	logFlagSet := flag.NewFlagSet("log", flag.ExitOnError)
-	logFlagSet.IntVar(&color, "color", -1, "value of 1 forces color on, 2 forces color off")
+	logFlagSet.IntVar(&color, "color", -1, "value of 1 forces color on, 0 forces color off")
 	logFlagSet.IntVar(&maxLines, "max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
 	logFlagSet.IntVar(&maxCommits, "n", 0, "max number of commits to display (0 for all commits)")
 	logFlagSet.BoolVar(&oneline, "oneline", false, "show a summary of each commit on a single line")
