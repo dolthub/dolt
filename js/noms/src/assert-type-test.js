@@ -328,4 +328,19 @@ suite('validate type', () => {
     assert.isFalse(isSubtype(tc, tb, []));
   });
 
+  test('isSubtype compound union', () => {
+    const emptyStructType = makeStructType('', [], []);
+    const rt = makeListType(emptyStructType);
+
+    const st1 = makeStructType('One', ['a'], [numberType]);
+    const st2 = makeStructType('Two', ['b'], [stringType]);
+    const ct = makeListType(makeUnionType([st1, st2]));
+
+    assert.isTrue(isSubtype(rt, ct));
+    assert.isFalse(isSubtype(ct, rt));
+
+    const ct2 = makeListType(makeUnionType([st1, st2, numberType]));
+    assert.isFalse(isSubtype(rt, ct2));
+    assert.isFalse(isSubtype(ct2, rt));
+  });
 });
