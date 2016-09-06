@@ -13,7 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
+	ldbIterator "github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -52,7 +52,7 @@ type ldbOpCache struct {
 }
 
 type ldbOpCacheIterator struct {
-	iter iterator.Iterator
+	iter ldbIterator.Iterator
 	vr   ValueReader
 }
 

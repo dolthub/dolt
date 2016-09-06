@@ -185,6 +185,14 @@ func (l List) IterAll(f listIterAllFunc) {
 	})
 }
 
+func (l List) Iterator() ListIterator {
+	return l.IteratorAt(0)
+}
+
+func (l List) IteratorAt(index uint64) ListIterator {
+	return ListIterator{newCursorAtIndex(l.seq, index)}
+}
+
 func (l List) Diff(last List, changes chan<- Splice, closeChan <-chan struct{}) {
 	l.DiffWithLimit(last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }

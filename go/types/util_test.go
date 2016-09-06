@@ -9,17 +9,41 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var generateNumbersAsValues = func(n int) []Value {
+type iterator interface {
+	Next() Value
+}
+
+func iterToSlice(iter iterator) ValueSlice {
+	vs := ValueSlice{}
+	for {
+		v := iter.Next()
+		if v == nil {
+			break
+		}
+		vs = append(vs, v)
+	}
+	return vs
+}
+
+func intsToValueSlice(ints ...int) ValueSlice {
+	vs := ValueSlice{}
+	for _, i := range ints {
+		vs = append(vs, Number(i))
+	}
+	return vs
+}
+
+func generateNumbersAsValues(n int) []Value {
 	d.Chk.True(n > 0, "must be an integer greater than zero")
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
-var generateNumbersAsValueSlice = func(n int) ValueSlice {
+func generateNumbersAsValueSlice(n int) ValueSlice {
 	d.Chk.True(n > 0, "must be an integer greater than zero")
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
-var generateNumbersAsValuesFromToBy = func(from, to, by int) ValueSlice {
+func generateNumbersAsValuesFromToBy(from, to, by int) ValueSlice {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
@@ -29,10 +53,11 @@ var generateNumbersAsValuesFromToBy = func(from, to, by int) ValueSlice {
 	return nums
 }
 
-var generateNumbersAsStructs = func(n int) ValueSlice {
+func generateNumbersAsStructs(n int) ValueSlice {
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
-var generateNumbersAsStructsFromToBy = func(from, to, by int) ValueSlice {
+
+func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 	d.Chk.True(to > from, "to must be greater than from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
@@ -42,7 +67,7 @@ var generateNumbersAsStructsFromToBy = func(from, to, by int) ValueSlice {
 	return nums
 }
 
-var generateNumbersAsRefOfStructs = func(n int) []Value {
+func generateNumbersAsRefOfStructs(n int) []Value {
 	d.Chk.True(n > 0, "must be an integer greater than zero")
 	vs := NewTestValueStore()
 	nums := []Value{}

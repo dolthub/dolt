@@ -11,26 +11,6 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func iterToSlice(iter SetIterator) ValueSlice {
-	vs := ValueSlice{}
-	for {
-		v := iter.Next()
-		if v == nil {
-			break
-		}
-		vs = append(vs, v)
-	}
-	return vs
-}
-
-func intsToValueSlice(ints ...int) ValueSlice {
-	vs := ValueSlice{}
-	for _, i := range ints {
-		vs = append(vs, Number(i))
-	}
-	return vs
-}
-
 func TestSetIterator(t *testing.T) {
 	assert := assert.New(t)
 

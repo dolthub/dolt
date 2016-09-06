@@ -7,6 +7,7 @@ package merge
 import (
 	"fmt"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -94,9 +95,10 @@ func canMerge(a, b types.List, aSplice, bSplice types.Splice) bool {
 	if aSplice != bSplice {
 		return false
 	}
-	// TODO: Add List.IterFrom() and use that to compare added values.
-	for i := uint64(0); i < aSplice.SpAdded; i++ {
-		if !a.Get(aSplice.SpFrom + i).Equals(b.Get(bSplice.SpFrom + i)) {
+	aIter, bIter := a.IteratorAt(aSplice.SpFrom), b.IteratorAt(bSplice.SpFrom)
+	for count := uint64(0); count < aSplice.SpAdded; count++ {
+		aVal, bVal := aIter.Next(), bIter.Next()
+		if aVal == nil || bVal == nil || !aVal.Equals(bVal) {
 			return false
 		}
 	}
@@ -109,10 +111,12 @@ func merge(s1, s2 types.Splice) types.Splice {
 }
 
 func apply(source, target types.List, offset uint64, s types.Splice) types.List {
-	// TODO: Add List.IterFrom() and use that to build up toAdd.
 	toAdd := make(types.ValueSlice, s.SpAdded)
-	for i := range toAdd {
-		toAdd[i] = source.Get(s.SpFrom + uint64(i))
+	iter := source.IteratorAt(s.SpFrom)
+	for i := 0; uint64(i) < s.SpAdded; i++ {
+		v := iter.Next()
+		d.PanicIfTrue(v == nil, "List diff returned a splice that inserts a nonexistent element.")
+		toAdd[i] = v
 	}
 	return target.Splice(s.SpAt+offset, s.SpRemoved, toAdd...)
 }
