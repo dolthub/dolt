@@ -26,19 +26,19 @@ type testSuite struct {
 
 func (s *testSuite) TestRoundTrip() {
 	spec := fmt.Sprintf("ldb:%s::hr", s.LdbDir)
-	stdout, stderr := s.Run(main, []string{"--ds", spec, "list-persons"})
+	stdout, stderr := s.MustRun(main, []string{"--ds", spec, "list-persons"})
 	s.Equal("No people found\n", stdout)
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"--ds", spec, "add-person", "42", "Benjamin Kalman", "Programmer, Barista"})
+	stdout, stderr = s.MustRun(main, []string{"--ds", spec, "add-person", "42", "Benjamin Kalman", "Programmer, Barista"})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"--ds", spec, "add-person", "43", "Abigail Boodman", "Chief Architect"})
+	stdout, stderr = s.MustRun(main, []string{"--ds", spec, "add-person", "43", "Abigail Boodman", "Chief Architect"})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"--ds", spec, "list-persons"})
+	stdout, stderr = s.MustRun(main, []string{"--ds", spec, "list-persons"})
 	s.Equal(`Benjamin Kalman (id: 42, title: Programmer, Barista)
 Abigail Boodman (id: 43, title: Chief Architect)
 `, stdout)
@@ -54,7 +54,7 @@ func (s *testSuite) TestReadCanned() {
 	// Have to copy the canned data elsewhere because just reading the database modifies it.
 	_, err = exec.Command("cp", "-r", p, dst).Output()
 	s.NoError(err)
-	stdout, stderr := s.Run(main, []string{"--ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
+	stdout, stderr := s.MustRun(main, []string{"--ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
 	s.Equal(`Aaron Boodman (id: 7, title: Chief Evangelism Officer)
 Samuel Boodman (id: 13, title: VP, Culture)
 `, stdout)
@@ -63,5 +63,5 @@ Samuel Boodman (id: 13, title: VP, Culture)
 
 func (s *testSuite) TestInvalidDatasetSpec() {
 	// Should not crash
-	_, _ = s.Run(main, []string{"--ds", "invalid-dataset", "list-persons"})
+	_, _ = s.MustRun(main, []string{"--ds", "invalid-dataset", "list-persons"})
 }

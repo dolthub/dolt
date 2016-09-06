@@ -47,10 +47,10 @@ func (s *testSuite) TestWin() {
 	}
 
 	for k, v := range changes {
-		stdout, stderr := s.Run(main, []string{sp, k, v})
+		stdout, stderr, err := s.Run(main, []string{sp, k, v})
 		s.Equal("", stdout)
 		s.Equal("", stderr)
-		s.Equal(0, s.ExitStatus)
+		s.Equal(nil, err)
 	}
 
 	ds, _ = spec.GetDataset(sp)
@@ -92,9 +92,9 @@ func (s *testSuite) TestLose() {
 	ds.Database().Close()
 
 	for _, c := range cases {
-		stdout, stderr := s.Run(main, c.args)
+		stdout, stderr, err := s.Run(main, c.args)
 		s.Empty(stdout, "Expected empty stdout for case: %#v", c.args)
 		s.Equal(c.err, stderr, "Unexpected output for case: %#v\n", c.args)
-		s.Equal(1, s.ExitStatus)
+		s.Equal(clienttest.ExitError{1}, err)
 	}
 }

@@ -96,7 +96,7 @@ func (s *testSuite) TestCSVExportFromList() {
 
 	// Run exporter
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{dataspec})
+	stdout, stderr := s.MustRun(main, []string{dataspec})
 	s.Equal("", stderr)
 
 	verifyOutput(s, stdout)
@@ -116,7 +116,7 @@ func (s *testSuite) TestCSVExportFromMap() {
 
 	// Run exporter
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{dataspec})
+	stdout, stderr := s.MustRun(main, []string{dataspec})
 	s.Equal("", stderr)
 
 	verifyOutput(s, stdout)

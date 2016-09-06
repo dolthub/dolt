@@ -5,10 +5,8 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -18,21 +16,7 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-type testExiter struct{}
-type exitError struct {
-	code int
-}
-
-func (e exitError) Error() string {
-	return fmt.Sprintf("Exiting with code: %d", e.code)
-}
-
-func (testExiter) Exit(code int) {
-	panic(exitError{code})
-}
-
 func TestNomsLog(t *testing.T) {
-	d.UtilExiter = testExiter{}
 	suite.Run(t, &nomsLogTestSuite{})
 }
 
@@ -47,7 +31,7 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	s.NoError(err)
 	commit := ds.Head()
 	ds.Database().Close()
-	res, _ := s.Run(main, []string{"log", str})
+	res, _ := s.MustRun(main, []string{"log", str})
 	s.Contains(res, commit.Hash().String())
 }
 
@@ -58,7 +42,7 @@ func (s *nomsLogTestSuite) TestNomsLog() {
 	s.NoError(err)
 
 	ds.Database().Close()
-	s.Panics(func() { s.Run(main, []string{"log", str}) })
+	s.Panics(func() { s.MustRun(main, []string{"log", str}) })
 
 	testCommitInResults(s, str, 1)
 	testCommitInResults(s, str, 2)
@@ -102,17 +86,17 @@ func (s *nomsLogTestSuite) TestNArg() {
 	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsName)
-	res, _ := s.Run(main, []string{"log", "-n1", dsSpec})
+	res, _ := s.MustRun(main, []string{"log", "-n1", dsSpec})
 	s.NotContains(res, h1.String())
-	res, _ = s.Run(main, []string{"log", "-n0", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "-n0", dsSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
 
 	vSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+h3.String())
-	res, _ = s.Run(main, []string{"log", "-n1", vSpec})
+	res, _ = s.MustRun(main, []string{"log", "-n1", vSpec})
 	s.NotContains(res, h1.String())
-	res, _ = s.Run(main, []string{"log", "-n0", vSpec})
+	res, _ = s.MustRun(main, []string{"log", "-n0", vSpec})
 	s.Contains(res, h3.String())
 	s.Contains(res, h2.String())
 	s.Contains(res, h1.String())
@@ -136,10 +120,10 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "ds1")
-	res, _ := s.Run(main, []string{"log", "--show-value=false", dsSpec})
+	res, _ := s.MustRun(main, []string{"log", "--show-value=false", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), metaRes1, res)
 
-	res, _ = s.Run(main, []string{"log", "--show-value=false", "--oneline", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--show-value=false", "--oneline", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), metaRes2, res)
 }
 
@@ -190,9 +174,9 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b1.Database().Close()
-	res, _ := s.Run(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
+	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
 	s.Equal(graphRes1, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
 	s.Equal(diffRes1, res)
 }
 
@@ -222,9 +206,9 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 
 	db.Close()
 
-	res, _ := s.Run(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
+	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
 	s.Equal(graphRes2, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
 	s.Equal(diffRes2, res)
 }
 
@@ -263,9 +247,9 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 
 	db.Close()
-	res, _ := s.Run(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
+	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
 	test.EqualsIgnoreHashes(s.T(), graphRes3, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
 	test.EqualsIgnoreHashes(s.T(), diffRes3, res)
 }
 
@@ -293,19 +277,19 @@ func (s *nomsLogTestSuite) TestTruncation() {
 	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "truncate")
-	res, _ := s.Run(main, []string{"log", "--graph", "--show-value=true", dsSpec})
+	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), truncRes1, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), diffTrunc1, res)
 
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=true", "--max-lines=-1", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=true", "--max-lines=-1", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), truncRes2, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", "--max-lines=-1", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", "--max-lines=-1", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), diffTrunc2, res)
 
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=true", "--max-lines=0", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=true", "--max-lines=0", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), truncRes3, res)
-	res, _ = s.Run(main, []string{"log", "--graph", "--show-value=false", "--max-lines=0", dsSpec})
+	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", "--max-lines=0", dsSpec})
 	test.EqualsIgnoreHashes(s.T(), diffTrunc3, res)
 }
 

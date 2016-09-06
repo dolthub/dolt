@@ -65,7 +65,7 @@ func (s *testSuite) TestWin() {
 	})
 
 	var mainErr error
-	stdout, stderr := s.Run(func() { mainErr = nomsMerge() }, []string{"--quiet=true", "--parent=" + p, s.LdbDir, l, r})
+	stdout, stderr, _ := s.Run(func() { mainErr = nomsMerge() }, []string{"--quiet=true", "--parent=" + p, s.LdbDir, l, r})
 	if s.NoError(mainErr, "%s", mainErr) {
 		s.Equal("", stdout)
 		s.Equal("", stderr)
@@ -110,7 +110,7 @@ func (s *testSuite) TestLose() {
 
 	for _, c := range cases {
 		var mainErr error
-		stdout, _ := s.Run(func() { mainErr = nomsMerge() }, c.args)
+		stdout, _, _ := s.Run(func() { mainErr = nomsMerge() }, c.args)
 		s.Empty(stdout, "Expected empty stdout for case: %#v", c.args)
 		if s.Error(mainErr) {
 			s.Equal(c.err, mainErr.Error(), "Unexpected output for case: %#v\n", c.args)

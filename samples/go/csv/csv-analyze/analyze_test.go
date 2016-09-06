@@ -57,37 +57,37 @@ func (s *csvAnalyzeTestSuite) TearDownTest() {
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectColumnTypes() {
-	stdout, stderr := s.Run(main, []string{"--detect-column-types=1", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-column-types=1", s.tmpFileName})
 	s.Equal("String,String,String\n", stdout)
 	s.Equal("", stderr)
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectColumnTypesSamples20() {
-	stdout, stderr := s.Run(main, []string{"--detect-column-types=1", "--num-samples=20", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-column-types=1", "--num-samples=20", s.tmpFileName})
 	s.Equal("String,String,Number\n", stdout)
 	s.Equal("", stderr)
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectPrimaryKeys() {
-	stdout, stderr := s.Run(main, []string{"--detect-pk=1", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-pk=1", s.tmpFileName})
 	s.Equal("Time\nDate,Time\nTime,Temperature\nDate,Time,Temperature\n", stdout)
 	s.Equal("", stderr)
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectPrimaryKeysSamples20() {
-	stdout, stderr := s.Run(main, []string{"--detect-pk=1", "--num-samples=20", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-pk=1", "--num-samples=20", s.tmpFileName})
 	s.Equal("Time\nTemperature\nDate,Time\nDate,Temperature\nTime,Temperature\nDate,Time,Temperature\n", stdout)
 	s.Equal("", stderr)
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectPrimaryKeysSingleField() {
-	stdout, stderr := s.Run(main, []string{"--detect-pk=1", "--num-fields-pk=1", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-pk=1", "--num-fields-pk=1", s.tmpFileName})
 	s.Equal("Time\n", stdout)
 	s.Equal("", stderr)
 }
 
 func (s *csvAnalyzeTestSuite) TestCSVAnalyzeDetectPrimaryKeysTwoFields() {
-	stdout, stderr := s.Run(main, []string{"--detect-pk=1", "--num-fields-pk=2", s.tmpFileName})
+	stdout, stderr := s.MustRun(main, []string{"--detect-pk=1", "--num-fields-pk=2", s.tmpFileName})
 	s.Equal("Time\nDate,Time\nTime,Temperature\n", stdout)
 	s.Equal("", stderr)
 }

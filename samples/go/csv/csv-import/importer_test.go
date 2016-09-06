@@ -108,7 +108,7 @@ func validateNestedMap(s *testSuite, m types.Map) {
 func (s *testSuite) TestCSVImporter() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -136,7 +136,7 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 		rawDS.CommitValue(types.NewBlob(csv))
 		db.Close()
 
-		stdout, stderr := s.Run(main, []string{
+		stdout, stderr := s.MustRun(main, []string{
 			"--no-progress", "--column-types", TEST_FIELDS,
 			pathFlag, spec.CreateValueSpecString("ldb", s.LdbDir, "raw.value"),
 			spec.CreateValueSpecString("ldb", s.LdbDir, "csv"),
@@ -156,7 +156,7 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 func (s *testSuite) TestCSVImporterToMap() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:1", s.tmpFileName, dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:1", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -172,7 +172,7 @@ func (s *testSuite) TestCSVImporterToMap() {
 func (s *testSuite) TestCSVImporterToNestedMap() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:0,1", s.tmpFileName, dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:0,1", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -188,7 +188,7 @@ func (s *testSuite) TestCSVImporterToNestedMap() {
 func (s *testSuite) TestCSVImporterToNestedMapByName() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:year,a", s.tmpFileName, dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:year,a", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -212,7 +212,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -240,7 +240,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -277,7 +277,7 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "2", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--skip-records", "2", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -308,7 +308,7 @@ func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
-	stdout, stderr := s.Run(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 

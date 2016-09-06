@@ -85,32 +85,32 @@ func (s *testSuite) TestNomdex() {
 	fnameIdx := "fname-idx"
 	dataSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsId)
 	dbSpec := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	stdout, stderr := s.Run(main, []string{"up", "--out-ds", fnameIdx, "--in-path", dataSpec, "--by", ".fname"})
+	stdout, stderr := s.MustRun(main, []string{"up", "--out-ds", fnameIdx, "--in-path", dataSpec, "--by", ".fname"})
 	s.Contains(stdout, "Indexed 24 objects")
 	s.Equal("", stderr)
 
 	genderIdx := "gender-idx"
-	stdout, stderr = s.Run(main, []string{"up", "--out-ds", genderIdx, "--in-path", dataSpec, "--by", ".gender"})
+	stdout, stderr = s.MustRun(main, []string{"up", "--out-ds", genderIdx, "--in-path", dataSpec, "--by", ".gender"})
 	s.Contains(stdout, "Indexed 24 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx = "lady"`})
+	stdout, stderr = s.MustRun(main, []string{"find", "--db", dbSpec, `fname-idx = "lady"`})
 	s.Contains(stdout, "Found 1 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx = "lady" and gender-idx = "f"`})
+	stdout, stderr = s.MustRun(main, []string{"find", "--db", dbSpec, `fname-idx = "lady" and gender-idx = "f"`})
 	s.Contains(stdout, "Found 1 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and gender-idx != "m"`})
+	stdout, stderr = s.MustRun(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and gender-idx != "m"`})
 	s.Contains(stdout, "Found 2 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and fname-idx != "john"`})
+	stdout, stderr = s.MustRun(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" and fname-idx != "john"`})
 	s.Contains(stdout, "Found 21 objects")
 	s.Equal("", stderr)
 
-	stdout, stderr = s.Run(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" or gender-idx != "f"`})
+	stdout, stderr = s.MustRun(main, []string{"find", "--db", dbSpec, `fname-idx != "lady" or gender-idx != "f"`})
 	s.Contains(stdout, "Found 23 objects")
 	s.Equal("", stderr)
 }

@@ -38,7 +38,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	r2 := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+ds.HeadRef().TargetHash().String())
 
 	ds.Database().Close()
-	out, _ := s.Run(main, []string{"diff", r1, r2})
+	out, _ := s.MustRun(main, []string{"diff", r1, r2})
 	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
 }
 
@@ -57,11 +57,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
 	s.NoError(err)
 	r2 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash())
 
-	out, _ := s.Run(main, []string{"diff", "--summarize", r1, r2})
+	out, _ := s.MustRun(main, []string{"diff", "--summarize", r1, r2})
 	s.Contains(out, "Comparing commit values")
 	s.Contains(out, "1 insertion (100.00%), 1 deletion (100.00%), 0 changes (0.00%), (1 value vs 1 value)")
 
-	out, _ = s.Run(main, []string{"diff", "--summarize", r1 + ".value", r2 + ".value"})
+	out, _ = s.MustRun(main, []string{"diff", "--summarize", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
 	ds, err = ds.CommitValue(types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
@@ -72,6 +72,6 @@ func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
 
-	out, _ = s.Run(main, []string{"diff", "--summarize", r3, r4})
+	out, _ = s.MustRun(main, []string{"diff", "--summarize", r3, r4})
 	s.Contains(out, "1 insertion (25.00%), 2 deletions (50.00%), 0 changes (0.00%), (4 values vs 3 values)")
 }

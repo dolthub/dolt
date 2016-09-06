@@ -23,6 +23,10 @@ type ClientTestSuite struct {
 	err        *os.File
 }
 
+type ExitError struct {
+	Code int
+}
+
 func (suite *ClientTestSuite) SetupSuite() {
 	dir, err := ioutil.TempDir(os.TempDir(), "nomstest")
 	d.Chk.NoError(err)
@@ -35,6 +39,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 	suite.LdbDir = path.Join(dir, "ldb")
 	suite.out = stdOutput
 	suite.err = errOutput
+	d.UtilExiter = suite
 }
 
 func (suite *ClientTestSuite) TearDownSuite() {
@@ -43,7 +48,19 @@ func (suite *ClientTestSuite) TearDownSuite() {
 	defer d.Chk.NoError(os.RemoveAll(suite.TempDir))
 }
 
-func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stderr string) {
+// MustRun is a wrapper around Run that will panic on Exit or Panic
+func (suite *ClientTestSuite) MustRun(m func(), args []string) (stdout string, stderr string) {
+	var err interface{}
+	if stdout, stderr, err = suite.Run(m, args); err != nil {
+		panic(err)
+	}
+	return
+}
+
+// Run will execute a function passing to it commandline args, and captures stdout,stderr.
+// If m()  panics the panic is caught, and returned with recoveredError
+// If m() calls os.Exit() m() will panic and return ExitError with recoveredError
+func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stderr string, recoveredErr interface{}) {
 	origArgs := os.Args
 	origOut := os.Stdout
 	origErr := os.Stderr
@@ -53,39 +70,39 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 	os.Stderr = suite.err
 
 	defer func() {
+		recoveredErr = recover()
+		_, err := suite.out.Seek(0, 0)
+		d.Chk.NoError(err)
+		capturedOut, err := ioutil.ReadAll(os.Stdout)
+		d.Chk.NoError(err)
+
+		_, err = suite.out.Seek(0, 0)
+		d.Chk.NoError(err)
+		err = suite.out.Truncate(0)
+		d.Chk.NoError(err)
+
+		_, err = suite.err.Seek(0, 0)
+		d.Chk.NoError(err)
+		capturedErr, err := ioutil.ReadAll(os.Stderr)
+		d.Chk.NoError(err)
+
+		_, err = suite.err.Seek(0, 0)
+		d.Chk.NoError(err)
+		err = suite.err.Truncate(0)
+		d.Chk.NoError(err)
 		os.Args = origArgs
 		os.Stdout = origOut
 		os.Stderr = origErr
+		stdout, stderr = string(capturedOut), string(capturedErr)
 	}()
 
 	suite.ExitStatus = 0
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	m()
-
-	_, err := suite.out.Seek(0, 0)
-	d.Chk.NoError(err)
-	capturedOut, err := ioutil.ReadAll(os.Stdout)
-	d.Chk.NoError(err)
-
-	_, err = suite.out.Seek(0, 0)
-	d.Chk.NoError(err)
-	err = suite.out.Truncate(0)
-	d.Chk.NoError(err)
-
-	_, err = suite.err.Seek(0, 0)
-	d.Chk.NoError(err)
-	capturedErr, err := ioutil.ReadAll(os.Stderr)
-	d.Chk.NoError(err)
-
-	_, err = suite.err.Seek(0, 0)
-	d.Chk.NoError(err)
-	err = suite.err.Truncate(0)
-	d.Chk.NoError(err)
-
-	return string(capturedOut), string(capturedErr)
+	return
 }
 
 // Mock os.Exit() implementation for use during testing.
 func (suite *ClientTestSuite) Exit(status int) {
-	suite.ExitStatus = status
+	panic(ExitError{status})
 }

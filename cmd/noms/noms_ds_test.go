@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
@@ -18,7 +17,6 @@ import (
 )
 
 func TestDs(t *testing.T) {
-	d.UtilExiter = testExiter{}
 	suite.Run(t, &nomsDsTestSuite{})
 }
 
@@ -35,7 +33,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	ds.Close()
 
 	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")
-	rtnVal, _ := s.Run(main, []string{"ds", dbSpec})
+	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal("", rtnVal)
 }
 
@@ -63,26 +61,26 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	dataset2Name := spec.CreateValueSpecString("ldb", dir+"/name", id2)
 
 	// both datasets show up
-	rtnVal, _ := s.Run(main, []string{"ds", dbSpec})
+	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal(id+"\n"+id2+"\n", rtnVal)
 
 	// both datasets again, to make sure printing doesn't change them
-	rtnVal, _ = s.Run(main, []string{"ds", dbSpec})
+	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal(id+"\n"+id2+"\n", rtnVal)
 
 	// delete one dataset, print message at delete
-	rtnVal, _ = s.Run(main, []string{"ds", "-d", datasetName})
+	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", datasetName})
 	s.Equal("Deleted "+datasetName+" (was #6ebc05f71q4sk2psi534fom9se228161)\n", rtnVal)
 
 	// print datasets, just one left
-	rtnVal, _ = s.Run(main, []string{"ds", dbSpec})
+	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal(id2+"\n", rtnVal)
 
 	// delete the second dataset
-	rtnVal, _ = s.Run(main, []string{"ds", "-d", dataset2Name})
+	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", dataset2Name})
 	s.Equal("Deleted "+dataset2Name+" (was #f5qtovr9mv7mjj2uoq7flcfpksgf0s2j)\n", rtnVal)
 
 	// print datasets, none left
-	rtnVal, _ = s.Run(main, []string{"ds", dbSpec})
+	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal("", rtnVal)
 }
