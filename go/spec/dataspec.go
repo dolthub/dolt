@@ -164,8 +164,8 @@ func parsePathSpec(spec string) (pathSpec, error) {
 	return pathSpec{dbSpec, path}, nil
 }
 
-func (s databaseSpec) String() string {
-	return s.Protocol + ":" + s.Path
+func (spec databaseSpec) String() string {
+	return spec.Protocol + ":" + spec.Path
 }
 
 func (spec databaseSpec) Database() (ds datas.Database, err error) {
@@ -195,8 +195,8 @@ func (spec datasetSpec) Dataset() (dataset.Dataset, error) {
 	return dataset.NewDataset(store, spec.DatasetName), nil
 }
 
-func (s datasetSpec) String() string {
-	return s.DbSpec.String() + "::" + s.DatasetName
+func (spec datasetSpec) String() string {
+	return spec.DbSpec.String() + "::" + spec.DatasetName
 }
 
 func (spec datasetSpec) Value() (datas.Database, types.Value, error) {

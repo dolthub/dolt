@@ -146,5 +146,3 @@ func (ds *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRe
 	}
 	return
 }
-
-

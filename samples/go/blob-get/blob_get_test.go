@@ -26,19 +26,19 @@ type bgSuite struct {
 }
 
 func (s *bgSuite) TestBlobGet() {
-	blob_bytes := []byte("hello")
-	blob := types.NewBlob(bytes.NewBuffer(blob_bytes))
+	blobBytes := []byte("hello")
+	blob := types.NewBlob(bytes.NewBuffer(blobBytes))
 
 	db, err := spec.GetDatabase(s.TempDir)
 	s.NoError(err)
 	hash := db.WriteValue(blob)
 	db.Close()
 
-	hash_spec := fmt.Sprintf("%s::#%s", s.TempDir, hash.TargetHash().String())
-	file_path := filepath.Join(s.TempDir, "out")
-	s.MustRun(main, []string{hash_spec, file_path})
+	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, hash.TargetHash().String())
+	filePath := filepath.Join(s.TempDir, "out")
+	s.MustRun(main, []string{hashSpec, filePath})
 
-	file_bytes, err := ioutil.ReadFile(file_path)
+	fileBytes, err := ioutil.ReadFile(filePath)
 	s.NoError(err)
-	s.Equal(blob_bytes, file_bytes)
+	s.Equal(blobBytes, fileBytes)
 }

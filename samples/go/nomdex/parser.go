@@ -131,46 +131,46 @@ func NewQueryScanner(query string) *qScanner {
 	return &qs
 }
 
-func (s *qScanner) parseExpr(level int, im *indexManager) expr {
-	tok := s.Scan()
+func (qs *qScanner) parseExpr(level int, im *indexManager) expr {
+	tok := qs.Scan()
 	switch tok {
 	case '(':
-		expr1 := s.parseExpr(level+1, im)
-		tok := s.Scan()
+		expr1 := qs.parseExpr(level+1, im)
+		tok := qs.Scan()
 		if tok != ')' {
 			d.PanicIfError(fmt.Errorf("missing ending paren for expr"))
 		} else {
-			tok = s.Peek()
+			tok = qs.Peek()
 			if tok == ')' {
 				return expr1
 			}
-			tok = s.Scan()
-			text := s.TokenText()
+			tok = qs.Scan()
+			text := qs.TokenText()
 			switch {
 			case tok == scanner.Ident && isBoolOp(text):
 				op := boolOp(text)
-				expr2 := s.parseExpr(level+1, im)
+				expr2 := qs.parseExpr(level+1, im)
 				return logExpr{op: op, expr1: expr1, expr2: expr2, idxName: idxNameIfSame(expr1, expr2)}
 			case tok == scanner.EOF:
 				return expr1
 			default:
-				d.PanicIfError(fmt.Errorf("extra text found at end of expr, tok: %d, text: %s", int(tok), s.TokenText()))
+				d.PanicIfError(fmt.Errorf("extra text found at end of expr, tok: %d, text: %s", int(tok), qs.TokenText()))
 			}
 		}
 	case scanner.Ident:
-		err := openIndex(s.TokenText(), im)
+		err := openIndex(qs.TokenText(), im)
 		d.PanicIfError(err)
-		expr1 := s.parseCompExpr(level+1, s.TokenText(), im)
-		tok := s.Peek()
+		expr1 := qs.parseCompExpr(level+1, qs.TokenText(), im)
+		tok := qs.Peek()
 		switch tok {
 		case ')':
 			return expr1
 		case rune(scanner.Ident):
-			tok = s.Scan()
-			text := s.TokenText()
+			_ = qs.Scan()
+			text := qs.TokenText()
 			if isBoolOp(text) {
 				op := boolOp(text)
-				expr2 := s.parseExpr(level+1, im)
+				expr2 := qs.parseExpr(level+1, im)
 				return logExpr{op: op, expr1: expr1, expr2: expr2, idxName: idxNameIfSame(expr1, expr2)}
 			} else {
 				d.PanicIfError(fmt.Errorf("expected boolean op, found: %s, level: %d", text, level))
@@ -178,34 +178,33 @@ func (s *qScanner) parseExpr(level int, im *indexManager) expr {
 		case rune(scanner.EOF):
 			return expr1
 		default:
-			_ = s.Scan()
+			_ = qs.Scan()
 		}
 	default:
-		d.PanicIfError(fmt.Errorf("unexpected token in expr: %s, %d", s.TokenText(), tok))
+		d.PanicIfError(fmt.Errorf("unexpected token in expr: %s, %d", qs.TokenText(), tok))
 	}
 	return logExpr{}
 }
 
-func (s *qScanner) parseCompExpr(level int, indexName string, im *indexManager) compExpr {
-
-	s.Scan()
-	text := s.TokenText()
+func (qs *qScanner) parseCompExpr(level int, indexName string, im *indexManager) compExpr {
+	qs.Scan()
+	text := qs.TokenText()
 	if !isCompOp(text) {
 		d.PanicIfError(fmt.Errorf("expected relop token but found: '%s'", text))
 	}
 	op := compOp(text)
-	value := s.parseValExpr()
+	value := qs.parseValExpr()
 	return compExpr{indexName, op, value}
 }
 
-func (s *qScanner) parseValExpr() types.Value {
-	tok := s.Scan()
-	text := s.TokenText()
+func (qs *qScanner) parseValExpr() types.Value {
+	tok := qs.Scan()
+	text := qs.TokenText()
 	isNeg := false
 	if tok == '-' {
 		isNeg = true
-		tok = s.Scan()
-		text = s.TokenText()
+		tok = qs.Scan()
+		text = qs.TokenText()
 	}
 	switch tok {
 	case scanner.String:

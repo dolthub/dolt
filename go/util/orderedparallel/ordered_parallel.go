@@ -95,8 +95,8 @@ func (wq *workQueue) Pop() interface{} {
 	return x
 }
 
-func (h workQueue) Empty() bool {
-	return len(h) == 0
+func (wq workQueue) Empty() bool {
+	return len(wq) == 0
 }
 
 func (wq workQueue) Peek() (oi workItem) {

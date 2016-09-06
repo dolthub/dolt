@@ -72,7 +72,7 @@ func nomsMerge() error {
 		pc := make(chan struct{}, 128)
 		go func() {
 			count := 0
-			for _ = range pc {
+			for range pc {
 				if !*quiet {
 					count++
 					status.Printf("Applied %d changes...", count)

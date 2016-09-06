@@ -195,7 +195,7 @@ func TestDecode(tt *testing.T) {
 }
 
 func TestDecodeNilPointer(t *testing.T) {
-	var x *bool = nil
+	var x *bool
 	assertDecodeErrorMessage(t, types.Bool(true), x, "Cannot unmarshal into Go nil pointer of type *bool")
 }
 

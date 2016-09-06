@@ -204,9 +204,8 @@ func FindPrimaryKeys(r *csv.Reader, numSamples, maxLenPrimaryKeyList, numFields 
 			key := makeKeyString(row, combination, "$&$")
 			if _, ok := keys[key]; ok {
 				return
-			} else {
-				keys[key] = true
 			}
+			keys[key] = true
 		}
 		// need to copy the combination because it will be changed by caller
 		pksFound = append(pksFound, append([]int{}, combination...))

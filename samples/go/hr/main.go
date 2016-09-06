@@ -109,7 +109,6 @@ func getPersons(ds dataset.Dataset) types.Map {
 	hv, ok := ds.MaybeHeadValue()
 	if ok {
 		return hv.(types.Map)
-	} else {
-		return types.NewMap()
 	}
+	return types.NewMap()
 }

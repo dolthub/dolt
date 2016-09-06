@@ -256,7 +256,7 @@ func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt 
 func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
 	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
 	parents := node.commit.Get(datas.ParentsField).(types.Set)
-	var parent types.Value = nil
+	var parent types.Value
 	if parents.Len() > 0 {
 		parent = parents.First()
 	}

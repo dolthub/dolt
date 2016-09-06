@@ -126,11 +126,11 @@ func (s Struct) Set(n string, v Value) Struct {
 	return Struct{values, s.t, &hash.Hash{}}
 }
 
-func (s1 Struct) Diff(s2 Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if s1.Equals(s2) {
+func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	if s.Equals(last) {
 		return
 	}
-	fs1, fs2 := s1.Type().Desc.(StructDesc).fields, s2.Type().Desc.(StructDesc).fields
+	fs1, fs2 := s.Type().Desc.(StructDesc).fields, last.Type().Desc.(StructDesc).fields
 	i1, i2 := 0, 0
 	for i1 < len(fs1) && i2 < len(fs2) {
 		f1, f2 := fs1[i1], fs2[i2]
@@ -138,7 +138,7 @@ func (s1 Struct) Diff(s2 Struct, changes chan<- ValueChanged, closeChan <-chan s
 
 		var change ValueChanged
 		if fn1 == fn2 {
-			if !s1.values[i1].Equals(s2.values[i2]) {
+			if !s.values[i1].Equals(last.values[i2]) {
 				change = ValueChanged{ChangeType: DiffChangeModified, V: String(fn1)}
 			}
 			i1++

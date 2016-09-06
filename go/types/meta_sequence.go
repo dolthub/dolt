@@ -201,20 +201,16 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 	if isIndexedSequence {
 		if childIsMeta {
 			return newIndexedMetaSequence(metaItems, ms.Type(), ms.vr)
-		} else {
-			return newListLeafSequence(ms.vr, valueItems...)
 		}
-	} else {
-		if childIsMeta {
-			return newOrderedMetaSequence(metaItems, ms.Type(), ms.vr)
-		} else {
-			if MapKind == ms.Type().Kind() {
-				return newMapLeafSequence(ms.vr, mapItems...)
-			} else {
-				return newSetLeafSequence(ms.vr, valueItems...)
-			}
-		}
+		return newListLeafSequence(ms.vr, valueItems...)
 	}
+	if childIsMeta {
+		return newOrderedMetaSequence(metaItems, ms.Type(), ms.vr)
+	}
+	if MapKind == ms.Type().Kind() {
+		return newMapLeafSequence(ms.vr, mapItems...)
+	}
+	return newSetLeafSequence(ms.vr, valueItems...)
 }
 
 func isMetaSequence(seq sequence) bool {

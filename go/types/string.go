@@ -24,14 +24,14 @@ func (s String) Hash() hash.Hash {
 	return getHash(s)
 }
 
-func (fs String) ChildValues() []Value {
+func (s String) ChildValues() []Value {
 	return nil
 }
 
-func (fs String) Chunks() []Ref {
+func (s String) Chunks() []Ref {
 	return nil
 }
 
-func (fs String) Type() *Type {
+func (s String) Type() *Type {
 	return StringType
 }

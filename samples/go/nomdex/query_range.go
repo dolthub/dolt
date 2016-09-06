@@ -73,18 +73,18 @@ func (b bound) String() string {
 	return fmt.Sprintf("bound{v: %s, include: %t, infinity: %d}", s1, b.include, b.infinity)
 }
 
-func (v bound) minValue(o bound) (res bound) {
-	if v.isLessThan(o) {
-		return v
+func (b bound) minValue(o bound) (res bound) {
+	if b.isLessThan(o) {
+		return b
 	}
 	return o
 }
 
-func (v bound) maxValue(o bound) (res bound) {
-	if v.isLessThan(o) {
+func (b bound) maxValue(o bound) (res bound) {
+	if b.isLessThan(o) {
 		return o
 	}
-	return v
+	return b
 }
 
 type queryRange struct {
