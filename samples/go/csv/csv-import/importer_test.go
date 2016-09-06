@@ -257,6 +257,34 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	s.Equal(types.Number(8), st.Get("y"))
 }
 
+func (s *testSuite) TestCSVImporterWithExternalHeaderAndCustomDelimiter() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	defer os.Remove(input.Name())
+
+	_, err = input.WriteString("7#8\n")
+	d.Chk.NoError(err)
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--delimiter", "#", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	defer ds.Database().Close()
+	defer os.RemoveAll(s.LdbDir)
+
+	l := ds.HeadValue().(types.List)
+	s.Equal(uint64(1), l.Len())
+	v := l.Get(0)
+	st := v.(types.Struct)
+	s.Equal(types.String("7"), st.Get("x"))
+	s.Equal(types.Number(8), st.Get("y"))
+}
+
 func (s *testSuite) TestCSVImportSkipRecords() {
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
