@@ -115,7 +115,7 @@ def GlobCopier(*globs, **kwargs):
 
 def _dir_path(arg):
     normalized = os.path.realpath(os.path.abspath(arg))
-    if not os.path.isdir(normalized):
+    if os.path.exists(normalized) and not os.path.isdir(normalized):
         raise ValueError(arg + ' is not a path to a directory.')
     return normalized
 
