@@ -134,7 +134,12 @@ func main() {
 	}
 
 	cr := csv.NewCSVReader(r, delim)
-	csv.SkipRecords(cr, *skipRecords)
+	err = csv.SkipRecords(cr, *skipRecords)
+
+	if err == io.EOF {
+		err = fmt.Errorf("skip-records skipped past EOF")
+	}
+	d.CheckErrorNoUsage(err)
 
 	var headers []string
 	if *header == "" {

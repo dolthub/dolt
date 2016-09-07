@@ -32,10 +32,15 @@ func (r reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func SkipRecords(r *csv.Reader, n uint) {
+func SkipRecords(r *csv.Reader, n uint) error {
+	var err error
 	for i := uint(0); i < n; i++ {
-		r.Read()
+		_, err = r.Read()
+		if err != nil {
+			return err
+		}
 	}
+	return err
 }
 
 // NewCSVReader returns a new csv.Reader that splits on comma

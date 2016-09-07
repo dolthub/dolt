@@ -311,6 +311,7 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--skip-records", "2", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
@@ -326,6 +327,26 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 	st := v.(types.Struct)
 	s.Equal(types.String("7"), st.Get("a"))
 	s.Equal(types.String("8"), st.Get("b"))
+}
+
+func (s *testSuite) TestCSVImportSkipRecordsTooMany() {
+
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	defer os.Remove(input.Name())
+
+	_, err = input.WriteString("a,b\n")
+	d.Chk.NoError(err)
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+
+	stdout, stderr, recoveredErr := s.Run(main, []string{"--no-progress", "--skip-records", "100", input.Name(), dataspec})
+	s.Equal("", stdout)
+	s.Equal("error: skip-records skipped past EOF\n", stderr)
+	s.Equal(clienttest.ExitError{-1}, recoveredErr)
+
 }
 
 func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
