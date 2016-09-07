@@ -144,9 +144,20 @@ func main() {
 		headers = strings.Split(*header, ",")
 	}
 
+	uniqueHeaders := make(map[string]bool)
+	for _, header := range headers {
+		uniqueHeaders[header] = true
+	}
+	if len(uniqueHeaders) != len(headers) {
+		d.CheckErrorNoUsage(fmt.Errorf("Invalid headers specified, headers must be unique"))
+	}
+
 	kinds := []types.NomsKind{}
 	if *columnTypes != "" {
 		kinds = csv.StringsToKinds(strings.Split(*columnTypes, ","))
+		if len(kinds) != len(uniqueHeaders) {
+			d.CheckErrorNoUsage(fmt.Errorf("Invalid column-types specified, column types do not correspond to number of headers"))
+		}
 	}
 
 	ds, err := spec.GetDataset(flag.Arg(dataSetArgN))
