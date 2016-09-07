@@ -6,8 +6,10 @@
 
 import argparse
 import glob
+import hashlib
 import os
 import os.path
+import re
 import shutil
 
 def Main(projectName, stagingFunction):
@@ -28,36 +30,86 @@ def Main(projectName, stagingFunction):
         staging.Main('nerdosphere', staging.GlobCopier('index.html', 'styles.css', '*.js'))
     """
     parser = argparse.ArgumentParser(description='Stage build products from this directory.')
-    parser.add_argument('stagingDir',
+    parser.add_argument('staging_dir',
                         metavar='path/to/staging/directory',
                         type=_dir_path,
                         help='top-level dir into which project build products are staged')
     args = parser.parse_args()
-    projectStagingDir = os.path.join(args.stagingDir, projectName)
+    project_staging_dir = os.path.join(args.staging_dir, projectName)
 
-    normalized = os.path.realpath(projectStagingDir)
-    if not _is_sub_dir(projectStagingDir, args.stagingDir):
-        raise Exception(projectStagingDir + ' must be a subdir of ' + args.stagingDir)
+    normalized = os.path.realpath(project_staging_dir)
+    if not _is_sub_dir(project_staging_dir, args.staging_dir):
+        raise Exception(project_staging_dir + ' must be a subdir of ' + args.staging_dir)
 
     if not os.path.exists(normalized):
         os.makedirs(normalized)
     stagingFunction(normalized)
 
 
-def GlobCopier(*globs):
+def run_globs(staging_dir, globs, exclude):
+    for pattern in globs:
+        for f in glob.glob(pattern):
+            if os.path.isdir(f):
+                continue
+            from_dir, name = os.path.split(f)
+            if name in exclude:
+                continue
+            to_dir = os.path.join(staging_dir, from_dir)
+            if not os.path.exists(to_dir):
+                os.makedirs(to_dir)
+            yield (f, to_dir)
+
+
+def rename_with_hash(f, to_dir, rename_dict):
+    with open(f) as fh:
+        sha = hashlib.sha256()
+        sha.update(fh.read())
+        digest = sha.hexdigest()
+    basename = os.path.basename(f)
+    name, ext = os.path.splitext(basename)
+    new_name = '%s.%s%s' % (name, digest[:20], ext)
+    rename_dict[basename] = new_name
+    shutil.move(os.path.join(to_dir, basename), os.path.join(to_dir, new_name))
+
+
+def GlobCopier(*globs, **kwargs):
+    '''
+    Returns a function that copies files defined by globs into a staging dir.
+
+    Arguments:
+    - Zero or more globs used to determine which files to copy.
+
+    Keyword arguments:
+    - rename (bool) - If True then the files gets renamed to name.%%hash.ext
+    - index_file (str) - If present then this file is copied to the staging dir
+      and its content is updated where the paths to the files are updated to the
+      renamed file paths.
+    '''
     exclude = ('webpack.config.js',)
-    def stage(stagingDir):
-        for pattern in globs:
-            for f in glob.glob(pattern):
-                if os.path.isdir(f):
-                    continue
-                fromDir, name = os.path.split(f)
-                if name in exclude:
-                    continue
-                toDir = os.path.join(stagingDir, fromDir)
-                if not os.path.exists(toDir):
-                    os.makedirs(toDir)
-                shutil.copy2(f, toDir)
+    rename = 'rename' in kwargs and kwargs['rename']
+    def stage(staging_dir):
+        if rename:
+            rename_dict = dict()
+        for f, to_dir in run_globs(staging_dir, globs, exclude):
+            shutil.copy2(f, to_dir)
+            if rename:
+                rename_with_hash(f, to_dir, rename_dict)
+
+        # Update index_file and write it to to_dir.
+        if 'index_file' not in kwargs:
+            return
+        index_file = kwargs['index_file']
+        from_dir, name = os.path.split(index_file)
+        to_dir = os.path.join(staging_dir, from_dir)
+        with open(index_file, 'r') as f:
+            data = f.read()
+        if rename:
+            for old_name, new_name in rename_dict.iteritems():
+                r = re.compile(r'\b%s\b' % re.escape(old_name))
+                data = r.sub(new_name, data)
+        with open(os.path.join(to_dir, name), 'w') as f:
+            f.write(data)
+
     return stage
 
 

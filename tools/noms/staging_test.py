@@ -96,6 +96,66 @@ class TestStaging(unittest.TestCase):
         self.assertEqual(['aaa.js', 'bbb.js'], os.listdir(os.path.join(self.nested, 'x/xx')))
         self.assertEqual(['aaaa.js', 'bbbb.js'], os.listdir(os.path.join(self.nested, 'y')))
 
+    def test_GlobCopierWithRename(self):
+        files = (
+                'a.js',
+                'b.js',
+                'c.html',
+                'd.css',
+                'webpack.config.js',
+
+                'x/aa.js',
+                'x/bb.js',
+                'x/dd.css',
+                'x/webpack.config.js',
+
+                'x/xx/aaa.js',
+                'x/xx/bbb.js',
+                'x/xx/webpack.config.js',
+
+                'x/yy/aaa.js',
+                'x/yy/bbb.js',
+                'x/yy/webpack.config.js',
+
+                'y/aaaa.js',
+                'y/bbbb.js',
+                'y/webpack.config.js',
+
+                'y/xxx/a5.js',
+                'y/xxx/b5.js',
+                'y/xxx/webpack.config.js',
+
+                'z/a6.js',
+                'z/b6.js',
+                'z/webpack.config.js',
+                )
+        with open(os.path.join(self.tempdir, 'index.html'), 'w') as f:
+            f.write('index.html')
+        for d in ('x/xx', 'x/yy', 'y/xxx', 'z'):
+            os.makedirs(os.path.join(self.tempdir, d))
+        for name in files:
+            with open(os.path.join(self.tempdir, name), 'w') as f:
+                f.write('hi! name: ' + name)
+
+        cwd = os.getcwd()
+        try:
+            os.chdir(self.tempdir)
+            staging.GlobCopier(
+                '*.js', 'c.html', 'x/*.js', 'x/xx/*', 'y/*', 'y/*',
+                index_file='index.html',
+                rename=True)(self.nested)
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(['a.702f720d2b49bd41c30f.js', 'b.49cf685c13e7de516ebc.js',
+                          'c.fe1a3b03473494234e2d.html', 'index.html', 'x', 'y'],
+                          os.listdir(self.nested))
+        self.assertEqual(['aa.eb0f5ae6432d325f9448.js', 'bb.480969faecf03a9eb729.js', 'xx'],
+                         os.listdir(os.path.join(self.nested, 'x')))
+        self.assertEqual(['aaa.a9810946370699474422.js', 'bbb.c06f75d2d61cb6717b2c.js'],
+                         os.listdir(os.path.join(self.nested, 'x/xx')))
+        self.assertEqual(['aaaa.a68d3caf6e0e971ab96f.js', 'bbbb.84bd5947630aca231726.js'],
+                         os.listdir(os.path.join(self.nested, 'y')))
 
 if __name__ == '__main__':
     unittest.main()
