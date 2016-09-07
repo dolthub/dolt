@@ -20,7 +20,7 @@ type ThreeWayMergeSuite struct {
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq, vs types.ValueReadWriter) {
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs, nil)
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs, nil, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -28,7 +28,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq, vs types.ValueRe
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained string) {
-	m, err := ThreeWay(a, b, p, nil, nil)
+	m, err := ThreeWay(a, b, p, nil, nil, nil)
 	if s.Error(err) {
 		s.Contains(err.Error(), contained)
 		return

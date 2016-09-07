@@ -153,6 +153,38 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMultiLevelMerge() 
 	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
 }
 
+func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
+	vs := types.NewTestValueStore()
+
+	p := kvs{"k1", "k-one", "k2", "k-two", "mm1", mm1, "s1", "s-one"}
+	a := kvs{"k1", "k-won", "k2", "k-too", "mm1", mm1, "s1", "s-one", "n1", kvs{"a", "1"}}
+	b := kvs{"k2", "k-two", "mm1", "mm-one", "s1", "s-one", "n1", kvs{"a", "2"}}
+	exp := kvs{"k2", "k-too", "mm1", "mm-one", "s1", "s-one", "n1", kvs{"a", "1"}}
+
+	expectedConflictPaths := [][]string{{"k1"}, {"n1", "a"}}
+	conflictPaths := []types.Path{}
+	resolve := func(aChange, bChange types.DiffChangeType, aVal, bVal types.Value, p types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
+		conflictPaths = append(conflictPaths, p)
+		if _, ok := aVal.(types.Map); ok || bChange == types.DiffChangeRemoved {
+			return bChange, bVal, true
+		}
+		return aChange, aVal, true
+	}
+
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs, resolve, nil)
+	if s.NoError(err) {
+		expected := s.create(exp)
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
+	}
+	if s.Len(conflictPaths, len(expectedConflictPaths), "Wrong number of conflicts!") {
+		for i := 0; i < len(conflictPaths); i++ {
+			for j, c := range conflictPaths[i] {
+				s.Contains(c.String(), expectedConflictPaths[i][j])
+			}
+		}
+	}
+}
+
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NilConflict() {
 	s.tryThreeWayConflict(nil, s.create(mm2b), s.create(mm2), "Cannot merge nil Value with")
 	s.tryThreeWayConflict(s.create(mm2a), nil, s.create(mm2), "with nil value.")

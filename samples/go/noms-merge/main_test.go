@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"io/ioutil"
 	"testing"
 
 	"github.com/attic-labs/noms/go/dataset"
@@ -114,6 +116,38 @@ func (s *testSuite) TestLose() {
 		s.Empty(stdout, "Expected empty stdout for case: %#v", c.args)
 		if s.Error(mainErr) {
 			s.Equal(c.err, mainErr.Error(), "Unexpected output for case: %#v\n", c.args)
+		}
+	}
+}
+
+func (s *testSuite) TestResolve() {
+	type c struct {
+		input            string
+		aChange, bChange types.DiffChangeType
+		aVal, bVal       types.Value
+		expectedChange   types.DiffChangeType
+		expected         types.Value
+		success          bool
+	}
+
+	cases := []c{
+		{"l\n", types.DiffChangeAdded, types.DiffChangeAdded, types.String("foo"), types.String("bar"), types.DiffChangeAdded, types.String("foo"), true},
+		{"r\n", types.DiffChangeAdded, types.DiffChangeAdded, types.String("foo"), types.String("bar"), types.DiffChangeAdded, types.String("bar"), true},
+		{"m\n", types.DiffChangeAdded, types.DiffChangeAdded, types.String("foo"), types.String("bar"), types.DiffChangeAdded, types.String("foobar"), true},
+		{"l\n", types.DiffChangeAdded, types.DiffChangeAdded, types.Number(7), types.String("bar"), types.DiffChangeAdded, types.Number(7), true},
+		{"r\n", types.DiffChangeModified, types.DiffChangeModified, types.Number(7), types.String("bar"), types.DiffChangeModified, types.String("bar"), true},
+		{"m\n", types.DiffChangeModified, types.DiffChangeModified, types.Number(7), types.String("bar"), types.DiffChangeModified, nil, false},
+	}
+
+	for _, c := range cases {
+		input := bytes.NewBufferString(c.input)
+
+		changeType, newVal, ok := cliResolve(input, ioutil.Discard, c.aChange, c.bChange, c.aVal, c.bVal, types.Path{})
+		if !c.success {
+			s.False(ok)
+		} else if s.True(ok) {
+			s.Equal(c.expectedChange, changeType)
+			s.True(c.expected.Equals(newVal))
 		}
 	}
 }
