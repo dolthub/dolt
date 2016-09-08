@@ -11,4 +11,5 @@ sys.path.append(os.path.abspath('../../../tools'))
 import noms.staging as staging
 
 if __name__ == '__main__':
-	staging.Main('splore', staging.GlobCopier('out.js', 'index.html', 'styles.css'))
+    staging.Main('splore', staging.GlobCopier('out.js', 'styles.css',
+        index_file='index.html', rename=True))

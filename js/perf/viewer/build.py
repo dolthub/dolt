@@ -18,5 +18,5 @@ def main():
 
     subprocess.check_call(['npm', 'install'], shell=False)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
