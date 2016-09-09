@@ -42,6 +42,7 @@ export const fieldNameRe = new RegExp(fieldNameComponentRe.source + '$');
  *   get s(): string;
  *   setS(value: string): MyStruct;
  * }
+ * ```
  *
  * With one major exception: if the field name conflicts with any of the properties in ValueBase (or
  * Object), such as `chunks`, `hash` or `type` (or `toString`, `hasOwnProperty` etc.), then these
