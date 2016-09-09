@@ -34,7 +34,7 @@
     "chai": "^3.5.0",
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
-    "documentation": "^4.0.0-beta10",
+    "documentation": "documentationjs/documentation#e11c1ab3b5a7b366131d335f707d0b4641f950ac",
     "flow-bin": "0.30.0",
     "fs-extra": "^0.30.0",
     "mocha": "^2.5.3"
@@ -49,7 +49,7 @@
     "copy-flow-files": "npm run copy-flow-files-commonjs",
     "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/",
     "make-index-html": "node build/make-index-html.js",
-    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --output generated-docs/$npm_package_version/ src/noms.js && npm run make-index-html"
+    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --sort-order alpha --output generated-docs/$npm_package_version/ src/noms.js && npm run make-index-html"
   },
   "browser": {
     "./src/bytes.js": "./src/browser/bytes.js",
