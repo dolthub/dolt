@@ -17,14 +17,14 @@ import type Value from './value.js';
 type walkCb = (v: Value) => ?boolean | Promise<?boolean>;
 
 /**
- * Invokes |cb| once for |v| and each of its descendants. The returned Promise is resolved when all
- * invocations to |cb| have been resolved.
+ * Invokes `cb` once for `v` and each of its descendants. The returned `Promise` is resolved when all
+ * invocations to `cb` have been resolved.
  *
- * The return value of |cb| indicates whether to recurse further into the tree. Return false or
- * Promise.resolve(false) to continue recursing. Return true or Promise.resolve(true) to skip this
+ * The return value of `cb` indicates whether to recurse further into the tree. Return false or
+ * `Promise.resolve(false)` to continue recursing. Return `true` or `Promise.resolve(true)` to skip this
  * node's children.
  *
- * If |cb| returns undefined or Promise.resolve(), the default is to continue recursing (false).
+ * If `cb` returns undefined or `Promise.resolve()`, the default is to continue recursing (`false`).
  */
 export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<void> {
   let skip = cb(v);
