@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/jsontonoms"
@@ -24,8 +25,9 @@ import (
 )
 
 var (
-	noIO        = flag.Bool("benchmark", false, "Run in 'benchmark' mode, without file-IO")
-	customUsage = func() {
+	noIO          = flag.Bool("benchmark", false, "Run in 'benchmark' mode: walk directories and parse XML files but do not write to Noms")
+	performCommit = flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
+	customUsage   = func() {
 		fmtString := `%s walks the given directory, looking for .xml files. When it finds one, the entity inside is parsed into nested Noms maps/lists and committed to the dataset indicated on the command line.`
 		fmt.Fprintf(os.Stderr, fmtString, os.Args[0])
 		fmt.Fprintf(os.Stderr, "\n\nUsage: %s [options] <path/to/root/directory> <dataset>\n", os.Args[0])
@@ -51,6 +53,7 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 
 func main() {
 	err := d.Try(func() {
+		spec.RegisterCommitMetaFlags(flag.CommandLine)
 		spec.RegisterDatabaseFlags(flag.CommandLine)
 		profile.RegisterProfileFlags(flag.CommandLine)
 		flag.Usage = customUsage
@@ -135,11 +138,18 @@ func main() {
 		rl := types.NewList(refs...)
 
 		if !*noIO {
-			_, err := ds.CommitValue(rl)
-			d.PanicIfError(err)
+			if *performCommit {
+				additionalMetaInfo := map[string]string{"inputDir": dir}
+				meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
+				d.CheckErrorNoUsage(err)
+				_, err = ds.Commit(rl, dataset.CommitOptions{Meta: meta})
+				d.PanicIfError(err)
+			} else {
+				ref := ds.Database().WriteValue(rl)
+				fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
+			}
 		}
 	})
-
 	if err != nil {
 		log.Fatal(err)
 	}

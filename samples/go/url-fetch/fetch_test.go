@@ -48,6 +48,7 @@ func (s *testSuite) TestImportFromStdin() {
 
 	db, blob, err := spec.GetPath(dsName + ".value")
 	assert.NoError(err)
+	defer db.Close()
 
 	expected := types.NewBlob(bytes.NewBufferString("abcdef"))
 	assert.True(expected.Equals(blob))
@@ -57,8 +58,6 @@ func (s *testSuite) TestImportFromStdin() {
 	metaDesc := meta.Type().Desc.(types.StructDesc)
 	assert.Equal(1, metaDesc.Len())
 	assert.NotNil(metaDesc.Field("date"))
-
-	db.Close()
 }
 
 func (s *testSuite) TestImportFromFile() {
@@ -75,6 +74,7 @@ func (s *testSuite) TestImportFromFile() {
 
 	db, blob, err := spec.GetPath(dsName + ".value")
 	assert.NoError(err)
+	defer db.Close()
 
 	expected := types.NewBlob(bytes.NewBufferString("abcdef"))
 	assert.True(expected.Equals(blob))
@@ -84,8 +84,6 @@ func (s *testSuite) TestImportFromFile() {
 	assert.Equal(2, metaDesc.Len())
 	assert.NotNil(metaDesc.Field("date"))
 	assert.Equal(f.Name(), string(meta.Get("file").(types.String)))
-
-	db.Close()
 }
 
 // TODO: TestImportFromURL

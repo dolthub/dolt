@@ -28,9 +28,11 @@ var (
 )
 
 func main() {
-	comment := flag.String("comment", "", "comment to add to commit's meta data")
+	noProgress := flag.Bool("no-progress", false, "prevents progress from being output if true")
+	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
 	stdin := flag.Bool("stdin", false, "read blob from stdin")
 
+	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 
 	flag.Usage = func() {
@@ -92,32 +94,34 @@ func main() {
 		sourceType, sourceVal = "file", url
 	}
 
-	pr := progressreader.New(r, getStatusPrinter(contentLength))
-	b := types.NewStreamingBlob(pr, ds.Database())
-	mi := metaInfoForCommit(sourceType, sourceVal, *comment)
-	ds, err = ds.Commit(b, dataset.CommitOptions{Meta: mi})
-	if err != nil {
-		d.Chk.Equal(datas.ErrMergeNeeded, err)
-		fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
-		return
+	if !*noProgress {
+		r = progressreader.New(r, getStatusPrinter(contentLength))
 	}
+	b := types.NewStreamingBlob(r, ds.Database())
 
-	status.Done()
-	fmt.Println("Done")
-}
-
-func metaInfoForCommit(sourceType, sourceVal, comment string) types.Struct {
-	date := time.Now().UTC().Format("2006-01-02T15:04:05-0700")
-	metaValues := map[string]types.Value{
-		"date": types.String(date),
+	if *performCommit {
+		var additionalMetaInfo map[string]string
+		if sourceType != "" {
+			additionalMetaInfo = map[string]string{sourceType: sourceVal}
+		}
+		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
+		d.CheckErrorNoUsage(err)
+		ds, err = ds.Commit(b, dataset.CommitOptions{Meta: meta})
+		if err != nil {
+			d.Chk.Equal(datas.ErrMergeNeeded, err)
+			fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
+			return
+		}
+		if !*noProgress {
+			status.Done()
+		}
+	} else {
+		ref := ds.Database().WriteValue(b)
+		if !*noProgress {
+			status.Clear()
+		}
+		fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
 	}
-	if sourceType != "" {
-		metaValues[sourceType] = types.String(sourceVal)
-	}
-	if comment != "" {
-		metaValues["comment"] = types.String(comment)
-	}
-	return types.NewStruct("Meta", metaValues)
 }
 
 func getStatusPrinter(expectedLen int64) progressreader.Callback {

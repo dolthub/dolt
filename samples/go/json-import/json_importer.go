@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/jsontonoms"
 	"github.com/attic-labs/noms/go/util/progressreader"
@@ -23,11 +24,13 @@ import (
 )
 
 func main() {
+	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: %s <url> <dataset>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
+	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 	flag.Parse(true)
 
@@ -37,6 +40,7 @@ func main() {
 
 	ds, err := spec.GetDataset(flag.Arg(1))
 	d.CheckError(err)
+	defer ds.Database().Close()
 
 	url := flag.Arg(0)
 	if url == "" {
@@ -64,7 +68,14 @@ func main() {
 	}
 	status.Done()
 
-	_, err = ds.CommitValue(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
-	d.PanicIfError(err)
-	ds.Database().Close()
+	if *performCommit {
+		additionalMetaInfo := map[string]string{"url": url}
+		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
+		d.CheckErrorNoUsage(err)
+		_, err = ds.Commit(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true), dataset.CommitOptions{Meta: meta})
+		d.PanicIfError(err)
+	} else {
+		ref := ds.Database().WriteValue(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
+		fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
+	}
 }

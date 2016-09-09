@@ -16,6 +16,7 @@ import (
 )
 
 var commands = []*util.Command{
+	nomsCommit,
 	nomsDiff,
 	nomsDs,
 	nomsLog,

@@ -25,27 +25,25 @@ import (
 )
 
 const (
-	dateFormat = "2006-01-02T15:04:05-0700"
-	destList   = iota
-	destMap    = iota
+	destList = iota
+	destMap  = iota
 )
 
 func main() {
 	// Actually the delimiter uses runes, which can be multiple characters long.
 	// https://blog.golang.org/strings
 	delimiter := flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
-	comment := flag.String("comment", "", "comment to add to commit's meta data")
 	header := flag.String("header", "", "header row. If empty, we'll use the first row of the file")
 	name := flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 	columnTypes := flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
 	pathDescription := "noms path to blob to import"
 	path := flag.String("path", "", pathDescription)
 	flag.StringVar(path, "p", "", pathDescription)
-	dateFlag := flag.String("date", "", fmt.Sprintf(`date of commit in ISO 8601 format ("%s"). By default, the current date is used.`, dateFormat))
 	noProgress := flag.Bool("no-progress", false, "prevents progress from being output if true")
 	destType := flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is the index position (0-based) of the column that is a the unique identifier for the column")
 	skipRecords := flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
-
+	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
+	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 	profile.RegisterProfileFlags(flag.CommandLine)
 
@@ -68,14 +66,6 @@ func main() {
 		err = errors.New("Too many arguments")
 	}
 	d.CheckError(err)
-
-	var date = *dateFlag
-	if date == "" {
-		date = time.Now().UTC().Format(dateFormat)
-	} else {
-		_, err := time.Parse(dateFormat, date)
-		d.CheckErrorNoUsage(err)
-	}
 
 	defer profile.MaybeStartProfile().Stop()
 
@@ -175,29 +165,32 @@ func main() {
 	} else {
 		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, ds.Database())
 	}
-	mi := metaInfoForCommit(date, filePath, *path, *comment)
-	_, err = ds.Commit(value, dataset.CommitOptions{Meta: mi})
-	if !*noProgress {
-		status.Clear()
+
+	if *performCommit {
+		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo(filePath, *path), nil)
+		d.CheckErrorNoUsage(err)
+		_, err = ds.Commit(value, dataset.CommitOptions{Meta: meta})
+		if !*noProgress {
+			status.Clear()
+		}
+		d.PanicIfError(err)
+	} else {
+		ref := ds.Database().WriteValue(value)
+		if !*noProgress {
+			status.Clear()
+		}
+		fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
 	}
-	d.PanicIfError(err)
 }
 
-func metaInfoForCommit(date, filePath, nomsPath, comment string) types.Struct {
+func additionalMetaInfo(filePath, nomsPath string) map[string]string {
 	fileOrNomsPath := "inputPath"
 	path := nomsPath
 	if path == "" {
 		path = filePath
 		fileOrNomsPath = "inputFile"
 	}
-	metaValues := types.StructData{
-		"date":         types.String(date),
-		fileOrNomsPath: types.String(path),
-	}
-	if comment != "" {
-		metaValues["comment"] = types.String(comment)
-	}
-	return types.NewStruct("Meta", metaValues)
+	return map[string]string{fileOrNomsPath: path}
 }
 
 func getStatusPrinter(expected uint64) progressreader.Callback {
