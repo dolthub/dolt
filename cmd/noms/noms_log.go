@@ -87,8 +87,10 @@ func runLog(args []string) int {
 		return buff.Bytes()
 	}, parallelism)
 
+	var done = false
+
 	go func() {
-		for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
+		for ln, ok := iter.Next(); !done && ok && displayed < maxCommits; ln, ok = iter.Next() {
 			inChan <- ln
 			displayed++
 		}
@@ -99,8 +101,15 @@ func runLog(args []string) int {
 	defer pgr.Stop()
 
 	for commitBuff := range outChan {
-		io.Copy(pgr.Writer, bytes.NewReader(commitBuff.([]byte)))
+		_, err := io.Copy(pgr.Writer, bytes.NewReader(commitBuff.([]byte)))
+		if err != nil {
+			done = true
+			for range outChan {
+				// drain the output
+			}
+		}
 	}
+
 	return 0
 }
 
