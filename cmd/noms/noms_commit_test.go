@@ -167,8 +167,11 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitHashNotFound() {
+	ds, dsStr, _ := s.setupDataset("commitTestBadHash", true)
+	defer ds.Database().Close()
+
 	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "#9ei6fbrs0ujo51vifd3f2eebufo4lgdu", "f::b"})
+		s.MustRun(main, []string{"commit", "#9ei6fbrs0ujo51vifd3f2eebufo4lgdu", dsStr})
 	})
 }
 
