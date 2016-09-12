@@ -49,7 +49,7 @@
     "copy-flow-files": "npm run copy-flow-files-commonjs",
     "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/",
     "make-index-html": "node build/make-index-html.js",
-    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --sort-order alpha --output generated-docs/$npm_package_version/ src/noms.js && npm run make-index-html"
+    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --sort-order alpha --output generated-docs/js/$npm_package_version/ src/noms.js && npm run make-index-html"
   },
   "browser": {
     "./src/bytes.js": "./src/browser/bytes.js",

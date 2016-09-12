@@ -4,18 +4,14 @@
 
 'use strict';
 
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 
-const outDir = path.join(__dirname, '..', 'generated-docs');
+const outDir = path.join(__dirname, '..', 'generated-docs', 'js');
 
-try {
-  fs.mkdirSync(outDir);
-} catch (ex) {
-  if (ex.code !== 'EEXIST') {
-    throw ex;
-  }
-}
+fs.mkdirsSync(outDir);
 const version = require('../package.json').version;
 const out = path.join(outDir, 'index.html');
-fs.writeFileSync(out, `<meta http-equiv="refresh" content="0; URL=${version}/">`);
+fs.writeFileSync(out, `<script>
+location.replace('./${version}/' + location.hash);
+</script>`);
