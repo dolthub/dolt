@@ -156,7 +156,11 @@ function callFlickr(method: string, params: ?{[key: string]: string}) {
         if (err) {
           rej(err);
         } else {
-          res(data);
+          if (data.stat === 'fail') {
+            rej(new Error(data.message));
+          } else {
+            res(data);
+          }
         }
       },
     });
