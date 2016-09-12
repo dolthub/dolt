@@ -14,6 +14,14 @@ import json
 import os
 import subprocess
 
+index_html_content = """
+<!doctype html>
+<title>Noms Documentation</title>
+<h1>Noms Documentation</h1>
+<h3><a href="https://godoc.org/github.com/attic-labs/noms">Go</a></h3>
+<h3><a href="js/">JavaScript</a></h3>
+"""
+
 def call_with_env_and_cwd(cmd, env, cwd):
     print(cmd)
     proc = subprocess.Popen(cmd, env=env, cwd=cwd, shell=False)
@@ -39,6 +47,9 @@ def main():
 
     call_with_env_and_cwd(['npm', 'install'], env, noms_js_dir)
     call_with_env_and_cwd(['npm', 'run', 'build-docs'], env, noms_js_dir)
+
+    with open(os.path.join(noms_js_dir, 'generated-docs', 'index.html'), 'w') as f:
+        f.write(index_html_content)
 
 if __name__ == '__main__':
     main()
