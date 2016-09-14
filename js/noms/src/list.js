@@ -35,6 +35,17 @@ function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   };
 }
 
+/**
+ * List represents a list or an array of Noms values. A list can contain zero or more values of zero
+ * or more types. The type of the list will reflect the type of the elements in the list. For
+ * example:
+ *
+ *  const l = new List([1, true]);
+ *  console.log(l.type.describe());
+ *  // outputs List<Bool | Number>
+ *
+ * Lists, like all Noms values are immutable so the "mutation" methods return a new list.
+ */
 export default class List<T: Value> extends Collection<IndexedSequence<any>> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
@@ -46,11 +57,19 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
     super(seq);
   }
 
+  /**
+   * Get returns the value at index `idx`. If this list has been chunked then this will have to
+   * descend into the prolly-tree which leads to Get being O(depth).
+   */
   async get(idx: number): Promise<T> {
     invariant(idx >= 0 && idx < this.length);
     return this.sequence.newCursorAt(idx).then(cursor => cursor.getCurrent());
   }
 
+  /**
+   * Splice returns a new list where `deleteCount` values have been removed at `idx` and the values
+   * `insert` have been inserted instead.
+   */
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
     return this.sequence.newCursorAt(idx).then(cursor =>
@@ -59,18 +78,33 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
                     hashValueBytes)).then(s => List.fromSequence(s));
   }
 
+  /**
+   * Insert returns a new list where `values` have been inserted at `idx`.
+   */
   insert(idx: number, ...values: Array<T>): Promise<List<T>> {
     return this.splice(idx, 0, ...values);
   }
 
+  /**
+   * Returns a new list where a single element at index `idx` have been removed.
+   */
   remove(idx: number): Promise<List<T>> {
     return this.splice(idx, 1);
   }
 
+  /**
+   * This returns a new list where `values` have been appended to the resulting list.
+   */
   append(...values: Array<T>): Promise<List<T>> {
     return this.splice(this.length, 0, ...values);
   }
 
+  /**
+   * This calls a function for every value in the list. This function is async and returns a promise
+   * that will be fulfilled when all the callback functions have been called. If the callback
+   * function returns a promise `forEach` will continue but it will not return until all of those
+   * promises have been fulfilled.
+   */
   async forEach(cb: (v: T, i: number) => ?Promise<void>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(0);
     const promises = [];
@@ -80,14 +114,25 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
     }).then(() => Promise.all(promises)).then(() => void 0);
   }
 
+  /**
+   * Returns a new `AsyncIterator` which can be used to iterate over the list.
+   */
   iterator(): AsyncIterator<T> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(0));
   }
 
+  /**
+   * Returns a new `AsyncIterator` starting at `i` which can be used to iterate over the list.
+   */
   iteratorAt(i: number): AsyncIterator<T> {
     return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
   }
 
+  /**
+   * Diff returns the diff of two different lists. If `maxSpliceMatrixSize` is provided then that
+   * determines the how big of an edit distance matrix we are willing to compute versus just saying
+   * the thing changed.
+   */
   diff(last: List<T>,
        maxSpliceMatrixSize: number = DEFAULT_MAX_SPLICE_MATRIX_SIZE): Promise<Array<Splice>> {
     invariant(equals(this.type, last.type));
@@ -107,6 +152,9 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
              maxSpliceMatrixSize));
   }
 
+  /**
+   * Returns a new JS array with the same values as list.
+   */
   // $FlowIssue
   toJS(start: number = 0, end: number = this.length): Promise<Array<T>> {
     const l = this.length;
@@ -118,20 +166,33 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
     return this.sequence.range(start, end);
   }
 
+  /**
+   * The number of elements in the list.
+   */
   get length(): number {
     return this.sequence.numLeaves;
   }
 }
 
+/**
+ * ListLeafSequence is used for the leaf lists of a list prolly-tree.
+ */
 export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
   get chunks(): Array<Ref<any>> {
     return getValueChunks(this.items);
   }
 
+  /**
+   * This method is for internal use of sequences. It returns how many leaf items there are up to an
+   * index within its sequence.
+   */
   cumulativeNumberOfLeaves(idx: number): number {
     return idx + 1;
   }
 
+  /**
+   * Returns an array of the values in the list.
+   */
   range(start: number, end: number): Promise<Array<T>> {
     invariant(start >= 0 && end >= 0 && end <= this.items.length);
     return Promise.resolve(this.items.slice(start, end));
@@ -154,12 +215,18 @@ function clampIndex(idx: number, length: number): number {
 
 type ListWriterState = 'writable' | 'closed';
 
+/**
+ * ListWriter is a class for efficiently creating a large list.
+ */
 export class ListWriter<T: Value> {
   _state: ListWriterState;
   _list: ?Promise<List<T>>;
   _chunker: SequenceChunker<T, ListLeafSequence<T>>;
   _vrw: ?ValueReadWriter;
 
+  /**
+   * If `vrw` is non `null` the chunks of the list gets written to it as they are created.
+   */
   constructor(vrw: ?ValueReadWriter) {
     this._state = 'writable';
     this._chunker = new SequenceChunker(null, vrw, vrw, newListLeafChunkFn(vrw),
@@ -167,17 +234,27 @@ export class ListWriter<T: Value> {
     this._vrw = vrw;
   }
 
+  /**
+   * Adds an item to the list we are creating.
+   */
   write(item: T) {
     assert(this._state === 'writable');
     this._chunker.append(item);
   }
 
+  /**
+   * Closes the ListWriter. No more items can be added after this.
+   */
   close() {
     assert(this._state === 'writable');
     this._list = this._chunker.done(this._vrw).then(seq => List.fromSequence(seq));
     this._state = 'closed';
   }
 
+  /**
+   * Gets a promise to the list we are creating. Make sure you call `close` before trying to get
+   * the list.
+   */
   get list(): Promise<List<any>> {
     assert(this._state === 'closed');
     invariant(this._list);

@@ -8,12 +8,13 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-// ListIterator can be used to efficiently iterate through a Noms List starting at an index of your choice.
+// ListIterator can be used to efficiently iterate through a Noms List.
 type ListIterator struct {
 	cursor *sequenceCursor
 }
 
-// Next returns subsequent Values from a List, starting with the index at which the iterator was created. If there are no more Values, Next() returns nil.
+// Next returns subsequent Values from a List, starting with the index at which the iterator was
+// created. If there are no more Values, Next() returns nil.
 func (li ListIterator) Next() (out Value) {
 	d.Chk.True(li.cursor != nil, "Cannot use a nil ListIterator")
 	if li.cursor.valid() {
