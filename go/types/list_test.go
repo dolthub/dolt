@@ -1060,3 +1060,50 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 		assert.True(tl.toList().Equals(nl))
 	}
 }
+
+func TestListConcat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	assert := assert.New(t)
+
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	vs := NewTestValueStore()
+	reload := func(vs *ValueStore, l List) List {
+		return vs.ReadValue(vs.WriteValue(l).TargetHash()).(List)
+	}
+
+	run := func(seed int64, size, from, to, by int) {
+		r := rand.New(rand.NewSource(seed))
+
+		listSlice := make(testList, size)
+		for i := range listSlice {
+			listSlice[i] = Number(r.Intn(size))
+		}
+
+		list := listSlice.toList()
+
+		for i := from; i < to; i += by {
+			fst := reload(vs, listSlice[:i].toList())
+			snd := reload(vs, listSlice[i:].toList())
+			actual := fst.Concat(snd)
+			assert.True(list.Equals(actual),
+				"fail at %d/%d (with expected length %d, actual %d)", i, size, list.Len(), actual.Len())
+		}
+	}
+
+	run(0, 10, 0, 10, 1)
+
+	run(1, 100, 0, 100, 1)
+
+	run(2, 1000, 0, 1000, 10)
+	run(3, 1000, 0, 100, 1)
+	run(4, 1000, 900, 1000, 1)
+
+	run(5, 1e4, 0, 1e4, 100)
+	run(6, 1e4, 0, 1000, 10)
+	run(7, 1e4, 1e4-1000, 1e4, 10)
+}

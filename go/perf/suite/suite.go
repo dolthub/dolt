@@ -83,6 +83,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/marshal"
@@ -339,16 +340,14 @@ func (suite *PerfSuite) Pause(fn func()) {
 	suite.paused += time.Since(start)
 }
 
-func callSafe(name string, fun reflect.Value, args ...interface{}) (err interface{}) {
-	defer func() {
-		err = recover()
-	}()
+func callSafe(name string, fun reflect.Value, args ...interface{}) error {
 	funArgs := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		funArgs[i] = reflect.ValueOf(arg)
 	}
-	fun.Call(funArgs)
-	return
+	return d.Try(func() {
+		fun.Call(funArgs)
+	})
 }
 
 func (suite *PerfSuite) getEnvironment() types.Value {

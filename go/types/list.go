@@ -91,11 +91,12 @@ func (l List) Hash() hash.Hash {
 	return *l.h
 }
 
-func (l List) ChildValues() (values []Value) {
+func (l List) ChildValues() []Value {
+	values := make([]Value, l.Len())
 	l.IterAll(func(v Value, idx uint64) {
-		values = append(values, v)
+		values[idx] = v
 	})
-	return
+	return values
 }
 
 func (l List) Chunks() []Ref {
@@ -161,7 +162,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	d.PanicIfFalse(idx+deleteCount <= l.Len())
 
 	cur := newCursorAtIndex(l.seq, idx)
-	ch := newSequenceChunker(cur, l.seq.valueReader(), nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), hashValueBytes)
+	ch := l.newChunker(cur, l.seq.valueReader())
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -176,6 +177,16 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 // Insert returns a new list where vs values have been inserted at idx.
 func (l List) Insert(idx uint64, vs ...Value) List {
 	return l.Splice(idx, 0, vs...)
+}
+
+// Concat returns new list comprised of this joined with other. It only needs to
+// visit the rightmost prolly tree chunks of this list, and the leftmost prolly
+// tree chunks of other.
+func (l List) Concat(other List) List {
+	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
+		return l.newChunker(cur, vr)
+	})
+	return newList(seq.(indexedSequence))
 }
 
 // Remove returns a new list where the items at index start (inclusive) through end (exclusive) have
@@ -260,6 +271,10 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 	lastCur := newCursorAtIndex(last.seq, 0)
 	lCur := newCursorAtIndex(l.seq, 0)
 	indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
+}
+
+func (l List) newChunker(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
+	return newSequenceChunker(cur, vr, nil, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are

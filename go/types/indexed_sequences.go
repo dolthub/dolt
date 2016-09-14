@@ -59,22 +59,6 @@ func (ims indexedMetaSequence) getCompareFn(other sequence) compareFn {
 	}
 }
 
-func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
-	var cur *sequenceCursor
-	for {
-		cur = newSequenceCursor(cur, seq, 0)
-		idx = idx - advanceCursorToOffset(cur, idx)
-		cs := cur.getChildSequence()
-		if cs == nil {
-			break
-		}
-		seq = cs.(indexedSequence)
-	}
-
-	d.PanicIfFalse(cur != nil)
-	return cur
-}
-
 func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	seq := cur.seq.(indexedSequence)
 	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {

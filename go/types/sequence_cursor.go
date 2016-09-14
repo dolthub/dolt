@@ -125,3 +125,19 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 		cur.advance()
 	}
 }
+
+func newCursorAtIndex(seq sequence, idx uint64) *sequenceCursor {
+	var cur *sequenceCursor
+	for {
+		cur = newSequenceCursor(cur, seq, 0)
+		idx = idx - advanceCursorToOffset(cur, idx)
+		cs := cur.getChildSequence()
+		if cs == nil {
+			break
+		}
+		seq = cs
+	}
+
+	d.PanicIfTrue(cur == nil)
+	return cur
+}

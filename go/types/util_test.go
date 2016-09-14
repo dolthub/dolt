@@ -34,17 +34,15 @@ func intsToValueSlice(ints ...int) ValueSlice {
 }
 
 func generateNumbersAsValues(n int) []Value {
-	d.Chk.True(n > 0, "must be an integer greater than zero")
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
 func generateNumbersAsValueSlice(n int) ValueSlice {
-	d.Chk.True(n > 0, "must be an integer greater than zero")
 	return generateNumbersAsValuesFromToBy(0, n, 1)
 }
 
 func generateNumbersAsValuesFromToBy(from, to, by int) ValueSlice {
-	d.Chk.True(to > from, "to must be greater than from")
+	d.Chk.True(to >= from, "to must be greater than or equal to from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
 	for i := from; i < to; i += by {
@@ -58,7 +56,7 @@ func generateNumbersAsStructs(n int) ValueSlice {
 }
 
 func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
-	d.Chk.True(to > from, "to must be greater than from")
+	d.Chk.True(to >= from, "to must be greater than or equal to from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
 	for i := from; i < to; i += by {
@@ -68,7 +66,6 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 }
 
 func generateNumbersAsRefOfStructs(n int) []Value {
-	d.Chk.True(n > 0, "must be an integer greater than zero")
 	vs := NewTestValueStore()
 	nums := []Value{}
 	for i := 0; i < n; i++ {
