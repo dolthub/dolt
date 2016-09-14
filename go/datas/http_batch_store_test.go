@@ -227,6 +227,7 @@ func (suite *HTTPBatchStoreSuite) TestRoot() {
 func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
 	store := newBadVersionHTTPBatchStoreForTest(suite)
 	c := chunks.NewChunk([]byte("abc"))
+	suite.cs.Put(c)
 	suite.Panics(func() { store.UpdateRoot(c.Hash(), hash.Hash{}) })
 }
 

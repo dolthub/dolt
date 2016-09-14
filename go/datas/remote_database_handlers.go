@@ -72,8 +72,8 @@ func versionCheck(hndlr Handler) Handler {
 
 		err := d.Try(func() { hndlr(w, req, ps, cs) })
 		if err != nil {
-			fmt.Printf("Returning bad request: %v\n", err)
-			http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
+			fmt.Printf("Returning bad request:\n%v\n", err)
+			http.Error(w, fmt.Sprintf("Error: %v", d.Unwrap(err)), http.StatusBadRequest)
 			return
 		}
 	}

@@ -96,34 +96,60 @@ func (ds *databaseCommon) doSetHead(datasetID string, commit types.Struct) error
 func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
 	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 
-	currentRootRef, currentDatasets := ds.getRootAndDatasets()
-	commitRef := ds.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
+	var err error
+	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
+		currentRootRef, currentDatasets := ds.getRootAndDatasets()
+		commitRef := ds.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
 
-	// First commit in store is always fast-forward.
-	if !currentRootRef.IsEmpty() {
-		r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
+		// Allow only fast-forward commits.
+		// If there's nothing in the DB yet, skip all this logic.
+		if !currentRootRef.IsEmpty() {
+			r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
 
-		// First commit in dataset is always fast-forward.
-		if hasHead {
-			currentHeadRef := r.(types.Ref)
-			// Allow only fast-forward commits.
-			if commitRef.Equals(currentHeadRef) {
-				return nil
-			}
-			if !CommitDescendsFrom(commit, currentHeadRef, ds) {
-				return ErrMergeNeeded
+			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
+			if hasHead {
+				currentHeadRef := r.(types.Ref)
+				if commitRef.Equals(currentHeadRef) {
+					return nil
+				}
+				// This covers all cases where commit doesn't descend from the Head of datasetID, including the case where we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
+				if !CommitDescendsFrom(commit, currentHeadRef, ds) {
+					return ErrMergeNeeded
+				}
 			}
 		}
+		currentDatasets = currentDatasets.Set(types.String(datasetID), commitRef)
+		err = ds.tryUpdateRoot(currentDatasets, currentRootRef)
 	}
-	currentDatasets = currentDatasets.Set(types.String(datasetID), commitRef)
-	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
+	return err
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootRef is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (ds *databaseCommon) doDelete(datasetID string) error {
+func (ds *databaseCommon) doDelete(datasetIDstr string) error {
+	datasetID := types.String(datasetIDstr)
 	currentRootRef, currentDatasets := ds.getRootAndDatasets()
-	currentDatasets = currentDatasets.Remove(types.String(datasetID))
-	return ds.tryUpdateRoot(currentDatasets, currentRootRef)
+	var initialHead types.Ref
+	if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead {
+		return nil
+	} else {
+		initialHead = r.(types.Ref)
+	}
+
+	var err error
+	for {
+		currentDatasets = currentDatasets.Remove(datasetID)
+		err = ds.tryUpdateRoot(currentDatasets, currentRootRef)
+		if err != ErrOptimisticLockFailed {
+			break
+		}
+		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
+		currentRootRef, currentDatasets = ds.getRootAndDatasets()
+		if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
+			err = ErrMergeNeeded
+			break
+		}
+	}
+	return err
 }
 
 func (ds *databaseCommon) getRootAndDatasets() (currentRootRef hash.Hash, currentDatasets types.Map) {
@@ -138,7 +164,7 @@ func (ds *databaseCommon) getRootAndDatasets() (currentRootRef hash.Hash, curren
 }
 
 func (ds *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootRef hash.Hash) (err error) {
-	// TODO: This Commit will be orphaned if the UpdateRoot below fails
+	// TODO: This Map will be orphaned if the UpdateRoot below fails
 	newRootRef := ds.WriteValue(currentDatasets).TargetHash()
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
 	if !ds.rt.UpdateRoot(newRootRef, currentRootRef) {
