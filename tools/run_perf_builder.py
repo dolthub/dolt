@@ -18,6 +18,7 @@ import subprocess
 # These are the 'go test' packages for perf testing.
 # Note that adding entires will actually run all tests in that package, not just the perf tests.
 PACKAGES = [
+    './go/types',
     './samples/go/csv/csv-import',
 ]
 
