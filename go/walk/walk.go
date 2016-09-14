@@ -148,7 +148,7 @@ func SomeChunksP(r types.Ref, bs types.BatchStore, stopCb SomeChunksStopCallback
 
 		if chunkCb != nil || r.Height() > 1 {
 			c = bs.Get(tr)
-			d.Chk.False(c.IsEmpty())
+			d.PanicIfTrue(c.IsEmpty())
 
 			if chunkCb != nil {
 				chunkCb(r, c)
@@ -200,7 +200,7 @@ func newRefQueue() refQueue {
 	}
 
 	pop := func() types.Ref {
-		d.Chk.True(len(buff) > 0)
+		d.PanicIfFalse(len(buff) > 0)
 		r := buff[0]
 		buff = buff[1:]
 		return r
@@ -223,7 +223,7 @@ func newRefQueue() refQueue {
 					push(r)
 				case head <- first:
 					r := pop()
-					d.Chk.True(r == first)
+					d.PanicIfFalse(r == first)
 				case <-done:
 					break loop
 				}

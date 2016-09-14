@@ -24,7 +24,7 @@ func (r *refCountingLdbStore) AddRef() {
 }
 
 func (r *refCountingLdbStore) Close() (err error) {
-	d.Chk.True(r.refCount > 0)
+	d.PanicIfFalse(r.refCount > 0)
 	r.refCount--
 	if r.refCount == 0 {
 		err = r.LevelDBStore.Close()

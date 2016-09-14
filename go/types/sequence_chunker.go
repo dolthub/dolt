@@ -30,9 +30,9 @@ func newEmptySequenceChunker(vr ValueReader, vw ValueWriter, makeChunk, parentMa
 
 func newSequenceChunker(cur *sequenceCursor, vr ValueReader, vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
 	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
-	d.Chk.True(makeChunk != nil)
-	d.Chk.True(parentMakeChunk != nil)
-	d.Chk.True(hashValueBytes != nil)
+	d.PanicIfFalse(makeChunk != nil)
+	d.PanicIfFalse(parentMakeChunk != nil)
+	d.PanicIfFalse(hashValueBytes != nil)
 
 	sc := &sequenceChunker{
 		cur,
@@ -129,7 +129,7 @@ func (sc *sequenceChunker) resume() {
 }
 
 func (sc *sequenceChunker) Append(item sequenceItem) {
-	d.Chk.True(item != nil)
+	d.PanicIfFalse(item != nil)
 	sc.current = append(sc.current, item)
 	sc.rv.ClearLastBoundary()
 	sc.hashValueBytes(item, sc.rv)
@@ -152,7 +152,7 @@ func (sc *sequenceChunker) skipParentIfExists() {
 }
 
 func (sc *sequenceChunker) createParent() {
-	d.Chk.True(sc.parent == nil)
+	d.PanicIfFalse(sc.parent == nil)
 	var parent *sequenceCursor
 	if sc.cur != nil && sc.cur.parent != nil {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
@@ -204,7 +204,7 @@ func (sc *sequenceChunker) anyPending() bool {
 
 // Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable. See comments inline.
 func (sc *sequenceChunker) Done() sequence {
-	d.Chk.False(sc.done)
+	d.PanicIfTrue(sc.done)
 	sc.done = true
 
 	if sc.cur != nil {
@@ -232,7 +232,7 @@ func (sc *sequenceChunker) Done() sequence {
 	}
 
 	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a non-leaf chunker happens to chunk on the first item (metaTuple) appended. In this case, this is the root of the tree, but it is *not* canonical and we must walk down until we find cases (1) or (2), above.
-	d.Chk.True(!sc.isLeaf && len(sc.current) == 1)
+	d.PanicIfFalse(!sc.isLeaf && len(sc.current) == 1)
 	mt := sc.current[0].(metaTuple)
 
 	for {

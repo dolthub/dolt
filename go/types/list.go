@@ -109,7 +109,7 @@ func (l List) Type() *Type {
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {
-	d.Chk.True(idx < l.Len())
+	d.PanicIfFalse(idx < l.Len())
 	cur := newCursorAtIndex(l.seq, idx)
 	return cur.current().(Value)
 }
@@ -140,7 +140,7 @@ func (l List) elemType() *Type {
 // Set returns a new list where the valie at the given index have been replaced with v. If idx is
 // out bounds then this panics.
 func (l List) Set(idx uint64, v Value) List {
-	d.Chk.True(idx < l.Len())
+	d.PanicIfFalse(idx < l.Len())
 	return l.Splice(idx, 1, v)
 }
 
@@ -157,8 +157,8 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 		return l
 	}
 
-	d.Chk.True(idx <= l.Len())
-	d.Chk.True(idx+deleteCount <= l.Len())
+	d.PanicIfFalse(idx <= l.Len())
+	d.PanicIfFalse(idx+deleteCount <= l.Len())
 
 	cur := newCursorAtIndex(l.seq, idx)
 	ch := newSequenceChunker(cur, l.seq.valueReader(), nil, makeListLeafChunkFn(l.seq.valueReader()), newIndexedMetaSequenceChunkFn(ListKind, l.seq.valueReader()), hashValueBytes)
@@ -181,7 +181,7 @@ func (l List) Insert(idx uint64, vs ...Value) List {
 // Remove returns a new list where the items at index start (inclusive) through end (exclusive) have
 // been removed. This panics if end is smaller than start.
 func (l List) Remove(start uint64, end uint64) List {
-	d.Chk.True(start <= end)
+	d.PanicIfFalse(start <= end)
 	return l.Splice(start, end-start)
 }
 

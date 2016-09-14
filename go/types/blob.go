@@ -39,8 +39,8 @@ func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
 		return b
 	}
 
-	d.Chk.True(idx <= b.Len())
-	d.Chk.True(idx+deleteCount <= b.Len())
+	d.PanicIfFalse(idx <= b.Len())
+	d.PanicIfFalse(idx+deleteCount <= b.Len())
 
 	cur := newCursorAtIndex(b.seq, idx)
 	ch := newSequenceChunker(cur, b.seq.valueReader(), nil, makeBlobLeafChunkFn(b.seq.valueReader()), newIndexedMetaSequenceChunkFn(BlobKind, b.seq.valueReader()), hashValueByte)
@@ -230,7 +230,7 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 				}
 			}
 			if err != nil {
-				d.Chk.True(io.EOF == err)
+				d.PanicIfFalse(io.EOF == err)
 				if offset > 0 {
 					makeChunk()
 				}

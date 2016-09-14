@@ -51,7 +51,7 @@ func (r *valueDecoder) readType() *Type {
 		return r.tc.getCycleType(r.readUint32())
 	}
 
-	d.Chk.True(IsPrimitiveKind(k))
+	d.PanicIfFalse(IsPrimitiveKind(k))
 	return MakePrimitiveType(k)
 }
 

@@ -67,7 +67,7 @@ func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
 		for el := c.lru.Front(); el != nil && c.totalSize > c.maxSize; {
 			key1 := el.Value
 			ce, ok := c.cache[key1]
-			d.Chk.True(ok, "SizeCache is missing expected value")
+			d.PanicIfFalse(ok, "SizeCache is missing expected value")
 			next := el.Next()
 			delete(c.cache, key1)
 			c.totalSize -= ce.size

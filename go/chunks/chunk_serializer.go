@@ -29,12 +29,12 @@ import (
 
 // Serialize a single Chunk to writer.
 func Serialize(chunk Chunk, writer io.Writer) {
-	d.Chk.True(chunk.data != nil)
+	d.PanicIfFalse(chunk.data != nil)
 
 	digest := chunk.Hash().Digest()
 	n, err := io.Copy(writer, bytes.NewReader(digest[:]))
 	d.Chk.NoError(err)
-	d.Chk.True(int64(hash.ByteLen) == n)
+	d.PanicIfFalse(int64(hash.ByteLen) == n)
 
 	// Because of chunking at higher levels, no chunk should never be more than 4GB
 	chunkSize := uint32(len(chunk.Data()))
@@ -43,7 +43,7 @@ func Serialize(chunk Chunk, writer io.Writer) {
 
 	n, err = io.Copy(writer, bytes.NewReader(chunk.Data()))
 	d.Chk.NoError(err)
-	d.Chk.True(uint32(n) == chunkSize)
+	d.PanicIfFalse(uint32(n) == chunkSize)
 }
 
 // Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If |rateLimit| is non-nill, concurrency will be limited to the available capacity of the channel.
@@ -91,7 +91,7 @@ func deserializeChunk(reader io.Reader) (Chunk, bool) {
 		return EmptyChunk, false
 	}
 	d.Chk.NoError(err)
-	d.Chk.True(int(hash.ByteLen) == n)
+	d.PanicIfFalse(int(hash.ByteLen) == n)
 	h := hash.New(digest)
 
 	chunkSize := uint32(0)
@@ -101,8 +101,8 @@ func deserializeChunk(reader io.Reader) (Chunk, bool) {
 	w := NewChunkWriter()
 	n2, err := io.CopyN(w, reader, int64(chunkSize))
 	d.Chk.NoError(err)
-	d.Chk.True(int64(chunkSize) == n2)
+	d.PanicIfFalse(int64(chunkSize) == n2)
 	c := w.Chunk()
-	d.Chk.True(h == c.Hash(), "%s != %s", h, c.Hash())
+	d.PanicIfFalse(h == c.Hash(), "%s != %s", h, c.Hash())
 	return c, true
 }

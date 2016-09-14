@@ -103,7 +103,7 @@ func main() {
 	blob = ds.HeadValue().(types.Blob)
 	outBytes, _ := ioutil.ReadAll(blob.Reader())
 	readDuration := time.Since(t1)
-	d.Chk.True(bytes.Compare(blobBytes, outBytes) == 0)
+	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)
 	fmt.Printf("\t\t\t%s\t\t%s\n\n", rate(buildDuration, *blobSize), rate(readDuration, *blobSize))
 }
 

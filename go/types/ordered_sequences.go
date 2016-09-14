@@ -94,7 +94,7 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 		seq = cs.(orderedSequence)
 	}
 
-	d.Chk.True(cur != nil)
+	d.PanicIfFalse(cur != nil)
 	return cur
 }
 
@@ -107,7 +107,7 @@ func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bo
 	})
 
 	if cur.idx == seq.seqLen() && lastPositionIfNotFound {
-		d.Chk.True(cur.idx > 0)
+		d.PanicIfFalse(cur.idx > 0)
 		cur.idx--
 	}
 
@@ -117,7 +117,7 @@ func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bo
 // Gets the key used for ordering the sequence at current index.
 func getCurrentKey(cur *sequenceCursor) orderedKey {
 	seq, ok := cur.seq.(orderedSequence)
-	d.Chk.True(ok, "need an ordered sequence here")
+	d.PanicIfFalse(ok, "need an ordered sequence here")
 	return seq.getKey(cur.idx)
 }
 
@@ -138,7 +138,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 		if kind == SetKind {
 			col = newSet(newSetMetaSequence(tuples, vr))
 		} else {
-			d.Chk.True(MapKind == kind)
+			d.PanicIfFalse(MapKind == kind)
 			col = newMap(newMapMetaSequence(tuples, vr))
 		}
 		return col, tuples.last().key, numLeaves

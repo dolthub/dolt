@@ -16,7 +16,7 @@ type sequenceCursor struct {
 func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
 	if idx < 0 {
 		idx += seq.seqLen()
-		d.Chk.True(idx >= 0)
+		d.PanicIfFalse(idx >= 0)
 	}
 
 	return &sequenceCursor{parent, seq, idx}
@@ -31,7 +31,7 @@ func (cur *sequenceCursor) getItem(idx int) sequenceItem {
 }
 
 func (cur *sequenceCursor) sync() {
-	d.Chk.True(cur.parent != nil)
+	d.PanicIfFalse(cur.parent != nil)
 	cur.seq = cur.parent.getChildSequence()
 }
 
@@ -44,7 +44,7 @@ func (cur *sequenceCursor) getChildSequence() sequence {
 
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
 func (cur *sequenceCursor) current() sequenceItem {
-	d.Chk.True(cur.valid())
+	d.PanicIfFalse(cur.valid())
 	return cur.getItem(cur.idx)
 }
 
@@ -98,7 +98,7 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(allowBeforeStart bool) b
 	if cur.idx == -1 {
 		return false
 	}
-	d.Chk.True(0 == cur.idx)
+	d.PanicIfFalse(0 == cur.idx)
 	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(false) {
 		cur.sync()
 		cur.idx = cur.length() - 1

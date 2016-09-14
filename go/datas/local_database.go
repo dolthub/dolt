@@ -46,6 +46,6 @@ func (lds *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
 		lds.ValueStore = types.NewValueStore(bs)
 		lds.rt = bs
 	}
-	d.Chk.True(bs.IsValidating())
+	d.PanicIfFalse(bs.IsValidating())
 	return bs
 }

@@ -71,7 +71,7 @@ func newCursorAtIndex(seq indexedSequence, idx uint64) *sequenceCursor {
 		seq = cs.(indexedSequence)
 	}
 
-	d.Chk.True(cur != nil)
+	d.PanicIfFalse(cur != nil)
 	return cur
 }
 
@@ -108,7 +108,7 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkF
 		if kind == ListKind {
 			col = newList(newListMetaSequence(tuples, source))
 		} else {
-			d.Chk.True(BlobKind == kind)
+			d.PanicIfFalse(BlobKind == kind)
 			col = newBlob(newBlobMetaSequence(tuples, source))
 		}
 		return col, orderedKeyFromSum(tuples), numLeaves

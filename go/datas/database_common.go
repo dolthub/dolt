@@ -46,13 +46,13 @@ func (ds *databaseCommon) MaybeHeadRef(datasetID string) (types.Ref, bool) {
 
 func (ds *databaseCommon) Head(datasetID string) types.Struct {
 	c, ok := ds.MaybeHead(datasetID)
-	d.Chk.True(ok, "Database \"%s\" has no Head.", datasetID)
+	d.PanicIfFalse(ok, "Database \"%s\" has no Head.", datasetID)
 	return c
 }
 
 func (ds *databaseCommon) HeadRef(datasetID string) types.Ref {
 	r, ok := ds.MaybeHeadRef(datasetID)
-	d.Chk.True(ok, "Database \"%s\" has no Head.", datasetID)
+	d.PanicIfFalse(ok, "Database \"%s\" has no Head.", datasetID)
 	return r
 }
 

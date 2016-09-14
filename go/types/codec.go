@@ -33,13 +33,13 @@ func DecodeFromBytes(data []byte, vr ValueReader, tc *TypeCache) Value {
 	br := &binaryNomsReader{data, 0}
 	dec := newValueDecoder(br, vr, tc)
 	v := dec.readValue()
-	d.Chk.True(br.pos() == uint32(len(data)))
+	d.PanicIfFalse(br.pos() == uint32(len(data)))
 	return v
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
 func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
-	d.Chk.False(c.IsEmpty())
+	d.PanicIfTrue(c.IsEmpty())
 	v := DecodeFromBytes(c.Data(), vr, staticTypeCache)
 	if cacher, ok := v.(hashCacher); ok {
 		assignHash(cacher, c.Hash())

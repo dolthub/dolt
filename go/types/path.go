@@ -162,7 +162,7 @@ func NewIndexIntoKeyPath(idx Value) IndexPath {
 
 func newIndexPath(idx Value, intoKey bool) IndexPath {
 	k := idx.Type().Kind()
-	d.Chk.True(k == StringKind || k == BoolKind || k == NumberKind)
+	d.PanicIfFalse(k == StringKind || k == BoolKind || k == NumberKind)
 	return IndexPath{idx, intoKey}
 }
 
@@ -221,7 +221,7 @@ func NewHashIndexIntoKeyPath(h hash.Hash) HashIndexPath {
 }
 
 func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
-	d.Chk.False(h.IsEmpty())
+	d.PanicIfTrue(h.IsEmpty())
 	return HashIndexPath{h, intoKey}
 }
 

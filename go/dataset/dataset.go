@@ -46,13 +46,13 @@ func (ds *Dataset) MaybeHeadRef() (types.Ref, bool) {
 // Head returns the current head Commit, which contains the current root of the Dataset's value tree.
 func (ds *Dataset) Head() types.Struct {
 	c, ok := ds.MaybeHead()
-	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
+	d.PanicIfFalse(ok, "Dataset \"%s\" does not exist", ds.id)
 	return c
 }
 
 func (ds *Dataset) HeadRef() types.Ref {
 	r, ok := ds.MaybeHeadRef()
-	d.Chk.True(ok, "Dataset \"%s\" does not exist", ds.id)
+	d.PanicIfFalse(ok, "Dataset \"%s\" does not exist", ds.id)
 	return r
 }
 

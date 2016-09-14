@@ -175,7 +175,7 @@ func planWork(srcQ, sinkQ *types.RefByHeight) (srcRefs, sinkRefs, comRefs types.
 		sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
 		return
 	}
-	d.Chk.True(srcHt == sinkHt)
+	d.PanicIfFalse(srcHt == sinkHt)
 	srcRefs, comRefs = findCommon(srcQ, sinkQ, srcHt)
 	sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
 	return
@@ -190,8 +190,8 @@ func popRefsOfHeight(q *types.RefByHeight, height uint64) (refs types.RefSlice) 
 }
 
 func findCommon(taller, shorter *types.RefByHeight, height uint64) (tallRefs, comRefs types.RefSlice) {
-	d.Chk.True(tallestHeight(taller) == height)
-	d.Chk.True(tallestHeight(shorter) == height)
+	d.PanicIfFalse(tallestHeight(taller) == height)
+	d.PanicIfFalse(tallestHeight(shorter) == height)
 	comIndices := []int{}
 	// Walk through shorter and taller in tandem from the back (where the tallest Refs are). Refs from taller that go into a work queue are popped off directly, but doing so to shorter would mess up shortIdx. So, instead just keep track of the indices of common refs and drop them from shorter at the end.
 	for shortIdx := shorter.Len() - 1; !taller.Empty() && tallestHeight(taller) == height; {
@@ -229,7 +229,7 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database) traverseResult {
 		srcBS := srcDB.validatingBatchStore()
 		c := srcBS.Get(h)
 		v := types.DecodeValue(c, srcDB)
-		d.Chk.True(v != nil, "Expected decoded chunk to be non-nil.")
+		d.PanicIfFalse(v != nil, "Expected decoded chunk to be non-nil.")
 		sinkDB.validatingBatchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
 		return traverseResult{h, v.Chunks(), len(c.Data())}
 	}

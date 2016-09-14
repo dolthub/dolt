@@ -53,7 +53,7 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 			k = nil
 		}
 
-		d.Chk.True(k == nil)
+		d.PanicIfFalse(k == nil)
 		outChan <- mx.Finish()
 	}()
 	return outChan
@@ -162,7 +162,7 @@ func (m Map) SetM(kv ...Value) Map {
 	if len(kv) == 0 {
 		return m
 	}
-	d.Chk.True(len(kv)%2 == 0)
+	d.PanicIfFalse(len(kv)%2 == 0)
 
 	k, v, tail := kv[0], kv[1], kv[2:]
 
@@ -253,7 +253,7 @@ func buildMapData(values []Value) mapEntrySlice {
 	}
 
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
-	d.Chk.True(0 == len(values)%2, "Must specify even number of key/value pairs")
+	d.PanicIfFalse(0 == len(values)%2, "Must specify even number of key/value pairs")
 	kvs := make(mapEntrySlice, len(values)/2)
 
 	for i := 0; i < len(values); i += 2 {

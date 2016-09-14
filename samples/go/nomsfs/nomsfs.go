@@ -443,7 +443,7 @@ func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 
 	ll := uint64(blob.Len())
 	oo := uint64(off)
-	d.Chk.True(ll >= oo)
+	d.PanicIfFalse(ll >= oo)
 	del := uint64(len(data))
 	if ll-oo < del {
 		del = ll - oo

@@ -57,7 +57,7 @@ func NewChunkWriter() *ChunkWriter {
 }
 
 func (w *ChunkWriter) Write(data []byte) (int, error) {
-	d.Chk.True(w.buffer != nil, "Write() cannot be called after Hash() or Close().")
+	d.PanicIfFalse(w.buffer != nil, "Write() cannot be called after Hash() or Close().")
 	size, err := w.buffer.Write(data)
 	d.Chk.NoError(err)
 	return size, nil

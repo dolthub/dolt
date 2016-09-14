@@ -120,7 +120,7 @@ func (s *RemoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle
 
 func (s *RemoteDatabaseServer) connState(c net.Conn, cs http.ConnState) {
 	if s.closing {
-		d.Chk.True(cs == http.StateClosed)
+		d.PanicIfFalse(cs == http.StateClosed)
 		return
 	}
 	s.csChan <- &connectionState{c, cs}

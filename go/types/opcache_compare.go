@@ -29,9 +29,9 @@ func (opCacheComparer) Compare(a, b []byte) int {
 			return 1
 		}
 		a, b = a[1:], b[1:]
-		d.Chk.True(len(a) == hash.ByteLen && len(b) == hash.ByteLen)
+		d.PanicIfFalse(len(a) == hash.ByteLen && len(b) == hash.ByteLen)
 		res := bytes.Compare(a, b)
-		d.Chk.True(res != 0 || aKind == bKind)
+		d.PanicIfFalse(res != 0 || aKind == bKind)
 		return res
 	case BoolKind:
 		return bytes.Compare(a, b)

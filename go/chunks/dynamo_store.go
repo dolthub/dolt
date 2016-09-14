@@ -237,10 +237,10 @@ func (s *DynamoStore) buildRequestItems(hashes map[hash.Hash]bool) map[string]*d
 func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.AttributeValue, batch ReadBatch) {
 	for _, item := range responses {
 		p := item[refAttr]
-		d.Chk.True(p != nil)
+		d.PanicIfFalse(p != nil)
 		r := hash.FromSlice(s.removeNamespace(p.B))
 		p = item[chunkAttr]
-		d.Chk.True(p != nil)
+		d.PanicIfFalse(p != nil)
 		b := p.B
 		if p = item[compAttr]; p != nil && *p.S == gzipValue {
 			gr, err := gzip.NewReader(bytes.NewReader(b))
@@ -400,9 +400,9 @@ func (s *DynamoStore) Version() string {
 	if itemLen == 0 {
 		return constants.NomsVersion
 	}
-	d.Chk.True(itemLen == 2, "Version should have 2 attributes on it: %+v", result.Item)
-	d.Chk.True(result.Item[numAttr] != nil)
-	d.Chk.True(result.Item[numAttr].S != nil)
+	d.PanicIfFalse(itemLen == 2, "Version should have 2 attributes on it: %+v", result.Item)
+	d.PanicIfFalse(result.Item[numAttr] != nil)
+	d.PanicIfFalse(result.Item[numAttr].S != nil)
 	return aws.StringValue(result.Item[numAttr].S)
 }
 
@@ -440,11 +440,11 @@ func (s *DynamoStore) Root() hash.Hash {
 	if itemLen == 0 {
 		return hash.Hash{}
 	}
-	d.Chk.True(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
+	d.PanicIfFalse(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
 	if itemLen == 3 {
-		d.Chk.True(result.Item[compAttr] != nil)
-		d.Chk.True(result.Item[compAttr].S != nil)
-		d.Chk.True(noneValue == *result.Item[compAttr].S)
+		d.PanicIfFalse(result.Item[compAttr] != nil)
+		d.PanicIfFalse(result.Item[compAttr].S != nil)
+		d.PanicIfFalse(noneValue == *result.Item[compAttr].S)
 	}
 	return hash.FromSlice(result.Item[chunkAttr].B)
 }

@@ -25,7 +25,7 @@ type metaSequence interface {
 }
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64, child Collection) metaTuple {
-	d.Chk.True(Ref{} != ref)
+	d.PanicIfFalse(Ref{} != ref)
 	return metaTuple{ref, key, numLeaves, child}
 }
 
@@ -85,7 +85,7 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	case mk2.isOrderedByValue:
 		return false
 	default:
-		d.Chk.False(key.h.IsEmpty() || mk2.h.IsEmpty())
+		d.PanicIfTrue(key.h.IsEmpty() || mk2.h.IsEmpty())
 		return key.h.Less(mk2.h)
 	}
 }
@@ -225,7 +225,7 @@ func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	}
 
 	r := mt.ref.TargetHash()
-	d.Chk.False(r.IsEmpty())
+	d.PanicIfTrue(r.IsEmpty())
 	return vr.ReadValue(r)
 }
 
@@ -234,7 +234,7 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	v := mt.key.v
 	if !mt.key.isOrderedByValue {
 		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-		d.Chk.False(mt.key.h.IsEmpty())
+		d.PanicIfTrue(mt.key.h.IsEmpty())
 		v = constructRef(MakeRefType(BoolType), mt.key.h, 0)
 	}
 

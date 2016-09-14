@@ -129,6 +129,10 @@ func TestPanicIfTrue(t *testing.T) {
 	formatted := fmt.Sprintf(format, arg)
 
 	assert.Panics(func() {
+		PanicIfTrue(true)
+	})
+
+	assert.Panics(func() {
 		PanicIfTrue(true, "Panicking!!!!")
 	})
 
@@ -143,6 +147,36 @@ func TestPanicIfTrue(t *testing.T) {
 
 	err = Try(func() {
 		PanicIfTrue(true, format, arg)
+	})
+	assert.Equal(errors.New(formatted), Unwrap(err))
+}
+
+func TestPanicIfFalse(t *testing.T) {
+	assert := assert.New(t)
+
+	arg := "arg value"
+	format := "could be a format: %s"
+	formatted := fmt.Sprintf(format, arg)
+
+	assert.Panics(func() {
+		PanicIfFalse(false)
+	})
+
+	assert.Panics(func() {
+		PanicIfFalse(false, "Panicking!!!!")
+	})
+
+	assert.NotPanics(func() {
+		PanicIfFalse(true, "Not panicking")
+	})
+
+	err := Try(func() {
+		PanicIfFalse(false, format)
+	})
+	assert.Equal(errors.New(format), Unwrap(err))
+
+	err = Try(func() {
+		PanicIfFalse(false, format, arg)
 	})
 	assert.Equal(errors.New(formatted), Unwrap(err))
 }

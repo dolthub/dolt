@@ -22,7 +22,7 @@ func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
 
 func (rds *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
 	bs = rds.ValueStore.BatchStore()
-	d.Chk.True(bs.IsValidating())
+	d.PanicIfFalse(bs.IsValidating())
 	return
 }
 

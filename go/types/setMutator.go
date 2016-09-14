@@ -16,13 +16,13 @@ func newSetMutator(vrw ValueReadWriter) *setMutator {
 }
 
 func (mx *setMutator) Insert(val Value) *setMutator {
-	d.Chk.True(mx.oc != nil, "Can't call Insert() again after Finish()")
+	d.PanicIfFalse(mx.oc != nil, "Can't call Insert() again after Finish()")
 	mx.oc.SetInsert(val)
 	return mx
 }
 
 func (mx *setMutator) Finish() Set {
-	d.Chk.True(mx.oc != nil, "Can only call Finish() once")
+	d.PanicIfFalse(mx.oc != nil, "Can only call Finish() once")
 	defer func() {
 		mx.oc = nil
 	}()

@@ -223,7 +223,7 @@ func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
-	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
 	rl := make(chan struct{}, 16)
 	chunks.Deserialize(reader, &readBatchChunkSink{&batch, &sync.RWMutex{}}, rl)
@@ -275,13 +275,13 @@ func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
-	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(bufio.ScanWords)
 	for scanner.Scan() {
 		h := hash.Parse(scanner.Text())
-		d.Chk.True(scanner.Scan())
+		d.PanicIfFalse(scanner.Scan())
 		if scanner.Text() == "true" {
 			for _, outstanding := range batch[h] {
 				// This is a little gross, but OutstandingHas.Satisfy() expects a chunk. It ignores it, though, and just sends 'true' over the channel it's holding.
@@ -429,7 +429,7 @@ func (bhcs *httpBatchStore) Root() hash.Hash {
 	expectVersion(res)
 	defer closeResponse(res.Body)
 
-	d.Chk.True(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
 	return hash.Parse(string(data))
@@ -520,6 +520,6 @@ func closeResponse(rc io.ReadCloser) error {
 	ioutil.ReadAll(rc)
 	// Bug #2069. It's not clear what the behavior is here. These checks are currently not enabled because they are shadowing information about a failure which occurs earlier.
 	// d.Chk.NoError(err)
-	// d.Chk.True(0 == len(data), string(data))
+	// d.PanicIfFalse(0 == len(data), string(data))
 	return rc.Close()
 }

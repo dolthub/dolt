@@ -105,10 +105,10 @@ func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
 
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns an appropriately-typed types.Ref. v is not guaranteed to be actually written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
-	d.Chk.True(v != nil)
+	d.PanicIfFalse(v != nil)
 	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
 	c := EncodeValue(v, lvs)
-	d.Chk.False(c.IsEmpty())
+	d.PanicIfTrue(c.IsEmpty())
 	hash := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(MakeRefType(v.Type()), hash, height)
@@ -217,7 +217,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 
 func getTargetType(refBase Ref) *Type {
 	refType := refBase.Type()
-	d.Chk.True(RefKind == refType.Kind())
+	d.PanicIfFalse(RefKind == refType.Kind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]
 }
 

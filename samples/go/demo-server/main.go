@@ -57,7 +57,7 @@ type cachingReadThroughStoreFactory struct {
 }
 
 func (f *cachingReadThroughStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	d.Chk.True(f.factory != nil, "Cannot use cachingReadThroughStoreFactory after Shutter().")
+	d.PanicIfFalse(f.factory != nil, "Cannot use cachingReadThroughStoreFactory after Shutter().")
 	return chunks.NewReadThroughStore(f.cache, f.factory.CreateStore(ns))
 }
 

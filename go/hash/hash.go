@@ -95,7 +95,7 @@ func FromData(data []byte) Hash {
 
 // FromSlice creates a new Hash backed by data, ensuring that data is an acceptable length.
 func FromSlice(data []byte) Hash {
-	d.Chk.True(len(data) == ByteLen)
+	d.PanicIfFalse(len(data) == ByteLen)
 	digest := Digest{}
 	copy(digest[:], data)
 	return New(digest)

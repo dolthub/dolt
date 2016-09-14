@@ -229,8 +229,8 @@ func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
  * Returns an array matching |a| and |b| respectively to whether that cursor has more values.
  */
 func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
-	d.Chk.True(a.valid())
-	d.Chk.True(b.valid())
+	d.PanicIfFalse(a.valid())
+	d.PanicIfFalse(b.valid())
 	aHasMore = true
 	bHasMore = true
 

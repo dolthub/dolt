@@ -55,7 +55,7 @@ func EscapeStructFieldFromCSV(input string) string {
 // MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
 func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typ *types.Type, fieldOrder []int, kindMap []types.NomsKind) {
 	useStringType := len(kinds) == 0
-	d.Chk.True(useStringType || len(headers) == len(kinds))
+	d.PanicIfFalse(useStringType || len(headers) == len(kinds))
 
 	fieldMap := make(types.TypeMap, len(headers))
 	origOrder := make(map[string]int, len(headers))

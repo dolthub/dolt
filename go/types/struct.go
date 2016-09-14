@@ -47,7 +47,7 @@ func NewStruct(name string, data StructData) Struct {
 
 func NewStructWithType(t *Type, data ValueSlice) Struct {
 	desc := t.Desc.(StructDesc)
-	d.Chk.True(len(data) == len(desc.fields))
+	d.PanicIfFalse(len(data) == len(desc.fields))
 	for i, field := range desc.fields {
 		v := data[i]
 		assertSubtype(field.t, v)

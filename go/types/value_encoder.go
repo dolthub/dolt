@@ -50,7 +50,7 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 		w.writeCycle(uint32(t.Desc.(CycleDesc)))
 	default:
 		w.writeKind(k)
-		d.Chk.True(IsPrimitiveKind(k))
+		d.PanicIfFalse(IsPrimitiveKind(k))
 	}
 }
 
@@ -106,7 +106,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 		v := tuple.key.v
 		if !tuple.key.isOrderedByValue {
 			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-			d.Chk.False(tuple.key.h.IsEmpty())
+			d.PanicIfTrue(tuple.key.h.IsEmpty())
 			v = constructRef(MakeRefType(BoolType), tuple.key.h, 0)
 		}
 		w.writeValue(v)

@@ -136,7 +136,7 @@ func valueTypesFromParents(parents types.Set, fieldName string) []*types.Type {
 }
 
 func getSetElementType(t *types.Type) *types.Type {
-	d.Chk.True(t.Kind() == types.SetKind)
+	d.PanicIfFalse(t.Kind() == types.SetKind)
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
@@ -145,12 +145,12 @@ func fieldTypeFromRefOfCommit(t *types.Type, fieldName string) *types.Type {
 }
 
 func getRefElementType(t *types.Type) *types.Type {
-	d.Chk.True(t.Kind() == types.RefKind)
+	d.PanicIfFalse(t.Kind() == types.RefKind)
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
 func fieldTypeFromCommit(t *types.Type, fieldName string) *types.Type {
-	d.Chk.True(t.Kind() == types.StructKind && t.Desc.(types.StructDesc).Name == "Commit")
+	d.PanicIfFalse(t.Kind() == types.StructKind && t.Desc.(types.StructDesc).Name == "Commit")
 	return t.Desc.(types.StructDesc).Field(fieldName)
 }
 
