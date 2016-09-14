@@ -77,7 +77,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
     return this._firstOrLast(true);
   }
 
-  async forEach(cb: (v: T) => ?Promise<void>): Promise<void> {
+  async forEach(cb: (v: T) => ?Promise<any>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(null);
     const promises = [];
     return cursor.iter(v => {

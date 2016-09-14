@@ -122,7 +122,7 @@ export default class Map<K: Value, V: Value> extends
     return equals(entry[KEY], key) ? entry[VALUE] : undefined;
   }
 
-  async forEach(cb: (v: V, k: K) => ?Promise<void>): Promise<void> {
+  async forEach(cb: (v: V, k: K) => ?Promise<any>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(null);
     const promises = [];
     return cursor.iter(entry => {

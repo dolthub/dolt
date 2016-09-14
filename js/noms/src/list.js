@@ -105,7 +105,7 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    * function returns a promise `forEach` will continue but it will not return until all of those
    * promises have been fulfilled.
    */
-  async forEach(cb: (v: T, i: number) => ?Promise<void>): Promise<void> {
+  async forEach(cb: (v: T, i: number) => ?Promise<any>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(0);
     const promises = [];
     return cursor.iter((v, i) => {
