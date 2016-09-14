@@ -11,6 +11,9 @@ export const byteLength = 20;
 export const stringLength = 32;
 const pattern = /^[0-9a-v]{32}$/;
 
+/**
+ * Hash is used to represent the hash of a Noms Value.
+ */
 export default class Hash {
   _digest: Uint8Array;
 
@@ -22,26 +25,46 @@ export default class Hash {
     this._digest = digest;
   }
 
+  /**
+   * The underlying byte array that represents the hash.
+   */
   get digest(): Uint8Array {
     return this._digest;
   }
 
+  /**
+   * Whether this Hash object is equal to the empty hash.
+   */
   isEmpty(): boolean {
     return this.equals(emptyHash);
   }
 
+  /**
+   * If this hash is equal to `other` then this returns `true`.
+   */
   equals(other: Hash): boolean {
     return this.compare(other) === 0;
   }
 
+  /**
+   * Compares two hashes. This returns < 0 when this hash is smaller than `other`, 0 if they are
+   * equal and > 0 if this hash is larger than `other`.
+   */
   compare(other: Hash): number {
     return compare(this._digest, other._digest);
   }
 
+  /**
+   * Returns a Base32 encoded version of the hash.
+   */
   toString(): string {
     return encode(this._digest);
   }
 
+  /**
+   * Parses a string representing a hash as a Base32 encoded byte array.
+   * If the string is not well formed then this returns `null`.
+   */
   static parse(s: string): Hash | null {
     if (pattern.test(s)) {
       return new Hash(decode(s));
@@ -49,9 +72,15 @@ export default class Hash {
     return null;
   }
 
+  /**
+   * Computes the hash from `data`.
+   */
   static fromData(data: Uint8Array): Hash {
     return new Hash(sha512(data));
   }
 }
 
-export const emptyHash = new Hash(alloc(byteLength));
+/**
+ * The empty hash (all zeroes).
+ */
+export const emptyHash: Hash = new Hash(alloc(byteLength));

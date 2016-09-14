@@ -8,6 +8,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
+// Number is a Noms Value wrapper around the primitive float64 type.
 type Number float64
 
 // Value interface

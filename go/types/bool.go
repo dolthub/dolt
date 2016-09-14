@@ -8,6 +8,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
+// Bool is a Noms Value wrapper around the primitive bool type.
 type Bool bool
 
 // Value interface

@@ -39,7 +39,10 @@ import (
 )
 
 const (
-	ByteLen   = 20
+	// ByteLen is the number of bytes used to represent the Hash.
+	ByteLen = 20
+
+	// StringLen is the number of characters need to represent the Hash using Base32.
 	StringLen = 32 // 20 * 8 / log2(32)
 )
 
@@ -48,10 +51,12 @@ var (
 	emptyHash = Hash{}
 )
 
+// Hash is used to represent the hash of a Noms Value.
 type Hash struct {
 	digest Digest
 }
 
+// Digest is used for the underlying data of the Hash.
 type Digest [ByteLen]byte
 
 // Digest returns a *copy* of the digest that backs Hash.
@@ -59,23 +64,28 @@ func (r Hash) Digest() Digest {
 	return r.digest
 }
 
+// IsEmpty determines if this Hash is equal to the empty hash (all zeroes).
 func (r Hash) IsEmpty() bool {
 	return r.digest == emptyHash.digest
 }
 
-// DigestSlice returns a slice of the digest that backs A NEW COPY of Hash, because the receiver of this method is not a pointer.
+// DigestSlice returns a slice of the digest that backs A NEW COPY of Hash, because the receiver of
+// this method is not a pointer.
 func (r Hash) DigestSlice() []byte {
 	return r.digest[:]
 }
 
+// String returns a string representation of the hash using Base32 encoding.
 func (r Hash) String() string {
 	return encode(r.digest[:])
 }
 
+// New creates a new Hash from a Digest.
 func New(digest Digest) Hash {
 	return Hash{digest}
 }
 
+// FromData computes a new Hash from data.
 func FromData(data []byte) Hash {
 	r := sha512.Sum512(data)
 	d := Digest{}
@@ -91,6 +101,8 @@ func FromSlice(data []byte) Hash {
 	return New(digest)
 }
 
+// MaybeParse parses a string representing a hash as a Base32 encoded byte array.
+// If the string is not well formed then this returns (emptyHash, false).
 func MaybeParse(s string) (Hash, bool) {
 	match := pattern.FindStringSubmatch(s)
 	if match == nil {
@@ -99,6 +111,8 @@ func MaybeParse(s string) (Hash, bool) {
 	return FromSlice(decode(s)), true
 }
 
+// MaybeParse parses a string representing a hash as a Base32 encoded byte array.
+// If the string is not well formed then this panics.
 func Parse(s string) Hash {
 	r, ok := MaybeParse(s)
 	if !ok {
@@ -107,25 +121,32 @@ func Parse(s string) Hash {
 	return r
 }
 
+// Less compares two hashes returning whether this Hash is less than other.
 func (r Hash) Less(other Hash) bool {
 	return bytes.Compare(r.digest[:], other.digest[:]) < 0
 }
 
+// Greater compares two hashes returning whether this Hash is greater than other.
 func (r Hash) Greater(other Hash) bool {
+	// TODO: Remove this
 	return bytes.Compare(r.digest[:], other.digest[:]) > 0
 }
 
+// HashSet is a set of Hashes.
 type HashSet map[Hash]struct{}
 
+// Insert adds a Hash to the set.
 func (hs HashSet) Insert(hash Hash) {
 	hs[hash] = struct{}{}
 }
 
+// Has returns true if the HashSet contains hash.
 func (hs HashSet) Has(hash Hash) (has bool) {
 	_, has = hs[hash]
 	return
 }
 
+// Remove removes hash from the HashSet.
 func (hs HashSet) Remove(hash Hash) {
 	delete(hs, hash)
 }
