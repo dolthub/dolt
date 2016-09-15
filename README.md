@@ -1,10 +1,9 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 <br>
-[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md) | &nbsp;[Project Status](#status)
+[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Intro to Noms](doc/intro.md)&nbsp; | &nbsp;[FAQ](doc/faq.md) | &nbsp;[Project Status](#status)&nbsp; | &nbsp;[Download](https://s3-us-west-2.amazonaws.com/download.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries/)
 <br><br>
 [![Build Status](http://jenkins.noms.io/job/NomsMasterBuilder/badge/icon)](http://jenkins.noms.io/job/NomsMasterBuilder)
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-[![Go Report Card](https://goreportcard.com/badge/github.com/attic-labs/noms)](https://goreportcard.com/report/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
 *Noms* is a decentralized database based on ideas from Git.
