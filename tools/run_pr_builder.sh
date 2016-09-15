@@ -39,3 +39,5 @@ popd
 pushd ${NOMS_DIR}/samples/js
 go test ./...
 popd
+
+python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
