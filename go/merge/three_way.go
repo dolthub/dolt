@@ -56,14 +56,17 @@ func newMergeConflict(format string, args ...interface{}) *ErrMergeConflict {
 // All other modifications are allowed.
 // ThreeWay() works on types.List, types.Map, types.Set, and types.Struct.
 func ThreeWay(a, b, parent types.Value, vrw types.ValueReadWriter, resolve ResolveFunc, progress chan struct{}) (merged types.Value, err error) {
+	describe := func(v types.Value) string {
+		if v != nil {
+			return v.Type().Describe()
+		}
+		return "nil Value"
+	}
+
 	if a == nil && b == nil {
 		return parent, nil
-	} else if a == nil {
-		return parent, newMergeConflict("Cannot merge nil Value with %s.", b.Type().Describe())
-	} else if b == nil {
-		return parent, newMergeConflict("Cannot merge %s with nil value.", a.Type().Describe())
 	} else if unmergeable(a, b) {
-		return parent, newMergeConflict("Cannot merge %s with %s.", a.Type().Describe(), b.Type().Describe())
+		return parent, newMergeConflict("Cannot merge %s with %s.", describe(a), describe(b))
 	}
 
 	if resolve == nil {

@@ -5,7 +5,10 @@
 package merge
 
 import (
+	"testing"
+
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -15,12 +18,21 @@ type seq interface {
 
 type ThreeWayMergeSuite struct {
 	suite.Suite
+	vs      *types.ValueStore
 	create  func(seq) types.Value
 	typeStr string
 }
 
-func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq, vs types.ValueReadWriter) {
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs, nil, nil)
+func (s *ThreeWayMergeSuite) SetupTest() {
+	s.vs = types.NewTestValueStore()
+}
+
+func (s *ThreeWayMergeSuite) TearDownTest() {
+	s.vs.Close()
+}
+
+func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -28,7 +40,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq, vs types.ValueRe
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained string) {
-	m, err := ThreeWay(a, b, p, nil, nil, nil)
+	m, err := ThreeWay(a, b, p, s.vs, nil, nil)
 	if s.Error(err) {
 		s.Contains(err.Error(), contained)
 		return
@@ -58,4 +70,21 @@ func valToTypesValue(f func(seq) types.Value, v interface{}) types.Value {
 		v1 = t
 	}
 	return v1
+}
+
+func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
+	threeWayConflict := func(a, b, p types.Value, contained string) {
+		mrgr := &merger{}
+		m, err := mrgr.threeWay(a, b, p, nil)
+		if assert.Error(t, err) {
+			assert.Contains(t, err.Error(), contained)
+			return
+		}
+		assert.Fail(t, "Expected error!", "Got successful merge: %s", types.EncodedValue(m))
+	}
+
+	a, b, p := types.Number(7), types.String("nope"), types.String("parent")
+
+	threeWayConflict(a, b, p, "Number and String on top of")
+	threeWayConflict(b, a, p, "String and Number on top of")
 }

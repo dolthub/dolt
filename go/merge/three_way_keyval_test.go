@@ -102,60 +102,54 @@ func (s *ThreeWayStructMergeSuite) SetupSuite() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_DoNothing() {
-	s.tryThreeWayMerge(nil, nil, aa1, aa1, nil)
+	s.tryThreeWayMerge(nil, nil, aa1, aa1)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NoRecursion() {
-	s.tryThreeWayMerge(aa1a, aa1b, aa1, aaMerged, nil)
-	s.tryThreeWayMerge(aa1b, aa1a, aa1, aaMerged, nil)
+	s.tryThreeWayMerge(aa1a, aa1b, aa1, aaMerged)
+	s.tryThreeWayMerge(aa1b, aa1a, aa1, aaMerged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveCreate() {
-	s.tryThreeWayMerge(mm1a, mm1b, mm1, mm1Merged, nil)
-	s.tryThreeWayMerge(mm1b, mm1a, mm1, mm1Merged, nil)
+	s.tryThreeWayMerge(mm1a, mm1b, mm1, mm1Merged)
+	s.tryThreeWayMerge(mm1b, mm1a, mm1, mm1Merged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveCreateNil() {
-	s.tryThreeWayMerge(mm1a, mm1b, nil, mm1Merged, nil)
-	s.tryThreeWayMerge(mm1b, mm1a, nil, mm1Merged, nil)
+	s.tryThreeWayMerge(mm1a, mm1b, nil, mm1Merged)
+	s.tryThreeWayMerge(mm1b, mm1a, nil, mm1Merged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMerge() {
-	s.tryThreeWayMerge(mm2a, mm2b, mm2, mm2Merged, nil)
-	s.tryThreeWayMerge(mm2b, mm2a, mm2, mm2Merged, nil)
+	s.tryThreeWayMerge(mm2a, mm2b, mm2, mm2Merged)
+	s.tryThreeWayMerge(mm2b, mm2a, mm2, mm2Merged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefMerge() {
-	vs := types.NewTestValueStore()
+	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
 
-	strRef := vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
+	m := kvs{"r2", s.vs.WriteValue(s.create(aa1))}
+	ma := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1a))}
+	mb := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1b))}
+	mMerged := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aaMerged))}
+	s.vs.Flush()
 
-	m := kvs{"r2", vs.WriteValue(s.create(aa1))}
-	ma := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aa1a))}
-	mb := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aa1b))}
-	mMerged := kvs{"r1", strRef, "r2", vs.WriteValue(s.create(aaMerged))}
-	vs.Flush()
-
-	s.tryThreeWayMerge(ma, mb, m, mMerged, vs)
-	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
+	s.tryThreeWayMerge(ma, mb, m, mMerged)
+	s.tryThreeWayMerge(mb, ma, m, mMerged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMultiLevelMerge() {
-	vs := types.NewTestValueStore()
+	m := kvs{"mm1", mm1, "mm2", s.vs.WriteValue(s.create(mm2))}
+	ma := kvs{"mm1", mm1a, "mm2", s.vs.WriteValue(s.create(mm2a))}
+	mb := kvs{"mm1", mm1b, "mm2", s.vs.WriteValue(s.create(mm2b))}
+	mMerged := kvs{"mm1", mm1Merged, "mm2", s.vs.WriteValue(s.create(mm2Merged))}
+	s.vs.Flush()
 
-	m := kvs{"mm1", mm1, "mm2", vs.WriteValue(s.create(mm2))}
-	ma := kvs{"mm1", mm1a, "mm2", vs.WriteValue(s.create(mm2a))}
-	mb := kvs{"mm1", mm1b, "mm2", vs.WriteValue(s.create(mm2b))}
-	mMerged := kvs{"mm1", mm1Merged, "mm2", vs.WriteValue(s.create(mm2Merged))}
-	vs.Flush()
-
-	s.tryThreeWayMerge(ma, mb, m, mMerged, vs)
-	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
+	s.tryThreeWayMerge(ma, mb, m, mMerged)
+	s.tryThreeWayMerge(mb, ma, m, mMerged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
-	vs := types.NewTestValueStore()
-
 	p := kvs{"k1", "k-one", "k2", "k-two", "mm1", mm1, "s1", "s-one"}
 	a := kvs{"k1", "k-won", "k2", "k-too", "mm1", mm1, "s1", "s-one", "n1", kvs{"a", "1"}}
 	b := kvs{"k2", "k-two", "mm1", "mm-one", "s1", "s-one", "n1", kvs{"a", "2"}}
@@ -171,7 +165,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 		return aChange, aVal, true
 	}
 
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), vs, resolve, nil)
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, resolve, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -187,12 +181,25 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NilConflict() {
 	s.tryThreeWayConflict(nil, s.create(mm2b), s.create(mm2), "Cannot merge nil Value with")
-	s.tryThreeWayConflict(s.create(mm2a), nil, s.create(mm2), "with nil value.")
+	s.tryThreeWayConflict(s.create(mm2a), nil, s.create(mm2), "with nil Value.")
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
 	s.tryThreeWayConflict(types.NewSet(), s.create(mm2b), s.create(mm2), "Cannot merge Set<> with "+s.typeStr)
 	s.tryThreeWayConflict(s.create(mm2b), types.NewSet(), s.create(mm2), "Cannot merge "+s.typeStr)
+}
+
+func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
+	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
+	numRef := s.vs.WriteValue(types.Number(7))
+
+	m := kvs{"r2", strRef}
+	ma := kvs{"r1", strRef, "r2", strRef}
+	mb := kvs{"r1", numRef, "r2", strRef}
+	s.vs.Flush()
+
+	s.tryThreeWayConflict(s.create(ma), s.create(mb), s.create(m), "Cannot merge struct Foo")
+	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Number and struct")
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflict() {

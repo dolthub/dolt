@@ -33,33 +33,33 @@ func (s *ThreeWayListMergeSuite) SetupSuite() {
 var p = items{"a", "b", "c", "d", "e"}
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_DoNothing() {
-	s.tryThreeWayMerge(nil, nil, p, p, nil)
+	s.tryThreeWayMerge(nil, nil, p, p)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_NoLengthChange() {
 	a := items{"a", 1, "c", "d", "e"}
 	b := items{"a", "b", "c", 2, "e"}
 	m := items{"a", 1, "c", 2, "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_HandleEmpty() {
-	s.tryThreeWayMerge(p, items{}, items{}, p, nil)
-	s.tryThreeWayMerge(items{}, p, items{}, p, nil)
-	s.tryThreeWayMerge(p, p, items{}, p, nil)
+	s.tryThreeWayMerge(p, items{}, items{}, p)
+	s.tryThreeWayMerge(items{}, p, items{}, p)
+	s.tryThreeWayMerge(p, p, items{}, p)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_HandleNil() {
-	s.tryThreeWayMerge(p, items{}, nil, p, nil)
+	s.tryThreeWayMerge(p, items{}, nil, p)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_MakeLonger() {
 	a := items{"a", 1, 2, "c", "d", "e"}
 	b := items{"a", "b", "c", 3, "e"}
 	m := items{"a", 1, 2, "c", 3, "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 
 }
 
@@ -67,40 +67,40 @@ func (s *ThreeWayListMergeSuite) TestThreeWayMerge_MakeShorter() {
 	a := items{"a", "c", "d", "e"}
 	b := items{"a", "b", "c", 3, "e"}
 	m := items{"a", "c", 3, "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_BothSidesRemove() {
 	a := items{"a", "c", "d", "e"}
 	b := items{"a", "b", "c", "e"}
 	m := items{"a", "c", "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_OverlapSameRemoveNoInsert() {
 	a := items{"a", "d", "e"}
 	b := items{"a", "d", "e"}
 	m := items{"a", "d", "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_OverlapSameRemoveSameInsert() {
 	a := items{"a", 1, 2, 3, "d", "e"}
 	b := items{"a", 1, 2, 3, "d", "e"}
 	m := items{"a", 1, 2, 3, "d", "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_RemoveUpToOtherSideInsertionPoint() {
 	a := items{"a", 1, 2, "c", "d", "e"}
 	b := items{"a", "b", 3, "c", "d", "e"}
 	m := items{"a", 1, 2, 3, "c", "d", "e"}
-	s.tryThreeWayMerge(a, b, p, m, nil)
-	s.tryThreeWayMerge(b, a, p, m, nil)
+	s.tryThreeWayMerge(a, b, p, m)
+	s.tryThreeWayMerge(b, a, p, m)
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_ConflictingAppends() {

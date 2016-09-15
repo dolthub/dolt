@@ -49,37 +49,35 @@ var (
 )
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_DoNothing() {
-	s.tryThreeWayMerge(nil, nil, flat, flat, nil)
+	s.tryThreeWayMerge(nil, nil, flat, flat)
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Primitives() {
-	s.tryThreeWayMerge(flatA, flatB, flat, flatM, nil)
-	s.tryThreeWayMerge(flatB, flatA, flat, flatM, nil)
+	s.tryThreeWayMerge(flatA, flatB, flat, flatM)
+	s.tryThreeWayMerge(flatB, flatA, flat, flatM)
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_HandleEmpty() {
-	s.tryThreeWayMerge(ss1a, ss1b, ss1, ss1Merged, nil)
-	s.tryThreeWayMerge(ss1b, ss1a, ss1, ss1Merged, nil)
+	s.tryThreeWayMerge(ss1a, ss1b, ss1, ss1Merged)
+	s.tryThreeWayMerge(ss1b, ss1a, ss1, ss1Merged)
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_HandleNil() {
-	s.tryThreeWayMerge(ss1a, ss1b, nil, ss1Merged, nil)
-	s.tryThreeWayMerge(ss1b, ss1a, nil, ss1Merged, nil)
+	s.tryThreeWayMerge(ss1a, ss1b, nil, ss1Merged)
+	s.tryThreeWayMerge(ss1b, ss1a, nil, ss1Merged)
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
-	vs := types.NewTestValueStore()
+	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
 
-	strRef := vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
+	m := items{s.vs.WriteValue(s.create(flatA)), s.vs.WriteValue(s.create(flatB))}
+	ma := items{"r1", s.vs.WriteValue(s.create(flatA))}
+	mb := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
+	mMerged := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
+	s.vs.Flush()
 
-	m := items{vs.WriteValue(s.create(flatA)), vs.WriteValue(s.create(flatB))}
-	ma := items{"r1", vs.WriteValue(s.create(flatA))}
-	mb := items{"r1", strRef, vs.WriteValue(s.create(flatA))}
-	mMerged := items{"r1", strRef, vs.WriteValue(s.create(flatA))}
-	vs.Flush()
-
-	s.tryThreeWayMerge(ma, mb, m, mMerged, vs)
-	s.tryThreeWayMerge(mb, ma, m, mMerged, vs)
+	s.tryThreeWayMerge(ma, mb, m, mMerged)
+	s.tryThreeWayMerge(mb, ma, m, mMerged)
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_ImmediateConflict() {
