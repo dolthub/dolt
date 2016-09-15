@@ -22,8 +22,8 @@ PACKAGES = [
     './samples/go/csv/csv-import',
 ]
 
-# 'go test' timeout. Go's default is 10m, which isn't long enough. These tests should only be run on commit to master + 
-TIMEOUT = '20m'
+# 'go test' timeout. Go's default is 10m, which isn't long enough.
+TIMEOUT = '30m'
 
 # Number of perf test repetitions. 3 is a good sample size, any more will take too long.
 PERF_REPEAT = '3'
@@ -61,21 +61,23 @@ def main():
     access_token = os.getenv('NOMS_ACCESS_TOKEN')
     assert access_token
 
-    cmd = [os.path.join(go_bin, 'go'), 'test', '-timeout', TIMEOUT] + PACKAGES + [
-        '-perf', 'http://demo.noms.io/perf?access_token=%s' % (access_token,),
-        '-perf.repeat', PERF_REPEAT,
-        '-perf.prefix', perf_prefix,
-        '-perf.testdata', testdata]
-    cwd = os.path.join(workspace, 'src/github.com/attic-labs/noms')
-    env = copy.copy(os.environ)
-    env.update({
-        'GOPATH': workspace,
-        'PATH': '%s:%s' % (os.getenv('PATH'), go_bin),
-    })
+    # Run test packages individually so they don't interfere with each other.
+    for package in PACKAGES:
+        cmd = [os.path.join(go_bin, 'go'), 'test', '-timeout', TIMEOUT, package,
+               '-perf', 'http://demo.noms.io/perf?access_token=%s' % (access_token,),
+               '-perf.repeat', PERF_REPEAT,
+               '-perf.prefix', perf_prefix,
+               '-perf.testdata', testdata]
+        cwd = os.path.join(workspace, 'src/github.com/attic-labs/noms')
+        env = copy.copy(os.environ)
+        env.update({
+            'GOPATH': workspace,
+            'PATH': '%s:%s' % (os.getenv('PATH'), go_bin),
+        })
 
-    proc = subprocess.Popen(cmd, cwd=cwd, env=env)
-    proc.wait()
-    assert proc.returncode == 0
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env)
+        proc.wait()
+        assert proc.returncode == 0
 
 
 if __name__ == '__main__':
