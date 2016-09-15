@@ -118,6 +118,82 @@ func toValuesString(refSet types.Set, vr types.ValueReader) string {
 	return strings.Join(values, ",")
 }
 
+func TestFindCommonAncestor(t *testing.T) {
+	assert := assert.New(t)
+	db := NewDatabase(chunks.NewTestStore())
+	defer db.Close()
+
+	// Add a commit and return it
+	addCommit := func(ds string, val string, parents ...types.Struct) types.Struct {
+		commit := NewCommit(types.String(val), toRefSet(parents...), types.EmptyStruct)
+		var err error
+		db, err = db.Commit(ds, commit)
+		assert.NoError(err)
+		return commit
+	}
+
+	// Assert that c is the common ancestor of a and b
+	assertCommonAncestor := func(expected, a, b types.Struct) {
+		if found, ok := FindCommonAncestor(a, b, db); assert.True(ok) {
+			assert.True(
+				expected.Equals(found),
+				"%s should be common ancestor of %s, %s. Got %s",
+				expected.Get(ValueField),
+				a.Get(ValueField),
+				b.Get(ValueField),
+				found.Get(ValueField),
+			)
+		}
+	}
+
+	// Build commit DAG
+	//
+	// ds-a: a1<-a2<-a3<-a4<-a5<-a6
+	//       ^    ^   ^          |
+	//       |     \   \----\  /-/
+	//       |      \        \V
+	// ds-b:  \      b3<-b4<-b5
+	//         \
+	//          \
+	// ds-c:     c2<-c3
+	//              /
+	//             /
+	//            V
+	// ds-d: d1<-d2
+	//
+	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
+	a1 := addCommit(a, "a1")
+	d1 := addCommit(d, "d1")
+	a2 := addCommit(a, "a2", a1)
+	c2 := addCommit(c, "c2", a1)
+	d2 := addCommit(d, "d2", d1)
+	a3 := addCommit(a, "a3", a2)
+	b3 := addCommit(b, "b3", a2)
+	c3 := addCommit(c, "c3", c2, d2)
+	a4 := addCommit(a, "a4", a3)
+	b4 := addCommit(b, "b4", b3)
+	a5 := addCommit(a, "a5", a4)
+	b5 := addCommit(b, "b5", b4, a3)
+	a6 := addCommit(a, "a6", a5, b5)
+
+	assertCommonAncestor(a1, a1, a1) // All self
+	assertCommonAncestor(a1, a1, a2) // One side self
+	assertCommonAncestor(a2, a3, b3) // Common parent
+	assertCommonAncestor(a2, a4, b4) // Common grandparent
+	assertCommonAncestor(a1, a6, c3) // Traversing multiple parents on both sides
+
+	// No common ancestor
+	if found, ok := FindCommonAncestor(d2, a6, db); !assert.False(ok) {
+		assert.Fail(
+			"Unexpected common ancestor!",
+			"Should be no common ancestor of %s, %s. Got %s",
+			d2.Get(ValueField),
+			a6.Get(ValueField),
+			found.Get(ValueField),
+		)
+	}
+}
+
 func TestCommitDescendsFrom(t *testing.T) {
 	assert := assert.New(t)
 	db := NewDatabase(chunks.NewTestStore())

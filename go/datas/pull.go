@@ -166,35 +166,27 @@ type traverseResult struct {
 // If one queue is 'taller' than the other, it's clear that we can process all refs from the taller queue with height greater than the height of the 'shorter' queue. We should also be able to process refs from the taller queue that are of the same height as the shorter queue, as long as we also check to see if they're common to both queues. It is not safe, however, to pull unique items off the shorter queue at this point. It's possible that, in processing some of the Refs from the taller queue, that these Refs will be discovered to be common after all.
 // TODO: Bug 2203
 func planWork(srcQ, sinkQ *types.RefByHeight) (srcRefs, sinkRefs, comRefs types.RefSlice) {
-	srcHt, sinkHt := tallestHeight(srcQ), tallestHeight(sinkQ)
+	srcHt, sinkHt := srcQ.MaxHeight(), sinkQ.MaxHeight()
 	if srcHt > sinkHt {
-		srcRefs = popRefsOfHeight(srcQ, srcHt)
+		srcRefs = srcQ.PopRefsOfHeight(srcHt)
 		return
 	}
 	if sinkHt > srcHt {
-		sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
+		sinkRefs = sinkQ.PopRefsOfHeight(sinkHt)
 		return
 	}
 	d.PanicIfFalse(srcHt == sinkHt)
 	srcRefs, comRefs = findCommon(srcQ, sinkQ, srcHt)
-	sinkRefs = popRefsOfHeight(sinkQ, sinkHt)
-	return
-}
-
-func popRefsOfHeight(q *types.RefByHeight, height uint64) (refs types.RefSlice) {
-	for tallestHeight(q) == height {
-		r := q.PopBack()
-		refs = append(refs, r)
-	}
+	sinkRefs = sinkQ.PopRefsOfHeight(sinkHt)
 	return
 }
 
 func findCommon(taller, shorter *types.RefByHeight, height uint64) (tallRefs, comRefs types.RefSlice) {
-	d.PanicIfFalse(tallestHeight(taller) == height)
-	d.PanicIfFalse(tallestHeight(shorter) == height)
+	d.PanicIfFalse(taller.MaxHeight() == height)
+	d.PanicIfFalse(shorter.MaxHeight() == height)
 	comIndices := []int{}
 	// Walk through shorter and taller in tandem from the back (where the tallest Refs are). Refs from taller that go into a work queue are popped off directly, but doing so to shorter would mess up shortIdx. So, instead just keep track of the indices of common refs and drop them from shorter at the end.
-	for shortIdx := shorter.Len() - 1; !taller.Empty() && tallestHeight(taller) == height; {
+	for shortIdx := shorter.Len() - 1; !taller.Empty() && taller.MaxHeight() == height; {
 		tallPeek := taller.PeekEnd()
 		shortPeek := shorter.PeekAt(shortIdx)
 		if types.HeightOrder(tallPeek, shortPeek) {
@@ -209,10 +201,6 @@ func findCommon(taller, shorter *types.RefByHeight, height uint64) (tallRefs, co
 	}
 	shorter.DropIndices(comIndices)
 	return
-}
-
-func tallestHeight(h *types.RefByHeight) uint64 {
-	return h.PeekEnd().Height()
 }
 
 func sendWork(ch chan<- types.Ref, refs types.RefSlice) {

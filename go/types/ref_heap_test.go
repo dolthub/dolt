@@ -86,3 +86,21 @@ func TestDropIndices(t *testing.T) {
 		assert.NotContains(t, *h, dropped, "Should not contain %d", toDrop[i])
 	}
 }
+
+func TestPopRefsOfHeight(t *testing.T) {
+	h := &RefByHeight{}
+	for i, n := range []int{6, 3, 6, 6, 2} {
+		r := NewRef(Number(i))
+		r.height = uint64(n)
+		h.PushBack(r)
+	}
+	sort.Sort(h)
+
+	expected := RefSlice{h.PeekAt(4), h.PeekAt(3), h.PeekAt(2)}
+	refs := h.PopRefsOfHeight(h.MaxHeight())
+	assert.Len(t, *h, 2)
+	assert.Len(t, refs, 3)
+	for _, popped := range expected {
+		assert.NotContains(t, *h, popped, "Should not contain ref of height 6")
+	}
+}

@@ -69,6 +69,20 @@ func (h *RefByHeight) Unique() {
 	*h = result
 }
 
+// PopRefsOfHeight pops off and returns all refs r in h for which r.Height() == height.
+func (h *RefByHeight) PopRefsOfHeight(height uint64) (refs RefSlice) {
+	for h.MaxHeight() == height {
+		r := h.PopBack()
+		refs = append(refs, r)
+	}
+	return
+}
+
+// MaxHeight returns the height of the 'tallest' Ref in h.
+func (h RefByHeight) MaxHeight() uint64 {
+	return h.PeekEnd().Height()
+}
+
 func (h RefByHeight) Empty() bool {
 	return h.Len() == 0
 }
