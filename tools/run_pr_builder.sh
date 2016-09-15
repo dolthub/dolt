@@ -29,7 +29,6 @@ for d in ${GO_LIST}; do
         rm profile.out
     fi
 done
-bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
 
 pushd ${NOMS_DIR}
 python tools/run-all-js-tests.py
@@ -41,3 +40,5 @@ go test ./...
 popd
 
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
+
+bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
