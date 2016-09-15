@@ -96,6 +96,7 @@ func (ds *databaseCommon) doSetHead(datasetID string, commit types.Struct) error
 func (ds *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
 	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 
+	// This could loop forever, given enough simultaneous committers. BUG 2565
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
 		currentRootRef, currentDatasets := ds.getRootAndDatasets()
