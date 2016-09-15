@@ -23,9 +23,9 @@ type DataPoint = {
   stddev: number;
 }
 
+type DataPoints = Map<string /* test name */, (DataPoint | null)[]>;
+
 window.onload = load;
-window.onpopstate = load;
-window.onresize = render;
 
 // The maximum number of git revisions to show in the perf history.
 //
@@ -34,26 +34,36 @@ window.onresize = render;
 // TODO: Implement paging mechanism.
 const MAX_PERF_HISTORY = 20;
 
-let chartDatasets: Map<string /* test name */, (DataPoint | null)[]>;
-let chartLabels: string[];
+// The frequency in ms to refresh the page, which will cycle through the datasets. Can be overridden
+// with the 'refresh' URL parameter.
+const DEFAULT_REFRESH_MS = 60 * 1000;
 
-async function load() {
+function load() {
   const params = getParams();
   if (!params.ds) {
     alert('Must provide a ?ds= param');
     return;
   }
 
-  if (params.refresh) {
-    // TODO: Poll Noms then refresh the graph, instead of reloading whole page.
-    setTimeout(() => location.reload(), Number(params.refresh));
-  }
+  const datasets = params.ds.split(',');
+  const refresh = 'refresh' in params ? Number(params.refresh) : DEFAULT_REFRESH_MS;
 
-  const dsSpec = DatasetSpec.parse(params.ds);
+  let datasetIdx = 0;
+  setInterval(() => {
+    datasetIdx = (datasetIdx + 1) % datasets.length;
+    loadDataset(datasets[datasetIdx]);
+  }, refresh);
+
+  loadDataset(datasets[0]);
+}
+
+async function loadDataset(ds: string) {
+  const dsSpec = DatasetSpec.parse(ds);
   const [perfData, gitRevs] = await getPerfHistory(dsSpec.dataset());
 
-  chartDatasets = new Map();
-  chartLabels = gitRevs.map(rev => rev.slice(0, 6));
+  // git describe --always uses the first 7 characters.
+  const labels = gitRevs.map(rev => rev.slice(0, 7));
+  const datapoints: DataPoints = new Map();
 
   // Each Noms commit might have a different set of tests (e.g. tests may have been added or removed
   // between git revisions), but they should all go on the graph. Find every test up-front.
@@ -85,10 +95,10 @@ async function load() {
   // TODO: Scale the data to "max while < 1000" so that these all fit on the same graph (not 1e9)?
   const testChartData = await Promise.all(testNames.map(getChartData));
   for (let i = 0; i < testNames.length; i++) {
-    chartDatasets.set(testNames[i], testChartData[i]);
+    datapoints.set(testNames[i], testChartData[i]);
   }
 
-  render();
+  render(ds, labels, datapoints);
 }
 
 // Returns the history of perf data with their git revisions, from oldest to newest.
@@ -122,11 +132,7 @@ function getParams(): {[key: string]: string} {
   return params;
 }
 
-async function render() {
-  if (!chartDatasets) {
-    return;
-  }
-
+async function render(ds: string, labels: string[], datapoints: DataPoints) {
   // We use the point radius to indicate the standard deviation, for lack of any better option.
   // Unfortunately chart.js doesn't provide any way to scale this relative to large the Y axis
   // values are with respect to the graph pixel height.
@@ -134,7 +140,7 @@ async function render() {
   // So, try to approximate it by taking into account: (a) the expected magnitude of the Y axis (the
   // maximum value), and (b) how much space the graph will take up on the screen (half of screen
   // *width* - this does appear to be what chart.js does).
-  const maxElapsedTime = Array.from(chartDatasets.values()).reduce((max, dataPoints) => {
+  const maxElapsedTime = Array.from(datapoints.values()).reduce((max, dataPoints) => {
     const medians = dataPoints.map(dp => dp !== null ? dp.median : 0);
     return Math.max(max, ...medians);
   }, 0);
@@ -142,7 +148,7 @@ async function render() {
   const getStddevPointRadius = stddev => Math.ceil(stddev / maxElapsedTime * graphHeight);
 
   const datasets = [];
-  for (const [testName, dataPoints] of chartDatasets) {
+  for (const [testName, dataPoints] of datapoints) {
     const [borderColor, backgroundColor] = getSolidAndAlphaColors(testName);
     datasets.push({
       backgroundColor,
@@ -160,9 +166,8 @@ async function render() {
   datasets.sort((a, b) => a._maxMedian - b._maxMedian);
 
   new Chart(document.getElementById('chart'), {
-    type: 'line',
     data: {
-      labels: chartLabels,
+      labels,
       datasets,
     },
     options: {
@@ -183,7 +188,12 @@ async function render() {
           },
         }],
       },
+      title: {
+        display: true,
+        text: ds,
+      },
     },
+    type: 'line',
   });
 }
 
