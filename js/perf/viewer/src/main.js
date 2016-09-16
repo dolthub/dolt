@@ -16,6 +16,11 @@ import {
 import type {Value} from '@attic/noms';
 
 declare class Chart {
+  static defaults: {
+    global: {
+      defaultFontColor: string;
+    };
+  };
 }
 
 type DataPoint = {
@@ -165,6 +170,7 @@ async function render(ds: string, labels: string[], datapoints: DataPoints) {
   // entire datasets.
   datasets.sort((a, b) => a._maxMedian - b._maxMedian);
 
+  Chart.defaults.global.defaultFontColor = 'white';
   new Chart(document.getElementById('chart'), {
     data: {
       labels,
@@ -219,9 +225,9 @@ function getSolidAndAlphaColors(str: string): [string, string] {
   // getHashOfValue() returns a Uint8Array, so pull out the first 3 8-bit numbers - which will be in
   // the range [0, 255] - to generate a full RGB colour.
   let [r, g, b] = getHashOfValue(str).digest;
-  // Invert if it's too light.
-  if (getMean([r, g, b]) > 127) {
-    [r, g, b] = [r, g, b].map(c => 255 - c);
+  // Invert if it's too dark.
+  if (getMean([r, g, b]) < 128) {
+    [r, g, b] = [r, g, b].map(c => c + 128);
   }
   return [`rgb(${r}, ${g}, ${b})`, `rgba(${r}, ${g}, ${b}, 0.2)`];
 }
