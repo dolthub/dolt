@@ -19,11 +19,11 @@ import (
 //
 // Lists, like all Noms values are immutable so the "mutation" methods return a new list.
 type List struct {
-	seq indexedSequence
+	seq sequence
 	h   *hash.Hash
 }
 
-func newList(seq indexedSequence) List {
+func newList(seq sequence) List {
 	return List{seq, &hash.Hash{}}
 }
 
@@ -34,7 +34,7 @@ func NewList(values ...Value) List {
 	for _, v := range values {
 		seq.Append(v)
 	}
-	return newList(seq.Done().(indexedSequence))
+	return newList(seq.Done())
 }
 
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
@@ -47,7 +47,7 @@ func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 		for v := range values {
 			seq.Append(v)
 		}
-		out <- newList(seq.Done().(indexedSequence))
+		out <- newList(seq.Done())
 		close(out)
 	}()
 	return out
@@ -171,7 +171,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	for _, v := range vs {
 		ch.Append(v)
 	}
-	return newList(ch.Done().(indexedSequence))
+	return newList(ch.Done())
 }
 
 // Insert returns a new list where vs values have been inserted at idx.
@@ -186,7 +186,7 @@ func (l List) Concat(other List) List {
 	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
 		return l.newChunker(cur, vr)
 	})
-	return newList(seq.(indexedSequence))
+	return newList(seq)
 }
 
 // Remove returns a new list where the items at index start (inclusive) through end (exclusive) have

@@ -5,9 +5,8 @@
 package types
 
 type mapLeafSequence struct {
+	leafSequence
 	data []mapEntry // sorted by entry.key.Hash()
-	t    *Type
-	vr   ValueReader
 }
 
 type mapEntry struct {
@@ -42,24 +41,13 @@ func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
 		vts[i] = e.value.Type()
 	}
 	t := MakeMapType(MakeUnionType(kts...), MakeUnionType(vts...))
-	return mapLeafSequence{data, t, vr}
+	return mapLeafSequence{leafSequence{vr, len(data), t}, data}
 }
 
 // sequence interface
+
 func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 	return ml.data[idx]
-}
-
-func (ml mapLeafSequence) seqLen() int {
-	return len(ml.data)
-}
-
-func (ml mapLeafSequence) numLeaves() uint64 {
-	return uint64(len(ml.data))
-}
-
-func (ml mapLeafSequence) valueReader() ValueReader {
-	return ml.vr
 }
 
 func (ml mapLeafSequence) Chunks() (chunks []Ref) {
@@ -70,15 +58,6 @@ func (ml mapLeafSequence) Chunks() (chunks []Ref) {
 	return
 }
 
-func (ml mapLeafSequence) Type() *Type {
-	return ml.t
-}
-
-// orderedSequence interface
-func (ml mapLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(ml.data[idx].key)
-}
-
 func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 	oml := other.(mapLeafSequence)
 	return func(idx, otherIdx int) bool {
@@ -86,6 +65,12 @@ func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 		otherEntry := oml.data[otherIdx]
 		return entry.key.Equals(otherEntry.key) && entry.value.Equals(otherEntry.value)
 	}
+}
+
+// orderedSequence interface
+
+func (ml mapLeafSequence) getKey(idx int) orderedKey {
+	return newOrderedKey(ml.data[idx].key)
 }
 
 // Collection interface

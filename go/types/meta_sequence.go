@@ -18,12 +18,6 @@ const (
 
 var emptyKey = orderedKey{}
 
-// metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a Prolly Tree, which results from the chunking of an ordered or unordered sequence of values.
-type metaSequence interface {
-	sequence
-	getChildSequence(idx int) sequence
-}
-
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64, child Collection) metaTuple {
 	d.PanicIfFalse(Ref{} != ref)
 	return metaTuple{ref, key, numLeaves, child}
@@ -72,10 +66,6 @@ func orderedKeyFromUint64(n uint64) orderedKey {
 	return newOrderedKey(Number(n))
 }
 
-func (key orderedKey) uint64Value() uint64 {
-	return uint64(key.v.(Number))
-}
-
 func (key orderedKey) Less(mk2 orderedKey) bool {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
@@ -90,37 +80,53 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	}
 }
 
-type metaSequenceData []metaTuple
-
-func (msd metaSequenceData) last() metaTuple {
-	return msd[len(msd)-1]
+type metaSequence struct {
+	tuples []metaTuple
+	t      *Type
+	vr     ValueReader
 }
 
-type metaSequenceObject struct {
-	tuples    metaSequenceData
-	t         *Type
-	vr        ValueReader
-	leafCount uint64
+func newMetaSequence(tuples []metaTuple, t *Type, vr ValueReader) metaSequence {
+	return metaSequence{tuples, t, vr}
 }
 
-func (ms metaSequenceObject) data() metaSequenceData {
+func (ms metaSequence) data() []metaTuple {
 	return ms.tuples
 }
 
+func (ms metaSequence) getKey(idx int) orderedKey {
+	return ms.tuples[idx].key
+}
+
+func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	cum := uint64(0)
+	for i := 0; i <= idx; i++ {
+		cum += ms.tuples[i].numLeaves
+	}
+	return cum
+}
+
+func (ms metaSequence) getCompareFn(other sequence) compareFn {
+	oms := other.(metaSequence)
+	return func(idx, otherIdx int) bool {
+		return ms.tuples[idx].ref.TargetHash() == oms.tuples[otherIdx].ref.TargetHash()
+	}
+}
+
 // sequence interface
-func (ms metaSequenceObject) getItem(idx int) sequenceItem {
+func (ms metaSequence) getItem(idx int) sequenceItem {
 	return ms.tuples[idx]
 }
 
-func (ms metaSequenceObject) seqLen() int {
+func (ms metaSequence) seqLen() int {
 	return len(ms.tuples)
 }
 
-func (ms metaSequenceObject) valueReader() ValueReader {
+func (ms metaSequence) valueReader() ValueReader {
 	return ms.vr
 }
 
-func (ms metaSequenceObject) Chunks() []Ref {
+func (ms metaSequence) Chunks() []Ref {
 	chunks := make([]Ref, len(ms.tuples))
 	for i, tuple := range ms.tuples {
 		chunks[i] = tuple.ref
@@ -128,21 +134,21 @@ func (ms metaSequenceObject) Chunks() []Ref {
 	return chunks
 }
 
-func (ms metaSequenceObject) Type() *Type {
+func (ms metaSequence) Type() *Type {
 	return ms.t
 }
 
-func (ms metaSequenceObject) numLeaves() uint64 {
-	return ms.leafCount
+func (ms metaSequence) numLeaves() uint64 {
+	return ms.cumulativeNumberOfLeaves(len(ms.tuples) - 1)
 }
 
 // metaSequence interface
-func (ms metaSequenceObject) getChildSequence(idx int) sequence {
+func (ms metaSequence) getChildSequence(idx int) sequence {
 	mt := ms.tuples[idx]
 	return mt.getChildSequence(ms.vr)
 }
 
-func (ms metaSequenceObject) beginFetchingChildSequences(start, length uint64) chan interface{} {
+func (ms metaSequence) beginFetchingChildSequences(start, length uint64) chan interface{} {
 	input := make(chan interface{})
 	output := orderedparallel.New(input, func(item interface{}) interface{} {
 		i := item.(int)
@@ -161,7 +167,7 @@ func (ms metaSequenceObject) beginFetchingChildSequences(start, length uint64) c
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
-func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
 	if length == 0 {
 		return emptySequence{}
 	}
@@ -181,12 +187,9 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 		seq := item.(sequence)
 
 		switch t := seq.(type) {
-		case indexedMetaSequence:
+		case metaSequence:
 			childIsMeta = true
-			metaItems = append(metaItems, t.metaSequenceObject.tuples...)
-		case orderedMetaSequence:
-			childIsMeta = true
-			metaItems = append(metaItems, t.metaSequenceObject.tuples...)
+			metaItems = append(metaItems, t.tuples...)
 		case mapLeafSequence:
 			mapItems = append(mapItems, t.data...)
 		case setLeafSequence:
@@ -198,18 +201,18 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 		}
 	}
 
+	if childIsMeta {
+		return newMetaSequence(metaItems, ms.Type(), ms.vr)
+	}
+
 	if isIndexedSequence {
-		if childIsMeta {
-			return newIndexedMetaSequence(metaItems, ms.Type(), ms.vr)
-		}
 		return newListLeafSequence(ms.vr, valueItems...)
 	}
-	if childIsMeta {
-		return newOrderedMetaSequence(metaItems, ms.Type(), ms.vr)
-	}
+
 	if MapKind == ms.Type().Kind() {
 		return newMapLeafSequence(ms.vr, mapItems...)
 	}
+
 	return newSetLeafSequence(ms.vr, valueItems...)
 }
 
@@ -278,4 +281,8 @@ func (es emptySequence) getKey(idx int) orderedKey {
 
 func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("empty sequence")
+}
+
+func (es emptySequence) getChildSequence(i int) sequence {
+	return nil
 }

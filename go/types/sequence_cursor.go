@@ -14,12 +14,14 @@ type sequenceCursor struct {
 }
 
 func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+	d.PanicIfTrue(seq == nil)
 	if idx < 0 {
 		idx += seq.seqLen()
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	return &sequenceCursor{parent, seq, idx}
+	cur := &sequenceCursor{parent, seq, idx}
+	return cur
 }
 
 func (cur *sequenceCursor) length() int {
@@ -36,10 +38,7 @@ func (cur *sequenceCursor) sync() {
 }
 
 func (cur *sequenceCursor) getChildSequence() sequence {
-	if ms, ok := cur.seq.(metaSequence); ok {
-		return ms.getChildSequence(cur.idx)
-	}
-	return nil
+	return cur.seq.getChildSequence(cur.idx)
 }
 
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.

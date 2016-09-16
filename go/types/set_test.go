@@ -912,7 +912,7 @@ func TestSetTypeAfterMutations(t *testing.T) {
 	}
 
 	test(10, setLeafSequence{})
-	test(2000, orderedMetaSequence{})
+	test(2000, metaSequence{})
 }
 
 func TestChunkedSetWithValuesOfEveryType(t *testing.T) {

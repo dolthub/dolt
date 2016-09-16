@@ -55,7 +55,7 @@ func (r *valueDecoder) readType() *Type {
 	return MakePrimitiveType(k)
 }
 
-func (r *valueDecoder) readBlobLeafSequence() indexedSequence {
+func (r *valueDecoder) readBlobLeafSequence() sequence {
 	b := r.readBytes()
 	return newBlobLeafSequence(r.vr, b)
 }
@@ -72,14 +72,14 @@ func (r *valueDecoder) readValueSequence() ValueSlice {
 	return data
 }
 
-func (r *valueDecoder) readListLeafSequence(t *Type) indexedSequence {
+func (r *valueDecoder) readListLeafSequence(t *Type) sequence {
 	data := r.readValueSequence()
-	return listLeafSequence{data, t, r.vr}
+	return listLeafSequence{leafSequence{r.vr, len(data), t}, data}
 }
 
 func (r *valueDecoder) readSetLeafSequence(t *Type) orderedSequence {
 	data := r.readValueSequence()
-	return setLeafSequence{data, t, r.vr}
+	return setLeafSequence{leafSequence{r.vr, len(data), t}, data}
 }
 
 func (r *valueDecoder) readMapLeafSequence(t *Type) orderedSequence {
@@ -91,13 +91,13 @@ func (r *valueDecoder) readMapLeafSequence(t *Type) orderedSequence {
 		data = append(data, mapEntry{k, v})
 	}
 
-	return mapLeafSequence{data, t, r.vr}
+	return mapLeafSequence{leafSequence{r.vr, len(data), t}, data}
 }
 
-func (r *valueDecoder) readMetaSequence() metaSequenceData {
+func (r *valueDecoder) readMetaSequence(t *Type) metaSequence {
 	count := r.readUint32()
 
-	data := metaSequenceData{}
+	data := []metaTuple{}
 	for i := uint32(0); i < count; i++ {
 		ref := r.readValue().(Ref)
 		v := r.readValue()
@@ -112,15 +112,7 @@ func (r *valueDecoder) readMetaSequence() metaSequenceData {
 		data = append(data, newMetaTuple(ref, key, numLeaves, nil))
 	}
 
-	return data
-}
-
-func (r *valueDecoder) readIndexedMetaSequence(t *Type) indexedMetaSequence {
-	return newIndexedMetaSequence(r.readMetaSequence(), t, r.vr)
-}
-
-func (r *valueDecoder) readOrderedMetaSequence(t *Type) orderedMetaSequence {
-	return newOrderedMetaSequence(r.readMetaSequence(), t, r.vr)
+	return newMetaSequence(data, t, r.vr)
 }
 
 func (r *valueDecoder) readValue() Value {
@@ -129,7 +121,7 @@ func (r *valueDecoder) readValue() Value {
 	case BlobKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newBlob(r.readIndexedMetaSequence(t))
+			return newBlob(r.readMetaSequence(t))
 		}
 
 		return newBlob(r.readBlobLeafSequence())
@@ -142,14 +134,14 @@ func (r *valueDecoder) readValue() Value {
 	case ListKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newList(r.readIndexedMetaSequence(t))
+			return newList(r.readMetaSequence(t))
 		}
 
 		return newList(r.readListLeafSequence(t))
 	case MapKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newMap(r.readOrderedMetaSequence(t))
+			return newMap(r.readMetaSequence(t))
 		}
 
 		return newMap(r.readMapLeafSequence(t))
@@ -158,7 +150,7 @@ func (r *valueDecoder) readValue() Value {
 	case SetKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newSet(r.readOrderedMetaSequence(t))
+			return newSet(r.readMetaSequence(t))
 		}
 
 		return newSet(r.readSetLeafSequence(t))

@@ -4,82 +4,51 @@
 
 package types
 
-import (
-	"sort"
+import "github.com/attic-labs/noms/go/d"
 
-	"github.com/attic-labs/noms/go/d"
-)
-
-type indexedSequence interface {
-	sequence
-	cumulativeNumberOfLeaves(idx int) uint64 // returns the total number of leaf values reachable from this sequence for all sub-trees from 0 to |idx|
-}
-
-type indexedMetaSequence struct {
-	metaSequenceObject
-	offsets []uint64
-}
-
-func newListMetaSequence(tuples metaSequenceData, vr ValueReader) indexedMetaSequence {
+func newListMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
 	ts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<List<T>>
 		ts[i] = mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
 	}
 	t := MakeListType(MakeUnionType(ts...))
-	return newIndexedMetaSequence(tuples, t, vr)
+	return newMetaSequence(tuples, t, vr)
 }
 
-func newBlobMetaSequence(tuples metaSequenceData, vr ValueReader) indexedMetaSequence {
-	return newIndexedMetaSequence(tuples, BlobType, vr)
-}
-
-func newIndexedMetaSequence(tuples metaSequenceData, t *Type, vr ValueReader) indexedMetaSequence {
-	var offsets []uint64
-	cum := uint64(0)
-	for _, mt := range tuples {
-		cum += mt.key.uint64Value()
-		offsets = append(offsets, cum)
-	}
-	leafCount := offsets[len(offsets)-1]
-	return indexedMetaSequence{
-		metaSequenceObject{tuples, t, vr, leafCount},
-		offsets,
-	}
-}
-
-func (ims indexedMetaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
-	return ims.offsets[idx]
-}
-
-func (ims indexedMetaSequence) getCompareFn(other sequence) compareFn {
-	oms := other.(indexedMetaSequence)
-	return func(idx, otherIdx int) bool {
-		return ims.tuples[idx].ref.TargetHash() == oms.tuples[otherIdx].ref.TargetHash()
-	}
+func newBlobMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
+	return newMetaSequence(tuples, BlobType, vr)
 }
 
 func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
-	seq := cur.seq.(indexedSequence)
-	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
-		return uint64(idx) < seq.cumulativeNumberOfLeaves(i)
-	})
-	if _, ok := seq.(metaSequence); ok {
-		if cur.idx == seq.seqLen() {
-			cur.idx = seq.seqLen() - 1
+	seq := cur.seq
+
+	if ms, ok := seq.(metaSequence); ok {
+		// For a meta sequence, advance the cursor to the smallest position where idx < seq.cumulativeNumLeaves()
+		cur.idx = 0
+		cum := uint64(0)
+
+		for cur.idx < ms.seqLen()-1 && uint64(idx) >= cum+ms.tuples[cur.idx].numLeaves {
+			cum += ms.tuples[cur.idx].numLeaves
+			cur.idx++
 		}
+
+		return cum // number of leaves sequences BEFORE cur.idx in meta sequence
 	}
-	if cur.idx == 0 {
-		return 0
+
+	cur.idx = int(idx)
+	if cur.idx > seq.seqLen() {
+		cur.idx = seq.seqLen()
 	}
-	return seq.cumulativeNumberOfLeaves(cur.idx - 1)
+
+	return uint64(cur.idx) + 1
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkFn {
 	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
-		tuples := make(metaSequenceData, len(items))
+		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
 
 		for i, v := range items {
@@ -99,10 +68,10 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkF
 	}
 }
 
-func orderedKeyFromSum(msd metaSequenceData) orderedKey {
+func orderedKeyFromSum(msd []metaTuple) orderedKey {
 	sum := uint64(0)
 	for _, mt := range msd {
-		sum += mt.key.uint64Value()
+		sum += mt.numLeaves
 	}
 	return orderedKeyFromUint64(sum)
 }

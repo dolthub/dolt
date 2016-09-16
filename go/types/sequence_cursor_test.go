@@ -39,7 +39,6 @@ func (ts testSequence) valueReader() ValueReader {
 	panic("not reached")
 }
 
-// metaSequence interface
 func (ts testSequence) getChildSequence(idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}

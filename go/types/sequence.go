@@ -16,4 +16,5 @@ type sequence interface {
 	Chunks() []Ref
 	Type() *Type
 	getCompareFn(other sequence) compareFn
+	getChildSequence(idx int) sequence
 }

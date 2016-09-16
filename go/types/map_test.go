@@ -1145,7 +1145,7 @@ func TestMapTypeAfterMutations(t *testing.T) {
 	}
 
 	test(10, mapLeafSequence{})
-	test(1000, orderedMetaSequence{})
+	test(1000, metaSequence{})
 }
 
 func TestCompoundMapWithValuesOfEveryType(t *testing.T) {

@@ -39,17 +39,17 @@ func TestEnsureHash(t *testing.T) {
 
 	ll := newList(newListLeafSequence(nil, String("foo")))
 	lt := MakeListType(StringType)
-	cl := newList(newIndexedMetaSequence([]metaTuple{{Ref{}, newOrderedKey(Number(1)), 1, ll}}, lt, vs))
+	cl := newList(newMetaSequence([]metaTuple{{Ref{}, newOrderedKey(Number(1)), 1, ll}}, lt, vs))
 
 	newStringOrderedKey := func(s string) orderedKey {
 		return newOrderedKey(String(s))
 	}
 
 	ml := newMap(newMapLeafSequence(nil, mapEntry{String("foo"), String("bar")}))
-	cm := newMap(newOrderedMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, ml}}, MakeMapType(StringType, StringType), vs))
+	cm := newMap(newMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, ml}}, MakeMapType(StringType, StringType), vs))
 
 	sl := newSet(newSetLeafSequence(nil, String("foo")))
-	cps := newSet(newOrderedMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, sl}}, MakeSetType(StringType), vs))
+	cps := newSet(newMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, sl}}, MakeSetType(StringType), vs))
 
 	count = byte(1)
 	values := []Value{

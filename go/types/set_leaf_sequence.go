@@ -5,9 +5,8 @@
 package types
 
 type setLeafSequence struct {
+	leafSequence
 	data []Value // sorted by Hash()
-	t    *Type
-	vr   ValueReader
 }
 
 func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
@@ -16,24 +15,13 @@ func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
 		ts[i] = v.Type()
 	}
 	t := MakeSetType(MakeUnionType(ts...))
-	return setLeafSequence{v, t, vr}
+	return setLeafSequence{leafSequence{vr, len(v), t}, v}
 }
 
 // sequence interface
+
 func (sl setLeafSequence) getItem(idx int) sequenceItem {
 	return sl.data[idx]
-}
-
-func (sl setLeafSequence) seqLen() int {
-	return len(sl.data)
-}
-
-func (sl setLeafSequence) numLeaves() uint64 {
-	return uint64(len(sl.data))
-}
-
-func (sl setLeafSequence) valueReader() ValueReader {
-	return sl.vr
 }
 
 func (sl setLeafSequence) Chunks() (chunks []Ref) {
@@ -43,19 +31,16 @@ func (sl setLeafSequence) Chunks() (chunks []Ref) {
 	return
 }
 
-func (sl setLeafSequence) Type() *Type {
-	return sl.t
-}
-
-// orderedSequence interface
-func (sl setLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(sl.data[idx])
-}
-
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 	osl := other.(setLeafSequence)
 	return func(idx, otherIdx int) bool {
 		entry := sl.data[idx]
 		return entry.Equals(osl.data[otherIdx])
 	}
+}
+
+// orderedSequence interface
+
+func (sl setLeafSequence) getKey(idx int) orderedKey {
+	return newOrderedKey(sl.data[idx])
 }

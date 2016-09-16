@@ -1037,7 +1037,7 @@ func TestListTypeAfterMutations(t *testing.T) {
 	}
 
 	test(15, listLeafSequence{})
-	test(1500, indexedMetaSequence{})
+	test(1500, metaSequence{})
 }
 
 func TestListRemoveLastWhenNotLoaded(t *testing.T) {

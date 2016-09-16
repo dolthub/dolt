@@ -16,11 +16,11 @@ import (
 
 // Blob represents a list of Blobs.
 type Blob struct {
-	seq indexedSequence
+	seq sequence
 	h   *hash.Hash
 }
 
-func newBlob(seq indexedSequence) Blob {
+func newBlob(seq sequence) Blob {
 	return Blob{seq, &hash.Hash{}}
 }
 
@@ -52,7 +52,7 @@ func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
 	for _, v := range data {
 		ch.Append(v)
 	}
-	return newBlob(ch.Done().(indexedSequence))
+	return newBlob(ch.Done())
 }
 
 // Collection interface
@@ -102,7 +102,7 @@ func (b Blob) Type() *Type {
 }
 
 type BlobReader struct {
-	seq           indexedSequence
+	seq           sequence
 	cursor        *sequenceCursor
 	currentReader io.ReadSeeker
 	pos           uint64
@@ -247,5 +247,5 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 		sc.parent.Append(b.(metaTuple))
 	}
 
-	return newBlob(sc.Done().(indexedSequence))
+	return newBlob(sc.Done())
 }

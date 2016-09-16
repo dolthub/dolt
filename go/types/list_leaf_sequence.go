@@ -5,24 +5,20 @@
 package types
 
 type listLeafSequence struct {
+	leafSequence
 	values []Value
-	t      *Type
-	vr     ValueReader
 }
 
-func newListLeafSequence(vr ValueReader, v ...Value) indexedSequence {
+func newListLeafSequence(vr ValueReader, v ...Value) sequence {
 	ts := make([]*Type, len(v))
 	for i, v := range v {
 		ts[i] = v.Type()
 	}
 	t := MakeListType(MakeUnionType(ts...))
-	return listLeafSequence{v, t, vr}
+	return listLeafSequence{leafSequence{vr, len(v), t}, v}
 }
 
-// indexedSequence interface
-func (ll listLeafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
-	return uint64(idx) + 1
-}
+// sequence interface
 
 func (ll listLeafSequence) getCompareFn(other sequence) compareFn {
 	oll := other.(listLeafSequence)
@@ -31,21 +27,8 @@ func (ll listLeafSequence) getCompareFn(other sequence) compareFn {
 	}
 }
 
-// sequence interface
 func (ll listLeafSequence) getItem(idx int) sequenceItem {
 	return ll.values[idx]
-}
-
-func (ll listLeafSequence) seqLen() int {
-	return len(ll.values)
-}
-
-func (ll listLeafSequence) numLeaves() uint64 {
-	return uint64(len(ll.values))
-}
-
-func (ll listLeafSequence) valueReader() ValueReader {
-	return ll.vr
 }
 
 func (ll listLeafSequence) Chunks() (chunks []Ref) {
@@ -53,8 +36,4 @@ func (ll listLeafSequence) Chunks() (chunks []Ref) {
 		chunks = append(chunks, v.Chunks()...)
 	}
 	return
-}
-
-func (ll listLeafSequence) Type() *Type {
-	return ll.t
 }
