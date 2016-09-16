@@ -14,9 +14,8 @@ coverage:
       default:
         url: "secret:n+BYhIXTXsaCiMKB3vOf6yP68ytdKd3WpXtJFWPEUsEWXDiGnU5dTB5DO2yv8tR0COdxvs7K31hVpEfHEXdoXOaQhUw3FKf3fh8KZDLN7CGTbeDhw1uNGGyBr2d2TWnopzYtcXomdwMmuckARtiWQx0YXJiZY9YyCrIoDK9HIJQ="
         branches: null
-        threshold: null
+        threshold: 1.15
         attachments: "sunburst, diff"
-        message: "template string"
 
   status:
     project:
