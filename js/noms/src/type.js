@@ -11,14 +11,12 @@ import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 import type Value from './value.js';
-import {equals} from './compare.js';
 import {describeType} from './encode-human-readable.js';
 import search from './binary-search.js';
 import {staticTypeCache} from './type-cache.js';
 
 export interface TypeDesc {
   kind: NomsKind;
-  equals(other: TypeDesc): boolean;
   hasUnresolvedCycle(visited: Type<any>[]): boolean;
 }
 
@@ -27,10 +25,6 @@ export class PrimitiveDesc {
 
   constructor(kind: NomsKind) {
     this.kind = kind;
-  }
-
-  equals(other: TypeDesc): boolean {
-    return other instanceof PrimitiveDesc && other.kind === this.kind;
   }
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars
@@ -45,24 +39,6 @@ export class CompoundDesc {
   constructor(kind: NomsKind, elemTypes: Array<Type<any>>) {
     this.kind = kind;
     this.elemTypes = elemTypes;
-  }
-
-  equals(other: TypeDesc): boolean {
-    if (other instanceof CompoundDesc) {
-      if (this.kind !== other.kind || this.elemTypes.length !== other.elemTypes.length) {
-        return false;
-      }
-
-      for (let i = 0; i < this.elemTypes.length; i++) {
-        if (!equals(this.elemTypes[i], other.elemTypes[i])) {
-          return false;
-        }
-      }
-
-      return true;
-    }
-
-    return false;
   }
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean {
@@ -90,32 +66,6 @@ export class StructDesc {
 
   get kind(): NomsKind {
     return Kind.Struct;
-  }
-
-  equals(other: TypeDesc): boolean {
-    if (this === other) {
-      return true;
-    }
-
-    if (other.kind !== this.kind) {
-      return false;
-    }
-    invariant(other instanceof StructDesc);
-
-    const fields = this.fields;
-    const otherFields = other.fields;
-
-    if (fields.length !== otherFields.length) {
-      return false;
-    }
-
-    for (let i = 0; i < fields.length; i++) {
-      if (fields[i].name !== otherFields[i].name || !equals(fields[i].type, otherFields[i].type)) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean {
@@ -157,10 +107,6 @@ export class CycleDesc {
 
   get kind(): NomsKind {
     return Kind.Cycle;
-  }
-
-  equals(other: TypeDesc): boolean {
-    return other instanceof CycleDesc && other.level === this.level;
   }
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars

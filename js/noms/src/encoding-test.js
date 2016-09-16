@@ -34,8 +34,8 @@ import {
   newSetMetaSequence,
 } from './meta-sequence.js';
 import {
-  boolType,
   blobType,
+  boolType,
   makeCycleType,
   makeListType,
   makeMapType,
@@ -45,6 +45,7 @@ import {
   numberType,
   stringType,
   typeType,
+  valueType,
 } from './type.js';
 import type {Type} from './type.js';
 import {staticTypeCache} from './type-cache.js';
@@ -291,6 +292,7 @@ suite('Encoding', () => {
   const SetKind = Kind.Set;
   const StructKind = Kind.Struct;
   const TypeKind = Kind.Type;
+  const ValueKind = Kind.Value;
   const CycleKind = Kind.Cycle;
   const UnionKind = Kind.Union;
 
@@ -319,6 +321,7 @@ suite('Encoding', () => {
   test('types', () => {
     assertEncoding([uint8(TypeKind), uint8(BoolKind)], boolType);
     assertEncoding([uint8(TypeKind), uint8(TypeKind)], typeType);
+    assertEncoding([uint8(TypeKind), uint8(ValueKind)], valueType);
     assertEncoding([uint8(TypeKind), uint8(ListKind), uint8(BoolKind)], makeListType(boolType));
     assertEncoding([uint8(TypeKind), uint8(SetKind), uint8(StringKind)], makeSetType(stringType));
     assertEncoding([uint8(TypeKind), uint8(MapKind), uint8(StringKind), uint8(NumberKind)], makeMapType(stringType, numberType));

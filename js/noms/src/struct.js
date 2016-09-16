@@ -279,9 +279,8 @@ function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> 
  * Returns the field names which have different values in the respective structs.
  */
 export function structDiff(s1: Struct, s2: Struct): string[] {
+  invariant(equals(s1.type, s2.type));
   const desc1: StructDesc = s1.type.desc;
-  const desc2: StructDesc = s2.type.desc;
-  invariant(desc1.equals(desc2));
 
   const changed = [];
   desc1.fields.forEach((f: Field, i: number) => {
