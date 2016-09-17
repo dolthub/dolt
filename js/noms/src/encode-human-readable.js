@@ -88,6 +88,11 @@ export class TypeWriter {
         this._w.write('<');
         invariant(t.desc instanceof CompoundDesc);
         t.desc.elemTypes.forEach((t, i) => {
+          if (t.kind === Kind.Union && t.desc.elemTypes.length === 0) {
+            // If one of the element types is an empty union all the other element types must also
+            // be empty union types.
+            return;
+          }
           if (i !== 0) {
             this._w.write(', ');
           }

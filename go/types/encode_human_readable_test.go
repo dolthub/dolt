@@ -406,7 +406,7 @@ func TestEmptyCollections(t *testing.T) {
 	c := MakeMapType(BlobType, NumberType)
 	assertWriteTaggedHRSEqual(t, "Type(Map<Blob, Number>)", c)
 	d := NewMap()
-	assertWriteTaggedHRSEqual(t, "Map<, >({})", d)
+	assertWriteTaggedHRSEqual(t, "Map<>({})", d)
 	e := MakeSetType(StringType)
 	assertWriteTaggedHRSEqual(t, "Type(Set<String>)", e)
 	f := NewSet()

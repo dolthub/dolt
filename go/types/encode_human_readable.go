@@ -245,6 +245,11 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 		w.write(KindToString[t.Kind()])
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
+			if et.Kind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
+				// If one of the element types is an empty union all the other element types must
+				// also be empty union types.
+				break
+			}
 			if i != 0 {
 				w.write(", ")
 			}

@@ -56,6 +56,8 @@ suite('Encode human readable types', () => {
     assertWriteType('', makeUnionType([]));
     assertWriteType('List<Number | String>', makeListType(makeUnionType([numberType, stringType])));
     assertWriteType('List<>', makeListType(makeUnionType([])));
+    assertWriteType('Set<>', makeSetType(makeUnionType([])));
+    assertWriteType('Map<>', makeMapType(makeUnionType([]), makeUnionType([])));
   });
 
   test('struct', () => {
