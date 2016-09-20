@@ -8,7 +8,7 @@ import Chunk from './chunk.js';
 import Hash, {byteLength as hashByteLength} from './hash.js';
 import {invariant} from './assert.js';
 import * as Bytes from './bytes.js';
-import {dvBigEndian} from './binary-rw.js';
+import {readUint32, writeUint32} from './bytes-uint32.js';
 
 const headerSize = 4; // uint32
 const chunkLengthSize = 4; // uint32
@@ -19,7 +19,6 @@ export type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
 export function serialize(hints: Set<Hash>, stream: ChunkStream): Promise<Uint8Array> {
   const hintsLength = serializedHintsLength(hints);
   let buf = Bytes.alloc(Math.max(hintsLength * 2, 2048));
-  let dv = new DataView(buf.buffer);
   let offset = 0;
 
   const ensureCapacity = (n: number) => {
@@ -32,19 +31,18 @@ export function serialize(hints: Set<Hash>, stream: ChunkStream): Promise<Uint8A
       length *= 2;
     }
     buf = Bytes.grow(buf, length);
-    dv = new DataView(buf.buffer);
   };
 
-  offset = serializeHints(hints, buf, dv);
+  offset = serializeHints(hints, buf);
 
   return stream(chunk => {
     const chunkLength = serializedChunkLength(chunk);
     ensureCapacity(chunkLength);
-    offset = serializeChunk(chunk, buf, dv, offset);
+    offset = serializeChunk(chunk, buf, offset);
   }).then(() => Bytes.subarray(buf, 0, offset));
 }
 
-function serializeChunk(chunk: Chunk, buffer: Uint8Array, dv: DataView, offset: number): number {
+function serializeChunk(chunk: Chunk, buffer: Uint8Array, offset: number): number {
   invariant(buffer.byteLength - offset >= serializedChunkLength(chunk),
     'Invalid chunk buffer');
 
@@ -52,18 +50,15 @@ function serializeChunk(chunk: Chunk, buffer: Uint8Array, dv: DataView, offset: 
   offset += hashByteLength;
 
   const chunkLength = chunk.data.length;
-  dv.setUint32(offset, chunkLength, dvBigEndian);
-  offset += chunkLengthSize;
+  offset = writeUint32(buffer, chunkLength, offset);
 
   Bytes.copy(chunk.data, buffer, offset);
   offset += chunkLength;
   return offset;
 }
 
-function serializeHints(hints: Set<Hash>, buff: Uint8Array, dv: DataView): number {
-  let offset = 0;
-  dv.setUint32(offset, hints.size, dvBigEndian);
-  offset += headerSize;
+function serializeHints(hints: Set<Hash>, buff: Uint8Array): number {
+  let offset = writeUint32(buff, hints.size, 0);
 
   hints.forEach(hash => {
     Bytes.copy(hash.digest, buff, offset);
@@ -82,16 +77,15 @@ function serializedChunkLength(chunk: Chunk): number {
 }
 
 export function deserialize(buff: Uint8Array): {hints: Array<Hash>, chunks: Array<Chunk>} {
-  const dv = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
-  const {hints, offset} = deserializeHints(buff, dv);
-  return {hints: hints, chunks: deserializeChunks(buff, dv, offset)};
+  const {hints, offset} = deserializeHints(buff);
+  return {hints: hints, chunks: deserializeChunks(buff, offset)};
 }
 
-function deserializeHints(buff: Uint8Array, dv: DataView): {hints: Array<Hash>, offset: number} {
+function deserializeHints(buff: Uint8Array): {hints: Array<Hash>, offset: number} {
   const hints:Array<Hash> = [];
 
   let offset = 0;
-  const numHints = dv.getUint32(offset, dvBigEndian);
+  const numHints = readUint32(buff, offset);
   offset += headerSize;
 
   invariant(buff.byteLength - offset >= hashByteLength * numHints, 'Invalid hint buffer');
@@ -104,7 +98,7 @@ function deserializeHints(buff: Uint8Array, dv: DataView): {hints: Array<Hash>, 
   return {hints: hints, offset: offset};
 }
 
-export function deserializeChunks(buff: Uint8Array, dv: DataView, offset: number = 0):
+export function deserializeChunks(buff: Uint8Array, offset: number = 0):
     Array<Chunk> {
   const chunks:Array<Chunk> = [];
 
@@ -116,7 +110,7 @@ export function deserializeChunks(buff: Uint8Array, dv: DataView, offset: number
     const hash = new Hash(Bytes.subarray(buff, offset, offset + hashByteLength));
     offset += hashByteLength;
 
-    const chunkLength = dv.getUint32(offset, dvBigEndian);
+    const chunkLength = readUint32(buff, offset);
     offset += chunkLengthSize;
 
     invariant(offset + chunkLength <= totalLength, 'Invalid chunk buffer');

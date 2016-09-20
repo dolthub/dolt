@@ -107,7 +107,7 @@ export class Delegate {
       return Promise.reject(versionErr);
     }
 
-    const chunks = deserializeChunks(buf, new DataView(buf.buffer, buf.byteOffset, buf.byteLength));
+    const chunks = deserializeChunks(buf);
 
     // Return success
     chunks.forEach(chunk => {

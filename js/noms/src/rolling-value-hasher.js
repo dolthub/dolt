@@ -133,20 +133,23 @@ export default class RollingValueHasher {
     this.hashVarint(intAndExp[1]);
   }
 
-  writeBool(v:boolean): void {
+  writeBool(v: boolean): void {
     this.writeUint8(v ? 1 : 0);
   }
 
   writeString(v: string): void {
-    // TODO: Avoid this allocation. =-(.
-    const buff = Bytes.fromString(v);
+    const len = Bytes.utf8ByteLength(v);
     if (this.lengthOnly) {
-      this.bytesHashed += 4 + buff.byteLength;
+      this.bytesHashed += 4 + len;
       return;
     }
 
-    this.writeUint32(buff.byteLength);
-    for (let i = 0; i < buff.byteLength; i++) {
+    this.writeUint32(len);
+
+    const buff = getScratchBuffer(len);
+    Bytes.encodeUtf8(v, buff, 0);
+
+    for (let i = 0; i < len; i++) {
       this.hashByte(buff[i]);
     }
   }
@@ -161,4 +164,17 @@ export default class RollingValueHasher {
   appendType(t: Type<any>): void { // eslint-disable-line no-unused-vars
     // Type bytes aren't included in the byte stream we chunk over
   }
+}
+
+let scratchBuffer = Bytes.alloc(8 * 1024);
+
+function getScratchBuffer(minLength: number): Uint8Array {
+  let length = scratchBuffer.byteLength;
+  if (length >= minLength) {
+    return scratchBuffer;
+  }
+  while (length <= minLength) {
+    length *= 2;
+  }
+  return scratchBuffer = Bytes.alloc(length);
 }

@@ -4,12 +4,10 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {TextEncoder, TextDecoder} from './text-encoding.js';
 import {SHA512} from 'asmcrypto.js-sha512';
+import {byteLength, encode, decode} from './utf8.js';
 
-const decoder = new TextDecoder();
-const encoder = new TextEncoder();
-const dvBigEndian = false;
+export {byteLength as utf8ByteLength, encode as encodeUtf8, decode as toString} from './utf8.js';
 
 export function alloc(size: number): Uint8Array {
   return new Uint8Array(size);
@@ -20,11 +18,10 @@ export function fromValues(values: number[]): Uint8Array {
 }
 
 export function fromString(s: string): Uint8Array {
-  return encoder.encode(s);
-}
-
-export function toString(buff: Uint8Array): string {
-  return decoder.decode(buff);
+  const size = byteLength(s);
+  const buf = alloc(size);
+  encode(s, buf, 0);
+  return buf;
 }
 
 export function fromHexString(s: string): Uint8Array {
@@ -69,21 +66,9 @@ export function subarray(buff: Uint8Array, start: number, end: number): Uint8Arr
 }
 
 export function readUtf8(buff: Uint8Array, start: number, end: number): string {
-  return toString(buff.subarray(start, end));
+  return decode(buff.subarray(start, end));
 }
 
-export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
-  const strBuff = fromString(str);
-  const size = strBuff.byteLength;
-
-  dv.setUint32(offset, size, dvBigEndian);
-  offset += 4;
-
-  buff.set(strBuff, offset);
-  offset += size;
-
-  return offset;
-}
 
 export function compare(b1: Uint8Array, b2: Uint8Array): number {
   const b1Len = b1.byteLength;
@@ -110,12 +95,12 @@ export function compare(b1: Uint8Array, b2: Uint8Array): number {
 }
 
 // This should be imported but this prevents the cyclic dependency.
-const byteLength = 20;
+const hashByteLength = 20;
 
 export function sha512(data: Uint8Array): Uint8Array {
   const full: Uint8Array = SHA512.bytes(data);
   // Safari does not have slice on Uint8Array yet.
-  return new Uint8Array(full.buffer, full.byteOffset, byteLength);
+  return new Uint8Array(full.buffer, full.byteOffset, hashByteLength);
 }
 
 function asciiToBinary(cc: number): number {

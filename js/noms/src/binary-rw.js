@@ -9,21 +9,16 @@ import Hash, {byteLength as hashByteLength} from './hash.js';
 import {floatToIntExp, intExpToFloat} from './number-util.js';
 import {invariant} from './assert.js';
 import {encode as encodeVarint, decode as decodeVarint, maxVarintLength} from './signed-varint.js';
+import {readUint32, writeUint32} from './bytes-uint32.js';
 
-/**
- * For methods of DataView 'false' means 'big endian', our default.
- */
-export const dvBigEndian = false;
 export const maxUint32 = Math.pow(2, 32);
 
 export class BinaryReader {
   buff: Uint8Array;
-  dv: DataView;
   offset: number;
 
   constructor(buff: Uint8Array) {
     this.buff = buff;
-    this.dv = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     this.offset = 0;
   }
 
@@ -44,13 +39,13 @@ export class BinaryReader {
   }
 
   readUint8(): number {
-    const v = this.dv.getUint8(this.offset);
+    const v = this.buff[this.offset];
     this.offset++;
     return v;
   }
 
   readUint32(): number {
-    const v = this.dv.getUint32(this.offset, dvBigEndian);
+    const v = readUint32(this.buff, this.offset);
     this.offset += 4;
     return v;
   }
@@ -97,12 +92,10 @@ const initialBufferSize = 16;
 
 export class BinaryWriter {
   buff: Uint8Array;
-  dv: DataView;
   offset: number;
 
   constructor() {
     this.buff = Bytes.alloc(initialBufferSize);
-    this.dv = new DataView(this.buff.buffer, 0);
     this.offset = 0;
   }
 
@@ -126,7 +119,6 @@ export class BinaryWriter {
     }
 
     this.buff = Bytes.grow(this.buff, length);
-    this.dv = new DataView(this.buff.buffer);
   }
 
   writeBytes(v: Uint8Array): void {
@@ -140,13 +132,13 @@ export class BinaryWriter {
 
   writeUint8(v: number): void {
     this.ensureCapacity(1);
-    this.dv.setUint8(this.offset, v);
+    this.buff[this.offset] = v;
     this.offset++;
   }
 
   writeUint32(v: number): void {
     this.ensureCapacity(4);
-    this.dv.setUint32(this.offset, v, dvBigEndian);
+    writeUint32(this.buff, v, this.offset);
     this.offset += 4;
   }
 
@@ -171,9 +163,10 @@ export class BinaryWriter {
   }
 
   writeString(v: string): void {
-    // TODO: This is a bummer. Ensure even the largest UTF8 string will fit.
-    this.ensureCapacity(4 + v.length * 4);
-    this.offset = Bytes.encodeUtf8(v, this.buff, this.dv, this.offset);
+    const len = Bytes.utf8ByteLength(v);
+    this.writeUint32(len);
+    this.ensureCapacity(len);
+    this.offset = Bytes.encodeUtf8(v, this.buff, this.offset);
   }
 
   writeHash(h: Hash): void {

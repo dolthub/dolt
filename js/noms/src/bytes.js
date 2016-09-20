@@ -75,16 +75,13 @@ export function readUtf8(buff: Uint8Array, start: number, end: number): string {
   return buff.toString('utf8', start, end);
 }
 
-export function encodeUtf8(str: string, buff: Uint8Array, dv: DataView, offset: number): number {
-  const size = Buffer.byteLength(str);
+export function encodeUtf8(str: string, buff: Uint8Array, offset: number): number {
   // $FlowIssue
-  buff.writeUInt32BE(size, offset);
-  offset += 4;
+  return offset + buff.write(str, offset);
+}
 
-  // $FlowIssue
-  buff.write(str, offset);
-  offset += size;
-  return offset;
+export function utf8ByteLength(str: string): number {
+  return Buffer.byteLength(str);
 }
 
 export function compare(b1: Uint8Array, b2: Uint8Array): number {

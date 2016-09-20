@@ -13,7 +13,6 @@
     "asmcrypto.js-sha512": "^0.0.1",
     "babel-regenerator-runtime": "^6.5.0",
     "babel-runtime": "^6.9.2",
-    "text-encoding-utf-8": "^1.0.1",
     "tingodb": "^0.4.2"
   },
   "devDependencies": {
