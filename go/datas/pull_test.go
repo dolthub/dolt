@@ -128,19 +128,18 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 	first := progress[0]
 	suite.Zero(first.DoneCount)
 	suite.True(first.KnownCount > 0)
-	suite.Zero(first.DoneBytes)
+	suite.Zero(first.ApproxWrittenBytes)
 
 	last := progress[len(progress)-1]
 	suite.True(last.DoneCount > 0)
 	suite.Equal(last.DoneCount, last.KnownCount)
-	suite.True(last.DoneBytes > 0)
 
 	for i, prog := range progress {
 		suite.True(prog.KnownCount >= prog.DoneCount)
 		if i > 0 {
 			prev := progress[i-1]
 			suite.True(prog.DoneCount >= prev.DoneCount)
-			suite.True(prog.DoneBytes >= prev.DoneBytes)
+			suite.True(prog.ApproxWrittenBytes >= prev.ApproxWrittenBytes)
 		}
 	}
 }

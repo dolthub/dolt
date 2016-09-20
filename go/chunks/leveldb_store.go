@@ -6,12 +6,14 @@ package chunks
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"sync"
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/snappy"
 	flag "github.com/juju/gnuflag"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -246,7 +248,7 @@ func (l *internalLevelDBStore) Close() error {
 		fmt.Println("GetCount: ", l.getCount)
 		fmt.Println("HasCount: ", l.hasCount)
 		fmt.Println("PutCount: ", l.putCount)
-		fmt.Println("Average PutSize: ", l.putBytes/l.putCount)
+		fmt.Printf("PutSize:   %s (%d/chunk)\n", humanize.Bytes(uint64(l.putCount)), l.putBytes/int64(math.Max(1, float64(l.putCount))))
 	}
 	return nil
 }

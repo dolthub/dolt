@@ -71,7 +71,7 @@ func runSync(args []string) int {
 			last = info
 			if status.WillPrint() {
 				pct := 100.0 * float64(info.DoneCount) / float64(info.KnownCount)
-				status.Printf("Syncing - %.2f%% (%s/s)", pct, bytesPerSec(info, start))
+				status.Printf("Syncing - %.2f%% (%s/s)", pct, bytesPerSec(info.ApproxWrittenBytes, start))
 			}
 		}
 
@@ -100,7 +100,8 @@ func runSync(args []string) int {
 
 	close(progressCh)
 	if last := <-lastProgressCh; last.DoneCount > 0 {
-		status.Printf("Done - Synced %s in %s (%s/s)", humanize.Bytes(last.DoneBytes), since(start), bytesPerSec(last, start))
+		status.Printf("Done - Synced %s in %s (%s/s)",
+			humanize.Bytes(last.ApproxWrittenBytes), since(start), bytesPerSec(last.ApproxWrittenBytes, start))
 		status.Done()
 	} else if !sinkExists {
 		fmt.Printf("All chunks already exist at destination! Created new dataset %s.\n", args[1])
@@ -113,10 +114,11 @@ func runSync(args []string) int {
 	return 0
 }
 
-func bytesPerSec(prog datas.PullProgress, start time.Time) string {
-	bps := float64(prog.DoneBytes) / float64(time.Since(start).Seconds())
+func bytesPerSec(bytes uint64, start time.Time) string {
+	bps := float64(bytes) / float64(time.Since(start).Seconds())
 	return humanize.Bytes(uint64(bps))
 }
+
 
 func since(start time.Time) string {
 	round := time.Second / 100
