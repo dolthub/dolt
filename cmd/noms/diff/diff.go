@@ -8,7 +8,15 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/writers"
 	humanize "github.com/dustin/go-humanize"
+)
+
+type prefixOp string
+
+const (
+	ADD = "+   "
+	DEL = "-   "
 )
 
 type (
@@ -239,7 +247,10 @@ func writeFooter(w io.Writer, wroteHdr *bool) error {
 }
 
 func line(w io.Writer, op prefixOp, key, val types.Value) error {
-	pw := newPrefixWriter(w, op)
+	genPrefix := func(w *writers.PrefixWriter) []byte {
+		return []byte(op)
+	}
+	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
 	if key != nil {
 		writeEncodedValue(pw, key)
 		write(w, []byte(": "))
@@ -249,7 +260,10 @@ func line(w io.Writer, op prefixOp, key, val types.Value) error {
 }
 
 func field(w io.Writer, op prefixOp, name, val types.Value) error {
-	pw := newPrefixWriter(w, op)
+	genPrefix := func(w *writers.PrefixWriter) []byte {
+		return []byte(op)
+	}
+	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
 	write(pw, []byte(name.(types.String)))
 	write(w, []byte(": "))
 	writeEncodedValue(pw, val)

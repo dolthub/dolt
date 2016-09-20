@@ -19,6 +19,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
+	"github.com/attic-labs/noms/go/util/writers"
 	flag "github.com/juju/gnuflag"
 	"github.com/mgutz/ansi"
 )
@@ -47,7 +48,7 @@ var nomsLog = &util.Command{
 func setupLogFlags() *flag.FlagSet {
 	logFlagSet := flag.NewFlagSet("log", flag.ExitOnError)
 	logFlagSet.IntVar(&color, "color", -1, "value of 1 forces color on, 0 forces color off")
-	logFlagSet.IntVar(&maxLines, "max-lines", 10, "max number of lines to show per commit (-1 for all lines)")
+	logFlagSet.IntVar(&maxLines, "max-lines", 9, "max number of lines to show per commit (-1 for all lines)")
 	logFlagSet.IntVar(&maxCommits, "n", 0, "max number of commits to display (0 for all commits)")
 	logFlagSet.BoolVar(&oneline, "oneline", false, "show a summary of each commit on a single line")
 	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarchy on left side of output")
@@ -162,7 +163,7 @@ func printCommit(node LogNode, w io.Writer, db datas.Database) (err error) {
 
 	if maxLines != 0 {
 		lineno, err = writeMetaLines(node, maxLines, lineno, maxFieldNameLen, w)
-		if err != nil && err != MaxLinesErr {
+		if err != nil && err != writers.MaxLinesErr {
 			fmt.Fprintf(w, "error: %s\n", err)
 			return
 		}
@@ -231,61 +232,79 @@ func genGraph(node LogNode, lineno int) string {
 
 func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer) (int, error) {
 	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
+		genPrefix := func(w *writers.PrefixWriter) []byte {
+			return []byte(genGraph(node, int(w.NumLines)))
+		}
 		meta := m.(types.Struct)
-		mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
+		mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
+		pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 		err := d.Try(func() {
 			meta.Type().Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type) {
 				v := meta.Get(fieldName)
-				fmt.Fprintf(mlw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
-				types.WriteEncodedValue(mlw, v)
-				fmt.Fprintf(mlw, "\n")
+				fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
+				types.WriteEncodedValue(pw, v)
+				fmt.Fprintf(pw, "\n")
 			})
 		})
-		return mlw.numLines, err
+		return int(pw.NumLines), err
 	}
 	return lineno, nil
 }
 
 func writeCommitLines(node LogNode, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
-	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
-	err = types.WriteEncodedValueWithTags(mlw, node.commit.Get(datas.ValueField))
-	d.PanicIfNotType(err, MaxLinesErr)
+	genPrefix := func(pw *writers.PrefixWriter) []byte {
+		return []byte(genGraph(node, int(pw.NumLines)+1))
+	}
+	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
+	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
+	err = types.WriteEncodedValueWithTags(pw, node.commit.Get(datas.ValueField))
+	mlw.MaxLines = 0
 	if err != nil {
-		mlw.forceWrite([]byte("..."))
-		mlw.numLines++
+		d.PanicIfNotType(writers.MaxLinesErr, err)
+		pw.NeedsPrefix = true
+		pw.Write([]byte("...\n"))
 		err = nil
+	} else {
+		pw.NeedsPrefix = false
+		pw.Write([]byte("\n"))
 	}
-	mlw.forceWrite([]byte("\n"))
 	if !node.lastCommit {
-		mlw.forceWrite([]byte("\n"))
+		pw.NeedsPrefix = true
+		pw.Write([]byte("\n"))
 	}
-	return mlw.numLines, err
+	return int(pw.NumLines), err
 }
 
 func writeDiffLines(node LogNode, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
-	mlw := &maxLineWriter{numLines: lineno, maxLines: maxLines, node: node, dest: w, needsPrefix: true, showGraph: showGraph}
+	genPrefix := func(w *writers.PrefixWriter) []byte {
+		return []byte(genGraph(node, int(w.NumLines)+1))
+	}
+	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
+	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 	parents := node.commit.Get(datas.ParentsField).(types.Set)
 	var parent types.Value
 	if parents.Len() > 0 {
 		parent = parents.First()
 	}
 	if parent == nil {
-		_, err = fmt.Fprint(mlw, "\n")
+		_, err = fmt.Fprint(pw, "\n")
 		return 1, err
 	}
 
 	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
-	err = diff.Diff(mlw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField), true)
-	d.PanicIfNotType(err, MaxLinesErr)
+	err = diff.Diff(pw, parentCommit.Get(datas.ValueField), node.commit.Get(datas.ValueField), true)
+	mlw.MaxLines = 0
 	if err != nil {
-		mlw.forceWrite([]byte("...\n"))
-		mlw.numLines++
+		d.PanicIfNotType(err, writers.MaxLinesErr)
+		pw.NeedsPrefix = true
+		pw.Write([]byte("...\n"))
 		err = nil
 	}
 	if !node.lastCommit {
-		mlw.forceWrite([]byte("\n"))
+		pw.NeedsPrefix = true
+		pw.Write([]byte("\n"))
 	}
-	return mlw.numLines, err
+	return int(pw.NumLines), err
 }
 
 func shouldUseColor() bool {

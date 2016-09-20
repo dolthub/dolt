@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/writers"
 	humanize "github.com/dustin/go-humanize"
 )
 
@@ -311,6 +312,17 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	w.write("}")
 }
 
+func encodedValueFormatMaxLines(v Value, floatFormat byte, maxLines uint32) string {
+	var buf bytes.Buffer
+	mlw := &writers.MaxLineWriter{Dest: &buf, MaxLines: maxLines}
+	w := &hrsWriter{w: mlw, floatFormat: floatFormat}
+	w.Write(v)
+	if w.err != nil {
+		d.Chk.IsType(writers.MaxLinesError{}, w.err, "Unexpected error: %s", w.err)
+	}
+	return buf.String()
+}
+
 func encodedValueFormat(v Value, floatFormat byte) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf, floatFormat: floatFormat}
@@ -323,13 +335,29 @@ func EncodedIndexValue(v Value) string {
 	return encodedValueFormat(v, 'f')
 }
 
+// EncodedValue returns a string containing the serialization of a value.
 func EncodedValue(v Value) string {
 	return encodedValueFormat(v, 'g')
+}
+
+// EncodedValueMaxLines returns a string containing the serialization of a value.
+// The string is truncated at |maxLines|.
+func EncodedValueMaxLines(v Value, maxLines uint32) string {
+	return encodedValueFormatMaxLines(v, 'g', maxLines)
 }
 
 // WriteEncodedValue writes the serialization of a value
 func WriteEncodedValue(w io.Writer, v Value) error {
 	hrs := &hrsWriter{w: w, floatFormat: 'g'}
+	hrs.Write(v)
+	return hrs.err
+}
+
+// WriteEncodedValue writes the serialization of a value. Writing will be
+// stopped and an error returned after |maxLines|.
+func WriteEncodedValueMaxLines(w io.Writer, v Value, maxLines uint32) error {
+	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
+	hrs := &hrsWriter{w: mlw, floatFormat: 'g'}
 	hrs.Write(v)
 	return hrs.err
 }
