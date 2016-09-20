@@ -6,15 +6,15 @@ package types
 
 import (
 	"bytes"
+	"sort"
 	"testing"
 
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
 var prefix = []byte{0x01, 0x02, 0x03, 0x04}
 
-func TestTotalOrdering(t *testing.T) {
+func TestCompareTotalOrdering(t *testing.T) {
 	assert := assert.New(t)
 
 	// values in increasing order. Some of these are compared by ref so changing the serialization might change the ordering.
@@ -57,88 +57,88 @@ func TestCompareEmpties(t *testing.T) {
 
 func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	assert := assert.New(t)
-	comp := opCacheComparer{}
+	vrw := NewTestValueStore()
+	defer vrw.Close()
 
-	b := append(prefix, byte(BoolKind), 0x00)
-	n := append(prefix, byte(NumberKind), 0x00)
-	s := append(prefix, byte(StringKind), 'a')
+	nums := ValueSlice{Number(1), Number(2), Number(3)}
+	words := ValueSlice{String("k1"), String("v1")}
 
-	assert.Equal(-1, comp.Compare(b, n))
-	assert.Equal(-1, comp.Compare(b, s))
-	assert.Equal(-1, comp.Compare(n, s))
+	blob := NewBlob(bytes.NewBuffer([]byte{1, 2, 3}))
+	nList := NewList(nums...)
+	nMap := NewMap(words...)
+	nRef := NewRef(blob)
+	nSet := NewSet(nums...)
+	nStruct := NewStruct("teststruct", map[string]Value{"f1": Number(1)})
 
-	assert.Equal(1, comp.Compare(s, n))
-	assert.Equal(1, comp.Compare(s, b))
-	assert.Equal(1, comp.Compare(n, b))
+	vals := ValueSlice{Bool(true), Number(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
+	sort.Sort(vals)
+
+	for i, v1 := range vals {
+		for j, v2 := range vals {
+			iBytes := [1024]byte{}
+			jBytes := [1024]byte{}
+			res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1, vrw), encodeGraphKey(jBytes[:0], v2, vrw))
+			assert.Equal(compareInts(i, j), res)
+		}
+	}
 }
 
 func TestComparePrimitives(t *testing.T) {
 	assert := assert.New(t)
-	comp := opCacheComparer{}
 
-	tru := encode(Bool(true))
-	fls := encode(Bool(false))
-	one := encode(Number(1))
-	fortytwo := encode(Number(42))
-	hey := encode(String("hey"))
-	ya := encode(String("ya"))
+	bools := []Bool{false, true}
+	for i, v1 := range bools {
+		for j, v2 := range bools {
+			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			assert.Equal(compareInts(i, j), res)
+		}
+	}
 
-	assert.Equal(-1, comp.Compare(fls, tru))
-	assert.Equal(-1, comp.Compare(one, fortytwo))
-	assert.Equal(-1, comp.Compare(hey, ya))
+	nums := []Number{-1111.29, -23, 0, 4.2345, 298}
+	for i, v1 := range nums {
+		for j, v2 := range nums {
+			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			assert.Equal(compareInts(i, j), res)
+		}
+	}
 
-	assert.Equal(0, comp.Compare(tru, tru))
-	assert.Equal(0, comp.Compare(one, one))
-	assert.Equal(0, comp.Compare(hey, hey))
-
-	assert.Equal(1, comp.Compare(tru, fls))
-	assert.Equal(1, comp.Compare(fortytwo, one))
-	assert.Equal(1, comp.Compare(ya, hey))
+	words := []String{"", "aaa", "another", "another1"}
+	for i, v1 := range words {
+		for j, v2 := range words {
+			res := compareEncodedNomsValues(encode(v1), encode(v2))
+			assert.Equal(compareInts(i, j), res)
+		}
+	}
 }
 
-func TestCompareHashes(t *testing.T) {
+func TestCompareEncodedKeys(t *testing.T) {
 	assert := assert.New(t)
 	comp := opCacheComparer{}
+	vrw := NewTestValueStore()
+	defer vrw.Close()
 
-	tru := encode(Bool(true))
-	one := encode(Number(1))
-	hey := encode(String("hey"))
+	k1 := ValueSlice{String("one"), Number(3)}
+	k2 := ValueSlice{String("one"), Number(5)}
 
-	minHash := append(prefix, append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0}, hash.ByteLen)...)...)
-	maxHash := append(prefix, append([]byte{byte(BlobKind)}, bytes.Repeat([]byte{0xff}, hash.ByteLen)...)...)
-	almostMaxHash := append(prefix, append([]byte{byte(BlobKind)}, append(bytes.Repeat([]byte{0xff}, hash.ByteLen-1), 0xfe)...)...)
+	bs1 := [initialBufferSize]byte{}
+	bs2 := [initialBufferSize]byte{}
 
-	assert.Equal(-1, comp.Compare(tru, minHash))
-	assert.Equal(-1, comp.Compare(one, minHash))
-	assert.Equal(-1, comp.Compare(hey, minHash))
-	assert.Equal(-1, comp.Compare(minHash, almostMaxHash))
-	assert.Equal(-1, comp.Compare(almostMaxHash, maxHash))
-
-	assert.Equal(0, comp.Compare(minHash, minHash))
-	assert.Equal(0, comp.Compare(almostMaxHash, almostMaxHash))
-	assert.Equal(0, comp.Compare(maxHash, maxHash))
-
-	assert.Equal(1, comp.Compare(minHash, tru))
-	assert.Equal(1, comp.Compare(minHash, one))
-	assert.Equal(1, comp.Compare(minHash, hey))
-	assert.Equal(1, comp.Compare(almostMaxHash, tru))
-	assert.Equal(1, comp.Compare(almostMaxHash, one))
-	assert.Equal(1, comp.Compare(almostMaxHash, hey))
-	assert.Equal(1, comp.Compare(maxHash, tru))
-	assert.Equal(1, comp.Compare(maxHash, one))
-	assert.Equal(1, comp.Compare(maxHash, hey))
-	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
-	assert.Equal(1, comp.Compare(almostMaxHash, minHash))
-
-	almostMaxHash[5]++
-	assert.Equal(1, comp.Compare(maxHash, almostMaxHash))
-
-	almostMaxHash[0]++
-	assert.Equal(-1, comp.Compare(maxHash, almostMaxHash))
+	e1, _ := encodeKeys(bs1[:0], 0x01020304, MapKind, k1, vrw)
+	e2, _ := encodeKeys(bs2[:0], 0x01020304, MapKind, k2, vrw)
+	assert.Equal(-1, comp.Compare(e1, e2))
 }
 
 func encode(v Value) []byte {
 	w := &binaryNomsWriter{make([]byte, 128, 128), 0}
 	newValueEncoder(w, nil).writeValue(v)
-	return append(prefix, w.data()...)
+	return w.data()
+}
+
+func compareInts(i, j int) (res int) {
+	if i < j {
+		res = -1
+	} else if i > j {
+		res = 1
+	}
+	return
 }

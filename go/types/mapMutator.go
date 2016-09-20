@@ -17,7 +17,7 @@ func newMapMutator(vrw ValueReadWriter) *mapMutator {
 
 func (mx *mapMutator) Set(key Value, val Value) *mapMutator {
 	d.PanicIfFalse(mx.oc != nil, "Can't call Set() again after Finish()")
-	mx.oc.MapSet(key, val)
+	mx.oc.GraphMapSet(nil, key, val)
 	return mx
 }
 
@@ -33,7 +33,10 @@ func (mx *mapMutator) Finish() Map {
 	iter := mx.oc.NewIterator()
 	defer iter.Release()
 	for iter.Next() {
-		seq.Append(iter.MapOp())
+		keys, kind, item := iter.GraphOp()
+		d.PanicIfFalse(0 == len(keys))
+		d.PanicIfFalse(MapKind == kind)
+		seq.Append(item)
 	}
 	return newMap(seq.Done().(orderedSequence))
 }

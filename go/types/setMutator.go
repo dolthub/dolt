@@ -17,7 +17,7 @@ func newSetMutator(vrw ValueReadWriter) *setMutator {
 
 func (mx *setMutator) Insert(val Value) *setMutator {
 	d.PanicIfFalse(mx.oc != nil, "Can't call Insert() again after Finish()")
-	mx.oc.SetInsert(val)
+	mx.oc.GraphSetInsert(nil, val)
 	return mx
 }
 
@@ -33,7 +33,10 @@ func (mx *setMutator) Finish() Set {
 	iter := mx.oc.NewIterator()
 	defer iter.Release()
 	for iter.Next() {
-		seq.Append(iter.SetOp())
+		keys, kind, item := iter.GraphOp()
+		d.PanicIfFalse(0 == len(keys))
+		d.PanicIfFalse(SetKind == kind)
+		seq.Append(item)
 	}
 	return newSet(seq.Done().(orderedSequence))
 }

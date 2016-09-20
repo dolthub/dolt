@@ -226,7 +226,7 @@ func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) {
 		kvChan <- entry.value
 	}
 	close(kvChan)
-	suite.True(suite.validate(<-mapChan))
+	suite.True(suite.validate(<-mapChan), "map not valid")
 }
 
 func (suite *mapTestSuite) TestStreamingMap() {

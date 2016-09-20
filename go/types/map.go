@@ -28,13 +28,13 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 
 func NewMap(kv ...Value) Map {
 	entries := buildMapData(kv)
-	seq := newEmptySequenceChunker(nil, nil, makeMapLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(MapKind, nil), mapHashValueBytes)
+	ch := newEmptyMapSequenceChunker(nil, nil)
 
 	for _, entry := range entries {
-		seq.Append(entry)
+		ch.Append(entry)
 	}
 
-	return newMap(seq.Done().(orderedSequence))
+	return newMap(ch.Done().(orderedSequence))
 }
 
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
@@ -42,19 +42,17 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 
 	outChan := make(chan Map)
 	go func() {
-		mx := newMapMutator(vrw)
-
+		gb := NewGraphBuilder(vrw, MapKind, false)
 		for v := range kvs {
 			if k == nil {
 				k = v
 				continue
 			}
-			mx.Set(k, v)
+			gb.MapSet(nil, k, v)
 			k = nil
 		}
-
 		d.PanicIfFalse(k == nil)
-		outChan <- mx.Finish()
+		outChan <- gb.Build().(Map)
 	}()
 	return outChan
 }
@@ -293,4 +291,8 @@ func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 		}
 		return m, key, uint64(len(items))
 	}
+}
+
+func newEmptyMapSequenceChunker(vr ValueReader, vw ValueWriter) *sequenceChunker {
+	return newEmptySequenceChunker(vr, vw, makeMapLeafChunkFn(vr), newOrderedMetaSequenceChunkFn(MapKind, vr), mapHashValueBytes)
 }

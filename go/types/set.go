@@ -21,25 +21,23 @@ func newSet(seq orderedSequence) Set {
 
 func NewSet(v ...Value) Set {
 	data := buildSetData(v)
-	seq := newEmptySequenceChunker(nil, nil, makeSetLeafChunkFn(nil), newOrderedMetaSequenceChunkFn(SetKind, nil), hashValueBytes)
+	ch := newEmptySetSequenceChunker(nil, nil)
 
 	for _, v := range data {
-		seq.Append(v)
+		ch.Append(v)
 	}
 
-	return newSet(seq.Done().(orderedSequence))
+	return newSet(ch.Done().(orderedSequence))
 }
 
 func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
 	outChan := make(chan Set)
 	go func() {
-		mx := newSetMutator(vrw)
-
+		gb := NewGraphBuilder(vrw, SetKind, false)
 		for v := range vals {
-			mx.Insert(v)
+			gb.SetInsert(nil, v)
 		}
-
-		outChan <- mx.Finish()
+		outChan <- gb.Build().(Set)
 	}()
 	return outChan
 }
@@ -239,4 +237,8 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 
 		return set, key, uint64(len(items))
 	}
+}
+
+func newEmptySetSequenceChunker(vr ValueReader, vw ValueWriter) *sequenceChunker {
+	return newEmptySequenceChunker(vr, vw, makeSetLeafChunkFn(vr), newOrderedMetaSequenceChunkFn(SetKind, vr), hashValueBytes)
 }
