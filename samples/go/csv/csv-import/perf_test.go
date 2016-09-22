@@ -73,6 +73,24 @@ func (s *perfSuite) Test03ImportSfRegisteredBusinessesFromBlobAsMap() {
 	s.execCsvImportExe("sf-reg-bus", "--dest-type", "map:0")
 }
 
+func (s *perfSuite) Test04ImportChiBuildingViolationsBlobFromTestData() {
+	assert := s.NewAssert()
+
+	files := s.openGlob(s.Testdata, "chi-building-violations", "2016-07-30.csv.*")
+	defer s.closeGlob(files)
+
+	blob := types.NewBlob(io.MultiReader(files...))
+	fmt.Fprintf(s.W, "\tchi-building-violations is %s\n", humanize.Bytes(blob.Len()))
+
+	ds := dataset.NewDataset(s.Database, "chi-building-violations/raw")
+	_, err := ds.CommitValue(blob)
+	assert.NoError(err)
+}
+
+func (s *perfSuite) Test05ImportChiBuildingViolationsFromBlobAsMultiKeyMap() {
+	s.execCsvImportExe("chi-building-violations", "--dest-type", "map:VIOLATION CODE,VIOLATION DATE")
+}
+
 func (s *perfSuite) execCsvImportExe(dsName string, args ...string) {
 	assert := s.NewAssert()
 
