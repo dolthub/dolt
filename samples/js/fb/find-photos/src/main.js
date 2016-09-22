@@ -7,7 +7,6 @@
 import argv from 'yargs';
 import {
   DatasetSpec,
-  invariant,
   isSubtype,
   makeListType,
   makeStructType,
@@ -96,17 +95,15 @@ async function main(): Promise<void> {
   return output.commit(await result).then(() => db.close());
 }
 
-function getGeo(input: Struct): Struct {
-  invariant(input.place);
+function getGeo(input): Struct {
   return newStruct('Geoposition', {
     latitude: input.place.location.latitude,
     longitude: input.place.location.longitude,
   });
 }
 
-async function getSizes(input: Struct): Promise<Map<Struct, string>> {
+async function getSizes(input): Promise<Map<Struct, string>> {
   let result = Promise.resolve(new Map());
-  invariant(input.images);
   await input.images.forEach(v => {
     result = result.then(m => m.set(
       newStruct('', {width: v.width, height: v.height}),

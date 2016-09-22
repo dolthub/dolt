@@ -148,7 +148,7 @@ suite('Struct', () => {
     });
   });
 
-  function assertDiff(expect: [string], s1: Struct, s2: Struct) {
+  function assertDiff(expect: string[], s1: Struct, s2: Struct) {
     const actual = structDiff(s1, s2);
     assert.deepEqual(expect, actual);
   }

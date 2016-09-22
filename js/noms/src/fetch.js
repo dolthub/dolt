@@ -83,7 +83,6 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
 }
 
 function arrayBufferToBuffer(ab: ArrayBuffer): Buffer {
-  // $FlowIssue: Node type declaration doesn't include ArrayBuffer.
   return new Buffer(ab);
 }
 

@@ -183,7 +183,6 @@ class DbCollection {
   insert(item: ChunkItem, options: Object = {}): Promise<number> {
     return new Promise((resolve, reject) => {
       options.w = 1;
-      //$FlowIssue
       const data = new Binary(new Buffer(item.data.buffer));
       this._coll.insert({hash: item.hash, data: data}, options, (err, result) => {
         if (err) {
@@ -236,7 +235,6 @@ function recordToItem(record: DbRecord): ChunkItem {
 
 function makeTempDir(): Promise<string> {
   return new Promise((resolve, reject) => {
-    //$FlowIssue
     fs.mkdtemp('/tmp/put-cache-', (err, folder) => {
       if (err) {
         reject(err);
