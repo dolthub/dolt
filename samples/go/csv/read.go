@@ -157,18 +157,40 @@ func readFieldsFromRow(row []string, headers []string, fieldOrder []int, kindMap
 	return fields
 }
 
+// primaryKeyValuesFromFields extracts the values of the primaryKey fields into
+// array. The values are in the user-specified order. This function returns 2
+// objects:
+//    1) a ValueSlice containing the first n-1 keys.
+//    2) a single Value which will be used as the key in the leaf map created by
+//       GraphBuilder
+func primaryKeyValuesFromFields(fields types.ValueSlice, fieldOrder, pkIndices []int) (types.ValueSlice, types.Value) {
+	numPrimaryKeys := len(pkIndices)
+
+	if numPrimaryKeys == 1 {
+		return nil, fields[fieldOrder[pkIndices[0]]]
+	}
+
+	keys := make(types.ValueSlice, numPrimaryKeys-1)
+	var value types.Value
+	for i, idx := range pkIndices {
+		k := fields[fieldOrder[idx]]
+		if i < numPrimaryKeys-1 {
+			keys[i] = k
+		} else {
+			value = k
+		}
+	}
+	return keys, value
+}
+
 // ReadToMap takes a CSV reader and reads data into a typed Map of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKeys []string, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
 	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headersRaw, structName, kinds)
 	pkIndices := getPkIndices(primaryKeys, headersRaw)
+	d.Chk.True(len(pkIndices) >= 1, "No primary key defined when reading into map")
+	gb := types.NewGraphBuilder(vrw, types.MapKind, false)
 
-	if len(primaryKeys) > 1 {
-		return readToNestedMap(r, structName, headersRaw, pkIndices, t, fieldOrder, kindMap, vrw)
-	}
-
-	kvChan := make(chan types.Value, 128)
-	mapChan := types.NewStreamingMap(vrw, kvChan)
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -178,74 +200,8 @@ func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKey
 		}
 
 		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
-		kvChan <- fields[fieldOrder[pkIndices[0]]]
-		kvChan <- types.NewStructWithType(t, fields)
+		graphKeys, mapKey := primaryKeyValuesFromFields(fields, fieldOrder, pkIndices)
+		gb.MapSet(graphKeys, mapKey, types.NewStructWithType(t, fields))
 	}
-	close(kvChan)
-	return <-mapChan
-}
-
-type mapOrStruct struct {
-	goMap      map[types.Value]mapOrStruct
-	nomsStruct types.Struct
-}
-
-func goMaptoNomsMap(gm map[types.Value]mapOrStruct, vrw types.ValueReadWriter) types.Map {
-	var nomsValue types.Value
-	kvChan := make(chan types.Value, 128)
-	mapChan := types.NewStreamingMap(vrw, kvChan)
-	for k, v := range gm {
-		if v.goMap != nil {
-			nomsValue = goMaptoNomsMap(v.goMap, vrw)
-		} else {
-			nomsValue = v.nomsStruct
-		}
-		kvChan <- k
-		kvChan <- nomsValue
-	}
-	close(kvChan)
-	return <-mapChan
-}
-
-func readToNestedMap(r *csv.Reader, structName string, headersRaw []string, pkIndices []int, t *types.Type, fieldOrder []int, kindMap []types.NomsKind, vrw types.ValueReadWriter) types.Map {
-	goMap := make(map[types.Value]mapOrStruct)
-	for {
-		row, err := r.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			panic(err)
-		}
-
-		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
-		rowStruct := types.NewStructWithType(t, fields)
-
-		// needed to allow recursive calls to encloseInMap
-		var encloseInMapFunc func(m map[types.Value]mapOrStruct, keyLevel int) map[types.Value]mapOrStruct
-		encloseInMapFunc = func(m map[types.Value]mapOrStruct, keyLevel int) map[types.Value]mapOrStruct {
-			fieldOrigIndex := fieldOrder[pkIndices[keyLevel]]
-			key := fields[fieldOrigIndex]
-
-			// at end of our indices, set the final key to point to this row
-			if keyLevel == len(pkIndices)-1 {
-				m[key] = mapOrStruct{nil, rowStruct}
-				return m
-			}
-
-			// not at end of our indices, determine if we already have a map
-			// created for the next level and use it if so, otherwise create it
-			var subMap map[types.Value]mapOrStruct
-			if n, ok := m[key]; !ok {
-				subMap = make(map[types.Value]mapOrStruct)
-			} else {
-				subMap = n.goMap
-			}
-			m[key] = mapOrStruct{encloseInMapFunc(subMap, keyLevel+1), types.Struct{}}
-			return m
-		}
-
-		goMap = encloseInMapFunc(goMap, 0)
-	}
-
-	return goMaptoNomsMap(goMap, vrw)
+	return gb.Build().(types.Map)
 }
