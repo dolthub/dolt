@@ -38,6 +38,8 @@ func setupServeFlags() *flag.FlagSet {
 }
 
 func runServe(args []string) int {
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	cs, err := spec.GetChunkStore(args[0])
 	d.CheckError(err)
 	server := datas.NewRemoteDatabaseServer(cs, port)

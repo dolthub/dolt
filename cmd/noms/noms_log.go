@@ -59,8 +59,10 @@ func setupLogFlags() *flag.FlagSet {
 
 func runLog(args []string) int {
 	useColor = shouldUseColor()
-
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	database, value, err := spec.GetPath(args[0])
+
 	if err != nil {
 		d.CheckErrorNoUsage(err)
 	}

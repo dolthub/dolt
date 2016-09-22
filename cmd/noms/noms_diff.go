@@ -34,6 +34,8 @@ func setupDiffFlags() *flag.FlagSet {
 }
 
 func runDiff(args []string) int {
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	db1, value1, err := spec.GetPath(args[0])
 	d.CheckErrorNoUsage(err)
 	if value1 == nil {

@@ -42,7 +42,8 @@ func setupSyncFlags() *flag.FlagSet {
 }
 
 func runSync(args []string) int {
-
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	sourceStore, sourceObj, err := spec.GetPath(args[0])
 	d.CheckError(err)
 	defer sourceStore.Close()

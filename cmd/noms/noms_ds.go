@@ -22,6 +22,7 @@ var nomsDs = &util.Command{
 	Short:     "Noms dataset management",
 	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the database and dataset arguments.",
 	Flags:     setupDsFlags,
+	Nargs:     0,
 }
 
 func setupDsFlags() *flag.FlagSet {
@@ -31,8 +32,10 @@ func setupDsFlags() *flag.FlagSet {
 }
 
 func runDs(args []string) int {
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	if toDelete != "" {
-		set, err := spec.GetDataset(toDelete)
+		set, err := spec.GetDataset(toDelete) // append local if no local given, check for aliases
 		d.CheckError(err)
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
@@ -46,11 +49,11 @@ func runDs(args []string) int {
 
 		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
 	} else {
-		if len(args) != 1 {
-			d.CheckError(fmt.Errorf("Database arg missing"))
+		dbSpec := ""
+		if len(args) >= 1 {
+			dbSpec = args[0]
 		}
-
-		store, err := spec.GetDatabase(args[0])
+		store, err := spec.GetDatabase(dbSpec)
 		d.CheckError(err)
 		defer store.Close()
 

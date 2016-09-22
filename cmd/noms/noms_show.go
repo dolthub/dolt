@@ -32,6 +32,8 @@ func setupShowFlags() *flag.FlagSet {
 }
 
 func runShow(args []string) int {
+	spec, err := spec.NewResolver()
+	d.CheckErrorNoUsage(err)
 	database, value, err := spec.GetPath(args[0])
 	d.CheckErrorNoUsage(err)
 	defer database.Close()

@@ -20,6 +20,10 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
+const (
+	separator = "::"
+)
+
 var (
 	datasetRe = regexp.MustCompile("^" + dataset.DatasetRe.String() + "$")
 	ldbStores = map[string]*refCountingLdbStore{}
@@ -196,7 +200,7 @@ func (spec datasetSpec) Dataset() (dataset.Dataset, error) {
 }
 
 func (spec datasetSpec) String() string {
-	return spec.DbSpec.String() + "::" + spec.DatasetName
+	return spec.DbSpec.String() + separator + spec.DatasetName
 }
 
 func (spec datasetSpec) Value() (datas.Database, types.Value, error) {
