@@ -7,24 +7,29 @@
 import {notNull} from '../assert.js';
 
 export type FetchOptions = {
-  method?: string,
+  method?: ?MethodType, // from flowlib bom.js
   body?: any,
-  headers?: {[key: string]: string},
-  withCredentials? : boolean,
+  headers?: ?{[key: string]: string},
+  withCredentials? : ?boolean,
 };
 
-type Response<T> = {headers: Map<string, string>, buf: T};
-type TextResponse = Response<string>;
-type BufResponse = Response<Uint8Array>;
+type ResponseType<T> = {headers: Map<string, string>, buf: T};
+type TextResponse = ResponseType<string>;
+type BufResponse = ResponseType<Uint8Array>;
 
-function fetch<T>(url: string, responseType: string, options: FetchOptions = {}):
- Promise<Response<T>> {
+function internalFetch<T>(url: string, responseType: string, options: FetchOptions = {}):
+    Promise<ResponseType<T>> {
   const xhr = new XMLHttpRequest();
   xhr.responseType = responseType;
   const method = options.method || 'GET';
   xhr.open(method, url, true);
   const p = new Promise((resolve, reject) => {
-    xhr.onloadend = () => {
+    // React Native does not support loadend events.
+    // https://github.com/facebook/react-native/pull/10047
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== xhr.DONE) {
+        return;
+      }
       if (xhr.status >= 200 && xhr.status < 300) {
         // Workaround Flow
         let buf: any = xhr.response;
@@ -49,35 +54,48 @@ function fetch<T>(url: string, responseType: string, options: FetchOptions = {})
   return p;
 }
 
+function hasWorkingFetch() {
+  return typeof fetch === 'function' && typeof Response === 'function' &&
+    typeof Response.prototype.arrayBuffer === 'function';
+}
+
 export function fetchText(url: string, options: FetchOptions = {}): Promise<TextResponse> {
-  if (self.fetch) {
-    return self.fetch(url, options)
+  if (hasWorkingFetch()) {
+    // $FlowIssue: Any object should work as RequestOptions
+    const o: RequestOptions = options;
+    return fetch(url, o)
       // resp.headers is a Headers which is a multi map, which is similar enough for now.
       .then(resp => {
-        const {headers} = resp;
+        // Work around. Headers is a Map like object.
+        const headers: any = resp.headers;
         return resp.text().then(text => ({headers, buf: text}));
       });
   }
 
-  return fetch(url, 'text', options);
+  return internalFetch(url, 'text', options);
 }
 
 export function fetchUint8Array(url: string, options: FetchOptions = {}): Promise<BufResponse> {
-  if (self.fetch) {
-    return self.fetch(url, options)
+  if (hasWorkingFetch()) {
+    // $FlowIssue: Any object should work as RequestOptions
+    const o: RequestOptions = options;
+    return fetch(url, o)
       // resp.headers is a Headers which is a multi map, which is similar enough for now.
       .then(resp => {
-        const {headers} = resp;
+        // Work around. Headers is a Map like object.
+        const headers: any = resp.headers;
         return resp.arrayBuffer().then(buf => ({headers, buf: new Uint8Array(buf)}));
       });
   }
 
-  return fetch(url, 'arraybuffer', options);
+  return internalFetch(url, 'arraybuffer', options);
 }
 
 function makeHeaders(xhr: XMLHttpRequest): Map<string, string> {
   const m = new Map();
-  const headers = xhr.getAllResponseHeaders().split(/\r\n/);  // spec requires \r\n
+  // React Native uses a JS implementation that combines the headers using \n only.
+  // https://github.com/facebook/react-native/pull/10034
+  const headers = xhr.getAllResponseHeaders().split(/\r?\n/);  // spec requires \r\n
   for (const header of headers) {
     if (header) {
       const [, name, value] = notNull(header.match(/([^:]+): (.*)/));

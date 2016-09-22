@@ -9,10 +9,10 @@ import {parse} from 'url';
 import * as Bytes from './bytes.js';
 
 export type FetchOptions = {
-  method?: string,
+  method?: ?MethodType, // from flowlib bom.js
   body?: any,
-  headers?: {[key: string]: string},
-  withCredentials? : boolean,
+  headers?: ?{[key: string]: string},
+  withCredentials? : ?boolean,
 };
 
 type Response<T> = {headers: Map<string, string>, buf: T};
