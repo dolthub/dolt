@@ -2,21 +2,22 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-// Package suite implements a performance test suite for Noms, intended for measuring and reporting
-// long running tests.
+// Package suite implements a performance test suite for Noms, intended for
+// measuring and reporting long running tests.
 //
 // Usage is similar to testify's suite:
 //  1. Define a test suite struct which inherits from suite.PerfSuite.
-//  2. Define methods on that struct that start with the word "Test", optionally followed by
-//     digits, then followed a non-empty capitalized string.
+//  2. Define methods on that struct that start with the word "Test", optionally
+//     followed by digits, then followed a non-empty capitalized string.
 //  3. Call suite.Run with an instance of that struct.
 //  4. Run go test with the -perf <path to noms db> flag.
 //
 // Flags:
-//  -perf.mem      backs the database by a memory store, instead of a (temporary) leveldb.
-//  -perf.prefix   gives the dataset IDs for test results a prefix
-//  -perf.repeat   sets how many times tests are repeated ("reps").
-//  -perf.testdata sets a custom path to the Noms testdata directory.
+//  -perf.mem      Backs the database by a memory store, instead of leveldb.
+//  -perf.prefix   Gives the dataset IDs for test results a prefix.
+//  -perf.repeat   Sets how many times tests are repeated ("reps").
+//  -perf.run      Only run tests that match a regex (case insensitive).
+//  -perf.testdata Sets a custom path to the Noms testdata directory.
 //
 // PerfSuite also supports testify/suite style Setup/TearDown methods:
 //  Setup/TearDownSuite is called exactly once.
@@ -102,6 +103,7 @@ var (
 	perfMemFlag      = flag.Bool("perf.mem", false, "Back the test database by a memory store, not leveldb. This will affect test timing, but it's provided in case you're low on disk space")
 	perfPrefixFlag   = flag.String("perf.prefix", "", `Prefix for the dataset IDs where results are written. For example, a prefix of "foo/" will write test datasets like "foo/csv-import" instead of just "csv-import"`)
 	perfRepeatFlag   = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
+	perfRunFlag      = flag.String("perf.run", "", "Only run perf tests that match a regular expression")
 	perfTestdataFlag = flag.String("perf.testdata", "", "Path to the noms testdata directory. By default this is ../testdata relative to the noms directory")
 	testNamePattern  = regexp.MustCompile("^Test[0-9]*([A-Z].*$)")
 )
@@ -190,7 +192,9 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	}
 
 	gopath := os.Getenv("GOPATH")
-	assert.NotEmpty(gopath)
+	if !assert.NotEmpty(gopath) {
+		return
+	}
 	suite.AtticLabs = path.Join(gopath, "src", "github.com", "attic-labs")
 	suite.Testdata = *perfTestdataFlag
 	if suite.Testdata == "" {
@@ -209,10 +213,19 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 	// This is the database the perf test results are written to.
 	db, err := spec.GetDatabase(*perfFlag)
-	assert.NoError(err)
+	if !assert.NoError(err) {
+		return
+	}
 
 	// List of test runs, each a map of test name => timing info.
 	testReps := make([]testRep, *perfRepeatFlag)
+
+	// Note: the default value of perfRunFlag is "", which is actually a valid
+	// regular expression that matches everything.
+	perfRunRe, err := regexp.Compile("(?i)" + *perfRunFlag)
+	if !assert.NoError(err, `Invalid regular expression "%s"`, *perfRunFlag) {
+		return
+	}
 
 	defer func() {
 		reps := make([]types.Value, *perfRepeatFlag)
@@ -265,13 +278,22 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 				continue
 			}
 
-			if t, ok := suiteT.(testifySuite.SetupTestSuite); ok {
-				t.SetupTest()
+			recordName := parts[1]
+			if !perfRunRe.MatchString(recordName) && !perfRunRe.MatchString(m.Name) {
+				continue
 			}
 
-			recordName := parts[1]
+			if _, ok := testReps[repIdx][recordName]; ok {
+				assert.Fail(`Multiple tests are named "%s"`, recordName)
+				continue
+			}
+
 			if verbose {
 				fmt.Printf("(perf) RUN(%d/%d) %s (as \"%s\")\n", repIdx+1, *perfRepeatFlag, m.Name, recordName)
+			}
+
+			if t, ok := suiteT.(testifySuite.SetupTestSuite); ok {
+				t.SetupTest()
 			}
 
 			start := time.Now()
