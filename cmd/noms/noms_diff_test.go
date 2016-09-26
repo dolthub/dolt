@@ -26,7 +26,7 @@ func TestNomsDiff(t *testing.T) {
 func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	datasetName := "diffTest"
 	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	ds, err := spec.GetDataset(str)
+	db, ds, err := spec.GetDataset(str)
 	s.NoError(err)
 
 	ds, err = addCommit(ds, "first commit")
@@ -37,7 +37,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	s.NoError(err)
 	r2 := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+ds.HeadRef().TargetHash().String())
 
-	ds.Database().Close()
+	db.Close()
 	out, _ := s.MustRun(main, []string{"diff", r1, r2})
 	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
 }
@@ -45,9 +45,9 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
 	datasetName := "diffSummarizeTest"
 	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	ds, err := spec.GetDataset(str)
+	store, ds, err := spec.GetDataset(str)
 	s.NoError(err)
-	defer ds.Database().Close()
+	defer store.Close()
 
 	ds, err = addCommit(ds, "first commit")
 	s.NoError(err)
@@ -64,11 +64,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
 	out, _ = s.MustRun(main, []string{"diff", "--summarize", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
-	ds, err = ds.CommitValue(types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
+	ds, err = store.CommitValue(ds, types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
 	s.NoError(err)
 	r3 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
 
-	ds, err = ds.CommitValue(types.NewList(types.Number(1), types.Number(222), types.Number(4)))
+	ds, err = store.CommitValue(ds, types.NewList(types.Number(1), types.Number(222), types.Number(4)))
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
 

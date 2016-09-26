@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -78,7 +78,8 @@ type nomsFS struct {
 
 	mdLock *sync.Mutex // protect filesystem metadata
 
-	ds   dataset.Dataset
+	db   datas.Database
+	ds   datas.Dataset
 	head types.Struct
 
 	// This map lets us find the name of a file and its parent given an inode. This lets us splice changes back into the hierarchy upon modification.
@@ -125,7 +126,7 @@ func init() {
 }
 
 func start(dataset string, mount mount) {
-	ds, err := spec.GetDataset(dataset)
+	db, ds, err := spec.GetDataset(dataset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
@@ -146,6 +147,7 @@ func start(dataset string, mount mount) {
 
 	mount(&nomsFS{
 		FileSystem: pathfs.NewDefaultFileSystem(),
+		db:         db,
 		ds:         ds,
 		head:       hv.(types.Struct),
 		mdLock:     &sync.Mutex{},
@@ -265,10 +267,10 @@ func (fs *nomsFS) Truncate(path string, size uint64, context *fuse.Context) fuse
 	attr := inode.Get("attr").(types.Struct)
 	file := inode.Get("contents").(types.Struct)
 	ref := file.Get("data").(types.Ref)
-	blob := ref.TargetValue(fs.ds.Database()).(types.Blob)
+	blob := ref.TargetValue(fs.db).(types.Blob)
 
 	blob = blob.Splice(size, blob.Len()-size, nil)
-	ref = fs.ds.Database().WriteValue(blob)
+	ref = fs.db.WriteValue(blob)
 	file = file.Set("data", ref)
 
 	inode = inode.Set("contents", file).Set("attr", updateMtime(attr))
@@ -284,7 +286,7 @@ func (fs *nomsFS) Create(path string, flags uint32, mode uint32, context *fuse.C
 	defer fs.mdLock.Unlock()
 	np, code := fs.createCommon(path, mode, func() types.Value {
 		blob := types.NewEmptyBlob()
-		return types.NewStructWithType(fileType, types.ValueSlice{fs.ds.Database().WriteValue(blob)})
+		return types.NewStructWithType(fileType, types.ValueSlice{fs.db.WriteValue(blob)})
 	})
 	if code != fuse.OK {
 		return nil, code
@@ -413,7 +415,7 @@ func (nfile nomsFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	d.Chk.Equal(nodeType(nfile.node.inode), "File")
 
 	ref := file.(types.Struct).Get("data").(types.Ref)
-	blob := ref.TargetValue(nfile.fs.ds.Database()).(types.Blob)
+	blob := ref.TargetValue(nfile.fs.db).(types.Blob)
 
 	br := blob.Reader()
 
@@ -439,7 +441,7 @@ func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	attr := inode.Get("attr").(types.Struct)
 	file := inode.Get("contents").(types.Struct)
 	ref := file.Get("data").(types.Ref)
-	blob := ref.TargetValue(nfile.fs.ds.Database()).(types.Blob)
+	blob := ref.TargetValue(nfile.fs.db).(types.Blob)
 
 	ll := uint64(blob.Len())
 	oo := uint64(off)
@@ -450,7 +452,7 @@ func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	}
 
 	blob = blob.Splice(uint64(off), del, data)
-	ref = nfile.fs.ds.Database().WriteValue(blob)
+	ref = nfile.fs.db.WriteValue(blob)
 	file = file.Set("data", ref)
 
 	nfile.fs.bufferNode(nfile.node, inode.Set("contents", file).Set("attr", updateMtime(attr)))
@@ -557,7 +559,7 @@ func (fs *nomsFS) splice(np *nNode) {
 }
 
 func (fs *nomsFS) commit() {
-	ds, ee := fs.ds.CommitValue(fs.head)
+	ds, ee := fs.db.CommitValue(fs.ds, fs.head)
 	if ee != nil {
 		panic("Unexpected changes to dataset (is it mounted in multiple locations?")
 	}
@@ -747,7 +749,7 @@ func (fs *nomsFS) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.
 
 	switch contents.Type().Desc.(types.StructDesc).Name {
 	case "File":
-		blob := contents.Get("data").(types.Ref).TargetValue(fs.ds.Database()).(types.Blob)
+		blob := contents.Get("data").(types.Ref).TargetValue(fs.db).(types.Blob)
 		at.Mode |= fuse.S_IFREG
 		at.Size = blob.Len()
 	case "Directory":

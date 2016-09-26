@@ -7,7 +7,6 @@ package counter
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/integrationtest"
 )
@@ -25,8 +24,8 @@ type testSuite struct {
 func (s *testSuite) Setup() {
 	db := s.Database()
 	defer db.Close()
-	ds := dataset.NewDataset(db, dsName)
-	_, err := ds.CommitValue(types.Number(42))
+	ds := db.GetDataset(dsName)
+	_, err := db.CommitValue(ds, types.Number(42))
 	s.NoError(err)
 }
 
@@ -35,7 +34,7 @@ func (s *testSuite) Teardown() {
 
 	db := s.Database()
 	defer db.Close()
-	ds := dataset.NewDataset(db, dsName)
+	ds := db.GetDataset(dsName)
 	s.True(ds.HeadValue().Equals(types.Number(43)))
 }
 

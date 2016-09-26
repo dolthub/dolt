@@ -86,7 +86,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -248,9 +247,9 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"reps":             types.NewList(reps...),
 		})
 
-		ds := dataset.NewDataset(db, *perfPrefixFlag+datasetID)
+		ds := db.GetDataset(*perfPrefixFlag + datasetID)
 		var err error
-		ds, err = ds.CommitValue(record)
+		ds, err = db.CommitValue(ds, record)
 		assert.NoError(err)
 		assert.NoError(db.Close())
 	}()

@@ -24,27 +24,40 @@ func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
 	}
 }
 
-func (lds *LocalDatabase) Commit(datasetID string, commit types.Struct) (Database, error) {
-	err := lds.doCommit(datasetID, commit)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
+func (ldb *LocalDatabase) GetDataset(datasetID string) Dataset {
+	return getDataset(ldb, datasetID)
 }
 
-func (lds *LocalDatabase) Delete(datasetID string) (Database, error) {
-	err := lds.doDelete(datasetID)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
+func (ldb *LocalDatabase) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	err := ldb.doCommit(ds.ID(), buildNewCommit(ds, v, opts))
+	return ldb.GetDataset(ds.ID()), err
 }
 
-func (lds *LocalDatabase) SetHead(datasetID string, commit types.Struct) (Database, error) {
-	err := lds.doSetHead(datasetID, commit)
-	return &LocalDatabase{newDatabaseCommon(lds.cch, lds.ValueStore, lds.rt), lds.cs}, err
+func (ldb *LocalDatabase) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
+	return ldb.Commit(ds, v, CommitOptions{})
 }
 
-func (lds *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
-	bs = lds.ValueStore.BatchStore()
+func (ldb *LocalDatabase) Delete(ds Dataset) (Dataset, error) {
+	err := ldb.doDelete(ds.ID())
+	return ldb.GetDataset(ds.ID()), err
+}
+
+func (ldb *LocalDatabase) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	err := ldb.doSetHead(ds, newHeadRef)
+	return ldb.GetDataset(ds.ID()), err
+}
+
+func (ldb *LocalDatabase) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	err := ldb.doFastForward(ds, newHeadRef)
+	return ldb.GetDataset(ds.ID()), err
+}
+
+func (ldb *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
+	bs = ldb.ValueStore.BatchStore()
 	if !bs.IsValidating() {
-		bs = newLocalBatchStore(lds.cs)
-		lds.ValueStore = types.NewValueStore(bs)
-		lds.rt = bs
+		bs = newLocalBatchStore(ldb.cs)
+		ldb.ValueStore = types.NewValueStore(bs)
+		ldb.rt = bs
 	}
 	d.PanicIfFalse(bs.IsValidating())
 	return bs

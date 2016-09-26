@@ -20,25 +20,38 @@ func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
 	return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(httpBS), types.NewValueStore(httpBS), httpBS)}
 }
 
-func (rds *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
-	bs = rds.ValueStore.BatchStore()
+func (rdb *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
+	bs = rdb.ValueStore.BatchStore()
 	d.PanicIfFalse(bs.IsValidating())
 	return
 }
 
-func (rds *RemoteDatabaseClient) Commit(datasetID string, commit types.Struct) (Database, error) {
-	err := rds.doCommit(datasetID, commit)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
+func (rdb *RemoteDatabaseClient) GetDataset(datasetID string) Dataset {
+	return getDataset(rdb, datasetID)
 }
 
-func (rds *RemoteDatabaseClient) Delete(datasetID string) (Database, error) {
-	err := rds.doDelete(datasetID)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
+func (rdb *RemoteDatabaseClient) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	err := rdb.doCommit(ds.ID(), buildNewCommit(ds, v, opts))
+	return rdb.GetDataset(ds.ID()), err
 }
 
-func (rds *RemoteDatabaseClient) SetHead(datasetID string, commit types.Struct) (Database, error) {
-	err := rds.doSetHead(datasetID, commit)
-	return &RemoteDatabaseClient{newDatabaseCommon(rds.cch, rds.ValueStore, rds.rt)}, err
+func (rdb *RemoteDatabaseClient) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
+	return rdb.Commit(ds, v, CommitOptions{})
+}
+
+func (rdb *RemoteDatabaseClient) Delete(ds Dataset) (Dataset, error) {
+	err := rdb.doDelete(ds.ID())
+	return rdb.GetDataset(ds.ID()), err
+}
+
+func (rdb *RemoteDatabaseClient) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	err := rdb.doSetHead(ds, newHeadRef)
+	return rdb.GetDataset(ds.ID()), err
+}
+
+func (rdb *RemoteDatabaseClient) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	err := rdb.doFastForward(ds, newHeadRef)
+	return rdb.GetDataset(ds.ID()), err
 }
 
 func (f RemoteStoreFactory) CreateStore(ns string) Database {

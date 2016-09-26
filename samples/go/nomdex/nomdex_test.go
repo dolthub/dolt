@@ -11,7 +11,6 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
@@ -71,7 +70,7 @@ func makeTestDb(s *testSuite, dsId string) datas.Database {
 	m := map[string]interface{}{"actors": l1, "musicians": m1}
 	v, err := marshal.Marshal(m)
 	s.NoError(err)
-	db, err = db.Commit("data", datas.NewCommit(v, types.NewSet(), types.EmptyStruct))
+	_, err = db.CommitValue(db.GetDataset(dsId), v)
 	s.NoError(err)
 	return db
 }

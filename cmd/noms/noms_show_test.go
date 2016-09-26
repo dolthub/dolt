@@ -32,14 +32,14 @@ const (
 )
 
 func writeTestData(str string, value types.Value) types.Ref {
-	ds, err := spec.GetDataset(str)
+	db, ds, err := spec.GetDataset(str)
 	d.Chk.NoError(err)
 
-	r1 := ds.Database().WriteValue(value)
-	ds, err = ds.CommitValue(r1)
+	r1 := db.WriteValue(value)
+	ds, err = db.CommitValue(ds, r1)
 	d.Chk.NoError(err)
 
-	err = ds.Database().Close()
+	err = db.Close()
 	d.Chk.NoError(err)
 	return r1
 }

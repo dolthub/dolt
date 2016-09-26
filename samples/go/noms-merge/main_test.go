@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -26,9 +25,9 @@ type testSuite struct {
 
 func (s *testSuite) TestWin() {
 	prep := func(name string, data types.StructData) {
-		ds, _ := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
-		defer ds.Database().Close()
-		ds.CommitValue(types.NewStruct("", data))
+		db, ds, _ := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
+		defer db.Close()
+		db.CommitValue(ds, types.NewStruct("", data))
 	}
 
 	p := "parent"
@@ -72,12 +71,12 @@ func (s *testSuite) TestWin() {
 		s.Equal("", stdout)
 		s.Equal("", stderr)
 
-		ds, err := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, r))
+		db, ds, err := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, r))
 		if s.NoError(err) {
 			merged := ds.HeadValue()
 			s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
 		}
-		defer ds.Database().Close()
+		defer db.Close()
 	}
 }
 
@@ -102,8 +101,8 @@ func (s *testSuite) TestLose() {
 
 	db, _ := spec.GetDatabase(sp)
 	prep := func(dsName string) {
-		ds := dataset.NewDataset(db, dsName)
-		ds.CommitValue(types.NewMap(types.String("foo"), types.String("bar")))
+		ds := db.GetDataset(dsName)
+		db.CommitValue(ds, types.NewMap(types.String("foo"), types.String("bar")))
 	}
 	prep(p)
 	prep(l)

@@ -52,9 +52,9 @@ func runSync(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDataset, err := spec.GetDataset(args[1])
+	sinkDB, sinkDataset, err := spec.GetDataset(args[1])
 	d.CheckError(err)
-	defer sinkDataset.Database().Close()
+	defer sinkDB.Close()
 
 	start := time.Now()
 	progressCh := make(chan datas.PullProgress)
@@ -84,12 +84,12 @@ func runSync(args []string) int {
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-		sinkDataset.Pull(sourceStore, sourceRef, p, progressCh)
+		datas.Pull(sourceStore, sinkDB, sourceRef, sinkRef, p, progressCh)
 
 		var err error
-		sinkDataset, err = sinkDataset.FastForward(sourceRef)
+		sinkDataset, err = sinkDB.FastForward(sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
-			sinkDataset, err = sinkDataset.SetHead(sourceRef)
+			sinkDataset, err = sinkDB.SetHead(sinkDataset, sourceRef)
 			nonFF = true
 		}
 		d.PanicIfError(err)
@@ -119,7 +119,6 @@ func bytesPerSec(bytes uint64, start time.Time) string {
 	bps := float64(bytes) / float64(time.Since(start).Seconds())
 	return humanize.Bytes(uint64(bps))
 }
-
 
 func since(start time.Time) string {
 	round := time.Second / 100

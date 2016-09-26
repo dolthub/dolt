@@ -2,7 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package dataset
+package datas
 
 import "github.com/attic-labs/noms/go/types"
 

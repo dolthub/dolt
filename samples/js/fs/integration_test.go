@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/integrationtest"
 )
@@ -34,7 +33,7 @@ func (s *testSuite) Teardown() {
 
 	db := s.Database()
 	defer db.Close()
-	ds := dataset.NewDataset(db, dsName)
+	ds := db.GetDataset(dsName)
 	v := ds.HeadValue()
 	s.True(v.Type().Equals(types.MakeStructType("File",
 		[]string{"content"},

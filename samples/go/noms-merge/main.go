@@ -12,7 +12,6 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -20,7 +19,7 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
-var datasetRe = regexp.MustCompile("^" + dataset.DatasetRe.String() + "$")
+var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
 
 func main() {
 	if err := nomsMerge(); err != nil {
@@ -50,9 +49,9 @@ func nomsMerge() error {
 		defer db.Close()
 		d.PanicIfError(err)
 
-		makeDS := func(dsName string) dataset.Dataset {
-			d.PanicIfTrue(!datasetRe.MatchString(dsName), "Invalid dataset %s, must match %s\n", dsName, dataset.DatasetRe.String())
-			return dataset.NewDataset(db, dsName)
+		makeDS := func(dsName string) datas.Dataset {
+			d.PanicIfTrue(!datasetRe.MatchString(dsName), "Invalid dataset %s, must match %s\n", dsName, datas.DatasetRe.String())
+			return db.GetDataset(dsName)
 		}
 
 		leftDS := makeDS(flag.Arg(1))
@@ -87,7 +86,7 @@ func nomsMerge() error {
 		merged, err := merge.ThreeWay(left, right, parent, db, resolve, pc)
 		d.PanicIfError(err)
 
-		_, err = outDS.Commit(merged, dataset.CommitOptions{
+		_, err = db.Commit(outDS, merged, datas.CommitOptions{
 			Parents: types.NewSet(leftDS.HeadRef(), rightDS.HeadRef()),
 			Meta:    parentDS.Head().Get(datas.MetaField).(types.Struct),
 		})

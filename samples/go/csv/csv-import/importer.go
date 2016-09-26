@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
@@ -155,27 +155,27 @@ func main() {
 		}
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(dataSetArgN))
+	db, ds, err := spec.GetDataset(flag.Arg(dataSetArgN))
 	d.CheckError(err)
-	defer ds.Database().Close()
+	defer db.Close()
 
 	var value types.Value
 	if dest == destList {
-		value, _ = csv.ReadToList(cr, *name, headers, kinds, ds.Database())
+		value, _ = csv.ReadToList(cr, *name, headers, kinds, db)
 	} else {
-		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, ds.Database())
+		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, db)
 	}
 
 	if *performCommit {
 		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo(filePath, *path), nil)
 		d.CheckErrorNoUsage(err)
-		_, err = ds.Commit(value, dataset.CommitOptions{Meta: meta})
+		_, err = db.Commit(ds, value, datas.CommitOptions{Meta: meta})
 		if !*noProgress {
 			status.Clear()
 		}
 		d.PanicIfError(err)
 	} else {
-		ref := ds.Database().WriteValue(value)
+		ref := db.WriteValue(value)
 		if !*noProgress {
 			status.Clear()
 		}

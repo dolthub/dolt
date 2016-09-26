@@ -14,7 +14,6 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
@@ -48,9 +47,9 @@ func main() {
 
 	start = time.Now()
 
-	ds, err := spec.GetDataset(flag.Arg(flag.NArg() - 1))
+	db, ds, err := spec.GetDataset(flag.Arg(flag.NArg() - 1))
 	d.CheckErrorNoUsage(err)
-	defer ds.Database().Close()
+	defer db.Close()
 
 	var r io.Reader
 	var contentLength int64
@@ -97,16 +96,16 @@ func main() {
 	if !*noProgress {
 		r = progressreader.New(r, getStatusPrinter(contentLength))
 	}
-	b := types.NewStreamingBlob(r, ds.Database())
+	b := types.NewStreamingBlob(r, db)
 
 	if *performCommit {
 		var additionalMetaInfo map[string]string
 		if sourceType != "" {
 			additionalMetaInfo = map[string]string{sourceType: sourceVal}
 		}
-		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
+		meta, err := spec.CreateCommitMetaStruct(db, "", "", additionalMetaInfo, nil)
 		d.CheckErrorNoUsage(err)
-		ds, err = ds.Commit(b, dataset.CommitOptions{Meta: meta})
+		ds, err = db.Commit(ds, b, datas.CommitOptions{Meta: meta})
 		if err != nil {
 			d.Chk.Equal(datas.ErrMergeNeeded, err)
 			fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
@@ -116,7 +115,7 @@ func main() {
 			status.Done()
 		}
 	} else {
-		ref := ds.Database().WriteValue(b)
+		ref := db.WriteValue(b)
 		if !*noProgress {
 			status.Clear()
 		}

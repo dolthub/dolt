@@ -11,12 +11,11 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 )
 
-var datasetCapturePrefixRe = regexp.MustCompile("^(" + dataset.DatasetRe.String() + ")")
+var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() + ")")
 
 type AbsolutePath struct {
 	dataset string
@@ -72,7 +71,8 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 	if len(p.dataset) > 0 {
 		var ok bool
-		if val, ok = db.MaybeHead(p.dataset); !ok {
+		ds := db.GetDataset(p.dataset)
+		if val, ok = ds.MaybeHead(); !ok {
 			val = nil
 		}
 	} else if !p.hash.IsEmpty() {

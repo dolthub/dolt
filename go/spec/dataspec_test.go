@@ -13,7 +13,6 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -28,12 +27,13 @@ func TestLDBDatabase(t *testing.T) {
 	spec := fmt.Sprintf("ldb:%s", path.Join(dir, "store"))
 
 	cs := chunks.NewLevelDBStoreUseFlags(ldbDir, "")
-	ds := datas.NewDatabase(cs)
+	db := datas.NewDatabase(cs)
+	ds := db.GetDataset("testDs")
 
 	s1 := types.String("A String")
-	s1Hash := ds.WriteValue(s1)
-	ds.Commit("testDs", datas.NewCommit(s1Hash, types.NewSet(), types.EmptyStruct))
-	ds.Close()
+	s1Hash := db.WriteValue(s1)
+	db.CommitValue(ds, s1Hash)
+	db.Close()
 
 	sp, errRead := parseDatabaseSpec(spec)
 	assert.NoError(errRead)
@@ -66,10 +66,10 @@ func TestMemDataset(t *testing.T) {
 	assert.NoError(err)
 	dataset1, err := sp1.Dataset()
 	assert.NoError(err)
-	commit := types.String("Commit Value")
-	dsTest, err := dataset1.CommitValue(commit)
+	headVal := types.String("Commit Value")
+	dsTest, err := dataset1.Database().CommitValue(dataset1, headVal)
 	assert.NoError(err)
-	assert.EqualValues(commit, dsTest.HeadValue())
+	assert.EqualValues(headVal, dsTest.HeadValue())
 }
 
 func TestLDBDataset(t *testing.T) {
@@ -79,21 +79,21 @@ func TestLDBDataset(t *testing.T) {
 	assert.NoError(err)
 	ldbPath := path.Join(dir, "name")
 	cs := chunks.NewLevelDBStoreUseFlags(ldbPath, "")
-	ds := datas.NewDatabase(cs)
+	db := datas.NewDatabase(cs)
 	id := "dsName"
 
-	set := dataset.NewDataset(ds, id)
-	commit := types.String("Commit Value")
-	set, err = set.CommitValue(commit)
+	ds := db.GetDataset(id)
+	headVal := types.String("Commit Value")
+	ds, err = ds.Database().CommitValue(ds, headVal)
 	assert.NoError(err)
-	ds.Close()
+	db.Close()
 
 	spec := fmt.Sprintf("ldb:%s::%s", ldbPath, id)
 	sp, err := parseDatasetSpec(spec)
 	assert.NoError(err)
 	dataset, err := sp.Dataset()
 	assert.NoError(err)
-	assert.EqualValues(commit, dataset.HeadValue())
+	assert.EqualValues(headVal, dataset.HeadValue())
 
 	os.Remove(dir)
 }
@@ -107,10 +107,10 @@ func TestLDBObject(t *testing.T) {
 
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbpath, "")
 	store1 := datas.NewDatabase(cs1)
-	dataset1 := dataset.NewDataset(store1, dsId)
+	dataset1 := store1.GetDataset(dsId)
 	s1 := types.String("Commit Value")
 	r1 := store1.WriteValue(s1)
-	_, err = dataset1.CommitValue(r1)
+	dataset1, err = store1.CommitValue(dataset1, r1)
 	assert.NoError(err)
 	store1.Close()
 
@@ -144,9 +144,9 @@ func TestReadHash(t *testing.T) {
 	ldbPath := path.Join(dir, "/name")
 	cs1 := chunks.NewLevelDBStoreUseFlags(ldbPath, "")
 	database1 := datas.NewDatabase(cs1)
-	dataset1 := dataset.NewDataset(database1, datasetId)
+	dataset1 := database1.GetDataset(datasetId)
 	commit := types.String("Commit Value")
-	dataset1, err = dataset1.CommitValue(commit)
+	dataset1, err = database1.CommitValue(dataset1, commit)
 	assert.NoError(err)
 	r1 := dataset1.Head().Hash()
 	dataset1.Database().Close()

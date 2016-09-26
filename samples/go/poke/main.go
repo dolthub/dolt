@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	flag "github.com/juju/gnuflag"
@@ -37,7 +36,7 @@ func poke() (win bool) {
 		return
 	}
 
-	inDS, err := spec.GetDataset(flag.Arg(0))
+	db, inDS, err := spec.GetDataset(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid input dataset '%s': %s\n", flag.Arg(0), err)
 		return
@@ -67,16 +66,16 @@ func poke() (win bool) {
 		return
 	}
 
-	var outDS dataset.Dataset
+	var outDS datas.Dataset
 	if *outDSStr == "" {
 		outDS = inDS
-	} else if !dataset.DatasetFullRe.MatchString(*outDSStr) {
+	} else if !datas.DatasetFullRe.MatchString(*outDSStr) {
 		fmt.Fprintf(os.Stderr, "Invalid output dataset name: %s\n", *outDSStr)
 		return
 	} else {
-		outDS = dataset.NewDataset(inDS.Database(), *outDSStr)
+		outDS = db.GetDataset(*outDSStr)
 	}
-	defer outDS.Database().Close()
+	defer db.Close()
 
 	outRoot, err := update(inRoot, inPath, val)
 	if err != nil {
@@ -84,7 +83,7 @@ func poke() (win bool) {
 		return
 	}
 
-	_, err = outDS.Commit(outRoot, dataset.CommitOptions{Meta: inDS.Head().Get(datas.MetaField).(types.Struct)})
+	_, err = db.Commit(outDS, outRoot, datas.CommitOptions{Meta: inDS.Head().Get(datas.MetaField).(types.Struct)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit: %s\n", err)
 		return

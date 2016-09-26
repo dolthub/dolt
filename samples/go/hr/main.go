@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -40,16 +40,16 @@ func main() {
 		return
 	}
 
-	ds, err := spec.GetDataset(*dsStr)
+	db, ds, err := spec.GetDataset(*dsStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
 	}
-	defer ds.Database().Close()
+	defer db.Close()
 
 	switch flag.Arg(0) {
 	case "add-person":
-		addPerson(ds)
+		addPerson(db, ds)
 	case "list-persons":
 		listPersons(ds)
 	default:
@@ -62,7 +62,7 @@ type Person struct {
 	Id          uint64
 }
 
-func addPerson(ds dataset.Dataset) {
+func addPerson(db datas.Database, ds datas.Dataset) {
 	if flag.NArg() != 4 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments for command add-person")
 		return
@@ -80,14 +80,14 @@ func addPerson(ds dataset.Dataset) {
 		return
 	}
 
-	_, err = ds.CommitValue(getPersons(ds).Set(types.Number(id), np))
+	_, err = db.CommitValue(ds, getPersons(ds).Set(types.Number(id), np))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return
 	}
 }
 
-func listPersons(ds dataset.Dataset) {
+func listPersons(ds datas.Dataset) {
 	d := getPersons(ds)
 	if d.Empty() {
 		fmt.Println("No people found")
@@ -105,7 +105,7 @@ func listPersons(ds dataset.Dataset) {
 	})
 }
 
-func getPersons(ds dataset.Dataset) types.Map {
+func getPersons(ds datas.Dataset) types.Map {
 	hv, ok := ds.MaybeHeadValue()
 	if ok {
 		return hv.(types.Map)

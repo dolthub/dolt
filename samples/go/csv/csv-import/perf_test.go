@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/perf/suite"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/csv"
@@ -48,8 +47,8 @@ func (s *perfSuite) Test01ImportSfCrimeBlobFromTestdata() {
 	blob := types.NewBlob(io.MultiReader(files...))
 	fmt.Fprintf(s.W, "\tsf-crime is %s\n", humanize.Bytes(blob.Len()))
 
-	ds := dataset.NewDataset(s.Database, "sf-crime/raw")
-	_, err := ds.CommitValue(blob)
+	ds := s.Database.GetDataset("sf-crime/raw")
+	_, err := s.Database.CommitValue(ds, blob)
 	assert.NoError(err)
 }
 
@@ -66,8 +65,8 @@ func (s *perfSuite) Test03ImportSfRegisteredBusinessesFromBlobAsMap() {
 	blob := types.NewBlob(io.MultiReader(files...))
 	fmt.Fprintf(s.W, "\tsf-reg-bus is %s\n", humanize.Bytes(blob.Len()))
 
-	ds := dataset.NewDataset(s.Database, "sf-reg-bus/raw")
-	_, err := ds.CommitValue(blob)
+	ds := s.Database.GetDataset("sf-reg-bus/raw")
+	_, err := s.Database.CommitValue(ds, blob)
 	assert.NoError(err)
 
 	s.execCsvImportExe("sf-reg-bus", "--dest-type", "map:0")

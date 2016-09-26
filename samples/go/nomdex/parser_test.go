@@ -107,7 +107,7 @@ func TestParsing(t *testing.T) {
 	}
 
 	db := datas.NewDatabase(chunks.NewMemoryStore())
-	db, err := db.Commit("index1", datas.NewCommit(types.NewMap(types.String("one"), types.NewSet(types.String("two"))), types.NewSet(), types.EmptyStruct))
+	_, err := db.CommitValue(db.GetDataset("index1"), types.NewMap(types.String("one"), types.NewSet(types.String("two"))))
 	assert.NoError(err)
 
 	im := &indexManager{db: db, indexes: map[string]types.Map{}}

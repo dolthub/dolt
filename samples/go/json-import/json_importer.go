@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/jsontonoms"
 	"github.com/attic-labs/noms/go/util/progressreader"
@@ -38,9 +38,9 @@ func main() {
 		d.CheckError(errors.New("expected url and dataset flags"))
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(1))
+	db, ds, err := spec.GetDataset(flag.Arg(1))
 	d.CheckError(err)
-	defer ds.Database().Close()
+	defer db.Close()
 
 	url := flag.Arg(0)
 	if url == "" {
@@ -72,10 +72,10 @@ func main() {
 		additionalMetaInfo := map[string]string{"url": url}
 		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
 		d.CheckErrorNoUsage(err)
-		_, err = ds.Commit(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true), dataset.CommitOptions{Meta: meta})
+		_, err = db.Commit(ds, jsontonoms.NomsValueFromDecodedJSON(jsonObject, true), datas.CommitOptions{Meta: meta})
 		d.PanicIfError(err)
 	} else {
-		ref := ds.Database().WriteValue(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
+		ref := db.WriteValue(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
 		fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
 	}
 }

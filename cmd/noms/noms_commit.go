@@ -12,7 +12,7 @@ import (
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/dataset"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	flag "github.com/juju/gnuflag"
 )
@@ -36,9 +36,9 @@ func setupCommitFlags() *flag.FlagSet {
 }
 
 func runCommit(args []string) int {
-	ds, err := spec.GetDataset(args[len(args)-1])
+	db, ds, err := spec.GetDataset(args[len(args)-1])
 	d.CheckError(err)
-	defer ds.Database().Close()
+	defer db.Close()
 
 	var path string
 	if len(args) == 2 {
@@ -51,7 +51,7 @@ func runCommit(args []string) int {
 	absPath, err := spec.NewAbsolutePath(path)
 	d.CheckError(err)
 
-	value := absPath.Resolve(ds.Database())
+	value := absPath.Resolve(db)
 	if value == nil {
 		d.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
@@ -65,10 +65,10 @@ func runCommit(args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(db, "", "", nil, nil)
 	d.CheckErrorNoUsage(err)
 
-	ds, err = ds.Commit(value, dataset.CommitOptions{Meta: meta})
+	ds, err = db.Commit(ds, value, datas.CommitOptions{Meta: meta})
 	d.CheckErrorNoUsage(err)
 
 	if oldCommitExists {

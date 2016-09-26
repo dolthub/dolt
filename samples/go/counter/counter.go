@@ -28,19 +28,19 @@ func main() {
 		return
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(0))
+	db, ds, err := spec.GetDataset(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
 	}
-	defer ds.Database().Close()
+	defer db.Close()
 
 	newVal := uint64(1)
 	if lastVal, ok := ds.MaybeHeadValue(); ok {
 		newVal = uint64(lastVal.(types.Number)) + 1
 	}
 
-	_, err = ds.CommitValue(types.Number(newVal))
+	_, err = db.CommitValue(ds, types.Number(newVal))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return

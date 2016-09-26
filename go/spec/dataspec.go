@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	flag "github.com/juju/gnuflag"
@@ -25,7 +24,7 @@ const (
 )
 
 var (
-	datasetRe = regexp.MustCompile("^" + dataset.DatasetRe.String() + "$")
+	datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
 	ldbStores = map[string]*refCountingLdbStore{}
 )
 
@@ -53,12 +52,16 @@ func GetChunkStore(str string) (chunks.ChunkStore, error) {
 	}
 }
 
-func GetDataset(str string) (dataset.Dataset, error) {
+func GetDataset(str string) (datas.Database, datas.Dataset, error) {
 	sp, err := parseDatasetSpec(str)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return nil, datas.Dataset{}, err
 	}
-	return sp.Dataset()
+	ds, err := sp.Dataset()
+	if err != nil {
+		return nil, datas.Dataset{}, err
+	}
+	return ds.Database(), ds, nil
 }
 
 func GetPath(str string) (datas.Database, types.Value, error) {
@@ -148,7 +151,7 @@ func parseDatasetSpec(spec string) (datasetSpec, error) {
 	}
 
 	if !datasetRe.MatchString(dsName) {
-		return datasetSpec{}, fmt.Errorf("Invalid dataset, must match %s: %s", dataset.DatasetRe.String(), dsName)
+		return datasetSpec{}, fmt.Errorf("Invalid dataset, must match %s: %s", datas.DatasetRe.String(), dsName)
 	}
 
 	return datasetSpec{dbSpec, dsName}, nil
@@ -190,13 +193,13 @@ func (spec databaseSpec) Database() (ds datas.Database, err error) {
 	return
 }
 
-func (spec datasetSpec) Dataset() (dataset.Dataset, error) {
+func (spec datasetSpec) Dataset() (datas.Dataset, error) {
 	store, err := spec.DbSpec.Database()
 	if err != nil {
-		return dataset.Dataset{}, err
+		return datas.Dataset{}, err
 	}
 
-	return dataset.NewDataset(store, spec.DatasetName), nil
+	return store.GetDataset(spec.DatasetName), nil
 }
 
 func (spec datasetSpec) String() string {
@@ -209,13 +212,11 @@ func (spec datasetSpec) Value() (datas.Database, types.Value, error) {
 		return nil, nil, err
 	}
 
-	commit, ok := dataset.MaybeHead()
-	if !ok {
-		dataset.Database().Close()
-		return nil, nil, fmt.Errorf("No head value for dataset: %s", spec.DatasetName)
+	if commit, ok := dataset.MaybeHead(); ok {
+		return dataset.Database(), commit, nil
 	}
-
-	return dataset.Database(), commit, nil
+	dataset.Database().Close()
+	return nil, nil, fmt.Errorf("No head value for dataset: %s", spec.DatasetName)
 }
 
 func (spec pathSpec) Value() (db datas.Database, val types.Value, err error) {

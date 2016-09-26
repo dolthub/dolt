@@ -13,7 +13,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -86,13 +85,13 @@ func (s *testSuite) TestCSVExportFromList() {
 	setName := "csvlist"
 
 	// Setup data store
-	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
+	ds := db.GetDataset(setName)
 
 	// Build data rows
 	structs := createTestData(s, false)
-	ds.CommitValue(types.NewList(structs...))
-	ds.Database().Close()
+	db.CommitValue(ds, types.NewList(structs...))
+	db.Close()
 
 	// Run exporter
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
@@ -106,13 +105,13 @@ func (s *testSuite) TestCSVExportFromMap() {
 	setName := "csvmap"
 
 	// Setup data store
-	cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
-	ds := dataset.NewDataset(datas.NewDatabase(cs), setName)
+	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
+	ds := db.GetDataset(setName)
 
 	// Build data rows
 	structs := createTestData(s, true)
-	ds.CommitValue(types.NewMap(structs...))
-	ds.Database().Close()
+	db.CommitValue(ds, types.NewMap(structs...))
+	db.Close()
 
 	// Run exporter
 	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)

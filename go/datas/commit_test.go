@@ -124,12 +124,12 @@ func TestFindCommonAncestor(t *testing.T) {
 	defer db.Close()
 
 	// Add a commit and return it
-	addCommit := func(ds string, val string, parents ...types.Struct) types.Struct {
-		commit := NewCommit(types.String(val), toRefSet(parents...), types.EmptyStruct)
+	addCommit := func(datasetID string, val string, parents ...types.Struct) types.Struct {
+		ds := db.GetDataset(datasetID)
 		var err error
-		db, err = db.Commit(ds, commit)
+		ds, err = db.Commit(ds, types.String(val), CommitOptions{Parents: toRefSet(parents...)})
 		assert.NoError(err)
-		return commit
+		return ds.Head()
 	}
 
 	// Assert that c is the common ancestor of a and b
@@ -200,12 +200,12 @@ func TestCommitDescendsFrom(t *testing.T) {
 	defer db.Close()
 
 	// Add a commit and return it
-	addCommit := func(ds string, val string, parents ...types.Struct) types.Struct {
-		commit := NewCommit(types.String(val), toRefSet(parents...), types.EmptyStruct)
+	addCommit := func(datasetID string, val string, parents ...types.Struct) types.Struct {
+		ds := db.GetDataset(datasetID)
 		var err error
-		db, err = db.Commit(ds, commit)
+		ds, err = db.Commit(ds, types.String(val), CommitOptions{Parents: toRefSet(parents...)})
 		assert.NoError(err)
-		return commit
+		return ds.Head()
 	}
 
 	// Assert that c does/doesn't descend from a

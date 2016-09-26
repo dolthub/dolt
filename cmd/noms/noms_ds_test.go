@@ -9,7 +9,6 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -41,19 +40,19 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.LdbDir
 
 	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
-	ds := datas.NewDatabase(cs)
+	db := datas.NewDatabase(cs)
 
 	id := "testdataset"
-	set := dataset.NewDataset(ds, id)
-	set, err := set.CommitValue(types.String("Commit Value"))
+	set := db.GetDataset(id)
+	set, err := db.CommitValue(set, types.String("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
-	set2 := dataset.NewDataset(ds, id2)
-	set2, err = set2.CommitValue(types.String("Commit Value2"))
+	set2 := db.GetDataset(id2)
+	set2, err = db.CommitValue(set2, types.String("Commit Value2"))
 	s.NoError(err)
 
-	err = ds.Close()
+	err = db.Close()
 	s.NoError(err)
 
 	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")

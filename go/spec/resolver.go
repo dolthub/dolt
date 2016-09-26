@@ -6,9 +6,9 @@ package spec
 
 import (
 	"strings"
+
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -24,7 +24,7 @@ func NewResolver() (Resolver, error) {
 		}
 		return Resolver{}, nil
 	}
-	return Resolver{ c }, nil
+	return Resolver{c}, nil
 }
 
 func (dsr *Resolver) resolveDatabase(str string) string {
@@ -66,7 +66,7 @@ func (dsr *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
-func (dsr *Resolver) GetDataset(str string) (dataset.Dataset, error) {
+func (dsr *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
 	return GetDataset(dsr.resolvePath(str))
 }
 

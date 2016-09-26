@@ -36,10 +36,10 @@ func main() {
 		d.CheckError(errors.New("expected dataset arg"))
 	}
 
-	ds, err := spec.GetDataset(flag.Arg(0))
+	db, ds, err := spec.GetDataset(flag.Arg(0))
 	d.CheckError(err)
 
-	defer ds.Database().Close()
+	defer db.Close()
 
 	comma, err := csv.StringToRune(*delimiter)
 	d.CheckError(err)
@@ -49,10 +49,10 @@ func main() {
 
 		hv := ds.HeadValue()
 		if l, ok := hv.(types.List); ok {
-			structDesc := csv.GetListElemDesc(l, ds.Database())
+			structDesc := csv.GetListElemDesc(l, db)
 			csv.WriteList(l, structDesc, comma, os.Stdout)
 		} else if m, ok := hv.(types.Map); ok {
-			structDesc := csv.GetMapElemDesc(m, ds.Database())
+			structDesc := csv.GetMapElemDesc(m, db)
 			csv.WriteMap(m, structDesc, comma, os.Stdout)
 		} else {
 			panic(fmt.Sprintf("Expected ListKind or MapKind, found %s", types.KindToString[hv.Type().Kind()]))

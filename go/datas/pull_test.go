@@ -14,7 +14,7 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-const dsID = "ds1"
+const datasetID = "ds1"
 
 func TestLocalToLocalPulls(t *testing.T) {
 	suite.Run(t, &LocalToLocalSuite{})
@@ -307,17 +307,17 @@ func (suite *PullSuite) TestPullUpdates() {
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {
-	var err error
-	suite.source, err = suite.source.Commit(dsID, NewCommit(v, p, types.EmptyStruct))
+	ds := suite.source.GetDataset(datasetID)
+	ds, err := suite.source.Commit(ds, v, CommitOptions{Parents: p})
 	suite.NoError(err)
-	return suite.source.HeadRef(dsID)
+	return ds.HeadRef()
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
-	var err error
-	suite.sink, err = suite.sink.Commit(dsID, NewCommit(v, p, types.EmptyStruct))
+	ds := suite.sink.GetDataset(datasetID)
+	ds, err := suite.sink.Commit(ds, v, CommitOptions{Parents: p})
 	suite.NoError(err)
-	return suite.sink.HeadRef(dsID)
+	return ds.HeadRef()
 }
 
 func buildListOfHeight(height int, vw types.ValueWriter) types.List {

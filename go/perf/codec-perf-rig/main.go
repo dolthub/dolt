@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	flag "github.com/juju/gnuflag"
@@ -56,10 +55,11 @@ func main() {
 
 			// Build One-Time
 			ms := chunks.NewMemoryStore()
-			ds := dataset.NewDataset(datas.NewDatabase(ms), "test")
+			db := datas.NewDatabase(ms)
+			ds := db.GetDataset("test")
 			t1 := time.Now()
 			col := buildFns[i](buildCount, valueFn)
-			ds, err := ds.CommitValue(col)
+			ds, err := db.CommitValue(ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -71,10 +71,11 @@ func main() {
 
 			// Build Incrementally
 			ms = chunks.NewMemoryStore()
-			ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
+			db = datas.NewDatabase(ms)
+			ds = db.GetDataset("test")
 			t1 = time.Now()
 			col = buildIncrFns[i](insertCount, valueFn)
-			ds, err = ds.CommitValue(col)
+			ds, err = db.CommitValue(ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -90,15 +91,17 @@ func main() {
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	ms := chunks.NewMemoryStore()
-	ds := dataset.NewDataset(datas.NewDatabase(ms), "test")
+	db := datas.NewDatabase(ms)
+	ds := db.GetDataset("test")
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
 	blob := types.NewBlob(bytes.NewReader(blobBytes))
-	ds.CommitValue(blob)
+	db.CommitValue(ds, blob)
 	buildDuration := time.Since(t1)
 
-	ds = dataset.NewDataset(datas.NewDatabase(ms), "test")
+	db = datas.NewDatabase(ms)
+	ds = db.GetDataset("test")
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
 	outBytes, _ := ioutil.ReadAll(blob.Reader())

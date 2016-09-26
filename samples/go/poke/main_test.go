@@ -28,15 +28,15 @@ func (s *testSuite) SetupTest() {
 
 func (s *testSuite) TestWin() {
 	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
-	ds, _ := spec.GetDataset(sp)
-	ds.CommitValue(types.NewStruct("", map[string]types.Value{
+	db, ds, _ := spec.GetDataset(sp)
+	ds, _ = db.CommitValue(ds, types.NewStruct("", map[string]types.Value{
 		"num": types.Number(42),
 		"str": types.String("foobar"),
 		"lst": types.NewList(types.Number(1), types.String("foo")),
 		"map": types.NewMap(types.Number(1), types.String("foo"),
 			types.String("foo"), types.Number(1)),
 	}))
-	ds.Database().Close()
+	db.Close()
 
 	changes := map[string]string{
 		".num":        "43",
@@ -53,7 +53,7 @@ func (s *testSuite) TestWin() {
 		s.Equal(nil, err)
 	}
 
-	ds, _ = spec.GetDataset(sp)
+	_, ds, _ = spec.GetDataset(sp)
 	r := ds.HeadValue()
 	for k, vs := range changes {
 		v, _, _, _ := types.ParsePathIndex(vs)
@@ -84,12 +84,12 @@ func (s *testSuite) TestLose() {
 		{[]string{sp, `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
 	}
 
-	ds, _ := spec.GetDataset(sp)
-	ds.CommitValue(types.NewStruct("", map[string]types.Value{
+	db, ds, _ := spec.GetDataset(sp)
+	db.CommitValue(ds, types.NewStruct("", map[string]types.Value{
 		"foo": types.String("foo"),
 		"bar": types.NewMap(types.String("baz"), types.Number(42)),
 	}))
-	ds.Database().Close()
+	db.Close()
 
 	for _, c := range cases {
 		stdout, stderr, err := s.Run(main, c.args)

@@ -22,7 +22,10 @@ type PullProgress struct {
 
 const bytesWrittenSampleRate = .10
 
-// Pull objects that descends from sourceRef from srcDB to sinkDB. sinkHeadRef should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This allows the algorithm to figure out which portions of data are already present in sinkDB and skip copying them.
+// Pull objects that descend from sourceRef from srcDB to sinkDB. sinkHeadRef
+// should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This
+// allows the algorithm to figure out which portions of data are already
+// present in sinkDB and skip copying them.
 func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	srcQ, sinkQ := &types.RefByHeight{sourceRef}, &types.RefByHeight{sinkHeadRef}
 
@@ -69,11 +72,11 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			for {
 				select {
 				case srcRef := <-srcChan:
-				// Hook in here to estimate the bytes written to disk during pull (since
-				// srcChan contains all chunks to be written to the sink). Rather than measuring
-				// the serialized, compressed bytes of each chunk, we take a 10% sample.
-				// There's no immediately observable performance benefit to sampling here, but there's
-				// also no appreciable loss in accuracy, so we'll keep it around.
+					// Hook in here to estimate the bytes written to disk during pull (since
+					// srcChan contains all chunks to be written to the sink). Rather than measuring
+					// the serialized, compressed bytes of each chunk, we take a 10% sample.
+					// There's no immediately observable performance benefit to sampling here, but there's
+					// also no appreciable loss in accuracy, so we'll keep it around.
 					takeSample := rand.Float64() < bytesWrittenSampleRate
 					srcResChan <- traverseSource(srcRef, srcDB, sinkDB, takeSample)
 				case sinkRef := <-sinkChan:
@@ -96,7 +99,7 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		if progressCh == nil {
 			return
 		}
-		doneCount, knownCount, approxBytesWritten = doneCount+moreDone, knownCount+moreKnown,  approxBytesWritten+moreApproxBytesWritten
+		doneCount, knownCount, approxBytesWritten = doneCount+moreDone, knownCount+moreKnown, approxBytesWritten+moreApproxBytesWritten
 		progressCh <- PullProgress{doneCount, knownCount + uint64(srcQ.Len()), approxBytesWritten}
 	}
 

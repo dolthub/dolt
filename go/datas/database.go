@@ -13,37 +13,88 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-// Database provides versioned storage for noms values. Each Database instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new Database, representing a new moment in history.
+// Database provides versioned storage for noms values. While Values can be
+// directly read and written from a Database, it is generally more appropriate
+// to read data by inspecting the Head of a Dataset and write new data by
+// updating the Head of a Dataset via Commit() or similar. Particularly, new
+// data is not guaranteed to be persistent until after a Commit (Delete,
+// SetHead, or FastForward) operation completes.
+// The Database API is stateful, meaning that calls to GetDataset() or
+// Datasets() occurring after a call to Commit() (et al) will represent the
+// result of the Commit().
 type Database interface {
-	// To implement types.ValueWriter, Database implementations provide WriteValue(). WriteValue() writes v to this Database, though v is not guaranteed to be be persistent until after a subsequent Commit(). The return value is the Ref of v.
+	// To implement types.ValueWriter, Database implementations provide
+	// WriteValue(). WriteValue() writes v to this Database, though v is not
+	// guaranteed to be be persistent until after a subsequent Commit(). The
+	// return value is the Ref of v.
 	types.ValueReadWriter
 	io.Closer
 
-	// MaybeHead returns the current Head Commit of this Database, which contains the current root of the Database's value tree, if available. If not, it returns a new Commit and 'false'.
-	MaybeHead(datasetID string) (types.Struct, bool)
-
-	// MaybeHeadRef returns the types.Ref of the Head Commit of this Database, and true, if available. If not, it returns an invalid types.Ref and false.
-	MaybeHeadRef(datasetID string) (types.Ref, bool)
-
-	// Head returns the current head Commit, which contains the current root of the Database's value tree.
-	Head(datasetID string) types.Struct
-
-	// HeadRef returns the ref of the current head Commit. See Head(datasetID).
-	HeadRef(datasetID string) types.Ref
-
-	// Datasets returns the root of the database which is a MapOfStringToRefOfCommit where string is a datasetID.
+	// Datasets returns the root of the database which is a
+	// Map<String, Ref<Commit>> where string is a datasetID.
 	Datasets() types.Map
 
-	// Commit updates the Commit that datasetID in this database points at. All Values that have been written to this Database are guaranteed to be persistent after Commit(). If the update cannot be performed, e.g., because of a conflict, error will be non-nil. The newest snapshot of the database is always returned.
-	Commit(datasetID string, commit types.Struct) (Database, error)
+	// GetDataset returns a Dataset struct containing the current mapping of
+	// datasetID in the above Datasets Map.
+	GetDataset(datasetID string) Dataset
 
-	// Delete removes the Dataset named datasetID from the map at the root of the Database. The Dataset data is not necessarily cleaned up at this time, but may be garbage collected in the future. If the update cannot be performed, e.g., because of a conflict, error will non-nil. The newest snapshot of the database is always returned.
-	Delete(datasetID string) (Database, error)
+	// Commit updates the Commit that ds.ID() in this database points at. All
+	// Values that have been written to this Database are guaranteed to be
+	// persistent after Commit() returns.
+	// The new Commit struct is constructed using `v`, `opts.Parents`, and
+	// `opts.Meta`. If `opts.Parents` is the zero value (`types.Set{}`) then
+	// the current head is used. If `opts.Meta is the zero value
+	// (`types.Struct{}`) then a fully initialized empty Struct is passed to
+	// NewCommit.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well. If the update cannot be performed, e.g., because
+	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
+	Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// SetHead sets the Commit that datasetID in this database points at. All Values that have been written to this Database are guaranteed to be persistent after SetHead(). If the update cannot be performed, e.g., because of a conflict, error will be non-nil. The newest snapshot of the database is always returned.
-	SetHead(datasetID string, commit types.Struct) (Database, error)
+	// CommitValue updates the Commit that ds.ID() in this database points at.
+	// All Values that have been written to this Database are guaranteed to be
+	// persistent after Commit().
+	// The new Commit struct is constructed using `v`, and the current Head of
+	// `ds` as the lone Parent.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well. If the update cannot be performed, e.g., because
+	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
+	CommitValue(ds Dataset, v types.Value) (Dataset, error)
 
-	has(hash hash.Hash) bool
+	// Delete removes the Dataset named ds.ID() from the map at the root of
+	// the Database. The Dataset data is not necessarily cleaned up at this
+	// time, but may be garbage collected in the future.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well. If the update cannot be performed, e.g., because
+	// of a conflict, Delete returns an 'ErrMergeNeeded' error.
+	Delete(ds Dataset) (Dataset, error)
+
+	// SetHead ignores any lineage constraints (e.g. the current Head being in
+	// commit’s Parent set) and force-sets a mapping from datasetID: commit in
+	// this database.
+	// All Values that have been written to this Database are guaranteed to be
+	// persistent after SetHead(). If the update cannot be performed, e.g.,
+	// because another process moved the current Head out from under you,
+	// error will be non-nil.
+	// The newest snapshot of the Dataset is always returned, so the caller an
+	// easily retry using the latest.
+	// Regardless, Datasets() is updated to match backing storage upon return.
+	SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error)
+
+	// FastForward takes a types.Ref to a Commit object and makes it the new
+	// Head of ds iff it is a descendant of the current Head. Intended to be
+	// used e.g. after a call to Pull(). If the update cannot be performed,
+	// e.g., because another process moved the current Head out from under
+	// you, err will be non-nil.
+	// The newest snapshot of the Dataset is always returned, so the caller
+	// can easily retry using the latest.
+	// Regardless, Datasets() is updated to match backing storage upon return.
+	FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error)
+
+	has(h hash.Hash) bool
 	validatingBatchStore() types.BatchStore
 }
 

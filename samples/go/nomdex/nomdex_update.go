@@ -12,7 +12,6 @@ import (
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/status"
@@ -75,7 +74,7 @@ func runUpdate(args []string) int {
 		return 1
 	}
 
-	outDs := dataset.NewDataset(db, outDsArg)
+	outDs := db.GetDataset(outDsArg)
 	relPath, err := types.ParsePath(relPathArg)
 	if printError(err, "Error parsing -by value\n\t") {
 		return 1
@@ -107,7 +106,7 @@ func runUpdate(args []string) int {
 
 	status.Done()
 	indexMap := writeToStreamingMap(db, index.m)
-	outDs, err = outDs.Commit(indexMap, dataset.CommitOptions{})
+	outDs, err = db.Commit(outDs, indexMap, datas.CommitOptions{})
 	d.Chk.NoError(err)
 	fmt.Printf("Committed index with %d entries to dataset: %s\n", indexMap.Len(), outDsArg)
 	return 0

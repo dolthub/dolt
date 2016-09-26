@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/attic-labs/noms/go/dataset"
 	"github.com/attic-labs/noms/go/perf/suite"
 	"github.com/attic-labs/noms/go/types"
 )
@@ -33,10 +32,10 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	}
 	close(in)
 
-	ds := dataset.NewDataset(s.Database, "BuildList10mNumbers")
+	ds := s.Database.GetDataset("BuildList10mNumbers")
 
 	var err error
-	ds, err = ds.CommitValue(<-out)
+	ds, err = s.Database.CommitValue(ds, <-out)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
@@ -54,10 +53,10 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	}
 	close(in)
 
-	ds := dataset.NewDataset(s.Database, "BuildList10mStructs")
+	ds := s.Database.GetDataset("BuildList10mStructs")
 
 	var err error
-	ds, err = ds.CommitValue(<-out)
+	ds, err = s.Database.CommitValue(ds, <-out)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
@@ -94,16 +93,16 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 		assert.Equal((i+1)*(l1Len+l2Len), l3.Len())
 	}
 
-	ds := dataset.NewDataset(s.Database, "Concat10mValues2kTimes")
+	ds := s.Database.GetDataset("Concat10mValues2kTimes")
 	var err error
-	ds, err = ds.CommitValue(l3)
+	ds, err = s.Database.CommitValue(ds, l3)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
 }
 
 func (s *perfSuite) headList(dsName string) types.List {
-	ds := dataset.NewDataset(s.Database, dsName)
+	ds := s.Database.GetDataset(dsName)
 	return ds.HeadValue().(types.List)
 }
 

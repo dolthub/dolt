@@ -35,17 +35,17 @@ func runDs(args []string) int {
 	spec, err := spec.NewResolver()
 	d.CheckErrorNoUsage(err)
 	if toDelete != "" {
-		set, err := spec.GetDataset(toDelete) // append local if no local given, check for aliases
+		db, set, err := spec.GetDataset(toDelete) // append local if no local given, check for aliases
 		d.CheckError(err)
+		defer db.Close()
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
 		if !errBool {
 			d.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
 
-		store, err := set.Database().Delete(set.ID())
+		_, err = set.Database().Delete(set)
 		d.CheckError(err)
-		defer store.Close()
 
 		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
 	} else {
