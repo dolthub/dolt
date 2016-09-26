@@ -10,7 +10,7 @@ Nomdex constructs indexes as Maps that are keyed by either Strings or Numbers. T
 ```
 nomdex up --in-path <absolute noms path> --by <relative noms path> --out-ds <dataset name>
 ```
-The ***'in-path'*** argument must be a ValueSpec(see [Spelling In Noms](../../../docs/spelling.md)) that designates the root of an object hierarchy to be scanned for "indexable" objects.
+The ***'in-path'*** argument must be a ValueSpec(see [Spelling In Noms](../../../doc/spelling.md#spelling-values)) that designates the root of an object hierarchy to be scanned for "indexable" objects.
 
 The ***'by'*** argument must be a relative path. Nomdex traverses every value reachable from 'in-path' and attempts to resolve this relative ***'by'*** path from it. Any value that has a String, Number, or Bool  index using the relative attribute as it's key.
 
