@@ -23,7 +23,7 @@ import {
 const args = argv
   .usage(
     'Indexes Photo objects out of slurped Flickr metadata\n\n' +
-    'Usage: flickr-find-photos <in-object> <out-dataset>')
+    'Usage: node . <in-object> <out-dataset>')
   .demand(2)
   .argv;
 

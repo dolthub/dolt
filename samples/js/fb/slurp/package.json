@@ -1,5 +1,5 @@
 {
-  "name": "noms-facebook-slurp",
+  "name": "noms-fb-slurp",
   "description": "Imports photo metadata from Facebook",
   "license": "Apache-2.0",
   "main": "dist/main.js",

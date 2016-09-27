@@ -1,6 +1,6 @@
 {
   "name": "noms-flickr-find-photos",
-  "description": "Creates standard photo structs out of slurped flickr data",
+  "description": "Finds photos in slurped Flickr data",
   "license": "Apache-2.0",
   "main": "dist/main.js",
   "scripts": {

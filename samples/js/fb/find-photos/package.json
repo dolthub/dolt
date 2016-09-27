@@ -1,6 +1,6 @@
 {
   "name": "noms-fb-find-photos",
-  "description": "Finds photos in slurped flickr data",
+  "description": "Finds photos in slurped Facebook data",
   "license": "Apache-2.0",
   "main": "dist/main.js",
   "scripts": {

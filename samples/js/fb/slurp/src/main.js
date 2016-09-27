@@ -21,8 +21,8 @@ import {
 
 const args = argv
   .usage(
-    'Imports photo metadata from Facebook API\n\n' +
-    'Usage: noms-facebook-slurp --access-token=<token> <dest-dataset>\n\n' +
+    'Parses photo metadata from Facebook API\n\n' +
+    'Usage: node . --access-token=<token> <dest-dataset>\n\n' +
     'Create an access token as follows:\n' +
     '1. Browse to https://developers.facebook.com/tools/explorer/\n' +
     '2. Login with your Facebook credentials\n' +

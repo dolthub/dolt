@@ -19,8 +19,8 @@ import {
 
 const args = argv
   .usage(
-    'Parses photo information out of Flickr API\n\n' +
-    'Usage: flickr-photos --api-key=<key> --api-secret=<secret> ' +
+    'Parses photo metadata out of Flickr API\n\n' +
+    'Usage: node . --api-key=<key> --api-secret=<secret> ' +
     '[--auth-token=<token> --auth-secret=<secret>] <dest-dataset>\n\n' +
     'You can create a Flickr API key at: ' +
     'https://www.flickr.com/services/apps/create/apply\n\n' +
