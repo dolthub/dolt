@@ -44,7 +44,7 @@ func (s *perfSuite) Test01ImportSfCrimeBlobFromTestdata() {
 	files := s.openGlob(s.Testdata, "sf-crime", "2016-07-28.*")
 	defer s.closeGlob(files)
 
-	blob := types.NewBlob(io.MultiReader(files...))
+	blob := types.NewBlob(files...)
 	fmt.Fprintf(s.W, "\tsf-crime is %s\n", humanize.Bytes(blob.Len()))
 
 	ds := s.Database.GetDataset("sf-crime/raw")
@@ -62,7 +62,7 @@ func (s *perfSuite) Test03ImportSfRegisteredBusinessesFromBlobAsMap() {
 	files := s.openGlob(s.Testdata, "sf-registered-businesses", "2016-07-25.csv")
 	defer s.closeGlob(files)
 
-	blob := types.NewBlob(io.MultiReader(files...))
+	blob := types.NewBlob(files...)
 	fmt.Fprintf(s.W, "\tsf-reg-bus is %s\n", humanize.Bytes(blob.Len()))
 
 	ds := s.Database.GetDataset("sf-reg-bus/raw")
