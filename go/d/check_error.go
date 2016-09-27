@@ -8,32 +8,21 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/attic-labs/noms/go/util/exit"
 	flag "github.com/juju/gnuflag"
 )
-
-type Exiter interface {
-	Exit(code int)
-}
-
-type nomsExiter struct{}
-
-func (e nomsExiter) Exit(code int) {
-	os.Exit(code)
-}
-
-var UtilExiter Exiter = nomsExiter{}
 
 func CheckError(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		flag.Usage()
-		UtilExiter.Exit(-1)
+		exit.Fail()
 	}
 }
 
 func CheckErrorNoUsage(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		UtilExiter.Exit(-1)
+		exit.Fail()
 	}
 }

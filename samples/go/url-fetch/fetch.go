@@ -16,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	human "github.com/dustin/go-humanize"
@@ -42,7 +43,7 @@ func main() {
 
 	if !(*stdin && flag.NArg() == 1) && flag.NArg() != 2 {
 		flag.Usage()
-		os.Exit(-1)
+		exit.Fail()
 	}
 
 	start = time.Now()

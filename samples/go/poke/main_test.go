@@ -22,10 +22,6 @@ type testSuite struct {
 	clienttest.ClientTestSuite
 }
 
-func (s *testSuite) SetupTest() {
-	exit = s.Exit
-}
-
 func (s *testSuite) TestWin() {
 	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
 	db, ds, _ := spec.GetDataset(sp)

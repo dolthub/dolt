@@ -11,12 +11,13 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/exit"
 	flag "github.com/juju/gnuflag"
 )
 
 func main() {
 	if !poke() {
-		exit(1)
+		exit.Fail()
 	}
 }
 
@@ -140,8 +141,4 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  <new-val> : new value for <path>\n\n")
 	fmt.Fprintln(os.Stderr, "Flags:\n")
 	flag.PrintDefaults()
-}
-
-var exit = func(status int) {
-	os.Exit(status)
 }

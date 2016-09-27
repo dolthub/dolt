@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/status"
 	flag "github.com/juju/gnuflag"
 )
@@ -24,7 +25,7 @@ var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
 func main() {
 	if err := nomsMerge(); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		exit.Fail()
 	}
 }
 

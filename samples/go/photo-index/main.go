@@ -12,13 +12,14 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
 )
 
 func main() {
 	if !index() {
-		os.Exit(1)
+		exit.Fail()
 	}
 }
 

@@ -270,7 +270,7 @@ func (s *testSuite) TestCSVImporterWithInvalidExternalHeader() {
 	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,x", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: Invalid headers specified, headers must be unique\n", stderr)
-	s.Equal(clienttest.ExitError{-1}, exitErr)
+	s.Equal(clienttest.ExitError{1}, exitErr)
 }
 
 func (s *testSuite) TestCSVImporterWithInvalidNumColumnTypeSpec() {
@@ -287,7 +287,7 @@ func (s *testSuite) TestCSVImporterWithInvalidNumColumnTypeSpec() {
 	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: Invalid column-types specified, column types do not correspond to number of headers\n", stderr)
-	s.Equal(clienttest.ExitError{-1}, exitErr)
+	s.Equal(clienttest.ExitError{1}, exitErr)
 }
 
 func (s *testSuite) TestCSVImportSkipRecords() {
@@ -343,7 +343,7 @@ func (s *testSuite) TestCSVImportSkipRecordsTooMany() {
 	stdout, stderr, recoveredErr := s.Run(main, []string{"--no-progress", "--skip-records", "100", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: skip-records skipped past EOF\n", stderr)
-	s.Equal(clienttest.ExitError{-1}, recoveredErr)
+	s.Equal(clienttest.ExitError{1}, recoveredErr)
 
 }
 

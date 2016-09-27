@@ -10,6 +10,7 @@ import (
 	"path"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/testify/suite"
 	flag "github.com/juju/gnuflag"
 )
@@ -39,7 +40,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 	suite.LdbDir = path.Join(dir, "ldb")
 	suite.out = stdOutput
 	suite.err = errOutput
-	d.UtilExiter = suite
+	exit.Exit = mockExit
 }
 
 func (suite *ClientTestSuite) TearDownSuite() {
@@ -59,7 +60,7 @@ func (suite *ClientTestSuite) MustRun(m func(), args []string) (stdout string, s
 
 // Run will execute a function passing to it commandline args, and captures stdout,stderr.
 // If m()  panics the panic is caught, and returned with recoveredError
-// If m() calls os.Exit() m() will panic and return ExitError with recoveredError
+// If m() calls exit.Exit() m() will panic and return ExitError with recoveredError
 func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stderr string, recoveredErr interface{}) {
 	origArgs := os.Args
 	origOut := os.Stdout
@@ -102,7 +103,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 	return
 }
 
-// Mock os.Exit() implementation for use during testing.
-func (suite *ClientTestSuite) Exit(status int) {
+// Mock exit.Exit() implementation for use during testing.
+func mockExit(status int) {
 	panic(ExitError{status})
 }
