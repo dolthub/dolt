@@ -238,3 +238,19 @@ func TestInvalidCyclesAndUnions(t *testing.T) {
 			[]*Type{MakeStructType("A", []string{"a"}, []*Type{MakeCycleType(1)})})
 	})
 }
+
+func TestMakeStructTypeFromFields(t *testing.T) {
+	assert := assert.New(t)
+	fields := map[string]*Type{
+		"str":    StringType,
+		"number": NumberType,
+		"bool":   BoolType,
+	}
+	desc := MakeStructTypeFromFields("Thing", fields).Desc.(StructDesc)
+	assert.Equal("Thing", desc.Name)
+	assert.Equal(3, desc.Len())
+	for k, v := range fields {
+		f := desc.Field(k)
+		assert.True(v == f)
+	}
+}

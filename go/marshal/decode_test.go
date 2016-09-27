@@ -221,6 +221,7 @@ func TestDecodeTypeMismatch(t *testing.T) {
 		X int
 	}
 	var s S
+	assertDecodeErrorMessage(t, types.String("hi!"), &s, "Cannot unmarshal String into Go value of type marshal.S, expected struct")
 	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"x": types.String("hi"),
 	}), &s, "Cannot unmarshal String into Go value of type int")

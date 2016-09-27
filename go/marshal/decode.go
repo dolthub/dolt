@@ -235,7 +235,10 @@ func structDecoder(t reflect.Type) decoderFunc {
 	}
 
 	d = func(v types.Value, rv reflect.Value) {
-		s := v.(types.Struct)
+		s, ok := v.(types.Struct)
+		if !ok {
+			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct"})
+		}
 		// If the name is empty then the Go struct has to be anonymous.
 		if !strings.EqualFold(s.Type().Desc.(types.StructDesc).Name, name) {
 			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", names do not match"})

@@ -383,6 +383,39 @@ func MakeMapType(keyType, valType *Type) *Type {
 	return staticTypeCache.getCompoundType(MapKind, keyType, valType)
 }
 
+type fieldSorter struct {
+	names []string
+	types []*Type
+}
+
+func (fs *fieldSorter) Len() int {
+	return len(fs.names)
+}
+
+func (fs *fieldSorter) Swap(i, j int) {
+	fs.names[i], fs.names[j] = fs.names[j], fs.names[i]
+	fs.types[i], fs.types[j] = fs.types[j], fs.types[i]
+}
+
+func (fs *fieldSorter) Less(i, j int) bool {
+	return fs.names[i] < fs.names[j]
+}
+
+type FieldMap map[string]*Type
+
+func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
+	// I'm the computer
+	names := make([]string, 0, len(fields))
+	types := make([]*Type, 0, len(fields))
+	for k, v := range fields {
+		names = append(names, k)
+		types = append(types, v)
+	}
+	fs := fieldSorter{names, types}
+	sort.Sort(&fs)
+	return MakeStructType(name, names, types)
+}
+
 func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
 	staticTypeCache.Lock()
 	defer staticTypeCache.Unlock()
