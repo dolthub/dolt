@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/go/walk"
 	humanize "github.com/dustin/go-humanize"
@@ -40,6 +41,7 @@ func setupUpdateFlags() *flag.FlagSet {
 	flagSet.StringVar(&inPathArg, "in-path", "", "a value to search for items to index within ")
 	flagSet.StringVar(&outDsArg, "out-ds", "", "name of dataset to save the results to")
 	flagSet.StringVar(&relPathArg, "by", "", "a path relative to all the items in <in-path> to index by")
+	profile.RegisterProfileFlags(flagSet)
 	return flagSet
 }
 
@@ -66,6 +68,8 @@ func runUpdate(args []string) int {
 		}
 	}
 
+	defer profile.MaybeStartProfile().Stop()
+
 	db, rootObject, err := spec.GetPath(inPathArg)
 	d.Chk.NoError(err)
 
@@ -80,6 +84,18 @@ func runUpdate(args []string) int {
 		return 1
 	}
 
+	gb := types.NewGraphBuilder(db, types.MapKind, true)
+	addElementsToGraphBuilder(gb, db, rootObject, relPath)
+	indexMap := gb.Build().(types.Map)
+
+	outDs, err = db.Commit(outDs, indexMap, datas.CommitOptions{})
+	d.Chk.NoError(err)
+	fmt.Printf("Committed index with %d entries to dataset: %s\n", indexMap.Len(), outDsArg)
+
+	return 0
+}
+
+func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootObject types.Value, relPath types.Path) {
 	typeCacheMutex := sync.Mutex{}
 	typeCache := map[*types.Type]bool{}
 
@@ -93,7 +109,7 @@ func runUpdate(args []string) int {
 			pathResolved := false
 			tv := relPath.Resolve(v)
 			if tv != nil {
-				index.Add(db, tv, v)
+				index.addToGraphBuilder(gb, tv, v)
 				pathResolved = true
 			}
 			if !ok {
@@ -105,46 +121,10 @@ func runUpdate(args []string) int {
 	}, 4)
 
 	status.Done()
-	indexMap := writeToStreamingMap(db, index.m)
-	outDs, err = db.Commit(outDs, indexMap, datas.CommitOptions{})
-	d.Chk.NoError(err)
-	fmt.Printf("Committed index with %d entries to dataset: %s\n", indexMap.Len(), outDsArg)
-	return 0
 }
 
-func (idx *Index) Add(db datas.Database, k, v types.Value) {
-	idx.mutex.Lock()
-	defer idx.mutex.Unlock()
-
+func (idx *Index) addToGraphBuilder(gb *types.GraphBuilder, k, v types.Value) {
 	idx.cnt++
-	se, ok := idx.m[k]
-	if !ok {
-		valChan := make(chan types.Value)
-		setChan := types.NewStreamingSet(db, valChan)
-		se = StreamingSetEntry{valChan: valChan, setChan: setChan}
-		idx.m[k] = se
-	}
-	se.valChan <- v
+	gb.SetInsert(types.ValueSlice{k}, v)
 	status.Printf("Indexed %s objects", humanize.Comma(idx.cnt))
-}
-
-func writeToStreamingMap(db datas.Database, indexMap IndexMap) types.Map {
-	itemCnt := len(indexMap)
-	writtenCnt := int64(0)
-	indexedCnt := int64(0)
-	kvChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(db, kvChan)
-	for k, v := range indexMap {
-		close(v.valChan)
-		s := <-v.setChan
-		kvChan <- k
-		kvChan <- s
-		indexedCnt += int64(s.Len())
-		delete(indexMap, k)
-		writtenCnt++
-		status.Printf("Wrote %s/%d keys, %s indexedObjects", humanize.Comma(writtenCnt), itemCnt, humanize.Comma(indexedCnt))
-	}
-	close(kvChan)
-	status.Done()
-	return <-mapChan
 }
