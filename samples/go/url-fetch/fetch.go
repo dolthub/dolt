@@ -96,7 +96,7 @@ func main() {
 	if !*noProgress {
 		r = progressreader.New(r, getStatusPrinter(contentLength))
 	}
-	b := types.NewStreamingBlob(r, db)
+	b := types.NewStreamingBlob(db, r)
 
 	if *performCommit {
 		var additionalMetaInfo map[string]string

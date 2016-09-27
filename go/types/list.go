@@ -179,9 +179,9 @@ func (l List) Insert(idx uint64, vs ...Value) List {
 	return l.Splice(idx, 0, vs...)
 }
 
-// Concat returns new list comprised of this joined with other. It only needs to
-// visit the rightmost prolly tree chunks of this list, and the leftmost prolly
-// tree chunks of other.
+// Concat returns a new List comprised of this joined with other. It only needs
+// to visit the rightmost prolly tree chunks of this List, and the leftmost
+// prolly tree chunks of other, so it's efficient.
 func (l List) Concat(other List) List {
 	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
 		return l.newChunker(cur, vr)

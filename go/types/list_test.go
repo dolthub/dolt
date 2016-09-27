@@ -1107,3 +1107,17 @@ func TestListConcat(t *testing.T) {
 	run(6, 1e4, 0, 1000, 10)
 	run(7, 1e4, 1e4-1000, 1e4, 10)
 }
+
+func TestListConcatDifferentTypes(t *testing.T) {
+	assert := assert.New(t)
+
+	fst := generateNumbersAsValuesFromToBy(0, testListSize/2, 1)
+	snd := generateNumbersAsStructsFromToBy(testListSize/2, testListSize, 1)
+
+	var whole ValueSlice
+	whole = append(whole, fst...)
+	whole = append(whole, snd...)
+
+	concat := NewList(fst...).Concat(NewList(snd...))
+	assert.True(NewList(whole...).Equals(concat))
+}
