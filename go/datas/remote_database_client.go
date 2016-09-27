@@ -5,7 +5,6 @@
 package datas
 
 import (
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/julienschmidt/httprouter"
 )
@@ -22,7 +21,6 @@ func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
 
 func (rdb *RemoteDatabaseClient) validatingBatchStore() (bs types.BatchStore) {
 	bs = rdb.ValueStore.BatchStore()
-	d.PanicIfFalse(bs.IsValidating())
 	return
 }
 

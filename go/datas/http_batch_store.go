@@ -94,10 +94,6 @@ func makeHTTPClient(requestLimit int) *http.Client {
 	return &http.Client{Transport: &t}
 }
 
-func (bhcs *httpBatchStore) IsValidating() bool {
-	return true
-}
-
 func (bhcs *httpBatchStore) Flush() {
 	bhcs.flushChan <- struct{}{}
 	bhcs.requestWg.Wait()

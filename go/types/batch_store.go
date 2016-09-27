@@ -16,9 +16,6 @@ import (
 
 // BatchStore provides an interface similar to chunks.ChunkStore, but batch-oriented. Instead of Put(), it provides SchedulePut(), which enqueues a Chunk to be sent at a possibly later time.
 type BatchStore interface {
-	// IsValidating indicates whether this implementation can internally enforce chunk validity & completeness. If a BatchStore supports this, it must also support "staging" of writes -- that is, allowing chunks to be written which reference chunks which have yet to be written.
-	IsValidating() bool
-
 	// Get returns from the store the Value Chunk by h. If h is absent from the store, chunks.EmptyChunk is returned.
 	Get(h hash.Hash) chunks.Chunk
 
@@ -47,10 +44,6 @@ type BatchStoreAdaptor struct {
 // NewBatchStoreAdaptor returns a BatchStore instance backed by a ChunkStore. Takes ownership of cs and manages its lifetime; calling Close on the returned BatchStore will Close cs.
 func NewBatchStoreAdaptor(cs chunks.ChunkStore) BatchStore {
 	return &BatchStoreAdaptor{cs: cs}
-}
-
-func (bsa *BatchStoreAdaptor) IsValidating() bool {
-	return false
 }
 
 // Get simply proxies to the backing ChunkStore

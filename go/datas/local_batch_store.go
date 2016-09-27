@@ -35,10 +35,6 @@ func newLocalBatchStore(cs chunks.ChunkStore) *localBatchStore {
 	}
 }
 
-func (lbs *localBatchStore) IsValidating() bool {
-	return true
-}
-
 // Get checks the internal Chunk cache, proxying to the backing ChunkStore if not present.
 func (lbs *localBatchStore) Get(h hash.Hash) chunks.Chunk {
 	lbs.once.Do(lbs.expectVersion)
@@ -122,9 +118,13 @@ func (lbs *localBatchStore) Flush() {
 	lbs.hints = types.Hints{}
 }
 
-// Close closes the underlying ChunkStore
-func (lbs *localBatchStore) Close() error {
+// FlushAndDestroyWithoutClose flushes lbs and destroys its cache of unwritten chunks. It's needed because LocalDatabase wraps a localBatchStore around a ChunkStore that's used by a separate BatchStore, so calling Close() on one is semantically incorrect while it still wants to use the other.
+func (lbs *localBatchStore) FlushAndDestroyWithoutClose() {
 	lbs.Flush()
 	lbs.unwrittenPuts.Destroy()
-	return lbs.cs.Close()
+}
+
+// Close is supposed to close the underlying ChunkStore, but the only place localBatchStore is currently used wants to keep the underlying ChunkStore open after it's done with lbs. Hence, the above method and the panic() here.
+func (lbs *localBatchStore) Close() error {
+	panic("Unreached")
 }

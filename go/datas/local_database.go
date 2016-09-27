@@ -6,14 +6,14 @@ package datas
 
 import (
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
 // Database provides versioned storage for noms values. Each Database instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new Database, representing a new moment in history.
 type LocalDatabase struct {
 	databaseCommon
-	cs chunks.ChunkStore
+	cs  chunks.ChunkStore
+	vbs *localBatchStore
 }
 
 func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
@@ -21,6 +21,7 @@ func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
 	return &LocalDatabase{
 		newDatabaseCommon(newCachingChunkHaver(cs), types.NewValueStore(bs), bs),
 		cs,
+		nil,
 	}
 }
 
@@ -29,8 +30,10 @@ func (ldb *LocalDatabase) GetDataset(datasetID string) Dataset {
 }
 
 func (ldb *LocalDatabase) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	err := ldb.doCommit(ds.ID(), buildNewCommit(ds, v, opts))
-	return ldb.GetDataset(ds.ID()), err
+	return ldb.doHeadUpdate(
+		ds,
+		func(ds Dataset) error { return ldb.doCommit(ds.ID(), buildNewCommit(ds, v, opts)) },
+	)
 }
 
 func (ldb *LocalDatabase) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
@@ -38,27 +41,29 @@ func (ldb *LocalDatabase) CommitValue(ds Dataset, v types.Value) (Dataset, error
 }
 
 func (ldb *LocalDatabase) Delete(ds Dataset) (Dataset, error) {
-	err := ldb.doDelete(ds.ID())
-	return ldb.GetDataset(ds.ID()), err
+	return ldb.doHeadUpdate(ds, func(ds Dataset) error { return ldb.doDelete(ds.ID()) })
 }
 
 func (ldb *LocalDatabase) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	err := ldb.doSetHead(ds, newHeadRef)
-	return ldb.GetDataset(ds.ID()), err
+	return ldb.doHeadUpdate(ds, func(ds Dataset) error { return ldb.doSetHead(ds, newHeadRef) })
 }
 
 func (ldb *LocalDatabase) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	err := ldb.doFastForward(ds, newHeadRef)
+	return ldb.doHeadUpdate(ds, func(ds Dataset) error { return ldb.doFastForward(ds, newHeadRef) })
+}
+
+func (ldb *LocalDatabase) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
+	if ldb.vbs != nil {
+		ldb.vbs.FlushAndDestroyWithoutClose()
+		ldb.vbs = nil
+	}
+	err := updateFunc(ds)
 	return ldb.GetDataset(ds.ID()), err
 }
 
-func (ldb *LocalDatabase) validatingBatchStore() (bs types.BatchStore) {
-	bs = ldb.ValueStore.BatchStore()
-	if !bs.IsValidating() {
-		bs = newLocalBatchStore(ldb.cs)
-		ldb.ValueStore = types.NewValueStore(bs)
-		ldb.rt = bs
+func (ldb *LocalDatabase) validatingBatchStore() types.BatchStore {
+	if ldb.vbs == nil {
+		ldb.vbs = newLocalBatchStore(ldb.cs)
 	}
-	d.PanicIfFalse(bs.IsValidating())
-	return bs
+	return ldb.vbs
 }
