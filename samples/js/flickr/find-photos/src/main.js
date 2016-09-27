@@ -59,6 +59,10 @@ const imageType = makeUnionType(sizeTypes.map(st => {
     tags: stringType,
     latitude: flickrNum,
     longitude: flickrNum,
+    datetaken: stringType,
+    datetakenunknown: flickrNum,
+    dateupload: flickrNum,
+    lastupdate: flickrNum,
   };
   st.desc.forEachField((name, type) => {
     newFields[name] = type;
@@ -70,6 +74,9 @@ const imageType = makeUnionType(sizeTypes.map(st => {
 
   return makeStructType('', fieldNames, fieldTypes);
 }));
+
+const nsInSecond = 10e9;
+const nsInMillisecond = 10e6;
 
 main().catch(ex => {
   console.error(ex);
@@ -93,7 +100,13 @@ async function main(): Promise<void> {
         title: v.title,
         tags: new Set(v.tags ? v.tags.split(' ') : []),
         sizes: getSizes(v),
+        datePublished: newDate(Number(v.dateupload) * nsInSecond),
+        dateUpdated: newDate(Number(v.lastupdate) * nsInSecond),
       };
+
+      if (!v.datetakenunknown) {
+        photo.dateTaken = newDate(Date.parse(v.datetaken) * nsInMillisecond);
+      }
 
       // Flickr API always includes a geoposition, but sometimes it is zero.
       const geo = (getGeo(v):Object);
@@ -129,4 +142,8 @@ function getSizes(input: Object): Map<Struct, string> {
   });
   // $FlowIssue: Does not understand that filter removes all null values.
   return new Map(a.filter(kv => kv));
+}
+
+function newDate(nsSinceEpoch: number): Struct {
+  return newStruct('Date', {nsSinceEpoch});
 }
