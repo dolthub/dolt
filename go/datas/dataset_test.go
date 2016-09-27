@@ -168,3 +168,22 @@ func TestHeadValueFunctions(t *testing.T) {
 	_, ok = ds2.MaybeHeadValue()
 	assert.False(ok)
 }
+
+func TestIsValidDatasetName(t *testing.T) {
+	assert := assert.New(t)
+	cases := []struct {
+		name  string
+		valid bool
+	}{
+		{"foo", true},
+		{"foo/bar", true},
+		{"f1", true},
+		{"1f", true},
+		{"", false},
+		{"f!!", false},
+	}
+	for _, c := range cases {
+		assert.Equal(c.valid, IsValidDatasetName(c.name),
+			"Expected %s validity to be %t", c.name, c.valid)
+	}
+}

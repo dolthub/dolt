@@ -49,29 +49,17 @@ func index() (win bool) {
 	defer db.Close()
 
 	var outDS datas.Dataset
-	if !datas.DatasetFullRe.MatchString(*outDSStr) {
+	if !datas.IsValidDatasetName(*outDSStr) {
 		fmt.Fprintf(os.Stderr, "Invalid output dataset name: %s\n", *outDSStr)
 		return
 	} else {
 		outDS = db.GetDataset(*outDSStr)
 	}
 
-	inputs := []types.Value{}
-	for i := 0; i < flag.NArg(); i++ {
-		p, err := spec.NewAbsolutePath(flag.Arg(i))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid input path '%s', error: %s\n", flag.Arg(i), err)
-			return
-		}
-
-		v := p.Resolve(db)
-		if v == nil {
-			fmt.Fprintf(os.Stderr, "Input path '%s' does not exist in '%s'", flag.Arg(i), *dbStr)
-			return
-		}
-
-		inputs = append(inputs, v)
-		continue
+	inputs, err := spec.ReadAbsolutePaths(db, flag.Args()...)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		return
 	}
 
 	sizeType := types.MakeStructTypeFromFields("", types.FieldMap{

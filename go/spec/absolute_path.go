@@ -98,3 +98,21 @@ func (p AbsolutePath) String() (str string) {
 
 	return str + p.path.String()
 }
+
+func ReadAbsolutePaths(db datas.Database, paths ...string) ([]types.Value, error) {
+	r := make([]types.Value, 0, len(paths))
+	for _, ps := range paths {
+		p, err := NewAbsolutePath(ps)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid input path '%s'", ps)
+		}
+
+		v := p.Resolve(db)
+		if v == nil {
+			return nil, fmt.Errorf("Input path '%s' does not exist in database", ps)
+		}
+
+		r = append(r, v)
+	}
+	return r, nil
+}

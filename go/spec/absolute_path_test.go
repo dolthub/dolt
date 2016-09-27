@@ -80,6 +80,33 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(nil, "#"+types.String("baz").Hash().String()+"[0]")
 }
 
+func TestReadAbsolutePaths(t *testing.T) {
+	assert := assert.New(t)
+
+	s0, s1 := types.String("foo"), types.String("bar")
+	list := types.NewList(s0, s1)
+
+	db := datas.NewDatabase(chunks.NewMemoryStore())
+	ds := db.GetDataset("ds")
+	ds, err := db.CommitValue(ds, list)
+	assert.NoError(err)
+
+	vals, err := ReadAbsolutePaths(db, "ds.value[0]", "ds.value[1]")
+	assert.NoError(err)
+
+	assert.Equal(2, len(vals))
+	assert.Equal("foo", string(vals[0].(types.String)))
+	assert.Equal("bar", string(vals[1].(types.String)))
+
+	vals, err = ReadAbsolutePaths(db, "!!#")
+	assert.Nil(vals)
+	assert.Equal("Invalid input path '!!#'", err.Error())
+
+	vals, err = ReadAbsolutePaths(db, "invalid.monkey")
+	assert.Nil(vals)
+	assert.Equal("Input path 'invalid.monkey' does not exist in database", err.Error())
+}
+
 func TestAbsolutePathParseErrors(t *testing.T) {
 	assert := assert.New(t)
 

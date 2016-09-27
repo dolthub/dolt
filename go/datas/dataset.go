@@ -84,3 +84,7 @@ func (ds Dataset) HeadValue() types.Value {
 	c := ds.Head()
 	return c.Get(ValueField)
 }
+
+func IsValidDatasetName(name string) bool {
+	return DatasetFullRe.MatchString(name)
+}
