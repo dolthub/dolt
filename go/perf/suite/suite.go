@@ -77,6 +77,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -130,6 +131,7 @@ type PerfSuite struct {
 	tempFiles []*os.File
 	tempDirs  []string
 	paused    time.Duration
+	datasetID string
 }
 
 // SetupRepSuite has a SetupRep method, which runs every repetition of the test, i.e. -perf.repeat times in total.
@@ -170,6 +172,10 @@ func (r nopWriter) Write(p []byte) (int, error) {
 func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	assert := assert.New(t)
 
+	if !assert.NotEqual("", datasetID) {
+		return
+	}
+
 	// Piggy-back off the go test -v flag.
 	verboseFlag := flag.Lookup("test.v")
 	assert.NotNil(verboseFlag)
@@ -209,6 +215,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			os.RemoveAll(d)
 		}
 	}()
+
+	suite.datasetID = datasetID
 
 	// This is the database the perf test results are written to.
 	db, err := spec.GetDatabase(*perfFlag)
@@ -338,20 +346,28 @@ func (suite *PerfSuite) NewAssert() *assert.Assertions {
 	return assert.New(suite.T)
 }
 
-// TempFile creates a temporary file, which will be automatically cleaned up by the perf test suite.
-func (suite *PerfSuite) TempFile(prefix string) *os.File {
-	f, err := ioutil.TempFile("", prefix)
+// TempFile creates a temporary file, which will be automatically cleaned up by
+// the perf test suite. Files will be prefixed with the test's dataset ID
+func (suite *PerfSuite) TempFile() *os.File {
+	f, err := ioutil.TempFile("", suite.tempPrefix())
 	assert.NoError(suite.T, err)
 	suite.tempFiles = append(suite.tempFiles, f)
 	return f
 }
 
-// TempDir creates a temporary directory, which will be automatically cleaned up by the perf test suite.
-func (suite *PerfSuite) TempDir(prefix string) string {
-	d, err := ioutil.TempDir("", prefix)
+// TempDir creates a temporary directory, which will be automatically cleaned
+// up by the perf test suite. Directories will be prefixed with the test's
+// dataset ID.
+func (suite *PerfSuite) TempDir() string {
+	d, err := ioutil.TempDir("", suite.tempPrefix())
 	assert.NoError(suite.T, err)
 	suite.tempDirs = append(suite.tempDirs, d)
 	return d
+}
+
+func (suite *PerfSuite) tempPrefix() string {
+	sep := fmt.Sprintf("%c", os.PathSeparator)
+	return strings.Replace(fmt.Sprintf("perf.%s.", suite.datasetID), sep, ".", -1)
 }
 
 // Pause pauses the test timer while fn is executing. Useful for omitting long setup code (e.g. copying files) from the test elapsed time.
@@ -359,6 +375,35 @@ func (suite *PerfSuite) Pause(fn func()) {
 	start := time.Now()
 	fn()
 	suite.paused += time.Since(start)
+}
+
+// OpenGlob opens the concatenation of all files that match pattern, returned
+// as []io.Reader so it can be used immediately with io.MultiReader.
+//
+// Large CSV files in testdata are broken up into foo.a, foo.b, etc to get
+// around GitHub file size restrictions.
+func (s *PerfSuite) OpenGlob(pattern ...string) []io.Reader {
+	assert := s.NewAssert()
+
+	glob, err := filepath.Glob(path.Join(pattern...))
+	assert.NoError(err)
+
+	files := make([]io.Reader, len(glob))
+	for i, m := range glob {
+		f, err := os.Open(m)
+		assert.NoError(err)
+		files[i] = f
+	}
+
+	return files
+}
+
+// CloseGlob closes all of the files, designed to be used with OpenGlob.
+func (s *PerfSuite) CloseGlob(files []io.Reader) {
+	assert := s.NewAssert()
+	for _, f := range files {
+		assert.NoError(f.(*os.File).Close())
+	}
 }
 
 func callSafe(name string, fun reflect.Value, args ...interface{}) error {
@@ -437,7 +482,7 @@ func (suite *PerfSuite) startServer() (host string, stopFn func()) {
 	if *perfMemFlag {
 		chunkStore = chunks.NewMemoryStore()
 	} else {
-		ldbDir := suite.TempDir("suite.suite")
+		ldbDir := suite.TempDir()
 		chunkStore = chunks.NewLevelDBStoreUseFlags(ldbDir, "")
 	}
 

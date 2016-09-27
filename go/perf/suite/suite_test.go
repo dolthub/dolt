@@ -24,25 +24,57 @@ type testSuite struct {
 	foo, bar, abc, def, nothing, testimate int
 }
 
-// This is the only test that does anything interesting. The others are just to test naming.
-func (s *testSuite) TestInterestingStuff() {
+func (s *testSuite) TestNonEmptyPaths() {
 	assert := s.NewAssert()
-	assert.NotNil(s.T)
-	assert.NotNil(s.W)
 	assert.NotEqual("", s.AtticLabs)
 	assert.NotEqual("", s.Testdata)
 	assert.NotEqual("", s.DatabaseSpec)
+}
 
+func (s *testSuite) TestDatabase() {
+	assert := s.NewAssert()
 	val := types.Bool(true)
 	r := s.Database.WriteValue(val)
 	assert.True(s.Database.ReadValue(r.TargetHash()).Equals(val))
+}
 
+func (s *testSuite) TestTempFile() {
+	s.tempFileName = s.TempFile().Name()
+	s.tempDir = s.TempDir()
+}
+
+func (s *testSuite) TestGlob() {
+	assert := s.NewAssert()
+	f := s.TempFile()
+	f.Close()
+
+	create := func(suffix string) {
+		f, err := os.Create(f.Name() + suffix)
+		assert.NoError(err)
+		f.Close()
+	}
+
+	create("a")
+	create(".a")
+	create(".b")
+
+	glob := s.OpenGlob(f.Name() + ".*")
+	assert.Equal(2, len(glob))
+	assert.Equal(f.Name()+".a", glob[0].(*os.File).Name())
+	assert.Equal(f.Name()+".b", glob[1].(*os.File).Name())
+
+	s.CloseGlob(glob)
+	b := make([]byte, 16)
+	_, err := glob[0].Read(b)
+	assert.Error(err)
+	_, err = glob[1].Read(b)
+	assert.Error(err)
+}
+
+func (s *testSuite) TestPause() {
 	s.Pause(func() {
 		s.waitForSmidge()
 	})
-
-	s.tempFileName = s.TempFile("suite.suite_test").Name()
-	s.tempDir = s.TempDir("suite.suite_test")
 }
 
 func (s *testSuite) TestFoo() {
@@ -129,7 +161,17 @@ func runTestSuite(t *testing.T, mem bool) {
 	s := &testSuite{}
 	Run("ds", t, s)
 
-	expectedTests := []string{"Abc", "Bar", "Def", "Foo", "InterestingStuff"}
+	expectedTests := []string{
+		"Abc",
+		"Bar",
+		"Database",
+		"Def",
+		"Foo",
+		"Glob",
+		"NonEmptyPaths",
+		"Pause",
+		"TempFile",
+	}
 
 	// The temp file and dir should have been cleaned up.
 	_, err = os.Stat(s.tempFileName)
@@ -192,7 +234,7 @@ func runTestSuite(t *testing.T, mem bool) {
 			assert.True(getOrFail(times, "total").(types.Number) > 0)
 
 			paused := getOrFail(times, "paused").(types.Number)
-			if k == types.String("InterestingStuff") {
+			if k == types.String("Pause") {
 				assert.True(paused > 0)
 			} else {
 				assert.True(paused == 0)

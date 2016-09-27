@@ -20,6 +20,7 @@ import subprocess
 PACKAGES = [
     './go/types/perf',
     './samples/go/csv/csv-import',
+    './samples/go/url-fetch/perf',
 ]
 
 # 'go test' timeout. Go's default is 10m, which isn't long enough.
