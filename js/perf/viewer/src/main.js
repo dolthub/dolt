@@ -62,9 +62,10 @@ function load() {
   loadDataset(datasets[0]);
 }
 
-async function loadDataset(ds: string) {
-  const dsSpec = DatasetSpec.parse(ds);
-  const [perfData, gitRevs] = await getPerfHistory(dsSpec.dataset());
+async function loadDataset(dsID: string) {
+  const dsSpec = DatasetSpec.parse(dsID);
+  const [, ds] = dsSpec.dataset();
+  const [perfData, gitRevs] = await getPerfHistory(ds);
 
   // git describe --always uses the first 7 characters.
   const labels = gitRevs.map(rev => rev.slice(0, 7));
@@ -103,7 +104,7 @@ async function loadDataset(ds: string) {
     datapoints.set(testNames[i], testChartData[i]);
   }
 
-  render(ds, labels, datapoints);
+  render(dsID, labels, datapoints);
 }
 
 // Returns the history of perf data with their git revisions, from oldest to newest.

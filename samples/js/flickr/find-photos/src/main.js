@@ -82,7 +82,7 @@ async function main(): Promise<void> {
     return db.close();
   }
   const outSpec = DatasetSpec.parse(args._[1]);
-  const output = outSpec.dataset();
+  const [outDB, output] = outSpec.dataset();
   let result = Promise.resolve(new Set());
 
   // TODO: How to report progress?
@@ -112,7 +112,9 @@ async function main(): Promise<void> {
     return false;
   });
 
-  return output.commit(await result).then(() => db.close());
+  return outDB.commit(output, await result)
+    .then(() => db.close())
+    .then(() => outDB.close());
 }
 
 function getGeo(input: Object): Struct {

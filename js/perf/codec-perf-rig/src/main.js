@@ -73,11 +73,11 @@ async function main(): Promise<void> {
       const valueFn = valueFns[j];
 
       // Build One-Time
-      let ds = notNull(DatasetSpec.parse('mem::csv')).dataset();
+      let [db, ds] = notNull(DatasetSpec.parse('mem::csv')).dataset();
 
       let t1 = Date.now();
       let col = buildFns[i](buildCount, valueFn);
-      ds = await ds.commit(col);
+      ds = await db.commit(ds, col);
       const buildDuration = Date.now() - t1;
 
       // Read
@@ -87,10 +87,10 @@ async function main(): Promise<void> {
       const readDuration = Date.now() - t1;
 
       // Build Incrementally
-      ds = notNull(DatasetSpec.parse('mem::csv')).dataset();
+      [db, ds] = notNull(DatasetSpec.parse('mem::csv')).dataset();
       t1 = Date.now();
       col = await buildIncrFns[i](insertCount, valueFn);
-      ds = await ds.commit(col);
+      ds = await db.commit(ds, col);
       const incrDuration = Date.now() - t1;
 
       const elementSize = elementSizes[j];
@@ -106,12 +106,12 @@ async function main(): Promise<void> {
   const blobSizeStr = humanize.numberFormat(blobSize / 1000000);
   console.log(`Testing Blob: \t\tbuild ${blobSizeStr} MB\t\t\tscan ${blobSizeStr} MB`);
 
-  let ds = notNull(DatasetSpec.parse('mem::csv')).dataset();
+  const [db, ds] = notNull(DatasetSpec.parse('mem::csv')).dataset();
   const blobBytes = makeBlobBytes(blobSize);
 
   let t1 = Date.now();
   let blob = new Blob(blobBytes);
-  ds = await ds.commit(blob);
+  await db.commit(ds, blob);
   const buildDuration = Date.now() - t1;
 
   t1 = Date.now();

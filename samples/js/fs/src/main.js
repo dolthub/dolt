@@ -78,10 +78,10 @@ async function main(): Promise<void> {
 
   startTime = Date.now();
 
-  const ds = spec.dataset();
-  const de = await processPath(path, ds.database);
+  const [db, ds] = spec.dataset();
+  const de = await processPath(path, db);
   if (de) {
-    await ds.commit(de);
+    await db.commit(ds, de);
     process.stdout.write('\ndone\n');
   }
 

@@ -42,9 +42,9 @@ function main(): Promise<void> {
     return Promise.resolve();
   }
 
-  const set = spec.dataset();
+  const [db, set] = spec.dataset();
   return getBlob(url)
-    .then(b => set.commit(b))
+    .then(b => db.commit(set, b))
     .then(() => {
       process.stderr.write(clearLine + 'Done\n');
     });

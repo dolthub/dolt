@@ -115,8 +115,9 @@ export class DatasetSpec {
   /**
    * Returns a new Dataset based on this DatasetSpec.
    */
-  dataset(): Dataset {
-    return new Dataset(this.database.database(), this.name);
+  dataset(): [Database, Dataset] {
+    const db = this.database.database();
+    return [db, db.getDataset(this.name)];
   }
 
   /**
@@ -126,8 +127,8 @@ export class DatasetSpec {
    * The caller should always call `close()` when done.
    */
   value(): Promise<[Database, Value | null]> {
-    const db = this.database.database();
-    return this.dataset().head().then(commit => [db, commit ? commit.value : null]);
+    const [db, ds] = this.dataset();
+    return ds.head().then(commit => [db, commit ? commit.value : null]);
   }
 }
 

@@ -10,7 +10,6 @@ import {equals} from './compare.js';
 
 import {invariant, notNull} from './assert.js';
 import AbsolutePath from './absolute-path.js';
-import Commit from './commit.js';
 import {getHash} from './get-hash.js';
 import {stringLength} from './hash.js';
 import List from './list.js';
@@ -35,14 +34,15 @@ suite('AbsolutePath', () => {
     const list = new List([s0, s1]);
     const emptySet = new Set();
 
-    let db = new TestDatabase();
+    const db = new TestDatabase();
     db.writeValue(s0);
     db.writeValue(s1);
     db.writeValue(list);
     db.writeValue(emptySet);
 
-    db = await db.commit('ds', new Commit(list));
-    const head = await db.head('ds');
+    let ds = db.getDataset('ds');
+    ds = await db.commit(ds, list);
+    const head = await ds.head();
     invariant(head);
 
     const resolvesTo = async (exp: Value | null, str: string) => {

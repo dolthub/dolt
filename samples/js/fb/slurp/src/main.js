@@ -49,13 +49,13 @@ async function main(): Promise<void> {
     throw 'invalid destination dataset spec';
   }
 
-  const out = outSpec.dataset();
+  const [db, out] = outSpec.dataset();
   const [user, photos] = await Promise.all([
     getUser(),
     getPhotos(),
     // TODO: Add more object types here
   ]);
-  await out.commit(newStruct('', {user, photos}));
+  await db.commit(out, newStruct('', {user, photos}));
   process.stdout.write(clearLine);
   return;
 }

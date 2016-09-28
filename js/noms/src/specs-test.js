@@ -6,8 +6,6 @@
 
 import {assert} from 'chai';
 import {suite, test} from 'mocha';
-
-import Dataset from './dataset.js';
 import {getHash} from './get-hash.js';
 import List from './list.js';
 import {DatabaseSpec, DatasetSpec, PathSpec} from './specs.js';
@@ -42,7 +40,8 @@ suite('Specs', () => {
     let [, head] = await spec.value();
     assert.strictEqual(null, head);
 
-    await spec.dataset().commit('Commit Value');
+    const [db, ds] = await spec.dataset();
+    await db.commit(ds, 'Commit Value');
     [, head] = await spec.value();
     assert.strictEqual('Commit Value', head);
   });
@@ -65,8 +64,8 @@ suite('Specs', () => {
     let [db, value] = await spec.value();
     assert.strictEqual(null, value);
 
-    const ds = new Dataset(db, 'test');
-    await ds.commit(new List([42]));
+    const ds = await db.getDataset('test');
+    await db.commit(ds, new List([42]));
     [db, value] = await spec.value();
     assert.strictEqual(42, value);
   });

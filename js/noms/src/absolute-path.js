@@ -84,7 +84,7 @@ export default class AbsolutePath {
   async resolve(db: Database): Promise<Value | null> {
     let val = null;
     if (this.dataset !== '') {
-      val = await db.head(this.dataset);
+      val = await db.getDataset(this.dataset).head();
     } else if (this.hash !== null) {
       val = await db.readValue(this.hash);
     } else {

@@ -6,6 +6,7 @@
 
 import argv from 'yargs';
 import {
+  Database,
   Dataset,
   DatasetSpec,
 } from '@attic/noms';
@@ -29,11 +30,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const ds = spec.dataset();
-  await increment(ds);
+  const [db, ds] = spec.dataset();
+  await increment(db, ds);
 }
 
-async function increment(ds: Dataset): Promise<Dataset> {
+async function increment(db: Database, ds: Dataset): Promise<Dataset> {
   let lastVal = 0;
 
   const value = await ds.headValue();
@@ -42,7 +43,7 @@ async function increment(ds: Dataset): Promise<Dataset> {
   }
 
   const newVal = lastVal + 1;
-  ds = await ds.commit(newVal);
+  ds = await db.commit(ds, newVal);
   process.stdout.write(`${ newVal }\n`);
   return ds;
 }
