@@ -11,9 +11,11 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/util/verbose"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -32,11 +34,13 @@ func setupCommitFlags() *flag.FlagSet {
 	commitFlagSet := flag.NewFlagSet("commit", flag.ExitOnError)
 	commitFlagSet.BoolVar(&allowDupe, "allow-dupe", false, "creates a new commit, even if it would be identical (modulo metadata and parents) to the existing HEAD.")
 	spec.RegisterCommitMetaFlags(commitFlagSet)
+	verbose.RegisterVerboseFlags(commitFlagSet)
 	return commitFlagSet
 }
 
 func runCommit(args []string) int {
-	db, ds, err := spec.GetDataset(args[len(args)-1])
+	cfg := config.NewResolver()
+	db, ds, err := cfg.GetDataset(args[len(args)-1])
 	d.CheckError(err)
 	defer db.Close()
 

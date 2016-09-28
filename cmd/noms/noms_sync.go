@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/go/util/verbose"
 	humanize "github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -37,14 +39,14 @@ func setupSyncFlags() *flag.FlagSet {
 	syncFlagSet := flag.NewFlagSet("sync", flag.ExitOnError)
 	syncFlagSet.IntVar(&p, "p", 512, "parallelism")
 	spec.RegisterDatabaseFlags(syncFlagSet)
+	verbose.RegisterVerboseFlags(syncFlagSet)
 	profile.RegisterProfileFlags(syncFlagSet)
 	return syncFlagSet
 }
 
 func runSync(args []string) int {
-	spec, err := spec.NewResolver()
-	d.CheckErrorNoUsage(err)
-	sourceStore, sourceObj, err := spec.GetPath(args[0])
+	cfg := config.NewResolver()
+	sourceStore, sourceObj, err := cfg.GetPath(args[0])
 	d.CheckError(err)
 	defer sourceStore.Close()
 
@@ -52,7 +54,7 @@ func runSync(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDB, sinkDataset, err := spec.GetDataset(args[1])
+	sinkDB, sinkDataset, err := cfg.GetDataset(args[1])
 	d.CheckError(err)
 	defer sinkDB.Close()
 

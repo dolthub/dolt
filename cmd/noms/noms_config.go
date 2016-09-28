@@ -10,7 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/cmd/util"
 	flag "github.com/juju/gnuflag"
-	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -28,8 +28,8 @@ func setupConfigFlags() *flag.FlagSet {
 }
 
 func runConfig(args []string) int {
-	c, err := spec.FindNomsConfig()
-	if err == spec.NoConfig {
+	c, err := config.FindNomsConfig()
+	if err == config.NoConfig {
 		fmt.Fprintf(os.Stdout, "no config active\n")
 	} else {
 		d.CheckError(err)

@@ -10,12 +10,13 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/attic-labs/noms/go/walk"
 	humanize "github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
@@ -41,6 +42,7 @@ func setupUpdateFlags() *flag.FlagSet {
 	flagSet.StringVar(&inPathArg, "in-path", "", "a value to search for items to index within ")
 	flagSet.StringVar(&outDsArg, "out-ds", "", "name of dataset to save the results to")
 	flagSet.StringVar(&relPathArg, "by", "", "a path relative to all the items in <in-path> to index by")
+	verbose.RegisterVerboseFlags(flagSet)
 	profile.RegisterProfileFlags(flagSet)
 	return flagSet
 }
@@ -70,7 +72,8 @@ func runUpdate(args []string) int {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	db, rootObject, err := spec.GetPath(inPathArg)
+	cfg := config.NewResolver()
+	db, rootObject, err := cfg.GetPath(inPathArg)
 	d.Chk.NoError(err)
 
 	if rootObject == nil {

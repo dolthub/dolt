@@ -1,4 +1,4 @@
-package spec
+package config
 
 import (
 	"bytes"
@@ -7,18 +7,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
 	File    string
-	Default DefaultConfig
 	Db      map[string]DbConfig
-}
-
-type DefaultConfig struct {
-	Url string
 }
 
 type DbConfig struct {
@@ -27,6 +24,7 @@ type DbConfig struct {
 
 const (
 	NomsConfigFile = ".nomsconfig"
+	DefaultDbAlias = "default"
 )
 
 var NoConfig = errors.New(fmt.Sprintf("no %s found", NomsConfigFile))
@@ -93,17 +91,16 @@ func (c *Config) WriteTo(configHome string) (string, error) {
 // Replace relative directory in path part of spec with an absolute
 // directory. Assumes the path is relative to the location of the config file
 func absDbSpec(configHome string, url string) string {
-	dbSpec, err := parseDatabaseSpec(url)
+	dbSpec, err := spec.ParseDatabaseSpec(url)
 	if err != nil {
 		return url
 	}
 	if dbSpec.Protocol != "ldb" {
 		return url
 	}
-	path := filepath.Join(configHome, dbSpec.Path)
-	if err != nil {
-		fmt.Println(err)
-		return url
+	path := dbSpec.Path
+	if !strings.HasPrefix(path, "/") {
+		path = filepath.Join(configHome, path)
 	}
 	return "ldb:" + path
 }
@@ -116,7 +113,6 @@ func qualifyPaths(configPath string, c *Config) (*Config, error) {
 	dir := filepath.Dir(file)
 	qc := *c
 	qc.File = file
-	qc.Default.Url = absDbSpec(dir, c.Default.Url)
 	for k, r := range c.Db {
 		qc.Db[k] = DbConfig{ absDbSpec(dir, r.Url) }
 	}
@@ -134,8 +130,6 @@ func (c *Config) String() string {
 
 func (c *Config) writeableString() string {
 	var buffer bytes.Buffer
-	buffer.WriteString("[default]\n")
-	buffer.WriteString(fmt.Sprintf("\t" + `url = "%s"`+"\n", c.Default.Url))
 	for k, r := range c.Db {
 		buffer.WriteString(fmt.Sprintf("[db.%s]\n", k))
 		buffer.WriteString(fmt.Sprintf("\t" + `url = "%s"`+"\n", r.Url))

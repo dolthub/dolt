@@ -13,12 +13,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/jsontonoms"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -32,13 +34,15 @@ func main() {
 
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	spec.RegisterDatabaseFlags(flag.CommandLine)
+	verbose.RegisterVerboseFlags(flag.CommandLine)
 	flag.Parse(true)
 
 	if len(flag.Args()) != 2 {
 		d.CheckError(errors.New("expected url and dataset flags"))
 	}
 
-	db, ds, err := spec.GetDataset(flag.Arg(1))
+	cfg := config.NewResolver()
+	db, ds, err := cfg.GetDataset(flag.Arg(1))
 	d.CheckError(err)
 	defer db.Close()
 

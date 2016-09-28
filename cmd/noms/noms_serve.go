@@ -10,10 +10,12 @@ import (
 	"syscall"
 
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
+	"github.com/attic-labs/noms/go/util/verbose"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -27,20 +29,24 @@ var nomsServe = &util.Command{
 	Short:     "Serves a Noms database over HTTP",
 	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the database argument.",
 	Flags:     setupServeFlags,
-	Nargs:     1,
+	Nargs:     0,
 }
 
 func setupServeFlags() *flag.FlagSet {
 	serveFlagSet := flag.NewFlagSet("serve", flag.ExitOnError)
 	serveFlagSet.IntVar(&port, "port", 8000, "port to listen on for HTTP requests")
 	spec.RegisterDatabaseFlags(serveFlagSet)
+	verbose.RegisterVerboseFlags(serveFlagSet)
 	return serveFlagSet
 }
 
 func runServe(args []string) int {
-	spec, err := spec.NewResolver()
-	d.CheckErrorNoUsage(err)
-	cs, err := spec.GetChunkStore(args[0])
+	cfg := config.NewResolver()
+	db := ""
+	if len(args) > 0 {
+		db = args[0]
+	}
+	cs, err := cfg.GetChunkStore(db)
 	d.CheckError(err)
 	server := datas.NewRemoteDatabaseServer(cs, port)
 

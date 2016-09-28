@@ -9,10 +9,11 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/verbose"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -28,6 +29,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "\tlist-persons")
 	}
 
+	verbose.RegisterVerboseFlags(flag.CommandLine)
 	flag.Parse(true)
 
 	if flag.NArg() == 0 {
@@ -40,7 +42,8 @@ func main() {
 		return
 	}
 
-	db, ds, err := spec.GetDataset(*dsStr)
+	cfg := config.NewResolver()
+	db, ds, err := cfg.GetDataset(*dsStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return

@@ -13,12 +13,13 @@ import (
 
 	"github.com/attic-labs/noms/cmd/noms/diff"
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/attic-labs/noms/go/util/writers"
 	flag "github.com/juju/gnuflag"
 	"github.com/mgutz/ansi"
@@ -54,14 +55,14 @@ func setupLogFlags() *flag.FlagSet {
 	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarchy on left side of output")
 	logFlagSet.BoolVar(&showValue, "show-value", false, "show commit value rather than diff information -- this is temporary")
 	outputpager.RegisterOutputpagerFlags(logFlagSet)
+	verbose.RegisterVerboseFlags(logFlagSet)
 	return logFlagSet
 }
 
 func runLog(args []string) int {
 	useColor = shouldUseColor()
-	spec, err := spec.NewResolver()
-	d.CheckErrorNoUsage(err)
-	database, value, err := spec.GetPath(args[0])
+	cfg := config.NewResolver()
+	database, value, err := cfg.GetPath(args[0])
 
 	if err != nil {
 		d.CheckErrorNoUsage(err)

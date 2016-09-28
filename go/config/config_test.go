@@ -1,4 +1,4 @@
-package spec
+package config
 
 import (
 	"io/ioutil"
@@ -8,12 +8,14 @@ import (
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
+	"github.com/attic-labs/noms/go/spec"
 )
 
 const (
-	ldbSpec    = "ldb:./local"
-	memSpec    = "mem"
-	httpSpec   = "http://test.com:8080/foo"
+	ldbSpec     = "ldb:./local"
+	memSpec     = "mem"
+	httpSpec    = "http://test.com:8080/foo"
+	ldbAbsSpec  = "ldb:/tmp/noms"
 	remoteAlias = "origin"
 )
 
@@ -22,20 +24,34 @@ var (
 
 	ldbConfig = &Config{
 		"",
-		DefaultConfig{ ldbSpec },
-		map[string]DbConfig{ remoteAlias: { httpSpec }},
+		map[string]DbConfig{
+			DefaultDbAlias: { ldbSpec },
+			remoteAlias: { httpSpec },
+		},
 	}
 
 	httpConfig = &Config{
 		"",
-		DefaultConfig{ httpSpec },
-		map[string]DbConfig{ remoteAlias: { ldbSpec }},
+		map[string]DbConfig{
+			DefaultDbAlias: { httpSpec },
+			remoteAlias: { ldbSpec },
+		},
 	}
 
 	memConfig = &Config{
 		"",
-		DefaultConfig{ memSpec },
-		map[string]DbConfig{ remoteAlias: { httpSpec }},
+		map[string]DbConfig{
+			DefaultDbAlias: { memSpec },
+			remoteAlias: { httpSpec },
+		},
+	}
+
+	ldbAbsConfig = &Config{
+		"",
+		map[string]DbConfig{
+			DefaultDbAlias: { ldbAbsSpec },
+			remoteAlias: { httpSpec },
+		},
 	}
 )
 
@@ -61,24 +77,28 @@ func qualifyFilePath(assert *assert.Assertions, path string) string {
 }
 
 func assertDbSpecsEquiv(assert *assert.Assertions, expected string, actual string) {
-	e, err := parseDatabaseSpec(expected)
+	e, err := spec.ParseDatabaseSpec(expected)
 	assert.NoError(err)
 	if e.Protocol != "ldb" {
 		assert.Equal(expected, actual)
 	} else {
-		a, err := parseDatabaseSpec(actual)
+		a, err := spec.ParseDatabaseSpec(actual)
 		assert.NoError(err)
-		// remove leading . or ..
-		ePath := strings.TrimPrefix(strings.TrimPrefix(e.Path, "."), ".")
-		assert.True(e.Protocol == a.Protocol && strings.HasSuffix(a.Path, ePath),
-			"expected suffix: " + ePath + "; actual path: " + actual,
-		)
+		assert.Equal(e.Protocol, a.Protocol, actual)
+		if strings.HasPrefix(e.Path, "/") {
+			assert.Equal(e.Path, a.Path, actual)
+		} else {
+			// If the original path is relative, it will return as absolute.
+			// All we do here is ensure that the path suffix is the same.
+			ePath := strings.TrimPrefix(strings.TrimPrefix(e.Path, "."), ".")
+			assert.True(strings.HasSuffix(a.Path, ePath),
+				"expected: %s; actual: %s", ePath, actual)
+		}
 	}
 }
 
 func validateConfig(assert *assert.Assertions, file string, e *Config, a *Config) {
 	assert.Equal(qualifyFilePath(assert, file), qualifyFilePath(assert, a.File))
-	assertDbSpecsEquiv(assert, e.Default.Url, a.Default.Url)
 	assert.Equal(len(e.Db), len(a.Db))
 	for k, er := range e.Db {
 		ar, ok := a.Db[k]
@@ -158,7 +178,7 @@ func TestQualifyingPaths(t *testing.T) {
 	path := getPaths(assert, "home")
 	assert.NoError(os.Chdir(path.home))
 
-	for _, tc := range []*Config{ httpConfig, memConfig } {
+	for _, tc := range []*Config{ httpConfig, memConfig, ldbAbsConfig } {
 		writeConfig(assert, tc, path.home)
 		ac, err := FindNomsConfig()
 		assert.NoError(err, path.config)
@@ -176,5 +196,3 @@ func TestCwd(t *testing.T) {
 
 	assert.Equal(cwd, abs)
 }
-
-

@@ -18,10 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -126,7 +126,9 @@ func init() {
 }
 
 func start(dataset string, mount mount) {
-	db, ds, err := spec.GetDataset(dataset)
+	cfg := config.NewResolver()
+	db, ds, err := cfg.GetDataset(dataset)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
@@ -286,7 +288,7 @@ func (fs *nomsFS) Create(path string, flags uint32, mode uint32, context *fuse.C
 	defer fs.mdLock.Unlock()
 	np, code := fs.createCommon(path, mode, func() types.Value {
 		blob := types.NewEmptyBlob()
-		return types.NewStructWithType(fileType, types.ValueSlice{fs.db.WriteValue(blob)})
+		return types.NewStructWithType(fileType, types.ValueSlice{fs.ds.Database().WriteValue(blob)})
 	})
 	if code != fuse.OK {
 		return nil, code

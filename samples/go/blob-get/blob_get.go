@@ -11,11 +11,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/go/util/verbose"
 	humanize "github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -27,15 +29,17 @@ func main() {
 	}
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
+	verbose.RegisterVerboseFlags(flag.CommandLine)
 	flag.Parse(true)
 
 	if len(flag.Args()) != 2 {
 		d.CheckError(errors.New("expected dataset and file flags"))
 	}
 
+	cfg := config.NewResolver()
 	var blob types.Blob
 	path := flag.Arg(0)
-	if db, val, err := spec.GetPath(path); err != nil {
+	if db, val, err := cfg.GetPath(path); err != nil {
 		d.CheckErrorNoUsage(err)
 	} else if val == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", path))

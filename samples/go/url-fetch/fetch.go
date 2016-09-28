@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -19,6 +20,7 @@ import (
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
+	"github.com/attic-labs/noms/go/util/verbose"
 	human "github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -34,6 +36,7 @@ func main() {
 
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	spec.RegisterDatabaseFlags(flag.CommandLine)
+	verbose.RegisterVerboseFlags(flag.CommandLine)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Fetches a URL, file, or stdin into a noms blob\n\nUsage: %s [--stdin?] [url-or-local-path?] [dataset]\n", os.Args[0])
@@ -48,7 +51,8 @@ func main() {
 
 	start = time.Now()
 
-	db, ds, err := spec.GetDataset(flag.Arg(flag.NArg() - 1))
+	cfg := config.NewResolver()
+	db, ds, err := cfg.GetDataset(flag.Arg(flag.NArg() - 1))
 	d.CheckErrorNoUsage(err)
 	defer db.Close()
 

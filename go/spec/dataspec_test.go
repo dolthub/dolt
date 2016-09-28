@@ -35,7 +35,7 @@ func TestLDBDatabase(t *testing.T) {
 	db.CommitValue(ds, s1Hash)
 	db.Close()
 
-	sp, errRead := parseDatabaseSpec(spec)
+	sp, errRead := ParseDatabaseSpec(spec)
 	assert.NoError(errRead)
 	store, err := sp.Database()
 	assert.NoError(err)
@@ -48,7 +48,7 @@ func TestMemDatabase(t *testing.T) {
 	assert := assert.New(t)
 
 	spec := "mem"
-	sp, err := parseDatabaseSpec(spec)
+	sp, err := ParseDatabaseSpec(spec)
 	assert.NoError(err)
 	store, err := sp.Database()
 	assert.NoError(err)
@@ -126,7 +126,7 @@ func TestLDBObject(t *testing.T) {
 	dataset2.Database().Close()
 
 	spec3 := fmt.Sprintf("ldb:%s::#%s", ldbpath, s1.Hash().String())
-	sp3, err := parsePathSpec(spec3)
+	sp3, err := ParsePathSpec(spec3)
 	assert.NoError(err)
 	database, v3, err := sp3.Value()
 	assert.NoError(err)
@@ -152,7 +152,7 @@ func TestReadHash(t *testing.T) {
 	dataset1.Database().Close()
 
 	spec2 := fmt.Sprintf("ldb:%s::#%s", ldbPath, r1.String())
-	sp2, err := parsePathSpec(spec2)
+	sp2, err := ParsePathSpec(spec2)
 	assert.NoError(err)
 	database, v2, err := sp2.Value()
 	assert.NoError(err)
@@ -166,7 +166,7 @@ func TestDatabaseSpecs(t *testing.T) {
 
 	badSpecs := []string{"mem:stuff", "mem:", "http:", "https:", "random:", "random:random", "/file/ba:d"}
 	for _, spec := range badSpecs {
-		_, err := parseDatabaseSpec(spec)
+		_, err := ParseDatabaseSpec(spec)
 		assert.Error(err, spec)
 	}
 
@@ -188,9 +188,9 @@ func TestDatabaseSpecs(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		dbSpec, err := parseDatabaseSpec(tc.spec)
+		dbSpec, err := ParseDatabaseSpec(tc.spec)
 		assert.NoError(err)
-		assert.Equal(databaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}, dbSpec)
+		assert.Equal(DatabaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}, dbSpec)
 	}
 }
 
@@ -232,7 +232,7 @@ func TestDatasetSpecs(t *testing.T) {
 	for _, tc := range testCases {
 		dsSpec, err := parseDatasetSpec(tc.spec)
 		assert.NoError(err)
-		dbSpec1 := databaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}
+		dbSpec1 := DatabaseSpec{Protocol: tc.scheme, Path: tc.path, accessToken: tc.accessToken}
 		assert.Equal(datasetSpec{DbSpec: dbSpec1, DatasetName: tc.ds}, dsSpec)
 	}
 }
@@ -242,7 +242,7 @@ func TestPathSpec(t *testing.T) {
 
 	badSpecs := []string{"mem::#", "mem::#s", "mem::#foobarbaz", "mem::#wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"}
 	for _, bs := range badSpecs {
-		_, err := parsePathSpec(bs)
+		_, err := ParsePathSpec(bs)
 		assert.Error(err)
 	}
 
@@ -259,11 +259,11 @@ func TestPathSpec(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		dbSpec := databaseSpec{Protocol: tc.scheme, Path: tc.dbPath, accessToken: ""}
+		dbSpec := DatabaseSpec{Protocol: tc.scheme, Path: tc.dbPath, accessToken: ""}
 		path, err := NewAbsolutePath(tc.pathStr)
 		assert.NoError(err)
-		expected := pathSpec{dbSpec, path}
-		actual, err := parsePathSpec(tc.spec)
+		expected := PathSpec{dbSpec, path}
+		actual, err := ParsePathSpec(tc.spec)
 		assert.NoError(err)
 		assert.Equal(expected, actual)
 	}
