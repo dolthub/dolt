@@ -109,14 +109,11 @@ suite('walk', () => {
   });
 
   test('struct', async () => {
-    const t = makeStructType('Thing',
-      ['foo', 'list', 'num'],
-      [
-        stringType,
-        makeListType(numberType),
-        numberType,
-      ]
-    );
+    const t = makeStructType('Thing', {
+      foo: stringType,
+      list: makeListType(numberType),
+      num: numberType,
+    });
 
     const c = createStructClass(t);
     const val = new c({

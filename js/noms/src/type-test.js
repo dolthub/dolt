@@ -31,13 +31,10 @@ suite('Type', () => {
 
     const mapType = makeMapType(stringType, numberType);
     const setType = makeSetType(stringType);
-    const mahType = makeStructType('MahStruct',
-      ['Field1', 'Field2'],
-      [
-        stringType,
-        boolType,
-      ]
-    );
+    const mahType = makeStructType('MahStruct', {
+      Field1: stringType,
+      Field2: boolType,
+    });
     const mapRef = db.writeValue(mapType).targetHash;
     const setRef = db.writeValue(setType).targetHash;
     const mahRef = db.writeValue(mahType).targetHash;
@@ -83,7 +80,7 @@ suite('Type', () => {
   test('verify struct field name', () => {
     function assertInvalid(n: string) {
       assert.throw(() => {
-        makeStructType('S', [n], [stringType]);
+        makeStructType('S', {[n]: stringType});
       });
     }
     assertInvalid('');
@@ -97,7 +94,7 @@ suite('Type', () => {
     assertInvalid('💩');
 
     function assertValid(n: string) {
-      makeStructType('S', [n], [stringType]);
+      makeStructType('S', {[n]: stringType});
     }
     assertValid('a');
     assertValid('A');
@@ -109,7 +106,7 @@ suite('Type', () => {
   test('verify struct name', () => {
     function assertInvalid(n: string) {
       assert.throw(() => {
-        makeStructType(n, [], []);
+        makeStructType(n, {});
       });
     }
     assertInvalid(' ');
@@ -122,7 +119,7 @@ suite('Type', () => {
     assertInvalid('💩');
 
     function assertValid(n: string) {
-      makeStructType(n, [], []);
+      makeStructType(n, {});
     }
     assertValid('');
     assertValid('a');
@@ -145,16 +142,24 @@ suite('Type', () => {
   });
 
   test('union with cycle', () => {
-    const inodeType = makeStructType('Inode', ['attr', 'contents'], [
-      makeStructType('Attr', ['ctime', 'mode', 'mtime'], [numberType, numberType, numberType]),
-      makeUnionType([
-        makeStructType('Directory', ['entries'], [
-          makeMapType(stringType, makeCycleType(1)),
-        ]),
-        makeStructType('File', ['data'], [blobType]),
-        makeStructType('Symlink', ['targetPath'], [stringType]),
+    const inodeType = makeStructType('Inode', {
+      attr: makeStructType('Attr', {
+        ctime: numberType,
+        mode: numberType,
+        mtime: numberType,
+      }),
+      contents: makeUnionType([
+        makeStructType('Directory', {
+          entries: makeMapType(stringType, makeCycleType(1)),
+        }),
+        makeStructType('File', {
+          data: blobType,
+        }),
+        makeStructType('Symlink', {
+          targetPath: stringType,
+        }),
       ]),
-    ]);
+    });
 
     const vr: any = null;
     const t1 = notNull(inodeType.desc.getField('contents'));

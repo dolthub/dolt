@@ -22,21 +22,19 @@ import Ref from './ref.js';
 import {newStruct} from './struct.js';
 
 suite('commit.js', () => {
-  const emptyStructType = makeStructType('', [], []);
+  const emptyStructType = makeStructType('', {});
   test('new Commit', () => {
     function assertTypeEquals(e, a) {
       assert.isTrue(equals(a, e), `Actual: ${a.describe()}\nExpected ${e.describe()}`);
     }
 
-    const commitFieldNames = ['meta', 'parents', 'value'];
-
     const commit = new Commit(1, new Set());
     const at = commit.type;
-    const et = makeStructType('Commit', commitFieldNames, [
-      emptyStructType,
-      makeSetType(makeRefType(makeCycleType(0))),
-      numberType,
-    ]);
+    const et = makeStructType('Commit', {
+      meta: emptyStructType,
+      parents: makeSetType(makeRefType(makeCycleType(0))),
+      value: numberType,
+    });
     assertTypeEquals(et, at);
 
     // Commiting another Number
@@ -48,31 +46,34 @@ suite('commit.js', () => {
     // Now commit a String
     const commit3 = new Commit('Hi', new Set([new Ref(commit2)]));
     const at3 = commit3.type;
-    const et3 = makeStructType('Commit', commitFieldNames, [
-      emptyStructType,
-      makeSetType(makeRefType(makeStructType('Commit', commitFieldNames, [
-        emptyStructType,
-        makeSetType(makeRefType(makeCycleType(0))),
-        makeUnionType([numberType, stringType]),
-      ]))),
-      stringType,
-    ]);
+    const et3 = makeStructType('Commit', {
+      meta: emptyStructType,
+      parents: makeSetType(makeRefType(makeStructType('Commit', {
+        meta: emptyStructType,
+        parents: makeSetType(makeRefType(makeCycleType(0))),
+        value: makeUnionType([numberType, stringType]),
+      }))),
+      value: stringType,
+    });
     assertTypeEquals(et3, at3);
 
     // Now commit a String with MetaInfo
     const meta = newStruct('Meta', {date: 'some date', number: 9});
-    const metaType = makeStructType('Meta', ['date', 'number'], [stringType, numberType]);
+    const metaType = makeStructType('Meta', {
+      date: stringType,
+      number: numberType,
+    });
     const commit4 = new Commit('Hi', new Set([new Ref(commit2)]), meta);
     const at4 = commit4.type;
-    const et4 = makeStructType('Commit', commitFieldNames, [
-      metaType,
-      makeSetType(makeRefType(makeStructType('Commit', commitFieldNames, [
-        makeUnionType([emptyStructType, metaType]),
-        makeSetType(makeRefType(makeCycleType(0))),
-        makeUnionType([numberType, stringType]),
-      ]))),
-      stringType,
-    ]);
+    const et4 = makeStructType('Commit', {
+      meta: metaType,
+      parents: makeSetType(makeRefType(makeStructType('Commit', {
+        meta: makeUnionType([emptyStructType, metaType]),
+        parents: makeSetType(makeRefType(makeCycleType(0))),
+        value: makeUnionType([numberType, stringType]),
+      }))),
+      value: stringType,
+    });
     assertTypeEquals(et4, at4);
   });
 

@@ -43,12 +43,12 @@ const args = argv
 //   entries: Map<String, Cycle<0> | File>,
 // }
 
-const fileType = makeStructType('File', ['content'], [makeRefType(blobType)]);
-const directoryType = makeStructType('Directory',
-  ['entries'],
-  [
-    makeMapType(stringType, makeUnionType([fileType, makeCycleType(0)])),
-  ]);
+const fileType = makeStructType('File', {
+  content: makeRefType(blobType),
+});
+const directoryType = makeStructType('Directory', {
+  entries: makeMapType(stringType, makeUnionType([fileType, makeCycleType(0)])),
+});
 
 const File = createStructClass(fileType);
 const Directory = createStructClass(directoryType);

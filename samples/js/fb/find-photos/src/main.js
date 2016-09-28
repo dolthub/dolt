@@ -31,40 +31,25 @@ main().catch(ex => {
   process.exit(1);
 });
 
-const imageType = makeStructType('',
-  ['height', 'source', 'width'],
-  [
-    numberType,
-    stringType,
-    numberType,
-  ]
-);
+const imageType = makeStructType('', {
+  height: numberType,
+  width: numberType,
+  source: stringType,
+});
 
-const photoType = makeStructType('',
-  ['id', 'images'],
-  [
-    stringType,
-    makeListType(imageType),
-  ]
-);
+const photoType = makeStructType('', {
+  id: stringType,
+  images: makeListType(imageType),
+});
 
-const placeType = makeStructType('',
-  ['place'],
-  [
-    makeStructType('',
-      ['location'],
-      [
-        makeStructType('',
-          ['latitude', 'longitude'],
-          [
-            numberType,
-            numberType,
-          ]
-        ),
-      ]
-    ),
-  ]
-);
+const placeType = makeStructType('', {
+  place: makeStructType('', {
+    location: makeStructType('', {
+      latitude: numberType,
+      longitude: numberType,
+    }),
+  }),
+});
 
 async function main(): Promise<void> {
   const inSpec = DatasetSpec.parse(args._[0]);

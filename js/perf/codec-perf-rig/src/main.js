@@ -139,14 +139,11 @@ function createNumber(i: number): Value {
   return i;
 }
 
-const structType = makeStructType('S1',
-  ['bool', 'num', 'str'],
-  [
-    boolType,
-    numberType,
-    stringType,
-  ]
-);
+const structType = makeStructType('S1', {
+  bool: boolType,
+  num: numberType,
+  str: stringType,
+});
 
 function createStruct(i: number): Value {
   return newStructWithType(structType,

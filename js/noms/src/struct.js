@@ -264,13 +264,11 @@ export function newStructWithValues<T: Struct>(type: Type<any>, values: Value[])
 }
 
 function computeTypeForStruct(name: string, data: StructData): Type<StructDesc> {
-  const fieldNames = Object.keys(data);
-  const fieldTypes = new Array(fieldNames.length);
-  fieldNames.sort();
-  for (let i = 0; i < fieldNames.length; i++) {
-    fieldTypes[i] = getTypeOfValue(data[fieldNames[i]]);
+  const fields = {};
+  for (const k in data) {
+    fields[k] = getTypeOfValue(data[k]);
   }
-  return makeStructType(name, fieldNames, fieldTypes);
+  return makeStructType(name, fields);
 }
 
 /**

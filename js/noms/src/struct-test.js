@@ -84,13 +84,10 @@ suite('Struct', () => {
   });
 
   test('createStructClass', () => {
-    const typeA = makeStructType('A',
-      ['b', 'c'],
-      [
-        numberType,
-        stringType,
-      ]
-    );
+    const typeA = makeStructType('A', {
+      b: numberType,
+      c: stringType,
+    });
     const A = createStructClass(typeA);
     const a = new A({b: 1, c: 'hi'});
     assert.instanceOf(a, Struct);
@@ -100,13 +97,10 @@ suite('Struct', () => {
   });
 
   test('type validation', () => {
-    const type = makeStructType('S1',
-      ['o', 'x'],
-      [
-        stringType,
-        boolType,
-      ]
-    );
+    const type = makeStructType('S1', {
+      o: stringType,
+      x: boolType,
+    });
 
     assert.throws(() => {
       newStructWithType(type, ['hi', 1]);
@@ -123,13 +117,10 @@ suite('Struct', () => {
     //   b: Bool
     //   l: List<S>
     // }
-    const type = makeStructType('S',
-      ['b', 'l'],
-      [
-        boolType,
-        makeListType(makeCycleType(0)),
-      ]
-    );
+    const type = makeStructType('S', {
+      b: boolType,
+      l: makeListType(makeCycleType(0)),
+    });
 
     const emptyList = new List([]);
     newStructWithType(type, [true, emptyList]);
@@ -218,7 +209,11 @@ suite('Struct', () => {
     assert.notEqual(s.hash, 'hash');
 
     assert.isTrue(equals(s.type,
-        makeStructType('', ['chunks', 'hash', 'type'], [stringType, stringType, stringType])));
+        makeStructType('', {
+          chunks: stringType,
+          hash: stringType,
+          type: stringType,
+        })));
     assert.deepEqual(s.chunks, []);
     assert.instanceOf(s.hash, Hash);
   });

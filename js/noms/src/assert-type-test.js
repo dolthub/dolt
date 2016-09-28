@@ -117,7 +117,7 @@ suite('validate type', () => {
   });
 
   test('struct', () => {
-    const type = makeStructType('Struct', ['x'], [boolType]);
+    const type = makeStructType('Struct', {x: boolType});
 
     const v = newStruct('Struct', {x: true});
     assertSubtype(type, v);
@@ -178,8 +178,8 @@ suite('validate type', () => {
   });
 
   test('struct subtype by name', () => {
-    const namedT = makeStructType('Name', ['x'], [numberType]);
-    const anonT = makeStructType('', ['x'], [numberType]);
+    const namedT = makeStructType('Name', {x: numberType});
+    const anonT = makeStructType('', {x: numberType});
     const namedV = newStruct('Name', {x: 42});
     const name2V = newStruct('foo', {x: 42});
     const anonV = newStruct('', {x: 42});
@@ -194,9 +194,9 @@ suite('validate type', () => {
   });
 
   test('struct subtype extra fields', () => {
-    const at = makeStructType('', [], []);
-    const bt = makeStructType('', ['x'], [numberType]);
-    const ct = makeStructType('', ['s', 'x'], [stringType, numberType]);
+    const at = makeStructType('', {});
+    const bt = makeStructType('', {x: numberType});
+    const ct = makeStructType('', {s: stringType, x: numberType});
     const av = newStruct('', {});
     const bv = newStruct('', {x: 1});
     const cv = newStruct('', {x: 2, s: 'hi'});
@@ -219,22 +219,16 @@ suite('validate type', () => {
       value: 1,
       parents: new Set(),
     });
-    const t1 = makeStructType('Commit',
-      ['parents', 'value'],
-      [
-        makeSetType(makeUnionType([])),
-        numberType,
-      ]
-    );
+    const t1 = makeStructType('Commit', {
+      parents: makeSetType(makeUnionType([])),
+      value: numberType,
+    });
     assertSubtype(t1, c1);
 
-    const t11 = makeStructType('Commit',
-      ['parents', 'value'],
-      [
-        makeSetType(makeRefType(t1)),
-        numberType,
-      ]
-    );
+    const t11 = makeStructType('Commit', {
+      parents: makeSetType(makeRefType(t1)),
+      value: numberType,
+    });
     assertSubtype(t11, c1);
 
     const c2 = newStruct('Commit', {
@@ -253,18 +247,18 @@ suite('validate type', () => {
     //   x: Cycle<0>,
     //   y: Number,
     // }
-    const t1 = makeStructType('', ['x', 'y'], [
-      makeCycleType(0),
-      numberType,
-    ]);
+    const t1 = makeStructType('', {
+      x: makeCycleType(0),
+      y: numberType,
+    });
     // struct {
     //   x: Cycle<0>,
     //   y: Number | String,
     // }
-    const t2 = makeStructType('', ['x', 'y'], [
-      makeCycleType(0),
-      makeUnionType([numberType, stringType]),
-    ]);
+    const t2 = makeStructType('', {
+      x: makeCycleType(0),
+      y: makeUnionType([numberType, stringType]),
+    });
 
     assert.isTrue(isSubtype(t2, t1, []));
     assert.isFalse(isSubtype(t1, t2, []));
@@ -273,10 +267,10 @@ suite('validate type', () => {
     //   x: Cycle<0> | Number,
     //   y: Number | String,
     // }
-    const t3 = makeStructType('', ['x', 'y'], [
-      makeUnionType([makeCycleType(0), numberType]),
-      makeUnionType([numberType, stringType]),
-    ]);
+    const t3 = makeStructType('', {
+      x: makeUnionType([makeCycleType(0), numberType]),
+      y: makeUnionType([numberType, stringType]),
+    });
 
     assert.isTrue(isSubtype(t3, t1, []));
     assert.isFalse(isSubtype(t1, t3, []));
@@ -288,10 +282,10 @@ suite('validate type', () => {
     //   x: Cycle<0> | Number,
     //   y: Number,
     // }
-    const t4 = makeStructType('', ['x', 'y'], [
-      makeUnionType([makeCycleType(0), numberType]),
-      numberType,
-    ]);
+    const t4 = makeStructType('', {
+      x: makeUnionType([makeCycleType(0), numberType]),
+      y: numberType,
+    });
 
     assert.isTrue(isSubtype(t4, t1, []));
     assert.isFalse(isSubtype(t1, t4, []));
@@ -313,27 +307,31 @@ suite('validate type', () => {
     //     b: Cycle<1>,
     //   },
     // }
-    const tb = makeStructType('', ['b'], [
-      makeStructType('', ['c'], [
-        makeCycleType(1),
-      ]),
-    ]);
-    const tc = makeStructType('', ['c'], [
-      makeStructType('', ['b'], [
-        makeCycleType(1),
-      ]),
-    ]);
+    const tb = makeStructType('', {
+      b: makeStructType('', {
+        c: makeCycleType(1),
+      }),
+    });
+    const tc = makeStructType('', {
+      c: makeStructType('', {
+        b: makeCycleType(1),
+      }),
+    });
 
     assert.isFalse(isSubtype(tb, tc, []));
     assert.isFalse(isSubtype(tc, tb, []));
   });
 
   test('isSubtype compound union', () => {
-    const emptyStructType = makeStructType('', [], []);
+    const emptyStructType = makeStructType('', {});
     const rt = makeListType(emptyStructType);
 
-    const st1 = makeStructType('One', ['a'], [numberType]);
-    const st2 = makeStructType('Two', ['b'], [stringType]);
+    const st1 = makeStructType('One', {
+      a: numberType,
+    });
+    const st2 = makeStructType('Two', {
+      b: stringType,
+    });
     const ct = makeListType(makeUnionType([st1, st2]));
 
     assert.isTrue(isSubtype(rt, ct));

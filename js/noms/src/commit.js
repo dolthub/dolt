@@ -78,24 +78,23 @@ export default class Commit<T: Value> extends Struct {
 // ../../go/datas/commit.go for the motivation for how this is computed.
 function makeCommitType(valueType: Type<any>, parentsValueTypes: Type<any>[],
                         metaType: Type<any>, parentsMetaTypes: Type<any>[]): Type<StructDesc> {
-  const fieldNames = ['meta', 'parents', 'value'];
   const parentsValueUnionType = makeUnionType(parentsValueTypes.concat(valueType));
   const parentsMetaUnionType = makeUnionType(parentsMetaTypes.concat(metaType));
   let parentsType;
   if (equals(parentsValueUnionType, valueType) && equals(parentsMetaUnionType, metaType)) {
     parentsType = makeSetType(makeRefType(makeCycleType(0)));
   } else {
-    parentsType = makeSetType(makeRefType(makeStructType('Commit', fieldNames, [
-      parentsMetaUnionType,
-      makeSetType(makeRefType(makeCycleType(0))),
-      parentsValueUnionType,
-    ])));
+    parentsType = makeSetType(makeRefType(makeStructType('Commit', {
+      meta: parentsMetaUnionType,
+      parents: makeSetType(makeRefType(makeCycleType(0))),
+      value: parentsValueUnionType,
+    })));
   }
-  return makeStructType('Commit', fieldNames, [
-    metaType,
-    parentsType,
-    valueType,
-  ]);
+  return makeStructType('Commit', {
+    meta: metaType,
+    parents: parentsType,
+    value: valueType,
+  });
 }
 
 function valueTypesFromParents(parents: Set<any>, fieldName: string): Type<any>[] {

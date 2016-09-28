@@ -61,19 +61,16 @@ suite('Encode human readable types', () => {
   });
 
   test('struct', () => {
-    const type = makeStructType('S1',
-      ['x', 'y'],
-      [
-        numberType,
-        stringType,
-      ]
-    );
+    const type = makeStructType('S1', {
+      x: numberType,
+      y: stringType,
+    });
     assertWriteType('struct S1 {\n  x: Number,\n  y: String,\n}', type);
   });
 
 
   test('list of struct', () => {
-    const type = makeStructType('S3', ['x'], [numberType]);
+    const type = makeStructType('S3', {x: numberType});
     assertWriteType('List<struct S3 {\n  x: Number,\n}>', makeListType(type));
   });
 
@@ -87,20 +84,14 @@ suite('Encode human readable types', () => {
     //   }
     // }
 
-    const a = makeStructType('A',
-      ['b', 'c', 'd'],
-      [
-        makeCycleType(0),
-        makeListType(makeCycleType(0)),
-        makeStructType('D',
-          ['e', 'f'],
-          [
-            makeCycleType(0),
-            makeCycleType(1),
-          ]
-        ),
-      ]
-    );
+    const a = makeStructType('A', {
+      b: makeCycleType(0),
+      c: makeListType(makeCycleType(0)),
+      d: makeStructType('D', {
+        e: makeCycleType(0),
+        f: makeCycleType(1),
+      }),
+    });
 
     assertWriteType(`struct A {
   b: Cycle<0>,
@@ -130,13 +121,10 @@ suite('Encode human readable types', () => {
     //   b: Cycle<1>
     // }
 
-    const a = makeStructType('A',
-      ['a', 'b'],
-      [
-        makeCycleType(0),
-        makeCycleType(1),
-      ]
-    );
+    const a = makeStructType('A', {
+      a: makeCycleType(0),
+      b: makeCycleType(1),
+    });
 
     assertWriteType(`struct A {
   a: Cycle<0>,

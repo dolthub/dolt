@@ -82,14 +82,14 @@ suite('TypeCache', () => {
   });
 
   test('struct', () => {
-    const st = makeStructType('Foo',
-      ['bar', 'foo'],
-      [stringType, numberType]
-    );
-    const st2 = makeStructType('Foo',
-      ['bar', 'foo'],
-      [stringType, numberType]
-    );
+    const st = makeStructType('Foo', {
+      bar: stringType,
+      foo: numberType,
+    });
+    const st2 = makeStructType('Foo', {
+      bar: stringType,
+      foo: numberType,
+    });
 
     assert.strictEqual(st, st2);
   });
@@ -110,19 +110,15 @@ suite('TypeCache', () => {
   });
 
   test('Cyclic Struct', () => {
-    const st = makeStructType('Foo',
-      ['foo'],
-      [
-        makeRefType(makeCycleType(0)),
-      ]);
+    const st = makeStructType('Foo', {
+      foo: makeRefType(makeCycleType(0)),
+    });
     assert.isFalse(st.hasUnresolvedCycle([]));
     assert.strictEqual(st, st.desc.fields[0].type.desc.elemTypes[0]);
 
-    const st2 = makeStructType('Foo',
-      ['foo'],
-      [
-        makeRefType(makeCycleType(0)),
-      ]);
+    const st2 = makeStructType('Foo', {
+      foo: makeRefType(makeCycleType(0)),
+    });
     assert.isFalse(st2.hasUnresolvedCycle([]));
     assert.strictEqual(st, st2);
   });
@@ -130,7 +126,9 @@ suite('TypeCache', () => {
   test('Cyclic Unions', () => {
     const ut = makeUnionType([makeCycleType(0), numberType, stringType, boolType, blobType,
                               valueType, typeType]);
-    const st = makeStructType('Foo', ['foo'], [ut]);
+    const st = makeStructType('Foo', {
+      foo: ut,
+    });
 
     assert.strictEqual(ut.desc.elemTypes[0].kind, Kind.Cycle);
     assert.strictEqual(st, st.desc.fields[0].type.desc.elemTypes[1]);
@@ -140,7 +138,9 @@ suite('TypeCache', () => {
     // types.
     const ut2 = makeUnionType([numberType, stringType, boolType, blobType, valueType, typeType,
                                makeCycleType(0)]);
-    const st2 = makeStructType('Foo', ['foo'], [ut]);
+    const st2 = makeStructType('Foo', {
+      foo: ut,
+    });
 
     assert.strictEqual(ut2.desc.elemTypes[0].kind, Kind.Cycle);
     assert.strictEqual(st2, st2.desc.fields[0].type.desc.elemTypes[1]);
@@ -152,8 +152,12 @@ suite('TypeCache', () => {
 
   test('Invalid Cycles and Unions', () => {
     assert.throws(() => {
-      makeStructType('A', ['a'], [makeStructType('A', ['a'], [makeCycleType(1)])]);
-    });
+      makeStructType('A', {
+        a: makeStructType('A', {
+          a: makeCycleType(1),
+        }),
+      });
+    }, 'unrolled cycle types are not supported; ahl owes you a beer');
   });
 
   test('Invalid Crazy Cycles and Unions', () => {
@@ -171,9 +175,13 @@ suite('TypeCache', () => {
      * }
      */
     assert.throws(() => {
-      makeStructType('A', ['a'], [makeUnionType(
-        [makeCycleType(0), makeStructType('A', ['a'], [makeCycleType(0), makeCycleType(1)])]
-      )]);
+      makeStructType('A', {
+        a: makeUnionType([
+          makeCycleType(0), makeStructType('A', {
+            a: makeUnionType([makeCycleType(0), makeCycleType(1)]),
+          }),
+        ]),
+      });
     });
   });
 });
