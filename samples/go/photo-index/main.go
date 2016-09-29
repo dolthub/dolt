@@ -69,39 +69,63 @@ func index() (win bool) {
 	dateType := types.MakeStructTypeFromFields("Date", types.FieldMap{
 		"nsSinceEpoch": types.NumberType,
 	})
-	fields := types.FieldMap{
+	faceType := types.MakeStructTypeFromFields("", types.FieldMap{
+		"name": types.StringType,
+		"x":    types.NumberType,
+		"y":    types.NumberType,
+		"w":    types.NumberType,
+		"h":    types.NumberType,
+	})
+	photoType := types.MakeStructTypeFromFields("Photo", types.FieldMap{
 		"sizes":         types.MakeMapType(sizeType, types.StringType),
 		"tags":          types.MakeSetType(types.StringType),
 		"title":         types.StringType,
 		"datePublished": dateType,
 		"dateUpdated":   dateType,
-	}
-	photoType := types.MakeStructTypeFromFields("Photo", fields)
-	fields["dateTaken"] = dateType
-	photoType = types.MakeUnionType(photoType, types.MakeStructTypeFromFields("Photo", fields))
+	})
+
+	withDateTaken := types.MakeStructTypeFromFields("", types.FieldMap{
+		"dateTaken": dateType,
+	})
+	withFaces := types.MakeStructTypeFromFields("", types.FieldMap{
+		"faces": types.MakeSetType(faceType),
+	})
 
 	byDate := types.NewGraphBuilder(db, types.MapKind, true)
 	byTag := types.NewGraphBuilder(db, types.MapKind, true)
+	byFace := types.NewGraphBuilder(db, types.MapKind, true)
 
 	for _, v := range inputs {
 		walk.SomeP(v, db, func(cv types.Value, _ *types.Ref) (stop bool) {
 			if types.IsSubtype(photoType, cv.Type()) {
 				s := cv.(types.Struct)
+
 				// Prefer to sort by the actual date the photo was taken, but if it's not
 				// available, use the date it was published instead.
-				ds, ok := s.MaybeGet("dateTaken")
-				if !ok {
-					ds = s.Get("datePublished")
+				ds := s.Get("datePublished")
+				if types.IsSubtype(withDateTaken, cv.Type()) {
+					ds = s.Get("dateTaken")
 				}
 
 				// Sort by most recent by negating the timestamp.
 				d := ds.(types.Struct).Get("nsSinceEpoch").(types.Number)
 				d = types.Number(-float64(d))
 
+				// Index by date
 				byDate.SetInsert([]types.Value{d}, cv)
+
+				// Index by tag, then date
 				s.Get("tags").(types.Set).IterAll(func(t types.Value) {
 					byTag.SetInsert([]types.Value{t, d}, cv)
 				})
+
+				// Index by face, then date
+				if types.IsSubtype(withFaces, cv.Type()) {
+					s.Get("faces").(types.Set).IterAll(func(t types.Value) {
+						byFace.SetInsert([]types.Value{t.(types.Struct).Get("name"), d}, cv)
+					})
+				}
+
 				// Can't be any photos inside photos, so we can save a little bit here.
 				stop = true
 			}
@@ -112,6 +136,7 @@ func index() (win bool) {
 	outDS, err = db.CommitValue(outDS, types.NewStruct("", types.StructData{
 		"byDate": byDate.Build(),
 		"byTag":  byTag.Build(),
+		"byFace": byFace.Build(),
 	}))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit: %s\n", err)
