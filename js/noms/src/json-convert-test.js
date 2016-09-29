@@ -23,6 +23,10 @@ suite('jsonToNoms', () => {
     assert.isTrue(equals(new List([true]), jsonToNoms([true])));
     assert.isTrue(equals(new List([true, 42]), jsonToNoms([true, 42])));
     assert.isTrue(equals(new List([new List([88.8])]), jsonToNoms([[88.8]])));
+    const l1 = [88.8, 'a string', false];
+    assert.isTrue(equals(new List(l1), jsonToNoms(l1)));
+    const l2 = [88.8, null, false];
+    assert.throws(() => { jsonToNoms(l2); });
   });
 
   test('object', () => {
@@ -33,13 +37,28 @@ suite('jsonToNoms', () => {
         bool: true,
         num: 42,
         string: 'monkey',
-        list: [],
+        list: ['one', 'two', 'three'],
         struct: {key: 'val'},
       },
       newStruct('', {
         bool: true,
         num: 42,
         string: 'monkey',
+        list: new List(['one', 'two', 'three']),
+        struct: newStruct('', {
+          key: 'val',
+        }),
+      }),
+      {
+        bool: true,
+        num: 42,
+        string: null,
+        list: [],
+        struct: {key: 'val'},
+      },
+      newStruct('', {
+        bool: true,
+        num: 42,
         list: new List([]),
         struct: newStruct('', {
           key: 'val',
