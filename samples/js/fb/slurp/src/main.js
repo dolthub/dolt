@@ -38,6 +38,24 @@ const args = argv
 
 const clearLine = '\x1b[2K\r';
 
+const query = [
+  'place',
+  'name',
+  'backdated_time',
+  'last_used_time',
+  'link',
+  'name_tags',
+  'updated_time',
+  'created_time',
+  'from',
+  'id',
+  'images',
+  'width',
+  'height',
+  'likes.limit(1000){id,name}',
+  'tags.limit(1000){x,y,id,name,tagging_user}',
+];
+
 main().catch(ex => {
   console.error(ex);
   process.exit(1);
@@ -61,7 +79,7 @@ async function main(): Promise<void> {
 }
 
 async function getUser(): Promise<Struct> {
-  const result = await jsonToNoms(await callFacebook('v2.5/me'));
+  const result = await jsonToNoms(await callFacebook('v2.7/me'));
   invariant(result instanceof Struct);
   return result;
 }
@@ -84,8 +102,8 @@ async function getPhotos(): Promise<List<any>> {
   // Sadly we cannot issue these requests in parallel because Facebook doesn't give you a way to
   // get individual page URLs ahead of time.
   let result = await new List();
-  let url = 'v2.5/me/photos/uploaded?limit=1000&fields=place,name,created_time,images,' +
-    'tags{x,y,name}&date_format=U';
+  let url = 'v2.7/me/photos/uploaded?limit=1000&fields=' + query.join(',') +
+      '&date_format=U';
   while (url) {
     const photosJSON = await callFacebook(url);
     result = await result.append(await jsonToNoms(photosJSON));

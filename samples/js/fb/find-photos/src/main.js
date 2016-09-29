@@ -6,6 +6,7 @@
 
 import argv from 'yargs';
 import {
+  createStructClass,
   DatasetSpec,
   isSubtype,
   makeListType,
@@ -38,8 +39,21 @@ const imageType = makeStructType('', {
 });
 
 const photoType = makeStructType('', {
-  id: stringType,
   images: makeListType(imageType),
+  created_time: numberType,
+  updated_time: numberType,
+});
+
+const tagsType = makeStructType('', {
+  tags: makeStructType('', {
+    data: makeListType(
+      makeStructType('', {
+        name: stringType,
+        x: numberType,
+        y: numberType,
+      })
+    ),
+  }),
 });
 
 const placeType = makeStructType('', {
@@ -50,6 +64,9 @@ const placeType = makeStructType('', {
     }),
   }),
 });
+
+const NomsDate = createStructClass(
+  makeStructType('Date', {nsSinceEpoch: numberType}));
 
 async function main(): Promise<void> {
   const inSpec = DatasetSpec.parse(args._[0]);
@@ -68,9 +85,14 @@ async function main(): Promise<void> {
         title: v.name || '',
         sizes: await getSizes(v),
         tags: new Set(),  // fb has 'tags', but they are actually people not textual tags
+        datePublished: new NomsDate({nsSinceEpoch: v.created_time * 1e9}),
+        dateUpdated: new NomsDate({nsSinceEpoch: v.updated_time * 1e9}),
       };
       if (isSubtype(placeType, v.type)) {
         photo.geoposition = getGeo(v);
+      }
+      if (isSubtype(tagsType, v.type)) {
+        photo.faces = await getFaces(v);
       }
       result = result.then(r => r.add(newStruct('Photo', photo)));
       return true;
@@ -97,4 +119,24 @@ async function getSizes(input): Promise<Map<Struct, string>> {
       v.source));
   });
   return result;
+}
+
+async function getFaces(photo): Promise<Set<Struct>> {
+  // TODO: Facebook only gives us the centerpoint of each face, not the
+  // bounding box. Ideally, we'd use face detection on the image to get the
+  // real bounding box, but for now, we just guess that faces are typically
+  // about 1/3 the width/height of image.
+  //
+  // This fails badly in lots of cases though, so we should fix asap.
+  const mw = 0.33;
+  const mh = 0.33;
+  let result = [];
+  await photo.tags.data.forEach(v => {
+    const x = Math.max(0, v.x / 100 - mw / 2);
+    const y = Math.max(0, v.y / 100 - mh / 2);
+    const w = Math.min(mw, 1 - x);
+    const h = Math.min(mh, 1 - y);
+    result.push(newStruct('', {x, y, w, h, name: v.name}));
+  });
+  return new Set(result);
 }
