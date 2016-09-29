@@ -226,8 +226,9 @@ func runTestSuite(t *testing.T, mem bool) {
 		i := 0
 
 		rep.(types.Map).IterAll(func(k, timesVal types.Value) {
-			assert.True(i < len(expectedTests))
-			assert.Equal(expectedTests[i], string(k.(types.String)))
+			if assert.True(i < len(expectedTests)) {
+				assert.Equal(expectedTests[i], string(k.(types.String)))
+			}
 
 			times := timesVal.(types.Struct)
 			assert.True(getOrFail(times, "elapsed").(types.Number) > 0)

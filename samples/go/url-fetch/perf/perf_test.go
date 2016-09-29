@@ -68,8 +68,11 @@ func (s *perfSuite) TestFetchURL() {
 }
 
 func (s *perfSuite) importPath(tag, path string) {
+	host, stopFn := s.StartRemoteDatabase()
+	defer stopFn()
+
 	assert := s.NewAssert()
-	cmd := exec.Command(s.urlFetchExe, path, fmt.Sprintf("%s::url-fetch-%s", s.DatabaseSpec, tag))
+	cmd := exec.Command(s.urlFetchExe, path, fmt.Sprintf("%s::url-fetch-%s", host, tag))
 	cmd.Stdout = s.W
 	cmd.Stderr = os.Stderr
 	assert.NoError(cmd.Run())
