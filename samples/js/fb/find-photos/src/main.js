@@ -40,8 +40,8 @@ const imageType = makeStructType('', {
 
 const photoType = makeStructType('', {
   images: makeListType(imageType),
-  created_time: numberType,
-  updated_time: numberType,
+  'created_time': numberType,
+  'updated_time': numberType,
 });
 
 const tagsType = makeStructType('', {
@@ -130,7 +130,7 @@ async function getFaces(photo): Promise<Set<Struct>> {
   // This fails badly in lots of cases though, so we should fix asap.
   const mw = 0.33;
   const mh = 0.33;
-  let result = [];
+  const result = [];
   await photo.tags.data.forEach(v => {
     const x = Math.max(0, v.x / 100 - mw / 2);
     const y = Math.max(0, v.y / 100 - mh / 2);
