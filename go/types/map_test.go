@@ -1046,15 +1046,15 @@ func TestMapChunks(t *testing.T) {
 	assert := assert.New(t)
 
 	l1 := NewMap(Number(0), Number(1))
-	c1 := l1.Chunks()
+	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
 	l2 := NewMap(NewRef(Number(0)), Number(1))
-	c2 := l2.Chunks()
+	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 
 	l3 := NewMap(Number(0), NewRef(Number(1)))
-	c3 := l3.Chunks()
+	c3 := getChunks(l3)
 	assert.Len(c3, 1)
 }
 

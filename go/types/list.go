@@ -91,16 +91,14 @@ func (l List) Hash() hash.Hash {
 	return *l.h
 }
 
-func (l List) ChildValues() []Value {
-	values := make([]Value, l.Len())
+func (l List) WalkValues(cb ValueCallback) {
 	l.IterAll(func(v Value, idx uint64) {
-		values[idx] = v
+		cb(v)
 	})
-	return values
 }
 
-func (l List) Chunks() []Ref {
-	return l.seq.Chunks()
+func (l List) WalkRefs(cb RefCallback) {
+	l.seq.WalkRefs(cb)
 }
 
 func (l List) Type() *Type {

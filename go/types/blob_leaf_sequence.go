@@ -26,6 +26,5 @@ func (bl blobLeafSequence) getItem(idx int) sequenceItem {
 	return bl.data[idx]
 }
 
-func (bl blobLeafSequence) Chunks() []Ref {
-	return []Ref{}
+func (bl blobLeafSequence) WalkRefs(cb RefCallback) {
 }

@@ -589,11 +589,11 @@ func TestWriteEmptyUnionList(t *testing.T) {
 
 type bogusType int
 
-func (bg bogusType) Equals(other Value) bool { return false }
-func (bg bogusType) Less(other Value) bool   { return false }
-func (bg bogusType) Hash() hash.Hash         { return hash.Hash{} }
-func (bg bogusType) ChildValues() []Value    { return ValueSlice{} }
-func (bg bogusType) Chunks() []Ref           { return RefSlice{} }
+func (bg bogusType) Equals(other Value) bool     { return false }
+func (bg bogusType) Less(other Value) bool       { return false }
+func (bg bogusType) Hash() hash.Hash             { return hash.Hash{} }
+func (bg bogusType) WalkValues(cb ValueCallback) {}
+func (bg bogusType) WalkRefs(cb RefCallback)     {}
 func (bg bogusType) Type() *Type {
 	return MakeCycleType(0)
 }

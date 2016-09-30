@@ -83,15 +83,15 @@ func (t *Type) Hash() hash.Hash {
 	return *t.h
 }
 
-func (t *Type) ChildValues() (res []Value) {
+func (t *Type) WalkValues(cb ValueCallback) {
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		for _, t := range desc.ElemTypes {
-			res = append(res, t)
+			cb(t)
 		}
 	case StructDesc:
 		desc.IterFields(func(name string, t *Type) {
-			res = append(res, t)
+			cb(t)
 		})
 	case PrimitiveDesc:
 		// Nothing, these have no child values
@@ -101,7 +101,7 @@ func (t *Type) ChildValues() (res []Value) {
 	return
 }
 
-func (t *Type) Chunks() (chunks []Ref) {
+func (t *Type) WalkRefs(cb RefCallback) {
 	return
 }
 

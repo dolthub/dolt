@@ -193,6 +193,14 @@ func (dbc *databaseCommon) validateRefAsCommit(r types.Ref) types.Struct {
 	return v.(types.Struct)
 }
 
+func getNumValues(v types.Value) (count int) {
+	count = 0
+	v.WalkValues(func(v types.Value) {
+		count++
+	})
+	return
+}
+
 func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct {
 	parents := opts.Parents
 	if (parents == types.Set{}) {
@@ -205,7 +213,7 @@ func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct 
 	meta := opts.Meta
 	// Ideally, would like to do 'if meta == types.Struct{}' but types.Struct is not comparable in Go
 	// since it contains a slice.
-	if meta.Type() == nil && len(meta.ChildValues()) == 0 {
+	if meta.Type() == nil && getNumValues(meta) == 0 {
 		meta = types.EmptyStruct
 	}
 	return NewCommit(v, parents, meta)

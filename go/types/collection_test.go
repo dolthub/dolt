@@ -43,7 +43,7 @@ func (suite *collectionTestSuite) TestEquals() {
 }
 
 func (suite *collectionTestSuite) TestChunkCountAndType() {
-	chunks := suite.col.Chunks()
+	chunks := getChunks(suite.col)
 	suite.Equal(suite.expectChunkCount, len(chunks))
 	refType := MakeRefType(suite.expectType)
 	for _, r := range chunks {
@@ -62,12 +62,12 @@ func (suite *collectionTestSuite) TestRoundTripAndValidate() {
 
 func (suite *collectionTestSuite) TestPrependChunkDiff() {
 	v2 := suite.prependOne()
-	suite.Equal(suite.expectPrependChunkDiff, chunkDiffCount(suite.col.Chunks(), v2.Chunks()))
+	suite.Equal(suite.expectPrependChunkDiff, chunkDiffCount(getChunks(suite.col), getChunks(v2)))
 }
 
 func (suite *collectionTestSuite) TestAppendChunkDiff() {
 	v2 := suite.appendOne()
-	suite.Equal(suite.expectAppendChunkDiff, chunkDiffCount(suite.col.Chunks(), v2.Chunks()))
+	suite.Equal(suite.expectAppendChunkDiff, chunkDiffCount(getChunks(suite.col), getChunks(v2)))
 }
 
 func deriveCollectionHeight(c Collection) uint64 {

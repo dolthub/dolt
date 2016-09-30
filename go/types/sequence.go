@@ -13,7 +13,7 @@ type sequence interface {
 	seqLen() int
 	numLeaves() uint64
 	valueReader() ValueReader
-	Chunks() []Ref
+	WalkRefs(cb RefCallback)
 	Type() *Type
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence

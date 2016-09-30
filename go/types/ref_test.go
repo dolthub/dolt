@@ -48,6 +48,6 @@ func TestRefChunks(t *testing.T) {
 
 	l := NewList()
 	r := NewRef(l)
-	assert.Len(r.Chunks(), 1)
-	assert.Equal(r, r.Chunks()[0])
+	assert.Len(getChunks(r), 1)
+	assert.Equal(r, getChunks(r)[0])
 }

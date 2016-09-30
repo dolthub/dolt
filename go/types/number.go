@@ -27,12 +27,10 @@ func (v Number) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v Number) ChildValues() []Value {
-	return nil
+func (v Number) WalkValues(cb ValueCallback) {
 }
 
-func (v Number) Chunks() []Ref {
-	return nil
+func (v Number) WalkRefs(cb RefCallback) {
 }
 
 func (v Number) Type() *Type {

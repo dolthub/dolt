@@ -237,6 +237,13 @@ func sendWork(ch chan<- types.Ref, refs types.RefSlice) {
 
 type hintCache map[hash.Hash]hash.Hash
 
+func getChunks(v types.Value) (chunks []types.Ref) {
+	v.WalkRefs(func(ref types.Ref) {
+		chunks = append(chunks, ref)
+	})
+	return
+}
+
 func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritten bool) traverseSourceResult {
 	h := srcRef.TargetHash()
 	if !sinkDB.has(h) {
@@ -251,7 +258,7 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritt
 			// write size is implementation specific.
 			bytesWritten = len(snappy.Encode(nil, c.Data()))
 		}
-		ts := traverseSourceResult{traverseResult{h, v.Chunks(), len(c.Data())}, bytesWritten}
+		ts := traverseSourceResult{traverseResult{h, getChunks(v), len(c.Data())}, bytesWritten}
 		return ts
 	}
 	return traverseSourceResult{}
@@ -259,7 +266,7 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritt
 
 func traverseSink(sinkRef types.Ref, db Database) traverseResult {
 	if sinkRef.Height() > 1 {
-		return traverseResult{sinkRef.TargetHash(), sinkRef.TargetValue(db).Chunks(), 0}
+		return traverseResult{sinkRef.TargetHash(), getChunks(sinkRef.TargetValue(db)), 0}
 	}
 	return traverseResult{}
 }
@@ -272,7 +279,7 @@ func traverseCommon(comRef, sinkHead types.Ref, db Database) traverseResult {
 		if comRef.Equals(sinkHead) {
 			exclusionSet = commit.Get(ParentsField).(types.Set)
 		}
-		chunks := types.RefSlice(commit.Chunks())
+		chunks := types.RefSlice(getChunks(commit))
 		for i := 0; i < len(chunks); {
 			if exclusionSet.Has(chunks[i]) {
 				end := len(chunks) - 1

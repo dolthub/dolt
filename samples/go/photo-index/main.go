@@ -26,7 +26,6 @@ func main() {
 func index() (win bool) {
 	var dbStr = flag.String("db", "", "input database spec")
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to - if empty, defaults to input dataset")
-	var parallelism = flag.Int("parallelism", 16, "number of parallel goroutines to search")
 
 	flag.Usage = usage
 	flag.Parse(false)
@@ -96,7 +95,7 @@ func index() (win bool) {
 	byFace := types.NewGraphBuilder(db, types.MapKind, true)
 
 	for _, v := range inputs {
-		walk.SomeP(v, db, func(cv types.Value, _ *types.Ref) (stop bool) {
+		walk.WalkValues(v, db, func(cv types.Value) (stop bool) {
 			if types.IsSubtype(photoType, cv.Type()) {
 				s := cv.(types.Struct)
 
@@ -130,7 +129,7 @@ func index() (win bool) {
 				stop = true
 			}
 			return
-		}, *parallelism)
+		})
 	}
 
 	outDS, err = db.CommitValue(outDS, types.NewStruct("", types.StructData{

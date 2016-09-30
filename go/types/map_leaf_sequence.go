@@ -50,12 +50,11 @@ func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 	return ml.data[idx]
 }
 
-func (ml mapLeafSequence) Chunks() (chunks []Ref) {
+func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
 	for _, entry := range ml.data {
-		chunks = append(chunks, entry.key.Chunks()...)
-		chunks = append(chunks, entry.value.Chunks()...)
+		entry.key.WalkRefs(cb)
+		entry.value.WalkRefs(cb)
 	}
-	return
 }
 
 func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {

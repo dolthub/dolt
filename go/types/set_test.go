@@ -817,11 +817,11 @@ func TestSetChunks(t *testing.T) {
 	assert := assert.New(t)
 
 	l1 := NewSet(Number(0))
-	c1 := l1.Chunks()
+	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
 	l2 := NewSet(NewRef(Number(0)))
-	c2 := l2.Chunks()
+	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 }
 
@@ -834,8 +834,8 @@ func TestSetChunks2(t *testing.T) {
 	vs := NewTestValueStore()
 	doTest := func(ts testSet) {
 		set := ts.toSet()
-		set2chunks := vs.ReadValue(vs.WriteValue(set).TargetHash()).Chunks()
-		for i, r := range set.Chunks() {
+		set2chunks := getChunks(vs.ReadValue(vs.WriteValue(set).TargetHash()))
+		for i, r := range getChunks(set) {
 			assert.True(r.Type().Equals(set2chunks[i].Type()), "%s != %s", r.Type().Describe(), set2chunks[i].Type().Describe())
 		}
 	}

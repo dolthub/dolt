@@ -10,6 +10,13 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
+func getChunks(v Value) (chunks []Ref) {
+	v.WalkRefs(func(r Ref) {
+		chunks = append(chunks, r)
+	})
+	return
+}
+
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
@@ -34,8 +41,8 @@ func TestGenericStructChunks(t *testing.T) {
 
 	s1 := NewStructWithType(typ, ValueSlice{NewRef(b)})
 
-	assert.Len(s1.Chunks(), 1)
-	assert.Equal(b.Hash(), s1.Chunks()[0].TargetHash())
+	assert.Len(getChunks(s1), 1)
+	assert.Equal(b.Hash(), getChunks(s1)[0].TargetHash())
 }
 
 func TestGenericStructNew(t *testing.T) {

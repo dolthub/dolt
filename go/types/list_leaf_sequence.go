@@ -31,9 +31,8 @@ func (ll listLeafSequence) getItem(idx int) sequenceItem {
 	return ll.values[idx]
 }
 
-func (ll listLeafSequence) Chunks() (chunks []Ref) {
+func (ll listLeafSequence) WalkRefs(cb RefCallback) {
 	for _, v := range ll.values {
-		chunks = append(chunks, v.Chunks()...)
+		v.WalkRefs(cb)
 	}
-	return
 }

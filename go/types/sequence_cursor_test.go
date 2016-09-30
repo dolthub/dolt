@@ -57,11 +57,11 @@ func (ts testSequence) Hash() hash.Hash {
 	panic("not reached")
 }
 
-func (ts testSequence) ChildValues() []Value {
+func (ts testSequence) WalkValues(cb ValueCallback) {
 	panic("not reached")
 }
 
-func (ts testSequence) Chunks() []Ref {
+func (ts testSequence) WalkRefs(cb RefCallback) {
 	panic("not reached")
 }
 

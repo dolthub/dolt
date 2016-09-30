@@ -164,7 +164,7 @@ func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootOb
 	}
 
 	index := Index{m: IndexMap{}}
-	walk.AllP(rootObject, db, func(v types.Value, r *types.Ref) {
+	walk.WalkValues(rootObject, db, func(v types.Value) bool {
 		typ := v.Type()
 		typeCacheMutex.Lock()
 		hasPath, ok := typeCache[typ]
@@ -182,7 +182,8 @@ func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootOb
 				typeCacheMutex.Unlock()
 			}
 		}
-	}, 4)
+		return false
+	})
 
 	status.Done()
 }

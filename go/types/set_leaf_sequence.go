@@ -24,11 +24,10 @@ func (sl setLeafSequence) getItem(idx int) sequenceItem {
 	return sl.data[idx]
 }
 
-func (sl setLeafSequence) Chunks() (chunks []Ref) {
+func (sl setLeafSequence) WalkRefs(cb RefCallback) {
 	for _, v := range sl.data {
-		chunks = append(chunks, v.Chunks()...)
+		v.WalkRefs(cb)
 	}
-	return
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {

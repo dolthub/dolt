@@ -8,6 +8,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
+type ValueCallback func(v Value)
+type RefCallback func(ref Ref)
+
 // Value is the interface all Noms values implement.
 type Value interface {
 	// Equals determines if two different Noms values represents the same underlying value.
@@ -24,13 +27,13 @@ type Value interface {
 	// same hash they must be equal.
 	Hash() hash.Hash
 
-	// ChildValues returns the immediate children of this value in the DAG, if any, not including
-	// Type().
-	ChildValues() []Value
+	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
+	// Type()
+	WalkValues(ValueCallback)
 
-	// Chunks returns the refs to the underlying chunks. If this value is a collection that has been
+	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
-	Chunks() []Ref
+	WalkRefs(RefCallback)
 
 	// Type returns the type of the Noms value. All Noms values carry their runtime Noms type.
 	Type() *Type
