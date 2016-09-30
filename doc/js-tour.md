@@ -145,6 +145,9 @@ Datasets are versioned. When you *commit* a new value, you aren't overwriting th
 function printCommit(commit) {
   console.log('list', commit.value.hash.toString(),
       'length:', commit.value.length);
+  if (commit.parents.isEmpty()) {
+    return;
+  }
   commit.parents.first().
     then(r => r.targetValue(db)).
     then(printCommit);
