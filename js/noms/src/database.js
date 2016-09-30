@@ -114,31 +114,31 @@ export default class Database {
   }
 
   async _doCommit(datasetId: string, commit: Commit<any>): Promise<Ref<any>> {
-    const currentRootRefP = this._rt.getRoot();
-    const datasetsP = this._datasetsFromRootRef(currentRootRefP);
-    let currentDatasets = await (datasetsP:Promise<Map<any, any>>);
-    const currentRootRef = await currentRootRefP;
     const commitRef = this.writeValue(commit);
 
-    if (!currentRootRef.isEmpty()) {
-      const currentHeadRef = await currentDatasets.get(datasetId);
-      if (currentHeadRef) {
-        if (equals(commitRef, currentHeadRef)) {
-          return commitRef;
-        }
-        if (!await this._descendsFrom(commit, currentHeadRef)) {
-          throw new Error('Merge needed');
+    for (;;) {
+      const currentRootRefP = this._rt.getRoot();
+      const currentRootRef = await currentRootRefP;
+      let currentDatasets = await this._datasetsFromRootRef(currentRootRefP);
+      if (!currentRootRef.isEmpty()) {
+        const currentHeadRef = await currentDatasets.get(datasetId);
+        if (currentHeadRef) {
+          if (equals(commitRef, currentHeadRef)) {
+            break;
+          }
+          if (!await this._descendsFrom(commit, currentHeadRef)) {
+            throw new Error('Merge needed');
+          }
         }
       }
-    }
 
-    currentDatasets = await currentDatasets.set(datasetId, commitRef);
-    const newRootRef = this.writeValue(currentDatasets).targetHash;
-    if (await this._rt.updateRoot(newRootRef, currentRootRef)) {
-      return commitRef;
+      currentDatasets = await currentDatasets.set(datasetId, commitRef);
+      const newRootRef = this.writeValue(currentDatasets).targetHash;
+      if (await this._rt.updateRoot(newRootRef, currentRootRef)) {
+        break;
+      }
     }
-
-    throw new Error('Optimistic lock failed');
+    return commitRef;
   }
 
   close(): Promise<void> {

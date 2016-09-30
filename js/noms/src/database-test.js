@@ -5,7 +5,10 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {suite, test} from 'mocha';
-import {makeTestingRemoteBatchStore} from './remote-batch-store.js';
+import makeRemoteBatchStoreFake from './remote-batch-store-fake.js';
+import {TestingDelegate} from './remote-batch-store-fake.js';
+import RemoteBatchStore from './remote-batch-store.js';
+import MemoryStore from './memory-store.js';
 import {assert} from 'chai';
 import Commit from './commit.js';
 import Database from './database.js';
@@ -16,7 +19,7 @@ import NomsSet from './set.js'; // namespace collision with JS Set
 
 suite('Database', () => {
   test('access', async () => {
-    const bs = makeTestingRemoteBatchStore();
+    const bs = makeRemoteBatchStoreFake();
     const ds = new Database(bs);
     const input = 'abc';
 
@@ -33,7 +36,7 @@ suite('Database', () => {
   });
 
   test('commit', async () => {
-    const bs = makeTestingRemoteBatchStore();
+    const bs = makeRemoteBatchStoreFake();
     const db = new Database(bs);
     let ds = await db.getDataset('ds1');
 
@@ -105,7 +108,7 @@ suite('Database', () => {
   });
 
   test('concurrency', async () => {
-    const bs = makeTestingRemoteBatchStore();
+    const bs = makeRemoteBatchStoreFake();
     const db = new Database(bs);
     let ds = await db.getDataset('ds1');
 
@@ -139,16 +142,63 @@ suite('Database', () => {
     await db.close();
   });
 
+  test('commit with concurrent chunk store use', async () => {
+    const dsID = 'ds1';
+    const ms = new MemoryStore();
+
+    // Craft DB that will allow me to move the backing ChunkStore while the code isn't looking
+    const hookedDelegate = new TestingDelegate(ms);
+    const hookedDB = new Database(new RemoteBatchStore(3, hookedDelegate));
+
+    let ds1 = await hookedDB.getDataset(dsID);
+    ds1 = await hookedDB.commit(ds1, 'a');
+    ds1 = await hookedDB.commit(ds1, 'b');
+    assert.strictEqual('b', notNull(await ds1.headValue()));
+
+    // Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
+    // ds1: |a| <- |b|
+    // ds2: |stuff|
+    hookedDelegate.preUpdateRootHook = async () => {
+      const db = new Database(new RemoteBatchStore(3, new TestingDelegate(ms)));
+      const ds2 = await db.commit(db.getDataset('ds2'), 'stuff');
+      assert.strictEqual(notNull(await ds2.headValue()), 'stuff');
+      hookedDelegate.preUpdateRootHook = () => Promise.resolve();
+    };
+
+    // Attempted Concurrent change, which should proceed without a problem
+    ds1 = await hookedDB.commit(ds1, 'c');
+    assert.strictEqual(notNull(await ds1.headValue()), 'c');
+
+    // Concurrent change, to move root out from under my feet:
+    // ds1: |a| <- |b| <- |c| <- |e|
+    hookedDelegate.preUpdateRootHook = async () => {
+      const db = new Database(new RemoteBatchStore(3, new TestingDelegate(ms)));
+      const ds = await db.commit(db.getDataset(dsID), 'e');
+      assert.strictEqual(notNull(await ds.headValue()), 'e');
+      hookedDelegate.preUpdateRootHook = () => Promise.resolve();
+    };
+
+    // Attempted Concurrent change, which should fail due to the above
+    let message = '';
+    try {
+      await hookedDB.commit(ds1, 'nope');
+      throw new Error('not reached');
+    } catch (ex) {
+      message = ex.message;
+    }
+    assert.strictEqual('Merge needed', message);
+    assert.strictEqual(notNull(await hookedDB.getDataset(dsID).headValue()), 'e');
+  });
 
   test('empty datasets', async () => {
-    const ds = new Database(makeTestingRemoteBatchStore());
+    const ds = new Database(makeRemoteBatchStoreFake());
     const datasets = await ds.datasets();
     assert.strictEqual(0, datasets.size);
     await ds.close();
   });
 
   test('height of refs', async () => {
-    const ds = new Database(new makeTestingRemoteBatchStore());
+    const ds = new Database(new makeRemoteBatchStoreFake());
 
     const v1 = ds.writeValue('hello');
     assert.strictEqual(1, v1.height);
@@ -160,7 +210,7 @@ suite('Database', () => {
   });
 
   test('height of collections', async() => {
-    const ds = new Database(new makeTestingRemoteBatchStore());
+    const ds = new Database(new makeRemoteBatchStoreFake());
 
     // Set<String>.
     const v1 = 'hello';
