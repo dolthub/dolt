@@ -74,12 +74,12 @@ import (
 )
 
 func main() {
-  ds, err := spec.GetDataset("http://localhost:8000::people")
+  db, ds, err := spec.GetDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer ds.Database().Close()
+  defer db.Close()
 
   if _, ok := ds.MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
@@ -115,12 +115,12 @@ func newPerson(givenName string, male bool) types.Struct {
 }
 
 func main() {
-  ds, err := spec.GetDataset("http://localhost:8000::people")
+  db, ds, err := spec.GetDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer ds.Database().Close()
+  defer db.Close()
 
   data := types.NewList(
     newPerson("Rickon", true),
@@ -131,7 +131,7 @@ func main() {
 
   fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
 
-  _, err = ds.CommitValue(data)
+  _, err = db.CommitValue(ds, data)
   if err != nil {
     fmt.Fprint(os.Stderr, "Error commiting: %s\n", err)
   }
@@ -162,12 +162,12 @@ import (
 )
 
 func main() {
-  ds, err := spec.GetDataset("http://localhost:8000::people")
+  db, ds, err := spec.GetDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer ds.Database().Close()
+  defer db.Close()
 
   if headValue, ok := ds.MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
@@ -230,12 +230,12 @@ import (
 )
 
 func main() {
-  ds, err := spec.GetDataset("http://localhost:8000::people")
+  db, ds, err := spec.GetDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer ds.Database().Close()
+  defer db.Close()
 
   if headValue, ok := ds.MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
@@ -252,7 +252,7 @@ func main() {
 
     fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
 
-    _, err = ds.CommitValue(data)
+    _, err = db.CommitValue(ds, data)
     if err != nil {
       fmt.Fprint(os.Stderr, "Error commiting: %s\n", err)
     }
