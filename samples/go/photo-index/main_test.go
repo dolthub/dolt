@@ -27,6 +27,11 @@ func (s *testSuite) TestWin() {
 	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
 	db, ds, _ := spec.GetDataset(sp)
 
+	type Face struct {
+		Name       string
+		X, Y, W, H int
+	}
+
 	type Date struct {
 		NsSinceEpoch int
 	}
@@ -34,6 +39,7 @@ func (s *testSuite) TestWin() {
 	type Photo struct {
 		Title string
 		Tags  types.Set
+		Faces types.Set
 		Sizes map[struct {
 			Width  int
 			Height int
@@ -51,6 +57,19 @@ func (s *testSuite) TestWin() {
 		return s
 	}
 
+	getFaces := func(n int) types.Set {
+		set := types.NewSet()
+		for i := 0; i < n; i++ {
+			v, err := marshal.Marshal(Face{
+				fmt.Sprintf("harry%d", i),
+				i, i, n, n,
+			})
+			s.NoError(err)
+			set = set.Insert(v)
+		}
+		return set
+	}
+
 	getPhoto := func(n int) Photo {
 		return Photo{
 			Title: fmt.Sprintf("photo %d", n),
@@ -60,6 +79,7 @@ func (s *testSuite) TestWin() {
 			DateTaken:     Date{n * 10},
 			DatePublished: Date{n*10 + 1},
 			DateUpdated:   Date{n*10 + 2},
+			Faces:         getFaces(n),
 		}
 	}
 
@@ -78,8 +98,11 @@ func (s *testSuite) TestWin() {
 
 	db, ds, _ = spec.GetDataset(fmt.Sprintf("%s::idx", s.LdbDir))
 	var idx struct {
-		ByDate map[int]types.Set
-		ByTag  map[string]map[int]types.Set
+		ByDate       map[int]types.Set
+		ByTag        map[string]map[int]types.Set
+		ByFace       map[string]map[int]types.Set
+		TagsByCount  map[int]types.Set
+		FacesByCount map[int]types.Set
 	}
 	marshal.Unmarshal(ds.HeadValue(), &idx)
 
@@ -91,9 +114,32 @@ func (s *testSuite) TestWin() {
 	}
 
 	s.Equal(4, len(idx.ByTag))
-	for i := 1; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		k := fmt.Sprintf("tag%d", i)
 		v := idx.ByTag[k]
 		s.Equal(4-i, len(v))
+	}
+
+	s.Equal(4, len(idx.ByFace))
+	for i := 0; i < 4; i++ {
+		k := fmt.Sprintf("harry%d", i)
+		v := idx.ByFace[k]
+		s.Equal(4-i, len(v))
+	}
+
+	s.Equal(4, len(idx.TagsByCount))
+	for i := 0; i < 4; i++ {
+		tags := idx.TagsByCount[-4+i]
+		s.Equal(1, int(tags.Len()))
+		k := fmt.Sprintf("tag%d", i)
+		s.True(tags.Has(types.String(k)))
+	}
+
+	s.Equal(4, len(idx.FacesByCount))
+	for i := 0; i < 4; i++ {
+		tags := idx.FacesByCount[-4+i]
+		s.Equal(1, int(tags.Len()))
+		k := fmt.Sprintf("harry%d", i)
+		s.True(tags.Has(types.String(k)))
 	}
 }

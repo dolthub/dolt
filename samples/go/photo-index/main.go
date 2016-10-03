@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -93,6 +94,10 @@ func index() (win bool) {
 	byTag := types.NewGraphBuilder(db, types.MapKind, true)
 	byFace := types.NewGraphBuilder(db, types.MapKind, true)
 
+	tagCounts := map[types.String]int{}
+	faceCounts := map[types.String]int{}
+	countsMtx := sync.Mutex{}
+
 	for _, v := range inputs {
 		walk.WalkValues(v, db, func(cv types.Value) (stop bool) {
 			if types.IsSubtype(photoType, cv.Type()) {
@@ -113,16 +118,30 @@ func index() (win bool) {
 				byDate.SetInsert([]types.Value{d}, cv)
 
 				// Index by tag, then date
+				moreTags := map[types.String]int{}
 				s.Get("tags").(types.Set).IterAll(func(t types.Value) {
 					byTag.SetInsert([]types.Value{t, d}, cv)
+					moreTags[t.(types.String)]++
 				})
 
 				// Index by face, then date
+				moreFaces := map[types.String]int{}
 				if types.IsSubtype(withFaces, cv.Type()) {
 					s.Get("faces").(types.Set).IterAll(func(t types.Value) {
-						byFace.SetInsert([]types.Value{t.(types.Struct).Get("name"), d}, cv)
+						name := t.(types.Struct).Get("name").(types.String)
+						byFace.SetInsert([]types.Value{name, d}, cv)
+						moreFaces[name]++
 					})
 				}
+
+				countsMtx.Lock()
+				for tag, count := range moreTags {
+					tagCounts[tag] += count
+				}
+				for face, count := range moreFaces {
+					faceCounts[face] += count
+				}
+				countsMtx.Unlock()
 
 				// Can't be any photos inside photos, so we can save a little bit here.
 				stop = true
@@ -132,9 +151,11 @@ func index() (win bool) {
 	}
 
 	outDS, err = db.CommitValue(outDS, types.NewStruct("", types.StructData{
-		"byDate": byDate.Build(),
-		"byTag":  byTag.Build(),
-		"byFace": byFace.Build(),
+		"byDate":       byDate.Build(),
+		"byTag":        byTag.Build(),
+		"byFace":       byFace.Build(),
+		"tagsByCount":  stringsByCount(db, tagCounts),
+		"facesByCount": stringsByCount(db, faceCounts),
 	}))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit: %s\n", err)
@@ -143,6 +164,15 @@ func index() (win bool) {
 
 	win = true
 	return
+}
+
+func stringsByCount(db datas.Database, strings map[types.String]int) types.Map {
+	b := types.NewGraphBuilder(db, types.MapKind, true)
+	for s, count := range strings {
+		// Sort by largest count by negating.
+		b.SetInsert([]types.Value{types.Number(-count)}, s)
+	}
+	return b.Build().(types.Map)
 }
 
 func usage() {
