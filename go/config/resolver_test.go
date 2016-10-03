@@ -95,7 +95,7 @@ func TestResolveDatabaseWithConfig(t *testing.T) {
 	spec := withConfig(t)
 	assert := assert.New(t)
 	for _, d := range append(dbTestsNoAliases, dbTestsWithAliases...) {
-		db := spec.resolveDbSpec(d.input)
+		db := spec.ResolveDbSpec(d.input)
 		assertDbSpecsEquiv(assert, d.expected, db)
 	}
 }
@@ -104,7 +104,7 @@ func TestResolvePathWithConfig(t *testing.T) {
 	spec := withConfig(t)
 	assert := assert.New(t)
 	for _, d := range append(pathTestsNoAliases, pathTestsWithAliases...) {
-		path := spec.resolvePathSpec(d.input)
+		path := spec.ResolvePathSpec(d.input)
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
 }
@@ -113,7 +113,7 @@ func TestResolveDatabaseWithoutConfig(t *testing.T) {
 	spec := withoutConfig(t)
 	assert := assert.New(t)
 	for _, d := range dbTestsNoAliases {
-		db := spec.resolveDbSpec(d.input)
+		db := spec.ResolveDbSpec(d.input)
 		assert.Equal(d.expected, db, d.input)
 	}
 }
@@ -122,7 +122,7 @@ func TestResolvePathWithoutConfig(t *testing.T) {
 	spec := withoutConfig(t)
 	assert := assert.New(t)
 	for _, d := range pathTestsNoAliases {
-		path := spec.resolvePathSpec(d.input)
+		path := spec.ResolvePathSpec(d.input)
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
 
@@ -142,8 +142,8 @@ func TestResolveDestPathWithDot(t *testing.T) {
 		{remoteSpec+"::"+testDs, ".",	remoteSpec+"::"+testDs, localSpec+"::"+testDs},
 	}
 	for _, d := range data {
-		src := spec.resolvePathSpec(d.src)
-		dest := spec.resolvePathSpec(d.dest)
+		src := spec.ResolvePathSpec(d.src)
+		dest := spec.ResolvePathSpec(d.dest)
 		assertPathSpecsEquiv(assert, d.expSrc, src)
 		assertPathSpecsEquiv(assert, d.expDest, dest)
 	}

@@ -15,6 +15,8 @@ import (
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
+	"github.com/attic-labs/noms/go/config"
+	"github.com/attic-labs/noms/go/util/verbose"
 )
 
 func main() {
@@ -26,6 +28,7 @@ func main() {
 func index() (win bool) {
 	var dbStr = flag.String("db", "", "input database spec")
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to - if empty, defaults to input dataset")
+	verbose.RegisterVerboseFlags(flag.CommandLine)
 
 	flag.Usage = usage
 	flag.Parse(false)
@@ -35,12 +38,8 @@ func index() (win bool) {
 		return
 	}
 
-	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "Need at least one dataset to index")
-		return
-	}
-
-	db, err := spec.GetDatabase(*dbStr)
+	cfg := config.NewResolver()
+	db, err := cfg.GetDatabase(*dbStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid input database '%s': %s\n", flag.Arg(0), err)
 		return

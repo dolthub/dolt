@@ -17,7 +17,6 @@ import (
 
 type Resolver struct {
 	config      *Config
-	deferredErr error  // non-nil if error occurred during construction
 	dotDatapath string // set to the first datapath that was resolved
 }
 
@@ -29,11 +28,11 @@ func NewResolver() *Resolver {
 	c, err := FindNomsConfig()
 	if err != nil {
 		if err != NoConfig {
-			return &Resolver{deferredErr: err}
+			panic(fmt.Errorf("Failed to read .nomsconfig due to: %v", err))
 		}
 		return &Resolver{}
 	}
-	return &Resolver{c, nil, ""}
+	return &Resolver{c, ""}
 }
 
 // Print replacement if one occurred
@@ -50,7 +49,7 @@ func (r *Resolver) verbose(orig string, replacement string) string {
 // Resolve string to database name. If config is defined:
 //   - replace the empty string with the default db url
 //   - replace any db alias with it's url
-func (r *Resolver) resolveDbSpec(str string) string {
+func (r *Resolver) ResolveDbSpec(str string) string {
 	if r.config != nil {
 		if str == "" {
 			return r.config.Db[DefaultDbAlias].Url
@@ -68,7 +67,7 @@ func (r *Resolver) resolveDbSpec(str string) string {
 //     datapath part for subsequent calls.
 //   - if this is not the first call and a "." is used, replace
 //     it with the first datapath.
-func (r *Resolver) resolvePathSpec(str string) string {
+func (r *Resolver) ResolvePathSpec(str string) string {
 	if r.config != nil {
 		split := strings.SplitN(str, spec.Separator, 2)
 		db, rest := "", split[0]
@@ -80,7 +79,7 @@ func (r *Resolver) resolvePathSpec(str string) string {
 		} else if rest == "." {
 			rest = r.dotDatapath
 		}
-		return r.resolveDbSpec(db) + spec.Separator + rest
+		return r.ResolveDbSpec(db) + spec.Separator + rest
 	}
 	return str
 }
@@ -89,36 +88,24 @@ func (r *Resolver) resolvePathSpec(str string) string {
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
 func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
-	if r.deferredErr != nil {
-		return nil, r.deferredErr
-	}
-	return spec.GetDatabase(r.verbose(str, r.resolveDbSpec(str)))
+	return spec.GetDatabase(r.verbose(str, r.ResolveDbSpec(str)))
 }
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
 func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
-	if r.deferredErr != nil {
-		return nil, r.deferredErr
-	}
-	return spec.GetChunkStore(r.verbose(str, r.resolveDbSpec(str)))
+	return spec.GetChunkStore(r.verbose(str, r.ResolveDbSpec(str)))
 }
 
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
-	if r.deferredErr != nil {
-		return nil, datas.Dataset{}, r.deferredErr
-	}
-	return spec.GetDataset(r.verbose(str, r.resolvePathSpec(str)))
+	return spec.GetDataset(r.verbose(str, r.ResolvePathSpec(str)))
 }
 
 // Resolve string to a value path. If a config is present,
 //  - if no db spec is present, assume the default db
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
-	if r.deferredErr != nil {
-		return nil, nil, r.deferredErr
-	}
-	return spec.GetPath(r.verbose(str, r.resolvePathSpec(str)))
+	return spec.GetPath(r.verbose(str, r.ResolvePathSpec(str)))
 }
