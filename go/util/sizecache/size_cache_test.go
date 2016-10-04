@@ -5,14 +5,12 @@
 package sizecache
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
-)
-
-var (
-	valueCounter = 0
 )
 
 func hashFromString(s string) hash.Hash {
@@ -71,6 +69,50 @@ func TestSizeCache(t *testing.T) {
 	assert.False(ok)
 	_, ok = c.Get(hashFromString("data-5"))
 	assert.False(ok)
+}
+
+func concurrencySizeCacheTest(data []string) {
+	dchan := make(chan string, 128)
+	go func() {
+		for _, d := range data {
+			dchan <- d
+		}
+		close(dchan)
+	}()
+
+	cache := New(25)
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			for d := range dchan {
+				cache.Add(d, uint64(len(d)), d)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+// I can't guarantee this will fail if the code isn't correct, but in the
+// previous version of SizeCache, this was able to reliably repro bug #2663.
+func TestConcurrency(t *testing.T) {
+	assert := assert.New(t)
+	generateDataStrings := func(numStrings, numValues int) []string {
+		l := []string{}
+		for i := 0; len(l) < numStrings; i++ {
+			for j := 0; j < numValues && len(l) < numStrings; j++ {
+				l = append(l, fmt.Sprintf("data-%d", i))
+			}
+		}
+		return l
+	}
+
+	data := generateDataStrings(50, 3)
+	for i := 0; i < 100; i++ {
+		assert.NotPanics(func() { concurrencySizeCacheTest(data) })
+	}
 }
 
 func TestTooLargeValue(t *testing.T) {
