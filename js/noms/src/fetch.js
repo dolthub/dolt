@@ -4,7 +4,8 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {request} from 'http';
+import * as http from 'http';
+import * as https from 'https';
 import {parse} from 'url';
 import * as Bytes from './bytes.js';
 
@@ -27,6 +28,11 @@ function objectToMap<T>(object: {[key: string]: T}): Map<string, T> {
   return m;
 }
 
+const requestModules = {
+  'http:': http,
+  'https:': https,
+};
+
 function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   const opts: any = parse(url);
   opts.method = options.method || 'GET';
@@ -34,7 +40,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
     opts.headers = options.headers;
   }
   return new Promise((resolve, reject) => {
-    const req = request(opts, res => {
+    const req = requestModules[opts.protocol].request(opts, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         reject(new Error(`HTTP Error: ${res.statusCode}`));
         return;
@@ -72,7 +78,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
     // then catch that event and report an error.
     req.setTimeout(2 * 60 * 1000, () => req.abort());
     req.on('abort', () => {
-      reject(new Error('HTTP request timed out'));
+      reject(new Error('Request timed out'));
     });
 
     if (options.body) {
