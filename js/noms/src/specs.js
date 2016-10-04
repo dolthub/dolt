@@ -71,15 +71,16 @@ export class DatabaseSpec {
   }
 
   /**
-   * Constructs a new Database based on the parsed spec.
+   * Constructs a new Database based on the parsed spec. If cacheSize is
+   * specified and > 0, the Database will be backed by a cache.
    */
-  database(): Database {
+  database(cacheSize: number = 0): Database {
     switch (this.scheme) {
       case 'mem':
-        return new Database(new BatchStoreAdaptor(notNull(this._ms)));
+        return new Database(new BatchStoreAdaptor(notNull(this._ms)), cacheSize);
       case 'http':
       case 'https':
-        return new Database(new HttpBatchStore(`${this.scheme}:${this.path}`));
+        return new Database(new HttpBatchStore(`${this.scheme}:${this.path}`), cacheSize);
       default:
         throw new Error('Unreached');
     }
