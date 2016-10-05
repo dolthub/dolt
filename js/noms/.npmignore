@@ -4,3 +4,4 @@ src/
 *.tgz
 *-test.js
 *-test.js.flow
+coverage.lcov
