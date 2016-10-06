@@ -19,7 +19,7 @@ export class IndexedSequence<T> extends Sequence<T> {
 
   getCompareFn(other: IndexedSequence<any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
-      // $FlowIssue
+      // $FlowIssue: Does not realize that these are Values.
       equals(this.items[idx], other.items[otherIdx]);
   }
 

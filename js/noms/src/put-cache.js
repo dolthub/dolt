@@ -84,7 +84,7 @@ export default class OrderedPutCache {
       // TODO: This should be resolve(emptyChunk)
       return null;
     }
-    //$FlowIssue
+    // $FlowIssue: Flow doesn't know that Promise.all takes an iterable.
     return Promise.all(this._appends)
       .then(() => this._coll)
       .then(coll => coll.findOne(hash))
@@ -104,7 +104,7 @@ export default class OrderedPutCache {
     if (!this._chunkIndex.has(limit)) {
       return Promise.reject(new Error('Tried to drop unknown chunk: ' + limit));
     }
-    //$FlowIssue
+    // $FlowIssue: Flow doesn't know that Promise.all takes an iterable.
     return Promise.all(this._appends).then(() => this._coll).then(coll => {
       let count = 0;
       for (const [hash, dbKey] of this._chunkIndex) {
@@ -121,7 +121,7 @@ export default class OrderedPutCache {
    * Returns a stream that iterates over the chunks between `first` and `last` (inclusive).
    */
   extractChunks(first: string, last: string): Promise<ChunkStream> {
-    //$FlowIssue
+    // $FlowIssue: Flow doesn't know that Promise.all takes an iterable.
     return Promise.all(this._appends)
       .then(() => this._coll)
       .then(coll => {
