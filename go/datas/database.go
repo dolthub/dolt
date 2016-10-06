@@ -41,10 +41,10 @@ type Database interface {
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
 	// persistent after Commit() returns.
-	// The new Commit struct is constructed using `v`, `opts.Parents`, and
-	// `opts.Meta`. If `opts.Parents` is the zero value (`types.Set{}`) then
-	// the current head is used. If `opts.Meta is the zero value
-	// (`types.Struct{}`) then a fully initialized empty Struct is passed to
+	// The new Commit struct is constructed using v, opts.Parents, and
+	// opts.Meta. If opts.Parents is the zero value (types.Set{}) then
+	// the current head is used. If opts.Meta is the zero value
+	// (types.Struct{}) then a fully initialized empty Struct is passed to
 	// NewCommit.
 	// The returned Dataset is always the newest snapshot, regardless of
 	// success or failure, and Datasets() is updated to match backing storage

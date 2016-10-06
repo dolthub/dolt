@@ -15,6 +15,12 @@ import type {BatchStore} from './batch-store.js';
 import Dataset from './dataset.js';
 import Commit from './commit.js';
 import {equals} from './compare.js';
+import type Struct from './struct.js';
+
+type CommitOptions = {
+  parents?: ?Array<Ref<Commit<any>>>,
+  meta?: Struct | void,
+};
 
 /**
  * Database provides versioned storage for noms values. While Values can be
@@ -90,20 +96,24 @@ export default class Database {
   }
 
   /**
-   * commit updates the commit that ds.id points at. If parents is provided then the promise
-   * is rejected if the commit does not descend from the parents.
-   * The returned Dataset is always the newest snapshot, regardless of
-   * success or failure, and datasets() is updated to match backing storage
+   * Commit updates the commit that `ds.id` in this database points at. All values that have been
+   * written to this database are guaranteed to be persistent after `commit()` returns. The new
+   * `Commit` struct is constructed using `v`, `opts.parents`, and `opts.meta`. If `opts.parents`
+   * is present and not `undefined` then the current head is used. If `opts.meta is present and not
+   * `undefined` then a fully initialized empty `Struct` is used to create the `Commit` struct.
+   * The returned `Dataset` is always the newest snapshot, regardless of
+   * success or failure, and `datasets()` is updated to match backing storage
    * upon return as well. If the update cannot be performed, e.g., because
-   * of a conflict, commit() throws an error containing 'Merge Needed'.
+   * of a conflict, `commit` returns a rejected `Promise`.
    */
-  async commit(ds: Dataset, v: Value, parents: ?Array<Ref<Commit<any>>> = undefined):
-  Promise<Dataset> {
+  async commit(ds: Dataset, v: Value, opts: CommitOptions = {}): Promise<Dataset> {
+    let {parents} = opts;
     if (!parents) {
       const headRef = await ds.headRef();
       parents = headRef ? [headRef] : [];
     }
-    const commit = new Commit(v, new Set(parents));
+
+    const commit = new Commit(v, new Set(parents), opts.meta);
     try {
       const commitRefPromise = this._doCommit(ds.id, commit);
       await commitRefPromise;

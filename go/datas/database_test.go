@@ -461,3 +461,15 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 
 	suite.db.WriteValue(types.NewList(andMore...))
 }
+
+func (suite *DatabaseSuite) TestMetaOption() {
+	ds := suite.db.GetDataset("ds1")
+	m := types.NewStruct("M", types.StructData{
+		"author": types.String("arv"),
+	})
+
+	ds, err := suite.db.Commit(ds, types.String("a"), CommitOptions{Meta: m})
+	suite.NoError(err)
+	c := ds.Head()
+	suite.Equal(types.String("arv"), c.Get("meta").(types.Struct).Get("author"))
+}

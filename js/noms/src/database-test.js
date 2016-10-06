@@ -14,8 +14,10 @@ import Commit from './commit.js';
 import Database from './database.js';
 import {notNull} from './assert.js';
 import List from './list.js';
+import Struct, {newStruct} from './struct.js';
 import {encodeValue} from './codec.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
+import {invariant} from './assert.js';
 
 suite('Database', () => {
   test('access', async () => {
@@ -58,7 +60,7 @@ suite('Database', () => {
     assert.strictEqual('a', aCommit1.value);
 
     // |a| <- |b|
-    ds = await db.commit(ds2, 'b', [aRef]);
+    ds = await db.commit(ds2, 'b', {parents: [aRef]});
     const bRef = notNull(await ds.headRef());
     assert.strictEqual(2, bRef.height);
     assert.strictEqual('b', notNull(await ds.head()).value);
@@ -77,7 +79,7 @@ suite('Database', () => {
     assert.strictEqual('b', notNull(await ds.head()).value);
 
     // |a| <- |b| <- |d|
-    ds = await db.commit(ds, 'd', [bRef]);
+    ds = await db.commit(ds, 'd', {parents: [bRef]});
     const dRef = notNull(await ds.headRef());
     assert.strictEqual(3, dRef.height);
     assert.strictEqual('d', notNull(await ds.head()).value);
@@ -85,7 +87,7 @@ suite('Database', () => {
     // Attempt to recommit |b| with |a| as parent.
     // Should be disallowed.
     try {
-      ds = await db.commit(ds, 'b', [aRef]);
+      ds = await db.commit(ds, 'b', {parents: [aRef]});
       throw new Error('not reached');
     } catch (ex) {
       message = ex.message;
@@ -115,7 +117,7 @@ suite('Database', () => {
     // |a| <- |b|
     ds = await db.commit(ds, 'a');
     const aRef = notNull(await ds.headRef());
-    ds = await db.commit(ds, 'b', [aRef]);
+    ds = await db.commit(ds, 'b', {parents: [aRef]});
     const bRef = notNull(await ds.headRef());
     assert.strictEqual('b', notNull(await ds.head()).value);
 
@@ -124,7 +126,7 @@ suite('Database', () => {
 
     // Change 1:
     // |a| <- |b| <- |c|
-    ds = await db.commit(ds, 'c', [bRef]);
+    ds = await db.commit(ds, 'c', {parents: [bRef]});
     assert.strictEqual('c', notNull(await ds.head()).value);
 
     // Change 2:
@@ -132,7 +134,7 @@ suite('Database', () => {
     // Should be disallowed, Dataset returned by Commit() should have |c| as Head.
     let message = '';
     try {
-      await db2.commit(ds, 'e', [bRef]);
+      await db2.commit(ds, 'e', {parents: [bRef]});
       throw new Error('not reached');
     } catch (ex) {
       message = ex.message;
@@ -244,5 +246,19 @@ suite('Database', () => {
     const l5 = new List([ds.writeValue(s1), s3]);
     assert.strictEqual(2, ds.writeValue(l5).height);
     await ds.close();
+  });
+
+  test('meta option', async () => {
+    const db = new Database(makeRemoteBatchStoreFake());
+    let ds = await db.getDataset('ds1');
+
+    const meta = newStruct('M', {author: 'arv'});
+    ds = await db.commit(ds, 'a', {meta});
+
+    const c = await ds.head();
+    invariant(c instanceof Struct);
+
+    const m2 = c.meta;
+    assert.equal(m2.author, 'arv');
   });
 });
