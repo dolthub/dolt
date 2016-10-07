@@ -8,6 +8,7 @@ import argv from 'yargs';
 import {
   createStructClass,
   DatasetSpec,
+  PathSpec,
   isSubtype,
   makeListType,
   makeStructType,
@@ -23,7 +24,7 @@ import {
 const args = argv
   .usage(
     'Finds photos in slurped Facebook metadata\n\n' +
-    'Usage: node . <in-dataset> <out-dataset>')
+    'Usage: node . <in-path> <out-dataset>')
   .demand(2)
   .argv;
 
@@ -69,10 +70,14 @@ const NomsDate = createStructClass(
   makeStructType('Date', {nsSinceEpoch: numberType}));
 
 async function main(): Promise<void> {
-  const inSpec = DatasetSpec.parse(args._[0]);
-  const [db, input] = await inSpec.value();
+  const inSpec = PathSpec.parse(args._[0]);
+  const pinnedSpec = await inSpec.pin();
+  if (!pinnedSpec) {
+    throw `Invalid input dataset: ${inSpec.path.dataset}`;
+  }
+  const [db, input] = await pinnedSpec.value();
   if (!input) {
-    return db.close();
+    throw `Invalid input spec: ${inSpec.toString()}`;
   }
   const outSpec = DatasetSpec.parse(args._[1]);
   const [outDB, output] = outSpec.dataset();
@@ -99,9 +104,14 @@ async function main(): Promise<void> {
     }
   });
 
-  return outDB.commit(output, await result)
-    .then(() => db.close())
-    .then(() => outDB.close());
+  return outDB.commit(output, await result, {
+    meta: newStruct('', {
+      date: new Date().toISOString(),
+      input: pinnedSpec.toString(),
+    }),
+  })
+  .then(() => db.close())
+  .then(() => outDB.close());
 }
 
 function getGeo(input): Struct {

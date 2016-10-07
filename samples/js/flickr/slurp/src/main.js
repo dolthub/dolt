@@ -86,7 +86,10 @@ async function main(): Promise<void> {
   return db.commit(out, newStruct('', {
     photosetsMeta: jsonToNoms(photosetsJSON),
     photosets: await photosets,
-  })).then(() => db.close());
+  }), {
+    meta: newStruct('', {date: new Date().toISOString()}),
+  })
+  .then(() => db.close());
 }
 
 async function getPhotosetsJSON(): Promise<any> {

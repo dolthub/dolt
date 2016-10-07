@@ -85,6 +85,18 @@ export class DatabaseSpec {
         throw new Error('Unreached');
     }
   }
+
+  toString(): string {
+    switch (this.scheme) {
+      case 'mem':
+        return this.scheme;
+      case 'http':
+      case 'https':
+        return `${this.scheme}:${this.path}`;
+      default:
+        throw new Error('Unreached');
+    }
+  }
 }
 
 /**
@@ -131,6 +143,10 @@ export class DatasetSpec {
     const [db, ds] = this.dataset();
     return ds.head().then(commit => [db, commit ? commit.value : null]);
   }
+
+  toString(): string {
+    return `${this.database.toString()}::${this.name}`;
+  }
 }
 
 /**
@@ -158,6 +174,23 @@ export class PathSpec {
   }
 
   /**
+   * Returns a new PathSpec in which the dataset component, if any, has been
+   * replaced with the hash of the HEAD of that dataset. This "pins" the path
+   * to the state of the database at the current moment in time.
+   */
+  async pin(): Promise<?PathSpec> {
+    if (this.path.dataset !== '') {
+      const ds = this.database.database().getDataset(this.path.dataset);
+      const commit = await ds.head();
+      if (!commit) {
+        return null;
+      }
+      return new PathSpec(this.database,
+        new AbsolutePath('', commit.hash, this.path.path));
+    }
+  }
+
+  /**
    * Resolves this PathSpec, and returns the database it was resolved in, and the value it
    * resolved to. If the value wasn't found, it will be `null`.
    *
@@ -166,6 +199,10 @@ export class PathSpec {
   value(): Promise<[Database, Value|null]> {
     const db = this.database.database();
     return this.path.resolve(db).then(value => [db, value]);
+  }
+
+  toString(): string {
+    return `${this.database.toString()}::${this.path.toString()}`;
   }
 }
 
