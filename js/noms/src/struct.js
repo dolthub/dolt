@@ -15,6 +15,7 @@ import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import * as Bytes from './bytes.js';
+import {isSubtype} from './assert-type.js';
 
 type StructData = {[key: string]: Value};
 
@@ -106,8 +107,6 @@ export class StructFieldMirror {
   }
 }
 
-type FieldCallback = (f: StructFieldMirror) => void;
-
 /**
  * A StructMirror allows reflection of a Noms struct.
  * This allows you to get and set a field by its name. Normally a Noms Struct will have a
@@ -117,6 +116,9 @@ type FieldCallback = (f: StructFieldMirror) => void;
  */
 export class StructMirror<T: Struct> {
   _values: Value[];
+  /**
+   * The type of the struct this mirror is representing.
+   */
   type: Type<StructDesc>;
 
   constructor(s: Struct) {
@@ -131,31 +133,56 @@ export class StructMirror<T: Struct> {
   /**
    * Iterates over all the fields in the struct and calls `cb`.
    */
-  forEachField(cb: FieldCallback) {
+  forEachField(cb: (f: StructFieldMirror) => void) {
     this.desc.fields.forEach((f, i) => {
       cb(new StructFieldMirror(this._values[i], f.name, f.type));
     });
   }
 
+  /**
+   * The name of the struct type.
+   */
   get name(): string {
     return this.desc.name;
   }
 
+  /**
+   * Gets the value of a field in the struct. If the struct does not a have a field with the name
+   * `name` then this returns `undefined`.
+   */
   get(name: string): ?Value {
     const i = findFieldIndex(name, this.desc.fields);
     return i !== -1 ? this._values[i] : undefined;
   }
 
+  /**
+   * Whether the struct has a field with the name `name`.
+   */
   has(name: string): boolean {
     return findFieldIndex(name, this.desc.fields) !== -1;
   }
 
   /**
-   * Returns a new struct where the field `name` has been set to `value`.
+   * Returns a new struct where the field `name` has been set to `value`. If `name` is not an
+   * existing field in the struct or the type of `value` is different from the old value of the
+   * struct field a new struct type is created.
    */
   set(name: string, value: Value): T {
-    const values = setValue(this._values, this.desc.fields, name, value);
-    return newStructWithType(this.type, values);
+    const fields = this.desc.fields;
+    const i = findFieldIndex(name, fields);
+    if (i === -1 || !isSubtype(fields[i].type, getTypeOfValue(value))) {
+      // New/change field
+      const data = Object.create(null);
+      for (let i = 0; i < fields.length; i++) {
+        data[fields[i].name] = this._values[i];
+      }
+      data[name] = value;
+      return newStruct(this.name, data);
+    }
+
+    const newValues = this._values.concat();  // shallow clone
+    newValues[i] = value;
+    return newStructWithType(this.type, newValues);
   }
 }
 
@@ -215,14 +242,6 @@ function getSetter(i: number) {
     values[i] = value;
     return newStructWithType(this.type, values);
   };
-}
-
-function setValue(values: Value[], fields: Field[], name: string, value: Value): Value[] {
-  const i = findFieldIndex(name, fields);
-  invariant(i !== -1);
-  const newValues = values.concat();  // shallow clone
-  newValues[i] = value;
-  return newValues;
 }
 
 /**

@@ -73,11 +73,21 @@ func TestGenericStructSet(t *testing.T) {
 	s := NewStruct("S3", StructData{"b": Bool(true), "o": String("hi")})
 	s2 := s.Set("b", Bool(false))
 
-	assert.Panics(func() { s.Set("b", Number(1)) })
-	assert.Panics(func() { s.Set("x", Number(1)) })
-
 	s3 := s2.Set("b", Bool(true))
 	assert.True(s.Equals(s3))
+
+	// Changes the type
+	s4 := s.Set("b", Number(42))
+	assert.True(MakeStructType("S3", []string{"b", "o"}, []*Type{NumberType, StringType}).Equals(s4.Type()))
+
+	// Adds a new field
+	s5 := s.Set("x", Number(42))
+	assert.True(MakeStructType("S3", []string{"b", "o", "x"}, []*Type{BoolType, StringType, NumberType}).Equals(s5.Type()))
+
+	// Subtype
+	s6 := NewStruct("", StructData{"l": NewList(Number(0), Number(1), Bool(false), Bool(true))})
+	s7 := s6.Set("l", NewList(Number(2), Number(3)))
+	assert.True(s6.Type().Equals(s7.Type()))
 }
 
 func TestStructDiff(t *testing.T) {

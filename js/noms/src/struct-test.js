@@ -81,6 +81,26 @@ suite('Struct', () => {
     const s5 = s3.setO('bye');
     const s6 = new StructMirror(s3).set('o', 'bye');
     assert.isTrue(equals(s5, s6));
+
+    // Changes the type
+    const s7 = new StructMirror(s1).set('b', 42);
+    assert.isTrue(equals(s7.type, makeStructType('S3', {
+      b: numberType,
+      o: stringType,
+    })));
+
+    // Adds a new field
+    const s8 = new StructMirror(s1).set('x', 42);
+    assert.isTrue(equals(s8.type, makeStructType('S3', {
+      b: boolType,
+      o: stringType,
+      x: numberType,
+    })));
+
+    // Subtype
+    const s9 = newStruct('', {l: new List([0, 1, false, true])});
+    const s10 = new StructMirror(s9).set('l', new List([2, 3]));
+    assert.isTrue(equals(s9.type, s10.type));
   });
 
   test('createStructClass', () => {

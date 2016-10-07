@@ -97,6 +97,8 @@ func (s Struct) desc() StructDesc {
 	return s.t.Desc.(StructDesc)
 }
 
+// MaybeGet returns the value of a field in the struct. If the struct does not a have a field with
+// the name name then this returns (nil, false).
 func (s Struct) MaybeGet(n string) (Value, bool) {
 	_, i := s.desc().findField(n)
 	if i == -1 {
@@ -105,6 +107,8 @@ func (s Struct) MaybeGet(n string) (Value, bool) {
 	return s.values[i], true
 }
 
+// Get returns the value of a field in the struct. If the struct does not a have a field with the
+// name name then this panics.
 func (s Struct) Get(n string) Value {
 	_, i := s.desc().findField(n)
 	if i == -1 {
@@ -113,16 +117,24 @@ func (s Struct) Get(n string) Value {
 	return s.values[i]
 }
 
+// Set returns a new struct where the field name has been set to value. If name is not an
+// existing field in the struct or the type of value is different from the old value of the
+// struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	f, i := s.desc().findField(n)
-	if i == -1 {
-		d.Chk.Fail(fmt.Sprintf(`Struct has no field "%s"`, n))
+	if i == -1 || !IsSubtype(f.t, v.Type()) {
+		// New/change field
+		data := make(StructData, len(s.values)+1)
+		for i, f := range s.desc().fields {
+			data[f.name] = s.values[i]
+		}
+		data[n] = v
+		return NewStruct(s.desc().Name, data)
 	}
-	assertSubtype(f.t, v)
+
 	values := make([]Value, len(s.values))
 	copy(values, s.values)
 	values[i] = v
-
 	return Struct{values, s.t, &hash.Hash{}}
 }
 
