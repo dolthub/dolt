@@ -49,7 +49,6 @@ const query = [
   'place',
   'name',
   'backdated_time',
-  'last_used_time',
   'link',
   'name_tags',
   'updated_time',
@@ -117,7 +116,7 @@ async function main(): Promise<void> {
 }
 
 async function getUser(): Promise<Struct> {
-  const result = await jsonToNoms(await callFacebook('v2.7/me'));
+  const result = await jsonToNoms(await callFacebook('v2.8/me'));
   invariant(result instanceof Struct);
   return result;
 }
@@ -126,7 +125,7 @@ async function getPhotos(): Promise<List<any>> {
   // Calculate the number of expected fetches via the list of albums, so that we can show progress.
   // This appears to be the fastest way (photos only let you paginate).
   const batchSize = 1000;
-  const albumsJSON = await callFacebook(`v2.5/me/albums?limit=${batchSize}&fields=count`);
+  const albumsJSON = await callFacebook(`v2.8/me/albums?limit=${batchSize}&fields=count`);
   const expected = albumsJSON.data.reduce((prev, album) => prev + album.count, 0);
   let seen = 0;
 
@@ -140,13 +139,19 @@ async function getPhotos(): Promise<List<any>> {
   // Sadly we cannot issue these requests in parallel because Facebook doesn't give you a way to
   // get individual page URLs ahead of time.
   let result = await new List();
-  let url = 'v2.7/me/photos/uploaded?limit=1000&fields=' + query.join(',') +
+  let url = 'v2.8/me/photos/uploaded?limit=1000&fields=' + query.join(',') +
       '&date_format=U';
   while (url) {
     const photosJSON = await callFacebook(url);
     result = await result.append(await jsonToNoms(photosJSON));
-    url = photosJSON.paging.next;
-    seen += photosJSON.data.length;
+    if (photosJSON.paging !== undefined) {
+      url = photosJSON.paging.next;
+    } else {
+      url = null;
+    }
+    if (photosJSON.data !== undefined) {
+      seen += photosJSON.data.length;
+    }
     updateProgress();
   }
   return result;
