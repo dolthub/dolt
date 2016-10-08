@@ -19,18 +19,22 @@ import {
   newStruct,
   Struct,
 } from '@attic/noms';
+import {stripIndent} from 'common-tags';
 
 const args = argv
-  .usage(
-    'Parses photo metadata from Facebook API\n\n' +
-    'Usage: node . --access-token=<token> [--exchange-token | <dest-dataset>]\n\n' +
-    'Create an access token as follows:\n' +
-    '1. Browse to https://developers.facebook.com/tools/explorer/\n' +
-    '2. Login with your Facebook credentials\n' +
-    '3. In the "Get Token" dropdown menu, select "Get User Access Token"\n' +
-    '4. Copy the Access Token from the textbox\n' +
-    '5. (optional) Exchange the "short-lived" token from (4) for a long-lived one:\n' +
-    '   node . --access-token=<short-lived-token> --exchange-token')
+  .usage(stripIndent`
+    Parses photo metadata from Facebook API
+
+    Usage: node . --access-token=<token> [--exchange-token | <dest-dataset>]
+
+    Create an access token as follows:
+    1. Browse to https://developers.facebook.com/tools/explorer/
+    2. Login with your Facebook credentials.
+    3. Select "AtticIO Photo Importer" in the "Application" drop down.
+    4. In the "Get Token" dropdown menu, select "Get User Access Token".
+    5. Copy the Access Token from the textbox.
+    6. (optional) Exchange the "short-lived" token from (5) for a long-lived one:
+       node . --access-token=<short-lived-token> --exchange-token`)
   .option('access-token', {
     describe: 'Facebook API access key',
     type: 'string',
