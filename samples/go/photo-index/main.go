@@ -9,15 +9,16 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
+	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/exit"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
-	"github.com/attic-labs/noms/go/config"
-	"github.com/attic-labs/noms/go/util/verbose"
 )
 
 func main() {
@@ -150,13 +151,17 @@ func index() (win bool) {
 		})
 	}
 
-	outDS, err = db.CommitValue(outDS, types.NewStruct("", types.StructData{
+	outDS, err = db.Commit(outDS, types.NewStruct("", types.StructData{
 		"byDate":       byDate.Build(),
 		"byTag":        byTag.Build(),
 		"byFace":       byFace.Build(),
 		"tagsByCount":  stringsByCount(db, tagCounts),
 		"facesByCount": stringsByCount(db, faceCounts),
-	}))
+	}), datas.CommitOptions{
+		Meta: types.NewStruct("", types.StructData{
+			"date": types.String(time.Now().Format(time.RFC3339)),
+		}),
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit: %s\n", err)
 		return
