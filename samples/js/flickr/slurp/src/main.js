@@ -9,7 +9,6 @@ import {
   DatasetSpec,
   jsonToNoms,
   newStruct,
-  Set,
 } from '@attic/noms';
 import Flickr from './flickr.js';
 
@@ -44,6 +43,12 @@ const args = argv
   .argv;
 
 const clearLine = '\x1b[2K\r';
+const flickr = new Flickr(
+  args['api-key'], args['api-secret'],
+  args['access-token'], args['access-token-secret']);
+
+let totalPhotos = 0;
+let gottenPhotos = 0;
 
 main().catch(ex => {
   console.error(ex);
@@ -58,44 +63,73 @@ async function main(): Promise<void> {
 
   const [db, out] = outSpec.dataset();
 
-  const flickr = new Flickr(args['api-key'], args['api-secret'],
-                            args['access-token'], args['access-token-secret']);
-
   if (!args['access-token'] || !args['access-token-secret']) {
     await flickr.authenticate();
     process.stdout.write(`Authenticated. Next time run:\n${
       process.argv.join(' ')} --access-token=${flickr.accessToken} --access-token-secret=${
       flickr.accessTokenSecret}\n\n`);
   }
+  const userId = await getUserId();
+  const photos = getAllPhotos(userId);
+  const photosets = getPhotosets();
 
-  const photosets = await getPhotosets(flickr);
-  let seen = 0;
-  const photosetsPromise = photosets.map(p => getPhotoset(flickr, p.id).then(p => {
-    process.stdout.write(`${clearLine}${++seen} of ${photosets.length} photosets imported...`);
-    return jsonToNoms(p);
-  }));
-  const setOfPhotosets = new Set(await Promise.all(photosetsPromise));
-
-  process.stdout.write(clearLine);
-  return db.commit(out, newStruct('', {
-    photosetsMeta: jsonToNoms(photosets),
-    photosets: await setOfPhotosets,
+  await db.commit(out, jsonToNoms({
+    photos: await photos,
+    photosets: await photosets,
   }), {
     meta: newStruct('', {date: new Date().toISOString()}),
-  })
-  .then(() => db.close());
-}
-
-async function getPhotoset(flickr: Flickr, id: string): Promise<*> {
-  const json = await flickr.callApi('flickr.photosets.getPhotos', {
-    'photoset_id': id,
-    extras: 'license, date_upload, date_taken, owner_name, icon_server, original_format, ' +
-      'last_update, geo, tags, machine_tags, o_dims, views, media, path_alias, url_sq, url_t, ' +
-      'url_s, url_m, url_o',
   });
-  return json.photoset;
+  await db.close();
+  process.stdout.write(clearLine);
 }
 
-function getPhotosets(flickr: Flickr): Promise<*> {
-  return flickr.callApi('flickr.photosets.getList').then(v => v.photosets.photoset);
+function getUserId(): Promise<string> {
+  return flickr.callApi('flickr.urls.getUserProfile').then(d => d.user.nsid);
+}
+
+function getAllPhotos(userId: string): Promise<Array<any>> {
+  const minPrivacy = 1;
+  const maxPrivacy = 5;
+  const results = [];
+  for (let i = minPrivacy; i <= maxPrivacy; i++) {
+    results.push(getPhotos(userId, i));
+  }
+  return Promise.all(results);
+}
+
+async function getPhotos(userId: string, privacyFilter: number): Promise<Array<any>> {
+  const perPage = 500;
+  const p1 = await getPhotoPage(userId, privacyFilter, perPage, 1);
+  totalPhotos += Number(p1.photos.total);
+  updateStatus();
+  const results = [];
+  // We got page '1' (first page) above. Get pages 2-n here.
+  for (let i = 2; i <= p1.photos.pages; i++) {
+    results.push(getPhotoPage(userId, privacyFilter, perPage, i));
+  }
+  return [p1].concat(await Promise.all(results));
+}
+
+async function getPhotoPage(userId: string, privacyFilter: number, perPage: number,
+    pageNumber: number): Promise<any> {
+  const result = await flickr.callApi('flickr.photos.search', {
+    'user_id': userId,
+    'privacy_filter': String(privacyFilter),
+    'per_page': String(perPage),
+    page: String(pageNumber),
+    extras: 'description,license,date_upload,date_taken,owner_name,icon_server,original_format,' +
+        'last_update,geo,tags,machine_tags,o_dims,views,media,path_alias,url_sq,url_t,url_s,' +
+        'url_q,url_m,url_n,url_z,url_c,url_l,url_o',
+  });
+  gottenPhotos += Number(result.photos.photo.length);
+  updateStatus();
+  return result;
+}
+
+async function getPhotosets(): Promise<any> {
+  return await flickr.callApi('flickr.photosets.getList');
+}
+
+function updateStatus() {
+  process.stdout.write(`${clearLine}${gottenPhotos}/${totalPhotos}...`);
 }
