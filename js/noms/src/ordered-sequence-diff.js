@@ -15,8 +15,7 @@ import type Value from './value.js'; // eslint-disable-line no-unused-vars
  * Returns a 3-tuple [added, removed, modified] sorted keys.
  */
 export default async function diff<K: Value, T>(
-    last: OrderedSequence<K, T>, current: OrderedSequence<K, T>):
-    Promise<[Array<K>, Array<K>, Array<K>]> {
+    last: OrderedSequence<K, T>, current: OrderedSequence<K, T>): Promise<[K[], K[], K[]]> {
   // TODO: Construct the cursor at exactly the right position. There is no point reading in the
   // first chunk of each sequence if we're not going to use them. This needs for chunks (or at
   // least meta chunks) to encode their height.
@@ -57,8 +56,8 @@ export default async function diff<K: Value, T>(
 /**
  * Advances |a| and |b| past their common sequence of equal values.
  */
-export function fastForward(a: OrderedSequenceCursor<any, any>, b: OrderedSequenceCursor<any, any>):
-    Promise<void> {
+export function fastForward(a: OrderedSequenceCursor<any, any>, b: OrderedSequenceCursor<any, any>)
+    : Promise<void> {
   return a.valid && b.valid ? doFastForward(true, a, b).then() : Promise.resolve();
 }
 

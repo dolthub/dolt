@@ -136,7 +136,7 @@ function constructPath(parts: Array<Part>, str: string) {
   throw new SyntaxError(`Invalid operator: ${op}`);
 }
 
-function parsePathIndex(str: string): [indexType|null, Hash|null, string] {
+function parsePathIndex(str: string): [indexType | null, Hash | null, string] {
   if (str[0] === '"') {
     // String is complicated because ] might be quoted, and " or \ might be escaped.
     const stringBuf = [];

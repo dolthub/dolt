@@ -164,7 +164,7 @@ suite('walk', () => {
   });
 });
 
-async function callbackHappensOnce(v: Value, ds: Database, skip: bool): Promise<void> {
+async function callbackHappensOnce(v: Value, ds: Database, skip: boolean): Promise<void> {
   // Test that our callback only gets called once.
   let count = 0;
   await walk(v, ds, async cv => {

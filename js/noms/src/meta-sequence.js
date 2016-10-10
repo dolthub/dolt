@@ -131,14 +131,14 @@ function getCollectionTypes(tuple: MetaTuple<any>): Type<any>[] {
   return tuple.ref.type.desc.elemTypes[0].desc.elemTypes;
 }
 
-export function newListMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<any>>):
-    IndexedMetaSequence {
+export function newListMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<any>>)
+    : IndexedMetaSequence {
   const t = makeListType(makeUnionType(items.map(tuple => getCollectionTypes(tuple)[0])));
   return new IndexedMetaSequence(vr, t, items);
 }
 
-export function newBlobMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<any>>):
-    IndexedMetaSequence {
+export function newBlobMetaSequence(vr: ?ValueReader, items: Array<MetaTuple<any>>)
+    : IndexedMetaSequence {
   return new IndexedMetaSequence(vr, blobType, items);
 }
 
@@ -306,8 +306,8 @@ export class OrderedMetaSequence<K: Value> extends OrderedSequence<K, MetaTuple<
   }
 }
 
-export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
-    makeChunkFn<any, any> {
+export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader)
+    : makeChunkFn<any, any> {
   return (tuples: Array<MetaTuple<any>>) => {
     const numLeaves = tuples.reduce((l, mt) => l + mt.numLeaves, 0);
     const last = tuples[tuples.length - 1];
@@ -325,8 +325,8 @@ export function newOrderedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
   };
 }
 
-export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader):
-    makeChunkFn<any, any> {
+export function newIndexedMetaSequenceChunkFn(kind: NomsKind, vr: ?ValueReader)
+    : makeChunkFn<any, any> {
   return (tuples: Array<MetaTuple<any>>) => {
     const sum = tuples.reduce((l, mt) => {
       const nv = mt.key.numberValue();

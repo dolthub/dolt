@@ -106,7 +106,7 @@ async function main(): Promise<void> {
       }
 
       // Flickr API always includes a geoposition, but sometimes it is zero.
-      const geo = (getGeo(v):Object);
+      const geo = (getGeo(v): Object);
       if (geo.latitude !== 0 && geo.longitude !== 0) {
         photo.geoposition = geo;
       }

@@ -16,7 +16,7 @@ const __tingodb = tingodb();
 const Db = __tingodb.Db;
 const Binary = __tingodb.Binary;
 
-type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
+type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>;
 type ChunkItem = {hash: string, data: Uint8Array};
 type DbRecord = {hash: string, data: Binary};
 

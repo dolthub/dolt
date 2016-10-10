@@ -15,8 +15,8 @@ import Sequence, {SequenceCursor} from './sequence.js';
 
 export class OrderedSequence<K: Value, T> extends Sequence<T> {
   // See newCursorAt().
-  newCursorAtValue(val: ?K, forInsertion: boolean = false, last: boolean = false):
-      Promise<OrderedSequenceCursor<any, any>> {
+  newCursorAtValue(val: ?K, forInsertion: boolean = false, last: boolean = false)
+      : Promise<OrderedSequenceCursor<any, any>> {
     let key;
     if (val !== null && val !== undefined) {
       key = new OrderedKey(val);
@@ -30,8 +30,8 @@ export class OrderedSequence<K: Value, T> extends Sequence<T> {
   //   -cursor positioned at
   //      -first value, if |key| is null
   //      -first value >= |key|
-  async newCursorAt(key: ?OrderedKey<any>, forInsertion: boolean = false, last: boolean = false):
-      Promise<OrderedSequenceCursor<any, any>> {
+  async newCursorAt(key: ?OrderedKey<any>, forInsertion: boolean = false, last: boolean = false)
+      : Promise<OrderedSequenceCursor<any, any>> {
     let cursor: ?OrderedSequenceCursor<any, any> = null;
     let sequence: ?OrderedSequence<any, any> = this;
 

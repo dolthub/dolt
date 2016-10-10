@@ -76,7 +76,7 @@ export interface NomsWriter {
   writeUint32(v: number): void;
   writeUint64(v: number): void;
   writeNumber(v: number): void;
-  writeBool(v:boolean): void;
+  writeBool(v: boolean): void;
   writeString(v: string): void;
   writeHash(h: Hash): void;
   appendType(t: Type<any>): void;

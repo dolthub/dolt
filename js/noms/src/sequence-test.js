@@ -15,8 +15,7 @@ class TestSequence extends Sequence<any> {
     super(null, makeListType(valueType), items);
   }
 
-  getChildSequence(idx: number): // eslint-disable-line no-unused-vars
-      Promise<?Sequence<any>> {
+  getChildSequence(idx: number): Promise<?Sequence<any>> {
     return Promise.resolve(new TestSequence(this.items[idx]));
   }
 }

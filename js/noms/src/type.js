@@ -195,8 +195,7 @@ export function makeRefType(elemType: Type<any>): Type<CompoundDesc> {
   return staticTypeCache.getCompoundType(Kind.Ref, elemType);
 }
 
-export function makeStructType(name: string, fields: {[key: string]: Type<any>}) :
-    Type<StructDesc> {
+export function makeStructType(name: string, fields: {[key: string]: Type<any>}): Type<StructDesc> {
   return staticTypeCache.makeStructType(name, fields);
 }
 

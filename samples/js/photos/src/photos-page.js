@@ -305,9 +305,8 @@ export default class PhotosPage extends React.Component<void, Props, State> {
     return this._getKeysByCount(index.tagsByCount, 20);
   }
 
-  async _createPhotosIter(
-      selectedDate: Date, selectedFaces: Set<string>, selectedTags: Set<string>):
-        Promise<PhotoSetIterator> {
+  async _createPhotosIter(selectedDate: Date, selectedFaces: Set<string>, selectedTags: Set<string>)
+      : Promise<PhotoSetIterator> {
     const selectedKey = -selectedDate.getTime() * nanosInMillis;
     const {index} = this.props;
     if (selectedTags.size === 0 && selectedFaces.size === 0) {

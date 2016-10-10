@@ -16,7 +16,7 @@ export type UnsentReadMap = { [key: string]: (c: Chunk) => void };
 export type WriteRequest = {
   hash: Hash;
   hints: Set<Hash>;
-}
+};
 
 interface Delegate {
   readBatch(reqs: UnsentReadMap): Promise<void>;

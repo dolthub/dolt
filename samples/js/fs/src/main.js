@@ -84,10 +84,9 @@ async function main(): Promise<void> {
     await db.commit(ds, de);
     process.stdout.write('\ndone\n');
   }
-
 }
 
-async function processPath(p: string, store: Database): Promise<void|Directory|File> {
+async function processPath(p: string, store: Database): Promise<void | Directory | File> {
   numFilesFound++;
   const st = await fs.stat(p);
   sizeFilesFound += st.size;

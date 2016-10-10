@@ -13,7 +13,7 @@ export type ChunkStore = {
   get(hash: Hash): Promise<Chunk>;
   has(hash: Hash): Promise<boolean>;
   put(c: Chunk): void;
-}
+};
 
 export interface RootTracker {
   getRoot(): Promise<Hash>;

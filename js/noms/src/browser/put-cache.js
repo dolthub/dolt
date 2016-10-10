@@ -7,7 +7,7 @@
 import type Chunk from '../chunk.js';
 import {invariant} from '../assert.js';
 
-type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>
+type ChunkStream = (cb: (chunk: Chunk) => void) => Promise<void>;
 type ChunkIndex = Map<string, number>;
 
 /**

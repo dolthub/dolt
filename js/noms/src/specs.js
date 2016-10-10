@@ -196,7 +196,7 @@ export class PathSpec {
    *
    * The caller should always call `close()` when done.
    */
-  value(): Promise<[Database, Value|null]> {
+  value(): Promise<[Database, Value | null]> {
     const db = this.database.database();
     return this.path.resolve(db).then(value => [db, value]);
   }

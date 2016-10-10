@@ -252,7 +252,7 @@ export class SequenceIterator<T, S: Sequence<any>> extends AsyncIterator<T> {
   // Wraps |_advance|.then() with the guarantee that |_advance| hasn't changed since running .then()
   // and the callback being run.
   _safeAdvance(fn: (success: boolean) => AsyncIteratorResult<T> | Promise<AsyncIteratorResult<T>>)
-              :Promise<AsyncIteratorResult<T>> {
+      : Promise<AsyncIteratorResult<T>> {
     const run = advance =>
       advance.then(success => {
         if (advance !== this._advance) {

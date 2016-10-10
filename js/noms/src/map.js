@@ -34,8 +34,7 @@ export type MapEntry<K: Value, V: Value> = [K, V];
 const KEY = 0;
 const VALUE = 1;
 
-function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader):
-    makeChunkFn<any, any> {
+function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<MapEntry<K, V>>) => {
     const key = new OrderedKey(items.length > 0 ? items[items.length - 1][KEY] : false);
     const seq = newMapLeafSequence(vr, items);
@@ -139,8 +138,8 @@ export default class Map<K: Value, V: Value> extends
     return new OrderedSequenceIterator(this.sequence.newCursorAtValue(k));
   }
 
-  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<MapEntry<K, V>>, remove: number):
-      Promise<Map<K, V>> {
+  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<MapEntry<K, V>>, remove: number)
+      : Promise<Map<K, V>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, vr, insert, remove, newMapLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Map, vr),

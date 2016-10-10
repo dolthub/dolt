@@ -14,7 +14,7 @@ type Props = {
   onNodeClick: (e: MouseEvent, s: string) => void,
   tree: TreeNode,
   db: string,
-}
+};
 
 export default function Layout(props: Props) : React.Element<any> {
   const children = [];

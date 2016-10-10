@@ -199,8 +199,7 @@ export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
   }
 }
 
-export function newListLeafSequence<T: Value>(vr: ?ValueReader, items: T[]):
-    ListLeafSequence<T> {
+export function newListLeafSequence<T: Value>(vr: ?ValueReader, items: T[]): ListLeafSequence<T> {
   const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
   return new ListLeafSequence(vr, t, items);
 }

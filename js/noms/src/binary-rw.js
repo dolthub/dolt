@@ -158,7 +158,7 @@ export class BinaryWriter {
     this.offset += encodeVarint(expVal, this.buff, this.offset);
   }
 
-  writeBool(v:boolean): void {
+  writeBool(v: boolean): void {
     this.writeUint8(v ? 1 : 0);
   }
 

@@ -110,7 +110,7 @@ suite('List', () => {
     assert.deepEqual(nums, out);
   }
 
-  async function testForEachAsyncCB(nums: Array<any>, list: List<any>): Promise<void> {
+  function testForEachAsyncCB(nums: Array<any>, list: List<any>): Promise<void> {
     let resolver = null;
     const p = new Promise(resolve => resolver = resolve);
 

@@ -156,8 +156,8 @@ export default class Database {
   }
 }
 
-async function getAncestors(commits: Set<Ref<Commit<any>>>, database: Database):
-    Promise<Set<Ref<Commit<any>>>> {
+async function getAncestors(commits: Set<Ref<Commit<any>>>, database: Database)
+    : Promise<Set<Ref<Commit<any>>>> {
   let ancestors = new Set();
   await commits.map(async (commitRef) => {
     const commit = await database.readValue(commitRef.targetHash);

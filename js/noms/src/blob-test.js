@@ -44,8 +44,7 @@ suite('Blob', () => {
     }
   }
 
-  async function testPrependChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number):
-      Promise<void> {
+  function testPrependChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number): void {
     const nb = new Uint8Array(buff.length + 1);
     for (let i = 0; i < buff.length; i++) {
       nb[i + 1] = buff[i];
@@ -55,8 +54,7 @@ suite('Blob', () => {
     assert.strictEqual(expectCount, chunkDiffCount(blob, v2));
   }
 
-  async function testAppendChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number):
-      Promise<void> {
+  function testAppendChunkDiff(buff: Uint8Array, blob: Blob, expectCount: number): void {
     const nb = new Uint8Array(buff.length + 1);
     for (let i = 0; i < buff.length; i++) {
       nb[i] = buff[i];
@@ -125,8 +123,8 @@ suite('Blob', () => {
       await assertReadFull(buff, b2.getReader());
     });
 
-    await testPrependChunkDiff(buff, blob, expectPrependChunkDiff);
-    await testAppendChunkDiff(buff, blob, expectAppendChunkDiff);
+    testPrependChunkDiff(buff, blob, expectPrependChunkDiff);
+    testAppendChunkDiff(buff, blob, expectAppendChunkDiff);
     await testRandomRead(buff, blob);
   }
 

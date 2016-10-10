@@ -94,8 +94,8 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
     return new OrderedSequenceIterator(this.sequence.newCursorAtValue(v));
   }
 
-  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<T>, remove: number):
-      Promise<Set<T>> {
+  _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<T>, remove: number)
+      : Promise<Set<T>> {
     const vr = this.sequence.vr;
     return chunkSequence(cursor, vr, insert, remove, newSetLeafChunkFn(vr),
                          newOrderedMetaSequenceChunkFn(Kind.Set, vr),

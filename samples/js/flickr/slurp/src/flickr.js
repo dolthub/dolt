@@ -27,8 +27,8 @@ export default class Flickr {
     await this._initAccessToken(token, secret, verificationCode);
   }
 
-  _initAccessToken(oauthToken: string, oauthTokenSecret: string, oauthVerifier: string):
-      Promise<void> {
+  _initAccessToken(oauthToken: string, oauthTokenSecret: string, oauthVerifier: string)
+      : Promise<void> {
     return new Promise((resolve, reject) => {
       const options = {
         flickrConsumerKey: this.apiKey,

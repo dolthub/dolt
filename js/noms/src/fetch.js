@@ -13,7 +13,7 @@ export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
   body?: any,
   headers?: ?{[key: string]: string},
-  withCredentials? : ?boolean,
+  withCredentials?: ?boolean,
 };
 
 type Response<T> = {headers: Map<string, string>, buf: T};

@@ -25,12 +25,12 @@ import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 
 export interface ValueWriter {
-  writeValue<T: Value>(v: T): Ref<T>
+  writeValue<T: Value>(v: T): Ref<T>;
 }
 
 export interface ValueReader {
   // TODO: This should return Promise<?Value>
-  readValue(hash: Hash): Promise<any>
+  readValue(hash: Hash): Promise<any>;
 }
 
 export interface ValueReadWriter {

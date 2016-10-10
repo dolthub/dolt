@@ -17,7 +17,7 @@ import type {
   NomsPhoto,
 } from './types.js';
 
-type PhotoSetIteratorResult = AsyncIteratorResult<[number /* -date */, NomsPhoto]>
+type PhotoSetIteratorResult = AsyncIteratorResult<[number /* -date */, NomsPhoto]>;
 
 export default class PhotoSetIterator extends AsyncIterator<[number, NomsPhoto]> {
 }

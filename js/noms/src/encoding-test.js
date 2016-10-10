@@ -260,7 +260,7 @@ suite('Encoding', () => {
       this.write(float64(v));
     }
 
-    writeBool(v:boolean): void {
+    writeBool(v: boolean): void {
       this.write(v);
     }
 

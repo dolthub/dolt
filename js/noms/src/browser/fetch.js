@@ -10,15 +10,15 @@ export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
   body?: any,
   headers?: ?{[key: string]: string},
-  withCredentials? : ?boolean,
+  withCredentials?: ?boolean,
 };
 
 type ResponseType<T> = {headers: Map<string, string>, buf: T};
 type TextResponse = ResponseType<string>;
 type BufResponse = ResponseType<Uint8Array>;
 
-function internalFetch<T>(url: string, responseType: string, options: FetchOptions = {}):
-    Promise<ResponseType<T>> {
+function internalFetch<T>(url: string, responseType: string, options: FetchOptions = {})
+    : Promise<ResponseType<T>> {
   const xhr = new XMLHttpRequest();
   xhr.responseType = responseType;
   const method = options.method || 'GET';

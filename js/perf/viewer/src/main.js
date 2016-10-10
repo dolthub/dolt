@@ -26,7 +26,7 @@ declare class Chart {
 type DataPoint = {
   median: number;
   stddev: number;
-}
+};
 
 type DataPoints = Map<string /* test name */, (DataPoint | null)[]>;
 

@@ -40,8 +40,7 @@ export async function flatten<T>(iter: AsyncIterator<T>): Promise<Array<T>> {
   return values;
 }
 
-export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number):
-    Promise<Array<T>> {
+export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number): Promise<T[]> {
   const promises = [];
   for (let i = 0; i < count; i++) {
     promises.push(iter.next());
