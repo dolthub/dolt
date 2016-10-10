@@ -10,10 +10,6 @@ body {
   overflow-y: scroll;
 }
 
-b {
-  font-weight: 600;
-}
-
 @keyframes fadeIn {
   0% {
     opacity: 0;

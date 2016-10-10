@@ -71,6 +71,6 @@ export default class Nav {
     }
 
     e.preventDefault();
-    this.push(anchor.pathname);
+    this.push(anchor.pathname + anchor.search);
   }
 }
