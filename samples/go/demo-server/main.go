@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/d"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -45,24 +44,7 @@ func main() {
 		factory = chunks.NewMemoryStoreFactory()
 		fmt.Printf("Using mem ...\n")
 	}
-	factory = &cachingReadThroughStoreFactory{chunks.NewMemoryStore(), factory}
 	defer factory.Shutter()
 
 	startWebServer(factory, *authKeyFlag)
-}
-
-type cachingReadThroughStoreFactory struct {
-	cache   *chunks.MemoryStore
-	factory chunks.Factory
-}
-
-func (f *cachingReadThroughStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	d.PanicIfFalse(f.factory != nil, "Cannot use cachingReadThroughStoreFactory after Shutter().")
-	return chunks.NewReadThroughStore(f.cache, f.factory.CreateStore(ns))
-}
-
-func (f *cachingReadThroughStoreFactory) Shutter() {
-	f.factory.Shutter()
-	f.factory = nil
-	f.cache.Close()
 }
