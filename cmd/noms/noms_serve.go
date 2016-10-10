@@ -37,6 +37,7 @@ func setupServeFlags() *flag.FlagSet {
 	serveFlagSet.IntVar(&port, "port", 8000, "port to listen on for HTTP requests")
 	spec.RegisterDatabaseFlags(serveFlagSet)
 	verbose.RegisterVerboseFlags(serveFlagSet)
+	profile.RegisterProfileFlags(serveFlagSet)
 	return serveFlagSet
 }
 

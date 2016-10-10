@@ -38,7 +38,7 @@ type ValueReadWriter interface {
 type ValueStore struct {
 	bs         BatchStore
 	cache      map[hash.Hash]chunkCacheEntry
-	mu         *sync.Mutex
+	mu         sync.RWMutex
 	valueCache *sizecache.SizeCache
 	opcStore   opCacheStore
 	once       sync.Once
@@ -67,7 +67,7 @@ func NewValueStore(bs BatchStore) *ValueStore {
 }
 
 func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
-	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, &sync.Mutex{}, sizecache.New(cacheSize), nil, sync.Once{}}
+	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, sync.RWMutex{}, sizecache.New(cacheSize), nil, sync.Once{}}
 }
 
 func (lvs *ValueStore) BatchStore() BatchStore {
@@ -154,8 +154,8 @@ func (lvs *ValueStore) isPresent(r hash.Hash) (present bool) {
 }
 
 func (lvs *ValueStore) check(r hash.Hash) chunkCacheEntry {
-	lvs.mu.Lock()
-	defer lvs.mu.Unlock()
+	lvs.mu.RLock()
+	defer lvs.mu.RUnlock()
 	return lvs.cache[r]
 }
 

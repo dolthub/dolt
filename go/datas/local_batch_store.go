@@ -28,7 +28,7 @@ func newLocalBatchStore(cs chunks.ChunkStore) *localBatchStore {
 	return &localBatchStore{
 		cs:            cs,
 		unwrittenPuts: newOrderedChunkCache(),
-		vbs:           types.NewValidatingBatchingSink(cs, types.NewTypeCache()),
+		vbs:           types.NewValidatingBatchingSink(cs),
 		hints:         types.Hints{},
 		hashes:        hash.HashSet{},
 		mu:            &sync.Mutex{},
@@ -101,7 +101,8 @@ func (lbs *localBatchStore) Flush() {
 	var bpe chunks.BackpressureError
 	for c := range chunkChan {
 		if bpe == nil {
-			bpe = lbs.vbs.Enqueue(*c)
+			dc := lbs.vbs.DecodeUnqueued(c)
+			bpe = lbs.vbs.Enqueue(*dc.Chunk, *dc.Value)
 		} else {
 			bpe = append(bpe, c.Hash())
 		}

@@ -46,7 +46,9 @@ func Serialize(chunk Chunk, writer io.Writer) {
 	d.PanicIfFalse(uint32(n) == chunkSize)
 }
 
-// Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If |rateLimit| is non-nill, concurrency will be limited to the available capacity of the channel.
+// Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If
+// |rateLimit| is non-nil, concurrency will be limited to the available
+// capacity of the channel.
 func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg := sync.WaitGroup{}
 
@@ -72,8 +74,12 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 	wg.Wait()
 }
 
-// DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
-func DeserializeToChan(reader io.Reader, chunkChan chan<- *Chunk) {
+// DeserializeToChan reads off of |reader| until EOF, sending chunks to
+// chunkChan in the order they are read. Objects sent over chunkChan are
+// *Chunk.
+// The type is `chan<- interface{}` so that this is compatible with
+// orderedparallel.New().
+func DeserializeToChan(reader io.Reader, chunkChan chan<- interface{}) {
 	for {
 		c, success := deserializeChunk(reader)
 		if !success {
@@ -98,11 +104,11 @@ func deserializeChunk(reader io.Reader) (Chunk, bool) {
 	err = binary.Read(reader, binary.BigEndian, &chunkSize)
 	d.Chk.NoError(err)
 
-	w := NewChunkWriter()
-	n2, err := io.CopyN(w, reader, int64(chunkSize))
+	data := make([]byte, int(chunkSize))
+	n, err = io.ReadFull(reader, data)
 	d.Chk.NoError(err)
-	d.PanicIfFalse(int64(chunkSize) == n2)
-	c := w.Chunk()
+	d.PanicIfFalse(int(chunkSize) == n)
+	c := NewChunk(data)
 	d.PanicIfFalse(h == c.Hash(), "%s != %s", h, c.Hash())
 	return c, true
 }

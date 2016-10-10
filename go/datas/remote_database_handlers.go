@@ -18,6 +18,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/golang/snappy"
 )
 
@@ -88,18 +89,25 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		io.Copy(ioutil.Discard, reader)
 		reader.Close()
 	}()
-	tc := types.NewTypeCache()
-	vbs := types.NewValidatingBatchingSink(cs, tc)
+	vbs := types.NewValidatingBatchingSink(cs)
 	vbs.Prepare(deserializeHints(reader))
 
-	chunkChan := make(chan *chunks.Chunk, 16)
+	chunkChan := make(chan interface{}, 16)
 	go chunks.DeserializeToChan(reader, chunkChan)
+	decoded := orderedparallel.New(
+		chunkChan,
+		func(c interface{}) interface{} {
+			return vbs.DecodeUnqueued(c.(*chunks.Chunk))
+		},
+		16)
+
 	var bpe chunks.BackpressureError
-	for c := range chunkChan {
+	for dci := range decoded {
+		dc := dci.(types.DecodedChunk)
 		if bpe == nil {
-			bpe = vbs.Enqueue(*c)
+			bpe = vbs.Enqueue(*dc.Chunk, *dc.Value)
 		} else {
-			bpe = append(bpe, c.Hash())
+			bpe = append(bpe, dc.Chunk.Hash())
 		}
 		// If a previous Enqueue() errored, we still need to drain chunkChan
 		// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
