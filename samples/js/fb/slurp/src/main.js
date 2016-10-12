@@ -21,6 +21,8 @@ import {
 } from '@attic/noms';
 import {stripIndent} from 'common-tags';
 
+const graphAPIHost = 'https://graph.facebook.com/';
+
 const args = argv
   .usage(stripIndent`
     Parses photo metadata from Facebook API
@@ -73,7 +75,8 @@ main().catch(ex => {
 
 async function main(): Promise<void> {
   if (args['exchange-token']) {
-    const resp = await callFacebookRaw('/oauth/access_token?' +
+    const resp = await callFacebookRaw(graphAPIHost +
+      'oauth/access_token?' +
       'grant_type=fb_exchange_token&' +
       'client_id=1025558197466738&' +
       'client_secret=45088a81dfea0faff8f91bbc6dde0a0c&' +
@@ -120,7 +123,7 @@ async function main(): Promise<void> {
 }
 
 async function getUser(): Promise<Struct> {
-  const result = await jsonToNoms(await callFacebook('v2.8/me'));
+  const result = await jsonToNoms(await callFacebook(`${graphAPIHost}v2.8/me`));
   invariant(result instanceof Struct);
   return result;
 }
@@ -128,8 +131,8 @@ async function getUser(): Promise<Struct> {
 async function getPhotos(): Promise<List<any>> {
   // Calculate the number of expected fetches via the list of albums, so that we can show progress.
   // This appears to be the fastest way (photos only let you paginate).
-  const batchSize = 1000;
-  const albumsJSON = await callFacebook(`v2.8/me/albums?limit=${batchSize}&fields=count`);
+  // TODO: this falls down if you have more than 1k albums.
+  const albumsJSON = await callFacebook(`${graphAPIHost}v2.8/me/albums?limit=1000&fields=count`);
   const expected = albumsJSON.data.reduce((prev, album) => prev + album.count, 0);
   let seen = 0;
 
@@ -142,9 +145,10 @@ async function getPhotos(): Promise<List<any>> {
 
   // Sadly we cannot issue these requests in parallel because Facebook doesn't give you a way to
   // get individual page URLs ahead of time.
+  // Note: Even though the documentation says that the max value for 'limit' is 1000, aa@ observed
+  // errors from fb servers past about 500.
   let result = await new List();
-  let url = 'v2.8/me/photos/uploaded?limit=1000&fields=' + query.join(',') +
-      '&date_format=U';
+  let url = `${graphAPIHost}v2.8/me/photos/uploaded?limit=500&date_format=U&fields=${query.join(',')}`;
   while (url) {
     const photosJSON = await callFacebook(url);
     result = await result.append(await jsonToNoms(photosJSON));
@@ -165,8 +169,7 @@ function callFacebook(path: string): Promise<any> {
   return callFacebookRaw(path).then(r => r.json());
 }
 
-function callFacebookRaw(path: string): Promise<Response> {
-  const url = 'https://graph.facebook.com/' + path;
+function callFacebookRaw(url: string): Promise<Response> {
   return fetch(new Request(url, {
     headers: new Headers(
       {'Authorization': `Bearer ${args['access-token']}`}),
