@@ -148,7 +148,8 @@ async function getPhotos(): Promise<List<any>> {
   // Note: Even though the documentation says that the max value for 'limit' is 1000, aa@ observed
   // errors from fb servers past about 500.
   let result = await new List();
-  let url = `${graphAPIHost}v2.8/me/photos/uploaded?limit=500&date_format=U&fields=${query.join(',')}`;
+  let url = `${graphAPIHost}v2.8/me/photos/uploaded?limit=500&date_format=U&fields=` +
+      `${query.join(',')}`;
   while (url) {
     const photosJSON = await callFacebook(url);
     result = await result.append(await jsonToNoms(photosJSON));
