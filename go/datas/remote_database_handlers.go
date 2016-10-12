@@ -30,7 +30,7 @@ type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chu
 
 // NomsVersionHeader is the name of the header that Noms clients and servers must set in every request/response.
 const NomsVersionHeader = "x-noms-vers"
-const nomsBaseHtml = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
+const nomsBaseHTML = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
 
 var (
 	// HandleWriteValue is meant to handle HTTP POST requests to the writeValue/ server endpoint. The payload should be an appropriately-ordered sequence of Chunks to be validated and stored on the server.
@@ -57,6 +57,8 @@ var (
 	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
 	HandleBaseGet = handleBaseGet
 )
+
+const writeValueConcurrency = 16
 
 func versionCheck(hndlr Handler) Handler {
 	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
@@ -92,25 +94,27 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	vbs := types.NewValidatingBatchingSink(cs)
 	vbs.Prepare(deserializeHints(reader))
 
-	chunkChan := make(chan interface{}, 16)
+	chunkChan := make(chan interface{}, writeValueConcurrency)
 	go chunks.DeserializeToChan(reader, chunkChan)
 	decoded := orderedparallel.New(
 		chunkChan,
 		func(c interface{}) interface{} {
 			return vbs.DecodeUnqueued(c.(*chunks.Chunk))
 		},
-		16)
+		writeValueConcurrency)
 
 	var bpe chunks.BackpressureError
 	for dci := range decoded {
 		dc := dci.(types.DecodedChunk)
-		if bpe == nil {
-			bpe = vbs.Enqueue(*dc.Chunk, *dc.Value)
-		} else {
-			bpe = append(bpe, dc.Chunk.Hash())
+		if dc.Chunk != nil && dc.Value != nil {
+			if bpe == nil {
+				bpe = vbs.Enqueue(*dc.Chunk, *dc.Value)
+			} else {
+				bpe = append(bpe, dc.Chunk.Hash())
+			}
+			// If a previous Enqueue() errored, we still need to drain chunkChan
+			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 		}
-		// If a previous Enqueue() errored, we still need to drain chunkChan
-		// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 	}
 	if bpe == nil {
 		bpe = vbs.Flush()
@@ -271,7 +275,7 @@ func handleBaseGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
 
 	w.Header().Add("content-type", "text/html")
-	fmt.Fprintf(w, nomsBaseHtml)
+	fmt.Fprintf(w, nomsBaseHTML)
 }
 
 func isMapOfStringToRefOfCommit(m types.Map) bool {

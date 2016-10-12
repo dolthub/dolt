@@ -57,6 +57,32 @@ func TestHandleWriteValue(t *testing.T) {
 	}
 }
 
+func TestHandleWriteValueDupChunks(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+
+	newItem := types.NewEmptyBlob()
+	itemChunk := types.EncodeValue(newItem, nil)
+
+	body := &bytes.Buffer{}
+	serializeHints(body, map[hash.Hash]struct{}{})
+	// Write the same chunk to body enough times to be certain that at least one of the concurrent deserialize/decode passes completes before the last one can continue.
+	for i := 0; i <= writeValueConcurrency; i++ {
+		chunks.Serialize(itemChunk, body)
+	}
+
+	w := httptest.NewRecorder()
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
+
+	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+		ds2 := NewDatabase(cs)
+		v := ds2.ReadValue(newItem.Hash())
+		if assert.NotNil(v) {
+			assert.True(v.Equals(newItem), "%+v != %+v", v, newItem)
+		}
+	}
+}
+
 func TestHandleWriteValueBackpressure(t *testing.T) {
 	assert := assert.New(t)
 	cs := &backpressureCS{ChunkStore: chunks.NewMemoryStore()}
@@ -260,7 +286,7 @@ func TestHandleGetBase(t *testing.T) {
 	HandleBaseGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		assert.Equal([]byte(nomsBaseHtml), w.Body.Bytes())
+		assert.Equal([]byte(nomsBaseHTML), w.Body.Bytes())
 	}
 }
 
