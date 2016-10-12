@@ -58,7 +58,7 @@ function getBlob(url): Promise<Blob> {
       switch (Math.floor(res.statusCode / 100)) {
         case 4:
         case 5:
-          invariant(res.statusMessage);
+          invariant(typeof res.statusMessage === 'string');
           process.stderr.write(`Error fetching ${url}: ${res.statusCode}: ${res.statusMessage}\n`);
           process.exit(1);
           break;

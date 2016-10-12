@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "63.1.0",
+  "version": "63.1.1",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms",
   "main": "dist/commonjs/noms.js",
@@ -35,7 +35,7 @@
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
     "documentation": "documentationjs/documentation#a71bb03681cd145723218910145c835dd5171a74",
-    "flow-bin": "^0.32.0",
+    "flow-bin": "^0.33.0",
     "fs-extra": "^0.30.0",
     "mocha": "^2.5.3",
     "mock-require": "^1.3.0",
