@@ -28,7 +28,9 @@ func TestValidatingBatchingSinkPrepare(t *testing.T) {
 
 	vbs := NewValidatingBatchingSink(cs)
 	vbs.Prepare(hints)
-	assert.Equal(t, 5, cs.Reads)
+	for h := range hints {
+		vbs.vs.isPresent(h)
+	}
 }
 
 func TestValidatingBatchingSinkDecode(t *testing.T) {
