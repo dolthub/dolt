@@ -231,6 +231,10 @@ func (spec PathSpec) Value() (db datas.Database, val types.Value, err error) {
 	return
 }
 
+func (spec PathSpec) String() string {
+	return spec.DbSpec.String() + Separator + spec.Path.String()
+}
+
 func RegisterDatabaseFlags(flags *flag.FlagSet) {
 	chunks.RegisterLevelDBFlags(flags)
 }

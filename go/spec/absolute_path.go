@@ -17,12 +17,18 @@ import (
 
 var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() + ")")
 
+// AbsolutePath represents a path originating at a dataset or a well-formed
+// hash (i.e. '#' + 32 chars) representing a Noms Value that is independently
+// addressable. Either the Dataset of Hash field will indicate the beginning of
+// the AbsolutePath and the other one will be nil. The Path field holds the
+// remainder of the path.
 type AbsolutePath struct {
-	dataset string
-	hash    hash.Hash
-	path    types.Path
+	Dataset string
+	Hash    hash.Hash
+	Path    types.Path
 }
 
+// NewAbsolutePath attempts to parse 'str' and return an AbsolutePath.
 func NewAbsolutePath(str string) (AbsolutePath, error) {
 	if len(str) == 0 {
 		return AbsolutePath{}, errors.New("Empty path")
@@ -57,7 +63,7 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 	}
 
 	if len(pathStr) == 0 {
-		return AbsolutePath{hash: h, dataset: dataset}, nil
+		return AbsolutePath{Hash: h, Dataset: dataset}, nil
 	}
 
 	path, err := types.ParsePath(pathStr)
@@ -65,40 +71,44 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 		return AbsolutePath{}, err
 	}
 
-	return AbsolutePath{hash: h, dataset: dataset, path: path}, nil
+	return AbsolutePath{Hash: h, Dataset: dataset, Path: path}, nil
 }
 
+// Resolve returns the Value reachable by 'p' in 'db'.
 func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
-	if len(p.dataset) > 0 {
+	if len(p.Dataset) > 0 {
 		var ok bool
-		ds := db.GetDataset(p.dataset)
+		ds := db.GetDataset(p.Dataset)
 		if val, ok = ds.MaybeHead(); !ok {
 			val = nil
 		}
-	} else if !p.hash.IsEmpty() {
-		val = db.ReadValue(p.hash)
+	} else if !p.Hash.IsEmpty() {
+		val = db.ReadValue(p.Hash)
 	} else {
 		d.Chk.Fail("Unreachable")
 	}
 
-	if val != nil && p.path != nil {
-		val = p.path.Resolve(val)
+	if val != nil && p.Path != nil {
+		val = p.Path.Resolve(val)
 	}
 	return
 }
 
 func (p AbsolutePath) String() (str string) {
-	if len(p.dataset) > 0 {
-		str = p.dataset
-	} else if !p.hash.IsEmpty() {
-		str = "#" + p.hash.String()
+	if len(p.Dataset) > 0 {
+		str = p.Dataset
+	} else if !p.Hash.IsEmpty() {
+		str = "#" + p.Hash.String()
 	} else {
 		d.Chk.Fail("Unreachable")
 	}
 
-	return str + p.path.String()
+	return str + p.Path.String()
 }
 
+// ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
+// If any path fails to parse correctly or if any path can be resolved to an
+// existing Noms Value, then this function returns (nil, error).
 func ReadAbsolutePaths(db datas.Database, paths ...string) ([]types.Value, error) {
 	r := make([]types.Value, 0, len(paths))
 	for _, ps := range paths {
