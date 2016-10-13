@@ -21,6 +21,24 @@ Due to legal reasons, all contributors must sign a contributor agreement, either
 * Tag PRs with either `toward: #<bug>` or `fixes: #<bug>` to help establish context for why a change is happening
 * Commit messages follow [Chris Beam's awesome commit message style guide](http://chris.beams.io/posts/git-commit/)
 
+### Go error reporting
+
+In general, for Public API in Noms, we use the Go-style of returning errors by default.
+
+For non-exposed code, we do provide, and use, some wrappers to do Exception-style error handling. There *must* be an overriding rationale for using this style, however. One reason to use the Exception-style is that the current code doesn't know how to proceed and needs to panic, but you want to signal that a calling function somewhere up the stack might be able to recover from the failure and continue.
+
+Test code rarely, if ever, needs to or should use the following Exception-style functions.
+
+* For problems that are conceptually `asserts`, meaning that the program cannot meaningfully continue, use the following calls:
+	* d.Chk.Error()
+	* d.Chk.NoError()
+	* d.Chk.True()
+	* d.Chk.False()
+* For problems that might occur during correct processing, you can choose the Go-style of returned errors, or use the following to 'raise' a 'catchable' error (see [go/d/try.go](https://godoc.org/github.com/attic-labs/noms/go/d)):
+	* d.PanicIfError()
+	* d.PanicIfTrue()
+	* d.PanicIfFalse()
+
 ## Submitting PRs
 
 We follow a code review protocol dervied from the one that the [Chromium team](https://www.chromium.org/) uses:
