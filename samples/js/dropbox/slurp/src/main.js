@@ -37,6 +37,10 @@ const args = argv
     type: 'string',
     demand: true,
   })
+  .option('path', {
+    describe: 'Path to import, everything below will be snarfed',
+    type: 'string',
+  })
   .argv;
 
 main().catch(ex => {
@@ -55,7 +59,7 @@ async function main(): Promise<void> {
   const data = [];
   let count = 0;
   let resp = await callDropbox(apiHost + 'files/list_folder', {
-    path: '',
+    path: args['path'],
     recursive: true,
     'include_media_info': true,
   });
