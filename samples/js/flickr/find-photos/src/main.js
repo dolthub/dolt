@@ -119,7 +119,7 @@ async function main(): Promise<void> {
 
   return outDB.commit(output, await result, {
     meta: newStruct('', {
-      data: new Date().toISOString(),
+      date: new Date().toISOString(),
       input: pinnedSpec.toString(),
     }),
   })
