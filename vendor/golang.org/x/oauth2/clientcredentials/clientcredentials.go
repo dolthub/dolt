@@ -1,4 +1,4 @@
-// Copyright 2014 The oauth2 Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -66,7 +66,7 @@ type Config struct {
 	Scopes []string
 }
 
-// Token uses client credentials to retreive a token.
+// Token uses client credentials to retrieve a token.
 // The HTTP client to use is derived from the context.
 // If nil, http.DefaultClient is used.
 func (c *Config) Token(ctx context.Context) (*oauth2.Token, error) {

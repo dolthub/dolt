@@ -1,4 +1,4 @@
-// Copyright 2015 The oauth2 Authors. All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -19,6 +19,10 @@ import (
 // requests, and returns a TokenSource that does not use any OAuth2 flow but
 // instead creates a JWT and sends that as the access token.
 // The audience is typically a URL that specifies the scope of the credentials.
+//
+// Note that this is not a standard OAuth flow, but rather an
+// optimization supported by a few Google services.
+// Unless you know otherwise, you should use JWTConfigFromJSON instead.
 func JWTAccessTokenSourceFromJSON(jsonKey []byte, audience string) (oauth2.TokenSource, error) {
 	cfg, err := JWTConfigFromJSON(jsonKey)
 	if err != nil {
@@ -32,6 +36,7 @@ func JWTAccessTokenSourceFromJSON(jsonKey []byte, audience string) (oauth2.Token
 		email:    cfg.Email,
 		audience: audience,
 		pk:       pk,
+		pkID:     cfg.PrivateKeyID,
 	}
 	tok, err := ts.Token()
 	if err != nil {
@@ -43,6 +48,7 @@ func JWTAccessTokenSourceFromJSON(jsonKey []byte, audience string) (oauth2.Token
 type jwtAccessTokenSource struct {
 	email, audience string
 	pk              *rsa.PrivateKey
+	pkID            string
 }
 
 func (ts *jwtAccessTokenSource) Token() (*oauth2.Token, error) {
@@ -58,10 +64,11 @@ func (ts *jwtAccessTokenSource) Token() (*oauth2.Token, error) {
 	hdr := &jws.Header{
 		Algorithm: "RS256",
 		Typ:       "JWT",
+		KeyID:     string(ts.pkID),
 	}
 	msg, err := jws.Encode(hdr, cs, ts.pk)
 	if err != nil {
 		return nil, fmt.Errorf("google: could not encode JWT: %v", err)
 	}
-	return &oauth2.Token{AccessToken: msg}, nil
+	return &oauth2.Token{AccessToken: msg, TokenType: "Bearer", Expiry: exp}, nil
 }

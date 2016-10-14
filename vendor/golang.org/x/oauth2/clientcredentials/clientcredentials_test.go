@@ -1,16 +1,15 @@
-// Copyright 2014 The oauth2 Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package clientcredentials
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"golang.org/x/oauth2"
 )
 
 func newConf(url string) *Config {
@@ -57,7 +56,7 @@ func TestTokenRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 	conf := newConf(ts.URL)
-	tok, err := conf.Token(oauth2.NoContext)
+	tok, err := conf.Token(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -91,6 +90,6 @@ func TestTokenRefreshRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 	conf := newConf(ts.URL)
-	c := conf.Client(oauth2.NoContext)
+	c := conf.Client(context.Background())
 	c.Get(ts.URL + "/somethingelse")
 }

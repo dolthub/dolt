@@ -1,15 +1,14 @@
-// Copyright 2014 The oauth2 Authors. All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package jwt
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"golang.org/x/oauth2"
 )
 
 var dummyPrivateKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
@@ -57,25 +56,25 @@ func TestJWTFetch_JSONResponse(t *testing.T) {
 		PrivateKey: dummyPrivateKey,
 		TokenURL:   ts.URL,
 	}
-	tok, err := conf.TokenSource(oauth2.NoContext).Token()
+	tok, err := conf.TokenSource(context.Background()).Token()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !tok.Valid() {
-		t.Errorf("Token invalid")
+		t.Errorf("got invalid token: %v", tok)
 	}
-	if tok.AccessToken != "90d64460d14870c08c81352a05dedd3465940a7c" {
-		t.Errorf("Unexpected access token, %#v", tok.AccessToken)
+	if got, want := tok.AccessToken, "90d64460d14870c08c81352a05dedd3465940a7c"; got != want {
+		t.Errorf("access token = %q; want %q", got, want)
 	}
-	if tok.TokenType != "bearer" {
-		t.Errorf("Unexpected token type, %#v", tok.TokenType)
+	if got, want := tok.TokenType, "bearer"; got != want {
+		t.Errorf("token type = %q; want %q", got, want)
 	}
-	if tok.Expiry.IsZero() {
-		t.Errorf("Unexpected token expiry, %#v", tok.Expiry)
+	if got := tok.Expiry.IsZero(); got {
+		t.Errorf("token expiry = %v, want none", got)
 	}
 	scope := tok.Extra("scope")
-	if scope != "user" {
-		t.Errorf("Unexpected value for scope: %v", scope)
+	if got, want := scope, "user"; got != want {
+		t.Errorf("scope = %q; want %q", got, want)
 	}
 }
 
@@ -91,25 +90,25 @@ func TestJWTFetch_BadResponse(t *testing.T) {
 		PrivateKey: dummyPrivateKey,
 		TokenURL:   ts.URL,
 	}
-	tok, err := conf.TokenSource(oauth2.NoContext).Token()
+	tok, err := conf.TokenSource(context.Background()).Token()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tok == nil {
-		t.Fatalf("token is nil")
+		t.Fatalf("got nil token; want token")
 	}
 	if tok.Valid() {
-		t.Errorf("token is valid. want invalid.")
+		t.Errorf("got invalid token: %v", tok)
 	}
-	if tok.AccessToken != "" {
-		t.Errorf("Unexpected non-empty access token %q.", tok.AccessToken)
+	if got, want := tok.AccessToken, ""; got != want {
+		t.Errorf("access token = %q; want %q", got, want)
 	}
-	if want := "bearer"; tok.TokenType != want {
-		t.Errorf("TokenType = %q; want %q", tok.TokenType, want)
+	if got, want := tok.TokenType, "bearer"; got != want {
+		t.Errorf("token type = %q; want %q", got, want)
 	}
 	scope := tok.Extra("scope")
-	if want := "user"; scope != want {
-		t.Errorf("token scope = %q; want %q", scope, want)
+	if got, want := scope, "user"; got != want {
+		t.Errorf("token scope = %q; want %q", got, want)
 	}
 }
 
@@ -124,11 +123,11 @@ func TestJWTFetch_BadResponseType(t *testing.T) {
 		PrivateKey: dummyPrivateKey,
 		TokenURL:   ts.URL,
 	}
-	tok, err := conf.TokenSource(oauth2.NoContext).Token()
+	tok, err := conf.TokenSource(context.Background()).Token()
 	if err == nil {
 		t.Error("got a token; expected error")
-		if tok.AccessToken != "" {
-			t.Errorf("Unexpected access token, %#v.", tok.AccessToken)
+		if got, want := tok.AccessToken, ""; got != want {
+			t.Errorf("access token = %q; want %q", got, want)
 		}
 	}
 }
