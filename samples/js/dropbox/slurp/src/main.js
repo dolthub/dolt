@@ -59,7 +59,7 @@ async function main(): Promise<void> {
   const data = [];
   let count = 0;
   let resp = await callDropbox(apiHost + 'files/list_folder', {
-    path: args['path'],
+    path: args['path'] || '',
     recursive: true,
     'include_media_info': true,
   });
