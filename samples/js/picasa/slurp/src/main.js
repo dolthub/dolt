@@ -40,19 +40,19 @@ or
 
 const args = argv
   .usage(usage)
-  .option('access_token', {
+  .option('access-token', {
     describe: 'OAuth2 access token (these are short lived and should only be used for testing)',
     type: 'string',
   })
-  .option('client_id', {
+  .option('client-id', {
     describe: 'Client ID for OAuth2 token request',
     type: 'string',
   })
-  .option('client_secret', {
+  .option('client-secret', {
     describe: 'Client secret for OAuth2 token request',
     type: 'string',
   })
-  .option('refresh_token', {
+  .option('refresh-token', {
     describe: 'Picasa refresh token',
     type: 'string',
   })
@@ -62,7 +62,7 @@ const args = argv
     describe: 'Number of parallel fetch requests',
     type: 'number',
   })
-  .option('batch_size', {
+  .option('batch-size', {
     alias: 'b',
     default: 1000,
     describe: 'Number of images to fetch per request',
@@ -82,20 +82,20 @@ main()
   });
 
 async function main(): Promise<void> {
-  if (args.access_token) {
-    accessToken = args.access_token;
-  } else if (!args.client_id || !args.client_secret) {
+  if (args['access-token']) {
+    accessToken = args['access-token'];
+  } else if (!args['client-id'] || !args['client-secret']) {
     throw usage;
-  } else if (args.refresh_token) {
+  } else if (args['refresh-token']) {
     accessToken = await getAccessTokenFromRefreshToken(
-        args.client_id, args.client_secret, args.refresh_token);
+        args['client-id'], args['client-secret'], args['refresh-token']);
     console.log(`Got access token ${accessToken}`);
   } else {
-    const refreshToken = await getRefreshToken(args.client_id, args.client_secret);
+    const refreshToken = await getRefreshToken(args['client-id'], args['client-secret']);
     console.log(`\nGot refresh token ${refreshToken}. Run me again:`);
-    console.log(` node .  --client_id=${args.client_id} ` +
-                `--client_secret=${args.client_secret} ` +
-                `--refresh_token ${refreshToken} <dest-dataset>`);
+    console.log(` node .  --client-id=${args['client-id']} ` +
+                `--client-secret=${args['client-secret']} ` +
+                `--refresh-token ${refreshToken} <dest-dataset>`);
     return;
   }
 
@@ -122,11 +122,11 @@ async function main(): Promise<void> {
     const numPhotos = entry['gphoto$numphotos']['$t'];
     numPhotosSum += numPhotos;
 
-    for (let i = 0; i < numPhotos; i += args.batch_size) {
+    for (let i = 0; i < numPhotos; i += args['batch-size']) {
       // Note: start-index is (i + 1) because it's 1-based.
       // TODO: This is racy because photos may be added or removed between batch calls. Perhaps try
       // using published-min and published-max?
-      const search = `?alt=json&max-results=${args.batch_size}&start-index=${i + 1}`;
+      const search = `?alt=json&max-results=${args['batch-size']}&start-index=${i + 1}`;
       albumURLs.push(`api/user/default/albumid/${id}${search}`);
       faceURLs.push(`back_compat/user/default/albumid/${id}${search}&kind=photo&v=4&fd=shapes2`);
     }
