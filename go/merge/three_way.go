@@ -36,25 +36,74 @@ func newMergeConflict(format string, args ...interface{}) *ErrMergeConflict {
 	return &ErrMergeConflict{fmt.Sprintf(format, args...)}
 }
 
-// ThreeWay attempts a three-way merge between two candidates and a common
-// ancestor.
-// It considers the three of them recursively, applying some simple rules to
-// identify conflicts:
-//  - If any of the three nodes are different NomsKinds
-//  - If we are dealing with a map:
-//    - same key is both removed and inserted wrt parent: conflict
-//    - same key is inserted wrt parent, but with different values: conflict
-//  - If we are dealing with a struct:
-//    - same field is both removed and inserted wrt parent: conflict
-//    - same field is inserted wrt parent, but with different values: conflict
-//  - If we are dealing with a list:
-//    - same index is both removed and inserted wrt parent: conflict
-//    - same index is inserted wrt parent, but with different values: conflict
-//  - If we are dealing with a set:
-//    - `merged` is essentially union(a, b, parent)
+// ThreeWay attempts a three-way merge between two _candidate_ values that
+// have both changed with respect to a common _parent_ value. The result of
+// the algorithm is a _merged_ value or an error if merging could not be done.
 //
-// All other modifications are allowed.
-// ThreeWay() works on types.List, types.Map, types.Set, and types.Struct.
+// The algorithm works recursively, applying the following rules for each value:
+//
+// - If any of the three values have a different [kind](link): conflict
+// - If the two candidates are identical: the result is that value
+// - If the values are primitives or Blob: conflict
+// - If the values are maps:
+//   - if the same key was inserted or updated in both candidates:
+//     - first run this same algorithm on those two values to attempt to merge them
+//     - if the two merged values are still different: conflict
+//   - if a key was inserted in one candidate and removed in the other: conflict
+// - If the values are structs:
+//   - Same as map, except using field names instead of map keys
+// - If the values are sets:
+//   - Apply the changes from both candidates to the parent to get the result. No conflicts are possible.
+// - If the values are list:
+//   - Apply list-merge (see below)
+//
+// Merge rules for List are a bit more complex than Map, Struct, and Set due
+// to a wider away of potential use patterns. A List might be a de-facto Map
+// with sequential numeric keys, or it might be a sequence of objects where
+// order matters but the caller is unlikely to go back and update the value at
+// a given index. List modifications are expressed in terms of 'splices' (see
+// types/edit_distance.go). Roughly, a splice indicates that some number of
+// elements were added and/or removed at some index in |parent|. In the
+// following example:
+//
+// parent: [a, b, c, d]
+// a:      [b, c, d]
+// b:      [a, b, c, d, e]
+// merged: [b, c, d, e]
+//
+// The difference from parent -> is described by the splice {0, 1}, indicating
+// that 1 element was removed from parent at index 0. The difference from
+// parent -> b is described as {4, 0, e}, indicating that 0 elements were
+// removed at parent's index 4, and the element 'e' was added. Our merge
+// algorithm will successfully merge a and b, because these splices do not
+// overlap; that is, neither one removes the index at which the other
+// operates. As a general rule, the merge algorithm will refuse to merge
+// splices that overlap, as in the following examples:
+//
+// parent: [a, b, c]
+// a:      [a, d, b, c]
+// b:      [a, c]
+// merged: conflict
+//
+// parent: [a, b, c]
+// a:      [a, e, b, c]
+// b:      [a, d, b, c]
+// merged: conflict
+//
+// The splices in the first example are {1, 0, d} (remove 0 elements at index
+// 1 and add 'd') and {1, 1} (remove 1 element at index 1). Since the latter
+// removes the element at which the former adds an element, these splices
+// overlap. Similarly, in the second example, both splices operate at index 1
+// but add different elements. Thus, they also overlap.
+//
+// There is one special case for overlapping splices. If they perform the
+// exact same operation, the algorithm considers them not to be in conflict.
+// E.g.
+//
+// parent: [a, b, c]
+// a:      [a, d, e]
+// b:      [a, d, e]
+// merged: [a, d, e]
 func ThreeWay(a, b, parent types.Value, vrw types.ValueReadWriter, resolve ResolveFunc, progress chan struct{}) (merged types.Value, err error) {
 	describe := func(v types.Value) string {
 		if v != nil {
