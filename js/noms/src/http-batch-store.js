@@ -14,6 +14,7 @@ import {emptyChunk} from './chunk.js';
 import {
   fetchUint8Array as fetchUint8ArrayWithoutVersion,
   fetchText as fetchTextWithoutVersion,
+  HTTPError,
 } from './fetch.js';
 import {notNull} from './assert.js';
 import nomsVersion from './version.js';
@@ -151,7 +152,7 @@ export class Delegate {
       }
       return true;
     } catch (ex) {
-      if (ex === HTTP_STATUS_CONFLICT) {
+      if (ex instanceof HTTPError && ex.status === HTTP_STATUS_CONFLICT) {
         return false;
       }
       throw ex;

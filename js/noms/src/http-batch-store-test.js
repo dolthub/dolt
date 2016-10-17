@@ -4,11 +4,31 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-import {suite, test} from 'mocha';
+import {suite, test, setup, teardown} from 'mocha';
 import {assert} from 'chai';
+import Hash from './hash.js';
+import {emptyHash} from './hash.js';
 import HttpBatchStore from './http-batch-store.js';
+import mock from 'mock-require';
 
 suite('HttpBatchStore', () => {
+  setup(() => {
+    mock('http', {
+      request(options, cb) {
+        cb({statusCode: 409});
+        return {
+          end() {},
+          on() {},
+          setTimeout() {},
+        };
+      },
+    });
+  });
+
+  teardown(() => {
+    mock.stopAll();
+  });
+
   test('endpoints', async () => {
     const getRefsEndpoint = '/getRefs/';
     const rootEndpoint = '/root/';
@@ -35,5 +55,14 @@ suite('HttpBatchStore', () => {
       assert.equal(host + rootEndpoint + params, rpc1.root);
       assert.equal(host + writeValueEndpoint + params, rpc1.writeValue);
     }
+  });
+
+  test('updateRoot conflict', async () => {
+    mock.reRequire('./fetch.js');
+    const HttpBatchStore = mock.reRequire('./http-batch-store.js').default;
+    const store = new HttpBatchStore('http://nowhere.com');
+
+    assert.isFalse(
+      await store.updateRoot(Hash.parse('00001111000011110000111100001111'), emptyHash));
   });
 });
