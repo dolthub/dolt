@@ -8,6 +8,7 @@ import * as http from 'http';
 import * as https from 'https';
 import {parse} from 'url';
 import * as Bytes from './bytes.js';
+import HTTPError from './http-error.js';
 
 export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
@@ -32,15 +33,6 @@ const requestModules = {
   'http:': http,
   'https:': https,
 };
-
-export class HTTPError extends Error {
-  constructor(status: number) {
-    super(`HTTP Error: ${status}`);
-    this.status = status;
-  }
-
-  status = 0;
-}
 
 function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   const opts: any = parse(url);

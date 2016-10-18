@@ -5,6 +5,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import {notNull} from '../assert.js';
+import HTTPError from '../http-error.js';
 
 export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
@@ -38,7 +39,7 @@ function internalFetch<T>(url: string, responseType: string, options: FetchOptio
         }
         resolve({headers: makeHeaders(xhr), buf});
       } else {
-        reject(new Error(`HTTP Error: ${xhr.status}`));
+        reject(new HTTPError(xhr.status));
       }
     };
   });

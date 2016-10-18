@@ -14,8 +14,8 @@ import {emptyChunk} from './chunk.js';
 import {
   fetchUint8Array as fetchUint8ArrayWithoutVersion,
   fetchText as fetchTextWithoutVersion,
-  HTTPError,
 } from './fetch.js';
+import HTTPError from './http-error.js';
 import {notNull} from './assert.js';
 import nomsVersion from './version.js';
 
