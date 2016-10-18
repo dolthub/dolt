@@ -6,6 +6,7 @@ package types
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/attic-labs/noms/go/d"
 )
@@ -129,7 +130,12 @@ func (w *valueEncoder) writeValue(v Value) {
 	case BoolKind:
 		w.writeBool(bool(v.(Bool)))
 	case NumberKind:
-		w.writeNumber(v.(Number))
+		n := v.(Number)
+		f := float64(n)
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			d.PanicIfTrue(true, "%f is not a supported number", f)
+		}
+		w.writeNumber(n)
 	case ListKind:
 		seq := v.(List).sequence()
 		if w.maybeWriteMetaSequence(seq) {

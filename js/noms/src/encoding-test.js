@@ -97,6 +97,21 @@ suite('Encoding - roundtrip', () => {
     assertRoundTrips(-122.411912027329);
   });
 
+  test('non finite numbers', () => {
+    const db = new TestDatabase();
+    const t = (v, s) => {
+      let message;
+      try {
+        encodeValue(v, db);
+      } catch (ex) {
+        ({message} = ex);
+      }
+      assert.equal(message, s);
+    };
+    t(NaN, 'NaN is not a supported number');
+    t(Infinity, 'Infinity is not a supported number');
+    t(-Infinity, '-Infinity is not a supported number');
+  });
 
   test('strings', () => {
     assertRoundTrips('');

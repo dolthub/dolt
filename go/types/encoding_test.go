@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -196,6 +197,21 @@ func TestRoundTrips(t *testing.T) {
 		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(10), 10, nil),
 		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(20), 20, nil),
 	}, nil)))
+}
+
+func TestNonFiniteNumbers(tt *testing.T) {
+	vs := NewTestValueStore()
+	t := func(f float64, s string) {
+		v := Number(f)
+		err := d.Try(func() {
+			EncodeValue(v, vs)
+		})
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), s)
+	}
+	t(math.NaN(), "NaN is not a supported number")
+	t(math.Inf(1), "+Inf is not a supported number")
+	t(math.Inf(-1), "-Inf is not a supported number")
 }
 
 func TestWritePrimitives(t *testing.T) {
