@@ -117,7 +117,7 @@ struct Commit {
 
 Let's add some more data. Back in Node:
 
-```
+```js
 data.append(noms.newStruct('', {
   given: 'Jon',
   family: 'Snow',
