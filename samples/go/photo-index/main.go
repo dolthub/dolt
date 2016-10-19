@@ -78,12 +78,14 @@ func index() (win bool) {
 	})
 	photoType := types.MakeStructTypeFromFields("Photo", types.FieldMap{
 		"sizes":         types.MakeMapType(sizeType, types.StringType),
-		"tags":          types.MakeSetType(types.StringType),
 		"title":         types.StringType,
 		"datePublished": dateType,
 		"dateUpdated":   dateType,
 	})
 
+	withTags := types.MakeStructTypeFromFields("", types.FieldMap{
+		"tags": types.MakeSetType(types.StringType),
+	})
 	withDateTaken := types.MakeStructTypeFromFields("", types.FieldMap{
 		"dateTaken": dateType,
 	})
@@ -120,10 +122,12 @@ func index() (win bool) {
 
 				// Index by tag, then date
 				moreTags := map[types.String]int{}
-				s.Get("tags").(types.Set).IterAll(func(t types.Value) {
-					byTag.SetInsert([]types.Value{t, d}, cv)
-					moreTags[t.(types.String)]++
-				})
+				if types.IsSubtype(withTags, cv.Type()) {
+					s.Get("tags").(types.Set).IterAll(func(t types.Value) {
+						byTag.SetInsert([]types.Value{t, d}, cv)
+						moreTags[t.(types.String)]++
+					})
+				}
 
 				// Index by face, then date
 				moreFaces := map[types.String]int{}

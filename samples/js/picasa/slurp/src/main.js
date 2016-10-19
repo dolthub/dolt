@@ -126,7 +126,7 @@ async function main(): Promise<void> {
       // Note: start-index is (i + 1) because it's 1-based.
       // TODO: This is racy because photos may be added or removed between batch calls. Perhaps try
       // using published-min and published-max?
-      const search = `?alt=json&max-results=${args['batch-size']}&start-index=${i + 1}`;
+      const search = `?alt=json&max-results=${args['batch-size']}&start-index=${i + 1}&imgmax=d`;
       albumURLs.push(`api/user/default/albumid/${id}${search}`);
       faceURLs.push(`back_compat/user/default/albumid/${id}${search}&kind=photo&v=4&fd=shapes2`);
     }
