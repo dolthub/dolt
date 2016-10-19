@@ -35,6 +35,7 @@ declare class Face extends Struct {
 declare class NomsPhoto extends Struct {
   faces: Set<Face>;
   sizes: Map<PhotoSize, string>;
+  dateTaken: ?NomsDate;
 }
 
 declare class PhotoIndex extends Struct {
@@ -50,6 +51,10 @@ declare class PhotoSize extends Struct {
   setHeight: (h: number) => PhotoSize;
   width: number;
   setWidth: (w: number) => PhotoSize;
+}
+
+declare class NomsDate extends Struct {
+  nsSinceEpoch: number;
 }
 
 export type {Face, NomsPhoto, PhotoIndex, PhotoSize};
