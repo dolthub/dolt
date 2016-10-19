@@ -1,8 +1,8 @@
-// @flow
-
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
+
+// @flow
 
 // http://croquetweak.blogspot.com/2014/08/deconstructing-floats-frexp-and-ldexp.html
 // https://github.com/bertfreudenberg/SqueakJS - MIT License

@@ -1,8 +1,8 @@
-// @flow
-
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
+
+// @flow
 
 import type {makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader, ValueReadWriter} from './value-store.js';

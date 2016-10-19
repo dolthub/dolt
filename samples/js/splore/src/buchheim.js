@@ -1,8 +1,8 @@
-// @flow
-
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
+
+// @flow
 
 // JavaScript implementation of Christoph Buchheim, Michael Jünger, Sebastian Leipert's tree layout
 // algorithm. See: http://dl.acm.org/citation.cfm?id=729576.
