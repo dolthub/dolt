@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"bytes"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -291,4 +292,50 @@ func TestPathParseErrors(t *testing.T) {
 	test("@foo", "Invalid operator: @")
 	test("@key", "Invalid operator: @")
 	test(fmt.Sprintf(".foo[#%s]@soup", hash.FromData([]byte{42}).String()), "Unsupported annotation: @soup")
+}
+
+func TestPathEquals(t *testing.T) {
+	assert := assert.New(t)
+	equalPaths := []string{
+		`[1]`,
+		`["one"]`,
+		`.two.three`,
+		`["yo"]@key`,
+	}
+	notEqualPaths := [][]string{
+		{`[1]`, `[2]`},
+		{`["one"]`, `["two"]`},
+		{`.two.three`, `.two.four`},
+		{`["yo"]@key`, `["yo"]`},
+	}
+
+	assert.True(Path{}.Equals(Path{}))
+	for _, s := range equalPaths {
+		p, err := ParsePath(s)
+		assert.NoError(err)
+		assert.True(p.Equals(p))
+	}
+
+	simple, err := ParsePath(`["one"].two`)
+	assert.NoError(err)
+	assert.False(Path{}.Equals(simple))
+	for _, a := range notEqualPaths {
+		s0, s1 := a[0], a[1]
+		p0, err := ParsePath(s0)
+		assert.NoError(err)
+		p1, err := ParsePath(s1)
+		assert.NoError(err)
+		assert.False(p0.Equals(p1))
+	}
+}
+
+func TestPathCanBePathIndex(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.True(ValueCanBePathIndex(Bool(true)))
+	assert.True(ValueCanBePathIndex(Number(5)))
+	assert.True(ValueCanBePathIndex(String("yes")))
+
+	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
+	assert.False(ValueCanBePathIndex(NewBlob(bytes.NewReader([]byte("yes")))))
 }

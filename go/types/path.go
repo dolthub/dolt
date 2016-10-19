@@ -110,6 +110,18 @@ func (p Path) Resolve(v Value) (resolved Value) {
 	return
 }
 
+func (p Path) Equals(o Path) bool {
+	if len(p) != len(o) {
+		return false
+	}
+	for i, pp := range p {
+		if pp != o[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (p Path) String() string {
 	strs := make([]string, 0, len(p))
 	for _, part := range p {
@@ -160,9 +172,13 @@ func NewIndexIntoKeyPath(idx Value) IndexPath {
 	return newIndexPath(idx, true)
 }
 
+func ValueCanBePathIndex(v Value) bool {
+	k := v.Type().Kind()
+	return k == StringKind || k == BoolKind || k == NumberKind
+}
+
 func newIndexPath(idx Value, intoKey bool) IndexPath {
-	k := idx.Type().Kind()
-	d.PanicIfFalse(k == StringKind || k == BoolKind || k == NumberKind)
+	d.PanicIfFalse(ValueCanBePathIndex(idx))
 	return IndexPath{idx, intoKey}
 }
 

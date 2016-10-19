@@ -6,11 +6,13 @@ package diff
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/test"
+	"github.com/attic-labs/noms/go/util/writers"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -70,7 +72,32 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 	return types.NewStruct(name, fields)
 }
 
-func TestNomsMapdiff(t *testing.T) {
+func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {
+	dChan := make(chan Difference)
+	sChan := make(chan struct{})
+
+	go func() {
+		Diff(v1, v2, dChan, sChan, leftRight)
+		close(dChan)
+	}()
+
+	var paths []string
+	for d := range dChan {
+		paths = append(paths, d.Path.String())
+	}
+	return paths
+}
+
+func mustParsePath(assert *assert.Assertions, s string) types.Path {
+	if s == "" {
+		return nil
+	}
+	p, err := types.ParsePath(s)
+	assert.NoError(err)
+	return p
+}
+
+func TestNomsDiffPrintMap(t *testing.T) {
 	assert := assert.New(t)
 	expected := `["map-3"] {
 -   "m3": "m-three"
@@ -81,21 +108,27 @@ func TestNomsMapdiff(t *testing.T) {
 +   "a1": "a-one-diff"
   }
 `
+	expectedPaths := []string{
+		`["map-3"]["m3"]`,
+		`["map-3"]["m4"]["a1"]`,
+	}
 
 	tf := func(leftRight bool) {
 		m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 		m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
 		buf := &bytes.Buffer{}
-		Diff(buf, m1, m2, leftRight)
-
+		PrintDiff(buf, m1, m2, leftRight)
 		assert.Equal(expected, buf.String())
+
+		paths := pathsFromDiff(m1, m2, leftRight)
+		assert.Equal(expectedPaths, paths)
 	}
 
 	tf(true)
 	tf(false)
 }
 
-func TestNomsSetDiff(t *testing.T) {
+func TestNomsDiffPrintSet(t *testing.T) {
 	assert := assert.New(t)
 
 	expected1 := `(root) {
@@ -103,6 +136,10 @@ func TestNomsSetDiff(t *testing.T) {
 +   "five-diff"
   }
 `
+	expectedPaths1 := []string{
+		`["five"]`,
+		`["five-diff"]`,
+	}
 
 	expected2 := `(root) {
 +   {  // 4 items
@@ -129,6 +166,10 @@ func TestNomsSetDiff(t *testing.T) {
 -   }
   }
 `
+	expectedPaths2 := []string{
+		fmt.Sprintf("[#%s]", mm3x.Hash()),
+		fmt.Sprintf("[#%s]", mm3.Hash()),
+	}
 
 	s1 := createSet("one", "three", "five", "seven", "nine")
 	s2 := createSet("one", "three", "five-diff", "seven", "nine")
@@ -137,11 +178,50 @@ func TestNomsSetDiff(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, s1, s2, leftRight)
+		PrintDiff(buf, s1, s2, leftRight)
+		assert.Equal(expected1, buf.String())
+
+		paths := pathsFromDiff(s1, s2, leftRight)
+		assert.Equal(expectedPaths1, paths)
+
+		buf = &bytes.Buffer{}
+		PrintDiff(buf, s3, s4, leftRight)
+		assert.Equal(expected2, buf.String())
+
+		paths = pathsFromDiff(s3, s4, leftRight)
+		assert.Equal(expectedPaths2, paths)
+	}
+
+	tf(true)
+	tf(false)
+}
+
+// This function tests stop functionality in PrintDiff and Diff.
+func TestNomsDiffPrintStop(t *testing.T) {
+	assert := assert.New(t)
+
+	expected1 := `(root) {
+-   "five"
+`
+
+	expected2 := `(root) {
++   {  // 4 items
+`
+
+	s1 := createSet("one", "three", "five", "seven", "nine")
+	s2 := createSet("one", "three", "five-diff", "seven", "nine")
+	s3 := createSet(mm1, mm2, mm3, mm4)
+	s4 := createSet(mm1, mm2, mm3x, mm4)
+
+	tf := func(leftRight bool) {
+		buf := &bytes.Buffer{}
+		mlw := &writers.MaxLineWriter{Dest: buf, MaxLines: 2}
+		PrintDiff(mlw, s1, s2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		buf = &bytes.Buffer{}
-		Diff(buf, s3, s4, leftRight)
+		mlw = &writers.MaxLineWriter{Dest: buf, MaxLines: 2}
+		PrintDiff(mlw, s3, s4, leftRight)
 		assert.Equal(expected2, buf.String())
 	}
 
@@ -149,7 +229,7 @@ func TestNomsSetDiff(t *testing.T) {
 	tf(false)
 }
 
-func TestNomsStructDiff(t *testing.T) {
+func TestNomsDiffPrintStruct(t *testing.T) {
 	assert := assert.New(t)
 
 	expected1 := `(root) {
@@ -163,6 +243,12 @@ func TestNomsStructDiff(t *testing.T) {
 +   field4: "field4-data"
   }
 `
+	expectedPaths1 := []string{
+		`["four"]`,
+		`["three"].field1`,
+		`["three"].field3`,
+		`["three"].field4`,
+	}
 
 	expected2 := `(root) {
 -   four: "four"
@@ -175,6 +261,12 @@ func TestNomsStructDiff(t *testing.T) {
 +   field4: "field4-data"
   }
 `
+	expectedPaths2 := []string{
+		`.four`,
+		`.three.field1`,
+		`.three.field3`,
+		`.three.field4`,
+	}
 
 	s1 := createStruct("TestData",
 		"field1", "field1-data",
@@ -195,19 +287,25 @@ func TestNomsStructDiff(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, m1, m2, leftRight)
+		PrintDiff(buf, m1, m2, leftRight)
 		assert.Equal(expected1, buf.String())
 
+		paths := pathsFromDiff(m1, m2, leftRight)
+		assert.Equal(expectedPaths1, paths)
+
 		buf = &bytes.Buffer{}
-		Diff(buf, s3, s4, leftRight)
+		PrintDiff(buf, s3, s4, leftRight)
 		assert.Equal(expected2, buf.String())
+
+		paths = pathsFromDiff(s3, s4, leftRight)
+		assert.Equal(expectedPaths2, paths)
 	}
 
 	tf(true)
 	tf(false)
 }
 
-func TestNomsListDiff(t *testing.T) {
+func TestNomsDiffPrintList(t *testing.T) {
 	assert := assert.New(t)
 
 	expected1 := `(root) {
@@ -216,6 +314,10 @@ func TestNomsListDiff(t *testing.T) {
 -   44
   }
 `
+	expectedPaths1 := []string{
+		`[1]`,
+		`[4]`,
+	}
 
 	l1 := createList(1, 2, 3, 4, 44, 5, 6)
 	l2 := createList(1, 22, 3, 4, 5, 6)
@@ -224,6 +326,9 @@ func TestNomsListDiff(t *testing.T) {
 +   "seven"
   }
 `
+	expectedPaths2 := []string{
+		`[6]`,
+	}
 
 	l3 := createList("one", "two", "three", "four", "five", "six")
 	l4 := createList("one", "two", "three", "four", "five", "six", "seven")
@@ -237,73 +342,100 @@ func TestNomsListDiff(t *testing.T) {
 +   "a1": "a-one-diff"
   }
 `
+	expectedPaths3 := []string{
+		`[2]["m3"]`,
+		`[2]["m4"]["a1"]`,
+	}
 
 	l5 := createList(mm1, mm2, mm3, mm4)
 	l6 := createList(mm1, mm2, mm3x, mm4)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, l1, l2, leftRight)
+		PrintDiff(buf, l1, l2, leftRight)
 		assert.Equal(expected1, buf.String())
 
+		paths := pathsFromDiff(l1, l2, leftRight)
+		assert.Equal(expectedPaths1, paths)
+
 		buf = &bytes.Buffer{}
-		Diff(buf, l3, l4, leftRight)
+		PrintDiff(buf, l3, l4, leftRight)
 		assert.Equal(expected2, buf.String())
 
-		buf = &bytes.Buffer{}
-		Diff(buf, l5, l6, leftRight)
+		paths = pathsFromDiff(l3, l4, leftRight)
+		assert.Equal(expectedPaths2, paths)
 
+		buf = &bytes.Buffer{}
+		PrintDiff(buf, l5, l6, leftRight)
 		assert.Equal(expected3, buf.String())
+
+		paths = pathsFromDiff(l5, l6, leftRight)
+		assert.Equal(expectedPaths3, paths)
 	}
 
 	tf(true)
 	tf(false)
 }
 
-func TestNomsBlobDiff(t *testing.T) {
+func TestNomsDiffPrintBlob(t *testing.T) {
 	assert := assert.New(t)
 
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
+	expectedPaths1 := []string{``}
 	b1 := types.NewBlob(strings.NewReader(strings.Repeat("x", 2*1024)))
 	b2 := types.NewBlob(strings.NewReader("Hello World"))
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, b1, b2, leftRight)
+		PrintDiff(buf, b1, b2, leftRight)
 		assert.Equal(expected, buf.String())
+
+		paths := pathsFromDiff(b1, b2, leftRight)
+		assert.Equal(expectedPaths1, paths)
 	}
 
 	tf(true)
 	tf(false)
 }
 
-func TestNomsTypeDiff(t *testing.T) {
+func TestNomsDiffPrintType(t *testing.T) {
 	assert := assert.New(t)
 
 	expected1 := "-   List<Number>\n+   List<String>\n"
+	expectedPaths1 := []string{""}
 	t1 := types.MakeListType(types.NumberType)
 	t2 := types.MakeListType(types.StringType)
 
 	expected2 := "-   List<Number>\n+   Set<String>\n"
+	expectedPaths2 := []string{``}
 	t3 := types.MakeListType(types.NumberType)
 	t4 := types.MakeSetType(types.StringType)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, t1, t2, leftRight)
+		PrintDiff(buf, t1, t2, leftRight)
 		assert.Equal(expected1, buf.String())
 
+		paths := pathsFromDiff(t1, t2, leftRight)
+		assert.Equal(expectedPaths1, paths)
+
 		buf = &bytes.Buffer{}
-		Diff(buf, t3, t4, leftRight)
+		PrintDiff(buf, t3, t4, leftRight)
 		assert.Equal(expected2, buf.String())
+
+		paths = pathsFromDiff(t3, t4, leftRight)
+		assert.Equal(expectedPaths2, paths)
 	}
 
 	tf(true)
 	tf(false)
 }
 
-func TestNomsRefDiff(t *testing.T) {
+func TestNomsDiffPrintRef(t *testing.T) {
+	assert := assert.New(t)
+
 	expected := "-   fckcbt7nk5jl4arco2dk7r9nj7abb6ci\n+   i7d3u5gekm48ot419t2cot6cnl7ltcah\n"
+	expectedPaths1 := []string{``}
 	l1 := createList(1)
 	l2 := createList(2)
 	r1 := types.NewRef(l1)
@@ -311,11 +443,34 @@ func TestNomsRefDiff(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		Diff(buf, r1, r2, leftRight)
-
+		PrintDiff(buf, r1, r2, leftRight)
 		test.EqualsIgnoreHashes(t, expected, buf.String())
+
+		paths := pathsFromDiff(r1, r2, leftRight)
+		assert.Equal(expectedPaths1, paths)
 	}
 
 	tf(true)
 	tf(false)
+}
+
+func TestCopyPath(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []string{
+		``,
+		`["key"]`,
+		`["key"].field1`,
+		`["key"]@key.field1`,
+	}
+
+	for _, s1 := range testCases {
+		expected := mustParsePath(assert, s1+`["anIndex"]`)
+		p := mustParsePath(assert, s1)
+		p1 := copyAppend(p, types.NewIndexPath(types.String("anIndex")))
+		if len(p) > 0 {
+			p[0] = expected[1] // if p1 really is a copy, this shouldn't be noticed
+		}
+		assert.Equal(expected, p1)
+	}
 }

@@ -9,9 +9,9 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/cmd/util"
-	flag "github.com/juju/gnuflag"
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
+	flag "github.com/juju/gnuflag"
 )
 
 var nomsConfig = &util.Command{
