@@ -11,11 +11,11 @@ import (
 	"math"
 	"strings"
 
-	"github.com/attic-labs/noms/cmd/noms/diff"
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
