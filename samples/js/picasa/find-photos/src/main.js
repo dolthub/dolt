@@ -35,46 +35,46 @@ main().catch(ex => {
 });
 
 const stringStruct = makeStructType('', {
-  'Q24t': stringType,
+  Q24t: stringType,
 });
 
 const sourceType = makeStructType('', {
-  'id': stringStruct,
-  'mediaQ24group': makeStructType('', {
-    'mediaQ24thumbnail': makeListType(makeStructType('', {
-      'height': numberType,
-      'width': numberType,
-      'url': stringType,
+  id: stringStruct,
+  mediaQ24group: makeStructType('', {
+    mediaQ24thumbnail: makeListType(makeStructType('', {
+      height: numberType,
+      width: numberType,
+      url: stringType,
     })),
   }),
-  'gphotoQ24width': stringStruct,
-  'gphotoQ24height': stringStruct,
-  'published': stringStruct,
-  'updated': stringStruct,
+  gphotoQ24width: stringStruct,
+  gphotoQ24height: stringStruct,
+  published: stringStruct,
+  updated: stringStruct,
 });
 
 const hasTitle = makeStructType('', {
-  'title': stringStruct,
+  title: stringStruct,
 });
 
 const hasExifTime = makeStructType('', {
-  'gphotoQ24exiftime': makeListType(stringStruct),
+  gphotoQ24exiftime: makeListType(stringStruct),
 });
 
 const hasFaces = makeStructType('', {
-  'gphotoQ24shapes': makeStructType('', {
-    'gphotoQ24shape': makeListType(makeStructType('', {
-      'name': stringType,
-      'upperLeft': stringType,
-      'lowerRight': stringType,
+  gphotoQ24shapes: makeStructType('', {
+    gphotoQ24shape: makeListType(makeStructType('', {
+      name: stringType,
+      upperLeft: stringType,
+      lowerRight: stringType,
     })),
   }),
 });
 
 const hasGeo = makeStructType('', {
-  'georssQ24where': makeStructType('', {
-    'gmlQ24Point': makeStructType('', {
-      'gmlQ24pos': stringStruct,
+  georssQ24where: makeStructType('', {
+    gmlQ24Point: makeStructType('', {
+      gmlQ24pos: stringStruct,
     }),
   }),
 });
@@ -102,23 +102,23 @@ async function main(): Promise<void> {
 
   await walk(input, db, async (v: any) => {
     if (v instanceof Struct && isSubtype(sourceType, getTypeOfValue(v))) {
-      const w = parseInt(v['gphotoQ24width']['Q24t'], 10);
-      const h = parseInt(v['gphotoQ24height']['Q24t'], 10);
+      const w = parseInt(v.gphotoQ24width.Q24t, 10);
+      const h = parseInt(v.gphotoQ24height.Q24t, 10);
 
       const photo: Object = {
         sizes: await getSizes(v, w, h),
-        datePublished: getDate(Date.parse(v['published']['Q24t'])),
-        dateUpdated: getDate(Date.parse(v['updated']['Q24t'])),
+        datePublished: getDate(Date.parse(v.published.Q24t)),
+        dateUpdated: getDate(Date.parse(v.updated.Q24t)),
       };
 
       if (isSubtype(hasTitle, v.type)) {
-        photo.title = v['title']['Q24t'];
+        photo.title = v.title.Q24t;
       }
 
       if (isSubtype(hasExifTime, v.type)) {
-        if (v['gphotoQ24exiftime'].length === 1) {
+        if (v.gphotoQ24exiftime.length === 1) {
           photo.dateTaken = getDate(parseInt(
-            (await v['gphotoQ24exiftime'].get(0))['Q24t'], 10));
+            (await v.gphotoQ24exiftime.get(0)).Q24t, 10));
         }
       }
 
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
 
 function getGeo(input): ?Struct {
   const pattern = /^(\-?\d+\.\d+) (\-?\d+\.\d+)$/;
-  const match = input['georssQ24where']['gmlQ24Point']['gmlQ24pos']['Q24t'].match(pattern);
+  const match = input.georssQ24where.gmlQ24Point.gmlQ24pos.Q24t.match(pattern);
   if (!match) {
     // This can happen even though we type-checked because the pattern might not match.
     return null;
@@ -174,8 +174,8 @@ function getGeo(input): ?Struct {
 
 async function getSizes(input: Object, origWidth: number, origHeight: number)
     : Promise<Map<Struct, string>> {
-  const thumbURL = (await input['mediaQ24group']['mediaQ24thumbnail']
-      .get(0))['url'].split('/');
+  const thumbURL = (await input.mediaQ24group.mediaQ24thumbnail
+      .get(0)).url.split('/');
   const sizePart = thumbURL.length - 2;
 
   const makeURL = s => {
@@ -216,7 +216,7 @@ async function getFaces(photo: Object, origWidth: number, origHeight: number)
   };
 
   const result = [];
-  await photo['gphotoQ24shapes']['gphotoQ24shape'].forEach(v => {
+  await photo.gphotoQ24shapes.gphotoQ24shape.forEach(v => {
     const ul = parsePos(v.upperLeft);
     const lr = parsePos(v.lowerRight);
     if (!ul || !lr || !v.name) {
