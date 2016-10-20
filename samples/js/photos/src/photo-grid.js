@@ -13,7 +13,7 @@ import PhotoSetIterator, {EmptyIterator} from './photo-set-iterator.js';
 import Viewport from './viewport.js';
 
 const maxPhotoHeight = 300;
-const timeGroupThresholdMs = 5000;
+const timeGroupThresholdNs = 5 * 1e9;
 const photosPerPage = 10;
 const photoSpacing = 5;
 
@@ -163,7 +163,7 @@ export default class PhotoGrid extends React.Component<void, Props, State> {
       // Dedupe photos that were taken close together in time.
       // This is a stopgap until we have proper visual deduplication.
       // Note that not every photo has a taken timestamp and we always include those.
-      if (!taken || ((lastTaken - taken.nsSinceEpoch) > timeGroupThresholdMs)) {
+      if (!taken || ((lastTaken - taken.nsSinceEpoch) > timeGroupThresholdNs)) {
         const hash = nomsPhoto.hash.toString();
         const path = `.byDate[${negDate}][#${hash}]`;
         moreP.push(createPhoto(path, nomsPhoto));

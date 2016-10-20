@@ -57,8 +57,8 @@ const hasTitle = makeStructType('', {
   title: stringStruct,
 });
 
-const hasExifTime = makeStructType('', {
-  gphotoQ24exiftime: makeListType(stringStruct),
+const hasTimestamp = makeStructType('', {
+  gphotoQ24timestamp: stringStruct,
 });
 
 const hasFaces = makeStructType('', {
@@ -117,11 +117,9 @@ async function main(): Promise<void> {
         photo.title = v.title.Q24t;
       }
 
-      if (isSubtype(hasExifTime, v.type)) {
-        if (v.gphotoQ24exiftime.length === 1) {
-          photo.dateTaken = getDate(parseInt(
-            (await v.gphotoQ24exiftime.get(0)).Q24t, 10));
-        }
+      if (isSubtype(hasTimestamp, v.type)) {
+        photo.dateTaken = getDate(parseInt(
+          v.gphotoQ24timestamp.Q24t, 10));
       }
 
       if (isSubtype(hasGeo, v.type)) {
