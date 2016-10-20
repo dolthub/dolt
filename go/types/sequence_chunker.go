@@ -29,10 +29,11 @@ func newEmptySequenceChunker(vr ValueReader, vw ValueWriter, makeChunk, parentMa
 }
 
 func newSequenceChunker(cur *sequenceCursor, vr ValueReader, vw ValueWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
-	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 	d.PanicIfFalse(makeChunk != nil)
 	d.PanicIfFalse(parentMakeChunk != nil)
 	d.PanicIfFalse(hashValueBytes != nil)
+
+	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 
 	sc := &sequenceChunker{
 		cur,
@@ -62,13 +63,12 @@ func (sc *sequenceChunker) resume() {
 	// Number of previous items' value bytes which must be hashed into the boundary checker.
 	primeHashBytes := int64(sc.rv.window)
 
-	retreater := sc.cur.clone()
 	appendCount := 0
 	primeHashCount := 0
 
 	// If the cursor is beyond the final position in the sequence, then we can't tell the difference between it having been an explicit and implicit boundary. Since the caller may be about to append another value, we need to know whether the existing final item is an explicit chunk boundary.
 	cursorBeyondFinal := sc.cur.idx == sc.cur.length()
-	if cursorBeyondFinal && retreater.retreatMaybeAllowBeforeStart(false) {
+	if cursorBeyondFinal && sc.cur.retreatMaybeAllowBeforeStart(false) {
 		// In that case, we prime enough items *prior* to the final item to be correct.
 		appendCount++
 		primeHashCount++
@@ -76,28 +76,28 @@ func (sc *sequenceChunker) resume() {
 
 	// Walk backwards to the start of the existing chunk.
 	sc.rv.lengthOnly = true
-	for retreater.indexInChunk() > 0 && retreater.retreatMaybeAllowBeforeStart(false) {
+	for sc.cur.indexInChunk() > 0 && sc.cur.retreatMaybeAllowBeforeStart(false) {
 		appendCount++
 		if primeHashBytes > 0 {
 			primeHashCount++
 			sc.rv.ClearLastBoundary()
-			sc.hashValueBytes(retreater.current(), sc.rv)
+			sc.hashValueBytes(sc.cur.current(), sc.rv)
 			primeHashBytes -= int64(sc.rv.bytesHashed)
 		}
 	}
 
 	// If the hash window won't be filled by the preceding items in the current chunk, walk further back until they will.
-	for primeHashBytes > 0 && retreater.retreatMaybeAllowBeforeStart(false) {
+	for primeHashBytes > 0 && sc.cur.retreatMaybeAllowBeforeStart(false) {
 		primeHashCount++
 		sc.rv.ClearLastBoundary()
-		sc.hashValueBytes(retreater.current(), sc.rv)
+		sc.hashValueBytes(sc.cur.current(), sc.rv)
 		primeHashBytes -= int64(sc.rv.bytesHashed)
 	}
 	sc.rv.lengthOnly = false
 
 	for primeHashCount > 0 || appendCount > 0 {
-		item := retreater.current()
-		retreater.advance()
+		item := sc.cur.current()
+		sc.cur.advance()
 
 		if primeHashCount > appendCount {
 			// Before the start of the current chunk: just hash value bytes into window
@@ -255,22 +255,21 @@ func (sc *sequenceChunker) finalizeCursor() {
 
 	// Append the rest of the values in the sequence, up to the window size, plus the rest of that chunk. It needs to be the full window size because anything that was appended/skipped between chunker construction and finalization will have changed the hash state.
 	hashWindow := int64(sc.rv.window)
-	fzr := sc.cur.clone()
 
 	isBoundary := len(sc.current) == 0
 
 	// We can terminate when: (1) we hit the end input in this sequence or (2) we process beyond the hash window and encounter an item which is boundary in both the old and new state of the sequence.
-	for i := 0; fzr.valid() && (hashWindow > 0 || fzr.indexInChunk() > 0 || !isBoundary); i++ {
-		if i == 0 || fzr.indexInChunk() == 0 {
+	for i := 0; sc.cur.valid() && (hashWindow > 0 || sc.cur.indexInChunk() > 0 || !isBoundary); i++ {
+		if i == 0 || sc.cur.indexInChunk() == 0 {
 			// Every time we step into a chunk from the original sequence, that chunk will no longer exist in the new sequence. The parent must be instructed to skip it.
 			sc.skipParentIfExists()
 		}
 
-		item := fzr.current()
+		item := sc.cur.current()
 		sc.current = append(sc.current, item)
 		isBoundary = false
 
-		fzr.advance()
+		sc.cur.advance()
 
 		if hashWindow > 0 {
 			// While we are within the hash window, we need to continue to hash items into the rolling hash and explicitly check for resulting boundaries.
@@ -278,7 +277,7 @@ func (sc *sequenceChunker) finalizeCursor() {
 			sc.hashValueBytes(item, sc.rv)
 			hashWindow -= int64(sc.rv.bytesHashed)
 			isBoundary = sc.rv.crossedBoundary
-		} else if fzr.indexInChunk() == 0 {
+		} else if sc.cur.indexInChunk() == 0 {
 			// Once we are beyond the hash window, we know that boundaries can only occur in the same place they did within the existing sequence.
 			isBoundary = true
 		}

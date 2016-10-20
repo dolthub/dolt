@@ -100,7 +100,6 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     // Number of previous items which must be hashed into the boundary checker.
     let primeHashBytes = this._rv.window;
 
-    const retreater = cursor.clone();
     let appendCount = 0;
     let primeHashCount = 0;
 
@@ -109,7 +108,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     // append another value, we need to know whether the existing final item is an explicit chunk
     // boundary.
     const cursorBeyondFinal = cursor.idx === cursor.length;
-    if (cursorBeyondFinal && await retreater._retreatMaybeAllowBeforeStart(false)) {
+    if (cursorBeyondFinal && await cursor._retreatMaybeAllowBeforeStart(false)) {
       // In that case, we prime enough items *prior* to the final item to be correct.
       appendCount++;
       primeHashCount++;
@@ -117,29 +116,29 @@ export default class SequenceChunker<T, S: Sequence<T>> {
 
     // Walk backwards to the start of the existing chunk.
     this._rv.lengthOnly = true;
-    while (retreater.indexInChunk > 0 && await retreater._retreatMaybeAllowBeforeStart(false)) {
+    while (cursor.indexInChunk > 0 && await cursor._retreatMaybeAllowBeforeStart(false)) {
       appendCount++;
       if (primeHashBytes > 0) {
         primeHashCount++;
         this._rv.clearLastBoundary();
-        this._hashValueBytes(retreater.getCurrent(), this._rv);
+        this._hashValueBytes(cursor.getCurrent(), this._rv);
         primeHashBytes -= this._rv.bytesHashed;
       }
     }
 
     // If the hash window won't be filled by the preceeding items in the current chunk, walk
     // further back until they will.
-    while (primeHashBytes > 0 && await retreater._retreatMaybeAllowBeforeStart(false)) {
+    while (primeHashBytes > 0 && await cursor._retreatMaybeAllowBeforeStart(false)) {
       primeHashCount++;
       this._rv.clearLastBoundary();
-      this._hashValueBytes(retreater.getCurrent(), this._rv);
+      this._hashValueBytes(cursor.getCurrent(), this._rv);
       primeHashBytes -= this._rv.bytesHashed;
     }
     this._rv.lengthOnly = false;
 
     while (primeHashCount > 0 || appendCount > 0) {
-      const item = retreater.getCurrent();
-      await retreater.advance();
+      const item = cursor.getCurrent();
+      await cursor.advance();
 
       if (primeHashCount > appendCount) {
         // Before the start of the current chunk: just hash value bytes into window.
@@ -356,7 +355,6 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     // chunk. It needs to be the full window size because anything that was appended/skipped
     // between chunker construction and finalization will have changed the hash state.
     let hashWindow = this._rv.window;
-    const fzr = cursor.clone();
 
     let isBoundary = this._current.length === 0;
 
@@ -364,18 +362,18 @@ export default class SequenceChunker<T, S: Sequence<T>> {
     // the hash window and encounter an item which is boundary in both the old and new state of the
     // sequence.
     let i = 0;
-    for (; fzr.valid && (hashWindow > 0 || fzr.indexInChunk > 0 || !isBoundary); i++) {
-      if (i === 0 || fzr.indexInChunk === 0) {
+    for (; cursor.valid && (hashWindow > 0 || cursor.indexInChunk > 0 || !isBoundary); i++) {
+      if (i === 0 || cursor.indexInChunk === 0) {
         // Every time we step into a chunk from the original sequence, that chunk will no longer
         // exist in the new sequence. The parent must be instructed to skip it.
         await this.skipParentIfExists();
       }
 
-      const item = fzr.getCurrent();
+      const item = cursor.getCurrent();
       this._current.push(item);
       isBoundary = false;
 
-      await fzr.advance();
+      await cursor.advance();
 
       if (hashWindow > 0) {
         // While we are within the hash window, append items (which explicit checks the hash value
@@ -384,7 +382,7 @@ export default class SequenceChunker<T, S: Sequence<T>> {
         this._hashValueBytes(item, this._rv);
         isBoundary = this._rv.crossedBoundary;
         hashWindow -= this._rv.bytesHashed;
-      } else if (fzr.indexInChunk === 0) {
+      } else if (cursor.indexInChunk === 0) {
         // Once we are beyond the hash window, we know that boundaries can only occur in the same
         // place they did within the existing sequence.
         isBoundary = true;
