@@ -40,6 +40,7 @@ const imageType = makeStructType('', {
 });
 
 const photoType = makeStructType('', {
+  id: stringType,
   images: makeListType(imageType),
   'created_time': numberType,
   'updated_time': numberType,
@@ -69,6 +70,8 @@ const placeType = makeStructType('', {
 const NomsDate = createStructClass(
   makeStructType('Date', {nsSinceEpoch: numberType}));
 
+const clearLine = '\x1b[2K\r';
+
 async function main(): Promise<void> {
   const inSpec = PathSpec.parse(args._[0]);
   const pinnedSpec = await inSpec.pin();
@@ -87,6 +90,7 @@ async function main(): Promise<void> {
   await walk(input, db, async (v: any) => {
     if (v instanceof Struct && isSubtype(photoType, v.type)) {
       const photo: Object = {
+        id: `https://github.com/attic-labs/noms/samples/js/fb/find-photos#${v.id}`,
         title: v.name || '',
         sizes: await getSizes(v),
         tags: new Set(),  // fb has 'tags', but they are actually people not textual tags
@@ -99,7 +103,12 @@ async function main(): Promise<void> {
       if (isSubtype(tagsType, v.type)) {
         photo.facesCentered = await getFaces(v);
       }
-      result = result.then(r => r.add(newStruct('Photo', photo)));
+      result = result
+          .then(r => r.add(newStruct('Photo', photo)))
+          .then(r => {
+            process.stdout.write(clearLine + `Indexed ${r.size} photos...`);
+            return r;
+          });
       return true;
     }
   });
@@ -111,7 +120,10 @@ async function main(): Promise<void> {
     }),
   })
   .then(() => db.close())
-  .then(() => outDB.close());
+  .then(() => outDB.close())
+  .then(() => {
+    process.stdout.write(clearLine);
+  });
 }
 
 function getGeo(input): Struct {

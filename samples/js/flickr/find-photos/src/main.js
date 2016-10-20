@@ -52,6 +52,7 @@ const sizeTypes = sizes.map(s =>
 // }
 const imageType = makeUnionType(sizeTypes.map(st => {
   const newFields = {
+    id: stringType,
     title: stringType,
     tags: stringType,
     latitude: flickrNum,
@@ -70,6 +71,7 @@ const imageType = makeUnionType(sizeTypes.map(st => {
 
 const nsInSecond = 1e9;
 const nsInMillisecond = 1e6;
+const clearLine = '\x1b[2K\r';
 
 main().catch(ex => {
   console.error(ex);
@@ -94,6 +96,7 @@ async function main(): Promise<void> {
   await walk(input, db, (v: any) => {
     if (isSubtype(imageType, getTypeOfValue(v))) {
       const photo: Object = {
+        id: `https://github.com/attic-labs/noms/samples/js/flickr/find-photos#${v.id}`,
         title: v.title,
         tags: new Set(v.tags ? v.tags.split(' ') : []),
         sizes: getSizes(v),
@@ -111,7 +114,12 @@ async function main(): Promise<void> {
         photo.geoposition = geo;
       }
 
-      result = result.then(r => r.add(newStruct('Photo', photo)));
+      result = result
+          .then(r => r.add(newStruct('Photo', photo)))
+          .then(r => {
+            process.stdout.write(clearLine + `Indexed ${r.size} photos...`);
+            return r;
+          });
       return true;
     }
     return false;
@@ -124,7 +132,10 @@ async function main(): Promise<void> {
     }),
   })
   .then(() => db.close())
-  .then(() => outDB.close());
+  .then(() => outDB.close())
+  .then(() => {
+    process.stdout.write(clearLine);
+  });
 }
 
 function getGeo(input: Object): Struct {

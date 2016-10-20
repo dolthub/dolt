@@ -39,7 +39,6 @@ const stringStruct = makeStructType('', {
 });
 
 const sourceType = makeStructType('', {
-  id: stringStruct,
   mediaQ24group: makeStructType('', {
     mediaQ24thumbnail: makeListType(makeStructType('', {
       height: numberType,
@@ -47,6 +46,7 @@ const sourceType = makeStructType('', {
       url: stringType,
     })),
   }),
+  gphotoQ24id: stringStruct,
   gphotoQ24width: stringStruct,
   gphotoQ24height: stringStruct,
   published: stringStruct,
@@ -106,6 +106,8 @@ async function main(): Promise<void> {
       const h = parseInt(v.gphotoQ24height.Q24t, 10);
 
       const photo: Object = {
+        id: 'https://github.com/attic-labs/noms/samples/js/picasa/find-photos' +
+            `#${v.gphotoQ24id.Q24t}`,
         sizes: await getSizes(v, w, h),
         datePublished: getDate(Date.parse(v.published.Q24t)),
         dateUpdated: getDate(Date.parse(v.updated.Q24t)),

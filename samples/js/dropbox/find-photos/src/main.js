@@ -62,6 +62,7 @@ const contentHost = 'https://content.dropboxapi.com/2/';
 const sizes = [[32, 32], [64, 64], [128, 128], [640, 480], [1024, 768]];
 
 const nanosPerMilli = 1e6;
+const clearLine = '\x1b[2K\r';
 
 main().catch(ex => {
   console.error(ex);
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
   await walk(input, db, (v: any) => {
     if (isSubtype(sourceType, getTypeOfValue(v))) {
       const photo: Object = {
+        id: `https://github.com/attic-labs/noms/samples/js/dropbox/find-photos#${v.id}`,
         title: v.name,
         tags: new Set(),
         sizes: getSizes(v),
@@ -97,7 +99,12 @@ async function main(): Promise<void> {
         photo.geolocation = v.media_info.metadata.location;
       }
 
-      result = result.then(r => r.add(newStruct('Photo', photo)));
+      result = result
+          .then(r => r.add(newStruct('Photo', photo)))
+          .then(r => {
+            process.stdout.write(clearLine + `Indexed ${r.size} photos...`);
+            return r;
+          });
       return true;
     }
     return false;
@@ -110,7 +117,10 @@ async function main(): Promise<void> {
     }),
   })
   .then(() => db.close())
-  .then(() => outDB.close());
+  .then(() => outDB.close())
+  .then(() => {
+    process.stdout.write(clearLine);
+  });
 }
 
 function getSizes(input: Object): Map<Struct, string> {

@@ -33,6 +33,7 @@ declare class Face extends Struct {
 }
 
 declare class NomsPhoto extends Struct {
+  id: string,
   faces: Set<Face>;
   sizes: Map<PhotoSize, string>;
   dateTaken: ?NomsDate;
