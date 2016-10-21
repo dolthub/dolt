@@ -56,7 +56,7 @@ func (dbc *databaseCommon) datasetsFromRef(datasetsRef hash.Hash) *types.Map {
 }
 
 func getDataset(db Database, datasetID string) Dataset {
-	d.PanicIfTrue(!DatasetFullRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
+	d.PanicIfFalse(DatasetFullRe.MatchString(datasetID), "Invalid dataset ID: %s", datasetID)
 	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
 		return Dataset{db, datasetID, r.(types.Ref)}
 	}
@@ -98,7 +98,7 @@ func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
-	d.PanicIfTrue(!IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
+	d.PanicIfFalse(IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Root(), nil }()
 
 	// This could loop forever, given enough simultaneous committers. BUG 2565

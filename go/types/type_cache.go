@@ -165,6 +165,12 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 	return t, false
 }
 
+// ToUnresolvedType replaces cycles (by pointer comparison) in types to Cycle types.
+func ToUnresolvedType(t *Type) *Type {
+	t2, _ := toUnresolvedType(t, staticTypeCache, 0, nil)
+	return t2
+}
+
 // Drops cycles and replaces them with pointers to parent structs
 func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
 	switch desc := t.Desc.(type) {

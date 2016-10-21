@@ -31,7 +31,7 @@ const (
 	res5 = "struct Commit {\n  meta: struct {},\n  parents: Set<Ref<struct Commit {\n    meta: struct {},\n    parents: Set<Ref<Cycle<0>>>,\n    value: Ref<List<Number | String>> | Ref<String>,\n  }>>,\n  value: Ref<String>,\n}({\n  meta:  {},\n  parents: {\n    3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n})\n"
 )
 
-func writeTestData(str string, value types.Value) types.Ref {
+func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.Ref {
 	db, ds, err := spec.GetDataset(str)
 	d.Chk.NoError(err)
 
@@ -49,7 +49,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
 
 	s1 := types.String("test string")
-	r := writeTestData(str, s1)
+	r := s.writeTestData(str, s1)
 	res, _ := s.MustRun(main, []string{"show", str})
 	s.Equal(res1, res)
 
@@ -58,7 +58,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	s.Equal(res2, res)
 
 	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
-	r = writeTestData(str, list)
+	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
 
@@ -66,7 +66,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	res, _ = s.MustRun(main, []string{"show", str1})
 	s.Equal(res4, res)
 
-	_ = writeTestData(str, s1)
+	_ = s.writeTestData(str, s1)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res5, res)
 }
