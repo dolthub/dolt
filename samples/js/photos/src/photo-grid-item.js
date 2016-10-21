@@ -95,7 +95,7 @@ export default class PhotoGridItem extends React.Component<void, Props, State> {
     return <div onClick={() => this._handleOnClick()}>
       {overlay}
       <div style={clipStyle}>
-        <img data-ref={photo.nomsPhoto.id} src={url} style={imgStyle}/>
+        <img data-id={photo.nomsPhoto.id} src={url} style={imgStyle}/>
       </div>
     </div>;
   }
