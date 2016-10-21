@@ -3,22 +3,23 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 // @flow
-
-import {createServer as createHttpServer} from 'http';
 import {OAuth2} from 'oauth';
-import {parse as parseQueryString} from 'querystring';
-import {parse as parseUrl} from 'url';
+import readline from 'readline';
 
 const scope = 'https://picasaweb.google.com/data';
 const authPath = 'https://accounts.google.com/o/oauth2/auth';
 const tokenPath = 'https://accounts.google.com/o/oauth2/token';
 
+// This magic URL causes Google's oauth endpoint to print out the token for the user to copy,
+// rather than actually redirecting to it.
+const redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
+
 /**
  * Gets a refresh token for the Picasa API. Refresh tokens are used to issue access tokens.
  */
 export function getRefreshToken(clientId: string, clientSecret: string): Promise<string> {
-  return getAuthCodeViaURL(clientId, clientSecret)
-    .then(([authCode, redirectUri]) => new Promise((res, rej) => {
+  return getAuthCode(clientId, clientSecret)
+    .then(authCode => new Promise((res, rej) => {
       const oauth = newOAuth2(clientId, clientSecret);
       oauth.getOAuthAccessToken(authCode, {
         'grant_type': 'authorization_code',
@@ -54,37 +55,10 @@ export function getAccessTokenFromRefreshToken(
   });
 }
 
-function getAuthCodeViaURL(clientId: string, clientSecret: string)
-    : Promise<[string /* auth code */, string /* authorize URL */]> {
-  return new Promise((res, rej) => {
-    // To be an OAuth endpoint, host an HTTP server on a random port to serve as the redirect URL,
-    // then capture the access code.
-    const server = createHttpServer((request, response) => {
-      let code = null;
-      try {
-        const url = parseUrl(request.url);
-        if (!url.query) {
-          rej(`oauth response ${request.url} missing query string`);
-          return;
-        }
-
-        const qs = parseQueryString(url.query);
-        if (qs.state !== secret) {
-          rej(`invalid secret ${qs.state}, expected ${secret}`);
-        } else if (!qs.code) {
-          rej(`oauth response ${request.url} does not have a code`);
-        } else {
-          code = qs.code;
-          res([code, redirectUri]);
-        }
-      } finally {
-        const message = code ? `got code ${code}` : 'failed to get code';
-        response.end(`<body>${message}</body>`);
-      }
-    }).listen(0);
-
+function getAuthCode(clientId: string, clientSecret: string)
+    : Promise<string> {
+  return new Promise(res => {
     const secret = String(Math.random());
-    const redirectUri = `http://localhost:${server.address().port}`;
     const oauth2 = newOAuth2(clientId, clientSecret);
     const authUrl = oauth2.getAuthorizeUrl({
       'access_type': 'offline', // without this, we won't be issued a refresh token
@@ -93,7 +67,17 @@ function getAuthCodeViaURL(clientId: string, clientSecret: string)
       scope,
       state: secret,
     });
-    console.log(authUrl);
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(
+      `Visit the following URL and paste the code you get:\n\n\t${authUrl}\n\n`,
+      answer => {
+        res(answer);
+        rl.close();
+      });
   });
 }
 
