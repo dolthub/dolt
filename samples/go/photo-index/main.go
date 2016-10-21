@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"sync"
@@ -77,20 +78,24 @@ func index() (win bool) {
 		"h":    types.NumberType,
 	})
 	photoType := types.MakeStructTypeFromFields("Photo", types.FieldMap{
-		"sizes":         types.MakeMapType(sizeType, types.StringType),
-		"title":         types.StringType,
-		"datePublished": dateType,
-		"dateUpdated":   dateType,
+		"id":    types.StringType,
+		"sizes": types.MakeMapType(sizeType, types.StringType),
 	})
 
 	withTags := types.MakeStructTypeFromFields("", types.FieldMap{
 		"tags": types.MakeSetType(types.StringType),
 	})
+	withFaces := types.MakeStructTypeFromFields("", types.FieldMap{
+		"faces": types.MakeSetType(faceType),
+	})
 	withDateTaken := types.MakeStructTypeFromFields("", types.FieldMap{
 		"dateTaken": dateType,
 	})
-	withFaces := types.MakeStructTypeFromFields("", types.FieldMap{
-		"faces": types.MakeSetType(faceType),
+	withDatePublished := types.MakeStructTypeFromFields("", types.FieldMap{
+		"datePublished": dateType,
+	})
+	withDateUpdated := types.MakeStructTypeFromFields("", types.FieldMap{
+		"dateUpdated": dateType,
 	})
 
 	byDate := types.NewGraphBuilder(db, types.MapKind, true)
@@ -106,16 +111,22 @@ func index() (win bool) {
 			if types.IsSubtype(photoType, cv.Type()) {
 				s := cv.(types.Struct)
 
-				// Prefer to sort by the actual date the photo was taken, but if it's not
-				// available, use the date it was published instead.
-				ds := s.Get("datePublished")
+				// None of the date fields are required, but they are usually available.
+				var ds types.Value
 				if types.IsSubtype(withDateTaken, cv.Type()) {
 					ds = s.Get("dateTaken")
+				} else if types.IsSubtype(withDatePublished, cv.Type()) {
+					ds = s.Get("datePublished")
+				} else if types.IsSubtype(withDateUpdated, cv.Type()) {
+					ds = s.Get("dateUpdated")
 				}
 
-				// Sort by most recent by negating the timestamp.
-				d := ds.(types.Struct).Get("nsSinceEpoch").(types.Number)
-				d = types.Number(-float64(d))
+				d := types.Number(float64(math.MaxFloat64))
+				if ds != nil {
+					// Sort by most recent by negating the timestamp.
+					d = ds.(types.Struct).Get("nsSinceEpoch").(types.Number)
+					d = types.Number(-float64(d))
+				}
 
 				// Index by date
 				byDate.SetInsert([]types.Value{d}, cv)

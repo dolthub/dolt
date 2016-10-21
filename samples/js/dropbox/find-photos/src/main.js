@@ -23,11 +23,14 @@ import {
 
 const args = argv
   .usage(
-    'Indexes Photo objects out of slurped Dropbox metadata.\n\n' +
-    'Note that the created objects have download URLs that are ' +
-    'authenticated by Dropbox. You can request them like:\n\n' +
-    'curl -H \'Authorization: Bearer <access token>\' <url>\n\n' +
-    'Usage: node . <in-object> <out-dataset>')
+    'Indexes Photo objects out of slurped Dropbox metadata.\n' +
+    'See dropbox/slurp for how to get an access token.\n\n' +
+    'Usage: node . --access-token=<token> <in-object> <out-dataset>')
+  .option('access-token', {
+    describe: 'Dropbox oauth access token',
+    type: 'string',
+    demand: true,
+  })
   .demand(2)
   .argv;
 
@@ -131,32 +134,32 @@ function getSizes(input: Object): Map<Struct, string> {
     if (resized.scale > 1) {
       return null;
     }
-
-    const args = {
-      path: input.id,
-      format: 'jpeg',
-      size: `w${width}h${height}`,
-    };
-    const url = `${contentHost}files/get_thumbnail?arg=` +
-        encodeURIComponent(JSON.stringify(args));
-    return [newStruct('', {width: resized.width, height: resized.height}), url];
+    return [
+      newStruct('', {width: resized.width, height: resized.height}),
+      getURL('files/get_thumbnail', {
+        path: input.id,
+        format: 'jpeg',
+        size: `w${width}h${height}`,
+      }),
+    ];
   });
 
-  const args = {
-    path: input.id,
-  };
-  const url = `${contentHost}files/download?arg=` +
-      encodeURIComponent(JSON.stringify(args));
   kv.push([
     newStruct('', {
       width: orig.width,
       height: orig.height,
     }),
-    url,
+    getURL('files/download', {path: input.id}),
   ]);
 
   // $FlowIssue: Does not understand that filter removes all null values.
   return new Map(kv.filter(kv => kv));
+}
+
+function getURL(path: string, dbArgs: Object): string {
+  const dbArgStr = encodeURIComponent(JSON.stringify(dbArgs));
+  return `${contentHost}${path}?arg=${dbArgStr}&` +
+      `authorization=Bearer%20${args['access-token']}`;
 }
 
 function newDate(iso: string): Struct {

@@ -37,6 +37,7 @@ func (s *testSuite) TestWin() {
 	}
 
 	type Photo struct {
+		Id    string
 		Title string
 		Tags  types.Set
 		Faces types.Set
@@ -72,6 +73,7 @@ func (s *testSuite) TestWin() {
 
 	getPhoto := func(n int) Photo {
 		return Photo{
+			Id:    fmt.Sprintf("photo%d", n),
 			Title: fmt.Sprintf("photo %d", n),
 			Tags:  getTags(n),
 			Sizes: map[struct{ Width, Height int }]string{
