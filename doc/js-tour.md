@@ -2,6 +2,9 @@
 
 This is a short introduction to using Noms from JavaScript. It should only take a few minutes if you have some familiarity with JavaScript and Node.
 
+During the tour, you can refer to the complete [JavaScript SDK Reference](docs.noms.io/js/) for more information on anything you see.
+
+
 ## Requirements
 
 * [Noms command-line tools](https://github.com/attic-labs/noms#setup)
