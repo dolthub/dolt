@@ -2,9 +2,9 @@
 
 ## General
 
+* [Command-Line Tour](cli-tour.md)
 * [Noms Design Overview](intro.md)
 * [FAQ](faq.md)
-* [Command-Line Tour](cli-tour.md)
 
 ## Go
 
