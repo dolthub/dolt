@@ -1,8 +1,10 @@
 # A Short Tour of Noms for Go
 
-[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-
 This is a short introduction to using Noms from Go. It should only take a few minutes if you have some familiarity with Go.
+
+During the tour, you can refer to the complete [Go SDK Reference](https://godoc.org/github.com/attic-labs/noms) for more information on anything you see.
+
+
 
 ## Requirements
 
