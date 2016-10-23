@@ -1,9 +1,12 @@
 # Documentation
 
+Here's what we have so far!
+
 ## General
 
 * [Command-Line Tour](cli-tour.md)
 * [Noms Design Overview](intro.md)
+* [Spelling in Noms](spelling.md) - specifying databases, datasets, and paths to values
 * [FAQ](faq.md)
 
 ## Go
