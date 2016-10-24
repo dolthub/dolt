@@ -14,7 +14,6 @@ import ValueStore from './value-store.js';
 import type {BatchStore} from './batch-store.js';
 import Dataset from './dataset.js';
 import Commit from './commit.js';
-import {equals} from './compare.js';
 import type Struct from './struct.js';
 
 type CommitOptions = {
@@ -133,9 +132,6 @@ export default class Database {
       if (!currentRootRef.isEmpty()) {
         const currentHeadRef = await currentDatasets.get(datasetId);
         if (currentHeadRef) {
-          if (equals(commitRef, currentHeadRef)) {
-            break;
-          }
           if (!await this._descendsFrom(commit, currentHeadRef)) {
             throw new Error('Merge needed');
           }

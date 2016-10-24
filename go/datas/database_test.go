@@ -191,6 +191,20 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	newDB.Close()
 }
 
+func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
+	datasetID := "ds1"
+	ds := suite.db.GetDataset(datasetID)
+	datasets := suite.db.Datasets()
+	suite.Zero(datasets.Len())
+
+	v := types.String("Hello")
+	_, err := suite.db.CommitValue(ds, v)
+	suite.NoError(err)
+
+	_, err = suite.db.CommitValue(ds, v)
+	suite.Error(err)
+}
+
 func (suite *DatabaseSuite) TestDatabaseDelete() {
 	datasetID1, datasetID2 := "ds1", "ds2"
 	ds1, ds2 := suite.db.GetDataset(datasetID1), suite.db.GetDataset(datasetID2)

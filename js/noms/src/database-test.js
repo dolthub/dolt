@@ -109,6 +109,28 @@ suite('Database', () => {
     await db.close();
   });
 
+  test('duplicate commit', async () => {
+    const bs = makeRemoteBatchStoreFake();
+    const db = new Database(bs);
+    const ds = await db.getDataset('ds1');
+
+    const datasets = await db.datasets();
+    assert.isTrue(datasets.isEmpty());
+
+    await db.commit(ds, 'a');
+    // Should be disallowed, Dataset returned by Commit() should have |c| as Head.
+    let message = '';
+    try {
+      await db.commit(ds, 'a');
+      throw new Error('not reached');
+    } catch (ex) {
+      message = ex.message;
+    }
+    assert.strictEqual('Merge needed', message);
+
+    await db.close();
+  });
+
   test('concurrency', async () => {
     const bs = makeRemoteBatchStoreFake();
     const db = new Database(bs);

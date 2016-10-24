@@ -114,12 +114,8 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct) error
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				currentHeadRef := r.(types.Ref)
-				if commitRef.Equals(currentHeadRef) {
-					return nil
-				}
 				// This covers all cases where commit doesn't descend from the Head of datasetID, including the case where we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
-				if !CommitDescendsFrom(commit, currentHeadRef, dbc) {
+				if !CommitDescendsFrom(commit, r.(types.Ref), dbc) {
 					return ErrMergeNeeded
 				}
 			}
