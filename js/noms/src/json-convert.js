@@ -13,7 +13,7 @@ import {
 import type Value from './value.js';
 
 type JSON = string | number | boolean | null | JSONObject | JSONArray;
-type JSONObject = { [key:string]: JSON };
+type JSONObject = { [key: string]: JSON };
 type JSONArray = Array<JSON>;
 
 type NullableValue = Value | null;
