@@ -4,7 +4,7 @@
   "description": "Shared node modules",
   "license": "Apache-2.0",
   "dependencies": {
-    "@attic/eslintrc": "^4.0.0",
+    "@attic/eslintrc": "4.3.0",
     "@attic/noms": "file:../../js/noms",
     "@attic/webpack-config": "^2.1.0",
     "babel-cli": "^6.14.0",
