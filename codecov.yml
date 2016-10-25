@@ -7,15 +7,15 @@ codecov:
 coverage:
   precision: 2         # how many decimal places to display in the UI: 0 <= value <= 4
   round: down          # how coverage is rounded: down/up/nearest
-  range: 60...100      # custom range of coverage colors from red -> yellow -> green
+  range: 70...100      # custom range of coverage colors from red -> yellow -> green
 
   notify:
     slack:
       default:
         url: "secret:n+BYhIXTXsaCiMKB3vOf6yP68ytdKd3WpXtJFWPEUsEWXDiGnU5dTB5DO2yv8tR0COdxvs7K31hVpEfHEXdoXOaQhUw3FKf3fh8KZDLN7CGTbeDhw1uNGGyBr2d2TWnopzYtcXomdwMmuckARtiWQx0YXJiZY9YyCrIoDK9HIJQ="
         branches: null
-        threshold: 1.15
-        attachments: "sunburst, diff"
+        threshold: 5.0
+        attachments: "tree, diff"
 
   status:
     project:
@@ -47,6 +47,6 @@ coverage:
         if_ci_failed: error
 
 comment:
-  layout: "header, diff, changes, sunburst, suggestions, tree"
+  layout: "tree"
   branches: null
-  behavior: once
+  behavior: default
