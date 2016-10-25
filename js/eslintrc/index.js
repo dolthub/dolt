@@ -21,8 +21,8 @@ module.exports = {
     'flowtype/semi':  ['error', 'always'],
     // Does not work with newlines: https://github.com/gajus/eslint-plugin-flowtype/issues/31
     // 'flowtype/space-after-type-colon':  ['error', 'always'],
+    // 'flowtype/space-before-type-colon':  ['error', 'never'],
     'flowtype/space-before-generic-bracket':  ['error', 'never'],
-    'flowtype/space-before-type-colon':  ['error', 'never'],
     'flowtype/union-intersection-spacing':  ['error', 'always'],
     'indent': ['error', 2, {'SwitchCase': 1}],
     'keyword-spacing': 'error',
