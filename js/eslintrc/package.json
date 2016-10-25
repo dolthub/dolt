@@ -2,7 +2,7 @@
   "name": "@attic/eslintrc",
   "description": "Shared eslintrc for noms",
   "license": "Apache-2.0",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "main": "index.js",
   "dependencies": {
     "babel-eslint": "7.0.0",

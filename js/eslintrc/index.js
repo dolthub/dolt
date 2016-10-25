@@ -19,7 +19,8 @@ module.exports = {
     'flowtype/delimiter-dangle': ['error', 'always-multiline'],
     'flowtype/generic-spacing':  ['error', 'never'],
     'flowtype/semi':  ['error', 'always'],
-    'flowtype/space-after-type-colon':  ['error', 'always'],
+    // Does not work with newlines: https://github.com/gajus/eslint-plugin-flowtype/issues/31
+    // 'flowtype/space-after-type-colon':  ['error', 'always'],
     'flowtype/space-before-generic-bracket':  ['error', 'never'],
     'flowtype/space-before-type-colon':  ['error', 'never'],
     'flowtype/union-intersection-spacing':  ['error', 'always'],
