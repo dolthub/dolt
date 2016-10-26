@@ -14,6 +14,7 @@ export {default as Blob, BlobReader, BlobWriter} from './blob.js';
 export {decodeValue} from './codec.js';
 export {default as Chunk} from './chunk.js';
 export {getHashOfValue} from './get-hash.js';
+export {BatchStoreAdaptor} from './batch-store.js';
 export {default as HttpBatchStore} from './http-batch-store.js';
 export {default as MemoryStore} from './memory-store.js';
 export {default as Hash, emptyHash} from './hash.js';
