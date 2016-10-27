@@ -7,7 +7,6 @@ package marshal
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/attic-labs/noms/go/types"
@@ -216,7 +215,6 @@ func structDecoder(t reflect.Type) decoderFunc {
 		return d
 	}
 
-	name := t.Name()
 	fields := make([]decField, 0, t.NumField())
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -238,10 +236,6 @@ func structDecoder(t reflect.Type) decoderFunc {
 		s, ok := v.(types.Struct)
 		if !ok {
 			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct"})
-		}
-		// If the name is empty then the Go struct has to be anonymous.
-		if !strings.EqualFold(s.Type().Desc.(types.StructDesc).Name, name) {
-			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", names do not match"})
 		}
 
 		for _, f := range fields {

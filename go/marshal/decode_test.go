@@ -192,6 +192,27 @@ func TestDecode(tt *testing.T) {
 	t(types.NewStruct("Abc", types.StructData{
 		"e": types.Bool(false),
 	}), &t4, aBc{false})
+
+	// Name of struct is irrelevant to unmarshalling structs.
+	type SomeOtherName struct {
+		A int
+	}
+	var t5 SomeOtherName
+	t(types.NewStruct("aeiou", types.StructData{
+		"a": types.Number(42),
+	}), &t5, SomeOtherName{42})
+
+	var t6 SomeOtherName
+	t(types.NewStruct("SomeOtherName", types.StructData{
+		"a": types.Number(42),
+	}), &t6, SomeOtherName{42})
+
+	var t7 struct {
+		A int
+	}
+	t(types.NewStruct("SomeOtherName", types.StructData{
+		"a": types.Number(42),
+	}), &t7, struct{ A int }{42})
 }
 
 func TestDecodeNilPointer(t *testing.T) {
@@ -225,10 +246,6 @@ func TestDecodeTypeMismatch(t *testing.T) {
 	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"x": types.String("hi"),
 	}), &s, "Cannot unmarshal String into Go value of type int")
-
-	assertDecodeErrorMessage(t, types.NewStruct("T", types.StructData{
-		"x": types.Number(42),
-	}), &s, "Cannot unmarshal struct T {\n  x: Number,\n} into Go value of type marshal.S, names do not match")
 }
 
 func assertDecodeErrorMessage(t *testing.T, v types.Value, ptr interface{}, msg string) {
@@ -312,16 +329,6 @@ func TestDecodeNonExportedField(tt *testing.T) {
 	}
 	var ts TestStruct
 	assertDecodeErrorMessage(tt, types.String("hi"), &ts, "Non exported fields are not supported, type: marshal.TestStruct")
-}
-
-func TestDecodeWrongStructName(tt *testing.T) {
-	type TestStruct struct {
-		X int
-	}
-	var ts TestStruct
-	assertDecodeErrorMessage(tt, types.NewStruct("Abc", types.StructData{
-		"X": types.Number(42),
-	}), &ts, "Cannot unmarshal struct Abc {\n  X: Number,\n} into Go value of type marshal.TestStruct, names do not match")
 }
 
 func TestDecodeTaggingSkip(t *testing.T) {
