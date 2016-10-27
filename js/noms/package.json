@@ -16,7 +16,6 @@
     "tingodb": "^0.4.2"
   },
   "devDependencies": {
-    "@attic/eslintrc": "4.3.0",
     "babel-cli": "^6.14.0",
     "babel-core": "^6.14.0",
     "babel-generator": "^6.14.0",
@@ -35,6 +34,7 @@
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
     "documentation": "documentationjs/documentation#a71bb03681cd145723218910145c835dd5171a74",
+    "eslint-config-noms": "1.0.0",
     "flow-bin": "^0.33.0",
     "fs-extra": "^0.30.0",
     "mocha": "^2.5.3",
