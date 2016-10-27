@@ -1,8 +1,8 @@
 {
-  "name": "@attic/eslintrc",
+  "name": "eslint-config-noms",
   "description": "Shared eslintrc for noms",
   "license": "Apache-2.0",
-  "version": "4.3.0",
+  "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
     "babel-eslint": "7.0.0",
@@ -10,7 +10,15 @@
     "eslint-plugin-flowtype": "2.25.0",
     "eslint-plugin-react": "6.3.0"
   },
+  "peerDependency": {
+    "eslint": ">= 3"
+  },
   "scripts": {
     "test": "exit 0"
-  }
+  },
+  "keywords": [
+    "eslint",
+    "eslintconfig",
+    "noms"
+  ]
 }
