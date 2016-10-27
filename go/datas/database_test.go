@@ -9,6 +9,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
@@ -163,7 +164,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.String("c")
-	ds, err = suite.db.Commit(ds, c, CommitOptions{Parents: types.NewSet(aCommitRef)})
+	ds, err = suite.db.Commit(ds, c, newOpts(aCommitRef))
 	suite.Error(err)
 	suite.True(ds.HeadValue().Equals(b))
 
@@ -176,7 +177,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
-	ds, err = suite.db.Commit(ds, b, CommitOptions{Parents: types.NewSet(aCommitRef)})
+	ds, err = suite.db.Commit(ds, b, newOpts(aCommitRef))
 	suite.Error(err)
 	suite.True(ds.HeadValue().Equals(d))
 
@@ -191,6 +192,10 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	newDB.Close()
 }
 
+func newOpts(parents ...types.Value) CommitOptions {
+	return CommitOptions{Parents: types.NewSet(parents...)}
+}
+
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 	datasetID := "ds1"
 	ds := suite.db.GetDataset(datasetID)
@@ -202,7 +207,49 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 	suite.NoError(err)
 
 	_, err = suite.db.CommitValue(ds, v)
-	suite.Error(err)
+	suite.IsType(ErrMergeNeeded, err)
+}
+
+func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
+	datasetID1, datasetID2 := "ds1", "ds2"
+	ds1, ds2 := suite.db.GetDataset(datasetID1), suite.db.GetDataset(datasetID2)
+
+	var err error
+	v := types.NewMap(types.String("Hello"), types.Number(42))
+	ds1, err = suite.db.CommitValue(ds1, v)
+	ds1First := ds1
+	suite.NoError(err)
+	ds1, err = suite.db.CommitValue(ds1, v.Set(types.String("Friends"), types.Bool(true)))
+	suite.NoError(err)
+
+	ds2, err = suite.db.CommitValue(ds2, types.String("Goodbye"))
+	suite.NoError(err)
+
+	// No common ancestor
+	_, err = suite.db.Commit(ds1, types.Number(47), newOpts(ds2.HeadRef()))
+	suite.IsType(ErrMergeNeeded, err, "%s", err)
+
+	// Unmergeable
+	_, err = suite.db.Commit(ds1, types.Number(47), newOptsWithMerge(merge.None, ds1First.HeadRef()))
+	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
+
+	// Merge policies
+	newV := v.Set(types.String("Friends"), types.Bool(false))
+	_, err = suite.db.Commit(ds1, newV, newOptsWithMerge(merge.None, ds1First.HeadRef()))
+	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
+
+	theirs, err := suite.db.Commit(ds1, newV, newOptsWithMerge(merge.Theirs, ds1First.HeadRef()))
+	suite.NoError(err)
+	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(types.String("Friends"))))
+
+	newV = v.Set(types.String("Friends"), types.Number(47))
+	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(merge.Ours, ds1First.HeadRef()))
+	suite.NoError(err)
+	suite.True(types.Number(47).Equals(ours.HeadValue().(types.Map).Get(types.String("Friends"))))
+}
+
+func newOptsWithMerge(policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
+	return CommitOptions{Parents: types.NewSet(parents...), Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {

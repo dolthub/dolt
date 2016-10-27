@@ -32,7 +32,7 @@ func (ldb *LocalDatabase) GetDataset(datasetID string) Dataset {
 func (ldb *LocalDatabase) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
 	return ldb.doHeadUpdate(
 		ds,
-		func(ds Dataset) error { return ldb.doCommit(ds.ID(), buildNewCommit(ds, v, opts)) },
+		func(ds Dataset) error { return ldb.doCommit(ds.ID(), buildNewCommit(ds, v, opts), opts.Policy) },
 	)
 }
 

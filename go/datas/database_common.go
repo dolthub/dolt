@@ -10,6 +10,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -93,11 +94,11 @@ func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error
 	}
 
 	commit := dbc.validateRefAsCommit(newHeadRef)
-	return dbc.doCommit(ds.ID(), commit)
+	return dbc.doCommit(ds.ID(), commit, nil)
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct) error {
+func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
 	d.PanicIfFalse(IsCommitType(commit.Type()), "Can't commit a non-Commit struct to dataset %s", datasetID)
 	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Root(), nil }()
 
@@ -107,16 +108,32 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct) error
 		currentRootHash, currentDatasets := dbc.getRootAndDatasets()
 		commitRef := dbc.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
 
-		// Allow only fast-forward commits.
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
 			r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				// This covers all cases where commit doesn't descend from the Head of datasetID, including the case where we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
-				if !CommitDescendsFrom(commit, r.(types.Ref), dbc) {
+				currentHeadRef := r.(types.Ref)
+				ancestorRef, found := FindCommonAncestor(commitRef, currentHeadRef, dbc)
+				if !found {
 					return ErrMergeNeeded
+				}
+
+				// This covers all cases where currentHeadRef is not an ancestor of commit, including the following edge cases:
+				//   - commit is a duplicate of currentHead.
+				//   - we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
+				if !currentHeadRef.Equals(ancestorRef) || currentHeadRef.Equals(commitRef) {
+					if mergePolicy == nil {
+						return ErrMergeNeeded
+					}
+
+					ancestor, currentHead := dbc.validateRefAsCommit(ancestorRef), dbc.validateRefAsCommit(currentHeadRef)
+					merged, err := mergePolicy(commit.Get(ValueField), currentHead.Get(ValueField), ancestor.Get(ValueField), dbc, nil)
+					if err != nil {
+						return err
+					}
+					commitRef = dbc.WriteValue(NewCommit(merged, types.NewSet(commitRef, currentHeadRef), types.EmptyStruct))
 				}
 			}
 		}

@@ -11,6 +11,12 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
+// Policy functors are used to merge two values (a and b) against a common
+// ancestor. All three Values and their must by wholly readable from vrw.
+// Whenever a change is merged, implementations should send a struct{} over
+// progress.
+type Policy func(a, b, ancestor types.Value, vrw types.ValueReadWriter, progress chan struct{}) (merged types.Value, err error)
+
 // ResolveFunc is the type for custom merge-conflict resolution callbacks.
 // When the merge algorithm encounters two non-mergeable changes (aChange and
 // bChange) at the same path, it calls the ResolveFunc passed into ThreeWay().
@@ -21,6 +27,21 @@ import (
 // function should return the appropriate type of change to apply, the new value
 // to be used (if any), and true.
 type ResolveFunc func(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool)
+
+// None is the no-op ResolveFunc. Any conflict results in a merge failure.
+func None(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
+	return change, merged, false
+}
+
+// Ours resolves conflicts by preferring changes from the Value currently being committed.
+func Ours(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
+	return aChange, a, true
+}
+
+// Theirs resolves conflicts by preferring changes in the current HEAD.
+func Theirs(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
+	return bChange, b, true
+}
 
 // ErrMergeConflict indicates that a merge attempt failed and must be resolved
 // manually for the provided reason.
@@ -34,6 +55,13 @@ func (e *ErrMergeConflict) Error() string {
 
 func newMergeConflict(format string, args ...interface{}) *ErrMergeConflict {
 	return &ErrMergeConflict{fmt.Sprintf(format, args...)}
+}
+
+// Creates a new Policy based on ThreeWay using the provided ResolveFunc.
+func NewThreeWay(resolve ResolveFunc) Policy {
+	return func(a, b, parent types.Value, vrw types.ValueReadWriter, progress chan struct{}) (merged types.Value, err error) {
+		return ThreeWay(a, b, parent, vrw, resolve, progress)
+	}
 }
 
 // ThreeWay attempts a three-way merge between two _candidate_ values that
@@ -119,7 +147,7 @@ func ThreeWay(a, b, parent types.Value, vrw types.ValueReadWriter, resolve Resol
 	}
 
 	if resolve == nil {
-		resolve = defaultResolve
+		resolve = None
 	}
 	m := &merger{vrw, resolve, progress}
 	return m.threeWay(a, b, parent, types.Path{})
@@ -138,10 +166,6 @@ type merger struct {
 	vrw      types.ValueReadWriter
 	resolve  ResolveFunc
 	progress chan<- struct{}
-}
-
-func defaultResolve(aChange, bChange types.DiffChangeType, a, b types.Value, p types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
-	return
 }
 
 func updateProgress(progress chan<- struct{}) {

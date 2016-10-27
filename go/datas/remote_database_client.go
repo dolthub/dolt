@@ -29,7 +29,7 @@ func (rdb *RemoteDatabaseClient) GetDataset(datasetID string) Dataset {
 }
 
 func (rdb *RemoteDatabaseClient) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	err := rdb.doCommit(ds.ID(), buildNewCommit(ds, v, opts))
+	err := rdb.doCommit(ds.ID(), buildNewCommit(ds, v, opts), opts.Policy)
 	return rdb.GetDataset(ds.ID()), err
 }
 

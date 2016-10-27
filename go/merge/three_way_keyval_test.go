@@ -179,6 +179,32 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 	}
 }
 
+func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeOurs() {
+	p := kvs{"k1", "k-one"}
+	a := kvs{"k1", "k-won"}
+	b := kvs{"k1", "k-too", "k2", "k-two"}
+	exp := kvs{"k1", "k-won", "k2", "k-two"}
+
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, Ours, nil)
+	if s.NoError(err) {
+		expected := s.create(exp)
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
+	}
+}
+
+func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeTheirs() {
+	p := kvs{"k1", "k-one"}
+	a := kvs{"k1", "k-won"}
+	b := kvs{"k1", "k-too", "k2", "k-two"}
+	exp := kvs{"k1", "k-too", "k2", "k-two"}
+
+	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, Theirs, nil)
+	if s.NoError(err) {
+		expected := s.create(exp)
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
+	}
+}
+
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NilConflict() {
 	s.tryThreeWayConflict(nil, s.create(mm2b), s.create(mm2), "Cannot merge nil Value with")
 	s.tryThreeWayConflict(s.create(mm2a), nil, s.create(mm2), "with nil Value.")
