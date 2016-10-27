@@ -176,7 +176,8 @@ export class PathSpec {
   /**
    * Returns a new PathSpec in which the dataset component, if any, has been
    * replaced with the hash of the HEAD of that dataset. This "pins" the path
-   * to the state of the database at the current moment in time.
+   * to the state of the database at the current moment in time. Returns this
+   * if the PathSpec is already "pinned".
    */
   async pin(): Promise<?PathSpec> {
     if (this.path.dataset !== '') {
@@ -188,6 +189,7 @@ export class PathSpec {
       return new PathSpec(this.database,
         new AbsolutePath('', commit.hash, this.path.path));
     }
+    return this;
   }
 
   /**

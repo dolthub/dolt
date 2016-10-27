@@ -221,5 +221,8 @@ suite('Specs', () => {
     ds = await db.commit(ds, 43);
     assert.strictEqual(42, (await pinned.value())[1]);
     assert.strictEqual(43, (await unpinned.value())[1]);
+
+    const pinned1 = PathSpec.parse('mem::#imgp9mp1h3b9nv0gna6mri53dlj9f4ql.value');
+    assert.strictEqual(pinned1, await pinned1.pin());
   });
 });
