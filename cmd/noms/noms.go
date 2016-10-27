@@ -21,6 +21,7 @@ var commands = []*util.Command{
 	nomsDiff,
 	nomsDs,
 	nomsLog,
+	nomsMerge,
 	nomsMigrate,
 	nomsServe,
 	nomsShow,
