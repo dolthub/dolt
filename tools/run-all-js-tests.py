@@ -9,14 +9,7 @@
 import argparse
 import os
 import subprocess
-from contextlib import contextmanager
-
-@contextmanager
-def pushd(path):
-  currentDir = os.getcwd()
-  os.chdir(path)
-  yield
-  os.chdir(currentDir)
+from noms.pushd import pushd
 
 def main():
   parser = argparse.ArgumentParser(description='Runs all Node.js tests')

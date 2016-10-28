@@ -6,19 +6,33 @@
 
 import os, subprocess, json
 from distutils.version import LooseVersion
+from noms.pushd import pushd
+
+packages = [
+    'babel-preset-noms',
+    'eslint-config-noms',
+    'noms',
+    'webpack-config',
+]
 
 def main():
-  os.chdir(os.path.join('js', 'noms'))
-  deployed_version = LooseVersion(
-    subprocess.check_output(['npm', 'info', '@attic/noms', 'version']).strip())
-  with open('package.json') as pkg:
-    data = json.load(pkg)
-  new_version = LooseVersion(data['version'])
-  print 'Old version: %s, New version: %s' % (deployed_version, new_version)
-  if new_version > deployed_version:
-    subprocess.check_call(['npm', 'whoami'])
-    subprocess.check_call(['npm', 'install'])
-    subprocess.check_call(['npm', 'publish'])
+    for p in packages:
+        with pushd(os.path.join('js', p)):
+            npm_publish()
+
+def npm_publish():
+    with open('package.json') as pkg:
+        data = json.load(pkg)
+    package_name = data['name']
+    deployed_version = LooseVersion(
+        subprocess.check_output(['npm', 'info', package_name, 'version']).strip())
+
+    new_version = LooseVersion(data['version'])
+    print '%s: Old version: %s, New version: %s' % (package_name, deployed_version, new_version)
+    if new_version > deployed_version:
+        subprocess.check_call(['npm', 'whoami'])
+        subprocess.check_call(['npm', 'install'])
+        subprocess.check_call(['npm', 'publish'])
 
 if __name__ == '__main__':
-  main()
+    main()
