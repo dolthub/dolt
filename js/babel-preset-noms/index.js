@@ -12,10 +12,10 @@ function plugin(n) {
   return require('babel-plugin-' + n);
 }
 
-const plugins = [
+const commonPlugins = [
   plugin('syntax-async-functions'),
+  plugin('syntax-flow'),
   plugin('transform-class-properties'),
-  plugin('transform-regenerator'),
   [
     plugin('transform-runtime'), {
       polyfill: false,
@@ -30,7 +30,10 @@ const production = {
     preset('es2016'),
     preset('react'),
   ],
-  plugins
+  plugins: [
+    ...commonPlugins,
+    plugin('transform-regenerator'),
+  ],
 };
 
 const development = {
@@ -39,8 +42,9 @@ const development = {
     preset('react'),
   ],
   plugins: [
+    ...commonPlugins,
     plugin('transform-es2015-modules-commonjs'),
-    ...plugins,
+    plugin('transform-async-to-generator'),
   ],
 };
 
