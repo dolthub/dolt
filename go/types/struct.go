@@ -138,6 +138,32 @@ func (s Struct) Set(n string, v Value) Struct {
 	return Struct{values, s.t, &hash.Hash{}}
 }
 
+// Delete returns a new struct where the field name has been removed.
+// If name is not an existing field in the struct then the current struct is returned.
+func (s Struct) Delete(n string) Struct {
+	desc := s.desc()
+	_, idx := desc.findField(n)
+	if idx == -1 {
+		return s
+	}
+
+	values := make([]Value, len(s.values)-1)
+	fieldNames := make([]string, len(s.values)-1)
+	fieldTypes := make([]*Type, len(s.values)-1)
+	j := 0
+	for i, v := range s.values {
+		if i != idx {
+			values[j] = v
+			fieldNames[j] = desc.fields[i].name
+			fieldTypes[j] = desc.fields[i].t
+			j++
+		}
+	}
+
+	newType := MakeStructType(s.desc().Name, fieldNames, fieldTypes)
+	return NewStructWithType(newType, values)
+}
+
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return

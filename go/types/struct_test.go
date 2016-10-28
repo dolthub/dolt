@@ -90,6 +90,23 @@ func TestGenericStructSet(t *testing.T) {
 	assert.True(s6.Type().Equals(s7.Type()))
 }
 
+func TestGenericStructDelete(t *testing.T) {
+	assert := assert.New(t)
+
+	s1 := NewStruct("S", StructData{"b": Bool(true), "o": String("hi")})
+
+	s2 := s1.Delete("notThere")
+	assert.True(s1.Equals(s2))
+
+	s3 := s1.Delete("o")
+	s4 := NewStruct("S", StructData{"b": Bool(true)})
+	assert.True(s3.Equals(s4))
+
+	s5 := s3.Delete("b")
+	s6 := NewStruct("S", StructData{})
+	assert.True(s5.Equals(s6))
+}
+
 func TestStructDiff(t *testing.T) {
 	assert := assert.New(t)
 

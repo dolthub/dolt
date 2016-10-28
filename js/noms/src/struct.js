@@ -109,23 +109,30 @@ export class StructFieldMirror {
 
 /**
  * A StructMirror allows reflection of a Noms struct.
- * This allows you to get and set a field by its name. Normally a Noms Struct will have a
+ * This allows you to get, set and remove a field by its name. Normally a Noms Struct will have
  * properties `foo` and method `setFoo(v)` to get and set a struct field but if the field name
  * conflicts with one of the properties provided by ValueBase then the only way to get and set them
  * is by using a StructMirror.
  */
 export class StructMirror<T: Struct> {
   _values: Value[];
+  _s: T;
+
+  constructor(s: T) {
+    this._s = s;
+    this._values = s._values;
+  }
+
   /**
    * The type of the struct this mirror is representing.
    */
-  type: Type<StructDesc>;
-
-  constructor(s: Struct) {
-    this._values = s._values;
-    this.type = s.type;
+  get type(): Type<StructDesc> {
+    return this._s.type;
   }
 
+  /**
+   * The StructDesc describing the struct type.
+   */
   get desc(): StructDesc {
     return this.type.desc;
   }
@@ -167,7 +174,7 @@ export class StructMirror<T: Struct> {
    * existing field in the struct or the type of `value` is different from the old value of the
    * struct field a new struct type is created.
    */
-  set(name: string, value: Value): T {
+  set(name: string, value: Value): Struct {
     const fields = this.desc.fields;
     const i = findFieldIndex(name, fields);
     if (i === -1 || !isSubtype(fields[i].type, getTypeOfValue(value))) {
@@ -184,12 +191,42 @@ export class StructMirror<T: Struct> {
     newValues[i] = value;
     return newStructWithType(this.type, newValues);
   }
+
+  /**
+   * Returns a new struct where the field `name` has been removed.
+   * If `name` is not an existing field in the struct then the current struct is returned.
+   */
+  delete(name: string): Struct {
+    const oldFields = this.desc.fields;
+    const idx = findFieldIndex(name, oldFields);
+    if (idx === -1) {
+      return this._s;
+    }
+
+    // New/change field
+    const values = this._values.concat();  // clone
+    values.splice(idx, 1);
+    const type = removeFieldFromType(this.type, idx);
+    return newStructWithValues(type, values);
+  }
+}
+
+function removeFieldFromType(type: Type<StructDesc>, idx: number): Type<StructDesc> {
+  const {desc} = type;
+  const fieldMap = Object.create(null);
+  let i = 0;
+  desc.forEachField((n, t) => {
+    if (i++ !== idx) {
+      fieldMap[n] = t;
+    }
+  });
+  return makeStructType(desc.name, fieldMap);
 }
 
 const cache: {[key: string]: Class<any>} = Object.create(null);
 
-function setterName(name) {
-  return `set${name[0].toUpperCase()}${name.slice(1)}`;
+function makeName(prefix, name) {
+  return `${prefix}${name[0].toUpperCase()}${name.slice(1)}`;
 }
 
 /**
@@ -225,10 +262,16 @@ export function createStructClass<T: Struct>(type: Type<StructDesc>): Class<T> {
         return this._values[i];
       },
     });
-    Object.defineProperty(c.prototype, setterName(f.name), {
+    Object.defineProperty(c.prototype, makeName('set', f.name), {
       configurable: true,
       enumerable: false,
       value: getSetter(i),
+      writable: true,
+    });
+    Object.defineProperty(c.prototype, makeName('delete', f.name), {
+      configurable: true,
+      enumerable: false,
+      value: getDeleter(i),
       writable: true,
     });
   });
@@ -241,6 +284,15 @@ function getSetter(i: number) {
     const values = this._values.concat();  // clone
     values[i] = value;
     return newStructWithType(this.type, values);
+  };
+}
+
+function getDeleter(i: number) {
+  return function() {
+    const values = this._values.concat();  // clone
+    values.splice(i, 1);
+    const type = removeFieldFromType(this.type, i);
+    return newStructWithType(type, values);
   };
 }
 

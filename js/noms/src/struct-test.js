@@ -103,6 +103,29 @@ suite('Struct', () => {
     assert.isTrue(equals(s9.type, s10.type));
   });
 
+  test('struct delete', () => {
+    const s1 = newStruct('S', {b: true, o: 'hi'});
+    const m1 = new StructMirror(s1);
+
+    const s2 = m1.delete('notThere');
+    assert.isTrue(equals(s1, s2));
+
+    const s3 = m1.delete('o');
+    const s4 = newStruct('S', {b: true});
+    assert.isTrue(equals(s3, s4));
+
+    const s5 = s1.deleteO();
+    assert.isTrue(equals(s4, s5));
+
+    const m5 = new StructMirror(s5);
+    const s6 = m5.delete('b');
+    const s7 = newStruct('S', {});
+    assert.isTrue(equals(s6, s7));
+
+    const s8 = s5.deleteB();
+    assert.isTrue(equals(s7, s8));
+  });
+
   test('createStructClass', () => {
     const typeA = makeStructType('A', {
       b: numberType,
