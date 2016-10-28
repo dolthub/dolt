@@ -1,5 +1,6 @@
 {
   "name": "noms-flickr-find-photos",
+  "private": true,
   "description": "Finds photos in slurped Flickr data",
   "license": "Apache-2.0",
   "main": "dist/main.js",

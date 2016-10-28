@@ -1,5 +1,6 @@
 {
   "name": "noms-picasa-slurp",
+  "private": true,
   "description": "Imports album and photo metadata from Picasa",
   "license": "Apache-2.0",
   "main": "dist/main.js",

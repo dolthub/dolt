@@ -1,5 +1,6 @@
 {
   "name": "noms-flickr-slurp",
+  "private": true,
   "description": "Imports album and photo metadata from Flickr",
   "license": "Apache-2.0",
   "main": "dist/main.js",

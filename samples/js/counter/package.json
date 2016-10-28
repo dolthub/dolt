@@ -1,5 +1,6 @@
 {
   "name": "@attic/counter",
+  "private": true,
   "description": "noms example javascript client with a counter",
   "license": "Apache-2.0",
   "main": "dist/main.js",

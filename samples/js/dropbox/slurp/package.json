@@ -1,5 +1,6 @@
 {
   "name": "noms-dropbox-slurp",
+  "private": true,
   "description": "Imports metadata from Dropbox",
   "license": "Apache-2.0",
   "main": "dist/main.js",

@@ -1,5 +1,6 @@
 {
   "name": "noms-dropbox-find-photos",
+  "private": true,
   "description": "Finds photos in slurped Dropbox data",
   "license": "Apache-2.0",
   "main": "dist/main.js",

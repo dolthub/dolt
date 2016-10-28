@@ -1,5 +1,6 @@
 {
   "name": "noms-samples",
+  "private": true,
   "version": "0.0.0",
   "description": "Shared node modules",
   "license": "Apache-2.0",

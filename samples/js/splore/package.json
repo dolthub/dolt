@@ -1,5 +1,6 @@
 {
   "name": "noms-splore",
+  "private": true,
   "license": "Apache-2.0",
   "scripts": {
     "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
