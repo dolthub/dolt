@@ -36,7 +36,6 @@ PACKAGES = [
     # './samples/go/hr',
     './samples/go/json-import',
     './samples/go/nomdex',
-    './samples/go/noms-merge',
     './samples/go/poke',
     './samples/go/url-fetch',
     './samples/go/xml-import',
