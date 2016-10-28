@@ -1,6 +1,7 @@
 {
   "name": "@attic/webpack-config",
   "description": "Shared webpack config for noms",
+  "repository": "https://github.com/attic-labs/noms/tree/master/js/webpack-config",
   "license": "Apache-2.0",
   "version": "2.1.0",
   "main": "index.js",

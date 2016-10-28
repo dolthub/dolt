@@ -1,37 +1,3 @@
 {
-  "env": {
-    "production": {
-      "presets": ["react", "es2015"],
-      "plugins": [
-        "syntax-async-functions",
-        "syntax-flow",
-        "transform-class-properties",
-        "transform-regenerator",
-        [
-          "transform-runtime", {
-            "polyfill": false,
-            "regenerator": true
-          }
-        ]
-      ]
-    },
-    "development": {
-      "presets": ["react"],
-      "plugins": [
-        "syntax-async-functions",
-        "syntax-flow",
-        "transform-async-to-generator",
-        "transform-class-properties",
-        "transform-es2015-destructuring",
-        "transform-es2015-modules-commonjs",
-        "transform-es2015-parameters",
-        [
-          "transform-runtime", {
-            "polyfill": false,
-            "regenerator": true
-          }
-        ]
-      ]
-    }
-  }
+  "presets": ["noms"]
 }

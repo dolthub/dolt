@@ -31,7 +31,7 @@ def main():
     if name == 'package.json':
       with pushd(path):
         subprocess.check_call(['npm', 'install'])
-        if args.force and not path.endswith('js/noms'):
+        if args.force and (path.endswith('samples/js') or path.endswith('js/perf')):
             subprocess.check_call(['npm', 'install', '@attic/noms'])
         subprocess.check_call(['npm', 'test'])
 

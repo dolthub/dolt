@@ -1,6 +1,7 @@
 {
   "name": "eslint-config-noms",
   "description": "Shared eslintrc for noms",
+  "repository": "https://github.com/attic-labs/noms/tree/master/js/eslint-config-noms",
   "license": "Apache-2.0",
   "version": "1.0.0",
   "main": "index.js",
