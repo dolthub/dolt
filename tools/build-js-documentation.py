@@ -22,9 +22,9 @@ index_html_content = """
 <h3><a href="js/">JavaScript</a></h3>
 """
 
-def call_with_env_and_cwd(cmd, env, cwd):
+def call_with_env_and_cwd(cmd, cwd):
     print(cmd)
-    proc = subprocess.Popen(cmd, env=env, cwd=cwd, shell=False)
+    proc = subprocess.Popen(cmd, env=os.environ, cwd=cwd, shell=False)
     proc.wait()
     assert proc.returncode == 0
 
@@ -33,20 +33,11 @@ def main():
     workspace = os.getenv('WORKSPACE')
     assert workspace
 
-    # Directory where node/npm binaries have been installed.
-    node_bin = '/var/lib/jenkins/node-v5.11.1-linux-x64/bin'
-    assert os.path.exists(node_bin)
-
     noms_dir = os.path.join(workspace, 'src/github.com/attic-labs/noms')
     noms_js_dir = os.path.join(noms_dir, 'js/noms')
 
-    env = copy.copy(os.environ)
-    env.update({
-        'PATH': '%s:%s' % (os.getenv('PATH'), node_bin),
-    })
-
-    call_with_env_and_cwd(['npm', 'install'], env, noms_js_dir)
-    call_with_env_and_cwd(['npm', 'run', 'build-docs'], env, noms_js_dir)
+    call_with_env_and_cwd(['npm', 'install'], noms_js_dir)
+    call_with_env_and_cwd(['npm', 'run', 'build-docs'], noms_js_dir)
 
     with open(os.path.join(noms_js_dir, 'generated-docs', 'index.html'), 'w') as f:
         f.write(index_html_content)

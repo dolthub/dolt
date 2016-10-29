@@ -9,7 +9,6 @@
 set -eux
 
 export GOPATH=${WORKSPACE}
-export PATH=${PATH}:/usr/local/go/bin:/var/lib/jenkins/node-v5.11.1-linux-x64/bin
 NOMS_DIR=${WORKSPACE}/src/github.com/attic-labs/noms
 
 go version
