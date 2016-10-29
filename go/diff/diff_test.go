@@ -453,24 +453,3 @@ func TestNomsDiffPrintRef(t *testing.T) {
 	tf(true)
 	tf(false)
 }
-
-func TestCopyPath(t *testing.T) {
-	assert := assert.New(t)
-
-	testCases := []string{
-		``,
-		`["key"]`,
-		`["key"].field1`,
-		`["key"]@key.field1`,
-	}
-
-	for _, s1 := range testCases {
-		expected := mustParsePath(assert, s1+`["anIndex"]`)
-		p := mustParsePath(assert, s1)
-		p1 := copyAppend(p, types.NewIndexPath(types.String("anIndex")))
-		if len(p) > 0 {
-			p[0] = expected[1] // if p1 really is a copy, this shouldn't be noticed
-		}
-		assert.Equal(expected, p1)
-	}
-}

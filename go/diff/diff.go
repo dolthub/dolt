@@ -115,7 +115,7 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 					idx := types.Number(splice.SpAt + i)
 					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
-					p1 := copyAppend(p, types.NewIndexPath(types.Number(splice.SpAt+i)))
+					p1 := p.Append(types.NewIndexPath(types.Number(splice.SpAt + i)))
 					dif := Difference{p1, types.DiffChangeModified, v1.Get(splice.SpAt + i), v2.Get(splice.SpFrom + i)}
 					stop = !d.sendDiff(dif)
 				}
@@ -125,12 +125,12 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 
 		// Heuristic: list only has additions/removals.
 		for i := uint64(0); i < splice.SpRemoved && !stop; i++ {
-			p1 := copyAppend(p, types.NewIndexPath(types.Number(splice.SpAt+i)))
+			p1 := p.Append(types.NewIndexPath(types.Number(splice.SpAt + i)))
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1.Get(splice.SpAt + i), NewValue: nil}
 			stop = !d.sendDiff(dif)
 		}
 		for i := uint64(0); i < splice.SpAdded && !stop; i++ {
-			p1 := copyAppend(p, types.NewIndexPath(types.Number(splice.SpFrom+i)))
+			p1 := p.Append(types.NewIndexPath(types.Number(splice.SpFrom + i)))
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2.Get(splice.SpFrom + i)}
 			stop = !d.sendDiff(dif)
 		}
@@ -212,7 +212,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 		}
 
 		k := kf(change.V)
-		p1 := copyAppend(p, ppf(k))
+		p1 := p.Append(ppf(k))
 
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
@@ -241,12 +241,6 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 	}
 
 	return
-}
-
-func copyAppend(p types.Path, pp types.PathPart) types.Path {
-	p1 := make(types.Path, len(p), len(p)+1)
-	copy(p1, p)
-	return append(p1, pp)
 }
 
 // shouldDescend returns true, if Value is not primitive or is a Ref.

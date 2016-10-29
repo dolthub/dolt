@@ -19,7 +19,8 @@ import (
 
 var annotationRe = regexp.MustCompile("^@([a-z]+)")
 
-// A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they can address inlined values.
+// A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they
+// can address inlined values.
 // See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
 type Path []PathPart
 
@@ -122,6 +123,13 @@ func (p Path) Equals(o Path) bool {
 	return true
 }
 
+// Append makes a copy of a p and appends the PathPart 'pp' to it.
+func (p Path) Append(pp PathPart) Path {
+	p1 := make(Path, len(p), len(p)+1)
+	copy(p1, p)
+	return append(p1, pp)
+}
+
 func (p Path) String() string {
 	strs := make([]string, 0, len(p))
 	for _, part := range p {
@@ -158,9 +166,12 @@ func (fp FieldPath) String() string {
 type IndexPath struct {
 	// The value of the index, e.g. `[42]` or `["value"]`.
 	Index Value
-	// Whether this index should resolve to the key of a map, given by a `@key` annotation.
-	// Typically IntoKey is false, and indices would resolve to the values. E.g. given `{a: 42}` then `["a"]` resolves to `42`.
-	// If IntoKey is true, then it resolves to `"a"`. For IndexPath this isn't particularly useful - it's mostly provided for consistency with HashIndexPath - but note that given `{a: 42}` then `["b"]` resolves to nil, not `"b"`.
+	// Whether this index should resolve to the key of a map, given by a `@key`
+	// annotation. Typically IntoKey is false, and indices would resolve to the
+	// values. E.g. given `{a: 42}` then `["a"]` resolves to `42`. If IntoKey is
+	// true, then it resolves to `"a"`. For IndexPath this isn't particularly
+	// useful - it's mostly provided for consistency with HashIndexPath - but
+	// note that given `{a: 42}` then `["b"]` resolves to nil, not `"b"`.
 	IntoKey bool
 }
 
@@ -220,11 +231,15 @@ func (ip IndexPath) String() (str string) {
 
 // Indexes into Maps by the hash of a key, or a Set by the hash of a value.
 type HashIndexPath struct {
-	// The hash of the key or value to search for. Maps and Set are ordered, so this in O(log(size)).
+	// The hash of the key or value to search for. Maps and Set are ordered, so
+	// this in O(log(size)).
 	Hash hash.Hash
-	// Whether this index should resolve to the key of a map, given by a `@key` annotation.
-	// Typically IntoKey is false, and indices would resolve to the values. E.g. given `{a: 42}` and if the hash of `"a"` is `#abcd`, then `[#abcd]` resolves to `42`.
-	// If IntoKey is true, then it resolves to `"a"`. This is useful for when Map keys aren't primitive values, e.g. a struct, since struct literals can't be spelled using a Path.
+	// Whether this index should resolve to the key of a map, given by a `@key`
+	// annotation. Typically IntoKey is false, and indices would resolve to the
+	// values. E.g. given `{a: 42}` and if the hash of `"a"` is `#abcd`, then
+	// `[#abcd]` resolves to `42`. If IntoKey is true, then it resolves to `"a"`.
+	// This is useful for when Map keys aren't primitive values, e.g. a struct,
+	// since struct literals can't be spelled using a Path.
 	IntoKey bool
 }
 

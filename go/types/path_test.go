@@ -339,3 +339,29 @@ func TestPathCanBePathIndex(t *testing.T) {
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
 	assert.False(ValueCanBePathIndex(NewBlob(bytes.NewReader([]byte("yes")))))
 }
+
+func TestCopyPath(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []string{
+		``,
+		`["key"]`,
+		`["key"].field1`,
+		`["key"]@key.field1`,
+	}
+
+	for _, s1 := range testCases {
+		expected, err := ParsePath(s1 + `["anIndex"]`)
+		assert.NoError(err)
+		var p Path
+		if s1 != "" {
+			p, err = ParsePath(s1)
+		}
+		assert.NoError(err)
+		p1 := p.Append(NewIndexPath(String("anIndex")))
+		if len(p) > 0 {
+			p[0] = expected[1] // if p1 really is a copy, this shouldn't be noticed
+		}
+		assert.Equal(expected, p1)
+	}
+}
