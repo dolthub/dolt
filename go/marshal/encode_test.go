@@ -216,6 +216,156 @@ func TestEncodeInvalidNamedFields(t *testing.T) {
 	assertEncodeErrorMessage(t, S{42}, "Invalid struct field name: 1a")
 }
 
+func TestEncodeOmitEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		String  string  `noms:",omitempty"`
+		Bool    bool    `noms:",omitempty"`
+		Int     int     `noms:",omitempty"`
+		Int8    int8    `noms:",omitempty"`
+		Int16   int16   `noms:",omitempty"`
+		Int32   int32   `noms:",omitempty"`
+		Int64   int64   `noms:",omitempty"`
+		Uint    uint    `noms:",omitempty"`
+		Uint8   uint8   `noms:",omitempty"`
+		Uint16  uint16  `noms:",omitempty"`
+		Uint32  uint32  `noms:",omitempty"`
+		Uint64  uint64  `noms:",omitempty"`
+		Float32 float32 `noms:",omitempty"`
+		Float64 float64 `noms:",omitempty"`
+	}
+	s := S{
+		String:  "s",
+		Bool:    true,
+		Int:     1,
+		Int8:    1,
+		Int16:   1,
+		Int32:   1,
+		Int64:   1,
+		Uint:    1,
+		Uint8:   1,
+		Uint16:  1,
+		Uint32:  1,
+		Uint64:  1,
+		Float32: 1,
+		Float64: 1,
+	}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S", types.StructData{
+		"string":  types.String("s"),
+		"bool":    types.Bool(true),
+		"int":     types.Number(1),
+		"int8":    types.Number(1),
+		"int16":   types.Number(1),
+		"int32":   types.Number(1),
+		"int64":   types.Number(1),
+		"uint":    types.Number(1),
+		"uint8":   types.Number(1),
+		"uint16":  types.Number(1),
+		"uint32":  types.Number(1),
+		"uint64":  types.Number(1),
+		"float32": types.Number(1),
+		"float64": types.Number(1),
+	}).Equals(v))
+
+	s2 := S{
+		String:  "",
+		Bool:    false,
+		Int:     0,
+		Int8:    0,
+		Int16:   0,
+		Int32:   0,
+		Int64:   0,
+		Uint:    0,
+		Uint8:   0,
+		Uint16:  0,
+		Uint32:  0,
+		Uint64:  0,
+		Float32: 0,
+		Float64: 0,
+	}
+	v2, err := Marshal(s2)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S", types.StructData{}).Equals(v2))
+
+	type S2 struct {
+		Slice []int       `noms:",omitempty"`
+		Map   map[int]int `noms:",omitempty"`
+	}
+
+	s3 := S2{
+		Slice: []int{0},
+		Map:   map[int]int{0: 0},
+	}
+	v3, err := Marshal(s3)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S2", types.StructData{
+		"slice": types.NewList(types.Number(0)),
+		"map":   types.NewMap(types.Number(0), types.Number(0)),
+	}).Equals(v3))
+
+	s4 := S2{
+		Slice: []int{},
+		Map:   map[int]int{},
+	}
+	v4, err := Marshal(s4)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S2", types.StructData{}).Equals(v4))
+
+	s5 := S2{
+		Slice: nil,
+		Map:   nil,
+	}
+	v5, err := Marshal(s5)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S2", types.StructData{}).Equals(v5))
+
+	type S3 struct {
+		List  types.List  `noms:",omitempty"`
+		Value types.Value `noms:",omitempty"`
+	}
+	s6 := S3{
+		List:  types.NewList(),
+		Value: types.Number(0),
+	}
+	v6, err := Marshal(s6)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S3", types.StructData{
+		"list":  types.NewList(),
+		"value": types.Number(0),
+	}).Equals(v6))
+
+	s7 := S3{
+		List:  types.List{},
+		Value: nil,
+	}
+	v7, err := Marshal(s7)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S3", types.StructData{}).Equals(v7))
+
+	// Both name and omitempty
+	type S4 struct {
+		X int `noms:"y,omitempty"`
+	}
+	s8 := S4{
+		X: 1,
+	}
+	v8, err := Marshal(s8)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S4", types.StructData{
+		"y": types.Number(1),
+	}).Equals(v8))
+
+	s9 := S4{
+		X: 0,
+	}
+	v9, err := Marshal(s9)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S4", types.StructData{}).Equals(v9))
+}
+
 func ExampleMarshal() {
 	type Person struct {
 		Given string

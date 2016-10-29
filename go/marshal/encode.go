@@ -31,6 +31,10 @@ import (
 //
 // Struct values are encoded as Noms structs (types.Struct). Each exported Go struct field becomes a member of the Noms struct unless
 //   - the field's tag is "-"
+//   - the field is empty and its tag specifies the "omitempty" option.
+//
+// The empty values are false, 0, any nil pointer or interface value, and any array, slice, map, or string of length zero.
+//
 // The Noms struct default field name is the Go struct field name where the first character is lower cased,
 // but can be specified in the Go struct field's tag value. The "noms" key in
 // the Go struct field's tag value is the field name. Examples:
@@ -44,7 +48,13 @@ import (
 //   // Field appears in a Noms struct as key "myName".
 //   Field int `noms:"myName"`
 //
-// Unlike encoding/json Marshal, this does not support "omitempty".
+//   // Field appears in a Noms struct as key "myName" and the field is
+//   //  omitted from the object if its value is empty, as defined above.
+//   Field int `noms:"myName,omitempty"
+//
+//   // Field appears in a Noms struct as key "field" and the field is
+//   //  omitted from the object if its value is empty, as defined above.
+//   Field int `noms:",omitempty"
 //
 // The name of the Noms struct is the name of the Go struct where the first character is changed to upper case.
 //
@@ -182,7 +192,11 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 		e = func(v reflect.Value) types.Value {
 			data := make(types.StructData, len(fields))
 			for _, f := range fields {
-				data[f.name] = f.encoder(v.Field(f.index))
+				fv := v.Field(f.index)
+				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
+					continue
+				}
+				data[f.name] = f.encoder(fv)
 			}
 			return types.NewStruct(name, data)
 		}
@@ -192,11 +206,33 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 	return e
 }
 
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Struct:
+		z := reflect.Zero(v.Type())
+		return z.Interface() == v.Interface()
+	case reflect.Interface:
+		return v.IsNil()
+	}
+	return false
+}
+
 type field struct {
-	name     string
-	encoder  encoderFunc
-	index    int
-	nomsType *types.Type
+	name      string
+	encoder   encoderFunc
+	index     int
+	nomsType  *types.Type
+	omitEmpty bool
 }
 
 type fieldSlice []field
@@ -227,14 +263,26 @@ func (c *encoderCacheT) set(t reflect.Type, e encoderFunc) {
 	c.m[t] = e
 }
 
-func getFieldName(fieldName string, f reflect.StructField) string {
-	if fieldName == "" {
-		fieldName = strings.ToLower(f.Name[:1]) + f.Name[1:]
+func parseTags(tags string, f reflect.StructField) (name string, omitEmpty bool) {
+	idx := strings.Index(tags, ",")
+	if tags == "" || idx == 0 {
+		name = strings.ToLower(f.Name[:1]) + f.Name[1:]
+	} else if idx == -1 {
+		name = tags
+	} else {
+		name = tags[:idx]
 	}
-	if !types.IsValidStructFieldName(fieldName) {
-		panic(&InvalidTagError{"Invalid struct field name: " + fieldName})
+
+	if !types.IsValidStructFieldName(name) {
+		panic(&InvalidTagError{"Invalid struct field name: " + name})
 	}
-	return fieldName
+
+	if idx != -1 {
+		// This is pretty simplistic but it is good enough for now.
+		omitEmpty = tags[idx+1:] == "omitempty"
+	}
+
+	return
 }
 
 func validateField(f reflect.StructField, t reflect.Type) {
@@ -260,12 +308,18 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 			continue
 		}
 
+		name, omitEmpty := parseTags(tags, f)
+		if omitEmpty {
+			canComputeStructType = false
+		}
 		fields = append(fields, field{
-			name:     getFieldName(tags, f),
-			encoder:  typeEncoder(f.Type, parentStructTypes),
-			index:    i,
-			nomsType: nt,
+			name:      name,
+			encoder:   typeEncoder(f.Type, parentStructTypes),
+			index:     i,
+			nomsType:  nt,
+			omitEmpty: omitEmpty,
 		})
+
 	}
 	sort.Sort(fields)
 	if canComputeStructType {

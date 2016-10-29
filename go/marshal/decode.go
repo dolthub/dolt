@@ -225,8 +225,9 @@ func structDecoder(t reflect.Type) decoderFunc {
 			continue
 		}
 
+		name, _ := parseTags(tags, f)
 		fields = append(fields, decField{
-			name:    getFieldName(tags, f),
+			name:    name,
 			decoder: typeDecoder(f.Type),
 			index:   i,
 		})
