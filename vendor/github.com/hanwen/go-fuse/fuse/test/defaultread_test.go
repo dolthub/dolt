@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package test
 
 import (
@@ -8,6 +12,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 type DefaultReadFS struct {
@@ -37,13 +42,10 @@ func defaultReadTest(t *testing.T) (root string, cleanup func()) {
 	}
 
 	var err error
-	dir, err := ioutil.TempDir("", "go-fuse")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	dir := testutil.TempDir()
 	pathfs := pathfs.NewPathNodeFs(fs, nil)
 	opts := nodefs.NewOptions()
-	opts.Debug = VerboseTest()
+	opts.Debug = testutil.VerboseTest()
 
 	state, _, err := nodefs.MountRoot(dir, pathfs.Root(), opts)
 	if err != nil {

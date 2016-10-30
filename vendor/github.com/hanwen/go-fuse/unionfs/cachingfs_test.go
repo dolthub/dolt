@@ -1,13 +1,17 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package unionfs
 
 import (
-	"io/ioutil"
 	"os"
 	"syscall"
 	"testing"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 func modeMapEq(m1, m2 map[string]uint32) bool {
@@ -25,7 +29,7 @@ func modeMapEq(m1, m2 map[string]uint32) bool {
 }
 
 func TestCachingFs(t *testing.T) {
-	wd, _ := ioutil.TempDir("", "")
+	wd := testutil.TempDir()
 	defer os.RemoveAll(wd)
 
 	fs := pathfs.NewLoopbackFileSystem(wd)

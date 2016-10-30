@@ -104,8 +104,7 @@ go-fuse works somewhat on OSX. Known limitations:
 * OSX has trouble with concurrent reads from the FUSE device, leading
   to performance concerns.
 
-* A bunch of tests under fuse/test/ fail, and the functionality they
-  test for OSX is likely broken.
+* Tests are expected to pass; report any failure as a bug!
 
 
 CREDITS

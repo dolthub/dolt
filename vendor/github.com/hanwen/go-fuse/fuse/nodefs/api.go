@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // The nodefs package offers a high level API that resembles the
 // kernel's idea of what an FS looks like.  File systems can have
 // multiple hard-links to one file, for example. It is also suited if

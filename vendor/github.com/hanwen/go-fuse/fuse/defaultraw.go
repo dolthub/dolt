@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package fuse
 
 import (
@@ -82,7 +86,7 @@ func (fs *defaultRawFileSystem) GetXAttrSize(header *InHeader, attr string) (siz
 }
 
 func (fs *defaultRawFileSystem) GetXAttrData(header *InHeader, attr string) (data []byte, code Status) {
-	return nil, ENODATA
+	return nil, ENOATTR
 }
 
 func (fs *defaultRawFileSystem) SetXAttr(input *SetXAttrIn, attr string, data []byte) Status {

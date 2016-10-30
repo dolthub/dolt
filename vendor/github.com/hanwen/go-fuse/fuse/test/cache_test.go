@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package test
 
 import (
@@ -11,6 +15,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 type cacheFs struct {
@@ -30,20 +35,17 @@ func (fs *cacheFs) Open(name string, flags uint32, context *fuse.Context) (fuseF
 }
 
 func setupCacheTest(t *testing.T) (string, *pathfs.PathNodeFs, func()) {
-	dir, err := ioutil.TempDir("", "go-fuse-cachetest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	dir := testutil.TempDir()
 	os.Mkdir(dir+"/mnt", 0755)
 	os.Mkdir(dir+"/orig", 0755)
 
 	fs := &cacheFs{
 		pathfs.NewLoopbackFileSystem(dir + "/orig"),
 	}
-	pfs := pathfs.NewPathNodeFs(fs, &pathfs.PathNodeFsOptions{Debug: VerboseTest()})
+	pfs := pathfs.NewPathNodeFs(fs, &pathfs.PathNodeFsOptions{Debug: testutil.VerboseTest()})
 
 	opts := nodefs.NewOptions()
-	opts.Debug = VerboseTest()
+	opts.Debug = testutil.VerboseTest()
 	state, _, err := nodefs.MountRoot(dir+"/mnt", pfs.Root(), opts)
 	if err != nil {
 		t.Fatalf("MountNodeFileSystem failed: %v", err)
@@ -138,14 +140,11 @@ func TestNonseekable(t *testing.T) {
 	fs := &nonseekFs{FileSystem: pathfs.NewDefaultFileSystem()}
 	fs.Length = 200 * 1024
 
-	dir, err := ioutil.TempDir("", "go-fuse-cache_test")
-	if err != nil {
-		t.Fatalf("failed: %v", err)
-	}
+	dir := testutil.TempDir()
 	defer os.RemoveAll(dir)
 	nfs := pathfs.NewPathNodeFs(fs, nil)
 	opts := nodefs.NewOptions()
-	opts.Debug = VerboseTest()
+	opts.Debug = testutil.VerboseTest()
 	state, _, err := nodefs.MountRoot(dir, nfs.Root(), opts)
 	if err != nil {
 		t.Fatalf("failed: %v", err)
@@ -171,18 +170,15 @@ func TestNonseekable(t *testing.T) {
 }
 
 func TestGetAttrRace(t *testing.T) {
-	dir, err := ioutil.TempDir("", "go-fuse-cache_test")
-	if err != nil {
-		t.Fatalf("failed: %v", err)
-	}
+	dir := testutil.TempDir()
 	defer os.RemoveAll(dir)
 	os.Mkdir(dir+"/mnt", 0755)
 	os.Mkdir(dir+"/orig", 0755)
 
 	fs := pathfs.NewLoopbackFileSystem(dir + "/orig")
-	pfs := pathfs.NewPathNodeFs(fs, &pathfs.PathNodeFsOptions{Debug: VerboseTest()})
+	pfs := pathfs.NewPathNodeFs(fs, &pathfs.PathNodeFsOptions{Debug: testutil.VerboseTest()})
 	state, _, err := nodefs.MountRoot(dir+"/mnt", pfs.Root(),
-		&nodefs.Options{Debug: VerboseTest()})
+		&nodefs.Options{Debug: testutil.VerboseTest()})
 	if err != nil {
 		t.Fatalf("MountNodeFileSystem failed: %v", err)
 	}

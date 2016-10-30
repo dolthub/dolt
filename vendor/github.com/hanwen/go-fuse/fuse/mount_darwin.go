@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package fuse
 
 import (
@@ -30,12 +34,18 @@ func openFUSEDevice() (*os.File, error) {
 	return nil, fmt.Errorf("all FUSE devices busy")
 }
 
-const bin = "/Library/Filesystems/osxfusefs.fs/Support/mount_osxfusefs"
+const oldMountBin = "/Library/Filesystems/osxfusefs.fs/Support/mount_osxfusefs"
+const newMountBin = "/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse"
 
 func mount(mountPoint string, opts *MountOptions, ready chan<- error) (fd int, err error) {
 	f, err := openFUSEDevice()
 	if err != nil {
 		return 0, err
+	}
+
+	bin := oldMountBin
+	if _, err := os.Stat(newMountBin); err == nil {
+		bin = newMountBin
 	}
 
 	cmd := exec.Command(bin, "-o", strings.Join(opts.optionsStrings(), ","), "-o", fmt.Sprintf("iosize=%d", opts.MaxWrite), "3", mountPoint)

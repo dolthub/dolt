@@ -1,21 +1,21 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package pathfs
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 func TestCopyFile(t *testing.T) {
-	d1, err := ioutil.TempDir("", "go-fuse")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	d1 := testutil.TempDir()
 	defer os.RemoveAll(d1)
-	d2, err := ioutil.TempDir("", "go-fuse")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	d2 := testutil.TempDir()
 	defer os.RemoveAll(d2)
 
 	fs1 := NewLoopbackFileSystem(d1)
@@ -23,7 +23,7 @@ func TestCopyFile(t *testing.T) {
 
 	content1 := "blabla"
 
-	err = ioutil.WriteFile(d1+"/file", []byte(content1), 0644)
+	err := ioutil.WriteFile(d1+"/file", []byte(content1), 0644)
 	if err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}

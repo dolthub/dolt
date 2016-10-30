@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package unionfs
 
 import (
@@ -293,44 +297,37 @@ func (fs *autoUnionFs) Unlink(path string, context *fuse.Context) (code fuse.Sta
 
 // Must define this, because ENOSYS will suspend all GetXAttr calls.
 func (fs *autoUnionFs) GetXAttr(name string, attr string, context *fuse.Context) ([]byte, fuse.Status) {
-	return nil, fuse.ENODATA
+	return nil, fuse.ENOATTR
 }
 
 func (fs *autoUnionFs) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
+	a := &fuse.Attr{
+		Owner: *fuse.CurrentOwner(),
+	}
 	if path == "" || path == _CONFIG || path == _STATUS {
-		a := &fuse.Attr{
-			Mode: fuse.S_IFDIR | 0755,
-		}
+		a.Mode = fuse.S_IFDIR | 0755
 		return a, fuse.OK
 	}
 
 	if path == filepath.Join(_STATUS, _VERSION) {
-		a := &fuse.Attr{
-			Mode: fuse.S_IFREG | 0644,
-			Size: uint64(len(fs.options.Version)),
-		}
+		a.Mode = fuse.S_IFREG | 0644
+		a.Size = uint64(len(fs.options.Version))
 		return a, fuse.OK
 	}
 
 	if path == filepath.Join(_STATUS, _DEBUG) {
-		a := &fuse.Attr{
-			Mode: fuse.S_IFREG | 0644,
-			Size: uint64(len(fs.DebugData())),
-		}
+		a.Mode = fuse.S_IFREG | 0644
+		a.Size = uint64(len(fs.DebugData()))
 		return a, fuse.OK
 	}
 
 	if path == filepath.Join(_STATUS, _ROOT) {
-		a := &fuse.Attr{
-			Mode: syscall.S_IFLNK | 0644,
-		}
+		a.Mode = syscall.S_IFLNK | 0644
 		return a, fuse.OK
 	}
 
 	if path == filepath.Join(_CONFIG, _SCAN_CONFIG) {
-		a := &fuse.Attr{
-			Mode: fuse.S_IFREG | 0644,
-		}
+		a.Mode = fuse.S_IFREG | 0644
 		return a, fuse.OK
 	}
 	comps := strings.Split(path, string(filepath.Separator))
@@ -342,9 +339,7 @@ func (fs *autoUnionFs) GetAttr(path string, context *fuse.Context) (*fuse.Attr, 
 			return nil, fuse.ENOENT
 		}
 
-		a := &fuse.Attr{
-			Mode: syscall.S_IFLNK | 0644,
-		}
+		a.Mode = syscall.S_IFLNK | 0644
 		return a, fuse.OK
 	}
 

@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package test
 
 import (
@@ -11,6 +15,7 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 type flipNode struct {
@@ -29,22 +34,19 @@ func (f *flipNode) GetAttr(out *fuse.Attr, file nodefs.File, c *fuse.Context) fu
 }
 
 func TestDeleteNotify(t *testing.T) {
-	dir, err := ioutil.TempDir("", "go-fuse-delete_test")
-	if err != nil {
-		t.Fatalf("TempDir failed %v", err)
-	}
+	dir := testutil.TempDir()
 	defer os.RemoveAll(dir)
 	root := nodefs.NewMemNodeFSRoot(dir + "/backing")
 	conn := nodefs.NewFileSystemConnector(root,
 		&nodefs.Options{PortableInodes: true})
 	mnt := dir + "/mnt"
-	err = os.Mkdir(mnt, 0755)
+	err := os.Mkdir(mnt, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	state, err := fuse.NewServer(conn.RawFS(), mnt, &fuse.MountOptions{
-		Debug: VerboseTest(),
+		Debug: testutil.VerboseTest(),
 	})
 	if err != nil {
 		t.Fatal(err)

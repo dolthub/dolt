@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package benchmark
 
 import (
@@ -25,6 +29,10 @@ func (m *LatencyMap) Get(name string) (count int, dt time.Duration) {
 	m.Mutex.Lock()
 	l := m.stats[name]
 	m.Mutex.Unlock()
+	if l == nil {
+		return 0, 0
+	}
+
 	return l.count, l.dur
 }
 

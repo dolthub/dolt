@@ -1,15 +1,21 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package test
 
 import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 func TestMountOnExisting(t *testing.T) {
@@ -165,10 +171,7 @@ func TestDeletedUnmount(t *testing.T) {
 }
 
 func TestDefaultNodeMount(t *testing.T) {
-	dir, err := ioutil.TempDir("", "go-fuse")
-	if err != nil {
-		t.Fatalf("TempDir: %v", err)
-	}
+	dir := testutil.TempDir()
 	defer os.RemoveAll(dir)
 	root := nodefs.NewDefaultNode()
 	s, conn, err := nodefs.MountRoot(dir, root, nil)
@@ -191,5 +194,32 @@ func TestDefaultNodeMount(t *testing.T) {
 		t.Fatalf("got %d entries", len(entries))
 	} else if entries[0].Name() != "sub" {
 		t.Fatalf("got %q, want %q", entries[0].Name(), "sub")
+	}
+}
+
+func TestLiveness(t *testing.T) {
+	dir := testutil.TempDir()
+	defer os.RemoveAll(dir)
+	root := nodefs.NewDefaultNode()
+	s, _, err := nodefs.MountRoot(dir, root, nil)
+	if err != nil {
+		t.Fatalf("MountRoot: %v", err)
+	}
+	go s.Serve()
+	if err := s.WaitMount(); err != nil {
+		t.Fatal("WaitMount", err)
+	}
+	defer s.Unmount()
+
+	if _, err := ioutil.ReadDir(dir); err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
+	// We previously encountered a sitation where a finalizer would close our fd out from under us. Try to force both finalizers to run and object destruction to complete.
+	runtime.GC()
+	runtime.GC()
+
+	if _, err := ioutil.ReadDir(dir); err != nil {
+		t.Fatalf("ReadDir: %v", err)
 	}
 }

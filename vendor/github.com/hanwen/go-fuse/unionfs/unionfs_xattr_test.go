@@ -1,15 +1,18 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package unionfs
 
 import (
-	"io/ioutil"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 type TestFS struct {
@@ -32,11 +35,11 @@ func (fs *TestFS) GetXAttr(path string, name string, context *fuse.Context) ([]b
 		fs.xattrRead++
 		return []byte{42}, fuse.OK
 	}
-	return nil, fuse.ENODATA
+	return nil, fuse.ENOATTR
 }
 
 func TestXAttrCaching(t *testing.T) {
-	wd, _ := ioutil.TempDir("", "unionfs")
+	wd := testutil.TempDir()
 	defer os.RemoveAll(wd)
 	os.Mkdir(wd+"/mnt", 0700)
 	err := os.Mkdir(wd+"/rw", 0700)
@@ -59,12 +62,12 @@ func TestXAttrCaching(t *testing.T) {
 		EntryTimeout:    entryTtl / 2,
 		AttrTimeout:     entryTtl / 2,
 		NegativeTimeout: entryTtl / 2,
-		Debug:           VerboseTest(),
+		Debug:           testutil.VerboseTest(),
 	}
 
 	pathfs := pathfs.NewPathNodeFs(ufs,
 		&pathfs.PathNodeFsOptions{ClientInodes: true,
-			Debug: VerboseTest()})
+			Debug: testutil.VerboseTest()})
 
 	server, _, err := nodefs.MountRoot(wd+"/mnt", pathfs.Root(), opts)
 	if err != nil {
@@ -72,13 +75,14 @@ func TestXAttrCaching(t *testing.T) {
 	}
 	defer server.Unmount()
 	go server.Serve()
+	server.WaitMount()
 
 	if fi, err := os.Lstat(wd + "/mnt"); err != nil || !fi.IsDir() {
 		t.Fatalf("root not readable: %v, %v", err, fi)
 	}
 
 	buf := make([]byte, 1024)
-	n, err := syscall.Getxattr(wd+"/mnt/file", "user.attr", buf)
+	n, err := Getxattr(wd+"/mnt/file", "user.attr", buf)
 	if err != nil {
 		t.Fatalf("Getxattr: %v", err)
 	}
@@ -87,8 +91,10 @@ func TestXAttrCaching(t *testing.T) {
 	if got != want {
 		t.Fatalf("Got %q want %q", got, err)
 	}
-	time.Sleep(entryTtl / 2)
-	n, err = syscall.Getxattr(wd+"/mnt/file", "user.attr", buf)
+
+	time.Sleep(entryTtl / 3)
+
+	n, err = Getxattr(wd+"/mnt/file", "user.attr", buf)
 	if err != nil {
 		t.Fatalf("Getxattr: %v", err)
 	}
@@ -96,7 +102,21 @@ func TestXAttrCaching(t *testing.T) {
 	if got != want {
 		t.Fatalf("Got %q want %q", got, err)
 	}
-	server.Unmount()
+
+	time.Sleep(entryTtl / 3)
+
+	// Make sure that an interceding Getxattr() to a filesystem that doesn't implement GetXAttr() doesn't affect future calls.
+	Getxattr(wd, "whatever", buf)
+
+	n, err = Getxattr(wd+"/mnt/file", "user.attr", buf)
+	if err != nil {
+		t.Fatalf("Getxattr: %v", err)
+	}
+	got = string(buf[:n])
+	if got != want {
+		t.Fatalf("Got %q want %q", got, err)
+	}
+
 	if roFS.xattrRead != 1 {
 		t.Errorf("got xattrRead=%d, want 1", roFS.xattrRead)
 	}

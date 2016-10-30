@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package zipfs
 
 import (
@@ -9,6 +13,7 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 func testZipFile() string {
@@ -26,12 +31,13 @@ func setupZipfs(t *testing.T) (mountPoint string, cleanup func()) {
 		t.Fatalf("NewArchiveFileSystem failed: %v", err)
 	}
 
-	mountPoint, _ = ioutil.TempDir("", "")
+	mountPoint = testutil.TempDir()
 	state, _, err := nodefs.MountRoot(mountPoint, root, &nodefs.Options{
-		Debug: VerboseTest(),
+		Debug: testutil.VerboseTest(),
 	})
 
 	go state.Serve()
+	state.WaitMount()
 
 	return mountPoint, func() {
 		state.Unmount()

@@ -1,4 +1,16 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package fuse
+
+import (
+	"syscall"
+)
+
+const (
+	ENOATTR = Status(syscall.ENODATA) // On Linux, ENOATTR is an alias for ENODATA.
+)
 
 type Attr struct {
 	Ino       uint64
@@ -95,4 +107,15 @@ type GetXAttrIn struct {
 	InHeader
 	Size    uint32
 	Padding uint32
+}
+
+func (s *StatfsOut) FromStatfsT(statfs *syscall.Statfs_t) {
+	s.Blocks = statfs.Blocks
+	s.Bsize = uint32(statfs.Bsize)
+	s.Bfree = statfs.Bfree
+	s.Bavail = statfs.Bavail
+	s.Files = statfs.Files
+	s.Ffree = statfs.Ffree
+	s.Frsize = uint32(statfs.Frsize)
+	s.NameLen = uint32(statfs.Namelen)
 }

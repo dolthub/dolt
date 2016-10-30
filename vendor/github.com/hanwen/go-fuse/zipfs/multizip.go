@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package zipfs
 
 /*
@@ -83,6 +87,7 @@ func (fs *MultiZipFs) OpenDir(name string, context *fuse.Context) (stream []fuse
 
 func (fs *MultiZipFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
 	a := &fuse.Attr{}
+	a.Owner = *fuse.CurrentOwner()
 	if name == "" {
 		// Should not write in top dir.
 		a.Mode = fuse.S_IFDIR | 0500
@@ -133,7 +138,7 @@ func (fs *MultiZipFs) Unlink(name string, context *fuse.Context) (code fuse.Stat
 		delete(fs.zips, basename)
 		delete(fs.dirZipFileMap, basename)
 
-		// Drop lock to ensure that notify doesn't cause deadlock.
+		// Drop the lock to ensure that notify doesn't cause a deadlock.
 		fs.lock.Unlock()
 		code = fs.nodeFs.UnmountNode(root.Inode())
 		fs.lock.Lock()

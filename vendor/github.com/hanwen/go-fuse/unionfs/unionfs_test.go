@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package unionfs
 
 import (
@@ -17,6 +21,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/hanwen/go-fuse/internal/testutil"
 )
 
 func TestFilePathHash(t *testing.T) {
@@ -59,7 +64,7 @@ func setupUfs(t *testing.T) (wd string, cleanup func()) {
 	// Make sure system setting does not affect test.
 	syscall.Umask(0)
 
-	wd, _ = ioutil.TempDir("", "unionfs")
+	wd = testutil.TempDir()
 	err := os.Mkdir(wd+"/mnt", 0700)
 	if err != nil {
 		t.Fatalf("Mkdir failed: %v", err)
@@ -90,7 +95,7 @@ func setupUfs(t *testing.T) (wd string, cleanup func()) {
 		AttrTimeout:     entryTtl / 2,
 		NegativeTimeout: entryTtl / 2,
 		PortableInodes:  true,
-		Debug:           VerboseTest(),
+		Debug:           testutil.VerboseTest(),
 	}
 
 	pathfs := pathfs.NewPathNodeFs(ufs,
@@ -102,6 +107,7 @@ func setupUfs(t *testing.T) (wd string, cleanup func()) {
 		t.Fatalf("MountNodeFileSystem failed: %v", err)
 	}
 	go state.Serve()
+	state.WaitMount()
 
 	return wd, func() {
 		err := state.Unmount()
@@ -239,8 +245,9 @@ func TestUnionFsChtimes(t *testing.T) {
 	}
 
 	fi, err := os.Lstat(wd + "/mnt/file")
-	stat := fuse.ToStatT(fi)
-	if stat.Atim.Sec != 82 || stat.Mtim.Sec != 83 {
+	attr := &fuse.Attr{}
+	attr.FromStat(fuse.ToStatT(fi))
+	if attr.Atime != 82 || attr.Mtime != 83 {
 		t.Error("Incorrect timestamp", fi)
 	}
 }
@@ -1123,7 +1130,7 @@ func newDisappearingFS(fs, nop pathfs.FileSystem) *disappearingFS {
 func TestUnionFsDisappearing(t *testing.T) {
 	// This init is like setupUfs, but we want access to the
 	// writable Fs.
-	wd, _ := ioutil.TempDir("", "")
+	wd := testutil.TempDir()
 	defer os.RemoveAll(wd)
 	err := os.Mkdir(wd+"/mnt", 0700)
 	if err != nil {
@@ -1154,7 +1161,7 @@ func TestUnionFsDisappearing(t *testing.T) {
 		EntryTimeout:    entryTtl,
 		AttrTimeout:     entryTtl,
 		NegativeTimeout: entryTtl,
-		Debug:           VerboseTest(),
+		Debug:           testutil.VerboseTest(),
 	}
 
 	nfs := pathfs.NewPathNodeFs(ufs, nil)
@@ -1164,6 +1171,7 @@ func TestUnionFsDisappearing(t *testing.T) {
 	}
 	defer state.Unmount()
 	go state.Serve()
+	state.WaitMount()
 
 	err = ioutil.WriteFile(wd+"/ro/file", []byte("blabla"), 0644)
 	if err != nil {
@@ -1189,9 +1197,9 @@ func TestUnionFsDisappearing(t *testing.T) {
 		t.Fatal("write should have failed")
 	}
 
-	// Restore, and wait for caches to catch up.
-	wrFs.visibleChan <- true
+	// Wait for the caches to purge, and then restore.
 	time.Sleep((3 * entryTtl) / 2)
+	wrFs.visibleChan <- true
 
 	_, err = ioutil.ReadDir(wd + "/mnt")
 	if err != nil {
@@ -1274,41 +1282,6 @@ func TestUnionFsDoubleOpen(t *testing.T) {
 
 	if string(b) != "hello" {
 		t.Errorf("r/w and r/o file are not synchronized: got %q want %q", string(b), want)
-	}
-}
-
-func TestUnionFsFdLeak(t *testing.T) {
-	beforeEntries, err := ioutil.ReadDir("/proc/self/fd")
-	if err != nil {
-		t.Fatalf("ReadDir failed: %v", err)
-	}
-
-	wd, clean := setupUfs(t)
-	err = ioutil.WriteFile(wd+"/ro/file", []byte("blablabla"), 0644)
-	if err != nil {
-		t.Fatalf("WriteFile failed: %v", err)
-	}
-	setRecursiveWritable(t, wd+"/ro", false)
-
-	contents, err := ioutil.ReadFile(wd + "/mnt/file")
-	if err != nil {
-		t.Fatalf("ReadFile failed: %v", err)
-	}
-
-	err = ioutil.WriteFile(wd+"/mnt/file", contents, 0644)
-	if err != nil {
-		t.Fatalf("WriteFile failed: %v", err)
-	}
-
-	clean()
-
-	afterEntries, err := ioutil.ReadDir("/proc/self/fd")
-	if err != nil {
-		t.Fatalf("ReadDir failed: %v", err)
-	}
-
-	if len(afterEntries) != len(beforeEntries) {
-		t.Errorf("/proc/self/fd changed size: after %v before %v", len(beforeEntries), len(afterEntries))
 	}
 }
 

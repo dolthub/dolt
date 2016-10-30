@@ -1,3 +1,7 @@
+// Copyright 2016 the Go-FUSE Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package fuse
 
 import (
@@ -59,13 +63,13 @@ func (ms *Server) SetDebug(dbg bool) {
 
 // KernelSettings returns the Init message from the kernel, so
 // filesystems can adapt to availability of features of the kernel
-// driver.
-func (ms *Server) KernelSettings() InitIn {
+// driver. The message should not be altered.
+func (ms *Server) KernelSettings() *InitIn {
 	ms.reqMu.Lock()
 	s := ms.kernelSettings
 	ms.reqMu.Unlock()
 
-	return s
+	return &s
 }
 
 const _MAX_NAME_LEN = 20
@@ -437,6 +441,10 @@ func (ms *Server) write(req *request) Status {
 // InodeNotify invalidates the information associated with the inode
 // (ie. data cache, attributes, etc.)
 func (ms *Server) InodeNotify(node uint64, off int64, length int64) Status {
+	if !ms.kernelSettings.SupportsNotify(NOTIFY_INVAL_INODE) {
+		return ENOSYS
+	}
+
 	entry := &NotifyInvalInodeOut{
 		Ino:    node,
 		Off:    off,
@@ -508,6 +516,9 @@ func (ms *Server) DeleteNotify(parent uint64, child uint64, name string) Status 
 // within a directory changes. You should not hold any FUSE filesystem
 // locks, as that can lead to deadlock.
 func (ms *Server) EntryNotify(parent uint64, name string) Status {
+	if !ms.kernelSettings.SupportsNotify(NOTIFY_INVAL_ENTRY) {
+		return ENOSYS
+	}
 	req := request{
 		inHeader: &InHeader{
 			Opcode: _OP_NOTIFY_ENTRY,
@@ -537,6 +548,26 @@ func (ms *Server) EntryNotify(parent uint64, name string) Status {
 		log.Printf("Response: ENTRY_NOTIFY: %v", result)
 	}
 	return result
+}
+
+// SupportsVersion returns true if the kernel supports the given
+// protocol version or newer.
+func (in *InitIn) SupportsVersion(maj, min uint32) bool {
+	return in.Major >= maj && in.Minor >= min
+}
+
+// SupportsNotify returns whether a certain notification type is
+// supported. Pass any of the NOTIFY_INVAL_* types as argument.
+func (in *InitIn) SupportsNotify(notifyType int) bool {
+	switch notifyType {
+	case NOTIFY_INVAL_ENTRY:
+		return in.SupportsVersion(7, 12)
+	case NOTIFY_INVAL_INODE:
+		return in.SupportsVersion(7, 12)
+	case NOTIFY_INVAL_DELETE:
+		return in.SupportsVersion(7, 18)
+	}
+	return false
 }
 
 var defaultBufferPool BufferPool
