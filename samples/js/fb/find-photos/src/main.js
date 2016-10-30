@@ -93,6 +93,7 @@ async function main(): Promise<void> {
         id: `https://github.com/attic-labs/noms/samples/js/fb/find-photos#${v.id}`,
         title: v.name || '',
         sizes: await getSizes(v),
+        resources: await getResources(v),
         tags: new Set(),  // fb has 'tags', but they are actually people not textual tags
         datePublished: new NomsDate({nsSinceEpoch: v.created_time * 1e9}),
         dateUpdated: new NomsDate({nsSinceEpoch: v.updated_time * 1e9}),
@@ -134,13 +135,25 @@ function getGeo(input): Struct {
 }
 
 async function getSizes(input): Promise<Map<Struct, string>> {
-  let result = Promise.resolve(new Map());
+  const tuples = [];
   await input.images.forEach(v => {
-    result = result.then(m => m.set(
+    tuples.push([
       newStruct('', {width: v.width, height: v.height}),
-      v.source));
+      v.source,
+    ]);
   });
-  return result;
+  return new Map(tuples);
+}
+
+async function getResources(input): Promise<Map<Struct, Struct>> {
+  const tuples = [];
+  await input.images.forEach(v => {
+    tuples.push([
+      newStruct('', {width: v.width, height: v.height}),
+      newStruct('RemoteResource', {url: v.source}),
+    ]);
+  });
+  return new Map(tuples);
 }
 
 async function getFaces(photo): Promise<Set<Struct>> {

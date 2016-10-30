@@ -105,10 +105,12 @@ async function main(): Promise<void> {
       const w = parseInt(v.gphotoQ24width.Q24t, 10);
       const h = parseInt(v.gphotoQ24height.Q24t, 10);
 
+      const resources = await getResources(v, w, h);
       const photo: Object = {
         id: 'https://github.com/attic-labs/noms/samples/js/picasa/find-photos' +
             `#${v.gphotoQ24id.Q24t}`,
-        sizes: await getSizes(v, w, h),
+        sizes: await getSizes(resources),
+        resources: resources,
         datePublished: getDate(Date.parse(v.published.Q24t)),
         dateUpdated: getDate(Date.parse(v.updated.Q24t)),
       };
@@ -172,10 +174,19 @@ function getGeo(input): ?Struct {
   });
 }
 
-async function getSizes(input: Object, origWidth: number, origHeight: number)
+async function getSizes(resources: Map<Struct, Struct>)
     : Promise<Map<Struct, string>> {
+  const tuples = [];
+  await resources.forEach((v: any, k: Struct) => {
+    tuples.push([k, v.url]);
+  });
+  return new Map(tuples);
+}
+
+async function getResources(input: Object, origWidth: number, origHeight: number)
+    : Promise<Map<Struct, Struct>> {
   const thumbURL = (await input.mediaQ24group.mediaQ24thumbnail
-      .get(0)).url.split('/');
+    .get(0)).url.split('/');
   const sizePart = thumbURL.length - 2;
 
   const makeURL = s => {
@@ -191,14 +202,14 @@ async function getSizes(input: Object, origWidth: number, origHeight: number)
     }
     return [
       newStruct('', {width: r.width, height: r.height}),
-      makeURL(s),
+      newStruct('RemoteResource', {url: makeURL(s)}),
     ];
   }).filter(t => t);
 
   // The original file.
   tuples.push([
     newStruct('', {width: origWidth, height: origHeight}),
-    makeURL('d'),
+    newStruct('RemoteResource', {url: makeURL('d')}),
   ]);
 
   return new Map(tuples);

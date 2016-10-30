@@ -100,6 +100,7 @@ async function main(): Promise<void> {
         title: v.title,
         tags: new Set(v.tags ? v.tags.split(' ') : []),
         sizes: getSizes(v),
+        resources: getResources(v),
         datePublished: newDate(Number(v.dateupload) * nsInSecond),
         dateUpdated: newDate(Number(v.lastupdate) * nsInSecond),
       };
@@ -146,6 +147,20 @@ function getGeo(input: Object): Struct {
 }
 
 function getSizes(input: Object): Map<Struct, string> {
+  const a = sizes.map((s, i) => {
+    if (!isSubtype(sizeTypes[i], input.type)) {
+      return null;
+    }
+    const url = input['url_' + s];
+    const width = Number(input['width_' + s]);
+    const height = Number(input['height_' + s]);
+    return [newStruct('', {width, height}), url];
+  });
+  // $FlowIssue: Does not understand that filter removes all null values.
+  return new Map(a.filter(kv => kv));
+}
+
+function getResources(input: Object): Map<Struct, Struct> {
   const a = sizes.map((s, i) => {
     if (!isSubtype(sizeTypes[i], input.type)) {
       return null;

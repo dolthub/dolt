@@ -87,13 +87,15 @@ async function main(): Promise<void> {
   let result = Promise.resolve(new Set());
 
   // TODO: How to report progress?
-  await walk(input, db, (v: any) => {
+  await walk(input, db, async (v: any) => {
     if (isSubtype(sourceType, getTypeOfValue(v))) {
+      const resources = getResources(v);
       const photo: Object = {
         id: `https://github.com/attic-labs/noms/samples/js/dropbox/find-photos#${v.id}`,
         title: v.name,
         tags: new Set(),
-        sizes: getSizes(v),
+        sizes: await getSizes(resources),
+        resources: resources,
         dateTaken: newDate(v.media_info.metadata.time_taken),
         dateUpdated: newDate(v.server_modified),
       };
@@ -126,7 +128,15 @@ async function main(): Promise<void> {
   });
 }
 
-function getSizes(input: Object): Map<Struct, string> {
+async function getSizes(resources: Map<Struct, Struct>): Promise<Map<Struct, string>> {
+  const tuples = [];
+  await resources.forEach((v: any, k: Struct) => {
+    tuples.push([k, v.url]);
+  });
+  return new Map(tuples);
+}
+
+function getResources(input: Object): Map<Struct, Struct> {
   const orig = input.media_info.metadata.dimensions;
 
   const kv = sizes.map(([width, height]) => {
@@ -136,10 +146,12 @@ function getSizes(input: Object): Map<Struct, string> {
     }
     return [
       newStruct('', {width: resized.width, height: resized.height}),
-      getURL('files/get_thumbnail', {
-        path: input.id,
-        format: 'jpeg',
-        size: `w${width}h${height}`,
+      newStruct('RemoteResource', {
+        url: getURL('files/get_thumbnail', {
+          path: input.id,
+          format: 'jpeg',
+          size: `w${width}h${height}`,
+        }),
       }),
     ];
   });
@@ -149,7 +161,9 @@ function getSizes(input: Object): Map<Struct, string> {
       width: orig.width,
       height: orig.height,
     }),
-    getURL('files/download', {path: input.id}),
+    newStruct('RemoteResource', {
+      url: getURL('files/download', {path: input.id}),
+    }),
   ]);
 
   // $FlowIssue: Does not understand that filter removes all null values.
