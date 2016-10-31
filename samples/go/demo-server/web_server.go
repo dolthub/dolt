@@ -19,18 +19,21 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/util/receipts"
 	"github.com/julienschmidt/httprouter"
 )
 
 const (
-	dbParam      = "dbName"
-	nomsBaseHtml = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
+	dbParam       = "dbName"
+	privatePrefix = "/p/"
+	nomsBaseHtml  = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
 )
 
 var (
 	authRegexp = regexp.MustCompile("^Bearer\\s+(\\S*)$")
 	router     *httprouter.Router
 	authKey    = ""
+	receiptKey receipts.Key
 )
 
 func setupWebServer(factory chunks.Factory) *httprouter.Router {
@@ -65,9 +68,13 @@ func setupWebServer(factory chunks.Factory) *httprouter.Router {
 	return router
 }
 
-func startWebServer(factory chunks.Factory, key string) {
-	d.Chk.NotEmpty(key, "No auth key was provided to startWebServer")
-	authKey = key
+func startWebServer(factory chunks.Factory, authKeyParam string, receiptKeyParam receipts.Key) {
+	d.Chk.NotEmpty(authKeyParam, "No auth key was provided to startWebServer")
+	// Allow receiptKey to be empty, we'll just always fail verification if
+	// anybody tries to access a private database.
+
+	authKey = authKeyParam
+	receiptKey = receiptKeyParam
 	router = setupWebServer(factory)
 
 	fmt.Printf("Listening on http://localhost:%d/...\n", *portFlag)
@@ -85,36 +92,73 @@ func startWebServer(factory chunks.Factory, key string) {
 // Attach handlers that provide the Database API
 func storeHandle(factory chunks.Factory, hndlr datas.Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		cs := factory.CreateStore(params.ByName(dbParam))
+		dbName := params.ByName(dbParam)
+
+		if isPrivate(dbName) {
+			// Private database access is granted with the master auth key, or a receipt.
+			token := getAuthToken(req)
+			if token != authKey && !checkReceipt(dbName, token) {
+				setUnauthorized(w)
+				return
+			}
+		}
+
+		cs := factory.CreateStore(dbName)
 		defer cs.Close()
 		hndlr(w, req, params, cs)
 	}
 }
 
 func authorizeHandle(f httprouter.Handle) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		authHeader := r.Header.Get("Authorization")
-		token := ""
+	return func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+		// If it's a private database, delegate authentication to storeHandle.
+		isPriv := isPrivate(params.ByName(dbParam))
 
-		if authHeader != "" {
-			res := authRegexp.FindStringSubmatch(authHeader)
-			if res != nil {
-				token = res[1]
-			}
-		}
-
-		if token == "" {
-			token = r.URL.Query().Get("access_token")
-		}
-
-		authorized := token == authKey
-		if !authorized {
-			w.Header().Set("WWW-Authenticate", "Bearer realm=\"Restricted\", error=\"invalid token\"")
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		if !isPriv && getAuthToken(r) != authKey {
+			setUnauthorized(w)
 			return
 		}
-		f(w, r, ps)
+
+		f(w, r, params)
 	}
+}
+
+func getAuthToken(r *http.Request) (token string) {
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		if res := authRegexp.FindStringSubmatch(authHeader); res != nil {
+			token = res[1]
+		}
+	} else {
+		token = r.URL.Query().Get("access_token")
+	}
+	return
+}
+
+func isPrivate(dbName string) bool {
+	return strings.HasPrefix(dbName, privatePrefix)
+}
+
+func checkReceipt(dbName, token string) bool {
+	if receiptKey == (receipts.Key{}) {
+		return false
+	}
+
+	data := receipts.Data{
+		Database: dbName,
+	}
+	ok, err := receipts.Verify(receiptKey, token, &data)
+
+	if err != nil {
+		fmt.Printf("Error decoding receipt for %s: %s\n", dbName, err.Error())
+	} else if !ok {
+		fmt.Printf("Receipt verification failed for %s issued at %s\n", dbName, data.IssueDate.String())
+	}
+	return ok
+}
+
+func setUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", "Bearer realm=\"Restricted\", error=\"invalid token\"")
+	http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 }
 
 func noopHandle(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
