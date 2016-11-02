@@ -59,6 +59,7 @@ export {
   getTypeOfValue,
 } from './type.js';
 export {equals, less} from './compare.js';
+export {default as Spec} from './spec.js';
 export {DatabaseSpec, DatasetSpec, PathSpec} from './specs.js';
 export {default as walk} from './walk.js';
 export {default as jsonToNoms} from './json-convert.js';

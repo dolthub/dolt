@@ -21,8 +21,8 @@ export function searchToParams(search: string): Map<string, string> {
   const paramsIdx = search.indexOf('?');
   if (paramsIdx > -1) {
     decodeURIComponent(search.slice(paramsIdx + 1)).split('&').forEach(pair => {
-      const [k, v] = pair.split('=');
-      params.set(k, v);
+      const idx = pair.indexOf('=');
+      params.set(pair.slice(0, idx), pair.slice(idx + 1));
     });
   }
   return params;

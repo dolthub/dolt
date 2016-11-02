@@ -19,6 +19,7 @@ import HTTPError from './http-error.js';
 import {notNull} from './assert.js';
 import nomsVersion from './version.js';
 
+export const DEFAULT_MAX_READS = 5;
 const HTTP_STATUS_CONFLICT = 409;
 const versionHeader = 'x-noms-vers';
 
@@ -52,7 +53,8 @@ const readBatchOptions = {
 export default class HttpBatchStore extends RemoteBatchStore {
   _rpc: RpcStrings;
 
-  constructor(urlparam: string, maxReads: number = 5, fetchOptions: FetchOptions = {}) {
+  constructor(
+      urlparam: string, maxReads: number = DEFAULT_MAX_READS, fetchOptions: FetchOptions = {}) {
     const [url, params] = separateParams(urlparam);
     const rpc = {
       getRefs: url + '/getRefs/' + params,

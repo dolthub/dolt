@@ -12,7 +12,7 @@ import PhotosPage from './photos-page.js';
 import Viewport from './viewport.js';
 import {createPhoto} from './photo.js';
 import type {PhotoIndex, NomsPhoto} from './types.js';
-import {Path, PathSpec, Struct} from '@attic/noms';
+import {Path, Spec, Struct} from '@attic/noms';
 
 // Cache of index paths to indices. Otherwise calls to render are pretty slow,
 // which is noticeable when resizing, toggling between full screen photos, etc.
@@ -42,14 +42,22 @@ async function getRenderElement(nav: Nav): Promise<React.Element<any>> {
 
   let index = indexMap.get(indexStr);
   if (!index) {
+    // TODO: Proper auth with localStorage.
+    let specOptions;
+    if (params.has('access_token')) {
+      specOptions = {
+        authorization: params.get('access_token'),
+      };
+    }
+
     let indexSpec;
     try {
-      indexSpec = PathSpec.parse(indexStr);
+      indexSpec = Spec.forPath(indexStr, specOptions);
     } catch (e) {
       return <div>{notice(indexStr)} is not a valid path: {notice(e.message)}.</div>;
     }
 
-    const [, indexValue] = await indexSpec.value();
+    const indexValue = await indexSpec.value();
     if (!(indexValue instanceof Struct)) {
       return <div>{notice(indexStr)} not found.</div>;
     }
