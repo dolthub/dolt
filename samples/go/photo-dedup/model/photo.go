@@ -17,8 +17,8 @@ type Photo struct {
 		Width  int
 		Height int
 	}]string
-	Dhash dhash.Hash `noms:"-"` 	// TODO: replace with optional field support
-	Orig  types.Struct `noms:"-"`   // TODO: replace with value preservation support
+	Dhash dhash.Hash   `noms:"-"` // TODO: replace with optional field support
+	Orig  types.Struct `noms:"-"` // TODO: replace with value preservation support
 }
 
 func UnmarshalPhoto(value types.Value) (*Photo, bool) {

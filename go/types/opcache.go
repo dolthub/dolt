@@ -152,7 +152,9 @@ func (store *ldbOpCacheStore) opCache() opCache {
 // are encoded directly into the ldb key bytes. All other types are encoded as
 // their Hash() digest. Their actual value is then stored in ldb value.
 func (opc *ldbOpCache) insertLdbOp(allKeys ValueSlice, opKind NomsKind, val Value) {
-	d.PanicIfTrue(len(allKeys) > 0x00FF, "Number of keys in GraphMapSet exceeds max of 256")
+	if len(allKeys) > 0x00FF {
+		d.Panic("Number of keys in GraphMapSet exceeds max of 256")
+	}
 	ldbKeyBytes := [initialBufferSize]byte{}
 	ldbValBytes := [initialBufferSize]byte{}
 

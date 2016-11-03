@@ -81,7 +81,9 @@ type MemoryStoreFactory struct {
 }
 
 func (f *MemoryStoreFactory) CreateStore(ns string) ChunkStore {
-	d.PanicIfFalse(f.stores != nil, "Cannot use MemoryStore after Shutter().")
+	if f.stores == nil {
+		d.Panic("Cannot use MemoryStore after Shutter().")
+	}
 	if cs, present := f.stores[ns]; present {
 		return cs
 	}

@@ -252,7 +252,9 @@ func buildMapData(values []Value) mapEntrySlice {
 	}
 
 	// Sadly, d.Chk.Equals() costs too much. BUG #83
-	d.PanicIfFalse(0 == len(values)%2, "Must specify even number of key/value pairs")
+	if 0 != len(values)%2 {
+		d.Panic("Must specify even number of key/value pairs")
+	}
 	kvs := make(mapEntrySlice, len(values)/2)
 
 	for i := 0; i < len(values); i += 2 {

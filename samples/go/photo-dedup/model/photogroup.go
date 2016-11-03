@@ -35,4 +35,3 @@ func (pg *PhotoGroup) Marshal() types.Struct {
 	s = s.Set("photos", types.NewSet(refs...))
 	return s
 }
-

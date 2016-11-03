@@ -93,7 +93,9 @@ func (sc structCandidate) get(key types.Value) types.Value {
 func (sc structCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	str, ok := change.V.(types.String)
-	d.PanicIfTrue(!ok, "Field names must be strings, not %s", change.V.Type().Describe())
+	if !ok {
+		d.Panic("Field names must be strings, not %s", change.V.Type().Describe())
+	}
 	return append(out, types.NewFieldPath(string(str)))
 }
 

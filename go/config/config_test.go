@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/testify/assert"
 )
 
 const (
@@ -29,38 +29,38 @@ var (
 	ldbConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: { ldbSpec },
-			remoteAlias: { httpSpec },
+			DefaultDbAlias: {ldbSpec},
+			remoteAlias:    {httpSpec},
 		},
 	}
 
 	httpConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: { httpSpec },
-			remoteAlias: { ldbSpec },
+			DefaultDbAlias: {httpSpec},
+			remoteAlias:    {ldbSpec},
 		},
 	}
 
 	memConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: { memSpec },
-			remoteAlias: { httpSpec },
+			DefaultDbAlias: {memSpec},
+			remoteAlias:    {httpSpec},
 		},
 	}
 
 	ldbAbsConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: { ldbAbsSpec },
-			remoteAlias: { httpSpec },
+			DefaultDbAlias: {ldbAbsSpec},
+			remoteAlias:    {httpSpec},
 		},
 	}
 )
 
 type paths struct {
-	home string
+	home   string
 	config string
 }
 
@@ -71,7 +71,7 @@ func getPaths(assert *assert.Assertions, base string) paths {
 	assert.NoError(err)
 	home := filepath.Join(abs, base)
 	config := filepath.Join(home, NomsConfigFile)
-	return paths{ home, config }
+	return paths{home, config}
 }
 
 func qualifyFilePath(assert *assert.Assertions, path string) string {
@@ -116,7 +116,6 @@ func writeConfig(assert *assert.Assertions, c *Config, home string) string {
 	assert.NoError(err, home)
 	return file
 }
-
 
 func TestConfig(t *testing.T) {
 	assert := assert.New(t)
@@ -182,7 +181,7 @@ func TestQualifyingPaths(t *testing.T) {
 	path := getPaths(assert, "home")
 	assert.NoError(os.Chdir(path.home))
 
-	for _, tc := range []*Config{ httpConfig, memConfig, ldbAbsConfig } {
+	for _, tc := range []*Config{httpConfig, memConfig, ldbAbsConfig} {
 		writeConfig(assert, tc, path.home)
 		ac, err := FindNomsConfig()
 		assert.NoError(err, path.config)

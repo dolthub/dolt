@@ -133,7 +133,7 @@ func (w *valueEncoder) writeValue(v Value) {
 		n := v.(Number)
 		f := float64(n)
 		if math.IsNaN(f) || math.IsInf(f, 0) {
-			d.PanicIfTrue(true, "%f is not a supported number", f)
+			d.Panic("%f is not a supported number", f)
 		}
 		w.writeNumber(n)
 	case ListKind:

@@ -56,7 +56,9 @@ func (m *merger) threeWayOrderedSequenceMerge(a, b, parent candidate, apply appl
 			bChange = types.ValueChanged{}
 			continue
 		}
-		d.PanicIfTrue(!aChange.V.Equals(bChange.V), "Diffs have skewed!") // Sanity check.
+		if !aChange.V.Equals(bChange.V) {
+			d.Panic("Diffs have skewed!") // Sanity check.
+		}
 
 		change, mergedVal, err := m.mergeChanges(aChange, bChange, a, b, parent, apply, path)
 		if err != nil {

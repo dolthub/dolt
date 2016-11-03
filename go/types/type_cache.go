@@ -77,7 +77,9 @@ func (tc *TypeCache) getCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 }
 
 func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
-	d.PanicIfFalse(len(fieldNames) == len(fieldTypes), "len(fieldNames) != len(fieldTypes)")
+	if len(fieldNames) != len(fieldTypes) {
+		d.Panic("len(fieldNames) != len(fieldTypes)")
+	}
 	verifyStructName(name)
 	verifyFieldNames(fieldNames)
 

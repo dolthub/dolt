@@ -109,6 +109,8 @@ func deserializeChunk(reader io.Reader) (Chunk, bool) {
 	d.Chk.NoError(err)
 	d.PanicIfFalse(int(chunkSize) == n)
 	c := NewChunk(data)
-	d.PanicIfFalse(h == c.Hash(), "%s != %s", h, c.Hash())
+	if h != c.Hash() {
+		d.Panic("%s != %s", h, c.Hash().String())
+	}
 	return c, true
 }

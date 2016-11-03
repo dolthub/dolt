@@ -15,7 +15,9 @@ import (
 
 func getElemDesc(s types.Collection, index int) types.StructDesc {
 	t := s.Type().Desc.(types.CompoundDesc).ElemTypes[index]
-	d.PanicIfTrue(types.StructKind != t.Kind(), "Expected StructKind, found %s", types.KindToString[t.Type().Kind()])
+	if types.StructKind != t.Kind() {
+		d.Panic("Expected StructKind, found %s", types.KindToString[t.Type().Kind()])
+	}
 	return t.Desc.(types.StructDesc)
 }
 
@@ -41,17 +43,23 @@ func writeValuesFromChan(structChan chan types.Struct, sd types.StructDesc, comm
 	fieldNames := getFieldNamesFromStruct(sd)
 	csvWriter := csv.NewWriter(output)
 	csvWriter.Comma = comma
-	d.PanicIfTrue(csvWriter.Write(fieldNames) != nil, "Failed to write header %v", fieldNames)
+	if csvWriter.Write(fieldNames) != nil {
+		d.Panic("Failed to write header %v", fieldNames)
+	}
 	record := make([]string, len(fieldNames))
 	for s := range structChan {
 		for i, f := range fieldNames {
 			record[i] = fmt.Sprintf("%v", s.Get(f))
 		}
-		d.PanicIfTrue(csvWriter.Write(record) != nil, "Failed to write record %v", record)
+		if csvWriter.Write(record) != nil {
+			d.Panic("Failed to write record %v", record)
+		}
 	}
 
 	csvWriter.Flush()
-	d.PanicIfTrue(csvWriter.Error() != nil, "error flushing csv")
+	if csvWriter.Error() != nil {
+		d.Panic("error flushing csv")
+	}
 }
 
 // Write takes a types.List l of structs (described by sd) and writes it to output as comma-delineated values.
@@ -88,7 +96,9 @@ func WriteMap(m types.Map, sd types.StructDesc, comma rune, output io.Writer) {
 
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
 	structDesc.IterFields(func(name string, t *types.Type) {
-		d.PanicIfTrue(!types.IsPrimitiveKind(t.Kind()), "Expected primitive kind, found %s", types.KindToString[t.Kind()])
+		if !types.IsPrimitiveKind(t.Kind()) {
+			d.Panic("Expected primitive kind, found %s", types.KindToString[t.Kind()])
+		}
 		fieldNames = append(fieldNames, name)
 	})
 	return

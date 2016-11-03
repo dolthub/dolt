@@ -81,7 +81,9 @@ func main() {
 		getFilePaths := func() {
 			index := 0
 			err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-				d.PanicIfTrue(err != nil, "Cannot traverse directories")
+				if err != nil {
+					d.Panic("Cannot traverse directories")
+				}
 				if !info.IsDir() && filepath.Ext(path) == ".xml" {
 					filesChan <- fileIndex{path, index}
 					index++
@@ -98,10 +100,14 @@ func main() {
 			expectedType := types.NewMap()
 			for f := range filesChan {
 				file, err := os.Open(f.path)
-				d.PanicIfTrue(err != nil, "Error getting XML")
+				if err != nil {
+					d.Panic("Error getting XML")
+				}
 
 				xmlObject, err := mxj.NewMapXmlReader(file)
-				d.PanicIfTrue(err != nil, "Error decoding XML")
+				if err != nil {
+					d.Panic("Error decoding XML")
+				}
 				object := xmlObject.Old()
 				file.Close()
 

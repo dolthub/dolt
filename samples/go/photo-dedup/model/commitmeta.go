@@ -3,9 +3,9 @@ package model
 import (
 	"time"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/d"
 )
 
 type CommitMeta struct {

@@ -70,4 +70,3 @@ func main() {
 		exit.Fail()
 	}
 }
-

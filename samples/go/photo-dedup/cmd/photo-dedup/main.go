@@ -71,4 +71,3 @@ func main() {
 		exit.Fail()
 	}
 }
-

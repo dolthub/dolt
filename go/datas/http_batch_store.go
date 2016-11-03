@@ -53,7 +53,9 @@ type httpBatchStore struct {
 func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 	u, err := url.Parse(baseURL)
 	d.PanicIfError(err)
-	d.PanicIfTrue(u.Scheme != "http" && u.Scheme != "https", "Unrecognized scheme: %s", u.Scheme)
+	if u.Scheme != "http" && u.Scheme != "https" {
+		d.Panic("Unrecognized scheme: %s", u.Scheme)
+	}
 	buffSink := &httpBatchStore{
 		host:          u,
 		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
@@ -219,7 +221,9 @@ func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
-	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	if http.StatusOK != res.StatusCode {
+		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
+	}
 
 	rl := make(chan struct{}, 16)
 	chunks.Deserialize(reader, &readBatchChunkSink{&batch, &sync.RWMutex{}}, rl)
@@ -271,7 +275,9 @@ func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
-	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	if http.StatusOK != res.StatusCode {
+		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
+	}
 
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(bufio.ScanWords)
@@ -415,7 +421,9 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.H
 			}
 		}
 
-		d.PanicIfTrue(http.StatusCreated != res.StatusCode, "Unexpected response: %s", formatErrorResponse(res))
+		if http.StatusCreated != res.StatusCode {
+			d.Panic("Unexpected response: %s", formatErrorResponse(res))
+		}
 	}()
 }
 
@@ -425,7 +433,9 @@ func (bhcs *httpBatchStore) Root() hash.Hash {
 	expectVersion(res)
 	defer closeResponse(res.Body)
 
-	d.PanicIfFalse(http.StatusOK == res.StatusCode, "Unexpected response: %s", http.StatusText(res.StatusCode))
+	if http.StatusOK != res.StatusCode {
+		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
+	}
 	data, err := ioutil.ReadAll(res.Body)
 	d.Chk.NoError(err)
 	return hash.Parse(string(data))
@@ -461,7 +471,9 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 	u := *bhcs.host
 	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
 	if method == "POST" {
-		d.PanicIfTrue(current.IsEmpty(), "Unexpected empty value")
+		if current.IsEmpty() {
+			d.Panic("Unexpected empty value")
+		}
 		params := u.Query()
 		params.Add("last", last.String())
 		params.Add("current", current.String())

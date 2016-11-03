@@ -210,7 +210,9 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 		}
 
 		targetType := getTargetType(reachable)
-		d.PanicIfTrue(!entry.Type().Equals(targetType), "Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetHash(), entry.Type(), targetType)
+		if !entry.Type().Equals(targetType) {
+			d.Panic("Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetHash(), entry.Type(), targetType)
+		}
 	}
 	v.WalkRefs(collectHints)
 	return hints

@@ -60,7 +60,9 @@ func (bsa *BatchStoreAdaptor) SchedulePut(c chunks.Chunk, refHeight uint64, hint
 
 func (bsa *BatchStoreAdaptor) expectVersion() {
 	dataVersion := bsa.cs.Version()
-	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	if constants.NomsVersion != dataVersion {
+		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	}
 }
 
 func (bsa *BatchStoreAdaptor) Root() hash.Hash {

@@ -250,7 +250,9 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritt
 		srcBS := srcDB.validatingBatchStore()
 		c := srcBS.Get(h)
 		v := types.DecodeValue(c, srcDB)
-		d.PanicIfFalse(v != nil, "Expected decoded chunk to be non-nil.")
+		if v == nil {
+			d.Panic("Expected decoded chunk to be non-nil.")
+		}
 		sinkDB.validatingBatchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
 		bytesWritten := 0
 		if estimateBytesWritten {

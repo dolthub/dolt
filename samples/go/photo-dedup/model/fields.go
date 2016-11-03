@@ -1,15 +1,15 @@
 package model
 
 var field = struct {
-	cover string
-	dhash string
+	cover  string
+	dhash  string
 	height string
-	id string
+	id     string
 	photos string
-	sizes string
-	title string
-	width string
-} {
+	sizes  string
+	title  string
+	width  string
+}{
 	"cover",
 	"dhash",
 	"height",

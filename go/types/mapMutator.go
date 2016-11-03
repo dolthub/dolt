@@ -16,13 +16,17 @@ func newMapMutator(vrw ValueReadWriter) *mapMutator {
 }
 
 func (mx *mapMutator) Set(key Value, val Value) *mapMutator {
-	d.PanicIfFalse(mx.oc != nil, "Can't call Set() again after Finish()")
+	if mx.oc == nil {
+		d.Panic("Can't call Set() again after Finish()")
+	}
 	mx.oc.GraphMapSet(nil, key, val)
 	return mx
 }
 
 func (mx *mapMutator) Finish() Map {
-	d.PanicIfFalse(mx.oc != nil, "Can only call Finish() once")
+	if mx.oc == nil {
+		d.Panic("Can only call Finish() once")
+	}
 	defer func() {
 		mx.oc = nil
 	}()

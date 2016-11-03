@@ -177,7 +177,9 @@ func updateProgress(progress chan<- struct{}) {
 
 func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged types.Value, err error) {
 	defer updateProgress(m.progress)
-	d.PanicIfTrue(a == nil || b == nil, "Merge candidates cannont be nil: a = %v, b = %v", a, b)
+	if a == nil || b == nil {
+		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
+	}
 
 	switch a.Type().Kind() {
 	case types.ListKind:

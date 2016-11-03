@@ -71,7 +71,9 @@ func newGraphBuilder(vrw ValueReadWriter, opc opCache, rootKind NomsKind, verbos
 // the graph using the |keys| slice. Intermediate maps referenced by |keys| are
 // created as necessary. This is threadsafe, may call from multiple go routines.
 func (b *GraphBuilder) MapSet(keys []Value, k Value, v Value) {
-	d.Chk.True(b.oc != nil, "Can't call MapSet() again after Build()")
+	if b.oc == nil {
+		d.Panic("Can't call MapSet() again after Build()")
+	}
 	b.oc.GraphMapSet(keys, k, v)
 }
 
@@ -79,7 +81,9 @@ func (b *GraphBuilder) MapSet(keys []Value, k Value, v Value) {
 // maps referenced by |keys| are created as necessary. This is threadsafe, may
 // call from multiple go routines.
 func (b *GraphBuilder) SetInsert(keys []Value, v Value) {
-	d.Chk.True(b.oc != nil, "Can't call SetInsert() again after Build()")
+	if b.oc == nil {
+		d.Panic("Can't call SetInsert() again after Build()")
+	}
 	b.oc.GraphSetInsert(keys, v)
 }
 
@@ -89,7 +93,9 @@ func (b *GraphBuilder) SetInsert(keys []Value, v Value) {
 // elements will be appended in order that functions are called, so order has
 // to be managed by caller.
 func (b *GraphBuilder) ListAppend(keys []Value, v Value) {
-	d.Chk.True(b.oc != nil, "Can't call ListAppend() again after Build()")
+	if b.oc == nil {
+		d.Panic("Can't call ListAppend() again after Build()")
+	}
 	b.oc.GraphListAppend(keys, v)
 }
 
@@ -111,7 +117,9 @@ func (b *GraphBuilder) Build() Value {
 		b.mutex.Lock()
 		defer b.mutex.Unlock()
 
-		d.PanicIfTrue(b.oc == nil, "Can only call Build() once")
+		if b.oc == nil {
+			d.Panic("Can only call Build() once")
+		}
 		opc = b.oc
 		b.oc = nil
 	}

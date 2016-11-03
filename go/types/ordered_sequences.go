@@ -91,7 +91,9 @@ func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bo
 // Gets the key used for ordering the sequence at current index.
 func getCurrentKey(cur *sequenceCursor) orderedKey {
 	seq, ok := cur.seq.(orderedSequence)
-	d.PanicIfFalse(ok, "need an ordered sequence here")
+	if !ok {
+		d.Panic("need an ordered sequence here")
+	}
 	return seq.getKey(cur.idx)
 }
 

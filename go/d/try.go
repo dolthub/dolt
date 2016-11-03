@@ -25,7 +25,19 @@ func (s panicker) Errorf(format string, args ...interface{}) {
 	panic(fmt.Sprintf(format, args...))
 }
 
-// PanicIfError(err) && PanicIfTrue(expr, fmt, args) can be used to panic in a way that's
+// Panic(err) creates an error using format and args and wraps it in a
+// WrappedError which can be handled using Try() and TryCatch()
+func Panic(format string, args ...interface{}) {
+
+	if len(args) == 0 {
+		err := errors.New(format)
+		panic(Wrap(err))
+	}
+	err := fmt.Errorf(format, args...)
+	panic(Wrap(err))
+}
+
+// PanicIfError(err) && PanicIfTrue(expr) can be used to panic in a way that's
 // easily handled by Try() and TryCatch()
 func PanicIfError(err error) {
 	if err != nil {
@@ -33,30 +45,17 @@ func PanicIfError(err error) {
 	}
 }
 
-func argsToError(def string, args ...interface{}) error {
-	if len(args) == 0 {
-		return errors.New(def)
-	}
-	msg := args[0].(string)
-	if len(args) > 1 {
-		return fmt.Errorf(msg, args[1:]...)
-	}
-	return errors.New(msg)
-}
-
-// If b is true, creates an error using args, wraps it and panics. If args is provided the first
-// value must be a string.
-func PanicIfTrue(b bool, args ...interface{}) {
+// If b is true, creates a default error, wraps it and panics.
+func PanicIfTrue(b bool) {
 	if b {
-		panic(Wrap(argsToError("Expected true", args...)))
+		panic(Wrap(errors.New("Expected true")))
 	}
 }
 
-// If b is false, creates an error using args, wraps it and panics. If args is provided the first
-// value must be a string.
-func PanicIfFalse(b bool, args ...interface{}) {
+// If b is false, creates a default error, wraps it and panics.
+func PanicIfFalse(b bool) {
 	if !b {
-		panic(Wrap(argsToError("Expected false", args...)))
+		panic(Wrap(errors.New("Expected false")))
 	}
 }
 

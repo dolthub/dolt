@@ -13,13 +13,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/BurntSushi/toml"
+	"github.com/attic-labs/noms/go/spec"
 )
 
 type Config struct {
-	File    string
-	Db      map[string]DbConfig
+	File string
+	Db   map[string]DbConfig
 }
 
 type DbConfig struct {
@@ -118,14 +118,14 @@ func qualifyPaths(configPath string, c *Config) (*Config, error) {
 	qc := *c
 	qc.File = file
 	for k, r := range c.Db {
-		qc.Db[k] = DbConfig{ absDbSpec(dir, r.Url) }
+		qc.Db[k] = DbConfig{absDbSpec(dir, r.Url)}
 	}
 	return &qc, nil
 }
 
 func (c *Config) String() string {
 	var buffer bytes.Buffer
-	if (c.File != "") {
+	if c.File != "" {
 		buffer.WriteString(fmt.Sprintf("file = %s\n", c.File))
 	}
 	buffer.WriteString(c.writeableString())
@@ -136,7 +136,7 @@ func (c *Config) writeableString() string {
 	var buffer bytes.Buffer
 	for k, r := range c.Db {
 		buffer.WriteString(fmt.Sprintf("[db.%s]\n", k))
-		buffer.WriteString(fmt.Sprintf("\t" + `url = "%s"`+"\n", r.Url))
+		buffer.WriteString(fmt.Sprintf("\t"+`url = "%s"`+"\n", r.Url))
 	}
 	return buffer.String()
 }

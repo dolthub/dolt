@@ -34,6 +34,8 @@ func DumbCopy(srcPath, dstPath string) {
 // MyDir returns the directory in which the file containing the calling source code resides.
 func MyDir() string {
 	_, path, _, ok := runtime.Caller(1)
-	d.PanicIfFalse(ok, "Should have been able to get Caller.")
+	if !ok {
+		d.Panic("Should have been able to get Caller.")
+	}
 	return filepath.Dir(path)
 }

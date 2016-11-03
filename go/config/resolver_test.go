@@ -9,15 +9,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/testify/assert"
 )
 
 const (
-	localSpec   = ldbSpec
-	remoteSpec  = httpSpec
-	testDs      = "testds"
-	testObject  = "#pckdvpvr9br1fie6c3pjudrlthe7na18"
+	localSpec  = ldbSpec
+	remoteSpec = httpSpec
+	testDs     = "testds"
+	testObject = "#pckdvpvr9br1fie6c3pjudrlthe7na18"
 )
 
 type testData struct {
@@ -31,36 +31,33 @@ var (
 	rtestConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: { localSpec },
-			remoteAlias: { remoteSpec },
+			DefaultDbAlias: {localSpec},
+			remoteAlias:    {remoteSpec},
 		},
 	}
 
-	dbTestsNoAliases = []testData {
+	dbTestsNoAliases = []testData{
 		{localSpec, localSpec},
 		{remoteSpec, remoteSpec},
 	}
 
-	dbTestsWithAliases = []testData {
+	dbTestsWithAliases = []testData{
 		{"", localSpec},
 		{remoteAlias, remoteSpec},
 	}
 
-	pathTestsNoAliases = []testData {
+	pathTestsNoAliases = []testData{
 		{remoteSpec + "::" + testDs, remoteSpec + "::" + testDs},
 		{remoteSpec + "::" + testObject, remoteSpec + "::" + testObject},
-
 	}
 
-	pathTestsWithAliases = []testData {
+	pathTestsWithAliases = []testData{
 		{testDs, localSpec + "::" + testDs},
 		{remoteAlias + "::" + testDs, remoteSpec + "::" + testDs},
 		{testObject, localSpec + "::" + testObject},
 		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
 	}
-
 )
-
 
 func withConfig(t *testing.T) *Resolver {
 	assert := assert.New(t)
@@ -133,13 +130,13 @@ func TestResolveDestPathWithDot(t *testing.T) {
 	assert := assert.New(t)
 
 	data := []struct {
-		src string
-		dest string
-		expSrc string
+		src     string
+		dest    string
+		expSrc  string
 		expDest string
-	} {
-		{testDs, remoteSpec+"::.", 	localSpec+"::"+testDs, remoteSpec+"::"+testDs},
-		{remoteSpec+"::"+testDs, ".",	remoteSpec+"::"+testDs, localSpec+"::"+testDs},
+	}{
+		{testDs, remoteSpec + "::.", localSpec + "::" + testDs, remoteSpec + "::" + testDs},
+		{remoteSpec + "::" + testDs, ".", remoteSpec + "::" + testDs, localSpec + "::" + testDs},
 	}
 	for _, d := range data {
 		src := spec.ResolvePathSpec(d.src)

@@ -133,20 +133,20 @@ func TestPanicIfTrue(t *testing.T) {
 	})
 
 	assert.Panics(func() {
-		PanicIfTrue(true, "Panicking!!!!")
+		PanicIfTrue(true)
 	})
 
 	assert.NotPanics(func() {
-		PanicIfTrue(false, "Not panicking")
+		PanicIfTrue(false)
 	})
 
 	err := Try(func() {
-		PanicIfTrue(true, format)
+		Panic(format)
 	})
 	assert.Equal(errors.New(format), Unwrap(err))
 
 	err = Try(func() {
-		PanicIfTrue(true, format, arg)
+		Panic(format, arg)
 	})
 	assert.Equal(errors.New(formatted), Unwrap(err))
 }
@@ -163,20 +163,20 @@ func TestPanicIfFalse(t *testing.T) {
 	})
 
 	assert.Panics(func() {
-		PanicIfFalse(false, "Panicking!!!!")
+		PanicIfFalse(false)
 	})
 
 	assert.NotPanics(func() {
-		PanicIfFalse(true, "Not panicking")
+		PanicIfFalse(true)
 	})
 
 	err := Try(func() {
-		PanicIfFalse(false, format)
+		Panic(format)
 	})
 	assert.Equal(errors.New(format), Unwrap(err))
 
 	err = Try(func() {
-		PanicIfFalse(false, format, arg)
+		Panic(format, arg)
 	})
 	assert.Equal(errors.New(formatted), Unwrap(err))
 }

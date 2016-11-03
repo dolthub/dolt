@@ -16,13 +16,17 @@ func newSetMutator(vrw ValueReadWriter) *setMutator {
 }
 
 func (mx *setMutator) Insert(val Value) *setMutator {
-	d.PanicIfFalse(mx.oc != nil, "Can't call Insert() again after Finish()")
+	if mx.oc == nil {
+		d.Panic("Can't call Insert() again after Finish()")
+	}
 	mx.oc.GraphSetInsert(nil, val)
 	return mx
 }
 
 func (mx *setMutator) Finish() Set {
-	d.PanicIfFalse(mx.oc != nil, "Can only call Finish() once")
+	if mx.oc == nil {
+		d.Panic("Can only call Finish() once")
+	}
 	defer func() {
 		mx.oc = nil
 	}()

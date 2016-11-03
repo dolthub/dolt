@@ -51,7 +51,9 @@ func (ds Dataset) MaybeHead() (types.Struct, bool) {
 // the Dataset's value tree.
 func (ds Dataset) Head() types.Struct {
 	c, ok := ds.MaybeHead()
-	d.PanicIfFalse(ok, "Dataset \"%s\" does not exist", ds.id)
+	if !ok {
+		d.Panic("Dataset \"%s\" does not exist", ds.id)
+	}
 	return c
 }
 
@@ -66,7 +68,9 @@ func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
 // current root of the Dataset's value tree.
 func (ds Dataset) HeadRef() types.Ref {
 	r, ok := ds.MaybeHeadRef()
-	d.PanicIfFalse(ok, "Dataset \"%s\" does not exist", ds.id)
+	if !ok {
+		d.Panic("Dataset \"%s\" does not exist", ds.id)
+	}
 	return r
 }
 

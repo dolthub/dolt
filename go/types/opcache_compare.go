@@ -90,7 +90,9 @@ func compareEncodedKey(a, b []byte) int {
 		a, b := a[1:], b[1:]
 		d.PanicIfFalse(len(a) == hash.ByteLen && len(b) == hash.ByteLen)
 		res := bytes.Compare(a, b)
-		d.PanicIfTrue(res == 0 && aKind != bKind, "Values of different kinds with the same hash. Whaa??")
+		if res == 0 && aKind != bKind {
+			d.Panic("Values of different kinds with the same hash. Whaa??")
+		}
 		return res
 	}
 
@@ -121,7 +123,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return res
 	}
 	aKind, bKind := NomsKind(a[0]), NomsKind(b[0])
-	d.PanicIfFalse(aKind == bKind, "compareEncodedNomsValues, aKind:", aKind, "!= bKind:", bKind)
+	if aKind != bKind {
+		d.Panic("compareEncodedNomsValues, aKind:", aKind, "!= bKind:", bKind)
+	}
 
 	switch aKind {
 	case BoolKind:

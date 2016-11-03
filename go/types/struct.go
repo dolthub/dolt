@@ -308,7 +308,9 @@ func verifyFieldNames(names []string) {
 }
 
 func verifyName(name, kind string) {
-	d.PanicIfTrue(!IsValidStructFieldName(name), `Invalid struct%s name: "%s"`, kind, name)
+	if !IsValidStructFieldName(name) {
+		d.Panic(`Invalid struct%s name: "%s"`, kind, name)
+	}
 }
 
 func verifyFieldName(name string) {

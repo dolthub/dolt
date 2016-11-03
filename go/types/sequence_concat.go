@@ -20,7 +20,9 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 	// cursor to the end of fst, then finalizing chunking to the start of snd - by
 	// swapping fst cursors for snd cursors in the middle of chunking.
 	vr := fst.valueReader()
-	d.PanicIfTrue(vr != snd.valueReader(), "cannot concat sequences from different databases")
+	if vr != snd.valueReader() {
+		d.Panic("cannot concat sequences from different databases")
+	}
 	chunker := newSequenceChunker(newCursorAtIndex(fst, fst.numLeaves()), vr)
 
 	for cur, ch := newCursorAtIndex(snd, 0), chunker; cur != nil; cur = cur.parent {

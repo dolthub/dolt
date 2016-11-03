@@ -83,7 +83,9 @@ func versionCheck(hndlr Handler) Handler {
 }
 
 func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
+	if req.Method != "POST" {
+		d.Panic("Expected post method.")
+	}
 
 	reader := bodyReader(req)
 	defer func() {
@@ -183,7 +185,9 @@ func (wc wc) Close() error {
 }
 
 func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
+	if req.Method != "POST" {
+		d.Panic("Expected post method.")
+	}
 
 	hashes := extractHashes(req)
 
@@ -203,7 +207,9 @@ func extractHashes(req *http.Request) hash.HashSlice {
 	err := req.ParseForm()
 	d.PanicIfError(err)
 	hashStrs := req.PostForm["ref"]
-	d.PanicIfTrue(len(hashStrs) <= 0, "PostForm is empty")
+	if len(hashStrs) <= 0 {
+		d.Panic("PostForm is empty")
+	}
 
 	hashes := make(hash.HashSlice, len(hashStrs))
 	for idx, refStr := range hashStrs {
@@ -221,7 +227,9 @@ func buildHashesRequest(hashes map[hash.Hash]struct{}) io.Reader {
 }
 
 func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
+	if req.Method != "POST" {
+		d.Panic("Expected post method.")
+	}
 
 	hashes := extractHashes(req)
 
@@ -235,7 +243,9 @@ func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 }
 
 func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
+	if req.Method != "GET" {
+		d.Panic("Expected get method.")
+	}
 
 	rootRef := rt.Root()
 	fmt.Fprintf(w, "%v", rootRef.String())
@@ -243,23 +253,33 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 }
 
 func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "POST", "Expected post method.")
+	if req.Method != "POST" {
+		d.Panic("Expected post method.")
+	}
 
 	params := req.URL.Query()
 	tokens := params["last"]
-	d.PanicIfTrue(len(tokens) != 1, `Expected "last" query param value`)
+	if len(tokens) != 1 {
+		d.Panic(`Expected "last" query param value`)
+	}
 	last := hash.Parse(tokens[0])
 	tokens = params["current"]
-	d.PanicIfTrue(len(tokens) != 1, `Expected "current" query param value`)
+	if len(tokens) != 1 {
+		d.Panic(`Expected "current" query param value`)
+	}
 	current := hash.Parse(tokens[0])
 
 	// Ensure that proposed new Root is present in cs
 	c := cs.Get(current)
-	d.PanicIfTrue(c.IsEmpty(), "Can't set Root to a non-present Chunk")
+	if c.IsEmpty() {
+		d.Panic("Can't set Root to a non-present Chunk")
+	}
 
 	// Ensure that proposed new Root is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
 	v := types.DecodeValue(c, nil)
-	d.PanicIfTrue(v.Type().Kind() != types.MapKind, "Root of a Database must be a Map")
+	if v.Type().Kind() != types.MapKind {
+		d.Panic("Root of a Database must be a Map")
+	}
 	m := v.(types.Map)
 	if !m.Empty() && !isMapOfStringToRefOfCommit(m) {
 		panic(d.Wrap(fmt.Errorf("Root of a Database must be a Map<String, Ref<Commit>>, not %s", m.Type().Describe())))
@@ -272,7 +292,9 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 }
 
 func handleBaseGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
-	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
+	if req.Method != "GET" {
+		d.Panic("Expected get method.")
+	}
 
 	w.Header().Add("content-type", "text/html")
 	fmt.Fprintf(w, nomsBaseHTML)

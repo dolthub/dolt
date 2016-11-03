@@ -238,7 +238,7 @@ func StringToValue(s string, k types.NomsKind) (types.Value, error) {
 	case types.StringKind:
 		return types.String(s), nil
 	default:
-		d.PanicIfTrue(true, "Invalid column type kind:", k)
+		d.Panic("Invalid column type kind:", k)
 	}
 	panic("not reached")
 }

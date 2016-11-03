@@ -79,39 +79,53 @@ type LevelDBStore struct {
 }
 
 func (l *LevelDBStore) Root() hash.Hash {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	return l.rootByKey(l.rootKey)
 }
 
 func (l *LevelDBStore) UpdateRoot(current, last hash.Hash) bool {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	l.versionSetOnce.Do(l.setVersIfUnset)
 	return l.updateRootByKey(l.rootKey, current, last)
 }
 
 func (l *LevelDBStore) Get(ref hash.Hash) Chunk {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	return l.getByKey(l.toChunkKey(ref), ref)
 }
 
 func (l *LevelDBStore) Has(ref hash.Hash) bool {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	return l.hasByKey(l.toChunkKey(ref))
 }
 
 func (l *LevelDBStore) Version() string {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	return l.versByKey(l.versionKey)
 }
 
 func (l *LevelDBStore) Put(c Chunk) {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	l.versionSetOnce.Do(l.setVersIfUnset)
 	l.putByKey(l.toChunkKey(c.Hash()), c)
 }
 
 func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
-	d.PanicIfFalse(l.internalLevelDBStore != nil, "Cannot use LevelDBStore after Close().")
+	if l.internalLevelDBStore == nil {
+		d.Panic("Cannot use LevelDBStore after Close().")
+	}
 	l.versionSetOnce.Do(l.setVersIfUnset)
 	numBytes := 0
 	b := new(leveldb.Batch)
@@ -155,7 +169,9 @@ type internalLevelDBStore struct {
 }
 
 func newBackingStore(dir string, maxFileHandles int, dumpStats bool) *internalLevelDBStore {
-	d.PanicIfTrue(dir == "", "dir cannot be empty")
+	if dir == "" {
+		d.Panic("dir cannot be empty")
+	}
 	d.PanicIfError(os.MkdirAll(dir, 0700))
 	db, err := leveldb.OpenFile(dir, &opt.Options{
 		Compression:            opt.NoCompression,
@@ -269,7 +285,9 @@ type LevelDBStoreFactory struct {
 }
 
 func (f *LevelDBStoreFactory) CreateStore(ns string) ChunkStore {
-	d.PanicIfFalse(f.store != nil, "Cannot use LevelDBStoreFactory after Shutter().")
+	if f.store == nil {
+		d.Panic("Cannot use LevelDBStoreFactory after Shutter().")
+	}
 	return newLevelDBStore(f.store, []byte(ns), false)
 }
 

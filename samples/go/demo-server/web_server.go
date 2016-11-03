@@ -202,7 +202,9 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBaseGet(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	d.PanicIfTrue(req.Method != "GET", "Expected get method.")
+	if req.Method != "GET" {
+		d.Panic("Expected get method.")
+	}
 
 	w.Header().Add("content-type", "text/html")
 	fmt.Fprintf(w, nomsBaseHtml)

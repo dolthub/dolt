@@ -115,7 +115,9 @@ func apply(source, target types.List, offset uint64, s types.Splice) types.List 
 	iter := source.IteratorAt(s.SpFrom)
 	for i := 0; uint64(i) < s.SpAdded; i++ {
 		v := iter.Next()
-		d.PanicIfTrue(v == nil, "List diff returned a splice that inserts a nonexistent element.")
+		if v == nil {
+			d.Panic("List diff returned a splice that inserts a nonexistent element.")
+		}
 		toAdd[i] = v
 	}
 	return target.Splice(s.SpAt+offset, s.SpRemoved, toAdd...)

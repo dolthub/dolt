@@ -66,7 +66,9 @@ func (lbs *localBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 
 func (lbs *localBatchStore) expectVersion() {
 	dataVersion := lbs.cs.Version()
-	d.PanicIfTrue(constants.NomsVersion != dataVersion, "SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	if constants.NomsVersion != dataVersion {
+		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	}
 }
 
 func (lbs *localBatchStore) Root() hash.Hash {

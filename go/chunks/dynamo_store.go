@@ -400,7 +400,9 @@ func (s *DynamoStore) Version() string {
 	if itemLen == 0 {
 		return constants.NomsVersion
 	}
-	d.PanicIfFalse(itemLen == 2, "Version should have 2 attributes on it: %+v", result.Item)
+	if itemLen != 2 {
+		d.Panic("Version should have 2 attributes on it: %+v", result.Item)
+	}
 	d.PanicIfFalse(result.Item[numAttr] != nil)
 	d.PanicIfFalse(result.Item[numAttr].S != nil)
 	return aws.StringValue(result.Item[numAttr].S)
@@ -440,7 +442,9 @@ func (s *DynamoStore) Root() hash.Hash {
 	if itemLen == 0 {
 		return hash.Hash{}
 	}
-	d.PanicIfFalse(itemLen == 2 || itemLen == 3, "Root should have 2 or three attributes on it: %+v", result.Item)
+	if itemLen != 2 && itemLen != 3 {
+		d.Panic("Root should have 2 or three attributes on it: %+v", result.Item)
+	}
 	if itemLen == 3 {
 		d.PanicIfFalse(result.Item[compAttr] != nil)
 		d.PanicIfFalse(result.Item[compAttr].S != nil)

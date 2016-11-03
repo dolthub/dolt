@@ -34,11 +34,15 @@ func main() {
 	}
 	err := d.Try(func() {
 		stagingDir, err := filepath.Abs(flag.Arg(0))
-		d.PanicIfTrue(err != nil, "Path to staging directory (first arg) must be valid, not %s", flag.Arg(0))
+		if err != nil {
+			d.Panic("Path to staging directory (first arg) must be valid, not %s", flag.Arg(0))
+		}
 		d.PanicIfError(os.MkdirAll(stagingDir, 0755))
 
 		goPath := os.Getenv("GOPATH")
-		d.PanicIfTrue(goPath == "", "GOPATH must be set!")
+		if goPath == "" {
+			d.Panic("GOPATH must be set!")
+		}
 		pythonPath := filepath.Join(goPath, nomsCheckoutPath, "tools")
 		env := runner.Env{
 			"PYTHONPATH": pythonPath,
