@@ -12,7 +12,6 @@ import (
 	_ "image/png"
 	"math"
 	"net/http"
-	"os"
 	"runtime"
 	"sync"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/attic-labs/noms/go/walk"
 	"github.com/attic-labs/noms/samples/go/photo-dedup/dhash"
 	"github.com/attic-labs/noms/samples/go/photo-dedup/model"
+	"github.com/attic-labs/noms/go/util/verbose"
 )
 
 // HashPhotosJob adds a dhash field to every photo in photoSets and commits them to
@@ -58,7 +58,9 @@ func hashPhotos(db datas.Database, photoSets []types.Value) <-chan types.Struct 
 			for photo := range toHash {
 				withHash, err := addHashToPhoto(photo)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "\nSkipping: %s\n", err)
+					if verbose.Verbose() {
+						fmt.Printf("\nSkipping: %s\n", err)
+					}
 					hashed <- photo.Marshal()
 				} else {
 					hashed <- withHash.Marshal()
