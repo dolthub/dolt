@@ -226,7 +226,8 @@ func (suite *HTTPBatchStoreSuite) TestRoot() {
 
 func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
 	store := newBadVersionHTTPBatchStoreForTest(suite)
-	c := chunks.NewChunk([]byte("abc"))
+	defer store.Close()
+	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
 	suite.Panics(func() { store.UpdateRoot(c.Hash(), hash.Hash{}) })
 }
@@ -241,6 +242,7 @@ func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
 func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
 	store := newAuthenticatingHTTPBatchStoreForTest(suite, u)
+	defer store.Close()
 	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
 	suite.True(store.UpdateRoot(c.Hash(), hash.Hash{}))
