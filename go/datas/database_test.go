@@ -111,12 +111,14 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	id1, id2 := "testdataset", "othertestdataset"
 
 	db1 := suite.makeDb(suite.cs)
+	defer db1.Close()
 	ds1 := db1.GetDataset(id1)
 	ds1HeadVal := types.String("Commit value for " + id1)
 	ds1, err := db1.CommitValue(ds1, ds1HeadVal)
 	suite.NoError(err)
 
 	db2 := suite.makeDb(suite.cs)
+	defer db2.Close()
 	ds2 := db2.GetDataset(id2)
 	db2HeadVal := types.String("Commit value for " + id2)
 	ds2, err = db2.CommitValue(ds2, db2HeadVal)
@@ -187,9 +189,9 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// Get a fresh database, and verify that both datasets are present
 	newDB := suite.makeDb(suite.cs)
+	defer newDB.Close()
 	datasets2 := newDB.Datasets()
 	suite.Equal(uint64(2), datasets2.Len())
-	newDB.Close()
 }
 
 func newOpts(parents ...types.Value) CommitOptions {
@@ -279,11 +281,11 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 
 	// Get a fresh database, and verify that only ds1 is present
 	newDB := suite.makeDb(suite.cs)
+	defer newDB.Close()
 	datasets = newDB.Datasets()
 	suite.Equal(uint64(1), datasets.Len())
 	_, present = newDB.GetDataset(datasetID2).MaybeHeadRef()
 	suite.True(present, "Dataset %s should be present", datasetID2)
-	newDB.Close()
 }
 
 type waitDuringUpdateRootChunkStore struct {
@@ -314,6 +316,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
 	w := &waitDuringUpdateRootChunkStore{suite.cs, nil}
 	db := suite.makeDb(w)
+	defer db.Close()
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
 	// ds1: |a| <- |b|
@@ -368,6 +371,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
 	w := &waitDuringUpdateRootChunkStore{suite.cs, nil}
 	db := suite.makeDb(w)
+	defer db.Close()
 
 	// Concurrent change, to move root out from under my feet:
 	// ds1: |a| <- |b| <- |e|

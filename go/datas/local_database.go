@@ -67,3 +67,11 @@ func (ldb *LocalDatabase) validatingBatchStore() types.BatchStore {
 	}
 	return ldb.vbs
 }
+
+func (ldb *LocalDatabase) Close() error {
+	if ldb.vbs != nil {
+		ldb.vbs.Destroy()
+		ldb.vbs = nil
+	}
+	return ldb.databaseCommon.Close()
+}
