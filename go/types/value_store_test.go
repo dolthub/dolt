@@ -12,6 +12,17 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
+func TestValueReadWriteRead(t *testing.T) {
+	assert := assert.New(t)
+
+	s := String("hello")
+	vs := NewTestValueStore()
+	assert.Nil(vs.ReadValue(s.Hash())) // nil
+	r := vs.WriteValue(s)
+	v := vs.ReadValue(r.TargetHash()) // non-nil
+	assert.True(s.Equals(v))
+}
+
 func TestCheckChunksInCache(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
@@ -89,7 +100,7 @@ func TestCacheOnReadValue(t *testing.T) {
 	v := cvs2.ReadValue(r.TargetHash())
 	assert.True(bref.Equals(v))
 	assert.True(cvs2.isPresent(b.Hash()))
-	assert.True(cvs2.isPresent(b.Hash()))
+	assert.True(cvs2.isPresent(bref.Hash()))
 }
 
 func TestHintsOnCache(t *testing.T) {

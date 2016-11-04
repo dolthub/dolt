@@ -69,6 +69,11 @@ func TestSizeCache(t *testing.T) {
 	assert.False(ok)
 	_, ok = c.Get(hashFromString("data-5"))
 	assert.False(ok)
+
+	c.Drop(hashFromString("data-10"))
+	assert.Equal(uint64(800), c.totalSize)
+	assert.Equal(4, c.lru.Len())
+	assert.Equal(4, len(c.cache))
 }
 
 func concurrencySizeCacheTest(data []string) {

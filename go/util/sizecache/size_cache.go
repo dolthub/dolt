@@ -70,7 +70,7 @@ func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
 		defer c.mu.Unlock()
 
 		if _, ok := c.entry(key); ok {
-			// this value is already in the cache just return
+			// this value is already in the cache; just return
 			return
 		}
 
@@ -90,5 +90,17 @@ func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
 			c.lru.Remove(el)
 			el = next
 		}
+	}
+}
+
+// Drop will remove the element associated with the given key from the cache.
+func (c *SizeCache) Drop(key interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if entry, ok := c.entry(key); ok {
+		c.totalSize -= entry.size
+		c.lru.Remove(entry.lruEntry)
+		delete(c.cache, key)
 	}
 }

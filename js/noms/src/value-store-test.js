@@ -12,6 +12,9 @@ import ValueStore from './value-store.js';
 import List from './list.js';
 import {encodeValue} from './codec.js';
 import {equals} from './compare.js';
+import Hash from './hash.js';
+import {getHash} from './get-hash.js';
+import {notNull} from './assert.js';
 
 suite('ValueStore', () => {
   test('readValue', async () => {
@@ -65,7 +68,7 @@ suite('ValueStore', () => {
 
   test('write coalescing', async () => {
     const bs = new BatchStoreAdaptor(new MemoryStore());
-    const vs = new ValueStore(bs, 1e6);
+    const vs = new ValueStore(bs, 128);
 
     const r1 = vs.writeValue('hello').targetHash;
     (bs: any).schedulePut = () => { assert.fail('unreachable'); };
@@ -76,7 +79,7 @@ suite('ValueStore', () => {
 
   test('read caching', async () => {
     const bs = new BatchStoreAdaptor(new MemoryStore());
-    const vs = new ValueStore(bs, 1e6);
+    const vs = new ValueStore(bs, 128);
 
     const r1 = vs.writeValue('hello').targetHash;
     const v1 = await vs.readValue(r1);
@@ -84,6 +87,31 @@ suite('ValueStore', () => {
     (bs: any).get = () => { throw new Error(); };
     const v2 = await vs.readValue(r1);
     assert.equal(v1, v2);
+    await vs.close();
+  });
+
+  test('read nonexistince caching', async () => {
+    const bs = new BatchStoreAdaptor(new MemoryStore());
+    const vs = new ValueStore(bs, 128);
+
+    const hash = notNull(Hash.parse('rmnjb8cjc5tblj21ed4qs821649eduie'));
+    const v1 = await vs.readValue(hash);
+    assert.equal(null, v1);
+    (bs: any).get = () => { throw new Error(); };
+    const v2 = await vs.readValue(hash);
+    assert.equal(null, v2);
+    await vs.close();
+  });
+
+  test('write clobbers cached nonexistence', async () => {
+    const vs = new ValueStore(new BatchStoreAdaptor(new MemoryStore()), 128);
+
+    const s = 'hello';
+    const v1 = await vs.readValue(getHash(s)); // undefined
+    assert.equal(null, v1);
+    vs.writeValue(s);
+    const v2 = await vs.readValue(getHash(s)); // "hello"
+    assert.equal(s, v2);
     await vs.close();
   });
 

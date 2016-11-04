@@ -75,30 +75,30 @@ func (lvs *ValueStore) BatchStore() BatchStore {
 }
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
-func (lvs *ValueStore) ReadValue(r hash.Hash) Value {
-	if v, ok := lvs.valueCache.Get(r); ok {
+func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
+	if v, ok := lvs.valueCache.Get(h); ok {
 		if v == nil {
 			return nil
 		}
 		return v.(Value)
 	}
-	chunk := lvs.bs.Get(r)
+	chunk := lvs.bs.Get(h)
 	if chunk.IsEmpty() {
-		lvs.valueCache.Add(r, 0, nil)
+		lvs.valueCache.Add(h, 0, nil)
 		return nil
 	}
 	v := DecodeValue(chunk, lvs)
-	lvs.valueCache.Add(r, uint64(len(chunk.Data())), v)
+	lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
 
 	var entry chunkCacheEntry = absentChunk{}
 	if v != nil {
-		lvs.cacheChunks(v, r)
-		// r is trivially a hint for v, so consider putting that in the cache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because r already has a hint in the cache. If we later read some other chunk that references v, cacheChunks will overwrite this with a hint pointing to that chunk.
+		lvs.cacheChunks(v, h)
+		// h is trivially a hint for v, so consider putting that in the cache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because h already has a hint in the cache. If we later read some other chunk that references v, cacheChunks will overwrite this with a hint pointing to that chunk.
 		// If we don't do this, top-level Values that get read but not written -- such as the existing Head of a Database upon a Commit -- can be erroneously left out during a pull.
-		entry = hintedChunk{v.Type(), r}
+		entry = hintedChunk{v.Type(), h}
 	}
-	if cur := lvs.check(r); cur == nil || cur.Hint().IsEmpty() {
-		lvs.set(r, entry)
+	if cur := lvs.check(h); cur == nil || cur.Hint().IsEmpty() {
+		lvs.set(h, entry)
 	}
 	return v
 }
@@ -118,6 +118,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	hints := lvs.chunkHintsFromCache(v)
 	lvs.bs.SchedulePut(c, height, hints)
 	lvs.set(hash, (*presentChunk)(v.Type()))
+	lvs.valueCache.Drop(hash)
 	return r
 }
 
