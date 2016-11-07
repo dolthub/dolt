@@ -32,7 +32,6 @@ PACKAGES = [
     './samples/go/csv/csv-analyze',
     './samples/go/csv/csv-export',
     './samples/go/csv/csv-import',
-    './samples/go/demo-server',
     # './samples/go/hr',
     './samples/go/json-import',
     './samples/go/nomdex',
