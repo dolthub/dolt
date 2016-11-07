@@ -20,14 +20,8 @@ export default class HTTPError extends Error {
     // Babel does not support extending native classes.
     const e = Object.create(HTTPError.prototype);
     e.status = status;
+    e.name = 'HTTPError';
+    e.message = String(status);
     return e;
-  }
-
-  get message(): string {
-    return String(this.status);
-  }
-
-  get name(): string {
-    return 'HTTPError';
   }
 }

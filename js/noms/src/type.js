@@ -16,7 +16,7 @@ import search from './binary-search.js';
 import {staticTypeCache} from './type-cache.js';
 
 export interface TypeDesc {
-  kind: NomsKind;
+  +kind: NomsKind;  // Hack: Makes this covariant to allow implementatations to not have a setter.
   hasUnresolvedCycle(visited: Type<any>[]): boolean;
 }
 
