@@ -55,8 +55,12 @@ func main() {
 	}
 	defer db.Close()
 
-	now := time.Now()
+	pst, err := time.LoadLocation("America/Tijuana")
+	d.CheckErrorNoUsage(err)
+	now := time.Now().In(pst)
 	lastTime, idx := getCurrent(ds)
+	lastTime = lastTime.In(pst)
+
 	if lastTime.YearDay() == now.YearDay() {
 		fmt.Println("Same day as last run, nothing to do. Peace.")
 		return
