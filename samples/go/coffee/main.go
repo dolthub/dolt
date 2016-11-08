@@ -32,20 +32,23 @@ var people = []string{
 }
 
 func main() {
+	dataset := flag.String("ds", "", "Dataset to read/write from")
+	wh := flag.String("slack", "", "Slack webhook to ping with update")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <ds>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags]\n", os.Args[0])
+		flag.PrintDefaults()
 	}
 
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 	flag.Parse(true)
 
-	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "Incorrect number of arguments")
+	if *dataset == "" || *wh == "" {
+		fmt.Fprintln(os.Stderr, "Required arguments not present")
 		return
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(flag.Arg(0))
+	db, ds, err := cfg.GetDataset(*dataset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return
@@ -70,7 +73,7 @@ func main() {
 	}
 	winner := people[idx]
 
-	pokeSlack(winner)
+	pokeSlack(*wh, winner)
 
 	_, err = db.Commit(ds, types.String(winner), datas.CommitOptions{
 		Meta: types.NewStruct("", types.StructData{
@@ -118,9 +121,8 @@ func getCurrent(ds datas.Dataset) (d time.Time, idx int) {
 	return
 }
 
-func pokeSlack(winner string) {
+func pokeSlack(url, winner string) {
 	r := strings.NewReader(fmt.Sprintf("{\"text\":\"Today @%s cleans the coffee machine. Thank-you! You are awesome!\"}", winner))
-	_, err := http.Post("https://hooks.slack.com/services/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",
-		"application/json", r)
+	_, err := http.Post(url, "application/json", r)
 	d.CheckErrorNoUsage(err)
 }
