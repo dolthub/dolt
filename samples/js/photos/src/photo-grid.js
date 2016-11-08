@@ -13,7 +13,6 @@ import PhotoSetIterator, {EmptyIterator} from './photo-set-iterator.js';
 import Viewport from './viewport.js';
 
 const maxPhotoHeight = 300;
-const timeGroupThresholdNs = 5 * 1e9;
 const photosPerPage = 10;
 const photoSpacing = 5;
 
@@ -155,22 +154,12 @@ export default class PhotoGrid extends React.Component<void, Props, State> {
   async _getMorePhotos(current: Photo[]): Promise<void> {
     const {photosIter} = this.props;
     const moreP = [];
-    let lastTaken = Infinity;
     let next;
     while (!(next = await photosIter.next()).done && moreP.length < photosPerPage) {
       const [negDate, nomsPhoto] = notNull(next.value);
-      const taken = nomsPhoto.dateTaken;
-      // Dedupe photos that were taken close together in time.
-      // This is a stopgap until we have proper visual deduplication.
-      // Note that not every photo has a taken timestamp and we always include those.
-      if (!taken || ((lastTaken - taken.nsSinceEpoch) > timeGroupThresholdNs)) {
-        const hash = nomsPhoto.hash.toString();
-        const path = `.byDate[${negDate}][#${hash}]`;
-        moreP.push(createPhoto(path, nomsPhoto));
-      }
-      if (taken) {
-        lastTaken = taken.nsSinceEpoch;
-      }
+      const hash = nomsPhoto.hash.toString();
+      const path = `.byDate[${negDate}][#${hash}]`;
+      moreP.push(createPhoto(path, nomsPhoto));
     }
 
     const more = await Promise.all(moreP);
