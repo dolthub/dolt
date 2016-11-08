@@ -81,22 +81,22 @@ func qualifyFilePath(assert *assert.Assertions, path string) string {
 }
 
 func assertDbSpecsEquiv(assert *assert.Assertions, expected string, actual string) {
-	e, err := spec.ParseDatabaseSpec(expected)
+	e, err := spec.ForDatabase(expected)
 	assert.NoError(err)
 	if e.Protocol != "ldb" {
 		assert.Equal(expected, actual)
 	} else {
-		a, err := spec.ParseDatabaseSpec(actual)
+		a, err := spec.ForDatabase(actual)
 		assert.NoError(err)
 		assert.Equal(e.Protocol, a.Protocol, actual)
-		if strings.HasPrefix(e.Path, "/") {
-			assert.Equal(e.Path, a.Path, actual)
+		if filepath.IsAbs(e.DatabaseName) {
+			assert.Equal(e.DatabaseName, a.DatabaseName, actual)
 		} else {
 			// If the original path is relative, it will return as absolute.
 			// All we do here is ensure that the path suffix is the same.
-			ePath := strings.TrimPrefix(strings.TrimPrefix(e.Path, "."), ".")
-			assert.True(strings.HasSuffix(a.Path, ePath),
-				"expected: %s; actual: %s", ePath, actual)
+			eName := strings.TrimPrefix(e.DatabaseName, ".")
+			assert.True(strings.HasSuffix(a.DatabaseName, eName),
+				"expected: %s; actual: %s", eName, actual)
 		}
 	}
 }

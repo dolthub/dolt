@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
@@ -85,7 +84,7 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 	} else if !p.Hash.IsEmpty() {
 		val = db.ReadValue(p.Hash)
 	} else {
-		d.Chk.Fail("Unreachable")
+		panic("Unreachable")
 	}
 
 	if val != nil && p.Path != nil {
@@ -94,13 +93,17 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 	return
 }
 
+func (p AbsolutePath) IsEmpty() bool {
+	return p.Dataset == "" && p.Hash.IsEmpty()
+}
+
 func (p AbsolutePath) String() (str string) {
 	if len(p.Dataset) > 0 {
 		str = p.Dataset
 	} else if !p.Hash.IsEmpty() {
 		str = "#" + p.Hash.String()
 	} else {
-		d.Chk.Fail("Unreachable")
+		panic("Unreachable")
 	}
 
 	return str + p.Path.String()

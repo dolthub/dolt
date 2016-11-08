@@ -70,7 +70,7 @@ func (s *testSuite) TestLose() {
 		{[]string{"foo"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux"}, "Incorrect number of arguments\n"},
-		{[]string{sp + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp + "!!': Invalid dataset, must match [a-zA-Z0-9\\-_/]+: test!!\n"},
+		{[]string{sp + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp + "!!': Dataset test!! must match ^[a-zA-Z0-9\\-_/]+$\n"},
 		{[]string{sp + "2", ".foo", `"bar"`}, "Input dataset '" + sp + "2' does not exist\n"},
 		{[]string{sp, "[invalid", `"bar"`}, "Invalid path '[invalid': Invalid index: invalid\n"},
 		{[]string{sp, ".nothinghere", `"bar"`}, "No value at path '.nothinghere' - cannot update\n"},

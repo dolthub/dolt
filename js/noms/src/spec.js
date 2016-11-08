@@ -13,6 +13,11 @@ import HttpBatchStore, {DEFAULT_MAX_READS} from './http-batch-store.js';
 import MemoryStore from './memory-store.js';
 import type Value from './value.js';
 
+// TODO: Change databaseName() -> get databaseName, database() -> getDatabase().
+// TODO: Change databaseName to include prefix // for http/https protocols,
+//       e.g. http://example.com -> databaseName = //example.com
+// TODO: Add utility for getting the hostname or whatever out of database names which are URLs.
+
 export type SpecOptions = {
   /**
    * Authorization token for requests. For example, if the Database is backed by
@@ -191,7 +196,7 @@ export default class Spec {
     const path = this._path;
     if (path) {
       if (path.hash !== null) {
-        // PathSpec is already pinned.
+        // Spec is already pinned.
         invariant(this._datasetName === undefined || this._datasetName === null);
         return this;
       }
@@ -212,21 +217,28 @@ export default class Spec {
     }
 
     spec += `::#${commit.hash.toString()}`;
+
     if (this._path && this._path.path !== null) {
       spec += this._path.path.toString();
     }
 
-    return Spec.forPath(spec, this._opts);
+    const pinned = Spec.forPath(spec, this._opts);
+    pinned._database = this._database;
+
+    return pinned;
   }
 
   /**
    * Closes the database backed by this spec, if any.
    */
   close(): Promise<void> {
-    if (!this._database) {
+    const db = this._database;
+    if (!db) {
       return Promise.resolve();
     }
-    return this._database.close();
+
+    delete this._database;
+    return db.close();
   }
 
   _createDatabase(): Database {
@@ -288,16 +300,16 @@ function parseDatabaseSpec(spec: string): [string, string] {
     case 'ldb':
       throw new SyntaxError(ldbNotSupported);
 
-    case 'mem':
-      throw new SyntaxError('In-memory database must be specified as "mem" not "mem:');
-
     case 'http':
     case 'https':
       // TODO: better validation, see https://github.com/attic-labs/noms/issues/2351.
       if (databaseName === '') {
         throw new SyntaxError(`Invalid URL ${spec}`);
       }
-      return [protocol, databaseName.slice('//'.length)];
+      return [protocol, databaseName.replace(/^\/\//, '')];
+
+    case 'mem':
+      throw new SyntaxError('In-memory database must be specified as "mem" not "mem:');
 
     default:
       throw new SyntaxError(`Unsupported protocol ${protocol}`);
@@ -308,7 +320,7 @@ function splitDatabaseSpec(str: string): [string /* database */, string /* rest 
   const sep = '::';
   const sepIdx = str.lastIndexOf(sep);
   if (sepIdx === -1) {
-    throw new SyntaxError(`Missing ${sep} separator between database and dataset: ${str}`);
+    throw new SyntaxError(`Missing ${sep} separator after database in ${str}`);
   }
 
   return [str.slice(0, sepIdx), str.slice(sepIdx + sep.length)];

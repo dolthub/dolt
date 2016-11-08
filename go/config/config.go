@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/attic-labs/noms/go/spec"
@@ -95,18 +94,18 @@ func (c *Config) WriteTo(configHome string) (string, error) {
 // Replace relative directory in path part of spec with an absolute
 // directory. Assumes the path is relative to the location of the config file
 func absDbSpec(configHome string, url string) string {
-	dbSpec, err := spec.ParseDatabaseSpec(url)
+	dbSpec, err := spec.ForDatabase(url)
 	if err != nil {
 		return url
 	}
 	if dbSpec.Protocol != "ldb" {
 		return url
 	}
-	path := dbSpec.Path
-	if !strings.HasPrefix(path, "/") {
-		path = filepath.Join(configHome, path)
+	dbName := dbSpec.DatabaseName
+	if !filepath.IsAbs(dbName) {
+		dbName = filepath.Join(configHome, dbName)
 	}
-	return "ldb:" + path
+	return "ldb:" + dbName
 }
 
 func qualifyPaths(configPath string, c *Config) (*Config, error) {

@@ -88,24 +88,40 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
 func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
-	return spec.GetDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	sp, err := spec.ForDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	if err != nil {
+		return nil, err
+	}
+	return sp.GetDatabase(), nil
 }
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
 func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
-	return spec.GetChunkStore(r.verbose(str, r.ResolveDbSpec(str)))
+	sp, err := spec.ForDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	if err != nil {
+		return nil, err
+	}
+	return sp.NewChunkStore(), nil
 }
 
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
-	return spec.GetDataset(r.verbose(str, r.ResolvePathSpec(str)))
+	sp, err := spec.ForDataset(r.verbose(str, r.ResolvePathSpec(str)))
+	if err != nil {
+		return nil, datas.Dataset{}, err
+	}
+	return sp.GetDatabase(), sp.GetDataset(), nil
 }
 
 // Resolve string to a value path. If a config is present,
 //  - if no db spec is present, assume the default db
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
-	return spec.GetPath(r.verbose(str, r.ResolvePathSpec(str)))
+	sp, err := spec.ForPath(r.verbose(str, r.ResolvePathSpec(str)))
+	if err != nil {
+		return nil, nil, err
+	}
+	return sp.GetDatabase(), sp.GetValue(), nil
 }

@@ -37,8 +37,9 @@ suite('Spec', () => {
 
   test('mem dataset', async () => {
     const spec = Spec.forDataset('mem::test');
-    assert.strictEqual('test', spec.datasetName());
+    assert.strictEqual('mem', spec.protocol());
     assert.strictEqual('', spec.databaseName());
+    assert.strictEqual('test', spec.datasetName());
 
     let head = await spec.dataset().headValue();
     assert.strictEqual(null, head);
@@ -70,8 +71,24 @@ suite('Spec', () => {
 
   test('database spec', async () => {
     const invalid = [
-      'mem:stuff', 'mem::', 'mem:', 'http:', 'https:', 'random:', 'random:random',
-      'local', './local', 'ldb', 'ldb:', 'ldb:local',
+      'mem:stuff',
+      'mem:',
+      'mem::',
+      'http:',
+      'https:',
+      // See issue https://github.com/attic-labs/noms/issues/2351:
+      // 'http://',
+      // 'http://%',
+      // 'https://',
+      // 'https://%',
+      'random:',
+      'random:random',
+      '/file/ba:d',
+      'local',
+      './local',
+      'ldb',
+      'ldb:',
+      'ldb:local',
     ];
     invalid.forEach(s => assertThrowsSyntaxError(Spec.forDatabase, s));
 
@@ -85,7 +102,6 @@ suite('Spec', () => {
         databaseName: 'server.com/john/doe?access_token=jane'},
       {spec: 'https://server.com/john/doe/?arg=2&qp1=true&access_token=jane', protocol: 'https',
         databaseName: 'server.com/john/doe/?arg=2&qp1=true&access_token=jane'},
-      // TODO: This isn't valid, see https://github.com/attic-labs/noms/issues/2351.
       {spec: 'http://some/::/one', protocol: 'http', databaseName: 'some/::/one'},
       {spec: 'http://::1', protocol: 'http', databaseName: '::1'},
       {spec: 'http://192.30.252.154', protocol: 'http', databaseName: '192.30.252.154'},
@@ -108,9 +124,18 @@ suite('Spec', () => {
     const assertInvalid = s => assertThrowsSyntaxError(Spec.forDataset, s);
 
     const invalid = [
-      'mem', 'mem:', 'http', 'http:', 'http://foo', 'monkey', 'monkey:balls',
-      'http::dsname', 'http:::dsname', 'mem:/a/bogus/path::dsname',
-      'ldb:', 'ldb:hello',
+      'mem',
+      'mem:',
+      'http',
+      'http:',
+      'http://foo',
+      'monkey',
+      'monkey:balls',
+      'http::dsname',
+      'http:::dsname',
+      'mem:/a/bogus/path::dsname',
+      'ldb:',
+      'ldb:hello',
     ];
     invalid.forEach(assertInvalid);
 
@@ -162,7 +187,13 @@ suite('Spec', () => {
   });
 
   test('path spec', async () => {
-    const badSpecs = ['mem::#', 'mem::#s', 'mem::#foobarbaz', 'mem::.hello', 'ldb:path::foo.bar'];
+    const badSpecs = [
+      'mem::#',
+      'mem::#s',
+      'mem::#foobarbaz',
+      'mem::.hello',
+      'ldb:path::foo.bar',
+    ];
     badSpecs.forEach(bs => assertThrowsSyntaxError(Spec.forPath, bs));
 
     const valid = [
@@ -204,7 +235,6 @@ suite('Spec', () => {
 
     const pinned = await unpinned.pin();
     invariant(pinned);
-    pinned._database = unpinned._database;
 
     const pinnedHash = pinned.path().hash;
     invariant(pinnedHash);
@@ -230,7 +260,6 @@ suite('Spec', () => {
 
     const pinned = await unpinned.pin();
     invariant(pinned);
-    pinned._database = unpinned._database;
 
     const pinnedHash = pinned.path().hash;
     invariant(pinnedHash);

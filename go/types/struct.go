@@ -86,7 +86,6 @@ func (s Struct) WalkRefs(cb RefCallback) {
 	for _, v := range s.values {
 		v.WalkRefs(cb)
 	}
-
 }
 
 func (s Struct) Type() *Type {

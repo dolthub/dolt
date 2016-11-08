@@ -5,6 +5,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,53 +81,58 @@ func withoutConfig(t *testing.T) *Resolver {
 }
 
 func assertPathSpecsEquiv(assert *assert.Assertions, expected string, actual string) {
-	e, err := spec.ParsePathSpec(expected)
+	e, err := spec.ForPath(expected)
 	assert.NoError(err)
-	a, err := spec.ParsePathSpec(actual)
+	a, err := spec.ForPath(actual)
 	assert.NoError(err)
-	assertDbSpecsEquiv(assert, e.DbSpec.String(), a.DbSpec.String())
+
+	databaseSpec := func(sp spec.Spec) string {
+		return fmt.Sprintf("%s:%s", sp.Protocol, sp.DatabaseName)
+	}
+
+	assertDbSpecsEquiv(assert, databaseSpec(e), databaseSpec(a))
 	assert.Equal(e.Path.String(), a.Path.String())
 }
 
 func TestResolveDatabaseWithConfig(t *testing.T) {
-	spec := withConfig(t)
+	r := withConfig(t)
 	assert := assert.New(t)
 	for _, d := range append(dbTestsNoAliases, dbTestsWithAliases...) {
-		db := spec.ResolveDbSpec(d.input)
+		db := r.ResolveDbSpec(d.input)
 		assertDbSpecsEquiv(assert, d.expected, db)
 	}
 }
 
 func TestResolvePathWithConfig(t *testing.T) {
-	spec := withConfig(t)
+	r := withConfig(t)
 	assert := assert.New(t)
 	for _, d := range append(pathTestsNoAliases, pathTestsWithAliases...) {
-		path := spec.ResolvePathSpec(d.input)
+		path := r.ResolvePathSpec(d.input)
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
 }
 
 func TestResolveDatabaseWithoutConfig(t *testing.T) {
-	spec := withoutConfig(t)
+	r := withoutConfig(t)
 	assert := assert.New(t)
 	for _, d := range dbTestsNoAliases {
-		db := spec.ResolveDbSpec(d.input)
+		db := r.ResolveDbSpec(d.input)
 		assert.Equal(d.expected, db, d.input)
 	}
 }
 
 func TestResolvePathWithoutConfig(t *testing.T) {
-	spec := withoutConfig(t)
+	r := withoutConfig(t)
 	assert := assert.New(t)
 	for _, d := range pathTestsNoAliases {
-		path := spec.ResolvePathSpec(d.input)
+		path := r.ResolvePathSpec(d.input)
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
 
 }
 
 func TestResolveDestPathWithDot(t *testing.T) {
-	spec := withConfig(t)
+	r := withConfig(t)
 	assert := assert.New(t)
 
 	data := []struct {
@@ -139,8 +145,8 @@ func TestResolveDestPathWithDot(t *testing.T) {
 		{remoteSpec + "::" + testDs, ".", remoteSpec + "::" + testDs, localSpec + "::" + testDs},
 	}
 	for _, d := range data {
-		src := spec.ResolvePathSpec(d.src)
-		dest := spec.ResolvePathSpec(d.dest)
+		src := r.ResolvePathSpec(d.src)
+		dest := r.ResolvePathSpec(d.dest)
 		assertPathSpecsEquiv(assert, d.expSrc, src)
 		assertPathSpecsEquiv(assert, d.expDest, dest)
 	}
