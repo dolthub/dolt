@@ -18,7 +18,7 @@ export type SizeEntry = MapEntry<PhotoSize, string>;
 /**
  * createPhoto asynchronously derives a Photo instance from a NomsPhoto.
  */
-export async function createPhoto(path: string, p: NomsPhoto): Promise<Photo> {
+export function createPhoto(path: string, p: NomsPhoto): Promise<Photo> {
   const sizeEntries = [];
   return p.sizes.forEach((url, size) => {
     sizeEntries.push([size, url]);

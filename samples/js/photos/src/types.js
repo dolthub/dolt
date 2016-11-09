@@ -12,8 +12,7 @@ import type {
   Map,
   Set,
 } from '@attic/noms';
-import {Struct} from '@attic/noms'; // eslint-disable-line no-unused-vars
-import type {MapEntry} from '@attic/noms';
+import type {MapEntry, Struct} from '@attic/noms';
 
 export type CountMap = Map<number, Set<string>>;
 
@@ -24,7 +23,7 @@ export type CountMap = Map<number, Set<string>>;
 export type PhotoSet = Map<number, Set<NomsPhoto>>;
 export type PhotoSetEntry = MapEntry<number, Set<NomsPhoto>>;
 
-declare class Face extends Struct {
+export interface Face extends Struct {
   h: number;
   name: string,
   w: number;
@@ -32,14 +31,14 @@ declare class Face extends Struct {
   y: number;
 }
 
-declare class NomsPhoto extends Struct {
+export interface NomsPhoto extends Struct {
   id: string,
   faces: Set<Face>;
   sizes: Map<PhotoSize, string>;
   dateTaken: ?NomsDate;
 }
 
-declare class PhotoIndex extends Struct {
+export interface PhotoIndex extends Struct {
   byDate: PhotoSet;
   byFace: Map<string, PhotoSet>;
   byTag: Map<string, PhotoSet>;
@@ -47,15 +46,13 @@ declare class PhotoIndex extends Struct {
   tagsByCount: CountMap;
 }
 
-declare class PhotoSize extends Struct {
+export interface PhotoSize extends Struct {
   height: number;
   setHeight: (h: number) => PhotoSize;
   width: number;
   setWidth: (w: number) => PhotoSize;
 }
 
-declare class NomsDate extends Struct {
+interface NomsDate extends Struct {
   nsSinceEpoch: number;
 }
-
-export type {Face, NomsPhoto, PhotoIndex, PhotoSize};
