@@ -24,6 +24,13 @@ type Difference struct {
 	OldValue types.Value
 	// NewValue is Value after the change, can be nil if Value was removed
 	NewValue types.Value
+	// NewKeyValue is used for when elements are added to diffs with a
+	// non-primitive key. The new key must available when the map gets updated.
+	NewKeyValue types.Value
+}
+
+func (dif Difference) IsEmpty() bool {
+	return dif.Path == nil && dif.OldValue == nil && dif.NewValue == nil
 }
 
 // differ is used internally to hold information necessary for diffing two graphs.
@@ -116,7 +123,7 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
 					p1 := p.Append(types.NewIndexPath(types.Number(splice.SpAt + i)))
-					dif := Difference{p1, types.DiffChangeModified, v1.Get(splice.SpAt + i), v2.Get(splice.SpFrom + i)}
+					dif := Difference{p1, types.DiffChangeModified, v1.Get(splice.SpAt + i), v2.Get(splice.SpFrom + i), nil}
 					stop = !d.sendDiff(dif)
 				}
 			}
@@ -147,7 +154,13 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 
 func (d differ) diffMaps(p types.Path, v1, v2 types.Map) bool {
 	return d.diffOrdered(p,
-		func(v types.Value) types.PathPart { return types.NewIndexPath(v) },
+		func(v types.Value) types.PathPart {
+			if types.ValueCanBePathIndex(v) {
+				return types.NewIndexPath(v)
+			} else {
+				return types.NewHashIndexPath(v.Hash())
+			}
+		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {
 				v2.DiffLeftRight(v1, cc, sc)
@@ -216,7 +229,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.V)}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.V), NewKeyValue: k}
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeRemoved:
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1(change.V), NewValue: nil}
