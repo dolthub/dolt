@@ -25,17 +25,15 @@ type nomsMigrateTestSuite struct {
 }
 
 func (s *nomsMigrateTestSuite) writeTestData(str string, value v7types.Value, meta v7types.Value) {
-	db, ds, err := v7spec.GetDataset(str)
+	sp, err := v7spec.ForDataset(str)
 	s.NoError(err)
+	defer sp.Close()
 
-	_, err = db.Commit(ds, value, v7datas.CommitOptions{
+	_, err = sp.GetDatabase().Commit(sp.GetDataset(), value, v7datas.CommitOptions{
 		Meta: v7types.NewStruct("", v7types.StructData{
 			"value": meta,
 		}),
 	})
-	s.NoError(err)
-
-	err = db.Close()
 	s.NoError(err)
 }
 
@@ -56,10 +54,11 @@ func (s *nomsMigrateTestSuite) TestNomsMigrate() {
 	s.Equal("", outStr)
 	s.Equal("", errStr)
 
-	destDb, destDs, err := spec.GetDataset(destStr)
+	sp, err := spec.ForDataset(destStr)
 	s.NoError(err)
-	defer destDb.Close()
+	defer sp.Close()
 
+	destDs := sp.GetDataset()
 	s.True(destDs.HeadValue().Equals(types.String(str)))
 	s.True(destDs.Head().Get("meta").(types.Struct).Get("value").Equals(types.Number(42)))
 }
@@ -83,11 +82,11 @@ func (s *nomsMigrateTestSuite) TestNomsMigrateNonCommit() {
 	s.Equal("", outStr)
 	s.Equal("", errStr)
 
-	destDb, destDs, err := spec.GetDataset(destStr)
+	sp, err := spec.ForDataset(destStr)
 	s.NoError(err)
-	defer destDb.Close()
+	defer sp.Close()
 
-	s.True(destDs.HeadValue().Equals(types.String(str)))
+	s.True(sp.GetDataset().HeadValue().Equals(types.String(str)))
 
 }
 

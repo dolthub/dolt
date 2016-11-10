@@ -38,9 +38,11 @@ func runMigrate(args []string) int {
 	// TODO: parallelize
 	// TODO: incrementalize
 
-	sourceDb, sourceValue, err := v7spec.GetPath(args[0])
+	v7Path, err := v7spec.ForPath(args[0])
 	d.CheckError(err)
-	defer sourceDb.Close()
+	defer v7Path.Close()
+
+	sourceDb, sourceValue := v7Path.GetDatabase(), v7Path.GetValue()
 
 	if sourceValue == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("Value not found: %s", args[0]))
@@ -48,9 +50,11 @@ func runMigrate(args []string) int {
 
 	isCommit := v7datas.IsCommitType(sourceValue.Type())
 
-	sinkDb, sinkDataset, err := spec.GetDataset(args[1])
+	vNewDataset, err := spec.ForDataset(args[1])
 	d.CheckError(err)
-	defer sinkDb.Close()
+	defer vNewDataset.Close()
+
+	sinkDb, sinkDataset := vNewDataset.GetDatabase(), vNewDataset.GetDataset()
 
 	if isCommit {
 		// Need to migrate both value and meta fields.

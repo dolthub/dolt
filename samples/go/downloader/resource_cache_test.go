@@ -32,13 +32,12 @@ func randomString(slen int) string {
 }
 
 func randomBlob(s *resourceCacheTestSuite, slen int) types.Blob {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
-	defer db.Close()
+	defer sp.Close()
 
 	s1 := randomString(slen)
-	blob := types.NewStreamingBlob(db, strings.NewReader(s1))
+	blob := types.NewStreamingBlob(sp.GetDatabase(), strings.NewReader(s1))
 	return blob
 }
 
@@ -59,10 +58,11 @@ func TestResourceCache(t *testing.T) {
 func (s *resourceCacheTestSuite) TestResourceCacheGet() {
 	dsName := "testCache"
 	cache1 := func(k types.String, v types.Blob, setNewValue bool) (types.Ref, types.Ref) {
-		str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-		db, err := spec.GetDatabase(str)
+		sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 		s.NoError(err)
-		defer db.Close()
+		defer sp.Close()
+
+		db := sp.GetDatabase()
 
 		hr, _ := db.GetDataset(dsName).MaybeHeadRef()
 		rc, err := getResourceCache(db, dsName)
@@ -96,9 +96,12 @@ func (s *resourceCacheTestSuite) TestResourceCacheGet() {
 	hr1, hr2 = cache1(types.String("key2"), blob2, true)
 	s.False(hr1.Equals(hr2))
 
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
+
+	db := sp.GetDatabase()
+
 	rc, err := getResourceCache(db, dsName)
 	s.NoError(err)
 	s.Equal(uint64(2), rc.len())
@@ -110,21 +113,21 @@ func (s *resourceCacheTestSuite) TestResourceCacheGet() {
 }
 
 func (s *resourceCacheTestSuite) TestCheckCacheType() {
-    blob1 := randomBlob(s, 30)
+	blob1 := randomBlob(s, 30)
 
-    badTestCases := []types.Value {
-        types.NewStruct("testStruct", types.StructData{"f1": types.String("f1value")}),
-        types.NewMap(types.Number(1), types.NewRef(blob1)),
-        types.NewMap(types.String("s1"), types.String("badtype")),
-        types.NewMap(types.String("s1"), types.NewRef(types.String("badtype"))),
-    }
-    
-    for _, tc := range badTestCases {
-        err := checkCacheType(tc)
-        s.Error(err)
-    }
+	badTestCases := []types.Value{
+		types.NewStruct("testStruct", types.StructData{"f1": types.String("f1value")}),
+		types.NewMap(types.Number(1), types.NewRef(blob1)),
+		types.NewMap(types.String("s1"), types.String("badtype")),
+		types.NewMap(types.String("s1"), types.NewRef(types.String("badtype"))),
+	}
 
-    c1 := types.NewMap(types.String("s1"), types.NewRef(blob1))
-    err := checkCacheType(c1)
-    s.NoError(err)
+	for _, tc := range badTestCases {
+		err := checkCacheType(tc)
+		s.Error(err)
+	}
+
+	c1 := types.NewMap(types.String("s1"), types.NewRef(blob1))
+	err := checkCacheType(c1)
+	s.NoError(err)
 }

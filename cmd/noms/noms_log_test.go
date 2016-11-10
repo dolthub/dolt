@@ -25,27 +25,28 @@ type nomsLogTestSuite struct {
 }
 
 func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
-	db, ds, err := spec.GetDataset(str)
+	sp, err := spec.ForDataset(str)
 	s.NoError(err)
-	ds, err = db.CommitValue(ds, types.Number(i))
+	defer sp.Close()
+
+	sp.GetDatabase().CommitValue(sp.GetDataset(), types.Number(i))
 	s.NoError(err)
-	commit := ds.Head()
-	db.Close()
+
+	commit := sp.GetDataset().Head()
 	res, _ := s.MustRun(main, []string{"log", str})
 	s.Contains(res, commit.Hash().String())
 }
 
 func (s *nomsLogTestSuite) TestNomsLog() {
-	datasetName := "dsTest"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	db, _, err := spec.GetDataset(str)
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, "dsTest"))
 	s.NoError(err)
+	defer sp.Close()
 
-	db.Close()
-	s.Panics(func() { s.MustRun(main, []string{"log", str}) })
+	sp.GetDatabase() // create the database
+	s.Panics(func() { s.MustRun(main, []string{"log", sp.Spec}) })
 
-	testCommitInResults(s, str, 1)
-	testCommitInResults(s, str, 2)
+	testCommitInResults(s, sp.Spec, 1)
+	testCommitInResults(s, sp.Spec, 2)
 }
 
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {
@@ -67,12 +68,13 @@ func mergeDatasets(ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
 }
 
 func (s *nomsLogTestSuite) TestNArg() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
 	dsName := "nArgTest"
-	db, err := spec.GetDatabase(str)
-	s.NoError(err)
 
-	ds := db.GetDataset(dsName)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
+
+	ds := sp.GetDatabase().GetDataset(dsName)
 
 	ds, err = addCommit(ds, "1")
 	h1 := ds.Head().Hash()
@@ -83,7 +85,6 @@ func (s *nomsLogTestSuite) TestNArg() {
 	ds, err = addCommit(ds, "3")
 	s.NoError(err)
 	h3 := ds.Head().Hash()
-	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsName)
 	res, _ := s.MustRun(main, []string{"log", "-n1", dsSpec})
@@ -103,10 +104,11 @@ func (s *nomsLogTestSuite) TestNArg() {
 }
 
 func (s *nomsLogTestSuite) TestEmptyCommit() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
 
+	db := sp.GetDatabase()
 	ds := db.GetDataset("ds1")
 
 	meta := types.NewStruct("Meta", map[string]types.Value{
@@ -116,8 +118,8 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	ds, err = db.Commit(ds, types.String("1"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
-	db.Commit(ds, types.String("2"), datas.CommitOptions{})
-	db.Close()
+	ds, err = db.Commit(ds, types.String("2"), datas.CommitOptions{})
+	s.NoError(err)
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "ds1")
 	res, _ := s.MustRun(main, []string{"log", "--show-value=false", dsSpec})
@@ -128,12 +130,13 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 }
 
 func (s *nomsLogTestSuite) TestNomsGraph1() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
+
+	db := sp.GetDatabase()
 
 	b1 := db.GetDataset("b1")
-
 	b1, err = addCommit(b1, "1")
 	s.NoError(err)
 	b1, err = addCommit(b1, "2")
@@ -173,7 +176,6 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	b1, err = addCommit(b1, "7")
 	s.NoError(err)
 
-	b1.Database().Close()
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
 	s.Equal(graphRes1, res)
 	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "b1")})
@@ -181,12 +183,13 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 }
 
 func (s *nomsLogTestSuite) TestNomsGraph2() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
+
+	db := sp.GetDatabase()
 
 	ba := db.GetDataset("ba")
-
 	ba, err = addCommit(ba, "1")
 	s.NoError(err)
 
@@ -204,8 +207,6 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	_, err = mergeDatasets(ba, bc, "101")
 	s.NoError(err)
 
-	db.Close()
-
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
 	s.Equal(graphRes2, res)
 	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "ba")})
@@ -213,9 +214,11 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 }
 
 func (s *nomsLogTestSuite) TestNomsGraph3() {
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
+
+	db := sp.GetDatabase()
 
 	w := db.GetDataset("w")
 
@@ -246,7 +249,6 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	_, err = mergeDatasets(w, z, "2222-wz")
 	s.NoError(err)
 
-	db.Close()
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
 	test.EqualsIgnoreHashes(s.T(), graphRes3, res)
 	res, _ = s.MustRun(main, []string{"log", "--graph", "--show-value=false", spec.CreateValueSpecString("ldb", s.LdbDir, "w")})
@@ -262,11 +264,11 @@ func (s *nomsLogTestSuite) TestTruncation() {
 		return types.NewList(nv...)
 	}
 
-	str := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
-	db, err := spec.GetDatabase(str)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
 	s.NoError(err)
+	defer sp.Close()
 
-	t := db.GetDataset("truncate")
+	t := sp.GetDatabase().GetDataset("truncate")
 
 	t, err = addCommit(t, "the first line")
 	s.NoError(err)
@@ -274,7 +276,6 @@ func (s *nomsLogTestSuite) TestTruncation() {
 	l := []string{"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven"}
 	_, err = addCommitWithValue(t, toNomsList(l))
 	s.NoError(err)
-	db.Close()
 
 	dsSpec := spec.CreateValueSpecString("ldb", s.LdbDir, "truncate")
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value=true", dsSpec})

@@ -29,10 +29,10 @@ func (s *bgSuite) TestBlobGet() {
 	blobBytes := []byte("hello")
 	blob := types.NewBlob(bytes.NewBuffer(blobBytes))
 
-	db, err := spec.GetDatabase(s.TempDir)
+	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
-	hash := db.WriteValue(blob)
-	db.Close()
+	defer sp.Close()
+	hash := sp.GetDatabase().WriteValue(blob)
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, hash.TargetHash().String())
 	filePath := filepath.Join(s.TempDir, "out")

@@ -219,10 +219,11 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	suite.datasetID = datasetID
 
 	// This is the database the perf test results are written to.
-	db, err := spec.GetDatabase(*perfFlag)
+	sp, err := spec.ForDatabase(*perfFlag)
 	if !assert.NoError(err) {
 		return
 	}
+	defer sp.Close()
 
 	// List of test runs, each a map of test name => timing info.
 	testReps := make([]testRep, *perfRepeatFlag)
@@ -255,11 +256,11 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"reps":             types.NewList(reps...),
 		})
 
+		db := sp.GetDatabase()
 		ds := db.GetDataset(*perfPrefixFlag + datasetID)
 		var err error
 		ds, err = db.CommitValue(ds, record)
 		assert.NoError(err)
-		assert.NoError(db.Close())
 	}()
 
 	if t, ok := suiteT.(testifySuite.SetupAllSuite); ok {

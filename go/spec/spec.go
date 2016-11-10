@@ -9,12 +9,22 @@ package spec
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
+)
+
+const (
+	Separator = "::"
+)
+
+var (
+	datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
+	ldbStores = map[string]*refCountingLdbStore{}
 )
 
 // SpecOptions customize Spec behavior.
@@ -146,7 +156,7 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "http", "https":
 		return nil
 	case "ldb":
-		return getLDBStore(sp.DatabaseName)
+		return getLdbStore(sp.DatabaseName)
 	case "mem":
 		return chunks.NewMemoryStore()
 	}
@@ -235,7 +245,7 @@ func (sp Spec) createDatabase() datas.Database {
 	case "http", "https":
 		return datas.NewRemoteDatabase(sp.Href(), sp.Options.Authorization)
 	case "ldb":
-		return datas.NewDatabase(getLDBStore(sp.DatabaseName))
+		return datas.NewDatabase(getLdbStore(sp.DatabaseName))
 	case "mem":
 		return datas.NewDatabase(chunks.NewMemoryStore())
 	}
@@ -292,4 +302,17 @@ func splitDatabaseSpec(spec string) (string, string, error) {
 	}
 
 	return spec[:lastIdx], spec[lastIdx+len(Separator):], nil
+}
+
+func getLdbStore(path string) chunks.ChunkStore {
+	if store, ok := ldbStores[path]; ok {
+		store.AddRef()
+		return store
+	}
+
+	store := newRefCountingLdbStore(path, func() {
+		delete(ldbStores, path)
+	})
+	ldbStores[path] = store
+	return store
 }

@@ -188,10 +188,10 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.Equal(*perfRepeatFlag*len(expectedTests), s.tearDownTest)
 
 	// The results should have been written to the "ds" dataset.
-	db, ds, err := spec.GetDataset(ldbDir + "::ds")
-	defer db.Close()
+	sp, err := spec.ForDataset(ldbDir + "::ds")
 	assert.NoError(err)
-	head := ds.HeadValue().(types.Struct)
+	defer sp.Close()
+	head := sp.GetDataset().HeadValue().(types.Struct)
 
 	// These tests mostly assert that the structure of the results is correct. Specific values are hard.
 
@@ -265,16 +265,16 @@ func TestPrefixFlag(t *testing.T) {
 	Run("my-prefix/test", t, &PerfSuite{})
 
 	// The results should have been written to "foo/my-prefix/test" not "my-prefix/test".
-	db, ds, err := spec.GetDataset(ldbDir + "::my-prefix/test")
-	defer db.Close()
+	sp, err := spec.ForDataset(ldbDir + "::my-prefix/test")
 	assert.NoError(err)
-	_, ok := ds.MaybeHead()
+	defer sp.Close()
+	_, ok := sp.GetDataset().MaybeHead()
 	assert.False(ok)
 
-	db, ds, err = spec.GetDataset(ldbDir + "::foo/my-prefix/test")
-	defer db.Close()
+	sp, err = spec.ForDataset(ldbDir + "::foo/my-prefix/test")
 	assert.NoError(err)
-	_, ok = ds.HeadValue().(types.Struct)
+	defer sp.Close()
+	_, ok = sp.GetDataset().HeadValue().(types.Struct)
 	assert.True(ok)
 }
 

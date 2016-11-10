@@ -7,7 +7,6 @@ package main
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -32,15 +31,15 @@ const (
 )
 
 func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.Ref {
-	db, ds, err := spec.GetDataset(str)
-	d.Chk.NoError(err)
+	sp, err := spec.ForDataset(str)
+	s.NoError(err)
+	defer sp.Close()
 
+	db := sp.GetDatabase()
 	r1 := db.WriteValue(value)
-	ds, err = db.CommitValue(ds, r1)
-	d.Chk.NoError(err)
+	_, err = db.CommitValue(sp.GetDataset(), r1)
+	s.NoError(err)
 
-	err = db.Close()
-	d.Chk.NoError(err)
 	return r1
 }
 

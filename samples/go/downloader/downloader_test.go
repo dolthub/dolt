@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -29,12 +30,10 @@ type testSuite struct {
 
 func (s testSuite) TestMain() {
 	commitToDb := func(v types.Value, dsName string, dbSpec string) {
-		db, err := spec.GetDatabase(dbSpec)
+		sp, err := spec.ForDataset(dbSpec + spec.Separator + dsName)
 		s.NoError(err)
-		defer db.Close()
-
-		ds := db.GetDataset(dsName)
-		db.Commit(ds, v, datas.CommitOptions{})
+		defer sp.Close()
+		sp.GetDatabase().Commit(sp.GetDataset(), v, datas.CommitOptions{})
 	}
 
 	testBlobValue := func(db datas.Database, m types.Map, key, expected string) {
@@ -81,12 +80,13 @@ func (s testSuite) TestMain() {
 		"walked: 1, updated 1, found in cache: 0, errors retrieving: 0",
 	)
 
-	db, v, err := spec.GetPath(dbSpecString + "::out-ds.value")
+	sp, err := spec.ForPath(dbSpecString + "::out-ds.value")
 	s.NoError(err)
-	defer db.Close()
+	defer sp.Close()
 
-	testBlobValue(db, v.(types.Map), "k1", "/one")
-	testBlobValue(db, v.(types.Map), "k2", "/two")
+	db, v := sp.GetDatabase(), sp.GetValue().(types.Map)
+	testBlobValue(db, v, "k1", "/one")
+	testBlobValue(db, v, "k2", "/two")
 
 	mustRunTest(
 		[]string{"--cache-ds", "cache", dbSpecString + "::in-ds.value", "out-ds"},
@@ -116,9 +116,7 @@ func (s testSuite) TestMain() {
 
 func TestDownloadBlob(t *testing.T) {
 	assert := assert.New(t)
-	db, err := spec.GetDatabase("mem")
-	assert.NoError(err)
-	defer db.Close()
+	db := datas.NewDatabase(chunks.NewMemoryStore())
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, client, url: "+r.URL.String())
@@ -135,13 +133,11 @@ func TestDownloadBlob(t *testing.T) {
 
 func TestPinPath(t *testing.T) {
 	assert := assert.New(t)
-	db, err := spec.GetDatabase("mem")
-	assert.NoError(err)
-	defer db.Close()
+	db := datas.NewDatabase(chunks.NewMemoryStore())
 
 	dsName := "testds"
 	ds := db.GetDataset(dsName)
-	ds, err = db.CommitValue(ds, types.NewMap(
+	ds, err := db.CommitValue(ds, types.NewMap(
 		types.String("k1"), types.String("v1"),
 		types.String("k2"), types.String("v2"),
 	))
@@ -163,16 +159,14 @@ func TestPinPath(t *testing.T) {
 
 func TestGetLastInRoot(t *testing.T) {
 	assert := assert.New(t)
-	db, err := spec.GetDatabase("mem")
-	assert.NoError(err)
-	defer db.Close()
+	db := datas.NewDatabase(chunks.NewMemoryStore())
 
 	k1 := types.String("k1")
 
 	// commit source ds with no sourcePath field
 	sourceM := types.NewMap(k1, types.String("source commit 1"))
 	sourceDs := db.GetDataset("test-source-ds")
-	sourceDs, err = db.Commit(sourceDs, sourceM, datas.CommitOptions{})
+	sourceDs, err := db.Commit(sourceDs, sourceM, datas.CommitOptions{})
 	assert.NoError(err)
 	lastInRoot := getLastInRoot(db, sourceDs.Head())
 	assert.Nil(lastInRoot)

@@ -91,8 +91,10 @@ func download() (win bool) {
 	// In order to pin the path, we need to get the path after running it through
 	// the config file processing.
 	resolvedPath := cfg.ResolvePathSpec(inPath)
-	inSpec, err := spec.ParsePathSpec(resolvedPath)
+	inSpec, err := spec.ForPath(resolvedPath)
 	d.PanicIfError(err)
+	defer inSpec.Close()
+
 	pinnedPath := pinPath(db, inSpec.Path)
 	fmt.Println("Resolved in-path:", resolvedPath, "\nPinned path:", pinnedPath)
 

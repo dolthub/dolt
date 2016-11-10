@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -23,8 +22,7 @@ func TestBasics(t *testing.T) {
 
 type testSuite struct {
 	clienttest.ClientTestSuite
-	db datas.Database
-	ds datas.Dataset
+	sp spec.Spec
 }
 type Face struct {
 	Name       string
@@ -123,8 +121,13 @@ func getPhotoOutput(photo Photo, faces types.Set) PhotoOutput {
 }
 
 func (s *testSuite) SetupTest() {
-	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
-	s.db, s.ds, _ = spec.GetDataset(sp)
+	var err error
+	s.sp, err = spec.ForDataset(fmt.Sprintf("ldb:%s::test", s.LdbDir))
+	s.NoError(err)
+}
+
+func (s *testSuite) TearDownTest() {
+	s.sp.Close()
 }
 
 func (s *testSuite) TestMerge() {
@@ -165,9 +168,8 @@ func (s *testSuite) TestMerge() {
 
 	v, err := marshal.Marshal(photos)
 	s.NoError(err)
-	s.ds, err = s.db.CommitValue(s.ds, v)
+	_, err = s.sp.GetDatabase().CommitValue(s.sp.GetDataset(), v)
 	s.NoError(err)
-	s.db.Close()
 
 	verifyOutput := func(photoA types.Struct, photoB types.Struct) {
 		s.Equal(photoA.Get("title").Equals(photoB.Get("title")), true)
@@ -181,9 +183,10 @@ func (s *testSuite) TestMerge() {
 
 	stdo, _ := s.MustRun(main, []string{"--out-ds", "idx", "--db", s.LdbDir, "test"})
 	fmt.Println(stdo)
-	_, ds, _ := spec.GetDataset(fmt.Sprintf("%s::idx", s.LdbDir))
+	sp, err := spec.ForDataset(fmt.Sprintf("%s::idx", s.LdbDir))
+	s.NoError(err)
 	val := types.Set{}
-	marshal.Unmarshal(ds.HeadValue(), &val)
+	marshal.Unmarshal(sp.GetDataset().HeadValue(), &val)
 
 	val.IterAll(func(v types.Value) {
 		var testOutput types.Value

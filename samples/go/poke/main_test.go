@@ -23,16 +23,17 @@ type testSuite struct {
 }
 
 func (s *testSuite) TestWin() {
-	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
-	db, ds, _ := spec.GetDataset(sp)
-	ds, _ = db.CommitValue(ds, types.NewStruct("", map[string]types.Value{
+	sp, err := spec.ForDataset(fmt.Sprintf("ldb:%s::test", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
+
+	sp.GetDatabase().CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
 		"num": types.Number(42),
 		"str": types.String("foobar"),
 		"lst": types.NewList(types.Number(1), types.String("foo")),
 		"map": types.NewMap(types.Number(1), types.String("foo"),
 			types.String("foo"), types.Number(1)),
 	}))
-	db.Close()
 
 	changes := map[string]string{
 		".num":        "43",
@@ -43,14 +44,16 @@ func (s *testSuite) TestWin() {
 	}
 
 	for k, v := range changes {
-		stdout, stderr, err := s.Run(main, []string{sp, k, v})
+		stdout, stderr, err := s.Run(main, []string{sp.Spec, k, v})
 		s.Equal("", stdout)
 		s.Equal("", stderr)
 		s.Equal(nil, err)
 	}
 
-	_, ds, _ = spec.GetDataset(sp)
-	r := ds.HeadValue()
+	sp, _ = spec.ForDataset(sp.Spec)
+	defer sp.Close()
+
+	r := sp.GetDataset().HeadValue()
 	for k, vs := range changes {
 		v, _, _, _ := types.ParsePathIndex(vs)
 		p, err := types.ParsePath(k)
@@ -61,31 +64,31 @@ func (s *testSuite) TestWin() {
 }
 
 func (s *testSuite) TestLose() {
-	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
-	type c struct {
+	sp, err := spec.ForDataset(fmt.Sprintf("ldb:%s::test", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
+
+	cases := []struct {
 		args []string
 		err  string
-	}
-	cases := []c{
+	}{
 		{[]string{"foo"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux"}, "Incorrect number of arguments\n"},
-		{[]string{sp + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp + "!!': Dataset test!! must match ^[a-zA-Z0-9\\-_/]+$\n"},
-		{[]string{sp + "2", ".foo", `"bar"`}, "Input dataset '" + sp + "2' does not exist\n"},
-		{[]string{sp, "[invalid", `"bar"`}, "Invalid path '[invalid': Invalid index: invalid\n"},
-		{[]string{sp, ".nothinghere", `"bar"`}, "No value at path '.nothinghere' - cannot update\n"},
-		{[]string{sp, ".foo", "bar"}, "Invalid new value: 'bar': Invalid index: bar\n"},
-		{[]string{"--out-ds-name", "!invalid", sp, ".foo", `"bar"`}, "Invalid output dataset name: !invalid\n"},
-		{[]string{sp, `.bar["baz"]@key`, "42"}, "Error updating path [\"baz\"]@key: @key paths not supported\n"},
-		{[]string{sp, `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
+		{[]string{sp.Spec + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp.Spec + "!!': Dataset test!! must match ^[a-zA-Z0-9\\-_/]+$\n"},
+		{[]string{sp.Spec + "2", ".foo", `"bar"`}, "Input dataset '" + sp.Spec + "2' does not exist\n"},
+		{[]string{sp.Spec, "[invalid", `"bar"`}, "Invalid path '[invalid': Invalid index: invalid\n"},
+		{[]string{sp.Spec, ".nothinghere", `"bar"`}, "No value at path '.nothinghere' - cannot update\n"},
+		{[]string{sp.Spec, ".foo", "bar"}, "Invalid new value: 'bar': Invalid index: bar\n"},
+		{[]string{"--out-ds-name", "!invalid", sp.Spec, ".foo", `"bar"`}, "Invalid output dataset name: !invalid\n"},
+		{[]string{sp.Spec, `.bar["baz"]@key`, "42"}, "Error updating path [\"baz\"]@key: @key paths not supported\n"},
+		{[]string{sp.Spec, `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
 	}
 
-	db, ds, _ := spec.GetDataset(sp)
-	db.CommitValue(ds, types.NewStruct("", map[string]types.Value{
+	sp.GetDatabase().CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
 		"foo": types.String("foo"),
 		"bar": types.NewMap(types.String("baz"), types.Number(42)),
 	}))
-	db.Close()
 
 	for _, c := range cases {
 		stdout, stderr, err := s.Run(main, c.args)

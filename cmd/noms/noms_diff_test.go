@@ -24,12 +24,11 @@ func TestNomsDiff(t *testing.T) {
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
-	datasetName := "diffTest"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	db, ds, err := spec.GetDataset(str)
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, "diffTest"))
 	s.NoError(err)
+	defer sp.Close()
 
-	ds, err = addCommit(ds, "first commit")
+	ds, err := addCommit(sp.GetDataset(), "first commit")
 	s.NoError(err)
 	r1 := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+ds.HeadRef().TargetHash().String())
 
@@ -37,19 +36,18 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	s.NoError(err)
 	r2 := spec.CreateValueSpecString("ldb", s.LdbDir, "#"+ds.HeadRef().TargetHash().String())
 
-	db.Close()
 	out, _ := s.MustRun(main, []string{"diff", r1, r2})
 	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
-	datasetName := "diffSummarizeTest"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
-	store, ds, err := spec.GetDataset(str)
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, "diffSummarizeTest"))
 	s.NoError(err)
-	defer store.Close()
+	defer sp.Close()
 
-	ds, err = addCommit(ds, "first commit")
+	db := sp.GetDatabase()
+
+	ds, err := addCommit(sp.GetDataset(), "first commit")
 	s.NoError(err)
 	r1 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash())
 
@@ -64,11 +62,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffSummarize() {
 	out, _ = s.MustRun(main, []string{"diff", "--summarize", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
-	ds, err = store.CommitValue(ds, types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
+	ds, err = db.CommitValue(ds, types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
 	s.NoError(err)
 	r3 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
 
-	ds, err = store.CommitValue(ds, types.NewList(types.Number(1), types.Number(222), types.Number(4)))
+	ds, err = db.CommitValue(ds, types.NewList(types.Number(1), types.Number(222), types.Number(4)))
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("ldb", s.LdbDir, ds.HeadRef().TargetHash()) + ".value"
 

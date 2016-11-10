@@ -84,22 +84,25 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 }
 
 func (s *nomsMergeTestSuite) setupMergeDataset(name string, data types.StructData, p types.Set) types.Ref {
-	db, ds, _ := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
-	defer db.Close()
-	ds, err := db.Commit(ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
+	s.NoError(err)
+	defer sp.Close()
+
+	ds := sp.GetDataset()
+	ds, err = sp.GetDatabase().Commit(ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
 	s.NoError(err)
 	return ds.HeadRef()
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
-	db, ds, err := spec.GetDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
 	if s.NoError(err) {
-		commit := ds.Head()
+		defer sp.Close()
+		commit := sp.GetDataset().Head()
 		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(parents...)))
-		merged := ds.HeadValue()
+		merged := sp.GetDataset().HeadValue()
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
 	}
-	defer db.Close()
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
@@ -148,7 +151,10 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 }
 
 func (s *nomsMergeTestSuite) TestBadInput() {
-	sp := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
+
 	l, r, o := "left", "right", "output"
 	type c struct {
 		args []string
@@ -159,20 +165,20 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 		{[]string{"foo", "bar"}, "error: Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz"}, "error: Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux", "five"}, "error: Incorrect number of arguments\n"},
-		{[]string{sp, l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
-		{[]string{sp, l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
-		{[]string{sp, l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
-		{[]string{sp, l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.Spec, l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.Spec, l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
+		{[]string{sp.Spec, l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
+		{[]string{sp.Spec, l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
 	}
 
-	db, _ := spec.GetDatabase(sp)
+	db := sp.GetDatabase()
+
 	prep := func(dsName string) {
 		ds := db.GetDataset(dsName)
 		db.CommitValue(ds, types.NewMap(types.String("foo"), types.String("bar")))
 	}
 	prep(l)
 	prep(r)
-	db.Close()
 
 	for _, c := range cases {
 		stdout, stderr, err := s.Run(main, append([]string{"merge"}, c.args...))

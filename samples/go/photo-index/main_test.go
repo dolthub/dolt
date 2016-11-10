@@ -24,8 +24,9 @@ type testSuite struct {
 }
 
 func (s *testSuite) TestWin() {
-	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
-	db, ds, _ := spec.GetDataset(sp)
+	sp, err := spec.ForDataset(fmt.Sprintf("ldb:%s::test", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
 
 	type Face struct {
 		Name       string
@@ -92,13 +93,15 @@ func (s *testSuite) TestWin() {
 
 	v, err := marshal.Marshal(photos)
 	s.NoError(err)
-	ds, err = db.CommitValue(ds, v)
+	_, err = sp.GetDatabase().CommitValue(sp.GetDataset(), v)
 	s.NoError(err)
-	db.Close()
 
 	_, _ = s.MustRun(main, []string{"--out-ds", "idx", "--db", s.LdbDir, "test"})
 
-	db, ds, _ = spec.GetDataset(fmt.Sprintf("%s::idx", s.LdbDir))
+	sp, err = spec.ForDataset(fmt.Sprintf("%s::idx", s.LdbDir))
+	s.NoError(err)
+	defer sp.Close()
+
 	var idx struct {
 		ByDate       map[int]types.Set
 		ByTag        map[string]map[int]types.Set
@@ -106,7 +109,7 @@ func (s *testSuite) TestWin() {
 		TagsByCount  map[int]types.Set
 		FacesByCount map[int]types.Set
 	}
-	marshal.Unmarshal(ds.HeadValue(), &idx)
+	marshal.Unmarshal(sp.GetDataset().HeadValue(), &idx)
 
 	s.Equal(5, len(idx.ByDate))
 	for i := 0; i < 5; i++ {
