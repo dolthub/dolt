@@ -123,6 +123,17 @@ export class SinglePhotoSetIterator extends PhotoSetIterator {
     this._innerIter = startPhoto ? innerSet.iteratorAt(startPhoto) : innerSet.iterator();
     return false;
   }
+
+  async return(): Promise<AsyncIteratorResult<IterValue>> {
+    this._done = true;
+    if (this._innerIter) {
+      await this._innerIter.return();
+    }
+    if (this._outerIter) {
+      await this._outerIter.return();
+    }
+    return {done: true};
+  }
 }
 
 export class PhotoSetIntersectionIterator extends PhotoSetIterator {
@@ -180,6 +191,9 @@ export class PhotoSetIntersectionIterator extends PhotoSetIterator {
 
 export class EmptyIterator extends PhotoSetIterator {
   next(): Promise<AsyncIteratorResult<IterValue>> {
+    return Promise.resolve({done: true});
+  }
+  return(): Promise<AsyncIteratorResult<IterValue>> {
     return Promise.resolve({done: true});
   }
 }
