@@ -7,7 +7,7 @@
 /**
  * This `Error` class is used to signal an non 2xx response fromg `fetchText` and `fetchUint8Array`.
  */
-export default class HTTPError extends Error {
+export default class HttpError extends Error {
 
   /**
    * The HTTP error code for this error.
@@ -18,9 +18,9 @@ export default class HTTPError extends Error {
     super();  // Make Babel happy!
 
     // Babel does not support extending native classes.
-    const e = Object.create(HTTPError.prototype);
+    const e = Object.create(HttpError.prototype);
     e.status = status;
-    e.name = 'HTTPError';
+    e.name = 'HttpError';
     e.message = String(status);
     return e;
   }

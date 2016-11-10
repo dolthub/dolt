@@ -5,7 +5,7 @@
 // @flow
 
 import {notNull} from '../assert.js';
-import HTTPError from '../http-error.js';
+import HttpError from '../http-error.js';
 
 export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
@@ -39,7 +39,7 @@ function internalFetch<T>(url: string, responseType: string, options: FetchOptio
         }
         resolve({headers: makeHeaders(xhr), buf});
       } else {
-        reject(new HTTPError(xhr.status));
+        reject(new HttpError(xhr.status));
       }
     };
   });

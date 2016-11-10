@@ -8,7 +8,7 @@ import * as http from 'http';
 import * as https from 'https';
 import {parse} from 'url';
 import * as Bytes from './bytes.js';
-import HTTPError from './http-error.js';
+import HttpError from './http-error.js';
 
 export type FetchOptions = {
   method?: ?MethodType, // from flowlib bom.js
@@ -43,7 +43,7 @@ function fetch(url: string, options: FetchOptions = {}): Promise<BufResponse> {
   return new Promise((resolve, reject) => {
     const req = requestModules[opts.protocol].request(opts, res => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        reject(new HTTPError(res.statusCode));
+        reject(new HttpError(res.statusCode));
         return;
       }
 

@@ -15,7 +15,7 @@ import {
   fetchUint8Array as fetchUint8ArrayWithoutVersion,
   fetchText as fetchTextWithoutVersion,
 } from './fetch.js';
-import HTTPError from './http-error.js';
+import HttpError from './http-error.js';
 import {notNull} from './assert.js';
 import nomsVersion from './version.js';
 
@@ -154,7 +154,7 @@ export class Delegate {
       }
       return true;
     } catch (ex) {
-      if (ex instanceof HTTPError && ex.status === HTTP_STATUS_CONFLICT) {
+      if (ex instanceof HttpError && ex.status === HTTP_STATUS_CONFLICT) {
         return false;
       }
       throw ex;
