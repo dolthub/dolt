@@ -12,7 +12,6 @@ import {
   Blob,
   Collection,
   Database,
-  DatabaseSpec,
   emptyHash,
   getHashOfValue,
   Hash,
@@ -24,6 +23,7 @@ import {
   OrderedMetaSequence,
   Ref,
   Set,
+  Spec,
   Struct,
   StructMirror,
 } from '@attic/noms';
@@ -69,7 +69,9 @@ function loadUnsafe() {
     return;
   }
 
-  const dbSpec = DatabaseSpec.parse(params.db);
+  const dbSpec = Spec.forDatabase(params.db, {
+    authorization: params.auth,
+  });
   database = dbSpec.database();
 
   let rootP: Promise<[Hash, Value]>;
@@ -270,6 +272,9 @@ class Prompt extends React.Component<void, PromptProps, void> {
           />
           <input type='text' ref='p' style={inputStyle}
             defaultValue={params.p} placeholder={'path (e.g. sf-film-locations)'}
+          />
+          <input type='text' ref='auth' style={inputStyle}
+            defaultValue={params.auth} placeholder={'auth token'}
           />
           <button type='submit'>OK</button>
         </form>
