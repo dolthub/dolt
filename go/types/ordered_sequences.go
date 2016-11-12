@@ -67,7 +67,6 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 		}
 		seq = cs.(orderedSequence)
 	}
-
 	d.PanicIfFalse(cur != nil)
 	return cur
 }

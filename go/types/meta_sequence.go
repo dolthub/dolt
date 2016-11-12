@@ -35,7 +35,6 @@ func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
 	if mt.child != nil {
 		return mt.child.sequence()
 	}
-
 	return mt.ref.TargetValue(vr).(Collection).sequence()
 }
 

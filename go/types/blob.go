@@ -31,8 +31,9 @@ func NewEmptyBlob() Blob {
 
 // BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
 func (b Blob) Reader() io.ReadSeeker {
-	cursor := newCursorAtIndex(b.seq, 0)
-	return &BlobReader{b.seq, cursor, nil, 0}
+	iter := newSequenceIterator(b.seq, 0)
+	return &BlobReader{b.seq, iter, nil, 0}
+
 }
 
 func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
@@ -116,7 +117,7 @@ func (b Blob) Type() *Type {
 
 type BlobReader struct {
 	seq           sequence
-	cursor        *sequenceCursor
+	iter          *sequenceIterator
 	currentReader io.ReadSeeker
 	pos           uint64
 }
@@ -127,11 +128,9 @@ func (cbr *BlobReader) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = cbr.currentReader.Read(p)
-	for i := 0; i < n; i++ {
-		cbr.pos++
-		cbr.cursor.advance()
-	}
-	if err == io.EOF && cbr.cursor.idx < cbr.cursor.seq.seqLen() {
+	cbr.pos += uint64(n)
+	hasMore := cbr.iter.advance(n)
+	if err == io.EOF && hasMore {
 		cbr.currentReader = nil
 		err = nil
 	}
@@ -158,14 +157,16 @@ func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	cbr.pos = uint64(abs)
-	cbr.cursor = newCursorAtIndex(cbr.seq, cbr.pos)
+	cbr.iter = newSequenceIterator(cbr.seq, cbr.pos)
 	cbr.currentReader = nil
 	return abs, nil
 }
 
 func (cbr *BlobReader) updateReader() {
-	cbr.currentReader = bytes.NewReader(cbr.cursor.seq.(blobLeafSequence).data)
-	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
+	chunk, idx := cbr.iter.chunkAndIndex()
+	data := chunk.(blobLeafSequence).data
+	cbr.currentReader = bytes.NewReader(data)
+	cbr.currentReader.Seek(int64(idx), 0)
 }
 
 func makeBlobLeafChunkFn(vr ValueReader) makeChunkFn {

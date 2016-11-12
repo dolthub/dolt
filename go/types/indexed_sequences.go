@@ -20,6 +20,14 @@ func newBlobMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
 	return newMetaSequence(tuples, BlobType, vr)
 }
 
+// advanceCursorToOffset advances the cursor as close as possible to idx
+//
+// If the cursor references a leaf sequence,
+// 	advance to idx,
+// 	and return the number of values preceding the idx
+// If it references a meta-sequence,
+// 	advance to the tuple containing idx,
+// 	and return the number of leaf values preceding this tuple
 func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	seq := cur.seq
 
@@ -28,6 +36,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 		cur.idx = 0
 		cum := uint64(0)
 
+		// Advance the cursor to the meta-sequence tuple containing idx
 		for cur.idx < ms.seqLen()-1 && uint64(idx) >= cum+ms.tuples[cur.idx].numLeaves {
 			cum += ms.tuples[cur.idx].numLeaves
 			cur.idx++
@@ -40,8 +49,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	if cur.idx > seq.seqLen() {
 		cur.idx = seq.seqLen()
 	}
-
-	return uint64(cur.idx) + 1
+	return uint64(cur.idx)
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
