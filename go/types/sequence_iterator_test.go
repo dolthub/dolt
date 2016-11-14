@@ -25,8 +25,9 @@ func genTestBlob() (Blob, []byte) {
 			buffer.WriteString(fmt.Sprintf("%d%s", i, v))
 		}
 	}
-	blob := NewBlob(bytes.NewReader(buffer.Bytes()))
-	return blob, buffer.Bytes()
+	raw := buffer.Bytes()
+	blob := NewBlob(&buffer)
+	return blob, raw
 }
 
 func TestIterBlob(t *testing.T) {
