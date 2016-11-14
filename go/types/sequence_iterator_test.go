@@ -25,7 +25,7 @@ func genTestBlob() (Blob, []byte) {
 			buffer.WriteString(fmt.Sprintf("%d%s", i, v))
 		}
 	}
-	blob := NewBlob(&buffer)
+	blob := NewBlob(bytes.NewReader(buffer.Bytes()))
 	return blob, buffer.Bytes()
 }
 
