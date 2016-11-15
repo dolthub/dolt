@@ -425,6 +425,10 @@ func TestDecodeSlice(t *testing.T) {
 	err := Unmarshal(types.NewList(types.String("a"), types.String("b"), types.String("c")), &s)
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b", "c"}, s)
+
+	err = Unmarshal(types.NewSet(types.String("a"), types.String("b"), types.String("c")), &s)
+	assert.NoError(err)
+	assert.Equal([]string{"a", "b", "c"}, s)
 }
 
 func TestDecodeSliceReuse(t *testing.T) {
@@ -435,6 +439,11 @@ func TestDecodeSliceReuse(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b"}, s)
 	assert.Equal([]string{"b", "C"}, s2)
+
+	err = Unmarshal(types.NewSet(types.String("a"), types.String("b")), &s)
+	assert.NoError(err)
+	assert.Equal([]string{"a", "b"}, s)
+	assert.Equal([]string{"b", "C"}, s2)
 }
 
 func TestDecodeArray(t *testing.T) {
@@ -442,6 +451,10 @@ func TestDecodeArray(t *testing.T) {
 	s := [3]string{"", "", ""}
 
 	err := Unmarshal(types.NewList(types.String("a"), types.String("b"), types.String("c")), &s)
+	assert.NoError(err)
+	assert.Equal([3]string{"a", "b", "c"}, s)
+
+	err = Unmarshal(types.NewSet(types.String("a"), types.String("b"), types.String("c")), &s)
 	assert.NoError(err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
 }
@@ -455,6 +468,12 @@ func TestDecodeStructWithSlice(t *testing.T) {
 	var s S
 	err := Unmarshal(types.NewStruct("S", types.StructData{
 		"list": types.NewList(types.Number(1), types.Number(2), types.Number(3)),
+	}), &s)
+	assert.NoError(err)
+	assert.Equal(S{[]int{1, 2, 3}}, s)
+
+	err = Unmarshal(types.NewStruct("S", types.StructData{
+		"list": types.NewSet(types.Number(1), types.Number(2), types.Number(3)),
 	}), &s)
 	assert.NoError(err)
 	assert.Equal(S{[]int{1, 2, 3}}, s)

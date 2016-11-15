@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -83,6 +84,13 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	encoder := typeEncoder(rv.Type(), nil)
 	nomsValue = encoder(rv)
 	return
+}
+
+// Marshals a Go value to a Noms value using the same rules as Marshal(). Panics on failure.
+func MustMarshal(v interface{}) types.Value {
+	r, err := Marshal(v)
+	d.Chk.NoError(err)
+	return r
 }
 
 // UnsupportedTypeError is returned by encode when attempting to encode a type that isn't supported.

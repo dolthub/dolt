@@ -22,15 +22,16 @@ import (
 // Unmarshal will only set exported fields of the struct.
 // The name of the Go struct must match (ignoring case) the name of the Noms struct.
 //
-// To unmarshal a Noms list into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice. If the Go slice was nil a new slice is created.
+// To unmarshal a Noms list or set into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice. If the Go slice was nil a new slice is created.
 //
-// To unmarshal a Noms list into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
+// To unmarshal a Noms list or set into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
 //
 // To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values into corresponding Go array elements. If the Go map was nil a new map is created.
 //
 // When unmarshalling onto `interface{}` the following rules are used:
 //  - `types.Bool` -> `bool`
 //  - `types.List` -> `[]T`, where `T` is determined recursively using the same rules.
+//  - `types.Set` -> same as `types.List`
 //  - `types.Map` -> `map[T]V`, where `T` and `V` is determined recursively using the same rules.
 //  - `types.Number` -> `float64`
 //  - `types.String` -> `string`
@@ -260,6 +261,21 @@ func nomsValueDecoder(v types.Value, rv reflect.Value) {
 	rv.Set(reflect.ValueOf(v))
 }
 
+func iterListOrSlice(v types.Value, t reflect.Type, f func(c types.Value, i uint64)) {
+	switch v := v.(type) {
+	case types.List:
+		v.IterAll(f)
+	case types.Set:
+		i := uint64(0)
+		v.IterAll(func(cv types.Value) {
+			f(cv, i)
+			i++
+		})
+	default:
+		panic(&UnmarshalTypeMismatchError{v, t, ""})
+	}
+}
+
 func sliceDecoder(t reflect.Type) decoderFunc {
 	d := decoderCache.get(t)
 	if d != nil {
@@ -269,17 +285,13 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 	var decoder decoderFunc
 
 	d = func(v types.Value, rv reflect.Value) {
-		list, ok := v.(types.List)
-		if !ok {
-			panic(&UnmarshalTypeMismatchError{v, t, ""})
-		}
 		var slice reflect.Value
 		if rv.IsNil() {
-			slice = reflect.MakeSlice(t, 0, int(list.Len()))
+			slice = reflect.MakeSlice(t, 0, int(v.(types.Collection).Len()))
 		} else {
 			slice = rv.Slice(0, 0)
 		}
-		list.IterAll(func(v types.Value, i uint64) {
+		iterListOrSlice(v, t, func(v types.Value, _ uint64) {
 			elemRv := reflect.New(t.Elem()).Elem()
 			decoder(v, elemRv)
 			slice = reflect.Append(slice, elemRv)
@@ -302,7 +314,7 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 
 	d = func(v types.Value, rv reflect.Value) {
 		size := t.Len()
-		list, ok := v.(types.List)
+		list, ok := v.(types.Collection)
 		if !ok {
 			panic(&UnmarshalTypeMismatchError{v, t, ""})
 		}
@@ -311,7 +323,7 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 		if l != size {
 			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match"})
 		}
-		list.IterAll(func(v types.Value, i uint64) {
+		iterListOrSlice(list, t, func(v types.Value, i uint64) {
 			decoder(v, rv.Index(int(i)))
 		})
 	}
@@ -382,7 +394,7 @@ func getGoTypeForNomsType(nt *types.Type, rt reflect.Type, v types.Value) reflec
 		return reflect.TypeOf(float64(0))
 	case types.StringKind:
 		return reflect.TypeOf("")
-	case types.ListKind:
+	case types.ListKind, types.SetKind:
 		et := getGoTypeForNomsType(nt.Desc.(types.CompoundDesc).ElemTypes[0], rt, v)
 		return reflect.SliceOf(et)
 	case types.MapKind:
