@@ -79,11 +79,13 @@ func index() (win bool) {
 	d.CheckErrorNoUsage(err)
 
 	byDate := types.NewGraphBuilder(db, types.MapKind, true)
-	byTag := types.NewGraphBuilder(db, types.MapKind, true)
 	byFace := types.NewGraphBuilder(db, types.MapKind, true)
+	bySource := types.NewGraphBuilder(db, types.MapKind, true)
+	byTag := types.NewGraphBuilder(db, types.MapKind, true)
 
-	tagCounts := map[types.String]int{}
 	faceCounts := map[types.String]int{}
+	sourceCounts := map[types.String]int{}
+	tagCounts := map[types.String]int{}
 	countsMtx := sync.Mutex{}
 
 	addToIndex := func(p Photo, cv types.Value) {
@@ -127,12 +129,26 @@ func index() (win bool) {
 			}
 		}
 
+		// Index by source, then date
+		moreSources := map[types.String]int{}
+		var ws struct {
+			Sources []string
+		}
+		if err = marshal.Unmarshal(cv, &ws); err == nil {
+			for _, s := range ws.Sources {
+				bySource.SetInsert([]types.Value{types.String(s), types.Number(d)}, cv)
+			}
+		}
+
 		countsMtx.Lock()
 		for tag, count := range moreTags {
 			tagCounts[tag] += count
 		}
 		for face, count := range moreFaces {
 			faceCounts[face] += count
+		}
+		for source, count := range moreSources {
+			sourceCounts[source] += count
 		}
 		countsMtx.Unlock()
 	}
@@ -171,11 +187,13 @@ func index() (win bool) {
 	}
 
 	outDS, err = db.Commit(outDS, types.NewStruct("", types.StructData{
-		"byDate":       byDate.Build(),
-		"byTag":        byTag.Build(),
-		"byFace":       byFace.Build(),
-		"tagsByCount":  stringsByCount(db, tagCounts),
-		"facesByCount": stringsByCount(db, faceCounts),
+		"byDate":         byDate.Build(),
+		"byFace":         byFace.Build(),
+		"bySource":       bySource.Build(),
+		"byTag":          byTag.Build(),
+		"facesByCount":   stringsByCount(db, faceCounts),
+		"sourcesByCount": stringsByCount(db, sourceCounts),
+		"tagsByCount":    stringsByCount(db, tagCounts),
 	}), datas.CommitOptions{
 		Meta: types.NewStruct("", types.StructData{
 			"date": types.String(time.Now().Format(time.RFC3339)),

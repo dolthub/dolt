@@ -25,8 +25,12 @@ import {
 const args = argv
   .usage(
     'Finds Noms Photo objects from output of picasa/slurp\n\n' +
-    'Usage: node . <in-path> <out-dataset>')
+    'Usage: node . [flags] <in-path> <out-dataset>')
   .demand(2)
+  .option('source-tags', {
+    describe: 'comma-separated list of source tags to write into created photos',
+    type: 'string',
+  })
   .argv;
 
 main().catch(ex => {
@@ -92,10 +96,13 @@ async function main(): Promise<void> {
   if (!pinnedSpec) {
     throw `Invalid input dataset: ${inSpec.path.dataset}`;
   }
+
   const [db, input] = await pinnedSpec.value();
   if (!input) {
     throw `Invalid input spec: ${inSpec.toString()}`;
   }
+
+  const sourceTags = new Set(args['source-tags'] ? args['source-tags'].split(',') : []);
   const outSpec = DatasetSpec.parse(args._[1]);
   const [outDB, output] = outSpec.dataset();
   const result = [];
@@ -109,10 +116,11 @@ async function main(): Promise<void> {
       const photo: Object = {
         id: 'https://github.com/attic-labs/noms/samples/js/picasa/find-photos' +
             `#${v.gphotoQ24id.Q24t}`,
-        sizes: await getSizes(resources),
-        resources: resources,
         datePublished: getDate(Date.parse(v.published.Q24t)),
         dateUpdated: getDate(Date.parse(v.updated.Q24t)),
+        resources: resources,
+        sizes: await getSizes(resources),
+        sources: sourceTags,
       };
 
       if (isSubtype(hasTitle, v.type)) {

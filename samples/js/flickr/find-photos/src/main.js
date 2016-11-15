@@ -26,6 +26,10 @@ const args = argv
     'Indexes Photo objects out of slurped Flickr metadata\n\n' +
     'Usage: node . <in-object> <out-dataset>')
   .demand(2)
+  .option('source-tags', {
+    describe: 'comma-separated list of source tags to write into created photos',
+    type: 'string',
+  })
   .argv;
 
 const sizes = ['t', 's', 'm', 'l', 'o'];
@@ -88,6 +92,8 @@ async function main(): Promise<void> {
   if (!input) {
     throw `Input spec ${args._[0]} does not exist`;
   }
+
+  const sourceTags = new Set(args['source-tags'] ? args['source-tags'].split(',') : []);
   const outSpec = DatasetSpec.parse(args._[1]);
   const [outDB, output] = outSpec.dataset();
   let result = Promise.resolve(new Set());
@@ -97,12 +103,13 @@ async function main(): Promise<void> {
     if (isSubtype(imageType, getTypeOfValue(v))) {
       const photo: Object = {
         id: `https://github.com/attic-labs/noms/samples/js/flickr/find-photos#${v.id}`,
-        title: v.title,
-        tags: new Set(v.tags ? v.tags.split(' ') : []),
-        sizes: getSizes(v),
-        resources: getResources(v),
         datePublished: newDate(Number(v.dateupload) * nsInSecond),
         dateUpdated: newDate(Number(v.lastupdate) * nsInSecond),
+        resources: getResources(v),
+        sizes: getSizes(v),
+        sources: sourceTags,
+        tags: new Set(v.tags ? v.tags.split(' ') : []),
+        title: v.title,
       };
 
       if (!v.datetakenunknown) {

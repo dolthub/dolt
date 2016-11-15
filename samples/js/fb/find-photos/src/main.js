@@ -26,6 +26,10 @@ const args = argv
     'Finds photos in slurped Facebook metadata\n\n' +
     'Usage: node . <in-path> <out-dataset>')
   .demand(2)
+  .option('source-tags', {
+    describe: 'comma-separated list of source tags to write into created photos',
+    type: 'string',
+  })
   .argv;
 
 main().catch(ex => {
@@ -82,6 +86,7 @@ async function main(): Promise<void> {
   if (!input) {
     throw `Invalid input spec: ${inSpec.toString()}`;
   }
+  const sourceTags = new Set(args['source-tags'] ? args['source-tags'].split(',') : []);
   const outSpec = DatasetSpec.parse(args._[1]);
   const [outDB, output] = outSpec.dataset();
   let result = Promise.resolve(new Set());
@@ -91,12 +96,13 @@ async function main(): Promise<void> {
     if (v instanceof Struct && isSubtype(photoType, v.type)) {
       const photo: Object = {
         id: `https://github.com/attic-labs/noms/samples/js/fb/find-photos#${v.id}`,
-        title: v.name || '',
-        sizes: await getSizes(v),
-        resources: await getResources(v),
-        tags: new Set(),  // fb has 'tags', but they are actually people not textual tags
         datePublished: new NomsDate({nsSinceEpoch: v.created_time * 1e9}),
         dateUpdated: new NomsDate({nsSinceEpoch: v.updated_time * 1e9}),
+        resources: await getResources(v),
+        sizes: await getSizes(v),
+        sources: sourceTags,
+        tags: new Set(),  // fb has 'tags', but they are actually people not textual tags
+        title: v.name || '',
       };
       if (isSubtype(placeType, v.type)) {
         photo.geoposition = getGeo(v);

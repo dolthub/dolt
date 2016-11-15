@@ -25,11 +25,15 @@ const args = argv
   .usage(
     'Indexes Photo objects out of slurped Dropbox metadata.\n' +
     'See dropbox/slurp for how to get an access token.\n\n' +
-    'Usage: node . --access-token=<token> <in-object> <out-dataset>')
+    'Usage: node . [flags] <in-object> <out-dataset>')
   .option('access-token', {
     describe: 'Dropbox oauth access token',
     type: 'string',
     demand: true,
+  })
+  .option('source-tags', {
+    describe: 'comma-separated list of source tags to write into created photos',
+    type: 'string',
   })
   .demand(2)
   .argv;
@@ -82,6 +86,7 @@ async function main(): Promise<void> {
   if (!input) {
     throw `Input spec ${args._[0]} does not exist`;
   }
+  const sourceTags = new Set(args['source-tags'] ? args['source-tags'].split(',') : []);
   const outSpec = DatasetSpec.parse(args._[1]);
   const [outDB, output] = outSpec.dataset();
   let result = Promise.resolve(new Set());
@@ -92,12 +97,13 @@ async function main(): Promise<void> {
       const resources = getResources(v);
       const photo: Object = {
         id: `https://github.com/attic-labs/noms/samples/js/dropbox/find-photos#${v.id}`,
-        title: v.name,
-        tags: new Set(),
-        sizes: await getSizes(resources),
-        resources: resources,
         dateTaken: newDate(v.media_info.metadata.time_taken),
         dateUpdated: newDate(v.server_modified),
+        resources: resources,
+        sizes: await getSizes(resources),
+        sources: sourceTags,
+        tags: new Set(),
+        title: v.name,
       };
 
       if (isSubtype(hasLocation, getTypeOfValue(v.media_info.metadata))) {
