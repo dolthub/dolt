@@ -66,6 +66,11 @@ func main() {
 		return
 	}
 
+	if now.Hour() < 10 {
+		fmt.Println("Waiting until people show up at work.")
+		return
+	}
+
 	if now.Weekday() == time.Sunday || now.Weekday() == time.Saturday {
 		fmt.Println("No coffee on weekends.")
 		return
