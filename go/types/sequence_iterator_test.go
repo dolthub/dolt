@@ -13,21 +13,27 @@ import (
 )
 
 var seedData = []string{
-	"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+	"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
 }
 
 const testCollectionSize = 100000
 
 func genTestBlob() (Blob, []byte) {
 	var buffer bytes.Buffer
-	for i := 0; i < testCollectionSize; i += 1 {
-		for _, v := range seedData {
-			buffer.WriteString(fmt.Sprintf("%d%s", i, v))
-		}
+	smallTestChunks()
+	defer normalProductionChunks()
+	for i := 0; buffer.Len() < testCollectionSize; i += 1 {
+		v := seedData[i%len(seedData)]
+		buffer.WriteString(fmt.Sprintf("%d%s", i, v))
 	}
 	raw := buffer.Bytes()
 	blob := NewBlob(&buffer)
 	return blob, raw
+}
+
+func assertMinDepth(assert *assert.Assertions, iter *sequenceIterator, min int) {
+	depth := iter.cursor.depth()
+	assert.Condition(func() bool { return depth >= min }, "depth less the min depth: %d >= %d", depth, min)
 }
 
 func TestIterBlob(t *testing.T) {
@@ -35,6 +41,8 @@ func TestIterBlob(t *testing.T) {
 		assert := assert.New(t)
 		expected = expected[start:]
 		iter := newSequenceIterator(blob.seq, uint64(start))
+		// need 4 levels to exercise parent traversal during read-ahead
+		assertMinDepth(assert, iter, 4)
 		var actual []byte
 		for iter.hasMore() {
 			actual = append(actual, iter.item().(byte))
@@ -45,11 +53,9 @@ func TestIterBlob(t *testing.T) {
 		// delta normally 0 but may be more in rare case where the same
 		// (chunkIdx, hash) pair is repeated in different chunks. A lower
 		// hit rate likely indicates a bug.
-		assert.InDelta(1.0, iter.readAheadHitRate(), 0.01)
+		assert.InDelta(1.0, iter.readAheadHitRate(), 0.05)
 	}
-
 	blob, expected := genTestBlob()
-
 	testIter(t, blob, expected, 0)
 	testIter(t, blob, expected, len(expected)/2)
 }
@@ -59,14 +65,15 @@ func TestIterList(t *testing.T) {
 		var buffer []string
 		var lbuffer []Value
 
+		smallTestChunks()
+		defer normalProductionChunks()
 		list := NewList()
 
-		for i := 0; i < testCollectionSize; i += 1 {
-			for _, v := range seedData {
-				s := fmt.Sprintf("%d%s", i, v)
-				buffer = append(buffer, s)
-				lbuffer = append(lbuffer, String(s))
-			}
+		for i := 0; len(buffer) < testCollectionSize; i += 1 {
+			v := seedData[i%len(seedData)]
+			s := fmt.Sprintf("%d%s", i, v)
+			buffer = append(buffer, s)
+			lbuffer = append(lbuffer, String(s))
 		}
 		list = list.Append(lbuffer...)
 		return list, buffer
@@ -76,6 +83,7 @@ func TestIterList(t *testing.T) {
 		assert := assert.New(t)
 		expected = expected[start:]
 		iter := newSequenceIterator(list.seq, uint64(start))
+		assertMinDepth(assert, iter, 4)
 		actual := []string{}
 		for iter.hasMore() {
 			actual = append(actual, string(iter.item().(String)))
