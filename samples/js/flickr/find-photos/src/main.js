@@ -175,7 +175,10 @@ function getResources(input: Object): Map<Struct, Struct> {
     const url = input['url_' + s];
     const width = Number(input['width_' + s]);
     const height = Number(input['height_' + s]);
-    return [newStruct('', {width, height}), url];
+    return [
+      newStruct('', {width, height}),
+      newStruct('RemoteResource', {url: url}),
+    ];
   });
   // $FlowIssue: Does not understand that filter removes all null values.
   return new Map(a.filter(kv => kv));
