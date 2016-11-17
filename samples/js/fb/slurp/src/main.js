@@ -65,7 +65,7 @@ const query = [
   'width',
   'height',
   'likes.limit(1000){id,name}',
-  'tags.limit(1000){x,y,id,name,tagging_user}',
+  'tags.limit(1000){x,y,id,name}',
 ];
 
 main().catch(ex => {
@@ -166,8 +166,13 @@ async function getPhotos(): Promise<List<any>> {
   return result;
 }
 
-function callFacebook(path: string): Promise<any> {
-  return callFacebookRaw(path).then(r => r.json());
+async function callFacebook(url: string): Promise<any> {
+  const result = await callFacebookRaw(url);
+  const json = await result.json();
+  if (json.error) {
+    throw new Error(`Error calling ${url}: ${JSON.stringify(json)}`);
+  }
+  return json;
 }
 
 function callFacebookRaw(url: string): Promise<Response> {
