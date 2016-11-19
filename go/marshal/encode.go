@@ -2,7 +2,9 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-// Package marshal implements encoding and decoding of Noms values. The mapping between Noms objects and Go values is described  in the documentation for the Marshal and Unmarshal functions.
+// Package marshal implements encoding and decoding of Noms values. The mapping
+// between Noms objects and Go values is described  in the documentation for the
+// Marshal and Unmarshal functions.
 package marshal
 
 import (
@@ -18,27 +20,33 @@ import (
 
 // Marshal converts a Go value to a Noms value.
 //
-// Marshal traverses the value v recursively. Marshal uses the following type-dependent encodings:
+// Marshal traverses the value v recursively. Marshal uses the following
+// type-dependent encodings:
 //
 // Boolean values are encoded as Noms types.Bool.
 //
-// Floating point and integer values are encoded as Noms types.Number. At the moment this might lead to some loss in precision because types.Number currently takes a float64.
+// Floating point and integer values are encoded as Noms types.Number. At the
+// moment this might lead to some loss in precision because types.Number
+// currently takes a float64.
 //
 // String values are encoded as Noms types.String.
 //
 // Slices and arrays are encoded as Noms types.List.
 //
-// Maps are encoded as Noms types.Map
+// Maps are encoded as Noms types.Map.
 //
-// Struct values are encoded as Noms structs (types.Struct). Each exported Go struct field becomes a member of the Noms struct unless
+// Struct values are encoded as Noms structs (types.Struct). Each exported Go
+// struct field becomes a member of the Noms struct unless
 //   - the field's tag is "-"
 //   - the field is empty and its tag specifies the "omitempty" option.
 //
-// The empty values are false, 0, any nil pointer or interface value, and any array, slice, map, or string of length zero.
+// The empty values are false, 0, any nil pointer or interface value, and any
+// array, slice, map, or string of length zero.
 //
-// The Noms struct default field name is the Go struct field name where the first character is lower cased,
-// but can be specified in the Go struct field's tag value. The "noms" key in
-// the Go struct field's tag value is the field name. Examples:
+// The Noms struct default field name is the Go struct field name where the
+// first character is lower cased, but can be specified in the Go struct field's
+// tag value. The "noms" key in the Go struct field's tag value is the field
+// name. Examples:
 //
 //   // Field is ignored.
 //   Field int `noms:"-"`
@@ -57,17 +65,21 @@ import (
 //   //  omitted from the object if its value is empty, as defined above.
 //   Field int `noms:",omitempty"
 //
-// The name of the Noms struct is the name of the Go struct where the first character is changed to upper case.
+// The name of the Noms struct is the name of the Go struct where the first
+// character is changed to upper case.
 //
 // Anonymous struct fields are currently not supported.
 //
-// Embedded structs are currently not supported (which is the same as anonymous struct fields).
+// Embedded structs are currently not supported (which is the same as anonymous
+// struct fields).
 //
-// Noms values (values implementing types.Value) are copied over without any change.
+// Noms values (values implementing types.Value) are copied over without any
+// change.
 //
 // When marshalling `interface{}` the dynamic type is used.
 //
-// Go pointers, complex, function are not supported. Attempting to encode such a value causes Marshal to return an UnsupportedTypeError.
+// Go pointers, complex, function are not supported. Attempting to encode such a
+// value causes Marshal to return an UnsupportedTypeError.
 //
 func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	defer func() {
@@ -86,14 +98,16 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	return
 }
 
-// Marshals a Go value to a Noms value using the same rules as Marshal(). Panics on failure.
+// Marshals a Go value to a Noms value using the same rules as Marshal(). Panics
+// on failure.
 func MustMarshal(v interface{}) types.Value {
 	r, err := Marshal(v)
 	d.Chk.NoError(err)
 	return r
 }
 
-// UnsupportedTypeError is returned by encode when attempting to encode a type that isn't supported.
+// UnsupportedTypeError is returned by encode when attempting to encode a type
+// that isn't supported.
 type UnsupportedTypeError struct {
 	Type    reflect.Type
 	Message string
@@ -107,13 +121,20 @@ func (e *UnsupportedTypeError) Error() string {
 	return msg + ", type: " + e.Type.String()
 }
 
-// InvalidTagError is returned by encode and decode when the struct field tag is invalid. For example if the field name is not a valid Noms struct field name.
+// InvalidTagError is returned by encode and decode when the struct field tag is
+// invalid. For example if the field name is not a valid Noms struct field name.
 type InvalidTagError struct {
 	message string
 }
 
 func (e *InvalidTagError) Error() string {
 	return e.message
+}
+
+type nomsTags struct {
+	name      string
+	omitEmpty bool
+	skip      bool
 }
 
 var nomsValueInterface = reflect.TypeOf((*types.Value)(nil)).Elem()
@@ -271,25 +292,30 @@ func (c *encoderCacheT) set(t reflect.Type, e encoderFunc) {
 	c.m[t] = e
 }
 
-func parseTags(tags string, f reflect.StructField) (name string, omitEmpty bool) {
-	idx := strings.Index(tags, ",")
-	if tags == "" || idx == 0 {
-		name = strings.ToLower(f.Name[:1]) + f.Name[1:]
-	} else if idx == -1 {
-		name = tags
+func getTags(f reflect.StructField) (tags nomsTags) {
+	reflectTags := f.Tag.Get("noms")
+	if reflectTags == "-" {
+		tags.skip = true
+		return
+	}
+
+	tagsSlice := strings.Split(reflectTags, ",")
+
+	// The first tag is always the name, or empty to use the field as the name.
+	if len(tagsSlice) == 0 || tagsSlice[0] == "" {
+		tags.name = strings.ToLower(f.Name[:1]) + f.Name[1:]
 	} else {
-		name = tags[:idx]
+		tags.name = tagsSlice[0]
 	}
 
-	if !types.IsValidStructFieldName(name) {
-		panic(&InvalidTagError{"Invalid struct field name: " + name})
+	if !types.IsValidStructFieldName(tags.name) {
+		panic(&InvalidTagError{"Invalid struct field name: " + tags.name})
 	}
 
-	if idx != -1 {
+	if len(tagsSlice) > 1 {
 		// This is pretty simplistic but it is good enough for now.
-		omitEmpty = tags[idx+1:] == "omitempty"
+		tags.omitEmpty = tagsSlice[1] == "omitempty"
 	}
-
 	return
 }
 
@@ -311,21 +337,22 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 		if nt == nil {
 			canComputeStructType = false
 		}
-		tags := f.Tag.Get("noms")
-		if tags == "-" {
+
+		tags := getTags(f)
+		if tags.skip {
 			continue
 		}
 
-		name, omitEmpty := parseTags(tags, f)
-		if omitEmpty {
+		if tags.omitEmpty {
 			canComputeStructType = false
 		}
+
 		fields = append(fields, field{
-			name:      name,
+			name:      tags.name,
 			encoder:   typeEncoder(f.Type, parentStructTypes),
 			index:     i,
 			nomsType:  nt,
-			omitEmpty: omitEmpty,
+			omitEmpty: tags.omitEmpty,
 		})
 
 	}
@@ -362,7 +389,11 @@ func nomsType(t reflect.Type, parentStructTypes []reflect.Type) *types.Type {
 	return nil
 }
 
-// structNomsType returns the Noms types.Type if it can be determined from the reflect.Type. Note that we can only determine the type for a subset of Noms types since the Go type does not fully reflect it. In this cases this returns nil and we have to wait until we have a value to be able to determine the type.
+// structNomsType returns the Noms types.Type if it can be determined from the
+// reflect.Type. Note that we can only determine the type for a subset of Noms
+// types since the Go type does not fully reflect it. In this cases this returns
+// nil and we have to wait until we have a value to be able to determine the
+// type.
 func structNomsType(t reflect.Type, parentStructTypes []reflect.Type) *types.Type {
 	if t.Implements(nomsValueInterface) {
 		// Use Name because List and Blob are convertible to each other on Go.

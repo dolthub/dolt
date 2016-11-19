@@ -12,21 +12,27 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-// Unmarshal converts a Noms value into a Go value. It decodes v and stores the result
-// in the value pointed to by out.
+// Unmarshal converts a Noms value into a Go value. It decodes v and stores the
+// result in the value pointed to by out.
 //
-// Unmarshal uses the inverse of the encodings that Marshal uses with the following additional rules:
+// Unmarshal uses the inverse of the encodings that Marshal uses with the
+// following additional rules:
 //
-// To unmarshal a Noms struct into a Go struct, Unmarshal matches incoming object
-// fields to the fields used by Marshal (either the struct field name or its tag).
-// Unmarshal will only set exported fields of the struct.
-// The name of the Go struct must match (ignoring case) the name of the Noms struct.
+// To unmarshal a Noms struct into a Go struct, Unmarshal matches incoming
+// object fields to the fields used by Marshal (either the struct field name or
+// its tag).  Unmarshal will only set exported fields of the struct.  The name
+// of the Go struct must match (ignoring case) the name of the Noms struct.
 //
-// To unmarshal a Noms list or set into a slice, Unmarshal resets the slice length to zero and then appends each element to the slice. If the Go slice was nil a new slice is created.
+// To unmarshal a Noms list or set into a slice, Unmarshal resets the slice
+// length to zero and then appends each element to the slice. If the Go slice
+// was nil a new slice is created.
 //
-// To unmarshal a Noms list or set into a Go array, Unmarshal decodes Noms list elements into corresponding Go array elements.
+// To unmarshal a Noms list or set into a Go array, Unmarshal decodes Noms list
+// elements into corresponding Go array elements.
 //
-// To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values into corresponding Go array elements. If the Go map was nil a new map is created.
+// To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values
+// into corresponding Go array elements. If the Go map was nil a new map is
+// created.
 //
 // When unmarshalling onto `interface{}` the following rules are used:
 //  - `types.Bool` -> `bool`
@@ -65,7 +71,8 @@ func Unmarshal(v types.Value, out interface{}) (err error) {
 	return
 }
 
-// InvalidUnmarshalError describes an invalid argument passed to Unmarshal. (The argument to Unmarshal must be a non-nil pointer.)
+// InvalidUnmarshalError describes an invalid argument passed to Unmarshal. (The
+// argument to Unmarshal must be a non-nil pointer.)
 type InvalidUnmarshalError struct {
 	Type reflect.Type
 }
@@ -81,7 +88,8 @@ func (e *InvalidUnmarshalError) Error() string {
 	return "Cannot unmarshal into Go nil pointer of type " + e.Type.String()
 }
 
-// UnmarshalTypeMismatchError describes a Noms value that was not appropriate for a value of a specific Go type.
+// UnmarshalTypeMismatchError describes a Noms value that was not appropriate
+// for a value of a specific Go type.
 type UnmarshalTypeMismatchError struct {
 	Value   types.Value
 	Type    reflect.Type // type of Go value it could not be assigned to
@@ -221,14 +229,13 @@ func structDecoder(t reflect.Type) decoderFunc {
 		f := t.Field(i)
 		validateField(f, t)
 
-		tags := f.Tag.Get("noms")
-		if tags == "-" {
+		tags := getTags(f)
+		if tags.skip {
 			continue
 		}
 
-		name, _ := parseTags(tags, f)
 		fields = append(fields, decField{
-			name:    name,
+			name:    tags.name,
 			decoder: typeDecoder(f.Type),
 			index:   i,
 		})
