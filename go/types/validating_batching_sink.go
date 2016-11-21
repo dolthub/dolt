@@ -65,7 +65,7 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 	}
 	tc := vbs.pool.Get()
 	defer vbs.pool.Put(tc)
-	v := DecodeFromBytes(c.Data(), vbs.vs, tc.(*TypeCache))
+	v := decodeFromBytesWithValidation(c.Data(), vbs.vs, tc.(*TypeCache))
 	if getHash(v) != h {
 		d.Panic("Invalid hash found")
 	}

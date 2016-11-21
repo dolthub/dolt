@@ -76,13 +76,7 @@ func (tc *TypeCache) getCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return trie.t
 }
 
-func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
-	if len(fieldNames) != len(fieldTypes) {
-		d.Panic("len(fieldNames) != len(fieldTypes)")
-	}
-	verifyStructName(name)
-	verifyFieldNames(fieldNames)
-
+func (tc *TypeCache) makeStructTypeQuickly(name string, fieldNames []string, fieldTypes []*Type, checkKind checkKindType) *Type {
 	trie := tc.trieRoots[StructKind].Traverse(tc.identTable.GetId(name))
 	for i, fn := range fieldNames {
 		ft := fieldTypes[i]
@@ -102,7 +96,7 @@ func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes
 			t, _ = toUnresolvedType(t, tc, -1, nil)
 			resolveStructCycles(t, nil)
 			if !t.HasUnresolvedCycle() {
-				normalize(t)
+				checkStructType(t, checkKind)
 			}
 		}
 		t.id = tc.nextTypeId()
@@ -110,6 +104,15 @@ func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes
 	}
 
 	return trie.t
+}
+
+func (tc *TypeCache) makeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
+	if len(fieldNames) != len(fieldTypes) {
+		d.Panic("len(fieldNames) != len(fieldTypes)")
+	}
+	verifyStructName(name)
+	verifyFieldNames(fieldNames)
+	return tc.makeStructTypeQuickly(name, fieldNames, fieldTypes, checkKindNormalize)
 }
 
 func indexOfType(t *Type, tl []*Type) (uint32, bool) {
@@ -196,63 +199,123 @@ func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
 	return t
 }
 
-// We normalize structs during their construction iff they have no unresolved cycles. Normalizing applies a canonical ordering to the composite types of a union and serializes all types under the struct. To ensure a consistent ordering of the composite types of a union, we generate a unique "order id" or OID for each of those types. The OID is the hash of a unique type encoding that is independent of the extant order of types within any subordinate unions. This encoding for most types is a straightforward serialization of its components; for unions the encoding is a bytewise XOR of the hashes of each of its composite type encodings.
-// We require a consistent order of types within a union to ensure that equivalent types have a single persistent encoding and, therefore, a single hash. The method described above fails for "unrolled" cycles whereby two equivalent, but uniquely described structures, would have different OIDs. Consider for example the following two types that, while equivalent, do not yield the same OID:
-//	Struct A { a: Cycle<0> }
-//	Struct A { a: Struct A { a: Cycle<1> } }
-// We explicitly disallow this sort of redundantly expressed type. If a non-Byzantine use of such a construction arises, we can attempt to simplify the expansive type or find another means of comparison.
-func normalize(t *Type) {
-	walkType(t, nil, func(tt *Type, _ []*Type) {
-		generateOID(tt, false)
-	})
+// We normalize structs during their construction iff they have no unresolved
+// cycles. Normalizing applies a canonical ordering to the composite types of a
+// union and serializes all types under the struct. To ensure a consistent
+// ordering of the composite types of a union, we generate a unique "order id"
+// or OID for each of those types. The OID is the hash of a unique type
+// encoding that is independent of the extant order of types within any
+// subordinate unions. This encoding for most types is a straightforward
+// serialization of its components; for unions the encoding is a bytewise XOR
+// of the hashes of each of its composite type encodings.
+//
+// We require a consistent order of types within a union to ensure that
+// equivalent types have a single persistent encoding and, therefore, a single
+// hash. The method described above fails for "unrolled" cycles whereby two
+// equivalent, but uniquely described structures, would have different OIDs.
+// Consider for example the following two types that, while equivalent, do not
+// yield the same OID:
+//
+//   Struct A { a: Cycle<0> }
+//   Struct A { a: Struct A { a: Cycle<1> } }
+//
+// We explicitly disallow this sort of redundantly expressed type. If a
+// non-Byzantine use of such a construction arises, we can attempt to simplify
+// the expansive type or find another means of comparison.
 
-	walkType(t, nil, func(tt *Type, parentStructTypes []*Type) {
-		if tt.Kind() == StructKind {
-			for _, ttt := range parentStructTypes {
-				if *tt.oid == *ttt.oid {
-					panic("unrolled cycle types are not supported; ahl owes you a beer")
-				}
-			}
-		}
-	})
+type checkKindType uint8
 
-	walkType(t, nil, func(tt *Type, _ []*Type) {
-		if tt.Kind() == UnionKind {
-			sort.Sort(tt.Desc.(CompoundDesc).ElemTypes)
-		}
-	})
+const (
+	checkKindNormalize checkKindType = iota
+	checkKindNoValidate
+	checkKindValidate
+)
 
-	walkType(t, nil, func(tt *Type, _ []*Type) {
-		serializeType(tt)
-	})
+func checkStructType(t *Type, checkKind checkKindType) {
+	if checkKind == checkKindNoValidate {
+		return
+	}
+
+	walkType(t, nil, generateOIDs)
+	walkType(t, nil, checkForUnrolledCycles)
+
+	switch checkKind {
+	case checkKindNormalize:
+		walkType(t, nil, sortUnions)
+	case checkKindValidate:
+		walkType(t, nil, validateTypes)
+	default:
+		panic("unreachable")
+	}
 }
 
-func walkType(t *Type, parentStructTypes []*Type, do func(*Type, []*Type)) {
+func generateOIDs(t *Type, _ []*Type) {
+	generateOID(t, false)
+}
+
+func checkForUnrolledCycles(t *Type, parentStructTypes []*Type) {
+	if t.Kind() == StructKind {
+		for _, ttt := range parentStructTypes {
+			if *t.oid == *ttt.oid {
+				panic("unrolled cycle types are not supported; ahl owes you a beer")
+			}
+		}
+	}
+}
+
+func sortUnions(t *Type, _ []*Type) {
+	if t.Kind() == UnionKind {
+		sort.Sort(t.Desc.(CompoundDesc).ElemTypes)
+	}
+}
+
+func validateTypes(t *Type, _ []*Type) {
+	switch t.Kind() {
+	case UnionKind:
+		elemTypes := t.Desc.(CompoundDesc).ElemTypes
+		if len(elemTypes) == 1 {
+			panic("Invalid union type")
+		}
+		for i := 1; i < len(elemTypes); i++ {
+			if !elemTypes[i-1].oid.Less(*elemTypes[i].oid) {
+				panic("Invalid union order")
+			}
+		}
+	case StructKind:
+		desc := t.Desc.(StructDesc)
+		verifyStructName(desc.Name)
+		verifyFields(desc.fields)
+	}
+}
+
+func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
 	if t.Kind() == StructKind {
 		if _, found := indexOfType(t, parentStructTypes); found {
 			return
 		}
 	}
 
-	do(t, parentStructTypes)
+	cb(t, parentStructTypes)
 
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		for _, tt := range desc.ElemTypes {
-			walkType(tt, parentStructTypes, do)
+			walkType(tt, parentStructTypes, cb)
 		}
 	case StructDesc:
 		for _, f := range desc.fields {
-			walkType(f.t, append(parentStructTypes, t), do)
+			walkType(f.t, append(parentStructTypes, t), cb)
 		}
 	}
 }
 
 func generateOID(t *Type, allowUnresolvedCycles bool) {
-	buf := newBinaryNomsWriter()
-	encodeForOID(t, buf, allowUnresolvedCycles, t, nil)
-	oid := hash.FromData(buf.data())
-	t.oid = &oid
+	if t.oid == nil {
+		buf := newBinaryNomsWriter()
+		encodeForOID(t, buf, allowUnresolvedCycles, t, nil)
+		oid := hash.FromData(buf.data())
+		t.oid = &oid
+	}
 }
 
 func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Type, parentStructTypes []*Type) {
@@ -287,10 +350,21 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 			// This is the only subtle case: encode each subordinate type, generate the hash, remove duplicates, and xor the results together to form an order independent encoding.
 			mbuf := newBinaryNomsWriter()
 			oids := make(map[hash.Hash]struct{})
-			for _, tt := range desc.ElemTypes {
-				mbuf.reset()
-				encodeForOID(tt, mbuf, allowUnresolvedCycles, root, parentStructTypes)
-				oids[hash.FromData(mbuf.data())] = struct{}{}
+			for _, elemType := range desc.ElemTypes {
+				h := elemType.oid
+				if h == nil {
+
+					mbuf.reset()
+					encodeForOID(elemType, mbuf, allowUnresolvedCycles, root, parentStructTypes)
+					h2 := hash.FromData(mbuf.data())
+					if _, found := indexOfType(elemType, parentStructTypes); !found {
+						elemType.oid = &h2
+					}
+					oids[h2] = struct{}{}
+				} else {
+					oids[*h] = struct{}{}
+					checkForUnresolvedCycles(elemType, root, parentStructTypes)
+				}
 			}
 
 			data := make([]byte, hash.ByteLen)
@@ -319,6 +393,34 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 		for _, field := range desc.fields {
 			buf.writeString(field.name)
 			encodeForOID(field.t, buf, allowUnresolvedCycles, root, parentStructTypes)
+		}
+	}
+}
+
+func checkForUnresolvedCycles(t, root *Type, parentStructTypes []*Type) {
+	desc := t.Desc
+
+	switch t.Kind() {
+	case CycleKind:
+		panic("ound an unexpected resolved cycle")
+
+	case ListKind, MapKind, RefKind, SetKind, UnionKind:
+		if t == root {
+			// If this is where we started, we don't need to keep going.
+			break
+		}
+		for _, elemType := range desc.(CompoundDesc).ElemTypes {
+			checkForUnresolvedCycles(elemType, root, parentStructTypes)
+		}
+
+	case StructKind:
+		if _, found := indexOfType(t, parentStructTypes); found {
+			return
+		}
+
+		parentStructTypes = append(parentStructTypes, t)
+		for _, field := range desc.(StructDesc).fields {
+			checkForUnresolvedCycles(field.t, root, parentStructTypes)
 		}
 	}
 }

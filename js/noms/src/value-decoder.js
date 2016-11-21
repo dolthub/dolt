@@ -232,6 +232,6 @@ export default class ValueDecoder {
       fieldNames[i] = this._r.readString();
       fieldTypes[i] = this.readType();
     }
-    return this._tc.makeStructTypeQuickly(name, fieldNames, fieldTypes);
+    return this._tc.makeStructTypeQuickly(name, fieldNames, fieldTypes, 'no-validate');
   }
 }

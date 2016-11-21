@@ -165,11 +165,9 @@ suite('Type', () => {
     const t1 = notNull(inodeType.desc.getField('contents'));
     const t2 = decodeValue(encodeValue(t1, null), vr);
     assert.isTrue(equals(t1, t2));
-    /*
-     * Note that we cannot ensure pointer equality between t1 and t2 because the types used to the
-     * construct the Unions, while eventually equivalent, are not identical due to the potentially
-     * differing placement of the Cycle type. We do not remake Union types after putting their
-     * component types into their canonical ordering.
-     */
+    // Note that we cannot ensure pointer equality between t1 and t2 because the types used to the
+    // construct the Unions, while eventually equivalent, are not identical due to the potentially
+    // differing placement of the Cycle type. We do not remake Union types after putting their
+    // component types into their canonical ordering.
   });
 });

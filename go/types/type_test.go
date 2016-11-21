@@ -148,11 +148,22 @@ func TestVerifyStructName(t *testing.T) {
 }
 
 func TestUnionWithCycles(tt *testing.T) {
-	inodeType := MakeStructType("Inode", []string{"attr", "contents"}, []*Type{
-		MakeStructType("Attr", []string{"ctime", "mode", "mtime"}, []*Type{NumberType, NumberType, NumberType}),
-		MakeUnionType(MakeStructType("Directory", []string{"entries"}, []*Type{MakeMapType(StringType, MakeCycleType(1))}),
-			MakeStructType("File", []string{"data"}, []*Type{BlobType}),
-			MakeStructType("Symlink", []string{"targetPath"}, []*Type{StringType}),
+	inodeType := MakeStructTypeFromFields("Inode", FieldMap{
+		"attr": MakeStructTypeFromFields("Attr", FieldMap{
+			"ctime": NumberType,
+			"mode":  NumberType,
+			"mtime": NumberType,
+		}),
+		"contents": MakeUnionType(
+			MakeStructTypeFromFields("Directory", FieldMap{
+				"entries": MakeMapType(StringType, MakeCycleType(1)),
+			}),
+			MakeStructTypeFromFields("File", FieldMap{
+				"data": BlobType,
+			}),
+			MakeStructTypeFromFields("Symlink", FieldMap{
+				"targetPath": StringType,
+			}),
 		),
 	})
 
@@ -160,5 +171,9 @@ func TestUnionWithCycles(tt *testing.T) {
 	t2 := DecodeValue(EncodeValue(t1, nil), nil)
 
 	assert.True(tt, t1.Equals(t2))
-	// Note that we cannot ensure pointer equality between t1 and t2 because the types used to the construct the Unions, while eventually equivalent, are not identical due to the potentially differing placement of the Cycle type. We do not remake Union types after putting their component types into their canonical ordering.
+	// Note that we cannot ensure pointer equality between t1 and t2 because the
+	// types used to the construct the Unions, while eventually equivalent, are
+	// not identical due to the potentially differing placement of the Cycle type.
+	// We do not remake Union types after putting their component types into
+	// their canonical ordering.
 }

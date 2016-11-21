@@ -294,15 +294,22 @@ func verifyFieldNames(names []string) {
 		return
 	}
 
-	last := names[0]
-	verifyFieldName(last)
+	verifyFieldName(names[0])
 
 	for i := 1; i < len(names); i++ {
 		verifyFieldName(names[i])
-		if strings.Compare(names[i], last) <= 0 {
+		if strings.Compare(names[i-1], names[i]) >= 0 {
 			d.Chk.Fail("Field names must be unique and ordered alphabetically")
 		}
-		last = names[i]
+	}
+}
+
+func verifyFields(fs []field) {
+	for i, f := range fs {
+		verifyFieldName(f.name)
+		if i > 0 && strings.Compare(fs[i-1].name, f.name) >= 0 {
+			d.Chk.Fail("Field names must be unique and ordered alphabetically")
+		}
 	}
 }
 

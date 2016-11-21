@@ -134,7 +134,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	assert.EqualValues(t, expect, tw.a)
 
 	ir := &nomsTestReader{expect, 0}
-	dec := valueDecoder{ir, vs, staticTypeCache}
+	dec := newValueDecoder(ir, vs, staticTypeCache)
 	v2 := dec.readValue()
 	assert.True(t, ir.atEnd())
 	assert.True(t, v.Equals(v2))

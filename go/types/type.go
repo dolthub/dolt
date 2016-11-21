@@ -30,18 +30,16 @@ type Type struct {
 const initialTypeBufferSize = 128
 
 func newType(desc TypeDesc, id uint32) *Type {
-	t := &Type{desc, &hash.Hash{}, &hash.Hash{}, id, nil}
-	if !t.HasUnresolvedCycle() {
-		serializeType(t)
-	}
-	return t
+	return &Type{desc, &hash.Hash{}, nil, id, nil}
 }
 
-func serializeType(t *Type) {
-	w := &binaryNomsWriter{make([]byte, initialTypeBufferSize), 0}
-	enc := newValueEncoder(w, nil)
-	enc.writeType(t, nil)
-	t.serialization = w.data()
+func ensureTypeSerialization(t *Type) {
+	if t.serialization == nil {
+		w := &binaryNomsWriter{make([]byte, initialTypeBufferSize), 0}
+		enc := newValueEncoder(w, nil)
+		enc.writeType(t, nil)
+		t.serialization = w.data()
+	}
 }
 
 // Describe generate text that should parse into the struct being described.

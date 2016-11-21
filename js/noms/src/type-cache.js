@@ -7,7 +7,7 @@
 import Hash, {byteLength as hashByteLength} from './hash.js';
 import type {NomsKind} from './noms-kind.js';
 import {Kind} from './noms-kind.js';
-import {CompoundDesc, CycleDesc, PrimitiveDesc, StructDesc, Type} from './type.js';
+import {CompoundDesc, CycleDesc, StructDesc, Type, getOID, hasOID} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {alloc} from './bytes.js';
 import {BinaryWriter} from './binary-rw.js';
@@ -89,11 +89,7 @@ export default class TypeCache {
   makeStructType(name: string, fields: { [key: string]: Type<any> }): Type<StructDesc> {
     const fieldNames = Object.keys(fields).sort();
     const fieldTypes = fieldNames.map(n => fields[n]);
-    return this.makeStructTypeQuickly(name, fieldNames, fieldTypes);
-  }
 
-  makeStructTypeQuickly(name: string, fieldNames: Array<string>, fieldTypes: Array<Type<any>>)
-      : Type<StructDesc> {
     if (fieldNames.length !== fieldTypes.length) {
       throw new Error('Field names and types must be of equal length');
     }
@@ -101,6 +97,12 @@ export default class TypeCache {
     verifyStructName(name);
     verifyFieldNames(fieldNames);
 
+    return this.makeStructTypeQuickly(name, fieldNames, fieldTypes, 'normalize');
+  }
+
+  makeStructTypeQuickly(name: string, fieldNames: Array<string>, fieldTypes: Array<Type<any>>,
+      checkKind: CheckKind)
+      : Type<StructDesc> {
     let trie = notNull(this.trieRoots.get(Kind.Struct)).traverse(this.identTable.getId(name));
     fieldNames.forEach((fn, i) => {
       const ft = fieldTypes[i];
@@ -119,7 +121,7 @@ export default class TypeCache {
         [t] = toUnresolvedType(t, this, -1, []);
         resolveStructCycles(t, []);
         if (!t.hasUnresolvedCycle([])) {
-          normalize(t);
+          checkStructType(t, checkKind);
         }
       }
       t.id = this.nextTypeId();
@@ -138,10 +140,9 @@ export default class TypeCache {
     for (let i = 0; i < types.length; i++) {
       generateOID(types[i], true);
     }
-    /*
-     * We sort the contituent types to dedup equivalent types in memory; we may need to sort again
-     * after cycles are resolved for final encoding.
-     */
+
+    // We sort the contituent types to dedup equivalent types in memory; we may need to sort again
+    // after cycles are resolved for final encoding.
     types.sort((t1: Type<any>, t2: Type<any>): number => t1.oidCompare(t2));
     return this.getCompoundType(Kind.Union, ...types);
   }
@@ -154,6 +155,10 @@ export default class TypeCache {
     }
 
     return notNull(trie.t);
+  }
+
+  generateOID(t: Type<any>) {
+    generateOID(t, true);
   }
 }
 
@@ -232,48 +237,56 @@ function resolveStructCycles(t: Type<any>, parentStructTypes: Type<any>[]): Type
   return t;
 }
 
-/**
- * We normalize structs during their construction iff they have no unresolved cycles. Normalizing
- * applies a canonical ordering to the composite types of a union (NB: this differs from the Go
- * implementation in that Go also serializes here, but in JS we do it lazily to avoid cylic
- * dependencies). To ensure a consistent ordering of the composite types of a union, we generate
- * a unique "order id" or OID for each of those types. The OID is the hash of a unique type
- * encoding that is independant of the extant order of types within any subordinate unions. This
- * encoding for most types is a straightforward serialization of its components; for unions the
- * encoding is a bytewise XOR of the hashes of each of its composite type encodings.
- *
- * We require a consistent order of types within a union to ensure that equivalent types have a
- * single persistent encoding and, therefore, a single hash. The method described above fails for
- * "unrolled" cycles whereby two equivalent, but uniquely described structures, would have
- * different OIDs.  Consider for example the following two types that, while equivalent, do not
- * yeild the same OID:
- *
- *   Struct A { a: Cycle<0> }
- *   Struct A { a: Struct A { a: Cycle<1> } }
- *
- * We explicitly disallow this sort of redundantly expressed type. If a non-Byzantine use of such a
- * construction arises, we can attempt to simplify the expansive type or find another means of
- * comparison.
- */
-function normalize(t: Type<any>) {
-  walkType(t, [], (tt: Type<any>) => {
-    generateOID(tt, false);
-  });
+// We normalize structs during their construction iff they have no unresolved cycles. Normalizing
+// applies a canonical ordering to the composite types of a union. To ensure a consistent ordering
+// of the composite types of a union, we generate a unique "order id" or OID for each of those
+// types. The OID is the hash of a unique type encoding that is independant of the extant order of
+// types within any subordinate unions. This encoding for most types is a straightforward
+// serialization of its components; for unions the encoding is a bytewise XOR of the hashes of each
+// of its composite type encodings.
+//
+// We require a consistent order of types within a union to ensure that equivalent types have a
+// single persistent encoding and, therefore, a single hash. The method described above fails for
+// "unrolled" cycles whereby two equivalent, but uniquely described structures, would have
+// different OIDs.  Consider for example the following two types that, while equivalent, do not
+// yeild the same OID:
+//
+//   Struct A { a: Cycle<0> }
+//   Struct A { a: Struct A { a: Cycle<1> } }
+//
+// We explicitly disallow this sort of redundantly expressed type. If a non-Byzantine use of such a
+// construction arises, we can attempt to simplify the expansive type or find another means of
+// comparison.
 
-  walkType(t, [], (tt: Type<any>, parentStructTypes: Type<any>[]) => {
-    if (tt.kind === Kind.Struct) {
-      for (let i = 0; i < parentStructTypes.length; i++) {
-        invariant(tt.oidCompare(parentStructTypes[i]) !== 0,
-          'unrolled cycle types are not supported; ahl owes you a beer');
-      }
-    }
-  });
+type CheckKind = 'normalize' | 'no-validate';
 
-  walkType(t, [], (tt: Type<any>) => {
-    if (tt.kind === Kind.Union) {
-      tt.desc.elemTypes.sort((t1: Type<any>, t2: Type<any>): number => t1.oidCompare(t2));
+function checkStructType(t: Type<any>, checkKind: CheckKind) {
+  if (checkKind === 'no-validate') {
+    return;
+  }
+
+  walkType(t, [], generateOIDs);
+  walkType(t, [], checkForUnrolledCycles);
+  walkType(t, [], sortUnions);
+}
+
+function generateOIDs(t: Type<any>) {
+  generateOID(t, false);
+}
+
+function checkForUnrolledCycles(t: Type<any>, parentStructTypes: Type<any>[]) {
+  if (t.kind === Kind.Struct) {
+    for (let i = 0; i < parentStructTypes.length; i++) {
+      invariant(t.oidCompare(parentStructTypes[i]) !== 0,
+        'unrolled cycle types are not supported; ahl owes you a beer');
     }
-  });
+  }
+}
+
+function sortUnions(t: Type<any>) {
+  if (t.kind === Kind.Union) {
+    t.desc.elemTypes.sort((t1: Type<any>, t2: Type<any>): number => t1.oidCompare(t2));
+  }
 }
 
 function walkType(t: Type<any>, parentStructTypes: Type<any>[],
@@ -297,84 +310,140 @@ function walkType(t: Type<any>, parentStructTypes: Type<any>[],
 }
 
 function generateOID(t: Type<any>, allowUnresolvedCycles: boolean) {
-  const buf = new BinaryWriter();
-  encodeForOID(t, buf, allowUnresolvedCycles, t, []);
-  t.updateOID(Hash.fromData(buf.data));
+  if (!hasOID(t)) {
+    const buf = new BinaryWriter();
+    encodeForOID(t, buf, allowUnresolvedCycles, t, []);
+    const oid = Hash.fromData(buf.data);
+    t.updateOID(oid);
+  }
 }
 
 function encodeForOID(t: Type<any>, buf: BinaryWriter, allowUnresolvedCycles: boolean,
     root: Type<any>, parentStructTypes: Type<any>[]) {
   const desc = t.desc;
+  switch (t.kind) {
+    case Kind.Cycle:
+      invariant(allowUnresolvedCycles, 'found an unexpected resolved cycle');
+      buf.writeUint8(t.kind);
+      buf.writeUint32(desc.level);
+      break;
+    case Kind.Blob:
+    case Kind.Bool:
+    case Kind.Number:
+    case Kind.String:
+    case Kind.Type:
+    case Kind.Value:
+      buf.writeUint8(t.kind);
+      break;
+    case Kind.List:
+    case Kind.Map:
+    case Kind.Ref:
+    case Kind.Set:
+      buf.writeUint8(t.kind);
+      buf.writeUint32(desc.elemTypes.length);
+      for (let i = 0; i < desc.elemTypes.length; i++) {
+        encodeForOID(desc.elemTypes[i], buf, allowUnresolvedCycles, root, parentStructTypes);
+      }
+      break;
 
-  if (desc instanceof CycleDesc) {
-    invariant(allowUnresolvedCycles, 'found an unexpected resolved cycle');
-    buf.writeUint8(desc.kind);
-    buf.writeUint32(desc.level);
-  } else if (desc instanceof PrimitiveDesc) {
-    buf.writeUint8(desc.kind);
-  } else if (desc instanceof CompoundDesc) {
-    switch (t.kind) {
-      case Kind.List:
-      case Kind.Map:
-      case Kind.Ref:
-      case Kind.Set: {
-        buf.writeUint8(t.kind);
-        buf.writeUint32(desc.elemTypes.length);
-        for (let i = 0; i < desc.elemTypes.length; i++) {
-          encodeForOID(desc.elemTypes[i], buf, allowUnresolvedCycles, root, parentStructTypes);
-        }
+    case Kind.Union: {
+      buf.writeUint8(t.kind);
+      if (t === root) {
+        // If this is where we started, we don't need to keep going.
         break;
       }
-      case Kind.Union: {
-        buf.writeUint8(t.kind);
-        if (t === root) {
-          // If this is where we started, we don't need to keep going.
-          break;
-        }
 
-        buf.writeUint32(desc.elemTypes.length);
+      buf.writeUint32(desc.elemTypes.length);
 
-        // This is the only subtle case: encode each subordinate type, generate the hash, remove
-        // duplicates, and xor the results together to form an order indepedant encoding.
-        const mbuf = new BinaryWriter();
-        const oids = new Map();
-        for (let i = 0; i < t.desc.elemTypes.length; i++) {
+      // This is the only subtle case: encode each subordinate type, generate the hash, remove
+      // duplicates, and xor the results together to form an order indepedant encoding.
+      const mbuf = new BinaryWriter();
+      const oids = new Map();
+      const {elemTypes} = desc;
+      for (let i = 0; i < elemTypes.length; i++) {
+        const elemType = elemTypes[i];
+        let h = getOID(elemType);
+        if (!h) {
           mbuf.reset();
-          encodeForOID(t.desc.elemTypes[i], mbuf, allowUnresolvedCycles, root, parentStructTypes);
-          const h = Hash.fromData(mbuf.data);
-          oids.set(h.toString(), h);
-        }
-
-        const data = alloc(hashByteLength);
-        oids.forEach((oid: Hash) => {
-          const digest = oid.digest;
-          for (let i = 0; i < hashByteLength; i++) {
-            data[i] ^= digest[i];
+          encodeForOID(elemType, mbuf, allowUnresolvedCycles, root, parentStructTypes);
+          h = Hash.fromData(mbuf.data);
+          if (parentStructTypes.indexOf(elemType) === -1) {
+            elemType.updateOID(h);
           }
-        });
-        buf.writeBytes(data);
+        } else {
+          checkForUnresolvedCycles(elemType, root, parentStructTypes);
+        }
+        oids.set(h.toString(), h);
+      }
+
+      const data = alloc(hashByteLength);
+      oids.forEach((oid: Hash) => {
+        const digest = oid.digest;
+        for (let i = 0; i < hashByteLength; i++) {
+          data[i] ^= digest[i];
+        }
+      });
+      buf.writeBytes(data);
+      break;
+    }
+
+    case Kind.Struct: {
+      const idx = parentStructTypes.indexOf(t);
+      if (idx >= 0) {
+        buf.writeUint8(Kind.Cycle);
+        buf.writeUint32(parentStructTypes.length - 1 - idx);
+        return;
+      }
+
+      buf.writeUint8(Kind.Struct);
+      buf.writeString(desc.name);
+
+      parentStructTypes.push(t);
+      for (let i = 0; i < desc.fields.length; i++) {
+        buf.writeString(desc.fields[i].name);
+        encodeForOID(desc.fields[i].type, buf, allowUnresolvedCycles, root, parentStructTypes);
+      }
+      parentStructTypes.pop(t);
+      break;
+    }
+  }
+}
+
+function checkForUnresolvedCycles(t: Type<any>, root: Type<any>, parentStructTypes: Type<any>[]) {
+  const desc = t.desc;
+
+  switch (t.kind) {
+    case Kind.Cycle:
+      invariant(false, 'found an unexpected resolved cycle');
+
+    // eslint does not know that the above always throws.
+    case Kind.List:  //eslint-disable-line no-fallthrough
+    case Kind.Map:
+    case Kind.Ref:
+    case Kind.Set:
+    case Kind.Union: {
+      if (t === root) {
+        // If this is where we started, we don't need to keep going.
         break;
       }
-      default:
-        invariant(false, 'unknown compound type');
+      for (let i = 0; i < desc.elemTypes.length; i++) {
+        checkForUnresolvedCycles(desc.elemTypes[i], root, parentStructTypes);
+      }
+      break;
     }
-  } else if (desc instanceof StructDesc) {
-    const idx = parentStructTypes.indexOf(t);
-    if (idx >= 0) {
-      buf.writeUint8(Kind.Cycle);
-      buf.writeUint32(parentStructTypes.length - 1 - idx);
-      return;
-    }
+    case Kind.Struct: {
+      const idx = parentStructTypes.indexOf(t);
+      if (idx >= 0) {
+        return;
+      }
 
-    buf.writeUint8(Kind.Struct);
-    buf.writeString(desc.name);
-
-    parentStructTypes.push(t);
-    for (let i = 0; i < desc.fields.length; i++) {
-      buf.writeString(desc.fields[i].name);
-      encodeForOID(desc.fields[i].type, buf, allowUnresolvedCycles, root, parentStructTypes);
+      parentStructTypes.push(t);
+      for (let i = 0; i < desc.fields.length; i++) {
+        checkForUnresolvedCycles(desc.fields[i].type, root, parentStructTypes);
+      }
+      parentStructTypes.pop(t);
+      break;
     }
-    parentStructTypes.pop(t);
   }
 }
 

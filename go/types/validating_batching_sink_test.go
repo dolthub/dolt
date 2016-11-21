@@ -53,6 +53,53 @@ func TestValidatingBatchingSinkDecodeAlreadyEnqueued(t *testing.T) {
 	assert.Nil(t, dc.Value)
 }
 
+func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
+	cs := chunks.NewTestStore()
+	vs := newLocalValueStore(cs)
+	r := &nomsTestReader{data, 0}
+	dec := newValueDecoder(r, vs, staticTypeCache)
+	v := dec.readValue()
+
+	c := EncodeValue(v, nil)
+	vbs := NewValidatingBatchingSink(cs)
+
+	assert.Panics(t, func() {
+		vbs.DecodeUnqueued(&c)
+	})
+}
+
+func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {
+	data := []interface{}{
+		uint8(TypeKind),
+		uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(NumberKind),
+	}
+	assertPanicsOnInvalidChunk(t, data)
+}
+
+func TestValidatingBatchingSinkDecodeInvalidStructFieldOrder(t *testing.T) {
+	data := []interface{}{
+		uint8(TypeKind),
+		uint8(StructKind), "S", uint32(2) /* len */, "b", uint8(NumberKind), "a", uint8(NumberKind),
+	}
+	assertPanicsOnInvalidChunk(t, data)
+}
+
+func TestValidatingBatchingSinkDecodeInvalidStructName(t *testing.T) {
+	data := []interface{}{
+		uint8(TypeKind),
+		uint8(StructKind), "S ", uint32(0), /* len */
+	}
+	assertPanicsOnInvalidChunk(t, data)
+}
+
+func TestValidatingBatchingSinkDecodeInvalidStructFieldName(t *testing.T) {
+	data := []interface{}{
+		uint8(TypeKind),
+		uint8(StructKind), "S", uint32(1) /* len */, "b ", uint8(NumberKind),
+	}
+	assertPanicsOnInvalidChunk(t, data)
+}
+
 func TestValidatingBatchingSinkEnqueueAndFlush(t *testing.T) {
 	v := Number(42)
 	c := EncodeValue(v, nil)

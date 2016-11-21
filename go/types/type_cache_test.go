@@ -16,17 +16,13 @@ func TestTypeCacheList(t *testing.T) {
 	lbt := MakeListType(BoolType)
 	lbt2 := MakeListType(BoolType)
 	assert.True(lbt == lbt2)
-	assert.NotNil(lbt.serialization)
 
 	lst := MakeListType(StringType)
 	lnt := MakeListType(NumberType)
 	assert.False(lst == lnt)
-	assert.NotNil(lnt.serialization)
-	assert.NotNil(lst.serialization)
 
 	lst2 := MakeListType(StringType)
 	assert.True(lst == lst2)
-	assert.NotNil(lst.serialization)
 
 	lnt2 := MakeListType(NumberType)
 	assert.True(lnt == lnt2)
@@ -41,7 +37,6 @@ func TestTypeCacheSet(t *testing.T) {
 	lbt := MakeSetType(BoolType)
 	lbt2 := MakeSetType(BoolType)
 	assert.True(lbt == lbt2)
-	assert.NotNil(lbt.serialization)
 
 	lst := MakeSetType(StringType)
 	lnt := MakeSetType(NumberType)
@@ -63,7 +58,6 @@ func TestTypeCacheRef(t *testing.T) {
 	lbt := MakeRefType(BoolType)
 	lbt2 := MakeRefType(BoolType)
 	assert.True(lbt == lbt2)
-	assert.NotNil(lbt.serialization)
 
 	lst := MakeRefType(StringType)
 	lnt := MakeRefType(NumberType)
@@ -92,7 +86,6 @@ func TestTypeCacheStruct(t *testing.T) {
 	)
 
 	assert.True(st == st2)
-	assert.NotNil(st.serialization)
 }
 
 func TestTypeCacheUnion(t *testing.T) {
@@ -100,7 +93,6 @@ func TestTypeCacheUnion(t *testing.T) {
 	ut := MakeUnionType(NumberType)
 	ut2 := MakeUnionType(NumberType)
 	assert.True(ut == ut2)
-	assert.NotNil(ut.serialization)
 
 	ut = MakeUnionType(NumberType, StringType)
 	ut2 = MakeUnionType(StringType, NumberType)
@@ -120,7 +112,6 @@ func TestTypeCacheCyclicStruct(t *testing.T) {
 	)
 	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[0])
 	assert.False(st.HasUnresolvedCycle())
-	assert.NotNil(st.serialization)
 
 	st2 := MakeStructType("Foo",
 		[]string{"foo"},
@@ -145,7 +136,6 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 		},
 	)
 	assert.True(st.HasUnresolvedCycle())
-	assert.Nil(st.serialization)
 	// foo ref is cyclic
 	assert.True(st == st.Desc.(StructDesc).fields[1].t)
 
@@ -164,7 +154,6 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 		},
 	)
 	assert.True(st2.HasUnresolvedCycle())
-	assert.Nil(st2.serialization)
 	// foo ref is cyclic
 	assert.True(st2.Desc.(StructDesc).fields[1].t == st2.Desc.(StructDesc).fields[1].t.Desc.(StructDesc).fields[1].t)
 	// bar ref is cyclic
@@ -188,7 +177,6 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 		},
 	)
 	assert.False(st3.HasUnresolvedCycle())
-	assert.NotNil(st3.serialization)
 
 	// foo ref is cyclic
 	assert.True(st3.Desc.(StructDesc).fields[0].t.Desc.(StructDesc).fields[1].t == st3.Desc.(StructDesc).fields[0].t.Desc.(StructDesc).fields[1].t.Desc.(StructDesc).fields[1].t)
