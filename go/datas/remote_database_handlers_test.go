@@ -57,6 +57,20 @@ func TestHandleWriteValue(t *testing.T) {
 	}
 }
 
+func TestHandleWriteValuePanic(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+
+	body := &bytes.Buffer{}
+	serializeHints(body, types.Hints{})
+	body.WriteString("Bogus")
+
+	w := httptest.NewRecorder()
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
+
+	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+}
+
 func TestHandleWriteValueDupChunks(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
@@ -108,7 +122,7 @@ func TestHandleWriteValueBackpressure(t *testing.T) {
 	w := httptest.NewRecorder()
 	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
 
-	if assert.Equal(httpStatusTooManyRequests, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
+	if assert.Equal(http.StatusTooManyRequests, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		hashes := deserializeHashes(w.Body)
 		assert.Len(hashes, 1)
 		assert.Equal(l2.Hash(), hashes[0])
@@ -144,12 +158,17 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	assert.Equal(len(hints), count)
 
 	outChunkChan := make(chan interface{}, 16)
-	go chunks.DeserializeToChan(gr, outChunkChan)
+	go deserializeToChan(gr, outChunkChan)
 	for c := range outChunkChan {
 		assert.Equal(chnx[0].Hash(), c.(*chunks.Chunk).Hash())
 		chnx = chnx[1:]
 	}
 	assert.Empty(chnx)
+}
+
+func deserializeToChan(reader io.Reader, chunkChan chan<- interface{}) {
+	chunks.DeserializeToChan(reader, chunkChan)
+	close(chunkChan)
 }
 
 func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
@@ -209,7 +228,7 @@ func TestHandleGetRefs(t *testing.T) {
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		chunkChan := make(chan interface{})
-		go chunks.DeserializeToChan(w.Body, chunkChan)
+		go deserializeToChan(w.Body, chunkChan)
 		for c := range chunkChan {
 			assert.Equal(chnx[0].Hash(), c.(*chunks.Chunk).Hash())
 			chnx = chnx[1:]

@@ -5,6 +5,8 @@
 package verbose
 
 import (
+	"fmt"
+
 	flag "github.com/juju/gnuflag"
 )
 
@@ -29,4 +31,11 @@ func Verbose() bool {
 // Quiet returns True if the verbose flag was set
 func Quiet() bool {
 	return quiet
+}
+
+// Log calls Printf(format, args...) iff Verbose() returns true.
+func Log(format string, args ...interface{}) {
+	if Verbose() {
+		fmt.Printf(format+"\n", args...)
+	}
 }

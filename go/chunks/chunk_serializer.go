@@ -87,7 +87,6 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- interface{}) {
 		}
 		chunkChan <- &c
 	}
-	close(chunkChan)
 }
 
 func deserializeChunk(reader io.Reader) (Chunk, bool) {

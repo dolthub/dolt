@@ -19,6 +19,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 )
 
@@ -28,43 +29,61 @@ type URLParams interface {
 
 type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore)
 
-// NomsVersionHeader is the name of the header that Noms clients and servers must set in every request/response.
-const NomsVersionHeader = "x-noms-vers"
-const nomsBaseHTML = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
-
-var (
-	// HandleWriteValue is meant to handle HTTP POST requests to the writeValue/ server endpoint. The payload should be an appropriately-ordered sequence of Chunks to be validated and stored on the server.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
-	HandleWriteValue = versionCheck(handleWriteValue)
-
-	// HandleGetRefs is meant to handle HTTP POST requests to the getRefs/ server endpoint. Given a sequence of Chunk hashes, the server will fetch and return them.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
-	HandleGetRefs = versionCheck(handleGetRefs)
-
-	// HandleWriteValue is meant to handle HTTP POST requests to the hasRefs/ server endpoint. Given a sequence of Chunk hashes, the server check for their presence and return a list of true/false responses.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
-	HandleHasRefs = versionCheck(handleHasRefs)
-
-	// HandleRootGet is meant to handle HTTP GET requests to the root/ server endpoint. The server returns the hash of the Root as a string.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and responses.
-	HandleRootGet = versionCheck(handleRootGet)
-
-	// HandleWriteValue is meant to handle HTTP POST requests to the root/ server endpoint. This is used to update the Root to point to a new Chunk.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
-	HandleRootPost = versionCheck(handleRootPost)
-
-	// HandleBaseGet is meant to handle HTTP GET requests to the / server endpoint. This is used to give a friendly message to users.
-	// TODO: Nice comment about what headers it expects/honors, payload format, and error responses.
-	HandleBaseGet = handleBaseGet
+const (
+	// NomsVersionHeader is the name of the header that Noms clients and
+	// servers must set in every request/response.
+	NomsVersionHeader     = "x-noms-vers"
+	nomsBaseHTML          = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
+	writeValueConcurrency = 16
 )
 
-const writeValueConcurrency = 16
+var (
+	// HandleWriteValue is meant to handle HTTP POST requests to the
+	// writeValue/ server endpoint. The payload should be an appropriately-
+	// ordered sequence of Chunks to be validated and stored on the server.
+	// TODO: Nice comment about what headers it expects/honors, payload
+	// format, and error responses.
+	HandleWriteValue = versionCheck(handleWriteValue)
+
+	// HandleGetRefs is meant to handle HTTP POST requests to the getRefs/
+	// server endpoint. Given a sequence of Chunk hashes, the server will
+	// fetch and return them.
+	// TODO: Nice comment about what headers it
+	// expects/honors, payload format, and responses.
+	HandleGetRefs = versionCheck(handleGetRefs)
+
+	// HandleWriteValue is meant to handle HTTP POST requests to the hasRefs/
+	// server endpoint. Given a sequence of Chunk hashes, the server check for
+	// their presence and return a list of true/false responses.
+	// TODO: Nice comment about what headers it expects/honors, payload
+	// format, and responses.
+	HandleHasRefs = versionCheck(handleHasRefs)
+
+	// HandleRootGet is meant to handle HTTP GET requests to the root/ server
+	// endpoint. The server returns the hash of the Root as a string.
+	// TODO: Nice comment about what headers it expects/honors, payload
+	// format, and responses.
+	HandleRootGet = versionCheck(handleRootGet)
+
+	// HandleWriteValue is meant to handle HTTP POST requests to the root/
+	// server endpoint. This is used to update the Root to point to a new
+	// Chunk.
+	// TODO: Nice comment about what headers it expects/honors, payload
+	// format, and error responses.
+	HandleRootPost = versionCheck(handleRootPost)
+
+	// HandleBaseGet is meant to handle HTTP GET requests to the / server
+	// endpoint. This is used to give a friendly message to users.
+	// TODO: Nice comment about what headers it expects/honors, payload
+	// format, and error responses.
+	HandleBaseGet = handleBaseGet
+)
 
 func versionCheck(hndlr Handler) Handler {
 	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
 		if req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
-			fmt.Println("Returning version mismatch error")
+			verbose.Log("Returning version mismatch error")
 			http.Error(
 				w,
 				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), constants.NomsVersion),
@@ -75,11 +94,27 @@ func versionCheck(hndlr Handler) Handler {
 
 		err := d.Try(func() { hndlr(w, req, ps, cs) })
 		if err != nil {
-			fmt.Printf("Returning bad request:\n%v\n", err)
-			http.Error(w, fmt.Sprintf("Error: %v", d.Unwrap(err)), http.StatusBadRequest)
+			err = d.Unwrap(err)
+			verbose.Log("Returning bad request:\n%v\n", err)
+			http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
 			return
 		}
 	}
+}
+
+func recoverToError(errChan chan<- d.WrappedError) {
+	var we d.WrappedError
+	if r := recover(); r != nil {
+		switch err := r.(type) {
+		case d.WrappedError:
+			we = err
+		case error:
+			we = d.Wrap(err)
+		default:
+			we = d.Wrap(fmt.Errorf("Error: %v", err))
+		}
+	}
+	errChan <- we
 }
 
 func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
@@ -87,6 +122,8 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		d.Panic("Expected post method.")
 	}
 
+	verbose.Log("Handling WriteValue from " + req.RemoteAddr)
+	defer verbose.Log("Finished handling WriteValue from " + req.RemoteAddr)
 	reader := bodyReader(req)
 	defer func() {
 		// Ensure all data on reader is consumed
@@ -96,8 +133,16 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	vbs := types.NewValidatingBatchingSink(cs)
 	vbs.Prepare(deserializeHints(reader))
 
+	// Deserialize chunks from reader in background, recovering from errors
+	errChan := make(chan d.WrappedError)
+	defer close(errChan)
 	chunkChan := make(chan interface{}, writeValueConcurrency)
-	go chunks.DeserializeToChan(reader, chunkChan)
+	go func() {
+		defer recoverToError(errChan)
+		defer close(chunkChan)
+		chunks.DeserializeToChan(reader, chunkChan)
+	}()
+
 	decoded := orderedparallel.New(
 		chunkChan,
 		func(c interface{}) interface{} {
@@ -105,12 +150,17 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		},
 		writeValueConcurrency)
 
+	count := 0
 	var bpe chunks.BackpressureError
 	for dci := range decoded {
 		dc := dci.(types.DecodedChunk)
 		if dc.Chunk != nil && dc.Value != nil {
 			if bpe == nil {
 				bpe = vbs.Enqueue(*dc.Chunk, *dc.Value)
+				count++
+				if count%100 == 0 {
+					verbose.Log("Enqueued %d chunks", count)
+				}
 			} else {
 				bpe = append(bpe, dc.Chunk.Hash())
 			}
@@ -118,11 +168,17 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 		}
 	}
+
+	// If there was an error during chunk deserialization, log and respond
+	if err := <-errChan; err != nil {
+		panic(err)
+	}
+
 	if bpe == nil {
 		bpe = vbs.Flush()
 	}
 	if bpe != nil {
-		w.WriteHeader(httpStatusTooManyRequests)
+		w.WriteHeader(http.StatusTooManyRequests)
 		w.Header().Add("Content-Type", "application/octet-stream")
 		writer := respWriter(req, w)
 		defer writer.Close()
@@ -282,7 +338,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	}
 	m := v.(types.Map)
 	if !m.Empty() && !isMapOfStringToRefOfCommit(m) {
-		panic(d.Wrap(fmt.Errorf("Root of a Database must be a Map<String, Ref<Commit>>, not %s", m.Type().Describe())))
+		d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, not %s", m.Type().Describe())
 	}
 
 	if !cs.UpdateRoot(current, last) {

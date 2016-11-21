@@ -22,6 +22,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 	"github.com/julienschmidt/httprouter"
 )
@@ -30,8 +31,6 @@ const (
 	httpChunkSinkConcurrency = 6
 	writeBufferSize          = 1 << 12 // 4K
 	readBufferSize           = 1 << 12 // 4K
-
-	httpStatusTooManyRequests = 429 // This is new in Go 1.6. Once the builders have that, use it.
 )
 
 // httpBatchStore implements types.BatchStore
@@ -387,6 +386,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.H
 		var res *http.Response
 		var err error
 		for tryAgain := true; tryAgain; {
+			verbose.Log("Sending %d chunks", len(hashes))
 			chunkChan := make(chan *chunks.Chunk, 1024)
 			go func() {
 				bhcs.unwrittenPuts.ExtractChunks(hashes, chunkChan)
@@ -408,7 +408,7 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.H
 			expectVersion(res)
 			defer closeResponse(res.Body)
 
-			if tryAgain = res.StatusCode == httpStatusTooManyRequests; tryAgain {
+			if tryAgain = res.StatusCode == http.StatusTooManyRequests; tryAgain {
 				reader := res.Body
 				if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
 					gr, err := gzip.NewReader(reader)
@@ -418,12 +418,14 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.H
 				}
 				/*hashes :=*/ deserializeHashes(reader)
 				// TODO: BUG 1259 Since the client must currently send all chunks in one batch, the only thing to do in response to backpressure is send EVERYTHING again. Once batching is again possible, this code should figure out how to resend the chunks indicated by hashes.
+				verbose.Log("Retrying...")
 			}
 		}
 
 		if http.StatusCreated != res.StatusCode {
 			d.Panic("Unexpected response: %s", formatErrorResponse(res))
 		}
+		verbose.Log("Finished sending %d hashes", len(hashes))
 	}()
 }
 
