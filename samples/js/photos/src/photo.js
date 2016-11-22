@@ -8,20 +8,22 @@ import type {NomsPhoto, PhotoSize} from './types.js';
 
 import type {MapEntry} from '@attic/noms';
 import {
-  StructMirror,
+  Blob,
   equals,
   invariant,
   notNull,
+  Ref,
+  StructMirror,
 } from '@attic/noms';
-export type SizeEntry = MapEntry<PhotoSize, string>;
+export type SizeEntry = MapEntry<PhotoSize, Ref<Blob>>;
 
 /**
  * createPhoto asynchronously derives a Photo instance from a NomsPhoto.
  */
 export function createPhoto(path: string, p: NomsPhoto): Promise<Photo> {
   const sizeEntries = [];
-  return p.sizes.forEach((url, size) => {
-    sizeEntries.push([size, url]);
+  return p.resources.forEach((details, size) => {
+    sizeEntries.push([size, details.blobRef]);
   }).then(() => new Photo(path, p, sizeEntries));
 }
 

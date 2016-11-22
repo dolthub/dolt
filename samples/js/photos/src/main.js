@@ -40,23 +40,23 @@ async function getRenderElement(nav: Nav): Promise<React.Element<any>> {
     return <div>Must provide the {notice('?index=')} parameter.</div>;
   }
 
+  // TODO: Proper auth with localStorage.
+  let specOptions;
+  if (params.has('access_token')) {
+    specOptions = {
+      authorization: params.get('access_token'),
+    };
+  }
+
+  let indexSpec;
+  try {
+    indexSpec = Spec.forPath(indexStr, specOptions);
+  } catch (e) {
+    return <div>{notice(indexStr)} is not a valid path: {notice(e.message)}.</div>;
+  }
+
   let index = indexMap.get(indexStr);
   if (!index) {
-    // TODO: Proper auth with localStorage.
-    let specOptions;
-    if (params.has('access_token')) {
-      specOptions = {
-        authorization: params.get('access_token'),
-      };
-    }
-
-    let indexSpec;
-    try {
-      indexSpec = Spec.forPath(indexStr, specOptions);
-    } catch (e) {
-      return <div>{notice(indexStr)} is not a valid path: {notice(e.message)}.</div>;
-    }
-
     const indexValue = await indexSpec.value();
     if (!(indexValue instanceof Struct)) {
       return <div>{notice(indexStr)} not found.</div>;
@@ -87,6 +87,7 @@ async function getRenderElement(nav: Nav): Promise<React.Element<any>> {
   const viewport = new Viewport(window, document.body);
 
   return <PhotosPage
+    db={indexSpec.database()}
     index={index}
     nav={nav}
     photo={photo}

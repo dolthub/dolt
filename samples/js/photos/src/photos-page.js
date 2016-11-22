@@ -20,10 +20,11 @@ import PhotoSetIterator, {
   SinglePhotoSetIterator,
 } from './photo-set-iterator.js';
 import {
-  Map as NomsMap,
-  Set as NomsSet,
+  Database,
   invariant,
+  Map as NomsMap,
   notNull,
+  Set as NomsSet,
 } from '@attic/noms';
 import Viewport from './viewport.js';
 
@@ -40,6 +41,7 @@ type FaceState = {
 };
 
 type Props = {
+  db: Database,
   index: PhotoIndex,
   nav: Nav,
   photo: ?Photo,
@@ -114,11 +116,12 @@ export default class PhotosPage extends React.Component<void, Props, State> {
   }
 
   render(): React.Element<*> {
-    const {nav, photo, viewport} = this.props;
+    const {db, nav, photo, viewport} = this.props;
     const {selectedDate, minDate, maxDate, photosIter} = this.state;
 
     const photoGrid = <PhotoGrid
       availWidth={viewport.clientWidth - panelWidth - gutter}
+      db={db}
       nav={nav}
       photo={photo}
       photosIter={photosIter}
