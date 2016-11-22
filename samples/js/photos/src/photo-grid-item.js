@@ -48,7 +48,7 @@ export default class PhotoGridItem extends React.Component<void, Props, State> {
   _parentTop: number;
   _parentLeft: number;
   _shouldTransition: boolean;
-  _unmounted: boolean;
+  _didUnmount: boolean;
 
   constructor(props: Props) {
     super(props);
@@ -58,7 +58,7 @@ export default class PhotoGridItem extends React.Component<void, Props, State> {
     };
     this._parentTop = 0;
     this._parentLeft = 0;
-    this._unmounted = false;
+    this._didUnmount = false;
     this._load(this.state.blob);
   }
 
@@ -108,7 +108,7 @@ export default class PhotoGridItem extends React.Component<void, Props, State> {
       }
 
       // might have unloaded
-      if (this._unmounted) {
+      if (this._didUnmount) {
         return;
       }
 
@@ -121,7 +121,7 @@ export default class PhotoGridItem extends React.Component<void, Props, State> {
 
   componentWillUnmount() {
     this._releaseBlobURL();
-    this._unmounted = true;
+    this._didUnmount = true;
   }
 
   _releaseBlobURL() {
