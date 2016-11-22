@@ -33,7 +33,8 @@ import (
 //
 // Slices and arrays are encoded as Noms types.List.
 //
-// Maps are encoded as Noms types.Map.
+// Maps are encoded as Noms types.Map, or a types.Set if the value type is
+// struct{} and the field is tagged with `noms:"set"`.
 //
 // Struct values are encoded as Noms structs (types.Struct). Each exported Go
 // struct field becomes a member of the Noms struct unless
@@ -76,7 +77,7 @@ import (
 // Noms values (values implementing types.Value) are copied over without any
 // change.
 //
-// When marshalling `interface{}` the dynamic type is used.
+// When marshalling interface{} the dynamic type is used.
 //
 // Go pointers, complex, function are not supported. Attempting to encode such a
 // value causes Marshal to return an UnsupportedTypeError.
@@ -93,7 +94,7 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 		}
 	}()
 	rv := reflect.ValueOf(v)
-	encoder := typeEncoder(rv.Type(), nil)
+	encoder := typeEncoder(rv.Type(), nil, nomsTags{})
 	nomsValue = encoder(rv)
 	return
 }
@@ -134,6 +135,7 @@ func (e *InvalidTagError) Error() string {
 type nomsTags struct {
 	name      string
 	omitEmpty bool
+	set       bool
 	skip      bool
 }
 
@@ -166,7 +168,7 @@ func nomsValueEncoder(v reflect.Value) types.Value {
 	return v.Interface().(types.Value)
 }
 
-func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
+func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags) encoderFunc {
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolEncoder
@@ -183,12 +185,15 @@ func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	case reflect.Slice, reflect.Array:
 		return listEncoder(t, parentStructTypes)
 	case reflect.Map:
+		if shouldMapEncodeAsSet(t, tags) {
+			return setEncoder(t, parentStructTypes)
+		}
 		return mapEncoder(t, parentStructTypes)
 	case reflect.Interface:
 		return func(v reflect.Value) types.Value {
 			// Get the dynamic type.
 			v2 := reflect.ValueOf(v.Interface())
-			return typeEncoder(v2.Type(), parentStructTypes)(v2)
+			return typeEncoder(v2.Type(), parentStructTypes, tags)(v2)
 		}
 	default:
 		panic(&UnsupportedTypeError{Type: t})
@@ -277,6 +282,10 @@ type encoderCacheT struct {
 
 var encoderCache = &encoderCacheT{}
 
+// Separate Set encoder cache because the same type with and without the
+// `noms:",set"` tag encode differently (Set vs Map).
+var setEncoderCache = &encoderCacheT{}
+
 func (c *encoderCacheT) get(t reflect.Type) encoderFunc {
 	c.RLock()
 	defer c.RUnlock()
@@ -312,9 +321,15 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 		panic(&InvalidTagError{"Invalid struct field name: " + tags.name})
 	}
 
-	if len(tagsSlice) > 1 {
-		// This is pretty simplistic but it is good enough for now.
-		tags.omitEmpty = tagsSlice[1] == "omitempty"
+	for i := 1; i < len(tagsSlice); i++ {
+		switch tag := tagsSlice[i]; tag {
+		case "omitempty":
+			tags.omitEmpty = true
+		case "set":
+			tags.set = true
+		default:
+			panic(&InvalidTagError{"Unrecognized tag: " + tag})
+		}
 	}
 	return
 }
@@ -349,7 +364,7 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 
 		fields = append(fields, field{
 			name:      tags.name,
-			encoder:   typeEncoder(f.Type, parentStructTypes),
+			encoder:   typeEncoder(f.Type, parentStructTypes, tags),
 			index:     i,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
@@ -437,7 +452,27 @@ func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	}
 
 	encoderCache.set(t, e)
-	elemEncoder = typeEncoder(t.Elem(), parentStructTypes)
+	elemEncoder = typeEncoder(t.Elem(), parentStructTypes, nomsTags{})
+	return e
+}
+
+func setEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
+	e := setEncoderCache.get(t)
+	if e != nil {
+		return e
+	}
+
+	var encoder encoderFunc
+	e = func(v reflect.Value) types.Value {
+		values := make([]types.Value, v.Len(), v.Len())
+		for i, k := range v.MapKeys() {
+			values[i] = encoder(k)
+		}
+		return types.NewSet(values...)
+	}
+
+	setEncoderCache.set(t, e)
+	encoder = typeEncoder(t.Key(), parentStructTypes, nomsTags{})
 	return e
 }
 
@@ -460,7 +495,15 @@ func mapEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	}
 
 	encoderCache.set(t, e)
-	keyEncoder = typeEncoder(t.Key(), parentStructTypes)
-	valueEncoder = typeEncoder(t.Elem(), parentStructTypes)
+	keyEncoder = typeEncoder(t.Key(), parentStructTypes, nomsTags{})
+	valueEncoder = typeEncoder(t.Elem(), parentStructTypes, nomsTags{})
 	return e
+}
+
+func shouldMapEncodeAsSet(t reflect.Type, tags nomsTags) bool {
+	d.PanicIfFalse(t.Kind() == reflect.Map)
+	// map[T]struct{} `noms:,"set"`
+	return tags.set &&
+		t.Elem().Kind() == reflect.Struct &&
+		t.Elem().NumField() == 0
 }

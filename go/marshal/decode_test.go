@@ -639,3 +639,89 @@ func TestDecodeOntoInterfaceStruct(t *testing.T) {
 	var i interface{}
 	assertDecodeErrorMessage(t, types.NewStruct("", types.StructData{}), &i, "Cannot unmarshal struct {} into Go value of type interface {}")
 }
+
+func TestDecodeSet(t *testing.T) {
+	assert := assert.New(t)
+
+	type T struct {
+		A map[int]struct{} `noms:",set"`
+		B map[int]struct{}
+		C map[string]struct{} `noms:",set"`
+		D map[string]struct{}
+		E []int
+		F []int
+	}
+
+	ns := types.NewStruct("T", types.StructData{
+		"a": types.NewSet(types.Number(0), types.Number(1), types.Number(2)),
+		"b": types.NewMap(types.Number(3), types.EmptyStruct, types.Number(4), types.EmptyStruct, types.Number(5), types.EmptyStruct),
+		"c": types.NewSet(types.String("0"), types.String("1"), types.String("2")),
+		"d": types.NewMap(types.String("3"), types.EmptyStruct, types.String("4"), types.EmptyStruct, types.String("5"), types.EmptyStruct),
+		"e": types.NewSet(types.Number(6), types.Number(7), types.Number(8)),
+		"f": types.NewList(types.Number(9), types.Number(10), types.Number(11)),
+	})
+
+	gs := T{}
+	assert.NoError(Unmarshal(ns, &gs))
+	assert.Equal(T{
+		A: map[int]struct{}{0: {}, 1: {}, 2: {}},
+		B: map[int]struct{}{3: {}, 4: {}, 5: {}},
+		C: map[string]struct{}{"0": {}, "1": {}, "2": {}},
+		D: map[string]struct{}{"3": {}, "4": {}, "5": {}},
+		E: []int{6, 7, 8},
+		F: []int{9, 10, 11},
+	}, gs)
+}
+
+func TestDecodeNamedSet(t *testing.T) {
+	assert := assert.New(t)
+
+	type T struct {
+		A map[int]struct{} `noms:"foo,set"`
+	}
+
+	ns := types.NewStruct("T", types.StructData{
+		"a":   types.NewSet(types.Number(0)),
+		"foo": types.NewSet(types.Number(1)),
+	})
+
+	gs := T{}
+	assert.NoError(Unmarshal(ns, &gs))
+	assert.Equal(T{
+		map[int]struct{}{1: {}},
+	}, gs)
+}
+
+func TestDecodeSetWrongMapType(t *testing.T) {
+	assert := assert.New(t)
+
+	type T1 struct {
+		A map[int]int `noms:",set"`
+	}
+
+	err := Unmarshal(types.NewStruct("T1", types.StructData{
+		"a": types.NewSet(types.Number(0)),
+	}), &T1{})
+	assert.Error(err)
+	assert.Equal("Cannot unmarshal Set<Number> into Go value of type map[int]int", err.Error())
+
+	type T2 struct {
+		A map[int]struct{}
+	}
+
+	err = Unmarshal(types.NewStruct("T2", types.StructData{
+		"a": types.NewSet(types.Number(0)),
+	}), &T2{})
+	assert.Error(err)
+	assert.Equal(`Cannot unmarshal Set<Number> into Go value of type map[int]struct {}, field missing "set" tag`, err.Error())
+
+	type T3 struct {
+		A map[int]struct{} `noms:",set"`
+	}
+
+	err = Unmarshal(types.NewStruct("T3", types.StructData{
+		"a": types.NewMap(types.Number(0), types.EmptyStruct),
+	}), &T3{})
+	assert.Error(err)
+	assert.Equal(`Cannot unmarshal Map<Number, struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
+}
