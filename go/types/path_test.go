@@ -365,3 +365,12 @@ func TestCopyPath(t *testing.T) {
 		assert.Equal(expected, p1)
 	}
 }
+
+func TestMustParsePath(t *testing.T) {
+	for _, good := range []string{".good", "[\"good\"]"} {
+		assert.NotNil(t, MustParsePath(good))
+	}
+	for _, bad := range []string{"", "bad", "[bad]", "!", "💩"} {
+		assert.Panics(t, func() { MustParsePath(bad) })
+	}
+}

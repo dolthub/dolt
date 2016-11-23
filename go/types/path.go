@@ -29,11 +29,21 @@ type PathPart interface {
 	String() string
 }
 
+// ParsePath parses str into a Path, or returns an error if parsing failed.
 func ParsePath(str string) (Path, error) {
 	if str == "" {
 		return Path{}, errors.New("Empty path")
 	}
 	return constructPath(Path{}, str)
+}
+
+// MustParsePath parses str into a Path, or panics if parsing failed.
+func MustParsePath(str string) Path {
+	p, err := ParsePath(str)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
 
 func constructPath(p Path, str string) (Path, error) {
