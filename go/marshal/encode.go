@@ -153,9 +153,9 @@ func float64Encoder(v reflect.Value) types.Value {
 }
 
 func intEncoder(v reflect.Value) types.Value {
-
 	return types.Number(float64(v.Int()))
 }
+
 func uintEncoder(v reflect.Value) types.Value {
 	return types.Number(float64(v.Uint()))
 }
@@ -443,7 +443,13 @@ func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	}
 
 	var elemEncoder encoderFunc
+	// lock e until encoder(s) are initialized
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	e = func(v reflect.Value) types.Value {
+		init.RLock()
+		defer init.RUnlock()
 		values := make([]types.Value, v.Len(), v.Len())
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i))
@@ -463,7 +469,13 @@ func setEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	}
 
 	var encoder encoderFunc
+	// lock e until encoder(s) are initialized
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	e = func(v reflect.Value) types.Value {
+		init.RLock()
+		defer init.RUnlock()
 		values := make([]types.Value, v.Len(), v.Len())
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(k)
@@ -484,7 +496,13 @@ func mapEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 
 	var keyEncoder encoderFunc
 	var valueEncoder encoderFunc
+	// lock e until encoder(s) are initialized
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	e = func(v reflect.Value) types.Value {
+		init.RLock()
+		defer init.RUnlock()
 		keys := v.MapKeys()
 		kvs := make([]types.Value, 2*len(keys))
 		for i, k := range keys {
