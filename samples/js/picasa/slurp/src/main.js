@@ -8,7 +8,10 @@ import argv from 'yargs';
 import {
   DatasetSpec,
   jsonToNoms,
+  makeStructType,
   newStruct,
+  newStructWithType,
+  valueType,
 } from '@attic/noms';
 import {
   default as fetch,
@@ -158,15 +161,19 @@ async function main(): Promise<void> {
   // necessary. Consider doing something about that.
 
   const j = (v: any) => jsonToNoms(v);
-  return db.commit(out, newStruct('', {
-    albums: j(albums),
-    faces: j(faces),
-    user: j(user),
-  }, {
-    meta: {
-      date: new Date().toISOString(),
-    },
-  })).then(() => db.close());
+
+  // The type of this dataset is really large. As a hack to help keep the size of the root commit
+  // chunk under control, we stick into a field of type Value.
+  return db.commit(out, newStructWithType(makeStructType('', {value: valueType}), [
+    newStruct('', {
+      albums: j(albums),
+      faces: j(faces),
+      user: j(user),
+    })]), {
+      meta: newStruct('', {
+        date: new Date().toISOString(),
+      }),
+    }).then(() => db.close());
 }
 
 function callPicasa(path: string): Promise<any> {
