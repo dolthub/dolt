@@ -15,3 +15,6 @@
 unsafe.enable_getters_and_setters=true
 munge_underscores=true
 suppress_comment=\\(.\\|\n\\)*\\$FlowIssue: .+
+
+[version]
+0.34.0
