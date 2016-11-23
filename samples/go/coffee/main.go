@@ -27,6 +27,7 @@ var people = []string{
 	"dan",
 	"ehalpern",
 	"kalman",
+	"jenna",
 	"rafael",
 	"zane",
 }
