@@ -53,16 +53,7 @@ function load() {
 
 function loadUnsafe() {
   renderNode = document.getElementById('splore');
-
-  // Note: this way anything after the # will end up in `params`, which is what we want.
-  params = {};
-  const paramsIdx = location.href.indexOf('?');
-  if (paramsIdx > -1) {
-    decodeURIComponent(location.href.slice(paramsIdx + 1)).split('&').forEach(pair => {
-      const [k, v] = pair.split('=');
-      params[k] = v;
-    });
-  }
+  params = getParams(location.href);
 
   if (!params.db) {
     renderPrompt('Can haz database?');
@@ -284,7 +275,7 @@ class Prompt extends React.Component<void, PromptProps, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const qs = ['db', 'p']
+    const qs = ['db', 'p', 'auth']
       .map(k => [k, this.refs[k].value])
       .filter(([, v]) => !!v)
       .map(([k, v]) => `${k}=${v}`)
@@ -322,4 +313,23 @@ function getSize(val: Value): string | number {
     return filesize(val.length);
   }
   throw new Error('unreachable');
+}
+
+function getParams(href: string): {[key: string]: string} {
+  // This way anything after the # will end up in params, which is what we want.
+  const paramsIdx = href.indexOf('?');
+  if (paramsIdx === -1) {
+    return {};
+  }
+
+  return decodeURIComponent(href.slice(paramsIdx + 1)).split('&').reduce((params, kv) => {
+    // Make sure that '=' characters are preserved in query values, since '=' is valid base64.
+    const eqIndex = kv.indexOf('=');
+    if (eqIndex === -1) {
+      params[kv] = '';
+    } else {
+      params[kv.slice(0, eqIndex)] = kv.slice(eqIndex + 1);
+    }
+    return params;
+  }, {});
 }
