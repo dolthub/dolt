@@ -8,9 +8,8 @@ url = "http://demo.noms.io/cli-tour"
 
 # DB alias named `temp` that refers to a noms db stored under /tmp
 [db.temp]
-url = "ldb:/tmp/noms/shared
+url = "ldb:/tmp/noms/shared"
 
 # DB alias named `http` that refers to the local http db
 [db.http]
-url = "http://localhost:8000
-
+url = "http://localhost:8000"
