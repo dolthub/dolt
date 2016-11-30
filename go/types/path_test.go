@@ -213,11 +213,14 @@ func TestPathParseSuccess(t *testing.T) {
 	h := Number(42).Hash() // arbitrary hash
 
 	test(".foo")
+	test(".foo@type")
 	test(".Q")
 	test(".QQ")
 	test("[true]")
+	test("[true]@type")
 	test("[false]")
 	test("[false]@key")
+	test("[false]@key@type")
 	test("[42]")
 	test("[42]@key")
 	test("[1e4]")
@@ -289,8 +292,9 @@ func TestPathParseErrors(t *testing.T) {
 	test(".foo[42]bar", "Invalid operator: b")
 	test("#foo", "Invalid operator: #")
 	test("!foo", "Invalid operator: !")
-	test("@foo", "Invalid operator: @")
-	test("@key", "Invalid operator: @")
+	test("@foo", "Unsupported annotation: @foo")
+	test("@key", "Cannot use @key annotation at beginning of path")
+	test(".foo@key", "Cannot use @key annotation on: .foo")
 	test(fmt.Sprintf(".foo[#%s]@soup", hash.FromData([]byte{42}).String()), "Unsupported annotation: @soup")
 }
 
@@ -373,4 +377,29 @@ func TestMustParsePath(t *testing.T) {
 	for _, bad := range []string{"", "bad", "[bad]", "!", "💩"} {
 		assert.Panics(t, func() { MustParsePath(bad) })
 	}
+}
+
+func TestPathType(t *testing.T) {
+	assert := assert.New(t)
+
+	m := NewMap(
+		String("string"), String("foo"),
+		String("bool"), Bool(false),
+		String("number"), Number(42),
+		String("List<number|string>"), NewList(Number(42), String("foo")),
+		String("Map<Bool, Bool>"), NewMap(Bool(true), Bool(false)))
+
+	m.IterAll(func(k, cv Value) {
+		ks := k.(String)
+		assertResolvesTo(assert, cv.Type(), m, fmt.Sprintf("[\"%s\"]@type", ks))
+	})
+
+	assertResolvesTo(assert, StringType, m, `["string"]@key@type`)
+	assertResolvesTo(assert, m.Type(), m, `@type`)
+	s := NewStruct("", StructData{
+		"str": String("foo"),
+		"num": Number(42),
+	})
+	assertResolvesTo(assert, s.Get("str").Type(), s, ".str@type")
+	assertResolvesTo(assert, s.Get("num").Type(), s, ".num@type")
 }

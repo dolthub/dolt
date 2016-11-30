@@ -17,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var annotationRe = regexp.MustCompile("^@([a-z]+)")
+var annotationRe = regexp.MustCompile("^([a-z]+)")
 
 // A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they
 // can address inlined values.
@@ -75,31 +75,35 @@ func constructPath(p Path, str string) (Path, error) {
 			return Path{}, errors.New("[ is missing closing ]")
 		}
 		rem = rem[1:]
-
-		intoKey := false
-		if ann, rem2 := getAnnotation(rem); ann != "" {
-			if ann != "key" {
-				return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
-			}
-			intoKey = true
-			rem = rem2
-		}
-
 		d.Chk.NotEqual(idx == nil, h.IsEmpty())
 
 		var part PathPart
-		switch {
-		case idx != nil && intoKey:
-			part = NewIndexIntoKeyPath(idx)
-		case idx != nil:
+		if idx != nil {
 			part = NewIndexPath(idx)
-		case intoKey:
-			part = NewHashIndexIntoKeyPath(h)
-		default:
+		} else {
 			part = NewHashIndexPath(h)
 		}
 		p = append(p, part)
 		return constructPath(p, rem)
+
+	case '@':
+		ann, rem := getAnnotation(tail)
+		switch ann {
+		case "key":
+			if len(p) == 0 {
+				return Path{}, fmt.Errorf("Cannot use @key annotation at beginning of path")
+			}
+			lastPart := p[len(p)-1]
+			if ki, ok := lastPart.(keyIndexable); ok {
+				p[len(p)-1] = ki.setIntoKey(true).(PathPart)
+				return constructPath(p, rem)
+			}
+			return Path{}, fmt.Errorf("Cannot use @key annotation on: %s", lastPart.String())
+		case "type":
+			return constructPath(append(p, TypePart{}), rem)
+		default:
+			return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
+		}
 
 	case ']':
 		return Path{}, errors.New("] is missing opening [")
@@ -239,6 +243,11 @@ func (ip IndexPath) String() (str string) {
 	return fmt.Sprintf("[%s]%s", EncodedIndexValue(ip.Index), ann)
 }
 
+func (ip IndexPath) setIntoKey(v bool) keyIndexable {
+	ip.IntoKey = v
+	return ip
+}
+
 // Indexes into Maps by the hash of a key, or a Set by the hash of a value.
 type HashIndexPath struct {
 	// The hash of the key or value to search for. Maps and Set are ordered, so
@@ -306,6 +315,11 @@ func (hip HashIndexPath) String() string {
 	return fmt.Sprintf("[#%s]%s", hip.Hash.String(), ann)
 }
 
+func (hip HashIndexPath) setIntoKey(v bool) keyIndexable {
+	hip.IntoKey = v
+	return hip
+}
+
 // Parse a Noms value from the path index syntax.
 // 4 ->          types.Number
 // "4" ->        types.String
@@ -369,10 +383,25 @@ Switch:
 	return
 }
 
+type TypePart struct {
+}
+
+func (tp TypePart) Resolve(v Value) Value {
+	return v.Type()
+}
+
+func (tp TypePart) String() string {
+	return "@type"
+}
+
 func getAnnotation(str string) (ann, rem string) {
 	if parts := annotationRe.FindStringSubmatch(str); parts != nil {
 		ann = parts[1]
 		rem = str[len(parts[0]):]
 	}
 	return
+}
+
+type keyIndexable interface {
+	setIntoKey(v bool) keyIndexable
 }
