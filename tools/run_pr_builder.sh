@@ -40,4 +40,5 @@ popd
 
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
 
-bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
+# Disabling code coverage upload in case it's causing errors.
+# bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
