@@ -26,7 +26,6 @@ PLATFORMS = [
 # The list of Go packages for which we should build binaries
 PACKAGES = [
     './cmd/noms',
-    # './cmd/noms-ui',
     './samples/go/blob-get',
     './samples/go/counter',
     './samples/go/csv/csv-analyze',
