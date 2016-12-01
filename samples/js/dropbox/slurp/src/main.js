@@ -27,7 +27,7 @@ const args = argv
 
     To obtain a token, build <noms>/tools/oauthify, then run:
 
-    ./oauthify --client-id=6i6tl9k390judrl --client-secret=bvmnnth5k2d2vc3 \\
+    ./oauthify --client-id=m9gqwikljd832nl --client-secret=vov2lbjo5wmbl4q \\
     --auth-url=https://www.dropbox.com/oauth2/authorize \\
     --token-url=https://api.dropboxapi.com/oauth2/token --pass-client-in-url
     `)
