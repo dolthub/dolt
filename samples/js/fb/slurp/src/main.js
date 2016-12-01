@@ -33,7 +33,9 @@ const args = argv
     1. Browse to https://developers.facebook.com/tools/explorer/
     2. Login with your Facebook credentials.
     3. Select "AtticIO Photo Importer" in the "Application" drop down.
+       (If you don't see AtticIO Photo Importer, then contact @aa.)
     4. In the "Get Token" dropdown menu, select "Get User Access Token".
+       (Click to enable permissions for email, user_photos, user_posts.)
     5. Copy the Access Token from the textbox.
     6. (optional) Exchange the "short-lived" token from (5) for a long-lived one:
        node . --access-token=<short-lived-token> --exchange-token`)
