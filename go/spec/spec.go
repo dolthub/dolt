@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -155,6 +156,8 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	switch sp.Protocol {
 	case "http", "https":
 		return nil
+	case "nbs":
+		return nbs.NewBlockStore(sp.DatabaseName, 1<<28)
 	case "ldb":
 		return getLdbStore(sp.DatabaseName)
 	case "mem":
@@ -246,6 +249,8 @@ func (sp Spec) createDatabase() datas.Database {
 		return datas.NewRemoteDatabase(sp.Href(), sp.Options.Authorization)
 	case "ldb":
 		return datas.NewDatabase(getLdbStore(sp.DatabaseName))
+	case "nbs":
+		return datas.NewDatabase(nbs.NewBlockStore(sp.DatabaseName, 1<<28))
 	case "mem":
 		return datas.NewDatabase(chunks.NewMemoryStore())
 	}
@@ -273,7 +278,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	}
 
 	switch parts[0] {
-	case "ldb":
+	case "ldb", "nbs":
 		protocol, name = parts[0], parts[1]
 
 	case "http", "https":
