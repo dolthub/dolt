@@ -36,6 +36,13 @@ func (s testSuite) TestMain() {
 		sp.GetDatabase().Commit(sp.GetDataset(), v, datas.CommitOptions{})
 	}
 
+	currentDatasetValueHash := func(dsName string, dbSpec string) string {
+		sp, err := spec.ForDataset(dbSpec + spec.Separator + dsName)
+		s.NoError(err)
+		defer sp.Close()
+		return sp.GetDataset().HeadValue().Hash().String()
+	}
+
 	testBlobValue := func(db datas.Database, m types.Map, key, expected string) {
 		k := types.String(key)
 		localResource1 := m.Get(k).(types.Struct)
@@ -72,6 +79,7 @@ func (s testSuite) TestMain() {
 		"walked: 3, updated 1, found in cache: 0, errors retrieving: 0",
 	)
 
+	prevValueHash := currentDatasetValueHash("out-ds", dbSpecString)
 	m["k2"] = RemoteResource{ts.URL + "/two"}
 	commitToDb(mustMarshal(m), "in-ds", dbSpecString)
 
@@ -79,6 +87,8 @@ func (s testSuite) TestMain() {
 		[]string{"--cache-ds", "cache", dbSpecString + "::in-ds.value", "out-ds"},
 		"walked: 1, updated 1, found in cache: 0, errors retrieving: 0",
 	)
+	curValueHash := currentDatasetValueHash("out-ds", dbSpecString)
+	s.NotEqual(prevValueHash, curValueHash)
 
 	sp, err := spec.ForPath(dbSpecString + "::out-ds.value")
 	s.NoError(err)
@@ -88,10 +98,13 @@ func (s testSuite) TestMain() {
 	testBlobValue(db, v, "k1", "/one")
 	testBlobValue(db, v, "k2", "/two")
 
+	prevValueHash = currentDatasetValueHash("out-ds", dbSpecString)
 	mustRunTest(
 		[]string{"--cache-ds", "cache", dbSpecString + "::in-ds.value", "out-ds"},
 		"No change since last run, doing nothing",
 	)
+	curValueHash = currentDatasetValueHash("out-ds", dbSpecString)
+	s.Equal(prevValueHash, curValueHash)
 
 	errorTest(
 		[]string{"--cache-ds", "cache", "--concurrency", "0", dbSpecString + "::in-ds.value", "out-ds"},

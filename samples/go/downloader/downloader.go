@@ -196,17 +196,17 @@ func downloadPhotos(db datas.Database, inRoot, lastInRoot, lastOutCommit types.V
 		return dif
 	}
 
+	var lastOutRoot types.Value
+	if lastOutCommit != nil {
+		lastOutRoot = lastOutCommit.(types.Struct).Get("value")
+	}
+
 	if lastInRoot != nil && lastInRoot.Equals(inRoot) {
 		// The current inRoot is the same as the last one we worked on, so there
 		// is nothing to do. Just return the inRoot so a new commit can be added
 		// latest meta data
 		fmt.Println("No change since last run, doing nothing")
-		return inRoot
-	}
-
-	var lastOutRoot types.Value
-	if lastOutCommit != nil {
-		lastOutRoot = lastOutCommit.(types.Struct).Get("value")
+		return lastOutRoot
 	}
 
 	newRoot = IncrementalUpdate(db, inRoot, lastInRoot, lastOutRoot, shouldUpdateCb, updateCb, concurrency)
