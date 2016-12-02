@@ -135,6 +135,7 @@ func (e *InvalidTagError) Error() string {
 type nomsTags struct {
 	name      string
 	omitEmpty bool
+	original  bool
 	set       bool
 	skip      bool
 }
@@ -331,6 +332,8 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 		switch tag := tagsSlice[i]; tag {
 		case "omitempty":
 			tags.omitEmpty = true
+		case "original":
+			tags.original = true
 		case "set":
 			tags.set = true
 		default:

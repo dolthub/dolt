@@ -750,3 +750,66 @@ func TestDecodeSetWrongMapType(t *testing.T) {
 	assert.Error(err)
 	assert.Equal(`Cannot unmarshal Map<Number, struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
 }
+
+func TestDecodeOmitEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Foo int `noms:",omitempty"`
+		Bar struct {
+			Baz    int
+			Hotdog int `noms:",omitempty"`
+		}
+	}
+	expected := S{
+		Bar: struct {
+			Baz    int
+			Hotdog int `noms:",omitempty"`
+		}{
+			Baz: 42,
+		},
+	}
+	var actual S
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"bar": types.NewStruct("", types.StructData{
+			"baz": types.Number(42),
+		}),
+	}), &actual)
+	assert.NoError(err)
+	assert.Equal(expected, actual)
+}
+
+func TestDecodeOriginal(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Foo int          `noms:",omitempty"`
+		Bar types.Struct `noms:",original"`
+		Baz types.Struct `noms:",original"`
+	}
+	input := types.NewStruct("S", types.StructData{
+		"foo": types.Number(42),
+	})
+	expected := S{
+		Foo: 42,
+		Bar: input,
+		Baz: input,
+	}
+	var actual S
+	err := Unmarshal(input, &actual)
+	assert.NoError(err)
+	assert.True(expected.Bar.Equals(actual.Bar))
+}
+
+func TestDecodeOriginalReceiveTypeError(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Foo types.Value `noms:",original"`
+	}
+	input := types.NewStruct("S", types.StructData{})
+	var actual S
+	err := Unmarshal(input, &actual)
+	assert.Error(err)
+	assert.Equal(`Cannot unmarshal struct S {} into Go value of type marshal.S, field with tag "original" must have type Struct`, err.Error())
+}
