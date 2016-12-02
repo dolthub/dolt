@@ -47,7 +47,7 @@ func runShow(args []string) int {
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	types.WriteEncodedValueWithTags(pgr.Writer, value)
+	types.WriteEncodedValue(pgr.Writer, value)
 	fmt.Fprintln(pgr.Writer)
 	return 0
 }

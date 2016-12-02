@@ -23,11 +23,11 @@ type nomsShowTestSuite struct {
 }
 
 const (
-	res1 = "struct Commit {\n  meta: struct {},\n  parents: Set<Ref<Cycle<0>>>,\n  value: Ref<String>,\n}({\n  meta:  {},\n  parents: {},\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n})\n"
+	res1 = "Commit {\n  meta:  {},\n  parents: {},\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}\n"
 	res2 = "\"test string\"\n"
-	res3 = "struct Commit {\n  meta: struct {},\n  parents: Set<Ref<struct Commit {\n    meta: struct {},\n    parents: Set<Ref<Cycle<0>>>,\n    value: Ref<List<Number | String>> | Ref<String>,\n  }>>,\n  value: Ref<List<Number | String>>,\n}({\n  meta:  {},\n  parents: {\n    4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  },\n  value: 82adk7hfcudg8fktittm672to66t6qeu,\n})\n"
-	res4 = "List<Number | String>([\n  \"elem1\",\n  2,\n  \"elem3\",\n])\n"
-	res5 = "struct Commit {\n  meta: struct {},\n  parents: Set<Ref<struct Commit {\n    meta: struct {},\n    parents: Set<Ref<Cycle<0>>>,\n    value: Ref<List<Number | String>> | Ref<String>,\n  }>>,\n  value: Ref<String>,\n}({\n  meta:  {},\n  parents: {\n    3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n})\n"
+	res3 = "Commit {\n  meta:  {},\n  parents: {\n    4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  },\n  value: 82adk7hfcudg8fktittm672to66t6qeu,\n}\n"
+	res4 = "[\n  \"elem1\",\n  2,\n  \"elem3\",\n]\n"
+	res5 = "Commit {\n  meta:  {},\n  parents: {\n    3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}\n"
 )
 
 func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.Ref {
