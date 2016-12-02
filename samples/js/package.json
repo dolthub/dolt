@@ -18,7 +18,7 @@
     "csv": "^1.1.0",
     "eslint-config-noms": "1.0.0",
     "flickr-oauth-and-upload": "^0.8.0",
-    "flow-bin": "0.34.0",
+    "flow-bin": "0.35.0",
     "http-server": "^0.9.0",
     "humanize": "^0.0.9",
     "mocha": "^2.5.3",
