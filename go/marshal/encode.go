@@ -195,6 +195,12 @@ func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags
 			v2 := reflect.ValueOf(v.Interface())
 			return typeEncoder(v2.Type(), parentStructTypes, tags)(v2)
 		}
+	case reflect.Ptr:
+		// Allow implementations of types.Value (like *types.Type)
+		if t.Implements(nomsValueInterface) {
+			return nomsValueEncoder
+		}
+		fallthrough
 	default:
 		panic(&UnsupportedTypeError{Type: t})
 	}

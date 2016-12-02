@@ -421,6 +421,32 @@ func TestEncodeStructWithArrayOfNomsValue(t *testing.T) {
 	}).Equals(v))
 }
 
+func TestEncodeNomsTypePtr(t *testing.T) {
+	assert := assert.New(t)
+
+	testMarshal := func(g interface{}, expected types.Value) {
+		v, err := Marshal(g)
+		assert.NoError(err)
+		assert.Equal(expected, v)
+	}
+
+	type S struct {
+		Type *types.Type
+	}
+
+	primitive := types.StringType
+	testMarshal(S{primitive}, types.NewStruct("S", types.StructData{"type": primitive}))
+
+	complex := types.MakeStructType("Complex",
+		[]string{"stuff"},
+		[]*types.Type{types.StringType},
+	)
+	testMarshal(S{complex}, types.NewStruct("S", types.StructData{"type": complex}))
+
+	var empty *types.Type
+	testMarshal(S{empty}, types.NewStruct("S", types.StructData{"type": empty}))
+}
+
 func TestEncodeRecursive(t *testing.T) {
 	assert := assert.New(t)
 

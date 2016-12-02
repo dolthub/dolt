@@ -399,6 +399,31 @@ func TestDecodeInvalidNomsType(t *testing.T) {
 	}), &s, "Cannot unmarshal Map<String, Number> into Go value of type types.List")
 }
 
+func TestDecodeNomsTypePtr(t *testing.T) {
+	assert := assert.New(t)
+
+	testUnmarshal := func(v types.Value, dest interface{}, expected interface{}) {
+		err := Unmarshal(v, dest)
+		assert.NoError(err)
+		assert.Equal(expected, dest)
+	}
+
+	type S struct{ Type *types.Type }
+	var s S
+
+	primitive := types.StringType
+	testUnmarshal(types.NewStruct("S", types.StructData{"type": primitive}), &s, &S{primitive})
+
+	complex := types.MakeStructType("Complex",
+		[]string{"stuff"},
+		[]*types.Type{types.StringType},
+	)
+	testUnmarshal(types.NewStruct("S", types.StructData{"type": complex}), &s, &S{complex})
+
+	var empty *types.Type
+	testUnmarshal(types.NewStruct("S", types.StructData{"type": empty}), &s, &S{empty})
+}
+
 func ExampleUnmarshal() {
 	type Person struct {
 		Given string
