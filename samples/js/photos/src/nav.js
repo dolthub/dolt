@@ -14,7 +14,7 @@ export default class Nav {
   constructor(wnd: Window) {
     this._window = wnd;
     this._listener = () => undefined;
-    wnd.addEventListener('click', e => this._handleClick(e));
+    wnd.addEventListener('click', (e: MouseEvent) => this._handleClick(e));
   }
 
   /**
@@ -48,8 +48,7 @@ export default class Nav {
     this._listener = f;
   }
 
-  _handleClick(e: Event) {
-    invariant(e instanceof MouseEvent);
+  _handleClick(e: MouseEvent) {
     if (e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
       // Modifiers to the click event may mean creating a new tab or window. Don't intercept these.
       return;
