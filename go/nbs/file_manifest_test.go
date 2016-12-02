@@ -33,8 +33,8 @@ func TestFileManifestParseIfExists(t *testing.T) {
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
-	newRoot := hash.FromData([]byte("new root"))
-	tableName := hash.FromData([]byte("table1"))
+	newRoot := hash.Of([]byte("new root"))
+	tableName := hash.Of([]byte("table1"))
 	b, err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", newRoot.String(), tableName.String(), "0"}, ":"))
 	assert.NoError(err, string(b))
 
@@ -55,15 +55,15 @@ func TestFileManifestParseIfExistsHoldsLock(t *testing.T) {
 	defer os.RemoveAll(fm.dir)
 
 	// Simulate another process writing a manifest.
-	newRoot := hash.FromData([]byte("new root"))
-	tableName := hash.FromData([]byte("table1"))
+	newRoot := hash.Of([]byte("new root"))
+	tableName := hash.Of([]byte("table1"))
 	b, err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, newRoot.String(), tableName.String(), "0"}, ":"))
 	assert.NoError(err, string(b))
 
 	// ParseIfExists should now reflect the manifest written above.
 	exists, vers, root, tableSpecs := fm.ParseIfExists(func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
-		badRoot := hash.FromData([]byte("bad root"))
+		badRoot := hash.Of([]byte("bad root"))
 		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", badRoot.String(), tableName.String(), "0"}, ":"))
 		assert.NoError(err, string(b))
 	})
@@ -94,10 +94,10 @@ func TestFileManifestUpdateWinRace(t *testing.T) {
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
 
-	newRoot2 := hash.FromData([]byte("new root 2"))
+	newRoot2 := hash.Of([]byte("new root 2"))
 	actual, tableSpecs := fm.Update(nil, hash.Hash{}, newRoot2, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
-		newRoot := hash.FromData([]byte("new root"))
+		newRoot := hash.Of([]byte("new root"))
 		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, newRoot.String()}, ":"))
 		assert.NoError(err, string(b))
 	})
@@ -110,12 +110,12 @@ func TestFileManifestUpdateRootOptimisticLockFail(t *testing.T) {
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
 
-	tableName := hash.FromData([]byte("table1"))
-	newRoot := hash.FromData([]byte("new root"))
+	tableName := hash.Of([]byte("table1"))
+	newRoot := hash.Of([]byte("new root"))
 	b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, newRoot.String(), tableName.String(), "3"}, ":"))
 	assert.NoError(err, string(b))
 
-	newRoot2 := hash.FromData([]byte("new root 2"))
+	newRoot2 := hash.Of([]byte("new root 2"))
 	actual, tableSpecs := fm.Update(nil, hash.Hash{}, newRoot2, nil)
 	assert.Equal(newRoot, actual)
 	if assert.Len(tableSpecs, 1) {

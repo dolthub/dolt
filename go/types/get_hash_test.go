@@ -16,16 +16,15 @@ func TestEnsureHash(t *testing.T) {
 	vs := NewTestValueStore()
 	count := byte(1)
 	mockGetRef := func(v Value) hash.Hash {
-		d := hash.Digest{}
-		d[0] = count
+		h := hash.Hash{}
+		h[0] = count
 		count++
-		return hash.New(d)
+		return h
 	}
-	testRef := func(r hash.Hash, expected byte) {
-		d := r.Digest()
-		assert.Equal(expected, d[0])
-		for i := 1; i < len(d); i++ {
-			assert.Equal(byte(0), d[i])
+	testRef := func(h hash.Hash, expected byte) {
+		assert.Equal(expected, h[0])
+		for i := 1; i < hash.ByteLen; i++ {
+			assert.Equal(byte(0), h[i])
 		}
 	}
 
@@ -70,7 +69,9 @@ func TestEnsureHash(t *testing.T) {
 
 	for _, v := range values {
 		expected := byte(0x42)
-		assignHash(v.(hashCacher), hash.New(hash.Digest{0: expected}))
+		h := hash.Hash{}
+		h[0] = expected
+		assignHash(v.(hashCacher), h)
 		testRef(v.Hash(), expected)
 	}
 

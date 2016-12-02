@@ -79,26 +79,8 @@ func TestString(t *testing.T) {
 	assert.Equal(t, s, r.String())
 }
 
-func TestDigest(t *testing.T) {
-	r := New(Digest{})
-	d := r.Digest()
-	assert.Equal(t, r.Digest(), d)
-	// Digest() must return a copy otherwise things get weird.
-	d[0] = 0x01
-	assert.NotEqual(t, r.Digest(), d)
-}
-
-func TestDigestSlice(t *testing.T) {
-	r := New(Digest{})
-	d := r.DigestSlice()
-	assert.Equal(t, r.DigestSlice(), d)
-	// DigestSlice() must return a copy otherwise things get weird.
-	d[0] = 0x01
-	assert.NotEqual(t, r.DigestSlice(), d)
-}
-
-func TestFromData(t *testing.T) {
-	r := FromData([]byte("abc"))
+func TestOf(t *testing.T) {
+	r := Of([]byte("abc"))
 	assert.Equal(t, "rmnjb8cjc5tblj21ed4qs821649eduie", r.String())
 }
 

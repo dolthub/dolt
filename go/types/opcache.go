@@ -317,7 +317,8 @@ func encodeForGraph(bs []byte, v Value, asValue bool, vrw ValueReadWriter) []byt
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
 		bs = append(bs, uint8(v.Type().Kind()))
-		bs = append(bs, v.Hash().DigestSlice()...)
+		h := v.Hash()
+		bs = append(bs, h[:]...)
 	}
 	return bs
 }

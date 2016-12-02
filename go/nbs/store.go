@@ -120,7 +120,7 @@ func unionTables(curTables chunkSources, tm tableManager, tableSpecs []tableSpec
 }
 
 func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
-	a := addr(c.Hash().Digest())
+	a := addr(c.Hash())
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
 	nbs.putCount++
 }
@@ -132,7 +132,7 @@ func (nbs *NomsBlockStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints t
 func (nbs *NomsBlockStore) PutMany(chunx []chunks.Chunk) (err chunks.BackpressureError) {
 	for ; len(chunx) > 0; chunx = chunx[1:] {
 		c := chunx[0]
-		a := addr(c.Hash().Digest())
+		a := addr(c.Hash())
 		if !nbs.addChunk(a, c.Data()) {
 			break
 		}
@@ -168,7 +168,7 @@ func prependTable(curTables chunkSources, crc chunkSource) chunkSources {
 }
 
 func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
-	a := addr(h.Digest())
+	a := addr(h)
 	data, tables := func() (data []byte, tables chunkSources) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
@@ -189,7 +189,7 @@ func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 	reqs := make([]getRecord, len(hashes))
 	for i, h := range hashes {
-		a := addr(h.Digest())
+		a := addr(h)
 		reqs[i] = getRecord{
 			a:      &a,
 			prefix: a.Prefix(),
@@ -232,7 +232,7 @@ func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 }
 
 func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
-	a := addr(h.Digest())
+	a := addr(h)
 	has, tables := func() (bool, chunkSources) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()

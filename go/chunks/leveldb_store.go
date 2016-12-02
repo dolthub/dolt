@@ -146,11 +146,10 @@ func (l *LevelDBStore) Close() error {
 	return nil
 }
 
-func (l *LevelDBStore) toChunkKey(r hash.Hash) []byte {
-	digest := r.DigestSlice()
-	out := make([]byte, len(l.chunkPrefix), len(l.chunkPrefix)+len(digest))
+func (l *LevelDBStore) toChunkKey(h hash.Hash) []byte {
+	out := make([]byte, len(l.chunkPrefix), len(l.chunkPrefix)+hash.ByteLen)
 	copy(out, l.chunkPrefix)
-	return append(out, digest...)
+	return append(out, h[:]...)
 }
 
 func (l *LevelDBStore) setVersIfUnset() {

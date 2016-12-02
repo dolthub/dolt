@@ -118,7 +118,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 
 	addrs := make([]addr, len(addrStrings))
 	for i, s := range addrStrings {
-		addrs[i] = addr(hash.Parse(s).Digest())
+		addrs[i] = addr(hash.Parse(s))
 	}
 
 	bogusData := []byte("bogus") // doesn't matter what this is. hasMany() won't check chunkRecords

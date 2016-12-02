@@ -108,12 +108,11 @@ func (p *orderedChunkCache) Clear(hashes hash.HashSet) {
 var uint64Size = binary.Size(uint64(0))
 
 // toDbKey takes a refHeight and a hash and returns a binary key suitable for use with LevelDB. The default sort order used by LevelDB ensures that these keys (and their associated values) will be iterated in ref-height order.
-func toDbKey(refHeight uint64, hash hash.Hash) []byte {
-	digest := hash.DigestSlice()
-	buf := bytes.NewBuffer(make([]byte, 0, uint64Size+binary.Size(digest)))
+func toDbKey(refHeight uint64, h hash.Hash) []byte {
+	buf := bytes.NewBuffer(make([]byte, 0, uint64Size+hash.ByteLen))
 	err := binary.Write(buf, binary.BigEndian, refHeight)
 	d.Chk.NoError(err)
-	err = binary.Write(buf, binary.BigEndian, digest)
+	err = binary.Write(buf, binary.BigEndian, h[:])
 	d.Chk.NoError(err)
 	return buf.Bytes()
 }
@@ -123,10 +122,10 @@ func fromDbKey(key []byte) (uint64, hash.Hash) {
 	r := bytes.NewReader(key)
 	err := binary.Read(r, binary.BigEndian, &refHeight)
 	d.Chk.NoError(err)
-	digest := hash.Digest{}
-	err = binary.Read(r, binary.BigEndian, &digest)
+	h := hash.Hash{}
+	err = binary.Read(r, binary.BigEndian, &h)
 	d.Chk.NoError(err)
-	return refHeight, hash.New(digest)
+	return refHeight, h
 }
 
 // ExtractChunks can be called from any goroutine to write Chunks referenced by the given hashes to w. The chunks are ordered by ref-height. Chunks of the same height are written in an unspecified order, relative to one another.

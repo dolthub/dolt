@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"bytes"
+
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -295,7 +296,7 @@ func TestPathParseErrors(t *testing.T) {
 	test("@foo", "Unsupported annotation: @foo")
 	test("@key", "Cannot use @key annotation at beginning of path")
 	test(".foo@key", "Cannot use @key annotation on: .foo")
-	test(fmt.Sprintf(".foo[#%s]@soup", hash.FromData([]byte{42}).String()), "Unsupported annotation: @soup")
+	test(fmt.Sprintf(".foo[#%s]@soup", hash.Of([]byte{42}).String()), "Unsupported annotation: @soup")
 }
 
 func TestPathEquals(t *testing.T) {

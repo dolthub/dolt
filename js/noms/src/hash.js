@@ -75,7 +75,7 @@ export default class Hash {
   /**
    * Computes the hash from `data`.
    */
-  static fromData(data: Uint8Array): Hash {
+  static of(data: Uint8Array): Hash {
     return new Hash(sha512(data));
   }
 }

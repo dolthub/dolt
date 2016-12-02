@@ -155,8 +155,7 @@ func (rv *rollingValueHasher) writeString(v string) {
 }
 
 func (rv *rollingValueHasher) writeHash(h hash.Hash) {
-	digest := h.Digest()
-	for _, b := range digest[:] {
+	for _, b := range h[:] {
 		rv.HashByte(b)
 	}
 }

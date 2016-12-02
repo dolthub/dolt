@@ -313,7 +313,7 @@ function generateOID(t: Type<any>, allowUnresolvedCycles: boolean) {
   if (!hasOID(t)) {
     const buf = new BinaryWriter();
     encodeForOID(t, buf, allowUnresolvedCycles, t, []);
-    const oid = Hash.fromData(buf.data);
+    const oid = Hash.of(buf.data);
     t.updateOID(oid);
   }
 }
@@ -366,7 +366,7 @@ function encodeForOID(t: Type<any>, buf: BinaryWriter, allowUnresolvedCycles: bo
         if (!h) {
           mbuf.reset();
           encodeForOID(elemType, mbuf, allowUnresolvedCycles, root, parentStructTypes);
-          h = Hash.fromData(mbuf.data);
+          h = Hash.of(mbuf.data);
           if (parentStructTypes.indexOf(elemType) === -1) {
             elemType.updateOID(h);
           }

@@ -53,7 +53,7 @@ suite('Hash', () => {
   });
 
   test('fromData', () => {
-    const r = Hash.fromData(Bytes.fromString('abc'));
+    const r = Hash.of(Bytes.fromString('abc'));
     assert.strictEqual('rmnjb8cjc5tblj21ed4qs821649eduie', r.toString());
   });
 

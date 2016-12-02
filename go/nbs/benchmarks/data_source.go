@@ -126,7 +126,7 @@ func (src *dataSource) readTuples(tuples chan<- offsetTuple) {
 			return
 		}
 		d.Chk.True(n == gen.OffsetTupleLen)
-		ot.h = hash.FromSlice(otBuf[:20])
+		ot.h = hash.New(otBuf[:20])
 		ot.l = uint64(binary.BigEndian.Uint32(otBuf[20:]))
 		src.dataRead += ot.l
 		tuples <- ot

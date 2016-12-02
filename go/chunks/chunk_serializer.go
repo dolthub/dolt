@@ -31,8 +31,8 @@ import (
 func Serialize(chunk Chunk, writer io.Writer) {
 	d.PanicIfFalse(chunk.data != nil)
 
-	digest := chunk.Hash().Digest()
-	n, err := io.Copy(writer, bytes.NewReader(digest[:]))
+	h := chunk.Hash()
+	n, err := io.Copy(writer, bytes.NewReader(h[:]))
 	d.Chk.NoError(err)
 	d.PanicIfFalse(int64(hash.ByteLen) == n)
 
@@ -90,14 +90,13 @@ func DeserializeToChan(reader io.Reader, chunkChan chan<- interface{}) {
 }
 
 func deserializeChunk(reader io.Reader) (Chunk, bool) {
-	digest := hash.Digest{}
-	n, err := io.ReadFull(reader, digest[:])
+	h := hash.Hash{}
+	n, err := io.ReadFull(reader, h[:])
 	if err == io.EOF {
 		return EmptyChunk, false
 	}
 	d.Chk.NoError(err)
 	d.PanicIfFalse(int(hash.ByteLen) == n)
-	h := hash.New(digest)
 
 	chunkSize := uint32(0)
 	err = binary.Read(reader, binary.BigEndian, &chunkSize)

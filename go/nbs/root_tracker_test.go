@@ -43,7 +43,7 @@ func TestChunkStoreVersion(t *testing.T) {
 	defer store.Close()
 
 	assert.Equal(constants.NomsVersion, store.Version())
-	newRoot := hash.FromData([]byte("new root"))
+	newRoot := hash.Of([]byte("new root"))
 	if assert.True(store.UpdateRoot(newRoot, hash.Hash{})) {
 		assert.Equal(constants.NomsVersion, store.Version())
 	}
@@ -86,7 +86,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 
 	// Simulate another process writing a manifest (with an old Noms version) after construction.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
-	newRoot := hash.FromData([]byte("new root"))
+	newRoot := hash.Of([]byte("new root"))
 	h := createOnDiskTable(dir, chunks)
 	b, err := clobberManifest(dir, strings.Join([]string{StorageVersion, "0", newRoot.String(), h.String(), "3"}, ":"))
 	assert.NoError(err, string(b))
@@ -121,13 +121,13 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	// Simulate another process having already written a manifest (with an old Noms version).
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 	h := createOnDiskTable(dir, chunks)
-	newRoot := hash.FromData([]byte("new root"))
+	newRoot := hash.Of([]byte("new root"))
 	b, err := tryClobberManifest(dir, strings.Join([]string{StorageVersion, "0", newRoot.String(), h.String(), "3"}, ":"))
 	assert.NoError(err, string(b))
 
 	store := hookedNewNomsBlockStore(dir, defaultMemTableSize, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
-		badRoot := hash.FromData([]byte("bad root"))
+		badRoot := hash.Of([]byte("bad root"))
 		b, err := tryClobberManifest(dir, strings.Join([]string{StorageVersion, "0", badRoot.String(), h.String(), "3"}, ":"))
 		assert.NoError(err, string(b))
 	})

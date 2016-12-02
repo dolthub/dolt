@@ -31,8 +31,7 @@ func serializeHashes(w io.Writer, hashes hash.HashSlice) {
 }
 
 func serializeHash(w io.Writer, h hash.Hash) {
-	digest := h.Digest()
-	n, err := io.Copy(w, bytes.NewReader(digest[:]))
+	n, err := io.Copy(w, bytes.NewReader(h[:]))
 	d.Chk.NoError(err)
 	d.PanicIfFalse(int64(hash.ByteLen) == n)
 }
@@ -62,9 +61,9 @@ func deserializeHashes(reader io.Reader) hash.HashSlice {
 }
 
 func deserializeHash(reader io.Reader) hash.Hash {
-	digest := hash.Digest{}
-	n, err := io.ReadFull(reader, digest[:])
+	h := hash.Hash{}
+	n, err := io.ReadFull(reader, h[:])
 	d.Chk.NoError(err)
 	d.PanicIfFalse(int(hash.ByteLen) == n)
-	return hash.New(digest)
+	return h
 }

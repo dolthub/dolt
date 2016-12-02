@@ -17,7 +17,7 @@ export default class Chunk {
   }
 
   get hash(): Hash {
-    return this._hash || (this._hash = Hash.fromData(this.data));
+    return this._hash || (this._hash = Hash.of(this.data));
   }
 
   isEmpty(): boolean {

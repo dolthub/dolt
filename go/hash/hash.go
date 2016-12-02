@@ -52,53 +52,32 @@ var (
 )
 
 // Hash is used to represent the hash of a Noms Value.
-type Hash struct {
-	digest Digest
-}
-
-// Digest is used for the underlying data of the Hash.
-type Digest [ByteLen]byte
-
-// Digest returns a *copy* of the digest that backs Hash.
-func (r Hash) Digest() Digest {
-	return r.digest
-}
+type Hash [ByteLen]byte
 
 // IsEmpty determines if this Hash is equal to the empty hash (all zeroes).
-func (r Hash) IsEmpty() bool {
-	return r.digest == emptyHash.digest
-}
-
-// DigestSlice returns a slice of the digest that backs A NEW COPY of Hash, because the receiver of
-// this method is not a pointer.
-func (r Hash) DigestSlice() []byte {
-	return r.digest[:]
+func (h Hash) IsEmpty() bool {
+	return h == emptyHash
 }
 
 // String returns a string representation of the hash using Base32 encoding.
-func (r Hash) String() string {
-	return encode(r.digest[:])
-}
-
-// New creates a new Hash from a Digest.
-func New(digest Digest) Hash {
-	return Hash{digest}
+func (h Hash) String() string {
+	return encode(h[:])
 }
 
 // FromData computes a new Hash from data.
-func FromData(data []byte) Hash {
+func Of(data []byte) Hash {
 	r := sha512.Sum512(data)
-	d := Digest{}
-	copy(d[:], r[:ByteLen])
-	return New(d)
+	h := Hash{}
+	copy(h[:], r[:ByteLen])
+	return h
 }
 
 // FromSlice creates a new Hash backed by data, ensuring that data is an acceptable length.
-func FromSlice(data []byte) Hash {
+func New(data []byte) Hash {
 	d.PanicIfFalse(len(data) == ByteLen)
-	digest := Digest{}
-	copy(digest[:], data)
-	return New(digest)
+	h := Hash{}
+	copy(h[:], data)
+	return h
 }
 
 // MaybeParse parses a string representing a hash as a Base32 encoded byte array.
@@ -108,7 +87,7 @@ func MaybeParse(s string) (Hash, bool) {
 	if match == nil {
 		return emptyHash, false
 	}
-	return FromSlice(decode(s)), true
+	return New(decode(s)), true
 }
 
 // MaybeParse parses a string representing a hash as a Base32 encoded byte array.
@@ -122,14 +101,14 @@ func Parse(s string) Hash {
 }
 
 // Less compares two hashes returning whether this Hash is less than other.
-func (r Hash) Less(other Hash) bool {
-	return bytes.Compare(r.digest[:], other.digest[:]) < 0
+func (h Hash) Less(other Hash) bool {
+	return bytes.Compare(h[:], other[:]) < 0
 }
 
 // Greater compares two hashes returning whether this Hash is greater than other.
-func (r Hash) Greater(other Hash) bool {
+func (h Hash) Greater(other Hash) bool {
 	// TODO: Remove this
-	return bytes.Compare(r.digest[:], other.digest[:]) > 0
+	return bytes.Compare(h[:], other[:]) > 0
 }
 
 // HashSet is a set of Hashes.

@@ -14,7 +14,7 @@ import (
 )
 
 func hashFromString(s string) hash.Hash {
-	return hash.FromData([]byte(s))
+	return hash.Of([]byte(s))
 }
 
 func TestSizeCache(t *testing.T) {

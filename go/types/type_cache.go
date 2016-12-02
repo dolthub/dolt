@@ -313,7 +313,7 @@ func generateOID(t *Type, allowUnresolvedCycles bool) {
 	if t.oid == nil {
 		buf := newBinaryNomsWriter()
 		encodeForOID(t, buf, allowUnresolvedCycles, t, nil)
-		oid := hash.FromData(buf.data())
+		oid := hash.Of(buf.data())
 		t.oid = &oid
 	}
 }
@@ -356,7 +356,7 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 
 					mbuf.reset()
 					encodeForOID(elemType, mbuf, allowUnresolvedCycles, root, parentStructTypes)
-					h2 := hash.FromData(mbuf.data())
+					h2 := hash.Of(mbuf.data())
 					if _, found := indexOfType(elemType, parentStructTypes); !found {
 						elemType.oid = &h2
 					}
@@ -369,9 +369,8 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 
 			data := make([]byte, hash.ByteLen)
 			for o := range oids {
-				digest := o.Digest()
 				for i := 0; i < len(data); i++ {
-					data[i] ^= digest[i]
+					data[i] ^= o[i]
 				}
 			}
 			buf.writeBytes(data)

@@ -170,10 +170,10 @@ func (b *binaryNomsReader) readIdent(tc *TypeCache) uint32 {
 }
 
 func (b *binaryNomsReader) readHash() hash.Hash {
-	digest := hash.Digest{}
-	copy(digest[:], b.buff[b.offset:b.offset+hash.ByteLen])
+	h := hash.Hash{}
+	copy(h[:], b.buff[b.offset:b.offset+hash.ByteLen])
 	b.offset += hash.ByteLen
-	return hash.New(digest)
+	return h
 }
 
 type binaryNomsWriter struct {
@@ -276,8 +276,7 @@ func (b *binaryNomsWriter) writeString(v string) {
 
 func (b *binaryNomsWriter) writeHash(h hash.Hash) {
 	b.ensureCapacity(hash.ByteLen)
-	digest := h.Digest()
-	copy(b.buff[b.offset:], digest[:])
+	copy(b.buff[b.offset:], h[:])
 	b.offset += hash.ByteLen
 }
 
