@@ -31,8 +31,8 @@ func TestCompactMemTable(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	tableAddr, wrote := compact(dir, mt, nil)
-	if assert.True(wrote) {
+	tableAddr, chunkCount := compact(dir, mt, nil)
+	if assert.True(chunkCount > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, tableAddr.String()))
 		assert.NoError(err)
 		tr := newTableReader(buff, memReaderAt(buff))
@@ -62,8 +62,8 @@ func TestCompactMemTableNoData(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
-	tableAddr, wrote := compact(dir, mt, existingTable)
-	assert.False(wrote)
+	tableAddr, chunkCount := compact(dir, mt, existingTable)
+	assert.True(chunkCount == 0)
 
 	_, err = os.Stat(filepath.Join(dir, tableAddr.String()))
 	assert.True(os.IsNotExist(err), "%v", err)

@@ -45,7 +45,7 @@ func TestFileManifestParseIfExists(t *testing.T) {
 	assert.Equal(newRoot, root)
 	if assert.Len(tableSpecs, 1) {
 		assert.Equal(tableName.String(), tableSpecs[0].name.String())
-		assert.Equal(uint64(0), tableSpecs[0].chunkCount)
+		assert.Equal(uint32(0), tableSpecs[0].chunkCount)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestFileManifestParseIfExistsHoldsLock(t *testing.T) {
 	assert.Equal(newRoot, root)
 	if assert.Len(tableSpecs, 1) {
 		assert.Equal(tableName.String(), tableSpecs[0].name.String())
-		assert.Equal(uint64(0), tableSpecs[0].chunkCount)
+		assert.Equal(uint32(0), tableSpecs[0].chunkCount)
 	}
 }
 
@@ -120,7 +120,7 @@ func TestFileManifestUpdateRootOptimisticLockFail(t *testing.T) {
 	assert.Equal(newRoot, actual)
 	if assert.Len(tableSpecs, 1) {
 		assert.Equal(tableName.String(), tableSpecs[0].name.String())
-		assert.Equal(uint64(3), tableSpecs[0].chunkCount)
+		assert.Equal(uint32(3), tableSpecs[0].chunkCount)
 	}
 	actual, tableSpecs = fm.Update(nil, actual, newRoot2, nil)
 }

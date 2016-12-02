@@ -20,7 +20,7 @@ type tableReader struct {
 	suffixes          []byte
 	prefixes, offsets []uint64
 	lengths, ordinals []uint32
-	chunkCount        uint64
+	chunkCount        uint32
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
@@ -36,42 +36,42 @@ func newTableReader(buff []byte, r io.ReaderAt) tableReader {
 	// skip total chunk data
 	pos -= uint64Size
 
-	pos -= uint64Size
-	tr.chunkCount = binary.BigEndian.Uint64(buff[pos : pos+uint64Size])
+	pos -= uint32Size
+	tr.chunkCount = binary.BigEndian.Uint32(buff[pos:])
 
 	// index
-	suffixesSize := tr.chunkCount * addrSuffixSize
+	suffixesSize := uint64(tr.chunkCount) * addrSuffixSize
 	pos -= suffixesSize
 	tr.suffixes = buff[pos : pos+suffixesSize]
 
-	lengthsSize := tr.chunkCount * lengthSize
+	lengthsSize := uint64(tr.chunkCount) * lengthSize
 	pos -= lengthsSize
 	tr.lengths, tr.offsets = computeOffsets(tr.chunkCount, buff[pos:pos+lengthsSize])
 
-	tuplesSize := tr.chunkCount * prefixTupleSize
+	tuplesSize := uint64(tr.chunkCount) * prefixTupleSize
 	pos -= tuplesSize
 	tr.prefixes, tr.ordinals = computePrefixes(tr.chunkCount, buff[pos:pos+tuplesSize])
 	return tr
 }
 
-func computeOffsets(count uint64, buff []byte) (lengths []uint32, offsets []uint64) {
+func computeOffsets(count uint32, buff []byte) (lengths []uint32, offsets []uint64) {
 	lengths = make([]uint32, count)
 	offsets = make([]uint64, count)
 
 	lengths[0] = binary.BigEndian.Uint32(buff)
 
-	for i := uint64(1); i < count; i++ {
+	for i := uint64(1); i < uint64(count); i++ {
 		lengths[i] = binary.BigEndian.Uint32(buff[i*lengthSize:])
 		offsets[i] = offsets[i-1] + uint64(lengths[i-1])
 	}
 	return
 }
 
-func computePrefixes(count uint64, buff []byte) (prefixes []uint64, ordinals []uint32) {
+func computePrefixes(count uint32, buff []byte) (prefixes []uint64, ordinals []uint32) {
 	prefixes = make([]uint64, count)
 	ordinals = make([]uint32, count)
 
-	for i := uint64(0); i < count; i++ {
+	for i := uint64(0); i < uint64(count); i++ {
 		idx := i * prefixTupleSize
 		prefixes[i] = binary.BigEndian.Uint64(buff[idx:])
 		ordinals[i] = binary.BigEndian.Uint32(buff[idx+addrPrefixSize:])
@@ -83,8 +83,8 @@ func computePrefixes(count uint64, buff []byte) (prefixes []uint64, ordinals []u
 func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 	// TODO: Use findInIndex if (tr.chunkCount - len(addrs)*Log2(tr.chunkCount)) > (tr.chunkCount - len(addrs))
 
-	filterIdx := uint64(0)
-	filterLen := uint64(len(tr.prefixes))
+	filterIdx := uint32(0)
+	filterLen := uint32(len(tr.prefixes))
 
 	for i, addr := range addrs {
 		if addr.has {
@@ -107,7 +107,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			li := tr.prefixIdxToOrdinal(j) * addrSuffixSize
+			li := uint64(tr.prefixIdxToOrdinal(j)) * addrSuffixSize
 			if bytes.Compare(addr.a[addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize]) == 0 {
 				addrs[i].has = true
 				break
@@ -122,13 +122,13 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 	return
 }
 
-func (tr tableReader) prefixIdxToOrdinal(idx uint64) uint64 {
-	return uint64(tr.ordinals[idx])
+func (tr tableReader) prefixIdxToOrdinal(idx uint32) uint32 {
+	return tr.ordinals[idx]
 }
 
 // returns the first position in |tr.prefixes| whose value == |prefix|. Returns |tr.chunkCount|
 // if absent
-func (tr tableReader) prefixIdx(prefix uint64) (idx uint64) {
+func (tr tableReader) prefixIdx(prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
 	idx, j := 0, tr.chunkCount
@@ -145,7 +145,7 @@ func (tr tableReader) prefixIdx(prefix uint64) (idx uint64) {
 	return
 }
 
-func (tr tableReader) count() uint64 {
+func (tr tableReader) count() uint32 {
 	return tr.chunkCount
 }
 
@@ -156,7 +156,7 @@ func (tr tableReader) has(h addr) bool {
 
 	for ; idx < tr.chunkCount && tr.prefixes[idx] == prefix; idx++ {
 		ordinal := tr.prefixIdxToOrdinal(idx)
-		suffixOffset := ordinal * addrSuffixSize
+		suffixOffset := uint64(ordinal) * addrSuffixSize
 
 		if bytes.Compare(tr.suffixes[suffixOffset:suffixOffset+addrSuffixSize], h[addrPrefixSize:]) == 0 {
 			return true

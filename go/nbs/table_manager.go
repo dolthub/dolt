@@ -5,18 +5,18 @@
 package nbs
 
 type tableManager interface {
-	compact(mt *memTable, haver chunkReader) (name addr, wrote bool)
-	open(name addr, chunkCount uint64) chunkSource
+	compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32)
+	open(name addr, chunkCount uint32) chunkSource
 }
 
 type fileTableManager struct {
 	dir string
 }
 
-func (ftm *fileTableManager) compact(mt *memTable, haver chunkReader) (name addr, wrote bool) {
+func (ftm *fileTableManager) compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32) {
 	return compact(ftm.dir, mt, haver)
 }
 
-func (ftm *fileTableManager) open(name addr, chunkCount uint64) chunkSource {
+func (ftm *fileTableManager) open(name addr, chunkCount uint32) chunkSource {
 	return newMmapTableReader(ftm.dir, name, chunkCount)
 }

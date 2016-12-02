@@ -31,8 +31,8 @@ func maxTableSize(numChunks, totalData uint64) uint64 {
 	return numChunks*(prefixTupleSize+lengthSize+addrSuffixSize+checksumSize+uint64(maxSnappySize)) + footerSize
 }
 
-func indexSize(numChunks uint64) uint64 {
-	return numChunks * (addrSuffixSize + lengthSize + prefixTupleSize)
+func indexSize(numChunks uint32) uint64 {
+	return uint64(numChunks) * (addrSuffixSize + lengthSize + prefixTupleSize)
 }
 
 // len(buff) must be >= maxTableSize(numChunks, totalData)
@@ -128,8 +128,9 @@ func (tw *tableWriter) writeIndex() {
 
 func (tw *tableWriter) writeFooter() {
 	// chunk count
-	binary.BigEndian.PutUint64(tw.buff[tw.pos:], uint64(len(tw.prefixes)))
-	tw.pos += uint64Size
+	chunkCount := uint32(len(tw.prefixes))
+	binary.BigEndian.PutUint32(tw.buff[tw.pos:], chunkCount)
+	tw.pos += uint32Size
 
 	// total chunk data
 	binary.BigEndian.PutUint64(tw.buff[tw.pos:], tw.totalPhysicalData)

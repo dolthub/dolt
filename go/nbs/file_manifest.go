@@ -36,7 +36,7 @@ type fileManifest struct {
 
 type tableSpec struct {
 	name       addr
-	chunkCount uint64
+	chunkCount uint32
 }
 
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
@@ -92,8 +92,9 @@ func parseManifest(r io.Reader) (string, hash.Hash, []tableSpec) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
 		specs[i].name = ParseAddr(tableInfo[2*i])
-		specs[i].chunkCount, err = strconv.ParseUint(string(tableInfo[2*i+1]), 10, 64)
+		c, err := strconv.ParseUint(string(tableInfo[2*i+1]), 10, 32)
 		d.PanicIfError(err)
+		specs[i].chunkCount = uint32(c)
 	}
 
 	return string(slices[1]), hash.Parse(string(slices[2])), specs
@@ -105,7 +106,7 @@ func writeManifest(temp io.Writer, root hash.Hash, tables chunkSources) {
 	tableInfo := strs[3:]
 	for i, t := range tables {
 		tableInfo[2*i] = t.hash().String()
-		tableInfo[2*i+1] = strconv.FormatUint(t.count(), 10)
+		tableInfo[2*i+1] = strconv.FormatUint(uint64(t.count()), 10)
 	}
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 	d.PanicIfError(err)

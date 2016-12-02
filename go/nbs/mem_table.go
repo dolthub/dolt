@@ -38,8 +38,8 @@ func (mt *memTable) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (mt *memTable) count() uint64 {
-	return uint64(len(mt.order))
+func (mt *memTable) count() uint32 {
+	return uint32(len(mt.order))
 }
 
 func (mt *memTable) has(h addr) (has bool) {
@@ -78,7 +78,7 @@ func (mt *memTable) getMany(reqs []getRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) write(tw chunkWriter, haver chunkReader) {
+func (mt *memTable) write(tw chunkWriter, haver chunkReader) (count uint32) {
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
 		haver.hasMany(mt.order)
@@ -89,6 +89,8 @@ func (mt *memTable) write(tw chunkWriter, haver chunkReader) {
 		if !addr.has {
 			h := addr.a
 			tw.addChunk(*h, mt.chunks[*h])
+			count++
 		}
 	}
+	return
 }

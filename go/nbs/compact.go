@@ -25,8 +25,8 @@ func init() {
 	}
 }
 
-func compact(dir string, mt *memTable, haver chunkReader) (name addr, wrote bool) {
-	tempName, h, wrote := func() (string, addr, bool) {
+func compact(dir string, mt *memTable, haver chunkReader) (name addr, chunkCount uint32) {
+	tempName, h, chunkCount := func() (string, addr, uint32) {
 		temp, err := ioutil.TempFile(dir, "nbs_table_")
 		d.PanicIfError(err)
 		defer checkClose(temp)
@@ -34,17 +34,17 @@ func compact(dir string, mt *memTable, haver chunkReader) (name addr, wrote bool
 		maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 		buff := make([]byte, maxSize)
 		tw := newTableWriter(buff)
-		mt.write(tw, haver)
+		count := mt.write(tw, haver)
 		tableSize, h := tw.finish()
 		io.Copy(temp, bytes.NewReader(buff[:tableSize]))
 
-		return temp.Name(), h, tw.totalPhysicalData > 0
+		return temp.Name(), h, count
 	}()
-	if wrote {
+	if chunkCount > 0 {
 		err := os.Rename(tempName, filepath.Join(dir, h.String()))
 		d.PanicIfError(err)
 	} else {
 		os.Remove(tempName)
 	}
-	return h, wrote
+	return h, chunkCount
 }

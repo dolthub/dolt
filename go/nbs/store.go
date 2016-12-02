@@ -151,8 +151,8 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		if tableHash, wrote := nbs.tm.compact(nbs.mt, nbs.immTables); wrote {
-			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, nbs.mt.count()))
+		if tableHash, chunkCount := nbs.tm.compact(nbs.mt, nbs.immTables); chunkCount > 0 {
+			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, chunkCount))
 		}
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
@@ -253,8 +253,8 @@ func (nbs *NomsBlockStore) UpdateRoot(current, last hash.Hash) bool {
 	d.Chk.True(nbs.root == last, "UpdateRoot: last != nbs.Root(); %s != %s", last, nbs.root)
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
-		if tableHash, wrote := nbs.tm.compact(nbs.mt, nbs.immTables); wrote {
-			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, nbs.mt.count()))
+		if tableHash, chunkCount := nbs.tm.compact(nbs.mt, nbs.immTables); chunkCount > 0 {
+			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, chunkCount))
 		}
 		nbs.mt = nil
 	}

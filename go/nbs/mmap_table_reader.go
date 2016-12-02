@@ -22,7 +22,7 @@ type mmapTableReader struct {
 
 var pageSize = int64(os.Getpagesize())
 
-func newMmapTableReader(dir string, h addr, chunkCount uint64) chunkSource {
+func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
 	success := false
 	f, err := os.Open(filepath.Join(dir, h.String()))
 	d.PanicIfError(err)
@@ -45,6 +45,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint64) chunkSource {
 	success = true
 
 	source := &mmapTableReader{newTableReader(buff[indexOffset-aligned:], f), f, buff, h}
+
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }

@@ -70,7 +70,7 @@ import (
 
    Footer:
    +----------------------+---------------------------+------------------+
-   | (Uint64) Chunk Count | (Uint64) Total Chunk Data | (8) Magic Number |
+   | (Uint32) Chunk Count | (Uint64) Total Chunk Data | (8) Magic Number |
    +----------------------+---------------------------+------------------+
 
      -Total Chunk Data is the sum of the logical byte lengths of all contained chunk byte slices.
@@ -107,9 +107,10 @@ const (
 	ordinalSize        = uint64(4)
 	lengthSize         = uint64(4)
 	uint64Size         = uint64(8)
+	uint32Size         = uint64(4)
 	magicNumber        = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	magicNumberSize    = uint64(len(magicNumber))
-	footerSize         = uint64Size + uint64Size + magicNumberSize
+	footerSize         = uint32Size + uint64Size + magicNumberSize
 	prefixTupleSize    = addrPrefixSize + ordinalSize
 	checksumSize       = uint64(4)
 	maxChunkLengthSize = uint64(binary.MaxVarintLen64)
@@ -200,7 +201,7 @@ type chunkReader interface {
 type chunkSource interface {
 	chunkReader
 	close() error
-	count() uint64
+	count() uint32
 	hash() addr
 }
 
