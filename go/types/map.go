@@ -5,6 +5,7 @@
 package types
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -138,6 +139,16 @@ func (m Map) First() (Value, Value) {
 
 func (m Map) Last() (Value, Value) {
 	return m.firstOrLast(true)
+}
+
+func (m Map) At(idx uint64) (key, value Value) {
+	if idx >= m.Len() {
+		panic(fmt.Errorf("Out of bounds: %s >= %s", idx, m.Len()))
+	}
+
+	cur := newCursorAtIndex(m.seq, idx)
+	entry := cur.current().(mapEntry)
+	return entry.key, entry.value
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {

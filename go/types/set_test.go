@@ -986,3 +986,18 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 		assert.True(ts.toSet().Equals(ns))
 	}
 }
+
+func TestSetAt(t *testing.T) {
+	assert := assert.New(t)
+
+	values := []Value{Bool(false), Number(42), String('a'), String('b'), String('c')}
+	s := NewSet(values...)
+
+	for i, v := range values {
+		assert.Equal(v, s.At(uint64(i)))
+	}
+
+	assert.Panics(func() {
+		s.At(42)
+	})
+}

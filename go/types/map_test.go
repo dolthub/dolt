@@ -1254,3 +1254,20 @@ func TestMapIterFrom(t *testing.T) {
 	assert.True(kvs[0:0].Equals(test(m1, Number(100), Number(1000))))
 	assert.True(kvs[50:60].Equals(test(m1, Number(0), Number(8))))
 }
+
+func TestMapAt(t *testing.T) {
+	assert := assert.New(t)
+
+	values := []Value{Bool(false), Number(42), String('a'), String('b'), String('c'), String('d')}
+	m := NewMap(values...)
+
+	for i := 0; i < len(values); i += 2 {
+		k, v := m.At(uint64(i / 2))
+		assert.Equal(values[i], k)
+		assert.Equal(values[i+1], v)
+	}
+
+	assert.Panics(func() {
+		m.At(42)
+	})
+}
