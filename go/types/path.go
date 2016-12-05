@@ -17,7 +17,10 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var annotationRe = regexp.MustCompile("^([a-z]+)")
+// For an annotation like @type, 1st capture group is the annotation.
+// For @at(42), 1st capture group is the annotation and 3rd is the parameter.
+// Note, @at() is valid under this regexp, code should deal with the error.
+var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 
 // A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they
 // can address inlined values.
@@ -44,6 +47,10 @@ func MustParsePath(str string) Path {
 		panic(err)
 	}
 	return p
+}
+
+type keyIndexable interface {
+	setIntoKey(v bool) keyIndexable
 }
 
 func constructPath(p Path, str string) (Path, error) {
@@ -74,22 +81,34 @@ func constructPath(p Path, str string) (Path, error) {
 		if !strings.HasPrefix(rem, "]") {
 			return Path{}, errors.New("[ is missing closing ]")
 		}
-		rem = rem[1:]
-		d.Chk.NotEqual(idx == nil, h.IsEmpty())
+		d.PanicIfTrue(idx == nil && h.IsEmpty())
+		d.PanicIfTrue(idx != nil && !h.IsEmpty())
 
-		var part PathPart
 		if idx != nil {
-			part = NewIndexPath(idx)
+			p = append(p, NewIndexPath(idx))
 		} else {
-			part = NewHashIndexPath(h)
+			p = append(p, NewHashIndexPath(h))
 		}
-		p = append(p, part)
-		return constructPath(p, rem)
+		return constructPath(p, rem[1:])
 
 	case '@':
-		ann, rem := getAnnotation(tail)
+		ann, hasArg, arg, rem := getAnnotation(tail)
+
 		switch ann {
+		case "at":
+			if arg == "" {
+				return Path{}, fmt.Errorf("@at annotation requires a position argument")
+			}
+			idx, err := strconv.ParseInt(arg, 10, 64)
+			if err != nil {
+				return Path{}, fmt.Errorf("Invalid position: %s", arg)
+			}
+			return constructPath(append(p, NewAtAnnotation(idx)), rem)
+
 		case "key":
+			if hasArg {
+				return Path{}, fmt.Errorf("@key annotation does not support arguments")
+			}
 			if len(p) == 0 {
 				return Path{}, fmt.Errorf("Cannot use @key annotation at beginning of path")
 			}
@@ -99,8 +118,13 @@ func constructPath(p Path, str string) (Path, error) {
 				return constructPath(p, rem)
 			}
 			return Path{}, fmt.Errorf("Cannot use @key annotation on: %s", lastPart.String())
+
 		case "type":
-			return constructPath(append(p, TypePart{}), rem)
+			if hasArg {
+				return Path{}, fmt.Errorf("@type annotation does not support arguments")
+			}
+			return constructPath(append(p, TypeAnnotation{}), rem)
+
 		default:
 			return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
 		}
@@ -178,7 +202,8 @@ func (fp FieldPath) String() string {
 
 // Indexes into Maps and Lists by key or index.
 type IndexPath struct {
-	// The value of the index, e.g. `[42]` or `["value"]`.
+	// The value of the index, e.g. `[42]` or `["value"]`. If Index is a negative
+	// number and the path is resolved in a List, it means index from the back.
 	Index Value
 	// Whether this index should resolve to the key of a map, given by a `@key`
 	// annotation. Typically IntoKey is false, and indices would resolve to the
@@ -212,14 +237,15 @@ func (ip IndexPath) Resolve(v Value) Value {
 	case List:
 		if n, ok := ip.Index.(Number); ok {
 			f := float64(n)
-			if f == math.Trunc(f) && f >= 0 {
-				u := uint64(f)
-				if u < v.Len() {
-					if ip.IntoKey {
-						return ip.Index
-					}
-					return v.Get(u)
+			if f == math.Trunc(f) {
+				absIndex, ok := getAbsoluteIndex(v, int64(f))
+				if !ok {
+					return nil
 				}
+				if ip.IntoKey {
+					return Number(absIndex)
+				}
+				return v.Get(absIndex)
 			}
 		}
 
@@ -236,11 +262,11 @@ func (ip IndexPath) Resolve(v Value) Value {
 }
 
 func (ip IndexPath) String() (str string) {
-	ann := ""
+	str = fmt.Sprintf("[%s]", EncodedIndexValue(ip.Index))
 	if ip.IntoKey {
-		ann = "@key"
+		str += "@key"
 	}
-	return fmt.Sprintf("[%s]%s", EncodedIndexValue(ip.Index), ann)
+	return
 }
 
 func (ip IndexPath) setIntoKey(v bool) keyIndexable {
@@ -307,12 +333,12 @@ func (hip HashIndexPath) Resolve(v Value) (res Value) {
 	return getCurrentValue(cur)
 }
 
-func (hip HashIndexPath) String() string {
-	ann := ""
+func (hip HashIndexPath) String() (str string) {
+	str = fmt.Sprintf("[#%s]", hip.Hash.String())
 	if hip.IntoKey {
-		ann = "@key"
+		str += "@key"
 	}
-	return fmt.Sprintf("[#%s]%s", hip.Hash.String(), ann)
+	return
 }
 
 func (hip HashIndexPath) setIntoKey(v bool) keyIndexable {
@@ -383,25 +409,104 @@ Switch:
 	return
 }
 
-type TypePart struct {
+// TypeAnntation is a PathPart annotation to resolve to the type of the value
+// it's resolved in.
+type TypeAnnotation struct {
 }
 
-func (tp TypePart) Resolve(v Value) Value {
+func (ann TypeAnnotation) Resolve(v Value) Value {
 	return v.Type()
 }
 
-func (tp TypePart) String() string {
+func (ann TypeAnnotation) String() string {
 	return "@type"
 }
 
-func getAnnotation(str string) (ann, rem string) {
-	if parts := annotationRe.FindStringSubmatch(str); parts != nil {
-		ann = parts[1]
-		rem = str[len(parts[0]):]
+// AtAnnotation is a PathPart annotation that gets the value of a collection at
+// a position, rather than a key. This is equivalent for lists, but different
+// for sets and maps.
+type AtAnnotation struct {
+	// Index is the position to resolve at. If negative, it means an index
+	// relative to the end of the collection.
+	Index int64
+	// IntoKey see IndexPath.IntoKey.
+	IntoKey bool
+}
+
+func NewAtAnnotation(idx int64) AtAnnotation {
+	return AtAnnotation{idx, false}
+}
+
+func NewAtAnnotationIntoKeyPath(idx int64) AtAnnotation {
+	return AtAnnotation{idx, true}
+}
+
+func (ann AtAnnotation) Resolve(v Value) Value {
+	var absIndex uint64
+	if col, ok := v.(Collection); !ok {
+		return nil
+	} else if absIndex, ok = getAbsoluteIndex(col, ann.Index); !ok {
+		return nil
+	}
+
+	switch v := v.(type) {
+	case List:
+		if ann.IntoKey {
+			return nil
+		}
+		return v.Get(absIndex)
+	case Set:
+		return v.At(absIndex)
+	case Map:
+		k, mapv := v.At(absIndex)
+		if ann.IntoKey {
+			return k
+		}
+		return mapv
+	default:
+		return nil
+	}
+}
+
+func (ann AtAnnotation) String() (str string) {
+	str = fmt.Sprintf("@at(%d)", ann.Index)
+	if ann.IntoKey {
+		str += "@key"
 	}
 	return
 }
 
-type keyIndexable interface {
-	setIntoKey(v bool) keyIndexable
+func (ann AtAnnotation) setIntoKey(v bool) keyIndexable {
+	ann.IntoKey = v
+	return ann
+}
+
+func getAnnotation(str string) (ann string, hasArg bool, arg, rem string) {
+	parts := annotationRe.FindStringSubmatch(str)
+	if parts == nil {
+		return
+	}
+
+	ann = parts[1]
+	hasArg = parts[2] != ""
+	arg = parts[3]
+	rem = str[len(parts[0]):]
+	return
+}
+
+func getAbsoluteIndex(col Collection, relIdx int64) (absIdx uint64, ok bool) {
+	if relIdx < 0 {
+		if uint64(-relIdx) > col.Len() {
+			return
+		}
+		absIdx = col.Len() - uint64(-relIdx)
+	} else {
+		if uint64(relIdx) >= col.Len() {
+			return
+		}
+		absIdx = uint64(relIdx)
+	}
+
+	ok = true
+	return
 }

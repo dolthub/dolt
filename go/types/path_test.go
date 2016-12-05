@@ -62,14 +62,9 @@ func TestPathIndex(t *testing.T) {
 	assert := assert.New(t)
 
 	var v Value
-	resolvesTo := func(exp, val Value, str string) {
-		// Indices resolve to |exp|.
-		assertResolvesTo(assert, exp, v, str)
-		// Keys resolve to themselves.
-		if exp != nil {
-			exp = val
-		}
-		assertResolvesTo(assert, exp, v, str+"@key")
+	resolvesTo := func(expVal, expKey Value, str string) {
+		assertResolvesTo(assert, expVal, v, str)
+		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
 	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
@@ -78,21 +73,25 @@ func TestPathIndex(t *testing.T) {
 	resolvesTo(Number(3), Number(1), "[1]")
 	resolvesTo(String("foo"), Number(2), "[2]")
 	resolvesTo(Bool(false), Number(3), "[3]")
-	resolvesTo(nil, Number(4), "[4]")
-	resolvesTo(nil, Number(-4), "[-4]")
+	resolvesTo(nil, nil, "[4]")
+	resolvesTo(nil, nil, "[-5]")
+	resolvesTo(Number(1), Number(0), "[-4]")
+	resolvesTo(Number(3), Number(1), "[-3]")
+	resolvesTo(String("foo"), Number(2), "[-2]")
+	resolvesTo(Bool(false), Number(3), "[-1]")
 
 	v = NewMap(
-		Number(1), String("foo"),
-		String("two"), String("bar"),
 		Bool(false), Number(23),
+		Number(1), String("foo"),
 		Number(2.3), Number(4.5),
+		String("two"), String("bar"),
 	)
 
 	resolvesTo(String("foo"), Number(1), "[1]")
 	resolvesTo(String("bar"), String("two"), `["two"]`)
 	resolvesTo(Number(23), Bool(false), "[false]")
 	resolvesTo(Number(4.5), Number(2.3), "[2.3]")
-	resolvesTo(nil, Number(4), "[4]")
+	resolvesTo(nil, nil, "[4]")
 }
 
 func TestPathHashIndex(t *testing.T) {
@@ -113,34 +112,29 @@ func TestPathHashIndex(t *testing.T) {
 	)
 	s := NewSet(b, br, i, str, l, lr)
 
-	resolvesTo := func(col, exp, val Value) {
-		// Values resolve to |exp|.
-		assertResolvesTo(assert, exp, col, hashIdx(val))
-		// Keys resolve to themselves.
-		if exp != nil {
-			exp = val
-		}
-		assertResolvesTo(assert, exp, col, hashIdx(val)+"@key")
+	resolvesTo := func(col, key, expVal, expKey Value) {
+		assertResolvesTo(assert, expVal, col, hashIdx(key))
+		assertResolvesTo(assert, expKey, col, hashIdx(key)+"@key")
 	}
 
 	// Primitives are only addressable by their values.
-	resolvesTo(m, nil, b)
-	resolvesTo(m, nil, i)
-	resolvesTo(m, nil, str)
-	resolvesTo(s, nil, b)
-	resolvesTo(s, nil, i)
-	resolvesTo(s, nil, str)
+	resolvesTo(m, b, nil, nil)
+	resolvesTo(m, i, nil, nil)
+	resolvesTo(m, str, nil, nil)
+	resolvesTo(s, b, nil, nil)
+	resolvesTo(s, i, nil, nil)
+	resolvesTo(s, str, nil, nil)
 
 	// Other values are only addressable by their hashes.
-	resolvesTo(m, i, br)
-	resolvesTo(m, lr, l)
-	resolvesTo(m, b, lr)
-	resolvesTo(s, br, br)
-	resolvesTo(s, l, l)
-	resolvesTo(s, lr, lr)
+	resolvesTo(m, br, i, br)
+	resolvesTo(m, l, lr, l)
+	resolvesTo(m, lr, b, lr)
+	resolvesTo(s, br, br, br)
+	resolvesTo(s, l, l, l)
+	resolvesTo(s, lr, lr, lr)
 
 	// Lists cannot be addressed by hashes, obviously.
-	resolvesTo(l, nil, i)
+	resolvesTo(l, i, nil, nil)
 }
 
 func TestPathHashIndexOfSingletonCollection(t *testing.T) {
@@ -166,8 +160,8 @@ func TestPathMulti(t *testing.T) {
 	)
 
 	m2 := NewMap(
-		String("d"), String("dar"),
 		Bool(false), String("earth"),
+		String("d"), String("dar"),
 		m1, String("fire"),
 	)
 
@@ -182,6 +176,9 @@ func TestPathMulti(t *testing.T) {
 	assertResolvesTo(assert, String("foo"), s, `.foo[0]["a"]`)
 	assertResolvesTo(assert, String("bar"), s, `.foo[0]["b"]`)
 	assertResolvesTo(assert, String("car"), s, `.foo[0]["c"]`)
+	assertResolvesTo(assert, String("foo"), s, `.foo[0]@at(0)`)
+	assertResolvesTo(assert, String("bar"), s, `.foo[0]@at(1)`)
+	assertResolvesTo(assert, String("car"), s, `.foo[0]@at(2)`)
 	assertResolvesTo(assert, nil, s, `.foo[0]["x"]`)
 	assertResolvesTo(assert, nil, s, `.foo[2]["c"]`)
 	assertResolvesTo(assert, nil, s, `.notHere[0]["c"]`)
@@ -191,6 +188,12 @@ func TestPathMulti(t *testing.T) {
 	assertResolvesTo(assert, String("fire"), s, fmt.Sprintf(`.foo[1]%s`, hashIdx(m1)))
 	assertResolvesTo(assert, m1, s, fmt.Sprintf(`.foo[1]%s@key`, hashIdx(m1)))
 	assertResolvesTo(assert, String("car"), s, fmt.Sprintf(`.foo[1]%s@key["c"]`, hashIdx(m1)))
+	assertResolvesTo(assert, String("fire"), s, `.foo[1]@at(2)`)
+	assertResolvesTo(assert, m1, s, `.foo[1]@at(2)@key`)
+	assertResolvesTo(assert, String("car"), s, `.foo[1]@at(2)@key@at(2)`)
+	assertResolvesTo(assert, String("fire"), s, `.foo[1]@at(-1)`)
+	assertResolvesTo(assert, m1, s, `.foo[1]@at(-1)@key`)
+	assertResolvesTo(assert, String("car"), s, `.foo[1]@at(-1)@key@at(-1)`)
 }
 
 func TestPathParseSuccess(t *testing.T) {
@@ -222,8 +225,10 @@ func TestPathParseSuccess(t *testing.T) {
 	test("[false]")
 	test("[false]@key")
 	test("[false]@key@type")
+	test("[false]@key@type@at(42)")
 	test("[42]")
 	test("[42]@key")
+	test("[42]@at(-101)")
 	test("[1e4]")
 	test("[1.]")
 	test("[1.345]")
@@ -296,6 +301,12 @@ func TestPathParseErrors(t *testing.T) {
 	test("@foo", "Unsupported annotation: @foo")
 	test("@key", "Cannot use @key annotation at beginning of path")
 	test(".foo@key", "Cannot use @key annotation on: .foo")
+	test(".foo@key()", "@key annotation does not support arguments")
+	test(".foo@key(42)", "@key annotation does not support arguments")
+	test(".foo@type()", "@type annotation does not support arguments")
+	test(".foo@type(42)", "@type annotation does not support arguments")
+	test(".foo@at", "@at annotation requires a position argument")
+	test(".foo@at()", "@at annotation requires a position argument")
 	test(fmt.Sprintf(".foo[#%s]@soup", hash.Of([]byte{42}).String()), "Unsupported annotation: @soup")
 }
 
@@ -403,4 +414,63 @@ func TestPathType(t *testing.T) {
 	})
 	assertResolvesTo(assert, s.Get("str").Type(), s, ".str@type")
 	assertResolvesTo(assert, s.Get("num").Type(), s, ".num@type")
+}
+
+func TestPathAtAnnotation(t *testing.T) {
+	assert := assert.New(t)
+
+	var v Value
+	resolvesTo := func(expVal, expKey Value, str string) {
+		assertResolvesTo(assert, expVal, v, str)
+		assertResolvesTo(assert, expKey, v, str+"@key")
+	}
+
+	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
+
+	resolvesTo(Number(1), nil, "@at(0)")
+	resolvesTo(Number(3), nil, "@at(1)")
+	resolvesTo(String("foo"), nil, "@at(2)")
+	resolvesTo(Bool(false), nil, "@at(3)")
+	resolvesTo(nil, nil, "@at(4)")
+	resolvesTo(nil, nil, "@at(-5)")
+	resolvesTo(Number(1), nil, "@at(-4)")
+	resolvesTo(Number(3), nil, "@at(-3)")
+	resolvesTo(String("foo"), nil, "@at(-2)")
+	resolvesTo(Bool(false), nil, "@at(-1)")
+
+	v = NewSet(
+		Bool(false),
+		Number(1),
+		Number(2.3),
+		String("two"),
+	)
+
+	resolvesTo(Bool(false), Bool(false), "@at(0)")
+	resolvesTo(Number(1), Number(1), "@at(1)")
+	resolvesTo(Number(2.3), Number(2.3), "@at(2)")
+	resolvesTo(String("two"), String("two"), `@at(3)`)
+	resolvesTo(nil, nil, "@at(4)")
+	resolvesTo(nil, nil, "@at(-5)")
+	resolvesTo(Bool(false), Bool(false), "@at(-4)")
+	resolvesTo(Number(1), Number(1), "@at(-3)")
+	resolvesTo(Number(2.3), Number(2.3), "@at(-2)")
+	resolvesTo(String("two"), String("two"), `@at(-1)`)
+
+	v = NewMap(
+		Bool(false), Number(23),
+		Number(1), String("foo"),
+		Number(2.3), Number(4.5),
+		String("two"), String("bar"),
+	)
+
+	resolvesTo(Number(23), Bool(false), "@at(0)")
+	resolvesTo(String("foo"), Number(1), "@at(1)")
+	resolvesTo(Number(4.5), Number(2.3), "@at(2)")
+	resolvesTo(String("bar"), String("two"), `@at(3)`)
+	resolvesTo(nil, nil, "@at(4)")
+	resolvesTo(nil, nil, "@at(-5)")
+	resolvesTo(Number(23), Bool(false), "@at(-4)")
+	resolvesTo(String("foo"), Number(1), "@at(-3)")
+	resolvesTo(Number(4.5), Number(2.3), "@at(-2)")
+	resolvesTo(String("bar"), String("two"), `@at(-1)`)
 }
