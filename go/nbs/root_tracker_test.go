@@ -5,30 +5,19 @@
 package nbs
 
 import (
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strings"
+	"encoding/binary"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
-func makeStoreInTempDir(t *testing.T) (dir string, store *NomsBlockStore) {
-	dir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	store = NewBlockStore(dir, defaultMemTableSize)
-	return
-}
-
 func TestChunkStoreZeroValue(t *testing.T) {
 	assert := assert.New(t)
-	dir, store := makeStoreInTempDir(t)
-	defer os.RemoveAll(dir)
+	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
 	// No manifest file gets written until the first call to UpdateRoot(). Prior to that, Root() will simply return hash.Hash{}.
@@ -38,8 +27,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 
 func TestChunkStoreVersion(t *testing.T) {
 	assert := assert.New(t)
-	dir, store := makeStoreInTempDir(t)
-	defer os.RemoveAll(dir)
+	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
 	assert.Equal(constants.NomsVersion, store.Version())
@@ -51,8 +39,7 @@ func TestChunkStoreVersion(t *testing.T) {
 
 func TestChunkStoreUpdateRoot(t *testing.T) {
 	assert := assert.New(t)
-	dir, store := makeStoreInTempDir(t)
-	defer os.RemoveAll(dir)
+	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
 	assert.Equal(hash.Hash{}, store.Root())
@@ -77,33 +64,72 @@ func TestChunkStoreUpdateRoot(t *testing.T) {
 
 func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	assert := assert.New(t)
-	dir, store := makeStoreInTempDir(t)
-	defer os.RemoveAll(dir)
+	fm, tt, store := makeStoreWithFakes(t)
 	defer store.Close()
 
 	assert.Equal(hash.Hash{}, store.Root())
 	assert.Equal(constants.NomsVersion, store.Version())
 
-	// Simulate another process writing a manifest (with an old Noms version) after construction.
+	// Simulate another process writing a manifest after construction.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 	newRoot := hash.Of([]byte("new root"))
-	h := createOnDiskTable(dir, chunks)
-	b, err := clobberManifest(dir, strings.Join([]string{StorageVersion, "0", newRoot.String(), h.String(), "3"}, ":"))
-	assert.NoError(err, string(b))
+	h, _ := tt.p.Compact(createMemTable(chunks), nil)
+	fm.set(constants.NomsVersion, newRoot, []tableSpec{{h, uint32(len(chunks))}})
 
-	// Creating another store should reflect the manifest written above.
-	store2 := NewBlockStore(dir, defaultMemTableSize)
-	defer store2.Close()
-
-	assert.Equal(newRoot, store2.Root())
-	assert.Equal("0", store2.Version())
-	assertDataInStore(chunks, store2, assert)
+	// state in store shouldn't change
+	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(constants.NomsVersion, store.Version())
 }
 
-func createOnDiskTable(dir string, chunks [][]byte) addr {
-	tableData, h := buildTable(chunks)
-	d.PanicIfError(ioutil.WriteFile(filepath.Join(dir, h.String()), tableData, 0666))
-	return h
+func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
+	assert := assert.New(t)
+	fm := &fakeManifest{}
+	tt := newFakeTableSet()
+
+	// Simulate another process having already written a manifest.
+	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
+	newRoot := hash.Of([]byte("new root"))
+	h, _ := tt.p.Compact(createMemTable(chunks), nil)
+	fm.set(constants.NomsVersion, newRoot, []tableSpec{{h, uint32(len(chunks))}})
+
+	store := newNomsBlockStore(fm, tt, defaultMemTableSize)
+	defer store.Close()
+
+	assert.Equal(newRoot, store.Root())
+	assert.Equal(constants.NomsVersion, store.Version())
+	assertDataInStore(chunks, store, assert)
+}
+
+func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
+	assert := assert.New(t)
+	fm, tt, store := makeStoreWithFakes(t)
+	defer store.Close()
+
+	// Simulate another process writing a manifest behind store's back.
+	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
+	newRoot := hash.Of([]byte("new root"))
+	h, _ := tt.p.Compact(createMemTable(chunks), nil)
+	fm.set(constants.NomsVersion, newRoot, []tableSpec{{h, uint32(len(chunks))}})
+
+	newRoot2 := hash.Of([]byte("new root 2"))
+	assert.False(store.UpdateRoot(newRoot2, hash.Hash{}))
+	assertDataInStore(chunks, store, assert)
+	assert.True(store.UpdateRoot(newRoot2, newRoot))
+}
+
+func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, tt tableSet, store *NomsBlockStore) {
+	fm = &fakeManifest{}
+	tt = newFakeTableSet()
+	store = newNomsBlockStore(fm, tt, 0)
+	return
+}
+
+func createMemTable(chunks [][]byte) *memTable {
+	mt := newMemTable(1 << 10)
+	for _, c := range chunks {
+		mt.addChunk(computeAddr(c), c)
+	}
+	return mt
 }
 
 func assertDataInStore(slices [][]byte, store chunks.ChunkSource, assert *assert.Assertions) {
@@ -112,28 +138,83 @@ func assertDataInStore(slices [][]byte, store chunks.ChunkSource, assert *assert
 	}
 }
 
-func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
-	assert := assert.New(t)
-	dir, err := ioutil.TempDir(os.TempDir(), "")
-	assert.NoError(err)
-	defer os.RemoveAll(dir)
+// fakeManifest simulates a fileManifest without touching disk.
+type fakeManifest struct {
+	version    string
+	root       hash.Hash
+	tableSpecs []tableSpec
+	mu         sync.RWMutex
+}
 
-	// Simulate another process having already written a manifest (with an old Noms version).
-	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
-	h := createOnDiskTable(dir, chunks)
-	newRoot := hash.Of([]byte("new root"))
-	b, err := tryClobberManifest(dir, strings.Join([]string{StorageVersion, "0", newRoot.String(), h.String(), "3"}, ":"))
-	assert.NoError(err, string(b))
+// ParseIfExists returns any fake manifest data the caller has injected using Update() or set(). It treats an empty |fm.root| as a non-existent manifest.
+func (fm *fakeManifest) ParseIfExists(readHook func()) (exists bool, vers string, root hash.Hash, tableSpecs []tableSpec) {
+	fm.mu.RLock()
+	defer fm.mu.RUnlock()
+	if fm.root != (hash.Hash{}) {
+		return true, fm.version, fm.root, fm.tableSpecs
+	}
+	return false, "", hash.Hash{}, nil
+}
 
-	store := hookedNewNomsBlockStore(dir, defaultMemTableSize, func() {
-		// This should fail to get the lock, and therefore _not_ clobber the manifest.
-		badRoot := hash.Of([]byte("bad root"))
-		b, err := tryClobberManifest(dir, strings.Join([]string{StorageVersion, "0", badRoot.String(), h.String(), "3"}, ":"))
-		assert.NoError(err, string(b))
-	})
-	defer store.Close()
+// Update checks whether |root| == |fm.root| and, if so, updates internal fake manifest state as per the manifest.Update() contract: |fm.root| is set to |newRoot|, and the contents of |specs| are merged into |fm.tableSpecs|. If |root| != |fm.root|, then the update fails. Regardless of success or failure, the current state is returned.
+func (fm *fakeManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
+	fm.mu.Lock()
+	defer fm.mu.Unlock()
+	if fm.root != root {
+		return fm.root, fm.tableSpecs
+	}
+	fm.version = constants.NomsVersion
+	fm.root = newRoot
 
-	assert.Equal(newRoot, store.Root())
-	assert.Equal("0", store.Version())
-	assertDataInStore(chunks, store, assert)
+	known := map[addr]struct{}{}
+	for _, t := range fm.tableSpecs {
+		known[t.name] = struct{}{}
+	}
+
+	for _, t := range specs {
+		if _, present := known[t.name]; !present {
+			fm.tableSpecs = append(fm.tableSpecs, t)
+		}
+	}
+	return fm.root, fm.tableSpecs
+}
+
+func (fm *fakeManifest) set(version string, root hash.Hash, specs []tableSpec) {
+	fm.version, fm.root, fm.tableSpecs = version, root, specs
+}
+
+func newFakeTableSet() tableSet {
+	return tableSet{p: fakeTablePersister{map[addr]*memTable{}}}
+}
+
+type fakeTablePersister struct {
+	sources map[addr]*memTable
+}
+
+func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) (name addr, count uint32) {
+	if mt.count() > 0 {
+		scratch := [binary.MaxVarintLen64]byte{}
+		binary.PutUvarint(scratch[:], uint64(len(ftp.sources)))
+		name = computeAddr(scratch[:])
+		ftp.sources[name] = mt
+		count = uint32(len(ftp.sources))
+	}
+	return
+}
+
+func (ftp fakeTablePersister) Open(name addr, chunkCount uint32) chunkSource {
+	return chunkSourceAdapter{ftp.sources[name], name}
+}
+
+type chunkSourceAdapter struct {
+	*memTable
+	h addr
+}
+
+func (csa chunkSourceAdapter) close() error {
+	return nil
+}
+
+func (csa chunkSourceAdapter) hash() addr {
+	return csa.h
 }

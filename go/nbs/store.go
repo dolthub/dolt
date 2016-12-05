@@ -27,15 +27,14 @@ const (
 )
 
 type NomsBlockStore struct {
-	mm          fileManifest
-	tm          tableManager
+	mm          manifest
 	nomsVersion string
 
-	mu        sync.RWMutex // protects the following state
-	mt        *memTable
-	mtSize    uint64
-	immTables chunkSources // slice is never mutated. on change, new slice is constructed and assigned
-	root      hash.Hash
+	mu     sync.RWMutex // protects the following state
+	mt     *memTable
+	mtSize uint64
+	tables tableSet
+	root   hash.Hash
 
 	putCount uint64
 }
@@ -79,44 +78,27 @@ func (css chunkSources) getMany(reqs []getRecord) (remaining bool) {
 	return true
 }
 
-func NewBlockStore(dir string, memTableSize uint64) *NomsBlockStore {
-	return hookedNewNomsBlockStore(dir, memTableSize, nil)
+func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
+	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir), memTableSize)
 }
 
-func hookedNewNomsBlockStore(dir string, memTableSize uint64, readHook func()) *NomsBlockStore {
+func newNomsBlockStore(mm manifest, tt tableSet, memTableSize uint64) *NomsBlockStore {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
 	nbs := &NomsBlockStore{
-		mm:          fileManifest{dir},
-		tm:          &fileTableManager{dir},
+		mm:          mm,
+		tables:      tt,
 		nomsVersion: constants.NomsVersion,
 		mtSize:      memTableSize,
 	}
 
-	if exists, vers, root, tableSpecs := nbs.mm.ParseIfExists(readHook); exists {
+	if exists, vers, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
 		nbs.nomsVersion, nbs.root = vers, root
-		nbs.immTables = unionTables(nil, nbs.tm, tableSpecs)
+		nbs.tables = nbs.tables.Union(tableSpecs)
 	}
 
 	return nbs
-}
-
-// unionTables returns a new chunkSources that contains all of curTables as well as a chunkSource for each as-yet-unknown table named by tableSpecs.
-func unionTables(curTables chunkSources, tm tableManager, tableSpecs []tableSpec) chunkSources {
-	newTables := make(chunkSources, len(curTables))
-	known := map[addr]struct{}{}
-	for i, t := range curTables {
-		known[t.hash()] = struct{}{}
-		newTables[i] = curTables[i]
-	}
-
-	for _, t := range tableSpecs {
-		if _, present := known[t.name]; !present {
-			newTables = append(newTables, tm.open(t.name, t.chunkCount))
-		}
-	}
-	return newTables
 }
 
 func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
@@ -151,31 +133,22 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		if tableHash, chunkCount := nbs.tm.compact(nbs.mt, nbs.immTables); chunkCount > 0 {
-			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, chunkCount))
-		}
+		nbs.tables = nbs.tables.Prepend(nbs.mt)
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
 	}
 	return true
 }
 
-func prependTable(curTables chunkSources, crc chunkSource) chunkSources {
-	newTables := make(chunkSources, len(curTables)+1)
-	newTables[0] = crc
-	copy(newTables[1:], curTables)
-	return newTables
-}
-
 func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 	a := addr(h)
-	data, tables := func() (data []byte, tables chunkSources) {
+	data, tables := func() (data []byte, tables chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
 			data = nbs.mt.get(a)
 		}
-		return data, nbs.immTables
+		return data, nbs.tables
 	}()
 	if data != nil {
 		return chunks.NewChunkWithHash(h, data)
@@ -197,10 +170,10 @@ func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 		}
 	}
 
-	tables, remaining := func() (tables chunkSources, remaining bool) {
+	tables, remaining := func() (tables chunkReader, remaining bool) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
-		tables = nbs.immTables
+		tables = nbs.tables
 
 		if nbs.mt != nil {
 			remaining = nbs.mt.getMany(reqs)
@@ -233,10 +206,10 @@ func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 
 func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
 	a := addr(h)
-	has, tables := func() (bool, chunkSources) {
+	has, tables := func() (bool, chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
-		return nbs.mt != nil && nbs.mt.has(a), nbs.immTables
+		return nbs.mt != nil && nbs.mt.has(a), nbs.tables
 	}()
 	return has || tables.has(a)
 }
@@ -253,17 +226,15 @@ func (nbs *NomsBlockStore) UpdateRoot(current, last hash.Hash) bool {
 	d.Chk.True(nbs.root == last, "UpdateRoot: last != nbs.Root(); %s != %s", last, nbs.root)
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
-		if tableHash, chunkCount := nbs.tm.compact(nbs.mt, nbs.immTables); chunkCount > 0 {
-			nbs.immTables = prependTable(nbs.immTables, nbs.tm.open(tableHash, chunkCount))
-		}
+		nbs.tables = nbs.tables.Prepend(nbs.mt)
 		nbs.mt = nil
 	}
 
-	actual, tableNames := nbs.mm.Update(nbs.immTables, nbs.root, current, nil)
+	actual, tableNames := nbs.mm.Update(nbs.tables.ToSpecs(), nbs.root, current, nil)
 
 	if current != actual {
 		nbs.root = actual
-		nbs.immTables = unionTables(nbs.immTables, nbs.tm, tableNames)
+		nbs.tables = nbs.tables.Union(tableNames)
 		return false
 	}
 	nbs.nomsVersion, nbs.root = constants.NomsVersion, current
@@ -277,10 +248,7 @@ func (nbs *NomsBlockStore) Version() string {
 func (nbs *NomsBlockStore) Close() (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	for _, t := range nbs.immTables {
-		err = t.close() // TODO: somehow coalesce these errors??
-	}
-	return
+	return nbs.tables.Close()
 }
 
 // types.BatchStore

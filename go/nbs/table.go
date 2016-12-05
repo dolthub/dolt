@@ -101,20 +101,20 @@ import (
 */
 
 const (
-	addrSize           = uint64(20)
-	addrPrefixSize     = uint64(8)
-	addrSuffixSize     = addrSize - addrPrefixSize
-	ordinalSize        = uint64(4)
-	lengthSize         = uint64(4)
-	uint64Size         = uint64(8)
-	uint32Size         = uint64(4)
-	magicNumber        = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
-	magicNumberSize    = uint64(len(magicNumber))
-	footerSize         = uint32Size + uint64Size + magicNumberSize
-	prefixTupleSize    = addrPrefixSize + ordinalSize
-	checksumSize       = uint64(4)
-	maxChunkLengthSize = uint64(binary.MaxVarintLen64)
-	maxChunkSize       = uint64(0xffffffff) // Snappy won't compress slices bigger than this
+	addrSize           uint64 = 20
+	addrPrefixSize     uint64 = 8
+	addrSuffixSize            = addrSize - addrPrefixSize
+	ordinalSize        uint64 = 4
+	lengthSize         uint64 = 4
+	uint64Size         uint64 = 8
+	uint32Size         uint64 = 4
+	magicNumber               = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
+	magicNumberSize    uint64 = uint64(len(magicNumber))
+	footerSize                = uint32Size + uint64Size + magicNumberSize
+	prefixTupleSize           = addrPrefixSize + ordinalSize
+	checksumSize       uint64 = 4
+	maxChunkLengthSize uint64 = binary.MaxVarintLen64
+	maxChunkSize       uint64 = 0xffffffff // Snappy won't compress slices bigger than this
 )
 
 func computeAddrDefault(data []byte) addr {
@@ -203,9 +203,4 @@ type chunkSource interface {
 	close() error
 	count() uint32
 	hash() addr
-}
-
-type chunkWriter interface {
-	// addChunk writes chunk data with the address h. Returns true if the data was written, false if not.
-	addChunk(h addr, data []byte) bool
 }

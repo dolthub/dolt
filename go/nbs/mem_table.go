@@ -4,7 +4,11 @@
 
 package nbs
 
-import "sort"
+import (
+	"bytes"
+	"io"
+	"sort"
+)
 
 type memTable struct {
 	chunks             map[addr][]byte
@@ -78,7 +82,11 @@ func (mt *memTable) getMany(reqs []getRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) write(tw chunkWriter, haver chunkReader) (count uint32) {
+func (mt *memTable) write(w io.Writer, haver chunkReader) (name addr, count uint32) {
+	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
+	buff := make([]byte, maxSize)
+	tw := newTableWriter(buff)
+
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
 		haver.hasMany(mt.order)
@@ -92,5 +100,7 @@ func (mt *memTable) write(tw chunkWriter, haver chunkReader) (count uint32) {
 			count++
 		}
 	}
-	return
+	tableSize, name := tw.finish()
+	io.Copy(w, bytes.NewReader(buff[:tableSize]))
+	return name, count
 }

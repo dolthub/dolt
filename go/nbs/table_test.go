@@ -46,7 +46,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(tableData, memReaderAt(tableData))
+	tr := newTableReader(tableData, bytes.NewReader(tableData))
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -89,7 +89,7 @@ func TestHasMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(tableData, memReaderAt(tableData))
+	tr := newTableReader(tableData, bytes.NewReader(tableData))
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -135,7 +135,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	length, _ := tw.finish()
 	buff = buff[:length]
 
-	tr := newTableReader(buff, memReaderAt(buff))
+	tr := newTableReader(buff, bytes.NewReader(buff))
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -159,7 +159,7 @@ func TestGetMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(tableData, memReaderAt(tableData))
+	tr := newTableReader(tableData, bytes.NewReader(tableData))
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
@@ -190,7 +190,7 @@ func Test65k(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(tableData, memReaderAt(tableData))
+	tr := newTableReader(tableData, bytes.NewReader(tableData))
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -235,7 +235,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(tableData, memReaderAt(tableData))
+	tr := newTableReader(tableData, bytes.NewReader(tableData))
 
 	getBatch := make([]getRecord, len(chunks))
 	for i := 0; i < count; i++ {

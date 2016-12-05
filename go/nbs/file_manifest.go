@@ -25,6 +25,41 @@ const (
 	lockFileName     = "LOCK"
 )
 
+type manifest interface {
+	// ParseIfExists extracts and returns values from a NomsBlockStore
+	// manifest, if one exists. Concrete implementations are responsible for
+	// defining how to find and parse the desired manifest, e.g. a
+	// particularly-named file in a given directory. Implementations are also
+	// responsible for managing whatever concurrency guarantees they require
+	// for correctness.
+	// If the manifest exists, |exists| is set to true and manifest data is
+	// returned, including the version of the Noms data in the store, the root
+	// hash.Hash of the store, and a tableSpec describing every table that
+	// comprises the store.
+	// If the manifest doesn't exist, |exists| is set to false and the other
+	// return values are undefined. The |readHook| parameter allows race
+	// condition testing. If it is non-nil, it will be invoked while the
+	// implementation is guaranteeing exclusive access to the manifest.
+	ParseIfExists(readHook func()) (exists bool, vers string, root hash.Hash, tableSpecs []tableSpec)
+
+	// Update optimistically tries to write a new manifest containing
+	// |newRoot| and the tables referenced by |specs|. If |root| matches the root
+	// hash in the currently persisted manifest (logically, the root that
+	// would be returned by ParseIfExists), then Update succeeds and
+	// subsequent calls to both Update and ParseIfExists will reflect a
+	// manifest containing |newRoot| and |tables|. If not, Update fails.
+	// Regardless, |actual| and |tableSpecs| will reflect the current state of
+	// the world upon return. Callers should check that |actual| == |newRoot|
+	// and, if not, merge any desired new table information with the contents
+	// of |tableSpecs| before trying again.
+	// Concrete implementations are responsible for ensuring that concurrent
+	// Update calls (and ParseIfExists calls) are correct.
+	// If writeHook is non-nil, it will be invoked while the implementation is
+	// guaranteeing exclusive access to the manifest. This allows for testing
+	// of race conditions.
+	Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec)
+}
+
 // fileManifest provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
 // is currently human readable:
 //
@@ -100,13 +135,13 @@ func parseManifest(r io.Reader) (string, hash.Hash, []tableSpec) {
 	return string(slices[1]), hash.Parse(string(slices[2])), specs
 }
 
-func writeManifest(temp io.Writer, root hash.Hash, tables chunkSources) {
-	strs := make([]string, 2*len(tables)+3)
+func writeManifest(temp io.Writer, root hash.Hash, specs []tableSpec) {
+	strs := make([]string, 2*len(specs)+3)
 	strs[0], strs[1], strs[2] = StorageVersion, constants.NomsVersion, root.String()
 	tableInfo := strs[3:]
-	for i, t := range tables {
-		tableInfo[2*i] = t.hash().String()
-		tableInfo[2*i+1] = strconv.FormatUint(uint64(t.count()), 10)
+	for i, t := range specs {
+		tableInfo[2*i] = t.name.String()
+		tableInfo[2*i+1] = strconv.FormatUint(uint64(t.chunkCount), 10)
 	}
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 	d.PanicIfError(err)
@@ -120,7 +155,8 @@ func writeManifest(temp io.Writer, root hash.Hash, tables chunkSources) {
 // contents of |tableSpecs| before trying again.
 // If writeHook is non-nil, it will be invoked wile the manifest file lock is
 // held. This is to allow for testing of race conditions.
-func (fm fileManifest) Update(tables chunkSources, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
+func (fm fileManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
+	tableSpecs = specs
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
@@ -128,7 +164,7 @@ func (fm fileManifest) Update(tables chunkSources, root, newRoot hash.Hash, writ
 		temp, err := ioutil.TempFile(fm.dir, "nbs_manifest_")
 		d.PanicIfError(err)
 		defer checkClose(temp)
-		writeManifest(temp, newRoot, tables)
+		writeManifest(temp, newRoot, tableSpecs)
 		return temp.Name()
 	}()
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
@@ -160,7 +196,7 @@ func (fm fileManifest) Update(tables chunkSources, root, newRoot hash.Hash, writ
 	}
 	err := os.Rename(tempManifestPath, manifestPath)
 	d.PanicIfError(err)
-	return newRoot, nil
+	return newRoot, tableSpecs
 }
 
 func checkClose(c io.Closer) {

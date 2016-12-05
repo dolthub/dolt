@@ -12,8 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var takeLock = flag.Bool("take-lock", false, "Expect to be able to lock the lock file.")
-
 func main() {
 	flag.Parse()
 
@@ -28,10 +26,10 @@ func main() {
 	defer l.Close()
 	// lock released by closing l.
 	err = unix.Flock(int(l.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+	if err == unix.EWOULDBLOCK {
+		return
+	}
 	if err != nil {
-		if !*takeLock && err == unix.EWOULDBLOCK {
-			return
-		}
 		log.Fatalln(err)
 	}
 

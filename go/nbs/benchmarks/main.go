@@ -71,7 +71,7 @@ func main() {
 		if *toNBS != "" {
 			dir = makeTempDir(*toNBS, pb)
 			open = func() blockStore {
-				return nbs.NewBlockStore(dir, bufSize)
+				return nbs.NewLocalStore(dir, bufSize)
 			}
 		} else if *toFile != "" {
 			dir = makeTempDir(*toFile, pb)
@@ -91,7 +91,7 @@ func main() {
 	} else {
 		if *useNBS != "" {
 			open = func() blockStore {
-				return nbs.NewBlockStore(*useNBS, bufSize)
+				return nbs.NewLocalStore(*useNBS, bufSize)
 			}
 		}
 		writeDB = func() {}

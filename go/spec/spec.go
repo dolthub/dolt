@@ -157,7 +157,7 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "http", "https":
 		return nil
 	case "nbs":
-		return nbs.NewBlockStore(sp.DatabaseName, 1<<28)
+		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
 	case "ldb":
 		return getLdbStore(sp.DatabaseName)
 	case "mem":
@@ -250,7 +250,7 @@ func (sp Spec) createDatabase() datas.Database {
 	case "ldb":
 		return datas.NewDatabase(getLdbStore(sp.DatabaseName))
 	case "nbs":
-		return datas.NewDatabase(nbs.NewBlockStore(sp.DatabaseName, 1<<28))
+		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
 	case "mem":
 		return datas.NewDatabase(chunks.NewMemoryStore())
 	}

@@ -5,8 +5,10 @@
 package nbs
 
 import (
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"golang.org/x/sys/unix"
 
@@ -20,7 +22,16 @@ type mmapTableReader struct {
 	h    addr
 }
 
-var pageSize = int64(os.Getpagesize())
+var (
+	pageSize = int64(os.Getpagesize())
+	maxInt   = int64(math.MaxInt64)
+)
+
+func init() {
+	if strconv.IntSize == 32 {
+		maxInt = math.MaxInt32
+	}
+}
 
 func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
 	success := false

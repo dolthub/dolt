@@ -11,17 +11,6 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-type memReaderAt []byte
-
-func (mr memReaderAt) ReadAt(buff []byte, offset int64) (n int, err error) {
-	copy(buff, mr[offset:])
-	n = len(buff)
-	if int64(len(mr))-offset < int64(n) {
-		n = int(int64(len(mr)) - offset)
-	}
-	return
-}
-
 func TestMemTableAddHasGetChunk(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(1024)
@@ -92,20 +81,16 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _ := buildTable(chunks[1:2])
 	td2, _ := buildTable(chunks[2:])
-	tr1, tr2 := newTableReader(td1, memReaderAt(td1)), newTableReader(td2, memReaderAt(td2))
+	tr1, tr2 := newTableReader(td1, bytes.NewReader(td1)), newTableReader(td2, bytes.NewReader(td2))
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
-	writeSize := maxTableSize(1, uint64(len(chunks[0])))
+	w := &bytes.Buffer{}
 
-	buff := make([]byte, writeSize)
-	tw := newTableWriter(buff)
+	_, count := mt.write(w, chunkReaderGroup{tr1, tr2})
+	assert.Equal(uint32(1), count)
 
-	mt.write(tw, chunkReaderGroup{tr1, tr2})
-
-	ll, _ := tw.finish()
-
-	outReader := newTableReader(buff[:ll], memReaderAt(buff[:ll]))
+	outReader := newTableReader(w.Bytes(), bytes.NewReader(w.Bytes()))
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
