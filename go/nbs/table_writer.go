@@ -48,15 +48,15 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 		panic("NBS blocks cannont be zero length")
 	}
 
-	// checksum (4 LSBytes, big-endian)
-	copy(tw.buff[tw.pos:tw.pos+checksumSize], h[addrSize-checksumSize:])
-	tw.pos += checksumSize
-
 	// Compress data straight into tw.buff
 	compressed := snappy.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
 	tw.pos += dataLength
 	tw.totalPhysicalData += dataLength
+
+	// checksum (4 LSBytes, big-endian)
+	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crc(data))
+	tw.pos += checksumSize
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{

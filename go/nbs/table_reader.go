@@ -107,8 +107,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			li := uint64(tr.prefixIdxToOrdinal(j)) * addrSuffixSize
-			if bytes.Compare(addr.a[addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize]) == 0 {
+			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *addr.a) {
 				addrs[i].has = true
 				break
 			}
@@ -155,15 +154,18 @@ func (tr tableReader) has(h addr) bool {
 	idx := tr.prefixIdx(prefix)
 
 	for ; idx < tr.chunkCount && tr.prefixes[idx] == prefix; idx++ {
-		ordinal := tr.prefixIdxToOrdinal(idx)
-		suffixOffset := uint64(ordinal) * addrSuffixSize
-
-		if bytes.Compare(tr.suffixes[suffixOffset:suffixOffset+addrSuffixSize], h[addrPrefixSize:]) == 0 {
+		if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(idx), h) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// Return true IFF the suffix at insertion order |ordinal| matches the address |a|.
+func (tr tableReader) ordinalSuffixMatches(ordinal uint32, a addr) bool {
+	li := uint64(ordinal) * addrSuffixSize
+	return bytes.Compare(a[addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize]) == 0
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
@@ -174,6 +176,10 @@ func (tr tableReader) get(h addr) (data []byte) {
 
 	for ; idx < tr.chunkCount && tr.prefixes[idx] == prefix; idx++ {
 		ordinal := tr.prefixIdxToOrdinal(idx)
+		if !tr.ordinalSuffixMatches(ordinal, h) {
+			continue
+		}
+
 		offset := tr.offsets[ordinal]
 		length := uint64(tr.lengths[ordinal])
 		buff := make([]byte, length) // TODO: Avoid this allocation for every get
@@ -206,8 +212,8 @@ const readAmpThresh = 1 << 1
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
 func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
-	filterIdx := uint64(0)
-	filterLen := uint64(len(tr.prefixes))
+	filterIdx := uint32(0)
+	filterLen := uint32(len(tr.prefixes))
 	offsetRecords := make(offsetRecSlice, 0, len(reqs))
 
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
@@ -228,9 +234,11 @@ func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
 			continue
 		}
 
-		// record all offsets within the table which *may* contain the address we are searching for.
+		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			offsetRecords = append(offsetRecords, offsetRec{uint32(i), tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
+			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *req.a) {
+				offsetRecords = append(offsetRecords, offsetRec{uint32(i), tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
+			}
 		}
 	}
 
@@ -326,23 +334,13 @@ func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
 
 // Fetches the byte stream of data logically encoded within the table starting at |pos|.
 func (tr tableReader) parseChunk(h addr, buff []byte) []byte {
-	// chksum (4 LSBytes, big-endian)
-	chksum := binary.BigEndian.Uint32(buff)
-	if chksum != h.Checksum() {
-		return nil // false positive
-	}
-	buff = buff[checksumSize:]
-
-	// data
-	data, err := snappy.Decode(nil, buff)
+	dataLen := uint64(len(buff)) - checksumSize
+	data, err := snappy.Decode(nil, buff[:dataLen])
 	d.Chk.NoError(err)
+	buff = buff[dataLen:]
 
-	computedAddr := computeAddr(data)
-	d.Chk.True(chksum == computedAddr.Checksum()) // integrity check
-
-	if computedAddr != h {
-		return nil // false positive
-	}
+	chksum := binary.BigEndian.Uint32(buff)
+	d.Chk.True(chksum == crc(data))
 
 	return data
 }
