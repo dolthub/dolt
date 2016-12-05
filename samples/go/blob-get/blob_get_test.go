@@ -41,4 +41,8 @@ func (s *bgSuite) TestBlobGet() {
 	fileBytes, err := ioutil.ReadFile(filePath)
 	s.NoError(err)
 	s.Equal(blobBytes, fileBytes)
+
+	stdout, _ := s.MustRun(main, []string{hashSpec})
+	fmt.Println("stdout:", stdout)
+	s.Equal(blobBytes, []byte(stdout))
 }
