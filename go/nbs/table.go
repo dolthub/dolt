@@ -105,10 +105,10 @@ const (
 	addrSize           uint64 = 20
 	addrPrefixSize     uint64 = 8
 	addrSuffixSize            = addrSize - addrPrefixSize
-	ordinalSize        uint64 = 4
-	lengthSize         uint64 = 4
 	uint64Size         uint64 = 8
 	uint32Size         uint64 = 4
+	ordinalSize        uint64 = uint32Size
+	lengthSize         uint64 = uint32Size
 	magicNumber               = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	magicNumberSize    uint64 = uint64(len(magicNumber))
 	footerSize                = uint32Size + uint64Size + magicNumberSize

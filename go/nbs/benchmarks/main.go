@@ -16,6 +16,9 @@ import (
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/testify/assert"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -26,8 +29,13 @@ var (
 	mtMiB    = flag.Uint64("mem", 64, "Size in MiB of memTable")
 	useNBS   = flag.String("useNBS", "", "Existing Database to use for not-WriteNovel benchmarks")
 	toNBS    = flag.String("toNBS", "", "Write to an NBS store in the given directory")
+	useAWS   = flag.String("useAWS", "", "Name of existing Database to use for not-WriteNovel benchmarks")
+	toAWS    = flag.String("toAWS", "", "Write to an NBS store in AWS")
 	toFile   = flag.String("toFile", "", "Write to a file in the given directory")
 )
+
+const s3Bucket = "attic-nbs"
+const dynamoTable = "attic-nbs"
 
 type panickingBencher struct {
 	n int
@@ -66,32 +74,53 @@ func main() {
 	wrote := false
 	var writeDB func()
 	var refresh func() blockStore
-	if *toNBS != "" || *toFile != "" {
-		var dir string
+	if *toNBS != "" || *toFile != "" || *toAWS != "" {
+		var reset func()
 		if *toNBS != "" {
-			dir = makeTempDir(*toNBS, pb)
-			open = func() blockStore {
-				return nbs.NewLocalStore(dir, bufSize)
-			}
+			dir := makeTempDir(*toNBS, pb)
+			defer os.RemoveAll(dir)
+			open = func() blockStore { return nbs.NewLocalStore(dir, bufSize) }
+			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
+
 		} else if *toFile != "" {
-			dir = makeTempDir(*toFile, pb)
+			dir := makeTempDir(*toFile, pb)
+			defer os.RemoveAll(dir)
 			open = func() blockStore {
 				f, err := ioutil.TempFile(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
 			}
+			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
+
+		} else if *toAWS != "" {
+			sess := session.New(aws.NewConfig().WithRegion("us-west-2"))
+			open = func() blockStore {
+				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, sess, bufSize)
+			}
+			reset = func() {
+				ddb := dynamodb.New(sess)
+				_, err := ddb.DeleteItem(&dynamodb.DeleteItemInput{
+					TableName: aws.String(dynamoTable),
+					Key: map[string]*dynamodb.AttributeValue{
+						"db": {S: toAWS},
+					},
+				})
+				d.PanicIfError(err)
+			}
 		}
-		defer os.RemoveAll(dir)
+
 		writeDB = func() { wrote = ensureNovelWrite(wrote, open, src, pb) }
 		refresh = func() blockStore {
-			os.RemoveAll(dir)
-			os.MkdirAll(dir, 0777)
+			reset()
 			return open()
 		}
 	} else {
 		if *useNBS != "" {
+			open = func() blockStore { return nbs.NewLocalStore(*useNBS, bufSize) }
+		} else if *useAWS != "" {
+			sess := session.New(aws.NewConfig().WithRegion("us-west-2"))
 			open = func() blockStore {
-				return nbs.NewLocalStore(*useNBS, bufSize)
+				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, sess, bufSize)
 			}
 		}
 		writeDB = func() {}
@@ -105,7 +134,9 @@ func main() {
 	}{
 		{"WriteNovel", func() {}, func() { wrote = benchmarkNovelWrite(refresh, src, pb) }},
 		{"WriteDuplicate", writeDB, func() { benchmarkNoRefreshWrite(open, src, pb) }},
-		{"ReadSequential", writeDB, func() { benchmarkRead(open, src.GetHashes(), src, pb) }},
+		{"ReadSequential", writeDB, func() {
+			benchmarkRead(open, src.GetHashes(), src, pb)
+		}},
 		{"ReadManySequential", writeDB, func() { benchmarkReadMany(open, src.GetHashes(), src, 1<<8, 6, pb) }},
 		{"ReadHashOrder", writeDB, func() {
 			ordered := src.GetHashes()

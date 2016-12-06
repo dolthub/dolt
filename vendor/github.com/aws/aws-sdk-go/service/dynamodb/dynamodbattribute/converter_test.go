@@ -2,12 +2,10 @@ package dynamodbattribute
 
 import (
 	"math"
-	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
@@ -122,6 +120,10 @@ var converterMapTestInputs = []converterTestInput{
 	{
 		input:    map[string]interface{}{"int": int(12)},
 		expected: map[string]*dynamodb.AttributeValue{"int": {N: aws.String("12")}},
+	},
+	{
+		input:    map[string]interface{}{"byte": []byte{48, 49}},
+		expected: map[string]*dynamodb.AttributeValue{"byte": {B: []byte{48, 49}}},
 	},
 	// List
 	{
@@ -477,12 +479,20 @@ func TestConvertFromListError(t *testing.T) {
 	}
 }
 
-func compareObjects(t *testing.T, expected interface{}, actual interface{}) {
-	if !reflect.DeepEqual(expected, actual) {
-		t.Errorf("\nExpected %s:\n%s\nActual %s:\n%s\n",
-			reflect.ValueOf(expected).Kind(),
-			awsutil.Prettify(expected),
-			reflect.ValueOf(actual).Kind(),
-			awsutil.Prettify(actual))
+func BenchmarkConvertTo(b *testing.B) {
+	d := mySimpleStruct{
+		String:  "abc",
+		Int:     123,
+		Uint:    123,
+		Float32: 123.321,
+		Float64: 123.321,
+		Bool:    true,
+		Null:    nil,
+	}
+	for i := 0; i < b.N; i++ {
+		_, err := ConvertTo(d)
+		if err != nil {
+			b.Fatal("unexpected error", err)
+		}
 	}
 }

@@ -13,6 +13,9 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
@@ -78,17 +81,23 @@ func (css chunkSources) getMany(reqs []getRecord) (remaining bool) {
 	return true
 }
 
+func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
+	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
+	ts := newS3TableSet(s3.New(sess), bucket)
+	return newNomsBlockStore(mm, ts, memTableSize)
+}
+
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
 	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir), memTableSize)
 }
 
-func newNomsBlockStore(mm manifest, tt tableSet, memTableSize uint64) *NomsBlockStore {
+func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64) *NomsBlockStore {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
 	nbs := &NomsBlockStore{
 		mm:          mm,
-		tables:      tt,
+		tables:      ts,
 		nomsVersion: constants.NomsVersion,
 		mtSize:      memTableSize,
 	}

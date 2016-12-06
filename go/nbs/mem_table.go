@@ -4,11 +4,7 @@
 
 package nbs
 
-import (
-	"bytes"
-	"io"
-	"sort"
-)
+import "sort"
 
 type memTable struct {
 	chunks             map[addr][]byte
@@ -82,7 +78,7 @@ func (mt *memTable) getMany(reqs []getRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) write(w io.Writer, haver chunkReader) (name addr, count uint32) {
+func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff)
@@ -101,6 +97,5 @@ func (mt *memTable) write(w io.Writer, haver chunkReader) (name addr, count uint
 		}
 	}
 	tableSize, name := tw.finish()
-	io.Copy(w, bytes.NewReader(buff[:tableSize]))
-	return name, count
+	return name, buff[:tableSize], count
 }

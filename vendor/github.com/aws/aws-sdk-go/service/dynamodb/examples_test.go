@@ -16,7 +16,13 @@ var _ time.Duration
 var _ bytes.Buffer
 
 func ExampleDynamoDB_BatchGetItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.BatchGetItemInput{
 		RequestItems: map[string]*dynamodb.KeysAndAttributes{ // Required
@@ -87,7 +93,13 @@ func ExampleDynamoDB_BatchGetItem() {
 }
 
 func ExampleDynamoDB_BatchWriteItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]*dynamodb.WriteRequest{ // Required
@@ -187,7 +199,13 @@ func ExampleDynamoDB_BatchWriteItem() {
 }
 
 func ExampleDynamoDB_CreateTable() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{ // Required
@@ -272,7 +290,13 @@ func ExampleDynamoDB_CreateTable() {
 }
 
 func ExampleDynamoDB_DeleteItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{ // Required
@@ -440,7 +464,13 @@ func ExampleDynamoDB_DeleteItem() {
 }
 
 func ExampleDynamoDB_DeleteTable() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.DeleteTableInput{
 		TableName: aws.String("TableName"), // Required
@@ -458,8 +488,37 @@ func ExampleDynamoDB_DeleteTable() {
 	fmt.Println(resp)
 }
 
+func ExampleDynamoDB_DescribeLimits() {
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
+
+	var params *dynamodb.DescribeLimitsInput
+	resp, err := svc.DescribeLimits(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
 func ExampleDynamoDB_DescribeTable() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.DescribeTableInput{
 		TableName: aws.String("TableName"), // Required
@@ -478,7 +537,13 @@ func ExampleDynamoDB_DescribeTable() {
 }
 
 func ExampleDynamoDB_GetItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{ // Required
@@ -542,7 +607,13 @@ func ExampleDynamoDB_GetItem() {
 }
 
 func ExampleDynamoDB_ListTables() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.ListTablesInput{
 		ExclusiveStartTableName: aws.String("TableName"),
@@ -562,7 +633,13 @@ func ExampleDynamoDB_ListTables() {
 }
 
 func ExampleDynamoDB_PutItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{ // Required
@@ -730,7 +807,13 @@ func ExampleDynamoDB_PutItem() {
 }
 
 func ExampleDynamoDB_Query() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.QueryInput{
 		TableName: aws.String("TableName"), // Required
@@ -915,7 +998,13 @@ func ExampleDynamoDB_Query() {
 }
 
 func ExampleDynamoDB_Scan() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.ScanInput{
 		TableName: aws.String("TableName"), // Required
@@ -1060,7 +1149,13 @@ func ExampleDynamoDB_Scan() {
 }
 
 func ExampleDynamoDB_UpdateItem() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.UpdateItemInput{
 		Key: map[string]*dynamodb.AttributeValue{ // Required
@@ -1266,7 +1361,13 @@ func ExampleDynamoDB_UpdateItem() {
 }
 
 func ExampleDynamoDB_UpdateTable() {
-	svc := dynamodb.New(session.New())
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
 
 	params := &dynamodb.UpdateTableInput{
 		TableName: aws.String("TableName"), // Required

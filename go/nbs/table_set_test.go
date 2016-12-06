@@ -72,6 +72,48 @@ func TestTableSetUnion(t *testing.T) {
 	assert.Len(ts.ToSpecs(), 3)
 }
 
+func TestS3TablePersisterCompact(t *testing.T) {
+	assert := assert.New(t)
+	mt := newMemTable(testMemTableSize)
+
+	for _, c := range testChunks {
+		assert.True(mt.addChunk(computeAddr(c), c))
+	}
+
+	s3svc := makeFakeS3(assert)
+	s3p := s3TablePersister{s3svc, "bucket"}
+
+	tableAddr, chunkCount := s3p.Compact(mt, nil)
+	if assert.True(chunkCount > 0) {
+		buff, present := s3svc.data[tableAddr.String()]
+		assert.True(present)
+		tr := newTableReader(buff, bytes.NewReader(buff))
+		for _, c := range testChunks {
+			assert.True(tr.has(computeAddr(c)))
+		}
+	}
+}
+
+func TestS3TablePersisterCompactNoData(t *testing.T) {
+	assert := assert.New(t)
+	mt := newMemTable(testMemTableSize)
+	existingTable := newMemTable(testMemTableSize)
+
+	for _, c := range testChunks {
+		assert.True(mt.addChunk(computeAddr(c), c))
+		assert.True(existingTable.addChunk(computeAddr(c), c))
+	}
+
+	s3svc := makeFakeS3(assert)
+	s3p := s3TablePersister{s3svc, "bucket"}
+
+	tableAddr, chunkCount := s3p.Compact(mt, existingTable)
+	assert.True(chunkCount == 0)
+
+	_, present := s3svc.data[tableAddr.String()]
+	assert.False(present)
+}
+
 func TestFSTablePersisterCompact(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(testMemTableSize)

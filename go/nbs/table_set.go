@@ -5,12 +5,20 @@
 package nbs
 
 import (
+	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+func newS3TableSet(s3 s3svc, bucket string) tableSet {
+	return tableSet{p: s3TablePersister{s3, bucket}}
+}
 
 func newFSTableSet(dir string) tableSet {
 	return tableSet{p: fsTablePersister{dir}}
@@ -72,6 +80,30 @@ type tablePersister interface {
 	Open(name addr, chunkCount uint32) chunkSource
 }
 
+type s3TablePersister struct {
+	s3     s3svc
+	bucket string
+}
+
+func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32) {
+	name, data, chunkCount := mt.write(haver)
+
+	if chunkCount > 0 {
+		_, err := s3p.s3.PutObject(&s3.PutObjectInput{
+			Bucket:        aws.String(s3p.bucket),
+			Key:           aws.String(name.String()),
+			Body:          bytes.NewReader(data),
+			ContentLength: aws.Int64(int64(len(data))),
+		})
+		d.PanicIfError(err)
+	}
+	return name, chunkCount
+}
+
+func (s3p s3TablePersister) Open(name addr, chunkCount uint32) chunkSource {
+	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount)
+}
+
 type fsTablePersister struct {
 	dir string
 }
@@ -82,7 +114,8 @@ func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) (name addr,
 		d.PanicIfError(err)
 		defer checkClose(temp)
 
-		name, chunkCount := mt.write(temp, haver)
+		name, data, chunkCount := mt.write(haver)
+		io.Copy(temp, bytes.NewReader(data))
 		return temp.Name(), name, chunkCount
 	}()
 	if chunkCount > 0 {

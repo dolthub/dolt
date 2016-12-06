@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/stretchr/testify/assert"
@@ -36,11 +37,19 @@ func ExampleCopy() {
 	// }
 }
 
-func TestCopy(t *testing.T) {
+func TestCopy1(t *testing.T) {
+	type Bar struct {
+		a *int
+		B *int
+		c int
+		D int
+	}
 	type Foo struct {
 		A int
 		B []*string
 		C map[string]*int
+		D *time.Time
+		E *Bar
 	}
 
 	// Create the initial value
@@ -48,12 +57,22 @@ func TestCopy(t *testing.T) {
 	str2 := "bye bye"
 	int1 := 1
 	int2 := 2
+	intPtr1 := 1
+	intPtr2 := 2
+	now := time.Now()
 	f1 := &Foo{
 		A: 1,
 		B: []*string{&str1, &str2},
 		C: map[string]*int{
 			"A": &int1,
 			"B": &int2,
+		},
+		D: &now,
+		E: &Bar{
+			&intPtr1,
+			&intPtr2,
+			2,
+			3,
 		},
 	}
 
@@ -65,16 +84,29 @@ func TestCopy(t *testing.T) {
 	assert.Equal(t, f2.A, f1.A)
 	assert.Equal(t, f2.B, f1.B)
 	assert.Equal(t, f2.C, f1.C)
+	assert.Equal(t, f2.D, f1.D)
+	assert.Equal(t, f2.E.B, f1.E.B)
+	assert.Equal(t, f2.E.D, f1.E.D)
 
 	// But pointers are not!
 	str3 := "nothello"
 	int3 := 57
 	f2.A = 100
-	f2.B[0] = &str3
-	f2.C["B"] = &int3
+	*f2.B[0] = str3
+	*f2.C["B"] = int3
+	*f2.D = time.Now()
+	f2.E.a = &int3
+	*f2.E.B = int3
+	f2.E.c = 5
+	f2.E.D = 5
 	assert.NotEqual(t, f2.A, f1.A)
 	assert.NotEqual(t, f2.B, f1.B)
 	assert.NotEqual(t, f2.C, f1.C)
+	assert.NotEqual(t, f2.D, f1.D)
+	assert.NotEqual(t, f2.E.a, f1.E.a)
+	assert.NotEqual(t, f2.E.B, f1.E.B)
+	assert.NotEqual(t, f2.E.c, f1.E.c)
+	assert.NotEqual(t, f2.E.D, f1.E.D)
 }
 
 func TestCopyNestedWithUnexported(t *testing.T) {
