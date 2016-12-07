@@ -2,7 +2,7 @@
 <br>
 [Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Documentation](doc/index.md)&nbsp; | &nbsp;[Project Status](#status)&nbsp; | &nbsp;[Download](https://s3-us-west-2.amazonaws.com/download.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries/)
 <br><br>
-[![Build Status](http://jenkins.noms.io/job/NomsMasterBuilder/badge/icon)](http://jenkins.noms.io/job/NomsMasterBuilder)
+[![Build Status](http://jenkins3.noms.io/job/NomsMasterBuilder/badge/icon)](http://jenkins3.noms.io/job/NomsMasterBuilder)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)

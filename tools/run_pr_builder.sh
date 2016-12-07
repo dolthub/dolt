@@ -4,7 +4,7 @@
 # Licensed under the Apache License, version 2.0:
 # http://www.apache.org/licenses/LICENSE-2.0
 
-# This script runs on the Noms PR Builder (http://jenkins.noms.io/job/NomsPRBuilder).
+# This script runs on the Noms PR Builder (http://jenkins3.noms.io/job/NomsPRBuilder).
 
 set -eux
 
