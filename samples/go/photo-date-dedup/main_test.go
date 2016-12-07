@@ -57,21 +57,28 @@ func (s *testSuite) TestBasic() {
 			DateTaken: Date{NsSinceEpoch: float64(55 * 1e9)},
 		}),
 
-		// No dupes, so it doen't end up in a group
+		// No dupes
 		marshal.MustMarshal(Photo{
 			Id:        "48",
 			DateTaken: Date{NsSinceEpoch: float64(61 * 1e9)},
 		}),
 
-		// Zero date taken, so it doesn't end up in a group
+		// If the DateTaken is zero, it should end up in its own group
 		marshal.MustMarshal(Photo{
 			Id:        "49",
 			DateTaken: Date{NsSinceEpoch: float64(0)},
 		}),
+		marshal.MustMarshal(Photo{
+			Id:        "50",
+			DateTaken: Date{NsSinceEpoch: float64(0)},
+		}),
 
-		// No date taken, so it doens't end up in a group
+		// If the DateTaken is not present, it should end up in its own group
 		types.NewStruct("Photo", types.StructData{
-			"Id": types.String("50"),
+			"id": types.String("51"),
+		}),
+		types.NewStruct("Photo", types.StructData{
+			"id": types.String("52"),
 		}),
 	)
 
@@ -90,15 +97,29 @@ func (s *testSuite) TestBasic() {
 	err = marshal.Unmarshal(sp.GetDataset().HeadValue(), &result)
 	s.NoError(err)
 
-	s.Equal(2, len(result.Groups))
+	expectedGroups := map[string]map[string]bool{
+		"44": map[string]bool{"45": true, "43": true, "42": true},
+		"46": map[string]bool{"47": true},
+		"48": nil,
+		"49": nil,
+		"50": nil,
+		"51": nil,
+		"52": nil,
+	}
 
-	s.Equal("44", result.Groups[0].Cover.Id)
-	s.Equal(3, len(result.Groups[0].Photos))
-	s.Equal("45", result.Groups[0].Photos[0].Id)
-	s.Equal("43", result.Groups[0].Photos[1].Id)
-	s.Equal("42", result.Groups[0].Photos[2].Id)
+	for _, g := range result.Groups {
+		exp, ok := expectedGroups[g.Cover.Id]
+		s.True(ok, "Group cover %s not expected", g.Cover.Id)
+		for _, p := range g.Photos {
+			if _, ok = exp[p.Id]; ok {
+				delete(exp, p.Id)
+			} else {
+				s.Fail("Photo %s not expected in group %s", p.Id, g.Cover.Id)
+			}
+		}
+		s.Equal(0, len(exp), "Some expected photos not found in group %s: %+v", g.Cover.Id, exp)
+		delete(expectedGroups, g.Cover.Id)
+	}
 
-	s.Equal("46", result.Groups[1].Cover.Id)
-	s.Equal(1, len(result.Groups[1].Photos))
-	s.Equal("47", result.Groups[1].Photos[0].Id)
+	s.Equal(0, len(expectedGroups), "Some expected groups not found in result: %+v", expectedGroups)
 }

@@ -30,7 +30,7 @@ type Date struct {
 
 type Photo struct {
 	Id        string
-	DateTaken Date
+	DateTaken Date `noms:",omitempty"`
 }
 
 type PhotoGroup struct {
@@ -124,11 +124,9 @@ func buildDateIndex(db types.ValueReadWriter, inputs []types.Value) types.Map {
 			var p Photo
 			if err := marshal.Unmarshal(cv, &p); err == nil {
 				stop = true
-				if p.DateTaken.NsSinceEpoch != 0 {
-					indexBuilder.SetInsert(
-						[]types.Value{types.Number(float64(p.DateTaken.NsSinceEpoch))},
-						cv)
-				}
+				indexBuilder.SetInsert(
+					[]types.Value{types.Number(float64(p.DateTaken.NsSinceEpoch))},
+					cv)
 			}
 			return
 		})
@@ -151,7 +149,7 @@ func buildGroups(db types.ValueReadWriter, thresh int, byDate types.Map) types.L
 	}
 
 	flush := func() {
-		if group != nil && group.Photos.Len() > 0 {
+		if group != nil {
 			v, err := marshal.Marshal(*group)
 			d.Chk.NoError(err)
 			vals <- v
@@ -163,10 +161,17 @@ func buildGroups(db types.ValueReadWriter, thresh int, byDate types.Map) types.L
 	byDate.IterAll(func(key, s types.Value) {
 		s.(types.Set).IterAll(func(val types.Value) {
 			dt := float64(key.(types.Number))
-			if (dt - lastTime) > float64(thresh*1e6) {
+			if dt == 0 {
+				// If date is not known, then the photo is in its own group
+				flush()
+				startGroup(val)
+				flush()
+			} else if (dt - lastTime) > float64(thresh*1e6) {
+				// Otherwise, if we've surpassed the threshold, start a new group
 				flush()
 				startGroup(val)
 			} else {
+				// Otherwise, add to the existing group
 				group.Photos = group.Photos.Insert(val)
 			}
 			lastTime = dt

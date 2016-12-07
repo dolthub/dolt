@@ -9,13 +9,11 @@ import (
 	"math"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -32,23 +30,39 @@ func main() {
 }
 
 type Photo struct {
-	Id    string
-	Sizes map[struct{ Width, Height int }]string
+	Id            string
+	Sizes         map[struct{ Width, Height int }]string
+	DateTaken     Date         `noms:",omitempty"`
+	DatePublished Date         `noms:",omitempty"`
+	DateUpdated   Date         `noms:",omitempty"`
+	Tags          []string     `noms:",omitempty"`
+	Sources       []string     `noms:",omitempty"`
+	Original      types.Struct `noms:",original"`
+	Faces         []struct {
+		Name       string
+		X, Y, W, H float32
+	} `noms:",omitempty"`
 }
 
 type PhotoGroup struct {
-	Cover  Photo
-	Photos types.Set
+	Id       string
+	Cover    Photo
+	Photos   []Photo
+	Original types.Struct `noms:",original"`
 }
 
 type Date struct {
 	NsSinceEpoch float64
 }
 
+func (d Date) IsEmpty() bool {
+	return d.NsSinceEpoch == 0
+}
+
 func index() (win bool) {
 	var dbStr = flag.String("db", "", "input database spec")
-	var groupsStr = flag.String("groups", "", "path within db to look for PhotoGroup structs")
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to - if empty, defaults to input dataset")
+	var indexCovers = flag.Bool("index-covers", false, "the resulting index will contain only the cover Photo, not the entire PhotoGroup")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 
 	flag.Usage = usage
@@ -86,101 +100,65 @@ func index() (win bool) {
 	faceCounts := map[types.String]int{}
 	sourceCounts := map[types.String]int{}
 	tagCounts := map[types.String]int{}
-	countsMtx := sync.Mutex{}
 
-	addToIndex := func(p Photo, cv types.Value) {
-		d := math.MaxFloat64
-		var dt struct{ DateTaken Date }
-		var dp struct{ DatePublished Date }
-		var du struct{ DateUpdated Date }
-		if err := marshal.Unmarshal(cv, &dt); err == nil {
-			d = -dt.DateTaken.NsSinceEpoch
-		} else if err := marshal.Unmarshal(cv, &dp); err == nil {
-			d = -dp.DatePublished.NsSinceEpoch
-		} else if err := marshal.Unmarshal(cv, &du); err == nil {
-			d = -du.DateUpdated.NsSinceEpoch
+	addToIndex := func(gb *types.GraphBuilder, path []types.Value, pg PhotoGroup) {
+		if *indexCovers {
+			gb.SetInsert(path, pg.Cover.Original)
+		} else {
+			gb.SetInsert(path, pg.Original)
 		}
+	}
+
+	addToIndexes := func(pg PhotoGroup) {
+		d := math.MaxFloat64
+		if !pg.Cover.DateTaken.IsEmpty() {
+			d = pg.Cover.DateTaken.NsSinceEpoch
+		} else if !pg.Cover.DatePublished.IsEmpty() {
+			d = pg.Cover.DatePublished.NsSinceEpoch
+		} else if !pg.Cover.DateUpdated.IsEmpty() {
+			d = pg.Cover.DateUpdated.NsSinceEpoch
+		}
+		d = -d
 
 		// Index by date
-		byDate.SetInsert([]types.Value{types.Number(d)}, cv)
+		addToIndex(byDate, []types.Value{types.Number(d)}, pg)
+
+		allPhotos := []Photo{pg.Cover}
+		if !*indexCovers {
+			allPhotos = append(allPhotos, pg.Photos...)
+		}
 
 		// Index by tag, then date
-		moreTags := map[types.String]int{}
-		var wt struct{ Tags []string }
-		if err = marshal.Unmarshal(cv, &wt); err == nil {
-			for _, t := range wt.Tags {
-				byTag.SetInsert([]types.Value{types.String(t), types.Number(d)}, cv)
-				moreTags[types.String(t)]++
+		for _, p := range allPhotos {
+			for _, t := range p.Tags {
+				addToIndex(byTag, []types.Value{types.String(t), types.Number(d)}, pg)
+				tagCounts[types.String(t)]++
 			}
 		}
 
 		// Index by face, then date
-		moreFaces := map[types.String]int{}
-		var wf struct {
-			Faces []struct {
-				Name       string
-				X, Y, W, H float32
-			}
-		}
-		if err = marshal.Unmarshal(cv, &wf); err == nil {
-			for _, f := range wf.Faces {
-				byFace.SetInsert([]types.Value{types.String(f.Name), types.Number(d)}, cv)
-				moreFaces[types.String(f.Name)]++
+		for _, p := range allPhotos {
+			for _, f := range p.Faces {
+				addToIndex(byFace, []types.Value{types.String(f.Name), types.Number(d)}, pg)
+				faceCounts[types.String(f.Name)]++
 			}
 		}
 
 		// Index by source, then date
-		moreSources := map[types.String]int{}
-		var ws struct {
-			Sources []string
-		}
-		if err = marshal.Unmarshal(cv, &ws); err == nil {
-			for _, s := range ws.Sources {
-				bySource.SetInsert([]types.Value{types.String(s), types.Number(d)}, cv)
+		for _, p := range allPhotos {
+			for _, s := range p.Sources {
+				addToIndex(bySource, []types.Value{types.String(s), types.Number(d)}, pg)
+				sourceCounts[types.String(s)]++
 			}
 		}
-
-		countsMtx.Lock()
-		for tag, count := range moreTags {
-			tagCounts[tag] += count
-		}
-		for face, count := range moreFaces {
-			faceCounts[face] += count
-		}
-		for source, count := range moreSources {
-			sourceCounts[source] += count
-		}
-		countsMtx.Unlock()
-	}
-
-	groups := []types.Value{}
-	inGroups := map[hash.Hash]struct{}{}
-	if *groupsStr != "" {
-		groups, err = spec.ReadAbsolutePaths(db, *groupsStr)
-		d.CheckErrorNoUsage(err)
-		walk.WalkValues(groups[0], db, func(cv types.Value) (stop bool) {
-			var pg PhotoGroup
-			if err := marshal.Unmarshal(cv, &pg); err == nil {
-				stop = true
-				// TODO: Don't need to do this second arg separately when decoder can catch full value.
-				addToIndex(pg.Cover, cv.(types.Struct).Get("cover"))
-				inGroups[cv.(types.Struct).Get("cover").Hash()] = struct{}{}
-				pg.Photos.IterAll(func(cv types.Value) {
-					inGroups[cv.Hash()] = struct{}{}
-				})
-			}
-			return
-		})
 	}
 
 	for _, v := range inputs {
 		walk.WalkValues(v, db, func(cv types.Value) (stop bool) {
-			var p Photo
-			if _, ok := inGroups[cv.Hash()]; ok {
+			var pg PhotoGroup
+			if err := marshal.Unmarshal(cv, &pg); err == nil {
 				stop = true
-			} else if err := marshal.Unmarshal(cv, &p); err == nil {
-				stop = true
-				addToIndex(p, cv)
+				addToIndexes(pg)
 			}
 			return
 		})
