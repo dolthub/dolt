@@ -9,9 +9,9 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-    "github.com/attic-labs/noms/go/marshal"
 )
 
 // ResourceCache is a Map<String, Ref<Blob>>
@@ -22,24 +22,24 @@ type resourceCache struct {
 }
 
 func checkCacheType(c types.Value) (err error) {
-    err = errors.New("resourceCache value is not Map<String, Ref<Blob>>")
-    var m types.Map
-	
-    if err1 := marshal.Unmarshal(c, &m); err1 != nil {
+	err = errors.New("resourceCache value is not Map<String, Ref<Blob>>")
+	var m types.Map
+
+	if err1 := marshal.Unmarshal(c, &m); err1 != nil {
 		return
-    }
-    keyType := c.Type().Desc.(types.CompoundDesc).ElemTypes[0]
-    if keyType.Kind() != types.StringKind {
-        return
-    }
-    valueType := c.Type().Desc.(types.CompoundDesc).ElemTypes[1]
-    if valueType.Kind() != types.RefKind {
-        return
-    }
-    if valueType.Desc.(types.CompoundDesc).ElemTypes[0].Kind() != types.BlobKind {
-        return
 	}
-    
+	keyType := c.Type().Desc.(types.CompoundDesc).ElemTypes[0]
+	if keyType.Kind() != types.StringKind {
+		return
+	}
+	valueType := c.Type().Desc.(types.CompoundDesc).ElemTypes[1]
+	if valueType.Kind() != types.RefKind {
+		return
+	}
+	if valueType.Desc.(types.CompoundDesc).ElemTypes[0].Kind() != types.BlobKind {
+		return
+	}
+
 	err = nil
 	return
 }
