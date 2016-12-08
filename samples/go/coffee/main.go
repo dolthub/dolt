@@ -67,7 +67,7 @@ func main() {
 		return
 	}
 
-	if now.Hour() < 10 {
+	if now.Hour() < 15 {
 		fmt.Println("Waiting until people show up at work.")
 		return
 	}
