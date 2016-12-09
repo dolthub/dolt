@@ -91,7 +91,7 @@ func (t *Type) WalkValues(cb ValueCallback) {
 		desc.IterFields(func(name string, t *Type) {
 			cb(t)
 		})
-	case PrimitiveDesc:
+	case PrimitiveDesc, CycleDesc:
 		// Nothing, these have no child values
 	default:
 		d.Chk.Fail("Unexpected type desc implementation: %#v", t)

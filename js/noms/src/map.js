@@ -28,6 +28,8 @@ import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import RollingValueHasher, {hashValueBytes} from './rolling-value-hasher.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
 
@@ -87,6 +89,15 @@ export default class Map<K: Value, V: Value> extends
         mapHashValueBytes);
     invariant(seq instanceof OrderedSequence);
     super(seq);
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    const p = [];
+    p.push(this.forEach((cv, k) => {
+      p.push(walk(k, vr, cb));
+      p.push(walk(cv, vr, cb));
+    }));
+    return Promise.all(p).then();
   }
 
   async has(key: K): Promise<boolean> {

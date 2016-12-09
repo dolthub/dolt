@@ -25,6 +25,8 @@ import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
@@ -55,6 +57,14 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
         hashValueBytes);
     invariant(seq instanceof IndexedSequence);
     super(seq);
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    const p = [];
+    p.push(this.forEach((v) => {
+      p.push(walk(v, vr, cb));
+    }));
+    return Promise.all(p).then();
   }
 
   /**

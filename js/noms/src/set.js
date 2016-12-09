@@ -26,6 +26,8 @@ import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
@@ -57,6 +59,14 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
         hashValueBytes);
     invariant(seq instanceof OrderedSequence);
     super(seq);
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    const p = [];
+    p.push(this.forEach((v) => {
+      p.push(walk(v, vr, cb));
+    }));
+    return Promise.all(p).then();
   }
 
   async has(key: T): Promise<boolean> {

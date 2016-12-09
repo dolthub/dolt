@@ -14,10 +14,14 @@ import type Value from './value.js';
 import {describeType} from './encode-human-readable.js';
 import search from './binary-search.js';
 import {staticTypeCache} from './type-cache.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
+import type {ValueReader} from './value-store.js';
 
 export interface TypeDesc {
   +kind: NomsKind;  // Hack: Makes this covariant to allow implementatations to not have a setter.
   hasUnresolvedCycle(visited: Type<any>[]): boolean;
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void>;
 }
 
 export class PrimitiveDesc {
@@ -29,6 +33,11 @@ export class PrimitiveDesc {
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars
     return false;
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): // eslint-disable-line no-unused-vars
+      Promise<void> {
+    return Promise.resolve();
   }
 }
 
@@ -43,6 +52,10 @@ export class CompoundDesc {
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean {
     return this.elemTypes.some(t => t.hasUnresolvedCycle(visited));
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    return Promise.all(this.elemTypes.map(v => walk(v, vr, cb))).then();
   }
 }
 
@@ -70,6 +83,10 @@ export class StructDesc {
 
   hasUnresolvedCycle(visited: Type<any>[]): boolean {
     return this.fields.some(f => f.type.hasUnresolvedCycle(visited));
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    return Promise.all(this.fields.map(f => walk(f.type, vr, cb))).then();
   }
 
   forEachField(cb: (name: string, type: Type<any>) => void) {
@@ -112,6 +129,11 @@ export class CycleDesc {
   hasUnresolvedCycle(visited: Type<any>[]): boolean { // eslint-disable-line no-unused-vars
     return true;
   }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): // eslint-disable-line no-unused-vars
+      Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 /**
@@ -138,6 +160,10 @@ export class Type<T: TypeDesc> extends ValueBase {
 
   get chunks(): Array<Ref<any>> {
     return [];
+  }
+
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    return this.desc.walkValues(vr, cb);
   }
 
   get kind(): NomsKind {
