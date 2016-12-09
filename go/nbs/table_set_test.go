@@ -9,9 +9,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
@@ -81,17 +83,68 @@ func TestS3TablePersisterCompact(t *testing.T) {
 	}
 
 	s3svc := makeFakeS3(assert)
-	s3p := s3TablePersister{s3svc, "bucket"}
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 3)}
 
 	tableAddr, chunkCount := s3p.Compact(mt, nil)
 	if assert.True(chunkCount > 0) {
-		buff, present := s3svc.data[tableAddr.String()]
-		assert.True(present)
-		tr := newTableReader(buff, bytes.NewReader(buff))
-		for _, c := range testChunks {
-			assert.True(tr.has(computeAddr(c)))
+		if r := s3svc.readerForTable(tableAddr); assert.NotNil(r) {
+			assertChunksInReader(testChunks, r, assert)
 		}
 	}
+}
+
+func calcPartSize(mt *memTable, maxPartNum int) int {
+	return int(maxTableSize(uint64(mt.count()), mt.totalData)) / maxPartNum
+}
+
+func TestS3TablePersisterCompactSinglePart(t *testing.T) {
+	assert := assert.New(t)
+	mt := newMemTable(testMemTableSize)
+
+	for _, c := range testChunks {
+		assert.True(mt.addChunk(computeAddr(c), c))
+	}
+
+	s3svc := makeFakeS3(assert)
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 1)}
+
+	tableAddr, chunkCount := s3p.Compact(mt, nil)
+	if assert.True(chunkCount > 0) {
+		if r := s3svc.readerForTable(tableAddr); assert.NotNil(r) {
+			assertChunksInReader(testChunks, r, assert)
+		}
+	}
+}
+
+func TestS3TablePersisterCompactAbort(t *testing.T) {
+	assert := assert.New(t)
+	mt := newMemTable(testMemTableSize)
+
+	for _, c := range testChunks {
+		assert.True(mt.addChunk(computeAddr(c), c))
+	}
+
+	numParts := 4
+	s3svc := &failingFakeS3{makeFakeS3(assert), sync.Mutex{}, 1}
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, numParts)}
+
+	assert.Panics(func() { s3p.Compact(mt, nil) })
+}
+
+type failingFakeS3 struct {
+	*fakeS3
+	mu           sync.Mutex
+	numSuccesses int
+}
+
+func (m *failingFakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.numSuccesses > 0 {
+		m.numSuccesses--
+		return m.fakeS3.UploadPart(input)
+	}
+	return nil, mockAWSError("MalformedXML")
 }
 
 func TestS3TablePersisterCompactNoData(t *testing.T) {
@@ -105,7 +158,7 @@ func TestS3TablePersisterCompactNoData(t *testing.T) {
 	}
 
 	s3svc := makeFakeS3(assert)
-	s3p := s3TablePersister{s3svc, "bucket"}
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: 1 << 10}
 
 	tableAddr, chunkCount := s3p.Compact(mt, existingTable)
 	assert.True(chunkCount == 0)
