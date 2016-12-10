@@ -18,7 +18,6 @@ import {SequenceCursor} from './sequence.js';
 import {blobType} from './type.js';
 import {invariant} from './assert.js';
 import {hashValueByte} from './rolling-value-hasher.js';
-import type {WalkCallback} from './walk.js';
 
 export default class Blob extends Collection<IndexedSequence<any>> {
   constructor(bytes: Uint8Array) {
@@ -32,11 +31,6 @@ export default class Blob extends Collection<IndexedSequence<any>> {
     const seq = chunker.doneSync();
     invariant(seq instanceof IndexedSequence);
     super(seq);
-  }
-
-  walkValues(vr: ValueReader, cb: WalkCallback):  // eslint-disable-line no-unused-vars
-      Promise<void> {
-    return Promise.resolve();
   }
 
   getReader(): BlobReader {

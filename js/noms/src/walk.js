@@ -4,10 +4,17 @@
 
 // @flow
 
-import type Value from './value.js';
-import type {ValueReader} from './value-store.js';
+import Blob from './blob.js';
+import List from './list.js';
+import Set from './set.js';
+import Map from './map.js';
+import Ref from './ref.js';
+import Struct, {StructMirror} from './struct.js';
 
-export type WalkCallback = (v: Value) => ?boolean | Promise<?boolean>;
+import type Database from './database.js';
+import type Value from './value.js';
+
+type walkCb = (v: Value) => ?boolean | Promise<?boolean>;
 
 /**
  * Invokes `cb` once for `v` and each of its descendants. The returned `Promise` is resolved when
@@ -19,7 +26,7 @@ export type WalkCallback = (v: Value) => ?boolean | Promise<?boolean>;
  *
  * If `cb` returns undefined or `Promise.resolve()`, the default is to continue recursing (`false`).
  */
-export default async function walk(v: Value, vr: ValueReader, cb: WalkCallback): Promise<void> {
+export default async function walk(v: Value, ds: Database, cb: walkCb): Promise<void> {
   let skip = cb(v);
   if (skip && skip !== true) {
     // Might be a Promise, but we can't check instanceof: https://phabricator.babeljs.io/T7340.
@@ -37,5 +44,29 @@ export default async function walk(v: Value, vr: ValueReader, cb: WalkCallback):
       return;
   }
 
-  return v.walkValues(vr, cb);
+  if (v instanceof Blob) {
+    return;
+  }
+
+  if (v instanceof Ref) {
+    return walk(await v.targetValue(ds), ds, cb);
+  }
+
+  const p = [];
+  if (v instanceof List || v instanceof Set) {
+    await v.forEach(cv => void(p.push(walk(cv, ds, cb))));
+  } else if (v instanceof Map) {
+    await v.forEach((cv, k) => {
+      p.push(walk(k, ds, cb));
+      p.push(walk(cv, ds, cb));
+    });
+  } else if (v instanceof Struct) {
+    new StructMirror(v).forEachField(f => {
+      p.push(walk(f.value, ds, cb));
+    });
+  } else {
+    throw new Error('not reached');
+  }
+
+  return Promise.all(p).then();
 }

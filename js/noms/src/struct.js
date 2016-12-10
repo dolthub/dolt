@@ -16,9 +16,6 @@ import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import * as Bytes from './bytes.js';
 import {isSubtype} from './assert-type.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
-import type {ValueReader} from './value-store.js';
 
 type StructData = {[key: string]: Value};
 
@@ -63,10 +60,6 @@ export default class Struct extends ValueBase {
     super();
     invariant(type.kind === Kind.Struct);
     init(this, type, values);
-  }
-
-  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return Promise.all(this._values.map(v => walk(v, vr, cb))).then();
   }
 
   get type(): Type<any> {
