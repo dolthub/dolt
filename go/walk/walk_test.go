@@ -37,6 +37,17 @@ func (suite *WalkAllTestSuite) walkWorker(v types.Value, expected int) {
 	suite.Equal(expected, actual)
 }
 
+func (suite *WalkAllTestSuite) assertVisitedOnce(root, v types.Value) {
+	actual := 0
+	WalkValues(v, suite.vs, func(c types.Value) bool {
+		if c == v {
+			actual++
+		}
+		return false
+	})
+	suite.Equal(1, actual)
+}
+
 func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 
 	dup := suite.NewList(types.Number(9), types.Number(10), types.Number(11), types.Number(12), types.Number(13))
@@ -57,6 +68,56 @@ func (suite *WalkAllTestSuite) TestWalkComposites() {
 	suite.walkWorker(suite.NewSet(types.Bool(false), types.Number(8)), 4)
 	suite.walkWorker(suite.NewMap(), 2)
 	suite.walkWorker(suite.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false)), 6)
+}
+
+func (suite *WalkAllTestSuite) TestWalkType() {
+	t := types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
+		"s":  types.StringType,
+		"b":  types.BoolType,
+		"n":  types.NumberType,
+		"bl": types.BlobType,
+		"t":  types.TypeType,
+		"v":  types.ValueType,
+	})
+	suite.assertVisitedOnce(t, t)
+	suite.assertVisitedOnce(t, types.BoolType)
+	suite.assertVisitedOnce(t, types.NumberType)
+	suite.assertVisitedOnce(t, types.StringType)
+	suite.assertVisitedOnce(t, types.BlobType)
+	suite.assertVisitedOnce(t, types.TypeType)
+	suite.assertVisitedOnce(t, types.ValueType)
+
+	{
+		t2 := types.MakeListType(types.BoolType)
+		suite.assertVisitedOnce(t2, t2)
+		suite.assertVisitedOnce(t2, types.BoolType)
+	}
+
+	{
+		t2 := types.MakeSetType(types.BoolType)
+		suite.assertVisitedOnce(t2, t2)
+		suite.assertVisitedOnce(t2, types.BoolType)
+	}
+
+	{
+		t2 := types.MakeRefType(types.BoolType)
+		suite.assertVisitedOnce(t2, t2)
+		suite.assertVisitedOnce(t2, types.BoolType)
+	}
+
+	t2 := types.MakeMapType(types.NumberType, types.StringType)
+	suite.assertVisitedOnce(t2, t2)
+	suite.assertVisitedOnce(t2, types.NumberType)
+	suite.assertVisitedOnce(t2, types.StringType)
+
+	t3 := types.MakeUnionType(types.NumberType, types.StringType, types.BoolType)
+	suite.assertVisitedOnce(t3, t3)
+	suite.assertVisitedOnce(t3, types.BoolType)
+	suite.assertVisitedOnce(t3, types.NumberType)
+	suite.assertVisitedOnce(t3, types.StringType)
+
+	t4 := types.MakeCycleType(11)
+	suite.assertVisitedOnce(t4, t4)
 }
 
 func (suite *WalkTestSuite) skipWorker(composite types.Value) (reached []types.Value) {

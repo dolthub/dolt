@@ -28,6 +28,8 @@ import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import RollingValueHasher, {hashValueBytes} from './rolling-value-hasher.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
 
@@ -89,6 +91,10 @@ export default class Map<K: Value, V: Value> extends
     super(seq);
   }
 
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    return this.forEach((v, k) => Promise.all([walk(k, vr, cb), walk(v, vr, cb)]));
+  }
+
   async has(key: K): Promise<boolean> {
     const cursor = await this.sequence.newCursorAtValue(key);
     return cursor.valid && equals(cursor.getCurrentKey().value(), key);
@@ -124,10 +130,11 @@ export default class Map<K: Value, V: Value> extends
   async forEach(cb: (v: V, k: K) => ?Promise<any>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(null, false, false, true);
     const promises = [];
-    return cursor.iter(entry => {
+    await cursor.iter(entry => {
       promises.push(cb(entry[VALUE], entry[KEY]));
       return false;
-    }).then(() => Promise.all(promises)).then(() => void 0);
+    });
+    await Promise.all(promises);
   }
 
   iterator(): AsyncIterator<MapEntry<K, V>> {

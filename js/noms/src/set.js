@@ -26,6 +26,8 @@ import {getValueChunks} from './sequence.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
+import walk from './walk.js';
+import type {WalkCallback} from './walk.js';
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
@@ -59,6 +61,10 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
     super(seq);
   }
 
+  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
+    return this.forEach(v => walk(v, vr, cb));
+  }
+
   async has(key: T): Promise<boolean> {
     const cursor = await this.sequence.newCursorAtValue(key);
     return cursor.valid && equals(cursor.getCurrentKey().value(), key);
@@ -80,10 +86,11 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
   async forEach(cb: (v: T) => ?Promise<any>): Promise<void> {
     const cursor = await this.sequence.newCursorAt(null, false, false, true);
     const promises = [];
-    return cursor.iter(v => {
+    await cursor.iter(v => {
       promises.push(cb(v));
       return false;
-    }).then(() => Promise.all(promises)).then(() => void 0);
+    });
+    await Promise.all(promises);
   }
 
   iterator(): AsyncIterator<T> {
