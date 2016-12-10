@@ -23,12 +23,12 @@ export class IndexedSequence<T> extends Sequence<T> {
       equals(this.items[idx], other.items[otherIdx]);
   }
 
-  async newCursorAt(idx: number): Promise<IndexedSequenceCursor<any>> {
+  async newCursorAt(idx: number, readAhead: boolean = false): Promise<IndexedSequenceCursor<any>> {
     let cursor: ?IndexedSequenceCursor<any> = null;
     let sequence: ?IndexedSequence<any> = this;
 
     while (sequence) {
-      cursor = new IndexedSequenceCursor(cursor, sequence, 0);
+      cursor = new IndexedSequenceCursor(cursor, sequence, 0, readAhead);
       idx -= cursor.advanceToOffset(idx);
       sequence = await cursor.getChildSequence();
     }
@@ -53,7 +53,8 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence<
   }
 
   clone(): IndexedSequenceCursor<T> {
-    return new IndexedSequenceCursor(this.parent && this.parent.clone(), this.sequence, this.idx);
+    return new IndexedSequenceCursor(this.parent && this.parent.clone(), this.sequence, this.idx,
+        this.readAhead);
   }
 }
 

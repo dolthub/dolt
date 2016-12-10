@@ -106,7 +106,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async _firstOrLast(last: boolean): Promise<?MapEntry<K, V>> {
-    const cursor = await this.sequence.newCursorAt(null, false, last);
+    const cursor = await this.sequence.newCursorAt(null, false, last, true);
     if (!cursor.valid) {
       return undefined;
     }
@@ -133,7 +133,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async forEach(cb: (v: V, k: K) => ?Promise<any>): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(null);
+    const cursor = await this.sequence.newCursorAt(null, false, false, true);
     const promises = [];
     return cursor.iter(entry => {
       promises.push(cb(entry[VALUE], entry[KEY]));
@@ -142,11 +142,11 @@ export default class Map<K: Value, V: Value> extends
   }
 
   iterator(): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(null));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(null, false, false, true));
   }
 
   iteratorAt(k: K): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(k));
+    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(k, false, false, true));
   }
 
   _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<MapEntry<K, V>>, remove: number)

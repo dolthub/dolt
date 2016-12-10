@@ -64,7 +64,7 @@ export class BlobReader {
 
   constructor(sequence: IndexedSequence<any>) {
     this._sequence = sequence;
-    this._cursor = sequence.newCursorAt(0);
+    this._cursor = sequence.newCursorAt(0, true);
     this._pos = 0;
     this._lock = '';
   }
@@ -135,7 +135,7 @@ export class BlobReader {
 
     invariant(abs >= 0, `cannot seek to negative position ${abs}`);
 
-    this._cursor = this._sequence.newCursorAt(abs);
+    this._cursor = this._sequence.newCursorAt(abs, true);
 
     // Wait for the seek to complete so that reads will be relative to the new position.
     return this._cursor.then(() => {

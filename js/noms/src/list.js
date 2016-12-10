@@ -116,7 +116,7 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    * promises have been fulfilled.
    */
   async forEach(cb: (v: T, i: number) => ?Promise<any>): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(0);
+    const cursor = await this.sequence.newCursorAt(0, true);
     const promises = [];
     return cursor.iter((v, i) => {
       promises.push(cb(v, i));
@@ -128,14 +128,14 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    * Returns a new `AsyncIterator` which can be used to iterate over the list.
    */
   iterator(): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(0));
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(0, true));
   }
 
   /**
    * Returns a new `AsyncIterator` starting at `i` which can be used to iterate over the list.
    */
   iteratorAt(i: number): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(i));
+    return new IndexedSequenceIterator(this.sequence.newCursorAt(i, true));
   }
 
   /**

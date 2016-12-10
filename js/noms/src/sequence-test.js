@@ -23,16 +23,16 @@ class TestSequence extends Sequence<any> {
 class TestSequenceCursor extends SequenceCursor<any, TestSequence> {
   clone(): TestSequenceCursor {
     return new TestSequenceCursor(this.parent ? this.parent.clone() : null, this.sequence,
-                                  this.idx);
+                                  this.idx, this.readAhead);
   }
 }
 
 suite('SequenceCursor', () => {
   function testCursor(data: Array<any>): TestSequenceCursor {
     const s1 = new TestSequence(data);
-    const c1 = new TestSequenceCursor(null, s1, 0);
+    const c1 = new TestSequenceCursor(null, s1, 0, false);
     const s2 = new TestSequence(data[0]);
-    return new TestSequenceCursor(c1, s2, 0);
+    return new TestSequenceCursor(c1, s2, 0, false);
   }
 
   function expect(c: TestSequenceCursor, expectIdx: number,

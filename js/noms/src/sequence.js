@@ -60,14 +60,18 @@ export class SequenceCursor<T, S: Sequence<any>> {
   parent: ?SequenceCursor<any, any>;
   sequence: S;
   idx: number;
+  readAhead: boolean;
+  childSeqs: ?Array<Promise<?S>>;
 
-  constructor(parent: ?SequenceCursor<any, any>, sequence: S, idx: number) {
+  constructor(parent: ?SequenceCursor<any, any>, sequence: S, idx: number, readAhead: boolean) {
     this.parent = parent;
     this.sequence = sequence;
     this.idx = idx;
     if (this.idx < 0) {
       this.idx = Math.max(0, this.sequence.length + this.idx);
     }
+    this.readAhead = readAhead;
+    this.childSeqs = null;
   }
 
   clone(): SequenceCursor<T, S> {
@@ -85,11 +89,24 @@ export class SequenceCursor<T, S: Sequence<any>> {
   sync(): Promise<void> {
     invariant(this.parent);
     return this.parent.getChildSequence().then(p => {
+      this.childSeqs = null;
       this.sequence = notNull(p);
     });
   }
 
   getChildSequence(): Promise<?S> {
+    if (this.readAhead && this.sequence.isMeta && !this.childSeqs) {
+      // Only readAhead when enabled, for meta sequences.
+      this.childSeqs = [];
+      for (let i = this.idx; i < this.sequence.length; i++) {
+        this.childSeqs.push(this.sequence.getChildSequence(i));
+      }
+    }
+
+    if (this.childSeqs && this.childSeqs[this.idx]) {
+      return this.childSeqs[this.idx]; // read ahead cache
+    }
+
     return this.sequence.getChildSequence(this.idx);
   }
 

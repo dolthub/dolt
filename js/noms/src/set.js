@@ -88,7 +88,7 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
   }
 
   async forEach(cb: (v: T) => ?Promise<any>): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(null);
+    const cursor = await this.sequence.newCursorAt(null, false, false, true);
     const promises = [];
     return cursor.iter(v => {
       promises.push(cb(v));
@@ -97,11 +97,11 @@ export default class Set<T: Value> extends Collection<OrderedSequence<any, any>>
   }
 
   iterator(): AsyncIterator<T> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(null));
+    return new OrderedSequenceIterator(this.sequence.newCursorAt(null, false, false, true));
   }
 
   iteratorAt(v: T): AsyncIterator<T> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(v));
+    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(v, false, false, true));
   }
 
   _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<T>, remove: number)
