@@ -53,6 +53,9 @@ type ChunkSink interface {
 	// PutMany tries to write chunks into the sink. It will block as it handles as many as possible, then return a BackpressureError containing the rest (if any).
 	PutMany(chunks []Chunk) BackpressureError
 
+	// On return, any previously Put chunks should be durable
+	Flush()
+
 	io.Closer
 }
 

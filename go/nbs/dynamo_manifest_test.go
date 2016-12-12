@@ -142,7 +142,7 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	m.assert.NotNil(input.Item[tableSpecsAttr].S, "specs should have been a String: %+v", input.Item[tableSpecsAttr])
 	specs := *input.Item[tableSpecsAttr].S
 
-	mustNotExist := *(input.ConditionExpression) == valueNotExistsExpression
+	mustNotExist := *(input.ConditionExpression) == valueNotExistsOrEqualsExpression
 	current, present := m.data[key]
 
 	if mustNotExist && present {

@@ -23,11 +23,12 @@ const (
 	versAttr       = "vers"
 	nbsVersAttr    = "nbsVers"
 	tableSpecsAttr = "specs"
-
-	valueNotExistsExpression = "attribute_not_exists(" + rootAttr + ")"
 )
 
-var valueEqualsExpression = fmt.Sprintf("(%s = :prev) and (%s = :vers)", rootAttr, versAttr)
+var (
+	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", rootAttr, versAttr)
+	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+rootAttr+") or %s", valueEqualsExpression)
+)
 
 type ddbsvc interface {
 	GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
@@ -92,14 +93,15 @@ func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writ
 		},
 	}
 
+	expr := valueEqualsExpression
 	if root.IsEmpty() {
-		putArgs.ConditionExpression = aws.String(valueNotExistsExpression)
-	} else {
-		putArgs.ConditionExpression = aws.String(valueEqualsExpression)
-		putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
-			":prev": {B: root[:]},
-			":vers": {S: aws.String(constants.NomsVersion)},
-		}
+		expr = valueNotExistsOrEqualsExpression
+	}
+
+	putArgs.ConditionExpression = aws.String(expr)
+	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
+		":prev": {B: root[:]},
+		":vers": {S: aws.String(constants.NomsVersion)},
 	}
 
 	_, err := dm.ddbsvc.PutItem(&putArgs)

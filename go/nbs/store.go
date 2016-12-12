@@ -93,6 +93,7 @@ func (nbs *NomsBlockStore) PutMany(chunx []chunks.Chunk) (err chunks.Backpressur
 	for _, c := range chunx {
 		err = append(err, c.Hash())
 	}
+
 	return err
 }
 
@@ -227,5 +228,6 @@ func (nbs *NomsBlockStore) AddHints(hints types.Hints) {
 }
 
 func (nbs *NomsBlockStore) Flush() {
-	// noop
+	success := nbs.UpdateRoot(nbs.root, nbs.root)
+	d.Chk.True(success)
 }

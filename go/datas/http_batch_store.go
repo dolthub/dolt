@@ -252,6 +252,8 @@ func (rb *readBatchChunkSink) PutMany(chnx []chunks.Chunk) (e chunks.Backpressur
 	return
 }
 
+func (rb *readBatchChunkSink) Flush() {}
+
 func (rb *readBatchChunkSink) Close() error {
 	rb.mu.RLock()
 	defer rb.mu.RUnlock()

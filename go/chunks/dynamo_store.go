@@ -370,6 +370,8 @@ func (s *DynamoStore) writeLargeChunk(c Chunk) {
 	d.Chk.Fail("Unsupported!")
 }
 
+func (s *DynamoStore) Flush() {}
+
 func (s *DynamoStore) Close() error {
 	s.requestWg.Wait()
 

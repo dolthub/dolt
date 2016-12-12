@@ -96,6 +96,9 @@ func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) chunks.Backp
 // BackpressureError returned by the underlying ChunkStore.
 func (vbs *ValidatingBatchingSink) Flush() (err chunks.BackpressureError) {
 	err = vbs.cs.PutMany(vbs.batch[:vbs.count])
+	if err == nil {
+		vbs.cs.Flush()
+	}
 	vbs.count = 0
 	return
 }

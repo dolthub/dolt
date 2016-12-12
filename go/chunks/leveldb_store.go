@@ -146,6 +146,8 @@ func (l *LevelDBStore) PutMany(chunks []Chunk) (e BackpressureError) {
 	return
 }
 
+func (l *LevelDBStore) Flush() {}
+
 func (l *LevelDBStore) Close() error {
 	if l.closeBackingStore {
 		l.internalLevelDBStore.Close()

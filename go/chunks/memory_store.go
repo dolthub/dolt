@@ -76,6 +76,8 @@ func (ms *MemoryStore) Len() int {
 	return len(ms.data)
 }
 
+func (ms *MemoryStore) Flush() {}
+
 func (ms *MemoryStore) Close() error {
 	return nil
 }
