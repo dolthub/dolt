@@ -5,7 +5,7 @@
 package nbs
 
 import (
-	"encoding/binary"
+	"bytes"
 	"sync"
 	"testing"
 
@@ -188,20 +188,18 @@ func newFakeTableSet() tableSet {
 }
 
 func newFakeTablePersister() tablePersister {
-	return fakeTablePersister{map[addr]*memTable{}} // TODO: Make this a better fake. Need to move count() to tableReader, make chunkSourceAdapter take a tableReader
+	return fakeTablePersister{map[addr]tableReader{}}
 }
 
 type fakeTablePersister struct {
-	sources map[addr]*memTable
+	sources map[addr]tableReader
 }
 
 func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) (name addr, count uint32) {
 	if mt.count() > 0 {
-		scratch := [binary.MaxVarintLen64]byte{}
-		binary.PutUvarint(scratch[:], uint64(len(ftp.sources)))
-		name = computeAddr(scratch[:])
-		ftp.sources[name] = mt
-		count = uint32(len(ftp.sources))
+		var data []byte
+		name, data, count = mt.write(haver)
+		ftp.sources[name] = newTableReader(data, bytes.NewReader(data))
 	}
 	return
 }
@@ -211,7 +209,7 @@ func (ftp fakeTablePersister) Open(name addr, chunkCount uint32) chunkSource {
 }
 
 type chunkSourceAdapter struct {
-	*memTable
+	tableReader
 	h addr
 }
 

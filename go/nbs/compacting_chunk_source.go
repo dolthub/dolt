@@ -71,10 +71,9 @@ func (ccs *compactingChunkSource) getMany(reqs []getRecord) bool {
 }
 
 func (ccs *compactingChunkSource) close() error {
-	if ccs.cs != nil {
-		return ccs.cs.close()
-	}
-	return nil
+	ccs.wg.Wait()
+	d.Chk.True(ccs.cs != nil)
+	return ccs.cs.close()
 }
 
 func (ccs *compactingChunkSource) count() uint32 {

@@ -5,7 +5,6 @@
 package nbs
 
 import (
-	"os"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -30,9 +29,6 @@ func (ftp pausingFakeTablePersister) Compact(mt *memTable, haver chunkReader) (n
 
 func TestCompactingChunkStore(t *testing.T) {
 	assert := assert.New(t)
-	dir := makeTempDir(assert)
-	defer os.RemoveAll(dir)
-
 	mt := newMemTable(testMemTableSize)
 
 	for _, c := range testChunks {
@@ -40,7 +36,7 @@ func TestCompactingChunkStore(t *testing.T) {
 	}
 
 	trigger := make(chan struct{})
-	ccs := newCompactingChunkSource(mt, nil, pausingFakeTablePersister{fsTablePersister{dir}, trigger}, make(chan struct{}, 1))
+	ccs := newCompactingChunkSource(mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1))
 
 	assertChunksInReader(testChunks, ccs, assert)
 	assert.EqualValues(mt.count(), ccs.count())

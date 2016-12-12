@@ -4,12 +4,20 @@
 
 package nbs
 
+const concurrentCompactions = 5
+
 func newS3TableSet(s3 s3svc, bucket string) tableSet {
-	return tableSet{p: s3TablePersister{s3, bucket, defaultS3PartSize}, rl: make(chan struct{}, 5)}
+	return tableSet{
+		p:  s3TablePersister{s3, bucket, defaultS3PartSize},
+		rl: make(chan struct{}, concurrentCompactions),
+	}
 }
 
 func newFSTableSet(dir string) tableSet {
-	return tableSet{p: fsTablePersister{dir}, rl: make(chan struct{}, 5)}
+	return tableSet{
+		p:  fsTablePersister{dir},
+		rl: make(chan struct{}, concurrentCompactions),
+	}
 }
 
 // tableSet is an immutable set of persistable chunkSources.
