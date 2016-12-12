@@ -42,6 +42,22 @@ type NomsBlockStore struct {
 	putCount uint64
 }
 
+type AWSStoreFactory struct {
+	sess          *session.Session
+	table, bucket string
+}
+
+func NewAWSStoreFactory(sess *session.Session, table, bucket string) chunks.Factory {
+	return &AWSStoreFactory{sess, table, bucket}
+}
+
+func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
+	return NewAWSStore(asf.table, ns, asf.bucket, asf.sess, 1<<26 /* 64MB */)
+}
+
+func (asf *AWSStoreFactory) Shutter() {
+}
+
 func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
 	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
 	ts := newS3TableSet(s3.New(sess), bucket)
