@@ -42,45 +42,6 @@ type NomsBlockStore struct {
 	putCount uint64
 }
 
-type chunkSources []chunkSource
-
-func (css chunkSources) has(h addr) bool {
-	for _, haver := range css {
-		if haver.has(h) {
-			return true
-		}
-	}
-	return false
-}
-
-func (css chunkSources) hasMany(addrs []hasRecord) (remaining bool) {
-	for _, haver := range css {
-		if !haver.hasMany(addrs) {
-			return false
-		}
-	}
-	return true
-}
-
-func (css chunkSources) get(h addr) []byte {
-	for _, haver := range css {
-		if data := haver.get(h); data != nil {
-			return data
-		}
-	}
-	return nil
-}
-
-func (css chunkSources) getMany(reqs []getRecord) (remaining bool) {
-	for _, haver := range css {
-		if !haver.getMany(reqs) {
-			return false
-		}
-	}
-
-	return true
-}
-
 func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
 	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
 	ts := newS3TableSet(s3.New(sess), bucket)

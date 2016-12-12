@@ -203,11 +203,11 @@ type chunkReader interface {
 	hasMany(addrs []hasRecord) bool
 	get(h addr) []byte
 	getMany(reqs []getRecord) bool
+	count() uint32
 }
 
 type chunkSource interface {
 	chunkReader
 	close() error
-	count() uint32
 	hash() addr
 }

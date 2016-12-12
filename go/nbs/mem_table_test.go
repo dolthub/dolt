@@ -120,7 +120,6 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
 			return false
 		}
 	}
-
 	return true
 }
 
@@ -130,6 +129,12 @@ func (crg chunkReaderGroup) getMany(reqs []getRecord) (remaining bool) {
 			return false
 		}
 	}
-
 	return true
+}
+
+func (crg chunkReaderGroup) count() (count uint32) {
+	for _, haver := range crg {
+		count += haver.count()
+	}
+	return
 }

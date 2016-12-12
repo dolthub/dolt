@@ -20,7 +20,9 @@ var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2"
 
 func TestTableSetPrependEmpty(t *testing.T) {
 	ts := newFakeTableSet().Prepend(newMemTable(testMemTableSize))
-	assert.Empty(t, ts.ToSpecs())
+	// assert.Empty(t, ts.ToSpecs())
+	assert.Len(t, ts.ToSpecs(), 1)
+	assert.EqualValues(t, 0, ts.chunkSources[0].count())
 }
 
 func TestTableSetPrepend(t *testing.T) {

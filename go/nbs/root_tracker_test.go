@@ -184,7 +184,11 @@ func (fm *fakeManifest) set(version string, root hash.Hash, specs []tableSpec) {
 }
 
 func newFakeTableSet() tableSet {
-	return tableSet{p: fakeTablePersister{map[addr]*memTable{}}}
+	return tableSet{p: newFakeTablePersister(), rl: make(chan struct{}, 1)}
+}
+
+func newFakeTablePersister() tablePersister {
+	return fakeTablePersister{map[addr]*memTable{}} // TODO: Make this a better fake. Need to move count() to tableReader, make chunkSourceAdapter take a tableReader
 }
 
 type fakeTablePersister struct {
