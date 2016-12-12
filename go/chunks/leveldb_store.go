@@ -100,6 +100,14 @@ func (l *LevelDBStore) Get(ref hash.Hash) Chunk {
 	return l.getByKey(l.toChunkKey(ref), ref)
 }
 
+func (l *LevelDBStore) GetMany(hashes []hash.Hash) (batch []Chunk) {
+	batch = make([]Chunk, len(hashes))
+	for i, h := range hashes {
+		batch[i] = l.Get(h)
+	}
+	return
+}
+
 func (l *LevelDBStore) Has(ref hash.Hash) bool {
 	if l.internalLevelDBStore == nil {
 		d.Panic("Cannot use LevelDBStore after Close().")

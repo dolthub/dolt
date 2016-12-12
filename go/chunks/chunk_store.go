@@ -36,6 +36,7 @@ type RootTracker interface {
 type ChunkSource interface {
 	// Get the Chunk for the value of the hash in the store. If the hash is absent from the store nil is returned.
 	Get(h hash.Hash) Chunk
+	GetMany(hashes []hash.Hash) []Chunk
 
 	// Returns true iff the value at the address |h| is contained in the source
 	Has(h hash.Hash) bool

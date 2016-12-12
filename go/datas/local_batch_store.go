@@ -44,6 +44,10 @@ func (lbs *localBatchStore) Get(h hash.Hash) chunks.Chunk {
 	return lbs.cs.Get(h)
 }
 
+func (lbs *localBatchStore) GetMany(hashes []hash.Hash) (batch []chunks.Chunk) {
+	return lbs.cs.GetMany(hashes)
+}
+
 // Has checks the internal Chunk cache, proxying to the backing ChunkStore if not present.
 func (lbs *localBatchStore) Has(h hash.Hash) bool {
 	lbs.once.Do(lbs.expectVersion)

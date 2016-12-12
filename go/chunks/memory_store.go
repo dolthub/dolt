@@ -32,6 +32,14 @@ func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 	return EmptyChunk
 }
 
+func (ms *MemoryStore) GetMany(hashes []hash.Hash) (batch []Chunk) {
+	batch = make([]Chunk, len(hashes))
+	for i, h := range hashes {
+		batch[i] = ms.Get(h)
+	}
+	return
+}
+
 func (ms *MemoryStore) Has(r hash.Hash) bool {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()

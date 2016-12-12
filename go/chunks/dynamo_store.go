@@ -121,6 +121,14 @@ func (s *DynamoStore) Get(h hash.Hash) Chunk {
 	return <-ch
 }
 
+func (s *DynamoStore) GetMany(hashes []hash.Hash) (batch []Chunk) {
+	batch = make([]Chunk, len(hashes))
+	for i, h := range hashes {
+		batch[i] = s.Get(h)
+	}
+	return
+}
+
 func (s *DynamoStore) Has(h hash.Hash) bool {
 	pending := s.unwrittenPuts.Get(h)
 	if !pending.IsEmpty() {
