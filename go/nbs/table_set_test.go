@@ -87,9 +87,9 @@ func TestS3TablePersisterCompact(t *testing.T) {
 	s3svc := makeFakeS3(assert)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 3)}
 
-	tableAddr, chunkCount := s3p.Compact(mt, nil)
-	if assert.True(chunkCount > 0) {
-		if r := s3svc.readerForTable(tableAddr); assert.NotNil(r) {
+	src := s3p.Compact(mt, nil)
+	if assert.True(src.count() > 0) {
+		if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
 			assertChunksInReader(testChunks, r, assert)
 		}
 	}
@@ -110,9 +110,9 @@ func TestS3TablePersisterCompactSinglePart(t *testing.T) {
 	s3svc := makeFakeS3(assert)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 1)}
 
-	tableAddr, chunkCount := s3p.Compact(mt, nil)
-	if assert.True(chunkCount > 0) {
-		if r := s3svc.readerForTable(tableAddr); assert.NotNil(r) {
+	src := s3p.Compact(mt, nil)
+	if assert.True(src.count() > 0) {
+		if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
 			assertChunksInReader(testChunks, r, assert)
 		}
 	}
@@ -162,10 +162,10 @@ func TestS3TablePersisterCompactNoData(t *testing.T) {
 	s3svc := makeFakeS3(assert)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: 1 << 10}
 
-	tableAddr, chunkCount := s3p.Compact(mt, existingTable)
-	assert.True(chunkCount == 0)
+	src := s3p.Compact(mt, existingTable)
+	assert.True(src.count() == 0)
 
-	_, present := s3svc.data[tableAddr.String()]
+	_, present := s3svc.data[src.hash().String()]
 	assert.False(present)
 }
 
@@ -181,9 +181,9 @@ func TestFSTablePersisterCompact(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir}
 
-	tableAddr, chunkCount := fts.Compact(mt, nil)
-	if assert.True(chunkCount > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, tableAddr.String()))
+	src := fts.Compact(mt, nil)
+	if assert.True(src.count() > 0) {
+		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
 		tr := newTableReader(buff, bytes.NewReader(buff))
 		for _, c := range testChunks {
@@ -206,9 +206,9 @@ func TestFSTablePersisterCompactNoData(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir}
 
-	tableAddr, chunkCount := fts.Compact(mt, existingTable)
-	assert.True(chunkCount == 0)
+	src := fts.Compact(mt, existingTable)
+	assert.True(src.count() == 0)
 
-	_, err := os.Stat(filepath.Join(dir, tableAddr.String()))
+	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
 }

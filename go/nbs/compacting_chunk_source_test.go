@@ -22,7 +22,7 @@ type pausingFakeTablePersister struct {
 	trigger <-chan struct{}
 }
 
-func (ftp pausingFakeTablePersister) Compact(mt *memTable, haver chunkReader) (name addr, count uint32) {
+func (ftp pausingFakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	<-ftp.trigger
 	return ftp.tablePersister.Compact(mt, haver)
 }

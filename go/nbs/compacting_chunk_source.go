@@ -16,10 +16,8 @@ func newCompactingChunkSource(mt *memTable, haver chunkReader, p tablePersister,
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		var cs chunkSource = emptyChunkSource{}
-		if tableHash, chunkCount := p.Compact(mt, haver); chunkCount > 0 {
-			cs = p.Open(tableHash, chunkCount)
-		}
+		cs := p.Compact(mt, haver)
+
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
 		ccs.cs = cs

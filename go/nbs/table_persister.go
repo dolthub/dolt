@@ -21,7 +21,7 @@ import (
 const defaultS3PartSize = 5 * 1 << 20 // 5MiB, smallest allowed by S3
 
 type tablePersister interface {
-	Compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32)
+	Compact(mt *memTable, haver chunkReader) chunkSource
 	Open(name addr, chunkCount uint32) chunkSource
 }
 
@@ -40,7 +40,7 @@ type s3UploadedPart struct {
 	etag string
 }
 
-func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32) {
+func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	name, data, chunkCount := mt.write(haver)
 
 	if chunkCount > 0 {
@@ -69,8 +69,11 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) (name addr,
 			UploadId:        aws.String(uploadID),
 		})
 		d.Chk.NoError(err)
+		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
+		s3tr.tableReader = newTableReader(data, s3tr)
+		return s3tr
 	}
-	return name, chunkCount
+	return emptyChunkSource{}
 }
 
 func (s3p s3TablePersister) uploadParts(data []byte, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
@@ -174,7 +177,7 @@ type fsTablePersister struct {
 	dir string
 }
 
-func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) (name addr, chunkCount uint32) {
+func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	tempName, name, chunkCount := func() (string, addr, uint32) {
 		temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
 		d.PanicIfError(err)
@@ -184,13 +187,13 @@ func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) (name addr,
 		io.Copy(temp, bytes.NewReader(data))
 		return temp.Name(), name, chunkCount
 	}()
-	if chunkCount > 0 {
-		err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
-		d.PanicIfError(err)
-	} else {
+	if chunkCount == 0 {
 		os.Remove(tempName)
+		return emptyChunkSource{}
 	}
-	return name, chunkCount
+	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+	d.PanicIfError(err)
+	return newMmapTableReader(ftp.dir, name, chunkCount)
 }
 
 func (ftp fsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
