@@ -4,6 +4,10 @@
 
 package nbs
 
+import (
+	"sync"
+)
+
 const concurrentCompactions = 5
 
 func newS3TableSet(s3 s3svc, bucket string) tableSet {
@@ -94,11 +98,28 @@ func (ts tableSet) Union(specs []tableSpec) tableSet {
 		}
 	}
 
+	// Create a list of tables to open so we can open them in parallel
+	tablesToOpen := make([]tableSpec, 0, len(specs))
 	for _, t := range specs {
 		if _, present := known[t.name]; !present {
-			newTables = append(newTables, ts.p.Open(t.name, t.chunkCount))
+			tablesToOpen = append(tablesToOpen, t)
 		}
 	}
+
+	openedTables := make(chunkSources, len(tablesToOpen))
+	wg := &sync.WaitGroup{}
+
+	for i, spec := range tablesToOpen {
+		wg.Add(1)
+		go func(idx int, spec tableSpec) {
+			openedTables[idx] = ts.p.Open(spec.name, spec.chunkCount)
+			wg.Done()
+		}(i, spec)
+	}
+
+	wg.Wait()
+	newTables = append(newTables, openedTables...)
+
 	return tableSet{newTables, ts.p, ts.rl}
 }
 
