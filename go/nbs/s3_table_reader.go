@@ -13,7 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-const s3RangePrefix = "bytes"
+const (
+	s3RangePrefix   = "bytes"
+	s3ReadAmpThresh = uint64(5)
+)
 
 type s3TableReader struct {
 	tableReader
@@ -41,7 +44,7 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32) chunkS
 	d.PanicIfError(err)
 	d.PanicIfFalse(size == uint64(n))
 
-	source.tableReader = newTableReader(buff, source)
+	source.tableReader = newTableReader(buff, source, s3ReadAmpThresh)
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }

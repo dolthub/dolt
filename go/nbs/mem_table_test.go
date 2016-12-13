@@ -81,14 +81,14 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _ := buildTable(chunks[1:2])
 	td2, _ := buildTable(chunks[2:])
-	tr1, tr2 := newTableReader(td1, bytes.NewReader(td1)), newTableReader(td2, bytes.NewReader(td2))
+	tr1, tr2 := newTableReader(td1, bytes.NewReader(td1), fileReadAmpThresh), newTableReader(td2, bytes.NewReader(td2), fileReadAmpThresh)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count := mt.write(chunkReaderGroup{tr1, tr2})
 	assert.Equal(uint32(1), count)
 
-	outReader := newTableReader(data, bytes.NewReader(data))
+	outReader := newTableReader(data, bytes.NewReader(data), fileReadAmpThresh)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))

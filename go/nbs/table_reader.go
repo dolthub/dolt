@@ -21,11 +21,12 @@ type tableReader struct {
 	prefixes, offsets []uint64
 	lengths, ordinals []uint32
 	chunkCount        uint32
+	readAmpThresh     uint64
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
-func newTableReader(buff []byte, r io.ReaderAt) tableReader {
-	tr := tableReader{r: r}
+func newTableReader(buff []byte, r io.ReaderAt, readAmpThresh uint64) tableReader {
+	tr := tableReader{r: r, readAmpThresh: readAmpThresh}
 
 	pos := uint64(len(buff))
 
@@ -207,7 +208,6 @@ func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offse
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 const blockSize = 1 << 12
-const readAmpThresh = 1 << 1
 
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
@@ -298,7 +298,7 @@ func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
 				}
 
 				fLength := tr.lengths[fRec.ordinal]
-				if fRec.offset+uint64(fLength)-readStart < readAmpThresh*(readAmp+fReadAmp) {
+				if fRec.offset+uint64(fLength)-readStart < tr.readAmpThresh*(readAmp+fReadAmp) {
 					break // including the next block will read too many unneeded bytes
 				}
 
