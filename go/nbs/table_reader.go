@@ -14,20 +14,22 @@ import (
 	"github.com/golang/snappy"
 )
 
-// tableReader implements get & has queries against a single nbs table. goroutine safe.
-type tableReader struct {
-	r                 io.ReaderAt
-	suffixes          []byte
+type tableIndex struct {
+	chunkCount        uint32
 	prefixes, offsets []uint64
 	lengths, ordinals []uint32
-	chunkCount        uint32
-	readAmpThresh     uint64
+	suffixes          []byte
 }
 
-// newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
-func newTableReader(buff []byte, r io.ReaderAt, readAmpThresh uint64) tableReader {
-	tr := tableReader{r: r, readAmpThresh: readAmpThresh}
+// tableReader implements get & has queries against a single nbs table. goroutine safe.
+type tableReader struct {
+	tableIndex
+	r             io.ReaderAt
+	readAmpThresh uint64
+}
 
+// parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. |tableIndex| doesn't keep alive any references to |buff|.
+func parseTableIndex(buff []byte) tableIndex {
 	pos := uint64(len(buff))
 
 	// footer
@@ -38,21 +40,28 @@ func newTableReader(buff []byte, r io.ReaderAt, readAmpThresh uint64) tableReade
 	pos -= uint64Size
 
 	pos -= uint32Size
-	tr.chunkCount = binary.BigEndian.Uint32(buff[pos:])
+	chunkCount := binary.BigEndian.Uint32(buff[pos:])
 
 	// index
-	suffixesSize := uint64(tr.chunkCount) * addrSuffixSize
+	suffixesSize := uint64(chunkCount) * addrSuffixSize
 	pos -= suffixesSize
-	tr.suffixes = buff[pos : pos+suffixesSize]
+	suffixes := make([]byte, suffixesSize)
+	copy(suffixes, buff[pos:])
 
-	lengthsSize := uint64(tr.chunkCount) * lengthSize
+	lengthsSize := uint64(chunkCount) * lengthSize
 	pos -= lengthsSize
-	tr.lengths, tr.offsets = computeOffsets(tr.chunkCount, buff[pos:pos+lengthsSize])
+	lengths, offsets := computeOffsets(chunkCount, buff[pos:pos+lengthsSize])
 
-	tuplesSize := uint64(tr.chunkCount) * prefixTupleSize
+	tuplesSize := uint64(chunkCount) * prefixTupleSize
 	pos -= tuplesSize
-	tr.prefixes, tr.ordinals = computePrefixes(tr.chunkCount, buff[pos:pos+tuplesSize])
-	return tr
+	prefixes, ordinals := computePrefixes(chunkCount, buff[pos:pos+tuplesSize])
+
+	return tableIndex{
+		chunkCount,
+		prefixes, offsets,
+		lengths, ordinals,
+		suffixes,
+	}
 }
 
 func computeOffsets(count uint32, buff []byte) (lengths []uint32, offsets []uint64) {
@@ -78,6 +87,54 @@ func computePrefixes(count uint32, buff []byte) (prefixes []uint64, ordinals []u
 		ordinals[i] = binary.BigEndian.Uint32(buff[idx+addrPrefixSize:])
 	}
 	return
+}
+
+func (ti tableIndex) prefixIdxToOrdinal(idx uint32) uint32 {
+	return ti.ordinals[idx]
+}
+
+// returns the first position in |tr.prefixes| whose value == |prefix|. Returns |tr.chunkCount|
+// if absent
+func (ti tableIndex) prefixIdx(prefix uint64) (idx uint32) {
+	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
+	// an extremely tight loop and inlining the code was a significant perf improvement.
+	idx, j := 0, ti.chunkCount
+	for idx < j {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		if ti.prefixes[h] < prefix {
+			idx = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+
+	return
+}
+
+// Return true IFF the suffix at insertion order |ordinal| matches the address |a|.
+func (ti tableIndex) ordinalSuffixMatches(ordinal uint32, h addr) bool {
+	li := uint64(ordinal) * addrSuffixSize
+	return bytes.Compare(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize]) == 0
+}
+
+// returns the ordinal of |h| if present. returns |ti.chunkCount| if absent
+func (ti tableIndex) lookupOrdinal(h addr) uint32 {
+	prefix := h.Prefix()
+
+	for idx := ti.prefixIdx(prefix); idx < ti.chunkCount && ti.prefixes[idx] == prefix; idx++ {
+		ordinal := ti.prefixIdxToOrdinal(idx)
+		if ti.ordinalSuffixMatches(ordinal, h) {
+			return ordinal
+		}
+	}
+
+	return ti.chunkCount
+}
+
+// newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
+func newTableReader(index tableIndex, r io.ReaderAt, readAmpThresh uint64) tableReader {
+	return tableReader{index, r, readAmpThresh}
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
@@ -122,76 +179,32 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 	return
 }
 
-func (tr tableReader) prefixIdxToOrdinal(idx uint32) uint32 {
-	return tr.ordinals[idx]
-}
-
-// returns the first position in |tr.prefixes| whose value == |prefix|. Returns |tr.chunkCount|
-// if absent
-func (tr tableReader) prefixIdx(prefix uint64) (idx uint32) {
-	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
-	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, tr.chunkCount
-	for idx < j {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if tr.prefixes[h] < prefix {
-			idx = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-
-	return
-}
-
 func (tr tableReader) count() uint32 {
 	return tr.chunkCount
 }
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) bool {
-	prefix := h.Prefix()
-	idx := tr.prefixIdx(prefix)
-
-	for ; idx < tr.chunkCount && tr.prefixes[idx] == prefix; idx++ {
-		if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(idx), h) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Return true IFF the suffix at insertion order |ordinal| matches the address |a|.
-func (tr tableReader) ordinalSuffixMatches(ordinal uint32, a addr) bool {
-	li := uint64(ordinal) * addrSuffixSize
-	return bytes.Compare(a[addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize]) == 0
+	ordinal := tr.lookupOrdinal(h)
+	return ordinal < tr.count()
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(h addr) (data []byte) {
-	prefix := h.Prefix()
-	idx := tr.prefixIdx(prefix)
-
-	for ; idx < tr.chunkCount && tr.prefixes[idx] == prefix; idx++ {
-		ordinal := tr.prefixIdxToOrdinal(idx)
-		if !tr.ordinalSuffixMatches(ordinal, h) {
-			continue
-		}
-
-		offset := tr.offsets[ordinal]
-		length := uint64(tr.lengths[ordinal])
-		buff := make([]byte, length) // TODO: Avoid this allocation for every get
-		n, err := tr.r.ReadAt(buff, int64(offset))
-		d.Chk.NoError(err)
-		d.Chk.True(n == int(length))
-		data = tr.parseChunk(h, buff)
-		if data != nil {
-			break
-		}
+	ordinal := tr.lookupOrdinal(h)
+	if ordinal == tr.count() {
+		return
 	}
+
+	offset := tr.offsets[ordinal]
+	length := uint64(tr.lengths[ordinal])
+	buff := make([]byte, length) // TODO: Avoid this allocation for every get
+	n, err := tr.r.ReadAt(buff, int64(offset))
+	d.Chk.NoError(err)
+	d.Chk.True(n == int(length))
+	data = tr.parseChunk(h, buff)
+	d.Chk.True(data != nil)
 
 	return
 }

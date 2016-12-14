@@ -70,7 +70,7 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		})
 		d.Chk.NoError(err)
 		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
-		s3tr.tableReader = newTableReader(data, s3tr, s3ReadAmpThresh)
+		s3tr.tableReader = newTableReader(parseTableIndex(data), s3tr, s3ReadAmpThresh)
 		return s3tr
 	}
 	return emptyChunkSource{}

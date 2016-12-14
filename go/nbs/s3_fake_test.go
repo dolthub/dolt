@@ -55,7 +55,7 @@ func (m *fakeS3) readerForTable(name addr) chunkReader {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
-		return newTableReader(buff, bytes.NewReader(buff), s3ReadAmpThresh)
+		return newTableReader(parseTableIndex(buff), bytes.NewReader(buff), s3ReadAmpThresh)
 	}
 	return nil
 }

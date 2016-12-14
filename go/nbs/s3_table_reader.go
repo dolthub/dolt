@@ -43,8 +43,9 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32) chunkS
 	n, err := source.readRange(buff, fmt.Sprintf("%s=-%d", s3RangePrefix, size))
 	d.PanicIfError(err)
 	d.PanicIfFalse(size == uint64(n))
+	index := parseTableIndex(buff)
 
-	source.tableReader = newTableReader(buff, source, s3ReadAmpThresh)
+	source.tableReader = newTableReader(index, source, s3ReadAmpThresh)
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }

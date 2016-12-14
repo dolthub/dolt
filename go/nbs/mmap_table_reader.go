@@ -57,7 +57,8 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
 	d.PanicIfError(err)
 	success = true
 
-	source := &mmapTableReader{newTableReader(buff[indexOffset-aligned:], f, fileReadAmpThresh), f, buff, h}
+	index := parseTableIndex(buff[indexOffset-aligned:])
+	source := &mmapTableReader{newTableReader(index, f, fileReadAmpThresh), f, buff, h}
 
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
