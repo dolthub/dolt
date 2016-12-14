@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -17,13 +18,14 @@ import (
 const defaultS3PartSize = 5 * 1 << 20 // 5MiB, smallest allowed by S3
 
 type s3TablePersister struct {
-	s3       s3svc
-	bucket   string
-	partSize int
+	s3         s3svc
+	bucket     string
+	partSize   int
+	indexCache *s3IndexCache
 }
 
 func (s3p s3TablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount)
+	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache)
 }
 
 type s3UploadedPart struct {
@@ -61,7 +63,12 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		})
 		d.Chk.NoError(err)
 		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
-		s3tr.tableReader = newTableReader(parseTableIndex(data), s3tr, s3ReadAmpThresh)
+
+		index := parseTableIndex(data)
+		if s3p.indexCache != nil {
+			s3p.indexCache.put(name, index)
+		}
+		s3tr.tableReader = newTableReader(index, s3tr, s3ReadAmpThresh)
 		return s3tr
 	}
 	return emptyChunkSource{}
@@ -162,4 +169,27 @@ func (s partsByPartNum) Less(i, j int) bool {
 
 func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
+}
+
+type s3IndexCache struct {
+	cache *sizecache.SizeCache
+}
+
+// Returns an indexCache which will burn roughly |size| bytes of memory
+func newS3IndexCache(size uint64) *s3IndexCache {
+	return &s3IndexCache{sizecache.New(size)}
+}
+
+func (sic s3IndexCache) get(name addr) (tableIndex, bool) {
+	idx, found := sic.cache.Get(name)
+	if found {
+		return idx.(tableIndex), true
+	}
+
+	return tableIndex{}, false
+}
+
+func (sic s3IndexCache) put(name addr, idx tableIndex) {
+	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
+	sic.cache.Add(name, indexSize, idx)
 }

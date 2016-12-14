@@ -34,16 +34,28 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32) chunkSource {
+func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *s3IndexCache) chunkSource {
 	source := &s3TableReader{s3: s3, bucket: bucket, h: h}
 
-	size := indexSize(chunkCount) + footerSize
-	buff := make([]byte, size)
+	var index tableIndex
+	found := false
+	if indexCache != nil {
+		index, found = indexCache.get(h)
+	}
 
-	n, err := source.readRange(buff, fmt.Sprintf("%s=-%d", s3RangePrefix, size))
-	d.PanicIfError(err)
-	d.PanicIfFalse(size == uint64(n))
-	index := parseTableIndex(buff)
+	if !found {
+		size := indexSize(chunkCount) + footerSize
+		buff := make([]byte, size)
+
+		n, err := source.readRange(buff, fmt.Sprintf("%s=-%d", s3RangePrefix, size))
+		d.PanicIfError(err)
+		d.PanicIfFalse(size == uint64(n))
+		index = parseTableIndex(buff)
+
+		if indexCache != nil {
+			indexCache.put(h, index)
+		}
+	}
 
 	source.tableReader = newTableReader(index, source, s3ReadAmpThresh)
 	d.PanicIfFalse(chunkCount == source.count())

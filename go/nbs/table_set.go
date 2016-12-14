@@ -10,9 +10,9 @@ import (
 
 const concurrentCompactions = 5
 
-func newS3TableSet(s3 s3svc, bucket string) tableSet {
+func newS3TableSet(s3 s3svc, bucket string, indexCache *s3IndexCache) tableSet {
 	return tableSet{
-		p:  s3TablePersister{s3, bucket, defaultS3PartSize},
+		p:  s3TablePersister{s3, bucket, defaultS3PartSize, indexCache},
 		rl: make(chan struct{}, concurrentCompactions),
 	}
 }

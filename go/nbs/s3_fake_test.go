@@ -44,6 +44,7 @@ type fakeS3 struct {
 	inProgressCounter int
 	inProgress        map[string]fakeS3Multipart // Key -> {UploadId, Etags...}
 	parts             map[string][]byte          // ETag -> data
+	getCount          int
 }
 
 type fakeS3Multipart struct {
@@ -137,6 +138,7 @@ func (m *fakeS3) CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput)
 }
 
 func (m *fakeS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	m.getCount++
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 

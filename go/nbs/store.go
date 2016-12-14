@@ -45,22 +45,31 @@ type NomsBlockStore struct {
 type AWSStoreFactory struct {
 	sess          *session.Session
 	table, bucket string
+	indexCache    *s3IndexCache
 }
 
-func NewAWSStoreFactory(sess *session.Session, table, bucket string) chunks.Factory {
-	return &AWSStoreFactory{sess, table, bucket}
+func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize uint64) chunks.Factory {
+	var indexCache *s3IndexCache
+	if indexCacheSize > 0 {
+		indexCache = newS3IndexCache(indexCacheSize)
+	}
+	return &AWSStoreFactory{sess, table, bucket, indexCache}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return NewAWSStore(asf.table, ns, asf.bucket, asf.sess, 1<<26 /* 64MB */)
+	return newAWSStore(asf.table, ns, asf.bucket, asf.sess, 1<<26 /* 64MB */, asf.indexCache)
 }
 
 func (asf *AWSStoreFactory) Shutter() {
 }
 
 func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
+	return newAWSStore(table, ns, bucket, sess, memTableSize, nil)
+}
+
+func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64, indexCache *s3IndexCache) *NomsBlockStore {
 	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
-	ts := newS3TableSet(s3.New(sess), bucket)
+	ts := newS3TableSet(s3.New(sess), bucket, indexCache)
 	return newNomsBlockStore(mm, ts, memTableSize)
 }
 

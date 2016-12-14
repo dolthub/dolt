@@ -85,9 +85,12 @@ func TestS3TablePersisterCompact(t *testing.T) {
 	}
 
 	s3svc := makeFakeS3(assert)
-	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 3)}
+	cache := newS3IndexCache(1024)
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", partSize: calcPartSize(mt, 3), indexCache: cache}
 
 	src := s3p.Compact(mt, nil)
+	assert.NotNil(cache.get(src.hash()))
+
 	if assert.True(src.count() > 0) {
 		if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
 			assertChunksInReader(testChunks, r, assert)
