@@ -43,6 +43,7 @@ func TestTableSetPrepend(t *testing.T) {
 	secondSpecs := ts.ToSpecs()
 	assert.Len(secondSpecs, 2)
 	assert.Equal(firstSpecs, secondSpecs[1:])
+	ts.Close()
 }
 
 func makeTempDir(assert *assert.Assertions) string {
@@ -74,6 +75,8 @@ func TestTableSetUnion(t *testing.T) {
 
 	ts = ts.Union(fullTS.ToSpecs())
 	assert.Len(ts.ToSpecs(), 3)
+	ts.Close()
+	fullTS.Close()
 }
 
 func TestS3TablePersisterCompact(t *testing.T) {
