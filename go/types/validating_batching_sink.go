@@ -78,27 +78,34 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 // internal buffer of Chunks, spilling to the ChunkStore when the buffer is
 // full. If an attempt to Put Chunks fails, this method returns the
 // BackpressureError from the underlying ChunkStore.
-func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) chunks.BackpressureError {
+func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) (err chunks.BackpressureError) {
 	h := c.Hash()
 	vbs.vs.ensureChunksInCache(v)
 	vbs.vs.set(h, hintedChunk{v.Type(), h})
 
 	vbs.batch[vbs.count] = c
 	vbs.count++
+
 	if vbs.count == batchSize {
-		return vbs.Flush()
+		err = vbs.cs.PutMany(vbs.batch[:vbs.count])
+		vbs.count = 0
 	}
-	return nil
+
+	return
 }
 
 // Flush Puts any Chunks buffered by Enqueue calls into the backing
 // ChunkStore. If the attempt to Put fails, this method returns the
 // BackpressureError returned by the underlying ChunkStore.
 func (vbs *ValidatingBatchingSink) Flush() (err chunks.BackpressureError) {
-	err = vbs.cs.PutMany(vbs.batch[:vbs.count])
+	if vbs.count > 0 {
+		err = vbs.cs.PutMany(vbs.batch[:vbs.count])
+	}
+
 	if err == nil {
 		vbs.cs.Flush()
 	}
+
 	vbs.count = 0
 	return
 }
