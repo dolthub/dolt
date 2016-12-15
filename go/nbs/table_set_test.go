@@ -20,9 +20,7 @@ var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2"
 
 func TestTableSetPrependEmpty(t *testing.T) {
 	ts := newFakeTableSet().Prepend(newMemTable(testMemTableSize))
-	// assert.Empty(t, ts.ToSpecs())
-	assert.Len(t, ts.ToSpecs(), 1)
-	assert.EqualValues(t, 0, ts.chunkSources[0].count())
+	assert.Empty(t, ts.ToSpecs())
 }
 
 func TestTableSetPrepend(t *testing.T) {
@@ -31,8 +29,8 @@ func TestTableSetPrepend(t *testing.T) {
 	assert.Empty(ts.ToSpecs())
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-
 	ts = ts.Prepend(mt)
+
 	firstSpecs := ts.ToSpecs()
 	assert.Len(firstSpecs, 1)
 
@@ -40,9 +38,31 @@ func TestTableSetPrepend(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(mt)
+
 	secondSpecs := ts.ToSpecs()
 	assert.Len(secondSpecs, 2)
 	assert.Equal(firstSpecs, secondSpecs[1:])
+	ts.Close()
+}
+
+func TestTableToSpecsExcludesEmptyTable(t *testing.T) {
+	assert := assert.New(t)
+	ts := newFakeTableSet()
+	assert.Empty(ts.ToSpecs())
+	mt := newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
+	ts = ts.Prepend(mt)
+
+	mt = newMemTable(testMemTableSize)
+	ts = ts.Prepend(mt)
+
+	mt = newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
+	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
+	ts = ts.Prepend(mt)
+
+	specs := ts.ToSpecs()
+	assert.Len(specs, 2)
 	ts.Close()
 }
 

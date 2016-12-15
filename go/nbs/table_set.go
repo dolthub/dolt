@@ -124,9 +124,11 @@ func (ts tableSet) Union(specs []tableSpec) tableSet {
 }
 
 func (ts tableSet) ToSpecs() []tableSpec {
-	tableSpecs := make([]tableSpec, len(ts.chunkSources))
-	for i, src := range ts.chunkSources {
-		tableSpecs[i] = tableSpec{src.hash(), src.count()}
+	tableSpecs := make([]tableSpec, 0, len(ts.chunkSources))
+	for _, src := range ts.chunkSources {
+		if src.count() > 0 {
+			tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
+		}
 	}
 	return tableSpecs
 }
