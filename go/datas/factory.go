@@ -14,17 +14,21 @@ type Factory interface {
 	Shutter()
 }
 
-type localFactory struct {
+type LocalFactory struct {
 	cf chunks.Factory
 }
 
-func (lf *localFactory) Create(ns string) (Database, bool) {
+func NewLocalFactory(cf chunks.Factory) *LocalFactory {
+	return &LocalFactory{cf}
+}
+
+func (lf *LocalFactory) Create(ns string) (Database, bool) {
 	if cs := lf.cf.CreateStore(ns); cs != nil {
 		return newLocalDatabase(cs), true
 	}
 	return &LocalDatabase{}, false
 }
 
-func (lf *localFactory) Shutter() {
+func (lf *LocalFactory) Shutter() {
 	lf.cf.Shutter()
 }
