@@ -73,7 +73,6 @@ export default class ValueDecoder {
       }
     }
 
-    invariant(isPrimitiveKind(k));
     return getPrimitiveType(k);
   }
 

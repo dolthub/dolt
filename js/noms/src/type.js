@@ -8,7 +8,7 @@ import Ref from './ref.js';
 import type {NomsKind} from './noms-kind.js';
 import type Hash from './hash.js';
 import {invariant, notNull} from './assert.js';
-import {isPrimitiveKind, Kind} from './noms-kind.js';
+import {Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
 import type Value from './value.js';
 import {describeType} from './encode-human-readable.js';
@@ -250,7 +250,6 @@ export function makeCycleType(level: number): Type<any> {
  * Gives the existing primitive Type value for a NomsKind.
  */
 export function getPrimitiveType(k: NomsKind): Type<any> {
-  invariant(isPrimitiveKind(k));
   switch (k) {
     case Kind.Bool:
       return boolType;
