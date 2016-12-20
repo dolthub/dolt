@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/attic-labs/noms/go/config"
@@ -51,17 +53,29 @@ func main() {
 		flag.Usage()
 	}
 
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatalf("Error fetching %s: %+v\n", url, err)
-	} else if res.StatusCode != 200 {
-		log.Fatalf("Error fetching %s: %s\n", url, res.Status)
+	var r io.Reader
+	if strings.HasPrefix(url, "http") {
+		res, err := http.Get(url)
+		if err != nil {
+			log.Fatalf("Error fetching %s: %+v\n", url, err)
+		} else if res.StatusCode != 200 {
+			log.Fatalf("Error fetching %s: %s\n", url, res.Status)
+		}
+		defer res.Body.Close()
+		r = res.Body
+	} else {
+		// assume it's a file
+		f, err := os.Open(url)
+		if err != nil {
+			log.Fatalf("Invalid URL %s - does not start with 'http' and isn't local file either. fopen error: %s", url, err)
+		}
+
+		r = f
 	}
-	defer res.Body.Close()
 
 	var jsonObject interface{}
 	start := time.Now()
-	r := progressreader.New(res.Body, func(seen uint64) {
+	r = progressreader.New(r, func(seen uint64) {
 		elapsed := time.Since(start).Seconds()
 		rate := uint64(float64(seen) / elapsed)
 		status.Printf("%s decoded in %ds (%s/s)...", humanize.Bytes(seen), int(elapsed), humanize.Bytes(rate))
