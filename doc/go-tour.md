@@ -41,12 +41,12 @@ import (
 )
 
 func main() {
-  db, err := spec.GetDatabase("http://localhost:8000")
+  sp, err := spec.ForDatabase("http://localhost:8000")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not access database: %s\n", err)
     return
   }
-  defer db.Close()
+  defer sp.Close()
 }
 ```
 
@@ -76,14 +76,14 @@ import (
 )
 
 func main() {
-  db, ds, err := spec.GetDataset("http://localhost:8000::people")
+  sp, err := spec.ForDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer db.Close()
+  defer sp.Close()
 
-  if _, ok := ds.MaybeHeadValue(); !ok {
+  if _, ok := sp.GetDataset().MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
   }
 }
@@ -117,12 +117,12 @@ func newPerson(givenName string, male bool) types.Struct {
 }
 
 func main() {
-  db, ds, err := spec.GetDataset("http://localhost:8000::people")
+  sp, err := spec.ForDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer db.Close()
+  defer sp.Close()
 
   data := types.NewList(
     newPerson("Rickon", true),
@@ -133,7 +133,7 @@ func main() {
 
   fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
 
-  _, err = db.CommitValue(ds, data)
+  _, err = sp.GetDatabase().CommitValue(sp.GetDataset(), data)
   if err != nil {
     fmt.Fprint(os.Stderr, "Error commiting: %s\n", err)
   }
@@ -164,14 +164,14 @@ import (
 )
 
 func main() {
-  db, ds, err := spec.GetDataset("http://localhost:8000::people")
+  sp, err := spec.ForDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer db.Close()
+  defer sp.Close()
 
-  if headValue, ok := ds.MaybeHeadValue(); !ok {
+  if headValue, ok := sp.GetDataset().MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
   } else {
     // type assertion to convert Head to List
@@ -232,14 +232,14 @@ import (
 )
 
 func main() {
-  db, ds, err := spec.GetDataset("http://localhost:8000::people")
+  sp, err := spec.ForDataset("http://localhost:8000::people")
   if err != nil {
     fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
     return
   }
-  defer db.Close()
+  defer sp.Close()
 
-  if headValue, ok := ds.MaybeHeadValue(); !ok {
+  if headValue, ok := sp.GetDataset().MaybeHeadValue(); !ok {
     fmt.Fprintf(os.Stdout, "head is empty\n")
   } else {
     // type assertion to convert Head to List
@@ -254,7 +254,7 @@ func main() {
 
     fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
 
-    _, err = db.CommitValue(ds, data)
+    _, err = sp.GetDatabase().CommitValue(sp.GetDataset(), data)
     if err != nil {
       fmt.Fprint(os.Stderr, "Error commiting: %s\n", err)
     }
