@@ -4,9 +4,7 @@
 
 package nbs
 
-import (
-	"sync"
-)
+import "sync"
 
 const concurrentCompactions = 5
 
@@ -68,6 +66,18 @@ func (css chunkSources) getMany(reqs []getRecord) (remaining bool) {
 	}
 
 	return true
+}
+
+func (css chunkSources) calcReads(reqs []getRecord, blockSize, ampThresh uint64) (reads int, split, remaining bool) {
+	for _, haver := range css {
+		rds, remaining := haver.calcReads(reqs, blockSize, ampThresh)
+		reads += rds
+		if !remaining {
+			return reads, split, remaining
+		}
+		split = true
+	}
+	return reads, split, remaining
 }
 
 func (css chunkSources) count() (count uint32) {

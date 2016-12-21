@@ -16,6 +16,7 @@ import (
 const (
 	s3RangePrefix   = "bytes"
 	s3ReadAmpThresh = uint64(5)
+	s3BlockSize     = 0
 )
 
 type s3TableReader struct {
@@ -57,7 +58,7 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexC
 		}
 	}
 
-	source.tableReader = newTableReader(index, source, s3ReadAmpThresh)
+	source.tableReader = newTableReader(index, source, s3BlockSize, s3ReadAmpThresh)
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }

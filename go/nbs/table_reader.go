@@ -24,8 +24,8 @@ type tableIndex struct {
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
 type tableReader struct {
 	tableIndex
-	r             io.ReaderAt
-	readAmpThresh uint64
+	r                        io.ReaderAt
+	blockSize, readAmpThresh uint64
 }
 
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. |tableIndex| doesn't keep alive any references to |buff|.
@@ -133,8 +133,8 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
-func newTableReader(index tableIndex, r io.ReaderAt, readAmpThresh uint64) tableReader {
-	return tableReader{index, r, readAmpThresh}
+func newTableReader(index tableIndex, r io.ReaderAt, blockSize, readAmpThresh uint64) tableReader {
+	return tableReader{index, r, blockSize, readAmpThresh}
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
@@ -220,44 +220,17 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-const blockSize = 1 << 12
-
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
 func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
-	filterIdx := uint32(0)
-	filterLen := uint32(len(tr.prefixes))
-	offsetRecords := make(offsetRecSlice, 0, len(reqs))
-
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
-	for i, req := range reqs {
-		// advance within the prefixes until we reach one which is >= req.prefix
-		for filterIdx < filterLen && tr.prefixes[filterIdx] < req.prefix {
-			filterIdx++
-		}
+	var offsetRecords offsetRecSlice
+	offsetRecords, remaining = tr.findOffsets(reqs)
 
-		if filterIdx >= filterLen {
-			remaining = true // last prefix visited.
-			break
-		}
-
-		if req.prefix != tr.prefixes[filterIdx] {
-			remaining = true
-			continue
-		}
-
-		// record all offsets within the table which contain the data required.
-		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *req.a) {
-				offsetRecords = append(offsetRecords, offsetRec{uint32(i), tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
-			}
-		}
-	}
-
-	// Now |offsets| contains all locations within the table which must be search (note that there
-	// may be duplicates of a particular location). Sort by offset and scan forward, grouping
-	// sequences of reads into large physical reads.
+	// Now |offsetRecords| contains all locations within the table which must be search (note
+	// that there may be duplicates of a particular location). Sort by offset and scan forward,
+	// grouping sequences of reads into large physical reads.
 	sort.Sort(offsetRecords)
 
 	scratch := []byte{} // raw byte area into which reads occur
@@ -293,30 +266,13 @@ func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
 					continue // already satisfied
 				}
 
-				if fRec.offset < readEnd {
-					// |offsetRecords| will contain an offsetRecord for *every* chunkRecord whose address
-					// prefix matches the prefix of a requested address. If the set of requests contains
-					// addresses which share a common prefix, then it's possible for multiple offsetRecords
-					// to reference the same table offset position. In that case, we'll see sequential
-					// offsetRecords with the same fRec.offset.
-					continue
-				}
-
-				// only consider "wasted" bytes ABOVE block_size to be read amplification.
-				fReadAmp := fRec.offset - readEnd
-				if fReadAmp < blockSize {
-					fReadAmp = 0
-				} else {
-					fReadAmp -= blockSize
-				}
-
-				fLength := tr.lengths[fRec.ordinal]
-				if fRec.offset+uint64(fLength)-readStart < tr.readAmpThresh*(readAmp+fReadAmp) {
+				newEnd, newAmp, canRead := canReadAhead(fRec, tr.lengths[fRec.ordinal], readStart, readEnd, readAmp, tr.blockSize, tr.readAmpThresh)
+				if !canRead {
 					break // including the next block will read too many unneeded bytes
 				}
 
-				readEnd = fRec.offset + uint64(fLength)
-				readAmp += fReadAmp
+				readEnd = newEnd
+				readAmp = newAmp
 			}
 
 			// Ensure our memory buffer is large enough
@@ -345,6 +301,72 @@ func (tr tableReader) getMany(reqs []getRecord) (remaining bool) {
 	return
 }
 
+// findOffsets iterates over |reqs| and |tr.prefixes| (both sorted by
+// address) to build the set of table locations which must be read in order to
+// find each chunk specified by |reqs|. If this table contains all requested
+// chunks remaining will be set to false upon return. If some are not here,
+// then remaining will be true.
+func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool) {
+	filterIdx := uint32(0)
+	filterLen := uint32(len(tr.prefixes))
+	ors = make(offsetRecSlice, 0, len(reqs))
+
+	// Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
+	// of table locations which must be read in order to satisfy |reqs|.
+	for i, req := range reqs {
+		// advance within the prefixes until we reach one which is >= req.prefix
+		for filterIdx < filterLen && tr.prefixes[filterIdx] < req.prefix {
+			filterIdx++
+		}
+
+		if filterIdx >= filterLen {
+			remaining = true // last prefix visited.
+			break
+		}
+
+		if req.prefix != tr.prefixes[filterIdx] {
+			remaining = true
+			continue
+		}
+
+		// record all offsets within the table which contain the data required.
+		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
+			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *req.a) {
+				ors = append(ors, offsetRec{uint32(i), tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
+			}
+		}
+	}
+	return ors, remaining
+}
+
+func canReadAhead(fRec offsetRec, fLength uint32, readStart, readEnd, readAmp, blockSize, ampThresh uint64) (newEnd, newAmp uint64, canRead bool) {
+	if fRec.offset < readEnd {
+		// |offsetRecords| will contain an offsetRecord for *every* chunkRecord whose address
+		// prefix matches the prefix of a requested address. If the set of requests contains
+		// addresses which share a common prefix, then it's possible for multiple offsetRecords
+		// to reference the same table offset position. In that case, we'll see sequential
+		// offsetRecords with the same fRec.offset.
+		return readEnd, 0, true
+	}
+
+	// only consider "wasted" bytes ABOVE tr.BlockSize to be read amplification.
+	fReadAmp := fRec.offset - readEnd
+	if fReadAmp < blockSize {
+		fReadAmp = 0
+	} else {
+		fReadAmp -= blockSize
+	}
+
+	if ampThresh == 0 && (readAmp+fReadAmp) > 0 {
+		return readEnd, 0, false
+	}
+	if fRec.offset+uint64(fLength)-readStart < ampThresh*(readAmp+fReadAmp) {
+		// including the next block will read too many unneeded bytes
+		return readEnd, 0, false
+	}
+	return fRec.offset + uint64(fLength), readAmp + fReadAmp, true
+}
+
 // Fetches the byte stream of data logically encoded within the table starting at |pos|.
 func (tr tableReader) parseChunk(h addr, buff []byte) []byte {
 	dataLen := uint64(len(buff)) - checksumSize
@@ -356,4 +378,51 @@ func (tr tableReader) parseChunk(h addr, buff []byte) []byte {
 	d.Chk.True(chksum == crc(data))
 
 	return data
+}
+
+func (tr tableReader) calcReads(reqs []getRecord, blockSize, ampThresh uint64) (reads int, remaining bool) {
+	var offsetRecords offsetRecSlice
+	// Pass #1: Build the set of table locations which must be read in order to find all the elements of |reqs| which are present in this table.
+	offsetRecords, remaining = tr.findOffsets(reqs)
+
+	// Now |offsetRecords| contains all locations within the table which must
+	// be searched (note that there may be duplicates of a particular
+	// location). Sort by offset and scan forward, grouping sequences of reads
+	// into large physical reads.
+	sort.Sort(offsetRecords)
+
+	for i, rec := range offsetRecords {
+		if reqs[rec.reqIdx].data != nil {
+			continue // already satisfied
+		}
+
+		// Mark this request "satisfied"
+		reqs[rec.reqIdx].data = []byte{0x01}
+
+		readStart := rec.offset
+		readEnd := rec.offset + uint64(tr.lengths[rec.ordinal]) // implicitly include the first chunk
+
+		// As we scan forward, for each location/length, we'll include it in the current read if
+		// the total number of bytes we'll read contains fewer than X bytes we don't care about.
+		readAmp := uint64(0)
+
+		// scan ahead in offsets
+		canRead := true
+		for j := i + 1; canRead && j < len(offsetRecords); j++ {
+			fRec := offsetRecords[j]
+
+			if reqs[fRec.reqIdx].data != nil {
+				continue // already satisfied
+			}
+
+			readEnd, readAmp, canRead = canReadAhead(fRec, tr.lengths[fRec.ordinal], readStart, readEnd, readAmp, blockSize, ampThresh)
+			if canRead {
+				// Mark this read-ahead-request "satisfied"
+				reqs[fRec.reqIdx].data = []byte{0x01}
+			}
+		}
+		reads++
+	}
+
+	return
 }

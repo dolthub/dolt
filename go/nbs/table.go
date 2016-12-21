@@ -210,4 +210,5 @@ type chunkSource interface {
 	chunkReader
 	close() error
 	hash() addr
+	calcReads(reqs []getRecord, blockSize, ampThresh uint64) (reads int, remaining bool)
 }
