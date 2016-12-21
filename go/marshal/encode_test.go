@@ -632,6 +632,21 @@ func TestInvalidTag(t *testing.T) {
 	assert.Equal(t, `Unrecognized tag: omitEmpty`, err.Error())
 }
 
+func TestEncodeCanSkipUnexportedField(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Abc         int
+		notExported bool `noms:"-"`
+	}
+	s := S{42, true}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("S", types.StructData{
+		"abc": types.Number(42),
+	}).Equals(v))
+}
+
 type TestInterface interface {
 	M()
 }

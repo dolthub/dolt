@@ -254,12 +254,12 @@ func structDecoder(t reflect.Type) decoderFunc {
 	fields := make([]decField, 0, t.NumField())
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		validateField(f, t)
-
 		tags := getTags(f)
 		if tags.skip {
 			continue
 		}
+
+		validateField(f, t)
 
 		fields = append(fields, decField{
 			name:      tags.name,

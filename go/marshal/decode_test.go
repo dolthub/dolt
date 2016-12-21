@@ -813,3 +813,18 @@ func TestDecodeOriginalReceiveTypeError(t *testing.T) {
 	assert.Error(err)
 	assert.Equal(`Cannot unmarshal struct S {} into Go value of type marshal.S, field with tag "original" must have type Struct`, err.Error())
 }
+
+func TestDecodeCanSkipUnexportedField(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Abc         int
+		notExported bool `noms:"-"`
+	}
+	var s S
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"abc": types.Number(42),
+	}), &s)
+	assert.NoError(err)
+	assert.Equal(S{42, false}, s)
+}

@@ -356,15 +356,15 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 	canComputeStructType := true
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
+		tags := getTags(f)
+		if tags.skip {
+			continue
+		}
+
 		validateField(f, t)
 		nt := nomsType(f.Type, parentStructTypes)
 		if nt == nil {
 			canComputeStructType = false
-		}
-
-		tags := getTags(f)
-		if tags.skip {
-			continue
 		}
 
 		if tags.omitEmpty {
