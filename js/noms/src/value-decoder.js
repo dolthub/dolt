@@ -16,7 +16,7 @@ import {
 } from './type.js';
 import {OrderedKey, MetaTuple} from './meta-sequence.js';
 import {invariant, notNull} from './assert.js';
-import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
+import {kindToString, Kind} from './noms-kind.js';
 import List, {ListLeafSequence} from './list.js';
 import Map, {MapLeafSequence} from './map.js';
 import Set, {SetLeafSequence} from './set.js';
