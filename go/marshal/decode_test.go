@@ -456,6 +456,28 @@ func TestDecodeSlice(t *testing.T) {
 	assert.Equal([]string{"a", "b", "c"}, s)
 }
 
+func TestDecodeSliceEmpty(t *testing.T) {
+	assert := assert.New(t)
+	var s []string
+
+	err := Unmarshal(types.NewList(), &s)
+	assert.NoError(err)
+	assert.Equal([]string(nil), s)
+
+	err = Unmarshal(types.NewSet(), &s)
+	assert.NoError(err)
+	assert.Equal([]string(nil), s)
+
+	s2 := []string{}
+	err = Unmarshal(types.NewList(), &s2)
+	assert.NoError(err)
+	assert.Equal([]string{}, s2)
+
+	err = Unmarshal(types.NewSet(), &s2)
+	assert.NoError(err)
+	assert.Equal([]string{}, s2)
+}
+
 func TestDecodeSliceReuse(t *testing.T) {
 	assert := assert.New(t)
 	s := []string{"A", "B", "C", "D"}
@@ -482,6 +504,19 @@ func TestDecodeArray(t *testing.T) {
 	err = Unmarshal(types.NewSet(types.String("a"), types.String("b"), types.String("c")), &s)
 	assert.NoError(err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
+}
+
+func TestDecodeArrayEmpty(t *testing.T) {
+	assert := assert.New(t)
+	var s [0]string
+
+	err := Unmarshal(types.NewList(), &s)
+	assert.NoError(err)
+	assert.Equal([0]string{}, s)
+
+	err = Unmarshal(types.NewSet(), &s)
+	assert.NoError(err)
+	assert.Equal([0]string{}, s)
 }
 
 func TestDecodeStructWithSlice(t *testing.T) {
@@ -575,8 +610,8 @@ func TestDecodeRecursive(t *testing.T) {
 
 	assert.Equal(Node{
 		1, []Node{
-			{2, []Node{}},
-			{3, []Node{}},
+			{2, nil},
+			{3, nil},
 		},
 	}, n)
 }
@@ -611,6 +646,20 @@ func TestDecodeMap(t *testing.T) {
 		types.NewStruct("S", types.StructData{"n": types.String("No")}), types.Bool(false)), &m2)
 	assert.NoError(err)
 	assert.Equal(map[S]bool{S{"Yes"}: true, S{"No"}: false}, m2)
+}
+
+func TestDecodeMapEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	var m map[string]int
+	err := Unmarshal(types.NewMap(), &m)
+	assert.NoError(err)
+	assert.Equal(map[string]int(nil), m)
+
+	m2 := map[string]int{}
+	err = Unmarshal(types.NewMap(), &m2)
+	assert.NoError(err)
+	assert.Equal(map[string]int{}, m2)
 }
 
 func TestDecodeMapWrongNomsType(t *testing.T) {
@@ -648,7 +697,7 @@ func TestDecodeOntoInterface(t *testing.T) {
 
 	err = Unmarshal(types.NewMap(types.String("a"), types.Bool(true), types.Number(42), types.NewList()), &i)
 	assert.NoError(err)
-	assert.Equal(map[interface{}]interface{}{"a": true, float64(42): []interface{}{}}, i)
+	assert.Equal(map[interface{}]interface{}{"a": true, float64(42): []interface{}(nil)}, i)
 }
 
 func TestDecodeOntoNonSupportedInterface(t *testing.T) {
@@ -696,6 +745,23 @@ func TestDecodeSet(t *testing.T) {
 		E: []int{6, 7, 8},
 		F: []int{9, 10, 11},
 	}, gs)
+
+	ns2 := types.NewStruct("T", types.StructData{
+		"a": types.NewSet(),
+		"b": types.NewMap(),
+		"c": types.NewSet(),
+		"d": types.NewMap(),
+		"e": types.NewSet(),
+		"f": types.NewList(),
+	})
+
+	gs2 := T{
+		A: map[int]struct{}{},
+	}
+	assert.NoError(Unmarshal(ns2, &gs2))
+	assert.Equal(T{
+		A: map[int]struct{}{},
+	}, gs2)
 }
 
 func TestDecodeNamedSet(t *testing.T) {

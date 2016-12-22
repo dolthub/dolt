@@ -29,14 +29,14 @@ import (
 //
 // To unmarshal a Noms list or set into a slice, Unmarshal resets the slice
 // length to zero and then appends each element to the slice. If the Go slice
-// was nil a new slice is created.
+// was nil a new slice is created when an element is added.
 //
 // To unmarshal a Noms list into a Go array, Unmarshal decodes Noms list
 // elements into corresponding Go array elements.
 //
 // To unmarshal a Noms map into a Go map, Unmarshal decodes Noms key and values
 // into corresponding Go array elements. If the Go map was nil a new map is
-// created.
+// created if any value is set.
 //
 // To unmarshal Noms sets, it depends on the presence of a `noms:",set"` tag:
 //  - Without (default), Unmarshal decodes into corresponding Go list elements.
@@ -331,7 +331,7 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 	d = func(v types.Value, rv reflect.Value) {
 		var slice reflect.Value
 		if rv.IsNil() {
-			slice = reflect.MakeSlice(t, 0, int(v.(types.Collection).Len()))
+			slice = rv
 		} else {
 			slice = rv.Slice(0, 0)
 		}
@@ -387,9 +387,6 @@ func mapFromSetDecoder(t reflect.Type) decoderFunc {
 
 	d = func(v types.Value, rv reflect.Value) {
 		m := rv
-		if m.IsNil() {
-			m = reflect.MakeMap(t)
-		}
 
 		nomsSet, ok := v.(types.Set)
 		if !ok {
@@ -399,6 +396,9 @@ func mapFromSetDecoder(t reflect.Type) decoderFunc {
 		nomsSet.IterAll(func(v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
 			decoder(v, keyRv)
+			if m.IsNil() {
+				m = reflect.MakeMap(t)
+			}
 			m.SetMapIndex(keyRv, reflect.New(t.Elem()).Elem())
 		})
 		rv.Set(m)
@@ -420,9 +420,6 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 
 	d = func(v types.Value, rv reflect.Value) {
 		m := rv
-		if m.IsNil() {
-			m = reflect.MakeMap(t)
-		}
 
 		// Special case decoding failure if it looks like the "set" tag is missing,
 		// because it's helpful.
@@ -440,6 +437,9 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 			keyDecoder(k, keyRv)
 			valueRv := reflect.New(t.Elem()).Elem()
 			valueDecoder(v, valueRv)
+			if m.IsNil() {
+				m = reflect.MakeMap(t)
+			}
 			m.SetMapIndex(keyRv, valueRv)
 		})
 		rv.Set(m)
