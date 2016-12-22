@@ -647,6 +647,53 @@ func TestEncodeCanSkipUnexportedField(t *testing.T) {
 	}).Equals(v))
 }
 
+func TestEncodeOriginal(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Foo int          `noms:",omitempty"`
+		Bar types.Struct `noms:",original"`
+	}
+
+	var s S
+	var err error
+	var orig types.Struct
+
+	// New field value clobbers old field value
+	orig = types.NewStruct("S", types.StructData{
+		"foo": types.Number(42),
+	})
+	err = Unmarshal(orig, &s)
+	assert.NoError(err)
+	s.Foo = 43
+	assert.True(MustMarshal(s).Equals(orig.Set("foo", types.Number(43))))
+
+	// New field extends old struct
+	orig = types.NewStruct("S", types.StructData{})
+	err = Unmarshal(orig, &s)
+	assert.NoError(err)
+	s.Foo = 43
+	assert.True(MustMarshal(s).Equals(orig.Set("foo", types.Number(43))))
+
+	// Old struct name always used
+	orig = types.NewStruct("Q", types.StructData{})
+	err = Unmarshal(orig, &s)
+	assert.NoError(err)
+	s.Foo = 43
+	assert.True(MustMarshal(s).Equals(orig.Set("foo", types.Number(43))))
+
+	// Field type of base are preserved
+	st := types.MakeStructType("S", []string{"foo"},
+		[]*types.Type{types.MakeUnionType(types.StringType, types.NumberType)})
+	orig = types.NewStructWithType(st, []types.Value{types.Number(42)})
+	err = Unmarshal(orig, &s)
+	assert.NoError(err)
+	s.Foo = 43
+	out := MustMarshal(s)
+	assert.True(out.Equals(orig.Set("foo", types.Number(43))))
+	assert.True(out.Type().Equals(st))
+}
+
 type TestInterface interface {
 	M()
 }
