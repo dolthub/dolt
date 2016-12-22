@@ -75,23 +75,13 @@ export function compare(b1: Uint8Array, b2: Uint8Array): number {
   const b2Len = b2.byteLength;
 
   for (let i = 0; i < b1Len && i < b2Len; i++) {
-    if (b1[i] < b2[i]) {
-      return -1;
+    if (b1[i] === b2[i]) {
+      continue;
     }
-
-    if (b1[i] > b2[i]) {
-      return 1;
-    }
+    return b1[i] - b2[i];
   }
 
-  if (b1Len < b2Len) {
-    return -1;
-  }
-  if (b1Len > b2Len) {
-    return 1;
-  }
-
-  return 0;
+  return b1Len - b2Len;
 }
 
 // This should be imported but this prevents the cyclic dependency.

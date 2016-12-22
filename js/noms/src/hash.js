@@ -5,7 +5,7 @@
 // @flow
 
 import {alloc, compare, sha512} from './bytes.js';
-import {encode, decode} from './base32';
+import {encode, decode} from './base32.js';
 
 export const byteLength = 20;
 export const stringLength = 32;
@@ -43,7 +43,7 @@ export default class Hash {
    * If this hash is equal to `other` then this returns `true`.
    */
   equals(other: Hash): boolean {
-    return this.compare(other) === 0;
+    return this === other || this.compare(other) === 0;
   }
 
   /**

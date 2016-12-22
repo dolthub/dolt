@@ -15,6 +15,10 @@ import type Value from './value.js';
  * `boolean` < `number` < `string` < everything else.
  */
 export function compare(v1: Value, v2: Value): number {
+  if (v1 === v2) {
+    return 0;
+  }
+
   const t1 = typeof v1;
   const t2 = typeof v2;
 
@@ -46,7 +50,7 @@ export function compare(v1: Value, v2: Value): number {
       }
       return -1;
 
-    case 'object': {
+    case 'object':
       switch (t2) {
         case 'boolean':
         case 'number':
@@ -54,9 +58,9 @@ export function compare(v1: Value, v2: Value): number {
           return 1;
       }
 
-      // $FlowIssue: Flow does not realize that v1 and v2 are Values here.
+      // $FlowIssue: Flow does not realize that v1 and v2 are ValueBase here.
       return v1.hash.compare(v2.hash);
-    }
+
     default:
       throw new Error('unreachable');
   }
@@ -74,5 +78,23 @@ export function less(v1: Value, v2: Value): boolean {
  * value (not the same object in memory like JavaScript normally does).
  */
 export function equals(v1: Value, v2: Value): boolean {
-  return compare(v1, v2) === 0;
+  if (v1 === v2) {
+    return true;
+  }
+
+  switch (typeof v1) {
+    case 'boolean':
+    case 'number':
+    case 'string':
+      return false;
+
+    case 'object':
+      if (typeof v2 !== 'object') {
+        return false;
+      }
+      return v1.hash.equals(v2.hash);
+
+    default:
+      throw new Error('unreachable');
+  }
 }
