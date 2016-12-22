@@ -20,7 +20,10 @@ import (
 //
 // To unmarshal a Noms struct into a Go struct, Unmarshal matches incoming
 // object fields to the fields used by Marshal (either the struct field name or
-// its tag). Unmarshal will only set exported fields of the struct. Go struct
+// its tag).  Unmarshal will only set exported fields of the struct.  The name
+// of the Go struct must match (ignoring case) the name of the Noms struct. All
+// exported fields on the Go struct must be present in the Noms struct, unless
+// the field on the Go struct is marked with the "omitempty" tag. Go struct
 // fields also support the "original" tag which causes the Go field to receive
 // the entire original unmarshaled Noms struct.
 //
@@ -231,10 +234,11 @@ func (c *decoderCacheT) set(t reflect.Type, d decoderFunc) {
 }
 
 type decField struct {
-	name     string
-	decoder  decoderFunc
-	index    int
-	original bool
+	name      string
+	decoder   decoderFunc
+	index     int
+	omitEmpty bool
+	original  bool
 }
 
 func structDecoder(t reflect.Type) decoderFunc {
@@ -258,10 +262,11 @@ func structDecoder(t reflect.Type) decoderFunc {
 		validateField(f, t)
 
 		fields = append(fields, decField{
-			name:     tags.name,
-			decoder:  typeDecoder(f.Type, tags),
-			index:    i,
-			original: tags.original,
+			name:      tags.name,
+			decoder:   typeDecoder(f.Type, tags),
+			index:     i,
+			omitEmpty: tags.omitEmpty,
+			original:  tags.original,
 		})
 	}
 
@@ -283,6 +288,8 @@ func structDecoder(t reflect.Type) decoderFunc {
 			fv, ok := s.MaybeGet(f.name)
 			if ok {
 				f.decoder(fv, sf)
+			} else if !f.omitEmpty {
+				panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", missing field \"" + f.name + "\""})
 			}
 		}
 	}

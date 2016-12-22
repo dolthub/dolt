@@ -309,11 +309,9 @@ func TestDecodeMissingField(t *testing.T) {
 		B bool
 	}
 	var s S
-	Unmarshal(types.NewStruct("S", types.StructData{
+	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"a": types.Number(42),
-	}), &s)
-	assert.Equal(t, int32(42), s.A)
-	assert.False(t, s.B)
+	}), &s, "Cannot unmarshal struct S {\n  a: Number,\n} into Go value of type marshal.S, missing field \"b\"")
 }
 
 func TestDecodeEmbeddedStruct(tt *testing.T) {
