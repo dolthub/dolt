@@ -22,10 +22,11 @@ type s3TablePersister struct {
 	bucket     string
 	partSize   int
 	indexCache *s3IndexCache
+	readRl     chan struct{}
 }
 
 func (s3p s3TablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache)
+	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache, s3p.readRl)
 }
 
 type s3UploadedPart struct {
@@ -68,7 +69,7 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		if s3p.indexCache != nil {
 			s3p.indexCache.put(name, index)
 		}
-		s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize, s3ReadAmpThresh)
+		s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize, s3MaxReadSize, s3ReadAmpThresh)
 		return s3tr
 	}
 	return emptyChunkSource{}

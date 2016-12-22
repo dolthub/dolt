@@ -27,6 +27,7 @@ const (
 	StorageVersion = "0"
 
 	defaultMemTableSize uint64 = 512 * 1 << 20 // 512MB
+	defaultAWSReadLimit        = 1024
 )
 
 type NomsBlockStore struct {
@@ -46,6 +47,7 @@ type AWSStoreFactory struct {
 	sess          *session.Session
 	table, bucket string
 	indexCache    *s3IndexCache
+	readRl        chan struct{}
 }
 
 func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize uint64) chunks.Factory {
@@ -53,23 +55,23 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 	if indexCacheSize > 0 {
 		indexCache = newS3IndexCache(indexCacheSize)
 	}
-	return &AWSStoreFactory{sess, table, bucket, indexCache}
+	return &AWSStoreFactory{sess, table, bucket, indexCache, make(chan struct{}, defaultAWSReadLimit)}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newAWSStore(asf.table, ns, asf.bucket, asf.sess, 1<<26 /* 64MB */, asf.indexCache)
+	return newAWSStore(asf.table, ns, asf.bucket, asf.sess, defaultMemTableSize, asf.indexCache, asf.readRl)
 }
 
 func (asf *AWSStoreFactory) Shutter() {
 }
 
 func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
-	return newAWSStore(table, ns, bucket, sess, memTableSize, nil)
+	return newAWSStore(table, ns, bucket, sess, memTableSize, nil, nil)
 }
 
-func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64, indexCache *s3IndexCache) *NomsBlockStore {
+func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64, indexCache *s3IndexCache, readRl chan struct{}) *NomsBlockStore {
 	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
-	ts := newS3TableSet(s3.New(sess), bucket, indexCache)
+	ts := newS3TableSet(s3.New(sess), bucket, indexCache, readRl)
 	return newNomsBlockStore(mm, ts, memTableSize)
 }
 
@@ -157,13 +159,17 @@ func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 
 func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 	reqs := toGetRecords(hashes)
+
+	wg := &sync.WaitGroup{}
+
 	tables, remaining := func() (tables chunkReader, remaining bool) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		tables = nbs.tables
 
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(reqs)
+			remaining = nbs.mt.getMany(reqs, &sync.WaitGroup{})
+			wg.Wait()
 		} else {
 			remaining = true
 		}
@@ -174,7 +180,8 @@ func (nbs *NomsBlockStore) GetMany(hashes []hash.Hash) []chunks.Chunk {
 	sort.Sort(getRecordByPrefix(reqs))
 
 	if remaining {
-		tables.getMany(reqs)
+		tables.getMany(reqs, wg)
+		wg.Wait()
 	}
 
 	sort.Sort(getRecordByOrder(reqs))
@@ -204,7 +211,7 @@ func toGetRecords(hashes []hash.Hash) []getRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) CalcReads(hashes []hash.Hash) (reads int, split bool) {
+func (nbs *NomsBlockStore) CalcReads(hashes []hash.Hash, blockSize, maxReadSize, ampThresh uint64) (reads int, split bool) {
 	reqs := toGetRecords(hashes)
 	tables := func() (tables tableSet) {
 		nbs.mu.RLock()
@@ -216,7 +223,7 @@ func (nbs *NomsBlockStore) CalcReads(hashes []hash.Hash) (reads int, split bool)
 
 	sort.Sort(getRecordByPrefix(reqs))
 
-	reads, split, remaining := tables.calcReads(reqs, 0, 0)
+	reads, split, remaining := tables.calcReads(reqs, blockSize, maxReadSize, ampThresh)
 	d.Chk.False(remaining)
 	return
 }

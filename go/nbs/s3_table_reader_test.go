@@ -23,7 +23,7 @@ func TestS3TableReader(t *testing.T) {
 	tableData, h := buildTable(chunks)
 	s3.data[h.String()] = tableData
 
-	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil)
+	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil)
 	defer trc.close()
 	assertChunksInReader(chunks, trc, assert)
 }
@@ -46,7 +46,7 @@ func TestS3TableReaderIndexCache(t *testing.T) {
 	cache := newS3IndexCache(1024)
 	cache.put(h, index)
 
-	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache)
+	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache, nil)
 
 	assert.Equal(0, s3.getCount) // constructing the table shouldn't have resulted in any reads
 

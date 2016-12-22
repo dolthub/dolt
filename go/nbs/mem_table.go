@@ -5,6 +5,7 @@
 package nbs
 
 import "sort"
+import "sync"
 
 type memTable struct {
 	chunks             map[addr][]byte
@@ -66,7 +67,7 @@ func (mt *memTable) get(h addr) []byte {
 	return mt.chunks[h]
 }
 
-func (mt *memTable) getMany(reqs []getRecord) (remaining bool) {
+func (mt *memTable) getMany(reqs []getRecord, wg *sync.WaitGroup) (remaining bool) {
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {

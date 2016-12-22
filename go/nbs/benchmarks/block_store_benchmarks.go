@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"

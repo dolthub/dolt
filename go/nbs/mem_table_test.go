@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -81,15 +82,15 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _ := buildTable(chunks[1:2])
 	td2, _ := buildTable(chunks[2:])
-	tr1 := newTableReader(parseTableIndex(td1), bytes.NewReader(td1), fileBlockSize, fileReadAmpThresh)
-	tr2 := newTableReader(parseTableIndex(td2), bytes.NewReader(td2), fileBlockSize, fileReadAmpThresh)
+	tr1 := newTableReader(parseTableIndex(td1), bytes.NewReader(td1), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
+	tr2 := newTableReader(parseTableIndex(td2), bytes.NewReader(td2), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count := mt.write(chunkReaderGroup{tr1, tr2})
 	assert.Equal(uint32(1), count)
 
-	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize, fileReadAmpThresh)
+	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
@@ -124,9 +125,9 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
 	return true
 }
 
-func (crg chunkReaderGroup) getMany(reqs []getRecord) (remaining bool) {
+func (crg chunkReaderGroup) getMany(reqs []getRecord, wg *sync.WaitGroup) (remaining bool) {
 	for _, haver := range crg {
-		if !haver.getMany(reqs) {
+		if !haver.getMany(reqs, wg) {
 			return false
 		}
 	}

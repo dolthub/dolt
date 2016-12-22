@@ -25,6 +25,7 @@ type mmapTableReader struct {
 const (
 	fileReadAmpThresh = uint64(2)
 	fileBlockSize     = 1 << 12
+	fileMaxReadSize   = 1 << 28 // 268MiB
 )
 
 var (
@@ -61,7 +62,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
 	success = true
 
 	index := parseTableIndex(buff[indexOffset-aligned:])
-	source := &mmapTableReader{newTableReader(index, f, fileBlockSize, fileReadAmpThresh), f, buff, h}
+	source := &mmapTableReader{newTableReader(index, f, fileBlockSize, fileMaxReadSize, fileReadAmpThresh), f, buff, h}
 
 	d.PanicIfFalse(chunkCount == source.count())
 	return source

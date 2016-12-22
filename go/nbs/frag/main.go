@@ -94,7 +94,7 @@ func main() {
 						}
 					})
 
-					reads, split := store.CalcReads(hashes)
+					reads, split := store.CalcReads(hashes, 0, 1<<63, 0)
 					numbers <- record{count: 1, calc: reads, split: split}
 
 					wg.Add(len(children))

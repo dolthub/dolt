@@ -10,6 +10,7 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"hash/crc32"
+	"sync"
 )
 
 /*
@@ -183,6 +184,7 @@ type getRecord struct {
 	a      *addr
 	prefix uint64
 	order  int
+	found  bool
 	data   []byte
 }
 
@@ -202,7 +204,7 @@ type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
 	get(h addr) []byte
-	getMany(reqs []getRecord) bool
+	getMany(reqs []getRecord, wg *sync.WaitGroup) bool
 	count() uint32
 }
 
@@ -210,5 +212,5 @@ type chunkSource interface {
 	chunkReader
 	close() error
 	hash() addr
-	calcReads(reqs []getRecord, blockSize, ampThresh uint64) (reads int, remaining bool)
+	calcReads(reqs []getRecord, blockSize, maxReadSize, ampThresh uint64) (reads int, remaining bool)
 }

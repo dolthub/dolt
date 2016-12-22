@@ -16,7 +16,8 @@ import (
 const (
 	s3RangePrefix   = "bytes"
 	s3ReadAmpThresh = uint64(5)
-	s3BlockSize     = 0
+	s3BlockSize     = (1 << 20) * 5  // 8MiB
+	s3MaxReadSize   = (1 << 20) * 20 // 20MiB
 )
 
 type s3TableReader struct {
@@ -24,6 +25,7 @@ type s3TableReader struct {
 	s3     s3svc
 	bucket string
 	h      addr
+	readRl chan struct{}
 }
 
 type s3svc interface {
@@ -35,8 +37,8 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *s3IndexCache) chunkSource {
-	source := &s3TableReader{s3: s3, bucket: bucket, h: h}
+func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *s3IndexCache, readRl chan struct{}) chunkSource {
+	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl}
 
 	var index tableIndex
 	found := false
@@ -58,7 +60,7 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexC
 		}
 	}
 
-	source.tableReader = newTableReader(index, source, s3BlockSize, s3ReadAmpThresh)
+	source.tableReader = newTableReader(index, source, s3BlockSize, s3MaxReadSize, s3ReadAmpThresh)
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }
@@ -78,6 +80,13 @@ func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err error) {
+	if s3tr.readRl != nil {
+		s3tr.readRl <- struct{}{}
+		defer func() {
+			<-s3tr.readRl
+		}()
+	}
+
 	result, err := s3tr.s3.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s3tr.bucket),
 		Key:    aws.String(s3tr.hash().String()),

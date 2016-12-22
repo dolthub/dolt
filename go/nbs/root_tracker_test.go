@@ -199,7 +199,7 @@ func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSour
 	if mt.count() > 0 {
 		var data []byte
 		name, data, _ := mt.write(haver)
-		ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize, fileReadAmpThresh)
+		ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 		return chunkSourceAdapter{ftp.sources[name], name}
 	}
 	return emptyChunkSource{}

@@ -137,11 +137,16 @@ func main() {
 		{"ReadSequential", writeDB, func() {
 			benchmarkRead(open, src.GetHashes(), src, pb)
 		}},
-		{"ReadManySequential", writeDB, func() { benchmarkReadMany(open, src.GetHashes(), src, 1<<8, 6, pb) }},
 		{"ReadHashOrder", writeDB, func() {
 			ordered := src.GetHashes()
 			sort.Sort(ordered)
 			benchmarkRead(open, ordered, src, pb)
+		}},
+		{"ReadManySequential", writeDB, func() { benchmarkReadMany(open, src.GetHashes(), src, 1<<8, 6, pb) }},
+		{"ReadManyHashOrder", writeDB, func() {
+			ordered := src.GetHashes()
+			sort.Sort(ordered)
+			benchmarkReadMany(open, ordered, src, 1<<8, 6, pb)
 		}},
 	}
 	w := 0

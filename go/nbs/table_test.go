@@ -12,6 +12,8 @@ import (
 
 	"bytes"
 
+	"sync"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
@@ -46,7 +48,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -89,7 +91,7 @@ func TestHasMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -135,7 +137,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	length, _ := tw.finish()
 	buff = buff[:length]
 
-	tr := newTableReader(parseTableIndex(buff), bytes.NewReader(buff), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(buff), bytes.NewReader(buff), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -159,17 +161,20 @@ func TestGetMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
-		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), 0, nil},
-		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), 1, nil},
-		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), 2, nil},
+		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), 0, false, nil},
+		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), 1, false, nil},
+		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), 2, false, nil},
 	}
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	tr.getMany(getBatch)
+	wg := &sync.WaitGroup{}
+	tr.getMany(getBatch, wg)
+	wg.Wait()
+
 	for _, rec := range getBatch {
 		assert.NotNil(rec.data, "Nothing for prefix %d", rec.prefix)
 	}
@@ -185,23 +190,23 @@ func TestCalcReads(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), 0, 0)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), 0, fileMaxReadSize, 0)
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
-		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), 0, nil},
-		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), 1, nil},
-		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), 2, nil},
+		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), 0, false, nil},
+		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), 1, false, nil},
+		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), 2, false, nil},
 	}
 
 	gb2 := []getRecord{getBatch[0], getBatch[2]}
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	reads, remaining := tr.calcReads(getBatch, 0, 0)
+	reads, remaining := tr.calcReads(getBatch, 0, fileMaxReadSize, 0)
 	assert.False(remaining)
 	assert.Equal(1, reads)
 
 	sort.Sort(getRecordByPrefix(gb2))
-	reads, remaining = tr.calcReads(gb2, 0, 0)
+	reads, remaining = tr.calcReads(gb2, 0, fileMaxReadSize, 0)
 	assert.False(remaining)
 	assert.Equal(2, reads)
 }
@@ -221,7 +226,7 @@ func Test65k(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -266,17 +271,19 @@ func doTestNGetMany(t *testing.T, count int) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileReadAmpThresh)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
 
 	getBatch := make([]getRecord, len(chunks))
 	for i := 0; i < count; i++ {
 		a := computeAddr(dataFn(i))
-		getBatch[i] = getRecord{&a, a.Prefix(), i, nil}
+		getBatch[i] = getRecord{&a, a.Prefix(), i, false, nil}
 	}
 
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	tr.getMany(getBatch)
+	wg := &sync.WaitGroup{}
+	tr.getMany(getBatch, wg)
+	wg.Wait()
 
 	sort.Sort(getRecordByOrder(getBatch))
 
