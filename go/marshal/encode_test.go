@@ -692,6 +692,13 @@ func TestEncodeOriginal(t *testing.T) {
 	out := MustMarshal(s)
 	assert.True(out.Equals(orig.Set("foo", types.Number(43))))
 	assert.True(out.Type().Equals(st))
+
+	// It's OK to have an empty original field
+	s = S{
+		Foo: 42,
+	}
+	assert.True(MustMarshal(s).Equals(
+		types.NewStruct("S", types.StructData{"foo": types.Number(float64(42))})))
 }
 
 type TestInterface interface {

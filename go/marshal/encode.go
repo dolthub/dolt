@@ -250,7 +250,11 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 		// Slowest path - we are extending some other struct. We need to start with the
 		// type of that struct and extend.
 		e = func(v reflect.Value) types.Value {
-			ret := v.FieldByIndex(originalFieldIndex).Interface().(types.Struct)
+			fv := v.FieldByIndex(originalFieldIndex)
+			ret := fv.Interface().(types.Struct)
+			if ret.Type() == nil {
+				ret = types.NewStruct(t.Name(), nil)
+			}
 			for _, f := range fields {
 				fv := v.Field(f.index)
 				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
