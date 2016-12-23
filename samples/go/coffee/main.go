@@ -26,7 +26,8 @@ var people = []string{
 	"arv",
 	"dan",
 	"ehalpern",
-	"kalman",
+	// Disabling kalman until back in office
+	// "kalman",
 	"jenna",
 	"rafael",
 	"zane",
