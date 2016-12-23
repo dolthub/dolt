@@ -96,6 +96,19 @@ func (ts tableSet) Prepend(mt *memTable) tableSet {
 	return tableSet{newTables, ts.p, ts.rl}
 }
 
+func (ts tableSet) extract(order EnumerationOrder, chunks chan<- extractRecord) {
+	// Since new tables are _prepended_ to a tableSet, extracting chunks in ReverseOrder requires iterating ts.chunkSources from front to back, while doing insertOrder requires iterating back to front.
+	if order == ReverseOrder {
+		for _, cs := range ts.chunkSources {
+			cs.extract(order, chunks)
+		}
+		return
+	}
+	for i := len(ts.chunkSources) - 1; i >= 0; i-- {
+		ts.chunkSources[i].extract(order, chunks)
+	}
+}
+
 // Union returns a new tableSet holding the union of the tables managed by
 // |ts| and those specified by |specs|.
 func (ts tableSet) Union(specs []tableSpec) tableSet {

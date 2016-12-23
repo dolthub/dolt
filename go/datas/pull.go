@@ -22,6 +22,18 @@ type PullProgress struct {
 
 const bytesWrittenSampleRate = .10
 
+// PullWithFlush calls Pull and then manually flushes data to sinkDB. This is
+// an unfortunate current necessity. The Flush() can't happen at the end of
+// regular Pull() because that breaks tests that try to ensure we're not
+// reading more data from the sinkDB than expected. Flush() triggers
+// validation, which triggers sinkDB reads, which means that the code can no
+// longer tell which reads were caused by Pull() and which by Flush().
+// TODO: Get rid of this (BUG 2982)
+func PullWithFlush(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
+	Pull(srcDB, sinkDB, sourceRef, sinkHeadRef, concurrency, progressCh)
+	sinkDB.validatingBatchStore().Flush()
+}
+
 // Pull objects that descend from sourceRef from srcDB to sinkDB. sinkHeadRef
 // should point to a Commit (in sinkDB) that's an ancestor of sourceRef. This
 // allows the algorithm to figure out which portions of data are already

@@ -16,11 +16,22 @@ import (
 
 // BatchStore provides an interface similar to chunks.ChunkStore, but batch-oriented. Instead of Put(), it provides SchedulePut(), which enqueues a Chunk to be sent at a possibly later time.
 type BatchStore interface {
-	// Get returns from the store the Value Chunk by h. If h is absent from the store, chunks.EmptyChunk is returned.
+	// Get returns the Chunk with the hash h from the store. If h is absent
+	// from the store, chunks.EmptyChunk is returned.
 	Get(h hash.Hash) chunks.Chunk
 
-	// SchedulePut enqueues a write for the Chunk c with the given refHeight. Typically, the Value which was encoded to provide c can also be queried for its refHeight. The call may or may not block until c is persisted. The provided hints are used to assist in validation. Validation requires checking that all refs embedded in c are themselves valid, which could naively be done by resolving each one. Instead, hints provides a (smaller) set of refs that point to Chunks that themselves contain many of c's refs. Thus, by checking only the hinted Chunks, c can be validated with fewer read operations.
-	// c may or may not be persisted when Put() returns, but is guaranteed to be persistent after a call to Flush() or Close().
+	// SchedulePut enqueues a write for the Chunk c with the given refHeight.
+	// c must be visible to subsequent Get() calls upon return. Typically, the
+	// Value which was encoded to provide c can also be queried for its
+	// refHeight. The call may or may not block until c is persisted. The
+	// provided hints are used to assist in validation. Validation requires
+	// checking that all refs embedded in c are themselves valid, which could
+	// naively be done by resolving each one. Instead, hints provides a
+	// (smaller) set of refs that point to Chunks that themselves contain many
+	// of c's refs. Thus, by checking only the hinted Chunks, c can be
+	// validated with fewer read operations.
+	// c may or may not be persisted when SchedulePut() returns, but is
+	// guaranteed to be persistent after a call to Flush() or UpdateRoot().
 	SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints)
 
 	// AddHints allows additional hints, as used by SchedulePut, to be added for use in the current batch.

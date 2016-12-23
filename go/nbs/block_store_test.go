@@ -129,6 +129,33 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	}
 }
 
+func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
+	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
+	rand.Read(input1)
+	rand.Read(input2)
+	chnx := []chunks.Chunk{chunks.NewChunk(input1), chunks.NewChunk(input2)}
+	suite.store.PutMany(chnx)
+
+	chunkChan := make(chan *chunks.Chunk)
+	go func() { suite.store.extractChunks(InsertOrder, chunkChan); close(chunkChan) }()
+	i := 0
+	for c := range chunkChan {
+		suite.Equal(chnx[i].Data(), c.Data())
+		suite.Equal(chnx[i].Hash(), c.Hash())
+		i++
+	}
+
+	chunkChan = make(chan *chunks.Chunk)
+	go func() { suite.store.extractChunks(ReverseOrder, chunkChan); close(chunkChan) }()
+	i = len(chnx) - 1
+	for c := range chunkChan {
+		suite.Equal(chnx[i].Data(), c.Data())
+		suite.Equal(chnx[i].Hash(), c.Hash())
+		i--
+	}
+
+}
+
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {
 	c := s.Get(h)
 	assert.False(c.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())

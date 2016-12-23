@@ -140,3 +140,15 @@ func (crg chunkReaderGroup) count() (count uint32) {
 	}
 	return
 }
+
+func (crg chunkReaderGroup) extract(order EnumerationOrder, chunks chan<- extractRecord) {
+	if order == InsertOrder {
+		for _, haver := range crg {
+			haver.extract(order, chunks)
+		}
+		return
+	}
+	for i := len(crg) - 1; i >= 0; i-- {
+		crg[i].extract(order, chunks)
+	}
+}

@@ -424,3 +424,34 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize, maxReadSize, ampThr
 
 	return
 }
+
+func (tr tableReader) extract(order EnumerationOrder, chunks chan<- extractRecord) {
+	// Build reverse lookup table from ordinal -> chunk hash
+	hashes := make(addrSlice, len(tr.prefixes))
+	for idx, prefix := range tr.prefixes {
+		ordinal := tr.prefixIdxToOrdinal(uint32(idx))
+		binary.BigEndian.PutUint64(hashes[ordinal][:], prefix)
+		li := uint64(ordinal) * addrSuffixSize
+		copy(hashes[ordinal][addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize])
+	}
+	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
+	buff := make([]byte, chunkLen)
+	n, err := tr.r.ReadAt(buff, int64(tr.offsets[0]))
+	d.Chk.NoError(err)
+	d.Chk.True(uint64(n) == chunkLen)
+
+	sendChunk := func(i uint32) {
+		localOffset := tr.offsets[i] - tr.offsets[0]
+		chunks <- extractRecord{hashes[i], tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])}
+	}
+
+	if order == ReverseOrder {
+		for i := uint32(1); i <= tr.chunkCount; i++ {
+			sendChunk(tr.chunkCount - i)
+		}
+		return
+	}
+	for i := uint32(0); i < tr.chunkCount; i++ {
+		sendChunk(i)
+	}
+}

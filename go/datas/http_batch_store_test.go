@@ -150,6 +150,18 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	suite.Equal(3, suite.cs.Writes)
 }
 
+func (suite *HTTPBatchStoreSuite) TestPutChunksReverseOrder() {
+	val := types.String("abc")
+	l := types.NewList(types.NewRef(val))
+
+	suite.store.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{})
+	suite.store.SchedulePut(types.EncodeValue(val, nil), 1, types.Hints{})
+	suite.store.SetReverseFlushOrder()
+	suite.store.Flush()
+
+	suite.Equal(2, suite.cs.Writes)
+}
+
 func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	vals := []types.Value{
 		types.String("abc"),

@@ -66,6 +66,47 @@ func TestTableToSpecsExcludesEmptyTable(t *testing.T) {
 	ts.Close()
 }
 
+func TestTableSetExtract(t *testing.T) {
+	assert := assert.New(t)
+	ts := newFakeTableSet()
+	assert.Empty(ts.ToSpecs())
+
+	// Put in one table
+	mt := newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
+	ts = ts.Prepend(mt)
+
+	// Put in a second
+	mt = newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
+	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
+	ts = ts.Prepend(mt)
+
+	chunkChan := make(chan extractRecord)
+	go func() { ts.extract(InsertOrder, chunkChan); close(chunkChan) }()
+	i := 0
+	for rec := range chunkChan {
+		a := computeAddr(testChunks[i])
+		assert.NotNil(rec.data, "Nothing for", a)
+		assert.Equal(testChunks[i], rec.data, "Item %d: %s != %s", i, string(testChunks[i]), string(rec.data))
+		assert.Equal(a, rec.a)
+		i++
+	}
+
+	chunkChan = make(chan extractRecord)
+	go func() { ts.extract(ReverseOrder, chunkChan); close(chunkChan) }()
+	i = len(testChunks) - 1
+	for rec := range chunkChan {
+		a := computeAddr(testChunks[i])
+		assert.NotNil(rec.data, "Nothing for", a)
+		assert.Equal(testChunks[i], rec.data, "Item %d: %s != %s", i, string(testChunks[i]), string(rec.data))
+		assert.Equal(a, rec.a)
+		i--
+	}
+
+	ts.Close()
+}
+
 func makeTempDir(assert *assert.Assertions) string {
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)

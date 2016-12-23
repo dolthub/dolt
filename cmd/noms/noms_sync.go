@@ -86,7 +86,7 @@ func runSync(args []string) int {
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-		datas.Pull(sourceStore, sinkDB, sourceRef, sinkRef, p, progressCh)
+		datas.PullWithFlush(sourceStore, sinkDB, sourceRef, sinkRef, p, progressCh)
 
 		var err error
 		sinkDataset, err = sinkDB.FastForward(sinkDataset, sourceRef)

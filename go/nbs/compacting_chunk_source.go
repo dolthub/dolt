@@ -92,6 +92,12 @@ func (ccs *compactingChunkSource) calcReads(reqs []getRecord, blockSize, maxRead
 	return ccs.cs.calcReads(reqs, blockSize, maxReadSize, ampThresh)
 }
 
+func (ccs *compactingChunkSource) extract(order EnumerationOrder, chunks chan<- extractRecord) {
+	ccs.wg.Wait()
+	d.Chk.True(ccs.cs != nil)
+	ccs.cs.extract(order, chunks)
+}
+
 type emptyChunkSource struct{}
 
 func (ecs emptyChunkSource) has(h addr) bool {
@@ -125,3 +131,5 @@ func (ecs emptyChunkSource) hash() addr {
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize, maxReadSize, ampThresh uint64) (reads int, remaining bool) {
 	return 0, true
 }
+
+func (ecs emptyChunkSource) extract(order EnumerationOrder, chunks chan<- extractRecord) {}

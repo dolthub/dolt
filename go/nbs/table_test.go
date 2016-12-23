@@ -211,6 +211,41 @@ func TestCalcReads(t *testing.T) {
 	assert.Equal(2, reads)
 }
 
+func TestExtract(t *testing.T) {
+	assert := assert.New(t)
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+
+	tableData, _ := buildTable(chunks)
+	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize, fileMaxReadSize, fileReadAmpThresh)
+
+	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+
+	chunkChan := make(chan extractRecord)
+	go func() { tr.extract(InsertOrder, chunkChan); close(chunkChan) }()
+	i := 0
+	for rec := range chunkChan {
+		assert.NotNil(rec.data, "Nothing for", addrs[i])
+		assert.Equal(addrs[i], rec.a)
+		assert.Equal(chunks[i], rec.data)
+		i++
+	}
+
+	chunkChan = make(chan extractRecord)
+	go func() { tr.extract(ReverseOrder, chunkChan); close(chunkChan) }()
+	i = len(chunks) - 1
+	for rec := range chunkChan {
+		assert.NotNil(rec.data, "Nothing for", addrs[i])
+		assert.Equal(addrs[i], rec.a)
+		assert.Equal(chunks[i], rec.data)
+		i--
+	}
+}
+
 func Test65k(t *testing.T) {
 	assert := assert.New(t)
 

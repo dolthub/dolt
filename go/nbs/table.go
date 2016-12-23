@@ -32,9 +32,9 @@ import (
       of CRC32) as a checksum and a filter against false positive reads costing more than one IOP.
 
    Index:
-   +------------+-------+----------+
-   | Prefix Map | Sizes | Suffixes |
-   +------------+-------+----------+
+   +------------+---------+----------+
+   | Prefix Map | Lengths | Suffixes |
+   +------------+---------+----------+
 
    Prefix Map:
    +--------------+--------------+-----+----------------+
@@ -200,12 +200,18 @@ func (hs getRecordByOrder) Len() int           { return len(hs) }
 func (hs getRecordByOrder) Less(i, j int) bool { return hs[i].order < hs[j].order }
 func (hs getRecordByOrder) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
+type extractRecord struct {
+	a    addr
+	data []byte
+}
+
 type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
 	get(h addr) []byte
 	getMany(reqs []getRecord, wg *sync.WaitGroup) bool
 	count() uint32
+	extract(order EnumerationOrder, chunks chan<- extractRecord)
 }
 
 type chunkSource interface {
