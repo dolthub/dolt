@@ -5,7 +5,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/attic-labs/noms/cmd/util"
@@ -19,17 +21,20 @@ import (
 
 var nomsShow = &util.Command{
 	Run:       runShow,
-	UsageLine: "show <object>",
+	UsageLine: "show [flags] <object>",
 	Short:     "Shows a serialization of a Noms object",
 	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object argument.",
 	Flags:     setupShowFlags,
 	Nargs:     1,
 }
 
+var showRaw = false
+
 func setupShowFlags() *flag.FlagSet {
 	showFlagSet := flag.NewFlagSet("show", flag.ExitOnError)
 	outputpager.RegisterOutputpagerFlags(showFlagSet)
 	verbose.RegisterVerboseFlags(showFlagSet)
+	showFlagSet.BoolVar(&showRaw, "raw", false, "If true, dumps the raw binary version of the data")
 	return showFlagSet
 }
 
@@ -41,6 +46,14 @@ func runShow(args []string) int {
 
 	if value == nil {
 		fmt.Fprintf(os.Stderr, "Object not found: %s\n", args[0])
+		return 0
+	}
+
+	if showRaw {
+		ch := types.EncodeValue(value, database)
+		buf := bytes.NewBuffer(ch.Data())
+		_, err = io.Copy(os.Stdout, buf)
+		d.CheckError(err)
 		return 0
 	}
 
