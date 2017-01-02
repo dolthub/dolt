@@ -17,6 +17,8 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 const (
@@ -154,7 +156,7 @@ func (sp Spec) GetDatabase() datas.Database {
 // time. If there is no ChunkStore, for example remote databases, returns nil.
 func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	switch sp.Protocol {
-	case "http", "https":
+	case "http", "https", "aws":
 		return nil
 	case "nbs":
 		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
@@ -191,11 +193,12 @@ func (sp Spec) GetValue() (val types.Value) {
 // "http://example.com/path". If the Protocol is not "http" or "http", returns
 // an empty string.
 func (sp Spec) Href() string {
-	proto := sp.Protocol
-	if proto == "http" || proto == "https" {
+	switch proto := sp.Protocol; proto {
+	case "http", "https", "aws":
 		return proto + ":" + sp.DatabaseName
+	default:
+		return ""
 	}
-	return ""
 }
 
 // Pin returns a Spec in which the dataset component, if any, has been replaced
@@ -247,6 +250,14 @@ func (sp Spec) createDatabase() datas.Database {
 	switch sp.Protocol {
 	case "http", "https":
 		return datas.NewRemoteDatabase(sp.Href(), sp.Options.Authorization)
+	case "aws":
+		u, _ := url.Parse(sp.Href())
+		parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
+		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+		if len(parts) == 1 {
+			return datas.NewDatabase(chunks.NewDynamoStore(parts[0], u.Path, sess, false))
+		}
+		return datas.NewDatabase(nbs.NewAWSStore(parts[0], u.Path, parts[1], sess, 1<<28))
 	case "ldb":
 		return datas.NewDatabase(getLdbStore(sp.DatabaseName))
 	case "nbs":
@@ -281,13 +292,15 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	case "ldb", "nbs":
 		protocol, name = parts[0], parts[1]
 
-	case "http", "https":
-		var u *url.URL
-		u, err = url.Parse(spec)
-		if err == nil && u.Host == "" {
+	case "http", "https", "aws":
+		u, perr := url.Parse(spec)
+		if perr != nil {
+			err = perr
+		} else if u.Host == "" {
 			err = fmt.Errorf("%s has empty host", spec)
-		}
-		if err == nil {
+		} else if parts[0] == "aws" && u.Path == "" {
+			err = fmt.Errorf("%s does not specify a database ID", spec)
+		} else {
 			protocol, name = parts[0], parts[1]
 		}
 

@@ -167,8 +167,17 @@ func TestHref(t *testing.T) {
 	assert.Equal("https://my.example.com/foo/bar/baz", sp.Href())
 	sp, _ = ForDataset("https://my.example.com/foo/bar/baz::myds")
 	assert.Equal("https://my.example.com/foo/bar/baz", sp.Href())
+	sp, _ = ForDataset("https://my.example.com:8080/foo/bar/baz::myds")
+	assert.Equal("https://my.example.com:8080/foo/bar/baz", sp.Href())
 	sp, _ = ForPath("https://my.example.com/foo/bar/baz::myds.my.path")
 	assert.Equal("https://my.example.com/foo/bar/baz", sp.Href())
+
+	sp, _ = ForDatabase("aws://table/foo/bar/baz")
+	assert.Equal("aws://table/foo/bar/baz", sp.Href())
+	sp, _ = ForDataset("aws://table:bucket/foo/bar/baz::myds")
+	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
+	sp, _ = ForPath("aws://table:bucket/foo/bar/baz::myds.my.path")
+	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
 
 	sp, err := ForPath("mem::myds.my.path")
 	assert.NoError(err)
@@ -191,6 +200,9 @@ func TestForDatabase(t *testing.T) {
 		"random:",
 		"random:random",
 		"/file/ba:d",
+		"aws://t:b",
+		"aws://t",
+		"aws://t:",
 	}
 
 	for _, spec := range badSpecs {
@@ -220,6 +232,8 @@ func TestForDatabase(t *testing.T) {
 		{"http://0:0:0:0:0:ffff:c01e:fc9a", "http", "//0:0:0:0:0:ffff:c01e:fc9a"},
 		{"http://::ffff:c01e:fc9a", "http", "//::ffff:c01e:fc9a"},
 		{"http://::ffff::1e::9a", "http", "//::ffff::1e::9a"},
+		{"aws://table:bucket/db", "aws", "//table:bucket/db"},
+		{"aws://table/db", "aws", "//table/db"},
 	}
 
 	for _, tc := range testCases {
@@ -252,6 +266,7 @@ func TestForDataset(t *testing.T) {
 		"http://localhost:8000/one",
 		"ldb:",
 		"ldb:hello",
+		"aws://t:b/db",
 	}
 
 	for _, spec := range badSpecs {
@@ -292,6 +307,8 @@ func TestForDataset(t *testing.T) {
 		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo"},
 		{"http://::ffff:c01e:fc9a::foo", "http", "//::ffff:c01e:fc9a", "foo"},
 		{"http://::ffff::1e::9a::foo", "http", "//::ffff::1e::9a", "foo"},
+		{"aws://table:bucket/db::ds", "aws", "//table:bucket/db", "ds"},
+		{"aws://table/db::ds", "aws", "//table/db", "ds"},
 	}
 
 	for _, tc := range testCases {
@@ -341,6 +358,8 @@ func TestForPath(t *testing.T) {
 		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo[42].bar", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo[42].bar"},
 		{"http://::ffff:c01e:fc9a::foo.foo", "http", "//::ffff:c01e:fc9a", "foo.foo"},
 		{"http://::ffff::1e::9a::hello[\"world\"]", "http", "//::ffff::1e::9a", "hello[\"world\"]"},
+		{"aws://table:bucket/db::foo.foo", "aws", "//table:bucket/db", "foo.foo"},
+		{"aws://table/db::foo.foo", "aws", "//table/db", "foo.foo"},
 	}
 
 	for _, tc := range testCases {

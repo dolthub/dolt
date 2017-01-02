@@ -81,10 +81,8 @@ type DynamoStore struct {
 }
 
 // NewDynamoStore returns a new DynamoStore instance pointed at a DynamoDB table in the given region. All keys used to access items are prefixed with the given namespace.
-// Uses credential from the AWS config parameter.
-func NewDynamoStore(table, namespace string, config *aws.Config, showStats bool) *DynamoStore {
-	sess := session.New(config)
-
+// Uses credentials from the AWS session parameter.
+func NewDynamoStore(table, namespace string, sess *session.Session, showStats bool) *DynamoStore {
 	return newDynamoStoreFromDDBsvc(table, namespace, dynamodb.New(sess), showStats)
 }
 
@@ -537,7 +535,7 @@ func (f DynamoStoreFlags) CreateStore(ns string) ChunkStore {
 		if *f.awsKey != "" {
 			config = config.WithCredentials(credentials.NewStaticCredentials(*f.awsKey, *f.awsSecret, ""))
 		}
-		return NewDynamoStore(*f.dynamoTable, ns, config, *f.dynamoStats)
+		return NewDynamoStore(*f.dynamoTable, ns, session.Must(session.NewSession(config)), *f.dynamoStats)
 	}
 	return nil
 }

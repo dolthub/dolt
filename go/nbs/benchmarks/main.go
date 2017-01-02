@@ -93,7 +93,7 @@ func main() {
 			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
 
 		} else if *toAWS != "" {
-			sess := session.New(aws.NewConfig().WithRegion("us-west-2"))
+			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() blockStore {
 				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, sess, bufSize)
 			}
@@ -118,7 +118,7 @@ func main() {
 		if *useNBS != "" {
 			open = func() blockStore { return nbs.NewLocalStore(*useNBS, bufSize) }
 		} else if *useAWS != "" {
-			sess := session.New(aws.NewConfig().WithRegion("us-west-2"))
+			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() blockStore {
 				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, sess, bufSize)
 			}
