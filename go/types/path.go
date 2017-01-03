@@ -409,7 +409,7 @@ Switch:
 	return
 }
 
-// TypeAnntation is a PathPart annotation to resolve to the type of the value
+// TypeAnnotation is a PathPart annotation to resolve to the type of the value
 // it's resolved in.
 type TypeAnnotation struct {
 }

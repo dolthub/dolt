@@ -14,9 +14,12 @@ import Set from './set.js';
 import Sequence, {OrderedKey} from './sequence.js';
 import {newCursorAt} from './ordered-sequence.js';
 import {fieldNameComponentRe} from './struct.js';
-import {getTypeOfValue, StructDesc} from './type.js';
+import {getTypeOfValue, StructDesc, Type, TypeDesc} from './type.js';
 
-const annotationRe = /^@([a-z]+)/;
+// For an annotation like @type, 1st capture group is the annotation.
+// For @at(42), 1st capture group is the annotation and 3rd is the parameter.
+// Note, @at() is valid under this regexp, code should deal with the error.
+const annotationRe = /^([a-z]+)(\(([\w\-"']*)\))?/;
 
 /**
  * A single component of a Path.
@@ -87,50 +90,80 @@ function constructPath(parts: Array<Part>, str: string) {
 
   const op = str[0], tail = str.slice(1);
 
-  if (op === '.') {
-    const match = tail.match(fieldNameComponentRe);
-    if (!match) {
-      throw new SyntaxError(`Invalid field: ${tail}`);
-    }
-    const idx = match[0].length;
-    parts.push(new FieldPath(tail.slice(0, idx)));
-    constructPath(parts, tail.slice(idx));
-    return;
-  }
-
-  if (op === '[') {
-    if (tail === '') {
-      throw new SyntaxError('Path ends in [');
-    }
-
-    const [idx, h, rem1] = parsePathIndex(tail);
-    const [ann, rem2] = getAnnotation(rem1);
-
-    let rem = rem1;
-    let intoKey = false;
-    if (ann !== '') {
-      if (ann !== 'key') {
-        throw new SyntaxError(`Unsupported annotation: @${ann}`);
+  switch (op) {
+    case '.': {
+      const match = tail.match(fieldNameComponentRe);
+      if (!match) {
+        throw new SyntaxError(`Invalid field: ${tail}`);
       }
-      intoKey = true;
-      rem = rem2;
+      const idx = match[0].length;
+      parts.push(new FieldPath(tail.slice(0, idx)));
+      constructPath(parts, tail.slice(idx));
+      return;
     }
 
-    let part: Part;
-    if (idx !== null) {
-      part = new IndexPath(idx, intoKey);
-    } else if (h !== null) {
-      part = new HashIndexPath(h, intoKey);
-    } else {
-      throw new Error('unreachable');
-    }
-    parts.push(part);
-    constructPath(parts, rem);
-    return;
-  }
+    case '[': {
+      if (tail === '') {
+        throw new SyntaxError('Path ends in [');
+      }
 
-  if (op === ']') {
-    throw new SyntaxError('] is missing opening [');
+      const [idx, h, rem] = parsePathIndex(tail);
+
+      let part: Part;
+      if (idx !== null) {
+        part = new IndexPath(idx);
+      } else if (h !== null) {
+        part = new HashIndexPath(h);
+      } else {
+        throw new Error('unreachable');
+      }
+      parts.push(part);
+      constructPath(parts, rem);
+      return;
+    }
+
+    case '@': {
+      const {ann, hasArg, rem} = getAnnotation(tail);
+
+      switch (ann) {
+        case 'at': {
+          throw new SyntaxError('https://github.com/attic-labs/noms/issues/2989');
+        }
+
+        case 'key': {
+          if (hasArg) {
+            throw new SyntaxError('@key annotation does not support arguments');
+          }
+          if (parts.length === 0) {
+            throw new SyntaxError('Cannot use @key annotation at beginning of path');
+          }
+          const lastPart = parts[parts.length - 1];
+          if (!(lastPart instanceof KeyIndexable)) {
+            throw new SyntaxError('Cannot use @key annotation on: ' + lastPart.toString());
+          }
+          lastPart.intoKey = true;
+          constructPath(parts, rem);
+          return;
+        }
+
+        case 'type': {
+          if (hasArg) {
+            throw new SyntaxError('@type annotation does not support arguments');
+          }
+          parts.push(new TypeAnnotation());
+          constructPath(parts, rem);
+          return;
+        }
+
+        default: {
+          throw new SyntaxError('Unsupported annotation: @' + ann);
+        }
+      }
+    }
+
+    case ']': {
+      throw new SyntaxError('] is missing opening [');
+    }
   }
 
   throw new SyntaxError(`Invalid operator: ${op}`);
@@ -200,13 +233,46 @@ function parsePathIndex(str: string): [indexType | null, Hash | null, string] {
   throw new SyntaxError(`Invalid index: ${idxStr}`);
 }
 
-function getAnnotation(str: string): [string /* ann */, string /* rem */] {
+type getAnnotationResult = {
+  ann: string;
+  arg: string;
+  hasArg: boolean;
+  rem: string;
+};
+
+function getAnnotation(str: string): getAnnotationResult {
   const parts = annotationRe.exec(str);
-  if (parts) {
-    invariant(parts.length === 2);
-    return [parts[1], str.slice(parts[0].length)];
+  if (!parts) {
+    throw new SyntaxError('Does not match annotation: ' + str);
   }
-  return ['', str];
+
+  invariant(parts.length === 4);
+  return {
+    ann: parts[1],
+    arg: parts[3] || '',
+    hasArg: parts[2] !== undefined,
+    rem: str.slice(parts[0].length),
+  };
+}
+
+/**
+ * Base class for Parts that can be indexed by key.
+ */
+export class KeyIndexable {
+  /**
+   * Whether this part should resolve to the key of a map, given by a `@key`
+   * annotation.
+   *
+   * Typically intoKey is false, and indices would resolve to the values.
+   *
+   * E.g.  given `{a: 42}` then `["a"]` resolves to `42`, but
+   * `["a"]@key` resolves to `"a"`.
+   */
+  intoKey: boolean;
+
+  constructor(intoKey: boolean) {
+    this.intoKey = intoKey;
+  }
 }
 
 /**
@@ -248,25 +314,14 @@ type indexType = boolean | number | string;
 /**
  * Indexes into Maps and Lists by key or index.
  */
-export class IndexPath {
+export class IndexPath extends KeyIndexable {
   /**
    * The value of the index, e.g. `[42]` or `["value"]`.
    */
   index: indexType;
 
-  /**
-   * Whether this index should resolve to the key of a map, given by a `@key` annotation.
-   *
-   * Typically IntoKey is false, and indices would resolve to the values. E.g.  given `{a: 42}`
-   * then `["a"]` resolves to `42`.
-   *
-   * If IntoKey is true, then it resolves to `"a"`. For IndexPath this isn't particularly useful
-   * - it's mostly provided for consistency with HashIndexPath - but note that given `{a: 42}`
-   *   then `["b"]` resolves to null, not `"b"`.
-   */
-  intoKey: boolean;
-
   constructor(idx: indexType, intoKey: boolean = false) {
+    super(intoKey);
     const t = getTypeOfValue(idx);
     switch (t.kind) {
       case Kind.String:
@@ -277,7 +332,6 @@ export class IndexPath {
       default:
         throw new Error('Unsupported');
     }
-    this.intoKey = intoKey;
   }
 
   async resolve(value: Value): Promise<Value | null> {
@@ -319,28 +373,17 @@ export class IndexPath {
 /**
  * Indexes into Maps by the hash of a key, or a Set by the hash of a value.
  */
-export class HashIndexPath {
+export class HashIndexPath extends KeyIndexable {
   /**
    * The hash of the key or value to search for. Maps and Set are ordered, so this in
    * O(log(size)).
    */
   hash: Hash;
 
-  /**
-   * Whether this index should resolve to the key of a map, given by a `@key` annotation.
-   *
-   * Typically IntoKey is false, and indices would resolve to the values. E.g. given `{a: 42}`
-   * and if the hash of `"a"` is `#abcd`, then `[#abcd]` resolves to `42`.
-   *
-   * If IntoKey is true, then it resolves to `"a"`. This is useful for when Map keys aren't
-   * primitive values, e.g. a struct, since struct literals can't be spelled using a Path.
-   */
-  intoKey: boolean;
-
   constructor(h: Hash, intoKey: boolean = false) {
+    super(intoKey);
     invariant(!h.isEmpty());
     this.hash = h;
-    this.intoKey = intoKey;
   }
 
   async resolve(value: Value): Promise<Value | null> {
@@ -379,6 +422,20 @@ export class HashIndexPath {
   toString(): string {
     const ann = this.intoKey ? '@key' : '';
     return `[#${this.hash.toString()}]${ann}`;
+  }
+}
+
+/**
+ * TypeAnnotation is a PathPart annotation to resolve to the type of the value
+ * it's resolved in.
+ */
+class TypeAnnotation {
+  resolve(v: Value): Promise<Type<TypeDesc>> {
+    return Promise.resolve(getTypeOfValue(v));
+  }
+
+  toString(): string {
+    return '@type';
   }
 }
 
