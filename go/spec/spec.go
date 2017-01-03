@@ -156,8 +156,10 @@ func (sp Spec) GetDatabase() datas.Database {
 // time. If there is no ChunkStore, for example remote databases, returns nil.
 func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	switch sp.Protocol {
-	case "http", "https", "aws":
+	case "http", "https":
 		return nil
+	case "aws":
+		return parseAWSSpec(sp.Href())
 	case "nbs":
 		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
 	case "ldb":
@@ -166,6 +168,16 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 		return chunks.NewMemoryStore()
 	}
 	panic("unreachable")
+}
+
+func parseAWSSpec(awsURL string) chunks.ChunkStore {
+	u, _ := url.Parse(awsURL)
+	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
+	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+	if len(parts) == 1 {
+		return chunks.NewDynamoStore(parts[0], u.Path, sess, false)
+	}
+	return nbs.NewAWSStore(parts[0], u.Path, parts[1], sess, 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
@@ -251,13 +263,7 @@ func (sp Spec) createDatabase() datas.Database {
 	case "http", "https":
 		return datas.NewRemoteDatabase(sp.Href(), sp.Options.Authorization)
 	case "aws":
-		u, _ := url.Parse(sp.Href())
-		parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
-		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-		if len(parts) == 1 {
-			return datas.NewDatabase(chunks.NewDynamoStore(parts[0], u.Path, sess, false))
-		}
-		return datas.NewDatabase(nbs.NewAWSStore(parts[0], u.Path, parts[1], sess, 1<<28))
+		return datas.NewDatabase(parseAWSSpec(sp.Href()))
 	case "ldb":
 		return datas.NewDatabase(getLdbStore(sp.DatabaseName))
 	case "nbs":
