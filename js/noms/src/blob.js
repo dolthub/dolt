@@ -8,19 +8,18 @@ import * as Bytes from './bytes.js';
 import Collection from './collection.js';
 import RollingValueHasher from './rolling-value-hasher.js';
 import {default as SequenceChunker, chunkSequence} from './sequence-chunker.js';
-import type {EqualsFn} from './edit-distance.js';
 import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
-import {IndexedSequence} from './indexed-sequence.js';
+import {newCursorAtIndex} from './indexed-sequence.js';
 import {Kind} from './noms-kind.js';
-import {OrderedKey, newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
-import {SequenceCursor} from './sequence.js';
+import {newIndexedMetaSequenceChunkFn} from './meta-sequence.js';
+import Sequence, {OrderedKey, SequenceCursor} from './sequence.js';
 import {blobType} from './type.js';
 import {invariant} from './assert.js';
 import {hashValueByte} from './rolling-value-hasher.js';
 import type {WalkCallback} from './walk.js';
 
-export default class Blob extends Collection<IndexedSequence<any>> {
+export default class Blob extends Collection<Sequence<any>> {
   constructor(bytes: Uint8Array) {
     const chunker = new SequenceChunker(null, null, null, newBlobLeafChunkFn(null),
         newIndexedMetaSequenceChunkFn(Kind.Blob, null), blobHashValueBytes);
@@ -30,7 +29,6 @@ export default class Blob extends Collection<IndexedSequence<any>> {
     }
 
     const seq = chunker.doneSync();
-    invariant(seq instanceof IndexedSequence);
     super(seq);
   }
 
@@ -49,7 +47,7 @@ export default class Blob extends Collection<IndexedSequence<any>> {
 
   splice(idx: number, deleteCount: number, insert: Uint8Array): Promise<Blob> {
     const vr = this.sequence.vr;
-    return this.sequence.newCursorAt(idx).then(cursor =>
+    return newCursorAtIndex(this.sequence, idx).then(cursor =>
       chunkSequence(cursor, vr, Array.from(insert), deleteCount, newBlobLeafChunkFn(vr),
                     newIndexedMetaSequenceChunkFn(Kind.Blob, vr, null),
                     hashValueByte)).then(s => Blob.fromSequence(s));
@@ -57,14 +55,14 @@ export default class Blob extends Collection<IndexedSequence<any>> {
 }
 
 export class BlobReader {
-  _sequence: IndexedSequence<any>;
-  _cursor: Promise<SequenceCursor<number, IndexedSequence<number>>>;
+  _sequence: Sequence<any>;
+  _cursor: Promise<SequenceCursor<number, Sequence<number>>>;
   _pos: number;
   _lock: string;
 
-  constructor(sequence: IndexedSequence<any>) {
+  constructor(sequence: Sequence<any>) {
     this._sequence = sequence;
-    this._cursor = sequence.newCursorAt(0, true);
+    this._cursor = newCursorAtIndex(sequence, 0, true);
     this._pos = 0;
     this._lock = '';
   }
@@ -135,7 +133,7 @@ export class BlobReader {
 
     invariant(abs >= 0, `cannot seek to negative position ${abs}`);
 
-    this._cursor = this._sequence.newCursorAt(abs, true);
+    this._cursor = newCursorAtIndex(this._sequence, abs, true);
 
     // Wait for the seek to complete so that reads will be relative to the new position.
     return this._cursor.then(() => {
@@ -146,19 +144,10 @@ export class BlobReader {
   }
 }
 
-export class BlobLeafSequence extends IndexedSequence<number> {
+export class BlobLeafSequence extends Sequence<number> {
   constructor(vr: ?ValueReader, items: Uint8Array) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
     super(vr, blobType, items);
-  }
-
-  cumulativeNumberOfLeaves(idx: number): number {
-    return idx + 1;
-  }
-
-  getCompareFn(other: IndexedSequence<any>): EqualsFn {
-    return (idx: number, otherIdx: number) =>
-      this.items[idx] === other.items[otherIdx];
   }
 }
 

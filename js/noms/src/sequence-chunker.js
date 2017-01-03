@@ -4,8 +4,8 @@
 
 // @flow
 
-import type Sequence from './sequence.js'; // eslint-disable-line no-unused-vars
-import type {MetaSequence, OrderedKey} from './meta-sequence.js';
+import type Sequence, {OrderedKey} from './sequence.js'; // eslint-disable-line no-unused-vars
+import type {MetaSequence} from './meta-sequence.js';
 import {metaHashValueBytes, MetaTuple} from './meta-sequence.js';
 import type {SequenceCursor} from './sequence.js';
 import type {ValueReader, ValueWriter} from './value-store.js';
@@ -25,7 +25,7 @@ export async function chunkSequence<T, S: Sequence<T>>(
     insert: Array<T>,
     remove: number,
     makeChunk: makeChunkFn<T, S>,
-    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>,
+    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence>,
     hashValueBytes: hashValueBytesFn<any>): Promise<Sequence<any>> {
 
   const chunker = new SequenceChunker(cursor, vr, null, makeChunk, parentMakeChunk, hashValueBytes);
@@ -51,7 +51,7 @@ export async function chunkSequence<T, S: Sequence<T>>(
 export function chunkSequenceSync<T, S: Sequence<T>>(
     insert: Array<T>,
     makeChunk: makeChunkFn<T, S>,
-    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>,
+    parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence>,
     hashValueBytes: hashValueBytesFn<any>): Sequence<any> {
 
   const chunker = new SequenceChunker(null, null, null, makeChunk, parentMakeChunk, hashValueBytes);
@@ -65,10 +65,10 @@ export default class SequenceChunker<T, S: Sequence<T>> {
   _cursor: ?SequenceCursor<T, S>;
   _vr: ?ValueReader;
   _vw: ?ValueWriter;
-  _parent: ?SequenceChunker<MetaTuple<any>, MetaSequence<any>>;
+  _parent: ?SequenceChunker<MetaTuple<any>, MetaSequence>;
   _current: Array<T>;
   _makeChunk: makeChunkFn<T, S>;
-  _parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence<any>>;
+  _parentMakeChunk: makeChunkFn<MetaTuple<any>, MetaSequence>;
   _isLeaf: boolean;
   _hashValueBytes: hashValueBytesFn<any>;
   _rv: RollingValueHasher;

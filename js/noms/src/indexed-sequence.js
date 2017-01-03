@@ -7,41 +7,23 @@
 import Sequence, {SequenceCursor} from './sequence.js';
 import search from './binary-search.js';
 import type {AsyncIteratorResult} from './async-iterator.js';
-import type {EqualsFn} from './edit-distance.js';
 import {AsyncIterator} from './async-iterator.js';
-import {equals} from './compare.js';
 import {notNull} from './assert.js';
 
-export class IndexedSequence<T> extends Sequence<T> {
-  cumulativeNumberOfLeaves(idx: number): number { // eslint-disable-line no-unused-vars
-    throw new Error('override');
+export async function newCursorAtIndex(sequence: Sequence<any>, idx: number,
+    readAhead: boolean = false): Promise<IndexedSequenceCursor<any>> {
+  let cursor: ?IndexedSequenceCursor<any> = null;
+
+  while (sequence) {
+    cursor = new IndexedSequenceCursor(cursor, sequence, 0, readAhead);
+    idx -= cursor.advanceToOffset(idx);
+    sequence = await cursor.getChildSequence();
   }
 
-  getCompareFn(other: IndexedSequence<any>): EqualsFn {
-    return (idx: number, otherIdx: number) =>
-      // $FlowIssue: Does not realize that these are Values.
-      equals(this.items[idx], other.items[otherIdx]);
-  }
-
-  async newCursorAt(idx: number, readAhead: boolean = false): Promise<IndexedSequenceCursor<any>> {
-    let cursor: ?IndexedSequenceCursor<any> = null;
-    let sequence: ?IndexedSequence<any> = this;
-
-    while (sequence) {
-      cursor = new IndexedSequenceCursor(cursor, sequence, 0, readAhead);
-      idx -= cursor.advanceToOffset(idx);
-      sequence = await cursor.getChildSequence();
-    }
-
-    return notNull(cursor);
-  }
-
-  range(start: number, end: number): Promise<Array<T>> { // eslint-disable-line no-unused-vars
-    throw new Error('override');
-  }
+  return notNull(cursor);
 }
 
-export class IndexedSequenceCursor<T> extends SequenceCursor<T, IndexedSequence<any>> {
+export class IndexedSequenceCursor<T> extends SequenceCursor<T, Sequence<any>> {
   advanceToOffset(idx: number): number {
     this.idx = search(this.length, (i: number) => idx < this.sequence.cumulativeNumberOfLeaves(i));
 

@@ -9,7 +9,7 @@ import {suite, setup, teardown, test} from 'mocha';
 
 import List, {ListWriter, ListLeafSequence, newListLeafSequence} from './list.js';
 import Ref from './ref.js';
-import {OrderedKey, MetaTuple, newListMetaSequence} from './meta-sequence.js';
+import {MetaSequence, MetaTuple, newListMetaSequence} from './meta-sequence.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
@@ -35,17 +35,10 @@ import {
   testRoundTripAndValidate,
 } from './test-util.js';
 import {TestDatabase} from './test-util.js';
-import {IndexedMetaSequence} from './meta-sequence.js';
+import {OrderedKey} from './sequence.js';
 
 const testListSize = 5000;
 const listOfNRef = 'tqpbqlu036sosdq9kg3lka7sjaklgslg';
-
-async function assertToJS(list: List<any>, nums: Array<any>, start: number = 0,
-    end: number = nums.length): Promise<void> {
-  const jsArray = await list.toJS(start, end);
-  const expect = nums.slice(start, end);
-  assert.deepEqual(expect, jsArray);
-}
 
 async function validateList(l: List<any>, values: number[]): Promise<void> {
   assert.isTrue(equals(new List(values), l));
@@ -80,17 +73,6 @@ suite('List', () => {
 
     const v2 = new List(nn);
     assert.strictEqual(expectCount, chunkDiffCount(list, v2));
-  }
-
-  async function testToJS(expect: Array<any>, list: List<any>): Promise<void> {
-    const length = expect.length;
-    let start = 0;
-
-    for (let count = Math.round(length / 2); count > 2;) {
-      assert.deepEqual(expect.slice(start, start + count), await list.toJS(start, start + count));
-      start = start + count;
-      count = (length - start) / 2;
-    }
   }
 
   async function testGet(nums: Array<any>, list: List<any>): Promise<void> {
@@ -138,12 +120,11 @@ suite('List', () => {
     assertChunkCountAndType(expectChunkCount, makeRefType(tr), list);
 
     await testRoundTripAndValidate(list, async(v2) => {
-      await assertToJS(v2, nums);
+      await validateList(v2, nums);
     });
 
     await testForEach(nums, list);
     await testForEachAsyncCB(nums, list);
-    await testToJS(nums, list);
     await testGet(nums, list);
     await testPrependChunkDiff(nums, list, expectPrependChunkDiff);
     await testAppendChunkDiff(nums, list, expectAppendChunkDiff);
@@ -237,17 +218,15 @@ suite('List', () => {
     const db = new TestDatabase();
 
     const nums = intSequence(testListSize);
-    const s = new List(nums);
-    const r = db.writeValue(s).targetHash;
-    const s2 = await db.readValue(r);
-    const outNums = await s2.toJS();
-    assert.deepEqual(nums, outNums);
+    const l = new List(nums);
+    const r = db.writeValue(l).targetHash;
+    const l2 = await db.readValue(r);
+    validateList(l2, nums);
 
-    invariant(s2 instanceof List);
-    const s3 = await s2.splice(testListSize - 1, 1);
-    const outNums2 = await s3.toJS();
+    invariant(l2 instanceof List);
+    const l3 = await l2.splice(testListSize - 1, 1);
     nums.splice(testListSize - 1, 1);
-    assert.deepEqual(nums, outNums2);
+    validateList(l3, nums);
     await db.close();
   });
 });
@@ -717,6 +696,6 @@ suite('ListWriter', () => {
     }
 
     await t(15, ListLeafSequence);
-    await t(1500, IndexedMetaSequence);
+    await t(1500, MetaSequence);
   });
 });

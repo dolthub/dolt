@@ -15,12 +15,11 @@ import {
   emptyHash,
   getHashOfValue,
   Hash,
-  IndexedMetaSequence,
   invariant,
   kindToString,
   List,
   Map,
-  OrderedMetaSequence,
+  MetaSequence,
   Ref,
   Set,
   Spec,
@@ -103,7 +102,7 @@ function formatKeyString(v: any): string {
 function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
   let counter = 0;
 
-  function processMetaSequence(id, sequence: IndexedMetaSequence | OrderedMetaSequence<any>,
+  function processMetaSequence(id, sequence: MetaSequence,
                                name: string) {
     data.nodes[id] = {name: name};
     sequence.items.forEach(tuple => {
@@ -148,7 +147,7 @@ function handleChunkLoad(hash: Hash, val: any, fromHash: ?string) {
       const {sequence} = val;
       const ks = kindToString(val.type.kind);
       const size = getSize(val);
-      if (sequence instanceof IndexedMetaSequence || sequence instanceof OrderedMetaSequence) {
+      if (sequence instanceof MetaSequence) {
         const name = `${ks}Node (${size})`;
         processMetaSequence(id, sequence, name);
       } else {

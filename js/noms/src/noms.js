@@ -36,8 +36,7 @@ export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {default as List, ListWriter, ListLeafSequence} from './list.js';
 export {default as Map, MapLeafSequence} from './map.js';
 export {default as Set, SetLeafSequence} from './set.js';
-export {IndexedSequence} from './indexed-sequence.js';
-export {OrderedMetaSequence, IndexedMetaSequence} from './meta-sequence.js';
+export {MetaSequence} from './meta-sequence.js';
 export {SPLICE_AT, SPLICE_REMOVED, SPLICE_ADDED, SPLICE_FROM} from './edit-distance.js';
 export {
   blobType,

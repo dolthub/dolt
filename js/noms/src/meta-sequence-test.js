@@ -8,8 +8,8 @@ import {assert} from 'chai';
 import {suite, test} from 'mocha';
 
 import List from './list.js';
+import {OrderedKey} from './sequence.js';
 import {
-  OrderedKey,
   MetaTuple,
   newOrderedMetaSequenceChunkFn,
   newIndexedMetaSequenceChunkFn,

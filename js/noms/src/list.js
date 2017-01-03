@@ -11,15 +11,12 @@ import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {default as SequenceChunker, chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
-import {IndexedSequence, IndexedSequenceIterator} from './indexed-sequence.js';
+import {IndexedSequenceIterator, newCursorAtIndex} from './indexed-sequence.js';
 import {diff} from './indexed-sequence-diff.js';
 import {invariant} from './assert.js';
 import {
-  OrderedKey,
   newIndexedMetaSequenceChunkFn,
 } from './meta-sequence.js';
-import Ref from './ref.js';
-import {getValueChunks} from './sequence.js';
 import {makeListType, makeUnionType, getTypeOfValue} from './type.js';
 import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
@@ -27,6 +24,7 @@ import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
 import walk from './walk.js';
 import type {WalkCallback} from './walk.js';
+import Sequence, {OrderedKey} from './sequence.js';
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
@@ -48,14 +46,13 @@ function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
  *
  * Lists, like all Noms values are immutable so the "mutation" methods return a new list.
  */
-export default class List<T: Value> extends Collection<IndexedSequence<any>> {
+export default class List<T: Value> extends Collection<Sequence<any>> {
   constructor(values: Array<T> = []) {
     const seq = chunkSequenceSync(
         values,
         newListLeafChunkFn(null),
         newIndexedMetaSequenceChunkFn(Kind.List, null, null),
         hashValueBytes);
-    invariant(seq instanceof IndexedSequence);
     super(seq);
   }
 
@@ -69,7 +66,7 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    */
   async get(idx: number): Promise<T> {
     invariant(idx >= 0 && idx < this.length);
-    return this.sequence.newCursorAt(idx).then(cursor => cursor.getCurrent());
+    return newCursorAtIndex(this.sequence, idx).then(cursor => cursor.getCurrent());
   }
 
   /**
@@ -78,7 +75,7 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    */
   splice(idx: number, deleteCount: number, ...insert: Array<T>): Promise<List<T>> {
     const vr = this.sequence.vr;
-    return this.sequence.newCursorAt(idx).then(cursor =>
+    return newCursorAtIndex(this.sequence, idx).then(cursor =>
       chunkSequence(cursor, vr, insert, deleteCount, newListLeafChunkFn(vr),
                     newIndexedMetaSequenceChunkFn(Kind.List, vr, null),
                     hashValueBytes)).then(s => List.fromSequence(s));
@@ -112,7 +109,7 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    * promises have been fulfilled.
    */
   async forEach(cb: (v: T, i: number) => ?Promise<any>): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(0, true);
+    const cursor = await newCursorAtIndex(this.sequence, 0, true);
     const promises = [];
     await cursor.iter((v, i) => {
       promises.push(cb(v, i));
@@ -125,14 +122,14 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
    * Returns a new `AsyncIterator` which can be used to iterate over the list.
    */
   iterator(): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(0, true));
+    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, 0, true));
   }
 
   /**
    * Returns a new `AsyncIterator` starting at `i` which can be used to iterate over the list.
    */
   iteratorAt(i: number): AsyncIterator<T> {
-    return new IndexedSequenceIterator(this.sequence.newCursorAt(i, true));
+    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, i, true));
   }
 
   /**
@@ -154,23 +151,10 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
       return Promise.resolve([[0, 0, this.length, 0]]); // Everything added
     }
 
-    return Promise.all([last.sequence.newCursorAt(0), this.sequence.newCursorAt(0)]).then(cursors =>
+    return Promise.all([newCursorAtIndex(last.sequence, 0),
+                        newCursorAtIndex(this.sequence, 0)]).then(cursors =>
         diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0,
              maxSpliceMatrixSize));
-  }
-
-  /**
-   * Returns a new JS array with the same values as list.
-   */
-  // $FlowIssue: Flow doesn't understand this in default param expressions.
-  toJS(start: number = 0, end: number = this.length): Promise<Array<T>> {
-    const l = this.length;
-    start = clampIndex(start, l);
-    end = clampIndex(end, l);
-    if (start >= end) {
-      return Promise.resolve([]);
-    }
-    return this.sequence.range(start, end);
   }
 
   /**
@@ -184,39 +168,11 @@ export default class List<T: Value> extends Collection<IndexedSequence<any>> {
 /**
  * ListLeafSequence is used for the leaf lists of a list prolly-tree.
  */
-export class ListLeafSequence<T: Value> extends IndexedSequence<T> {
-  get chunks(): Array<Ref<any>> {
-    return getValueChunks(this.items);
-  }
-
-  /**
-   * This method is for internal use of sequences. It returns how many leaf items there are up to an
-   * index within its sequence.
-   */
-  cumulativeNumberOfLeaves(idx: number): number {
-    return idx + 1;
-  }
-
-  /**
-   * Returns an array of the values in the list.
-   */
-  range(start: number, end: number): Promise<Array<T>> {
-    invariant(start >= 0 && end >= 0 && end <= this.items.length);
-    return Promise.resolve(this.items.slice(start, end));
-  }
-}
+export class ListLeafSequence<T: Value> extends Sequence<T> {}
 
 export function newListLeafSequence<T: Value>(vr: ?ValueReader, items: T[]): ListLeafSequence<T> {
   const t = makeListType(makeUnionType(items.map(getTypeOfValue)));
   return new ListLeafSequence(vr, t, items);
-}
-
-function clampIndex(idx: number, length: number): number {
-  if (idx > length) {
-    return length;
-  }
-
-  return idx < 0 ? Math.max(0, length + idx) : idx;
 }
 
 type ListWriterState = 'writable' | 'closed';

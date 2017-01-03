@@ -4,7 +4,6 @@
 
 // @flow
 
-import {invariant} from './assert.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
@@ -14,14 +13,13 @@ import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
+import Sequence, {OrderedKey} from './sequence.js';
+import {newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {
-  OrderedKey,
-  newOrderedMetaSequenceChunkFn,
-} from './meta-sequence.js';
-import {
-  OrderedSequence,
   OrderedSequenceCursor,
   OrderedSequenceIterator,
+  newCursorAt,
+  newCursorAtValue,
 } from './ordered-sequence.js';
 import diff from './ordered-sequence-diff.js';
 import {ValueBase} from './value.js';
@@ -80,14 +78,13 @@ function buildMapData<K: Value, V: Value>(
 }
 
 export default class Map<K: Value, V: Value> extends
-    Collection<OrderedSequence<any, any>> {
+    Collection<Sequence<any>> {
   constructor(kvs: Array<MapEntry<K, V>> = []) {
     const seq = chunkSequenceSync(
         buildMapData(kvs),
         newMapLeafChunkFn(null),
         newOrderedMetaSequenceChunkFn(Kind.Map, null),
         mapHashValueBytes);
-    invariant(seq instanceof OrderedSequence);
     super(seq);
   }
 
@@ -96,12 +93,12 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async has(key: K): Promise<boolean> {
-    const cursor = await this.sequence.newCursorAtValue(key);
+    const cursor = await newCursorAtValue(this.sequence, key);
     return cursor.valid && equals(cursor.getCurrentKey().value(), key);
   }
 
   async _firstOrLast(last: boolean): Promise<?MapEntry<K, V>> {
-    const cursor = await this.sequence.newCursorAt(null, false, last, true);
+    const cursor = await newCursorAt(this.sequence, null, false, last, true);
     if (!cursor.valid) {
       return undefined;
     }
@@ -118,7 +115,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async get(key: K): Promise<?V> {
-    const cursor = await this.sequence.newCursorAtValue(key);
+    const cursor = await newCursorAtValue(this.sequence, key);
     if (!cursor.valid) {
       return undefined;
     }
@@ -128,7 +125,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async forEach(cb: (v: V, k: K) => ?Promise<any>): Promise<void> {
-    const cursor = await this.sequence.newCursorAt(null, false, false, true);
+    const cursor = await newCursorAt(this.sequence, null, false, false, true);
     const promises = [];
     await cursor.iter(entry => {
       promises.push(cb(entry[VALUE], entry[KEY]));
@@ -138,11 +135,11 @@ export default class Map<K: Value, V: Value> extends
   }
 
   iterator(): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAt(null, false, false, true));
+    return new OrderedSequenceIterator(newCursorAt(this.sequence, null, false, false, true));
   }
 
   iteratorAt(k: K): AsyncIterator<MapEntry<K, V>> {
-    return new OrderedSequenceIterator(this.sequence.newCursorAtValue(k, false, false, true));
+    return new OrderedSequenceIterator(newCursorAtValue(this.sequence, k, false, false, true));
   }
 
   _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<MapEntry<K, V>>, remove: number)
@@ -155,7 +152,7 @@ export default class Map<K: Value, V: Value> extends
 
   async set(key: K, value: V): Promise<Map<K, V>> {
     let remove = 0;
-    const cursor = await this.sequence.newCursorAtValue(key, true);
+    const cursor = await newCursorAtValue(this.sequence, key, true);
     if (cursor.valid && equals(cursor.getCurrentKey().value(), key)) {
       const entry = cursor.getCurrent();
       if (equals(entry[VALUE], value)) {
@@ -169,7 +166,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async delete(key: K): Promise<Map<K, V>> {
-    const cursor = await this.sequence.newCursorAtValue(key);
+    const cursor = await newCursorAtValue(this.sequence, key);
     if (cursor.valid && equals(cursor.getCurrentKey().value(), key)) {
       return this._splice(cursor, [], 1);
     }
@@ -189,13 +186,12 @@ export default class Map<K: Value, V: Value> extends
   }
 }
 
-export class MapLeafSequence<K: Value, V: Value> extends
-    OrderedSequence<K, MapEntry<K, V>> {
+export class MapLeafSequence<K: Value, V: Value> extends Sequence<MapEntry<K, V>> {
   getKey(idx: number): OrderedKey<any> {
     return new OrderedKey(this.items[idx][KEY]);
   }
 
-  getCompareFn(other: OrderedSequence<any, any>): EqualsFn {
+  getCompareFn(other: Sequence<any>): EqualsFn {
     return (idx: number, otherIdx: number) =>
       equals(this.items[idx][KEY], other.items[otherIdx][KEY]) &&
       equals(this.items[idx][VALUE], other.items[otherIdx][VALUE]);

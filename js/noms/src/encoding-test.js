@@ -26,8 +26,8 @@ import {encodeValue, decodeValue} from './codec.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct, newStructWithType} from './struct.js';
+import {OrderedKey} from './sequence.js';
 import {
-  OrderedKey,
   MetaTuple,
   newBlobMetaSequence,
   newListMetaSequence,

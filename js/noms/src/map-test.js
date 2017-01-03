@@ -27,10 +27,10 @@ import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
 import List from './list.js';
 import Map, {MapLeafSequence} from './map.js';
-import {OrderedKey, MetaTuple, newMapMetaSequence} from './meta-sequence.js';
+import {MetaSequence, MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
-import {OrderedMetaSequence} from './meta-sequence.js';
+import {OrderedKey} from './sequence.js';
 import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
 import {
   makeMapType,
@@ -738,7 +738,7 @@ suite('CompoundMap', () => {
       smallTestChunks();
     }
 
-    await t(1000, OrderedMetaSequence);
+    await t(1000, MetaSequence);
   });
 
   test('compound map with values of every type', async () => {

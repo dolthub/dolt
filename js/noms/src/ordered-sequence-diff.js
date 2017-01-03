@@ -5,8 +5,8 @@
 // @flow
 
 import {invariant} from './assert.js';
-import {OrderedSequence, OrderedSequenceCursor} from './ordered-sequence.js';
-import {SequenceCursor} from './sequence.js';
+import {OrderedSequenceCursor, newCursorAt} from './ordered-sequence.js';
+import Sequence, {SequenceCursor} from './sequence.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 
 // TODO: Expose an iteration API.
@@ -15,12 +15,12 @@ import type Value from './value.js'; // eslint-disable-line no-unused-vars
  * Returns a 3-tuple [added, removed, modified] sorted keys.
  */
 export default async function diff<K: Value, T>(
-    last: OrderedSequence<K, T>, current: OrderedSequence<K, T>): Promise<[K[], K[], K[]]> {
+    last: Sequence<T>, current: Sequence<T>): Promise<[K[], K[], K[]]> {
   // TODO: Construct the cursor at exactly the right position. There is no point reading in the
   // first chunk of each sequence if we're not going to use them. This needs for chunks (or at
   // least meta chunks) to encode their height.
   // See https://github.com/attic-labs/noms/issues/1219.
-  const [lastCur, currentCur] = await Promise.all([last.newCursorAt(), current.newCursorAt()]);
+  const [lastCur, currentCur] = await Promise.all([newCursorAt(last), newCursorAt(current)]);
   const [added, removed, modified] = [[], [], []];
 
   while (lastCur.valid && currentCur.valid) {

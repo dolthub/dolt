@@ -11,7 +11,16 @@ import type {AsyncIteratorResult} from './async-iterator.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
+import type {EqualsFn} from './edit-distance.js';
+import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import Hash from './hash.js';
+import {compare, equals} from './compare.js';
 
+// Sequence<T> is the base class of all prolly-tree nodes. It represents a sequence of "values"
+// which are grouped together and defined by the output of a rolling hash value as a result of
+// chunking. In this context, |T| need not be a `Value` type. In the case of non-leaf prolly-tree
+// levels, it will be a |MetaTuple|, and in the case of a Map leaf sequence, it will be a
+// |MapEntry|.
 export default class Sequence<T> {
   vr: ?ValueReader;
   _type: Type<any>;
@@ -47,8 +56,28 @@ export default class Sequence<T> {
     return null;
   }
 
+  getKey(idx: number): OrderedKey<any> {
+    // $FlowIssue: getKey will be overridden if items isn't a value.
+    return new OrderedKey(this.items[idx]);
+  }
+
+  getCompareFn(other: Sequence<T>): EqualsFn {
+    // $FlowIssue: getKey will be overridden if items isn't a value.
+    return (idx: number, otherIdx: number) => equals(this.items[idx], other.items[otherIdx]);
+  }
+
+  cumulativeNumberOfLeaves(idx: number): number {
+    return idx + 1;
+  }
+
   get chunks(): Array<Ref<any>> {
-    return [];
+    const chunks = [];
+    for (const item of this.items) {
+      if (item instanceof ValueBase) {
+        chunks.push(...item.chunks);
+      }
+    }
+    return chunks;
   }
 
   get length(): number {
@@ -281,12 +310,49 @@ export class SequenceIterator<T, S: Sequence<any>> extends AsyncIterator<T> {
   }
 }
 
-export function getValueChunks<T>(items: Array<T>): Array<Ref<any>> {
-  const chunks = [];
-  for (const item of items) {
-    if (item instanceof ValueBase) {
-      chunks.push(...item.chunks);
+export class OrderedKey<T: Value> {
+  isOrderedByValue: boolean;
+  v: ?T;
+  h: ?Hash;
+
+  constructor(v: T) {
+    this.v = v;
+    if (v instanceof ValueBase) {
+      this.isOrderedByValue = false;
+      this.h = v.hash;
+    } else {
+      this.isOrderedByValue = true;
+      this.h = null;
     }
   }
-  return chunks;
+
+  static fromHash(h: Hash): OrderedKey<any> {
+    const k = Object.create(this.prototype);
+    k.isOrderedByValue = false;
+    k.v = null;
+    k.h = h;
+    return k;
+  }
+
+  value(): T {
+    return notNull(this.v);
+  }
+
+  numberValue(): number {
+    invariant(typeof this.v === 'number');
+    return this.v;
+  }
+
+  compare(other: OrderedKey<any>): number {
+    if (this.isOrderedByValue && other.isOrderedByValue) {
+      return compare(notNull(this.v), notNull(other.v));
+    }
+    if (this.isOrderedByValue) {
+      return -1;
+    }
+    if (other.isOrderedByValue) {
+      return 1;
+    }
+    return notNull(this.h).compare(notNull(other.h));
+  }
 }
