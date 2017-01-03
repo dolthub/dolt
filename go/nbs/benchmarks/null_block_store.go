@@ -22,7 +22,7 @@ func (nb nullBlockStore) Get(h hash.Hash) chunks.Chunk {
 	panic("not impl")
 }
 
-func (nb nullBlockStore) GetMany(batch []hash.Hash) (result []chunks.Chunk) {
+func (nb nullBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	panic("not impl")
 }
 

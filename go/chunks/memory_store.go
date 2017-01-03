@@ -32,10 +32,10 @@ func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 	return EmptyChunk
 }
 
-func (ms *MemoryStore) GetMany(hashes []hash.Hash) (batch []Chunk) {
-	batch = make([]Chunk, len(hashes))
-	for i, h := range hashes {
-		batch[i] = ms.Get(h)
+func (ms *MemoryStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+	for h, _ := range hashes {
+		c := ms.Get(h)
+		foundChunks <- &c
 	}
 	return
 }

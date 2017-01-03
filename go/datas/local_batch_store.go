@@ -44,8 +44,8 @@ func (lbs *localBatchStore) Get(h hash.Hash) chunks.Chunk {
 	return lbs.cs.Get(h)
 }
 
-func (lbs *localBatchStore) GetMany(hashes []hash.Hash) (batch []chunks.Chunk) {
-	return lbs.cs.GetMany(hashes)
+func (lbs *localBatchStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	lbs.cs.GetMany(hashes, foundChunks)
 }
 
 // Has checks the internal Chunk cache, proxying to the backing ChunkStore if not present.

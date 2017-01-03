@@ -29,3 +29,12 @@ func (rs HashSlice) Equals(other HashSlice) bool {
 	}
 	return true
 }
+
+func (rs HashSlice) HashSet() HashSet {
+	hs := make(HashSet, len(rs))
+	for _, h := range rs {
+		hs[h] = struct{}{}
+	}
+
+	return hs
+}

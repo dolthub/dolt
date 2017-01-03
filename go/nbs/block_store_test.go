@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"io/ioutil"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -122,11 +123,19 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	for i, c := range chnx {
 		hashes[i] = c.Hash()
 	}
-	gotten := suite.store.GetMany(hashes)
 
-	for i, c := range gotten {
-		suite.Equal(chnx[i].Hash(), c.Hash(), "Chunk %d not equal")
+	chunkChan := make(chan *chunks.Chunk, len(hashes))
+	suite.store.GetMany(hashes.HashSet(), chunkChan)
+	close(chunkChan)
+
+	found := make(hash.HashSlice, 0)
+	for c := range chunkChan {
+		found = append(found, c.Hash())
 	}
+
+	sort.Sort(found)
+	sort.Sort(hashes)
+	suite.True(found.Equals(hashes))
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {

@@ -7,6 +7,9 @@ package nbs
 import (
 	"sort"
 	"sync"
+
+	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/hash"
 )
 
 type memTable struct {
@@ -69,11 +72,12 @@ func (mt *memTable) get(h addr) []byte {
 	return mt.chunks[h]
 }
 
-func (mt *memTable) getMany(reqs []getRecord, wg *sync.WaitGroup) (remaining bool) {
-	for i, r := range reqs {
+func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) (remaining bool) {
+	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
-			reqs[i].data = data
+			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
+			foundChunks <- &c
 		} else {
 			remaining = true
 		}

@@ -11,6 +11,8 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"sync"
+
+	"github.com/attic-labs/noms/go/chunks"
 )
 
 /*
@@ -183,9 +185,7 @@ func (hs hasRecordByOrder) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 type getRecord struct {
 	a      *addr
 	prefix uint64
-	order  int
 	found  bool
-	data   []byte
 }
 
 type getRecordByPrefix []getRecord
@@ -193,12 +193,6 @@ type getRecordByPrefix []getRecord
 func (hs getRecordByPrefix) Len() int           { return len(hs) }
 func (hs getRecordByPrefix) Less(i, j int) bool { return hs[i].prefix < hs[j].prefix }
 func (hs getRecordByPrefix) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
-
-type getRecordByOrder []getRecord
-
-func (hs getRecordByOrder) Len() int           { return len(hs) }
-func (hs getRecordByOrder) Less(i, j int) bool { return hs[i].order < hs[j].order }
-func (hs getRecordByOrder) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 type extractRecord struct {
 	a    addr
@@ -209,7 +203,7 @@ type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
 	get(h addr) []byte
-	getMany(reqs []getRecord, wg *sync.WaitGroup) bool
+	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool
 	count() uint32
 	extract(order EnumerationOrder, chunks chan<- extractRecord)
 }
@@ -218,5 +212,5 @@ type chunkSource interface {
 	chunkReader
 	close() error
 	hash() addr
-	calcReads(reqs []getRecord, blockSize, maxReadSize, ampThresh uint64) (reads int, remaining bool)
+	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
 }

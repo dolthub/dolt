@@ -69,7 +69,7 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		if s3p.indexCache != nil {
 			s3p.indexCache.put(name, index)
 		}
-		s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize, s3MaxReadSize, s3ReadAmpThresh)
+		s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize)
 		return s3tr
 	}
 	return emptyChunkSource{}

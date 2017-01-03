@@ -119,10 +119,10 @@ func (s *DynamoStore) Get(h hash.Hash) Chunk {
 	return <-ch
 }
 
-func (s *DynamoStore) GetMany(hashes []hash.Hash) (batch []Chunk) {
-	batch = make([]Chunk, len(hashes))
-	for i, h := range hashes {
-		batch[i] = s.Get(h)
+func (s *DynamoStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+	for h, _ := range hashes {
+		c := s.Get(h)
+		foundChunks <- &c
 	}
 	return
 }

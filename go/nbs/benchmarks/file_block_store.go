@@ -28,7 +28,7 @@ func (fb fileBlockStore) Get(h hash.Hash) chunks.Chunk {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) GetMany(batch []hash.Hash) (result []chunks.Chunk) {
+func (fb fileBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	panic("not impl")
 }
 

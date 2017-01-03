@@ -16,7 +16,7 @@ import (
 
 type blockStore interface {
 	types.BatchStore
-	GetMany(hashes []hash.Hash) []chunks.Chunk
+	GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk)
 }
 
 type storeOpenFn func() blockStore
@@ -73,15 +73,28 @@ func benchmarkRead(openStore storeOpenFn, hashes hashSlice, src *dataSource, t a
 	assert.NoError(t, store.Close())
 }
 
-func verifyChunks(hashes []hash.Hash, batch []chunks.Chunk) {
-	for i, c := range batch {
-		verifyChunk(hashes[i], c)
+func verifyChunks(hashes hash.HashSlice, foundChunks chan *chunks.Chunk) {
+	requested := hashes.HashSet()
+
+	for c := range foundChunks {
+		if _, ok := requested[c.Hash()]; !ok {
+			panic(fmt.Sprintf("Got unexpected chunk: %s", c.Hash().String()))
+		}
+
+		delete(requested, c.Hash())
+	}
+
+	if len(requested) > 0 {
+		for h, _ := range requested {
+			fmt.Printf("Failed to fetch %s\n", h.String())
+		}
+		panic("failed to fetch chunks")
 	}
 }
 
 func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource, batchSize, concurrency int, t assert.TestingT) {
 	store := openStore()
-	batch := make([]hash.Hash, 0, batchSize)
+	batch := make(hash.HashSlice, 0, batchSize)
 
 	wg := sync.WaitGroup{}
 	limit := make(chan struct{}, concurrency)
@@ -92,8 +105,11 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 		if len(batch) == batchSize {
 			limit <- struct{}{}
 			wg.Add(1)
-			go func(hashes []hash.Hash) {
-				verifyChunks(hashes, store.GetMany(hashes))
+			go func(hashes hash.HashSlice) {
+				chunkChan := make(chan *chunks.Chunk, len(hashes))
+				store.GetMany(hashes.HashSet(), chunkChan)
+				close(chunkChan)
+				verifyChunks(hashes, chunkChan)
 				wg.Done()
 				<-limit
 			}(batch)
@@ -103,7 +119,11 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 	}
 
 	if len(batch) > 0 {
-		verifyChunks(batch, store.GetMany(batch))
+		chunkChan := make(chan *chunks.Chunk, len(batch))
+		store.GetMany(batch.HashSet(), chunkChan)
+		close(chunkChan)
+
+		verifyChunks(batch, chunkChan)
 	}
 
 	wg.Wait()

@@ -260,10 +260,14 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 			batch = batch[:maxGetBatchSize]
 		}
 
-		for _, c := range cs.GetMany(hashes) {
-			if !c.IsEmpty() {
-				chunks.Serialize(c, writer)
-			}
+		chunkChan := make(chan *chunks.Chunk, maxGetBatchSize)
+		go func() {
+			cs.GetMany(hashes.HashSet(), chunkChan)
+			close(chunkChan)
+		}()
+
+		for c := range chunkChan {
+			chunks.Serialize(*c, writer)
 		}
 
 		hashes = hashes[len(batch):]
