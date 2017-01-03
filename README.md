@@ -12,7 +12,7 @@
 This repository contains two reference implementations of the database—one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
 
 <br>
- 
+
 ## About Noms
 
 Noms is different from other databases. It is:
@@ -26,26 +26,48 @@ Noms is different from other databases. It is:
 * *Decentralized*. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
 
 <br/>
-## Setup
+## Install Noms
 
-Noms is supported on Mac OS X and Linux. You can compile a Windows build from source, and it usually works, but isn't officially supported.
+Noms is supported on Mac OS X and Linux. While Windows isn't officially supported, you can compile a Windows build from source, and it usually works.
 
-1. [Download the latest Noms build](https://s3-us-west-2.amazonaws.com/download.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries/)
-2. Extract it: `tar -xzf noms-*.tar.gz`
-2. Run:
+1. [Download the latest  build](https://s3-us-west-2.amazonaws.com/download.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries/)
 
-```
-./noms ds http://demo.noms.io/cli-tour
+  The build contains the Noms command-line and some utility tools. You can use `tar -ztvf noms-*.tar.gz` to view the contents of the tar.
 
-./noms log http://demo.noms.io/cli-tour::sf-film-locations
-```
+2. Extract the Noms commands.
 
+  `tar -xzf noms-*.tar.gz`
+
+3. Use the `noms ds` command to connect to the `cli-tour` database.
+
+    ```
+    ./noms ds http://demo.noms.io/cli-tour
+    chi-building-violations
+    chi-building-violations/backup
+    chi-building-violations/raw
+    ...<snip>..
+    sf-film-locations
+    sf-film-locations/raw
+    sf-fire-inspections
+    sf-fire-inspections/raw
+    sf-registered-business
+    sf-registered-business/raw
+    ```
+
+4. View the history for the `sf-film-locations` dataset.
+
+    ```
+    ./noms log http://demo.noms.io/cli-tour::sf-film-locations
+    ```
+
+Next, you can explore a Noms database or [take a tour of the CLI commands](doc/cli-tour.md).
 
 <br/>
-## Explore
-<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms</a>
+## Explore a demo instance of Noms
 
-<br/>
+<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms.</a>
+
+<br>
 ## What Noms is Good For
 
 #### Data Version Control
