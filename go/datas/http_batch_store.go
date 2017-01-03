@@ -94,7 +94,7 @@ func makeHTTPClient(requestLimit int) *http.Client {
 	t := http.Transport(*http.DefaultTransport.(*http.Transport))
 	t.MaxIdleConnsPerHost = requestLimit
 	// This sets, essentially, an idle-timeout. The timer starts counting AFTER the client has finished sending the entire request to the server. As soon as the client receives the server's response headers, the timeout is canceled.
-	t.ResponseHeaderTimeout = time.Duration(2) * time.Minute
+	t.ResponseHeaderTimeout = time.Duration(4) * time.Minute
 
 	return &http.Client{Transport: &t}
 }

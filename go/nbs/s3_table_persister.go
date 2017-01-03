@@ -8,9 +8,11 @@ import (
 	"bytes"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/util/sizecache"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -38,6 +40,7 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 	name, data, chunkCount := mt.write(haver)
 
 	if chunkCount > 0 {
+		t1 := time.Now()
 		result, err := s3p.s3.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
 			Bucket: aws.String(s3p.bucket),
 			Key:    aws.String(name.String()),
@@ -65,6 +68,7 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		d.Chk.NoError(err)
 		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
 
+		verbose.Log("Compacted table of %d Kb in %s", len(data)/1024, time.Since(t1))
 		index := parseTableIndex(data)
 		if s3p.indexCache != nil {
 			s3p.indexCache.put(name, index)
