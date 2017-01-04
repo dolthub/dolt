@@ -4,7 +4,7 @@
 
 // @flow
 
-import Chunk from './chunk.js';
+import Chunk, {emptyChunk} from './chunk.js';
 import Hash, {emptyHash} from './hash.js';
 import {constructRef, maxChunkHeight} from './ref.js';
 import type Ref from './ref.js';
@@ -43,11 +43,13 @@ export default class ValueStore {
   _bs: BatchStore;
   _knownHashes: HashCache;
   _valueCache: Cache<?Value>;
+  _pendingPuts: Map<string, PendingChunk>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
     this._bs = bs;
     this._knownHashes = new HashCache();
     this._valueCache = cacheSize > 0 ? new SizeCache(cacheSize) : new NoopCache();
+    this._pendingPuts = new Map();
   }
 
   // TODO: This should return Promise<?Value>
@@ -56,7 +58,14 @@ export default class ValueStore {
     if (entry) {
       return entry.value;
     }
-    const chunk: Chunk = await this._bs.get(hash);
+    let chunk = emptyChunk;
+    const pc = this._pendingPuts.get(hash.toString());
+    if (pc) {
+      chunk = pc.c;
+    } else {
+      chunk = await this._bs.get(hash);
+    }
+
     if (chunk.isEmpty()) {
       this._valueCache.add(hash, 0, null);
       this._knownHashes.addIfNotPresent(hash, new HashCacheEntry(false));
@@ -88,8 +97,19 @@ export default class ValueStore {
       return ref;
     }
     const hints = this._knownHashes.checkChunksInCache(v);
-    this._bs.schedulePut(chunk, hints);
 
+    if (v instanceof ValueBase) {
+      const chunks = v.chunks;
+      for (let i = 0; i < chunks.length; i++) {
+        const reachableHash = chunks[i].targetHash.toString();
+        const pc = this._pendingPuts.get(reachableHash);
+        if (pc) {
+          this._bs.schedulePut(pc.c, pc.hints);
+          this._pendingPuts.delete(reachableHash);
+        }
+      }
+    }
+    this._pendingPuts.set(hash.toString(), new PendingChunk(chunk, hints));
     this._knownHashes.cacheChunks(v, hash, true);
     this._knownHashes.add(hash, new HashCacheEntry(true, t), false);
     this._valueCache.drop(hash);
@@ -98,11 +118,25 @@ export default class ValueStore {
 
   async flush(): Promise<void> {
     this._knownHashes.mergePendingHints();
+    for (const [, pc] of this._pendingPuts) {
+      this._bs.schedulePut(pc.c, pc.hints);
+    }
+    this._pendingPuts = new Map();
     return this._bs.flush();
   }
 
   close(): Promise<void> {
     return this._bs.close();
+  }
+}
+
+class PendingChunk {
+  c: Chunk;
+  hints: Set<Hash>;
+
+  constructor(c: Chunk, hints: Set<Hash>) {
+    this.c = c;
+    this.hints = hints;
   }
 }
 
@@ -132,7 +166,7 @@ class CacheEntry<T> {
  * insertion order and any time a value is checked it is taken out and reinserted which puts it last
  * in the iteration.
  */
-export class SizeCache<T> {
+class SizeCache<T> {
   _size: number;
   _maxSize: number;
   _cache: Map<string, CacheEntry<T>>;
@@ -189,7 +223,7 @@ export class SizeCache<T> {
   }
 }
 
-export class NoopCache<T> {
+class NoopCache<T> {
   entry(hash: Hash): ?CacheEntry<any> {}  // eslint-disable-line no-unused-vars
 
   get(hash: Hash): ?T {}  // eslint-disable-line no-unused-vars

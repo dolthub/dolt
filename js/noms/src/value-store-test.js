@@ -122,6 +122,7 @@ suite('ValueStore', () => {
 
     const r1 = vs.writeValue('hello').targetHash;
     const r2 = vs.writeValue('world').targetHash;
+    vs.flush();
 
     // Prime the cache
     const v1 = await vs.readValue(r1);
@@ -142,20 +143,39 @@ suite('ValueStore', () => {
   });
 
   test('hints on cache', async () => {
-    const bs = new BatchStoreAdaptor(new MemoryStore());
-    const vs = new ValueStore(bs, 15);
+    const vs = new ValueStore(new BatchStoreAdaptor(new MemoryStore()), 15);
 
     const l = new List([vs.writeValue(1), vs.writeValue(2)]);
     const r = vs.writeValue(l);
+    vs.flush();
 
     const v = await vs.readValue(r.targetHash);
     assert.isTrue(equals(l, v));
     await vs.close();
   });
 
-  test('hints on cache', async () => {
+  test('chunks get put only when referenced', async () => {
     const bs = new BatchStoreAdaptor(new MemoryStore());
     const vs = new ValueStore(bs, 15);
+
+    (bs: any).schedulePut = () => { throw new Error(); };
+
+    // Writing these primitives shouldn't result in any putting...
+    const l = new List([vs.writeValue(1), vs.writeValue(2)]);
+
+    let ex;
+    try {
+      // ...but this should, as it references the chunks from the two Values above.
+      vs.writeValue(l);
+    } catch (e) {
+      ex = e;
+    }
+    assert.instanceOf(ex, Error);
+    await vs.close();
+  });
+
+  test('pending hints', async () => {
+    const vs = new ValueStore(new BatchStoreAdaptor(new MemoryStore()), 15);
 
     let l = new List();
     let r = new Ref(l);

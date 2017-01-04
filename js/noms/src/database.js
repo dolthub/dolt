@@ -140,6 +140,7 @@ export default class Database {
 
       currentDatasets = await currentDatasets.set(datasetId, commitRef);
       const newRootRef = this.writeValue(currentDatasets).targetHash;
+      await this._vs.flush();
       if (await this._rt.updateRoot(newRootRef, currentRootRef)) {
         break;
       }

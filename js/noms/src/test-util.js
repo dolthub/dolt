@@ -67,12 +67,13 @@ export function assertChunkCountAndType(expectCount: number, expectType: Type<an
 export async function testRoundTripAndValidate<T: Value>(v: T,
       validateFn: (v2: T) => Promise<void>): Promise<void> {
   const ms = new MemoryStore();
-  const ds = new Database(new BatchStoreAdaptor(ms));
+  const db = new Database(new BatchStoreAdaptor(ms));
 
-  const r1 = await ds.writeValue(v).targetHash;
-  const ds2 = new Database(new BatchStoreAdaptor(ms));
+  const r1 = await db.writeValue(v);
+  await db.commit(db.getDataset('test'), r1);
+  const db2 = new Database(new BatchStoreAdaptor(ms));
 
-  const v2 = await ds2.readValue(r1);
+  const v2 = await db2.readValue(r1.targetHash);
   if (v instanceof ValueBase) {
     assert.isTrue(equals(v, v2));
     assert.isTrue(equals(v2, v));
@@ -80,7 +81,7 @@ export async function testRoundTripAndValidate<T: Value>(v: T,
     assert.strictEqual(v2, v);
   }
   await validateFn(v2);
-  await ds2.close();
+  await db2.close();
 }
 
 export function chunkDiffCount(v1: Value, v2: Value): number {

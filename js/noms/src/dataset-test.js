@@ -6,11 +6,8 @@
 
 import {suite, test} from 'mocha';
 import makeRemoteBatchStoreFake from './remote-batch-store-fake.js';
-import {emptyHash} from './hash.js';
 import {assert} from 'chai';
-import Commit from './commit.js';
 import Database from './database.js';
-import Map from './map.js';
 import {invariant} from './assert.js';
 import {equals} from './compare.js';
 
@@ -28,18 +25,14 @@ suite('Dataset', () => {
     const bs = makeRemoteBatchStoreFake();
     let db = new Database(bs);
 
-    const commit = new Commit('foo');
-
-    const commitRef = db.writeValue(commit);
-    const datasets = new Map([['foo', commitRef]]);
-    const rootRef = db.writeValue(datasets).targetHash;
-    assert.isTrue(await bs.updateRoot(rootRef, emptyHash));
+    const headVal = 'fooContent';
+    await db.commit(db.getDataset('foo'), headVal);
     db = new Database(bs); // refresh the datasets
 
     const ds = await db.getDataset('foo');
-    const fooHead = await ds.head();
+    const fooHead = await ds.headValue();
     invariant(fooHead);
-    assert.isTrue(equals(fooHead, commit));
+    assert.isTrue(equals(fooHead, headVal));
 
     const ds2 = await db.getDataset('bar');
     const barHead = await ds2.head();

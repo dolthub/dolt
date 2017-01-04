@@ -30,8 +30,9 @@ suite('Specs', () => {
     assert.strictEqual('', spec.path);
 
     const db = spec.database();
-    db.writeValue(true);
-    assert.strictEqual(true, await spec.database().readValue(getHash(true)));
+    const r = db.writeValue(true);
+    await db.commit(db.getDataset('dataset'), r);
+    assert.strictEqual(true, await spec.database().readValue(r.targetHash));
   });
 
   test('mem dataset', async () => {
@@ -54,7 +55,8 @@ suite('Specs', () => {
     let [db, value] = await spec.value();
     assert.strictEqual(null, value);
 
-    db.writeValue(true);
+    const r = db.writeValue(true);
+    await db.commit(db.getDataset('dataset'), r);
     [db, value] = await spec.value();
     assert.strictEqual(true, value);
   });
