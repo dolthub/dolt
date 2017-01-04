@@ -81,7 +81,7 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) (err chunks.BackpressureError) {
 	h := c.Hash()
 	vbs.vs.ensureChunksInCache(v)
-	vbs.vs.set(h, hintedChunk{v.Type(), h})
+	vbs.vs.set(h, hintedChunk{v.Type(), h}, false)
 
 	vbs.batch[vbs.count] = c
 	vbs.count++

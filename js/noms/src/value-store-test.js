@@ -15,6 +15,7 @@ import {equals} from './compare.js';
 import Hash from './hash.js';
 import {getHash} from './get-hash.js';
 import {notNull} from './assert.js';
+import Ref from './ref.js';
 
 suite('ValueStore', () => {
   test('readValue', async () => {
@@ -151,4 +152,27 @@ suite('ValueStore', () => {
     assert.isTrue(equals(l, v));
     await vs.close();
   });
+
+  test('hints on cache', async () => {
+    const bs = new BatchStoreAdaptor(new MemoryStore());
+    const vs = new ValueStore(bs, 15);
+
+    let l = new List();
+    let r = new Ref(l);
+    for (let i = 0; r.height === 0; i++) {
+      l = await l.append(i);
+      r = new Ref(l);
+    }
+    vs.writeValue(l);
+
+    for (const r of l.chunks) {
+      assert.isTrue(notNull(vs._knownHashes.get(r.targetHash)).provenance.isEmpty());
+    }
+    await vs.flush();
+    for (const r of l.chunks) {
+      assert.isTrue(notNull(vs._knownHashes.get(r.targetHash)).provenance.equals(l.hash));
+    }
+    await vs.close();
+  });
+
 });

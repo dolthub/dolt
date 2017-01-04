@@ -30,10 +30,36 @@ func TestCheckChunksInCache(t *testing.T) {
 
 	b := NewEmptyBlob()
 	cs.Put(EncodeValue(b, nil))
-	cvs.set(b.Hash(), hintedChunk{b.Type(), b.Hash()})
+	cvs.set(b.Hash(), hintedChunk{b.Type(), b.Hash()}, false)
 
 	bref := NewRef(b)
 	assert.NotPanics(func() { cvs.chunkHintsFromCache(bref) })
+}
+
+func TestCheckChunksInCachePostCommit(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	cvs := newLocalValueStore(cs)
+
+	l := NewList()
+	r := NewRef(l)
+	i := 0
+	for r.Height() == 1 {
+		l = l.Append(Number(i))
+		r = NewRef(l)
+		i++
+	}
+
+	cvs.WriteValue(l)
+	// Hints for leaf sequences should be absent prior to Flush...
+	l.WalkRefs(func(ref Ref) {
+		assert.True(cvs.check(ref.TargetHash()).Hint().IsEmpty())
+	})
+	cvs.Flush()
+	// ...And present afterwards
+	l.WalkRefs(func(ref Ref) {
+		assert.True(cvs.check(ref.TargetHash()).Hint() == l.Hash())
+	})
 }
 
 func TestCheckChunksNotInCache(t *testing.T) {

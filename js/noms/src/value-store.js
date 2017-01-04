@@ -65,7 +65,7 @@ export default class ValueStore {
 
     const v = decodeValue(chunk, this);
     this._valueCache.add(hash, chunk.data.length, v);
-    this._knownHashes.cacheChunks(v, hash);
+    this._knownHashes.cacheChunks(v, hash, false);
     // hash is trivially a hint for v, so consider putting that in the cache.
     // If we got to v by reading some higher-level chunk, this entry gets dropped on
     // the floor because r already has a hint in the cache. If we later read some other
@@ -89,12 +89,15 @@ export default class ValueStore {
     }
     const hints = this._knownHashes.checkChunksInCache(v);
     this._bs.schedulePut(chunk, hints);
-    this._knownHashes.add(hash, new HashCacheEntry(true, t));
+
+    this._knownHashes.cacheChunks(v, hash, true);
+    this._knownHashes.add(hash, new HashCacheEntry(true, t), false);
     this._valueCache.drop(hash);
     return ref;
   }
 
   async flush(): Promise<void> {
+    this._knownHashes.mergePendingHints();
     return this._bs.flush();
   }
 
@@ -213,17 +216,30 @@ class HashCacheEntry {
 
 class HashCache {
   _cache: Map<string, HashCacheEntry>;
+  _pending: Map<string, HashCacheEntry>;
 
   constructor() {
     this._cache = new Map();
+    this._pending = new Map();
   }
 
   get(hash: Hash): ?HashCacheEntry {
     return this._cache.get(hash.toString());
   }
 
-  add(hash: Hash, entry: HashCacheEntry) {
-    this._cache.set(hash.toString(), entry);
+  add(hash: Hash, entry: HashCacheEntry, toPending: boolean) {
+    if (toPending) {
+      this._pending.set(hash.toString(), entry);
+    } else {
+      this._cache.set(hash.toString(), entry);
+    }
+  }
+
+  mergePendingHints() {
+    for (const [hashStr, entry] of this._pending) {
+      this._cache.set(hashStr, entry);
+    }
+    this._pending = new Map();
   }
 
   addIfNotPresent(hash: Hash, entry: HashCacheEntry) {
@@ -234,13 +250,13 @@ class HashCache {
     }
   }
 
-  cacheChunks(v: Value, hash: Hash) {
+  cacheChunks(v: Value, hash: Hash, toPending: boolean) {
     if (v instanceof ValueBase) {
       v.chunks.forEach(reachable => {
         const h = reachable.targetHash;
         const cur = this.get(h);
         if (!cur || cur.provenance.isEmpty() || cur.provenance.equals(h)) {
-          this.add(h, new HashCacheEntry(true, getTargetType(reachable), hash));
+          this.add(h, new HashCacheEntry(true, getTargetType(reachable), hash), toPending);
         }
       });
     }
