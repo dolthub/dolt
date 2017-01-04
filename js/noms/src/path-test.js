@@ -79,7 +79,11 @@ suite('Path', () => {
     await resolvesTo('foo', 2, '[2]');
     await resolvesTo(false, 3, '[3]');
     await resolvesTo(null, 4, '[4]');
-    await resolvesTo(null, -4, '[-4]');
+    await resolvesTo(null, 4, '[-5]');
+    await resolvesTo(1, 0, '[-4]');
+    await resolvesTo(3, 1, '[-3]');
+    await resolvesTo('foo', 2, '[-2]');
+    await resolvesTo(false, 3, '[-1]');
 
     v = new Map([
       [1, 'foo'],
@@ -175,7 +179,11 @@ suite('Path', () => {
     await assertResolvesTo('foo', s, '.foo[0]["a"]');
     await assertResolvesTo('bar', s, '.foo[0]["b"]');
     await assertResolvesTo('car', s, '.foo[0]["c"]');
+    await assertResolvesTo('foo', s, '.foo[0]@at(0)');
+    await assertResolvesTo('bar', s, '.foo[0]@at(1)');
+    await assertResolvesTo('car', s, '.foo[0]@at(2)');
     await assertResolvesTo(null, s, '.foo[0]["x"]');
+    await assertResolvesTo(null, s, '.foo[0]@at(3)');
     await assertResolvesTo(null, s, '.foo[2]["c"]');
     await assertResolvesTo(null, s, '.notHere[0]["c"]');
     await assertResolvesTo(m2, s, '.foo[1]');
@@ -184,6 +192,12 @@ suite('Path', () => {
     await assertResolvesTo('fire', s, `.foo[1]${hashIdx(m1)}`);
     await assertResolvesTo(m1, s, `.foo[1]${hashIdx(m1)}@key`);
     await assertResolvesTo('car', s, `.foo[1]${hashIdx(m1)}@key["c"]`);
+    await assertResolvesTo('fire', s, '.foo[1]@at(2)');
+    await assertResolvesTo(m1, s, '.foo[1]@at(2)@key');
+    await assertResolvesTo('car', s, '.foo[1]@at(2)@key@at(2)');
+    await assertResolvesTo('fire', s, '.foo[1]@at(-1)');
+    await assertResolvesTo(m1, s, '.foo[1]@at(-1)@key');
+    await assertResolvesTo('car', s, '.foo[1]@at(-1)@key@at(-1)');
   });
 
   test('parse success', () => {
@@ -212,8 +226,10 @@ suite('Path', () => {
     t('[false]');
     t('[false]@key');
     t('[false]@key@type');
+    t('[false]@key@type@at(42)');
     t('[42]');
     t('[42]@key');
+    t('[42]@at(101)');
     t('[1e4]');
     t('[1.]');
     t('[1.345]');
@@ -289,6 +305,10 @@ suite('Path', () => {
     t('.foo@key(42)', '@key annotation does not support arguments');
     t('.foo@type()', '@type annotation does not support arguments');
     t('.foo@type(42)', '@type annotation does not support arguments');
+    t('.foo@at', '@at annotation requires a position argument');
+    t('.foo@at()', '@at annotation requires a position argument');
+    t('.foo@at(', '@at annotation requires a position argument');
+    t('.foo@at(42', '@at annotation requires a position argument');
   });
 
   test('type annotation', async () => {
@@ -321,5 +341,63 @@ suite('Path', () => {
     );
 
     await Promise.all(tests);
+  });
+
+  test('at annotation', async () => {
+    let v: Value;
+    const resolvesTo = (expVal, expKey, str) => Promise.all([
+      assertResolvesTo(expVal, v, str),
+      assertResolvesTo(expKey, v, str + '@key'),
+    ]);
+
+    v = new List([1, 3, 'foo', false]);
+
+    await Promise.all([
+      resolvesTo(1, null, '@at(0)'),
+      resolvesTo(3, null, '@at(1)'),
+      resolvesTo('foo', null, '@at(2)'),
+      resolvesTo(false, null, '@at(3)'),
+      resolvesTo(null, null, '@at(4)'),
+      resolvesTo(null, null, '@at(-5)'),
+      resolvesTo(1, null, '@at(-4)'),
+      resolvesTo(3, null, '@at(-3)'),
+      resolvesTo('foo', null, '@at(-2)'),
+      resolvesTo(false, null, '@at(-1)'),
+    ]);
+
+    v = new Set([false, 1, 2.3, 'two']);
+
+    await Promise.all([
+      resolvesTo(false, false, '@at(0)'),
+      resolvesTo(1, 1, '@at(1)'),
+      resolvesTo(2.3, 2.3, '@at(2)'),
+      resolvesTo('two', 'two', '@at(3)'),
+      resolvesTo(null, null, '@at(4)'),
+      resolvesTo(null, null, '@at(-5)'),
+      resolvesTo(false, false, '@at(-4)'),
+      resolvesTo(1, 1, '@at(-3)'),
+      resolvesTo(2.3, 2.3, '@at(-2)'),
+      resolvesTo('two', 'two', '@at(-1)'),
+    ]);
+
+    v = new Map([
+      [false, 23],
+      [1, 'foo'],
+      [2.3, 4.5],
+      ['two', 'bar'],
+    ]);
+
+    await Promise.all([
+      resolvesTo(23, false, '@at(0)'),
+      resolvesTo('foo', 1, '@at(1)'),
+      resolvesTo(4.5, 2.3, '@at(2)'),
+      resolvesTo('bar', 'two', '@at(3)'),
+      resolvesTo(null, null, '@at(4)'),
+      resolvesTo(null, null, '@at(-5)'),
+      resolvesTo(23, false, '@at(-4)'),
+      resolvesTo('foo', 1, '@at(-3)'),
+      resolvesTo(4.5, 2.3, '@at(-2)'),
+      resolvesTo('bar', 'two', '@at(-1)'),
+    ]);
   });
 });

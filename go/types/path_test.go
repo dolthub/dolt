@@ -180,6 +180,7 @@ func TestPathMulti(t *testing.T) {
 	assertResolvesTo(assert, String("bar"), s, `.foo[0]@at(1)`)
 	assertResolvesTo(assert, String("car"), s, `.foo[0]@at(2)`)
 	assertResolvesTo(assert, nil, s, `.foo[0]["x"]`)
+	assertResolvesTo(assert, nil, s, `.foo[0]@at(3)`)
 	assertResolvesTo(assert, nil, s, `.foo[2]["c"]`)
 	assertResolvesTo(assert, nil, s, `.notHere[0]["c"]`)
 	assertResolvesTo(assert, m2, s, `.foo[1]`)
@@ -307,6 +308,8 @@ func TestPathParseErrors(t *testing.T) {
 	test(".foo@type(42)", "@type annotation does not support arguments")
 	test(".foo@at", "@at annotation requires a position argument")
 	test(".foo@at()", "@at annotation requires a position argument")
+	test(".foo@at(", "@at annotation requires a position argument")
+	test(".foo@at(42", "@at annotation requires a position argument")
 	test(fmt.Sprintf(".foo[#%s]@soup", hash.Of([]byte{42}).String()), "Unsupported annotation: @soup")
 }
 

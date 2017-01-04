@@ -4,12 +4,12 @@
 
 // @flow
 
-import {invariant} from './assert.js';
+import {invariant, notNull} from './assert.js';
 import type Value from './value.js';
 import Hash from './hash.js';
 import {Kind} from './noms-kind.js';
 import List from './list.js';
-import Map from './map.js';
+import Map, {KEY, VALUE} from './map.js';
 import Set from './set.js';
 import Sequence, {OrderedKey} from './sequence.js';
 import {newCursorAt} from './ordered-sequence.js';
@@ -123,11 +123,20 @@ function constructPath(parts: Array<Part>, str: string) {
     }
 
     case '@': {
-      const {ann, hasArg, rem} = getAnnotation(tail);
+      const {ann, arg, hasArg, rem} = getAnnotation(tail);
 
       switch (ann) {
         case 'at': {
-          throw new SyntaxError('https://github.com/attic-labs/noms/issues/2989');
+          if (arg === '') {
+            throw new SyntaxError('@at annotation requires a position argument');
+          }
+          const idx = Number(arg);
+          if (Number.isNaN(idx)) {
+            throw new SyntaxError('Invalid position: ' + arg);
+          }
+          parts.push(new AtAnnotation(idx));
+          constructPath(parts, rem);
+          return;
         }
 
         case 'key': {
@@ -339,10 +348,11 @@ export class IndexPath extends KeyIndexable {
       if (typeof this.index !== 'number') {
         return null;
       }
-      if (this.index < 0 || this.index >= value.length) {
-        return null; // index out of bounds
+      const absIdx = getAbsoluteIndex(value.length, this.index);
+      if (Number.isNaN(absIdx)) {
+        return null;
       }
-      return this.intoKey ? this.index : value.get(this.index).then(valueOrNull);
+      return this.intoKey ? absIdx : value.get(absIdx).then(notNull);
     }
 
     if (value instanceof Map) {
@@ -397,11 +407,8 @@ export class HashIndexPath extends KeyIndexable {
       getCurrentValue = cur => cur.getCurrent();
     } else if (value instanceof Map) {
       seq = value.sequence;
-      if (this.intoKey) {
-        getCurrentValue = cur => cur.getCurrent()[0]; // key
-      } else {
-        getCurrentValue = cur => cur.getCurrent()[1]; // value
-      }
+      const prop = this.intoKey ? KEY : VALUE;
+      getCurrentValue = cur => cur.getCurrent()[prop];
     } else {
       return null;
     }
@@ -437,6 +444,57 @@ class TypeAnnotation {
   toString(): string {
     return '@type';
   }
+}
+
+/**
+ * AtAnnotation is a Part annotation that gets the value of a collection at a
+ * position, rather than a key. This is equivalent to IndexPath for lists, but
+ * different for sets and maps.
+ */
+class AtAnnotation extends KeyIndexable {
+  index: number;
+
+  constructor(index: number, intoKey: boolean = false) {
+    super(intoKey);
+    this.index = index;
+  }
+
+  async resolve(v: Value): Promise<Value | null> {
+    if (v instanceof List) {
+      const absIdx = getAbsoluteIndex(v.length, this.index);
+      if (Number.isNaN(absIdx)) {
+        return null;
+      }
+      return this.intoKey ? null : v.get(absIdx);
+    }
+
+    if (v instanceof Set) {
+      const absIdx = getAbsoluteIndex(v.size, this.index);
+      return Number.isNaN(absIdx) ? null : v.at(absIdx);
+    }
+
+    if (v instanceof Map) {
+      const absIdx = getAbsoluteIndex(v.size, this.index);
+      if (Number.isNaN(absIdx)) {
+        return null;
+      }
+      const [k, mapv] = await v.at(absIdx);
+      return this.intoKey ? k : mapv;
+    }
+
+    return null;
+  }
+
+  toString(): string {
+    return `@at(${this.index})`;
+  }
+}
+
+function getAbsoluteIndex(size: number, relIdx: number): number {
+  if (relIdx < 0) {
+    return -relIdx <= size ? relIdx + size : NaN;
+  }
+  return relIdx < size ? relIdx : NaN;
 }
 
 function valueOrNull(v: ?Value): Value | null {

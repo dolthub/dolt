@@ -423,8 +423,8 @@ func (ann TypeAnnotation) String() string {
 }
 
 // AtAnnotation is a PathPart annotation that gets the value of a collection at
-// a position, rather than a key. This is equivalent for lists, but different
-// for sets and maps.
+// a position, rather than a key. This is equivalent to IndexPath for lists,
+// but different for sets and maps.
 type AtAnnotation struct {
 	// Index is the position to resolve at. If negative, it means an index
 	// relative to the end of the collection.
