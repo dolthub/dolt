@@ -6,8 +6,11 @@ package marshal
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -701,9 +704,177 @@ func TestEncodeOriginal(t *testing.T) {
 		types.NewStruct("S", types.StructData{"foo": types.Number(float64(42))})))
 }
 
-type TestInterface interface {
-	M()
-}
-type TestImpl int
+type primitiveType int
 
-func (impl TestImpl) M() {}
+func (t primitiveType) MarshalNoms() (types.Value, error) {
+	return types.Number(int(t) + 1), nil
+}
+
+func TestMarshalerPrimitiveType(t *testing.T) {
+	assert := assert.New(t)
+
+	u := primitiveType(42)
+	v := MustMarshal(u)
+	assert.Equal(types.Number(43), v)
+}
+
+type primitiveSliceType []string
+
+func (u primitiveSliceType) MarshalNoms() (types.Value, error) {
+	return types.String(strings.Join(u, ",")), nil
+}
+
+func TestMarshalerPrimitiveSliceType(t *testing.T) {
+	assert := assert.New(t)
+
+	u := primitiveSliceType([]string{"a", "b", "c"})
+	v := MustMarshal(u)
+	assert.Equal(types.String("a,b,c"), v)
+}
+
+type primitiveMapType map[string]string
+
+func (u primitiveMapType) MarshalNoms() (types.Value, error) {
+	var vals types.ValueSlice
+	for k, v := range u {
+		vals = append(vals, types.String(k+v))
+	}
+	return types.NewSet(vals...), nil
+}
+
+func TestMarshalerPrimitiveMapType(t *testing.T) {
+	assert := assert.New(t)
+
+	u := primitiveMapType(map[string]string{
+		"a": "foo",
+		"b": "bar",
+	})
+	v := MustMarshal(u)
+	assert.True(types.NewSet(types.String("afoo"), types.String("bbar")).Equals(v))
+}
+
+type primitiveStructType struct {
+	x, y int
+}
+
+func (u primitiveStructType) MarshalNoms() (types.Value, error) {
+	return types.Number(u.x + u.y), nil
+}
+
+func TestMarshalerPrimitiveStructType(t *testing.T) {
+	assert := assert.New(t)
+
+	u := primitiveStructType{1, 2}
+	v := MustMarshal(u)
+	assert.Equal(types.Number(3), v)
+}
+
+type builtinType regexp.Regexp
+
+func (u builtinType) MarshalNoms() (types.Value, error) {
+	r := regexp.Regexp(u)
+	return types.String(r.String()), nil
+}
+
+func TestMarshalerBuiltinType(t *testing.T) {
+	assert := assert.New(t)
+
+	s := "[a-z]+$"
+	r := regexp.MustCompile(s)
+	u := builtinType(*r)
+	v := MustMarshal(u)
+	assert.Equal(types.String(s), v)
+}
+
+type wrappedMarshalerType primitiveType
+
+func (u wrappedMarshalerType) MarshalNoms() (types.Value, error) {
+	return types.Number(int(u) + 2), nil
+}
+
+func TestMarshalerWrapperMarshalerType(t *testing.T) {
+	assert := assert.New(t)
+
+	u := wrappedMarshalerType(primitiveType(42))
+	v := MustMarshal(u)
+	assert.Equal(types.Number(44), v)
+}
+
+type TestComplexStructType struct {
+	P       primitiveType
+	Ps      []primitiveType
+	Pm      map[string]primitiveType
+	Pslice  primitiveSliceType
+	Pmap    primitiveMapType
+	Pstruct primitiveStructType
+	B       builtinType
+}
+
+func TestMarshalerComplexStructType(t *testing.T) {
+	assert := assert.New(t)
+
+	s := "foo|bar"
+	r := regexp.MustCompile(s)
+	u := TestComplexStructType{
+		P:  42,
+		Ps: []primitiveType{1, 2},
+		Pm: map[string]primitiveType{
+			"x": 100,
+			"y": 101,
+		},
+		Pslice: primitiveSliceType{"a", "b", "c"},
+		Pmap: primitiveMapType{
+			"c": "123",
+			"d": "456",
+		},
+		Pstruct: primitiveStructType{10, 20},
+		B:       builtinType(*r),
+	}
+
+	v := MustMarshal(u)
+
+	assert.True(types.NewStruct("TestComplexStructType", types.StructData{
+		"p":       types.Number(43),
+		"ps":      types.NewList(types.Number(2), types.Number(3)),
+		"pm":      types.NewMap(types.String("x"), types.Number(101), types.String("y"), types.Number(102)),
+		"pslice":  types.String("a,b,c"),
+		"pmap":    types.NewSet(types.String("c123"), types.String("d456")),
+		"pstruct": types.Number(30),
+		"b":       types.String(s),
+	}).Equals(v))
+}
+
+type returnsMarshalerError struct {
+	err error
+}
+
+func (u returnsMarshalerError) MarshalNoms() (types.Value, error) {
+	return nil, u.err
+}
+
+type returnsMarshalerNil struct{}
+
+func (u returnsMarshalerNil) MarshalNoms() (types.Value, error) {
+	return nil, nil
+}
+
+type panicsMarshaler struct{}
+
+func (u panicsMarshaler) MarshalNoms() (types.Value, error) {
+	panic("panic")
+}
+
+func TestMarshalerErrors(t *testing.T) {
+	assert := assert.New(t)
+
+	expErr := errors.New("expected error")
+	m1 := returnsMarshalerError{expErr}
+	_, actErr := Marshal(m1)
+	assert.Equal(expErr, actErr)
+
+	m2 := returnsMarshalerNil{}
+	assert.Panics(func() { Marshal(m2) })
+
+	m3 := panicsMarshaler{}
+	assert.Panics(func() { Marshal(m3) })
+}

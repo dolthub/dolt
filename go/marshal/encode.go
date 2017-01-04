@@ -8,6 +8,7 @@
 package marshal
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -44,6 +45,9 @@ import (
 //     initial value onto which the fields of the Go type are added. When
 //     combined with the corresponding support for "original" in Unmarshal(),
 //     this allows one to find and modify any values of a known subtype.
+//
+// Additionally, user-defined types can implement the Marshaler interface to
+// provide a custom encoding.
 //
 // The empty values are false, 0, any nil pointer or interface value, and any
 // array, slice, map, or string of length zero.
@@ -89,12 +93,14 @@ import (
 func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			switch r.(type) {
+			switch r := r.(type) {
 			case *UnsupportedTypeError, *InvalidTagError:
 				err = r.(error)
-				return
+			case *marshalNomsError:
+				err = r.err
+			default:
+				panic(r)
 			}
-			panic(r)
 		}
 	}()
 	rv := reflect.ValueOf(v)
@@ -109,6 +115,14 @@ func MustMarshal(v interface{}) types.Value {
 	r, err := Marshal(v)
 	d.Chk.NoError(err)
 	return r
+}
+
+// Marshaler is an interface types can implement to provide their own encoding.
+type Marshaler interface {
+	// MarshalNoms returns the Noms Value encoding of a type, or an error.
+	// nil is not a valid return val - if both val and err are nil, Marshal will
+	// panic.
+	MarshalNoms() (val types.Value, err error)
 }
 
 // UnsupportedTypeError is returned by encode when attempting to encode a type
@@ -136,6 +150,16 @@ func (e *InvalidTagError) Error() string {
 	return e.message
 }
 
+// marshalNomsError wraps errors from Marshaler.MarshalNoms. These should be
+// unwrapped and never leak to the caller of Marshal.
+type marshalNomsError struct {
+	err error
+}
+
+func (e *marshalNomsError) Error() string {
+	return e.err.Error()
+}
+
 type nomsTags struct {
 	name      string
 	omitEmpty bool
@@ -146,6 +170,7 @@ type nomsTags struct {
 
 var nomsValueInterface = reflect.TypeOf((*types.Value)(nil)).Elem()
 var emptyInterface = reflect.TypeOf((*interface{})(nil)).Elem()
+var marshalerInterface = reflect.TypeOf((*Marshaler)(nil)).Elem()
 
 type encoderFunc func(v reflect.Value) types.Value
 
@@ -173,7 +198,24 @@ func nomsValueEncoder(v reflect.Value) types.Value {
 	return v.Interface().(types.Value)
 }
 
+func marshalerEncoder(t reflect.Type) encoderFunc {
+	return func(v reflect.Value) types.Value {
+		val, err := v.Interface().(Marshaler).MarshalNoms()
+		if err != nil {
+			panic(&marshalNomsError{err})
+		}
+		if val == nil {
+			panic(fmt.Errorf("nil result from %s.MarshalNoms", t.String()))
+		}
+		return val
+	}
+}
+
 func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags) encoderFunc {
+	if t.Implements(marshalerInterface) {
+		return marshalerEncoder(t)
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolEncoder
@@ -233,7 +275,7 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 		}
 	} else if originalFieldIndex == nil {
 		// Slower path: cannot precompute the Noms type since there are Noms collections,
-		// but at least there are a set number of fields
+		// but at least there are a set number of fields.
 		name := strings.Title(t.Name())
 		e = func(v reflect.Value) types.Value {
 			data := make(types.StructData, len(fields))
@@ -423,6 +465,12 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 }
 
 func nomsType(t reflect.Type, parentStructTypes []reflect.Type) *types.Type {
+	if t.Implements(marshalerInterface) {
+		// There is no way to determine the noms type now, it can be different each
+		// time MarshalNoms is called. This is handled further up the stack.
+		return nil
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		return types.BoolType
