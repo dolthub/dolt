@@ -148,6 +148,9 @@ func TestMakeSimplifiedUnion(t *testing.T) {
 		in  []*Type
 		out *Type
 	}{
+		// {} -> <empty-union>
+		{[]*Type{},
+			MakeUnionType()},
 		// {bool} -> bool
 		{[]*Type{BoolType},
 			BoolType},

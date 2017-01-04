@@ -57,6 +57,7 @@ func index() (win bool) {
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to - if empty, defaults to input dataset")
 	var thresh = flag.Int("threshold", 5000, "Number of milliseconds within which to consider photos duplicates")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
+	types.RegisterTypeSimplificationFlags(flag.CommandLine)
 
 	flag.Usage = usage
 	flag.Parse(true)

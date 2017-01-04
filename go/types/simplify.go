@@ -35,8 +35,6 @@ import (
 // Anytime any of the above cases generates a union as output, the same process
 // is applied to that union recursively.
 func makeSimplifiedUnion(in ...*Type) *Type {
-	d.Chk.True(len(in) > 0)
-
 	ts := make(typeset, len(in))
 	for _, t := range in {
 		// De-cycle so that we handle cycles explicitly below. Otherwise, we would implicitly crawl
@@ -135,6 +133,8 @@ func makeSimplifiedUnionImpl(in typeset) *Type {
 		return out[0]
 	}
 
+	staticTypeCache.Lock()
+	defer staticTypeCache.Unlock()
 	return staticTypeCache.makeUnionType(out...)
 }
 

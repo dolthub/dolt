@@ -539,11 +539,12 @@ func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type 
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
 	if enableTypeSimplification {
 		return makeSimplifiedUnion(elemTypes...)
 	}
+
+	staticTypeCache.Lock()
+	defer staticTypeCache.Unlock()
 	return staticTypeCache.makeUnionType(elemTypes...)
 }
 
