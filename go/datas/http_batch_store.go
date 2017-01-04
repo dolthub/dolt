@@ -339,7 +339,7 @@ func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 	defer bhcs.cacheMu.RUnlock()
 	bhcs.unwrittenPuts.Insert(c)
 	for hint := range hints {
-		hints[hint] = struct{}{}
+		bhcs.hints[hint] = struct{}{}
 	}
 }
 
@@ -347,7 +347,7 @@ func (bhcs *httpBatchStore) AddHints(hints types.Hints) {
 	bhcs.cacheMu.RLock()
 	defer bhcs.cacheMu.RUnlock()
 	for hint := range hints {
-		hints[hint] = struct{}{}
+		bhcs.hints[hint] = struct{}{}
 	}
 }
 
