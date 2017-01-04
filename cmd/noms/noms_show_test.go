@@ -93,6 +93,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	// out to same thing.
 	test := func(in types.Value) {
 		r1 := db.WriteValue(in)
+		db.CommitValue(sp.GetDataset(), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("ldb", s.LdbDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))

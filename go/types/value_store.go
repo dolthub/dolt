@@ -13,35 +13,45 @@ import (
 	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
-// ValueReader is an interface that knows how to read Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value reading.
+// ValueReader is an interface that knows how to read Noms Values, e.g.
+// datas/Database. Required to avoid import cycle between this package and the
+// package that implements Value reading.
 type ValueReader interface {
 	ReadValue(h hash.Hash) Value
 }
 
-// ValueWriter is an interface that knows how to write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value writing.
+// ValueWriter is an interface that knows how to write Noms Values, e.g.
+// datas/Database. Required to avoid import cycle between this package and the
+// package that implements Value writing.
 type ValueWriter interface {
 	WriteValue(v Value) Ref
 }
 
-// ValueReadWriter is an interface that knows how to read and write Noms Values, e.g. datas/Database. Required to avoid import cycle between this package and the package that implements Value read/writing.
+// ValueReadWriter is an interface that knows how to read and write Noms
+// Values, e.g. datas/Database. Required to avoid import cycle between this
+// package and the package that implements Value read/writing.
 type ValueReadWriter interface {
 	ValueReader
 	ValueWriter
 	opCache() opCache
 }
 
-// ValueStore provides methods to read and write Noms Values to a BatchStore. It validates Values as they are written, but does not guarantee that these Values are persisted to the BatchStore until a subsequent Flush. or Close.
+// ValueStore provides methods to read and write Noms Values to a BatchStore.
+// It validates Values as they are written, but does not guarantee that these
+// Values are persisted through the BatchStore until a subsequent Flush.
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
 // - all Refs in v point to a Value that can be read from this ValueStore
 // - all Refs in v point to a Value of the correct Type
 type ValueStore struct {
-	bs         BatchStore
-	cache      map[hash.Hash]chunkCacheEntry
-	mu         sync.RWMutex
-	valueCache *sizecache.SizeCache
-	opcStore   opCacheStore
-	once       sync.Once
+	bs          BatchStore
+	cacheMu     sync.RWMutex
+	cache       map[hash.Hash]chunkCacheEntry
+	pendingMu   sync.RWMutex
+	pendingPuts map[hash.Hash]pendingChunk
+	valueCache  *sizecache.SizeCache
+	opcStore    opCacheStore
+	once        sync.Once
 }
 
 const defaultValueCacheSize = 1 << 25 // 32MB
@@ -52,7 +62,14 @@ type chunkCacheEntry interface {
 	Type() *Type
 }
 
-// NewTestValueStore creates a simple struct that satisfies ValueReadWriter and is backed by a chunks.TestStore.
+type pendingChunk struct {
+	c      chunks.Chunk
+	height uint64
+	hints  Hints
+}
+
+// NewTestValueStore creates a simple struct that satisfies ValueReadWriter
+// and is backed by a chunks.TestStore.
 func NewTestValueStore() *ValueStore {
 	return newLocalValueStore(chunks.NewTestStore())
 }
@@ -61,20 +78,32 @@ func newLocalValueStore(cs chunks.ChunkStore) *ValueStore {
 	return NewValueStore(NewBatchStoreAdaptor(cs))
 }
 
-// NewValueStore returns a ValueStore instance that owns the provided BatchStore and manages its lifetime. Calling Close on the returned ValueStore will Close bs.
+// NewValueStore returns a ValueStore instance that owns the provided
+// BatchStore and manages its lifetime. Calling Close on the returned
+// ValueStore will Close bs.
 func NewValueStore(bs BatchStore) *ValueStore {
 	return NewValueStoreWithCache(bs, defaultValueCacheSize)
 }
 
 func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
-	return &ValueStore{bs, map[hash.Hash]chunkCacheEntry{}, sync.RWMutex{}, sizecache.New(cacheSize), nil, sync.Once{}}
+	return &ValueStore{
+		bs:          bs,
+		cacheMu:     sync.RWMutex{},
+		cache:       map[hash.Hash]chunkCacheEntry{},
+		pendingMu:   sync.RWMutex{},
+		pendingPuts: map[hash.Hash]pendingChunk{},
+		valueCache:  sizecache.New(cacheSize),
+		once:        sync.Once{},
+	}
 }
 
 func (lvs *ValueStore) BatchStore() BatchStore {
 	return lvs.bs
 }
 
-// ReadValue reads and decodes a value from lvs. It is not considered an error for the requested chunk to be empty; in this case, the function simply returns nil.
+// ReadValue reads and decodes a value from lvs. It is not considered an error
+// for the requested chunk to be empty; in this case, the function simply
+// returns nil.
 func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	if v, ok := lvs.valueCache.Get(h); ok {
 		if v == nil {
@@ -82,11 +111,23 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 		}
 		return v.(Value)
 	}
-	chunk := lvs.bs.Get(h)
+
+	chunk := func() chunks.Chunk {
+		lvs.pendingMu.RLock()
+		defer lvs.pendingMu.RUnlock()
+		if pc, ok := lvs.pendingPuts[h]; ok {
+			return pc.c
+		}
+		return chunks.EmptyChunk
+	}()
+	if chunk.IsEmpty() {
+		chunk = lvs.bs.Get(h)
+	}
 	if chunk.IsEmpty() {
 		lvs.valueCache.Add(h, 0, nil)
 		return nil
 	}
+
 	v := DecodeValue(chunk, lvs)
 	lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
 
@@ -103,32 +144,55 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	return v
 }
 
-// WriteValue takes a Value, schedules it to be written it to lvs, and returns an appropriately-typed types.Ref. v is not guaranteed to be actually written until after Flush().
+// WriteValue takes a Value, schedules it to be written it to lvs, and returns
+// an appropriately-typed types.Ref. v is not guaranteed to be actually
+// written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
 	d.PanicIfFalse(v != nil)
 	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
 	c := EncodeValue(v, lvs)
 	d.PanicIfTrue(c.IsEmpty())
-	hash := c.Hash()
+	h := c.Hash()
 	height := maxChunkHeight(v) + 1
-	r := constructRef(MakeRefType(v.Type()), hash, height)
-	if lvs.isPresent(hash) {
+	r := constructRef(MakeRefType(v.Type()), h, height)
+	if lvs.isPresent(h) {
 		return r
 	}
+
+	// TODO: It _really_ feels like there should be some refactoring that allows us to only have to walk the refs of |v| once, but I'm hesitant to undertake that refactor right now.
 	hints := lvs.chunkHintsFromCache(v)
-	lvs.bs.SchedulePut(c, height, hints)
-	lvs.set(hash, (*presentChunk)(v.Type()))
-	lvs.valueCache.Drop(hash)
+
+	func() {
+		lvs.pendingMu.Lock()
+		defer lvs.pendingMu.Unlock()
+		lvs.pendingPuts[h] = pendingChunk{c, height, hints}
+		v.WalkRefs(func(reachable Ref) {
+			if pc, present := lvs.pendingPuts[reachable.TargetHash()]; present {
+				lvs.bs.SchedulePut(pc.c, pc.height, pc.hints)
+				delete(lvs.pendingPuts, reachable.TargetHash())
+			}
+		})
+	}()
+
+	lvs.set(h, (*presentChunk)(v.Type()))
+	lvs.valueCache.Drop(h)
 	return r
 }
 
 func (lvs *ValueStore) Flush() {
+	func() {
+		lvs.pendingMu.Lock()
+		defer lvs.pendingMu.Unlock()
+		for _, pc := range lvs.pendingPuts {
+			lvs.bs.SchedulePut(pc.c, pc.height, pc.hints)
+		}
+		lvs.pendingPuts = map[hash.Hash]pendingChunk{}
+	}()
 	lvs.bs.Flush()
 }
 
 // Close closes the underlying BatchStore
 func (lvs *ValueStore) Close() error {
-	lvs.Flush()
 	if lvs.opcStore != nil {
 		err := lvs.opcStore.destroy()
 		d.Chk.NoError(err, "Attempt to clean up opCacheStore failed, error: %s\n", err)
@@ -155,14 +219,14 @@ func (lvs *ValueStore) isPresent(r hash.Hash) (present bool) {
 }
 
 func (lvs *ValueStore) check(r hash.Hash) chunkCacheEntry {
-	lvs.mu.RLock()
-	defer lvs.mu.RUnlock()
+	lvs.cacheMu.RLock()
+	defer lvs.cacheMu.RUnlock()
 	return lvs.cache[r]
 }
 
 func (lvs *ValueStore) set(r hash.Hash, entry chunkCacheEntry) {
-	lvs.mu.Lock()
-	defer lvs.mu.Unlock()
+	lvs.cacheMu.Lock()
+	defer lvs.cacheMu.Unlock()
 	lvs.cache[r] = entry
 }
 

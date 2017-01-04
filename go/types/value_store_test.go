@@ -95,6 +95,7 @@ func TestCacheOnReadValue(t *testing.T) {
 	b := NewEmptyBlob()
 	bref := cvs.WriteValue(b)
 	r := cvs.WriteValue(bref)
+	cvs.Flush()
 
 	cvs2 := newLocalValueStore(cs)
 	v := cvs2.ReadValue(r.TargetHash())
@@ -141,7 +142,7 @@ func TestPanicOnReadBadVersion(t *testing.T) {
 
 func TestPanicOnWriteBadVersion(t *testing.T) {
 	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
-	assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()) })
+	assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()); cvs.Flush() })
 }
 
 type badVersionStore struct {

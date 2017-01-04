@@ -32,9 +32,12 @@ func (s *bgSuite) TestBlobGet() {
 	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
 	defer sp.Close()
-	hash := sp.GetDatabase().WriteValue(blob)
+	db := sp.GetDatabase()
+	ref := db.WriteValue(blob)
+	_, err = db.CommitValue(db.GetDataset("datasetID"), ref)
+	s.NoError(err)
 
-	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, hash.TargetHash().String())
+	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())
 	filePath := filepath.Join(s.TempDir, "out")
 	s.MustRun(main, []string{hashSpec, filePath})
 

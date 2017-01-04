@@ -116,7 +116,9 @@ func TestLDBDatabaseSpec(t *testing.T) {
 		store1 := path.Join(tmpDir, "store1")
 		cs := chunks.NewLevelDBStoreUseFlags(store1, "")
 		db := datas.NewDatabase(cs)
-		db.WriteValue(s)
+		r := db.WriteValue(s)
+		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
+		assert.NoError(err)
 		db.Close() // must close immediately to free ldb
 
 		spec1, err := ForDatabase(prefix + store1)
@@ -139,6 +141,9 @@ func TestLDBDatabaseSpec(t *testing.T) {
 
 		db = spec2.GetDatabase()
 		db.WriteValue(s)
+		r = db.WriteValue(s)
+		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
+		assert.NoError(err)
 		assert.Equal(s, db.ReadValue(s.Hash()))
 	}
 
@@ -455,7 +460,10 @@ func TestMultipleSpecsSameLeveldb(t *testing.T) {
 	assert.NoError(err2)
 
 	s := types.String("hello")
-	spec1.GetDatabase().WriteValue(s)
+	db := spec1.GetDatabase()
+	r := db.WriteValue(s)
+	_, err = db.CommitValue(db.GetDataset("datasetID"), r)
+	assert.NoError(err)
 	assert.Equal(s, spec2.GetDatabase().ReadValue(s.Hash()))
 }
 
