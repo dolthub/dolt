@@ -13,6 +13,7 @@ import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {invariant} from './assert.js';
 import Sequence, {OrderedKey} from './sequence.js';
+import {newCursorAtIndex} from './indexed-sequence.js';
 import {
   newOrderedMetaSequenceChunkFn,
 } from './meta-sequence.js';
@@ -81,6 +82,13 @@ export default class Set<T: Value> extends Collection<Sequence<any>> {
 
   last(): Promise<?T> {
     return this._firstOrLast(true);
+  }
+
+  // Returns the value at index `idx`, as per the (stable) ordering of noms
+  // values in this set.
+  at(idx: number): Promise<T> {
+    invariant(idx >= 0 && idx < this.size);
+    return newCursorAtIndex(this.sequence, idx).then(cur => cur.getCurrent());
   }
 
   async forEach(cb: (v: T) => ?Promise<any>): Promise<void> {

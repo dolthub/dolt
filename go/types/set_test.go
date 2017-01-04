@@ -990,7 +990,7 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 func TestSetAt(t *testing.T) {
 	assert := assert.New(t)
 
-	values := []Value{Bool(false), Number(42), String('a'), String('b'), String('c')}
+	values := []Value{Bool(false), Number(42), String("a"), String("b"), String("c")}
 	s := NewSet(values...)
 
 	for i, v := range values {

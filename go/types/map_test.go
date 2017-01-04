@@ -1258,7 +1258,7 @@ func TestMapIterFrom(t *testing.T) {
 func TestMapAt(t *testing.T) {
 	assert := assert.New(t)
 
-	values := []Value{Bool(false), Number(42), String('a'), String('b'), String('c'), String('d')}
+	values := []Value{Bool(false), Number(42), String("a"), String("b"), String("c"), String("d")}
 	m := NewMap(values...)
 
 	for i := 0; i < len(values); i += 2 {

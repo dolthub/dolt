@@ -26,7 +26,7 @@ import {getTypeOfValue} from './type.js';
 import type Value from './value.js';
 import {invariant, notNull} from './assert.js';
 import List from './list.js';
-import Map, {MapLeafSequence} from './map.js';
+import Map, {KEY, VALUE, MapLeafSequence} from './map.js';
 import {MetaSequence, MetaTuple, newMapMetaSequence} from './meta-sequence.js';
 import type {ValueReadWriter} from './value-store.js';
 import {compare, equals} from './compare.js';
@@ -805,5 +805,22 @@ suite('CompoundMap', () => {
       map = await map.delete(lastKey).then(reload);
       assert.isTrue(equals(new Map(kvs), map));
     }
+  });
+
+  test('at', async () => {
+    const kvs = [
+      [false, 42],
+      ['a', 'b'],
+      ['c', 'd'],
+    ];
+    const m = new Map(kvs);
+
+    for (let i = 0; i < kvs.length; i++) {
+      const [k, v] = await m.at(i);
+      assert.equal(kvs[i][KEY], k);
+      assert.equal(kvs[i][VALUE], v);
+    }
+
+    assert.throws(() => m.at(42));
   });
 });

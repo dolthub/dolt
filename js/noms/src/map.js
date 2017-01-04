@@ -4,6 +4,7 @@
 
 // @flow
 
+import {invariant} from './assert.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
@@ -14,6 +15,7 @@ import Collection from './collection.js';
 import {compare, equals} from './compare.js';
 import {getTypeOfValue, makeMapType, makeUnionType} from './type.js';
 import Sequence, {OrderedKey} from './sequence.js';
+import {newCursorAtIndex} from './indexed-sequence.js';
 import {newOrderedMetaSequenceChunkFn} from './meta-sequence.js';
 import {
   OrderedSequenceCursor,
@@ -30,9 +32,8 @@ import walk from './walk.js';
 import type {WalkCallback} from './walk.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
-
-const KEY = 0;
-const VALUE = 1;
+export const KEY = 0;
+export const VALUE = 1;
 
 function newMapLeafChunkFn<K: Value, V: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<MapEntry<K, V>>) => {
@@ -112,6 +113,13 @@ export default class Map<K: Value, V: Value> extends
 
   last(): Promise<?MapEntry<K, V>> {
     return this._firstOrLast(true);
+  }
+
+  // Returns the map entry at index `idx`, as per the (stable) ordering of noms
+  // values in this map.
+  at(idx: number): Promise<MapEntry<K, V>> {
+    invariant(idx >= 0 && idx < this.size);
+    return newCursorAtIndex(this.sequence, idx).then(cur => cur.getCurrent());
   }
 
   async get(key: K): Promise<?V> {

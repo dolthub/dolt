@@ -670,4 +670,15 @@ suite('CompoundSet', () => {
       assert.isTrue(equals(new Set(vals), set));
     }
   });
+
+  test('at', async () => {
+    const vals = [false, 42, 'a', 'b', 'c'];
+    const set = new Set(vals);
+
+    for (let i = 0; i < vals.length; i++) {
+      assert.equal(vals[i], await set.at(i));
+    }
+
+    assert.throws(() => set.at(42));
+  });
 });
