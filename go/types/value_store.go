@@ -46,7 +46,7 @@ type ValueReadWriter interface {
 type ValueStore struct {
 	bs           BatchStore
 	cacheMu      sync.RWMutex
-	cache        map[hash.Hash]chunkCacheEntry
+	hintCache    map[hash.Hash]chunkCacheEntry
 	pendingHints map[hash.Hash]chunkCacheEntry
 	pendingMu    sync.RWMutex
 	pendingPuts  map[hash.Hash]pendingChunk
@@ -90,7 +90,7 @@ func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
 	return &ValueStore{
 		bs:           bs,
 		cacheMu:      sync.RWMutex{},
-		cache:        map[hash.Hash]chunkCacheEntry{},
+		hintCache:    map[hash.Hash]chunkCacheEntry{},
 		pendingHints: map[hash.Hash]chunkCacheEntry{},
 		pendingMu:    sync.RWMutex{},
 		pendingPuts:  map[hash.Hash]pendingChunk{},
@@ -132,18 +132,21 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 
 	v := DecodeValue(chunk, lvs)
 	lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
+	lvs.setHintsForReadValue(v, h)
+	return v
+}
 
+func (lvs *ValueStore) setHintsForReadValue(v Value, h hash.Hash) {
 	var entry chunkCacheEntry = absentChunk{}
 	if v != nil {
-		lvs.cacheChunks(v, h, false)
-		// h is trivially a hint for v, so consider putting that in the cache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because h already has a hint in the cache. If we later read some other chunk that references v, cacheChunks will overwrite this with a hint pointing to that chunk.
+		lvs.setHintsForReachable(v, h, false)
+		// h is trivially a hint for v, so consider putting that in the hintCache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because h already has a hint in the hintCache. If we later read some other chunk that references v, setHintsForReachable will overwrite this with a hint pointing to that chunk.
 		// If we don't do this, top-level Values that get read but not written -- such as the existing Head of a Database upon a Commit -- can be erroneously left out during a pull.
 		entry = hintedChunk{v.Type(), h}
 	}
 	if cur := lvs.check(h); cur == nil || cur.Hint().IsEmpty() {
 		lvs.set(h, entry, false)
 	}
-	return v
 }
 
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns
@@ -176,7 +179,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 		})
 	}()
 
-	lvs.cacheChunks(v, v.Hash(), true)
+	lvs.setHintsForReachable(v, v.Hash(), true)
 	lvs.set(h, (*presentChunk)(v.Type()), false)
 	lvs.valueCache.Drop(h)
 	return r
@@ -205,8 +208,8 @@ func (lvs *ValueStore) Close() error {
 	return lvs.bs.Close()
 }
 
-// cacheChunks looks at the Chunks reachable from v and, for each one checks if there's a hint in the cache. If there isn't, or if the hint is a self-reference, the chunk gets r set as its new hint.
-func (lvs *ValueStore) cacheChunks(v Value, r hash.Hash, toPending bool) {
+// setHintsForReachable looks at the Chunks reachable from v and, for each one checks if there's a hint in the hintCache. If there isn't, or if the hint is a self-reference, the chunk gets r set as its new hint.
+func (lvs *ValueStore) setHintsForReachable(v Value, r hash.Hash, toPending bool) {
 	v.WalkRefs(func(reachable Ref) {
 		hash := reachable.TargetHash()
 		if cur := lvs.check(hash); cur == nil || cur.Hint().IsEmpty() || cur.Hint() == hash {
@@ -225,7 +228,7 @@ func (lvs *ValueStore) isPresent(r hash.Hash) (present bool) {
 func (lvs *ValueStore) check(r hash.Hash) chunkCacheEntry {
 	lvs.cacheMu.RLock()
 	defer lvs.cacheMu.RUnlock()
-	return lvs.cache[r]
+	return lvs.hintCache[r]
 }
 
 func (lvs *ValueStore) set(r hash.Hash, entry chunkCacheEntry, toPending bool) {
@@ -234,7 +237,7 @@ func (lvs *ValueStore) set(r hash.Hash, entry chunkCacheEntry, toPending bool) {
 	if toPending {
 		lvs.pendingHints[r] = entry
 	} else {
-		lvs.cache[r] = entry
+		lvs.hintCache[r] = entry
 	}
 }
 
@@ -243,7 +246,7 @@ func (lvs *ValueStore) mergePendingHints() {
 	defer lvs.cacheMu.Unlock()
 
 	for h, entry := range lvs.pendingHints {
-		lvs.cache[h] = entry
+		lvs.hintCache[h] = entry
 	}
 	lvs.pendingHints = map[hash.Hash]chunkCacheEntry{}
 }
@@ -266,11 +269,11 @@ func (lvs *ValueStore) opCache() opCache {
 func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 	hints := map[hash.Hash]struct{}{}
 	collectHints := func(reachable Ref) {
-		// First, check the type cache to see if reachable is already known to be valid.
+		// First, check the  hintCache to see if reachable is already known to be valid.
 		targetHash := reachable.TargetHash()
 		entry := lvs.check(targetHash)
 
-		// If it's not already in the cache, attempt to read the value directly, which will put it and its chunks into the cache.
+		// If it's not already in the hintCache, attempt to read the value directly, which will put it and its chunks into the hintCache.
 		if entry == nil || !entry.Present() {
 			var reachableV Value
 			if readValues {

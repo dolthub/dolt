@@ -122,7 +122,9 @@ func (s *DynamoStore) Get(h hash.Hash) Chunk {
 func (s *DynamoStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
 	for h, _ := range hashes {
 		c := s.Get(h)
-		foundChunks <- &c
+		if !c.IsEmpty() {
+			foundChunks <- &c
+		}
 	}
 	return
 }

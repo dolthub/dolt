@@ -32,19 +32,23 @@ func NewValidatingBatchingSink(cs chunks.ChunkStore) *ValidatingBatchingSink {
 
 // Prepare primes the type info cache used to validate Enqueued Chunks by reading the Chunks referenced by the provided hints.
 func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
-	rl := make(chan struct{}, batchSize)
+	foundChunks := make(chan *chunks.Chunk, batchSize)
 	wg := sync.WaitGroup{}
-	for hint := range hints {
+	for i := 0; i < batchSize; i++ {
 		wg.Add(1)
-		rl <- struct{}{}
-		go func(hint hash.Hash) {
-			vbs.vs.ReadValue(hint)
-			<-rl
-			wg.Done()
-		}(hint)
+		go func() {
+			defer wg.Done()
+			tc := vbs.pool.Get()
+			defer vbs.pool.Put(tc)
+			for c := range foundChunks {
+				v := DecodeFromBytes(c.Data(), vbs.vs, tc.(*TypeCache))
+				vbs.vs.setHintsForReadValue(v, c.Hash())
+			}
+		}()
 	}
+	vbs.cs.GetMany(hash.HashSet(hints), foundChunks)
+	close(foundChunks)
 	wg.Wait()
-	close(rl)
 }
 
 // DecodedChunk holds a pointer to a Chunk and the Value that results from

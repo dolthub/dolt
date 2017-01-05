@@ -26,13 +26,15 @@ import (
 func TestHandleWriteValue(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
-	ds := NewDatabase(cs)
+	db := NewDatabase(cs)
 
 	l := types.NewList(
-		ds.WriteValue(types.Bool(true)),
-		ds.WriteValue(types.Bool(false)),
+		db.WriteValue(types.Bool(true)),
+		db.WriteValue(types.Bool(false)),
 	)
-	ds.WriteValue(l)
+	r := db.WriteValue(l)
+	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
+	assert.NoError(err)
 
 	hint := l.Hash()
 	newItem := types.NewEmptyBlob()
@@ -49,8 +51,8 @@ func TestHandleWriteValue(t *testing.T) {
 	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		ds2 := NewDatabase(cs)
-		v := ds2.ReadValue(l2.Hash())
+		db2 := NewDatabase(cs)
+		v := db2.ReadValue(l2.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(l2), "%+v != %+v", v, l2)
 		}
@@ -89,8 +91,8 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		ds2 := NewDatabase(cs)
-		v := ds2.ReadValue(newItem.Hash())
+		db := NewDatabase(cs)
+		v := db.ReadValue(newItem.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(newItem), "%+v != %+v", v, newItem)
 		}
@@ -100,13 +102,15 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 func TestHandleWriteValueBackpressure(t *testing.T) {
 	assert := assert.New(t)
 	cs := &backpressureCS{ChunkStore: chunks.NewMemoryStore()}
-	ds := NewDatabase(cs)
+	db := NewDatabase(cs)
 
 	l := types.NewList(
-		ds.WriteValue(types.Bool(true)),
-		ds.WriteValue(types.Bool(false)),
+		db.WriteValue(types.Bool(true)),
+		db.WriteValue(types.Bool(false)),
 	)
-	ds.WriteValue(l)
+	r := db.WriteValue(l)
+	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
+	assert.NoError(err)
 
 	hint := l.Hash()
 	newItem := types.NewEmptyBlob()

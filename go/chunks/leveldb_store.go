@@ -103,7 +103,9 @@ func (l *LevelDBStore) Get(ref hash.Hash) Chunk {
 func (l *LevelDBStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
 	for h, _ := range hashes {
 		c := l.Get(h)
-		foundChunks <- &c
+		if !c.IsEmpty() {
+			foundChunks <- &c
+		}
 	}
 	return
 }

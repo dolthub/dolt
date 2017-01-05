@@ -44,7 +44,7 @@ type BatchStore interface {
 }
 
 // Hints are a set of hashes that should be used to speed up the validation of one or more Chunks.
-type Hints map[hash.Hash]struct{}
+type Hints hash.HashSet
 
 // BatchStoreAdaptor provides a naive implementation of BatchStore should only be used with ChunkStores that can Put relatively quickly. It provides no actual batching or validation. Its intended use is for adapting a ChunkStore for use in something that requires a BatchStore.
 type BatchStoreAdaptor struct {
