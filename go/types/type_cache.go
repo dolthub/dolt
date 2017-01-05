@@ -13,10 +13,10 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
-var enableTypeSimplification = false
+var EnableTypeSimplification = false
 
 func RegisterTypeSimplificationFlags(flags *flag.FlagSet) {
-	flags.BoolVar(&enableTypeSimplification, "type-simplification", false, "enables type simplification (see https://github.com/attic-labs/noms/issues/2995)")
+	flags.BoolVar(&EnableTypeSimplification, "type-simplification", false, "enables type simplification (see https://github.com/attic-labs/noms/issues/2995)")
 }
 
 type TypeCache struct {
@@ -539,7 +539,7 @@ func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type 
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	if enableTypeSimplification {
+	if EnableTypeSimplification {
 		return makeSimplifiedUnion(elemTypes...)
 	}
 
