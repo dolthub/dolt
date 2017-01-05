@@ -356,7 +356,10 @@ func (bhcs *httpBatchStore) sendWriteRequests() {
 	defer func() { <-bhcs.rateLimit }()
 
 	bhcs.cacheMu.Lock()
-	defer bhcs.cacheMu.Unlock()
+	defer func() {
+		bhcs.flushOrder = nbs.InsertOrder // This needs to happen even if no chunks get written.
+		bhcs.cacheMu.Unlock()
+	}()
 
 	count := bhcs.unwrittenPuts.Count()
 	if count == 0 {
@@ -366,7 +369,6 @@ func (bhcs *httpBatchStore) sendWriteRequests() {
 		bhcs.unwrittenPuts.Destroy()
 		bhcs.unwrittenPuts = nbs.NewCache()
 		bhcs.hints = types.Hints{}
-		bhcs.flushOrder = nbs.InsertOrder
 	}()
 
 	var res *http.Response
