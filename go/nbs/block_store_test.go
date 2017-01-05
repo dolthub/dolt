@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -43,12 +44,22 @@ func (suite *BlockStoreSuite) SetupTest() {
 
 func (suite *BlockStoreSuite) TearDownTest() {
 	suite.store.Close()
-	os.Remove(suite.dir)
+	os.RemoveAll(suite.dir)
+}
+
+func (suite *BlockStoreSuite) TestChunkStoreMkdir() {
+	newDir := filepath.Join(suite.dir, "newthing")
+	store := NewLocalStore(newDir, testMemTableSize)
+
+	c := chunks.NewChunk([]byte("abc"))
+	suite.store.Put(c)
+
+	suite.NotPanics(func() { store.UpdateRoot(c.Hash(), store.Root()) })
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {
 	input := []byte("abc")
-	c := chunks.NewChunk([]byte(input))
+	c := chunks.NewChunk(input)
 	suite.store.Put(c)
 	h := c.Hash()
 

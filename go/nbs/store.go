@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"os"
 	"sort"
 	"sync"
 
@@ -81,6 +82,8 @@ func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize u
 }
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
+	err := os.MkdirAll(dir, 0777)
+	d.PanicIfError(err)
 	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir), memTableSize)
 }
 
