@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,10 +34,9 @@ type Handler func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chu
 const (
 	// NomsVersionHeader is the name of the header that Noms clients and
 	// servers must set in every request/response.
-	NomsVersionHeader     = "x-noms-vers"
-	nomsBaseHTML          = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
-	writeValueConcurrency = 16
-	maxGetBatchSize       = 1 << 11 // Limit GetMany() to ~8MB of data
+	NomsVersionHeader = "x-noms-vers"
+	nomsBaseHTML      = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
+	maxGetBatchSize   = 1 << 11 // Limit GetMany() to ~8MB of data
 )
 
 var (
@@ -79,6 +79,8 @@ var (
 	// TODO: Nice comment about what headers it expects/honors, payload
 	// format, and error responses.
 	HandleBaseGet = handleBaseGet
+
+	writeValueConcurrency = runtime.NumCPU()
 )
 
 func versionCheck(hndlr Handler) Handler {
