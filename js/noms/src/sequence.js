@@ -126,10 +126,11 @@ export class SequenceCursor<T, S: Sequence<any>> {
   getChildSequence(): Promise<?S> {
     if (this.readAhead && this.sequence.isMeta && !this.childSeqs) {
       // Only readAhead when enabled, for meta sequences.
-      this.childSeqs = [];
+      const childSeqs = [];
       for (let i = this.idx; i < this.sequence.length; i++) {
-        this.childSeqs.push(this.sequence.getChildSequence(i));
+        childSeqs[i] = this.sequence.getChildSequence(i);
       }
+      this.childSeqs = childSeqs;
     }
 
     if (this.childSeqs && this.childSeqs[this.idx]) {
