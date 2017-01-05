@@ -686,15 +686,20 @@ func TestEncodeOriginal(t *testing.T) {
 	assert.True(MustMarshal(s).Equals(orig.Set("foo", types.Number(43))))
 
 	// Field type of base are preserved
-	st := types.MakeStructType("S", []string{"foo"},
-		[]*types.Type{types.MakeUnionType(types.StringType, types.NumberType)})
+	st := types.MakeStructTypeFromFields("S", types.FieldMap{
+		"foo": types.MakeUnionType(types.StringType, types.NumberType),
+	})
 	orig = types.NewStructWithType(st, []types.Value{types.Number(42)})
 	err = Unmarshal(orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	out := MustMarshal(s)
 	assert.True(out.Equals(orig.Set("foo", types.Number(43))))
-	assert.True(out.Type().Equals(st))
+
+	st2 := types.MakeStructTypeFromFields("S", types.FieldMap{
+		"foo": types.NumberType,
+	})
+	assert.True(out.Type().Equals(st2))
 
 	// It's OK to have an empty original field
 	s = S{

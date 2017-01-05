@@ -15,7 +15,6 @@ import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import * as Bytes from './bytes.js';
-import {isSubtype} from './assert-type.js';
 import walk from './walk.js';
 import type {WalkCallback} from './walk.js';
 import type {ValueReader} from './value-store.js';
@@ -184,7 +183,7 @@ export class StructMirror<T: Struct> {
   set(name: string, value: Value): Struct {
     const fields = this.desc.fields;
     const i = findFieldIndex(name, fields);
-    if (i === -1 || !isSubtype(fields[i].type, getTypeOfValue(value))) {
+    if (i === -1 || !equals(fields[i].type, getTypeOfValue(value))) {
       // New/change field
       const data = Object.create(null);
       for (let i = 0; i < fields.length; i++) {

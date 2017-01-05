@@ -97,10 +97,13 @@ suite('Struct', () => {
       x: numberType,
     })));
 
-    // Subtype
+    // Subtype is not equal
     const s9 = newStruct('', {l: new List([0, 1, false, true])});
     const s10 = new StructMirror(s9).set('l', new List([2, 3]));
-    assert.isTrue(equals(s9.type, s10.type));
+    const t10 = makeStructType('', {
+      l: makeListType(numberType),
+    });
+    assert.isTrue(equals(t10, s10.type));
   });
 
   test('struct delete', () => {

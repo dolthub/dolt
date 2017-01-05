@@ -84,10 +84,13 @@ func TestGenericStructSet(t *testing.T) {
 	s5 := s.Set("x", Number(42))
 	assert.True(MakeStructType("S3", []string{"b", "o", "x"}, []*Type{BoolType, StringType, NumberType}).Equals(s5.Type()))
 
-	// Subtype
+	// Subtype is not equal.
 	s6 := NewStruct("", StructData{"l": NewList(Number(0), Number(1), Bool(false), Bool(true))})
 	s7 := s6.Set("l", NewList(Number(2), Number(3)))
-	assert.True(s6.Type().Equals(s7.Type()))
+	t7 := MakeStructTypeFromFields("", FieldMap{
+		"l": MakeListType(NumberType),
+	})
+	assert.True(t7.Equals(s7.Type()))
 }
 
 func TestGenericStructDelete(t *testing.T) {

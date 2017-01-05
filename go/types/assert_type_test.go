@@ -156,10 +156,10 @@ func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
 
-	assertInvalid(tt,
+	assert.False(tt, IsSubtype(
 		MakeStructTypeFromFields("", FieldMap{}),
 		MakeUnionType(MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
-			NumberType))
+			NumberType)))
 
 	assert.True(tt, IsSubtype(
 		MakeUnionType(
@@ -169,13 +169,13 @@ func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
 
-	assertInvalid(tt,
+	assert.False(tt, IsSubtype(
 		MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType})),
 		MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}),
-			NumberType))
+			NumberType)))
 }
 
 func TestAssertTypeEmptyListUnion(tt *testing.T) {

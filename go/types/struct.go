@@ -121,7 +121,7 @@ func (s Struct) Get(n string) Value {
 // struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	f, i := s.desc().findField(n)
-	if i == -1 || !IsSubtype(f.t, v.Type()) {
+	if i == -1 || !f.t.Equals(v.Type()) {
 		// New/change field
 		data := make(StructData, len(s.values)+1)
 		for i, f := range s.desc().fields {
