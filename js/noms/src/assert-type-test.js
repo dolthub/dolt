@@ -148,6 +148,36 @@ suite('validate type', () => {
     assertInvalid(makeUnionType([st, numberType]), new Set([1, 2]));
   });
 
+  test('concrete type is union', () => {
+    assert.isOk(isSubtype(
+      makeStructType('', {}),
+      makeUnionType([
+        makeStructType('', {foo: stringType}),
+        makeStructType('', {bar: numberType})])));
+
+    assertInvalid(
+      makeStructType('', {}),
+      makeUnionType([
+        makeStructType('', {foo: stringType}),
+        numberType]));
+
+    assert.isOk(isSubtype(
+      makeUnionType([
+        makeStructType('', {foo: stringType}),
+        makeStructType('', {bar: numberType})]),
+      makeUnionType([
+        makeStructType('', {foo: stringType, bar: numberType}),
+        makeStructType('', {bar: numberType})])));
+
+    assertInvalid(
+      makeUnionType([
+        makeStructType('', {foo: stringType}),
+        makeStructType('', {bar: numberType})]),
+      makeUnionType([
+        makeStructType('', {foo: stringType, bar: numberType}),
+        numberType]));
+  });
+
   test('empty list union', () => {
     const lt = makeListType(makeUnionType([]));
     assertSubtype(lt, new List());

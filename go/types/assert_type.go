@@ -22,16 +22,18 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 		return true
 	}
 
-	if requiredType.Kind() == UnionKind {
-		// If we're comparing two unions all component types must be compatible
-		if concreteType.Kind() == UnionKind {
-			for _, t := range concreteType.Desc.(CompoundDesc).ElemTypes {
-				if !isSubtype(requiredType, t, parentStructTypes) {
-					return false
-				}
+	// If the concrete type is a union, all component types must be compatible.
+	if concreteType.Kind() == UnionKind {
+		for _, t := range concreteType.Desc.(CompoundDesc).ElemTypes {
+			if !isSubtype(requiredType, t, parentStructTypes) {
+				return false
 			}
-			return true
 		}
+		return true
+	}
+
+	// If the required type is a union, at least one of the component types must be compatible.
+	if requiredType.Kind() == UnionKind {
 		for _, t := range requiredType.Desc.(CompoundDesc).ElemTypes {
 			if isSubtype(t, concreteType, parentStructTypes) {
 				return true

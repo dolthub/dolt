@@ -53,14 +53,15 @@ function isSubtypeInternal(requiredType: Type<any>, concreteType: Type<any>,
     return true;
   }
 
-  if (requiredType.kind === Kind.Union) {
+  // If the concrete type is a union, all component types must be compatible.
+  if (concreteType.kind === Kind.Union) {
+    const {desc} = concreteType;
+    invariant(desc instanceof CompoundDesc);
+    return desc.elemTypes.every(t => isSubtypeInternal(requiredType, t, parentStructTypes));
+  }
 
-    // If we're comparing two unions all component types must be compatible
-    if (concreteType.kind === Kind.Union) {
-      const {desc} = concreteType;
-      invariant(desc instanceof CompoundDesc);
-      return desc.elemTypes.every(t => isSubtypeInternal(requiredType, t, parentStructTypes));
-    }
+  // If the required type is a union, at least one of the component types must be compatible.
+  if (requiredType.kind === Kind.Union) {
     const {desc} = requiredType;
     invariant(desc instanceof CompoundDesc);
     return desc.elemTypes.some(t => isSubtypeInternal(t, concreteType, parentStructTypes));

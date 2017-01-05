@@ -149,6 +149,35 @@ func TestAssertTypeUnion(tt *testing.T) {
 	assertInvalid(tt, MakeUnionType(st, NumberType), NewSet(Number(1), Number(2)))
 }
 
+func TestAssertConcreteTypeIsUnion(tt *testing.T) {
+	assert.True(tt, IsSubtype(
+		MakeStructTypeFromFields("", FieldMap{}),
+		MakeUnionType(
+			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
+			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
+
+	assertInvalid(tt,
+		MakeStructTypeFromFields("", FieldMap{}),
+		MakeUnionType(MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
+			NumberType))
+
+	assert.True(tt, IsSubtype(
+		MakeUnionType(
+			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
+			MakeStructTypeFromFields("", FieldMap{"bar": StringType})),
+		MakeUnionType(
+			MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}),
+			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
+
+	assertInvalid(tt,
+		MakeUnionType(
+			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
+			MakeStructTypeFromFields("", FieldMap{"bar": StringType})),
+		MakeUnionType(
+			MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}),
+			NumberType))
+}
+
 func TestAssertTypeEmptyListUnion(tt *testing.T) {
 	lt := MakeListType(MakeUnionType())
 	assertSubtype(lt, NewList())
