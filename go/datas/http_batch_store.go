@@ -24,6 +24,7 @@ import (
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/golang/snappy"
 	"github.com/julienschmidt/httprouter"
 )
@@ -480,7 +481,7 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 func newRequest(method, auth, url string, body io.Reader, header http.Header) *http.Request {
 	req, err := http.NewRequest(method, url, body)
 	d.Chk.NoError(err)
-	req.Header.Set(NomsVersionHeader, constants.NomsVersion)
+	req.Header.Set(NomsVersionHeader, version.Current())
 	for k, vals := range header {
 		for _, v := range vals {
 			req.Header.Add(k, v)
@@ -500,14 +501,14 @@ func formatErrorResponse(res *http.Response) string {
 
 func expectVersion(res *http.Response) {
 	dataVersion := res.Header.Get(NomsVersionHeader)
-	if constants.NomsVersion != dataVersion {
+	if version.Current() != dataVersion {
 		b, _ := ioutil.ReadAll(res.Body)
 		res.Body.Close()
 		d.PanicIfError(fmt.Errorf(
 			"Version mismatch\n\r"+
 				"\tSDK version '%s' is incompatible with data of version: '%s'\n\r"+
 				"\tHTTP Response: %d (%s): %s\n",
-			constants.NomsVersion, dataVersion,
+			version.Current(), dataVersion,
 			res.StatusCode, res.Status, string(b)))
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -33,8 +34,8 @@ type RemoteDatabaseServer struct {
 
 func NewRemoteDatabaseServer(cs chunks.ChunkStore, port int) *RemoteDatabaseServer {
 	dataVersion := cs.Version()
-	if constants.NomsVersion != dataVersion {
-		d.Panic("SDK version %s is incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	if version.Current() != dataVersion {
+		d.Panic("SDK version %s is incompatible with data of version %s", version.Current(), dataVersion)
 	}
 	return &RemoteDatabaseServer{
 		cs, port, nil, make(chan *connectionState, 16), false, func() {},
@@ -115,7 +116,7 @@ func (s *RemoteDatabaseServer) corsHandle(f httprouter.Handle) httprouter.Handle
 		w.Header().Add("Access-Control-Allow-Methods", "GET, POST")
 		w.Header().Add("Access-Control-Allow-Headers", NomsVersionHeader)
 		w.Header().Add("Access-Control-Expose-Headers", NomsVersionHeader)
-		w.Header().Add(NomsVersionHeader, constants.NomsVersion)
+		w.Header().Add(NomsVersionHeader, version.Current())
 		f(w, r, ps)
 	}
 }

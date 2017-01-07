@@ -55,7 +55,6 @@ func download() (win bool) {
 	var cacheDsArg = flag.String("cache-ds", "", "name of photo-cache dataset")
 	var concurrencyArg = flag.Uint("concurrency", 4, "number of concurrent HTTP calls to retrieve remote resources")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
-	types.RegisterTypeSimplificationFlags(flag.CommandLine)
 	flag.Usage = usage
 	flag.Parse(false)
 

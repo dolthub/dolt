@@ -10,14 +10,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	flag "github.com/juju/gnuflag"
+	"github.com/attic-labs/noms/go/version"
 )
-
-var EnableTypeSimplification = false
-
-func RegisterTypeSimplificationFlags(flags *flag.FlagSet) {
-	flags.BoolVar(&EnableTypeSimplification, "type-simplification", false, "enables type simplification (see https://github.com/attic-labs/noms/issues/2995)")
-}
 
 type TypeCache struct {
 	identTable *identTable
@@ -539,7 +533,7 @@ func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type 
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	if EnableTypeSimplification {
+	if version.IsNext() {
 		return makeSimplifiedUnion(elemTypes...)
 	}
 

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -87,7 +87,7 @@ func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writ
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:         {S: aws.String(dm.db)},
 			nbsVersAttr:    {S: aws.String(StorageVersion)},
-			versAttr:       {S: aws.String(constants.NomsVersion)},
+			versAttr:       {S: aws.String(version.Current())},
 			rootAttr:       {B: newRoot[:]},
 			tableSpecsAttr: {S: aws.String(strings.Join(tableInfo, ":"))},
 		},
@@ -101,7 +101,7 @@ func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writ
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
 		":prev": {B: root[:]},
-		":vers": {S: aws.String(constants.NomsVersion)},
+		":vers": {S: aws.String(version.Current())},
 	}
 
 	_, err := dm.ddbsvc.PutItem(&putArgs)
@@ -110,7 +110,7 @@ func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writ
 			if awsErr.Code() == "ConditionalCheckFailedException" {
 				exists, vers, actual, tableSpecs := dm.ParseIfExists(nil)
 				d.Chk.True(exists)
-				d.Chk.True(vers == constants.NomsVersion)
+				d.Chk.True(vers == version.Current())
 				return actual, tableSpecs
 			} // TODO handle other aws errors?
 		}

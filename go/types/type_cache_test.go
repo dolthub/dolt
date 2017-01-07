@@ -7,6 +7,7 @@ package types
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/go/version"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -101,6 +102,19 @@ func TestTypeCacheUnion(t *testing.T) {
 	ut = MakeUnionType(StringType, BoolType, NumberType)
 	ut2 = MakeUnionType(NumberType, StringType, BoolType)
 	assert.True(ut == ut2)
+}
+
+func TestTypeCacheUnionVersionNext(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.True(version.IsStable())
+	u := MakeUnionType(MakeSetType(NumberType), MakeSetType(StringType))
+	assert.Equal("Set<String> | Set<Number>", u.Describe())
+
+	version.UseNext(true)
+	defer version.UseNext(false)
+	u = MakeUnionType(MakeSetType(NumberType), MakeSetType(StringType))
+	assert.Equal("Set<Number | String>", u.Describe())
 }
 
 func TestTypeCacheCyclicStruct(t *testing.T) {

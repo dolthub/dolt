@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/version"
 )
 
 type localBatchStore struct {
@@ -70,8 +70,8 @@ func (lbs *localBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 
 func (lbs *localBatchStore) expectVersion() {
 	dataVersion := lbs.cs.Version()
-	if constants.NomsVersion != dataVersion {
-		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	if version.Current() != dataVersion {
+		d.Panic("SDK version %s incompatible with data of version %s", version.Current(), dataVersion)
 	}
 }
 

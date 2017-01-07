@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -132,7 +132,7 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 
 	m.assert.NotNil(input.Item[versAttr], "%s should have been present", versAttr)
 	m.assert.NotNil(input.Item[versAttr].S, "nbsVers should have been a String: %+v", input.Item[versAttr])
-	m.assert.Equal(constants.NomsVersion, *input.Item[versAttr].S)
+	m.assert.Equal(version.Current(), *input.Item[versAttr].S)
 
 	m.assert.NotNil(input.Item[rootAttr], "%s should have present", rootAttr)
 	m.assert.NotNil(input.Item[rootAttr].B, "root should have been a blob: %+v", input.Item[rootAttr])
@@ -151,7 +151,7 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
-	m.put(key, root, constants.NomsVersion, specs)
+	m.put(key, root, version.Current(), specs)
 	m.numPuts++
 
 	return &dynamodb.PutItemOutput{}, nil

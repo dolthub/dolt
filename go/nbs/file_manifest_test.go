@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -57,7 +57,7 @@ func TestFileManifestParseIfExistsHoldsLock(t *testing.T) {
 	// Simulate another process writing a manifest.
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, newRoot.String(), tableName.String(), "0"}, ":"))
+	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, version.Current(), newRoot.String(), tableName.String(), "0"}, ":"))
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
@@ -69,7 +69,7 @@ func TestFileManifestParseIfExistsHoldsLock(t *testing.T) {
 	})
 
 	assert.True(exists)
-	assert.Equal(constants.NomsVersion, vers)
+	assert.Equal(version.Current(), vers)
 	assert.Equal(newRoot, root)
 	if assert.Len(tableSpecs, 1) {
 		assert.Equal(tableName.String(), tableSpecs[0].name.String())
@@ -100,7 +100,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	actual, tableSpecs := fm.Update(specs, hash.Hash{}, newRoot, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		newRoot2 := hash.Of([]byte("new root 2"))
-		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, newRoot2.String()}, ":"))
+		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, version.Current(), newRoot2.String()}, ":"))
 		assert.NoError(err, string(b))
 	})
 	assert.Equal(newRoot, actual)

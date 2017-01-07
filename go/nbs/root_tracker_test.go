@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -22,7 +22,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 
 	// No manifest file gets written until the first call to UpdateRoot(). Prior to that, Root() will simply return hash.Hash{}.
 	assert.Equal(hash.Hash{}, store.Root())
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(version.Current(), store.Version())
 }
 
 func TestChunkStoreVersion(t *testing.T) {
@@ -30,10 +30,10 @@ func TestChunkStoreVersion(t *testing.T) {
 	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(version.Current(), store.Version())
 	newRoot := hash.Of([]byte("new root"))
 	if assert.True(store.UpdateRoot(newRoot, hash.Hash{})) {
-		assert.Equal(constants.NomsVersion, store.Version())
+		assert.Equal(version.Current(), store.Version())
 	}
 }
 
@@ -68,17 +68,17 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	defer store.Close()
 
 	assert.Equal(hash.Hash{}, store.Root())
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(version.Current(), store.Version())
 
 	// Simulate another process writing a manifest after construction.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 	newRoot := hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(version.Current(), newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	// state in store shouldn't change
 	assert.Equal(hash.Hash{}, store.Root())
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(version.Current(), store.Version())
 }
 
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
@@ -90,13 +90,13 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 	newRoot := hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(version.Current(), newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	store := newNomsBlockStore(fm, tt, defaultMemTableSize)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root())
-	assert.Equal(constants.NomsVersion, store.Version())
+	assert.Equal(version.Current(), store.Version())
 	assertDataInStore(chunks, store, assert)
 }
 
@@ -109,7 +109,7 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 	newRoot := hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(version.Current(), newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	newRoot2 := hash.Of([]byte("new root 2"))
 	assert.False(store.UpdateRoot(newRoot2, hash.Hash{}))
@@ -163,7 +163,7 @@ func (fm *fakeManifest) Update(specs []tableSpec, root, newRoot hash.Hash, write
 	if fm.root != root {
 		return fm.root, fm.tableSpecs
 	}
-	fm.version = constants.NomsVersion
+	fm.version = version.Current()
 	fm.root = newRoot
 
 	known := map[addr]struct{}{}

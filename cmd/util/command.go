@@ -57,13 +57,14 @@ func countFlags(flags *flag.FlagSet) int {
 	}
 }
 
-func (nc *Command) Usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s\n\n", nc.UsageLine)
-	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(nc.Long))
-	flags := nc.Flags()
-	if countFlags(flags) > 0 {
-		fmt.Fprintf(os.Stderr, "\noptions:\n")
-		flags.PrintDefaults()
+func (nc *Command) MakeUsage(flags *flag.FlagSet) func() {
+	return func() {
+		fmt.Fprintf(os.Stderr, "usage: %s\n\n", nc.UsageLine)
+		fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(nc.Long))
+		if countFlags(flags) > 0 {
+			fmt.Fprintf(os.Stderr, "\noptions:\n")
+			flags.PrintDefaults()
+		}
+		os.Exit(1)
 	}
-	os.Exit(1)
 }

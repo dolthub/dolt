@@ -64,7 +64,6 @@ func index() (win bool) {
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to - if empty, defaults to input dataset")
 	var indexCovers = flag.Bool("index-covers", false, "the resulting index will contain only the cover Photo, not the entire PhotoGroup")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
-	types.RegisterTypeSimplificationFlags(flag.CommandLine)
 
 	flag.Usage = usage
 	flag.Parse(false)

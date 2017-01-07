@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/verbose"
+	"github.com/attic-labs/noms/go/version"
 	"github.com/golang/snappy"
 )
 
@@ -85,12 +85,12 @@ var (
 
 func versionCheck(hndlr Handler) Handler {
 	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
-		if req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
+		w.Header().Set(NomsVersionHeader, version.Current())
+		if req.Header.Get(NomsVersionHeader) != version.Current() {
 			verbose.Log("Returning version mismatch error")
 			http.Error(
 				w,
-				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), constants.NomsVersion),
+				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), version.Current()),
 				http.StatusBadRequest,
 			)
 			return
