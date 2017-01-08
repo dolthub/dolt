@@ -47,6 +47,13 @@ func (nbc *NomsBlockCache) Get(hash hash.Hash) chunks.Chunk {
 	return nbc.chunks.Get(hash)
 }
 
+// GetMany gets the Chunks with |hashes| from the store. On return,
+// |foundChunks| will have been fully sent all chunks which have been
+// found. Any non-present chunks will silently be ignored.
+func (nbc *NomsBlockCache) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	nbc.chunks.GetMany(hashes, foundChunks)
+}
+
 // ExtractChunks writes the entire contents of the cache to chunkChan. The
 // chunks are extracted in insertion order.
 func (nbc *NomsBlockCache) ExtractChunks(order EnumerationOrder, chunkChan chan *chunks.Chunk) {

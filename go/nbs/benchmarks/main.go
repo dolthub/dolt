@@ -14,6 +14,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/nbs"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
@@ -73,19 +74,19 @@ func main() {
 	open := newNullBlockStore
 	wrote := false
 	var writeDB func()
-	var refresh func() blockStore
+	var refresh func() types.BatchStore
 	if *toNBS != "" || *toFile != "" || *toAWS != "" {
 		var reset func()
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
 			defer os.RemoveAll(dir)
-			open = func() blockStore { return nbs.NewLocalStore(dir, bufSize) }
+			open = func() types.BatchStore { return nbs.NewLocalStore(dir, bufSize) }
 			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
 
 		} else if *toFile != "" {
 			dir := makeTempDir(*toFile, pb)
 			defer os.RemoveAll(dir)
-			open = func() blockStore {
+			open = func() types.BatchStore {
 				f, err := ioutil.TempFile(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
@@ -94,7 +95,7 @@ func main() {
 
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() blockStore {
+			open = func() types.BatchStore {
 				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, sess, bufSize)
 			}
 			reset = func() {
@@ -110,21 +111,21 @@ func main() {
 		}
 
 		writeDB = func() { wrote = ensureNovelWrite(wrote, open, src, pb) }
-		refresh = func() blockStore {
+		refresh = func() types.BatchStore {
 			reset()
 			return open()
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() blockStore { return nbs.NewLocalStore(*useNBS, bufSize) }
+			open = func() types.BatchStore { return nbs.NewLocalStore(*useNBS, bufSize) }
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() blockStore {
+			open = func() types.BatchStore {
 				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, sess, bufSize)
 			}
 		}
 		writeDB = func() {}
-		refresh = func() blockStore { panic("WriteNovel unsupported with --useLDB and --useNBS") }
+		refresh = func() types.BatchStore { panic("WriteNovel unsupported with --useLDB and --useNBS") }
 	}
 
 	benchmarks := []struct {

@@ -14,12 +14,7 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-type blockStore interface {
-	types.BatchStore
-	GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk)
-}
-
-type storeOpenFn func() blockStore
+type storeOpenFn func() types.BatchStore
 
 func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.TestingT) bool {
 	store := refreshStore()
@@ -28,7 +23,7 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 	return true
 }
 
-func writeToEmptyStore(store blockStore, src *dataSource, t assert.TestingT) {
+func writeToEmptyStore(store types.BatchStore, src *dataSource, t assert.TestingT) {
 	root := store.Root()
 	assert.Equal(t, hash.Hash{}, root)
 

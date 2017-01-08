@@ -18,6 +18,7 @@ import (
 // package that implements Value reading.
 type ValueReader interface {
 	ReadValue(h hash.Hash) Value
+	ReadManyValues(hashes hash.HashSet, foundValues chan<- Value)
 }
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g.
@@ -146,6 +147,58 @@ func (lvs *ValueStore) setHintsForReadValue(v Value, h hash.Hash) {
 	}
 	if cur := lvs.check(h); cur == nil || cur.Hint().IsEmpty() {
 		lvs.set(h, entry, false)
+	}
+}
+
+// ReadManyValues reads and decodes Values indicated by |hashes| from lvs. On
+// return, |foundValues| will have been fully sent all Values which have been
+// found. Any non-present Values will silently be ignored.
+func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Value) {
+	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
+		v := DecodeValue(*chunk, lvs)
+		lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
+		lvs.setHintsForReadValue(v, h)
+		return v
+	}
+
+	// First, see which hashes can be found in either the Value cache or pendingPuts. Put the rest into a new HashSet to be requested en masse from the BatchStore.
+	remaining := hash.HashSet{}
+	for h := range hashes {
+		if v, ok := lvs.valueCache.Get(h); ok {
+			if v != nil {
+				foundValues <- v.(Value)
+			}
+			continue
+		}
+
+		chunk := func() chunks.Chunk {
+			lvs.pendingMu.RLock()
+			defer lvs.pendingMu.RUnlock()
+			if pc, ok := lvs.pendingPuts[h]; ok {
+				return pc.c
+			}
+			return chunks.EmptyChunk
+		}()
+		if !chunk.IsEmpty() {
+			foundValues <- decode(h, &chunk)
+			continue
+		}
+
+		remaining.Insert(h)
+	}
+
+	// Request remaining hashes from BatchStore, processing the found chunks as they come in.
+	foundChunks := make(chan *chunks.Chunk, 16)
+	go func() { lvs.bs.GetMany(remaining, foundChunks); close(foundChunks) }()
+	for c := range foundChunks {
+		h := c.Hash()
+		foundValues <- decode(h, c)
+		remaining.Remove(h)
+	}
+
+	// Any remaining hashes weren't found in the BatchStore should be recorded as not present.
+	for h := range remaining {
+		lvs.valueCache.Add(h, 0, nil)
 	}
 }
 

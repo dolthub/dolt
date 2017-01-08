@@ -5,6 +5,7 @@
 package chunks
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -28,10 +29,10 @@ func TestGetRequestBatch(t *testing.T) {
 	}
 
 	req0chan := make(chan bool, 1)
-	req1chan := make(chan Chunk, 1)
+	req1chan := make(chan *Chunk, 1)
 	req2chan := make(chan bool, 1)
 	req3chan := make(chan bool, 1)
-	req4chan := make(chan Chunk, 1)
+	req4chan := make(chan *Chunk, 1)
 
 	batch := ReadBatch{
 		r0: []OutstandingRequest{OutstandingHas(req0chan), OutstandingGet(req1chan)},
@@ -42,10 +43,10 @@ func TestGetRequestBatch(t *testing.T) {
 		for requestedRef, reqs := range batch {
 			for _, req := range reqs {
 				if requestedRef == r1 {
-					req.Satisfy(c1)
+					req.Satisfy(&c1)
 					delete(batch, r1)
 				} else if requestedRef == r2 {
-					req.Satisfy(c2)
+					req.Satisfy(&c2)
 					delete(batch, r2)
 				}
 			}
@@ -77,4 +78,46 @@ func TestGetRequestBatch(t *testing.T) {
 	}
 	assert.Equal(0, r0True)
 	assert.Equal(1, r0False)
+}
+
+func TestGetManyRequestBatch(t *testing.T) {
+	assert := assert.New(t)
+	h0 := hash.Parse("00000000000000000000000000000000")
+	c1 := NewChunk([]byte("abc"))
+	h1 := c1.Hash()
+	c2 := NewChunk([]byte("123"))
+	h2 := c2.Hash()
+
+	chunks := make(chan *Chunk)
+	hashes := hash.NewHashSet(h0, h1, h2)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(hashes))
+	go func() { wg.Wait(); close(chunks) }()
+
+	req := NewGetManyRequest(hashes, wg, chunks)
+	batch := ReadBatch{
+		h0: {req.Outstanding()},
+		h1: {req.Outstanding()},
+		h2: {req.Outstanding()},
+	}
+	go func() {
+		for reqHash, reqs := range batch {
+			for _, req := range reqs {
+				if reqHash == h1 {
+					req.Satisfy(&c1)
+					delete(batch, h1)
+				} else if reqHash == h2 {
+					req.Satisfy(&c2)
+					delete(batch, h2)
+				}
+			}
+		}
+		batch.Close()
+	}()
+
+	for c := range chunks {
+		hashes.Remove(c.Hash())
+	}
+	assert.Len(hashes, 1)
+	assert.True(hashes.Has(h0))
 }

@@ -20,6 +20,11 @@ type BatchStore interface {
 	// from the store, chunks.EmptyChunk is returned.
 	Get(h hash.Hash) chunks.Chunk
 
+	// GetMany gets the Chunks with |hashes| from the store. On return,
+	// |foundChunks| will have been fully sent all chunks which have been
+	// found. Any non-present chunks will silently be ignored.
+	GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk)
+
 	// SchedulePut enqueues a write for the Chunk c with the given refHeight.
 	// c must be visible to subsequent Get() calls upon return. Typically, the
 	// Value which was encoded to provide c can also be queried for its
@@ -61,6 +66,12 @@ func NewBatchStoreAdaptor(cs chunks.ChunkStore) BatchStore {
 func (bsa *BatchStoreAdaptor) Get(h hash.Hash) chunks.Chunk {
 	bsa.once.Do(bsa.expectVersion)
 	return bsa.cs.Get(h)
+}
+
+// GetMany simply proxies to the backing ChunkStore
+func (bsa *BatchStoreAdaptor) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	bsa.once.Do(bsa.expectVersion)
+	bsa.cs.GetMany(hashes, foundChunks)
 }
 
 // SchedulePut simply calls Put on the underlying ChunkStore, and ignores hints.

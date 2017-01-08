@@ -114,6 +114,14 @@ func (h Hash) Greater(other Hash) bool {
 // HashSet is a set of Hashes.
 type HashSet map[Hash]struct{}
 
+func NewHashSet(hashes ...Hash) HashSet {
+	out := HashSet{}
+	for _, h := range hashes {
+		out.Insert(h)
+	}
+	return out
+}
+
 // Insert adds a Hash to the set.
 func (hs HashSet) Insert(hash Hash) {
 	hs[hash] = struct{}{}

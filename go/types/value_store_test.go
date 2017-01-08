@@ -19,8 +19,45 @@ func TestValueReadWriteRead(t *testing.T) {
 	vs := NewTestValueStore()
 	assert.Nil(vs.ReadValue(s.Hash())) // nil
 	r := vs.WriteValue(s)
+	vs.Flush()
 	v := vs.ReadValue(r.TargetHash()) // non-nil
 	assert.True(s.Equals(v))
+}
+
+func TestValueReadMany(t *testing.T) {
+	assert := assert.New(t)
+
+	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
+	vs := NewTestValueStore()
+	hashes := hash.HashSet{}
+	for _, v := range vals {
+		hashes.Insert(vs.WriteValue(v).TargetHash())
+	}
+	vs.Flush()
+
+	// Get one Value into vs's Value cache
+	vs.ReadValue(vals[0].Hash())
+
+	// Get one Value into vs's pendingPuts
+	three := Number(3)
+	vals = append(vals, three)
+	vs.WriteValue(three)
+	hashes.Insert(three.Hash())
+
+	// Add one Value to request that's not in vs
+	hashes.Insert(Bool(false).Hash())
+
+	found := map[hash.Hash]Value{}
+	foundValues := make(chan Value, len(vals))
+	go func() { vs.ReadManyValues(hashes, foundValues); close(foundValues) }()
+	for v := range foundValues {
+		found[v.Hash()] = v
+	}
+
+	assert.Len(found, len(vals))
+	for _, v := range vals {
+		assert.True(v.Equals(found[v.Hash()]))
+	}
 }
 
 func TestCheckChunksInCache(t *testing.T) {

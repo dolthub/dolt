@@ -113,10 +113,10 @@ func (s *DynamoStore) Get(h hash.Hash) Chunk {
 		return pending
 	}
 
-	ch := make(chan Chunk)
+	ch := make(chan *Chunk)
 	s.requestWg.Add(1)
-	s.readQueue <- GetRequest{h, ch}
-	return <-ch
+	s.readQueue <- NewGetRequest(h, ch)
+	return *(<-ch)
 }
 
 func (s *DynamoStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
@@ -137,7 +137,7 @@ func (s *DynamoStore) Has(h hash.Hash) bool {
 
 	ch := make(chan bool)
 	s.requestWg.Add(1)
-	s.readQueue <- HasRequest{h, ch}
+	s.readQueue <- NewHasRequest(h, ch)
 	return <-ch
 }
 
@@ -197,9 +197,10 @@ func (s *DynamoStore) sendGetRequests(req ReadRequest) {
 	refs := map[hash.Hash]bool{}
 
 	addReq := func(req ReadRequest) {
-		r := req.Hash()
-		batch[r] = append(batch[r], req.Outstanding())
-		refs[r] = true
+		for h := range req.Hashes() {
+			batch[h] = append(batch[h], req.Outstanding())
+			refs[h] = true
+		}
 		s.requestWg.Done()
 	}
 	addReq(req)
@@ -260,7 +261,7 @@ func (s *DynamoStore) processResponses(responses []map[string]*dynamodb.Attribut
 		}
 		c := NewChunkWithHash(r, b)
 		for _, reqChan := range batch[r] {
-			reqChan.Satisfy(c)
+			reqChan.Satisfy(&c)
 		}
 		delete(batch, r)
 	}

@@ -138,10 +138,34 @@ func (bhcs *httpBatchStore) Get(h hash.Hash) chunks.Chunk {
 		return pending
 	}
 
-	ch := make(chan chunks.Chunk)
+	ch := make(chan *chunks.Chunk)
 	bhcs.requestWg.Add(1)
 	bhcs.getQueue <- chunks.NewGetRequest(h, ch)
-	return <-ch
+	return *(<-ch)
+}
+
+func (bhcs *httpBatchStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	cachedChunks := make(chan *chunks.Chunk)
+	go func() {
+		bhcs.cacheMu.RLock()
+		defer bhcs.cacheMu.RUnlock()
+		defer close(cachedChunks)
+		bhcs.unwrittenPuts.GetMany(hashes, cachedChunks)
+	}()
+	remaining := hash.HashSet{}
+	for h := range hashes {
+		remaining.Insert(h)
+	}
+	for c := range cachedChunks {
+		remaining.Remove(c.Hash())
+		foundChunks <- c
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(remaining))
+	bhcs.requestWg.Add(1)
+	bhcs.getQueue <- chunks.NewGetManyRequest(hashes, wg, foundChunks)
+	wg.Wait()
 }
 
 func (bhcs *httpBatchStore) batchGetRequests() {
@@ -199,9 +223,10 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 
 	count := 0
 	addReq := func(req chunks.ReadRequest) {
-		hash := req.Hash()
-		batch[hash] = append(batch[hash], req.Outstanding())
-		hashes.Insert(hash)
+		for h := range req.Hashes() {
+			batch[h] = append(batch[h], req.Outstanding())
+			hashes.Insert(h)
+		}
 		count++
 	}
 
@@ -259,7 +284,7 @@ type readBatchChunkSink struct {
 func (rb *readBatchChunkSink) Put(c chunks.Chunk) {
 	rb.mu.RLock()
 	for _, or := range (*(rb.batch))[c.Hash()] {
-		or.Satisfy(c)
+		or.Satisfy(&c)
 	}
 	rb.mu.RUnlock()
 
@@ -311,7 +336,7 @@ func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 		if scanner.Text() == "true" {
 			for _, outstanding := range batch[h] {
 				// This is a little gross, but OutstandingHas.Satisfy() expects a chunk. It ignores it, though, and just sends 'true' over the channel it's holding.
-				outstanding.Satisfy(chunks.EmptyChunk)
+				outstanding.Satisfy(&chunks.EmptyChunk)
 			}
 		} else {
 			for _, outstanding := range batch[h] {

@@ -273,6 +273,25 @@ func (suite *HTTPBatchStoreSuite) TestGet() {
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
+func (suite *HTTPBatchStoreSuite) TestGetMany() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
+	suite.NoError(suite.cs.PutMany(chnx))
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
+	foundChunks := make(chan *chunks.Chunk)
+	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+
+	for c := range foundChunks {
+		hashes.Remove(c.Hash())
+	}
+	suite.Len(hashes, 1)
+	suite.True(hashes.Has(notPresent))
+}
+
 func (suite *HTTPBatchStoreSuite) TestGetSame() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("def")),

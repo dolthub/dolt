@@ -14,7 +14,7 @@ type nullBlockStore struct {
 	bogus int32
 }
 
-func newNullBlockStore() blockStore {
+func newNullBlockStore() types.BatchStore {
 	return nullBlockStore{}
 }
 

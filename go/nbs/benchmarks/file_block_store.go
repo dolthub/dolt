@@ -20,7 +20,7 @@ type fileBlockStore struct {
 	w  io.WriteCloser
 }
 
-func newFileBlockStore(w io.WriteCloser) blockStore {
+func newFileBlockStore(w io.WriteCloser) types.BatchStore {
 	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
 }
 
