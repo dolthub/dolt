@@ -6,11 +6,15 @@ package marshal
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -893,4 +897,181 @@ func TestDecodeCanSkipUnexportedField(t *testing.T) {
 	}), &s)
 	assert.NoError(err)
 	assert.Equal(S{42, false}, s)
+}
+
+func (u *primitiveType) UnmarshalNoms(v types.Value) error {
+	*u = primitiveType(v.(types.Number) - 1)
+	return nil
+}
+
+func TestUnmarshalerPrimitiveType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := types.Number(43)
+	u := primitiveType(0)
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(primitiveType(42), u)
+}
+
+func (u *primitiveSliceType) UnmarshalNoms(v types.Value) error {
+	sv := string(v.(types.String))
+	spl := strings.Split(sv, ",")
+	*u = make(primitiveSliceType, len(spl))
+	for i, s := range spl {
+		(*u)[i] = s
+	}
+	return nil
+}
+
+func TestUnmarshalerPrimitiveSliceType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := types.String("a,b,c")
+	u := primitiveSliceType{}
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(primitiveSliceType{"a", "b", "c"}, u)
+}
+
+func (u *primitiveMapType) UnmarshalNoms(v types.Value) error {
+	*u = primitiveMapType{}
+	v.(types.Set).IterAll(func(v types.Value) {
+		sv := v.(types.String)
+		spl := strings.Split(string(sv), ",")
+		d.PanicIfFalse(len(spl) == 2)
+		(*u)[spl[0]] = spl[1]
+	})
+	return nil
+}
+
+func TestUnmarshalerPrimitiveMapType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := types.NewSet(types.String("a,foo"), types.String("b,bar"))
+	u := primitiveMapType{}
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(primitiveMapType(map[string]string{
+		"a": "foo",
+		"b": "bar",
+	}), u)
+}
+
+func (u *primitiveStructType) UnmarshalNoms(v types.Value) error {
+	n := int(v.(types.Number))
+	u.x = n / 3
+	u.y = n % 3
+	return nil
+}
+
+func TestUnmarshalerPrimitiveStructType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := types.Number(10)
+	u := primitiveStructType{}
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(primitiveStructType{3, 1}, u)
+}
+
+func (u *builtinType) UnmarshalNoms(v types.Value) error {
+	sv := v.(types.String)
+	*u = builtinType(*regexp.MustCompile(string(sv)))
+	return nil
+}
+
+func TestUnmarshalerBuiltinType(t *testing.T) {
+	assert := assert.New(t)
+
+	s := "[a-z]+$"
+	v := types.String(s)
+	u := builtinType{}
+	assert.NoError(Unmarshal(v, &u))
+	r := regexp.Regexp(u)
+	assert.Equal(s, r.String())
+}
+
+func (u *wrappedMarshalerType) UnmarshalNoms(v types.Value) error {
+	n := v.(types.Number)
+	*u = wrappedMarshalerType(int(n) - 2)
+	return nil
+}
+
+func TestUnmarshalerWrappedMarshalerType(t *testing.T) {
+	assert := assert.New(t)
+
+	v := types.Number(44)
+	u := wrappedMarshalerType(0)
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(wrappedMarshalerType(42), u)
+}
+
+func TestUnmarshalerComplexStructType(t *testing.T) {
+	assert := assert.New(t)
+
+	s := "foo|bar"
+	r := regexp.MustCompile(s)
+	v := types.NewStruct("TestComplexStructType", types.StructData{
+		"p":       types.Number(43),
+		"ps":      types.NewList(types.Number(2), types.Number(3)),
+		"pm":      types.NewMap(types.String("x"), types.Number(101), types.String("y"), types.Number(102)),
+		"pslice":  types.String("a,b,c"),
+		"pmap":    types.NewSet(types.String("c,123"), types.String("d,456")),
+		"pstruct": types.Number(5),
+		"b":       types.String(s),
+	})
+	u := TestComplexStructType{}
+	assert.NoError(Unmarshal(v, &u))
+	assert.Equal(TestComplexStructType{
+		P:  42,
+		Ps: []primitiveType{1, 2},
+		Pm: map[string]primitiveType{
+			"x": 100,
+			"y": 101,
+		},
+		Pslice: primitiveSliceType{"a", "b", "c"},
+		Pmap: primitiveMapType{
+			"c": "123",
+			"d": "456",
+		},
+		Pstruct: primitiveStructType{1, 2},
+		B:       builtinType(*r),
+	}, u)
+}
+
+func (u *returnsMarshalerError) UnmarshalNoms(v types.Value) error {
+	// Can't use u.err because an empty returnsMarshalerError is created for each
+	// call to UnmarshalNoms.
+	return errors.New("foo bar baz")
+}
+
+func (u panicsMarshaler) UnmarshalNoms(v types.Value) error {
+	panic("panic")
+}
+
+func TestUnmarshalerError(t *testing.T) {
+	assert := assert.New(t)
+
+	m1 := returnsMarshalerError{}
+	err := Unmarshal(types.EmptyStruct, &m1)
+	assert.Equal(errors.New("foo bar baz"), err)
+
+	m2 := panicsMarshaler{}
+	assert.Panics(func() { Unmarshal(types.EmptyStruct, &m2) })
+}
+
+type notPointer struct {
+	x int
+}
+
+func (u notPointer) UnmarshalNoms(v types.Value) error {
+	u.x++
+	return nil
+}
+
+func TestUnmarshalNomsNotPointerDoesNotShareState(t *testing.T) {
+	assert := assert.New(t)
+
+	u := notPointer{0}
+	assert.NoError(Unmarshal(types.EmptyStruct, &u))
+	assert.NoError(Unmarshal(types.EmptyStruct, &u))
+	assert.NoError(Unmarshal(types.EmptyStruct, &u))
+	assert.Equal(notPointer{0}, u)
 }

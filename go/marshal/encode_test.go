@@ -742,7 +742,7 @@ type primitiveMapType map[string]string
 func (u primitiveMapType) MarshalNoms() (types.Value, error) {
 	var vals types.ValueSlice
 	for k, v := range u {
-		vals = append(vals, types.String(k+v))
+		vals = append(vals, types.String(k+","+v))
 	}
 	return types.NewSet(vals...), nil
 }
@@ -755,7 +755,7 @@ func TestMarshalerPrimitiveMapType(t *testing.T) {
 		"b": "bar",
 	})
 	v := MustMarshal(u)
-	assert.True(types.NewSet(types.String("afoo"), types.String("bbar")).Equals(v))
+	assert.True(types.NewSet(types.String("a,foo"), types.String("b,bar")).Equals(v))
 }
 
 type primitiveStructType struct {
@@ -843,7 +843,7 @@ func TestMarshalerComplexStructType(t *testing.T) {
 		"ps":      types.NewList(types.Number(2), types.Number(3)),
 		"pm":      types.NewMap(types.String("x"), types.Number(101), types.String("y"), types.Number(102)),
 		"pslice":  types.String("a,b,c"),
-		"pmap":    types.NewSet(types.String("c123"), types.String("d456")),
+		"pmap":    types.NewSet(types.String("c,123"), types.String("d,456")),
 		"pstruct": types.Number(30),
 		"b":       types.String(s),
 	}).Equals(v))

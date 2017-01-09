@@ -64,12 +64,14 @@ import (
 func Unmarshal(v types.Value, out interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			switch r.(type) {
+			switch r := r.(type) {
 			case *UnmarshalTypeMismatchError, *UnsupportedTypeError, *InvalidTagError:
 				err = r.(error)
-				return
+			case *unmarshalNomsError:
+				err = r.err
+			default:
+				panic(r)
 			}
-			panic(r)
 		}
 	}()
 
@@ -82,6 +84,21 @@ func Unmarshal(v types.Value, out interface{}) (err error) {
 	d(v, rv)
 	return
 }
+
+// Unmarshaler is an interface types can implement to provide their own
+// decoding.
+//
+// You probably want to implement this on a pointer to a type, otherwise
+// calling UnmarshalNoms will effectively do nothing. For example, to unmarshal
+// a MyType you would define:
+//
+//  func (t *MyType) UnmarshalNoms(v types.Value) error {}
+type Unmarshaler interface {
+	// UnmarshalNoms decodes v, or returns an error.
+	UnmarshalNoms(v types.Value) error
+}
+
+var unmarshalerInterface = reflect.TypeOf((*Unmarshaler)(nil)).Elem()
 
 // InvalidUnmarshalError describes an invalid argument passed to Unmarshal. (The
 // argument to Unmarshal must be a non-nil pointer.)
@@ -122,9 +139,23 @@ func overflowError(v types.Number, t reflect.Type) *UnmarshalTypeMismatchError {
 	return &UnmarshalTypeMismatchError{v, t, fmt.Sprintf(" (%g does not fit in %s)", v, t)}
 }
 
+// unmarshalNomsError wraps errors from Marshaler.UnmarshalNoms. These should
+// be unwrapped and never leak to the caller of Unmarshal.
+type unmarshalNomsError struct {
+	err error
+}
+
+func (e *unmarshalNomsError) Error() string {
+	return e.err.Error()
+}
+
 type decoderFunc func(v types.Value, rv reflect.Value)
 
 func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
+	if reflect.PtrTo(t).Implements(unmarshalerInterface) {
+		return marshalerDecoder(t)
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolDecoder
@@ -159,6 +190,7 @@ func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 		panic(&UnsupportedTypeError{Type: t})
 	}
 }
+
 func boolDecoder(v types.Value, rv reflect.Value) {
 	if b, ok := v.(types.Bool); ok {
 		rv.SetBool(bool(b))
@@ -303,6 +335,17 @@ func nomsValueDecoder(v types.Value, rv reflect.Value) {
 		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
 	}
 	rv.Set(reflect.ValueOf(v))
+}
+
+func marshalerDecoder(t reflect.Type) decoderFunc {
+	return func(v types.Value, rv reflect.Value) {
+		ptr := reflect.New(t)
+		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(v)
+		if err != nil {
+			panic(&unmarshalNomsError{err})
+		}
+		rv.Set(ptr.Elem())
+	}
 }
 
 func iterListOrSlice(v types.Value, t reflect.Type, f func(c types.Value, i uint64)) {
