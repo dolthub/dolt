@@ -189,11 +189,17 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 
 	// Request remaining hashes from BatchStore, processing the found chunks as they come in.
 	foundChunks := make(chan *chunks.Chunk, 16)
+	foundHashes := hash.HashSet{}
+
 	go func() { lvs.bs.GetMany(remaining, foundChunks); close(foundChunks) }()
 	for c := range foundChunks {
 		h := c.Hash()
+		foundHashes[h] = struct{}{}
 		foundValues <- decode(h, c)
-		remaining.Remove(h)
+	}
+
+	for h, _ := range foundHashes {
+		remaining.Remove(h) // Avoid concurrent access with the call to GetMany above
 	}
 
 	// Any remaining hashes weren't found in the BatchStore should be recorded as not present.
