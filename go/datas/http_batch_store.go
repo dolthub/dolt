@@ -272,40 +272,16 @@ func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
 	}
 
-	rl := make(chan struct{}, 16)
-	chunks.Deserialize(reader, &readBatchChunkSink{&batch, &sync.RWMutex{}}, rl)
-}
+	chunkChan := make(chan interface{}, 16)
+	go func() { defer close(chunkChan); chunks.Deserialize(reader, chunkChan) }()
 
-type readBatchChunkSink struct {
-	batch *chunks.ReadBatch
-	mu    *sync.RWMutex
-}
-
-func (rb *readBatchChunkSink) Put(c chunks.Chunk) {
-	rb.mu.RLock()
-	for _, or := range (*(rb.batch))[c.Hash()] {
-		or.Satisfy(&c)
+	for i := range chunkChan {
+		cp := i.(*chunks.Chunk)
+		for _, or := range batch[cp.Hash()] {
+			go or.Satisfy(cp)
+		}
+		delete(batch, cp.Hash())
 	}
-	rb.mu.RUnlock()
-
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-	delete(*(rb.batch), c.Hash())
-}
-
-func (rb *readBatchChunkSink) PutMany(chnx []chunks.Chunk) (e chunks.BackpressureError) {
-	for _, c := range chnx {
-		rb.Put(c)
-	}
-	return
-}
-
-func (rb *readBatchChunkSink) Flush() {}
-
-func (rb *readBatchChunkSink) Close() error {
-	rb.mu.RLock()
-	defer rb.mu.RUnlock()
-	return rb.batch.Close()
 }
 
 func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) {

@@ -106,21 +106,6 @@ func versionCheck(hndlr Handler) Handler {
 	}
 }
 
-func recoverToError(errChan chan<- d.WrappedError) {
-	var we d.WrappedError
-	if r := recover(); r != nil {
-		switch err := r.(type) {
-		case d.WrappedError:
-			we = err
-		case error:
-			we = d.Wrap(err)
-		default:
-			we = d.Wrap(fmt.Errorf("Error: %v", err))
-		}
-	}
-	errChan <- we
-}
-
 func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 	if req.Method != "POST" {
 		d.Panic("Expected post method.")
@@ -145,13 +130,14 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	vbs.Prepare(deserializeHints(reader))
 
 	// Deserialize chunks from reader in background, recovering from errors
-	errChan := make(chan d.WrappedError)
+	errChan := make(chan error)
 	defer close(errChan)
 	chunkChan := make(chan interface{}, writeValueConcurrency)
 	go func() {
-		defer recoverToError(errChan)
+		var err error
+		defer func() { errChan <- err }()
 		defer close(chunkChan)
-		chunks.DeserializeToChan(reader, chunkChan)
+		err = chunks.Deserialize(reader, chunkChan)
 	}()
 
 	decoded := orderedparallel.New(
@@ -176,13 +162,13 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 				bpe = append(bpe, dc.Chunk.Hash())
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
-			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
+			// TODO: what about having Deserialize take a 'done' channel to stop it?
 		}
 	}
 
-	// If there was an error during chunk deserialization, log and respond
+	// If there was an error during chunk deserialization, raise so it can be logged and responded to.
 	if err := <-errChan; err != nil {
-		panic(err)
+		panic(d.Wrap(fmt.Errorf("Deserialization failure: %v", err)))
 	}
 
 	if bpe == nil {

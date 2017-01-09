@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -46,69 +45,48 @@ func Serialize(chunk Chunk, writer io.Writer) {
 	d.PanicIfFalse(uint32(n) == chunkSize)
 }
 
-// Deserialize reads off of |reader| until EOF, sending chunks to |cs|. If
-// |rateLimit| is non-nil, concurrency will be limited to the available
-// capacity of the channel.
-func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
-	wg := sync.WaitGroup{}
-
-	for {
-		c, success := deserializeChunk(reader)
-		if !success {
-			break
-		}
-
-		wg.Add(1)
-		if rateLimit != nil {
-			rateLimit <- struct{}{}
-		}
-		go func() {
-			cs.Put(c)
-			wg.Done()
-			if rateLimit != nil {
-				<-rateLimit
-			}
-		}()
-	}
-
-	wg.Wait()
-}
-
-// DeserializeToChan reads off of |reader| until EOF, sending chunks to
+// Deserialize reads off of |reader| until EOF, sending chunks to
 // chunkChan in the order they are read. Objects sent over chunkChan are
 // *Chunk.
 // The type is `chan<- interface{}` so that this is compatible with
 // orderedparallel.New().
-func DeserializeToChan(reader io.Reader, chunkChan chan<- interface{}) {
+func Deserialize(reader io.Reader, chunkChan chan<- interface{}) (err error) {
 	for {
-		c, success := deserializeChunk(reader)
-		if !success {
+		var c Chunk
+		c, err = deserializeChunk(reader)
+		if err != nil {
 			break
 		}
+		d.Chk.NotEqual(EmptyChunk.Hash(), c.Hash())
 		chunkChan <- &c
 	}
+	if err == io.EOF {
+		err = nil
+	}
+	return
 }
 
-func deserializeChunk(reader io.Reader) (Chunk, bool) {
+func deserializeChunk(reader io.Reader) (Chunk, error) {
 	h := hash.Hash{}
 	n, err := io.ReadFull(reader, h[:])
-	if err == io.EOF {
-		return EmptyChunk, false
+	if err != nil {
+		return EmptyChunk, err
 	}
-	d.Chk.NoError(err)
 	d.PanicIfFalse(int(hash.ByteLen) == n)
 
 	chunkSize := uint32(0)
-	err = binary.Read(reader, binary.BigEndian, &chunkSize)
-	d.Chk.NoError(err)
+	if err = binary.Read(reader, binary.BigEndian, &chunkSize); err != nil {
+		return EmptyChunk, err
+	}
 
 	data := make([]byte, int(chunkSize))
-	n, err = io.ReadFull(reader, data)
-	d.Chk.NoError(err)
+	if n, err = io.ReadFull(reader, data); err != nil {
+		return EmptyChunk, err
+	}
 	d.PanicIfFalse(int(chunkSize) == n)
 	c := NewChunk(data)
 	if h != c.Hash() {
 		d.Panic("%s != %s", h, c.Hash().String())
 	}
-	return c, true
+	return c, nil
 }
