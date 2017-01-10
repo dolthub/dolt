@@ -43,13 +43,8 @@ func makeSimplifiedUnion(in ...*Type) *Type {
 		ts[t] = struct{}{}
 	}
 
-	r := makeSimplifiedUnionImpl(ts)
-
-	if r.HasUnresolvedCycle() {
-		r = resolveStructCycles(r, nil)
-	}
-
-	return r
+	// makeSimplifiedUnionImpl de-cycles internally.
+	return makeSimplifiedUnionImpl(ts)
 }
 
 // typeset is a helper that aggregates the unique set of input types for this algorithm, flattening
@@ -127,6 +122,11 @@ func makeSimplifiedUnionImpl(in typeset) *Type {
 			r = simplifyStructs(h.n, ts)
 		}
 		out = append(out, r)
+	}
+
+	for i, t := range out {
+		t = ToUnresolvedType(t)
+		out[i] = resolveStructCycles(t, nil)
 	}
 
 	if len(out) == 1 {

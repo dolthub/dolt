@@ -5,7 +5,29 @@
 // Package constants collects common constants used in Noms, such as the Noms data format version.
 package constants
 
+import (
+	"fmt"
+	"os"
+)
+
 // TODO: generate this from some central thing with go generate, so that JS and Go can be easily kept in sync
-const NomsVersion = "7"
+const NomsVersion = "7.1"
+const NOMS_VERSION_NEXT_ENV_NAME = "NOMS_VERSION_NEXT"
+const NOMS_VERSION_NEXT_ENV_VALUE = "1"
 
 var NomsGitSHA = "<developer build>"
+
+func init() {
+	if os.Getenv(NOMS_VERSION_NEXT_ENV_NAME) != NOMS_VERSION_NEXT_ENV_VALUE {
+		fmt.Fprintln(os.Stderr,
+			"WARNING: This is an unstable version of Noms. Data created with it won't be supported.")
+		fmt.Fprintf(os.Stderr,
+			"Please see %s for getting the latest supported version.\n",
+			"https://github.com/attic-labs/noms#install-noms")
+		fmt.Fprintf(os.Stderr,
+			"Or add %s=%s to your environment to proceed with this version.\n",
+			NOMS_VERSION_NEXT_ENV_NAME,
+			NOMS_VERSION_NEXT_ENV_VALUE)
+		os.Exit(1)
+	}
+}

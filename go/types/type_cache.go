@@ -10,14 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	flag "github.com/juju/gnuflag"
 )
-
-var EnableTypeSimplification = false
-
-func RegisterTypeSimplificationFlags(flags *flag.FlagSet) {
-	flags.BoolVar(&EnableTypeSimplification, "type-simplification", false, "enables type simplification (see https://github.com/attic-labs/noms/issues/2995)")
-}
 
 type TypeCache struct {
 	identTable *identTable
@@ -370,7 +363,9 @@ func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Typ
 					oids[h2] = struct{}{}
 				} else {
 					oids[*h] = struct{}{}
-					checkForUnresolvedCycles(elemType, root, parentStructTypes)
+					if !allowUnresolvedCycles {
+						checkForUnresolvedCycles(elemType, root, parentStructTypes)
+					}
 				}
 			}
 
@@ -539,13 +534,7 @@ func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type 
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	if EnableTypeSimplification {
-		return makeSimplifiedUnion(elemTypes...)
-	}
-
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.makeUnionType(elemTypes...)
+	return makeSimplifiedUnion(elemTypes...)
 }
 
 func MakeCycleType(level uint32) *Type {
