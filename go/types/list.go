@@ -109,7 +109,7 @@ func (l List) Type() *Type {
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(l.seq, idx)
+	cur := newCursorAtIndex(l.seq, idx, false)
 	return cur.current().(Value)
 }
 
@@ -120,7 +120,7 @@ func (l List) Map(mf MapFunc) []interface{} {
 	// TODO: This is bad API. It should have returned another List.
 	// https://github.com/attic-labs/noms/issues/2557
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx)
+	cur := newCursorAtIndex(l.seq, idx, true)
 
 	results := make([]interface{}, 0, l.Len())
 	cur.iter(func(v interface{}) bool {
@@ -159,7 +159,7 @@ func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
 	d.PanicIfFalse(idx <= l.Len())
 	d.PanicIfFalse(idx+deleteCount <= l.Len())
 
-	cur := newCursorAtIndex(l.seq, idx)
+	cur := newCursorAtIndex(l.seq, idx, false)
 	ch := l.newChunker(cur, l.seq.valueReader())
 	for deleteCount > 0 {
 		ch.Skip()
@@ -205,7 +205,7 @@ type listIterFunc func(v Value, index uint64) (stop bool)
 // iteration stops.
 func (l List) Iter(f listIterFunc) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx)
+	cur := newCursorAtIndex(l.seq, idx, true)
 	cur.iter(func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
@@ -223,7 +223,7 @@ func (l List) IterAll(f listIterAllFunc) {
 	// TODO: Consider removing this and have Iter behave like IterAll.
 	// https://github.com/attic-labs/noms/issues/2558
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx)
+	cur := newCursorAtIndex(l.seq, idx, true)
 	cur.iter(func(v interface{}) bool {
 		f(v.(Value), uint64(idx))
 		idx++
@@ -239,7 +239,7 @@ func (l List) Iterator() ListIterator {
 // IteratorAt returns a ListIterator starting at index. If index is out of bound the iterator will
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
-	return ListIterator{newCursorAtIndex(l.seq, index)}
+	return ListIterator{newCursorAtIndex(l.seq, index, true)}
 }
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
@@ -266,8 +266,8 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 		return
 	}
 
-	lastCur := newCursorAtIndex(last.seq, 0)
-	lCur := newCursorAtIndex(l.seq, 0)
+	lastCur := newCursorAtIndex(last.seq, 0, false)
+	lCur := newCursorAtIndex(l.seq, 0, false)
 	indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
 }
 

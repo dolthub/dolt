@@ -7,7 +7,6 @@ package types
 import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/orderedparallel"
 )
 
 const (
@@ -145,23 +144,6 @@ func (ms metaSequence) getChildSequence(idx int) sequence {
 	return mt.getChildSequence(ms.vr)
 }
 
-func (ms metaSequence) beginFetchingChildSequences(start, length uint64) chan interface{} {
-	input := make(chan interface{})
-	output := orderedparallel.New(input, func(item interface{}) interface{} {
-		i := item.(int)
-		return ms.getChildSequence(i)
-	}, int(length))
-
-	go func() {
-		for i := start; i < start+length; i++ {
-			input <- int(i)
-		}
-
-		close(input)
-	}()
-	return output
-}
-
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
@@ -179,9 +161,8 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		isIndexedSequence = true
 	}
 
-	output := ms.beginFetchingChildSequences(start, length)
-	for item := range output {
-		seq := item.(sequence)
+	output := ms.getChildren(start, start+length)
+	for _, seq := range output {
 
 		switch t := seq.(type) {
 		case metaSequence:
@@ -211,6 +192,53 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 	}
 
 	return newSetLeafSequence(ms.vr, valueItems...)
+}
+
+// fetches child sequences from start (inclusive) to end (exclusive) and respects uncommitted child
+// sequences.
+func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
+	d.Chk.True(end <= uint64(len(ms.tuples)))
+	d.Chk.True(start <= end)
+
+	seqs = make([]sequence, end-start)
+	hs := make(hash.HashSet, len(seqs))
+
+	for i := start; i < end; i++ {
+		mt := ms.tuples[i]
+		if mt.child != nil {
+			seqs[i-start] = mt.child.sequence()
+		} else {
+			hs[mt.ref.TargetHash()] = struct{}{}
+		}
+	}
+
+	if len(hs) == 0 {
+		return // can occur with ptree that is fully uncommitted
+	}
+
+	// Fetch committed child sequences in a single batch
+	valueChan := make(chan Value, len(hs))
+	go func() {
+		ms.vr.ReadManyValues(hs, valueChan)
+		close(valueChan)
+	}()
+	children := make(map[hash.Hash]sequence, len(hs))
+	for value := range valueChan {
+		children[value.Hash()] = value.(Collection).sequence()
+	}
+
+	for i := start; i < end; i++ {
+		mt := ms.tuples[i]
+		if mt.child != nil {
+			continue
+		}
+
+		childSeq := children[mt.ref.TargetHash()]
+		d.Chk.NotNil(childSeq)
+		seqs[i-start] = childSeq
+	}
+
+	return
 }
 
 func isMetaSequence(seq sequence) bool {

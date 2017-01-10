@@ -77,9 +77,9 @@ func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 			expectAppendChunkDiff:  expectAppendChunkDiff,
 			validate: func(v2 Collection) bool {
 				b2 := v2.(Blob)
-				out := make([]byte, length)
-				io.ReadFull(b2.Reader(), out)
-				return bytes.Compare(out, buff) == 0
+				outBuff := &bytes.Buffer{}
+				b2.Reader().Copy(outBuff)
+				return bytes.Compare(outBuff.Bytes(), buff) == 0
 			},
 			prependOne: func() Collection {
 				dup := make([]byte, length+1)
@@ -307,4 +307,23 @@ func TestBlobNewParallel(t *testing.T) {
 
 	b = NewBlob(readers...)
 	assert.Equal(data, readAll(b))
+}
+
+func TestStreamingParallelBlob(t *testing.T) {
+	assert := assert.New(t)
+
+	buff := randomBuff(1 << 26 /* 64MB */)
+	chunks := 4
+	readers := make([]io.Reader, chunks)
+	chunkSize := len(buff) / chunks
+
+	for i := 0; i < len(readers); i++ {
+		readers[i] = bytes.NewReader(buff[i*chunkSize : (i+1)*chunkSize])
+	}
+
+	vs := NewTestValueStore()
+	blob := NewStreamingBlob(vs, readers...)
+	outBuff := &bytes.Buffer{}
+	blob.Reader().Copy(outBuff)
+	assert.True(bytes.Compare(buff, outBuff.Bytes()) == 0)
 }

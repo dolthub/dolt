@@ -4,34 +4,83 @@
 
 package types
 
-import (
-	"runtime"
-
-	"github.com/attic-labs/noms/go/d"
-)
-
-// The number of go routines to devote to read-ahead.
-// The current setting provides good throughput on on a
-// 2015 MacBook Pro/2.7 GHz i5 /8 GB.
-var readAheadParallelism = runtime.NumCPU() * 64
+import "github.com/attic-labs/noms/go/d"
 
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
 	parent    *sequenceCursor
 	seq       sequence
 	idx       int
-	readAhead *sequenceReadAhead
+	readAhead bool
+	childSeqs []sequence
+}
+
+// Advances |sc| forward and streams back a clone of |sc| for each distinct sequence its *parent*
+// visits. The caller should read the leaf cursor off of |curChan| and advance() until invalid.
+// |readAheadLeafCursor| will |preloadChildren()| on each distinct parent cursor prior to sending it
+// to |curChan|. The effect of this is that the client will be iterating over a sequence of
+// leaf + 1 prolly tree sequences, each of which will have preloaded its children.
+//
+//     /---\       /---\
+//  _______________________    <- each Cx's grandparent will be nil so that it only advances within a single sequence
+//   / \   / \   / \   / \     <- first meta-level
+//  /\ /\ /\ /\ /\ /\ /\ /\    <- leaf level
+//  ^     ^     ^     ^
+//  |     |     |     |
+//  c1    c2    c3    c3  <- |curChan|
+//
+func readAheadLeafCursors(sc *sequenceCursor, curChan chan chan *sequenceCursor, stopChan chan struct{}) {
+	d.Chk.False(isMetaSequence(sc.seq))
+
+	parentCursor := sc.parent
+	if parentCursor == nil {
+		ch := make(chan *sequenceCursor, 1)
+		curChan <- ch
+		ch <- sc // No meta level on which to read ahead
+		return
+	}
+
+	d.Chk.True(parentCursor.readAhead)
+	leafIdx := sc.idx // Ensure the first cursor delivered is at the correct start position
+
+	for {
+		select {
+		case <-stopChan:
+			return
+		default:
+		}
+
+		if !parentCursor.valid() {
+			break // end of meta level has been reached
+		}
+
+		ch := make(chan *sequenceCursor)
+		curChan <- ch
+
+		pc := newSequenceCursor(nil, parentCursor.seq, parentCursor.idx, true)
+
+		go func(ch chan *sequenceCursor, pc *sequenceCursor, leafIdx int) {
+			ch <- newSequenceCursor(pc, pc.getChildSequence(), leafIdx, true)
+		}(ch, pc, leafIdx)
+
+		for parentCursor.advance() && parentCursor.idx > 0 {
+		}
+
+		leafIdx = 0
+	}
 }
 
 // newSequenceCursor creates a cursor on seq positioned at idx.
 // If idx < 0, count backward from the end of seq.
-func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int, readAhead bool) *sequenceCursor {
 	d.PanicIfTrue(seq == nil)
 	if idx < 0 {
 		idx += seq.seqLen()
 		d.PanicIfFalse(idx >= 0)
 	}
-	return &sequenceCursor{parent, seq, idx, nil}
+
+	readAhead = readAhead && isMetaSequence(seq) && seq.valueReader() != nil
+	return &sequenceCursor{parent, seq, idx, readAhead, nil}
 }
 
 func (cur *sequenceCursor) length() int {
@@ -46,19 +95,29 @@ func (cur *sequenceCursor) getItem(idx int) sequenceItem {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *sequenceCursor) sync() {
 	d.PanicIfFalse(cur.parent != nil)
-	if cur.readAhead != nil {
-		v := cur.parent.current()
-		hash := v.(metaTuple).ref.TargetHash()
-		if cs, ok := cur.readAhead.get(cur.parent.idx, hash); ok {
-			cur.seq = cs
-			return
-		}
-	}
+	cur.childSeqs = nil
 	cur.seq = cur.parent.getChildSequence()
+}
+
+func (cur *sequenceCursor) preloadChildren() {
+	if cur.childSeqs != nil {
+		return
+	}
+
+	cur.childSeqs = make([]sequence, cur.seq.seqLen())
+	ms := cur.seq.(metaSequence)
+	copy(cur.childSeqs[cur.idx:], ms.getChildren(uint64(cur.idx), uint64(cur.seq.seqLen())))
 }
 
 // getChildSequence retrieves the child at the current cursor position.
 func (cur *sequenceCursor) getChildSequence() sequence {
+	if cur.readAhead {
+		cur.preloadChildren()
+		if child := cur.childSeqs[cur.idx]; child != nil {
+			return child
+		}
+	}
+
 	return cur.seq.getChildSequence(cur.idx)
 }
 
@@ -137,15 +196,43 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 	if cur.parent != nil {
 		parent = cur.parent.clone()
 	}
-	return newSequenceCursor(parent, cur.seq, cur.idx)
+	cl := newSequenceCursor(parent, cur.seq, cur.idx, cur.readAhead)
+	cl.childSeqs = cur.childSeqs
+	return cl
 }
 
 type cursorIterCallback func(item interface{}) bool
 
 // iter iterates forward from the current position
-// TODO: replace calls to this with direct calls to IterSequence()
 func (cur *sequenceCursor) iter(cb cursorIterCallback) {
-	iterSequence(cur, cb)
+	if !cur.readAhead {
+		for cur.valid() && !cb(cur.getItem(cur.idx)) {
+			cur.advance()
+		}
+		return
+	}
+
+	curChan := make(chan chan *sequenceCursor, 16) // read ahead ~ 10MB of leaf sequence
+	stopChan := make(chan struct{}, 1)
+
+	go func() {
+		readAheadLeafCursors(cur, curChan, stopChan)
+		close(curChan)
+	}()
+
+	for ch := range curChan {
+		leafCursor := <-ch
+		for leafCursor.valid() {
+			if cb(leafCursor.getItem(cur.idx)) {
+				stopChan <- struct{}{}
+				for _ = range curChan {
+				} // ensure async loading goroutine exits before we do
+				return
+			}
+
+			leafCursor.advance()
+		}
+	}
 }
 
 // newCursorAtIndex creates a new cursor over seq positioned at idx.
@@ -153,10 +240,10 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence cursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the cursor exhausts the entries in the current chunk.
-func newCursorAtIndex(seq sequence, idx uint64) *sequenceCursor {
+func newCursorAtIndex(seq sequence, idx uint64, readAhead bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
-		cur = newSequenceCursor(cur, seq, 0)
+		cur = newSequenceCursor(cur, seq, 0, readAhead)
 		idx = idx - advanceCursorToOffset(cur, idx)
 		cs := cur.getChildSequence()
 		if cs == nil {
@@ -166,17 +253,4 @@ func newCursorAtIndex(seq sequence, idx uint64) *sequenceCursor {
 	}
 	d.PanicIfTrue(cur == nil)
 	return cur
-}
-
-// enableReadAhead turns on chunk read-ahead for a leaf sequence cursor.
-// It is only intended to be called by sequenceIterator.
-//
-// Read-ahead should only be used in cases where the caller is iterating sequentially
-// forward through all chunks starting at the current position.
-func (cur *sequenceCursor) enableReadAhead() {
-	_, meta := cur.seq.(metaSequence)
-	d.PanicIfTrue(meta)
-	if cur.parent != nil { // only operative if sequence is chunked
-		cur.readAhead = newSequenceReadAhead(cur.parent, readAheadParallelism)
-	}
 }

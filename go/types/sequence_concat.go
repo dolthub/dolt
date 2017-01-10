@@ -23,9 +23,9 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 	if vr != snd.valueReader() {
 		d.Panic("cannot concat sequences from different databases")
 	}
-	chunker := newSequenceChunker(newCursorAtIndex(fst, fst.numLeaves()), vr)
+	chunker := newSequenceChunker(newCursorAtIndex(fst, fst.numLeaves(), false), vr)
 
-	for cur, ch := newCursorAtIndex(snd, 0), chunker; cur != nil; cur = cur.parent {
+	for cur, ch := newCursorAtIndex(snd, 0, false), chunker; cur != nil; cur = cur.parent {
 		// If fst is shallower than snd, its cur will have a parent whereas the
 		// chunker to snd won't. In that case, create a parent for fst.
 		// Note that if the inverse is true - snd is shallower than fst - this just

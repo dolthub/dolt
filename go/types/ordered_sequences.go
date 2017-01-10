@@ -38,15 +38,15 @@ func newMapMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
 	return newMetaSequence(tuples, t, vr)
 }
 
-func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool, readAhead bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
 		key = newOrderedKey(val)
 	}
-	return newCursorAt(seq, key, forInsertion, last)
+	return newCursorAt(seq, key, forInsertion, last, readAhead)
 }
 
-func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool, readAhead bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		idx := 0
@@ -54,7 +54,7 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 			idx = -1
 		}
 		seqIsMeta := isMetaSequence(seq)
-		cur = newSequenceCursor(cur, seq, idx)
+		cur = newSequenceCursor(cur, seq, idx, readAhead)
 		if key != emptyKey {
 			if !seekTo(cur, key, forInsertion && seqIsMeta) {
 				return cur

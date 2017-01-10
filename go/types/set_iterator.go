@@ -38,7 +38,7 @@ type setIterator struct {
 
 func (si *setIterator) Next() Value {
 	if si.cursor == nil {
-		si.cursor = newCursorAt(si.s.seq, emptyKey, false, false)
+		si.cursor = newCursorAt(si.s.seq, emptyKey, false, false, false)
 	} else {
 		si.cursor.advance()
 	}
@@ -53,7 +53,7 @@ func (si *setIterator) SkipTo(v Value) Value {
 	first := false
 	if si.cursor == nil {
 		first = true
-		si.cursor, _ = si.s.getCursorAtValue(v)
+		si.cursor, _ = si.s.getCursorAtValue(v, false)
 	}
 
 	if !si.cursor.valid() {
@@ -69,7 +69,7 @@ func (si *setIterator) SkipTo(v Value) Value {
 		return si.Next()
 	}
 
-	si.cursor, _ = si.s.getCursorAtValue(v)
+	si.cursor, _ = si.s.getCursorAtValue(v, false)
 	if si.cursor.valid() {
 		return si.cursor.current().(Value)
 	}

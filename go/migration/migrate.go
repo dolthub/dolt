@@ -6,6 +6,7 @@ package migration
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
@@ -22,7 +23,12 @@ func MigrateFromVersion7(source v7types.Value, sourceStore v7types.ValueReadWrit
 	case v7types.String:
 		return types.String(string(source)), nil
 	case v7types.Blob:
-		return types.NewStreamingBlob(sourceStore, source.Reader()), nil
+		preader, pwriter := io.Pipe()
+		go func() {
+			source.Reader().Copy(pwriter)
+			pwriter.Close()
+		}()
+		return types.NewStreamingBlob(sourceStore, preader), nil
 	case v7types.List:
 		vc := make(chan types.Value, 1024)
 		lc := types.NewStreamingList(sinkStore, vc)

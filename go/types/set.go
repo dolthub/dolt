@@ -108,7 +108,7 @@ func (s Set) Type() *Type {
 }
 
 func (s Set) First() Value {
-	cur := newCursorAt(s.seq, emptyKey, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -120,7 +120,7 @@ func (s Set) At(idx uint64) Value {
 		panic(fmt.Errorf("Out of bounds: %s >= %s", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(s.seq, idx)
+	cur := newCursorAtIndex(s.seq, idx, false)
 	return cur.current().(Value)
 }
 
@@ -132,7 +132,7 @@ func (s Set) Insert(values ...Value) Set {
 	head, tail := values[0], values[1:]
 
 	var res Set
-	if cur, found := s.getCursorAtValue(head); !found {
+	if cur, found := s.getCursorAtValue(head, false); !found {
 		res = s.splice(cur, 0, head)
 	} else {
 		res = s
@@ -149,7 +149,7 @@ func (s Set) Remove(values ...Value) Set {
 	head, tail := values[0], values[1:]
 
 	var res Set
-	if cur, found := s.getCursorAtValue(head); found {
+	if cur, found := s.getCursorAtValue(head, false); found {
 		res = s.splice(cur, 1)
 	} else {
 		res = s
@@ -173,21 +173,21 @@ func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
 	return ns
 }
 
-func (s Set) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtValue(s.seq, v, true, false)
+func (s Set) getCursorAtValue(v Value, readAhead bool) (cur *sequenceCursor, found bool) {
+	cur = newCursorAtValue(s.seq, v, true, false, readAhead)
 	found = cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
 	return
 }
 
 func (s Set) Has(v Value) bool {
-	cur := newCursorAtValue(s.seq, v, false, false)
+	cur := newCursorAtValue(s.seq, v, false, false, false)
 	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAt(s.seq, emptyKey, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		return cb(v.(Value))
 	})
@@ -196,7 +196,7 @@ func (s Set) Iter(cb setIterCallback) {
 type setIterAllCallback func(v Value)
 
 func (s Set) IterAll(cb setIterAllCallback) {
-	cur := newCursorAt(s.seq, emptyKey, false, false)
+	cur := newCursorAt(s.seq, emptyKey, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		cb(v.(Value))
 		return false

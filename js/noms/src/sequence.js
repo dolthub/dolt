@@ -99,7 +99,7 @@ export class SequenceCursor<T, S: Sequence<any>> {
     if (this.idx < 0) {
       this.idx = Math.max(0, this.sequence.length + this.idx);
     }
-    this.readAhead = readAhead;
+    this.readAhead = readAhead && this.sequence.isMeta;
     this.childSeqs = null;
   }
 
@@ -124,17 +124,18 @@ export class SequenceCursor<T, S: Sequence<any>> {
   }
 
   getChildSequence(): Promise<?S> {
-    if (this.readAhead && this.sequence.isMeta && !this.childSeqs) {
-      // Only readAhead when enabled, for meta sequences.
-      const childSeqs = [];
-      for (let i = this.idx; i < this.sequence.length; i++) {
-        childSeqs[i] = this.sequence.getChildSequence(i);
+    if (this.readAhead) {
+      if (!this.childSeqs) {
+        const childSeqs = [];
+        for (let i = this.idx; i < this.sequence.length; i++) {
+          childSeqs[i] = this.sequence.getChildSequence(i);
+        }
+        this.childSeqs = childSeqs;
       }
-      this.childSeqs = childSeqs;
-    }
 
-    if (this.childSeqs && this.childSeqs[this.idx]) {
-      return this.childSeqs[this.idx]; // read ahead cache
+      if (this.childSeqs[this.idx]) {
+        return this.childSeqs[this.idx]; // read ahead cache
+      }
     }
 
     return this.sequence.getChildSequence(this.idx);

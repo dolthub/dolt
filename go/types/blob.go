@@ -30,10 +30,9 @@ func NewEmptyBlob() Blob {
 }
 
 // BUG 155 - Should provide Write... Maybe even have Blob implement ReadWriteSeeker
-func (b Blob) Reader() io.ReadSeeker {
-	iter := newSequenceIterator(b.seq, 0)
-	return &BlobReader{b.seq, iter, nil, 0}
-
+func (b Blob) Reader() *BlobReader {
+	cursor := newCursorAtIndex(b.seq, 0, true)
+	return &BlobReader{b.seq, cursor, nil, 0}
 }
 
 func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
@@ -44,7 +43,7 @@ func (b Blob) Splice(idx uint64, deleteCount uint64, data []byte) Blob {
 	d.PanicIfFalse(idx <= b.Len())
 	d.PanicIfFalse(idx+deleteCount <= b.Len())
 
-	ch := b.newChunker(newCursorAtIndex(b.seq, idx), b.seq.valueReader())
+	ch := b.newChunker(newCursorAtIndex(b.seq, idx, false), b.seq.valueReader())
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -117,7 +116,7 @@ func (b Blob) Type() *Type {
 
 type BlobReader struct {
 	seq           sequence
-	iter          *sequenceIterator
+	cursor        *sequenceCursor
 	currentReader io.ReadSeeker
 	pos           uint64
 }
@@ -128,11 +127,48 @@ func (cbr *BlobReader) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = cbr.currentReader.Read(p)
-	cbr.pos += uint64(n)
-	hasMore := cbr.iter.advance(n)
-	if err == io.EOF && hasMore {
+	for i := 0; i < n; i++ {
+		cbr.pos++
+		cbr.cursor.advance()
+	}
+	if err == io.EOF && cbr.cursor.idx < cbr.cursor.seq.seqLen() {
 		cbr.currentReader = nil
 		err = nil
+	}
+
+	return
+}
+
+func (cbr BlobReader) Copy(w io.Writer) (n int64) {
+	if cbr.cursor.parent == nil {
+		data := cbr.cursor.seq.(blobLeafSequence).data
+		n, err := io.Copy(w, bytes.NewReader(data))
+		d.Chk.NoError(err)
+		d.Chk.True(n == int64(len(data)))
+		return n
+	}
+
+	curChan := make(chan chan *sequenceCursor, 30)
+	stopChan := make(chan struct{})
+
+	go func() {
+		readAheadLeafCursors(cbr.cursor, curChan, stopChan)
+		close(curChan)
+	}()
+
+	// Copy the bytes of each leaf
+	for ch := range curChan {
+		leafCur := <-ch
+		parentCur := leafCur.parent
+		d.Chk.NotNil(parentCur.childSeqs)
+		// This is hacky, but iterating over the each of these preloaded cursors actual dramatically
+		// degrades perf. Just reach in and grab the leaf sequences
+		for _, leaf := range parentCur.childSeqs {
+			data := leaf.(blobLeafSequence).data
+			n, err := io.Copy(w, bytes.NewReader(data))
+			d.Chk.NoError(err)
+			d.Chk.True(n == int64(len(data)))
+		}
 	}
 
 	return
@@ -157,16 +193,14 @@ func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	cbr.pos = uint64(abs)
-	cbr.iter = newSequenceIterator(cbr.seq, cbr.pos)
+	cbr.cursor = newCursorAtIndex(cbr.seq, cbr.pos, true)
 	cbr.currentReader = nil
 	return abs, nil
 }
 
 func (cbr *BlobReader) updateReader() {
-	chunk, idx := cbr.iter.chunkAndIndex()
-	data := chunk.(blobLeafSequence).data
-	cbr.currentReader = bytes.NewReader(data)
-	cbr.currentReader.Seek(int64(idx), 0)
+	cbr.currentReader = bytes.NewReader(cbr.cursor.seq.(blobLeafSequence).data)
+	cbr.currentReader.Seek(int64(cbr.cursor.idx), 0)
 }
 
 func makeBlobLeafChunkFn(vr ValueReader) makeChunkFn {

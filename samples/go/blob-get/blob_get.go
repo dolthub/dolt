@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/go/util/verbose"
@@ -30,6 +31,8 @@ func main() {
 
 	spec.RegisterDatabaseFlags(flag.CommandLine)
 	verbose.RegisterVerboseFlags(flag.CommandLine)
+	profile.RegisterProfileFlags(flag.CommandLine)
+
 	flag.Parse(true)
 
 	if flag.NArg() != 1 && flag.NArg() != 2 {
@@ -50,30 +53,36 @@ func main() {
 		blob = b
 	}
 
-	file := os.Stdout
-	blobReader := blob.Reader().(io.Reader)
-	showProgress := false
+	defer profile.MaybeStartProfile().Stop()
 
 	filePath := flag.Arg(1)
-	if filePath != "" {
-		// Note: overwrites any existing file.
-		var err error
-		file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
-		d.CheckErrorNoUsage(err)
-		defer file.Close()
-
-		showProgress = true
-		start := time.Now()
-		expected := humanize.Bytes(blob.Len())
-		blobReader = progressreader.New(blob.Reader(), func(seen uint64) {
-			elapsed := time.Since(start).Seconds()
-			rate := uint64(float64(seen) / elapsed)
-			status.Printf("%s of %s written in %ds (%s/s)...", humanize.Bytes(seen), expected, int(elapsed), humanize.Bytes(rate))
-		})
+	if filePath == "" {
+		blob.Reader().Copy(os.Stdout)
+		return
 	}
+
+	// Note: overwrites any existing file.
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
+	d.CheckErrorNoUsage(err)
+	defer file.Close()
+
+	start := time.Now()
+	expected := humanize.Bytes(blob.Len())
+
+	// Create a pipe so that we can connect a progress reader
+	preader, pwriter := io.Pipe()
+
+	go func() {
+		blob.Reader().Copy(pwriter)
+		pwriter.Close()
+	}()
+
+	blobReader := progressreader.New(preader, func(seen uint64) {
+		elapsed := time.Since(start).Seconds()
+		rate := uint64(float64(seen) / elapsed)
+		status.Printf("%s of %s written in %ds (%s/s)...", humanize.Bytes(seen), expected, int(elapsed), humanize.Bytes(rate))
+	})
 
 	io.Copy(file, blobReader)
-	if showProgress {
-		status.Done()
-	}
+	status.Done()
 }

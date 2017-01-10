@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -104,7 +103,9 @@ func main() {
 	ds = db.GetDataset("test")
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
-	outBytes, _ := ioutil.ReadAll(blob.Reader())
+	buff := &bytes.Buffer{}
+	blob.Reader().Copy(buff)
+	outBytes := buff.Bytes()
 	readDuration := time.Since(t1)
 	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)
 	fmt.Printf("\t\t\t%s\t\t%s\n\n", rate(buildDuration, *blobSize), rate(readDuration, *blobSize))

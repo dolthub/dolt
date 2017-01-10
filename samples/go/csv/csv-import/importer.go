@@ -89,7 +89,12 @@ func main() {
 			d.CheckError(fmt.Errorf("Path %s not a Blob: %s\n", *path, types.EncodedValue(val.Type())))
 		}
 		defer db.Close()
-		r = blob.Reader()
+		preader, pwriter := io.Pipe()
+		go func() {
+			blob.Reader().Copy(pwriter)
+			pwriter.Close()
+		}()
+		r = preader
 		size = blob.Len()
 		dataSetArgN = 0
 	} else {

@@ -112,8 +112,8 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	var lastHeight, currentHeight int
 	functions.All(
-		func() { lastHeight = newCursorAt(last, emptyKey, false, false).depth() },
-		func() { currentHeight = newCursorAt(current, emptyKey, false, false).depth() },
+		func() { lastHeight = newCursorAt(last, emptyKey, false, false, false).depth() },
+		func() { currentHeight = newCursorAt(current, emptyKey, false, false, false).depth() },
 	)
 	return orderedSequenceDiffInternalNodes(last, current, changes, stopChan, lastHeight, currentHeight)
 }
@@ -159,8 +159,8 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	lastCur := newCursorAt(last, emptyKey, false, false)
-	currentCur := newCursorAt(current, emptyKey, false, false)
+	lastCur := newCursorAt(last, emptyKey, false, false, true)
+	currentCur := newCursorAt(current, emptyKey, false, false, true)
 
 	for lastCur.valid() && currentCur.valid() {
 		fastForward(lastCur, currentCur)

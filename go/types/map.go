@@ -125,7 +125,7 @@ func (m Map) Type() *Type {
 }
 
 func (m Map) firstOrLast(last bool) (Value, Value) {
-	cur := newCursorAt(m.seq, emptyKey, false, last)
+	cur := newCursorAt(m.seq, emptyKey, false, last, false)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -146,13 +146,13 @@ func (m Map) At(idx uint64) (key, value Value) {
 		panic(fmt.Errorf("Out of bounds: %s >= %s", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(m.seq, idx)
+	cur := newCursorAtIndex(m.seq, idx, false)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(m.seq, key, false, false)
+	cur := newCursorAtValue(m.seq, key, false, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -176,7 +176,7 @@ func (m Map) SetM(kv ...Value) Map {
 
 	k, v, tail := kv[0], kv[1], kv[2:]
 
-	cur, found := m.getCursorAtValue(k)
+	cur, found := m.getCursorAtValue(k, false)
 	deleteCount := uint64(0)
 	if found {
 		deleteCount = 1
@@ -185,7 +185,7 @@ func (m Map) SetM(kv ...Value) Map {
 }
 
 func (m Map) Remove(k Value) Map {
-	if cur, found := m.getCursorAtValue(k); found {
+	if cur, found := m.getCursorAtValue(k, false); found {
 		return m.splice(cur, 1)
 	}
 	return m
@@ -204,14 +204,14 @@ func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map
 	return newMap(ch.Done().(orderedSequence))
 }
 
-func (m Map) getCursorAtValue(v Value) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtValue(m.seq, v, true, false)
+func (m Map) getCursorAtValue(v Value, readAhead bool) (cur *sequenceCursor, found bool) {
+	cur = newCursorAtValue(m.seq, v, true, false, readAhead)
 	found = cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(v)
 	return
 }
 
 func (m Map) Has(key Value) bool {
-	cur := newCursorAtValue(m.seq, key, false, false)
+	cur := newCursorAtValue(m.seq, key, false, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -227,7 +227,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(m.seq, emptyKey, false, false)
+	cur := newCursorAt(m.seq, emptyKey, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -237,7 +237,7 @@ func (m Map) Iter(cb mapIterCallback) {
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {
-	cur := newCursorAt(m.seq, emptyKey, false, false)
+	cur := newCursorAt(m.seq, emptyKey, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		cb(entry.key, entry.value)
@@ -246,7 +246,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(m.seq, start, false, false)
+	cur := newCursorAtValue(m.seq, start, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)

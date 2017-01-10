@@ -70,18 +70,18 @@ func (ts testSequence) Type() *Type {
 }
 
 func newTestSequenceCursor(items []interface{}) *sequenceCursor {
-	parent := newSequenceCursor(nil, testSequence{items}, 0)
+	parent := newSequenceCursor(nil, testSequence{items}, 0, false)
 	items = items[0].([]interface{})
-	return newSequenceCursor(parent, testSequence{items}, 0)
+	return newSequenceCursor(parent, testSequence{items}, 0, false)
 }
 
 // TODO: Convert all tests to use newTestSequenceCursor3.
 func newTestSequenceCursor3(items []interface{}) *sequenceCursor {
-	top := newSequenceCursor(nil, testSequence{items}, 0)
+	top := newSequenceCursor(nil, testSequence{items}, 0, false)
 	items = items[0].([]interface{})
-	middle := newSequenceCursor(top, testSequence{items}, 0)
+	middle := newSequenceCursor(top, testSequence{items}, 0, false)
 	items = items[0].([]interface{})
-	return newSequenceCursor(middle, testSequence{items}, 0)
+	return newSequenceCursor(middle, testSequence{items}, 0, false)
 }
 
 func TestTestCursor(t *testing.T) {

@@ -321,7 +321,7 @@ func (hip HashIndexPath) Resolve(v Value) (res Value) {
 		return nil
 	}
 
-	cur := newCursorAt(seq, orderedKeyFromHash(hip.Hash), false, false)
+	cur := newCursorAt(seq, orderedKeyFromHash(hip.Hash), false, false, false)
 	if !cur.valid() {
 		return nil
 	}
