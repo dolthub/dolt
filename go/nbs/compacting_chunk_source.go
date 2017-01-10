@@ -76,9 +76,9 @@ func (ccs *compactingChunkSource) close() error {
 }
 
 func (ccs *compactingChunkSource) count() uint32 {
-	cr := ccs.getReader()
-	d.Chk.True(cr != nil)
-	return cr.count()
+	ccs.wg.Wait()
+	d.Chk.True(ccs.cs != nil)
+	return ccs.cs.count()
 }
 
 func (ccs *compactingChunkSource) hash() addr {

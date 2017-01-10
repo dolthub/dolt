@@ -39,7 +39,7 @@ func TestCompactingChunkStore(t *testing.T) {
 	ccs := newCompactingChunkSource(mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1))
 
 	assertChunksInReader(testChunks, ccs, assert)
-	assert.EqualValues(mt.count(), ccs.count())
+	assert.EqualValues(mt.count(), ccs.getReader().count())
 	close(trigger)
 
 	assert.NotEqual(addr{}, ccs.hash())

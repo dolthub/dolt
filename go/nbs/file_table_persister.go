@@ -20,16 +20,18 @@ type fsTablePersister struct {
 
 func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	tempName, name, chunkCount := func() (string, addr, uint32) {
-		temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
-		d.PanicIfError(err)
-		defer checkClose(temp)
-
+		var tempName string
 		name, data, chunkCount := mt.write(haver)
-		io.Copy(temp, bytes.NewReader(data))
-		return temp.Name(), name, chunkCount
+		if chunkCount > 0 {
+			temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
+			d.PanicIfError(err)
+			defer checkClose(temp)
+			io.Copy(temp, bytes.NewReader(data))
+			tempName = temp.Name()
+		}
+		return tempName, name, chunkCount
 	}()
 	if chunkCount == 0 {
-		os.Remove(tempName)
 		return emptyChunkSource{}
 	}
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
