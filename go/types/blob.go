@@ -232,7 +232,7 @@ func readBlobsP(vrw ValueReadWriter, rs ...io.Reader) Blob {
 }
 
 func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(vrw, vrw, makeBlobLeafChunkFn(nil), newIndexedMetaSequenceChunkFn(BlobKind, nil), func(item sequenceItem, rv *rollingValueHasher) {
+	sc := newEmptySequenceChunker(vrw, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
 
