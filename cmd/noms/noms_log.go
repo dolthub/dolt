@@ -17,7 +17,6 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/attic-labs/noms/go/util/writers"
@@ -84,31 +83,35 @@ func runLog(args []string) int {
 		maxCommits = math.MaxInt32
 	}
 
-	inChan := make(chan interface{}, parallelism)
-	outChan := orderedparallel.New(inChan, func(node interface{}) interface{} {
-		buff := &bytes.Buffer{}
-		printCommit(node.(LogNode), buff, database)
-		return buff.Bytes()
-	}, parallelism)
+	bytesChan := make(chan chan []byte, parallelism)
 
 	var done = false
 
 	go func() {
 		for ln, ok := iter.Next(); !done && ok && displayed < maxCommits; ln, ok = iter.Next() {
-			inChan <- ln
+			ch := make(chan []byte)
+			bytesChan <- ch
+
+			go func(ch chan []byte, node LogNode) {
+				buff := &bytes.Buffer{}
+				printCommit(node, buff, database)
+				ch <- buff.Bytes()
+			}(ch, ln)
+
 			displayed++
 		}
-		close(inChan)
+		close(bytesChan)
 	}()
 
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	for commitBuff := range outChan {
-		_, err := io.Copy(pgr.Writer, bytes.NewReader(commitBuff.([]byte)))
+	for ch := range bytesChan {
+		commitBuff := <-ch
+		_, err := io.Copy(pgr.Writer, bytes.NewReader(commitBuff))
 		if err != nil {
 			done = true
-			for range outChan {
+			for range bytesChan {
 				// drain the output
 			}
 		}

@@ -161,12 +161,12 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	}
 	assert.Equal(len(hints), count)
 
-	outChunkChan := make(chan interface{}, len(chnx))
+	outChunkChan := make(chan *chunks.Chunk, len(chnx))
 	chunks.Deserialize(gr, outChunkChan)
 	close(outChunkChan)
 
 	for c := range outChunkChan {
-		assert.Equal(chnx[0].Hash(), c.(*chunks.Chunk).Hash())
+		assert.Equal(chnx[0].Hash(), c.Hash())
 		chnx = chnx[1:]
 	}
 	assert.Empty(chnx)
@@ -228,13 +228,13 @@ func TestHandleGetRefs(t *testing.T) {
 	)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		chunkChan := make(chan interface{}, len(chnx))
+		chunkChan := make(chan *chunks.Chunk, len(chnx))
 		chunks.Deserialize(w.Body, chunkChan)
 		close(chunkChan)
 
 		foundHashes := hash.HashSet{}
 		for c := range chunkChan {
-			foundHashes[c.(*chunks.Chunk).Hash()] = struct{}{}
+			foundHashes[c.Hash()] = struct{}{}
 		}
 
 		assert.True(len(foundHashes) == 2)

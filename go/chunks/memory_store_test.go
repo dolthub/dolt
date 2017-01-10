@@ -29,7 +29,7 @@ func (suite *MemoryStoreTestSuite) TearDownTest() {
 
 func (suite *MemoryStoreTestSuite) TestBadSerialization() {
 	bad := []byte{0, 1} // Not enough bytes to read first length
-	ch := make(chan interface{})
+	ch := make(chan *Chunk)
 	defer close(ch)
 	suite.Error(Deserialize(bytes.NewReader(bad), ch))
 }

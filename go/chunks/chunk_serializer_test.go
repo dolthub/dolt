@@ -23,15 +23,15 @@ func TestSerializeRoundTrip(t *testing.T) {
 	Serialize(chnx[0], buf)
 	Serialize(chnx[1], buf)
 
-	chunkChan := make(chan interface{})
+	chunkChan := make(chan *Chunk)
 	go func() {
 		defer close(chunkChan)
 		err := Deserialize(bytes.NewReader(buf.Bytes()), chunkChan)
 		assert.NoError(err)
 	}()
 
-	for i := range chunkChan {
-		assert.Equal(chnx[0].Hash(), i.(*Chunk).Hash())
+	for c := range chunkChan {
+		assert.Equal(chnx[0].Hash(), c.Hash())
 		chnx = chnx[1:]
 	}
 	assert.Len(chnx, 0)

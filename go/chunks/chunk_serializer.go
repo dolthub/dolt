@@ -48,9 +48,7 @@ func Serialize(chunk Chunk, writer io.Writer) {
 // Deserialize reads off of |reader| until EOF, sending chunks to
 // chunkChan in the order they are read. Objects sent over chunkChan are
 // *Chunk.
-// The type is `chan<- interface{}` so that this is compatible with
-// orderedparallel.New().
-func Deserialize(reader io.Reader, chunkChan chan<- interface{}) (err error) {
+func Deserialize(reader io.Reader, chunkChan chan<- *Chunk) (err error) {
 	for {
 		var c Chunk
 		c, err = deserializeChunk(reader)

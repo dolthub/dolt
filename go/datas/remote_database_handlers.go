@@ -20,7 +20,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 )
@@ -132,7 +131,9 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	// Deserialize chunks from reader in background, recovering from errors
 	errChan := make(chan error)
 	defer close(errChan)
-	chunkChan := make(chan interface{}, writeValueConcurrency)
+
+	chunkChan := make(chan *chunks.Chunk, writeValueConcurrency)
+
 	go func() {
 		var err error
 		defer func() { errChan <- err }()
@@ -140,16 +141,23 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		err = chunks.Deserialize(reader, chunkChan)
 	}()
 
-	decoded := orderedparallel.New(
-		chunkChan,
-		func(c interface{}) interface{} {
-			return vbs.DecodeUnqueued(c.(*chunks.Chunk))
-		},
-		writeValueConcurrency)
+	decoded := make(chan chan types.DecodedChunk, writeValueConcurrency)
+
+	go func() {
+		defer close(decoded)
+		for c := range chunkChan {
+			ch := make(chan types.DecodedChunk)
+			decoded <- ch
+
+			go func(ch chan types.DecodedChunk, c *chunks.Chunk) {
+				ch <- vbs.DecodeUnqueued(c)
+			}(ch, c)
+		}
+	}()
 
 	var bpe chunks.BackpressureError
-	for dci := range decoded {
-		dc := dci.(types.DecodedChunk)
+	for ch := range decoded {
+		dc := <-ch
 		if dc.Chunk != nil && dc.Value != nil {
 			if bpe == nil {
 				totalDataWritten += len(dc.Chunk.Data())

@@ -271,15 +271,14 @@ func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
 	}
 
-	chunkChan := make(chan interface{}, 16)
+	chunkChan := make(chan *chunks.Chunk, 16)
 	go func() { defer close(chunkChan); chunks.Deserialize(reader, chunkChan) }()
 
-	for i := range chunkChan {
-		cp := i.(*chunks.Chunk)
-		for _, or := range batch[cp.Hash()] {
-			go or.Satisfy(cp)
+	for c := range chunkChan {
+		for _, or := range batch[c.Hash()] {
+			go or.Satisfy(c)
 		}
-		delete(batch, cp.Hash())
+		delete(batch, c.Hash())
 	}
 }
 

@@ -10,9 +10,10 @@ import (
 	"io"
 	"sync"
 
+	"runtime"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/orderedparallel"
 )
 
 // Blob represents a list of Blobs.
@@ -287,24 +288,27 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 		return rv.crossedBoundary
 	}
 
-	input := make(chan interface{}, 16)
-	output := orderedparallel.New(input, func(item interface{}) interface{} {
-		cp := item.([]byte)
-		col, key, numLeaves := chunkBlobLeaf(vrw, cp)
-		var ref Ref
-		if vrw != nil {
-			ref = vrw.WriteValue(col)
-			col = nil
-		} else {
-			ref = NewRef(col)
-		}
-		return newMetaTuple(ref, key, numLeaves, col)
-	}, 16)
+	mtChan := make(chan chan metaTuple, runtime.NumCPU())
 
 	makeChunk := func() {
 		cp := make([]byte, offset)
 		copy(cp, chunkBytes[0:offset])
-		input <- cp
+
+		ch := make(chan metaTuple)
+		mtChan <- ch
+
+		go func(ch chan metaTuple, cp []byte) {
+			col, key, numLeaves := chunkBlobLeaf(vrw, cp)
+			var ref Ref
+			if vrw != nil {
+				ref = vrw.WriteValue(col)
+				col = nil
+			} else {
+				ref = NewRef(col)
+			}
+			ch <- newMetaTuple(ref, key, numLeaves, col)
+		}(ch, cp)
+
 		offset = 0
 	}
 
@@ -323,17 +327,18 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 				if offset > 0 {
 					makeChunk()
 				}
-				close(input)
+				close(mtChan)
 				break
 			}
 		}
 	}()
 
-	for b := range output {
+	for ch := range mtChan {
+		mt := <-ch
 		if sc.parent == nil {
 			sc.createParent()
 		}
-		sc.parent.Append(b.(metaTuple))
+		sc.parent.Append(mt)
 	}
 
 	return newBlob(sc.Done())
