@@ -9,9 +9,9 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 )
 
 // BatchStore provides an interface similar to chunks.ChunkStore, but batch-oriented. Instead of Put(), it provides SchedulePut(), which enqueues a Chunk to be sent at a possibly later time.
@@ -82,8 +82,8 @@ func (bsa *BatchStoreAdaptor) SchedulePut(c chunks.Chunk, refHeight uint64, hint
 
 func (bsa *BatchStoreAdaptor) expectVersion() {
 	dataVersion := bsa.cs.Version()
-	if version.Current() != dataVersion {
-		d.Panic("SDK version %s incompatible with data of version %s", version.Current(), dataVersion)
+	if constants.NomsVersion != dataVersion {
+		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	}
 }
 

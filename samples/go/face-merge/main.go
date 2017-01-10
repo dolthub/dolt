@@ -37,6 +37,7 @@ func mergeFaces() {
 	var dbStr = flag.String("db", "", "input database spec")
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
+	types.RegisterTypeSimplificationFlags(flag.CommandLine)
 
 	flag.Usage = usage
 	flag.Parse(false)

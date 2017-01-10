@@ -7,7 +7,7 @@ package chunks
 import (
 	"bytes"
 
-	"github.com/attic-labs/noms/go/version"
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -37,7 +37,7 @@ func createFakeDDB(a *assert.Assertions) *fakeDDB {
 	return &fakeDDB{
 		data:    map[string]record{},
 		assert:  a,
-		version: version.Current(),
+		version: constants.NomsVersion,
 	}
 }
 

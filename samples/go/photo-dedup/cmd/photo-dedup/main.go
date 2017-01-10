@@ -12,6 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/attic-labs/noms/samples/go/photo-dedup/job"
@@ -34,6 +35,7 @@ func main() {
 	var outDSStr = flag.String("out-ds", "", "output dataset to write to")
 	var threshold = flag.Int("threshold", 10, "photo's whose dhash distance is < threshold are grouped together")
 	verbose.RegisterVerboseFlags(flag.CommandLine)
+	types.RegisterTypeSimplificationFlags(flag.CommandLine)
 
 	flag.Usage = usage
 	flag.Parse(false)

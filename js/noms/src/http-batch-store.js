@@ -31,7 +31,7 @@ type RpcStrings = {
 
 const versionOptions = {
   headers: {
-    [versionHeader]: nomsVersion.current(),
+    [versionHeader]: nomsVersion,
   },
 };
 
@@ -164,10 +164,9 @@ export class Delegate {
 
 function checkVersion(headers: Map<string, string>): ?Error {
   const version = headers.get(versionHeader);
-  if (version !== nomsVersion.current()) {
+  if (version !== nomsVersion) {
     return new Error(
-      `SDK version ${nomsVersion.current()} is not compatible with data of version ` +
-      `${String(version)}.`);
+      `SDK version ${nomsVersion} is not compatible with data of version ${String(version)}.`);
   }
   return null;
 }

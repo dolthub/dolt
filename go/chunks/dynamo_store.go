@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -408,7 +408,7 @@ func (s *DynamoStore) Version() string {
 
 	itemLen := len(result.Item)
 	if itemLen == 0 {
-		return version.Current()
+		return constants.NomsVersion
 	}
 	if itemLen != 2 {
 		d.Panic("Version should have 2 attributes on it: %+v", result.Item)
@@ -423,7 +423,7 @@ func (s *DynamoStore) setVersIfUnset() {
 		TableName: aws.String(s.table),
 		Item: map[string]*dynamodb.AttributeValue{
 			refAttr: {B: s.versionKey},
-			numAttr: {S: aws.String(version.Current())},
+			numAttr: {S: aws.String(constants.NomsVersion)},
 		},
 		ConditionExpression: aws.String(valueNotExistsExpression),
 	}

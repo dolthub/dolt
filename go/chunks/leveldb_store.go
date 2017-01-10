@@ -10,9 +10,9 @@ import (
 	"os"
 	"sync"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/snappy"
 	flag "github.com/juju/gnuflag"
@@ -242,14 +242,14 @@ func (l *internalLevelDBStore) hasByKey(key []byte) bool {
 func (l *internalLevelDBStore) versByKey(key []byte) string {
 	val, err := l.db.Get(key, nil)
 	if err == errors.ErrNotFound {
-		return version.Current()
+		return constants.NomsVersion
 	}
 	d.Chk.NoError(err)
 	return string(val)
 }
 
 func (l *internalLevelDBStore) setVersByKey(key []byte) {
-	err := l.db.Put(key, []byte(version.Current()), nil)
+	err := l.db.Put(key, []byte(constants.NomsVersion), nil)
 	d.Chk.NoError(err)
 }
 

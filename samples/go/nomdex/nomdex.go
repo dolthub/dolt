@@ -42,12 +42,12 @@ func main() {
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] {
 			flags := cmd.Flags()
-			flags.Usage = cmd.MakeUsage(flags)
+			flags.Usage = cmd.Usage
 
 			flags.Parse(true, args[1:])
 			args = flags.Args()
 			if cmd.Nargs != 0 && len(args) < cmd.Nargs {
-				flags.Usage()
+				cmd.Usage()
 			}
 			exitCode := cmd.Run(args)
 			if exitCode != 0 {

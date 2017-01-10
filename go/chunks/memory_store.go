@@ -7,9 +7,9 @@ package chunks
 import (
 	"sync"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 )
 
 // An in-memory implementation of store.ChunkStore. Useful mainly for tests.
@@ -53,7 +53,7 @@ func (ms *MemoryStore) Has(r hash.Hash) bool {
 }
 
 func (ms *MemoryStore) Version() string {
-	return version.Current()
+	return constants.NomsVersion
 }
 
 func (ms *MemoryStore) Put(c Chunk) {

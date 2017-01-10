@@ -53,7 +53,7 @@ type ChunkSource interface {
 	// Returns true iff the value at the address |h| is contained in the source
 	Has(h hash.Hash) bool
 
-	// Returns the Noms format version with which this ChunkSource is compatible.
+	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string
 }
 

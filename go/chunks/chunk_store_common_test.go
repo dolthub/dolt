@@ -7,8 +7,8 @@ package chunks
 import (
 	"github.com/attic-labs/testify/suite"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 )
 
 type ChunkStoreTestSuite struct {
@@ -89,5 +89,5 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	newRoot := hash.Parse("11111222223333344444555556666677")
 	suite.True(suite.Store.UpdateRoot(newRoot, oldRoot))
 
-	suite.Equal(version.Current(), suite.Store.Version())
+	suite.Equal(constants.NomsVersion, suite.Store.Version())
 }

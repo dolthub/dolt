@@ -10,10 +10,10 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/version"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -94,7 +94,7 @@ func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64) *NomsBlock
 	nbs := &NomsBlockStore{
 		mm:          mm,
 		tables:      ts,
-		nomsVersion: version.Current(),
+		nomsVersion: constants.NomsVersion,
 		mtSize:      memTableSize,
 	}
 
@@ -293,7 +293,7 @@ func (nbs *NomsBlockStore) UpdateRoot(current, last hash.Hash) bool {
 		nbs.tables = nbs.tables.Union(tableNames)
 		return false
 	}
-	nbs.nomsVersion, nbs.root = version.Current(), current
+	nbs.nomsVersion, nbs.root = constants.NomsVersion, current
 	return true
 }
 

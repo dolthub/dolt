@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/version"
 )
 
 const (
@@ -122,7 +122,7 @@ func (fm fileManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeH
 
 			var mVers string
 			mVers, actual, tableSpecs = parseManifest(f)
-			d.PanicIfFalse(version.Current() == mVers)
+			d.PanicIfFalse(constants.NomsVersion == mVers)
 		} else {
 			d.Chk.True(root == hash.Hash{})
 		}
@@ -138,7 +138,7 @@ func (fm fileManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeH
 
 func writeManifest(temp io.Writer, root hash.Hash, specs []tableSpec) {
 	strs := make([]string, 2*len(specs)+3)
-	strs[0], strs[1], strs[2] = StorageVersion, version.Current(), root.String()
+	strs[0], strs[1], strs[2] = StorageVersion, constants.NomsVersion, root.String()
 	tableInfo := strs[3:]
 	formatSpecs(specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
