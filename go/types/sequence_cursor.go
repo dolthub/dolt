@@ -205,7 +205,7 @@ type cursorIterCallback func(item interface{}) bool
 
 // iter iterates forward from the current position
 func (cur *sequenceCursor) iter(cb cursorIterCallback) {
-	if !cur.readAhead {
+	if cur.parent == nil || !cur.parent.readAhead {
 		for cur.valid() && !cb(cur.getItem(cur.idx)) {
 			cur.advance()
 		}
@@ -223,7 +223,7 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 	for ch := range curChan {
 		leafCursor := <-ch
 		for leafCursor.valid() {
-			if cb(leafCursor.getItem(cur.idx)) {
+			if cb(leafCursor.getItem(leafCursor.idx)) {
 				stopChan <- struct{}{}
 				for _ = range curChan {
 				} // ensure async loading goroutine exits before we do
