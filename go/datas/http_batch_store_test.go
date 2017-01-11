@@ -292,6 +292,43 @@ func (suite *HTTPBatchStoreSuite) TestGetMany() {
 	suite.True(hashes.Has(notPresent))
 }
 
+func (suite *HTTPBatchStoreSuite) TestGetManyAllCached() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	suite.store.SchedulePut(chnx[0], 1, types.Hints{})
+	suite.store.SchedulePut(chnx[1], 1, types.Hints{})
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
+	foundChunks := make(chan *chunks.Chunk)
+	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+
+	for c := range foundChunks {
+		hashes.Remove(c.Hash())
+	}
+	suite.Len(hashes, 0)
+}
+
+func (suite *HTTPBatchStoreSuite) TestGetManySomeCached() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	cached := chunks.NewChunk([]byte("ghi"))
+	suite.NoError(suite.cs.PutMany(chnx))
+	suite.store.SchedulePut(cached, 1, types.Hints{})
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
+	foundChunks := make(chan *chunks.Chunk)
+	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+
+	for c := range foundChunks {
+		hashes.Remove(c.Hash())
+	}
+	suite.Len(hashes, 0)
+}
+
 func (suite *HTTPBatchStoreSuite) TestGetSame() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("def")),
