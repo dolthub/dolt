@@ -187,6 +187,10 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		remaining.Insert(h)
 	}
 
+	if len(remaining) == 0 {
+		return
+	}
+
 	// Request remaining hashes from BatchStore, processing the found chunks as they come in.
 	foundChunks := make(chan *chunks.Chunk, 16)
 	foundHashes := hash.HashSet{}
