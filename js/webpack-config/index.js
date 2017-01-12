@@ -12,6 +12,7 @@ const devMode = process.env.NODE_ENV !== 'production';
 function replaceEnv(envVars) {
   const replacements = {
     'process.env.NODE_ENV': JSON.stringify(String(process.env.NODE_ENV)),
+    'process.env.NOMS_VERSION_NEXT': JSON.stringify(String(process.env.NOMS_VERSION_NEXT)),
   };
   for (const name of envVars) {
     if (!(name in process.env)) {
