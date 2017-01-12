@@ -9,8 +9,9 @@ import type {primitive} from './primitives.js';
 import {ensureHash} from './get-hash.js';
 import type {Type} from './type.js';
 import type Ref from './ref.js';
-import type {WalkCallback} from './walk.js';
 import type {ValueReader} from './value-store.js';
+
+export type ValueCallback = (v: Value) => void | Promise<void>;
 
 /**
  * ValueBase is the base class for non primitive Noms values.
@@ -49,7 +50,7 @@ export class ValueBase {
    * WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	 * the `type`.
    */
-  walkValues(vr: ValueReader, cb: WalkCallback):  // eslint-disable-line no-unused-vars
+  walkValues(vr: ValueReader, cb: ValueCallback):  // eslint-disable-line no-unused-vars
       Promise<void> {
     return Promise.reject(new Error('abstract'));
   }

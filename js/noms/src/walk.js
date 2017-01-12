@@ -5,9 +5,15 @@
 // @flow
 
 import type Value from './value.js';
+import {ValueBase} from './value.js';
 import type {ValueReader} from './value-store.js';
+import Ref from './ref.js';
+import Collection from './collection.js';
+import Hash from './hash.js';
 
 export type WalkCallback = (v: Value) => ?boolean | Promise<?boolean>;
+
+const maxRefCount = (1 << 12); // ~16MB of data
 
 /**
  * Invokes `cb` once for `v` and each of its descendants. The returned `Promise` is resolved when
@@ -18,24 +24,84 @@ export type WalkCallback = (v: Value) => ?boolean | Promise<?boolean>;
  * this node's children.
  *
  * If `cb` returns undefined or `Promise.resolve()`, the default is to continue recursing (`false`).
+ *
  */
+
+interface ValueRec {
+  v: Value;
+  needsCallback: boolean;
+}
+
+interface HashRec {
+  h: Hash;
+  needsCallback: boolean;
+}
+
 export default async function walk(v: Value, vr: ValueReader, cb: WalkCallback): Promise<void> {
-  let skip = cb(v);
-  if (skip && skip !== true) {
-    // Might be a Promise, but we can't check instanceof: https://phabricator.babeljs.io/T7340.
-    skip = await skip;
-  }
+  const values: ValueRec[] = [{v: v, needsCallback: true}];
+  const refs: HashRec[] = [];
 
-  if (skip) {
-    return;
-  }
+  const visited = Object.create(null);
+  const childValuesP = [];
+  const childCB = [];
 
-  switch (typeof v) {
-    case 'boolean':
-    case 'number':
-    case 'string':
-      return;
-  }
+  while (values.length > 0 || refs.length > 0) {
+    // Visit all values located *within* loaded chunks.
+    while (values.length > 0) {
+      const rec = values.pop();
+      if (rec.needsCallback) {
+        let skip = cb(rec.v);
+        if (skip && skip !== true) {
+          skip = await skip;
+        }
+        if (skip) {
+          continue;
+        }
+      }
 
-  return v.walkValues(vr, cb);
+      v = rec.v;
+      if (v instanceof Ref) {
+        refs.push({h: v.targetHash, needsCallback: true});
+        continue;
+      }
+
+      if (v instanceof Collection && v.sequence.isMeta) {
+        v.sequence.items.forEach(mt => {
+          if (mt.child) {
+            // Eagerly visit uncommitted child sequences.
+            values.push({v: mt.child, needsCallback: false});
+          } else {
+            refs.push({h: mt.ref.targetHash, needsCallback: false});
+          }
+        });
+        continue;
+      }
+
+      if (v instanceof ValueBase) {
+        await v.walkValues(vr, v => {
+          values.push({v: v, needsCallback: true});
+          return;
+        });
+      }
+    }
+
+    // Load the next level of chunks.
+    while (refs.length > 0 && childValuesP.length <= maxRefCount) {
+      const rec = refs.pop();
+      const hstr = rec.h.toString();
+      if (visited[hstr]) {
+        return;
+      }
+
+      visited[hstr] = true;
+      childValuesP.push(vr.readValue(rec.h));
+      childCB.push(rec.needsCallback);
+    }
+
+    (await Promise.all(childValuesP)).forEach(
+        (child: Value, idx) => values.push({v: child, needsCallback: childCB[idx]}));
+
+    childValuesP.length = 0;
+    childCB.length = 0;
+  }
 }

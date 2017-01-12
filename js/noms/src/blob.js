@@ -17,7 +17,7 @@ import Sequence, {OrderedKey, SequenceCursor} from './sequence.js';
 import {blobType} from './type.js';
 import {invariant} from './assert.js';
 import {hashValueByte} from './rolling-value-hasher.js';
-import type {WalkCallback} from './walk.js';
+import type {ValueCallback} from './value.js';
 
 export default class Blob extends Collection<Sequence<any>> {
   constructor(bytes: Uint8Array) {
@@ -32,7 +32,7 @@ export default class Blob extends Collection<Sequence<any>> {
     super(seq);
   }
 
-  walkValues(vr: ValueReader, cb: WalkCallback):  // eslint-disable-line no-unused-vars
+  walkValues(vr: ValueReader, cb: ValueCallback):  // eslint-disable-line no-unused-vars
       Promise<void> {
     return Promise.resolve();
   }

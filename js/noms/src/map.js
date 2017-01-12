@@ -8,7 +8,7 @@ import {invariant} from './assert.js';
 import Ref from './ref.js';
 import type {ValueReader} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
-import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
@@ -28,8 +28,6 @@ import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 import type {EqualsFn} from './edit-distance.js';
 import RollingValueHasher, {hashValueBytes} from './rolling-value-hasher.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
 
 export type MapEntry<K: Value, V: Value> = [K, V];
 export const KEY = 0;
@@ -89,8 +87,8 @@ export default class Map<K: Value, V: Value> extends
     super(seq);
   }
 
-  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return this.forEach((v, k) => Promise.all([walk(k, vr, cb), walk(v, vr, cb)]));
+  walkValues(vr: ValueReader, cb: ValueCallback): Promise<void> {
+    return this.forEach((v, k) => Promise.all([cb(k), cb(v)]));
   }
 
   async has(key: K): Promise<boolean> {

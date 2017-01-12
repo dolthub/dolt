@@ -6,7 +6,7 @@
 
 import type {ValueReader} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
-import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
 import {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
@@ -28,8 +28,6 @@ import {makeSetType, makeUnionType, getTypeOfValue} from './type.js';
 import {removeDuplicateFromOrdered} from './map.js';
 import {Kind} from './noms-kind.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
 
 function newSetLeafChunkFn<T:Value>(vr: ?ValueReader): makeChunkFn<any, any> {
   return (items: Array<T>) => {
@@ -62,8 +60,8 @@ export default class Set<T: Value> extends Collection<Sequence<any>> {
     super(seq);
   }
 
-  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return this.forEach(v => walk(v, vr, cb));
+  walkValues(vr: ValueReader, cb: ValueCallback): Promise<void> {
+    return this.forEach(v => cb(v));
   }
 
   async has(key: T): Promise<boolean> {

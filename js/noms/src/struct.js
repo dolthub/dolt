@@ -7,7 +7,7 @@
 import assertSubtype from './assert-type.js';
 import type Ref from './ref.js';
 import type {Type, StructDesc, Field} from './type.js';
-import type Value from './value.js';
+import type Value, {ValueCallback} from './value.js';
 import {Kind} from './noms-kind.js';
 import {ValueBase, init as initValue} from './value.js';
 import {equals} from './compare.js';
@@ -15,8 +15,6 @@ import {getTypeOfValue, makeStructType, findFieldIndex} from './type.js';
 import {invariant} from './assert.js';
 import {isPrimitive} from './primitives.js';
 import * as Bytes from './bytes.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
 import type {ValueReader} from './value-store.js';
 
 type StructData = {[key: string]: Value};
@@ -64,8 +62,8 @@ export default class Struct extends ValueBase {
     init(this, type, values);
   }
 
-  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return Promise.all(this._values.map(v => walk(v, vr, cb))).then();
+  walkValues(vr: ValueReader, cb: ValueCallback): Promise<void> {
+    return Promise.all(this._values.map(v => cb(v))).then();
   }
 
   get type(): Type<any> {

@@ -10,12 +10,10 @@ import {getHashOfValue} from './get-hash.js';
 import {Kind} from './noms-kind.js';
 import type Hash from './hash.js';
 import type {Type} from './type.js';
-import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
 import {getTypeOfValue, makeRefType} from './type.js';
 import {ValueBase, getChunksOfValue} from './value.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
 
 export function constructRef(t: Type<any>, targetHash: Hash, height: number): Ref<any> {
   invariant(t.kind === Kind.Ref, () => `Not a Ref type: ${describeType(t)}`);
@@ -46,8 +44,9 @@ export default class Ref<T: Value> extends ValueBase {
     this.targetHash = getHashOfValue(val);
   }
 
-  async walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return walk(await this.targetValue(vr), vr, cb);
+  async walkValues(vr: ValueReader, cb: ValueCallback): // eslint-disable-line no-unused-vars
+      Promise<void> {
+    return Promise.resolve();
   }
 
   get type(): Type<any> {

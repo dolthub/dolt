@@ -118,14 +118,25 @@ suite('walk', () => {
       expected.add(i);
     }
     const list = new List(Array.from(expected));
-    expected.add(list);
 
     await callbackHappensOnce(list, ds, true);
 
-    await walk(list, ds, async v => {
-      assert.isOk(expected.delete(v));
-    });
-    assert.equal(0, expected.size);
+    const test = async (list, ds, expected) => {
+      await walk(list, ds, async v => {
+        assert.isOk(expected.delete(v));
+      });
+      assert.equal(0, expected.size);
+    };
+
+    expected.add(list);
+    await test(list, ds, new Set(expected));
+    expected.delete(list);
+
+    const r = ds.writeValue(list);
+    const outList = await ds.readValue(r.targetHash);
+
+    expected.add(outList);
+    await test(outList, ds, new Set(expected));
   });
 
   test('set', async () => {
@@ -134,14 +145,25 @@ suite('walk', () => {
       expected.add(String(i));
     }
     const set = new NomsSet(Array.from(expected));
-    expected.add(set);
 
     await callbackHappensOnce(set, ds, true);
 
-    await walk(set, ds, async v => {
-      assert.isOk(expected.delete(v));
-    });
-    assert.equal(0, expected.size);
+    const test = async (set, ds, expected) => {
+      await walk(set, ds, async v => {
+        assert.isOk(expected.delete(v));
+      });
+      assert.equal(0, expected.size);
+    };
+
+    expected.add(set);
+    await test(set, ds, new Set(expected));
+    expected.delete(set);
+
+    const r = ds.writeValue(set);
+    const outSet = await ds.readValue(r.targetHash);
+
+    expected.add(outSet);
+    await test(outSet, ds, new Set(expected));
   });
 
   test('map', async () => {
@@ -153,16 +175,27 @@ suite('walk', () => {
       entries.push([i, 'value' + i]);
     }
     const map = new Map(entries);
-    expected.push(map);
 
     await callbackHappensOnce(map, ds, true);
 
-    await walk(map, ds, async v => {
-      const idx = expected.indexOf(v);
-      assert.isAbove(idx, -1);
-      assert.equal(expected.splice(idx, 1).length, 1);
-    });
-    assert.equal(0, expected.length);
+    const test = async (map, ds, expected) => {
+      await walk(map, ds, async v => {
+        const idx = expected.indexOf(v);
+        assert.isAbove(idx, -1);
+        assert.equal(expected.splice(idx, 1).length, 1);
+      });
+      assert.equal(0, expected.length);
+    };
+
+    expected.push(map);
+    await test(map, ds, expected.slice());
+    expected.pop();
+
+    const r = ds.writeValue(map);
+    const outMap = await ds.readValue(r.targetHash);
+
+    expected.push(outMap);
+    await test(outMap, ds, expected);
   });
 
   test('struct', async () => {

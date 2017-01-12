@@ -7,7 +7,7 @@
 import type {makeChunkFn} from './sequence-chunker.js';
 import type {ValueReader, ValueReadWriter} from './value-store.js';
 import type {Splice} from './edit-distance.js';
-import type Value from './value.js'; // eslint-disable-line no-unused-vars
+import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
 import type {AsyncIterator} from './async-iterator.js';
 import {default as SequenceChunker, chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
@@ -22,8 +22,6 @@ import {equals} from './compare.js';
 import {Kind} from './noms-kind.js';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE} from './edit-distance.js';
 import {hashValueBytes} from './rolling-value-hasher.js';
-import walk from './walk.js';
-import type {WalkCallback} from './walk.js';
 import Sequence, {OrderedKey} from './sequence.js';
 
 function newListLeafChunkFn<T: Value>(vr: ?ValueReader): makeChunkFn<any, any> {
@@ -56,8 +54,8 @@ export default class List<T: Value> extends Collection<Sequence<any>> {
     super(seq);
   }
 
-  walkValues(vr: ValueReader, cb: WalkCallback): Promise<void> {
-    return this.forEach(v => walk(v, vr, cb));
+  walkValues(vr: ValueReader, cb: ValueCallback): Promise<void> {
+    return this.forEach(v => cb(v));
   }
 
   /**
