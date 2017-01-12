@@ -91,6 +91,10 @@ func (m Map) hashPointer() *hash.Hash {
 	return m.h
 }
 
+func (m Map) IsLeaf() bool {
+	return !isMetaSequence(m.sequence())
+}
+
 // Value interface
 func (m Map) Equals(other Value) bool {
 	return m.Hash() == other.Hash()

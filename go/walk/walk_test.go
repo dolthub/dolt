@@ -28,11 +28,11 @@ func (suite *WalkAllTestSuite) SetupTest() {
 	suite.vs = types.NewTestValueStore()
 }
 
-func (suite *WalkAllTestSuite) walkWorker(v types.Value, expected int) {
+func (suite *WalkAllTestSuite) assertCallbackCount(v types.Value, expected int) {
 	actual := 0
-	WalkValues(v, suite.vs, func(c types.Value) bool {
+	WalkValues(v, suite.vs, func(c types.Value) (stop bool) {
 		actual++
-		return false
+		return
 	})
 	suite.Equal(expected, actual)
 }
@@ -53,21 +53,34 @@ func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 	dup := suite.NewList(types.Number(9), types.Number(10), types.Number(11), types.Number(12), types.Number(13))
 	l := suite.NewList(types.Number(8), dup, dup)
 
-	suite.walkWorker(l, 11)
+	suite.assertCallbackCount(l, 11)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.walkWorker(suite.vs.WriteValue(types.Number(0.0)), 2)
-	suite.walkWorker(suite.vs.WriteValue(types.String("hello")), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(types.Number(0.0)), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(types.String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
-	suite.walkWorker(suite.NewList(), 2)
-	suite.walkWorker(suite.NewList(types.Bool(false), types.Number(8)), 4)
-	suite.walkWorker(suite.NewSet(), 2)
-	suite.walkWorker(suite.NewSet(types.Bool(false), types.Number(8)), 4)
-	suite.walkWorker(suite.NewMap(), 2)
-	suite.walkWorker(suite.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false)), 6)
+	suite.assertCallbackCount(suite.NewList(), 2)
+	suite.assertCallbackCount(suite.NewList(types.Bool(false), types.Number(8)), 4)
+	suite.assertCallbackCount(suite.NewSet(), 2)
+	suite.assertCallbackCount(suite.NewSet(types.Bool(false), types.Number(8)), 4)
+	suite.assertCallbackCount(suite.NewMap(), 2)
+	suite.assertCallbackCount(suite.NewMap(types.Number(8), types.Bool(true), types.Number(0), types.Bool(false)), 6)
+}
+
+func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
+	count := 1 << 12
+	valueChan := make(chan types.Value, count)
+	for i := 0; i < count; i++ {
+		valueChan <- types.Number(i)
+	}
+	close(valueChan)
+
+	l := <-types.NewStreamingList(suite.vs, valueChan)
+	suite.True(types.NewRef(l).Height() > 1)
+	suite.assertCallbackCount(l, count+1)
 }
 
 func (suite *WalkAllTestSuite) TestWalkType() {
@@ -184,8 +197,8 @@ func (suite *WalkAllTestSuite) NewSet(vs ...types.Value) types.Ref {
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
-	suite.walkWorker(suite.NewList(suite.NewSet(), types.Number(8)), 5)
-	suite.walkWorker(suite.NewSet(suite.NewList(), suite.NewSet()), 6)
+	suite.assertCallbackCount(suite.NewList(suite.NewSet(), types.Number(8)), 5)
+	suite.assertCallbackCount(suite.NewSet(suite.NewList(), suite.NewSet()), 6)
 	// {"string": "string",
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
@@ -201,7 +214,7 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 		types.String("set"), suite.NewSet(types.Number(5), types.Number(7), types.Number(8)),
 		suite.NewList(), types.String("wow"), // note that the dupe list chunk is skipped
 	)
-	suite.walkWorker(nested, 25)
+	suite.assertCallbackCount(nested, 25)
 }
 
 type WalkTestSuite struct {

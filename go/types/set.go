@@ -76,6 +76,10 @@ func (s Set) hashPointer() *hash.Hash {
 	return s.h
 }
 
+func (s Set) IsLeaf() bool {
+	return !isMetaSequence(s.sequence())
+}
+
 // Value interface
 func (s Set) Equals(other Value) bool {
 	return s.Hash() == other.Hash()
