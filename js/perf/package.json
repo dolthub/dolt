@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@attic/noms": "file:../../js/noms",
-    "@attic/webpack-config": "^2.1.0",
+    "@attic/webpack-config": "^2.2.0",
     "babel-preset-noms": "1.0.1",
     "chai": "^3.5.0",
     "classnames": "^2.1.3",
