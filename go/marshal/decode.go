@@ -370,7 +370,9 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 	}
 
 	var decoder decoderFunc
-
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	d = func(v types.Value, rv reflect.Value) {
 		var slice reflect.Value
 		if rv.IsNil() {
@@ -378,6 +380,8 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 		} else {
 			slice = rv.Slice(0, 0)
 		}
+		init.RLock()
+		defer init.RUnlock()
 		iterListOrSlice(v, t, func(v types.Value, _ uint64) {
 			elemRv := reflect.New(t.Elem()).Elem()
 			decoder(v, elemRv)
@@ -398,7 +402,9 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 	}
 
 	var decoder decoderFunc
-
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	d = func(v types.Value, rv reflect.Value) {
 		size := t.Len()
 		list, ok := v.(types.Collection)
@@ -410,6 +416,8 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 		if l != size {
 			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match"})
 		}
+		init.RLock()
+		defer init.RUnlock()
 		iterListOrSlice(list, t, func(v types.Value, i uint64) {
 			decoder(v, rv.Index(int(i)))
 		})
@@ -427,7 +435,9 @@ func mapFromSetDecoder(t reflect.Type) decoderFunc {
 	}
 
 	var decoder decoderFunc
-
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	d = func(v types.Value, rv reflect.Value) {
 		m := rv
 
@@ -436,6 +446,8 @@ func mapFromSetDecoder(t reflect.Type) decoderFunc {
 			panic(&UnmarshalTypeMismatchError{v, t, `, field has "set" tag`})
 		}
 
+		init.RLock()
+		defer init.RUnlock()
 		nomsSet.IterAll(func(v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
 			decoder(v, keyRv)
@@ -460,7 +472,9 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 
 	var keyDecoder decoderFunc
 	var valueDecoder decoderFunc
-
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
 	d = func(v types.Value, rv reflect.Value) {
 		m := rv
 
@@ -475,6 +489,8 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 			panic(&UnmarshalTypeMismatchError{v, t, ""})
 		}
 
+		init.RLock()
+		defer init.RUnlock()
 		nomsMap.IterAll(func(k, v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
 			keyDecoder(k, keyRv)
