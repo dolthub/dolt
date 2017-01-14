@@ -73,10 +73,6 @@ func (l List) hashPointer() *hash.Hash {
 	return l.h
 }
 
-func (l List) IsLeaf() bool {
-	return !isMetaSequence(l.sequence())
-}
-
 // Value interface
 
 func (l List) Equals(other Value) bool {

@@ -20,7 +20,6 @@ import (
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/random"
 	"github.com/attic-labs/noms/go/util/verbose"
-	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -120,7 +119,7 @@ func index() (win bool) {
 func buildDateIndex(db types.ValueReadWriter, inputs []types.Value) types.Map {
 	indexBuilder := types.NewGraphBuilder(db, types.MapKind, true)
 	for _, v := range inputs {
-		walk.WalkValues(v, db, func(cv types.Value) (stop bool) {
+		types.WalkValues(v, db, func(cv types.Value) (stop bool) {
 			var p Photo
 			if err := marshal.Unmarshal(cv, &p); err == nil {
 				stop = true

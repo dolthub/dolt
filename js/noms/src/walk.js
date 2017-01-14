@@ -10,6 +10,7 @@ import type {ValueReader} from './value-store.js';
 import Ref from './ref.js';
 import Collection from './collection.js';
 import Hash from './hash.js';
+import Blob from './blob.js';
 
 export type WalkCallback = (v: Value) => ?boolean | Promise<?boolean>;
 
@@ -60,6 +61,11 @@ export default async function walk(v: Value, vr: ValueReader, cb: WalkCallback):
       }
 
       v = rec.v;
+
+      if (v instanceof Blob) {
+        continue;
+      }
+
       if (v instanceof Ref) {
         refs.push({h: v.targetHash, needsCallback: true});
         continue;

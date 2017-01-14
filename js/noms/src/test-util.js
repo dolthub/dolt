@@ -7,6 +7,7 @@
 import Database from './database.js';
 import type Collection from './collection.js';
 import type Value from './value.js';
+import Hash from './hash.js';
 import {assert} from 'chai';
 import {notNull} from './assert.js';
 import {AsyncIterator} from './async-iterator.js';
@@ -20,10 +21,16 @@ import type Ref from './ref.js';
 
 export class TestDatabase extends Database {
   writeCount: number;
-
+  readCount: number;
   constructor() {
     super(new BatchStoreAdaptor(new MemoryStore()));
     this.writeCount = 0;
+    this.readCount = 0;
+  }
+
+  readValue(hash: Hash): Promise<any> {
+    this.readCount++;
+    return super.readValue(hash);
   }
 
   writeValue<T: Value>(v: T): Ref<T> {

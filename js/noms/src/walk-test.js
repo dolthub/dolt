@@ -7,7 +7,6 @@
 import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
 import {assert} from 'chai';
 
-import {BatchStoreAdaptor} from './batch-store.js';
 import {createStructClass} from './struct.js';
 import Database from './database.js';
 import {
@@ -25,7 +24,6 @@ import {
   typeType,
   valueType,
 } from './type.js';
-import MemoryStore from './memory-store.js';
 import Blob from './blob.js';
 import List from './list.js';
 import Map from './map.js';
@@ -33,12 +31,14 @@ import NomsSet from './set.js'; // namespace collision with JS Set
 import walk from './walk.js';
 import type Value from './value.js';
 import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js';
+import {randomBuff} from './blob-test.js';
+import {TestDatabase} from './test-util.js';
 
 suite('walk', () => {
   let ds;
   suiteSetup(() => {
     smallTestChunks();
-    ds = new Database(new BatchStoreAdaptor(new MemoryStore()));
+    ds = new TestDatabase();
   });
 
   suiteTeardown((): Promise<void> => {
@@ -53,15 +53,22 @@ suite('walk', () => {
   });
 
   test('blob', async () => {
-    const arr = new Uint32Array(1000);
-    for (let i = 0; i < arr.length; i++) {
-      arr[i] = i;
-    }
+    const arr = randomBuff(1 << 10);
     const blob = new Blob(new Uint8Array(arr.buffer));
-    assert.equal(blob.length, arr.length * 4);
+    assert.equal(blob.length, arr.length);
     assert.isAbove(blob.chunks.length, 1);
 
     await callbackHappensOnce(blob, ds, false);
+  });
+
+  test('blob doesnt load chunks', async () => {
+    const arr = randomBuff(1 << 16);
+    const blob = new Blob(new Uint8Array(arr.buffer));
+    const r = ds.writeValue(blob);
+    assert.isTrue(r.height > 1);
+    const outBlob = await ds.readValue(r.targetHash);
+    await callbackHappensOnce(outBlob, ds, false);
+    assert.strictEqual(1, ds.readCount);
   });
 
   test('type', async () => {

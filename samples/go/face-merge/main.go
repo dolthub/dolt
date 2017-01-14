@@ -15,7 +15,6 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
-	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -103,7 +102,7 @@ func mergeFaces() {
 	annotatedPhotoSet := types.NewGraphBuilder(db, types.SetKind, true)
 
 	for _, v := range inputs {
-		walk.WalkValues(v, db, func(cv types.Value) bool {
+		types.WalkValues(v, db, func(cv types.Value) bool {
 			if types.IsSubtype(photoType, cv.Type()) {
 				photo := cv.(types.Struct)
 				if types.IsSubtype(withFaceType, photo.Type()) {

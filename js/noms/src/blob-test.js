@@ -23,6 +23,43 @@ import {smallTestChunks, normalProductionChunks} from './rolling-value-hasher.js
 // IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
 // corresponding tests in go
 
+class CountingByteReader {
+  _z: number;
+  _value: number;
+  _count: number;
+
+  constructor(seed: number = 0) {
+    this._z = seed;
+    this._value = seed;
+    this._count = 4;
+  }
+
+  nextUint8(): number {
+    // Increment number
+    if (this._count === 0) {
+      this._z++;
+      this._value = this._z;
+      this._count = 4;
+    }
+
+    // Unshift a uint8 from our current number
+    const retval = this._value & 0xff;
+    this._value = this._value >>> 8;
+    this._count--;
+
+    return retval;
+  }
+}
+
+export function randomBuff(len: number): Uint8Array {
+  const r = new CountingByteReader();
+  const a = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    a[i] = r.nextUint8();
+  }
+  return a;
+}
+
 suite('Blob', () => {
 
   async function assertReadFull(expect: Uint8Array, reader: BlobReader): Promise<void> {
@@ -98,15 +135,6 @@ suite('Blob', () => {
     }
   }
 
-  function randomBuff(len: number): Uint8Array {
-    const r = new CountingByteReader();
-    const a = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      a[i] = r.nextUint8();
-    }
-    return a;
-  }
-
   async function blobTestSuite(size: number, expectHashStr: string, expectChunkCount: number,
                                expectPrependChunkDiff: number,
                                expectAppendChunkDiff: number) {
@@ -126,34 +154,6 @@ suite('Blob', () => {
     testPrependChunkDiff(buff, blob, expectPrependChunkDiff);
     testAppendChunkDiff(buff, blob, expectAppendChunkDiff);
     await testRandomRead(buff, blob);
-  }
-
-  class CountingByteReader {
-    _z: number;
-    _value: number;
-    _count: number;
-
-    constructor(seed: number = 0) {
-      this._z = seed;
-      this._value = seed;
-      this._count = 4;
-    }
-
-    nextUint8(): number {
-      // Increment number
-      if (this._count === 0) {
-        this._z++;
-        this._value = this._z;
-        this._count = 4;
-      }
-
-      // Unshift a uint8 from our current number
-      const retval = this._value & 0xff;
-      this._value = this._value >>> 8;
-      this._count--;
-
-      return retval;
-    }
   }
 
   test('LONG: Blob 4K', () =>

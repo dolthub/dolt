@@ -19,7 +19,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/verbose"
-	"github.com/attic-labs/noms/go/walk"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -154,7 +153,7 @@ func index() (win bool) {
 	}
 
 	for _, v := range inputs {
-		walk.WalkValues(v, db, func(cv types.Value) (stop bool) {
+		types.WalkValues(v, db, func(cv types.Value) (stop bool) {
 			var pg PhotoGroup
 			if err := marshal.Unmarshal(cv, &pg); err == nil {
 				stop = true

@@ -2,29 +2,24 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-// Package walk implements an API for iterating on Noms values.
-package walk
+package types
 
-import (
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
-)
+import "github.com/attic-labs/noms/go/hash"
 
-type SkipValueCallback func(v types.Value) bool
+type SkipValueCallback func(v Value) bool
 
 // WalkValues loads prolly trees progressively by walking down the tree. We don't wants to invoke
 // the value callback on internal sub-trees (which are valid values) because they are not logical
 // values in the graph
 type valueRec struct {
-	v  types.Value
+	v  Value
 	cb bool
 }
 
 const maxRefCount = 1 << 12 // ~16MB of data
 
 // WalkValues recursively walks over all types. Values reachable from r and calls cb on them.
-// TODO: This will only work on graphs of data and are committed to |vr|.
-func WalkValues(target types.Value, vr types.ValueReader, cb SkipValueCallback) {
+func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 	visited := hash.HashSet{}
 	refs := map[hash.Hash]bool{}
 	values := []valueRec{{target, true}}
@@ -34,24 +29,33 @@ func WalkValues(target types.Value, vr types.ValueReader, cb SkipValueCallback) 
 			rec := values[len(values)-1]
 			values = values[:len(values)-1]
 
-			if rec.cb && cb(rec.v) {
+			v := rec.v
+			if rec.cb && cb(v) {
 				continue
 			}
 
-			v := rec.v
-			if r, ok := v.(types.Ref); ok {
+			if _, ok := v.(Blob); ok {
+				continue // don't traverse into blob ptrees
+			}
+
+			if r, ok := v.(Ref); ok {
 				refs[r.TargetHash()] = true
 				continue
 			}
 
-			if col, ok := v.(types.Collection); ok && !col.IsLeaf() {
-				col.WalkRefs(func(r types.Ref) {
-					refs[r.TargetHash()] = false
-				})
+			if col, ok := v.(Collection); ok && isMetaSequence(col.sequence()) {
+				ms := col.sequence().(metaSequence)
+				for _, mt := range ms.tuples {
+					if mt.child != nil {
+						values = append(values, valueRec{mt.child, false})
+					} else {
+						refs[mt.ref.TargetHash()] = false
+					}
+				}
 				continue
 			}
 
-			v.WalkValues(func(sv types.Value) {
+			v.WalkValues(func(sv Value) {
 				values = append(values, valueRec{sv, true})
 			})
 		}
@@ -78,7 +82,7 @@ func WalkValues(target types.Value, vr types.ValueReader, cb SkipValueCallback) 
 		}
 
 		if len(hs) > 0 {
-			valueChan := make(chan types.Value, len(hs))
+			valueChan := make(chan Value, len(hs))
 			vr.ReadManyValues(hs, valueChan)
 			close(valueChan)
 			for sv := range valueChan {

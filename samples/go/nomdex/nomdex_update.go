@@ -20,7 +20,6 @@ import (
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
 	"github.com/attic-labs/noms/go/util/verbose"
-	"github.com/attic-labs/noms/go/walk"
 	humanize "github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -40,7 +39,7 @@ This sample tool can index objects based on any string or number attribute of th
 object. The 'up' command works by scanning all the objects reachable from the --in-path
 command line argument. It tests the object to determine if there is a string or number
 value reachable by applying the --by path argument to the object. If so, the object is
-added to the index under that value. 
+added to the index under that value.
 
 For example, if there are objects in the database that contain a personId and a
 gender field, 'nomdex up' can scan all the objects in a given dataset and build
@@ -73,7 +72,7 @@ being indexed:
             regex.FindStringSubmatch(|index value|)
     *tx-convert: attempts to convert the index value to the type specified.
         Currently the only value accepted for this arg is 'number'
-        
+
 The resulting indexes can be used by the 'nomdex find command' for help on that
 see: nomdex find -h
 `
@@ -164,7 +163,7 @@ func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootOb
 	}
 
 	index := Index{m: IndexMap{}}
-	walk.WalkValues(rootObject, db, func(v types.Value) bool {
+	types.WalkValues(rootObject, db, func(v types.Value) bool {
 		typ := v.Type()
 		typeCacheMutex.Lock()
 		hasPath, ok := typeCache[typ]

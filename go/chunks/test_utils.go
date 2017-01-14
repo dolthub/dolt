@@ -36,6 +36,11 @@ func (s *TestStore) Get(h hash.Hash) Chunk {
 	return s.MemoryStore.Get(h)
 }
 
+func (s *TestStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+	s.Reads += len(hashes)
+	s.MemoryStore.GetMany(hashes, foundChunks)
+}
+
 func (s *TestStore) Has(h hash.Hash) bool {
 	s.Hases++
 	return s.MemoryStore.Has(h)

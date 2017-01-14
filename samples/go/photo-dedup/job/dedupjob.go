@@ -11,7 +11,6 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/status"
-	"github.com/attic-labs/noms/go/walk"
 	"github.com/attic-labs/noms/samples/go/photo-dedup/model"
 )
 
@@ -28,7 +27,7 @@ func DeduplicateJob(db datas.Database, photoSets []types.Value, outDS datas.Data
 func groupPhotos(db datas.Database, photoSets []types.Value, threshold int) <-chan types.Struct {
 	grouper = newPhotoGrouper(threshold)
 	for _, set := range photoSets {
-		walk.WalkValues(set, db, func(cv types.Value) (stop bool) {
+		types.WalkValues(set, db, func(cv types.Value) (stop bool) {
 			if photo, ok := model.UnmarshalPhoto(cv); ok {
 				grouper.insertPhoto(photo)
 			}

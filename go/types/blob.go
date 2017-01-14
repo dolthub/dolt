@@ -87,10 +87,6 @@ func (b Blob) hashPointer() *hash.Hash {
 	return b.h
 }
 
-func (b Blob) IsLeaf() bool {
-	return !isMetaSequence(b.sequence())
-}
-
 // Value interface
 func (b Blob) Equals(other Value) bool {
 	return b.Hash() == other.Hash()
