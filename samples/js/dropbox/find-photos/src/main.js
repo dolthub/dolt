@@ -145,12 +145,14 @@ async function getSizes(resources: Map<Struct, Struct>): Promise<Map<Struct, str
 function getResources(input: Object): Map<Struct, Struct> {
   const orig = input.media_info.metadata.dimensions;
 
-  const kv = sizes.map(([width, height]) => {
+  const kvs = [];
+
+  sizes.forEach(([width, height]) => {
     const resized = fit(orig.width, orig.height, width, height);
     if (resized.scale > 1) {
-      return null;
+      return;
     }
-    return [
+    kvs.push([
       newStruct('', {width: resized.width, height: resized.height}),
       newStruct('RemoteResource', {
         url: getURL('files/get_thumbnail', {
@@ -159,10 +161,10 @@ function getResources(input: Object): Map<Struct, Struct> {
           size: `w${width}h${height}`,
         }),
       }),
-    ];
+    ]);
   });
 
-  kv.push([
+  kvs.push([
     newStruct('', {
       width: orig.width,
       height: orig.height,
@@ -172,8 +174,7 @@ function getResources(input: Object): Map<Struct, Struct> {
     }),
   ]);
 
-  // $FlowIssue: Does not understand that filter removes all null values.
-  return new Map(kv.filter(kv => kv));
+  return new Map(kvs);
 }
 
 function getURL(path: string, dbArgs: Object): string {

@@ -154,34 +154,34 @@ function getGeo(input: Object): Struct {
 }
 
 function getSizes(input: Object): Map<Struct, string> {
-  const a = sizes.map((s, i) => {
+  const kvs = [];
+  sizes.forEach((s, i) => {
     if (!isSubtype(sizeTypes[i], input.type)) {
-      return null;
+      return;
     }
     const url = input['url_' + s];
     const width = Number(input['width_' + s]);
     const height = Number(input['height_' + s]);
-    return [newStruct('', {width, height}), url];
+    kvs.push([newStruct('', {width, height}), url]);
   });
-  // $FlowIssue: Does not understand that filter removes all null values.
-  return new Map(a.filter(kv => kv));
+  return new Map(kvs);
 }
 
-function getResources(input: Object): Map<Struct, Struct> {
-  const a = sizes.map((s, i) => {
+function getResources(input: Object): null | Map<Struct, Struct> {
+  const kvs = [];
+  sizes.forEach((s, i) => {
     if (!isSubtype(sizeTypes[i], input.type)) {
-      return null;
+      return;
     }
     const url = input['url_' + s];
     const width = Number(input['width_' + s]);
     const height = Number(input['height_' + s]);
-    return [
+    kvs.push([
       newStruct('', {width, height}),
       newStruct('RemoteResource', {url: url}),
-    ];
+    ]);
   });
-  // $FlowIssue: Does not understand that filter removes all null values.
-  return new Map(a.filter(kv => kv));
+  return new Map(kvs);
 }
 
 function newDate(nsSinceEpoch: number): Struct {
