@@ -100,11 +100,11 @@ export default class Set<T: Value> extends Collection<Sequence<any>> {
   }
 
   iterator(): AsyncIterator<T> {
-    return new OrderedSequenceIterator(newCursorAt(this.sequence, null, false, false, true));
+    return new OrderedSequenceIterator(newCursorAt(this.sequence, null, false, false));
   }
 
   iteratorAt(v: T): AsyncIterator<T> {
-    return new OrderedSequenceIterator(newCursorAtValue(this.sequence, v, false, false, true));
+    return new OrderedSequenceIterator(newCursorAtValue(this.sequence, v, false, false));
   }
 
   _splice(cursor: OrderedSequenceCursor<any, any>, insert: Array<T>, remove: number)

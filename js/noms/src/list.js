@@ -120,14 +120,14 @@ export default class List<T: Value> extends Collection<Sequence<any>> {
    * Returns a new `AsyncIterator` which can be used to iterate over the list.
    */
   iterator(): AsyncIterator<T> {
-    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, 0, true));
+    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, 0));
   }
 
   /**
    * Returns a new `AsyncIterator` starting at `i` which can be used to iterate over the list.
    */
   iteratorAt(i: number): AsyncIterator<T> {
-    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, i, true));
+    return new IndexedSequenceIterator(newCursorAtIndex(this.sequence, i));
   }
 
   /**
