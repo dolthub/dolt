@@ -7,6 +7,7 @@ package constants
 const (
 	RootPath       = "/root/"
 	GetRefsPath    = "/getRefs/"
+	GetBlobPath    = "/getBlob/"
 	HasRefsPath    = "/hasRefs/"
 	WriteValuePath = "/writeValue/"
 	BasePath       = "/"

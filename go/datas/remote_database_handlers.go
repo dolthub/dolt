@@ -44,34 +44,40 @@ var (
 	// ordered sequence of Chunks to be validated and stored on the server.
 	// TODO: Nice comment about what headers it expects/honors, payload
 	// format, and error responses.
-	HandleWriteValue = versionCheck(handleWriteValue)
+	HandleWriteValue = createHandler(handleWriteValue, true)
 
 	// HandleGetRefs is meant to handle HTTP POST requests to the getRefs/
 	// server endpoint. Given a sequence of Chunk hashes, the server will
 	// fetch and return them.
 	// TODO: Nice comment about what headers it
 	// expects/honors, payload format, and responses.
-	HandleGetRefs = versionCheck(handleGetRefs)
+	HandleGetRefs = createHandler(handleGetRefs, true)
+
+	// HandleGetBlob is a custom endpoint whose sole purpose is to directly
+	// fetch the *bytes* contained in a Blob value. It expects a single query
+	// param of `h` to be the ref of the Blob.
+	// TODO: Support retrieving blob contents via a path.
+	HandleGetBlob = createHandler(handleGetBlob, false)
 
 	// HandleWriteValue is meant to handle HTTP POST requests to the hasRefs/
 	// server endpoint. Given a sequence of Chunk hashes, the server check for
 	// their presence and return a list of true/false responses.
 	// TODO: Nice comment about what headers it expects/honors, payload
 	// format, and responses.
-	HandleHasRefs = versionCheck(handleHasRefs)
+	HandleHasRefs = createHandler(handleHasRefs, true)
 
 	// HandleRootGet is meant to handle HTTP GET requests to the root/ server
 	// endpoint. The server returns the hash of the Root as a string.
 	// TODO: Nice comment about what headers it expects/honors, payload
 	// format, and responses.
-	HandleRootGet = versionCheck(handleRootGet)
+	HandleRootGet = createHandler(handleRootGet, true)
 
 	// HandleWriteValue is meant to handle HTTP POST requests to the root/
 	// server endpoint. This is used to update the Root to point to a new
 	// Chunk.
 	// TODO: Nice comment about what headers it expects/honors, payload
 	// format, and error responses.
-	HandleRootPost = versionCheck(handleRootPost)
+	HandleRootPost = createHandler(handleRootPost, true)
 
 	// HandleBaseGet is meant to handle HTTP GET requests to the / server
 	// endpoint. This is used to give a friendly message to users.
@@ -82,10 +88,11 @@ var (
 	writeValueConcurrency = runtime.NumCPU()
 )
 
-func versionCheck(hndlr Handler) Handler {
+func createHandler(hndlr Handler, versionCheck bool) Handler {
 	return func(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
 		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
-		if req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
+
+		if versionCheck && req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
 			verbose.Log("Returning version mismatch error")
 			http.Error(
 				w,
@@ -276,6 +283,29 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 		hashes = hashes[len(batch):]
 	}
+}
+
+func handleGetBlob(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	refStr := req.URL.Query().Get("h")
+	if refStr == "" {
+		d.Panic("Expected h param")
+	}
+
+	h := hash.Parse(refStr)
+	if (h == hash.Hash{}) {
+		d.Panic("h failed to parse")
+	}
+
+	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+	v := vs.ReadValue(h)
+	b, ok := v.(types.Blob)
+	if !ok {
+		d.Panic("h is not a Blob")
+	}
+
+	w.Header().Add("Content-Type", "application/octet-stream")
+	w.Header().Add("Content-Length", fmt.Sprintf("%d", b.Len()))
+	b.Reader().Copy(w)
 }
 
 func extractHashes(req *http.Request) hash.HashSlice {

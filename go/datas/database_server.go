@@ -61,6 +61,7 @@ func (s *RemoteDatabaseServer) Run() {
 	router := httprouter.New()
 
 	router.POST(constants.GetRefsPath, s.corsHandle(s.makeHandle(HandleGetRefs)))
+	router.GET(constants.GetBlobPath, s.corsHandle(s.makeHandle(HandleGetBlob)))
 	router.OPTIONS(constants.GetRefsPath, s.corsHandle(noopHandle))
 	router.POST(constants.HasRefsPath, s.corsHandle(s.makeHandle(HandleHasRefs)))
 	router.OPTIONS(constants.HasRefsPath, s.corsHandle(noopHandle))
