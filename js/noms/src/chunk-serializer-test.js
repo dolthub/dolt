@@ -31,7 +31,7 @@ suite('ChunkSerializer', () => {
   test('simple', async () => {
     const expHints = [];
     const expChunks = [Chunk.fromString('abc'), Chunk.fromString('def'), Chunk.fromString('ghi'),
-                       Chunk.fromString('wacka wack wack')];
+      Chunk.fromString('wacka wack wack')];
 
     const pSerialized = serialize(new Set(expHints), createChunkStream(expChunks));
     const {hints, chunks} = deserialize(await pSerialized);

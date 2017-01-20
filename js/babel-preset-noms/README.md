@@ -5,7 +5,7 @@ Babel preset for Noms applications.
 ## Install
 
 ```sh
-$ npm install --save-dev babel-preset-noms
+$ yarn add --dev babel-preset-noms
 ```
 
 ## Usage

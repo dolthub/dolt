@@ -4,7 +4,7 @@
 # Licensed under the Apache License, version 2.0:
 # http://www.apache.org/licenses/LICENSE-2.0
 
-# This tool finds all package.json files and runs npm install and npm test in those directories.
+# This tool finds all package.json files and runs yarn and yarn test in those directories.
 
 import argparse
 import os
@@ -13,7 +13,6 @@ from noms.pushd import pushd
 
 def main():
   parser = argparse.ArgumentParser(description='Runs all Node.js tests')
-  parser.add_argument('--force', action='store_true', help='Force updating @attic/noms')
   args = parser.parse_args()
 
   lsfiles = subprocess.check_output(['git', 'ls-files']).split('\n')
@@ -23,10 +22,9 @@ def main():
 
     if name == 'package.json':
       with pushd(path):
-        subprocess.check_call(['npm', 'install'])
-        if args.force and (path.endswith('samples/js') or path.endswith('js/perf')):
-            subprocess.check_call(['npm', 'install', '@attic/noms'])
-        subprocess.check_call(['npm', 'test'])
+        print('Running tests in: %s' % path)
+        subprocess.check_call(['yarn'])
+        subprocess.check_call(['yarn', 'test'])
 
 if __name__ == '__main__':
   main()

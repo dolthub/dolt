@@ -36,8 +36,8 @@ def main():
     noms_dir = os.path.join(workspace, 'src/github.com/attic-labs/noms')
     noms_js_dir = os.path.join(noms_dir, 'js/noms')
 
-    call_with_env_and_cwd(['npm', 'install'], noms_js_dir)
-    call_with_env_and_cwd(['npm', 'run', 'build-docs'], noms_js_dir)
+    call_with_env_and_cwd(['yarn'], noms_js_dir)
+    call_with_env_and_cwd(['yarn', 'run', 'build-docs'], noms_js_dir)
 
     with open(os.path.join(noms_js_dir, 'generated-docs', 'index.html'), 'w') as f:
         f.write(index_html_content)

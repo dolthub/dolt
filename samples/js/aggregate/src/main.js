@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   const [, input] = inSpec.dataset();
   const rv = await input.headRef();
   if (!rv) {
-    process.stderr.write(`{args._[0]} does not exist}\n`);
+    process.stderr.write(`${args._[0]} does not exist\n`);
     return;
   }
 

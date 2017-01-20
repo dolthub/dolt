@@ -6,10 +6,10 @@ viewer for Noms perf data
 
 ```
 # First time only:
-npm install
+yarn
 
 # Every time js/noms changes:
-npm install @attic/noms
+yarn install @attic/noms
 
-npm start
+yarn start
 ```

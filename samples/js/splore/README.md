@@ -15,7 +15,7 @@ go build
 
 # Build Splore
 cd ../../js/splore
-./build.py
+yarn
 
 # Serve Splore
 ./node_modules/.bin/http-server &
@@ -25,5 +25,4 @@ open http://localhost:8080
 ## Develop
 
 Same as the example, but:
-* `./build.py` is only necessary the first time.
-* Run `npm run start` to continuously build a non-minified (and thus debuggable) build.
+* Run `yarn run start` to continuously build a non-minified (and thus debuggable) build.

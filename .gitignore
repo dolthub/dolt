@@ -3,3 +3,5 @@ noms.iml
 .vscode
 .idea
 .noms
+.DS_Store
+node_modules

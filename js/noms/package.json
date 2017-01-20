@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "68.3.0",
+  "version": "68.4.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms/tree/master/js/noms",
   "main": "dist/commonjs/noms.js",
@@ -13,35 +13,37 @@
     "asmcrypto.js-sha512": "^0.0.1",
     "babel-regenerator-runtime": "^6.5.0",
     "babel-runtime": "^6.11.6",
-    "tingodb": "^0.4.2"
+    "tingodb": "^0.5.1"
   },
   "devDependencies": {
+    "babel-cli": "^6.18.0",
     "babel-preset-noms": "1.0.1",
     "chai": "^3.5.0",
     "chokidar": "^1.6.0",
     "commander": "^2.9.0",
     "documentation": "4.0.0-beta.18",
-    "eslint-config-noms": "1.0.0",
+    "eslint": "^3.13.1",
+    "eslint-config-noms": "^1.0.0",
     "flow-bin": "^0.36.0",
-    "fs-extra": "^0.30.0",
-    "mocha": "^2.5.3",
-    "mock-require": "^1.3.0",
-    "nyc": "^8.3.0"
+    "fs-extra": "^2.0.0",
+    "mocha": "^3.2.0",
+    "mock-require": "^2.0.1",
+    "nyc": "^10.1.2"
   },
   "scripts": {
     "lint": "eslint src/",
     "flow": "flow src/",
-    "pretest": "npm run lint && npm run flow",
+    "pretest": "yarn run lint && yarn run flow",
     "ts": "mocha --ui tdd --timeout=4000 --reporter dot --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
     "test-no-cov": "mocha --ui tdd --timeout=30000 --reporter dot --compilers js:babel-core/register src/*-test.js",
-    "test": "nyc npm run test-no-cov && nyc report --reporter=text-lcov > coverage.lcov",
-    "prepublish": "rm -rf dist/ && npm run compile && npm run copy-flow-files",
-    "compile": "npm run compile-to-commonjs",
+    "test": "nyc yarn run test-no-cov && nyc report --reporter=text-lcov > coverage.lcov",
+    "prepublish": "rm -rf dist/ && yarn run compile && yarn run copy-flow-files",
+    "compile": "yarn run compile-to-commonjs",
     "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/ > /dev/null",
-    "copy-flow-files": "npm run copy-flow-files-commonjs",
+    "copy-flow-files": "yarn run copy-flow-files-commonjs",
     "copy-flow-files-commonjs": "node build/copy-flow-files.js -d dist/commonjs/ src/",
     "make-index-html": "node build/make-index-html.js",
-    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --sort-order alpha --output generated-docs/js/$npm_package_version/ src/noms.js && npm run make-index-html"
+    "build-docs": "documentation build --name Noms --project-version $npm_package_version --document-exported --infer-private ^_ --github --format html --sort-order alpha --output generated-docs/js/$npm_package_version/ src/noms.js && yarn run make-index-html"
   },
   "browser": {
     "./src/bytes.js": "./src/browser/bytes.js",

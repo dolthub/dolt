@@ -3,10 +3,27 @@
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
-    "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
-    "prepublish": "npm run build",
+    "preinstall": "ln -sf ../../../js/noms/.babelrc && ln -sf ../.eslintrc.js && ln -sf ../../../js/noms/.flowconfig",
+    "prepublish": "yarn run build",
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
     "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
     "test": "eslint src/ && flow src/"
+  },
+  "dependencies": {
+    "@attic/noms": "file:../../../js/noms",
+    "@attic/webpack-config": "^2.2.0",
+    "babel-cli": "^6.18.0",
+    "babel-core": "^6.21.0",
+    "babel-preset-noms": "1.0.1",
+    "classnames": "^2.1.3",
+    "csv": "^1.1.0",
+    "eslint": "^3.13.1",
+    "eslint-config-noms": "1.0.0",
+    "flow-bin": "^0.36.0",
+    "http-server": "^0.9.0",
+    "humanize": "^0.0.9",
+    "react": "^15.2.0",
+    "react-dom": "^15.2.0",
+    "webpack": "^1.14.0"
   }
 }

@@ -3,13 +3,13 @@
   "description": "Shared eslintrc for noms",
   "repository": "https://github.com/attic-labs/noms/tree/master/js/eslint-config-noms",
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.js",
   "dependencies": {
-    "babel-eslint": "7.0.0",
-    "eslint": "3.8.1",
-    "eslint-plugin-flowtype": "2.25.0",
-    "eslint-plugin-react": "6.3.0"
+    "babel-eslint": "^7.1.1",
+    "eslint": "^3.13.1",
+    "eslint-plugin-flowtype": "^2.30.0",
+    "eslint-plugin-react": "^6.9.0"
   },
   "peerDependency": {
     "eslint": ">= 3"

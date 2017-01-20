@@ -13,7 +13,8 @@ const details = 'https://github.com/attic-labs/noms#install-noms';
 // the value if we do that.
 if (process.env.NOMS_VERSION_NEXT !== envVal) {
   throw new Error(
-    `WARNING: This is an unstable version of Noms. Data created with it won't be supported.\n` +
-    `Please see ${details} for getting the latest supported version.\n` +
-    `Or add NOMS_VERSION_NEXT=${envVal} to your environment to proceed with this version.\n`);
+    `WARNING: This is an unstable version of Noms. Data created with it won't be supported.
+Please see ${details} for getting the latest supported version.
+Or add NOMS_VERSION_NEXT=${envVal} to your environment to proceed with this version.
+`);
 }

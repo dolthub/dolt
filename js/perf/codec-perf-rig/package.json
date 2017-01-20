@@ -3,10 +3,21 @@
   "license": "Apache-2.0",
   "main": "dist/main.js",
   "scripts": {
-    "preinstall": "rm -rf node_modules && ln -sf ../node_modules/",
-    "prepublish": "npm run build",
+    "preinstall": "ln -sf ../../noms/.babelrc && ln -sf ../.eslintrc.js && ln -sf ../../noms/.flowconfig",
+    "prepublish": "yarn run build",
     "start": "babel -d dist -w src",
     "build": "BABEL_ENV=production babel -d dist src",
     "test": "eslint src/ && flow src/"
+  },
+  "dependencies": {
+    "@attic/noms": "file:../../noms",
+    "babel-cli": "^6.18.0",
+    "babel-core": "^6.21.0",
+    "babel-preset-noms": "1.0.1",
+    "eslint": "^3.13.1",
+    "eslint-config-noms": "1.0.0",
+    "flow-bin": "^0.36.0",
+    "humanize": "^0.0.9",
+    "yargs": "^6.6.0"
   }
 }

@@ -26,7 +26,7 @@ Leave the server running, and in a separate terminal:
 mkdir noms-tour
 cd noms-tour
 echo '{"name":"noms-tour","version":"0.0.1"}' > package.json
-npm install @attic/noms
+yarn add @attic/noms
 ```
 
 Then launch Node so that we can have a play:

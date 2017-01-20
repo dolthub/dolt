@@ -536,7 +536,7 @@ suite('CompoundMap', () => {
     const kv = [];
     await c.forEach((v, k) => { kv.push(k, v); });
     assert.deepEqual(['a', false, 'b', false, 'e', true, 'f', true, 'h', false, 'i', true, 'm',
-        true, 'n', false], kv);
+      true, 'n', false], kv);
   });
 
   test('forEachAsyncCB', async () => {

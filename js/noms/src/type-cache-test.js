@@ -125,7 +125,7 @@ suite('TypeCache', () => {
 
   test('Cyclic Unions', () => {
     const ut = makeUnionType([makeCycleType(0), numberType, stringType, boolType, blobType,
-                              valueType, typeType]);
+      valueType, typeType]);
     const st = makeStructType('Foo', {
       foo: ut,
     });
@@ -137,7 +137,7 @@ suite('TypeCache', () => {
     // Note that the union in this second case has a different provided ordering of it's element
     // types.
     const ut2 = makeUnionType([numberType, stringType, boolType, blobType, valueType, typeType,
-                               makeCycleType(0)]);
+      makeCycleType(0)]);
     const st2 = makeStructType('Foo', {
       foo: ut,
     });

@@ -6,14 +6,9 @@ counter uses noms/js to read and write a simple incrementing counter.
 ## Getting Started
 
 ```
-noms serve /tmp/noms &
-cd ../../samples/js/counter
-pushd ..
-npm install
-popd
-npm install
+cd samples/js/counter
+yarn
 node . http://localhost:8000:counter
 ```
 
-You only need to do the `npm install` calls once. After that you can use `npm run build` or
-`npm run start` for dev mode.
+For dev mode you might want to run `yarn run start` instead which does not obfuscate the source.

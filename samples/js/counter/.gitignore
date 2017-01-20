@@ -1,2 +1,5 @@
 node_modules
 dist
+.babelrc
+.eslintrc.js
+.flowconfig

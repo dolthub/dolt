@@ -149,8 +149,10 @@ export default class List<T: Value> extends Collection<Sequence<any>> {
       return Promise.resolve([[0, 0, this.length, 0]]); // Everything added
     }
 
-    return Promise.all([newCursorAtIndex(last.sequence, 0),
-                        newCursorAtIndex(this.sequence, 0)]).then(cursors =>
+    return Promise.all([
+      newCursorAtIndex(last.sequence, 0),
+      newCursorAtIndex(this.sequence, 0),
+    ]).then(cursors =>
         diff(last.sequence, cursors[0].depth, 0, this.sequence, cursors[1].depth, 0,
              maxSpliceMatrixSize));
   }

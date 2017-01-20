@@ -1,3 +1,6 @@
 node_modules
 dist
 out.js
+.babelrc
+.eslintrc.js
+.flowconfig
