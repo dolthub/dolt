@@ -176,6 +176,21 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 
 }
 
+func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
+	input1, input2 := []byte("abc"), []byte("def")
+	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
+
+	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper.Put(c1)
+	interloper.UpdateRoot(c1.Hash(), interloper.Root()) // Commit write
+
+	suite.store.Put(c2)
+	suite.store.Flush() // Commit write
+
+	// And reading c2 via the API should work...
+	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
+}
+
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {
 	c := s.Get(h)
 	assert.False(c.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())

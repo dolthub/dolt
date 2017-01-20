@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
@@ -17,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/jpillora/backoff"
 )
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
@@ -313,6 +315,13 @@ func (nbs *NomsBlockStore) AddHints(hints types.Hints) {
 }
 
 func (nbs *NomsBlockStore) Flush() {
-	success := nbs.UpdateRoot(nbs.root, nbs.root)
-	d.Chk.True(success)
+	b := &backoff.Backoff{
+		Min:    128 * time.Microsecond,
+		Max:    10 * time.Second,
+		Factor: 2,
+		Jitter: true,
+	}
+	for !nbs.UpdateRoot(nbs.root, nbs.root) {
+		time.Sleep(b.Duration())
+	}
 }
