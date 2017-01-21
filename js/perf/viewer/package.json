@@ -2,7 +2,7 @@
   "name": "perf-viewer",
   "license": "Apache-2.0",
   "scripts": {
-    "preinstall": "ln -sf ../../noms/.babelrc && ln -sf ../.eslintrc.js && ln -sf ../../noms/.flowconfig",
+    "preinstall": "cp ../../noms/.babelrc ../.eslintrc.js ../../noms/.flowconfig .",
     "prepublish": "yarn run build",
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
     "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",

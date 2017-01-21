@@ -3,7 +3,7 @@
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
-    "preinstall": "ln -sf ../../../js/noms/.babelrc && ln -sf ../.eslintrc.js && ln -sf ../../../js/noms/.flowconfig",
+    "preinstall": "cp ../../../js/noms/.babelrc ../.eslintrc.js ../../../js/noms/.flowconfig .",
     "prepublish": "yarn run build",
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
     "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",

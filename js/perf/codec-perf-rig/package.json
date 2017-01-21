@@ -3,7 +3,7 @@
   "license": "Apache-2.0",
   "main": "dist/main.js",
   "scripts": {
-    "preinstall": "ln -sf ../../noms/.babelrc && ln -sf ../.eslintrc.js && ln -sf ../../noms/.flowconfig",
+    "preinstall": "cp ../../noms/.babelrc ../.eslintrc.js ../../noms/.flowconfig .",
     "prepublish": "yarn run build",
     "start": "babel -d dist -w src",
     "build": "BABEL_ENV=production babel -d dist src",
