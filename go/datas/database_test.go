@@ -129,7 +129,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	suite.False(ds2.HeadValue().Equals(ds1HeadVal))
 	suite.False(ds1.HeadValue().Equals(db2HeadVal))
 
-	suite.Equal("tcu8fn066i70qi99pkd5u3gq0lqncek7", suite.cs.Root().String())
+	suite.Equal("eol076qd3a86icq39aanga5jnqoqc8qf", suite.cs.Root().String())
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
@@ -192,6 +192,25 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	defer newDB.Close()
 	datasets2 := newDB.Datasets()
 	suite.Equal(uint64(2), datasets2.Len())
+}
+
+func (suite *DatabaseSuite) TestDatasetsMapType() {
+	dsID1, dsID2 := "ds1", "ds2"
+
+	datasets := suite.db.Datasets()
+	ds, err := suite.db.CommitValue(suite.db.GetDataset(dsID1), types.String("a"))
+	suite.NoError(err)
+	suite.NotPanics(func() { assertMapOfStringToRefOfCommit(suite.db.Datasets(), datasets, suite.db) })
+
+	datasets = suite.db.Datasets()
+	_, err = suite.db.CommitValue(suite.db.GetDataset(dsID2), types.Number(42))
+	suite.NoError(err)
+	suite.NotPanics(func() { assertMapOfStringToRefOfCommit(suite.db.Datasets(), datasets, suite.db) })
+
+	datasets = suite.db.Datasets()
+	_, err = suite.db.Delete(ds)
+	suite.NoError(err)
+	suite.NotPanics(func() { assertMapOfStringToRefOfCommit(suite.db.Datasets(), datasets, suite.db) })
 }
 
 func newOpts(parents ...types.Value) CommitOptions {

@@ -1,10 +1,10 @@
-=============== Jan 9, 2017 (PST) ===============
-23:23:31.487581 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-23:23:31.487803 db@open opening
-23:23:31.487849 journal@recovery F·1
-23:23:31.488403 journal@recovery recovering @1
-23:23:31.489128 memdb@flush created L0@2 N·4 S·599B "/ch..Ut:,v3":"/vers,v1"
-23:23:31.490315 db@janitor F·3 G·0
-23:23:31.490333 db@open done T·2.519768ms
-23:23:31.490953 db@close closing
-23:23:31.491012 db@close done T·58.052µs
+=============== Jan 19, 2017 (PST) ===============
+13:48:57.057068 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+13:48:57.057312 db@open opening
+13:48:57.057353 journal@recovery F·1
+13:48:57.058333 journal@recovery recovering @1
+13:48:57.058978 memdb@flush created L0@2 N·4 S·509B "/ch..\xa3}\xb3,v2":"/vers,v1"
+13:48:57.061679 db@janitor F·3 G·0
+13:48:57.061725 db@open done T·4.402697ms
+13:48:57.063156 db@close closing
+13:48:57.063405 db@close done T·248.903µs

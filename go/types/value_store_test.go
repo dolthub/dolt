@@ -99,6 +99,30 @@ func TestCheckChunksInCachePostCommit(t *testing.T) {
 	})
 }
 
+func TestCheckChunksInCacheRefValue(t *testing.T) {
+	assert := assert.New(t)
+	cs := chunks.NewTestStore()
+	cvs := newLocalValueStore(cs)
+
+	l := NewList()
+	r := NewRef(l)
+	i := 0
+	for r.Height() == 1 {
+		l = l.Append(Number(i))
+		r = NewRef(l)
+		i++
+	}
+
+	r = cvs.WriteValue(l)
+	rr := cvs.WriteValue(ToRefOfValue(r))
+	cvs.Flush()
+
+	cvs2 := newLocalValueStore(cs)
+	rv := cvs2.ReadValue(rr.TargetHash()).(Ref)
+	assert.True(ValueType.Equals(getTargetType(rv)))
+	assert.NotPanics(func() { cvs.chunkHintsFromCache(r) })
+}
+
 func TestCheckChunksNotInCache(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()

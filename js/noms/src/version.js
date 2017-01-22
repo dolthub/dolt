@@ -4,7 +4,7 @@
 
 // @flow
 
-export default '7.1';
+export default '7.2';
 
 const envVal = '1';
 const details = 'https://github.com/attic-labs/noms#install-noms';

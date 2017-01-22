@@ -13,8 +13,11 @@ import type {RootTracker} from './chunk-store.js';
 import ValueStore from './value-store.js';
 import type {BatchStore} from './batch-store.js';
 import Dataset from './dataset.js';
-import Commit from './commit.js';
+import Commit, {isCommitType} from './commit.js';
 import type Struct from './struct.js';
+import {getTypeOfValue} from './type.js';
+import {makeRefOfValue} from './ref.js';
+import {invariant, notNull} from './assert.js';
 
 type CommitOptions = {
   parents?: ?Array<Ref<Commit<any>>>,
@@ -33,7 +36,7 @@ type CommitOptions = {
 export default class Database {
   _vs: ValueStore;
   _rt: RootTracker;
-  _datasets: Promise<Map<string, Ref<Commit<any>>>>;
+  _datasets: Promise<Map<string, Ref<Value>>>;
 
   constructor(bs: BatchStore, cacheSize: number = 0) {
     this._vs = new ValueStore(bs, cacheSize);
@@ -41,7 +44,7 @@ export default class Database {
     this._datasets = this._datasetsFromRootRef(bs.getRoot());
   }
 
-  _datasetsFromRootRef(rootRef: Promise<Hash>): Promise<Map<string, Ref<Commit<any>>>> {
+  _datasetsFromRootRef(rootRef: Promise<Hash>): Promise<Map<string, Ref<Value>>> {
     return rootRef.then(rootRef => {
       if (rootRef.isEmpty()) {
         return Promise.resolve(new Map());
@@ -54,7 +57,7 @@ export default class Database {
   /**
    * datasets returns the root of the database.
    */
-  datasets(): Promise<Map<string, Ref<Commit<any>>>> {
+  datasets(): Promise<Map<string, Ref<Value>>> {
     return this._datasets;
   }
 
@@ -63,7 +66,22 @@ export default class Database {
    * id in the above Datasets Map.
    */
   getDataset(id: string): Dataset {
-    return new Dataset(this, id, this.datasets().then(sets => sets.get(id)));
+    const getRef = async () => {
+      const sets = await this.datasets();
+      const valRef = await sets.get(id);
+      if (!valRef) {
+        return null;
+      }
+      const v = await notNull(valRef).targetValue(this);
+      if (!v) {
+        return null;
+      }
+      invariant(isCommitType(getTypeOfValue(v)), 'Head of dataset ' + id + ' is not a Ref<Commit>');
+      // $FlowIssue: Can't make Value into a Commit<*>
+      const c = (v: Commit<*>);
+      return new Ref(c);
+    };
+    return new Dataset(this, id, getRef());
   }
 
   // TODO: This should return Promise<Value | null>
@@ -132,13 +150,16 @@ export default class Database {
       if (!currentRootRef.isEmpty()) {
         const currentHeadRef = await currentDatasets.get(datasetId);
         if (currentHeadRef) {
-          if (!await this._descendsFrom(commit, currentHeadRef)) {
+          // $FlowIssue: Can't make Value into a Commit<any>
+          const currentHead: Commit<any> = await currentHeadRef.targetValue(this);
+          const r = new Ref(currentHead);
+          if (!await this._descendsFrom(commit, r)) {
             throw new Error('Merge needed');
           }
         }
       }
 
-      currentDatasets = await currentDatasets.set(datasetId, commitRef);
+      currentDatasets = await currentDatasets.set(datasetId, makeRefOfValue(commitRef));
       const newRootRef = this.writeValue(currentDatasets).targetHash;
       await this._vs.flush();
       if (await this._rt.updateRoot(newRootRef, currentRootRef)) {

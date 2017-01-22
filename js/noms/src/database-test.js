@@ -18,6 +18,9 @@ import Struct, {newStruct} from './struct.js';
 import {encodeValue} from './codec.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
 import {invariant} from './assert.js';
+import {Kind} from './noms-kind.js';
+import {getTypeOfValue} from './type.js';
+import type Value from './value.js';
 
 suite('Database', () => {
   test('access', async () => {
@@ -106,6 +109,18 @@ suite('Database', () => {
     const newDS2 = await newDB.getDataset('otherDs');
     assert.strictEqual('d', notNull(await newDS1.head()).value);
     assert.strictEqual('a', notNull(await newDS2.head()).value);
+    await db.close();
+  });
+
+  test('datasets map type', async () => {
+    const bs = makeRemoteBatchStoreFake();
+    const db = new Database(bs);
+
+    await db.commit(await db.getDataset('ds1'), 'a');
+    assert.isTrue(isMapOfStringToRefOfValue(await db.datasets()));
+
+    await db.commit(await db.getDataset('ds2'), 42);
+    assert.isTrue(isMapOfStringToRefOfValue(await db.datasets()));
     await db.close();
   });
 
@@ -284,3 +299,16 @@ suite('Database', () => {
     assert.equal(m2.author, 'arv');
   });
 });
+
+function isMapOfStringToRefOfValue(v: Value): boolean {
+  const t = getTypeOfValue(v);
+  if (t.kind !== Kind.Map) {
+    return false;
+  }
+  const valType = t.elemTypes[1];
+  if (valType.kind !== Kind.Ref) {
+    return false;
+  }
+  const targetType = valType.elemTypes[0];
+  return targetType.kind === Kind.Value;
+}

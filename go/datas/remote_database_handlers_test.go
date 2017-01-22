@@ -385,20 +385,22 @@ func TestHandlePostRoot(t *testing.T) {
 	cs := chunks.NewTestStore()
 	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
 
-	commit := NewCommit(types.String("head"), types.NewSet(), types.NewStruct("Meta", types.StructData{}))
-	newHead := types.NewMap(types.String("dataset1"), vs.WriteValue(commit))
-	chnx := []chunks.Chunk{
-		chunks.NewChunk([]byte("abc")),
-		types.EncodeValue(newHead, nil),
-	}
-	err := cs.PutMany(chnx)
-	assert.NoError(err)
+	commit := buildTestCommit(types.String("head"))
+	commitRef := vs.WriteValue(commit)
+	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
+	firstHeadRef := vs.WriteValue(firstHead)
+	vs.Flush()
+
+	commit = buildTestCommit(types.String("second"), commitRef)
+	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
+	newHeadRef := vs.WriteValue(newHead)
+	vs.Flush()
 
 	// First attempt should fail, as 'last' won't match.
 	u := &url.URL{}
 	queryParams := url.Values{}
-	queryParams.Add("last", chnx[0].Hash().String())
-	queryParams.Add("current", chnx[1].Hash().String())
+	queryParams.Add("last", firstHeadRef.TargetHash().String())
+	queryParams.Add("current", newHeadRef.TargetHash().String())
 	u.RawQuery = queryParams.Encode()
 	url := u.String()
 
@@ -407,10 +409,14 @@ func TestHandlePostRoot(t *testing.T) {
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
-	assert.True(cs.UpdateRoot(chnx[0].Hash(), hash.Hash{}))
+	assert.True(cs.UpdateRoot(firstHeadRef.TargetHash(), hash.Hash{}))
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+}
+
+func buildTestCommit(v types.Value, parents ...types.Value) types.Struct {
+	return NewCommit(v, types.NewSet(parents...), types.NewStruct("Meta", types.StructData{}))
 }
 
 func TestRejectPostRoot(t *testing.T) {
@@ -421,7 +427,7 @@ func TestRejectPostRoot(t *testing.T) {
 	chunk := types.EncodeValue(newHead, nil)
 	cs.Put(chunk)
 
-	// First attempt should fail, as 'last' won't match.
+	// Attempt should fail, as newHead isn't the right type.
 	u := &url.URL{}
 	queryParams := url.Values{}
 	queryParams.Add("last", chunks.EmptyChunk.Hash().String())

@@ -310,16 +310,17 @@ class HashCache {
           hints.add(entry.provenance);
         }
 
-        // BUG 1121
-        // It's possible that entry.type will be simply 'Value', but that 'reachable' is actually a
-        // properly-typed object -- that is, a Hash to some specific Type. The Exp below would fail,
-        // though it's possible that the Type is actually correct. We wouldn't be able to verify
-        // without reading it, though, so we'll dig into this later.
         const targetType = getTargetType(reachable);
         if (equals(targetType, valueType)) {
           continue;
         }
+        // BUG 3099 - TODO: if equals(entryType, valueType) but !equals(targetType, valueType),
+        // readValue(targetHash), check its type against targetType, and panic if there's a
+        // mismatch.
         const entryType = notNull(entry.type);
+        if (equals(entryType, valueType)) {
+          continue;
+        }
         invariant(equals(entryType, targetType), () =>
           `Value to write contains ref ${reachable.targetHash.toString()}, which points to a ` +
           `value of a different type: ${describeType(entryType)} != ${describeType(targetType)}`);

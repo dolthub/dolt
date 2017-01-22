@@ -332,13 +332,13 @@ func (lvs *ValueStore) opCache() opCache {
 func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 	hints := map[hash.Hash]struct{}{}
 	collectHints := func(reachable Ref) {
-		// First, check the  hintCache to see if reachable is already known to be valid.
+		// First, check the hintCache to see if reachable is already known to be valid.
 		targetHash := reachable.TargetHash()
 		entry := lvs.check(targetHash)
 
 		// If it's not already in the hintCache, attempt to read the value directly, which will put it and its chunks into the hintCache.
+		var reachableV Value
 		if entry == nil || !entry.Present() {
-			var reachableV Value
 			if readValues {
 				// TODO: log or report that we needed to ReadValue here BUG 1762
 				reachableV = lvs.ReadValue(targetHash)
@@ -353,8 +353,17 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 		}
 
 		targetType := getTargetType(reachable)
-		if !entry.Type().Equals(targetType) {
-			d.Panic("Value to write contains ref %s, which points to a value of a different type: %+v != %+v", reachable.TargetHash(), entry.Type(), targetType)
+		if entry.Type().Kind() == ValueKind && targetType.Kind() != ValueKind {
+			// We've seen targetHash before, but only in a Ref<Value>, and reachable has a more specific type than that. Deref reachable to check the real type on the chunk it points to, and cache the result if everything checks out.
+			if reachableV == nil {
+				reachableV = lvs.ReadValue(targetHash)
+			}
+			entry = hintedChunk{reachableV.Type(), entry.Hint()}
+			lvs.set(targetHash, entry, false)
+		}
+		// At this point, entry should have the most specific type info possible. Unless it matches targetType, or targetType is 'Value', bail.
+		if !(targetType.Kind() == ValueKind || entry.Type().Equals(targetType)) {
+			d.Panic("Value to write contains ref %s, which points to a value of a different type: %s != %s", reachable.TargetHash(), targetType.Describe(), entry.Type().Describe())
 		}
 	}
 	v.WalkRefs(collectHints)

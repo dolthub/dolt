@@ -198,10 +198,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	pt := startProgressTracker()
 
 	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
-	if suite.sinkIsLocal() {
-		// C1 gets read from most-local DB
-		expectedReads++
-	}
+
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
 	pt.Validate(suite)
 
@@ -294,8 +291,8 @@ func (suite *PullSuite) TestPullUpdates() {
 	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
 
 	if suite.sinkIsLocal() {
-		// 3 objects read from sink: L3, L2 and C1 (when considering the shared commit).
-		expectedReads += 3
+		// 2 objects read from sink: L3 and L2 (when considering the shared commit C1).
+		expectedReads += 2
 	}
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
 	pt.Validate(suite)

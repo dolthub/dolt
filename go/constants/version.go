@@ -11,7 +11,7 @@ import (
 )
 
 // TODO: generate this from some central thing with go generate, so that JS and Go can be easily kept in sync
-const NomsVersion = "7.1"
+const NomsVersion = "7.2"
 const NOMS_VERSION_NEXT_ENV_NAME = "NOMS_VERSION_NEXT"
 const NOMS_VERSION_NEXT_ENV_VALUE = "1"
 

@@ -12,7 +12,7 @@ import type Hash from './hash.js';
 import type {Type} from './type.js';
 import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant} from './assert.js';
-import {getTypeOfValue, makeRefType} from './type.js';
+import {getTypeOfValue, makeRefType, valueType} from './type.js';
 import {ValueBase, getChunksOfValue} from './value.js';
 
 export function constructRef(t: Type<any>, targetHash: Hash, height: number): Ref<any> {
@@ -27,6 +27,14 @@ export function constructRef(t: Type<any>, targetHash: Hash, height: number): Re
 
 export function maxChunkHeight(v: Value): number {
   return getChunksOfValue(v).reduce((max, c) => Math.max(max, c.height), 0);
+}
+
+export function makeRefOfValue(r: Ref<*>): Ref<Value> {
+  const rv = Object.create(Ref.prototype);
+  rv._type = makeRefType(valueType);
+  rv.targetHash = r.targetHash;
+  rv.height = r.height;
+  return rv;
 }
 
 export default class Ref<T: Value> extends ValueBase {

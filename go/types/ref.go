@@ -20,10 +20,15 @@ func NewRef(v Value) Ref {
 	return Ref{v.Hash(), maxChunkHeight(v) + 1, MakeRefType(v.Type()), &hash.Hash{}}
 }
 
+// ToRefOfValue returns a new Ref that points to the same target as |r|, but
+// with the type 'Ref<Value>'.
+func ToRefOfValue(r Ref) Ref {
+	return Ref{r.TargetHash(), r.Height(), MakeRefType(ValueType), &hash.Hash{}}
+}
+
 // Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
 func constructRef(t *Type, target hash.Hash, height uint64) Ref {
 	d.PanicIfFalse(RefKind == t.Kind())
-	d.PanicIfFalse(ValueType != t.Desc.(CompoundDesc).ElemTypes[0])
 	return Ref{target, height, t, &hash.Hash{}}
 }
 

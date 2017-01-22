@@ -1,7 +1,7 @@
-=============== Jan 9, 2017 (PST) ===============
-23:23:31.472732 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-23:23:31.473606 db@open opening
-23:23:31.475322 db@janitor F·2 G·0
-23:23:31.475522 db@open done T·1.732586ms
-23:23:31.476058 db@close closing
-23:23:31.476120 db@close done T·59.133µs
+=============== Jan 19, 2017 (PST) ===============
+13:48:57.044938 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+13:48:57.045496 db@open opening
+13:48:57.046563 db@janitor F·2 G·0
+13:48:57.046607 db@open done T·1.09674ms
+13:48:57.047347 db@close closing
+13:48:57.047392 db@close done T·44.986µs

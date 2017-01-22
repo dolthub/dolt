@@ -31,13 +31,6 @@ func newDatabaseCommon(cch *cachingChunkHaver, vs *types.ValueStore, rt chunks.R
 	return databaseCommon{ValueStore: vs, cch: cch, rt: rt, rootHash: rt.Root()}
 }
 
-func (dbc *databaseCommon) maybeHeadRef(datasetID string) (types.Ref, bool) {
-	if r, ok := dbc.Datasets().MaybeGet(types.String(datasetID)); ok {
-		return r.(types.Ref), true
-	}
-	return types.Ref{}, false
-}
-
 func (dbc *databaseCommon) Datasets() types.Map {
 	if dbc.datasets == nil {
 		if dbc.rootHash.IsEmpty() {
@@ -61,7 +54,9 @@ func getDataset(db Database, datasetID string) Dataset {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
 	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
-		return Dataset{db, datasetID, r.(types.Ref)}
+		head := r.(types.Ref).TargetValue(db)
+		d.Chk.True(IsCommitType(head.Type()))
+		return Dataset{db, datasetID, types.NewRef(head)}
 	}
 	return Dataset{store: db, id: datasetID}
 }
@@ -84,7 +79,7 @@ func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	currentRootHash, currentDatasets := dbc.getRootAndDatasets()
 	commitRef := dbc.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
 
-	currentDatasets = currentDatasets.Set(types.String(ds.ID()), commitRef)
+	currentDatasets = currentDatasets.Set(types.String(ds.ID()), types.ToRefOfValue(commitRef))
 	return dbc.tryUpdateRoot(currentDatasets, currentRootHash)
 }
 
@@ -118,7 +113,8 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				currentHeadRef := r.(types.Ref)
+				head := r.(types.Ref).TargetValue(dbc)
+				currentHeadRef := types.NewRef(head)
 				ancestorRef, found := FindCommonAncestor(commitRef, currentHeadRef, dbc)
 				if !found {
 					return ErrMergeNeeded
@@ -141,7 +137,7 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 				}
 			}
 		}
-		currentDatasets = currentDatasets.Set(types.String(datasetID), commitRef)
+		currentDatasets = currentDatasets.Set(types.String(datasetID), types.ToRefOfValue(commitRef))
 		err = dbc.tryUpdateRoot(currentDatasets, currentRootHash)
 	}
 	return err
