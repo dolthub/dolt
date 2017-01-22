@@ -305,6 +305,8 @@ func handleGetBlob(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 	w.Header().Add("Content-Type", "application/octet-stream")
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", b.Len()))
+	w.Header().Add("Cache-Control", fmt.Sprintf("max-age=%d", 60*60*24*365))
+
 	b.Reader().Copy(w)
 }
 
