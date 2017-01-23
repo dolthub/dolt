@@ -6,6 +6,7 @@
   "version": "2.3.0",
   "main": "index.js",
   "dependencies": {
+    "babel-core": "^6.22.1",
     "babel-loader": "^6.2.10",
     "webpack": "^1.14.0"
   },
