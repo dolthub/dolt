@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -248,4 +249,127 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.shouldSee = NewList(suite.shouldSeeItem)
 	suite.deadValue = Number(0xDEADBEEF)
 	suite.mustSkip = NewList(suite.deadValue)
+}
+
+type WalkDifferentStructsTestSuite struct {
+	suite.Suite
+	vs *ValueStore
+	ts *chunks.TestStore
+}
+
+func TestWalkDifferentStructsTestSuite(t *testing.T) {
+	suite.Run(t, &WalkDifferentStructsTestSuite{})
+}
+
+func (suite *WalkDifferentStructsTestSuite) SetupTest() {
+	suite.ts = chunks.NewTestStore()
+	suite.vs = NewValueStore(NewBatchStoreAdaptor(suite.ts))
+}
+
+func (suite *WalkDifferentStructsTestSuite) AssertDiffs(last, current Value, expectAdded, expectRemoved []Value) {
+	equalIgnoreOrder := func(expect []Value, actual map[hash.Hash]Struct) {
+		hashes := hash.HashSet{}
+		for _, v := range expect {
+			hashes.Insert(v.Hash())
+		}
+
+		suite.Equal(len(hashes), len(actual))
+		for h, _ := range actual {
+			_, ok := hashes[h]
+			suite.True(ok)
+		}
+	}
+
+	added, removed := WalkDifferentStructs(last, current, suite.vs)
+	equalIgnoreOrder(expectAdded, added)
+	equalIgnoreOrder(expectRemoved, removed)
+}
+
+func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
+	// Nothing plus nothing is nothing
+	suite.AssertDiffs(nil, nil, []Value{}, []Value{})
+
+	s1 := NewStruct("s", StructData{
+		"n": Number(1),
+	})
+
+	// Top level struct.
+	suite.AssertDiffs(nil, s1, []Value{s1}, []Value{})
+
+	// Same Struct
+	suite.AssertDiffs(s1, s1, []Value{}, []Value{})
+
+	// Removed.
+	suite.AssertDiffs(s1, nil, []Value{}, []Value{s1})
+
+	// Collections of structs
+	s2 := NewStruct("s", StructData{
+		"n": Number(2),
+	})
+	s3 := NewStruct("s", StructData{
+		"n": Number(3),
+	})
+	s4 := NewStruct("s", StructData{
+		"n": Number(4),
+	})
+
+	l1 := NewList(s2, s4)
+	l2 := NewList(s1, s2, s3)
+
+	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
+	suite.AssertDiffs(l1, l1, []Value{}, []Value{})
+	suite.AssertDiffs(l2, l1, []Value{s4}, []Value{s1, s3})
+
+	// Big, uncommitted collections of structs
+	bl := NewList()
+	i := 0
+	for NewRef(bl).Height() == 1 {
+		bl = bl.Append(Number(i))
+		i++
+	}
+
+	l1 = bl.Append(s2, s4)
+	l2 = bl.Append(s1, s2, s3)
+
+	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
+	suite.AssertDiffs(l1, l1, []Value{}, []Value{})
+	suite.AssertDiffs(l2, l1, []Value{s4}, []Value{s1, s3})
+
+	// Big, committed collections of structs
+	h1 := suite.vs.WriteValue(l1).TargetHash()
+	h2 := suite.vs.WriteValue(l2).TargetHash()
+	suite.vs.Flush(h1)
+	suite.vs.Flush(h2)
+
+	// Use a fresh value store to avoid cached chunks
+	nvs := NewValueStore(NewBatchStoreAdaptor(suite.ts))
+
+	l1 = nvs.ReadValue(h1).(List)
+	l2 = nvs.ReadValue(h2).(List)
+
+	suite.ts.Reads = 0
+	suite.AssertDiffs(nil, l2, []Value{s1, s2, s3}, []Value{})
+	suite.Equal(1, suite.ts.Reads) // Type information gets used to avoid loads
+
+	suite.ts.Reads = 0
+	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
+	suite.Equal(1, suite.ts.Reads) // Chunk diff gets used to avoid loading common subtrees
+
+	// Structs inside structs whose fields will be simplified away.
+	s5 := NewStruct("s", StructData{
+		"s1": s1,
+	})
+	s6 := NewStruct("s", StructData{
+		"s2": s2,
+	})
+	s7 := NewStruct("s", StructData{
+		"s3": s3,
+	})
+
+	l1 = bl.Append(s5, s6)
+	l2 = bl.Append(s6, s7)
+
+	suite.AssertDiffs(nil, l1, []Value{s5, s6, s1, s2}, []Value{})
+	suite.AssertDiffs(nil, l2, []Value{s6, s7, s2, s3}, []Value{})
+	suite.AssertDiffs(l1, l2, []Value{s7, s3}, []Value{s5, s1})
 }
