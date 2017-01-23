@@ -73,24 +73,23 @@ func (suite *DatabaseSuite) TearDownTest() {
 
 func (suite *DatabaseSuite) TestReadWriteCache() {
 	var v types.Value = types.Bool(true)
-	suite.NotEqual(hash.Hash{}, suite.db.WriteValue(v))
-	r := suite.db.WriteValue(v).TargetHash()
-	ds := suite.db.GetDataset("foo")
-	_, err := suite.db.CommitValue(ds, v)
+	r := suite.db.WriteValue(v)
+	suite.NotEqual(hash.Hash{}, r.TargetHash())
+	_, err := suite.db.CommitValue(suite.db.GetDataset("foo"), r)
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 
-	v = suite.db.ReadValue(r)
+	v = suite.db.ReadValue(r.TargetHash())
 	suite.True(v.Equals(types.Bool(true)))
 }
 
 func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	var err error
 	var v types.Value = types.Bool(true)
-	suite.NotEqual(hash.Hash{}, suite.db.WriteValue(v))
 	r := suite.db.WriteValue(v)
+	suite.NotEqual(hash.Hash{}, r.TargetHash())
 	ds := suite.db.GetDataset("foo")
-	ds, err = suite.db.CommitValue(ds, v)
+	ds, err = suite.db.CommitValue(ds, r)
 	suite.NoError(err)
 	suite.Equal(1, suite.cs.Writes-writesOnCommit)
 

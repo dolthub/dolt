@@ -389,12 +389,12 @@ func TestHandlePostRoot(t *testing.T) {
 	commitRef := vs.WriteValue(commit)
 	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
 	firstHeadRef := vs.WriteValue(firstHead)
-	vs.Flush()
+	vs.Flush(firstHeadRef.TargetHash())
 
 	commit = buildTestCommit(types.String("second"), commitRef)
 	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
-	vs.Flush()
+	vs.Flush(newHeadRef.TargetHash())
 
 	// First attempt should fail, as 'last' won't match.
 	u := &url.URL{}

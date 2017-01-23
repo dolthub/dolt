@@ -32,7 +32,7 @@ func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.
 	ref = sp.GetDatabase().WriteValue(v)
 
 	if doCommit {
-		_, err = sp.GetDatabase().CommitValue(sp.GetDataset(), v)
+		_, err = sp.GetDatabase().CommitValue(sp.GetDataset(), ref)
 		s.NoError(err)
 	}
 	return
@@ -104,7 +104,8 @@ func structFieldEqual(old, now types.Struct, field string) bool {
 }
 
 func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
-	sp, ref := s.setupDataset("commitTestDuplicate", true)
+	dsName := "commitTestDuplicate"
+	sp, ref := s.setupDataset(dsName, true)
 	defer sp.Close()
 
 	_, ok := sp.GetDataset().MaybeHeadValue()
@@ -114,9 +115,10 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	if allowDuplicate {
 		cliOptions = append(cliOptions, "--allow-dupe=1")
 	}
-	cliOptions = append(cliOptions, "#"+ref.TargetHash().String(), sp.Spec)
+	cliOptions = append(cliOptions, dsName+".value", sp.Spec)
 
-	stdoutString, stderrString := s.MustRun(main, cliOptions)
+	stdoutString, stderrString, err := s.Run(main, cliOptions)
+	s.Nil(err)
 	s.Empty(stderrString)
 	if allowDuplicate {
 		s.NotContains(stdoutString, "Commit aborted")
@@ -130,7 +132,7 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 
 	value, ok := sp.GetDataset().MaybeHeadValue()
 	s.True(ok, "should still have a commit")
-	s.True(value.Hash() == ref.TargetHash(), "commit.value hash == previous commit hash")
+	s.True(value.Hash() == ref.Hash(), "commit.value hash == previous commit hash")
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitDuplicate() {
@@ -139,12 +141,14 @@ func (s *nomsCommitTestSuite) TestNomsCommitDuplicate() {
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
-	sp, ref := s.setupDataset("commitTestMetadata", true)
+	dsName := "commitTestMetadata"
+	sp, _ := s.setupDataset(dsName, true)
 	defer sp.Close()
 
 	metaOld := sp.GetDataset().Head().Get(datas.MetaField).(types.Struct)
 
-	stdoutString, stderrString := s.MustRun(main, []string{"commit", "--allow-dupe=1", "--message=foo", "#" + ref.TargetHash().String(), sp.Spec})
+	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.Spec})
+	s.Nil(err)
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
@@ -160,7 +164,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaOld = metaNew
 
-	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat, "#" + ref.TargetHash().String(), sp.Spec})
+	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat, dsName + ".value", sp.Spec})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 

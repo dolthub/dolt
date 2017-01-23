@@ -39,10 +39,10 @@ func TestIncrementalLoadList(t *testing.T) {
 	vs := newLocalValueStore(cs)
 
 	expected := NewList(testVals...)
-	ref := vs.WriteValue(expected).TargetHash()
-	vs.Flush()
+	hash := vs.WriteValue(expected).TargetHash()
+	vs.Flush(hash)
 
-	actualVar := vs.ReadValue(ref)
+	actualVar := vs.ReadValue(hash)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads

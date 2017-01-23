@@ -132,7 +132,6 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefMerge() {
 	ma := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1a))}
 	mb := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1b))}
 	mMerged := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aaMerged))}
-	s.vs.Flush()
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)
@@ -143,7 +142,6 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMultiLevelMerge() 
 	ma := kvs{"mm1", mm1a, "mm2", s.vs.WriteValue(s.create(mm2a))}
 	mb := kvs{"mm1", mm1b, "mm2", s.vs.WriteValue(s.create(mm2b))}
 	mMerged := kvs{"mm1", mm1Merged, "mm2", s.vs.WriteValue(s.create(mm2Merged))}
-	s.vs.Flush()
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)
@@ -222,7 +220,6 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
 	m := kvs{"r2", strRef}
 	ma := kvs{"r1", strRef, "r2", strRef}
 	mb := kvs{"r1", numRef, "r2", strRef}
-	s.vs.Flush()
 
 	s.tryThreeWayConflict(s.create(ma), s.create(mb), s.create(m), "Cannot merge struct Foo")
 	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Number and struct")

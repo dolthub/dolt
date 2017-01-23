@@ -18,9 +18,9 @@ func TestValueReadWriteRead(t *testing.T) {
 	s := String("hello")
 	vs := NewTestValueStore()
 	assert.Nil(vs.ReadValue(s.Hash())) // nil
-	r := vs.WriteValue(s)
-	vs.Flush()
-	v := vs.ReadValue(r.TargetHash()) // non-nil
+	h := vs.WriteValue(s).TargetHash()
+	vs.Flush(h)
+	v := vs.ReadValue(h) // non-nil
 	assert.True(s.Equals(v))
 }
 
@@ -31,9 +31,10 @@ func TestValueReadMany(t *testing.T) {
 	vs := NewTestValueStore()
 	hashes := hash.HashSet{}
 	for _, v := range vals {
-		hashes.Insert(vs.WriteValue(v).TargetHash())
+		h := vs.WriteValue(v).TargetHash()
+		hashes.Insert(h)
+		vs.Flush(h)
 	}
-	vs.Flush()
 
 	// Get one Value into vs's Value cache
 	vs.ReadValue(vals[0].Hash())
@@ -60,6 +61,23 @@ func TestValueReadMany(t *testing.T) {
 	}
 }
 
+func TestValueWriteFlush(t *testing.T) {
+	assert := assert.New(t)
+
+	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
+	vs := NewTestValueStore()
+	hashes := hash.HashSet{}
+	for _, v := range vals {
+		hashes.Insert(vs.WriteValue(v).TargetHash())
+	}
+	assert.NotZero(vs.pendingPutSize)
+
+	for h := range hashes {
+		vs.Flush(h)
+	}
+	assert.Zero(vs.pendingPutSize)
+}
+
 func TestCheckChunksInCache(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
@@ -75,8 +93,7 @@ func TestCheckChunksInCache(t *testing.T) {
 
 func TestCheckChunksInCachePostCommit(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
+	vs := NewTestValueStore()
 
 	l := NewList()
 	r := NewRef(l)
@@ -87,15 +104,40 @@ func TestCheckChunksInCachePostCommit(t *testing.T) {
 		i++
 	}
 
-	cvs.WriteValue(l)
+	h := vs.WriteValue(l).TargetHash()
 	// Hints for leaf sequences should be absent prior to Flush...
 	l.WalkRefs(func(ref Ref) {
-		assert.True(cvs.check(ref.TargetHash()).Hint().IsEmpty())
+		assert.True(vs.check(ref.TargetHash()).Hint().IsEmpty())
 	})
-	cvs.Flush()
+	vs.Flush(h)
 	// ...And present afterwards
 	l.WalkRefs(func(ref Ref) {
-		assert.True(cvs.check(ref.TargetHash()).Hint() == l.Hash())
+		assert.True(vs.check(ref.TargetHash()).Hint() == l.Hash())
+	})
+}
+
+func TestCheckChunksNotInCacheAfterReadingNovelValue(t *testing.T) {
+	assert := assert.New(t)
+	vs := NewTestValueStore()
+
+	l := NewList()
+	r := NewRef(l)
+	i := 0
+	for r.Height() == 1 {
+		l = l.Append(Number(i))
+		r = NewRef(l)
+		i++
+	}
+
+	h := vs.WriteValue(l).TargetHash()
+	// Hints for leaf sequences should be absent prior to ReadValue...
+	l.WalkRefs(func(ref Ref) {
+		assert.True(vs.check(ref.TargetHash()).Hint().IsEmpty())
+	})
+	vs.ReadValue(h)
+	// ...And remain absent!
+	l.WalkRefs(func(ref Ref) {
+		assert.False(vs.check(ref.TargetHash()).Hint() == l.Hash())
 	})
 }
 
@@ -115,7 +157,7 @@ func TestCheckChunksInCacheRefValue(t *testing.T) {
 
 	r = cvs.WriteValue(l)
 	rr := cvs.WriteValue(ToRefOfValue(r))
-	cvs.Flush()
+	cvs.Flush(rr.TargetHash())
 
 	cvs2 := newLocalValueStore(cs)
 	rv := cvs2.ReadValue(rr.TargetHash()).(Ref)
@@ -133,6 +175,82 @@ func TestCheckChunksNotInCache(t *testing.T) {
 
 	bref := NewRef(b)
 	assert.Panics(func() { cvs.chunkHintsFromCache(bref) })
+}
+
+type checkingBatchStore struct {
+	BatchStore
+	a             *assert.Assertions
+	expectedOrder hash.HashSlice
+}
+
+func (cbs *checkingBatchStore) expect(rs ...Ref) {
+	for _, r := range rs {
+		cbs.expectedOrder = append(cbs.expectedOrder, r.TargetHash())
+	}
+}
+
+func (cbs *checkingBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints) {
+	if cbs.a.NotZero(len(cbs.expectedOrder)) {
+		cbs.a.Equal(cbs.expectedOrder[0], c.Hash())
+		cbs.expectedOrder = cbs.expectedOrder[1:]
+	}
+}
+
+func (cbs *checkingBatchStore) Flush() {
+	cbs.a.Empty(cbs.expectedOrder)
+}
+
+func TestFlushOrder(t *testing.T) {
+	assert := assert.New(t)
+	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	vs := NewValueStore(bs)
+	// Graph, which should be flushed grandchildren-first, bottom-up
+	//         l
+	//        / \
+	//      ml1  ml2
+	//     /   \    \
+	//    b    ml    f
+	//        /  \
+	//       s    n
+	//
+	// Expected order: s, n, b, ml, f, ml1, ml2, l
+	s := String("oy")
+	n := Number(42)
+	sr, nr := vs.WriteValue(s), vs.WriteValue(n)
+	bs.expect(sr, nr)
+	ml := NewList(sr, nr)
+
+	b := NewEmptyBlob()
+	br, mlr := vs.WriteValue(b), vs.WriteValue(ml)
+	bs.expect(br, mlr)
+	ml1 := NewList(br, mlr)
+
+	f := Bool(false)
+	fr := vs.WriteValue(f)
+	bs.expect(fr)
+	ml2 := NewList(fr)
+
+	ml1r, ml2r := vs.WriteValue(ml1), vs.WriteValue(ml2)
+	bs.expect(ml1r, ml2r)
+	l := NewList(ml1r, ml2r)
+
+	r := vs.WriteValue(l)
+	bs.expect(r)
+	vs.Flush(l.Hash())
+}
+
+func TestFlushOverSize(t *testing.T) {
+	assert := assert.New(t)
+	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	vs := newValueStoreWithCacheAndPending(bs, 0, 10)
+
+	s := String("oy")
+	sr := vs.WriteValue(s)
+	l := NewList(sr)
+	bs.expect(sr, NewRef(l))
+
+	vs.WriteValue(l)
+	vs.Flush(l.Hash())
 }
 
 func TestEnsureChunksInCache(t *testing.T) {
@@ -182,7 +300,7 @@ func TestCacheOnReadValue(t *testing.T) {
 	b := NewEmptyBlob()
 	bref := cvs.WriteValue(b)
 	r := cvs.WriteValue(bref)
-	cvs.Flush()
+	cvs.Flush(r.TargetHash())
 
 	cvs2 := newLocalValueStore(cs)
 	v := cvs2.ReadValue(r.TargetHash())
@@ -202,6 +320,7 @@ func TestHintsOnCache(t *testing.T) {
 		"b": cr2,
 	})
 	r := cvs.WriteValue(s1)
+	cvs.Flush(r.TargetHash())
 	v := cvs.ReadValue(r.TargetHash())
 
 	if assert.True(v.Equals(s1)) {
@@ -214,10 +333,8 @@ func TestHintsOnCache(t *testing.T) {
 
 		hints := cvs.chunkHintsFromCache(s2)
 		if assert.Len(hints, 1) {
-			for _, hash := range []hash.Hash{r.TargetHash()} {
-				_, present := hints[hash]
-				assert.True(present)
-			}
+			_, present := hints[r.TargetHash()]
+			assert.True(present)
 		}
 	}
 }
@@ -229,7 +346,7 @@ func TestPanicOnReadBadVersion(t *testing.T) {
 
 func TestPanicOnWriteBadVersion(t *testing.T) {
 	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
-	assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()); cvs.Flush() })
+	assert.Panics(t, func() { r := cvs.WriteValue(NewEmptyBlob()); cvs.Flush(r.TargetHash()) })
 }
 
 type badVersionStore struct {

@@ -74,7 +74,6 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
 	ma := items{"r1", s.vs.WriteValue(s.create(flatA))}
 	mb := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
 	mMerged := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
-	s.vs.Flush()
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)

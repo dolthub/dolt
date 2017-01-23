@@ -186,10 +186,10 @@ func (dbc *databaseCommon) getRootAndDatasets() (currentRootHash hash.Hash, curr
 
 func (dbc *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
 	// TODO: This Map will be orphaned if the UpdateRoot below fails
-	newRootRef := dbc.WriteValue(currentDatasets).TargetHash()
-	dbc.Flush()
+	newRootHash := dbc.WriteValue(currentDatasets).TargetHash()
+	dbc.Flush(newRootHash)
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if !dbc.rt.UpdateRoot(newRootRef, currentRootHash) {
+	if !dbc.rt.UpdateRoot(newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}
 	return

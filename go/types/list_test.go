@@ -958,17 +958,17 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	vs1 := newLocalValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(nums1...)
-	ref1 := vs1.WriteValue(l1).TargetHash()
-	vs1.Flush()
-	refList1 := vs1.ReadValue(ref1).(List)
+	hash1 := vs1.WriteValue(l1).TargetHash()
+	vs1.Flush(hash1)
+	refList1 := vs1.ReadValue(hash1).(List)
 
 	cs2 := chunks.NewTestStore()
 	vs2 := newLocalValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(nums2...)
-	ref2 := vs2.WriteValue(l2).TargetHash()
-	vs2.Flush()
-	refList2 := vs2.ReadValue(ref2).(List)
+	hash2 := vs2.WriteValue(l2).TargetHash()
+	vs2.Flush(hash2)
+	refList2 := vs2.ReadValue(hash2).(List)
 
 	// diff lists without value store
 	diff1 := accumulateDiffSplices(l2, l1)

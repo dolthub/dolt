@@ -42,7 +42,7 @@ func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
 			defer vbs.pool.Put(tc)
 			for c := range foundChunks {
 				v := DecodeFromBytes(c.Data(), vbs.vs, tc.(*TypeCache))
-				vbs.vs.setHintsForReadValue(v, c.Hash())
+				vbs.vs.setHintsForReadValue(v, c.Hash(), false)
 			}
 		}()
 	}
