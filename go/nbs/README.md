@@ -13,3 +13,5 @@ NBS is more-or-less "alpha". There's still work we want to do, but it basically 
 However, there are two full "back-ends", one for storage on a file-system and one for storage in AWS. The later requires a dynamo table and an s3 bucket.
 
 For the file back-end, perf is substantially better than LevelDB for two reasons (1) LDB does quite alot of compaction which burns IO but doesn't benenfit noms at all. (2) NBS locates related chunks together and thus reading data from a NBS store can be done quite alot faster (on a current Macbook Pro, you can read large blobs at 100s of MB/s, whereas LDB tops out at about 75 MB/s).
+
+NBS is currently available via the `nbs:` scheme. I.e. `./csv-import foo.csv nbs:/Users/bob/csv-store::data`. When nbs is deemed stable, we will likely make it the default backed for local storage.
