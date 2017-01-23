@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "68.4.0",
+  "version": "69.0.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms/tree/master/js/noms",
   "main": "dist/commonjs/noms.js",
