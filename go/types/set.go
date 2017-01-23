@@ -43,15 +43,28 @@ func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
 	return outChan
 }
 
-// Computes the diff from |last| to |s| using "best" algorithm, which balances returning results early vs completing quickly.
+// Diff computes the diff from |last| to |m| using the top-down algorithm,
+// which completes as fast as possible while taking longer to return early
+// results than left-to-right.
 func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	if s.Equals(last) {
+		return
+	}
+	orderedSequenceDiffTopDown(last.seq, s.seq, changes, closeChan)
+}
+
+// DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
+// which balances returning results early vs completing quickly, if possible.
+func (s Set) DiffHybrid(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
 	orderedSequenceDiffBest(last.seq, s.seq, changes, closeChan)
 }
 
-// Like Diff() but uses a left-to-right streaming approach, optimised for returning results early, but not completing quickly.
+// DiffLeftRight computes the diff from |last| to |s| using a left-to-right
+// streaming approach, optimised for returning results early, but not
+// completing quickly.
 func (s Set) DiffLeftRight(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return

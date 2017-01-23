@@ -165,7 +165,7 @@ func (d differ) diffMaps(p types.Path, v1, v2 types.Map) bool {
 			if d.leftRight {
 				v2.DiffLeftRight(v1, cc, sc)
 			} else {
-				v2.Diff(v1, cc, sc)
+				v2.DiffHybrid(v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },
@@ -201,7 +201,7 @@ func (d differ) diffSets(p types.Path, v1, v2 types.Set) bool {
 			if d.leftRight {
 				v2.DiffLeftRight(v1, cc, sc)
 			} else {
-				v2.Diff(v1, cc, sc)
+				v2.DiffHybrid(v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },

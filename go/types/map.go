@@ -58,15 +58,28 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	return outChan
 }
 
-// Computes the diff from |last| to |m| using "best" algorithm, which balances returning results early vs completing quickly.
+// Diff computes the diff from |last| to |m| using the top-down algorithm,
+// which completes as fast as possible while taking longer to return early
+// results than left-to-right.
 func (m Map) Diff(last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+	if m.Equals(last) {
+		return
+	}
+	orderedSequenceDiffTopDown(last.seq, m.seq, changes, closeChan)
+}
+
+// DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
+// which balances returning results early vs completing quickly, if possible.
+func (m Map) DiffHybrid(last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
 	orderedSequenceDiffBest(last.seq, m.seq, changes, closeChan)
 }
 
-// Like Diff() but uses a left-to-right streaming approach, optimised for returning results early, but not completing quickly.
+// DiffLeftRight computes the diff from |last| to |m| using a left-to-right
+// streaming approach, optimised for returning results early, but not
+// completing quickly.
 func (m Map) DiffLeftRight(last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
