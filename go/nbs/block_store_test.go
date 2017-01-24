@@ -179,6 +179,7 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
+	root := suite.store.Root()
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
@@ -189,6 +190,11 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 
 	// And reading c2 via the API should work...
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
+
+	// Updating from stale root should fail...
+	suite.False(suite.store.UpdateRoot(c2.Hash(), root))
+	// ...but new root should succeed
+	suite.True(suite.store.UpdateRoot(c2.Hash(), suite.store.Root()))
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

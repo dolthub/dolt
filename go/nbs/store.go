@@ -281,7 +281,9 @@ func (nbs *NomsBlockStore) Root() hash.Hash {
 func (nbs *NomsBlockStore) UpdateRoot(current, last hash.Hash) bool {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	d.Chk.True(nbs.root == last, "UpdateRoot: last != nbs.Root(); %s != %s", last, nbs.root)
+	if nbs.root != last {
+		return false
+	}
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
 		nbs.tables = nbs.tables.Prepend(nbs.mt)
