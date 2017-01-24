@@ -97,7 +97,7 @@ export default class Map<K: Value, V: Value> extends
   }
 
   async _firstOrLast(last: boolean): Promise<?MapEntry<K, V>> {
-    const cursor = await newCursorAt(this.sequence, null, false, last, true);
+    const cursor = await newCursorAt(this.sequence, null, false, last, false);
     if (!cursor.valid) {
       return undefined;
     }
