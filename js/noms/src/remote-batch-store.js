@@ -85,7 +85,13 @@ export default class RemoteBatchStore {
     this._unsentReads = null;
     this._readScheduled = false;
 
-    await this._delegate.readBatch(reqs);
+    // Make a copy because the delegate can and does mutate the reqs object.
+    const reqsCopy = Object.create(null);
+    for (const prop in reqs) {
+      reqsCopy[prop] = reqs[prop];
+    }
+
+    await this._delegate.readBatch(reqsCopy);
 
     const self = this; // TODO: Remove this when babel bug is fixed.
     Object.keys(reqs).forEach(hashStr => {

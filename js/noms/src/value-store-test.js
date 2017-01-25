@@ -131,6 +131,9 @@ suite('ValueStore', () => {
     const v2 = await vs.readValue(r2);
     assert.equal(v2, 'world');
 
+    // Need to wait two turns for expire to have been run.
+    await Promise.resolve().then(() => {});
+
     (bs: any).get = () => { throw new Error(); };
     let ex;
     try {

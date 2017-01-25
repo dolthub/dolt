@@ -114,16 +114,10 @@ export function deserializeChunks(buff: Uint8Array, offset: number = 0): Array<C
 
     invariant(offset + chunkLength <= totalLength, 'Invalid chunk buffer');
 
-    let chunk: Chunk;
-    if (process.env.NODE_ENV === 'production') {
-      chunk = new Chunk(Bytes.slice(buff, offset, offset + chunkLength), hash); // copy
-    } else {
-      chunk = new Chunk(Bytes.slice(buff, offset, offset + chunkLength)); // copy
-      invariant(chunk.hash.equals(hash), 'Serialized hash !== computed hash');
-    }
-
+    const bytesCopy = Bytes.slice(buff, offset, offset + chunkLength);
     offset += chunkLength;
-    chunks.push(chunk);
+
+    chunks.push(new Chunk(bytesCopy, hash));
   }
 
   return chunks;
