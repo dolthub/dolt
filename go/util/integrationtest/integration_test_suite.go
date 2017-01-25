@@ -61,7 +61,9 @@ type IntegrationSuite struct {
 
 func Run(t *testing.T, s IntegrationSuiteInterface) {
 	s.SetT(t)
+	fmt.Println("== Calling npmInstall")
 	s.npmInstall()
+	fmt.Println("== Done npmInstall")
 	cs := chunks.NewMemoryStore()
 	s.setCs(cs)
 
@@ -69,7 +71,9 @@ func Run(t *testing.T, s IntegrationSuiteInterface) {
 		s.Setup()
 	}
 
+	fmt.Println("== Calling runServer")
 	runServer(s, cs)
+	fmt.Println("== Done runServer")
 
 	if s, ok := s.(TeardownSuite); ok {
 		s.Teardown()
@@ -80,7 +84,9 @@ func runServer(s IntegrationSuiteInterface, cs chunks.ChunkStore) {
 	server := datas.NewRemoteDatabaseServer(cs, 0)
 	server.Ready = func() {
 		s.setPort(server.Port())
+		fmt.Println("== Calling runNode")
 		runNode(s)
+		fmt.Println("== Done runNode")
 		server.Stop()
 	}
 	server.Run()
