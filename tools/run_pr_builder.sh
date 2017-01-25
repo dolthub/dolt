@@ -29,15 +29,23 @@ for d in ${GO_LIST}; do
     fi
 done
 
+echo "== JS tests"
 pushd ${NOMS_DIR}
 python tools/run-all-js-tests.py
 popd
+echo "== JS tests done"
 
 # The integration test only works after the node tests because the node tests sets up samples/js/node_modules
+echo "== Integration tests"
 pushd ${NOMS_DIR}/samples/js
-go test ./...
+go test -v ./...
 popd
+echo "== Integration tests done"
 
+echo "== Python tests"
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
+echo "== Python tests done"
 
+echo "== Codecov upload"
 bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
+echo "== Codecov upload done"
