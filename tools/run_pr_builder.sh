@@ -14,23 +14,27 @@ NOMS_DIR=${WORKSPACE}/src/github.com/attic-labs/noms
 go version
 node --version
 
-# go list is expensive, only do it once.
-GO_LIST="$(go list ./... | grep -v /vendor/ | grep -v /samples/js/)"
-go build ${GO_LIST}
+# # go list is expensive, only do it once.
+# GO_LIST="$(go list ./... | grep -v /vendor/ | grep -v /samples/js/)"
+# go build ${GO_LIST}
 
-# go test plus build coverage data for upload codecov.io
-rm -rf coverage.txt
-touch coverage.txt
-for d in ${GO_LIST}; do
-    go test -coverprofile=profile.out -covermode=atomic $d
-    if [ -f profile.out ]; then
-        cat profile.out >> coverage.txt
-        rm profile.out
-    fi
-done
+# # go test plus build coverage data for upload codecov.io
+# rm -rf coverage.txt
+# touch coverage.txt
+# for d in ${GO_LIST}; do
+#     go test -coverprofile=profile.out -covermode=atomic $d
+#     if [ -f profile.out ]; then
+#         cat profile.out >> coverage.txt
+#         rm profile.out
+#     fi
+# done
 
-pushd ${NOMS_DIR}
-python tools/run-all-js-tests.py
+#pushd ${NOMS_DIR}
+#python tools/run-all-js-tests.py
+#popd
+
+pushd ${NOMS_DIR}/js/noms
+yarn
 popd
 
 # The integration test only works after the node tests because the node tests sets up samples/js/node_modules
@@ -38,7 +42,8 @@ echo "== Integration tests"
 SAMPLES_JS=github.com/attic-labs/noms/samples/js
 go test -v ${SAMPLES_JS}/aggregate
 go test -v ${SAMPLES_JS}/counter
-go test -v ${SAMPLES_JS}/fs
+ls -al ${NOMS_DIR}/samples/js/fs
+#go test -v ${SAMPLES_JS}/fs
 go test -v ${SAMPLES_JS}/url_fetch
 echo "== Integration tests done"
 
