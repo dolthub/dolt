@@ -127,7 +127,10 @@ func (s *IntegrationSuite) NodeOutput() string {
 }
 
 func (s *IntegrationSuite) npmInstall() {
-	err := exec.Command("yarn").Run()
+	cmd := exec.Command("yarn")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
 	s.NoError(err)
 }
 
