@@ -40,7 +40,9 @@ def npm_publish():
     if new_version > deployed_version:
         subprocess.check_call(['npm', 'whoami'])
         subprocess.check_call(['yarn'])
-        subprocess.check_call(['yarn', 'publish'])
+        subprocess.check_call([
+            'yarn', 'publish', '--no-git-tag-version', '--new-version', new_version
+        ])
 
 if __name__ == '__main__':
     main()
