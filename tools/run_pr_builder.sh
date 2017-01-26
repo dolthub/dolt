@@ -36,10 +36,10 @@ popd
 # The integration test only works after the node tests because the node tests sets up samples/js/node_modules
 echo "== Integration tests"
 SAMPLES_JS=github.com/attic-labs/noms/samples/js
-go test ${SAMPLES_JS}/aggregate
-go test ${SAMPLES_JS}/counter
-go test ${SAMPLES_JS}/fs
-go test ${SAMPLES_JS}/url_fetch
+go test -v ${SAMPLES_JS}/aggregate
+go test -v ${SAMPLES_JS}/counter
+go test -v ${SAMPLES_JS}/fs
+go test -v ${SAMPLES_JS}/url_fetch
 echo "== Integration tests done"
 
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
