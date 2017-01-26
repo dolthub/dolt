@@ -41,7 +41,7 @@ def npm_publish():
         subprocess.check_call(['npm', 'whoami'])
         subprocess.check_call(['yarn'])
         subprocess.check_call([
-            'yarn', 'publish', '--no-git-tag-version', '--new-version', new_version
+            'yarn', 'publish', '--no-git-tag-version', '--new-version', str(new_version)
         ])
 
 if __name__ == '__main__':
