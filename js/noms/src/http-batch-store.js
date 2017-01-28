@@ -50,6 +50,10 @@ const readBatchOptions = {
   },
 };
 
+const writeBatchOptions = {
+  method: 'POST',
+};
+
 export default class HttpBatchStore extends RemoteBatchStore {
   _rpc: RpcStrings;
 
@@ -89,20 +93,22 @@ function mergeOptions(baseOpts: FetchOptions, opts: FetchOptions): FetchOptions 
 export class Delegate {
   _rpc: RpcStrings;
   _readBatchOptions: FetchOptions;
+  _writeBatchOptions: FetchOptions;
   _rootOptions: FetchOptions;
   _body: ArrayBuffer;
 
   constructor(rpc: RpcStrings, fetchOptions: FetchOptions) {
     this._rpc = rpc;
-    this._rootOptions = fetchOptions;
     this._readBatchOptions = mergeOptions(readBatchOptions, fetchOptions);
+    this._writeBatchOptions = mergeOptions(writeBatchOptions, fetchOptions);
+    this._rootOptions = fetchOptions;
     this._body = new ArrayBuffer(0);
   }
 
   async readBatch(reqs: UnsentReadMap): Promise<void> {
     const hashStrs = Object.keys(reqs);
     const body = hashStrs.map(r => 'ref=' + r).join('&');
-    const opts = Object.assign(this._readBatchOptions, {body: body});
+    const opts = Object.assign({}, this._readBatchOptions, {body});
     const {headers, buf} = await fetchUint8Array(this._rpc.getRefs, opts);
 
     const versionErr = checkVersion(headers);
@@ -125,7 +131,8 @@ export class Delegate {
 
   writeBatch(hints: Set<Hash>, chunkStream: ChunkStream): Promise<void> {
     return serialize(hints, chunkStream)
-      .then(body => fetchText(this._rpc.writeValue, {method: 'POST', body}))
+      .then(body => fetchText(this._rpc.writeValue,
+                              Object.assign({}, this._writeBatchOptions, {body})))
       .then(({headers}) => {
         const versionErr = checkVersion(headers);
         if (versionErr) {
