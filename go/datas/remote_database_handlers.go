@@ -137,13 +137,11 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 
 	// Deserialize chunks from reader in background, recovering from errors
 	errChan := make(chan error)
-	defer close(errChan)
-
 	chunkChan := make(chan *chunks.Chunk, writeValueConcurrency)
 
 	go func() {
 		var err error
-		defer func() { errChan <- err }()
+		defer func() { errChan <- err; close(errChan) }()
 		defer close(chunkChan)
 		err = chunks.Deserialize(reader, chunkChan)
 	}()
