@@ -72,9 +72,19 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 		var key types.Value
 		var pfunc printFunc = line
 
-		switch parentEl.(type) {
+		switch parent := parentEl.(type) {
 		case types.Map:
-			key = lastPart.(types.IndexPath).Index
+			if indexPath, ok := lastPart.(types.IndexPath); ok {
+				key = indexPath.Index
+			} else if hip, ok := lastPart.(types.HashIndexPath); ok {
+				// In this case, the map has a non-primitive key so the value
+				// is a ref to the key. We need the actual key, not a ref to it.
+				hip1 := hip
+				hip1.IntoKey = true
+				key = hip1.Resolve(parent)
+			} else {
+				panic("unexpected Path type")
+			}
 		case types.Set:
 			// default values are ok
 		case types.Struct:

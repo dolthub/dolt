@@ -305,6 +305,33 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 	tf(false)
 }
 
+func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
+	a := assert.New(t)
+	k1 := createStruct("TestKey", "name", "n1", "label", "l1")
+
+	expected1 := `(root) {
+-   TestKey {
+-     label: "l1",
+-     name: "n1",
+-   }: true
++   TestKey {
++     label: "l1",
++     name: "n1",
++   }: false
+  }
+`
+
+	m1 := types.NewMap(k1, types.Bool(true))
+	m2 := types.NewMap(k1, types.Bool(false))
+	tf := func(leftRight bool) {
+		buf := &bytes.Buffer{}
+		PrintDiff(buf, m1, m2, leftRight)
+		a.Equal(expected1, buf.String())
+	}
+	tf(true)
+	tf(false)
+}
+
 func TestNomsDiffPrintList(t *testing.T) {
 	assert := assert.New(t)
 
