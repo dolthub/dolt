@@ -808,6 +808,18 @@ func TestMapIter2(t *testing.T) {
 	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
 }
 
+func TestMapAny(t *testing.T) {
+	assert := assert.New(t)
+
+	p := func(k, v Value) bool {
+		return k.Equals(String("foo")) && v.Equals(String("bar"))
+	}
+
+	assert.False(NewMap().Any(p))
+	assert.False(NewMap(String("foo"), String("baz")).Any(p))
+	assert.True(NewMap(String("foo"), String("bar")).Any(p))
+}
+
 func TestMapIterAll(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")

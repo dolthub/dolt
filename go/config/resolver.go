@@ -104,6 +104,19 @@ func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 	return sp.NewChunkStore(), nil
 }
 
+// Resolve string to a RootTracker. Like ResolveDatabase, but returns a RootTracker instead
+func (r *Resolver) GetRootTracker(str string) (chunks.RootTracker, error) {
+	sp, err := spec.ForDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	if err != nil {
+		return nil, err
+	}
+	var rt chunks.RootTracker = sp.NewChunkStore()
+	if rt == nil {
+		rt = datas.NewHTTPBatchStore(sp.Spec, "")
+	}
+	return rt, nil
+}
+
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it

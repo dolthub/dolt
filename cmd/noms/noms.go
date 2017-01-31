@@ -23,6 +23,7 @@ var commands = []*util.Command{
 	nomsLog,
 	nomsMerge,
 	nomsMigrate,
+	nomsRoot,
 	nomsServe,
 	nomsShow,
 	nomsSync,

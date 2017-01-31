@@ -247,6 +247,18 @@ func (m Map) Iter(cb mapIterCallback) {
 	})
 }
 
+// Any returns true if cb() return true for any of the items in the map.
+func (m Map) Any(cb func(k, v Value) bool) (yep bool) {
+	m.Iter(func(k, v Value) bool {
+		if cb(k, v) {
+			yep = true
+			return true
+		}
+		return false
+	})
+	return
+}
+
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {

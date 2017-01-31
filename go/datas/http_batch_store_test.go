@@ -49,10 +49,10 @@ func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) 
 
 func (suite *HTTPBatchStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.store = newHTTPBatchStoreForTest(suite.cs)
+	suite.store = NewHTTPBatchStoreForTest(suite.cs)
 }
 
-func newHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
+func NewHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.WriteValuePath,
@@ -84,7 +84,7 @@ func newHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
-	hcs := newHTTPBatchStore("http://localhost:9000", "")
+	hcs := NewHTTPBatchStore("http://localhost:9000", "")
 	hcs.httpClient = serv
 	return hcs
 }
@@ -102,7 +102,7 @@ func newAuthenticatingHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite, hostUrl 
 			HandleRootPost(w, req, ps, suite.cs)
 		},
 	)
-	hcs := newHTTPBatchStore(hostUrl, "")
+	hcs := NewHTTPBatchStore(hostUrl, "")
 	hcs.httpClient = serv
 	return hcs
 }
@@ -116,7 +116,7 @@ func newBadVersionHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite) *httpBatchSt
 			w.Header().Set(NomsVersionHeader, "BAD")
 		},
 	)
-	hcs := newHTTPBatchStore("http://localhost", "")
+	hcs := NewHTTPBatchStore("http://localhost", "")
 	hcs.httpClient = serv
 	return hcs
 }
@@ -210,7 +210,7 @@ func (b *backpressureCS) PutMany(chnx []chunks.Chunk) chunks.BackpressureError {
 
 func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
 	bpcs := &backpressureCS{ChunkStore: suite.cs}
-	bs := newHTTPBatchStoreForTest(bpcs)
+	bs := NewHTTPBatchStoreForTest(bpcs)
 	defer bs.Close()
 	defer bpcs.Close()
 

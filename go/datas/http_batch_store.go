@@ -53,7 +53,7 @@ type httpBatchStore struct {
 	hints         types.Hints
 }
 
-func newHTTPBatchStore(baseURL, auth string) *httpBatchStore {
+func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 	u, err := url.Parse(baseURL)
 	d.PanicIfError(err)
 	if u.Scheme != "http" && u.Scheme != "https" {

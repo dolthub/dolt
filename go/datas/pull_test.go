@@ -85,7 +85,7 @@ func (suite *RemoteToRemoteSuite) SetupTest() {
 }
 
 func makeRemoteDb(cs chunks.ChunkStore) Database {
-	hbs := newHTTPBatchStoreForTest(cs)
+	hbs := NewHTTPBatchStoreForTest(cs)
 	return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(hbs), types.NewValueStore(hbs), hbs)}
 }
 

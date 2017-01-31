@@ -15,7 +15,7 @@ type RemoteDatabaseClient struct {
 }
 
 func NewRemoteDatabase(baseURL, auth string) *RemoteDatabaseClient {
-	httpBS := newHTTPBatchStore(baseURL, auth)
+	httpBS := NewHTTPBatchStore(baseURL, auth)
 	return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(httpBS), types.NewValueStore(httpBS), httpBS)}
 }
 

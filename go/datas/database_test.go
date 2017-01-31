@@ -60,7 +60,7 @@ type RemoteDatabaseSuite struct {
 func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
-		hbs := newHTTPBatchStoreForTest(cs)
+		hbs := NewHTTPBatchStoreForTest(cs)
 		return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(hbs), types.NewValueStore(hbs), hbs)}
 	}
 	suite.db = suite.makeDb(suite.cs)
