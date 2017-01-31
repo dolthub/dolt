@@ -121,8 +121,12 @@ export class Delegate {
     // Return success
     chunks.forEach(chunk => {
       const hashStr = chunk.hash.toString();
-      reqs[hashStr](chunk);
-      delete reqs[hashStr];
+      const req = reqs[hashStr];
+      // https://github.com/attic-labs/noms/issues/3133
+      if (req) {
+        req(chunk);
+        delete reqs[hashStr];
+      }
     });
 
     // Report failure
