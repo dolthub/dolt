@@ -53,7 +53,7 @@ function intKVs(count: number): [number, number][] {
   return kvs;
 }
 
-async function validateMap(m: Map<any, any>, kvs: [[number, number]]): Promise<void> {
+async function validateMap(m: Map<any, any>, kvs: [number, number][]): Promise<void> {
   assert.isTrue(equals(new Map(kvs), m));
 
   const out = [];
@@ -153,7 +153,8 @@ suite('BuildMap', () => {
   test('LONG: map of ref to ref, set of n numbers', () => {
     const kvs = intKVs(testMapSize);
 
-    const kvRefs = kvs.map(entry => entry.map(n => new Ref(newStruct('num', {n}))));
+    const toRef = n => new Ref(newStruct('num', {n}));
+    const kvRefs = kvs.map(([k, v]) => [toRef(k), toRef(v)]);
     const m = new Map(kvRefs);
     assert.strictEqual(m.hash.toString(), 'g49bom2pq40n2v927846vpmc3injuf5a');
     const height = deriveCollectionHeight(m);
@@ -177,7 +178,7 @@ suite('BuildMap', () => {
     assert.strictEqual(m.hash.toString(), mapOfNRef);
   });
 
-  async function validateSet(kvs: [[number, number]]): Promise<void> {
+  async function validateSet(kvs: [number, number][]): Promise<void> {
     let m = new Map();
     for (let i = 0; i < kvs.length; i++) {
       const kv = kvs[i];

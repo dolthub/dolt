@@ -3,12 +3,12 @@
 
 
 "@attic/noms@file:../../../js/noms":
-  version "68.3.0"
+  version "69.3.0"
   dependencies:
     asmcrypto.js-sha512 "^0.0.1"
     babel-regenerator-runtime "^6.5.0"
     babel-runtime "^6.11.6"
-    tingodb "^0.4.2"
+    tingodb "^0.5.1"
 
 abbrev@1:
   version "1.0.9"
@@ -1273,9 +1273,9 @@ flat-cache@^1.2.1:
     graceful-fs "^4.1.2"
     write "^0.2.1"
 
-flow-bin@^0.36.0:
-  version "0.36.0"
-  resolved "https://registry.yarnpkg.com/flow-bin/-/flow-bin-0.36.0.tgz#557907bd9c2ab0670cfad9e7e906a74b0631e39a"
+flow-bin@^0.38.0:
+  version "0.38.0"
+  resolved "https://registry.yarnpkg.com/flow-bin/-/flow-bin-0.38.0.tgz#3ae096d401c969cc8b5798253fb82381e2d0237a"
 
 for-in@^0.1.5:
   version "0.1.6"
@@ -1774,9 +1774,9 @@ lodash@^4.0.0, lodash@^4.15.0, lodash@^4.2.0, lodash@^4.3.0:
   version "4.17.4"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.4.tgz#78203a4d1c328ae1d86dca6460e369b57f4055ae"
 
-lodash@~3.10.x:
-  version "3.10.1"
-  resolved "https://registry.yarnpkg.com/lodash/-/lodash-3.10.1.tgz#5bf45e8e49ba4189e17d482789dfd15bd140b7b6"
+lodash@~4.11.x:
+  version "4.11.2"
+  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.11.2.tgz#d6b4338b110a58e21dae5cebcfdbbfd2bc4cdb3b"
 
 loose-envify@^1.0.0:
   version "1.3.1"
@@ -2261,7 +2261,7 @@ rx-lite@^3.1.2:
   version "3.1.2"
   resolved "https://registry.yarnpkg.com/rx-lite/-/rx-lite-3.1.2.tgz#19ce502ca572665f3b647b10939f97fd1615f102"
 
-safe@~0.3.0:
+safe@~0.3.9:
   version "0.3.9"
   resolved "https://registry.yarnpkg.com/safe/-/safe-0.3.9.tgz#178159bee45791ac21628aee2dabb74a52d5d072"
 
@@ -2457,12 +2457,12 @@ through@^2.3.6:
   version "2.3.8"
   resolved "https://registry.yarnpkg.com/through/-/through-2.3.8.tgz#0dd4c9ffaabc357960b1b724115d7e0e86a2e1f5"
 
-tingodb@^0.4.2:
-  version "0.4.2"
-  resolved "https://registry.yarnpkg.com/tingodb/-/tingodb-0.4.2.tgz#ef9e4ad432e179891f83d6f9e79a0094399f5641"
+tingodb@^0.5.1:
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/tingodb/-/tingodb-0.5.1.tgz#53cae52cb4d431080898cc19fc5d04333a0301c9"
   dependencies:
-    lodash "~3.10.x"
-    safe "~0.3.0"
+    lodash "~4.11.x"
+    safe "~0.3.9"
   optionalDependencies:
     bson "0.2.x"
 

@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "69.4.0",
+  "version": "69.5.0",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms/tree/master/js/noms",
   "main": "dist/commonjs/noms.js",
@@ -24,7 +24,7 @@
     "documentation": "4.0.0-beta.18",
     "eslint": "^3.13.1",
     "eslint-config-noms": "^1.0.0",
-    "flow-bin": "^0.36.0",
+    "flow-bin": "^0.38.0",
     "fs-extra": "^2.0.0",
     "mocha": "^3.2.0",
     "mock-require": "^2.0.1",

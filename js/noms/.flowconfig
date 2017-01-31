@@ -17,4 +17,4 @@ munge_underscores=true
 suppress_comment=\\(.\\|\n\\)*\\$FlowIssue: .+
 
 [version]
-^0.36.0
+^0.38.0

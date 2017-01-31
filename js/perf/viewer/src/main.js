@@ -9,6 +9,7 @@ import {
   DatasetSpec,
   getHashOfValue,
   invariant,
+  notNull,
   List,
   Map as NomsMap,
   Struct,
@@ -150,7 +151,7 @@ async function render(ds: string, labels: string[], datapoints: DataPoints) {
     const medians = dataPoints.map(dp => dp !== null ? dp.median : 0);
     return Math.max(max, ...medians);
   }, 0);
-  const graphHeight = document.body.scrollWidth / 2;
+  const graphHeight = notNull(document.body).scrollWidth / 2;
   const getStddevPointRadius = stddev => Math.ceil(stddev / maxElapsedTime * graphHeight);
 
   const datasets = [];

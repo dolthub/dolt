@@ -75,7 +75,7 @@ export default class ValueEncoder {
     this._w.writeBytes(seq.items);
   }
 
-  writeValueList(values: [Value]) {
+  writeValueList(values: Value[]) {
     const count = values.length;
     this._w.writeUint32(count);
     values.forEach(sv => this.writeValue(sv));
