@@ -54,6 +54,10 @@ const writeBatchOptions = {
   method: 'POST',
 };
 
+const updateRootOptions = {
+  method: 'POST',
+};
+
 export default class HttpBatchStore extends RemoteBatchStore {
   _rpc: RpcStrings;
 
@@ -94,14 +98,16 @@ export class Delegate {
   _rpc: RpcStrings;
   _readBatchOptions: FetchOptions;
   _writeBatchOptions: FetchOptions;
-  _rootOptions: FetchOptions;
+  _getRootOptions: FetchOptions;
+  _updateRootOptions: FetchOptions;
   _body: ArrayBuffer;
 
   constructor(rpc: RpcStrings, fetchOptions: FetchOptions) {
     this._rpc = rpc;
     this._readBatchOptions = mergeOptions(readBatchOptions, fetchOptions);
     this._writeBatchOptions = mergeOptions(writeBatchOptions, fetchOptions);
-    this._rootOptions = fetchOptions;
+    this._getRootOptions = fetchOptions;
+    this._updateRootOptions = mergeOptions(updateRootOptions, fetchOptions);
     this._body = new ArrayBuffer(0);
   }
 
@@ -146,7 +152,7 @@ export class Delegate {
   }
 
   async getRoot(): Promise<Hash> {
-    const {headers, buf} = await fetchText(this._rpc.root, this._rootOptions);
+    const {headers, buf} = await fetchText(this._rpc.root, this._getRootOptions);
     const versionErr = checkVersion(headers);
     if (versionErr) {
       return Promise.reject(versionErr);
@@ -158,7 +164,7 @@ export class Delegate {
     const ch = this._rpc.root.indexOf('?') >= 0 ? '&' : '?';
     const params = `${ch}current=${current.toString()}&last=${last.toString()}`;
     try {
-      const {headers} = await fetchText(this._rpc.root + params, {method: 'POST'});
+      const {headers} = await fetchText(this._rpc.root + params, this._updateRootOptions);
       const versionErr = checkVersion(headers);
       if (versionErr) {
         return Promise.reject(versionErr);
