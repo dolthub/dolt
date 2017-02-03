@@ -37,7 +37,7 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache) chunkSource {
 	success := false
 	f, err := os.Open(filepath.Join(dir, h.String()))
 	d.PanicIfError(err)
@@ -51,24 +51,37 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32) chunkSource {
 	d.PanicIfError(err)
 	d.PanicIfTrue(fi.Size() < 0)
 
-	// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
-	indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
-	aligned := indexOffset / pageSize * pageSize // Thanks, integer arithmetic!
-	d.PanicIfTrue(fi.Size()-aligned > maxInt)
-	buff, err := unix.Mmap(int(f.Fd()), aligned, int(fi.Size()-aligned), unix.PROT_READ, unix.MAP_SHARED)
-	d.PanicIfError(err)
+	var index tableIndex
+	found := false
+	if indexCache != nil {
+		index, found = indexCache.get(h)
+	}
+
+	var buff []byte
+	if !found {
+		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
+		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
+		aligned := indexOffset / pageSize * pageSize // Thanks, integer arithmetic!
+		d.PanicIfTrue(fi.Size()-aligned > maxInt)
+		var err error
+		buff, err = unix.Mmap(int(f.Fd()), aligned, int(fi.Size()-aligned), unix.PROT_READ, unix.MAP_SHARED)
+		d.PanicIfError(err)
+		index = parseTableIndex(buff[indexOffset-aligned:])
+	}
 	success = true
 
-	index := parseTableIndex(buff[indexOffset-aligned:])
 	source := &mmapTableReader{newTableReader(index, f, fileBlockSize), f, buff, h}
 
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }
 
-func (mmtr *mmapTableReader) close() error {
-	mmtr.f.Close()
-	return unix.Munmap(mmtr.buff)
+func (mmtr *mmapTableReader) close() (err error) {
+	err = mmtr.f.Close()
+	if mmtr.buff != nil {
+		err = unix.Munmap(mmtr.buff)
+	}
+	return
 }
 
 func (mmtr *mmapTableReader) hash() addr {

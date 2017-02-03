@@ -92,7 +92,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	src := tt.p.Compact(createMemTable(chunks), nil)
 	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
-	store := newNomsBlockStore(fm, tt, defaultMemTableSize)
+	store := newNomsBlockStore(fm, tt, defaultMemTableSize, maxTables)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root())
@@ -120,7 +120,7 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, tt tableSet, store *NomsBlockStore) {
 	fm = &fakeManifest{}
 	tt = newFakeTableSet()
-	store = newNomsBlockStore(fm, tt, 0)
+	store = newNomsBlockStore(fm, tt, 0, maxTables)
 	return
 }
 
@@ -197,8 +197,20 @@ type fakeTablePersister struct {
 
 func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	if mt.count() > 0 {
-		var data []byte
-		name, data, _ := mt.write(haver)
+		name, data, chunkCount := mt.write(haver)
+		if chunkCount > 0 {
+			ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
+			return chunkSourceAdapter{ftp.sources[name], name}
+		}
+	}
+	return emptyChunkSource{}
+}
+
+func (ftp fakeTablePersister) CompactAll(sources chunkSources) chunkSource {
+	rl := make(chan struct{}, 32)
+	defer close(rl)
+	name, data, chunkCount := compactSourcesToBuffer(sources, rl)
+	if chunkCount > 0 {
 		ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
 		return chunkSourceAdapter{ftp.sources[name], name}
 	}

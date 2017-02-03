@@ -15,30 +15,36 @@ import (
 )
 
 type fsTablePersister struct {
-	dir string
+	dir        string
+	indexCache *indexCache
 }
 
 func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
-	tempName, name, chunkCount := func() (string, addr, uint32) {
-		var tempName string
-		name, data, chunkCount := mt.write(haver)
-		if chunkCount > 0 {
-			temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
-			d.PanicIfError(err)
-			defer checkClose(temp)
-			io.Copy(temp, bytes.NewReader(data))
-			tempName = temp.Name()
-		}
-		return tempName, name, chunkCount
-	}()
+	return ftp.persistTable(mt.write(haver))
+}
+
+func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
 	if chunkCount == 0 {
 		return emptyChunkSource{}
 	}
+	tempName := func() string {
+		temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
+		d.PanicIfError(err)
+		defer checkClose(temp)
+		io.Copy(temp, bytes.NewReader(data))
+		return temp.Name()
+	}()
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 	d.PanicIfError(err)
-	return newMmapTableReader(ftp.dir, name, chunkCount)
+	return ftp.Open(name, chunkCount)
+}
+
+func (ftp fsTablePersister) CompactAll(sources chunkSources) chunkSource {
+	rl := make(chan struct{}, 32)
+	defer close(rl)
+	return ftp.persistTable(compactSourcesToBuffer(sources, rl))
 }
 
 func (ftp fsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	return newMmapTableReader(ftp.dir, name, chunkCount)
+	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache)
 }

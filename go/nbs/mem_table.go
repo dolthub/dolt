@@ -48,6 +48,10 @@ func (mt *memTable) count() uint32 {
 	return uint32(len(mt.order))
 }
 
+func (mt *memTable) byteLen() uint64 {
+	return mt.totalData
+}
+
 func (mt *memTable) has(h addr) (has bool) {
 	_, has = mt.chunks[h]
 	return

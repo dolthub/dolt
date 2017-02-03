@@ -142,6 +142,13 @@ func (crg chunkReaderGroup) count() (count uint32) {
 	return
 }
 
+func (crg chunkReaderGroup) byteLen() (data uint64) {
+	for _, haver := range crg {
+		data += haver.byteLen()
+	}
+	return
+}
+
 func (crg chunkReaderGroup) extract(order EnumerationOrder, chunks chan<- extractRecord) {
 	if order == InsertOrder {
 		for _, haver := range crg {

@@ -43,7 +43,7 @@ func TestS3TableReaderIndexCache(t *testing.T) {
 	s3.data[h.String()] = tableData
 
 	index := parseTableIndex(tableData)
-	cache := newS3IndexCache(1024)
+	cache := newIndexCache(1024)
 	cache.put(h, index)
 
 	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache, nil)

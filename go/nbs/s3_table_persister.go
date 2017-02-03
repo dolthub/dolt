@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -23,7 +22,7 @@ type s3TablePersister struct {
 	s3         s3svc
 	bucket     string
 	partSize   int
-	indexCache *s3IndexCache
+	indexCache *indexCache
 	readRl     chan struct{}
 }
 
@@ -37,8 +36,10 @@ type s3UploadedPart struct {
 }
 
 func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
-	name, data, chunkCount := mt.write(haver)
+	return s3p.persistTable(mt.write(haver))
+}
 
+func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
 	if chunkCount > 0 {
 		t1 := time.Now()
 		result, err := s3p.s3.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
@@ -77,6 +78,10 @@ func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 		return s3tr
 	}
 	return emptyChunkSource{}
+}
+
+func (s3p s3TablePersister) CompactAll(sources chunkSources) chunkSource {
+	return s3p.persistTable(compactSourcesToBuffer(sources, s3p.readRl))
 }
 
 func (s3p s3TablePersister) uploadParts(data []byte, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
@@ -174,27 +179,4 @@ func (s partsByPartNum) Less(i, j int) bool {
 
 func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
-}
-
-type s3IndexCache struct {
-	cache *sizecache.SizeCache
-}
-
-// Returns an indexCache which will burn roughly |size| bytes of memory
-func newS3IndexCache(size uint64) *s3IndexCache {
-	return &s3IndexCache{sizecache.New(size)}
-}
-
-func (sic s3IndexCache) get(name addr) (tableIndex, bool) {
-	idx, found := sic.cache.Get(name)
-	if found {
-		return idx.(tableIndex), true
-	}
-
-	return tableIndex{}, false
-}
-
-func (sic s3IndexCache) put(name addr, idx tableIndex) {
-	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
-	sic.cache.Add(name, indexSize, idx)
 }
