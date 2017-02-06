@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -71,15 +72,28 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 
 	// Use "channel of channels" ordered-concurrency pattern so that chunks from a given table stay together, preserving whatever locality was present in that table.
 	chunkChans := make(chan chan extractRecord)
+	type errRec struct {
+		name addr
+		err  interface{}
+	}
+	// TODO: remove/clean up this error reporting. BUG 3148
+	errChan := make(chan errRec, len(sources)) // This way we don't have to worry about sends on errChan ever blocking
 	go func() {
 		defer close(chunkChans)
+		defer close(errChan)
 		wg := sync.WaitGroup{}
 		for _, src := range sources {
 			chunks := make(chan extractRecord)
 			wg.Add(1)
 			go func(s chunkSource, c chan<- extractRecord) {
 				defer func() { close(c); wg.Done(); <-rl }()
+				defer func() {
+					if r := recover(); r != nil {
+						errChan <- errRec{s.hash(), r}
+					}
+				}()
 				rl <- struct{}{}
+
 				s.extract(InsertOrder, c)
 			}(src, chunks)
 			chunkChans <- chunks
@@ -96,6 +110,15 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 			}
 		}
 	}
+
+	errString := ""
+	for e := range errChan {
+		errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", e.name, e.err)
+	}
+	if errString != "" {
+		panic(fmt.Errorf(errString))
+	}
+
 	tableSize, name := tw.finish()
 	return name, buff[:tableSize], uint32(len(known))
 }
