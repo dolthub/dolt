@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {assert} from 'chai';
 
 import jsonToNoms from './json-convert.js';

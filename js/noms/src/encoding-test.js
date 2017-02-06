@@ -5,7 +5,7 @@
 /* eslint-disable max-len */
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {assert} from 'chai';
 
 import Blob from './blob.js';
@@ -22,7 +22,8 @@ import type Value from './value.js';
 import {ValueBase} from './value.js';
 import {Kind} from './noms-kind.js';
 import {TestDatabase} from './test-util.js';
-import {encodeValue, decodeValue} from './codec.js';
+import encodeValue from './encode-value.js';
+import decodeValue from './decode-value.js';
 import {equals} from './compare.js';
 import {invariant, notNull} from './assert.js';
 import {newStruct, newStructWithType} from './struct.js';

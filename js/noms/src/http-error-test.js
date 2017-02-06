@@ -6,7 +6,7 @@
 
 import HttpError from './http-error.js';
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 suite('http-error', () => {
   test('prototype', () => {

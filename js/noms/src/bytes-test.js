@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 import * as NodeBytes from './bytes.js';
 import * as BrowserBytes from './browser/bytes.js';

@@ -11,7 +11,7 @@ export {default as Commit} from './commit.js';
 export {default as Database} from './database.js';
 export {default as Dataset} from './dataset.js';
 export {default as Blob, BlobReader, BlobWriter} from './blob.js';
-export {decodeValue} from './codec.js';
+export {default as decodeValue} from './decode-value.js';
 export {default as Chunk} from './chunk.js';
 export {getHashOfValue} from './get-hash.js';
 export {BatchStoreAdaptor} from './batch-store.js';
@@ -30,7 +30,7 @@ export {
   createStructClass,
   escapeStructField,
 } from './struct.js';
-export {encodeValue} from './codec.js';
+export {default as encodeValue} from './encode-value.js';
 export {invariant, notNull} from './assert.js';
 export {isPrimitiveKind, Kind, kindToString} from './noms-kind.js';
 export {default as List, ListWriter, ListLeafSequence} from './list.js';

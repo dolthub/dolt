@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import type {Splice} from './edit-distance.js';
 import {assert} from 'chai';
 import {DEFAULT_MAX_SPLICE_MATRIX_SIZE, calcSplices} from './edit-distance.js';

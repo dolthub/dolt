@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import makeRemoteBatchStoreFake from './remote-batch-store-fake.js';
 import {TestingDelegate} from './remote-batch-store-fake.js';
 import RemoteBatchStore from './remote-batch-store.js';
@@ -15,7 +15,7 @@ import Database from './database.js';
 import {notNull} from './assert.js';
 import List from './list.js';
 import Struct, {newStruct} from './struct.js';
-import {encodeValue} from './codec.js';
+import encodeValue from './encode-value.js';
 import NomsSet from './set.js'; // namespace collision with JS Set
 import {invariant} from './assert.js';
 import {Kind} from './noms-kind.js';

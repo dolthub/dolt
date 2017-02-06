@@ -8,7 +8,7 @@ import Hash, {emptyHash} from './hash.js';
 import {assert} from 'chai';
 import * as Bytes from './bytes.js';
 import {notNull} from './assert.js';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 suite('Hash', () => {
   test('parse', () => {

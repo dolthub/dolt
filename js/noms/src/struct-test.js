@@ -22,7 +22,7 @@ import {
   numberType,
   stringType,
 } from './type.js';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {equals} from './compare.js';
 import List from './list.js';
 import Map from './map.js';

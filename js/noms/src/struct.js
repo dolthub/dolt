@@ -85,6 +85,16 @@ export default class Struct extends ValueBase {
     mirror.forEachField(add);
     return chunks;
   }
+
+  /**
+   * Gets the values of the struct in the same order as the fields. To get the field names you can
+   * inspect the type or use a StructMirror.
+   */
+  get values(): Value[] {
+    // This is exposed this way to allow us breaking cyclic dependencies.
+    // TODO: Use Symbol and expose symbol internally instead?
+    return this._values;
+  }
 }
 
 function validate(type: Type<any>, values: Value[]): void {

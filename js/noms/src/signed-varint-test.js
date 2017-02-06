@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {encodingLength, encode, decode, maxVarintLength} from './signed-varint.js';
 import {alloc} from './bytes.js';
 

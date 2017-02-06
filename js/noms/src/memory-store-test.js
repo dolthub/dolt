@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import Chunk from './chunk.js';
 import MemoryStore from './memory-store.js';
 import Hash from './hash.js';

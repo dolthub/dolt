@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {invariant} from './assert.js';
 import {getHash} from './get-hash.js';
 import List from './list.js';

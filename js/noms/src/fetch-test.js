@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test, setup, teardown} from 'mocha';
+import {suite, test, setup, teardown} from './jest.js';
 import mock from 'mock-require';
 
 suite('fetch', () => {

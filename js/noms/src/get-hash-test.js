@@ -7,7 +7,7 @@
 import Hash from './hash.js';
 import {assert} from 'chai';
 import {ensureHash} from './get-hash.js';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 suite('get hash', () => {
   test('ensureHash', () => {

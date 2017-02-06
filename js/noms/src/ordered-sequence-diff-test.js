@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test} from './jest.js';
 import {assert} from 'chai';
 import {OrderedKey} from './sequence.js';
 import {MetaTuple, newSetMetaSequence} from './meta-sequence.js';

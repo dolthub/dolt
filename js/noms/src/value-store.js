@@ -18,9 +18,9 @@ import {
 } from './type.js';
 import {Kind} from './noms-kind.js';
 import {ValueBase} from './value.js';
-import {decodeValue} from './codec.js';
+import decodeValue from './decode-value.js';
 import {invariant, notNull} from './assert.js';
-import {encodeValue} from './codec.js';
+import encodeValue from './encode-value.js';
 import {describeType, describeTypeOfValue} from './encode-human-readable.js';
 import {equals} from './compare.js';
 

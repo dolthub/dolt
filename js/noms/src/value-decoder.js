@@ -24,7 +24,7 @@ import Set, {SetLeafSequence} from './set.js';
 import {MetaSequence} from './meta-sequence.js';
 import type Value from './value.js';
 import type {ValueReader} from './value-store.js';
-import type {NomsReader} from './codec.js';
+import type {NomsReader} from './noms-reader.js';
 import type TypeCache from './type-cache.js';
 
 export default class ValueDecoder {

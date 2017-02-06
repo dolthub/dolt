@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 import {invariant, notNull} from './assert.js';
 import {TypeWriter} from './encode-human-readable.js';

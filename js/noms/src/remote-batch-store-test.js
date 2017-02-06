@@ -4,10 +4,10 @@
 
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import {assert} from 'chai';
 import makeRemoteBatchStoreFake from './remote-batch-store-fake.js';
-import {encodeValue} from './codec.js';
+import encodeValue from './encode-value.js';
 
 suite('BatchStore', () => {
   test('get after schedulePut works immediately', async () => {

@@ -7,7 +7,7 @@
 import {encode, decode} from './base32.js';
 import {assert} from 'chai';
 import {alloc} from './bytes.js';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 
 suite('base32', () => {
   test('encode', () => {

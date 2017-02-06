@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import type Value from './value.js';
 import {TestDatabase} from './test-util.js';
 import {equals} from './compare.js';

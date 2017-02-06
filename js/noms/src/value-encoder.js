@@ -4,21 +4,22 @@
 
 // @flow
 
-import Blob, {BlobLeafSequence} from './blob.js';
-import List, {ListLeafSequence} from './list.js';
-import Map, {MapLeafSequence} from './map.js';
-import Ref, {constructRef} from './ref.js';
+import type {BlobLeafSequence} from './blob.js';
+import type {ListLeafSequence} from './list.js';
+import type {MapLeafSequence} from './map.js';
+import type Ref from './ref.js';
+import {constructRef} from './ref.js';
 import Sequence from './sequence.js';
-import Set, {SetLeafSequence} from './set.js';
-import Struct, {StructMirror} from './struct.js';
+import type {SetLeafSequence} from './set.js';
+import type Struct from './struct.js';
 import type Value from './value.js';
 import type {NomsKind} from './noms-kind.js';
-import type {NomsWriter} from './codec.js';
+import type {NomsWriter} from './noms-writer.js';
 import type {ValueWriter} from './value-store.js';
 import type {primitive} from './primitives.js';
-import {MetaTuple} from './meta-sequence.js';
-import {boolType, CycleDesc, getTypeOfValue, makeRefType, StructDesc, Type} from './type.js';
-import {describeTypeOfValue} from './encode-human-readable.js';
+import type {MetaTuple} from './meta-sequence.js';
+import {boolType, CycleDesc, getTypeOfValue, makeRefType, StructDesc} from './type.js';
+import type {Type} from './type.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, kindToString, Kind} from './noms-kind.js';
 
@@ -111,7 +112,7 @@ export default class ValueEncoder {
     this._w.writeUint32(count);
     for (let i = 0; i < count; i++) {
       const tuple: MetaTuple<any> = v.items[i];
-      invariant(tuple instanceof MetaTuple);
+      // invariant(tuple instanceof MetaTuple);
       const child = tuple.child;
       if (child && this._vw) {
         this._vw.writeValue(child);
@@ -135,85 +136,75 @@ export default class ValueEncoder {
     this._w.appendType(t);
     switch (t.kind) {
       case Kind.Blob: {
-        invariant(v instanceof Blob,
-                  () => `Failed to write Blob. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Blob here.
         const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
 
-        invariant(sequence instanceof BlobLeafSequence);
         this.writeBlobLeafSequence(sequence);
         break;
       }
-      case Kind.Bool:
-        invariant(typeof v === 'boolean',
-                  () => `Failed to write Bool. Invalid type: ${describeTypeOfValue(v)}`);
-        this._w.writeBool(v);
+      case Kind.Bool: {
+        // $FlowIssue: We know b is a boolean here.
+        const b: boolean = v;
+        this._w.writeBool(b);
         break;
-      case Kind.Number:
-        invariant(typeof v === 'number',
-                  () => `Failed to write Number. Invalid type: ${describeTypeOfValue(v)}`);
-        if (!Number.isFinite(v)) {
-          throw new Error(`${v} is not a supported number`);
+      }
+      case Kind.Number: {
+        // $FlowIssue: We know n is a number here.
+        const n: number = v;
+        if (!Number.isFinite(n)) {
+          throw new Error(`${n} is not a supported number`);
         }
-        this._w.writeNumber(v);
+        this._w.writeNumber(n);
         break;
+      }
       case Kind.List: {
-        invariant(v instanceof List,
-                  () => `Failed to write List. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a List here.
         const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
 
-        invariant(sequence instanceof ListLeafSequence);
         this.writeListLeafSequence(sequence);
         break;
       }
       case Kind.Map: {
-        invariant(v instanceof Map,
-                  () => `Failed to write Map. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Map here.
         const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
 
-        invariant(sequence instanceof MapLeafSequence);
         this.writeMapLeafSequence(sequence);
         break;
       }
       case Kind.Ref:
-        invariant(v instanceof Ref,
-                  () => `Failed to write Ref. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Ref here.
         this.writeRef(v);
         break;
       case Kind.Set: {
-        invariant(v instanceof Set,
-                  () => `Failed to write Set. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Set here.
         const sequence = v.sequence;
         if (this.maybeWriteMetaSequence(sequence)) {
           break;
         }
 
-        invariant(sequence instanceof SetLeafSequence);
         this.writeSetLeafSequence(sequence);
         break;
       }
       case Kind.String:
-        invariant(typeof v === 'string',
-                  () => `Failed to write String. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a string here.
         this._w.writeString(v);
         break;
 
       case Kind.Type:
-        invariant(v instanceof Type,
-                  () => `Failed to write Type. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Type here.
         this.writeType(v, []);
         break;
       case Kind.Struct:
-        invariant(v instanceof Struct,
-                  () => `Failed to write Struct. Invalid type: ${describeTypeOfValue(v)}`);
+        // $FlowIssue: We know v is a Struct here.
         this.writeStruct(v);
         break;
       case Kind.Cycle:
@@ -226,10 +217,10 @@ export default class ValueEncoder {
   }
 
   writeStruct(s: Struct) {
-    const mirror = new StructMirror(s);
-    mirror.forEachField(field => {
-      this.writeValue(field.value);
-    });
+    const {values} = s;
+    for (let i = 0; i < values.length; i++) {
+      this.writeValue(values[i]);
+    }
   }
 
   writeCycle(i: number) {

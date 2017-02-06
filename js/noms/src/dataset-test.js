@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import makeRemoteBatchStoreFake from './remote-batch-store-fake.js';
 import {assert} from 'chai';
 import Database from './database.js';

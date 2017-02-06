@@ -17,6 +17,8 @@ export async function newCursorAtIndex(sequence: Sequence<any>, idx: number,
   while (sequence) {
     cursor = new IndexedSequenceCursor(cursor, sequence, 0, readAhead);
     idx -= cursor.advanceToOffset(idx);
+    // TODO: The Sequence type needs to be cleaned up.
+    // $FlowIssue: xxx
     sequence = await cursor.getChildSequence();
   }
 

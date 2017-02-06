@@ -4,7 +4,7 @@
 
 // @flow
 
-import {suite, suiteSetup, suiteTeardown, test} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test} from './jest.js';
 import {assert} from 'chai';
 
 import {createStructClass} from './struct.js';

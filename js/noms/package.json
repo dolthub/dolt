@@ -1,7 +1,7 @@
 {
   "name": "@attic/noms",
   "license": "Apache-2.0",
-  "version": "69.6.0",
+  "version": "69.6.1",
   "description": "Noms JS SDK",
   "repository": "https://github.com/attic-labs/noms/tree/master/js/noms",
   "main": "dist/commonjs/noms.js",
@@ -27,6 +27,7 @@
     "flow-bin": "^0.38.0",
     "flow-copy-source": "^1.1.0",
     "fs-extra": "^2.0.0",
+    "jest": "^18.1.0",
     "mocha": "^3.2.0",
     "mock-require": "^2.0.1",
     "nyc": "^10.1.2"
@@ -34,10 +35,8 @@
   "scripts": {
     "lint": "eslint src/",
     "flow": "flow src/",
-    "pretest": "yarn run lint && yarn run flow",
-    "ts": "mocha --ui tdd --timeout=4000 --reporter dot --slow=50 --invert --grep='LONG:' --compilers js:babel-core/register src/*-test.js",
-    "test-no-cov": "mocha --ui tdd --timeout=30000 --reporter dot --compilers js:babel-core/register src/*-test.js",
-    "test": "nyc yarn run test-no-cov && nyc report --reporter=text-lcov > coverage.lcov",
+    "jest": "jest",
+    "test": "yarn run lint && yarn run flow && jest --coverage",
     "prepublish": "rm -rf dist/ && yarn run compile && yarn run flow-copy-source",
     "compile": "yarn run compile-to-commonjs",
     "compile-to-commonjs": "BABEL_ENV=production babel -d dist/commonjs src/ > /dev/null",
@@ -52,5 +51,11 @@
     "./dist/commonjs/fetch.js": "./dist/commonjs/browser/fetch.js",
     "./src/put-cache.js": "./src/browser/put-cache.js",
     "./dist/commonjs/put-cache.js": "./dist/commonjs/browser/put-cache.js"
+  },
+  "jest": {
+    "testRegex": ".+-test\\.js$",
+    "testPathIgnorePatterns": [
+      "/dist/"
+    ]
   }
 }

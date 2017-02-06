@@ -7,7 +7,7 @@
 import {blobType, makeRefType} from './type.js';
 import {assert} from 'chai';
 import Blob, {BlobReader, BlobWriter} from './blob.js';
-import {suite, suiteSetup, suiteTeardown, test, setup, teardown} from 'mocha';
+import {suite, suiteSetup, suiteTeardown, test, setup, teardown} from './jest.js';
 import {
   assertChunkCountAndType,
   assertValueHash,

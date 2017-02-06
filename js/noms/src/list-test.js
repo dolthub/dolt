@@ -5,7 +5,7 @@
 // @flow
 
 import {assert} from 'chai';
-import {suite, setup, teardown, test} from 'mocha';
+import {suite, setup, teardown, test} from './jest.js';
 
 import List, {ListWriter, ListLeafSequence, newListLeafSequence} from './list.js';
 import Ref from './ref.js';

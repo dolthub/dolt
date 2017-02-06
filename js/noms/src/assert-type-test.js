@@ -10,7 +10,7 @@ import List from './list.js';
 import Map from './map.js';
 import Set from './set.js';
 import {newStruct} from './struct.js';
-import {suite, test} from 'mocha';
+import {suite, test} from './jest.js';
 import assertSubtype, {isSubtype} from './assert-type.js';
 import type {Type} from './type.js';
 import {

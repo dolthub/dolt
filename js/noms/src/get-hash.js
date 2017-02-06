@@ -4,16 +4,12 @@
 
 // @flow
 
-import type Chunk from './chunk.js';
 import type Hash from './hash.js';
-import type {ValueWriter} from './value-store.js';
 import {notNull} from './assert.js';
 import type Value from './value.js';
 import {getTypeOfValue} from './type.js';
 import {ValueBase} from './value.js';
-
-type encodeFn = (v: Value, vw: ?ValueWriter) => Chunk;
-let encodeValue: ?encodeFn = null;
+import encodeValue from './encode-value.js';
 
 /**
  * Returns the hash of a Noms value. All Noms values have a unique hash and if two values have the
@@ -37,8 +33,4 @@ export function ensureHash(h: ?Hash, v: Value): Hash {
   }
 
   return getHash(v);
-}
-
-export function setEncodeValue(encode: encodeFn) {
-  encodeValue = encode;
 }
