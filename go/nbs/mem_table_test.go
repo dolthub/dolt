@@ -88,7 +88,7 @@ func TestMemTableWrite(t *testing.T) {
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
-	_, data, count := mt.write(chunkReaderGroup{tr1, tr2})
+	_, data, count, _ := mt.write(chunkReaderGroup{tr1, tr2})
 	assert.Equal(uint32(1), count)
 
 	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)

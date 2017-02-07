@@ -10,6 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/util/verbose"
 )
 
 type memTable struct {
@@ -102,7 +103,7 @@ func (mt *memTable) extract(order EnumerationOrder, chunks chan<- extractRecord)
 	}
 }
 
-func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {
+func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32, errata map[addr][]byte) {
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff)
@@ -121,5 +122,14 @@ func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint
 		}
 	}
 	tableSize, name := tw.finish()
-	return name, buff[:tableSize], count
+
+	// TODO: remove when BUG 3156 is fixed
+	if len(tw.errata) > 0 {
+		verbose.Log("BUG 3156: table %s; %d chunks, %d total data; max table size %d\n", name.String(), len(mt.order), mt.totalData, maxSize)
+		for h, data := range tw.errata {
+			verbose.Log("  Failed to write %s of uncompressed length %d\n", h.String(), len(data))
+		}
+	}
+
+	return name, buff[:tableSize], count, tw.errata
 }

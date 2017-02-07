@@ -36,40 +36,21 @@ type s3UploadedPart struct {
 }
 
 func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
-	return s3p.persistTable(mt.write(haver))
+	name, data, count, errata := mt.write(haver)
+	// TODO: remove when BUG 3156 is fixed
+	for h, eData := range errata {
+		s3p.multipartUpload(eData, h.String()+"-errata")
+	}
+	return s3p.persistTable(name, data, count)
 }
 
 func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
 	if chunkCount > 0 {
 		t1 := time.Now()
-		result, err := s3p.s3.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
-			Bucket: aws.String(s3p.bucket),
-			Key:    aws.String(name.String()),
-		})
-		d.PanicIfError(err)
-		uploadID := *result.UploadId
-
-		multipartUpload, err := s3p.uploadParts(data, name.String(), uploadID)
-		if err != nil {
-			_, abrtErr := s3p.s3.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
-				Bucket:   aws.String(s3p.bucket),
-				Key:      aws.String(name.String()),
-				UploadId: aws.String(uploadID),
-			})
-			d.Chk.NoError(abrtErr)
-			panic(err) // TODO: Better error handling here
-		}
-
-		_, err = s3p.s3.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
-			Bucket:          aws.String(s3p.bucket),
-			Key:             aws.String(name.String()),
-			MultipartUpload: multipartUpload,
-			UploadId:        aws.String(uploadID),
-		})
-		d.Chk.NoError(err)
-		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
-
+		s3p.multipartUpload(data, name.String())
 		verbose.Log("Compacted table of %d Kb in %s", len(data)/1024, time.Since(t1))
+
+		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
 		index := parseTableIndex(data)
 		if s3p.indexCache != nil {
 			s3p.indexCache.put(name, index)
@@ -82,6 +63,34 @@ func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint
 
 func (s3p s3TablePersister) CompactAll(sources chunkSources) chunkSource {
 	return s3p.persistTable(compactSourcesToBuffer(sources, s3p.readRl))
+}
+
+func (s3p s3TablePersister) multipartUpload(data []byte, key string) {
+	result, err := s3p.s3.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
+		Bucket: aws.String(s3p.bucket),
+		Key:    aws.String(key),
+	})
+	d.Chk.NoError(err)
+	uploadID := *result.UploadId
+
+	multipartUpload, err := s3p.uploadParts(data, key, uploadID)
+	if err != nil {
+		_, abrtErr := s3p.s3.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+			Bucket:   aws.String(s3p.bucket),
+			Key:      aws.String(key),
+			UploadId: aws.String(uploadID),
+		})
+		d.Chk.NoError(abrtErr)
+		panic(err) // TODO: Better error handling here
+	}
+
+	_, err = s3p.s3.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String(s3p.bucket),
+		Key:             aws.String(key),
+		MultipartUpload: multipartUpload,
+		UploadId:        aws.String(uploadID),
+	})
+	d.Chk.NoError(err)
 }
 
 func (s3p s3TablePersister) uploadParts(data []byte, key, uploadID string) (*s3.CompletedMultipartUpload, error) {

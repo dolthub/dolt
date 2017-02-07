@@ -197,7 +197,7 @@ type fakeTablePersister struct {
 
 func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
 	if mt.count() > 0 {
-		name, data, chunkCount := mt.write(haver)
+		name, data, chunkCount, _ := mt.write(haver)
 		if chunkCount > 0 {
 			ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
 			return chunkSourceAdapter{ftp.sources[name], name}

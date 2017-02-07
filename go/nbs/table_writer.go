@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 )
 
@@ -21,6 +22,8 @@ type tableWriter struct {
 	totalPhysicalData uint64
 	prefixes          prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockHash         hash.Hash
+
+	errata map[addr][]byte // TODO: Get rid of this once we've diagnosed and fixed BUG 3156
 }
 
 func maxTableSize(numChunks, totalData uint64) uint64 {
@@ -40,6 +43,7 @@ func newTableWriter(buff []byte) *tableWriter {
 	return &tableWriter{
 		buff:      buff,
 		blockHash: sha512.New(),
+		errata:    map[addr][]byte{},
 	}
 }
 
@@ -51,11 +55,27 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	// Compress data straight into tw.buff
 	compressed := snappy.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
+
+	// BUG 3156 indicates that, sometimes, snappy decides that there's not enough space in tw.buff[tw.pos:] to encode into.
+	// This _should not be_, because we believe that we allocate enough space in |tw.buff| to cover snappy's worst-case but...we've seen some instances.
+	// Since we know that |data| can't be 0-length, we also know that the compressed version of |data| has length greater than zero. The first element in a snappy-encoded blob is a Uvarint indicating how much data is present. Therefore, if there's a Uvarint-encoded 0 at tw.buff[tw.pos:], we know that snappy did not write anything there and we have a problem.
+	if v, n := binary.Uvarint(tw.buff[tw.pos:]); v == 0 {
+		d.Chk.True(n != 0)
+		d.Chk.True(uint64(len(tw.buff[tw.pos:])) >= dataLength)
+
+		verbose.Log("BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
+
+		// Copy the compressed data over to tw.buff.
+		copy(tw.buff[tw.pos:], compressed)
+		// Store the uncompressed data, so code with access to durable storage can save it off for analysis.
+		tw.errata[h] = data
+	}
+
 	tw.pos += dataLength
 	tw.totalPhysicalData += dataLength
 
 	// checksum (4 LSBytes, big-endian)
-	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crc(data))
+	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crc(compressed))
 	tw.pos += checksumSize
 
 	// Stored in insertion order
