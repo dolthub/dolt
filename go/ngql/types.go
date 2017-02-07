@@ -10,6 +10,7 @@ import (
 
 	"strings"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/graphql-go/graphql"
@@ -58,13 +59,23 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 		newNonNull.OfType = structToGQLObject(nomsType, tm)
 
 	case types.ListKind, types.SetKind:
-		valueTyp := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
-		newNonNull.OfType = collectionToGraphQLObject(nomsType, nomsTypeToGraphQLType(valueTyp, tm), tm)
+		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
+		var valueType graphql.Type
+		if !isEmptyNomsUnion(nomsValueType) {
+			valueType = nomsTypeToGraphQLType(nomsValueType, tm)
+		}
+
+		newNonNull.OfType = collectionToGraphQLObject(nomsType, valueType, tm)
 
 	case types.MapKind:
-		keyTyp := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
-		valueTyp := nomsType.Desc.(types.CompoundDesc).ElemTypes[1]
-		newNonNull.OfType = collectionToGraphQLObject(nomsType, mapEntryToGraphQLObject(keyTyp, valueTyp, tm), tm)
+		nomsKeyType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
+		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[1]
+		var valueType graphql.Type
+		if !isEmptyNomsUnion(nomsKeyType) && !isEmptyNomsUnion(nomsValueType) {
+			valueType = mapEntryToGraphQLObject(nomsKeyType, nomsValueType, tm)
+		}
+
+		newNonNull.OfType = collectionToGraphQLObject(nomsType, valueType, tm)
 
 	case types.RefKind:
 		newNonNull.OfType = refToGraphQLObject(nomsType, tm)
@@ -73,7 +84,8 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 		newNonNull.OfType = unionToGQLUnion(nomsType, tm)
 
 	case types.BlobKind, types.ValueKind, types.TypeKind:
-		panic(fmt.Sprintf("%d: type not impemented", nomsType.Kind()))
+		// TODO: https://github.com/attic-labs/noms/issues/3155
+		newNonNull.OfType = graphql.String
 
 	case types.CycleKind:
 		panic("not reached") // we should never attempt to create a schedule for any unresolved cycle
@@ -83,6 +95,10 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 	}
 
 	return newNonNull
+}
+
+func isEmptyNomsUnion(nomsType *types.Type) bool {
+	return nomsType.Kind() == types.UnionKind && len(nomsType.Desc.(types.CompoundDesc).ElemTypes) == 0
 }
 
 // Creates a union of structs type.
@@ -279,22 +295,39 @@ func getTypeName(nomsType *types.Type) string {
 	case types.StringKind:
 		return "String"
 
+	case types.BlobKind:
+		return "Blob"
+
 	case types.ValueKind:
 		return "Value"
 
 	case types.ListKind:
-		return fmt.Sprintf("%sList", getTypeName(nomsType.Desc.(types.CompoundDesc).ElemTypes[0]))
+		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
+		if isEmptyNomsUnion(nomsValueType) {
+			return "EmptyList"
+		}
+		return fmt.Sprintf("%sList", getTypeName(nomsValueType))
 
 	case types.MapKind:
-		kn := getTypeName(nomsType.Desc.(types.CompoundDesc).ElemTypes[0])
-		vn := getTypeName(nomsType.Desc.(types.CompoundDesc).ElemTypes[0])
-		return fmt.Sprintf("%sTo%sMap", kn, vn)
+		nomsKeyType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
+		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[1]
+		if isEmptyNomsUnion(nomsKeyType) {
+			d.Chk.True(isEmptyNomsUnion(nomsValueType))
+			return "EmptyMap"
+		}
+
+		return fmt.Sprintf("%sTo%sMap", getTypeName(nomsKeyType), getTypeName(nomsValueType))
 
 	case types.RefKind:
 		return fmt.Sprintf("%sRef", getTypeName(nomsType.Desc.(types.CompoundDesc).ElemTypes[0]))
 
 	case types.SetKind:
-		return fmt.Sprintf("%sSet", getTypeName(nomsType.Desc.(types.CompoundDesc).ElemTypes[0]))
+		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
+		if isEmptyNomsUnion(nomsValueType) {
+			return "EmptySet"
+		}
+
+		return fmt.Sprintf("%sSet", getTypeName(nomsValueType))
 
 	case types.StructKind:
 		return fmt.Sprintf("%sStruct", nomsType.Desc.(types.StructDesc).Name)
@@ -313,43 +346,48 @@ func getTypeName(nomsType *types.Type) string {
 }
 
 func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm typeMap) *graphql.Object {
-	var args graphql.FieldConfigArgument
-	var getSubvalues getSubvaluesFn
+	fields := graphql.Fields{
+		sizeKey: &graphql.Field{
+			Type: graphql.Float,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				c := p.Source.(types.Collection)
+				return maybeGetScalar(types.Number(c.Len())), nil
+			},
+		},
+	}
 
-	switch nomsType.Kind() {
-	case types.ListKind:
-		args = listArgs
-		getSubvalues = getListValues
+	if listType != nil {
+		var args graphql.FieldConfigArgument
+		var getSubvalues getSubvaluesFn
 
-	case types.SetKind:
-		args = setArgs
-		getSubvalues = getSetValues
+		switch nomsType.Kind() {
+		case types.ListKind:
+			args = listArgs
+			getSubvalues = getListValues
 
-	case types.MapKind:
-		args = mapArgs
-		getSubvalues = getMapValues
+		case types.SetKind:
+			args = setArgs
+			getSubvalues = getSetValues
+
+		case types.MapKind:
+			args = mapArgs
+			getSubvalues = getMapValues
+		}
+
+		fields[elementsKey] = &graphql.Field{
+			Type: graphql.NewList(listType),
+			Args: args,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				c := p.Source.(types.Collection)
+				return getSubvalues(c, p.Args)
+			},
+		}
 	}
 
 	return graphql.NewObject(graphql.ObjectConfig{
-		Name: getTypeName(nomsType),
-		Fields: graphql.Fields{
-			sizeKey: &graphql.Field{
-				Type: graphql.Float,
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					c := p.Source.(types.Collection)
-					return maybeGetScalar(types.Number(c.Len())), nil
-				},
-			},
-
-			elementsKey: &graphql.Field{
-				Type: graphql.NewList(listType),
-				Args: args,
-				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					c := p.Source.(types.Collection)
-					return getSubvalues(c, p.Args)
-				},
-			},
-		}})
+		Name:   getTypeName(nomsType),
+		Fields: fields,
+	})
 }
 
 // Refs are represented as structs:
@@ -391,6 +429,9 @@ func maybeGetScalar(v types.Value) interface{} {
 		return float64(v.(types.Number))
 	case types.String:
 		return string(v.(types.String))
+	case *types.Type, types.Blob:
+		// TODO: https://github.com/attic-labs/noms/issues/3155
+		return v.Hash()
 	}
 
 	return v

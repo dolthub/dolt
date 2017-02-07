@@ -77,7 +77,11 @@ func (suite *QueryGraphQLSuite) TestEmbeddedStruct() {
 }
 
 func (suite *QueryGraphQLSuite) TestListBasic() {
-	list := types.NewList(types.String("foo"), types.String("bar"), types.String("baz"))
+	list := types.NewList()
+	suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":0}}}`)
+	suite.assertQueryResult(list, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptyList\".","locations":[{"line":1,"column":7}]}]}`)
+
+	list = types.NewList(types.String("foo"), types.String("bar"), types.String("baz"))
 
 	suite.assertQueryResult(list, "{root{elements}}", `{"data":{"root":{"elements":["foo","bar","baz"]}}}`)
 	suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":3}}}`)
@@ -116,7 +120,11 @@ func (suite *QueryGraphQLSuite) TestListOfStruct() {
 }
 
 func (suite *QueryGraphQLSuite) TestSetBasic() {
-	set := types.NewSet(types.String("foo"), types.String("bar"), types.String("baz"))
+	set := types.NewSet()
+	suite.assertQueryResult(set, "{root{size}}", `{"data":{"root":{"size":0}}}`)
+	suite.assertQueryResult(set, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptySet\".","locations":[{"line":1,"column":7}]}]}`)
+
+	set = types.NewSet(types.String("foo"), types.String("bar"), types.String("baz"))
 
 	suite.assertQueryResult(set, "{root{elements}}", `{"data":{"root":{"elements":["bar","baz","foo"]}}}`)
 	suite.assertQueryResult(set, "{root{size}}", `{"data":{"root":{"size":3}}}`)
@@ -154,7 +162,11 @@ func (suite *QueryGraphQLSuite) TestSetOfStruct() {
 }
 
 func (suite *QueryGraphQLSuite) TestMapBasic() {
-	m := types.NewMap(
+	m := types.NewMap()
+	suite.assertQueryResult(m, "{root{size}}", `{"data":{"root":{"size":0}}}`)
+	suite.assertQueryResult(m, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptyMap\".","locations":[{"line":1,"column":7}]}]}`)
+
+	m = types.NewMap(
 		types.String("foo"), types.Number(1),
 		types.String("bar"), types.Number(2),
 		types.String("baz"), types.Number(3),
@@ -262,4 +274,13 @@ func (suite *QueryGraphQLSuite) TestNestedCollection() {
 	suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":2}}}`)
 	suite.assertQueryResult(list, "{root{elements(count:1){size}}}", `{"data":{"root":{"elements":[{"size":2}]}}}`)
 	suite.assertQueryResult(list, "{root{elements(at:1,count:1){elements(count:1){elements{key value}}}}}", `{"data":{"root":{"elements":[{"elements":[{"elements":[{"key":30,"value":"baz"}]}]}]}}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestLoFi() {
+	b := types.NewBlob(bytes.NewBufferString("I am a blob"))
+
+	suite.assertQueryResult(b, "{root}", `{"data":{"root":"h6jkv35uum62a7ovu14uvmhaf0sojgh6"}}`)
+
+	t := types.StringType
+	suite.assertQueryResult(t, "{root}", `{"data":{"root":"pej65tf21rubhu9cb0oi5gqrkgf26aql"}}`)
 }
