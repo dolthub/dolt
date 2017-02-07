@@ -498,16 +498,16 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
 
     const expectedDiff = [
-      [0,49,50,0],
-      [50,50,49,51],
-      [1000,49,50,1000],
-      [1050,50,49,1051],
-      [2000,49,50,2000],
-      [2050,50,49,2051],
-      [3000,49,50,3000],
-      [3050,50,49,3051],
-      [4000,49,50,4000],
-      [4050,50,49,4051],
+      [0, 49, 50, 0],
+      [50, 50, 49, 51],
+      [1000, 49, 50, 1000],
+      [1050, 50, 49, 1051],
+      [2000, 49, 50, 2000],
+      [2050, 50, 49, 2051],
+      [3000, 49, 50, 3000],
+      [3050, 50, 49, 3051],
+      [4000, 49, 50, 4000],
+      [4050, 50, 49, 4051],
     ];
     assert.deepEqual(expectedDiff, directDiff);
   });
@@ -517,7 +517,7 @@ suite('Diff List', () => {
     const nums2 = nums1.slice(0);
 
     const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-      (i, j) => equals(nums1[i],nums2[j]));
+      (i, j) => equals(nums1[i], nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -533,7 +533,7 @@ suite('Diff List', () => {
     const nums2 = ['one', 'two', 'three', 'four'];
 
     const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-      (i, j) => equals(nums1[i],nums2[j]));
+      (i, j) => equals(nums1[i], nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -541,7 +541,7 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
 
     const expectedDiff = [
-      [3,0,1,3],
+      [3, 0, 1, 3],
     ];
     assert.deepEqual(expectedDiff, directDiff);
   });
@@ -551,7 +551,7 @@ suite('Diff List', () => {
     const nums2 = ['one', 'two', 'four'];
 
     const directDiff = calcSplices(nums1.length, nums2.length, DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-      (i, j) => equals(nums1[i],nums2[j]));
+      (i, j) => equals(nums1[i], nums2[j]));
     const l1 = new List(nums1);
     const l2 = new List(nums2);
 
@@ -559,7 +559,7 @@ suite('Diff List', () => {
     assert.deepEqual(directDiff, listDiff);
 
     const expectedDiff = [
-      [2,1,1,2],
+      [2, 1, 1, 2],
     ];
     assert.deepEqual(expectedDiff, directDiff);
   });
@@ -584,7 +584,7 @@ suite('Diff List', () => {
 
     const listDiff = await l2.diff(l1);
     assert.deepEqual(listDiff, [
-      [3,0,5,3],
+      [3, 0, 5, 3],
     ]);
   });
 });

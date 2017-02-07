@@ -11,6 +11,7 @@ module.exports = {
     'arrow-spacing': ['error', {'before': true, 'after': true}],
     'camelcase': 'error',
     'comma-dangle': ['error', 'always-multiline'],
+    'comma-spacing': ['error', {'before': false, 'after': true}],
     'eol-last': 'error',
     'eqeqeq': 'error',
     'flowtype/boolean-style': 'error',

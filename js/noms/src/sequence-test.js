@@ -49,7 +49,7 @@ suite('SequenceCursor', () => {
   }
 
   test('retreating past the start', async () => {
-    const cur = testCursor([[100, 101],[102]]);
+    const cur = testCursor([[100, 101], [102]]);
     expect(cur, 0, 0, true, 100);
     assert.isFalse(await cur.retreat());
     expect(cur, -1, 0, false, null);
@@ -58,7 +58,7 @@ suite('SequenceCursor', () => {
   });
 
   test('retreating past the start, then advanding past the end', async () => {
-    const cur = testCursor([[100, 101],[102]]);
+    const cur = testCursor([[100, 101], [102]]);
     assert.isFalse(await cur.retreat());
     assert.isTrue(await cur.advance());
     expect(cur, 0, 0, true, 100);
@@ -73,7 +73,7 @@ suite('SequenceCursor', () => {
   });
 
   test('advancing past the end', async () => {
-    const cur = testCursor([[100, 101],[102]]);
+    const cur = testCursor([[100, 101], [102]]);
     assert.isTrue(await cur.advance());
     expect(cur, 1, 0, true, 101);
     assert.isTrue(await cur.retreat());
@@ -85,7 +85,7 @@ suite('SequenceCursor', () => {
   });
 
   test('advancing past the end, then retreating past the start.', async () => {
-    const cur = testCursor([[100, 101],[102]]);
+    const cur = testCursor([[100, 101], [102]]);
     assert.isTrue(await cur.advance());
     assert.isTrue(await cur.advance());
     expect(cur, 0, 1, true, 102);

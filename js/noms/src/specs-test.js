@@ -120,7 +120,7 @@ suite('Specs', () => {
     const invalidDatasetNames = [' ', '', '$', '#', ':', '\n', '💩'];
     invalidDatasetNames.map(s => `mem::${s}`).forEach(assertInvalid);
 
-    const validDatasetNames = ['a', 'Z', '0','/', '-', '_'];
+    const validDatasetNames = ['a', 'Z', '0', '/', '-', '_'];
     for (const s of validDatasetNames) {
       DatasetSpec.parse(`mem::${s}`);
     }
