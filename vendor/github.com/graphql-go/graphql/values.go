@@ -7,11 +7,12 @@ import (
 	"reflect"
 	"strings"
 
+	"sort"
+
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/kinds"
 	"github.com/graphql-go/graphql/language/printer"
-	"sort"
 )
 
 // Prepares an object map of variableValues of the correct type based on the
@@ -317,9 +318,10 @@ func isValidInputValue(value interface{}, ttype Input) (bool, []string) {
 
 // Returns true if a value is null, undefined, or NaN.
 func isNullish(value interface{}) bool {
-	if value, ok := value.(string); ok {
-		return value == ""
-	}
+	// https://github.com/graphql-go/graphql/issues/183
+	// if value, ok := value.(string); ok {
+	// 	return value == ""
+	// }
 	if value, ok := value.(int); ok {
 		return math.IsNaN(float64(value))
 	}

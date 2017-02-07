@@ -15,7 +15,11 @@ import (
 	"github.com/graphql-go/graphql"
 )
 
-type typeMap map[hash.Hash]graphql.Type
+type typeMap *map[hash.Hash]graphql.Type
+
+func newTypeMap() typeMap {
+	return &map[hash.Hash]graphql.Type{}
+}
 
 // In terms of resolving a graph of data, there are three types of value: scalars, lists and maps.
 // During resolution, we are converting some noms value to a graphql value. A getFieldFn will
@@ -29,7 +33,7 @@ type getSubvaluesFn func(v types.Value, args map[string]interface{}) (interface{
 
 // Note: Always returns a graphql.NonNull() as the outer type.
 func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
-	gqlType, ok := tm[nomsType.Hash()]
+	gqlType, ok := (*tm)[nomsType.Hash()]
 	if ok {
 		return gqlType
 	}
@@ -38,7 +42,7 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 	// creating any subtypes. Since all noms-types are non-nullable, the graphql NonNull creates a
 	// handy piece of state for us to mutate once the subtype is fully created
 	newNonNull := &graphql.NonNull{}
-	tm[nomsType.Hash()] = newNonNull
+	(*tm)[nomsType.Hash()] = newNonNull
 
 	switch nomsType.Kind() {
 	case types.NumberKind:
@@ -86,12 +90,12 @@ func unionToGQLUnion(nomsType *types.Type, tm typeMap) *graphql.Union {
 	nomsMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
 	memberTypes := make([]*graphql.Object, len(nomsMemberTypes))
 
-	for i, unionTyp := range nomsMemberTypes {
-		if unionTyp.Kind() != types.StructKind {
+	for i, nomsUnionType := range nomsMemberTypes {
+		if nomsUnionType.Kind() != types.StructKind {
 			panic("booh: grqphql-go only supports unions of structs")
 		}
 
-		memberTypes[i] = nomsTypeToGraphQLType(unionTyp, tm).(*graphql.NonNull).OfType.(*graphql.Object)
+		memberTypes[i] = nomsTypeToGraphQLType(nomsUnionType, tm).(*graphql.NonNull).OfType.(*graphql.Object)
 	}
 
 	return graphql.NewUnion(graphql.UnionConfig{
@@ -99,8 +103,8 @@ func unionToGQLUnion(nomsType *types.Type, tm typeMap) *graphql.Union {
 		Types: memberTypes,
 		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
 			tm := p.Context.Value(tmKey).(typeMap)
-			typ := p.Value.(types.Value).Type()
-			gqlType := tm[typ.Hash()].(*graphql.NonNull).OfType.(*graphql.Object)
+			nomsType := p.Value.(types.Value).Type()
+			gqlType := (*tm)[nomsType.Hash()].(*graphql.NonNull).OfType.(*graphql.Object)
 			return gqlType
 		},
 	})
@@ -110,8 +114,8 @@ func structToGQLObject(nomsType *types.Type, tm typeMap) *graphql.Object {
 	structDesc := nomsType.Desc.(types.StructDesc)
 	fields := graphql.Fields{}
 
-	structDesc.IterFields(func(name string, fieldTyp *types.Type) {
-		fieldType := nomsTypeToGraphQLType(fieldTyp, tm)
+	structDesc.IterFields(func(name string, nomsFieldType *types.Type) {
+		fieldType := nomsTypeToGraphQLType(nomsFieldType, tm)
 
 		fields[name] = &graphql.Field{
 			Type: fieldType,
@@ -296,10 +300,10 @@ func getTypeName(nomsType *types.Type) string {
 		return fmt.Sprintf("%sStruct", nomsType.Desc.(types.StructDesc).Name)
 
 	case types.UnionKind:
-		unionTyps := nomsType.Desc.(types.CompoundDesc).ElemTypes
-		names := make([]string, len(unionTyps))
-		for i, unionTyp := range unionTyps {
-			names[i] = getTypeName(unionTyp)
+		unionMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
+		names := make([]string, len(unionMemberTypes))
+		for i, unionMemberType := range unionMemberTypes {
+			names[i] = getTypeName(unionMemberType)
 		}
 		return strings.Join(names, "Or")
 

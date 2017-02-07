@@ -35,7 +35,7 @@ func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect strin
 
 func (suite *QueryGraphQLSuite) TestScalars() {
 	suite.assertQueryResult(types.String("aaa"), "{root}", `{"data":{"root":"aaa"}}`)
-	// suite.assertQueryResult(types.String(""), "{root}", `{"data":{"root":""}}`)
+	suite.assertQueryResult(types.String(""), "{root}", `{"data":{"root":""}}`)
 
 	suite.assertQueryResult(types.Number(0), "{root}", `{"data":{"root":0}}`)
 	suite.assertQueryResult(types.Number(1), "{root}", `{"data":{"root":1}}`)

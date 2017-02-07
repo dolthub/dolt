@@ -418,12 +418,10 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	params := req.URL.Query()
 	dsTokens := params["ds"]
 	hTokens := params["h"]
-	if len(dsTokens) != 1 && len(hTokens) != 1 {
-		d.Panic("Must specify ds (dataset) or h (hash)")
+	if len(dsTokens)+len(hTokens) != 1 {
+		d.Panic("Must specify one (and only one) of ds (dataset) or h (hash)")
 	}
-	if len(dsTokens) == 1 && len(hTokens) == 1 {
-		d.Panic("Only one of ds (dataset) or h (hash) may be specified")
-	}
+
 	qTokens := params["query"]
 	if len(qTokens) != 1 {
 		d.Panic("Expected query")

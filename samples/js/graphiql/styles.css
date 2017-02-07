@@ -6,9 +6,6 @@
 
 html, body {
 	height: 100%;
-}
-
-html, body, svg {
 	padding: 0;
 	margin: 0;
 }
