@@ -1714,8 +1714,9 @@ escope@^3.6.0:
     esrecurse "^4.1.0"
     estraverse "^4.1.1"
 
-"eslint-config-noms@file:../eslint-config-noms":
+eslint-config-noms@1.2.0:
   version "1.2.0"
+  resolved "https://registry.yarnpkg.com/eslint-config-noms/-/eslint-config-noms-1.2.0.tgz#62a3ce623c95eeae4067d3951b5698062b28ba71"
   dependencies:
     babel-eslint "^7.1.1"
     eslint "^3.13.1"
