@@ -19,13 +19,14 @@ const (
 	atKey          = "at"
 	countKey       = "count"
 	keyKey         = "key"
-	rootKey        = "Root"
+	rootQueryKey   = "Root"
 	sizeKey        = "size"
 	targetHashKey  = "targetHash"
 	targetValueKey = "targetValue"
 	tmKey          = "tm"
 	valueKey       = "value"
-	valuesKey      = "values"
+	rootKey        = "root"
+	elementsKey    = "elements"
 	vrKey          = "vr"
 )
 
@@ -34,9 +35,9 @@ func constructQueryType(rootValue types.Value, tm typeMap) *graphql.Object {
 	rootType := nomsTypeToGraphQLType(rootNomsType, tm)
 
 	return graphql.NewObject(graphql.ObjectConfig{
-		Name: rootKey,
+		Name: rootQueryKey,
 		Fields: graphql.Fields{
-			valueKey: &graphql.Field{
+			rootKey: &graphql.Field{
 				Type: rootType,
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					return maybeGetScalar(rootValue), nil

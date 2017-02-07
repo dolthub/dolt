@@ -337,7 +337,7 @@ func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm t
 				},
 			},
 
-			valuesKey: &graphql.Field{
+			elementsKey: &graphql.Field{
 				Type: graphql.NewList(listType),
 				Args: args,
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
