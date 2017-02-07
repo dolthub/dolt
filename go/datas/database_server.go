@@ -72,6 +72,9 @@ func (s *RemoteDatabaseServer) Run() {
 	router.OPTIONS(constants.WriteValuePath, s.corsHandle(noopHandle))
 	router.GET(constants.BasePath, s.corsHandle(s.makeHandle(HandleBaseGet)))
 
+	router.GET(constants.GraphQLPath, s.corsHandle(s.makeHandle(HandleGraphQL)))
+	router.OPTIONS(constants.GraphQLPath, s.corsHandle(noopHandle))
+
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			router.ServeHTTP(w, req)

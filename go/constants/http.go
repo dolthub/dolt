@@ -11,4 +11,6 @@ const (
 	HasRefsPath    = "/hasRefs/"
 	WriteValuePath = "/writeValue/"
 	BasePath       = "/"
+
+	GraphQLPath = "/graphql/"
 )
