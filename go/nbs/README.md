@@ -8,7 +8,7 @@ An experimental storage layer for [noms](https://github.com/attic-labs/noms).
 - Writers need not worry about re-writing duplicate chunks. NBS will efficiently detect and drop (most) duplicates.
 
 # Status
-NBS is more-or-less "alpha". There's still [work we want to do](https://github.com/attic-labs/noms/issues?q=is%3Aopen+is%3Aissue+label%3ANBS), but it basically works. The most obvious things that aren't implemented are Compaction and GC. In particular, there's currently no upper bound on the set of "tables" which comprise a store and no way to reduce the number.
+NBS is more-or-less "alpha". There's still [work we want to do](https://github.com/attic-labs/noms/issues?q=is%3Aopen+is%3Aissue+label%3ANBS), but it basically works.
 
 There are two full back-ends for nbs, one for storage on a file-system and one for storage in AWS. The later requires a dynamo table and an s3 bucket.
 
