@@ -62,6 +62,12 @@ func (suite *QueryGraphQLSuite) TestStructBasic() {
 	suite.assertQueryResult(s1, "{root{a c}}", `{"data":{"root":{"a":"aaa","c":0.1}}}`)
 }
 
+func (suite *QueryGraphQLSuite) TestEmptyStruct() {
+	s1 := types.NewStruct("", types.StructData{})
+
+	suite.assertQueryResult(s1, "{root{hash}}", `{"data":{"root":{"hash":"c66c33bb6na2m5mk0bek7eqqrl2t7gmv"}}}`)
+}
+
 func (suite *QueryGraphQLSuite) TestEmbeddedStruct() {
 	s1 := types.NewStruct("Foo", types.StructData{
 		"a": types.String("aaa"),
@@ -235,6 +241,32 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 	)
 
 	suite.assertQueryResult(list, "{root{elements{... on FooStruct{a b} ... on BarStruct{b} ... on BazStruct{c}}}}", `{"data":{"root":{"elements":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() {
+	list := types.NewList(
+		types.NewStruct("Foo", types.StructData{
+			"a": types.Number(28),
+		}),
+		types.NewStruct("Bar", types.StructData{
+			"a": types.String("bar"),
+		}),
+		types.NewStruct("Baz", types.StructData{
+			"a": types.Bool(true),
+		}),
+	)
+
+	suite.assertQueryResult(list, "{root{elements{... on FooStruct{a} ... on BarStruct{b: a} ... on BazStruct{c: a}}}}", `{"data":{"root":{"elements":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestListOfUnionOfScalars() {
+	list := types.NewList(
+		types.Number(28),
+		types.String("bar"),
+		types.Bool(true),
+	)
+
+	suite.assertQueryResult(list, "{root{elements{... on BooleanValue{b: scalarValue} ... on StringValue{s: scalarValue} ... on NumberValue{n: scalarValue}}}}", `{"data":{"root":{"elements":[{"n":28},{"s":"bar"},{"b":true}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestCyclicStructs() {

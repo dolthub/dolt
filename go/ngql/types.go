@@ -16,10 +16,15 @@ import (
 	"github.com/graphql-go/graphql"
 )
 
-type typeMap *map[hash.Hash]graphql.Type
+type typeMap map[typeMapKey]graphql.Type
 
-func newTypeMap() typeMap {
-	return &map[hash.Hash]graphql.Type{}
+type typeMapKey struct {
+	h             hash.Hash
+	boxedIfScalar bool
+}
+
+func newTypeMap() *typeMap {
+	return &typeMap{}
 }
 
 // In terms of resolving a graph of data, there are three types of value: scalars, lists and maps.
@@ -32,9 +37,29 @@ type getFieldFn func(v interface{}, fieldName string, ctx context.Context) types
 // returning one or more *noms* values whose presence is indicated by the provided arguments.
 type getSubvaluesFn func(v types.Value, args map[string]interface{}) (interface{}, error)
 
+// GraphQL requires all memberTypes in a Union to be Structs, so when a noms union contains a
+// scalar, we represent it in that context as a "boxed" value. E.g.
+// Boolean! =>
+// type BooleanValue {
+//   scalarValue: Boolean!
+// }
+func scalarToValue(nomsType *types.Type, scalarType graphql.Type, tm *typeMap) graphql.Type {
+	return graphql.NewObject(graphql.ObjectConfig{
+		Name: fmt.Sprintf("%sValue", getTypeName(nomsType)),
+		Fields: graphql.Fields{
+			scalarValue: &graphql.Field{
+				Type: graphql.NewNonNull(scalarType),
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					return p.Source, nil // p.Source is already a go-native scalar type
+				},
+			},
+		}})
+}
+
 // Note: Always returns a graphql.NonNull() as the outer type.
-func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
-	gqlType, ok := (*tm)[nomsType.Hash()]
+func nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap) graphql.Type {
+	key := typeMapKey{nomsType.Hash(), boxedIfScalar}
+	gqlType, ok := (*tm)[key]
 	if ok {
 		return gqlType
 	}
@@ -43,17 +68,26 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 	// creating any subtypes. Since all noms-types are non-nullable, the graphql NonNull creates a
 	// handy piece of state for us to mutate once the subtype is fully created
 	newNonNull := &graphql.NonNull{}
-	(*tm)[nomsType.Hash()] = newNonNull
+	(*tm)[key] = newNonNull
 
 	switch nomsType.Kind() {
 	case types.NumberKind:
 		newNonNull.OfType = graphql.Float
+		if boxedIfScalar {
+			newNonNull.OfType = scalarToValue(nomsType, newNonNull.OfType, tm)
+		}
 
 	case types.StringKind:
 		newNonNull.OfType = graphql.String
+		if boxedIfScalar {
+			newNonNull.OfType = scalarToValue(nomsType, newNonNull.OfType, tm)
+		}
 
 	case types.BoolKind:
 		newNonNull.OfType = graphql.Boolean
+		if boxedIfScalar {
+			newNonNull.OfType = scalarToValue(nomsType, newNonNull.OfType, tm)
+		}
 
 	case types.StructKind:
 		newNonNull.OfType = structToGQLObject(nomsType, tm)
@@ -62,7 +96,7 @@ func nomsTypeToGraphQLType(nomsType *types.Type, tm typeMap) graphql.Type {
 		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 		var valueType graphql.Type
 		if !isEmptyNomsUnion(nomsValueType) {
-			valueType = nomsTypeToGraphQLType(nomsValueType, tm)
+			valueType = nomsTypeToGraphQLType(nomsValueType, false, tm)
 		}
 
 		newNonNull.OfType = collectionToGraphQLObject(nomsType, valueType, tm)
@@ -102,36 +136,54 @@ func isEmptyNomsUnion(nomsType *types.Type) bool {
 }
 
 // Creates a union of structs type.
-func unionToGQLUnion(nomsType *types.Type, tm typeMap) *graphql.Union {
+func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
 	nomsMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
 	memberTypes := make([]*graphql.Object, len(nomsMemberTypes))
 
 	for i, nomsUnionType := range nomsMemberTypes {
-		if nomsUnionType.Kind() != types.StructKind {
-			panic("booh: grqphql-go only supports unions of structs")
-		}
-
-		memberTypes[i] = nomsTypeToGraphQLType(nomsUnionType, tm).(*graphql.NonNull).OfType.(*graphql.Object)
+		// Member types cannot be non-null and must be struct (graphl.Object)
+		memberTypes[i] = nomsTypeToGraphQLType(nomsUnionType, true, tm).(*graphql.NonNull).OfType.(*graphql.Object)
 	}
 
 	return graphql.NewUnion(graphql.UnionConfig{
 		Name:  getTypeName(nomsType),
 		Types: memberTypes,
 		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
-			tm := p.Context.Value(tmKey).(typeMap)
-			nomsType := p.Value.(types.Value).Type()
-			gqlType := (*tm)[nomsType.Hash()].(*graphql.NonNull).OfType.(*graphql.Object)
-			return gqlType
+			tm := p.Context.Value(tmKey).(*typeMap)
+			var nomsType *types.Type
+			if v, ok := p.Value.(types.Value); ok {
+				nomsType = v.Type()
+			} else {
+				switch p.Value.(type) {
+				case float64:
+					nomsType = types.NumberType
+				case string:
+					nomsType = types.StringType
+				case bool:
+					nomsType = types.BoolType
+				}
+			}
+			key := typeMapKey{nomsType.Hash(), true}
+			memberType := (*tm)[key]
+			// Member types cannot be non-null and must be struct (graphl.Object)
+			return memberType.(*graphql.NonNull).OfType.(*graphql.Object)
 		},
 	})
 }
 
-func structToGQLObject(nomsType *types.Type, tm typeMap) *graphql.Object {
+func structToGQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 	structDesc := nomsType.Desc.(types.StructDesc)
-	fields := graphql.Fields{}
+	fields := graphql.Fields{
+		"hash": &graphql.Field{
+			Type: graphql.NewNonNull(graphql.String),
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				return p.Source.(types.Struct).Hash().String(), nil
+			},
+		},
+	}
 
 	structDesc.IterFields(func(name string, nomsFieldType *types.Type) {
-		fieldType := nomsTypeToGraphQLType(nomsFieldType, tm)
+		fieldType := nomsTypeToGraphQLType(nomsFieldType, false, tm)
 
 		fields[name] = &graphql.Field{
 			Type: fieldType,
@@ -260,9 +312,9 @@ type mapEntry struct {
 //	 key: <KeyType>!
 //	 value: <ValueType>!
 // }
-func mapEntryToGraphQLObject(nomsKeyType, nomsValueType *types.Type, tm typeMap) *graphql.Object {
-	keyType := nomsTypeToGraphQLType(nomsKeyType, tm)
-	valueType := nomsTypeToGraphQLType(nomsValueType, tm)
+func mapEntryToGraphQLObject(nomsKeyType, nomsValueType *types.Type, tm *typeMap) *graphql.Object {
+	keyType := nomsTypeToGraphQLType(nomsKeyType, false, tm)
+	valueType := nomsTypeToGraphQLType(nomsValueType, false, tm)
 
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: fmt.Sprintf("%s%sEntry", getTypeName(nomsKeyType), getTypeName(nomsValueType)),
@@ -345,7 +397,7 @@ func getTypeName(nomsType *types.Type) string {
 	}
 }
 
-func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm typeMap) *graphql.Object {
+func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm *typeMap) *graphql.Object {
 	fields := graphql.Fields{
 		sizeKey: &graphql.Field{
 			Type: graphql.Float,
@@ -396,15 +448,15 @@ func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm t
 //	 targetHash: String!
 //	 targetValue: <ValueType>!
 // }
-func refToGraphQLObject(nomsType *types.Type, tm typeMap) *graphql.Object {
+func refToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 	nomsTargetType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
-	targetType := nomsTypeToGraphQLType(nomsTargetType, tm)
+	targetType := nomsTypeToGraphQLType(nomsTargetType, false, tm)
 
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: getTypeName(nomsType),
 		Fields: graphql.Fields{
 			targetHashKey: &graphql.Field{
-				Type: graphql.String,
+				Type: graphql.NewNonNull(graphql.String),
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 					r := p.Source.(types.Ref)
 					return maybeGetScalar(types.String(r.TargetHash().String())), nil
