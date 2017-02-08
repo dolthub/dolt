@@ -12,10 +12,24 @@ window.onload = render;
 const server = 'http://localhost:8000';
 const endPoint = '/graphql/';
 const ds = 'sfcrime';
+const auth = '';
 
 function graphQLFetcher(graphQLParams) {
   const url = `${server}${endPoint}?ds=${ds}&query=${graphQLParams.query}`;
-  return fetch(url).then(response => response.json());
+
+  const headers = new Headers();
+  if (auth) {
+    headers.append('Authorization', `Bearer ${auth}`);
+  }
+
+  const req = new Request(url, {
+    headers: headers,
+    method: 'GET',
+    mode: 'cors',
+  });
+
+  console.log(url);
+  return fetch(req).then(response => response.json());
 }
 
 function render() {
