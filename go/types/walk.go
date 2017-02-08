@@ -71,7 +71,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 		hs := hash.HashSet{}
 		oldRefs := refs
 		refs = map[hash.Hash]bool{}
-		for h, _ := range oldRefs {
+		for h := range oldRefs {
 			if _, ok := visited[h]; ok {
 				continue
 			}
@@ -221,7 +221,7 @@ func WalkDifferentStructs(last, current Value, vr ValueReader) (added, removed m
 
 		// oldRefsToLoad and currentRefsToLoad are fully disjoint. Insert all old into current and use
 		// oldRefs to later differentiate
-		for h, _ := range oldRefsToLoad {
+		for h := range oldRefsToLoad {
 			currentRefsToLoad.Insert(h)
 		}
 
@@ -238,7 +238,7 @@ func WalkDifferentStructs(last, current Value, vr ValueReader) (added, removed m
 	}
 
 	// Remove common
-	for h, _ := range added {
+	for h := range added {
 		if _, ok := removed[h]; ok {
 			delete(added, h)
 			delete(removed, h)

@@ -81,7 +81,7 @@ func makeSimplifiedUnionImpl(in typeset) *Type {
 
 	out := make([]*Type, 0, len(in))
 	groups := map[how]typeset{}
-	for t, _ := range in {
+	for t := range in {
 		var h how
 		switch t.Kind() {
 		case RefKind, SetKind, ListKind, MapKind:
@@ -102,7 +102,7 @@ func makeSimplifiedUnionImpl(in typeset) *Type {
 
 	for h, ts := range groups {
 		if len(ts) == 1 {
-			for t, _ := range ts {
+			for t := range ts {
 				out = append(out, t)
 			}
 			continue
@@ -152,7 +152,7 @@ func simplifyLists(ts typeset) *Type {
 
 func simplifyContainers(expectedKind NomsKind, makeContainer func(elem *Type) *Type, ts typeset) *Type {
 	elemTypes := make(typeset, len(ts))
-	for t, _ := range ts {
+	for t := range ts {
 		d.Chk.True(expectedKind == t.Kind())
 		elemTypes.Add(t.Desc.(CompoundDesc).ElemTypes[0])
 	}
@@ -162,7 +162,7 @@ func simplifyContainers(expectedKind NomsKind, makeContainer func(elem *Type) *T
 func simplifyMaps(ts typeset) *Type {
 	keyTypes := make(typeset, len(ts))
 	valTypes := make(typeset, len(ts))
-	for t, _ := range ts {
+	for t := range ts {
 		d.Chk.True(MapKind == t.Kind())
 		desc := t.Desc.(CompoundDesc)
 		keyTypes.Add(desc.ElemTypes[0])
@@ -177,7 +177,7 @@ func simplifyStructs(expectedName string, ts typeset) *Type {
 	commonFields := map[string]typeset{}
 
 	first := true
-	for t, _ := range ts {
+	for t := range ts {
 		d.Chk.True(StructKind == t.Kind())
 		desc := t.Desc.(StructDesc)
 		d.Chk.True(expectedName == desc.Name)

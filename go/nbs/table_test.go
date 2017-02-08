@@ -180,7 +180,7 @@ func TestGetMany(t *testing.T) {
 	close(chunkChan)
 
 	gotCount := 0
-	for _ = range chunkChan {
+	for range chunkChan {
 		gotCount++
 	}
 
@@ -330,7 +330,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	close(chunkChan)
 
 	gotCount := 0
-	for _ = range chunkChan {
+	for range chunkChan {
 		gotCount++
 	}
 

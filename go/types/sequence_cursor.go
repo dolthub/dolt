@@ -225,7 +225,7 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 		for leafCursor.valid() {
 			if cb(leafCursor.getItem(leafCursor.idx)) {
 				stopChan <- struct{}{}
-				for _ = range curChan {
+				for range curChan {
 				} // ensure async loading goroutine exits before we do
 				return
 			}

@@ -217,7 +217,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		foundValues <- decode(h, c, false)
 	}
 
-	for h, _ := range foundHashes {
+	for h := range foundHashes {
 		remaining.Remove(h) // Avoid concurrent access with the call to GetMany above
 	}
 

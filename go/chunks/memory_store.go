@@ -33,7 +33,7 @@ func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 }
 
 func (ms *MemoryStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
-	for h, _ := range hashes {
+	for h := range hashes {
 		c := ms.Get(h)
 		if !c.IsEmpty() {
 			foundChunks <- &c

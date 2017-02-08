@@ -211,7 +211,7 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 func toGetRecords(hashes hash.HashSet) []getRecord {
 	reqs := make([]getRecord, len(hashes))
 	idx := 0
-	for h, _ := range hashes {
+	for h := range hashes {
 		a := addr(h)
 		reqs[idx] = getRecord{
 			a:      &a,

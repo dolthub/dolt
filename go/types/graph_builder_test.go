@@ -16,11 +16,11 @@ func TestGraphBuilderFindIndex(t *testing.T) {
 	assert := assert.New(t)
 
 	elems := []*graphStackElem{
-		&graphStackElem{key: String("ROOT")},
-		&graphStackElem{key: String("one")},
-		&graphStackElem{key: String("two")},
-		&graphStackElem{key: String("three")},
-		&graphStackElem{key: String("four")},
+		{key: String("ROOT")},
+		{key: String("one")},
+		{key: String("two")},
+		{key: String("three")},
+		{key: String("four")},
 	}
 
 	s := graphStack{elems: elems}

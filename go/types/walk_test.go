@@ -274,7 +274,7 @@ func (suite *WalkDifferentStructsTestSuite) AssertDiffs(last, current Value, exp
 		}
 
 		suite.Equal(len(hashes), len(actual))
-		for h, _ := range actual {
+		for h := range actual {
 			_, ok := hashes[h]
 			suite.True(ok)
 		}

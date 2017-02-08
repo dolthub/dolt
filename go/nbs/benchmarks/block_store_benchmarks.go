@@ -80,7 +80,7 @@ func verifyChunks(hashes hash.HashSlice, foundChunks chan *chunks.Chunk) {
 	}
 
 	if len(requested) > 0 {
-		for h, _ := range requested {
+		for h := range requested {
 			fmt.Printf("Failed to fetch %s\n", h.String())
 		}
 		panic("failed to fetch chunks")
