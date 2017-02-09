@@ -384,6 +384,10 @@ func getTypeName(nomsType *types.Type) string {
 	case types.StructKind:
 		return fmt.Sprintf("%sStruct", nomsType.Desc.(types.StructDesc).Name)
 
+	case types.TypeKind:
+		// TODO: https://github.com/attic-labs/noms/issues/3155
+		return fmt.Sprintf("%sType", nomsType.Hash().String())
+
 	case types.UnionKind:
 		unionMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
 		names := make([]string, len(unionMemberTypes))
@@ -393,7 +397,7 @@ func getTypeName(nomsType *types.Type) string {
 		return strings.Join(names, "Or")
 
 	default:
-		panic("type name not implemented")
+		panic(fmt.Sprintf("%d: (getTypeName) not reached", nomsType.Kind()))
 	}
 }
 
