@@ -24,7 +24,7 @@ func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource
 	// TODO: remove when BUG 3156 is fixed
 	for h, eData := range errata {
 		func() {
-			temp, err := ioutil.TempFile(ftp.dir, h.String()+"-errata")
+			temp, err := ioutil.TempFile(ftp.dir, "errata-"+h.String())
 			d.PanicIfError(err)
 			defer checkClose(temp)
 			io.Copy(temp, bytes.NewReader(eData))

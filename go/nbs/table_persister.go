@@ -68,7 +68,7 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 
 	maxSize := maxTableSize(uint64(chunkCount), totalData)
 	buff := make([]byte, maxSize) // This can blow up RAM (BUG 3130)
-	tw := newTableWriter(buff)
+	tw := newTableWriter(buff, nil)
 
 	// Use "channel of channels" ordered-concurrency pattern so that chunks from a given table stay together, preserving whatever locality was present in that table.
 	chunkChans := make(chan chan extractRecord)

@@ -5,18 +5,21 @@
 package nbs
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/verbose"
 )
 
 type memTable struct {
 	chunks             map[addr][]byte
 	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order
 	maxData, totalData uint64
+
+	snapper snappyEncoder
 }
 
 func newMemTable(memTableSize uint64) *memTable {
@@ -106,7 +109,7 @@ func (mt *memTable) extract(order EnumerationOrder, chunks chan<- extractRecord)
 func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32, errata map[addr][]byte) {
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
-	tw := newTableWriter(buff)
+	tw := newTableWriter(buff, mt.snapper)
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
@@ -125,9 +128,9 @@ func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint
 
 	// TODO: remove when BUG 3156 is fixed
 	if len(tw.errata) > 0 {
-		verbose.Log("BUG 3156: table %s; %d chunks, %d total data; max table size %d\n", name.String(), len(mt.order), mt.totalData, maxSize)
+		fmt.Fprintf(os.Stderr, "BUG 3156: table %s; %d chunks, %d total data; max table size %d\n", name.String(), len(mt.order), mt.totalData, maxSize)
 		for h, data := range tw.errata {
-			verbose.Log("  Failed to write %s of uncompressed length %d\n", h.String(), len(data))
+			fmt.Fprintf(os.Stderr, "  Failed to write %s of uncompressed length %d\n", h.String(), len(data))
 		}
 	}
 

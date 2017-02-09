@@ -7,11 +7,12 @@ package nbs
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"hash"
+	"os"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 )
 
@@ -23,7 +24,18 @@ type tableWriter struct {
 	prefixes          prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockHash         hash.Hash
 
-	errata map[addr][]byte // TODO: Get rid of this once we've diagnosed and fixed BUG 3156
+	errata  map[addr][]byte // TODO: Get rid of this once we've diagnosed and fixed BUG 3156
+	snapper snappyEncoder
+}
+
+type snappyEncoder interface {
+	Encode(dst, src []byte) []byte
+}
+
+type realSnappyEncoder struct{}
+
+func (r realSnappyEncoder) Encode(dst, src []byte) []byte {
+	return snappy.Encode(dst, src)
 }
 
 func maxTableSize(numChunks, totalData uint64) uint64 {
@@ -39,11 +51,15 @@ func indexSize(numChunks uint32) uint64 {
 }
 
 // len(buff) must be >= maxTableSize(numChunks, totalData)
-func newTableWriter(buff []byte) *tableWriter {
+func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
+	if snapper == nil {
+		snapper = realSnappyEncoder{}
+	}
 	return &tableWriter{
 		buff:      buff,
 		blockHash: sha512.New(),
 		errata:    map[addr][]byte{},
+		snapper:   snapper,
 	}
 }
 
@@ -53,7 +69,7 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	}
 
 	// Compress data straight into tw.buff
-	compressed := snappy.Encode(tw.buff[tw.pos:], data)
+	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
 
 	// BUG 3156 indicates that, sometimes, snappy decides that there's not enough space in tw.buff[tw.pos:] to encode into.
@@ -63,7 +79,7 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 		d.Chk.True(n != 0)
 		d.Chk.True(uint64(len(tw.buff[tw.pos:])) >= dataLength)
 
-		verbose.Log("BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
+		fmt.Fprintf(os.Stderr, "BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
 
 		// Copy the compressed data over to tw.buff.
 		copy(tw.buff[tw.pos:], compressed)

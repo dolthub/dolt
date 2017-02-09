@@ -141,7 +141,7 @@ func bytesToChunkSource(bs ...[]byte) chunkSource {
 	}
 	maxSize := maxTableSize(uint64(len(bs)), uint64(sum))
 	buff := make([]byte, maxSize)
-	tw := newTableWriter(buff)
+	tw := newTableWriter(buff, nil)
 	for _, b := range bs {
 		tw.addChunk(computeAddr(b), b)
 	}

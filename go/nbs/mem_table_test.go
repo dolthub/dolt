@@ -11,6 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/testify/assert"
+	"github.com/golang/snappy"
 )
 
 func TestMemTableAddHasGetChunk(t *testing.T) {
@@ -95,6 +96,50 @@ func TestMemTableWrite(t *testing.T) {
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
+}
+
+func TestMemTableWriteErrata(t *testing.T) {
+	assert := assert.New(t)
+	mt := newMemTable(1024)
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+
+	for _, c := range chunks {
+		assert.True(mt.addChunk(computeAddr(c), c))
+	}
+	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should wind up in errata
+
+	_, data, count, errata := mt.write(nil)
+	assert.EqualValues(3, count)
+
+	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
+	assertChunksInReader(chunks, outReader, assert)
+
+	if assert.Len(errata, 1) {
+		data, present := errata[computeAddr(chunks[1])]
+		assert.True(present)
+		assert.EqualValues(chunks[1], data)
+	}
+}
+
+type outOfLineSnappy struct {
+	policy []bool
+}
+
+func (o *outOfLineSnappy) Encode(dst, src []byte) []byte {
+	outOfLine := false
+	if len(o.policy) > 0 {
+		outOfLine = o.policy[0]
+		o.policy = o.policy[1:]
+	}
+	if outOfLine {
+		return snappy.Encode(nil, src)
+	}
+	return snappy.Encode(dst, src)
 }
 
 type chunkReaderGroup []chunkReader
