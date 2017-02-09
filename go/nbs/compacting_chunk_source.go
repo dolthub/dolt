@@ -81,10 +81,10 @@ func (ccs *compactingChunkSource) count() uint32 {
 	return ccs.cs.count()
 }
 
-func (ccs *compactingChunkSource) byteLen() uint64 {
+func (ccs *compactingChunkSource) lens() []uint32 {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
-	return ccs.cs.byteLen()
+	return ccs.cs.lens()
 }
 
 func (ccs *compactingChunkSource) hash() addr {
@@ -131,8 +131,8 @@ func (ecs emptyChunkSource) count() uint32 {
 	return 0
 }
 
-func (ecs emptyChunkSource) byteLen() uint64 {
-	return 0
+func (ecs emptyChunkSource) lens() []uint32 {
+	return nil
 }
 
 func (ecs emptyChunkSource) hash() addr {

@@ -21,11 +21,11 @@ import (
 )
 
 func buildTable(chunks [][]byte) ([]byte, addr) {
-	totalData := uint64(0)
+	lengths := []uint32{}
 	for _, chunk := range chunks {
-		totalData += uint64(len(chunk))
+		lengths = append(lengths, uint32(len(chunk)))
 	}
-	capacity := maxTableSize(uint64(len(chunks)), totalData)
+	capacity := maxTableSize(lengths)
 
 	buff := make([]byte, capacity)
 
@@ -125,9 +125,12 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	}
 
 	bogusData := []byte("bogus") // doesn't matter what this is. hasMany() won't check chunkRecords
-	totalData := uint64(len(bogusData) * len(addrs))
+	lengths := []uint32{}
+	for range addrs {
+		lengths = append(lengths, uint32(len(bogusData)))
+	}
 
-	capacity := maxTableSize(uint64(len(addrs)), totalData)
+	capacity := maxTableSize(lengths)
 	buff := make([]byte, capacity)
 	tw := newTableWriter(buff, nil)
 

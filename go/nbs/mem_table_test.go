@@ -89,7 +89,7 @@ func TestMemTableWrite(t *testing.T) {
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
-	_, data, count, _ := mt.write(chunkReaderGroup{tr1, tr2})
+	_, data, count := mt.write(chunkReaderGroup{tr1, tr2})
 	assert.Equal(uint32(1), count)
 
 	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
@@ -98,7 +98,7 @@ func TestMemTableWrite(t *testing.T) {
 	assert.False(outReader.has(computeAddr(chunks[2])))
 }
 
-func TestMemTableWriteErrata(t *testing.T) {
+func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(1024)
 
@@ -111,19 +111,9 @@ func TestMemTableWriteErrata(t *testing.T) {
 	for _, c := range chunks {
 		assert.True(mt.addChunk(computeAddr(c), c))
 	}
-	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should wind up in errata
+	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should wind up getting written "out of line"
 
-	_, data, count, errata := mt.write(nil)
-	assert.EqualValues(3, count)
-
-	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
-	assertChunksInReader(chunks, outReader, assert)
-
-	if assert.Len(errata, 1) {
-		data, present := errata[computeAddr(chunks[1])]
-		assert.True(present)
-		assert.EqualValues(chunks[1], data)
-	}
+	assert.Panics(func() { mt.write(nil) })
 }
 
 type outOfLineSnappy struct {
@@ -187,9 +177,9 @@ func (crg chunkReaderGroup) count() (count uint32) {
 	return
 }
 
-func (crg chunkReaderGroup) byteLen() (data uint64) {
+func (crg chunkReaderGroup) lens() (lengths []uint32) {
 	for _, haver := range crg {
-		data += haver.byteLen()
+		lengths = append(lengths, haver.lens()...)
 	}
 	return
 }

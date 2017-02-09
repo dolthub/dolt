@@ -36,12 +36,7 @@ type s3UploadedPart struct {
 }
 
 func (s3p s3TablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
-	name, data, count, errata := mt.write(haver)
-	// TODO: remove when BUG 3156 is fixed
-	for h, eData := range errata {
-		s3p.multipartUpload(eData, "errata-"+h.String())
-	}
-	return s3p.persistTable(name, data, count)
+	return s3p.persistTable(mt.write(haver))
 }
 
 func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {

@@ -20,17 +20,7 @@ type fsTablePersister struct {
 }
 
 func (ftp fsTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
-	name, data, count, errata := mt.write(haver)
-	// TODO: remove when BUG 3156 is fixed
-	for h, eData := range errata {
-		func() {
-			temp, err := ioutil.TempFile(ftp.dir, "errata-"+h.String())
-			d.PanicIfError(err)
-			defer checkClose(temp)
-			io.Copy(temp, bytes.NewReader(eData))
-		}()
-	}
-	return ftp.persistTable(name, data, count)
+	return ftp.persistTable(mt.write(haver))
 }
 
 func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {

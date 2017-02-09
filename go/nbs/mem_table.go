@@ -5,8 +5,6 @@
 package nbs
 
 import (
-	"fmt"
-	"os"
 	"sort"
 	"sync"
 
@@ -52,8 +50,12 @@ func (mt *memTable) count() uint32 {
 	return uint32(len(mt.order))
 }
 
-func (mt *memTable) byteLen() uint64 {
-	return mt.totalData
+func (mt *memTable) lens() []uint32 {
+	lengths := make([]uint32, 0, len(mt.chunks))
+	for _, data := range mt.chunks {
+		lengths = append(lengths, uint32(len(data)))
+	}
+	return lengths
 }
 
 func (mt *memTable) has(h addr) (has bool) {
@@ -106,8 +108,8 @@ func (mt *memTable) extract(order EnumerationOrder, chunks chan<- extractRecord)
 	}
 }
 
-func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32, errata map[addr][]byte) {
-	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
+func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {
+	maxSize := maxTableSize(mt.lens())
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
 
@@ -126,13 +128,5 @@ func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint
 	}
 	tableSize, name := tw.finish()
 
-	// TODO: remove when BUG 3156 is fixed
-	if len(tw.errata) > 0 {
-		fmt.Fprintf(os.Stderr, "BUG 3156: table %s; %d chunks, %d total data; max table size %d\n", name.String(), len(mt.order), mt.totalData, maxSize)
-		for h, data := range tw.errata {
-			fmt.Fprintf(os.Stderr, "  Failed to write %s of uncompressed length %d\n", h.String(), len(data))
-		}
-	}
-
-	return name, buff[:tableSize], count, tw.errata
+	return name, buff[:tableSize], count
 }

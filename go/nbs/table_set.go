@@ -117,14 +117,16 @@ func (ts tableSet) count() uint32 {
 	return f(ts.novel) + f(ts.upstream)
 }
 
-func (ts tableSet) byteLen() uint64 {
-	f := func(css chunkSources) (data uint64) {
+func (ts tableSet) lens() (lengths []uint32) {
+	f := func(css chunkSources) {
 		for _, haver := range css {
-			data += haver.byteLen()
+			lengths = append(lengths, haver.lens()...)
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+	f(ts.novel)
+	f(ts.upstream)
+	return
 }
 
 // Size returns the number of tables in this tableSet.

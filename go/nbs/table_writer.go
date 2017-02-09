@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"os"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -24,7 +23,6 @@ type tableWriter struct {
 	prefixes          prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockHash         hash.Hash
 
-	errata  map[addr][]byte // TODO: Get rid of this once we've diagnosed and fixed BUG 3156
 	snapper snappyEncoder
 }
 
@@ -38,12 +36,14 @@ func (r realSnappyEncoder) Encode(dst, src []byte) []byte {
 	return snappy.Encode(dst, src)
 }
 
-func maxTableSize(numChunks, totalData uint64) uint64 {
-	avgChunkSize := totalData / numChunks
-	d.Chk.True(avgChunkSize < maxChunkSize)
-	maxSnappySize := snappy.MaxEncodedLen(int(avgChunkSize))
-	d.Chk.True(maxSnappySize > 0)
-	return numChunks*(prefixTupleSize+lengthSize+addrSuffixSize+checksumSize+uint64(maxSnappySize)) + footerSize
+func maxTableSize(lengths []uint32) (max uint64) {
+	max = footerSize
+	for _, length := range lengths {
+		max += prefixTupleSize + lengthSize + addrSuffixSize + checksumSize // Metadata
+		d.Chk.True(int64(length) < maxInt)
+		max += uint64(snappy.MaxEncodedLen(int(length)))
+	}
+	return
 }
 
 func indexSize(numChunks uint32) uint64 {
@@ -58,7 +58,6 @@ func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
 	return &tableWriter{
 		buff:      buff,
 		blockHash: sha512.New(),
-		errata:    map[addr][]byte{},
 		snapper:   snapper,
 	}
 }
@@ -72,19 +71,12 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
 
-	// BUG 3156 indicates that, sometimes, snappy decides that there's not enough space in tw.buff[tw.pos:] to encode into.
-	// This _should not be_, because we believe that we allocate enough space in |tw.buff| to cover snappy's worst-case but...we've seen some instances.
+	// BUG 3156 indicated that, sometimes, snappy decided that there's not enough space in tw.buff[tw.pos:] to encode into.
+	// This _should never happen anymore be_, because we iterate over all chunks to be added and sum the max amount of space that snappy says it might need.
 	// Since we know that |data| can't be 0-length, we also know that the compressed version of |data| has length greater than zero. The first element in a snappy-encoded blob is a Uvarint indicating how much data is present. Therefore, if there's a Uvarint-encoded 0 at tw.buff[tw.pos:], we know that snappy did not write anything there and we have a problem.
 	if v, n := binary.Uvarint(tw.buff[tw.pos:]); v == 0 {
 		d.Chk.True(n != 0)
-		d.Chk.True(uint64(len(tw.buff[tw.pos:])) >= dataLength)
-
-		fmt.Fprintf(os.Stderr, "BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
-
-		// Copy the compressed data over to tw.buff.
-		copy(tw.buff[tw.pos:], compressed)
-		// Store the uncompressed data, so code with access to durable storage can save it off for analysis.
-		tw.errata[h] = data
+		panic(fmt.Errorf("BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:])))
 	}
 
 	tw.pos += dataLength
