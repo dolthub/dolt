@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"os"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -18,11 +17,11 @@ import (
 
 // tableWriter encodes a collection of byte stream chunks into a nbs table. NOT goroutine safe.
 type tableWriter struct {
-	buff              []byte
-	pos               uint64
-	totalPhysicalData uint64
-	prefixes          prefixIndexSlice // TODO: This is in danger of exploding memory
-	blockHash         hash.Hash
+	buff                  []byte
+	pos                   uint64
+	totalUncompressedData uint64
+	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
+	blockHash             hash.Hash
 
 	snapper snappyEncoder
 }
@@ -37,14 +36,12 @@ func (r realSnappyEncoder) Encode(dst, src []byte) []byte {
 	return snappy.Encode(dst, src)
 }
 
-func maxTableSize(lengths []uint32) (max uint64) {
-	max = footerSize
-	for _, length := range lengths {
-		max += prefixTupleSize + lengthSize + addrSuffixSize + checksumSize // Metadata
-		d.Chk.True(int64(length) < maxInt)
-		max += uint64(snappy.MaxEncodedLen(int(length)))
-	}
-	return
+func maxTableSize(numChunks, totalData uint64) uint64 {
+	avgChunkSize := totalData / numChunks
+	d.Chk.True(avgChunkSize < maxChunkSize)
+	maxSnappySize := snappy.MaxEncodedLen(int(avgChunkSize))
+	d.Chk.True(maxSnappySize > 0)
+	return numChunks*(prefixTupleSize+lengthSize+addrSuffixSize+checksumSize+uint64(maxSnappySize)) + footerSize
 }
 
 func indexSize(numChunks uint32) uint64 {
@@ -77,15 +74,11 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	// Since we know that |data| can't be 0-length, we also know that the compressed version of |data| has length greater than zero. The first element in a snappy-encoded blob is a Uvarint indicating how much data is present. Therefore, if there's a Uvarint-encoded 0 at tw.buff[tw.pos:], we know that snappy did not write anything there and we have a problem.
 	if v, n := binary.Uvarint(tw.buff[tw.pos:]); v == 0 {
 		d.Chk.True(n != 0)
-		d.Chk.True(uint64(len(tw.buff[tw.pos:])) >= dataLength)
-		fmt.Fprintf(os.Stderr, "BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
-
-		// Copy the compressed data over to tw.buff.
-		copy(tw.buff[tw.pos:], compressed)
+		panic(fmt.Errorf("BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:])))
 	}
 
 	tw.pos += dataLength
-	tw.totalPhysicalData += dataLength
+	tw.totalUncompressedData += uint64(len(data))
 
 	// checksum (4 LSBytes, big-endian)
 	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crc(compressed))
@@ -102,10 +95,10 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (tw *tableWriter) finish() (byteLength uint64, blockAddr addr) {
+func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr) {
 	tw.writeIndex()
 	tw.writeFooter()
-	byteLength = tw.pos
+	uncompressedLength = tw.pos
 
 	var h []byte
 	h = tw.blockHash.Sum(h) // Appends hash to h
@@ -165,8 +158,8 @@ func (tw *tableWriter) writeFooter() {
 	binary.BigEndian.PutUint32(tw.buff[tw.pos:], chunkCount)
 	tw.pos += uint32Size
 
-	// total chunk data
-	binary.BigEndian.PutUint64(tw.buff[tw.pos:], tw.totalPhysicalData)
+	// total uncompressed chunk data
+	binary.BigEndian.PutUint64(tw.buff[tw.pos:], tw.totalUncompressedData)
 	tw.pos += uint64Size
 
 	// magic number

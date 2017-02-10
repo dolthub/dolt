@@ -50,12 +50,8 @@ func (mt *memTable) count() uint32 {
 	return uint32(len(mt.order))
 }
 
-func (mt *memTable) lens() []uint32 {
-	lengths := make([]uint32, 0, len(mt.chunks))
-	for _, data := range mt.chunks {
-		lengths = append(lengths, uint32(len(data)))
-	}
-	return lengths
+func (mt *memTable) uncompressedLen() uint64 {
+	return mt.totalData
 }
 
 func (mt *memTable) has(h addr) (has bool) {
@@ -109,7 +105,7 @@ func (mt *memTable) extract(order EnumerationOrder, chunks chan<- extractRecord)
 }
 
 func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {
-	maxSize := maxTableSize(mt.lens())
+	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
 

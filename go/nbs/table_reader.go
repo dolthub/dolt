@@ -18,10 +18,11 @@ import (
 )
 
 type tableIndex struct {
-	chunkCount        uint32
-	prefixes, offsets []uint64
-	lengths, ordinals []uint32
-	suffixes          []byte
+	chunkCount            uint32
+	totalUncompressedData uint64
+	prefixes, offsets     []uint64
+	lengths, ordinals     []uint32
+	suffixes              []byte
 }
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
@@ -39,8 +40,9 @@ func parseTableIndex(buff []byte) tableIndex {
 	pos -= magicNumberSize
 	d.Chk.True(string(buff[pos:]) == magicNumber)
 
-	// Ignore total chunk data
+	// total uncompressed chunk data
 	pos -= uint64Size
+	totalUncompressedData := binary.BigEndian.Uint64(buff[pos:])
 
 	pos -= uint32Size
 	chunkCount := binary.BigEndian.Uint32(buff[pos:])
@@ -60,7 +62,7 @@ func parseTableIndex(buff []byte) tableIndex {
 	prefixes, ordinals := computePrefixes(chunkCount, buff[pos:pos+tuplesSize])
 
 	return tableIndex{
-		chunkCount,
+		chunkCount, totalUncompressedData,
 		prefixes, offsets,
 		lengths, ordinals,
 		suffixes,
@@ -186,8 +188,8 @@ func (tr tableReader) count() uint32 {
 	return tr.chunkCount
 }
 
-func (tr tableReader) lens() []uint32 {
-	return tr.lengths
+func (tr tableReader) uncompressedLen() uint64 {
+	return tr.totalUncompressedData
 }
 
 // returns true iff |h| can be found in this table.

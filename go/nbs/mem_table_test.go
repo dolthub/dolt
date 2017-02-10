@@ -98,7 +98,6 @@ func TestMemTableWrite(t *testing.T) {
 	assert.False(outReader.has(computeAddr(chunks[2])))
 }
 
-/* Temporarily disabled while we work around BUG 3156
 func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(1024)
@@ -112,10 +111,10 @@ func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	for _, c := range chunks {
 		assert.True(mt.addChunk(computeAddr(c), c))
 	}
-	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should wind up getting written "out of line"
+	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should trigger a panic
 
 	assert.Panics(func() { mt.write(nil) })
-}*/
+}
 
 type outOfLineSnappy struct {
 	policy []bool
@@ -178,9 +177,9 @@ func (crg chunkReaderGroup) count() (count uint32) {
 	return
 }
 
-func (crg chunkReaderGroup) lens() (lengths []uint32) {
+func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
 	for _, haver := range crg {
-		lengths = append(lengths, haver.lens()...)
+		data += haver.uncompressedLen()
 	}
 	return
 }

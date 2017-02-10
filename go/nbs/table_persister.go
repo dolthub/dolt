@@ -57,16 +57,16 @@ func (csbc chunkSourcesByDescendingCount) Swap(i, j int) { csbc[i], csbc[j] = cs
 
 func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, data []byte, chunkCount uint32) {
 	d.Chk.True(rl != nil)
-
-	lengths := []uint32{}
+	totalData := uint64(0)
 	for _, src := range sources {
-		lengths = append(lengths, src.lens()...)
+		chunkCount += src.count()
+		totalData += src.uncompressedLen()
 	}
-	if len(lengths) == 0 {
+	if chunkCount == 0 {
 		return
 	}
 
-	maxSize := maxTableSize(lengths)
+	maxSize := maxTableSize(uint64(chunkCount), totalData)
 	buff := make([]byte, maxSize) // This can blow up RAM (BUG 3130)
 	tw := newTableWriter(buff, nil)
 

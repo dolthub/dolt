@@ -36,7 +36,7 @@ func TestS3TablePersisterCompact(t *testing.T) {
 }
 
 func calcPartSize(rdr chunkReader, maxPartNum int) int {
-	return int(maxTableSize(rdr.lens())) / maxPartNum
+	return int(maxTableSize(uint64(rdr.count()), rdr.uncompressedLen())) / maxPartNum
 }
 
 func TestS3TablePersisterCompactSinglePart(t *testing.T) {
@@ -135,11 +135,11 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 }
 
 func bytesToChunkSource(bs ...[]byte) chunkSource {
-	lengths := []uint32{}
+	sum := 0
 	for _, b := range bs {
-		lengths = append(lengths, uint32(len(b)))
+		sum += len(b)
 	}
-	maxSize := maxTableSize(lengths)
+	maxSize := maxTableSize(uint64(len(bs)), uint64(sum))
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, nil)
 	for _, b := range bs {
