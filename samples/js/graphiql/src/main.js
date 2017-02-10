@@ -104,7 +104,7 @@ class Prompt extends React.Component<void, PromptProps, void> {
 }
 
 function graphQLFetcher(graphQLParams) {
-  const url = `${params.db}$/graphql/?ds=${params.ds}&query=${graphQLParams.query}`;
+  const url = `${params.db}/graphql/?ds=${params.ds}&query=${graphQLParams.query}`;
 
   const headers = new Headers();
   if (params.auth) {
