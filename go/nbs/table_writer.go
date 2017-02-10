@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
+	"os"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -76,7 +77,11 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	// Since we know that |data| can't be 0-length, we also know that the compressed version of |data| has length greater than zero. The first element in a snappy-encoded blob is a Uvarint indicating how much data is present. Therefore, if there's a Uvarint-encoded 0 at tw.buff[tw.pos:], we know that snappy did not write anything there and we have a problem.
 	if v, n := binary.Uvarint(tw.buff[tw.pos:]); v == 0 {
 		d.Chk.True(n != 0)
-		panic(fmt.Errorf("BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:])))
+		d.Chk.True(uint64(len(tw.buff[tw.pos:])) >= dataLength)
+		fmt.Fprintf(os.Stderr, "BUG 3156: unbuffered chunk %s: uncompressed %d, compressed %d, snappy max %d, tw.buff %d\n", h.String(), len(data), dataLength, snappy.MaxEncodedLen(len(data)), len(tw.buff[tw.pos:]))
+
+		// Copy the compressed data over to tw.buff.
+		copy(tw.buff[tw.pos:], compressed)
 	}
 
 	tw.pos += dataLength
