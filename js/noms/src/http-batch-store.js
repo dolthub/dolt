@@ -52,6 +52,9 @@ const readBatchOptions = {
 
 const writeBatchOptions = {
   method: 'POST',
+  headers: {
+    'Content-Type': 'application/octet-stream',
+  },
 };
 
 const updateRootOptions = {
