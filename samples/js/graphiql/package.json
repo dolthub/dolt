@@ -7,6 +7,7 @@
     "prepublish": "yarn run build",
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
     "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
+    "postbuild": "cp node_modules/graphiql/graphiql.css .",
     "test": "eslint src/ && flow src/"
   },
   "dependencies": {
