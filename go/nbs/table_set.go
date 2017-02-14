@@ -207,7 +207,11 @@ func (ts tableSet) Flatten() (flattened tableSet) {
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	flattened.upstream = append(flattened.upstream, ts.novel...)
+	for _, src := range ts.novel {
+		if src.count() > 0 {
+			flattened.upstream = append(flattened.upstream, src)
+		}
+	}
 	flattened.upstream = append(flattened.upstream, ts.upstream...)
 	return
 }

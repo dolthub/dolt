@@ -42,7 +42,7 @@ func TestTableSetPrepend(t *testing.T) {
 	ts.Close()
 }
 
-func TestTableToSpecsExcludesEmptyTable(t *testing.T) {
+func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	assert.Empty(ts.ToSpecs())
@@ -60,6 +60,27 @@ func TestTableToSpecsExcludesEmptyTable(t *testing.T) {
 
 	specs := ts.ToSpecs()
 	assert.Len(specs, 2)
+	ts.Close()
+}
+
+func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
+	assert := assert.New(t)
+	ts := newFakeTableSet()
+	assert.Empty(ts.ToSpecs())
+	mt := newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
+	ts = ts.Prepend(mt)
+
+	mt = newMemTable(testMemTableSize)
+	ts = ts.Prepend(mt)
+
+	mt = newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
+	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
+	ts = ts.Prepend(mt)
+
+	ts = ts.Flatten()
+	assert.EqualValues(ts.Size(), 2)
 	ts.Close()
 }
 
