@@ -92,7 +92,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	src := tt.p.Compact(createMemTable(chunks), nil)
 	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
-	store := newNomsBlockStore(fm, tt, defaultMemTableSize, maxTables)
+	store := newNomsBlockStore(fm, tt, defaultMemTableSize, defaultMaxTables)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root())
@@ -120,7 +120,7 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, tt tableSet, store *NomsBlockStore) {
 	fm = &fakeManifest{}
 	tt = newFakeTableSet()
-	store = newNomsBlockStore(fm, tt, 0, maxTables)
+	store = newNomsBlockStore(fm, tt, 0, defaultMaxTables)
 	return
 }
 

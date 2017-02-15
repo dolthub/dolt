@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"os"
+	"path"
 	"sort"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ const (
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultAWSReadLimit        = 1024
-	maxTables                  = 128
+	defaultMaxTables           = 128
 
 	defaultIndexCacheSize = (1 << 20) * 8 // 8MB
 
@@ -84,6 +85,30 @@ func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 func (asf *AWSStoreFactory) Shutter() {
 }
 
+type LocalStoreFactory struct {
+	dir        string
+	indexCache *indexCache
+	maxTables  int
+}
+
+func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chunks.Factory {
+	err := os.MkdirAll(dir, 0777)
+	d.PanicIfError(err)
+
+	var indexCache *indexCache
+	if indexCacheSize > 0 {
+		indexCache = newIndexCache(indexCacheSize)
+	}
+	return &LocalStoreFactory{dir, indexCache, maxTables}
+}
+
+func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
+	return newLocalStore(path.Join(lsf.dir, ns), defaultMemTableSize, lsf.indexCache, lsf.maxTables)
+}
+
+func (lsf *LocalStoreFactory) Shutter() {
+}
+
 func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
 	indexCacheOnce.Do(makeGlobalIndexCache)
 	return newAWSStore(table, ns, bucket, sess, memTableSize, globalIndexCache, make(chan struct{}, 32))
@@ -92,14 +117,18 @@ func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize u
 func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64, indexCache *indexCache, readRl chan struct{}) *NomsBlockStore {
 	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
 	ts := newS3TableSet(s3.New(sess), bucket, indexCache, readRl)
-	return newNomsBlockStore(mm, ts, memTableSize, maxTables)
+	return newNomsBlockStore(mm, ts, memTableSize, defaultMaxTables)
 }
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
+	indexCacheOnce.Do(makeGlobalIndexCache)
+	return newLocalStore(dir, memTableSize, globalIndexCache, defaultMaxTables)
+}
+
+func newLocalStore(dir string, memTableSize uint64, indexCache *indexCache, maxTables int) *NomsBlockStore {
 	err := os.MkdirAll(dir, 0777)
 	d.PanicIfError(err)
-	indexCacheOnce.Do(makeGlobalIndexCache)
-	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir, globalIndexCache), memTableSize, maxTables)
+	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir, indexCache), memTableSize, maxTables)
 }
 
 func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64, maxTables int) *NomsBlockStore {
