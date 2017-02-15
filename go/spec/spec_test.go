@@ -11,8 +11,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -102,7 +102,7 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	assert.Equal(types.Number(42), spec.GetValue())
 }
 
-func TestLDBDatabaseSpec(t *testing.T) {
+func TestNBSDatabaseSpec(t *testing.T) {
 	assert := assert.New(t)
 
 	run := func(prefix string) {
@@ -114,18 +114,19 @@ func TestLDBDatabaseSpec(t *testing.T) {
 
 		// Existing database in the database are read from the spec.
 		store1 := path.Join(tmpDir, "store1")
-		cs := chunks.NewLevelDBStoreUseFlags(store1, "")
-		db := datas.NewDatabase(cs)
-		r := db.WriteValue(s)
-		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
-		assert.NoError(err)
-		db.Close() // must close immediately to free ldb
+		func() {
+			db := datas.NewDatabase(nbs.NewLocalStore(store1, 8*(1<<20)))
+			defer db.Close()
+			r := db.WriteValue(s)
+			_, err = db.CommitValue(db.GetDataset("datasetID"), r)
+			assert.NoError(err)
+		}()
 
 		spec1, err := ForDatabase(prefix + store1)
 		assert.NoError(err)
 		defer spec1.Close()
 
-		assert.Equal("ldb", spec1.Protocol)
+		assert.Equal("nbs", spec1.Protocol)
 		assert.Equal(store1, spec1.DatabaseName)
 
 		assert.Equal(s, spec1.GetDatabase().ReadValue(s.Hash()))
@@ -136,19 +137,19 @@ func TestLDBDatabaseSpec(t *testing.T) {
 		assert.NoError(err)
 		defer spec2.Close()
 
-		assert.Equal("ldb", spec2.Protocol)
+		assert.Equal("nbs", spec2.Protocol)
 		assert.Equal(store2, spec2.DatabaseName)
 
-		db = spec2.GetDatabase()
+		db := spec2.GetDatabase()
 		db.WriteValue(s)
-		r = db.WriteValue(s)
+		r := db.WriteValue(s)
 		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 		assert.NoError(err)
 		assert.Equal(s, db.ReadValue(s.Hash()))
 	}
 
 	run("")
-	run("ldb:")
+	run("nbs:")
 }
 
 // Skip LDB dataset and path tests: the database behaviour is tested in
@@ -202,6 +203,7 @@ func TestForDatabase(t *testing.T) {
 		"https:",
 		"https://",
 		"https://%",
+		"ldb:",
 		"random:",
 		"random:random",
 		"/file/ba:d",
@@ -226,8 +228,8 @@ func TestForDatabase(t *testing.T) {
 		{"http://localhost:8000/fff", "http", "//localhost:8000/fff"},
 		{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe"},
 		{"mem", "mem", ""},
-		{tmpDir, "ldb", tmpDir},
-		{"ldb:" + tmpDir, "ldb", tmpDir},
+		{tmpDir, "nbs", tmpDir},
+		{"nbs:" + tmpDir, "nbs", tmpDir},
 		{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane"},
 		{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane"},
 		{"http://some/::/one", "http", "//some/::/one"},
@@ -269,8 +271,8 @@ func TestForDataset(t *testing.T) {
 		"http:::dsname",
 		"mem:/a/bogus/path:dsname",
 		"http://localhost:8000/one",
-		"ldb:",
-		"ldb:hello",
+		"nbs:",
+		"nbs:hello",
 		"aws://t:b/db",
 	}
 
@@ -302,8 +304,8 @@ func TestForDataset(t *testing.T) {
 		{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2"},
 		{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3"},
 		{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1"},
-		{tmpDir + "::ds/one", "ldb", tmpDir, "ds/one"},
-		{"ldb:" + tmpDir + "::ds/one", "ldb", tmpDir, "ds/one"},
+		{"nbs:" + tmpDir + "::ds/one", "nbs", tmpDir, "ds/one"},
+		{tmpDir + "::ds/one", "nbs", tmpDir, "ds/one"},
 		{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one"},
 		{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one"},
 		{"http://192.30.252.154::foo", "http", "//192.30.252.154", "foo"},
@@ -352,8 +354,8 @@ func TestForPath(t *testing.T) {
 		spec, protocol, databaseName, pathString string
 	}{
 		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		{tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "ldb", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
-		{"ldb:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "ldb", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
+		{tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
+		{"nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
 		{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv"},
 		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
 		{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
@@ -446,7 +448,7 @@ func TestAlreadyPinnedPathSpec(t *testing.T) {
 	assert.Equal(unpinned, pinned)
 }
 
-func TestMultipleSpecsSameLeveldb(t *testing.T) {
+func TestMultipleSpecsSameNBS(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpDir, err := ioutil.TempDir("", "spec_test")

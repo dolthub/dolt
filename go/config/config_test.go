@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	ldbSpec     = "ldb:./local"
+	nbsSpec     = "nbs:./local"
 	memSpec     = "mem"
 	httpSpec    = "http://test.com:8080/foo"
-	ldbAbsSpec  = "ldb:/tmp/noms"
+	nbsAbsSpec  = "nbs:/tmp/noms"
 	remoteAlias = "origin"
 )
 
@@ -29,7 +29,7 @@ var (
 	ldbConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {ldbSpec},
+			DefaultDbAlias: {nbsSpec},
 			remoteAlias:    {httpSpec},
 		},
 	}
@@ -38,7 +38,7 @@ var (
 		"",
 		map[string]DbConfig{
 			DefaultDbAlias: {httpSpec},
-			remoteAlias:    {ldbSpec},
+			remoteAlias:    {nbsSpec},
 		},
 	}
 
@@ -53,7 +53,7 @@ var (
 	ldbAbsConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {ldbAbsSpec},
+			DefaultDbAlias: {nbsAbsSpec},
 			remoteAlias:    {httpSpec},
 		},
 	}
@@ -83,7 +83,7 @@ func qualifyFilePath(assert *assert.Assertions, path string) string {
 func assertDbSpecsEquiv(assert *assert.Assertions, expected string, actual string) {
 	e, err := spec.ForDatabase(expected)
 	assert.NoError(err)
-	if e.Protocol != "ldb" {
+	if e.Protocol != "nbs" {
 		assert.Equal(expected, actual)
 	} else {
 		a, err := spec.ForDatabase(actual)

@@ -5,13 +5,11 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os/exec"
 	"path"
 	"runtime"
 	"testing"
 
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/suite"
 )
@@ -25,7 +23,7 @@ type testSuite struct {
 }
 
 func (s *testSuite) TestRoundTrip() {
-	spec := fmt.Sprintf("ldb:%s::hr", s.LdbDir)
+	spec := spec.CreateValueSpecString("nbs", s.DBDir, "hr")
 	stdout, stderr := s.MustRun(main, []string{"--ds", spec, "list-persons"})
 	s.Equal("No people found\n", stdout)
 	s.Equal("", stderr)
@@ -49,12 +47,8 @@ Abigail Boodman (id: 43, title: Chief Architect)
 func (s *testSuite) TestReadCanned() {
 	_, p, _, _ := runtime.Caller(0)
 	p = path.Join(path.Dir(p), "test-data")
-	dst, err := ioutil.TempDir("", "")
-	s.NoError(err)
-	// Have to copy the canned data elsewhere because just reading the database modifies it.
-	_, err = exec.Command("cp", "-r", p, dst).Output()
-	s.NoError(err)
-	stdout, stderr := s.MustRun(main, []string{"--ds", fmt.Sprintf("ldb:%s/test-data::hr", dst), "list-persons"})
+
+	stdout, stderr := s.MustRun(main, []string{"--ds", spec.CreateValueSpecString("nbs", p, "hr"), "list-persons"})
 	s.Equal(`Aaron Boodman (id: 7, title: Chief Evangelism Officer)
 Samuel Boodman (id: 13, title: VP, Culture)
 `, stdout)

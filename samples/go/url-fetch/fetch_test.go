@@ -42,7 +42,7 @@ func (s *testSuite) TestImportFromStdin() {
 		blobOut.Close()
 	}()
 
-	dsName := spec.CreateValueSpecString("ldb", s.LdbDir, "ds")
+	dsName := spec.CreateValueSpecString("nbs", s.DBDir, "ds")
 	// Run() will return when blobOut is closed.
 	s.MustRun(main, []string{"--stdin", dsName})
 
@@ -70,7 +70,7 @@ func (s *testSuite) TestImportFromFile() {
 	f.Write([]byte("abcdef"))
 	f.Close()
 
-	dsName := spec.CreateValueSpecString("ldb", s.LdbDir, "ds")
+	dsName := spec.CreateValueSpecString("nbs", s.DBDir, "ds")
 	s.MustRun(main, []string{f.Name(), dsName})
 
 	sp, err := spec.ForPath(dsName + ".value")

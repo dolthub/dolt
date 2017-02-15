@@ -46,7 +46,6 @@ func main() {
 	skipRecords := flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
 	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
-	spec.RegisterDatabaseFlags(flag.CommandLine)
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 	profile.RegisterProfileFlags(flag.CommandLine)
 

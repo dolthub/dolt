@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/testify/assert"
@@ -38,7 +38,7 @@ func TestNomdex(t *testing.T) {
 }
 
 func makeTestDb(s *testSuite, dsId string) datas.Database {
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	l1 := []TestObj{
 		{1, "will", "smith", "m", 40},
 		{2, "lana", "turner", "f", 91},
@@ -84,8 +84,8 @@ func (s *testSuite) TestNomdex() {
 	db.Close()
 
 	fnameIdx := "fname-idx"
-	dataSpec := spec.CreateValueSpecString("ldb", s.LdbDir, dsId)
-	dbSpec := spec.CreateDatabaseSpecString("ldb", s.LdbDir)
+	dataSpec := spec.CreateValueSpecString("nbs", s.DBDir, dsId)
+	dbSpec := spec.CreateDatabaseSpecString("nbs", s.DBDir)
 	stdout, stderr := s.MustRun(main, []string{"up", "--out-ds", fnameIdx, "--in-path", dataSpec, "--by", ".fname"})
 	s.Contains(stdout, "Indexed 24 objects")
 	s.Equal("", stderr)

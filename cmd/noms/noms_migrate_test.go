@@ -39,10 +39,10 @@ func (s *nomsMigrateTestSuite) writeTestData(str string, value v7types.Value, me
 
 func (s *nomsMigrateTestSuite) TestNomsMigrate() {
 	sourceDsName := "migrateSourceTest"
-	sourceStr := v7spec.CreateValueSpecString("ldb", s.LdbDir, sourceDsName)
+	sourceStr := v7spec.CreateValueSpecString("nbs", s.DBDir, sourceDsName)
 
 	destDsName := "migrateDestTest"
-	destStr := spec.CreateValueSpecString("ldb", s.LdbDir, destDsName)
+	destStr := spec.CreateValueSpecString("nbs", s.DBDir, destDsName)
 
 	str := "Hello world"
 	v7val := v7types.String(str)
@@ -65,10 +65,10 @@ func (s *nomsMigrateTestSuite) TestNomsMigrate() {
 
 func (s *nomsMigrateTestSuite) TestNomsMigrateNonCommit() {
 	sourceDsName := "migrateSourceTest2"
-	sourceStr := v7spec.CreateValueSpecString("ldb", s.LdbDir, sourceDsName)
+	sourceStr := v7spec.CreateValueSpecString("nbs", s.DBDir, sourceDsName)
 
 	destDsName := "migrateDestTest2"
-	destStr := spec.CreateValueSpecString("ldb", s.LdbDir, destDsName)
+	destStr := spec.CreateValueSpecString("nbs", s.DBDir, destDsName)
 
 	str := "Hello world"
 	v7val := v7types.NewStruct("", v7types.StructData{
@@ -92,10 +92,10 @@ func (s *nomsMigrateTestSuite) TestNomsMigrateNonCommit() {
 
 func (s *nomsMigrateTestSuite) TestNomsMigrateNil() {
 	sourceDsName := "migrateSourceTest3"
-	sourceStr := v7spec.CreateValueSpecString("ldb", s.LdbDir, sourceDsName)
+	sourceStr := v7spec.CreateValueSpecString("nbs", s.DBDir, sourceDsName)
 
 	destDsName := "migrateDestTest3"
-	destStr := spec.CreateValueSpecString("ldb", s.LdbDir, destDsName)
+	destStr := spec.CreateValueSpecString("nbs", s.DBDir, destDsName)
 
 	defer func() {
 		err := recover()

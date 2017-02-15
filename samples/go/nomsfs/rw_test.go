@@ -23,7 +23,7 @@ func TestRW(t *testing.T) {
 
 func (s *fuseTestSuite) TestSimpleFile() {
 	datasetName := "TestSimpleFile"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -53,7 +53,7 @@ func (s *fuseTestSuite) TestSimpleFile() {
 
 func (s *fuseTestSuite) TestBigFile() {
 	datasetName := "TestBigFile"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -78,7 +78,7 @@ func (s *fuseTestSuite) TestBigFile() {
 
 func (s *fuseTestSuite) TestOverwrite() {
 	datasetName := "TestOverwrite"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -105,7 +105,7 @@ func (s *fuseTestSuite) TestOverwrite() {
 
 func (s *fuseTestSuite) TestMultipleOpens() {
 	datasetName := "TestMultipleOpens"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 

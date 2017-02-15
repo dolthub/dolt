@@ -13,7 +13,7 @@
 //  4. Run go test with the -perf <path to noms db> flag.
 //
 // Flags:
-//  -perf.mem      Backs the database by a memory store, instead of leveldb.
+//  -perf.mem      Backs the database by a memory store, instead of nbs.
 //  -perf.prefix   Gives the dataset IDs for test results a prefix.
 //  -perf.repeat   Sets how many times tests are repeated ("reps").
 //  -perf.run      Only run tests that match a regex (case insensitive).
@@ -88,6 +88,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
@@ -100,7 +101,7 @@ import (
 
 var (
 	perfFlag         = flag.String("perf", "", "The database to write perf tests to. If this isn't specified, perf tests are skipped. If you want a dry run, use \"mem\" as a database")
-	perfMemFlag      = flag.Bool("perf.mem", false, "Back the test database by a memory store, not leveldb. This will affect test timing, but it's provided in case you're low on disk space")
+	perfMemFlag      = flag.Bool("perf.mem", false, "Back the test database by a memory store, not nbs. This will affect test timing, but it's provided in case you're low on disk space")
 	perfPrefixFlag   = flag.String("perf.prefix", "", `Prefix for the dataset IDs where results are written. For example, a prefix of "foo/" will write test datasets like "foo/csv-import" instead of just "csv-import"`)
 	perfRepeatFlag   = flag.Int("perf.repeat", 1, "The number of times to repeat each perf test")
 	perfRunFlag      = flag.String("perf.run", "", "Only run perf tests that match a regular expression")
@@ -383,8 +384,8 @@ func (suite *PerfSuite) Pause(fn func()) {
 //
 // Large CSV files in testdata are broken up into foo.a, foo.b, etc to get
 // around GitHub file size restrictions.
-func (s *PerfSuite) OpenGlob(pattern ...string) []io.Reader {
-	assert := s.NewAssert()
+func (suite *PerfSuite) OpenGlob(pattern ...string) []io.Reader {
+	assert := suite.NewAssert()
 
 	glob, err := filepath.Glob(path.Join(pattern...))
 	assert.NoError(err)
@@ -400,8 +401,8 @@ func (s *PerfSuite) OpenGlob(pattern ...string) []io.Reader {
 }
 
 // CloseGlob closes all of the files, designed to be used with OpenGlob.
-func (s *PerfSuite) CloseGlob(files []io.Reader) {
-	assert := s.NewAssert()
+func (suite *PerfSuite) CloseGlob(files []io.Reader) {
+	assert := suite.NewAssert()
 	for _, f := range files {
 		assert.NoError(f.(*os.File).Close())
 	}
@@ -470,7 +471,7 @@ func (suite *PerfSuite) getGitHead(dir string) string {
 // started on, and a callback to run to shut down the server.
 //
 // If the -perf.mem flag is specified, the remote database is hosted in memory,
-// not on disk (in a temporary leveldb directory).
+// not on disk (in a temporary nbs directory).
 //
 // - Why not use a local database + memory store?
 // Firstly, because the spec would be "mem", and the spec library doesn't
@@ -481,8 +482,8 @@ func (suite *PerfSuite) getGitHead(dir string) string {
 // It's more realistic to exercise the HTTP stack, even if it's just talking
 // over localhost.
 //
-// - Why provide an option for leveldb vs memory underlying store?
-// Again, leveldb is more realistic than memory, and in common cases disk
+// - Why provide an option for nbs vs memory underlying store?
+// Again, nbs is more realistic than memory, and in common cases disk
 // space > memory space.
 // However, on this developer's laptop, there is
 // actually very little disk space, and a lot of memory; plus making the
@@ -492,8 +493,8 @@ func (suite *PerfSuite) StartRemoteDatabase() (host string, stopFn func()) {
 	if *perfMemFlag {
 		chunkStore = chunks.NewMemoryStore()
 	} else {
-		ldbDir := suite.TempDir()
-		chunkStore = chunks.NewLevelDBStoreUseFlags(ldbDir, "")
+		dbDir := suite.TempDir()
+		chunkStore = nbs.NewLocalStore(dbDir, 128*(1<<20))
 	}
 
 	server := datas.NewRemoteDatabaseServer(chunkStore, 0)

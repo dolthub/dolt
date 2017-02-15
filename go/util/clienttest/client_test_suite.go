@@ -15,10 +15,12 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
+const DefaultMemTableSize = 8 * (1 << 20) // 8MB
+
 type ClientTestSuite struct {
 	suite.Suite
 	TempDir    string
-	LdbDir     string
+	DBDir      string
 	ExitStatus int
 	out        *os.File
 	err        *os.File
@@ -37,7 +39,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 	d.Chk.NoError(err)
 
 	suite.TempDir = dir
-	suite.LdbDir = path.Join(dir, "ldb")
+	suite.DBDir = path.Join(dir, "db")
 	suite.out = stdOutput
 	suite.err = errOutput
 	exit.Exit = mockExit

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -85,7 +85,7 @@ func (s *testSuite) TestCSVExportFromList() {
 	setName := "csvlist"
 
 	// Setup data store
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	ds := db.GetDataset(setName)
 
 	// Build data rows
@@ -94,7 +94,7 @@ func (s *testSuite) TestCSVExportFromList() {
 	db.Close()
 
 	// Run exporter
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{dataspec})
 	s.Equal("", stderr)
 
@@ -105,7 +105,7 @@ func (s *testSuite) TestCSVExportFromMap() {
 	setName := "csvmap"
 
 	// Setup data store
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	ds := db.GetDataset(setName)
 
 	// Build data rows
@@ -114,7 +114,7 @@ func (s *testSuite) TestCSVExportFromMap() {
 	db.Close()
 
 	// Run exporter
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{dataspec})
 	s.Equal("", stderr)
 

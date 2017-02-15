@@ -7,8 +7,8 @@ package main
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -24,22 +24,22 @@ type nomsDsTestSuite struct {
 }
 
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
-	dir := s.LdbDir
+	dir := s.DBDir
 
-	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
+	cs := nbs.NewLocalStore(dir+"/name", clienttest.DefaultMemTableSize)
 	ds := datas.NewDatabase(cs)
 
 	ds.Close()
 
-	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir+"/name")
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal("", rtnVal)
 }
 
 func (s *nomsDsTestSuite) TestNomsDs() {
-	dir := s.LdbDir
+	dir := s.DBDir
 
-	cs := chunks.NewLevelDBStore(dir+"/name", "", 24, false)
+	cs := nbs.NewLocalStore(dir+"/name", clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
 
 	id := "testdataset"
@@ -55,9 +55,9 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	err = db.Close()
 	s.NoError(err)
 
-	dbSpec := spec.CreateDatabaseSpecString("ldb", dir+"/name")
-	datasetName := spec.CreateValueSpecString("ldb", dir+"/name", id)
-	dataset2Name := spec.CreateValueSpecString("ldb", dir+"/name", id2)
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir+"/name")
+	datasetName := spec.CreateValueSpecString("nbs", dir+"/name", id)
+	dataset2Name := spec.CreateValueSpecString("nbs", dir+"/name", id2)
 
 	// both datasets show up
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})

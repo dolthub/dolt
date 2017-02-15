@@ -27,7 +27,7 @@ func TestNomsMerge(t *testing.T) {
 }
 
 func (s *nomsMergeTestSuite) TearDownTest() {
-	s.NoError(os.RemoveAll(s.LdbDir))
+	s.NoError(os.RemoveAll(s.DBDir))
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
@@ -74,7 +74,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 	})
 
 	output := "output"
-	stdout, stderr, err := s.Run(main, []string{"merge", s.LdbDir, left, right, output})
+	stdout, stderr, err := s.Run(main, []string{"merge", s.DBDir, left, right, output})
 	if err == nil {
 		s.Equal("", stderr)
 		s.validateDataset(output, expected, l, r)
@@ -84,7 +84,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 }
 
 func (s *nomsMergeTestSuite) setupMergeDataset(name string, data types.StructData, p types.Set) types.Ref {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
 	s.NoError(err)
 	defer sp.Close()
 
@@ -95,7 +95,7 @@ func (s *nomsMergeTestSuite) setupMergeDataset(name string, data types.StructDat
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("ldb", s.LdbDir, name))
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
 	if s.NoError(err) {
 		defer sp.Close()
 		commit := sp.GetDataset().Head()
@@ -114,7 +114,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	expected := types.NewStruct("", types.StructData{"num": types.Number(43)})
 
 	output := "output"
-	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=l", s.LdbDir, left, right, output})
+	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=l", s.DBDir, left, right, output})
 	if err == nil {
 		s.Equal("", stderr)
 		s.validateDataset(output, expected, l, r)
@@ -132,7 +132,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	expected := types.NewStruct("", types.StructData{"num": types.Number(44)})
 
 	output := "output"
-	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=r", s.LdbDir, left, right, output})
+	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=r", s.DBDir, left, right, output})
 	if err == nil {
 		s.Equal("", stderr)
 		s.validateDataset(output, expected, l, r)
@@ -147,11 +147,11 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	s.setupMergeDataset(left, types.StructData{"num": types.Number(43)}, types.NewSet(p))
 	s.setupMergeDataset(right, types.StructData{"num": types.Number(44)}, types.NewSet(p))
 
-	s.Panics(func() { s.MustRun(main, []string{"merge", s.LdbDir, left, right, "output"}) })
+	s.Panics(func() { s.MustRun(main, []string{"merge", s.DBDir, left, right, "output"}) })
 }
 
 func (s *nomsMergeTestSuite) TestBadInput() {
-	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("ldb", s.LdbDir))
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
 	s.NoError(err)
 	defer sp.Close()
 

@@ -33,7 +33,7 @@ type testKey struct {
 }
 
 func (s *testSuite) TestWin() {
-	sp := fmt.Sprintf("ldb:%s::test", s.LdbDir)
+	sp := spec.CreateValueSpecString("nbs", s.DBDir, "test")
 	dsSpec, err := spec.ForDataset(sp)
 	d.Chk.NoError(err)
 
@@ -92,7 +92,7 @@ func (s *testSuite) TestWin() {
 }
 
 func (s *testSuite) TestLose() {
-	sp, err := spec.ForDataset(fmt.Sprintf("ldb:%s::test", s.LdbDir))
+	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, "test"))
 	s.NoError(err)
 	defer sp.Close()
 

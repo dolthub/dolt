@@ -36,7 +36,7 @@ func TestBasics(t *testing.T) {
 
 func (s *fuseTestSuite) TestDir() {
 	datasetName := "TestDir"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -49,7 +49,7 @@ func (s *fuseTestSuite) TestDir() {
 
 func (s *fuseTestSuite) TestDirInDir() {
 	datasetName := "TestDirInDir"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -65,7 +65,7 @@ func (s *fuseTestSuite) TestDirInDir() {
 
 func (s *fuseTestSuite) TestFile() {
 	datasetName := "TestFile"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -78,7 +78,7 @@ func (s *fuseTestSuite) TestFile() {
 
 func (s *fuseTestSuite) TestFileInDir() {
 	datasetName := "TestFile"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -97,7 +97,7 @@ func (s *fuseTestSuite) TestFileInDir() {
 
 func (s *fuseTestSuite) TestSymlink() {
 	datasetName := "TestSymlink"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -113,7 +113,7 @@ func (s *fuseTestSuite) TestSymlink() {
 
 func (s *fuseTestSuite) TestChmod() {
 	datasetName := "TestChmod"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -128,7 +128,7 @@ func (s *fuseTestSuite) TestChmod() {
 
 func (s *fuseTestSuite) TestRename() {
 	datasetName := "TestRename"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -143,7 +143,7 @@ func (s *fuseTestSuite) TestRename() {
 
 func (s *fuseTestSuite) TestUnlink() {
 	datasetName := "TestUnlink"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -159,7 +159,7 @@ func (s *fuseTestSuite) TestUnlink() {
 
 func (s *fuseTestSuite) TestRmdir() {
 	datasetName := "TestRmdir"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 

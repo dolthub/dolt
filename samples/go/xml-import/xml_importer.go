@@ -56,7 +56,6 @@ func (a refIndexList) Less(i, j int) bool { return a[i].index < a[j].index }
 func main() {
 	err := d.Try(func() {
 		spec.RegisterCommitMetaFlags(flag.CommandLine)
-		spec.RegisterDatabaseFlags(flag.CommandLine)
 		verbose.RegisterVerboseFlags(flag.CommandLine)
 		profile.RegisterProfileFlags(flag.CommandLine)
 		flag.Usage = customUsage

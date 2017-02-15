@@ -7,14 +7,8 @@ package spec
 import (
 	"fmt"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	flag "github.com/juju/gnuflag"
 )
-
-func RegisterDatabaseFlags(flags *flag.FlagSet) {
-	chunks.RegisterLevelDBFlags(flags)
-}
 
 func CreateDatabaseSpecString(protocol, path string) string {
 	return fmt.Sprintf("%s:%s", protocol, path)

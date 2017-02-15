@@ -98,14 +98,14 @@ func absDbSpec(configHome string, url string) string {
 	if err != nil {
 		return url
 	}
-	if dbSpec.Protocol != "ldb" {
+	if dbSpec.Protocol != "nbs" {
 		return url
 	}
 	dbName := dbSpec.DatabaseName
 	if !filepath.IsAbs(dbName) {
 		dbName = filepath.Join(configHome, dbName)
 	}
-	return "ldb:" + dbName
+	return "nbs:" + dbName
 }
 
 func qualifyPaths(configPath string, c *Config) (*Config, error) {

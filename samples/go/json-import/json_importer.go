@@ -35,7 +35,6 @@ func main() {
 	}
 
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
-	spec.RegisterDatabaseFlags(flag.CommandLine)
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 	flag.Parse(true)
 

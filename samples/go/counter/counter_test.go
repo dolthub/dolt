@@ -21,7 +21,7 @@ type counterTestSuite struct {
 }
 
 func (s *counterTestSuite) TestCounter() {
-	spec := spec.CreateValueSpecString("ldb", s.LdbDir, "counter")
+	spec := spec.CreateValueSpecString("nbs", s.DBDir, "counter")
 	args := []string{spec}
 	stdout, stderr := s.MustRun(main, args)
 	s.Equal("1\n", stdout)

@@ -12,9 +12,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
@@ -106,13 +106,13 @@ func validateNestedMap(s *testSuite, m types.Map) {
 
 func (s *testSuite) TestCSVImporter() {
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -121,10 +121,10 @@ func (s *testSuite) TestCSVImporter() {
 
 func (s *testSuite) TestCSVImporterFromBlob() {
 	test := func(pathFlag string) {
-		defer os.RemoveAll(s.LdbDir)
+		defer os.RemoveAll(s.DBDir)
 
 		newDB := func() datas.Database {
-			cs := chunks.NewLevelDBStore(s.LdbDir, "", 1, false)
+			cs := nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize)
 			return datas.NewDatabase(cs)
 		}
 
@@ -137,8 +137,8 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 
 		stdout, stderr := s.MustRun(main, []string{
 			"--no-progress", "--column-types", TEST_FIELDS,
-			pathFlag, spec.CreateValueSpecString("ldb", s.LdbDir, "raw.value"),
-			spec.CreateValueSpecString("ldb", s.LdbDir, "csv"),
+			pathFlag, spec.CreateValueSpecString("nbs", s.DBDir, "raw.value"),
+			spec.CreateValueSpecString("nbs", s.DBDir, "csv"),
 		})
 		s.Equal("", stdout)
 		s.Equal("", stderr)
@@ -154,13 +154,13 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 
 func (s *testSuite) TestCSVImporterToMap() {
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:1", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -170,13 +170,13 @@ func (s *testSuite) TestCSVImporterToMap() {
 
 func (s *testSuite) TestCSVImporterToNestedMap() {
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:0,1", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -186,13 +186,13 @@ func (s *testSuite) TestCSVImporterToNestedMap() {
 
 func (s *testSuite) TestCSVImporterToNestedMapByName() {
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", TEST_FIELDS, "--dest-type", "map:year,a", s.tmpFileName, dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -210,13 +210,13 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -238,13 +238,13 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -266,7 +266,7 @@ func (s *testSuite) TestCSVImporterWithInvalidExternalHeader() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,x", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: Invalid headers specified, headers must be unique\n", stderr)
@@ -283,7 +283,7 @@ func (s *testSuite) TestCSVImporterWithInvalidNumColumnTypeSpec() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: Invalid column-types specified, column types do not correspond to number of headers\n", stderr)
@@ -309,14 +309,14 @@ func (s *testSuite) TestCSVImportSkipRecords() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--skip-records", "2", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 
@@ -338,7 +338,7 @@ func (s *testSuite) TestCSVImportSkipRecordsTooMany() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 
 	stdout, stderr, recoveredErr := s.Run(main, []string{"--no-progress", "--skip-records", "100", input.Name(), dataspec})
 	s.Equal("", stdout)
@@ -360,13 +360,13 @@ func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {
 	d.Chk.NoError(err)
 
 	setName := "csv"
-	dataspec := spec.CreateValueSpecString("ldb", s.LdbDir, setName)
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
 	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--skip-records", "1", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
-	db := datas.NewDatabase(chunks.NewLevelDBStore(s.LdbDir, "", 1, false))
-	defer os.RemoveAll(s.LdbDir)
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
 	defer db.Close()
 	ds := db.GetDataset(setName)
 

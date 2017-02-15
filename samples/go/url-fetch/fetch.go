@@ -35,7 +35,6 @@ func main() {
 	stdin := flag.Bool("stdin", false, "read blob from stdin")
 
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
-	spec.RegisterDatabaseFlags(flag.CommandLine)
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 
 	flag.Usage = func() {

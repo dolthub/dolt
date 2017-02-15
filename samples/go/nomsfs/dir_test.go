@@ -21,9 +21,8 @@ func TestDir(t *testing.T) {
 	suite.Run(t, &fuseTestSuite{})
 }
 
-func findDir(fs pathfs.FileSystem, path string, delimiter string) []string {
+func findDir(fs pathfs.FileSystem, path string, delimiter string) (ret []string) {
 	ents, _ := fs.OpenDir(path, nil)
-	ret := make([]string, 0)
 	for _, ent := range ents {
 		child := path + delimiter + ent.Name
 		attr, _ := fs.GetAttr(child, nil)
@@ -44,7 +43,7 @@ func find(fs pathfs.FileSystem) []string {
 
 func (s *fuseTestSuite) TestHierarchy() {
 	datasetName := "TestHierarchy"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -84,7 +83,7 @@ func (s *fuseTestSuite) TestHierarchy() {
 
 func (s *fuseTestSuite) TestDirError() {
 	datasetName := "TestDirError"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -103,7 +102,7 @@ func (s *fuseTestSuite) TestDirError() {
 
 func (s *fuseTestSuite) TestRenaming() {
 	datasetName := "TestRenaming"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 
@@ -128,7 +127,7 @@ func (s *fuseTestSuite) TestRenaming() {
 
 func (s *fuseTestSuite) TestRenameWhileOpen() {
 	datasetName := "TestRenameWhileOpen"
-	str := spec.CreateValueSpecString("ldb", s.LdbDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	var testfs pathfs.FileSystem
 

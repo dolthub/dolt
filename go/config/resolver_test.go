@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	localSpec  = ldbSpec
+	localSpec  = nbsSpec
 	remoteSpec = httpSpec
 	testDs     = "testds"
 	testObject = "#pckdvpvr9br1fie6c3pjudrlthe7na18"
