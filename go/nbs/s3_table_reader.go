@@ -7,6 +7,7 @@ package nbs
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
@@ -79,7 +80,13 @@ func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
 
 func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err error) {
 	if s3tr.readRl != nil {
-		s3tr.readRl <- struct{}{}
+		select {
+		case s3tr.readRl <- struct{}{}:
+		// Was able to put a token in the rate limiter, great!
+		default:
+			fmt.Fprintln(os.Stderr, "*** s3TableReader rate limiting")
+			s3tr.readRl <- struct{}{} // still need to block on the rate limiter
+		}
 		defer func() {
 			<-s3tr.readRl
 		}()
