@@ -34,7 +34,7 @@ var excludeServices = map[string]struct{}{
 // If the SERVICES environment variable is set, and this service is not apart of the list
 // this service will be skipped.
 func newGenerateInfo(modelFile, svcPath, svcImportPath string) *generateInfo {
-	g := &generateInfo{API: &api.API{SvcClientImportPath: svcImportPath}}
+	g := &generateInfo{API: &api.API{SvcClientImportPath: svcImportPath, BaseCrosslinkURL: "https://docs.aws.amazon.com"}}
 	g.API.Attach(modelFile)
 
 	if _, ok := excludeServices[g.API.PackageName()]; ok {
@@ -181,6 +181,7 @@ func writeServiceFiles(g *generateInfo, filename string) {
 	Must(writeServiceFile(g))
 	Must(writeInterfaceFile(g))
 	Must(writeWaitersFile(g))
+	Must(writeAPIErrorsFile(g))
 }
 
 // Must will panic if the error passed in is not nil.
@@ -259,5 +260,15 @@ func writeAPIFile(g *generateInfo) error {
 			g.API.PackageName(), g.API.Metadata.ServiceFullName),
 		g.API.PackageName(),
 		g.API.APIGoCode(),
+	)
+}
+
+// writeAPIErrorsFile writes out the service api errors file.
+func writeAPIErrorsFile(g *generateInfo) error {
+	return writeGoFile(filepath.Join(g.PackageDir, "errors.go"),
+		codeLayout,
+		"",
+		g.API.PackageName(),
+		g.API.APIErrorsGoCode(),
 	)
 }

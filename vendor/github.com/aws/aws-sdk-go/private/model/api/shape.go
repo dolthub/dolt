@@ -14,20 +14,24 @@ import (
 
 // A ShapeRef defines the usage of a shape within the API.
 type ShapeRef struct {
-	API              *API   `json:"-"`
-	Shape            *Shape `json:"-"`
-	Documentation    string
-	ShapeName        string `json:"shape"`
-	Location         string
-	LocationName     string
-	QueryName        string
-	Flattened        bool
-	Streaming        bool
-	XMLAttribute     bool
+	API           *API   `json:"-"`
+	Shape         *Shape `json:"-"`
+	Documentation string
+	ShapeName     string `json:"shape"`
+	Location      string
+	LocationName  string
+	QueryName     string
+	Flattened     bool
+	Streaming     bool
+	XMLAttribute  bool
+	// Ignore, if set, will not be sent over the wire
+	Ignore           bool
 	XMLNamespace     XMLInfo
 	Payload          string
 	IdempotencyToken bool `json:"idempotencyToken"`
 	Deprecated       bool `json:"deprecated"`
+
+	OrigShapeName string `json:"-"`
 }
 
 // ErrorInfo represents the error block of a shape's structure
@@ -69,6 +73,8 @@ type Shape struct {
 	refs       []*ShapeRef // References to this shape
 	resolvePkg string      // use this package in the goType() if present
 
+	OrigShapeName string `json:"-"`
+
 	// Defines if the shape is a placeholder and should not be used directly
 	Placeholder bool
 
@@ -81,8 +87,14 @@ type Shape struct {
 	ErrorInfo ErrorInfo `json:"error"`
 }
 
+// ErrorCodeName will return the error shape's name formated for
+// error code const.
+func (s *Shape) ErrorCodeName() string {
+	return "ErrCode" + s.ShapeName
+}
+
 // ErrorName will return the shape's name or error code if available based
-// on the API's protocol.
+// on the API's protocol. This is the error code string returned by the service.
 func (s *Shape) ErrorName() string {
 	name := s.ShapeName
 	switch s.API.Metadata.Protocol {
@@ -105,10 +117,12 @@ func (s *Shape) GoTags(root, required bool) string {
 // the associated API's reference to use newName.
 func (s *Shape) Rename(newName string) {
 	for _, r := range s.refs {
+		r.OrigShapeName = r.ShapeName
 		r.ShapeName = newName
 	}
 
 	delete(s.API.Shapes, s.ShapeName)
+	s.OrigShapeName = s.ShapeName
 	s.API.Shapes[newName] = s
 	s.ShapeName = newName
 }
@@ -381,6 +395,10 @@ func (ref *ShapeRef) GoTags(toplevel bool, isRequired bool) string {
 		tags = append(tags, ShapeTag{"idempotencyToken", "true"})
 	}
 
+	if ref.Ignore {
+		tags = append(tags, ShapeTag{"ignore", "true"})
+	}
+
 	return fmt.Sprintf("`%s`", tags)
 }
 
@@ -469,8 +487,21 @@ func (s *Shape) NestedShape() *Shape {
 	return nestedShape
 }
 
-var structShapeTmpl = template.Must(template.New("StructShape").Parse(`
+var structShapeTmpl = template.Must(template.New("StructShape").Funcs(template.FuncMap{
+	"GetCrosslinkURL": GetCrosslinkURL,
+}).Parse(`
 {{ .Docstring }}
+{{ if ne $.OrigShapeName "" -}}
+{{ $crosslinkURL := GetCrosslinkURL $.API.BaseCrosslinkURL $.API.APIName $.API.Metadata.UID $.OrigShapeName -}}
+{{ if ne $crosslinkURL "" -}} 
+// Please also see {{ $crosslinkURL }}
+{{ end -}}
+{{ else -}}
+{{ $crosslinkURL := GetCrosslinkURL $.API.BaseCrosslinkURL $.API.APIName $.API.Metadata.UID $.ShapeName -}}
+{{ if ne $crosslinkURL "" -}} 
+// Please also see {{ $crosslinkURL }}
+{{ end -}}
+{{ end -}}
 {{ $context := . -}}
 type {{ .ShapeName }} struct {
 	_ struct{} {{ .GoTags true false }}

@@ -1103,9 +1103,9 @@ func ExampleS3_GetObjectTagging() {
 	svc := s3.New(sess)
 
 	params := &s3.GetObjectTaggingInput{
-		Bucket:    aws.String("BucketName"),      // Required
-		Key:       aws.String("ObjectKey"),       // Required
-		VersionId: aws.String("ObjectVersionId"), // Required
+		Bucket:    aws.String("BucketName"), // Required
+		Key:       aws.String("ObjectKey"),  // Required
+		VersionId: aws.String("ObjectVersionId"),
 	}
 	resp, err := svc.GetObjectTagging(params)
 
@@ -2409,7 +2409,7 @@ func ExampleS3_PutObjectTagging() {
 				// More values...
 			},
 		},
-		VersionId: aws.String("ObjectVersionId"), // Required
+		VersionId: aws.String("ObjectVersionId"),
 	}
 	resp, err := svc.PutObjectTagging(params)
 

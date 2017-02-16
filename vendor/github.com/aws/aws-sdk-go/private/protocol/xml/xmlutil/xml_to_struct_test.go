@@ -34,7 +34,7 @@ func TestUnmarshal(t *testing.T) {
 
 	expected := &s3.GetBucketAclOutput{
 		Grants: []*s3.Grant{
-			&s3.Grant{
+			{
 				Grantee: &s3.Grantee{
 					DisplayName: aws.String("user"),
 					ID:          aws.String("foo-id"),

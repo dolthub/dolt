@@ -24,7 +24,7 @@ func TestRequestCancelRetry(t *testing.T) {
 	s.Handlers.UnmarshalError.Clear()
 	s.Handlers.Send.PushFront(func(r *request.Request) {
 		reqNum++
-		r.Error = errors.New("net/http: canceled")
+		r.Error = errors.New("net/http: request canceled")
 	})
 	out := &testData{}
 	r := s.NewRequest(&request.Operation{Name: "Operation"}, nil, out)

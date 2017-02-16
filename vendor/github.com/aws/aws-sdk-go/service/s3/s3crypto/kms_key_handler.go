@@ -39,7 +39,7 @@ func NewKMSKeyGenerator(kmsClient kmsiface.KMSAPI, cmkID string) CipherDataGener
 //	sess := session.New(&aws.Config{})
 //	cmkID := "arn to key"
 //	matdesc := s3crypto.MaterialDescription{}
-//	handler, err := s3crypto.NewKMSEncryptHandler(kms.New(sess), cmkID, matdesc)
+//	handler, err := s3crypto.NewKMSKeyGeneratorWithMatDesc(kms.New(sess), cmkID, matdesc)
 func NewKMSKeyGeneratorWithMatDesc(kmsClient kmsiface.KMSAPI, cmkID string, matdesc MaterialDescription) CipherDataGenerator {
 	if matdesc == nil {
 		matdesc = MaterialDescription{}

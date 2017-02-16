@@ -424,6 +424,49 @@ func TestBuildCanonicalRequest(t *testing.T) {
 	assert.Equal(t, expected, ctx.Request.URL.String())
 }
 
+func TestSignWithBody_ReplaceRequestBody(t *testing.T) {
+	creds := credentials.NewStaticCredentials("AKID", "SECRET", "SESSION")
+	req, seekerBody := buildRequest("dynamodb", "us-east-1", "{}")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
+
+	s := NewSigner(creds)
+	origBody := req.Body
+
+	_, err := s.Sign(req, seekerBody, "dynamodb", "us-east-1", time.Now())
+	if err != nil {
+		t.Fatalf("expect no error, got %v", err)
+	}
+
+	if req.Body == origBody {
+		t.Errorf("expeect request body to not be origBody")
+	}
+
+	if req.Body == nil {
+		t.Errorf("expect request body to be changed but was nil")
+	}
+}
+
+func TestSignWithBody_NoReplaceRequestBody(t *testing.T) {
+	creds := credentials.NewStaticCredentials("AKID", "SECRET", "SESSION")
+	req, seekerBody := buildRequest("dynamodb", "us-east-1", "{}")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
+
+	s := NewSigner(creds, func(signer *Signer) {
+		signer.DisableRequestBodyOverwrite = true
+	})
+
+	origBody := req.Body
+
+	_, err := s.Sign(req, seekerBody, "dynamodb", "us-east-1", time.Now())
+	if err != nil {
+		t.Fatalf("expect no error, got %v", err)
+	}
+
+	if req.Body != origBody {
+		t.Errorf("expeect request body to not be chagned")
+	}
+}
+
 func BenchmarkPresignRequest(b *testing.B) {
 	signer := buildSigner()
 	req, body := buildRequest("dynamodb", "us-east-1", "{}")

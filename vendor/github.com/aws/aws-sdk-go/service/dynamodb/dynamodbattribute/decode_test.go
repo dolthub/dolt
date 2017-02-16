@@ -478,3 +478,19 @@ func TestDecodeEmbeddedPointerStruct(t *testing.T) {
 	// But not for absent fields.
 	assert.Nil(t, a.C)
 }
+
+func TestDecodeBooleanOverlay(t *testing.T) {
+	type BooleanOverlay bool
+
+	av := &dynamodb.AttributeValue{
+		BOOL: aws.Bool(true),
+	}
+
+	decoder := NewDecoder()
+
+	var v BooleanOverlay
+
+	err := decoder.Decode(av, &v)
+	assert.NoError(t, err)
+	assert.Equal(t, BooleanOverlay(true), v)
+}

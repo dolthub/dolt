@@ -99,6 +99,10 @@ type DynamoDBAPI interface {
 
 	ListTablesPages(*dynamodb.ListTablesInput, func(*dynamodb.ListTablesOutput, bool) bool) error
 
+	ListTagsOfResourceRequest(*dynamodb.ListTagsOfResourceInput) (*request.Request, *dynamodb.ListTagsOfResourceOutput)
+
+	ListTagsOfResource(*dynamodb.ListTagsOfResourceInput) (*dynamodb.ListTagsOfResourceOutput, error)
+
 	PutItemRequest(*dynamodb.PutItemInput) (*request.Request, *dynamodb.PutItemOutput)
 
 	PutItem(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
@@ -114,6 +118,14 @@ type DynamoDBAPI interface {
 	Scan(*dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
 
 	ScanPages(*dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool) error
+
+	TagResourceRequest(*dynamodb.TagResourceInput) (*request.Request, *dynamodb.TagResourceOutput)
+
+	TagResource(*dynamodb.TagResourceInput) (*dynamodb.TagResourceOutput, error)
+
+	UntagResourceRequest(*dynamodb.UntagResourceInput) (*request.Request, *dynamodb.UntagResourceOutput)
+
+	UntagResource(*dynamodb.UntagResourceInput) (*dynamodb.UntagResourceOutput, error)
 
 	UpdateItemRequest(*dynamodb.UpdateItemInput) (*request.Request, *dynamodb.UpdateItemOutput)
 

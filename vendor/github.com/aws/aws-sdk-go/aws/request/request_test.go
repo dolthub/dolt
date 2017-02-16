@@ -3,12 +3,13 @@ package request_test
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/awstesting"
+	"github.com/aws/aws-sdk-go/private/protocol/rest"
 )
 
 type testData struct {
@@ -313,7 +315,7 @@ func TestRequestRecoverTimeoutWithNilBody(t *testing.T) {
 		{StatusCode: 200, Body: body(`{"data":"valid"}`)},
 	}
 	errors := []error{
-		errors.New("timeout"), nil,
+		errTimeout, nil,
 	}
 
 	s := awstesting.NewClient(aws.NewConfig().WithMaxRetries(10))
@@ -349,7 +351,7 @@ func TestRequestRecoverTimeoutWithNilResponse(t *testing.T) {
 		{StatusCode: 200, Body: body(`{"data":"valid"}`)},
 	}
 	errors := []error{
-		errors.New("timeout"),
+		errTimeout,
 		nil,
 	}
 
@@ -377,4 +379,62 @@ func TestRequestRecoverTimeoutWithNilResponse(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 1, int(r.RetryCount))
 	assert.Equal(t, "valid", out.Data)
+}
+
+func TestRequest_NoBody(t *testing.T) {
+	cases := []string{
+		"GET", "HEAD", "DELETE",
+		"PUT", "POST", "PATCH",
+	}
+
+	for i, c := range cases {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if v := r.TransferEncoding; len(v) > 0 {
+				t.Errorf("%d, expect no body sent with Transfer-Encoding, %v", i, v)
+			}
+
+			outMsg := []byte(`{"Value": "abc"}`)
+
+			if b, err := ioutil.ReadAll(r.Body); err != nil {
+				t.Fatalf("%d, expect no error reading request body, got %v", i, err)
+			} else if n := len(b); n > 0 {
+				t.Errorf("%d, expect no request body, got %d bytes", i, n)
+			}
+
+			w.Header().Set("Content-Length", strconv.Itoa(len(outMsg)))
+			if _, err := w.Write(outMsg); err != nil {
+				t.Fatalf("%d, expect no error writing server response, got %v", i, err)
+			}
+		}))
+
+		s := awstesting.NewClient(&aws.Config{
+			Region:     aws.String("mock-region"),
+			MaxRetries: aws.Int(0),
+			Endpoint:   aws.String(server.URL),
+			DisableSSL: aws.Bool(true),
+		})
+		s.Handlers.Build.PushBack(rest.Build)
+		s.Handlers.Validate.Clear()
+		s.Handlers.Unmarshal.PushBack(unmarshal)
+		s.Handlers.UnmarshalError.PushBack(unmarshalError)
+
+		in := struct {
+			Bucket *string `location:"uri" locationName:"bucket"`
+			Key    *string `location:"uri" locationName:"key"`
+		}{
+			Bucket: aws.String("mybucket"), Key: aws.String("myKey"),
+		}
+
+		out := struct {
+			Value *string
+		}{}
+
+		r := s.NewRequest(&request.Operation{
+			Name: "OpName", HTTPMethod: c, HTTPPath: "/{bucket}/{key+}",
+		}, &in, &out)
+
+		if err := r.Send(); err != nil {
+			t.Fatalf("%d, expect no error sending request, got %v", i, err)
+		}
+	}
 }

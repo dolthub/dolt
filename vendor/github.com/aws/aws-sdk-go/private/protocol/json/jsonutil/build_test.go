@@ -33,6 +33,8 @@ type J struct {
 	T  *time.Time
 }
 
+var zero = 0.0
+
 var jsonTests = []struct {
 	in  interface{}
 	out string
@@ -67,6 +69,13 @@ var jsonTests = []struct {
 		},
 		`{"S":"\u0000føøÿ\n\\\"\r\t\b\f"}`,
 		``,
+	},
+	{
+		J{
+			F: F(4.56 / zero),
+		},
+		"",
+		`json: unsupported value: +Inf`,
 	},
 }
 

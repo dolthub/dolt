@@ -632,6 +632,32 @@ func ExampleDynamoDB_ListTables() {
 	fmt.Println(resp)
 }
 
+func ExampleDynamoDB_ListTagsOfResource() {
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
+
+	params := &dynamodb.ListTagsOfResourceInput{
+		ResourceArn: aws.String("ResourceArnString"), // Required
+		NextToken:   aws.String("NextTokenString"),
+	}
+	resp, err := svc.ListTagsOfResource(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
 func ExampleDynamoDB_PutItem() {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -1136,6 +1162,67 @@ func ExampleDynamoDB_Scan() {
 		TotalSegments: aws.Int64(1),
 	}
 	resp, err := svc.Scan(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleDynamoDB_TagResource() {
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
+
+	params := &dynamodb.TagResourceInput{
+		ResourceArn: aws.String("ResourceArnString"), // Required
+		Tags: []*dynamodb.Tag{ // Required
+			{ // Required
+				Key:   aws.String("TagKeyString"),   // Required
+				Value: aws.String("TagValueString"), // Required
+			},
+			// More values...
+		},
+	}
+	resp, err := svc.TagResource(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleDynamoDB_UntagResource() {
+	sess, err := session.NewSession()
+	if err != nil {
+		fmt.Println("failed to create session,", err)
+		return
+	}
+
+	svc := dynamodb.New(sess)
+
+	params := &dynamodb.UntagResourceInput{
+		ResourceArn: aws.String("ResourceArnString"), // Required
+		TagKeys: []*string{ // Required
+			aws.String("TagKeyString"), // Required
+			// More values...
+		},
+	}
+	resp, err := svc.UntagResource(params)
 
 	if err != nil {
 		// Print the error, cast err to awserr.Error to get the Code and

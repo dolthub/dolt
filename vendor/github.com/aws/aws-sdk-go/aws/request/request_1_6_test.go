@@ -3,11 +3,13 @@
 package request_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/defaults"
@@ -30,4 +32,20 @@ func TestRequestInvalidEndpoint(t *testing.T) {
 	)
 
 	assert.Error(t, r.Error)
+}
+
+type timeoutErr struct {
+	error
+}
+
+var errTimeout = awserr.New("foo", "bar", &timeoutErr{
+	errors.New("net/http: request canceled"),
+})
+
+func (e *timeoutErr) Timeout() bool {
+	return true
+}
+
+func (e *timeoutErr) Temporary() bool {
+	return true
 }

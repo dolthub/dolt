@@ -288,6 +288,17 @@ func TestResolveEndpoint_UnknownService(t *testing.T) {
 	assert.True(t, ok, "expect error to be UnknownServiceError")
 }
 
+func TestResolveEndpoint_ResolveUnknownService(t *testing.T) {
+	resolved, err := testPartitions.EndpointFor("unknown-service", "us-region-1",
+		ResolveUnknownServiceOption)
+
+	assert.NoError(t, err)
+
+	assert.Equal(t, "https://unknown-service.us-region-1.amazonaws.com", resolved.URL)
+	assert.Equal(t, "us-region-1", resolved.SigningRegion)
+	assert.Equal(t, "unknown-service", resolved.SigningName)
+}
+
 func TestResolveEndpoint_UnknownMatchedRegion(t *testing.T) {
 	resolved, err := testPartitions.EndpointFor("service2", "us-region-1")
 
