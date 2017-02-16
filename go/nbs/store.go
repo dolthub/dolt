@@ -33,7 +33,7 @@ const (
 	StorageVersion = "2"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
-	defaultAWSReadLimit        = 768
+	defaultAWSReadLimit        = 1024
 	defaultMaxTables           = 128
 
 	defaultIndexCacheSize = (1 << 20) * 8 // 8MB
