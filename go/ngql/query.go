@@ -47,7 +47,8 @@ func constructQueryType(rootValue types.Value, tm *typeMap) *graphql.Object {
 		}})
 }
 
-// Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and executes |query| against it, encoding the result to |w|.
+// Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and
+// executes |query| against it, encoding the result to |w|.
 func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) error {
 	tm := newTypeMap()
 

@@ -6,6 +6,7 @@ package ngql
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -240,7 +241,12 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 		}),
 	)
 
-	suite.assertQueryResult(list, "{root{elements{... on FooStruct{a b} ... on BarStruct{b} ... on BazStruct{c}}}}", `{"data":{"root":{"elements":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
+	suite.assertQueryResult(list,
+		fmt.Sprintf("{root{elements{... on %s{a b} ... on %s{b} ... on %s{c}}}}",
+			getTypeName(list.Get(0).Type()),
+			getTypeName(list.Get(1).Type()),
+			getTypeName(list.Get(2).Type())),
+		`{"data":{"root":{"elements":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() {
@@ -256,7 +262,12 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 		}),
 	)
 
-	suite.assertQueryResult(list, "{root{elements{... on FooStruct{a} ... on BarStruct{b: a} ... on BazStruct{c: a}}}}", `{"data":{"root":{"elements":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
+	suite.assertQueryResult(list,
+		fmt.Sprintf("{root{elements{... on %s{a} ... on %s{b: a} ... on %s{c: a}}}}",
+			getTypeName(list.Get(0).Type()),
+			getTypeName(list.Get(1).Type()),
+			getTypeName(list.Get(2).Type())),
+		`{"data":{"root":{"elements":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestListOfUnionOfScalars() {

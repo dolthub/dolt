@@ -27,18 +27,21 @@ func newTypeMap() *typeMap {
 	return &typeMap{}
 }
 
-// In terms of resolving a graph of data, there are three types of value: scalars, lists and maps.
-// During resolution, we are converting some noms value to a graphql value. A getFieldFn will
-// be invoked for a matching noms type. Its job is to retrieve the sub-value from the noms type
-// which is mapped to a graphql map as a fieldname.
+// In terms of resolving a graph of data, there are three types of value:
+// scalars, lists and maps. During resolution, we are converting some noms
+// value to a graphql value. A getFieldFn will be invoked for a matching noms
+// type. Its job is to retrieve the sub-value from the noms type which is
+// mapped to a graphql map as a fieldname.
 type getFieldFn func(v interface{}, fieldName string, ctx context.Context) types.Value
 
-// When a field name is resolved, it may take key:value arguments. A getSubvaluesFn handles
-// returning one or more *noms* values whose presence is indicated by the provided arguments.
+// When a field name is resolved, it may take key:value arguments. A
+// getSubvaluesFn handles returning one or more *noms* values whose presence is
+// indicated by the provided arguments.
 type getSubvaluesFn func(v types.Value, args map[string]interface{}) (interface{}, error)
 
-// GraphQL requires all memberTypes in a Union to be Structs, so when a noms union contains a
-// scalar, we represent it in that context as a "boxed" value. E.g.
+// GraphQL requires all memberTypes in a Union to be Structs, so when a noms
+// union contains a scalar, we represent it in that context as a "boxed" value.
+// E.g.
 // Boolean! =>
 // type BooleanValue {
 //   scalarValue: Boolean!
@@ -56,9 +59,18 @@ func scalarToValue(nomsType *types.Type, scalarType graphql.Type, tm *typeMap) g
 		}})
 }
 
+func isScalar(nomsType *types.Type) bool {
+	switch nomsType {
+	case types.BoolType, types.NumberType, types.StringType:
+		return true
+	default:
+		return false
+	}
+}
+
 // Note: Always returns a graphql.NonNull() as the outer type.
 func nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap) graphql.Type {
-	key := typeMapKey{nomsType.Hash(), boxedIfScalar}
+	key := typeMapKey{nomsType.Hash(), boxedIfScalar && isScalar(nomsType)}
 	gqlType, ok := (*tm)[key]
 	if ok {
 		return gqlType
@@ -151,19 +163,23 @@ func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
 		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
 			tm := p.Context.Value(tmKey).(*typeMap)
 			var nomsType *types.Type
+			isScalar := false
 			if v, ok := p.Value.(types.Value); ok {
 				nomsType = v.Type()
 			} else {
 				switch p.Value.(type) {
 				case float64:
 					nomsType = types.NumberType
+					isScalar = true
 				case string:
 					nomsType = types.StringType
+					isScalar = true
 				case bool:
 					nomsType = types.BoolType
+					isScalar = true
 				}
 			}
-			key := typeMapKey{nomsType.Hash(), true}
+			key := typeMapKey{nomsType.Hash(), isScalar}
 			memberType := (*tm)[key]
 			// Member types cannot be non-null and must be struct (graphl.Object)
 			return memberType.(*graphql.NonNull).OfType.(*graphql.Object)
@@ -382,11 +398,14 @@ func getTypeName(nomsType *types.Type) string {
 		return fmt.Sprintf("%sSet", getTypeName(nomsValueType))
 
 	case types.StructKind:
-		return fmt.Sprintf("%sStruct", nomsType.Desc.(types.StructDesc).Name)
+		// GraphQL Name cannot start with a number.
+		// GraphQL type names must be globally unique.
+		return fmt.Sprintf("%s_%s", nomsType.Desc.(types.StructDesc).Name, nomsType.Hash().String()[:6])
 
 	case types.TypeKind:
+		// GraphQL Name cannot start with a number.
 		// TODO: https://github.com/attic-labs/noms/issues/3155
-		return fmt.Sprintf("%sType", nomsType.Hash().String())
+		return fmt.Sprintf("Type_%s", nomsType.Hash().String()[:6])
 
 	case types.UnionKind:
 		unionMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
