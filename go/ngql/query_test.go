@@ -6,6 +6,7 @@ package ngql
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -31,7 +32,7 @@ func (suite *QueryGraphQLSuite) SetupTest() {
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {
 	buff := &bytes.Buffer{}
 	Query(v, q, suite.vs, buff)
-	suite.Equal(expect, string(buff.Bytes()))
+	suite.Equal(expect+"\n", string(buff.Bytes()))
 }
 
 func (suite *QueryGraphQLSuite) TestScalars() {
@@ -326,4 +327,11 @@ func (suite *QueryGraphQLSuite) TestLoFi() {
 
 	t := types.StringType
 	suite.assertQueryResult(t, "{root}", `{"data":{"root":"pej65tf21rubhu9cb0oi5gqrkgf26aql"}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestError() {
+	buff := &bytes.Buffer{}
+	Error(errors.New("Some error string"), buff)
+	suite.Equal(buff.String(), `{"data":null,"errors":[{"message":"Some error string","locations":null}]}
+`)
 }

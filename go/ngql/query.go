@@ -5,7 +5,6 @@
 package ngql
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/gqlerrors"
 )
 
 const (
@@ -49,7 +49,7 @@ func constructQueryType(rootValue types.Value, tm *typeMap) *graphql.Object {
 
 // Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and
 // executes |query| against it, encoding the result to |w|.
-func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) error {
+func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) {
 	tm := newTypeMap()
 
 	queryObj := constructQueryType(rootValue, tm)
@@ -63,8 +63,18 @@ func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Write
 		Context:       ctx,
 	})
 
-	rJSON, err := json.Marshal(r)
-	d.Chk.NoError(err)
-	io.Copy(w, bytes.NewBuffer([]byte(rJSON)))
-	return nil
+	err := json.NewEncoder(w).Encode(r)
+	d.PanicIfError(err)
+}
+
+// Error writes an error as a GraphQL error to a writer.
+func Error(err error, w io.Writer) {
+	r := graphql.Result{
+		Errors: []gqlerrors.FormattedError{
+			{Message: err.Error()},
+		},
+	}
+
+	jsonErr := json.NewEncoder(w).Encode(r)
+	d.PanicIfError(jsonErr)
 }

@@ -6,6 +6,7 @@ package datas
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -431,21 +432,32 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	db := NewDatabase(cs)
 
 	var rootValue types.Value
+	var err error
 	if len(dsTokens) == 1 {
 		ds := dsTokens[0]
 		dataset := db.GetDataset(ds)
-		rootValue = dataset.Head()
+		var ok bool
+		rootValue, ok = dataset.MaybeHead()
+		if !ok {
+			err = fmt.Errorf("Dataset %s not found", ds)
+		}
 	} else {
 		h := hash.Parse(hTokens[0])
 		rootValue = db.ReadValue(h)
+		if rootValue == nil {
+			err = errors.New("Root value not found")
+		}
 	}
-	d.PanicIfTrue(rootValue == nil)
 
 	w.Header().Add("Content-Type", "application/json")
 	writer := respWriter(req, w)
 	defer writer.Close()
 
-	ngql.Query(rootValue, qTokens[0], db, writer)
+	if err != nil {
+		ngql.Error(err, writer)
+	} else {
+		ngql.Query(rootValue, qTokens[0], db, writer)
+	}
 }
 
 func handleBaseGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt chunks.ChunkStore) {
