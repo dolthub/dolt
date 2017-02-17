@@ -303,6 +303,30 @@ func (suite *QueryGraphQLSuite) TestCyclicStructs() {
 	suite.assertQueryResult(s1, "{root{a b{elements{a}}}}", `{"data":{"root":{"a":"aaa","b":{"elements":[{"a":"bbb"}]}}}}`)
 }
 
+func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
+	typ := types.MakeStructTypeFromFields("A", types.FieldMap{
+		"a": types.StringType,
+		"b": types.MakeUnionType(types.NumberType, types.MakeCycleType(0)),
+	})
+
+	// Struct A {
+	//  a: "aaa"
+	//  b: Struct A {
+	// 	 a: "bbb"
+	// 	 b: 42
+	//  })
+	// }
+
+	s1 := types.NewStructWithType(typ, types.ValueSlice{
+		types.String("aaa"),
+		types.NewStructWithType(typ, types.ValueSlice{types.String("bbb"), types.Number(42)}),
+	})
+
+	suite.assertQueryResult(s1,
+		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, getTypeName(s1.Type())),
+		`{"data":{"root":{"a":"aaa","b":{"a":"bbb"}}}}`)
+}
+
 func (suite *QueryGraphQLSuite) TestNestedCollection() {
 	list := types.NewList(
 		types.NewSet(
