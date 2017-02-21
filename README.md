@@ -1,36 +1,36 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 <br>
-[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[JavaScript SDK Tour](doc/js-tour.md)&nbsp; | &nbsp;[Documentation](doc/index.md)&nbsp; | &nbsp;[Project Status](#status)&nbsp; | &nbsp;[Download](https://s3-us-west-2.amazonaws.com/downloadstable.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries-v7/)
+[Command-Line Tour](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK Tour](doc/go-tour.md)&nbsp; | &nbsp;[Documentation](doc/index.md)&nbsp; | &nbsp;[Project Status](#status)&nbsp; | &nbsp;[Download](https://s3-us-west-2.amazonaws.com/downloadstable.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries-v7/)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
-*Noms* is a decentralized database based on ideas from Git.
+*Noms* is a decentralized database philosophically descendant from the Git version control system.
 
-This repository contains two reference implementations of the database—one in Go, and one in JavaScript. It also includes a number of tools and sample applications.
+Like Git, Noms is:
+
+* **Versioned:** By default, all previous versions of the database are retained. You can trivially track how the database evolved to its current state, easily and efficiently compare any two versions, or even rewind and branch from any previous version.
+* **Synchronizable:** Instances of a single Noms database can be disconnected from each other for any amount of time, then later reconcile their changes efficiently and correctly.
+
+Unlike Git, Noms is a database, so it also:
+
+* Primarily **stores structured data**, not files and directories (see: [the Noms type system](https://github.com/attic-labs/noms/blob/master/doc/intro.md#types))
+* **Scales well** to large amounts of data and concurrent clients (TODO: benchmarks)
+* Supports **atomic transactions** (when run in AWS, Noms is "effectively CA")
+* Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
+* Featuers a **flexible query model** (see: [GraphQL](./ngql/README.md))
+
+Finally, because Noms is content-addressed, it yields a very pleasant programming model. Working with Noms is _declarative_. You don't INSERT new data, UPDATE existing data, or REMOVE old data. You simply _declare_ what the data ought to be right now. Noms transparently figures out how to translate those assertions into physical updates.
 
 <br>
 
-## About Noms
-
-Noms is different from other databases. It is:
-
-* *Content-addressed*. If you have some data you want to put into Noms, you don't have to worry about whether it already exists. Duplicate data is automatically ignored. There is no update, only insert.
-
-* *Append-only*. When you commit data to Noms, you aren't overwriting anything. Instead you're adding to a historical record. By default, data is never removed from Noms. You can see the entire history of the database, diff any two commits, or rewind to any previous point in time.
-
-* *Typed*. Every value, dataset, and version of a database has a *type*, which is generated automatically as you add data. You can write code against the type of a Noms database, confident that you've handled all the cases you need to.
-
-* *Decentralized*. If I give you a copy of my database, you and I can modify our copies disconnected from each other, and come back together and merge our changes efficiently and correctly days, weeks, or years later.
-
-<br/>
 ## Install Noms
 
 Noms is supported on Mac OS X and Linux. While Windows isn't officially supported, you can compile a Windows build from source, and it usually works.
 
-1. [Download the latest  build](https://s3-us-west-2.amazonaws.com/downloadstable.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries-v7/)
+1. [Download the latest build](https://s3-us-west-2.amazonaws.com/downloadstable.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries-v7/)
 
   The build contains the Noms command-line and some utility tools. You can use `tar -ztvf noms-*.tar.gz` to view the contents of the tar.
 
@@ -38,7 +38,9 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
 
   `tar -xzf noms-*.tar.gz`
 
-3. Use the `noms ds` command to connect to the `cli-tour` database.
+## Get started with Noms
+
+1. Use the `noms ds` command to connect to the `cli-tour` database.
 
     ```
     ./noms ds http://demo.noms.io/cli-tour
@@ -54,63 +56,47 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
     sf-registered-business/raw
     ```
 
-4. View the history for the `sf-film-locations` dataset.
+2. View the history for the `sf-film-locations` dataset.
 
     ```
     ./noms log http://demo.noms.io/cli-tour::sf-film-locations
     ```
 
-Next, you can explore a Noms database or [take a tour of the CLI commands](doc/cli-tour.md).
+## Even more
 
-<br/>
-## Explore a demo instance of Noms
+Learn the basics: [Introduction to Noms](doc/intro.md)
 
-<a href="http://splore.noms.io/?db=https://demo.noms.io/cli-tour"><img src="doc/splore.png"><br>Visually explore a demo instance of Noms.</a>
-
-<br>
-## What Noms is Good For
-
-#### Data Version Control
-
-Noms gives you the entire Git workflow, but for large-scale structured (or unstructured) data. Fork, merge, track history, efficiently synchronize changes, etc.
-
-[<img src="doc/data-version-control.png" width="320" height="180">](https://www.youtube.com/watch?v=Zeg9CY3BMes)<br/>
-*[`noms diff` and `noms log` on large datasets](https://www.youtube.com/watch?v=Zeg9CY3BMes)*
-
-
-#### An Application Database with History
-
-A database where every change is automatically and efficiently preserved. Instantly revert to, fork, or work from any historical commit.
-
-[<img src="doc/versioned-database.png" width="320" height="180">](https://www.youtube.com/watch?v=JDO3z0vHEso)<br/>
-*[Versioning, Diffing, and Syncing with Noms](https://www.youtube.com/watch?v=JDO3z0vHEso)*
-
-
-#### An Archival Database
-
-Trivially import snapshots from any format or API. Data is automatically versioned and deduplicated. Track the history of each datasource. Search across data sources.
-
-*TODO: Sample and video*
-
+Take a tour: [Command-line interface tour](doc/cli-tour.md)
 
 <br>
-## Status
+## Status / Roadmap
 
-#### Data Format
+Noms is currently under heavy development. Attic Labs plans to use it as an integral piece of an upcoming consumer product.
+
+### Data Format
 
 We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/master/go/constants/version.go#L8) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
 
+### Roadmap
 
-#### Completeness
+We plan to implement the following for Noms version 8. Beyond that unknown.
 
-We're just getting started. Some important features are not yet implemented including a query system, concurrency, auto-merging, and GC.
+- [x] Horizontal scalability (Done! See: [nbs](./nbs/README.md))
+- [x] Automatic merge (Done! See: [CommitOptions.Policy](https://godoc.org/github.com/attic-labs/noms/go/datas#CommitOptions) and the `noms merge` subcommand).
+- [ ] Query language (In progress: See [ngql](./ngql/README.md))
+- [ ] Garbage Collection (#3192)
+- [ ] Optional fields (#2327)
+- [ ] Fix sync performance with long commit chains (#2233)
+- [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues/2307)
 
-#### API
+### API
 
 The Public API will continue to evolve. Pull requests which represent breaking API changes should be marked with `APIChange` and sent to the slack channel and mailing list below for advance warning and feedback.
 
 <br>
 ## Talk
+
+If you'd like to use Noms for something, we'd love to hear. Contact us:
 
 - [Slack](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
