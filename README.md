@@ -24,7 +24,7 @@ Unlike Git, Noms is a database, so it also:
 
 Finally, because Noms is content-addressed, it yields a very pleasant programming model.
 
-Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `REMOVE` old data. You simply *declare* what the data ought to be right now. Noms figures out how to translate those assertions into physical updates.
+Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. Noms figures out how to translate those assertions into physical updates.
 
 <br>
 
