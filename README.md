@@ -20,7 +20,7 @@ Unlike Git, Noms is a database, so it also:
 * **Scales well** to large amounts of data and concurrent clients (TODO: benchmarks)
 * Supports **atomic transactions** (a single instance of Noms is CP, but Noms is typically run in production backed by S3, in which case it is "[effectively CA](https://cloud.google.com/spanner/docs/whitepapers/SpannerAndCap.pdf)")
 * Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
-* Featuers a **flexible query model** (see: [GraphQL](./ngql/README.md))
+* Featuers a **flexible query model** (see: [GraphQL](./go/ngql/README.md))
 
 Finally, because Noms is content-addressed, it yields a very pleasant programming model.
 
@@ -68,7 +68,9 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
 
 Learn the basics: [Introduction to Noms](doc/intro.md)
 
-Take a tour: [Command-line interface tour](doc/cli-tour.md)
+Tour the CLI: [Command-Line Interface Tour](doc/cli-tour.md)
+
+Tour the Go API:[Go SDK Tour](doc/go-tour.md)
 
 <br>
 ## Status / Roadmap
@@ -83,13 +85,13 @@ We are fairly confident in the core data format, and plan to support Noms databa
 
 We plan to implement the following for Noms version 8. Beyond that unknown.
 
-- [x] Horizontal scalability (Done! See: [nbs](./nbs/README.md))
+- [x] Horizontal scalability (Done! See: [nbs](./go/nbs/README.md))
 - [x] Automatic merge (Done! See: [CommitOptions.Policy](https://godoc.org/github.com/attic-labs/noms/go/datas#CommitOptions) and the `noms merge` subcommand).
-- [ ] Query language (In progress: See [ngql](./ngql/README.md))
+- [ ] Query language (In progress: See [ngql](./go/ngql/README.md))
 - [ ] Garbage Collection (#3192)
 - [ ] Optional fields (#2327)
 - [ ] Fix sync performance with long commit chains (#2233)
-- [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues/2307)
+- [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues?q=is%3Aissue+is%3Aopen+label%3AFormat)
 
 ### API
 
