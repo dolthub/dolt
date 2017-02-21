@@ -20,7 +20,7 @@ Unlike Git, Noms is a database, so it also:
 * **Scales well** to large amounts of data and concurrent clients (TODO: benchmarks)
 * Supports **atomic transactions** (a single instance of Noms is CP, but Noms is typically run in production backed by S3, in which case it is "[effectively CA](https://cloud.google.com/spanner/docs/whitepapers/SpannerAndCap.pdf)")
 * Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
-* Featuers a **flexible query model** (see: [GraphQL](./go/ngql/README.md))
+* Features a **flexible query model** (see: [GraphQL](./go/ngql/README.md))
 
 Finally, because Noms is content-addressed, it yields a very pleasant programming model.
 
