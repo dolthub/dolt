@@ -6,8 +6,7 @@
 
 import type {ValueReader} from './value-store.js';
 import {invariant, notNull} from './assert.js';
-import {AsyncIterator} from './async-iterator.js';
-import type {AsyncIteratorResult} from './async-iterator.js';
+import type {AsyncIterator, AsyncIteratorResult} from './async-iterator.js';
 import Ref from './ref.js';
 import type {Type} from './type.js';
 import {ValueBase} from './value.js';
@@ -261,13 +260,12 @@ export class SequenceCursor<T, S: Sequence<any>> {
   }
 }
 
-export class SequenceIterator<T, S: Sequence<any>> extends AsyncIterator<T> {
+export class SequenceIterator<T, S: Sequence<any>> { // AsyncIterator
   _cursor: SequenceCursor<T, S>;
   _advance: Promise<boolean>;
   _closed: boolean;
 
   constructor(cursor: SequenceCursor<T, S>) {
-    super();
     this._cursor = cursor;
     this._advance = Promise.resolve(cursor.valid);
     this._closed = false;

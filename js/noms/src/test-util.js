@@ -9,8 +9,8 @@ import type Collection from './collection.js';
 import type Value from './value.js';
 import Hash from './hash.js';
 import {assert} from 'chai';
-import {notNull} from './assert.js';
-import {AsyncIterator} from './async-iterator.js';
+import {invariant, notNull} from './assert.js';
+import type {AsyncIterator} from './async-iterator.js';
 import {getChunksOfValue, ValueBase} from './value.js';
 import {getHashOfValue} from './get-hash.js';
 import {getTypeOfValue, Type} from './type.js';
@@ -53,7 +53,10 @@ export async function flattenParallel<T>(iter: AsyncIterator<T>, count: number):
     promises.push(iter.next());
   }
   const results = await Promise.all(promises);
-  return results.map(res => notNull(res.value));
+  return results.map(res => {
+    invariant(!res.done);
+    return res.value;
+  });
 }
 
 export function assertValueHash(expectHashStr: string, v: Value) {

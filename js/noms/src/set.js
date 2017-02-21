@@ -7,7 +7,7 @@
 import type {ValueReader} from './value-store.js';
 import type {makeChunkFn} from './sequence-chunker.js';
 import type Value, {ValueCallback} from './value.js'; // eslint-disable-line no-unused-vars
-import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIterator} from './async-iterator.js';
 import {chunkSequence, chunkSequenceSync} from './sequence-chunker.js';
 import Collection from './collection.js';
 import {compare, equals} from './compare.js';

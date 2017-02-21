@@ -4,8 +4,7 @@
 
 // @flow
 
-import {AsyncIterator} from './async-iterator.js';
-import type {AsyncIteratorResult} from './async-iterator.js';
+import type {AsyncIterator, AsyncIteratorResult} from './async-iterator.js';
 import {OrderedKey} from './sequence.js';
 import type Value from './value.js'; // eslint-disable-line no-unused-vars
 import {invariant, notNull} from './assert.js';
@@ -77,11 +76,10 @@ export class OrderedSequenceCursor<T, K: Value> extends
   }
 }
 
-export class OrderedSequenceIterator<T, K: Value> extends AsyncIterator<T> {
+export class OrderedSequenceIterator<T, K: Value> { // AsyncIterator
   _iterator: Promise<AsyncIterator<T>>;
 
   constructor(cursorP: Promise<OrderedSequenceCursor<T, K>>) {
-    super();
     this._iterator = cursorP.then(cur => cur.iterator());
   }
 

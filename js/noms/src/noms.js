@@ -5,7 +5,7 @@
 // @flow
 
 export {default as AbsolutePath} from './absolute-path.js';
-export {AsyncIterator} from './async-iterator.js';
+export {AsyncIterator, AsyncIteratorResult} from './async-iterator.js';
 export {default as BuzHash} from './buzhash.js';
 export {default as Commit} from './commit.js';
 export {default as Database} from './database.js';
@@ -66,7 +66,6 @@ export {default as jsonToNoms} from './json-convert.js';
 export {isSubtype} from './assert-type.js';
 export {default as Collection} from './collection.js';
 
-export type {AsyncIteratorResult} from './async-iterator.js';
 export type {ChunkStore} from './chunk-store.js';
 export type {MapEntry} from './map.js';
 export type {Splice} from './edit-distance.js';

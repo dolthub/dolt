@@ -6,8 +6,7 @@
 
 import Sequence, {SequenceCursor} from './sequence.js';
 import search from './binary-search.js';
-import type {AsyncIteratorResult} from './async-iterator.js';
-import {AsyncIterator} from './async-iterator.js';
+import type {AsyncIterator, AsyncIteratorResult} from './async-iterator.js';
 import {notNull} from './assert.js';
 
 export async function newCursorAtIndex(sequence: Sequence<any>, idx: number,
@@ -42,11 +41,10 @@ export class IndexedSequenceCursor<T> extends SequenceCursor<T, Sequence<any>> {
   }
 }
 
-export class IndexedSequenceIterator<T> extends AsyncIterator<T> {
+export class IndexedSequenceIterator<T> { // AsyncIterator
   _iterator: Promise<AsyncIterator<T>>;
 
   constructor(cursorP: Promise<IndexedSequenceCursor<T>>) {
-    super();
     this._iterator = cursorP.then(cur => cur.iterator());
   }
 
