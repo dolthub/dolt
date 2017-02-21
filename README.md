@@ -82,13 +82,9 @@ Tour the Go API: [Go SDK Tour](doc/go-tour.md)
 
 Noms is currently under heavy development. Attic Labs plans to use it as an integral piece of an upcoming consumer product.
 
-<br>
-
 ### Data Format
 
 We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/master/go/constants/version.go#L8) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
-
-<br>
 
 ### Roadmap
 
@@ -101,8 +97,6 @@ We plan to implement the following for Noms version 8. Beyond that unknown.
 - [ ] Optional fields (https://github.com/attic-labs/noms/issues/2327)
 - [ ] Fix sync performance with long commit chains (https://github.com/attic-labs/noms/issues/2233)
 - [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues?q=is%3Aissue+is%3Aopen+label%3AFormat)
-
-<br>
 
 ### API
 
