@@ -26,6 +26,8 @@ Finally, because Noms is content-addressed, it yields a very pleasant programmin
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
 
+<br>
+
 ## Install Noms
 
 Noms is supported on Mac OS X and Linux. While Windows isn't officially supported, you can compile a Windows build from source, and it usually works.
@@ -37,6 +39,8 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
 2. Extract the Noms commands.
 
   `tar -xzf noms-*.tar.gz`
+
+<br>
 
 ## Get started
 
@@ -62,6 +66,8 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
     ./noms log http://demo.noms.io/cli-tour::sf-film-locations
     ```
 
+<br>
+
 ## Learn Noms
 
 Learn the basics: [Introduction to Noms](doc/intro.md)
@@ -70,13 +76,19 @@ Tour the CLI: [Command-Line Interface Tour](doc/cli-tour.md)
 
 Tour the Go API: [Go SDK Tour](doc/go-tour.md)
 
+<br>
+
 ## Status / Roadmap
 
 Noms is currently under heavy development. Attic Labs plans to use it as an integral piece of an upcoming consumer product.
 
+<br>
+
 ### Data Format
 
 We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/master/go/constants/version.go#L8) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
+
+<br>
 
 ### Roadmap
 
@@ -90,11 +102,14 @@ We plan to implement the following for Noms version 8. Beyond that unknown.
 - [ ] Fix sync performance with long commit chains (https://github.com/attic-labs/noms/issues/2233)
 - [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues?q=is%3Aissue+is%3Aopen+label%3AFormat)
 
+<br>
+
 ### API
 
 The Public API will continue to evolve. Pull requests which represent breaking API changes should be marked with `APIChange` and sent to the slack channel and mailing list below for advance warning and feedback.
 
 <br>
+
 ## Talk
 
 If you'd like to use Noms for something, we'd love to hear. Contact us:
