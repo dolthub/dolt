@@ -18,11 +18,13 @@ Unlike Git, Noms is a database, so it also:
 
 * Primarily **stores structured data**, not files and directories (see: [the Noms type system](https://github.com/attic-labs/noms/blob/master/doc/intro.md#types))
 * **Scales well** to large amounts of data and concurrent clients (TODO: benchmarks)
-* Supports **atomic transactions** (when run in AWS, Noms is "effectively CA")
+* Supports **atomic transactions** (a single instance of Noms is CP, but Noms is typically run in production backed by S3, in which case it is "[effectively CA](https://cloud.google.com/spanner/docs/whitepapers/SpannerAndCap.pdf)")
 * Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
 * Featuers a **flexible query model** (see: [GraphQL](./ngql/README.md))
 
-Finally, because Noms is content-addressed, it yields a very pleasant programming model. Working with Noms is _declarative_. You don't INSERT new data, UPDATE existing data, or REMOVE old data. You simply _declare_ what the data ought to be right now. Noms transparently figures out how to translate those assertions into physical updates.
+Finally, because Noms is content-addressed, it yields a very pleasant programming model.
+
+Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `REMOVE` old data. You simply *declare* what the data ought to be right now. Noms figures out how to translate those assertions into physical updates.
 
 <br>
 
