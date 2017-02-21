@@ -40,7 +40,8 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
 
   `tar -xzf noms-*.tar.gz`
 
-## Get started with Noms
+<br>
+## Get started
 
 1. Use the `noms ds` command to connect to the `cli-tour` database.
 
@@ -64,13 +65,14 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
     ./noms log http://demo.noms.io/cli-tour::sf-film-locations
     ```
 
-## Even more
+<br>
+## Learn Noms
 
 Learn the basics: [Introduction to Noms](doc/intro.md)
 
 Tour the CLI: [Command-Line Interface Tour](doc/cli-tour.md)
 
-Tour the Go API:[Go SDK Tour](doc/go-tour.md)
+Tour the Go API: [Go SDK Tour](doc/go-tour.md)
 
 <br>
 ## Status / Roadmap
