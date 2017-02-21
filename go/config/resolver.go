@@ -112,7 +112,7 @@ func (r *Resolver) GetRootTracker(str string) (chunks.RootTracker, error) {
 	}
 	var rt chunks.RootTracker = sp.NewChunkStore()
 	if rt == nil {
-		rt = datas.NewHTTPBatchStore(sp.Spec, "")
+		rt = datas.NewHTTPBatchStore(sp.String(), "")
 	}
 	return rt, nil
 }

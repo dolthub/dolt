@@ -26,7 +26,6 @@ func TestMemDatabaseSpec(t *testing.T) {
 
 	assert.Equal("mem", spec.Protocol)
 	assert.Equal("", spec.DatabaseName)
-	assert.Equal("", spec.DatasetName)
 	assert.True(spec.Path.IsEmpty())
 
 	s := types.String("hello")
@@ -44,8 +43,8 @@ func TestMemDatasetSpec(t *testing.T) {
 
 	assert.Equal("mem", spec.Protocol)
 	assert.Equal("", spec.DatabaseName)
-	assert.Equal("test", spec.DatasetName)
-	assert.True(spec.Path.IsEmpty())
+	assert.Equal("test", spec.Path.Dataset)
+	assert.True(spec.Path.Path.IsEmpty())
 
 	ds := spec.GetDataset()
 	_, ok := spec.GetDataset().MaybeHeadValue()
@@ -68,7 +67,6 @@ func TestMemHashPathSpec(t *testing.T) {
 
 	assert.Equal("mem", spec.Protocol)
 	assert.Equal("", spec.DatabaseName)
-	assert.Equal("", spec.DatasetName)
 	assert.False(spec.Path.IsEmpty())
 
 	// This would be a reasonable check, and the equivalent JS test does it, but
@@ -89,7 +87,6 @@ func TestMemDatasetPathSpec(t *testing.T) {
 
 	assert.Equal("mem", spec.Protocol)
 	assert.Equal("", spec.DatabaseName)
-	assert.Equal("", spec.DatasetName)
 	assert.False(spec.Path.IsEmpty())
 
 	assert.Nil(spec.GetValue())
@@ -222,25 +219,25 @@ func TestForDatabase(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	testCases := []struct {
-		spec, protocol, databaseName string
+		spec, protocol, databaseName, canonicalSpecIfAny string
 	}{
-		{"http://localhost:8000", "http", "//localhost:8000"},
-		{"http://localhost:8000/fff", "http", "//localhost:8000/fff"},
-		{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe"},
-		{"mem", "mem", ""},
-		{tmpDir, "nbs", tmpDir},
-		{"nbs:" + tmpDir, "nbs", tmpDir},
-		{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane"},
-		{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane"},
-		{"http://some/::/one", "http", "//some/::/one"},
-		{"http://::1", "http", "//::1"},
-		{"http://192.30.252.154", "http", "//192.30.252.154"},
-		{"http://::192.30.252.154", "http", "//::192.30.252.154"},
-		{"http://0:0:0:0:0:ffff:c01e:fc9a", "http", "//0:0:0:0:0:ffff:c01e:fc9a"},
-		{"http://::ffff:c01e:fc9a", "http", "//::ffff:c01e:fc9a"},
-		{"http://::ffff::1e::9a", "http", "//::ffff::1e::9a"},
-		{"aws://table:bucket/db", "aws", "//table:bucket/db"},
-		{"aws://table/db", "aws", "//table/db"},
+		{"http://localhost:8000", "http", "//localhost:8000", ""},
+		{"http://localhost:8000/fff", "http", "//localhost:8000/fff", ""},
+		{"https://local.attic.io/john/doe", "https", "//local.attic.io/john/doe", ""},
+		{"mem", "mem", "", ""},
+		{tmpDir, "nbs", tmpDir, "nbs:" + tmpDir},
+		{"nbs:" + tmpDir, "nbs", tmpDir, ""},
+		{"http://server.com/john/doe?access_token=jane", "http", "//server.com/john/doe?access_token=jane", ""},
+		{"https://server.com/john/doe/?arg=2&qp1=true&access_token=jane", "https", "//server.com/john/doe/?arg=2&qp1=true&access_token=jane", ""},
+		{"http://some/::/one", "http", "//some/::/one", ""},
+		{"http://::1", "http", "//::1", ""},
+		{"http://192.30.252.154", "http", "//192.30.252.154", ""},
+		{"http://::192.30.252.154", "http", "//::192.30.252.154", ""},
+		{"http://0:0:0:0:0:ffff:c01e:fc9a", "http", "//0:0:0:0:0:ffff:c01e:fc9a", ""},
+		{"http://::ffff:c01e:fc9a", "http", "//::ffff:c01e:fc9a", ""},
+		{"http://::ffff::1e::9a", "http", "//::ffff::1e::9a", ""},
+		{"aws://table:bucket/db", "aws", "//table:bucket/db", ""},
+		{"aws://table/db", "aws", "//table/db", ""},
 	}
 
 	for _, tc := range testCases {
@@ -248,11 +245,15 @@ func TestForDatabase(t *testing.T) {
 		assert.NoError(err, tc.spec)
 		defer spec.Close()
 
-		assert.Equal(tc.spec, spec.Spec)
 		assert.Equal(tc.protocol, spec.Protocol)
 		assert.Equal(tc.databaseName, spec.DatabaseName)
-		assert.Equal("", spec.DatasetName)
 		assert.True(spec.Path.IsEmpty())
+
+		if tc.canonicalSpecIfAny == "" {
+			assert.Equal(tc.spec, spec.String())
+		} else {
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
+		}
 	}
 }
 
@@ -274,6 +275,7 @@ func TestForDataset(t *testing.T) {
 		"nbs:",
 		"nbs:hello",
 		"aws://t:b/db",
+		"mem::foo.value",
 	}
 
 	for _, spec := range badSpecs {
@@ -298,24 +300,24 @@ func TestForDataset(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	testCases := []struct {
-		spec, protocol, databaseName, datasetName string
+		spec, protocol, databaseName, datasetName, canonicalSpecIfAny string
 	}{
-		{"http://localhost:8000::ds1", "http", "//localhost:8000", "ds1"},
-		{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2"},
-		{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3"},
-		{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1"},
-		{"nbs:" + tmpDir + "::ds/one", "nbs", tmpDir, "ds/one"},
-		{tmpDir + "::ds/one", "nbs", tmpDir, "ds/one"},
-		{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one"},
-		{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one"},
-		{"http://192.30.252.154::foo", "http", "//192.30.252.154", "foo"},
-		{"http://::1::foo", "http", "//::1", "foo"},
-		{"http://::192.30.252.154::foo", "http", "//::192.30.252.154", "foo"},
-		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo"},
-		{"http://::ffff:c01e:fc9a::foo", "http", "//::ffff:c01e:fc9a", "foo"},
-		{"http://::ffff::1e::9a::foo", "http", "//::ffff::1e::9a", "foo"},
-		{"aws://table:bucket/db::ds", "aws", "//table:bucket/db", "ds"},
-		{"aws://table/db::ds", "aws", "//table/db", "ds"},
+		{"http://localhost:8000::ds1", "http", "//localhost:8000", "ds1", ""},
+		{"http://localhost:8000/john/doe/::ds2", "http", "//localhost:8000/john/doe/", "ds2", ""},
+		{"https://local.attic.io/john/doe::ds3", "https", "//local.attic.io/john/doe", "ds3", ""},
+		{"http://local.attic.io/john/doe::ds1", "http", "//local.attic.io/john/doe", "ds1", ""},
+		{"nbs:" + tmpDir + "::ds/one", "nbs", tmpDir, "ds/one", ""},
+		{tmpDir + "::ds/one", "nbs", tmpDir, "ds/one", "nbs:" + tmpDir + "::ds/one"},
+		{"http://localhost:8000/john/doe?access_token=abc::ds/one", "http", "//localhost:8000/john/doe?access_token=abc", "ds/one", ""},
+		{"https://localhost:8000?qp1=x&access_token=abc&qp2=y::ds/one", "https", "//localhost:8000?qp1=x&access_token=abc&qp2=y", "ds/one", ""},
+		{"http://192.30.252.154::foo", "http", "//192.30.252.154", "foo", ""},
+		{"http://::1::foo", "http", "//::1", "foo", ""},
+		{"http://::192.30.252.154::foo", "http", "//::192.30.252.154", "foo", ""},
+		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo", ""},
+		{"http://::ffff:c01e:fc9a::foo", "http", "//::ffff:c01e:fc9a", "foo", ""},
+		{"http://::ffff::1e::9a::foo", "http", "//::ffff::1e::9a", "foo", ""},
+		{"aws://table:bucket/db::ds", "aws", "//table:bucket/db", "ds", ""},
+		{"aws://table/db::ds", "aws", "//table/db", "ds", ""},
 	}
 
 	for _, tc := range testCases {
@@ -323,11 +325,15 @@ func TestForDataset(t *testing.T) {
 		assert.NoError(err, tc.spec)
 		defer spec.Close()
 
-		assert.Equal(tc.spec, spec.Spec)
 		assert.Equal(tc.protocol, spec.Protocol)
 		assert.Equal(tc.databaseName, spec.DatabaseName)
-		assert.Equal(tc.datasetName, spec.DatasetName)
-		assert.True(spec.Path.IsEmpty())
+		assert.Equal(tc.datasetName, spec.Path.Dataset)
+
+		if tc.canonicalSpecIfAny == "" {
+			assert.Equal(tc.spec, spec.String())
+		} else {
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
+		}
 	}
 }
 
@@ -351,22 +357,22 @@ func TestForPath(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	testCases := []struct {
-		spec, protocol, databaseName, pathString string
+		spec, protocol, databaseName, pathString, canonicalSpecIfAny string
 	}{
-		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		{tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
-		{"nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv"},
-		{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv"},
-		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv"},
-		{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1"},
-		{"http://192.30.252.154::foo.bar", "http", "//192.30.252.154", "foo.bar"},
-		{"http://::1::foo.bar.baz", "http", "//::1", "foo.bar.baz"},
-		{"http://::192.30.252.154::baz[42]", "http", "//::192.30.252.154", "baz[42]"},
-		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo[42].bar", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo[42].bar"},
-		{"http://::ffff:c01e:fc9a::foo.foo", "http", "//::ffff:c01e:fc9a", "foo.foo"},
-		{"http://::ffff::1e::9a::hello[\"world\"]", "http", "//::ffff::1e::9a", "hello[\"world\"]"},
-		{"aws://table:bucket/db::foo.foo", "aws", "//table:bucket/db", "foo.foo"},
-		{"aws://table/db::foo.foo", "aws", "//table/db", "foo.foo"},
+		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv", ""},
+		{tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv", "nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv"},
+		{"nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv", ""},
+		{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv", ""},
+		{"http://local.attic.io/john/doe::#0123456789abcdefghijklmnopqrstuv", "http", "//local.attic.io/john/doe", "#0123456789abcdefghijklmnopqrstuv", ""},
+		{"http://localhost:8000/john/doe/::ds1", "http", "//localhost:8000/john/doe/", "ds1", ""},
+		{"http://192.30.252.154::foo.bar", "http", "//192.30.252.154", "foo.bar", ""},
+		{"http://::1::foo.bar.baz", "http", "//::1", "foo.bar.baz", ""},
+		{"http://::192.30.252.154::baz[42]", "http", "//::192.30.252.154", "baz[42]", ""},
+		{"http://0:0:0:0:0:ffff:c01e:fc9a::foo[42].bar", "http", "//0:0:0:0:0:ffff:c01e:fc9a", "foo[42].bar", ""},
+		{"http://::ffff:c01e:fc9a::foo.foo", "http", "//::ffff:c01e:fc9a", "foo.foo", ""},
+		{"http://::ffff::1e::9a::hello[\"world\"]", "http", "//::ffff::1e::9a", "hello[\"world\"]", ""},
+		{"aws://table:bucket/db::foo.foo", "aws", "//table:bucket/db", "foo.foo", ""},
+		{"aws://table/db::foo.foo", "aws", "//table/db", "foo.foo", ""},
 	}
 
 	for _, tc := range testCases {
@@ -374,11 +380,15 @@ func TestForPath(t *testing.T) {
 		assert.NoError(err)
 		defer spec.Close()
 
-		assert.Equal(tc.spec, spec.Spec)
 		assert.Equal(tc.protocol, spec.Protocol)
 		assert.Equal(tc.databaseName, spec.DatabaseName)
-		assert.Equal("", spec.DatasetName)
 		assert.Equal(tc.pathString, spec.Path.String())
+
+		if tc.canonicalSpecIfAny == "" {
+			assert.Equal(tc.spec, spec.String())
+		} else {
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
+		}
 	}
 }
 
@@ -399,7 +409,7 @@ func TestPinPathSpec(t *testing.T) {
 	head := db.GetDataset("foo").Head()
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash().String()), pinned.Spec)
+	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash().String()), pinned.String())
 	assert.Equal(types.Number(42), pinned.GetValue())
 	assert.Equal(types.Number(42), unpinned.GetValue())
 
@@ -429,7 +439,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	}
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash().String()), pinned.Spec)
+	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash().String()), pinned.String())
 	assert.Equal(types.Number(42), commitValue(pinned.GetValue()))
 	assert.Equal(types.Number(42), unpinned.GetDataset().HeadValue())
 

@@ -165,10 +165,10 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 		{[]string{"foo", "bar"}, "error: Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz"}, "error: Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux", "five"}, "error: Incorrect number of arguments\n"},
-		{[]string{sp.Spec, l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
-		{[]string{sp.Spec, l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
-		{[]string{sp.Spec, l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
-		{[]string{sp.Spec, l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.String(), l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.String(), l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
+		{[]string{sp.String(), l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
+		{[]string{sp.String(), l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
 	}
 
 	db := sp.GetDatabase()

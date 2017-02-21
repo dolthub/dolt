@@ -5,19 +5,20 @@
 package spec
 
 import (
-	"fmt"
-
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
-func CreateDatabaseSpecString(protocol, path string) string {
-	return fmt.Sprintf("%s:%s", protocol, path)
+func CreateDatabaseSpecString(protocol, db string) string {
+	return Spec{Protocol: protocol, DatabaseName: db}.String()
 }
 
-func CreateValueSpecString(protocol, path, value string) string {
-	return fmt.Sprintf("%s:%s%s%s", protocol, path, Separator, value)
+func CreateValueSpecString(protocol, db, path string) string {
+	p, err := NewAbsolutePath(path)
+	d.Chk.NoError(err)
+	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String()
 }
 
-func CreateHashSpecString(protocol, path string, h hash.Hash) string {
-	return fmt.Sprintf("%s:%s%s#%s", protocol, path, Separator, h.String())
+func CreateHashSpecString(protocol, db string, h hash.Hash) string {
+	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String()
 }

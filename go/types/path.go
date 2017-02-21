@@ -22,9 +22,12 @@ import (
 // Note, @at() is valid under this regexp, code should deal with the error.
 var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 
-// A Path is an address to a Noms value - and unlike hashes (i.e. #abcd...) they
-// can address inlined values.
-// See https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
+// A Path locates a value in Noms relative to some other value. For locating
+// values absolutely within a database, see AbsolutePath. To locate values
+// globally, see Spec.
+//
+// For more details, see:
+// https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
 type Path []PathPart
 
 type PathPart interface {
@@ -174,6 +177,10 @@ func (p Path) String() string {
 		strs = append(strs, part.String())
 	}
 	return strings.Join(strs, "")
+}
+
+func (p Path) IsEmpty() bool {
+	return len(p) == 0
 }
 
 // Gets Struct field values by name.

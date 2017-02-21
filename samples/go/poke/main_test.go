@@ -103,13 +103,13 @@ func (s *testSuite) TestLose() {
 		{[]string{"foo"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar"}, "Incorrect number of arguments\n"},
 		{[]string{"foo", "bar", "baz", "quux"}, "Incorrect number of arguments\n"},
-		{[]string{sp.Spec + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp.Spec + "!!': Dataset test!! must match ^[a-zA-Z0-9\\-_/]+$\n"},
-		{[]string{sp.Spec + "2", ".foo", `"bar"`}, "Input dataset '" + sp.Spec + "2' does not exist\n"},
-		{[]string{sp.Spec, "[invalid", `"bar"`}, "Invalid path '[invalid': Invalid index: invalid\n"},
-		{[]string{sp.Spec, ".nothinghere", `"bar"`}, "No value at path '.nothinghere' - cannot update\n"},
-		{[]string{sp.Spec, ".foo", "bar"}, "Invalid new value: 'bar': Invalid index: bar\n"},
-		{[]string{"--out-ds-name", "!invalid", sp.Spec, ".foo", `"bar"`}, "Invalid output dataset name: !invalid\n"},
-		{[]string{sp.Spec, `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
+		{[]string{sp.String() + "!!", ".foo", `"bar"`}, "Invalid input dataset '" + sp.String() + "!!': Invalid operator: !\n"},
+		{[]string{sp.String() + "2", ".foo", `"bar"`}, "Input dataset '" + sp.String() + "2' does not exist\n"},
+		{[]string{sp.String(), "[invalid", `"bar"`}, "Invalid path '[invalid': Invalid index: invalid\n"},
+		{[]string{sp.String(), ".nothinghere", `"bar"`}, "No value at path '.nothinghere' - cannot update\n"},
+		{[]string{sp.String(), ".foo", "bar"}, "Invalid new value: 'bar': Invalid index: bar\n"},
+		{[]string{"--out-ds-name", "!invalid", sp.String(), ".foo", `"bar"`}, "Invalid output dataset name: !invalid\n"},
+		{[]string{sp.String(), `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
 	}
 
 	sp.GetDatabase().CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{

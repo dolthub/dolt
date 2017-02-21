@@ -43,10 +43,10 @@ func (s *nomsLogTestSuite) TestNomsLog() {
 	defer sp.Close()
 
 	sp.GetDatabase() // create the database
-	s.Panics(func() { s.MustRun(main, []string{"log", sp.Spec}) })
+	s.Panics(func() { s.MustRun(main, []string{"log", sp.String()}) })
 
-	testCommitInResults(s, sp.Spec, 1)
-	testCommitInResults(s, sp.Spec, 2)
+	testCommitInResults(s, sp.String(), 1)
+	testCommitInResults(s, sp.String(), 2)
 }
 
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {

@@ -16,15 +16,24 @@ import (
 
 var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() + ")")
 
-// AbsolutePath represents a path originating at a dataset or a well-formed
-// hash (i.e. '#' + 32 chars) representing a Noms Value that is independently
-// addressable. Either the Dataset of Hash field will indicate the beginning of
-// the AbsolutePath and the other one will be nil. The Path field holds the
-// remainder of the path.
+// AbsolutePath describes the location of a Value within a Noms database.
+//
+// To locate a value relative to some other value, see Path. To locate a value
+// globally, see Spec.
+//
+// For more on paths, absolute paths, and specs, see:
+// https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
 type AbsolutePath struct {
+	// Dataset is the dataset this AbsolutePath is rooted at. Only one of
+	// Dataset and Hash should be set.
 	Dataset string
-	Hash    hash.Hash
-	Path    types.Path
+	// Hash is the hash this AbsolutePath is rooted at. Only one of Dataset and
+	// Hash should be set.
+	Hash hash.Hash
+	// Path is the relative path from Dataset or Hash. This can be empty. In
+	// that case, the AbsolutePath describes the value at either Dataset or
+	// Hash.
+	Path types.Path
 }
 
 // NewAbsolutePath attempts to parse 'str' and return an AbsolutePath.
@@ -98,6 +107,10 @@ func (p AbsolutePath) IsEmpty() bool {
 }
 
 func (p AbsolutePath) String() (str string) {
+	if p.IsEmpty() {
+		return ""
+	}
+
 	if len(p.Dataset) > 0 {
 		str = p.Dataset
 	} else if !p.Hash.IsEmpty() {
