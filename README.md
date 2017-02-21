@@ -26,8 +26,6 @@ Finally, because Noms is content-addressed, it yields a very pleasant programmin
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
 
-<br>
-
 ## Install Noms
 
 Noms is supported on Mac OS X and Linux. While Windows isn't officially supported, you can compile a Windows build from source, and it usually works.
@@ -40,7 +38,6 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
 
   `tar -xzf noms-*.tar.gz`
 
-<br>
 ## Get started
 
 1. Use the `noms ds` command to connect to the `cli-tour` database.
@@ -65,7 +62,6 @@ Noms is supported on Mac OS X and Linux. While Windows isn't officially supporte
     ./noms log http://demo.noms.io/cli-tour::sf-film-locations
     ```
 
-<br>
 ## Learn Noms
 
 Learn the basics: [Introduction to Noms](doc/intro.md)
@@ -74,7 +70,6 @@ Tour the CLI: [Command-Line Interface Tour](doc/cli-tour.md)
 
 Tour the Go API: [Go SDK Tour](doc/go-tour.md)
 
-<br>
 ## Status / Roadmap
 
 Noms is currently under heavy development. Attic Labs plans to use it as an integral piece of an upcoming consumer product.
