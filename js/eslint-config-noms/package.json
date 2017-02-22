@@ -9,7 +9,8 @@
     "babel-eslint": "^7.1.1",
     "eslint": "^3.13.1",
     "eslint-plugin-flowtype": "^2.30.0",
-    "eslint-plugin-react": "^6.9.0"
+    "eslint-plugin-react": "^6.9.0",
+    "flow-bin": "^0.39.0"
   },
   "peerDependency": {
     "eslint": ">= 3"

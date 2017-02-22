@@ -16,7 +16,7 @@
     "babel-preset-noms": "1.0.1",
     "eslint": "^3.13.1",
     "eslint-config-noms": "1.2.0",
-    "flow-bin": "^0.38.0",
+    "flow-bin": "^0.39.0",
     "yargs": "^6.6.0"
   }
 }

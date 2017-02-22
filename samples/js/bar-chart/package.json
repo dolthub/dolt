@@ -7,7 +7,7 @@
     "prepublish": "yarn run build",
     "start": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js development",
     "build": "python node_modules/@attic/webpack-config/run.py --src src/main.js --out out.js production",
-    "test": "eslint src/"
+    "test": "eslint src/ && flow src/"
   },
   "dependencies": {
     "@attic/noms": "file:../../../js/noms",
@@ -17,6 +17,7 @@
     "babel-preset-noms": "1.0.1",
     "eslint": "^3.13.1",
     "eslint-config-noms": "1.2.0",
+    "flow-bin": "^0.39.0",
     "webpack": "^1.14.0"
   }
 }

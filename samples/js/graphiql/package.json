@@ -17,7 +17,7 @@
     "babel-preset-noms": "1.0.1",
     "eslint": "^3.13.1",
     "eslint-config-noms": "1.0.0",
-    "flow-bin": "^0.38.0",
+    "flow-bin": "^0.39.0",
     "graphiql": "^0.9.1",
     "graphql": "^0.9.1",
     "react": "^15.2.0",
