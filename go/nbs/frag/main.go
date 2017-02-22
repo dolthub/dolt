@@ -18,6 +18,8 @@ import (
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -51,7 +53,7 @@ func main() {
 		*dbName = *dir
 	} else if *table != "" && *bucket != "" && *dbName != "" {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-		store = nbs.NewAWSStore(*table, *dbName, *bucket, sess, memTableSize)
+		store = nbs.NewAWSStore(*table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
 	}

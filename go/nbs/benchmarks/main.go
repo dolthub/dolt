@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 )
@@ -96,7 +97,7 @@ func main() {
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() types.BatchStore {
-				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, sess, bufSize)
+				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
 				ddb := dynamodb.New(sess)
@@ -121,7 +122,7 @@ func main() {
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() types.BatchStore {
-				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, sess, bufSize)
+				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}

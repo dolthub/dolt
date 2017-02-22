@@ -19,6 +19,8 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 const Separator = "::"
@@ -179,10 +181,11 @@ func parseAWSSpec(awsURL string) chunks.ChunkStore {
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
 	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+	ddb := dynamodb.New(sess)
 	if len(parts) == 1 {
-		return chunks.NewDynamoStore(parts[0], u.Path, sess, false)
+		return chunks.NewDynamoStore(parts[0], u.Path, ddb, false)
 	}
-	return nbs.NewAWSStore(parts[0], u.Path, parts[1], sess, 1<<28)
+	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), ddb, 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.

@@ -64,7 +64,8 @@ type NomsBlockStore struct {
 }
 
 type AWSStoreFactory struct {
-	sess          *session.Session
+	s3            s3svc
+	ddb           ddbsvc
 	table, bucket string
 	indexCache    *indexCache
 	readRl        chan struct{}
@@ -75,11 +76,11 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
 	}
-	return &AWSStoreFactory{sess, table, bucket, indexCache, make(chan struct{}, defaultAWSReadLimit)}
+	return &AWSStoreFactory{s3.New(sess), dynamodb.New(sess), table, bucket, indexCache, make(chan struct{}, defaultAWSReadLimit)}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newAWSStore(asf.table, ns, asf.bucket, asf.sess, defaultMemTableSize, asf.indexCache, asf.readRl)
+	return newAWSStore(asf.table, ns, asf.bucket, asf.s3, asf.ddb, defaultMemTableSize, asf.indexCache, asf.readRl)
 }
 
 func (asf *AWSStoreFactory) Shutter() {
@@ -109,14 +110,14 @@ func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 func (lsf *LocalStoreFactory) Shutter() {
 }
 
-func NewAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64) *NomsBlockStore {
+func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
 	indexCacheOnce.Do(makeGlobalIndexCache)
-	return newAWSStore(table, ns, bucket, sess, memTableSize, globalIndexCache, make(chan struct{}, 32))
+	return newAWSStore(table, ns, bucket, s3, ddb, memTableSize, globalIndexCache, make(chan struct{}, 32))
 }
 
-func newAWSStore(table, ns, bucket string, sess *session.Session, memTableSize uint64, indexCache *indexCache, readRl chan struct{}) *NomsBlockStore {
-	mm := newDynamoManifest(table, ns, dynamodb.New(sess))
-	ts := newS3TableSet(s3.New(sess), bucket, indexCache, readRl)
+func newAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, indexCache *indexCache, readRl chan struct{}) *NomsBlockStore {
+	mm := newDynamoManifest(table, ns, ddb)
+	ts := newS3TableSet(s3, bucket, indexCache, readRl)
 	return newNomsBlockStore(mm, ts, memTableSize, defaultMaxTables)
 }
 
