@@ -3,5 +3,6 @@ noms.iml
 .vscode
 .idea
 .noms
+.nomsconfig
 .DS_Store
 node_modules
