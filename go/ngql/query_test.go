@@ -87,7 +87,7 @@ func (suite *QueryGraphQLSuite) TestEmbeddedStruct() {
 func (suite *QueryGraphQLSuite) TestListBasic() {
 	list := types.NewList()
 	suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":0}}}`)
-	suite.assertQueryResult(list, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptyList\".","locations":[{"line":1,"column":7}]}]}`)
+	suite.assertQueryResult(list, "{root{elements}}", `{"data":{"root":{}}}`)
 
 	list = types.NewList(types.String("foo"), types.String("bar"), types.String("baz"))
 
@@ -130,7 +130,7 @@ func (suite *QueryGraphQLSuite) TestListOfStruct() {
 func (suite *QueryGraphQLSuite) TestSetBasic() {
 	set := types.NewSet()
 	suite.assertQueryResult(set, "{root{size}}", `{"data":{"root":{"size":0}}}`)
-	suite.assertQueryResult(set, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptySet\".","locations":[{"line":1,"column":7}]}]}`)
+	suite.assertQueryResult(set, "{root{elements}}", `{"data":{"root":{}}}`)
 
 	set = types.NewSet(types.String("foo"), types.String("bar"), types.String("baz"))
 
@@ -172,7 +172,7 @@ func (suite *QueryGraphQLSuite) TestSetOfStruct() {
 func (suite *QueryGraphQLSuite) TestMapBasic() {
 	m := types.NewMap()
 	suite.assertQueryResult(m, "{root{size}}", `{"data":{"root":{"size":0}}}`)
-	suite.assertQueryResult(m, "{root{elements}}", `{"data":null,"errors":[{"message":"Cannot query field \"elements\" on type \"EmptyMap\".","locations":[{"line":1,"column":7}]}]}`)
+	suite.assertQueryResult(m, "{root{elements}}", `{"data":{"root":{}}}`)
 
 	m = types.NewMap(
 		types.String("foo"), types.Number(1),
