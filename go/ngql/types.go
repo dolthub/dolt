@@ -13,7 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/graphql-go/graphql"
+	"github.com/attic-labs/graphql"
 )
 
 type typeMap map[typeMapKey]graphql.Type

@@ -11,8 +11,8 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/graphql-go/graphql"
-	"github.com/graphql-go/graphql/gqlerrors"
+	"github.com/attic-labs/graphql"
+	"github.com/attic-labs/graphql/gqlerrors"
 )
 
 const (
