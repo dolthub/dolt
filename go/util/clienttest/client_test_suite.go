@@ -74,9 +74,15 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 
 	defer func() {
 		recoveredErr = recover()
+
+		// Reset everything right away so that error-checking below goes to terminal.
+		os.Args = origArgs
+		os.Stdout = origOut
+		os.Stderr = origErr
+
 		_, err := suite.out.Seek(0, 0)
 		d.Chk.NoError(err)
-		capturedOut, err := ioutil.ReadAll(os.Stdout)
+		capturedOut, err := ioutil.ReadAll(suite.out)
 		d.Chk.NoError(err)
 
 		_, err = suite.out.Seek(0, 0)
@@ -86,16 +92,13 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 
 		_, err = suite.err.Seek(0, 0)
 		d.Chk.NoError(err)
-		capturedErr, err := ioutil.ReadAll(os.Stderr)
+		capturedErr, err := ioutil.ReadAll(suite.err)
 		d.Chk.NoError(err)
 
 		_, err = suite.err.Seek(0, 0)
 		d.Chk.NoError(err)
 		err = suite.err.Truncate(0)
 		d.Chk.NoError(err)
-		os.Args = origArgs
-		os.Stdout = origOut
-		os.Stderr = origErr
 		stdout, stderr = string(capturedOut), string(capturedErr)
 	}()
 

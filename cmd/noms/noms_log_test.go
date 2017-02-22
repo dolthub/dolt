@@ -49,6 +49,30 @@ func (s *nomsLogTestSuite) TestNomsLog() {
 	testCommitInResults(s, sp.String(), 2)
 }
 
+func (s *nomsLogTestSuite) TestNomsLogPath() {
+	sp, err := spec.ForPath(spec.CreateValueSpecString("nbs", s.DBDir, "dsTest.value.bar"))
+	s.NoError(err)
+	defer sp.Close()
+
+	db := sp.GetDatabase()
+	ds := sp.GetDataset()
+	for i := 0; i < 3; i++ {
+		data := types.NewStruct("", types.StructData{
+			"bar": types.Number(i),
+		})
+		ds, err = db.CommitValue(ds, data)
+		s.NoError(err)
+	}
+
+	stdout, stderr := s.MustRun(main, []string{"log", "--show-value", sp.String()})
+	s.Empty(stderr)
+	test.EqualsIgnoreHashes(s.T(), pathValue, stdout)
+
+	stdout, stderr = s.MustRun(main, []string{"log", sp.String()})
+	s.Empty(stderr)
+	test.EqualsIgnoreHashes(s.T(), pathDiff, stdout)
+}
+
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {
 	return ds.Database().CommitValue(ds, types.String(v))
 }
@@ -327,10 +351,10 @@ const (
 	graphRes3 = "*   k81k6h8qfak0olqs3mklq9pbjh61srba\n|\\  Merge: fqg2d04nuk10kbbe9m8vfen7l4ashmnc gtbdds4hsqa02kqgacrsglouat3tavfv\n| | \"2222-wz\"\n| | \n| *   gtbdds4hsqa02kqgacrsglouat3tavfv\n| |\\  Merge: 55a0vlrjlvaqak6cqig6bg249h5gfl0t 0gvkuvvo502tsutnmlpbsp45bi3p135b\n| | | \"222-wy\"\n| | | \n| * |   55a0vlrjlvaqak6cqig6bg249h5gfl0t\n| |\\ \\  Merge: esd5lqno0falqp25upnmo4ihffbqerqj cliug26ajdb0js7caibn9ov1g8nch2jm\n| | | | \"22-wx\"\n| | | | \n* | | | fqg2d04nuk10kbbe9m8vfen7l4ashmnc\n| | | | Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n| | | | \"2000-z\"\n| | | | \n| | * | cliug26ajdb0js7caibn9ov1g8nch2jm\n| | | | Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n| | | | \"20-x\"\n| | | | \n| | | * 0gvkuvvo502tsutnmlpbsp45bi3p135b\n|/ / /  Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n|       \"200-y\"\n|       \n* esd5lqno0falqp25upnmo4ihffbqerqj\n| Parent: mu3kl33om7qr4ieggqv0fuggv4lpphhf\n| \"2\"\n| \n* mu3kl33om7qr4ieggqv0fuggv4lpphhf\n| Parent: None\n| \"1\"\n"
 	diffRes3  = "*   k81k6h8qfak0olqs3mklq9pbjh61srba\n|\\  Merge: fqg2d04nuk10kbbe9m8vfen7l4ashmnc gtbdds4hsqa02kqgacrsglouat3tavfv\n| | -   \"2000-z\"\n| | +   \"2222-wz\"\n| | \n| *   gtbdds4hsqa02kqgacrsglouat3tavfv\n| |\\  Merge: 55a0vlrjlvaqak6cqig6bg249h5gfl0t 0gvkuvvo502tsutnmlpbsp45bi3p135b\n| | | -   \"22-wx\"\n| | | +   \"222-wy\"\n| | | \n| * |   55a0vlrjlvaqak6cqig6bg249h5gfl0t\n| |\\ \\  Merge: esd5lqno0falqp25upnmo4ihffbqerqj cliug26ajdb0js7caibn9ov1g8nch2jm\n| | | | -   \"2\"\n| | | | +   \"22-wx\"\n| | | | \n* | | | fqg2d04nuk10kbbe9m8vfen7l4ashmnc\n| | | | Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n| | | | -   \"2\"\n| | | | +   \"2000-z\"\n| | | | \n| | * | cliug26ajdb0js7caibn9ov1g8nch2jm\n| | | | Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n| | | | -   \"2\"\n| | | | +   \"20-x\"\n| | | | \n| | | * 0gvkuvvo502tsutnmlpbsp45bi3p135b\n|/ / /  Parent: esd5lqno0falqp25upnmo4ihffbqerqj\n|       -   \"2\"\n|       +   \"200-y\"\n|       \n* esd5lqno0falqp25upnmo4ihffbqerqj\n| Parent: mu3kl33om7qr4ieggqv0fuggv4lpphhf\n| -   \"1\"\n| +   \"2\"\n| \n* mu3kl33om7qr4ieggqv0fuggv4lpphhf\n| Parent: None\n| \n"
 
-	truncRes1  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| List<String>([  // 11 items\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n| ...\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \"the first line\"\n"
+	truncRes1  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| [  // 11 items\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n| ...\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \"the first line\"\n"
 	diffTrunc1 = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| -   \"the first line\"\n| +   [  // 11 items\n| +     \"one\",\n| +     \"two\",\n| +     \"three\",\n| +     \"four\",\n| +     \"five\",\n| +     \"six\",\n| ...\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \n"
 
-	truncRes2  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| List<String>([  // 11 items\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n|   \"eight\",\n|   \"nine\",\n|   \"ten\",\n|   \"eleven\",\n| ])\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \"the first line\"\n"
+	truncRes2  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| [  // 11 items\n|   \"one\",\n|   \"two\",\n|   \"three\",\n|   \"four\",\n|   \"five\",\n|   \"six\",\n|   \"seven\",\n|   \"eight\",\n|   \"nine\",\n|   \"ten\",\n|   \"eleven\",\n| ]\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \"the first line\"\n"
 	diffTrunc2 = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n| -   \"the first line\"\n| +   [  // 11 items\n| +     \"one\",\n| +     \"two\",\n| +     \"three\",\n| +     \"four\",\n| +     \"five\",\n| +     \"six\",\n| +     \"seven\",\n| +     \"eight\",\n| +     \"nine\",\n| +     \"ten\",\n| +     \"eleven\",\n| +   ]\n| \n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n| \n"
 
 	truncRes3  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
@@ -338,4 +362,8 @@ const (
 
 	metaRes1 = "p7jmuh67vhfccnqk1bilnlovnms1m67o\nParent: f8gjiv5974ojir9tnrl2k393o4s1tf0r\n-   \"1\"\n+   \"2\"\n\nf8gjiv5974ojir9tnrl2k393o4s1tf0r\nParent:          None\nLongNameForTest: \"Yoo\"\nTest2:           \"Hoo\"\n\n"
 	metaRes2 = "p7jmuh67vhfccnqk1bilnlovnms1m67o (Parent: f8gjiv5974ojir9tnrl2k393o4s1tf0r)\nf8gjiv5974ojir9tnrl2k393o4s1tf0r (Parent: None)\n"
+
+	pathValue = "oki4cv7vkh743rccese3r3omf6l6mao4\nParent: lca4vejkm0iqsk7ok5322pt61u4otn6q\n2\n\nlca4vejkm0iqsk7ok5322pt61u4otn6q\nParent: u42pi8ukgkvpoi6n7d46cklske41oguf\n1\n\nu42pi8ukgkvpoi6n7d46cklske41oguf\nParent: hgmlqmsnrb3sp9jqc6mas8kusa1trrs2\n0\n\nhgmlqmsnrb3sp9jqc6mas8kusa1trrs2\nParent: hffiuecdpoq622tamm3nvungeca99ohl\n<nil>\nhffiuecdpoq622tamm3nvungeca99ohl\nParent: None\n<nil>\n"
+
+	pathDiff = "oki4cv7vkh743rccese3r3omf6l6mao4\nParent: lca4vejkm0iqsk7ok5322pt61u4otn6q\n-   1\n+   2\n\nlca4vejkm0iqsk7ok5322pt61u4otn6q\nParent: u42pi8ukgkvpoi6n7d46cklske41oguf\n-   0\n+   1\n\nu42pi8ukgkvpoi6n7d46cklske41oguf\nParent: hgmlqmsnrb3sp9jqc6mas8kusa1trrs2\nold (#hgmlqmsnrb3sp9jqc6mas8kusa1trrs2.value.bar) not found\n\nhgmlqmsnrb3sp9jqc6mas8kusa1trrs2\nParent: hffiuecdpoq622tamm3nvungeca99ohl\nnew (#hgmlqmsnrb3sp9jqc6mas8kusa1trrs2.value.bar) not found\nold (#hffiuecdpoq622tamm3nvungeca99ohl.value.bar) not found\n\nhffiuecdpoq622tamm3nvungeca99ohl\nParent: None\n\n"
 )

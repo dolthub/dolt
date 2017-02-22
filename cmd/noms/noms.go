@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
+	"github.com/attic-labs/noms/go/util/exit"
 	flag "github.com/juju/gnuflag"
 )
 
@@ -77,7 +78,7 @@ func main() {
 			}
 			exitCode := cmd.Run(args)
 			if exitCode != 0 {
-				os.Exit(exitCode)
+				exit.Exit(exitCode)
 			}
 			return
 		}
