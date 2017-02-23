@@ -709,6 +709,34 @@ func TestEncodeOriginal(t *testing.T) {
 		types.NewStruct("S", types.StructData{"foo": types.Number(float64(42))})))
 }
 
+func TestNomsTypes(t *testing.T) {
+	assert := assert.New(t)
+
+	type S struct {
+		Blob   types.Blob
+		Bool   types.Bool
+		Number types.Number
+		String types.String
+		Type   *types.Type
+	}
+	s := S{
+		Blob:   types.NewBlob(),
+		Bool:   types.Bool(true),
+		Number: types.Number(42),
+		String: types.String("hi"),
+		Type:   types.NumberType,
+	}
+	assert.True(MustMarshal(s).Equals(
+		types.NewStruct("S", types.StructData{
+			"blob":   types.NewBlob(),
+			"bool":   types.Bool(true),
+			"number": types.Number(42),
+			"string": types.String("hi"),
+			"type":   types.NumberType,
+		}),
+	))
+}
+
 type primitiveType int
 
 func (t primitiveType) MarshalNoms() (types.Value, error) {

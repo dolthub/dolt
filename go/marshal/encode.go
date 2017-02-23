@@ -109,8 +109,8 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 	return
 }
 
-// Marshals a Go value to a Noms value using the same rules as Marshal(). Panics
-// on failure.
+// MustMarshal marshals a Go value to a Noms value using the same rules as
+// Marshal(). Panics on failure.
 func MustMarshal(v interface{}) types.Value {
 	r, err := Marshal(v)
 	d.Chk.NoError(err)
@@ -264,7 +264,7 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 	}
 
 	parentStructTypes = append(parentStructTypes, t)
-	fields, structType, originalFieldIndex := typeFields(t, parentStructTypes)
+	fields, structType, originalFieldIndex := typeFields(t, parentStructTypes, encodeTypeOptions{})
 	if structType != nil {
 		e = func(v reflect.Value) types.Value {
 			values := make([]types.Value, len(fields))
@@ -417,7 +417,7 @@ func validateField(f reflect.StructField, t reflect.Type) {
 	}
 }
 
-func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldSlice, structType *types.Type, originalFieldIndex []int) {
+func typeFields(t reflect.Type, parentStructTypes []reflect.Type, options encodeTypeOptions) (fields fieldSlice, structType *types.Type, originalFieldIndex []int) {
 	canComputeStructType := true
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -433,12 +433,12 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 		}
 
 		validateField(f, t)
-		nt := nomsType(f.Type, parentStructTypes)
+		nt := encodeType(f.Type, parentStructTypes, tags, options)
 		if nt == nil {
 			canComputeStructType = false
 		}
 
-		if tags.omitEmpty {
+		if tags.omitEmpty && !options.IgnoreOmitEmpty {
 			canComputeStructType = false
 		}
 
@@ -462,64 +462,6 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type) (fields fieldS
 		structType = types.MakeStructType(strings.Title(t.Name()), fieldNames, fieldTypes)
 	}
 	return
-}
-
-func nomsType(t reflect.Type, parentStructTypes []reflect.Type) *types.Type {
-	if t.Implements(marshalerInterface) {
-		// There is no way to determine the noms type now, it can be different each
-		// time MarshalNoms is called. This is handled further up the stack.
-		return nil
-	}
-
-	switch t.Kind() {
-	case reflect.Bool:
-		return types.BoolType
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return types.NumberType
-	case reflect.String:
-		return types.StringType
-	case reflect.Struct:
-		return structNomsType(t, parentStructTypes)
-	case reflect.Array, reflect.Slice:
-		elemType := nomsType(t.Elem(), parentStructTypes)
-		if elemType != nil {
-			return types.MakeListType(elemType)
-		}
-	}
-	// This will be reported as an error at a different layer.
-	return nil
-}
-
-// structNomsType returns the Noms types.Type if it can be determined from the
-// reflect.Type. Note that we can only determine the type for a subset of Noms
-// types since the Go type does not fully reflect it. In this cases this returns
-// nil and we have to wait until we have a value to be able to determine the
-// type.
-func structNomsType(t reflect.Type, parentStructTypes []reflect.Type) *types.Type {
-	if t.Implements(nomsValueInterface) {
-		// Use Name because List and Blob are convertible to each other on Go.
-		switch t.Name() {
-		case "Blob":
-			return types.BlobType
-		case "Bool":
-			return types.BoolType
-		case "Number":
-			return types.NumberType
-		case "String":
-			return types.StringType
-		}
-		// The rest of the Noms types need the value to get the exact type.
-		return nil
-	}
-
-	for i, pst := range parentStructTypes {
-		if pst == t {
-			return types.MakeCycleType(uint32(i))
-		}
-	}
-
-	_, structType, _ := typeFields(t, parentStructTypes)
-	return structType
 }
 
 func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
