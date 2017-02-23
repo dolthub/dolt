@@ -1,6 +1,35 @@
 Contributing to Noms
 ====================
 
+## Install Go
+
+First setup Go on your machine per https://golang.org/doc/install.
+
+Don't forget to [setup your `$GOPATH` and `$BIN` environment variables](https://golang.org/doc/install) correctly. Everybody forgets that.
+
+You can test your setup like so:
+
+```
+# This should print something
+echo $GOPATH
+
+# We need at least version 1.7
+go version
+```
+
+## Setup Noms Environment
+
+Add `NOMS_VERSION_NEXT=1` to your environment. The current trunk codebase is a development version of the format and this environment variable is a safety check to ensure people aren't accidentally using this development format against production servers.
+
+## Get and build Noms
+
+```
+go get github.com/attic-labs/noms/cmd/noms
+cd $GOPATH/src/github.com/attic-labs/noms/cmd/noms
+go build
+go test
+```
+
 ## License
 
 Noms is open source software, licensed under the [Apache License, Version 2.0](LICENSE).
