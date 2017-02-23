@@ -1075,3 +1075,16 @@ func TestUnmarshalNomsNotPointerDoesNotShareState(t *testing.T) {
 	assert.NoError(Unmarshal(types.EmptyStruct, &u))
 	assert.Equal(notPointer{0}, u)
 }
+
+func TestUnmarshalMustUnmarshal(t *testing.T) {
+	a := assert.New(t)
+
+	type TestStruct struct{ F1 int }
+
+	v := MustMarshal(types.Number(1))
+	var out TestStruct
+	a.Panics(func() { MustUnmarshal(v, &out) })
+
+	v = MustMarshal(TestStruct{2})
+	a.NotPanics(func() { MustUnmarshal(v, &out) })
+}
