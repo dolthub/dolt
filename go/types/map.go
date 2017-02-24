@@ -259,6 +259,22 @@ func (m Map) Any(cb func(k, v Value) bool) (yep bool) {
 	return
 }
 
+func (m Map) Iterator() MapIterator {
+	return m.IteratorAt(0)
+}
+
+func (m Map) IteratorAt(pos uint64) MapIterator {
+	return MapIterator{
+		cursor: newCursorAtIndex(m.seq, pos, false),
+	}
+}
+
+func (m Map) IteratorFrom(key Value) MapIterator {
+	return MapIterator{
+		cursor: newCursorAtValue(m.seq, key, false, false, true),
+	}
+}
+
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {
