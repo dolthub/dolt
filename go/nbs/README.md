@@ -1,18 +1,28 @@
 # Noms Block Store
-An experimental storage layer for [noms](https://github.com/attic-labs/noms).
 
-- Provides storage for a content-addressed DAG of nodes (with exactly one root), where each node is encoded as a sequence of bytes and addressed by a 20-byte hash of the byte-sequence.
-- There is no `update` or `delete`, only `insert`, `update root` and `garbage collect`.
-- Insertion of any novel byte-sequence is durable only upon updating the root.
-- File-level multiprocess concurrency is supported, with optimistic locking for multiple writers.
-- Writers need not worry about re-writing duplicate chunks. NBS will efficiently detect and drop (most) duplicates.
+A horizontally-scalable storage backend for Noms.
 
-# Status
-NBS is more-or-less "alpha". There's still [work we want to do](https://github.com/attic-labs/noms/issues?q=is%3Aopen+is%3Aissue+label%3ANBS), but it basically works.
+## Overview
 
-There are two full back-ends for nbs, one for storage on a file-system and one for storage in AWS. The later requires a dynamo table and an s3 bucket.
+NBS is a storage layer optimized for the needs of the [Noms](https://github.com/attic-labs/noms) database.
 
-For the file back-end, perf is substantially better than LevelDB for two reasons (1) LDB does quite alot of compaction which burns IO but doesn't benenfit noms at all. (2) NBS locates related chunks together and thus reading data from a NBS store can be done quite alot faster. As an example, storing & retrieving a 1.1GB MP4 video file on a MBP i5 2.9Ghz:
+NBS can run in two configurations: either backed by local disk, or backed by Amazon S3.
+
+When backed by local disk, NBS is significantly faster than LevelDB for our workloads and supports full multiprocess concurrency.
+
+When backed by S3, NBS makes Noms "[effectively CA](https://research.google.com/pubs/pub45855.html)": Noms is always consistent, and this configuration makes Noms as available as S3. It also means Noms has the cost profile of object storage with power closer to that of a traditional database.
+
+## Details
+
+* NBS provides storage for a content-addressed DAG of nodes (with exactly one root), where each node is encoded as a sequence of bytes and addressed by a 20-byte hash of the byte-sequence.
+* There is no `update` or `delete` -- only `insert`, `update root` and `garbage collect`.
+* Insertion of any novel byte-sequence is durable only upon updating the root.
+* File-level multiprocess concurrency is supported, with optimistic locking for multiple writers.
+* Writers need not worry about re-writing duplicate chunks. NBS will efficiently detect and drop (most) duplicates.
+
+## Perf
+
+For the file back-end, perf is substantially better than LevelDB for two reasons (1) LDB does quite alot of compaction which burns IO but doesn't benenfit Noms at all. (2) NBS locates related chunks together and thus reading data from a NBS store can be done quite alot faster. As an example, storing & retrieving a 1.1GB MP4 video file on a MBP i5 2.9Ghz:
 
  * LDB
    * Initial import: 44 MB/s, size on disk: 1.1 GB. 
@@ -23,4 +33,17 @@ For the file back-end, perf is substantially better than LevelDB for two reasons
    * Import exact same bytes: 92 MB/s, size on disk: 1.1GB.
    * Export: 300 MB/s
 
-NBS is currently available via the `nbs:` scheme. I.e. `./csv-import foo.csv nbs:/Users/bob/csv-store::data`. When nbs is deemed stable, we will likely make it the default for file system storage.
+## Status
+
+NBS is more-or-less "beta". There's still [work we want to do](https://github.com/attic-labs/noms/issues?q=is%3Aopen+is%3Aissue+label%3ANBS), but it now works better than LevelDB for our purposes and so we have made it the default local backend for Noms:
+
+```
+# This uses nbs locally:
+./csv-import foo.csv /Users/bob/csv-store::data
+```
+
+The AWS backend is available via the `aws:` scheme:
+
+```
+./csv-import foo.csv aws://table:bucket::data
+```
