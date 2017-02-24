@@ -27,7 +27,7 @@
     "flow-bin": "^0.39.0",
     "flow-copy-source": "^1.1.0",
     "fs-extra": "^2.0.0",
-    "jest": "^18.1.0",
+    "jest": "^19.0.2",
     "mocha": "^3.2.0",
     "mock-require": "^2.0.1",
     "nyc": "^10.1.2"
