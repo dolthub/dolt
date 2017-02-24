@@ -6,11 +6,11 @@ A horizontally-scalable storage backend for Noms.
 
 NBS is a storage layer optimized for the needs of the [Noms](https://github.com/attic-labs/noms) database.
 
-NBS can run in two configurations: either backed by local disk, or backed by Amazon S3.
+NBS can run in two configurations: either backed by local disk, or backed by Amazon AWS.
 
 When backed by local disk, NBS is significantly faster than LevelDB for our workloads and supports full multiprocess concurrency.
 
-When backed by S3, NBS makes Noms "[effectively CA](https://research.google.com/pubs/pub45855.html)": Noms is always consistent, and this configuration makes Noms as available as S3. It also means Noms has the cost profile of object storage with power closer to that of a traditional database.
+When backed by AWS, NBS stores its data mainly in S3, along with a single 4KB DynamoDB item. This configuration makes Noms "[effectively CA](https://research.google.com/pubs/pub45855.html)", in the sense that Noms is always consistent, and Noms+NBS is as available as DynamoDB and S3 are. This configuration also gives Noms the cost profile of object storage with power closer to that of a traditional database.
 
 ## Details
 
