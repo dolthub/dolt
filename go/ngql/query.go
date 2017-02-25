@@ -9,16 +9,18 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/graphql/gqlerrors"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/types"
 )
 
 const (
 	atKey          = "at"
 	countKey       = "count"
+	elementsKey    = "elements"
 	keyKey         = "key"
+	rootKey        = "root"
 	rootQueryKey   = "Root"
 	scalarValue    = "scalarValue"
 	sizeKey        = "size"
@@ -26,8 +28,6 @@ const (
 	targetValueKey = "targetValue"
 	tmKey          = "tm"
 	valueKey       = "value"
-	rootKey        = "root"
-	elementsKey    = "elements"
 	vrKey          = "vr"
 )
 

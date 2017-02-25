@@ -10,10 +10,10 @@ import (
 
 	"strings"
 
+	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/graphql"
 )
 
 type typeMap map[typeMapKey]graphql.Type
@@ -222,29 +222,35 @@ var listArgs = graphql.FieldConfigArgument{
 	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
 }
 
-func getListValues(v types.Value, args map[string]interface{}) (interface{}, error) {
-	l := v.(types.List)
-	idx := uint64(0)
-	count := l.Len()
+func getBounds(l uint64, args map[string]interface{}) (uint64, uint64, bool) {
+	len := int64(l)
+	idx := int64(0)
+	count := int64(len)
 	if at, ok := args[atKey].(int); ok {
-		idx = uint64(at)
+		idx = int64(at)
 	}
 	if c, ok := args[countKey].(int); ok {
-		count = uint64(c)
+		count = int64(c)
 	}
 
 	// Clamp ranges
+	if count <= 0 || idx >= len {
+		return 0, 0, true
+	}
 	if idx < 0 {
 		idx = 0
 	}
-	if idx > l.Len() {
-		idx = l.Len()
+	if idx+count > len {
+		count = len - idx
 	}
-	if count < 0 {
-		count = 0
-	}
-	if idx+count > l.Len() {
-		count = l.Len() - idx
+	return uint64(idx), uint64(count), false
+}
+
+func getListValues(v types.Value, args map[string]interface{}) (interface{}, error) {
+	l := v.(types.List)
+	idx, count, empty := getBounds(l.Len(), args)
+	if empty {
+		return ([]interface{})(nil), nil
 	}
 
 	values := make([]interface{}, count)
@@ -257,63 +263,46 @@ func getListValues(v types.Value, args map[string]interface{}) (interface{}, err
 }
 
 var setArgs = graphql.FieldConfigArgument{
+	atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
 	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
 }
 
 func getSetValues(v types.Value, args map[string]interface{}) (interface{}, error) {
+	// TODO: Refactor to share code between the collections.
 	s := v.(types.Set)
-
-	count := s.Len()
-	if c, ok := args[countKey].(int); ok {
-		count = uint64(c)
-	}
-
-	// Clamp ranges
-	if count < 0 {
-		count = 0
-	}
-	if count > s.Len() {
-		count = s.Len()
+	idx, count, empty := getBounds(s.Len(), args)
+	if empty {
+		return ([]interface{})(nil), nil
 	}
 
 	values := make([]interface{}, count)
-	i := uint64(0)
-	s.Iter(func(v types.Value) bool {
-		values[i] = maybeGetScalar(v)
-		i++
-		return i >= count
-	})
+	iter := s.IteratorAt(idx)
+	for i := uint64(0); i < count; i++ {
+		values[i] = maybeGetScalar(iter.Next())
+	}
 
 	return values, nil
 }
 
 var mapArgs = graphql.FieldConfigArgument{
+	atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
 	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
 }
 
 func getMapValues(v types.Value, args map[string]interface{}) (interface{}, error) {
+	// TODO: Refactor to share code between the collections.
 	m := v.(types.Map)
-
-	count := m.Len()
-	if c, ok := args[countKey].(int); ok {
-		count = uint64(c)
-	}
-
-	// Clamp ranges
-	if count < 0 {
-		count = 0
-	}
-	if count > m.Len() {
-		count = m.Len()
+	idx, count, empty := getBounds(m.Len(), args)
+	if empty {
+		return ([]interface{})(nil), nil
 	}
 
 	values := make([]mapEntry, count)
-	i := uint64(0)
-	m.Iter(func(k, v types.Value) bool {
+	iter := m.IteratorAt(idx)
+	for i := uint64(0); i < count; i++ {
+		k, v := iter.Next()
 		values[i] = mapEntry{k, v}
-		i++
-		return i >= count
-	})
+	}
 
 	return values, nil
 }
