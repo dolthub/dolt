@@ -265,7 +265,7 @@ func (m Map) Iterator() MapIterator {
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
 	return MapIterator{
-		cursor: newCursorAtIndex(m.seq, pos, false),
+		cursor: newCursorAtIndex(m.seq, pos, true),
 	}
 }
 

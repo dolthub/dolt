@@ -44,6 +44,55 @@ func TestSetIterator(t *testing.T) {
 	assert.Nil(empty.Iterator().SkipTo(Number(-30)))
 }
 
+func TestSetIteratorAt(t *testing.T) {
+	assert := assert.New(t)
+
+	numbers := append(generateNumbersAsValues(5), Number(10))
+	s := NewSet(numbers...)
+	i := s.IteratorAt(0)
+	vs := iterToSlice(i)
+	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
+
+	i = s.IteratorAt(2)
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
+
+	i = s.IteratorAt(10)
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(nil), "Expected: %v != actual: %v", nil, vs)
+}
+
+func TestSetIteratorFrom(t *testing.T) {
+	assert := assert.New(t)
+
+	numbers := append(generateNumbersAsValues(5), Number(10), Number(20))
+	s := NewSet(numbers...)
+	i := s.IteratorFrom(Number(0))
+	vs := iterToSlice(i)
+	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
+
+	i = s.IteratorFrom(Number(2))
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
+
+	i = s.IteratorFrom(Number(10))
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(ValueSlice{Number(10), Number(20)}), "Expected: %v != actual: %v", nil, vs)
+
+	i = s.IteratorFrom(Number(20))
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(ValueSlice{Number(20)}), "Expected: %v != actual: %v", nil, vs)
+
+	i = s.IteratorFrom(Number(100))
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(nil), "Expected: %v != actual: %v", nil, vs)
+
+	// Not present. Starts at next larger.
+	i = s.IteratorFrom(Number(15))
+	vs = iterToSlice(i)
+	assert.True(vs.Equals(ValueSlice{Number(20)}), "Expected: %v != actual: %v", nil, vs)
+}
+
 func TestUnionIterator(t *testing.T) {
 	assert := assert.New(t)
 
@@ -150,12 +199,12 @@ type UnionTestIterator struct {
 }
 
 func (ui *UnionTestIterator) Next() Value {
-	*ui.cntr += 1
+	*ui.cntr++
 	return ui.UnionIterator.Next()
 }
 
 func (ui *UnionTestIterator) SkipTo(v Value) Value {
-	*ui.cntr += 1
+	*ui.cntr++
 	return ui.UnionIterator.SkipTo(v)
 }
 
@@ -197,12 +246,12 @@ type IntersectionTestIterator struct {
 }
 
 func (i *IntersectionTestIterator) Next() Value {
-	*i.cntr += 1
+	*i.cntr++
 	return i.IntersectionIterator.Next()
 }
 
 func (i *IntersectionTestIterator) SkipTo(v Value) Value {
-	*i.cntr += 1
+	*i.cntr++
 	return i.IntersectionIterator.SkipTo(v)
 }
 

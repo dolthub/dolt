@@ -239,7 +239,9 @@ func (l List) Iterator() ListIterator {
 // IteratorAt returns a ListIterator starting at index. If index is out of bound the iterator will
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
-	return ListIterator{newCursorAtIndex(l.seq, index, true)}
+	return ListIterator{
+		newCursorAtIndex(l.seq, index, true),
+	}
 }
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close

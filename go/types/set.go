@@ -217,7 +217,21 @@ func (s Set) IterAll(cb setIterAllCallback) {
 }
 
 func (s Set) Iterator() SetIterator {
-	return &setIterator{s: s, cursor: nil}
+	return s.IteratorAt(0)
+}
+
+func (s Set) IteratorAt(idx uint64) SetIterator {
+	return &setIterator{
+		cursor: newCursorAtIndex(s.seq, idx, true),
+		s:      s,
+	}
+}
+
+func (s Set) IteratorFrom(val Value) SetIterator {
+	return &setIterator{
+		cursor: newCursorAtValue(s.seq, val, false, false, true),
+		s:      s,
+	}
 }
 
 func (s Set) elemType() *Type {

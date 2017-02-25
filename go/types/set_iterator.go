@@ -32,48 +32,39 @@ type SetIterator interface {
 }
 
 type setIterator struct {
-	s      Set
-	cursor *sequenceCursor
+	s            Set
+	cursor       *sequenceCursor
+	currentValue Value
 }
 
 func (si *setIterator) Next() Value {
-	if si.cursor == nil {
-		si.cursor = newCursorAt(si.s.seq, emptyKey, false, false, false)
-	} else {
-		si.cursor.advance()
-	}
 	if si.cursor.valid() {
-		return si.cursor.current().(Value)
+		si.currentValue = si.cursor.current().(Value)
+		si.cursor.advance()
+	} else {
+		si.currentValue = nil
 	}
-	return nil
+	return si.currentValue
 }
 
 func (si *setIterator) SkipTo(v Value) Value {
-	d.Chk.NotNil(v, "setIterator.SkipTo() called with nil value")
-	first := false
-	if si.cursor == nil {
-		first = true
-		si.cursor, _ = si.s.getCursorAtValue(v, false)
-	}
-
-	if !si.cursor.valid() {
-		return nil
-	}
-
-	curValue := si.cursor.current().(Value)
-	if first {
-		return curValue
-	}
-
-	if compareValue(v, curValue) <= 0 {
-		return si.Next()
-	}
-
-	si.cursor, _ = si.s.getCursorAtValue(v, false)
+	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
-		return si.cursor.current().(Value)
+		if compareValue(v, si.currentValue) <= 0 {
+			return si.Next()
+		}
+
+		si.cursor, _ = si.s.getCursorAtValue(v, true)
+		if si.cursor.valid() {
+			si.currentValue = si.cursor.current().(Value)
+			si.cursor.advance()
+		} else {
+			si.currentValue = nil
+		}
+	} else {
+		si.currentValue = nil
 	}
-	return nil
+	return si.currentValue
 }
 
 // iterState contains iterator and it's current value
@@ -109,8 +100,8 @@ type UnionIterator struct {
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
 func NewUnionIterator(iterA, iterB SetIterator) SetIterator {
-	d.Chk.NotNil(iterA)
-	d.Chk.NotNil(iterB)
+	d.PanicIfTrue(iterA == nil)
+	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next()}
 	b := iterState{i: iterB, v: iterB.Next()}
 	return &UnionIterator{aState: a, bState: b}
@@ -130,7 +121,7 @@ func (u *UnionIterator) Next() Value {
 }
 
 func (u *UnionIterator) SkipTo(v Value) Value {
-	d.Chk.NotNil(v)
+	d.PanicIfTrue(v == nil)
 	didAdvance := false
 	if compareValue(u.aState.v, v) < 0 {
 		didAdvance = true
@@ -164,8 +155,8 @@ type IntersectionIterator struct {
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
 func NewIntersectionIterator(iterA, iterB SetIterator) SetIterator {
-	d.Chk.NotNil(iterA)
-	d.Chk.NotNil(iterB)
+	d.PanicIfTrue(iterA == nil)
+	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next()}
 	b := iterState{i: iterB, v: iterB.Next()}
 	return &IntersectionIterator{aState: a, bState: b}
@@ -190,7 +181,7 @@ func (i *IntersectionIterator) Next() Value {
 }
 
 func (i *IntersectionIterator) SkipTo(v Value) Value {
-	d.Chk.NotNil(v)
+	d.PanicIfTrue(v == nil)
 	if compareValue(v, i.aState.v) >= 0 {
 		i.aState.SkipTo(v)
 	}
