@@ -85,13 +85,20 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 		}()
 	}
 
-	result, err := s3tr.s3.GetObject(&s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(s3tr.bucket),
 		Key:    aws.String(s3tr.hash().String()),
 		Range:  aws.String(rangeHeader),
-	})
+	}
+	result, err := s3tr.s3.GetObject(input)
 	d.PanicIfError(err)
 	d.PanicIfFalse(*result.ContentLength == int64(len(p)))
 
-	return io.ReadFull(result.Body, p)
+	n, err = io.ReadFull(result.Body, p)
+
+	if err != nil {
+		d.Chk.Fail("Failed ranged read from S3", "\n%s\nerror: %v", input.GoString(), err)
+	}
+
+	return n, err
 }
