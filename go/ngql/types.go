@@ -108,17 +108,17 @@ func nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap
 			valueType = nomsTypeToGraphQLType(nomsValueType, false, tm)
 		}
 
-		gqlType = collectionToGraphQLObject(nomsType, valueType, tm)
+		gqlType = collectionToGraphQLObject(nomsType, valueType, unpackNonNullType(valueType), tm)
 
 	case types.MapKind:
 		nomsKeyType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 		nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[1]
-		var valueType graphql.Type
+		var entryType, keyType graphql.Type
 		if !isEmptyNomsUnion(nomsKeyType) && !isEmptyNomsUnion(nomsValueType) {
-			valueType = mapEntryToGraphQLObject(nomsKeyType, nomsValueType, tm)
+			entryType, keyType = mapEntryToGraphQLObject(nomsKeyType, nomsValueType, tm)
 		}
 
-		gqlType = collectionToGraphQLObject(nomsType, valueType, tm)
+		gqlType = collectionToGraphQLObject(nomsType, entryType, unpackNonNullType(keyType), tm)
 
 	case types.RefKind:
 		gqlType = refToGraphQLObject(nomsType, tm)
@@ -140,6 +140,13 @@ func nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap
 	newNonNull := graphql.NewNonNull(gqlType)
 	(*tm)[key] = newNonNull
 	return newNonNull
+}
+
+func unpackNonNullType(t graphql.Type) graphql.Type {
+	if t, ok := t.(*graphql.NonNull); ok {
+		return t.OfType
+	}
+	return t
 }
 
 func isEmptyNomsUnion(nomsType *types.Type) bool {
@@ -222,20 +229,23 @@ var listArgs = graphql.FieldConfigArgument{
 	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
 }
 
-func getBounds(l uint64, args map[string]interface{}) (uint64, uint64, bool) {
-	len := int64(l)
-	idx := int64(0)
-	count := int64(len)
+func getListValues(v types.Value, args map[string]interface{}) (interface{}, error) {
+	l := v.(types.List)
+	idx := 0
+	count := int(l.Len())
+	len := count
+
 	if at, ok := args[atKey].(int); ok {
-		idx = int64(at)
+		idx = at
 	}
+
 	if c, ok := args[countKey].(int); ok {
-		count = int64(c)
+		count = c
 	}
 
 	// Clamp ranges
 	if count <= 0 || idx >= len {
-		return 0, 0, true
+		return ([]interface{})(nil), nil
 	}
 	if idx < 0 {
 		idx = 0
@@ -243,68 +253,204 @@ func getBounds(l uint64, args map[string]interface{}) (uint64, uint64, bool) {
 	if idx+count > len {
 		count = len - idx
 	}
-	return uint64(idx), uint64(count), false
-}
-
-func getListValues(v types.Value, args map[string]interface{}) (interface{}, error) {
-	l := v.(types.List)
-	idx, count, empty := getBounds(l.Len(), args)
-	if empty {
-		return ([]interface{})(nil), nil
-	}
 
 	values := make([]interface{}, count)
-	iter := l.IteratorAt(idx)
-	for i := uint64(0); i < count; i++ {
+	iter := l.IteratorAt(uint64(idx))
+	for i := uint64(0); i < uint64(count); i++ {
 		values[i] = maybeGetScalar(iter.Next())
 	}
 
 	return values, nil
-}
-
-var setArgs = graphql.FieldConfigArgument{
-	atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
-	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
 }
 
 func getSetValues(v types.Value, args map[string]interface{}) (interface{}, error) {
-	// TODO: Refactor to share code between the collections.
 	s := v.(types.Set)
-	idx, count, empty := getBounds(s.Len(), args)
-	if empty {
+
+	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(s.Type(), s.Len(), args, iteratorFactory{
+		IteratorFrom: func(from types.Value) interface{} {
+			return s.IteratorFrom(from)
+		},
+		IteratorAt: func(at uint64) interface{} {
+			return s.IteratorAt(at)
+		},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	if count == 0 {
 		return ([]interface{})(nil), nil
 	}
 
-	values := make([]interface{}, count)
-	iter := s.IteratorAt(idx)
+	setIter := iter.(types.SetIterator)
+	values := make([]interface{}, 0, count)
 	for i := uint64(0); i < count; i++ {
-		values[i] = maybeGetScalar(iter.Next())
+		v := setIter.Next()
+		if v == nil {
+			break
+		}
+		if singleExactMatch {
+			if nomsKey.Equals(v) {
+				values = append(values, maybeGetScalar(v))
+			}
+			break
+		}
+
+		if nomsThrough != nil {
+			if !nomsThrough.Less(v) {
+				values = append(values, maybeGetScalar(v))
+			} else {
+				break
+			}
+		} else {
+			values = append(values, maybeGetScalar(v))
+		}
 	}
 
 	return values, nil
 }
 
-var mapArgs = graphql.FieldConfigArgument{
-	atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
-	countKey: &graphql.ArgumentConfig{Type: graphql.Int},
+func getArgValue(arg interface{}, nomsType *types.Type) (types.Value, error) {
+	var nomsVal types.Value
+	switch arg := arg.(type) {
+	case bool:
+		nomsVal = types.Bool(arg)
+	case float64:
+		nomsVal = types.Number(arg)
+	case string:
+		nomsVal = types.String(arg)
+	default:
+		return nil, fmt.Errorf("Unsupported type in GraphQL argument, %T, %s", arg, nomsType.Describe())
+	}
+
+	if types.IsSubtype(nomsType, nomsVal.Type()) {
+		return nomsVal, nil
+	}
+
+	return nil, fmt.Errorf("%s is not a subtype of %s", nomsVal.Type().Describe(), nomsType.Describe())
+}
+
+func getCollectionArgs(typ *types.Type, len uint64, args map[string]interface{}, factory iteratorFactory) (iter interface{}, nomsKey, nomsThrough types.Value, count uint64, singleExactMatch bool, err error) {
+	nomsKeyType := typ.Desc.(types.CompoundDesc).ElemTypes[0]
+
+	if key, ok := args[keyKey]; ok {
+		nomsKey, err = getArgValue(key, nomsKeyType)
+		if err != nil {
+			return
+		}
+		iter = factory.IteratorFrom(nomsKey)
+	} else if at, ok := args[atKey]; ok {
+		idx := at.(int)
+		if idx < 0 {
+			idx = 0
+		} else if uint64(idx) > len {
+			// count is already 0
+			return
+		}
+		iter = factory.IteratorAt(uint64(idx))
+	} else {
+		iter = factory.IteratorAt(0)
+	}
+
+	// iter, err = getIterator(len, nomsKeyType, args, factory)
+	if err != nil {
+		return
+	}
+	if iter == nil {
+		// count is already 0
+		return
+	}
+
+	nomsThrough, err = getThroughArg(nomsKeyType, args)
+	if err != nil {
+		return
+	}
+
+	count, singleExactMatch = getCountArg(len, args)
+	return
 }
 
 func getMapValues(v types.Value, args map[string]interface{}) (interface{}, error) {
-	// TODO: Refactor to share code between the collections.
 	m := v.(types.Map)
-	idx, count, empty := getBounds(m.Len(), args)
-	if empty {
+
+	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(m.Type(), m.Len(), args, iteratorFactory{
+		IteratorFrom: func(from types.Value) interface{} {
+			return m.IteratorFrom(from)
+		},
+		IteratorAt: func(at uint64) interface{} {
+			return m.IteratorAt(at)
+		},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	if count == 0 {
 		return ([]interface{})(nil), nil
 	}
 
-	values := make([]mapEntry, count)
-	iter := m.IteratorAt(idx)
+	mapIter := iter.(types.MapIterator)
+	values := make([]mapEntry, 0, count)
 	for i := uint64(0); i < count; i++ {
-		k, v := iter.Next()
-		values[i] = mapEntry{k, v}
+		k, v := mapIter.Next()
+		if k == nil {
+			break
+		}
+
+		if singleExactMatch {
+			if nomsKey.Equals(k) {
+				values = append(values, mapEntry{k, v})
+			}
+			break
+		}
+
+		if nomsThrough != nil {
+			if !nomsThrough.Less(k) {
+				values = append(values, mapEntry{k, v})
+			} else {
+				break
+			}
+		} else {
+			values = append(values, mapEntry{k, v})
+		}
 	}
 
 	return values, nil
+}
+
+func getCountArg(count uint64, args map[string]interface{}) (c uint64, singleExactMatch bool) {
+	if c, ok := args[countKey]; ok {
+		c := c.(int)
+		if c <= 0 {
+			return 0, false
+		}
+		return uint64(c), false
+	}
+	// If we have key and no count/through we use count 1
+	_, hasKey := args[keyKey]
+	_, hasThrough := args[throughKey]
+	if hasKey && !hasThrough {
+		return uint64(1), true
+	}
+
+	return count, false
+}
+
+func getThroughArg(nomsKeyType *types.Type, args map[string]interface{}) (types.Value, error) {
+	var nomsThrough types.Value
+	if through, ok := args[throughKey]; ok {
+		var err error
+		nomsThrough, err = getArgValue(through, nomsKeyType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nomsThrough, nil
+}
+
+type iteratorFactory struct {
+	IteratorFrom func(from types.Value) interface{}
+	IteratorAt   func(at uint64) interface{}
 }
 
 type mapEntry struct {
@@ -318,11 +464,11 @@ type mapEntry struct {
 //	 key: <KeyType>!
 //	 value: <ValueType>!
 // }
-func mapEntryToGraphQLObject(nomsKeyType, nomsValueType *types.Type, tm *typeMap) *graphql.Object {
+func mapEntryToGraphQLObject(nomsKeyType, nomsValueType *types.Type, tm *typeMap) (*graphql.Object, graphql.Type) {
+	keyType := nomsTypeToGraphQLType(nomsKeyType, false, tm)
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: fmt.Sprintf("%s%sEntry", getTypeName(nomsKeyType), getTypeName(nomsValueType)),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
-			keyType := nomsTypeToGraphQLType(nomsKeyType, false, tm)
 			valueType := nomsTypeToGraphQLType(nomsValueType, false, tm)
 			return graphql.Fields{
 				keyKey: &graphql.Field{
@@ -341,7 +487,7 @@ func mapEntryToGraphQLObject(nomsKeyType, nomsValueType *types.Type, tm *typeMap
 				},
 			}
 		}),
-	})
+	}), keyType
 }
 
 func getTypeName(nomsType *types.Type) string {
@@ -412,7 +558,7 @@ func getTypeName(nomsType *types.Type) string {
 	}
 }
 
-func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm *typeMap) *graphql.Object {
+func collectionToGraphQLObject(nomsType *types.Type, listType, keyType graphql.Type, tm *typeMap) *graphql.Object {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: getTypeName(nomsType),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
@@ -436,11 +582,28 @@ func collectionToGraphQLObject(nomsType *types.Type, listType graphql.Type, tm *
 					getSubvalues = getListValues
 
 				case types.SetKind:
-					args = setArgs
+					args = graphql.FieldConfigArgument{
+						atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
+						countKey: &graphql.ArgumentConfig{Type: graphql.Int},
+					}
+					if graphql.IsInputType(keyType) {
+						// TODO: Should compute an graphql.InputObject from the noms type. graphql.InputObject is different from graphql.Object
+						// See graphql.IsInputType vs graphql.IsOutputType
+
+						args[keyKey] = &graphql.ArgumentConfig{Type: keyType}
+						args[throughKey] = &graphql.ArgumentConfig{Type: keyType}
+					}
 					getSubvalues = getSetValues
 
 				case types.MapKind:
-					args = mapArgs
+					args = graphql.FieldConfigArgument{
+						atKey:    &graphql.ArgumentConfig{Type: graphql.Int},
+						countKey: &graphql.ArgumentConfig{Type: graphql.Int},
+					}
+					if graphql.IsInputType(keyType) {
+						args[keyKey] = &graphql.ArgumentConfig{Type: keyType}
+						args[throughKey] = &graphql.ArgumentConfig{Type: keyType}
+					}
 					getSubvalues = getMapValues
 				}
 

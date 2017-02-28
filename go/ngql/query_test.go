@@ -201,21 +201,6 @@ func (suite *QueryGraphQLSuite) TestMapBasic() {
 
 	suite.assertQueryResult(m, "{root{elements{key value}}}", `{"data":{"root":{"elements":[{"key":"a","value":1},{"key":"b","value":2},{"key":"c","value":3},{"key":"d","value":4}]}}}`)
 	suite.assertQueryResult(m, "{root{size}}", `{"data":{"root":{"size":4}}}`)
-
-	suite.assertQueryResult(m, "{root{elements(count:0){value}}}", `{"data":{"root":{"elements":[]}}}`)
-	suite.assertQueryResult(m, "{root{elements(count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(count:3){key}}}", `{"data":{"root":{"elements":[{"key":"a"},{"key":"b"},{"key":"c"}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(count: -1){key}}}", `{"data":{"root":{"elements":[]}}}`)
-	suite.assertQueryResult(m, "{root{elements(count:5){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2},{"value":3},{"value":4}]}}}`)
-
-	suite.assertQueryResult(m, "{root{elements(at:-1,count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:0,count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:1,count:2){value}}}", `{"data":{"root":{"elements":[{"value":2},{"value":3}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:2){value}}}", `{"data":{"root":{"elements":[{"value":3},{"value":4}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:2,count:1){value}}}", `{"data":{"root":{"elements":[{"value":3}]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:2,count:0){value}}}", `{"data":{"root":{"elements":[]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:5){value}}}", `{"data":{"root":{"elements":[]}}}`)
-	suite.assertQueryResult(m, "{root{elements(at:2,count:10){value}}}", `{"data":{"root":{"elements":[{"value":3},{"value":4}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestMapOfStruct() {
@@ -390,4 +375,201 @@ func (suite *QueryGraphQLSuite) TestError() {
 	Error(errors.New("Some error string"), buff)
 	suite.Equal(buff.String(), `{"data":null,"errors":[{"message":"Some error string","locations":null}]}
 `)
+}
+
+func (suite *QueryGraphQLSuite) TestMapArgs() {
+	m := types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("c"), types.Number(2),
+		types.String("e"), types.Number(3),
+		types.String("g"), types.Number(4),
+	)
+
+	// count
+	suite.assertQueryResult(m, "{root{elements(count:0){value}}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, "{root{elements(count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(count:3){key}}}", `{"data":{"root":{"elements":[{"key":"a"},{"key":"c"},{"key":"e"}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(count: -1){key}}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, "{root{elements(count:5){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2},{"value":3},{"value":4}]}}}`)
+
+	// at
+	suite.assertQueryResult(m, "{root{elements(at:0){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2},{"value":3},{"value":4}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:-1){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2},{"value":3},{"value":4}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:2){value}}}", `{"data":{"root":{"elements":[{"value":3},{"value":4}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:5){value}}}", `{"data":{"root":{"elements":[]}}}`)
+
+	// at & count
+	suite.assertQueryResult(m, "{root{elements(at:0,count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:-1,count:2){value}}}", `{"data":{"root":{"elements":[{"value":1},{"value":2}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:1,count:2){value}}}", `{"data":{"root":{"elements":[{"value":2},{"value":3}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:2,count:1){value}}}", `{"data":{"root":{"elements":[{"value":3}]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:2,count:0){value}}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, "{root{elements(at:2,count:10){value}}}", `{"data":{"root":{"elements":[{"value":3},{"value":4}]}}}`)
+
+	// key
+	suite.assertQueryResult(m, `{root{elements(key:"e"){key value}}}`,
+		`{"data":{"root":{"elements":[{"key":"e","value":3}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"g"){value}}}`,
+		`{"data":{"root":{"elements":[{"value":4}]}}}`)
+	// "f", no count/through so asking for exact match
+	suite.assertQueryResult(m, `{root{elements(key:"f"){value}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	// "x" is larger than end
+	suite.assertQueryResult(m, `{root{elements(key:"x"){value}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// key & at
+	// at is ignored when key is present
+	suite.assertQueryResult(m, `{root{elements(key:"e",at:2){key value}}}`,
+		`{"data":{"root":{"elements":[{"key":"e","value":3}]}}}`)
+
+	// key & count
+	suite.assertQueryResult(m, `{root{elements(key:"c", count: 2){key value}}}`,
+		`{"data":{"root":{"elements":[{"key":"c","value":2},{"key":"e","value":3}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"c", count: 0){key value}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"c", count: -1){key value}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"e", count: 5){key value}}}`,
+		`{"data":{"root":{"elements":[{"key":"e","value":3},{"key":"g","value":4}]}}}`)
+
+	// through
+	suite.assertQueryResult(m, `{root{elements(through:"c"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"},{"key":"c"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(through:"b"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(through:"0"){key}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// key & through
+	suite.assertQueryResult(m, `{root{elements(key:"c", through:"c"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"c"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"c",through:"e"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"c"},{"key":"e"}]}}}`)
+
+	// through & count
+	suite.assertQueryResult(m, `{root{elements(through:"c",count:1){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(through:"b",count:0){key}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(m, `{root{elements(through:"0",count:10){key}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// at & through
+	suite.assertQueryResult(m, `{root{elements(at:0,through:"a"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(at:1,through:"e"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"c"},{"key":"e"}]}}}`)
+
+	// at & count & through
+	suite.assertQueryResult(m, `{root{elements(at:0,count:2,through:"a"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(at:0,count:2,through:"e"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"a"},{"key":"c"}]}}}`)
+
+	// key & count & through
+	suite.assertQueryResult(m, `{root{elements(key:"c",count:2,through:"c"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"c"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(key:"c",count:2,through:"g"){key}}}`,
+		`{"data":{"root":{"elements":[{"key":"c"},{"key":"e"}]}}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestSetArgs() {
+	s := types.NewSet(
+		types.String("a"),
+		types.String("c"),
+		types.String("e"),
+		types.String("g"),
+	)
+
+	// count
+	suite.assertQueryResult(s, "{root{elements(count:0)}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, "{root{elements(count:2)}}", `{"data":{"root":{"elements":["a","c"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(count:3)}}", `{"data":{"root":{"elements":["a","c","e"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(count: -1)}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, "{root{elements(count:5)}}", `{"data":{"root":{"elements":["a","c","e","g"]}}}`)
+
+	// at
+	suite.assertQueryResult(s, "{root{elements(at:0)}}", `{"data":{"root":{"elements":["a","c","e","g"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:-1)}}", `{"data":{"root":{"elements":["a","c","e","g"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:2)}}", `{"data":{"root":{"elements":["e","g"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:5)}}", `{"data":{"root":{"elements":[]}}}`)
+
+	// at & count
+	suite.assertQueryResult(s, "{root{elements(at:0,count:2)}}", `{"data":{"root":{"elements":["a","c"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:-1,count:2)}}", `{"data":{"root":{"elements":["a","c"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:1,count:2)}}", `{"data":{"root":{"elements":["c","e"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:2,count:1)}}", `{"data":{"root":{"elements":["e"]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:2,count:0)}}", `{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, "{root{elements(at:2,count:10)}}", `{"data":{"root":{"elements":["e","g"]}}}`)
+
+	// key
+	suite.assertQueryResult(s, `{root{elements(key:"e")}}`,
+		`{"data":{"root":{"elements":["e"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"g")}}`,
+		`{"data":{"root":{"elements":["g"]}}}`)
+	// "f", no count/through so asking for exact match
+	suite.assertQueryResult(s, `{root{elements(key:"f")}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	// "x" is larger than end
+	suite.assertQueryResult(s, `{root{elements(key:"x")}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	// exact match
+	suite.assertQueryResult(s, `{root{elements(key:"0")}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// key & at
+	// at is ignored when key is present
+	suite.assertQueryResult(s, `{root{elements(key:"e",at:2)}}`,
+		`{"data":{"root":{"elements":["e"]}}}`)
+
+	// key & count
+	suite.assertQueryResult(s, `{root{elements(key:"c", count: 2)}}`,
+		`{"data":{"root":{"elements":["c","e"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"c", count: 0)}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"c", count: -1)}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"e", count: 5)}}`,
+		`{"data":{"root":{"elements":["e","g"]}}}`)
+
+	// through
+	suite.assertQueryResult(s, `{root{elements(through:"c")}}`,
+		`{"data":{"root":{"elements":["a","c"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(through:"b")}}`,
+		`{"data":{"root":{"elements":["a"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(through:"0")}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// key & through
+	suite.assertQueryResult(s, `{root{elements(key:"c", through:"c")}}`,
+		`{"data":{"root":{"elements":["c"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"c",through:"e")}}`,
+		`{"data":{"root":{"elements":["c","e"]}}}`)
+
+	// through & count
+	suite.assertQueryResult(s, `{root{elements(through:"c",count:1)}}`,
+		`{"data":{"root":{"elements":["a"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(through:"b",count:0)}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+	suite.assertQueryResult(s, `{root{elements(through:"0",count:10)}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	// at & through
+	suite.assertQueryResult(s, `{root{elements(at:0,through:"a")}}`,
+		`{"data":{"root":{"elements":["a"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(at:1,through:"e")}}`,
+		`{"data":{"root":{"elements":["c","e"]}}}`)
+
+	// at & count & through
+	suite.assertQueryResult(s, `{root{elements(at:0,count:2,through:"a")}}`,
+		`{"data":{"root":{"elements":["a"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(at:0,count:2,through:"e")}}`,
+		`{"data":{"root":{"elements":["a","c"]}}}`)
+
+	// key & count & through
+	suite.assertQueryResult(s, `{root{elements(key:"c",count:2,through:"c")}}`,
+		`{"data":{"root":{"elements":["c"]}}}`)
+	suite.assertQueryResult(s, `{root{elements(key:"c",count:2,through:"g")}}`,
+		`{"data":{"root":{"elements":["c","e"]}}}`)
 }

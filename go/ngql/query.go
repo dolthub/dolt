@@ -26,6 +26,7 @@ const (
 	sizeKey        = "size"
 	targetHashKey  = "targetHash"
 	targetValueKey = "targetValue"
+	throughKey     = "through"
 	tmKey          = "tm"
 	valueKey       = "value"
 	vrKey          = "vr"
