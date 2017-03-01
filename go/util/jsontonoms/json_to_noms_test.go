@@ -81,6 +81,31 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 	suite.True(tstruct.Equals(o))
 }
 
+func (suite *LibTestSuite) TestCompositeTypeWithNamedStruct() {
+	// {
+	//  "_name": "TStruct1",
+	//  "string": "string",
+	//  "list": [false true],
+	//  "id": {"_name", "Id", "owner": "string", "value": "string"}
+	// }
+	tstruct := types.NewStruct("TStruct1", types.StructData{
+		"string": types.String("string"),
+		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		"struct": types.NewStruct("Id", types.StructData{
+			"owner": types.String("string"),
+			"value": types.String("string"),
+		}),
+	})
+	o := NomsValueUsingNamedStructsFromDecodedJSON(map[string]interface{}{
+		"_name":  "TStruct1",
+		"string": "string",
+		"list":   []interface{}{false, true},
+		"struct": map[string]interface{}{"_name": "Id", "owner": "string", "value": "string"},
+	})
+
+	suite.True(tstruct.Equals(o))
+}
+
 func (suite *LibTestSuite) TestPanicOnUnsupportedType() {
 	suite.Panics(func() { NomsValueFromDecodedJSON(map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
 }

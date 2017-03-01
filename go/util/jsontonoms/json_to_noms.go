@@ -11,6 +11,62 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
+func nomsValueFromDecodedJSONBase(o interface{}, useStruct bool, namedStructs bool) types.Value {
+	switch o := o.(type) {
+	case string:
+		return types.String(o)
+	case bool:
+		return types.Bool(o)
+	case float64:
+		return types.Number(o)
+	case nil:
+		return nil
+	case []interface{}:
+		items := make([]types.Value, 0, len(o))
+		for _, v := range o {
+			nv := nomsValueFromDecodedJSONBase(v, useStruct, namedStructs)
+			if nv != nil {
+				items = append(items, nv)
+			}
+		}
+		return types.NewList(items...)
+	case map[string]interface{}:
+		var v types.Value
+		if useStruct {
+			structName := ""
+			fields := make(types.StructData, len(o))
+			for k, v := range o {
+				if namedStructs && k == "_name" {
+					if s1, isString := v.(string); isString {
+						structName = s1
+						continue
+					}
+				}
+				nv := nomsValueFromDecodedJSONBase(v, useStruct, namedStructs)
+				if nv != nil {
+					k := types.EscapeStructField(k)
+					fields[k] = nv
+				}
+			}
+			v = types.NewStruct(structName, fields)
+		} else {
+			kv := make([]types.Value, 0, len(o)*2)
+			for k, v := range o {
+				nv := nomsValueFromDecodedJSONBase(v, useStruct, namedStructs)
+				if nv != nil {
+					kv = append(kv, types.String(k), nv)
+				}
+			}
+			v = types.NewMap(kv...)
+		}
+		return v
+
+	default:
+		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
+	}
+	return nil
+}
+
 // NomsValueFromDecodedJSON takes a generic Go interface{} and recursively
 // tries to resolve the types within so that it can build up and return
 // a Noms Value with the same structure.
@@ -26,50 +82,13 @@ import (
 //  - []interface{}
 //  - map[string]interface{}
 func NomsValueFromDecodedJSON(o interface{}, useStruct bool) types.Value {
-	switch o := o.(type) {
-	case string:
-		return types.String(o)
-	case bool:
-		return types.Bool(o)
-	case float64:
-		return types.Number(o)
-	case nil:
-		return nil
-	case []interface{}:
-		items := make([]types.Value, 0, len(o))
-		for _, v := range o {
-			nv := NomsValueFromDecodedJSON(v, useStruct)
-			if nv != nil {
-				items = append(items, nv)
-			}
-		}
-		return types.NewList(items...)
-	case map[string]interface{}:
-		var v types.Value
-		if useStruct {
-			fields := make(types.StructData, len(o))
-			for k, v := range o {
-				nv := NomsValueFromDecodedJSON(v, useStruct)
-				if nv != nil {
-					k := types.EscapeStructField(k)
-					fields[k] = nv
-				}
-			}
-			v = types.NewStruct("", fields)
-		} else {
-			kv := make([]types.Value, 0, len(o)*2)
-			for k, v := range o {
-				nv := NomsValueFromDecodedJSON(v, useStruct)
-				if nv != nil {
-					kv = append(kv, types.String(k), nv)
-				}
-			}
-			v = types.NewMap(kv...)
-		}
-		return v
+	return nomsValueFromDecodedJSONBase(o, useStruct, false)
+}
 
-	default:
-		d.Chk.Fail("Nomsification failed.", "I don't understand %+v, which is of type %s!\n", o, reflect.TypeOf(o).String())
-	}
-	return nil
+// NomsValueUsingNamedStructsFromDecodedJSON performs the same function as
+// NomsValueFromDecodedJson except that it always decodes JSON objects into
+// structs. If the JSON object has a string field name '_name' it uses the
+// value of that field as the name of the Noms struct.
+func NomsValueUsingNamedStructsFromDecodedJSON(o interface{}) types.Value {
+	return nomsValueFromDecodedJSONBase(o, true, true)
 }
