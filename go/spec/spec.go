@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"os"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
@@ -268,6 +269,7 @@ func (sp Spec) createDatabase() datas.Database {
 	case "aws":
 		return datas.NewDatabase(parseAWSSpec(sp.Href()))
 	case "nbs":
+		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
 	case "mem":
 		return datas.NewDatabase(chunks.NewMemoryStore())

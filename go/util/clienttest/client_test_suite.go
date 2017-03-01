@@ -21,6 +21,7 @@ type ClientTestSuite struct {
 	suite.Suite
 	TempDir    string
 	DBDir      string
+	DBDir2     string
 	ExitStatus int
 	out        *os.File
 	err        *os.File
@@ -40,9 +41,13 @@ func (suite *ClientTestSuite) SetupSuite() {
 
 	suite.TempDir = dir
 	suite.DBDir = path.Join(dir, "db")
+	suite.DBDir2 = path.Join(suite.TempDir, "db2")
 	suite.out = stdOutput
 	suite.err = errOutput
 	exit.Exit = mockExit
+
+	os.Mkdir(suite.DBDir, 0777)
+	os.Mkdir(suite.DBDir2, 0777)
 }
 
 func (suite *ClientTestSuite) TearDownSuite() {

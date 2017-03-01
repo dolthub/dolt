@@ -6,7 +6,6 @@ package main
 
 import (
 	"os"
-	"path"
 	"testing"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -34,8 +33,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 	source1.Database().Close()
 	sourceSpecMissingHashSymbol := spec.CreateValueSpecString("nbs", s.DBDir, source1HeadRef.String())
 
-	db2dir := path.Join(s.TempDir, "db2")
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", db2dir, "dest")
+	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 
 	defer func() {
 		err := recover()
@@ -46,8 +44,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 }
 
 func (s *nomsSyncTestSuite) TestSync() {
-	db2dir := path.Join(s.TempDir, "db2")
-	defer s.NoError(os.RemoveAll(db2dir))
+	defer s.NoError(os.RemoveAll(s.DBDir2))
 
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	source1 := sourceDB.GetDataset("src")
@@ -59,11 +56,11 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sourceDB.Close()
 
 	sourceSpec := spec.CreateValueSpecString("nbs", s.DBDir, "#"+source1HeadRef.String())
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", db2dir, "dest")
+	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 
 	s.Regexp("Created", sout)
-	db := datas.NewDatabase(nbs.NewLocalStore(db2dir, clienttest.DefaultMemTableSize))
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
 	dest := db.GetDataset("dest")
 	s.True(types.Number(42).Equals(dest.HeadValue()))
 	db.Close()
@@ -72,7 +69,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
 
-	db = datas.NewDatabase(nbs.NewLocalStore(db2dir, clienttest.DefaultMemTableSize))
+	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
 	dest = db.GetDataset("dest")
 	s.True(types.Number(43).Equals(dest.HeadValue()))
 	db.Close()
@@ -82,8 +79,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 }
 
 func (s *nomsSyncTestSuite) TestSync_Issue2598() {
-	db2dir := path.Join(s.TempDir, "db2")
-	defer s.NoError(os.RemoveAll(db2dir))
+	defer s.NoError(os.RemoveAll(s.DBDir2))
 
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	// Create dataset "src1", which has a lineage of two commits.
@@ -102,20 +98,20 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 
 	// Sync over "src1"
 	sourceDataset := spec.CreateValueSpecString("nbs", s.DBDir, "src1")
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", db2dir, "dest")
+	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 
-	db := datas.NewDatabase(nbs.NewLocalStore(db2dir, clienttest.DefaultMemTableSize))
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
 	dest := db.GetDataset("dest")
 	s.True(types.Number(43).Equals(dest.HeadValue()))
 	db.Close()
 
 	// Now, try syncing a second dataset. This crashed in issue #2598
 	sourceDataset2 := spec.CreateValueSpecString("nbs", s.DBDir, "src2")
-	sinkDatasetSpec2 := spec.CreateValueSpecString("nbs", db2dir, "dest2")
+	sinkDatasetSpec2 := spec.CreateValueSpecString("nbs", s.DBDir2, "dest2")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset2, sinkDatasetSpec2})
 
-	db = datas.NewDatabase(nbs.NewLocalStore(db2dir, clienttest.DefaultMemTableSize))
+	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
 	dest = db.GetDataset("dest2")
 	s.True(types.Number(1).Equals(dest.HeadValue()))
 	db.Close()

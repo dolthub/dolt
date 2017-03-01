@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
@@ -92,8 +93,19 @@ type LocalStoreFactory struct {
 	maxTables  int
 }
 
+func CheckDir(dir string) error {
+	stat, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return fmt.Errorf("Path is not a directory: %s", dir)
+	}
+	return nil
+}
+
 func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chunks.Factory {
-	err := os.MkdirAll(dir, 0777)
+	err := CheckDir(dir)
 	d.PanicIfError(err)
 
 	var indexCache *indexCache
@@ -127,7 +139,7 @@ func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
 }
 
 func newLocalStore(dir string, memTableSize uint64, indexCache *indexCache, maxTables int) *NomsBlockStore {
-	err := os.MkdirAll(dir, 0777)
+	err := CheckDir(dir)
 	d.PanicIfError(err)
 	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir, indexCache), memTableSize, maxTables)
 }

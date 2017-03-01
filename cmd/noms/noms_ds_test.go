@@ -26,12 +26,12 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir+"/name", clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
 	ds := datas.NewDatabase(cs)
 
 	ds.Close()
 
-	dbSpec := spec.CreateDatabaseSpecString("nbs", dir+"/name")
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir)
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal("", rtnVal)
 }
@@ -39,7 +39,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir+"/name", clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
 
 	id := "testdataset"
@@ -55,9 +55,9 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	err = db.Close()
 	s.NoError(err)
 
-	dbSpec := spec.CreateDatabaseSpecString("nbs", dir+"/name")
-	datasetName := spec.CreateValueSpecString("nbs", dir+"/name", id)
-	dataset2Name := spec.CreateValueSpecString("nbs", dir+"/name", id2)
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir)
+	datasetName := spec.CreateValueSpecString("nbs", dir, id)
+	dataset2Name := spec.CreateValueSpecString("nbs", dir, id2)
 
 	// both datasets show up
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})

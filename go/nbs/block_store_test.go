@@ -47,14 +47,15 @@ func (suite *BlockStoreSuite) TearDownTest() {
 	os.RemoveAll(suite.dir)
 }
 
-func (suite *BlockStoreSuite) TestChunkStoreMkdir() {
-	newDir := filepath.Join(suite.dir, "newthing")
-	store := NewLocalStore(newDir, testMemTableSize)
+func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
+	newDir := filepath.Join(suite.dir, "does-not-exist")
+	suite.Panics(func() { NewLocalStore(newDir, testMemTableSize) })
+}
 
-	c := chunks.NewChunk([]byte("abc"))
-	suite.store.Put(c)
-
-	suite.NotPanics(func() { store.UpdateRoot(c.Hash(), store.Root()) })
+func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
+	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
+	os.Create(existingFile)
+	suite.Panics(func() { NewLocalStore(existingFile, testMemTableSize) })
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {

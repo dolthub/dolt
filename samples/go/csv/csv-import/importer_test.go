@@ -124,6 +124,7 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 		defer os.RemoveAll(s.DBDir)
 
 		newDB := func() datas.Database {
+			os.Mkdir(s.DBDir, 0777)
 			cs := nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize)
 			return datas.NewDatabase(cs)
 		}
