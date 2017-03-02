@@ -116,7 +116,10 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chun
 }
 
 func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newLocalStore(path.Join(lsf.dir, ns), defaultMemTableSize, lsf.indexCache, lsf.maxTables)
+	path := path.Join(lsf.dir, ns)
+	err := os.MkdirAll(path, 0777)
+	d.PanicIfError(err)
+	return newLocalStore(path, defaultMemTableSize, lsf.indexCache, lsf.maxTables)
 }
 
 func (lsf *LocalStoreFactory) Shutter() {
