@@ -19,6 +19,7 @@ const (
 	atKey          = "at"
 	countKey       = "count"
 	elementsKey    = "elements"
+	entriesKey     = "entries"
 	keyKey         = "key"
 	keysKey        = "keys"
 	rootKey        = "root"
@@ -30,6 +31,7 @@ const (
 	throughKey     = "through"
 	tmKey          = "tm"
 	valueKey       = "value"
+	valuesKey      = "values"
 	vrKey          = "vr"
 )
 
