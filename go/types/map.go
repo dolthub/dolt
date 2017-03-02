@@ -43,6 +43,7 @@ func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 
 	outChan := make(chan Map)
 	go func() {
+		defer close(outChan)
 		gb := NewGraphBuilder(vrw, MapKind, false)
 		for v := range kvs {
 			if k == nil {

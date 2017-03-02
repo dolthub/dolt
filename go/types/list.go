@@ -43,12 +43,12 @@ func NewList(values ...Value) List {
 func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List)
 	go func() {
+		defer close(out)
 		ch := newEmptyListSequenceChunker(vrw, vrw)
 		for v := range values {
 			ch.Append(v)
 		}
 		out <- newList(ch.Done())
-		close(out)
 	}()
 	return out
 }
