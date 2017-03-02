@@ -5,12 +5,12 @@
 package nbs
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"sort"
 	"sync"
 	"time"
-	"fmt"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
@@ -128,6 +128,7 @@ func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize ui
 }
 
 func newAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, indexCache *indexCache, readRl chan struct{}) *NomsBlockStore {
+	d.PanicIfTrue(ns == "")
 	mm := newDynamoManifest(table, ns, ddb)
 	ts := newS3TableSet(s3, bucket, indexCache, readRl)
 	return newNomsBlockStore(mm, ts, memTableSize, defaultMaxTables)
