@@ -474,6 +474,38 @@ func (suite *QueryGraphQLSuite) TestMapArgs() {
 		`{"data":{"root":{"elements":[{"key":"c"},{"key":"e"}]}}}`)
 }
 
+func (suite *QueryGraphQLSuite) TestMapKeysArg() {
+	m := types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("c"), types.Number(2),
+		types.String("e"), types.Number(3),
+		types.String("g"), types.Number(4),
+	)
+	suite.assertQueryResult(m, `{root{elements(keys:["c","a"]){value}}}`,
+		`{"data":{"root":{"elements":[{"value":2},{"value":1}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(keys:[]){value}}}`,
+		`{"data":{"root":{"elements":[]}}}`)
+
+	m = types.NewMap(
+		types.Number(1), types.String("a"),
+		types.Number(2), types.String("c"),
+		types.Number(3), types.String("e"),
+		types.Number(4), types.String("g"),
+	)
+	suite.assertQueryResult(m, `{root{elements(keys:[4,1]){value}}}`,
+		`{"data":{"root":{"elements":[{"value":"g"},{"value":"a"}]}}}`)
+
+	// Ignore other args
+	suite.assertQueryResult(m, `{root{elements(keys:[4,1],key:2){value}}}`,
+		`{"data":{"root":{"elements":[{"value":"g"},{"value":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(keys:[4,1],count:0){value}}}`,
+		`{"data":{"root":{"elements":[{"value":"g"},{"value":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(keys:[4,1],at:4){value}}}`,
+		`{"data":{"root":{"elements":[{"value":"g"},{"value":"a"}]}}}`)
+	suite.assertQueryResult(m, `{root{elements(keys:[4,1],through:1){value}}}`,
+		`{"data":{"root":{"elements":[{"value":"g"},{"value":"a"}]}}}`)
+}
+
 func (suite *QueryGraphQLSuite) TestSetArgs() {
 	s := types.NewSet(
 		types.String("a"),

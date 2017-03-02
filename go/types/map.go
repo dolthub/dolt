@@ -264,13 +264,13 @@ func (m Map) Iterator() MapIterator {
 }
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
-	return MapIterator{
+	return &mapIterator{
 		cursor: newCursorAtIndex(m.seq, pos, true),
 	}
 }
 
 func (m Map) IteratorFrom(key Value) MapIterator {
-	return MapIterator{
+	return &mapIterator{
 		cursor: newCursorAtValue(m.seq, key, false, false, true),
 	}
 }

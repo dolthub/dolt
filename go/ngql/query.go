@@ -20,6 +20,7 @@ const (
 	countKey       = "count"
 	elementsKey    = "elements"
 	keyKey         = "key"
+	keysKey        = "keys"
 	rootKey        = "root"
 	rootQueryKey   = "Root"
 	scalarValue    = "scalarValue"

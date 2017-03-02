@@ -19,20 +19,16 @@ func TestMapIterator(t *testing.T) {
 	}
 
 	test := func(it MapIterator, start int, msg string) {
-		assert.Nil(it.CurrentKey, msg)
-		assert.Nil(it.CurrentValue, msg)
 		for i := start; i < 5; i++ {
 			k, v := it.Next()
-			assert.True(k.Equals(it.CurrentKey), msg)
-			assert.True(v.Equals(it.CurrentValue), msg)
-			assert.True(String(string(byte(65+i))).Equals(it.CurrentKey), msg)
-			assert.True(Number(i).Equals(it.CurrentValue), msg)
+			assert.True(k.Equals(k), msg)
+			assert.True(v.Equals(v), msg)
+			assert.True(String(string(byte(65+i))).Equals(k), msg)
+			assert.True(Number(i).Equals(v), msg)
 		}
 		k, v := it.Next()
 		assert.Nil(k, msg)
 		assert.Nil(v, msg)
-		assert.Nil(it.CurrentKey, msg)
-		assert.Nil(it.CurrentValue, msg)
 	}
 
 	test(m.Iterator(), 0, "Iterator()")

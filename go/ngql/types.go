@@ -13,6 +13,7 @@ import (
 	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -266,7 +267,7 @@ func getListValues(v types.Value, args map[string]interface{}) (interface{}, err
 func getSetValues(v types.Value, args map[string]interface{}) (interface{}, error) {
 	s := v.(types.Set)
 
-	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(s.Type(), s.Len(), args, iteratorFactory{
+	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(s, args, iteratorFactory{
 		IteratorFrom: func(from types.Value) interface{} {
 			return s.IteratorFrom(from)
 		},
@@ -310,31 +311,38 @@ func getSetValues(v types.Value, args map[string]interface{}) (interface{}, erro
 	return values, nil
 }
 
-func getArgValue(arg interface{}, nomsType *types.Type) (types.Value, error) {
-	var nomsVal types.Value
-	switch arg := arg.(type) {
-	case bool:
-		nomsVal = types.Bool(arg)
-	case float64:
-		nomsVal = types.Number(arg)
-	case string:
-		nomsVal = types.String(arg)
-	default:
-		return nil, fmt.Errorf("Unsupported type in GraphQL argument, %T, %s", arg, nomsType.Describe())
-	}
-
-	if types.IsSubtype(nomsType, nomsVal.Type()) {
-		return nomsVal, nil
-	}
-
-	return nil, fmt.Errorf("%s is not a subtype of %s", nomsVal.Type().Describe(), nomsType.Describe())
+type nomsCollection interface {
+	types.Value
+	Len() uint64
 }
 
-func getCollectionArgs(typ *types.Type, len uint64, args map[string]interface{}, factory iteratorFactory) (iter interface{}, nomsKey, nomsThrough types.Value, count uint64, singleExactMatch bool, err error) {
+func getCollectionArgs(col nomsCollection, args map[string]interface{}, factory iteratorFactory) (iter interface{}, nomsKey, nomsThrough types.Value, count uint64, singleExactMatch bool, err error) {
+	typ := col.Type()
+	length := col.Len()
 	nomsKeyType := typ.Desc.(types.CompoundDesc).ElemTypes[0]
 
+	if keys, ok := args[keysKey]; ok {
+		slice := keys.([]interface{})
+		nomsKeys := make(types.ValueSlice, len(slice))
+		for i, v := range slice {
+			var nomsValue types.Value
+			nomsValue, err = marshal.Marshal(v)
+			if err != nil {
+				return
+			}
+			nomsKeys[i] = nomsValue
+		}
+		count = uint64(len(slice))
+		iter = &mapIteratorForKeys{
+			m:    col.(types.Map),
+			keys: nomsKeys,
+		}
+		return
+
+	}
+
 	if key, ok := args[keyKey]; ok {
-		nomsKey, err = getArgValue(key, nomsKeyType)
+		nomsKey, err = marshal.Marshal(key)
 		if err != nil {
 			return
 		}
@@ -343,7 +351,7 @@ func getCollectionArgs(typ *types.Type, len uint64, args map[string]interface{},
 		idx := at.(int)
 		if idx < 0 {
 			idx = 0
-		} else if uint64(idx) > len {
+		} else if uint64(idx) > length {
 			// count is already 0
 			return
 		}
@@ -352,7 +360,6 @@ func getCollectionArgs(typ *types.Type, len uint64, args map[string]interface{},
 		iter = factory.IteratorAt(0)
 	}
 
-	// iter, err = getIterator(len, nomsKeyType, args, factory)
 	if err != nil {
 		return
 	}
@@ -366,14 +373,14 @@ func getCollectionArgs(typ *types.Type, len uint64, args map[string]interface{},
 		return
 	}
 
-	count, singleExactMatch = getCountArg(len, args)
+	count, singleExactMatch = getCountArg(length, args)
 	return
 }
 
 func getMapValues(v types.Value, args map[string]interface{}) (interface{}, error) {
 	m := v.(types.Map)
 
-	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(m.Type(), m.Len(), args, iteratorFactory{
+	iter, nomsKey, nomsThrough, count, singleExactMatch, err := getCollectionArgs(m, args, iteratorFactory{
 		IteratorFrom: func(from types.Value) interface{} {
 			return m.IteratorFrom(from)
 		},
@@ -440,7 +447,7 @@ func getThroughArg(nomsKeyType *types.Type, args map[string]interface{}) (types.
 	var nomsThrough types.Value
 	if through, ok := args[throughKey]; ok {
 		var err error
-		nomsThrough, err = getArgValue(through, nomsKeyType)
+		nomsThrough, err = marshal.Marshal(through)
 		if err != nil {
 			return nil, err
 		}
@@ -589,7 +596,6 @@ func collectionToGraphQLObject(nomsType *types.Type, listType, keyType graphql.T
 					if graphql.IsInputType(keyType) {
 						// TODO: Should compute an graphql.InputObject from the noms type. graphql.InputObject is different from graphql.Object
 						// See graphql.IsInputType vs graphql.IsOutputType
-
 						args[keyKey] = &graphql.ArgumentConfig{Type: keyType}
 						args[throughKey] = &graphql.ArgumentConfig{Type: keyType}
 					}
@@ -602,6 +608,7 @@ func collectionToGraphQLObject(nomsType *types.Type, listType, keyType graphql.T
 					}
 					if graphql.IsInputType(keyType) {
 						args[keyKey] = &graphql.ArgumentConfig{Type: keyType}
+						args[keysKey] = &graphql.ArgumentConfig{Type: graphql.NewList(keyType)}
 						args[throughKey] = &graphql.ArgumentConfig{Type: keyType}
 					}
 					getSubvalues = getMapValues
@@ -670,4 +677,20 @@ func maybeGetScalar(v types.Value) interface{} {
 	}
 
 	return v
+}
+
+type mapIteratorForKeys struct {
+	m    types.Map
+	keys types.ValueSlice
+	idx  int
+}
+
+func (it *mapIteratorForKeys) Next() (k, v types.Value) {
+	if it.idx >= len(it.keys) {
+		return
+	}
+	k = it.keys[it.idx]
+	v = it.m.Get(k)
+	it.idx++
+	return
 }
