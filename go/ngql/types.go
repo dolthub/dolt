@@ -24,7 +24,7 @@ type typeMapKey struct {
 	boxedIfScalar bool
 }
 
-func newTypeMap() *typeMap {
+func NewTypeMap() *typeMap {
 	return &typeMap{}
 }
 
@@ -70,7 +70,7 @@ func isScalar(nomsType *types.Type) bool {
 }
 
 // Note: Always returns a graphql.NonNull() as the outer type.
-func nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap) graphql.Type {
+func NomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap) graphql.Type {
 	key := typeMapKey{nomsType.Hash(), boxedIfScalar && isScalar(nomsType)}
 	gqlType, ok := (*tm)[key]
 	if ok {
@@ -148,7 +148,7 @@ func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
 
 	for i, nomsUnionType := range nomsMemberTypes {
 		// Member types cannot be non-null and must be struct (graphl.Object)
-		memberTypes[i] = nomsTypeToGraphQLType(nomsUnionType, true, tm).(*graphql.NonNull).OfType.(*graphql.Object)
+		memberTypes[i] = NomsTypeToGraphQLType(nomsUnionType, true, tm).(*graphql.NonNull).OfType.(*graphql.Object)
 	}
 
 	return graphql.NewUnion(graphql.UnionConfig{
@@ -196,13 +196,13 @@ func structToGQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 			}
 
 			structDesc.IterFields(func(name string, nomsFieldType *types.Type) {
-				fieldType := nomsTypeToGraphQLType(nomsFieldType, false, tm)
+				fieldType := NomsTypeToGraphQLType(nomsFieldType, false, tm)
 
 				fields[name] = &graphql.Field{
 					Type: fieldType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						field := p.Source.(types.Struct).Get(p.Info.FieldName)
-						return maybeGetScalar(field), nil
+						return MaybeGetScalar(field), nil
 					},
 				}
 			})
@@ -245,7 +245,7 @@ func getListElements(v types.Value, args map[string]interface{}) (interface{}, e
 	values := make([]interface{}, count)
 	iter := l.IteratorAt(uint64(idx))
 	for i := uint64(0); i < uint64(count); i++ {
-		values[i] = maybeGetScalar(iter.Next())
+		values[i] = MaybeGetScalar(iter.Next())
 	}
 
 	return values, nil
@@ -282,19 +282,19 @@ func getSetElements(v types.Value, args map[string]interface{}) (interface{}, er
 		}
 		if singleExactMatch {
 			if nomsKey.Equals(v) {
-				values = append(values, maybeGetScalar(v))
+				values = append(values, MaybeGetScalar(v))
 			}
 			break
 		}
 
 		if nomsThrough != nil {
 			if !nomsThrough.Less(v) {
-				values = append(values, maybeGetScalar(v))
+				values = append(values, MaybeGetScalar(v))
 			} else {
 				break
 			}
 		} else {
-			values = append(values, maybeGetScalar(v))
+			values = append(values, MaybeGetScalar(v))
 		}
 	}
 
@@ -466,14 +466,14 @@ func mapEntryToGraphQLObject(keyType, valueType graphql.Type, nomsKeyType, nomsV
 					Type: keyType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						entry := p.Source.(mapEntry)
-						return maybeGetScalar(entry.key), nil
+						return MaybeGetScalar(entry.key), nil
 					},
 				},
 				valueKey: &graphql.Field{
 					Type: valueType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						entry := p.Source.(mapEntry)
-						return maybeGetScalar(entry.value), nil
+						return MaybeGetScalar(entry.value), nil
 					},
 				},
 			}
@@ -555,7 +555,7 @@ func argsWithSize() graphql.Fields {
 			Type: graphql.Float,
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				c := p.Source.(types.Collection)
-				return maybeGetScalar(types.Number(c.Len())), nil
+				return MaybeGetScalar(types.Number(c.Len())), nil
 			},
 		},
 	}
@@ -565,7 +565,7 @@ func listAndSetToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Objec
 	nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 	var listType, valueType graphql.Type
 	if !isEmptyNomsUnion(nomsValueType) {
-		listType = nomsTypeToGraphQLType(nomsValueType, false, tm)
+		listType = NomsTypeToGraphQLType(nomsValueType, false, tm)
 		valueType = unpackNonNullType(listType)
 	}
 
@@ -624,9 +624,9 @@ func mapToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 			fields := argsWithSize()
 
 			if !isEmptyMap {
-				keyType := nomsTypeToGraphQLType(nomsKeyType, false, tm)
+				keyType := NomsTypeToGraphQLType(nomsKeyType, false, tm)
 				nullableKeyType := unpackNonNullType(keyType)
-				valueType := unpackNonNullType(nomsTypeToGraphQLType(nomsValueType, false, tm))
+				valueType := unpackNonNullType(NomsTypeToGraphQLType(nomsValueType, false, tm))
 				entryType := mapEntryToGraphQLObject(keyType, valueType, nomsKeyType, nomsValueType, tm)
 
 				args := graphql.FieldConfigArgument{
@@ -674,11 +674,11 @@ func mapToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 }
 
 func mapAppendKey(slice []interface{}, k, v types.Value) []interface{} {
-	return append(slice, maybeGetScalar(k))
+	return append(slice, MaybeGetScalar(k))
 }
 
 func mapAppendValue(slice []interface{}, k, v types.Value) []interface{} {
-	return append(slice, maybeGetScalar(v))
+	return append(slice, MaybeGetScalar(v))
 }
 
 func mapAppendEntry(slice []interface{}, k, v types.Value) []interface{} {
@@ -696,14 +696,14 @@ func refToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 		Name: getTypeName(nomsType),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
 			nomsTargetType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
-			targetType := nomsTypeToGraphQLType(nomsTargetType, false, tm)
+			targetType := NomsTypeToGraphQLType(nomsTargetType, false, tm)
 
 			return graphql.Fields{
 				targetHashKey: &graphql.Field{
 					Type: graphql.NewNonNull(graphql.String),
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						r := p.Source.(types.Ref)
-						return maybeGetScalar(types.String(r.TargetHash().String())), nil
+						return MaybeGetScalar(types.String(r.TargetHash().String())), nil
 					},
 				},
 
@@ -711,7 +711,7 @@ func refToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 					Type: targetType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						r := p.Source.(types.Ref)
-						return maybeGetScalar(r.TargetValue(p.Context.Value(vrKey).(types.ValueReader))), nil
+						return MaybeGetScalar(r.TargetValue(p.Context.Value(vrKey).(types.ValueReader))), nil
 					},
 				},
 			}
@@ -719,7 +719,7 @@ func refToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 	})
 }
 
-func maybeGetScalar(v types.Value) interface{} {
+func MaybeGetScalar(v types.Value) interface{} {
 	switch v.(type) {
 	case types.Bool:
 		return bool(v.(types.Bool))

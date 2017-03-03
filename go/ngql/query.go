@@ -37,7 +37,7 @@ const (
 
 func constructQueryType(rootValue types.Value, tm *typeMap) *graphql.Object {
 	rootNomsType := rootValue.Type()
-	rootType := nomsTypeToGraphQLType(rootNomsType, false, tm)
+	rootType := NomsTypeToGraphQLType(rootNomsType, false, tm)
 
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: rootQueryKey,
@@ -45,21 +45,25 @@ func constructQueryType(rootValue types.Value, tm *typeMap) *graphql.Object {
 			rootKey: &graphql.Field{
 				Type: rootType,
 				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-					return maybeGetScalar(rootValue), nil
+					return MaybeGetScalar(rootValue), nil
 				},
 			},
 		}})
 }
 
+func NewContext(vr types.ValueReader, tm *typeMap) context.Context {
+	return context.WithValue(context.WithValue(context.Background(), vrKey, vr), tmKey, tm)
+}
+
 // Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and
 // executes |query| against it, encoding the result to |w|.
 func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) {
-	tm := newTypeMap()
+	tm := NewTypeMap()
 
 	queryObj := constructQueryType(rootValue, tm)
 	schemaConfig := graphql.SchemaConfig{Query: queryObj}
 	schema, _ := graphql.NewSchema(schemaConfig)
-	ctx := context.WithValue(context.WithValue(context.Background(), vrKey, vr), tmKey, tm)
+	ctx := NewContext(vr, tm)
 
 	r := graphql.Do(graphql.Params{
 		Schema:        schema,
