@@ -624,7 +624,7 @@ func mapToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 			if !isEmptyMap {
 				keyType := nomsTypeToGraphQLType(nomsKeyType, false, tm)
 				nullableKeyType := unpackNonNullType(keyType)
-				valueType := nomsTypeToGraphQLType(nomsValueType, false, tm)
+				valueType := unpackNonNullType(nomsTypeToGraphQLType(nomsValueType, false, tm))
 				entryType := mapEntryToGraphQLObject(keyType, valueType, nomsKeyType, nomsValueType, tm)
 
 				args := graphql.FieldConfigArgument{

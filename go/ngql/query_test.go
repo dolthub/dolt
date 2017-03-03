@@ -775,3 +775,24 @@ func (suite *QueryGraphQLSuite) TestMapKeys() {
 	suite.assertQueryResult(m, `{root{keys(key:"c",count:2,through:"g")}}`,
 		`{"data":{"root":{"keys":["c","e"]}}}`)
 }
+
+func (suite *QueryGraphQLSuite) TestMapNullable() {
+	// When selecting the result based on keys the values may be null.
+	m := types.NewMap(
+		types.String("a"), types.Number(1),
+		types.String("c"), types.Number(2),
+	)
+
+	for _, entriesKey := range []string{"elements", "entries"} {
+		suite.assertQueryResult(m, `{root{`+entriesKey+`(keys:["a","b","c"]){value}}}`,
+			`{"data":{"root":{"`+entriesKey+`":[{"value":1},{"value":null},{"value":2}]}}}`)
+		suite.assertQueryResult(m, `{root{`+entriesKey+`(keys:["a","b","c"]){key}}}`,
+			`{"data":{"root":{"`+entriesKey+`":[{"key":"a"},{"key":"b"},{"key":"c"}]}}}`)
+		suite.assertQueryResult(m, `{root{`+entriesKey+`(keys:["a","b","c"]){key value}}}`,
+			`{"data":{"root":{"`+entriesKey+`":[{"key":"a","value":1},{"key":"b","value":null},{"key":"c","value":2}]}}}`)
+	}
+	suite.assertQueryResult(m, `{root{values(keys:["a","b","c"])}}`,
+		`{"data":{"root":{"values":[1,null,2]}}}`)
+	suite.assertQueryResult(m, `{root{keys(keys:["a","b","c"])}}`,
+		`{"data":{"root":{"keys":["a","b","c"]}}}`)
+}
