@@ -9,6 +9,7 @@ import ReactDOM from 'react-dom';
 import GraphiQL from 'graphiql';
 
 window.onload = load;
+window.onpopstate = load;
 
 let params = {};
 
@@ -21,7 +22,7 @@ function load() {
 }
 
 function loadUnsafe() {
-  params = getParams(location.href);
+  params = getParams(location.search);
 
   if (!params.db) {
     renderPrompt('Noms GraphQL Endpoint?');
@@ -31,23 +32,18 @@ function loadUnsafe() {
   render();
 }
 
-function getParams(href: string): {[key: string]: string} {
-  // This way anything after the # will end up in params, which is what we want.
-  const paramsIdx = href.indexOf('?');
-  if (paramsIdx === -1) {
+function getParams(search: string): {[key: string]: string} {
+  if (search[0] !== '?') {
     return {};
   }
 
-  return decodeURIComponent(href.slice(paramsIdx + 1)).split('&').reduce((params, kv) => {
-    // Make sure that '=' characters are preserved in query values, since '=' is valid base64.
-    const eqIndex = kv.indexOf('=');
-    if (eqIndex === -1) {
-      params[kv] = '';
-    } else {
-      params[kv.slice(0, eqIndex)] = kv.slice(eqIndex + 1);
-    }
-    return params;
-  }, {});
+  const params = {};
+  for (const param of search.slice(1).split('&')) {
+    const eq = param.indexOf('=');
+    params[param.slice(0, eq)] = decodeURIComponent(param.slice(eq + 1));
+  }
+
+  return params;
 }
 
 type PromptProps = {
@@ -60,6 +56,10 @@ class Prompt extends React.Component<void, PromptProps, void> {
       fontFamily: 'Menlo',
       fontSize: '14px',
     };
+    const headerStyle = {
+      fontSize: '16px',
+      fontWeight: 'bold',
+    };
     const divStyle = {
       alignItems: 'center',
       display: 'flex',
@@ -70,21 +70,45 @@ class Prompt extends React.Component<void, PromptProps, void> {
       marginBottom: '0.5em',
       width: '50ex',
     });
-    const server = 'http://localhost:8000';
+
+    const defaults = {
+      db: 'http://localhost:8000',
+      ds: 'photoindexer/all/run',
+      endpoint: 'graphql',
+    };
 
     return <div style={divStyle}>
       <div style={fontStyle}>
-        {this.props.msg}
+        <span style={headerStyle}>{this.props.msg}</span>
         <form style={{margin:'0.5em 0'}} onSubmit={e => this._handleOnSubmit(e)}>
-          <input type='text' ref='db' autoFocus={true} style={inputStyle}
-            defaultValue={params.db || server} placeholder={`database (e.g. ${server})`}
-          />
-          <input type='text' ref='ds' style={inputStyle}
-            defaultValue={params.ds} placeholder={'dataset (e.g. sf-film-locations)'}
-          />
-          <input type='text' ref='auth' style={inputStyle}
-            defaultValue={params.auth} placeholder={'auth token'}
-          />
+
+          <label>
+            Server
+            <input type='text' ref='db' autoFocus={true} style={inputStyle}
+              defaultValue={params.db || defaults.db}/>
+          </label>
+
+          <label>
+            API endpoint
+            <input type='text' ref='endpoint' style={inputStyle}
+              defaultValue={params.endpoint || defaults.endpoint}/>
+          </label>
+
+          <label>
+            Dataset
+            <input type='text' ref='ds' style={inputStyle} defaultValue={params.ds || defaults.ds}/>
+          </label>
+
+          <label>
+            Auth token
+            <input type='text' ref='auth' style={inputStyle} defaultValue={params.auth}/>
+          </label>
+
+          <label>
+            Extra args
+            <input type='text' ref='extra' style={inputStyle} defaultValue={params.extra}/>
+          </label>
+
           <button type='submit'>OK</button>
         </form>
       </div>
@@ -93,10 +117,10 @@ class Prompt extends React.Component<void, PromptProps, void> {
 
   _handleOnSubmit(e) {
     e.preventDefault();
-    const qs = ['db', 'ds', 'auth']
+    const qs = ['db', 'endpoint', 'ds', 'auth', 'extra']
       .map(k => [k, this.refs[k].value])
       .filter(([, v]) => !!v)
-      .map(([k, v]) => `${k}=${v}`)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
     window.history.pushState({}, undefined, qs === '' || ('?' + qs));
     load();
@@ -104,7 +128,7 @@ class Prompt extends React.Component<void, PromptProps, void> {
 }
 
 function graphQLFetcher(graphQLParams) {
-  const url = `${params.db}/graphql/`;
+  const url = `${params.db}/${params.endpoint}`;
 
   const headers = new Headers();
   headers.append('Content-Type', 'application/x-www-form-urlencoded; charset=utf-8');
@@ -112,8 +136,9 @@ function graphQLFetcher(graphQLParams) {
     headers.append('Authorization', `Bearer ${params.auth}`);
   }
 
+  const extra = params.extra ? ('&' + params.extra) : '';
   return fetch(url, {
-    body: `ds=${params.ds}&query=${encodeURIComponent(graphQLParams.query)}`,
+    body: `ds=${params.ds}&query=${encodeURIComponent(graphQLParams.query)}${extra}`,
     headers,
     method: 'POST',
     mode: 'cors',
