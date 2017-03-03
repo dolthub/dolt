@@ -42,6 +42,17 @@ func TestSetIterator(t *testing.T) {
 	empty := NewSet()
 	assert.Nil(empty.Iterator().Next())
 	assert.Nil(empty.Iterator().SkipTo(Number(-30)))
+
+	single := NewSet(Number(42)).Iterator()
+	assert.Equal(Number(42), single.SkipTo(Number(42)))
+	assert.Equal(nil, single.SkipTo(Number(42)))
+
+	single = NewSet(Number(42)).Iterator()
+	assert.Equal(Number(42), single.SkipTo(Number(42)))
+	assert.Equal(nil, single.Next())
+
+	single = NewSet(Number(42)).Iterator()
+	assert.Equal(Number(42), single.SkipTo(Number(21)))
 }
 
 func TestSetIteratorAt(t *testing.T) {

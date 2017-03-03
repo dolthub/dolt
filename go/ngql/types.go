@@ -261,6 +261,9 @@ func getSetElements(v types.Value, args map[string]interface{}) (interface{}, er
 		IteratorAt: func(at uint64) interface{} {
 			return s.IteratorAt(at)
 		},
+		First: func() interface{} {
+			return &setFirstIterator{s: s}
+		},
 	})
 
 	if err != nil {
@@ -320,8 +323,14 @@ func getCollectionArgs(col types.Collection, args map[string]interface{}, factor
 			keys: nomsKeys,
 		}
 		return
-
 	}
+
+	nomsThrough, err = getThroughArg(nomsKeyType, args)
+	if err != nil {
+		return
+	}
+
+	count, singleExactMatch = getCountArg(length, args)
 
 	if key, ok := args[keyKey]; ok {
 		nomsKey, err = marshal.Marshal(key)
@@ -334,28 +343,17 @@ func getCollectionArgs(col types.Collection, args map[string]interface{}, factor
 		if idx < 0 {
 			idx = 0
 		} else if uint64(idx) > length {
-			// count is already 0
+			count = 0
 			return
 		}
 		iter = factory.IteratorAt(uint64(idx))
+	} else if count == 1 && !singleExactMatch {
+		// no key, no at, no through, but a count:1
+		iter = factory.First()
 	} else {
 		iter = factory.IteratorAt(0)
 	}
 
-	if err != nil {
-		return
-	}
-	if iter == nil {
-		// count is already 0
-		return
-	}
-
-	nomsThrough, err = getThroughArg(nomsKeyType, args)
-	if err != nil {
-		return
-	}
-
-	count, singleExactMatch = getCountArg(length, args)
 	return
 }
 
@@ -370,6 +368,9 @@ func getMapElements(v types.Value, args map[string]interface{}, app mapAppender)
 		},
 		IteratorAt: func(at uint64) interface{} {
 			return m.IteratorAt(at)
+		},
+		First: func() interface{} {
+			return &mapFirstIterator{m: m}
 		},
 	})
 
@@ -442,6 +443,7 @@ func getThroughArg(nomsKeyType *types.Type, args map[string]interface{}) (types.
 type iteratorFactory struct {
 	IteratorFrom func(from types.Value) interface{}
 	IteratorAt   func(at uint64) interface{}
+	First        func() interface{}
 }
 
 type mapEntry struct {
@@ -747,4 +749,24 @@ func (it *mapIteratorForKeys) Next() (k, v types.Value) {
 	v = it.m.Get(k)
 	it.idx++
 	return
+}
+
+type setFirstIterator struct {
+	s types.Set
+}
+
+func (it *setFirstIterator) Next() types.Value {
+	return it.s.First()
+}
+
+func (it *setFirstIterator) SkipTo(v types.Value) types.Value {
+	panic("not implemented")
+}
+
+type mapFirstIterator struct {
+	m types.Map
+}
+
+func (it *mapFirstIterator) Next() (types.Value, types.Value) {
+	return it.m.First()
 }
