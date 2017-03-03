@@ -104,20 +104,20 @@ class Prompt extends React.Component<void, PromptProps, void> {
 }
 
 function graphQLFetcher(graphQLParams) {
-  const url = `${params.db}/graphql/?ds=${params.ds}&query=${
-    encodeURIComponent(graphQLParams.query)}`;
+  const url = `${params.db}/graphql/`;
 
   const headers = new Headers();
+  headers.append('Content-Type', 'application/x-www-form-urlencoded; charset=utf-8');
   if (params.auth) {
     headers.append('Authorization', `Bearer ${params.auth}`);
   }
 
-  const req = new Request(url, {
-    headers: headers,
+  return fetch(url, {
+    body: `ds=${params.ds}&query=${encodeURIComponent(graphQLParams.query)}`,
+    headers,
+    method: 'POST',
     mode: 'cors',
-  });
-
-  return fetch(req).then(response => response.json());
+  }).then(response => response.json());
 }
 
 function renderPrompt(msg: string) {

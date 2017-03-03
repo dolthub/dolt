@@ -412,19 +412,19 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 }
 
 func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	if req.Method != "GET" {
-		d.Panic("Expected post method.")
+	if req.Method != http.MethodGet && req.Method != http.MethodPost {
+		d.Panic("Unexpected method")
 	}
 
-	params := req.URL.Query()
-	dsTokens := params["ds"]
-	hTokens := params["h"]
-	if len(dsTokens)+len(hTokens) != 1 {
+	ds := req.FormValue("ds")
+	h := req.FormValue("h")
+
+	if (ds == "") == (h == "") {
 		d.Panic("Must specify one (and only one) of ds (dataset) or h (hash)")
 	}
 
-	qTokens := params["query"]
-	if len(qTokens) != 1 {
+	query := req.FormValue("query")
+	if query == "" {
 		d.Panic("Expected query")
 	}
 
@@ -433,8 +433,7 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 	var rootValue types.Value
 	var err error
-	if len(dsTokens) == 1 {
-		ds := dsTokens[0]
+	if ds != "" {
 		dataset := db.GetDataset(ds)
 		var ok bool
 		rootValue, ok = dataset.MaybeHead()
@@ -442,8 +441,7 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 			err = fmt.Errorf("Dataset %s not found", ds)
 		}
 	} else {
-		h := hash.Parse(hTokens[0])
-		rootValue = db.ReadValue(h)
+		rootValue = db.ReadValue(hash.Parse(h))
 		if rootValue == nil {
 			err = errors.New("Root value not found")
 		}
@@ -456,7 +454,7 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	if err != nil {
 		ngql.Error(err, writer)
 	} else {
-		ngql.Query(rootValue, qTokens[0], db, writer)
+		ngql.Query(rootValue, query, db, writer)
 	}
 }
 
