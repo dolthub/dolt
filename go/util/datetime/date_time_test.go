@@ -92,3 +92,14 @@ func TestMarshal(t *testing.T) {
 	test(DateTime(time.Unix(-42, -123456789)), -42.123456789)
 	test(DateTime(time.Unix(-123456789, -123456789)), -123456789.123456789)
 }
+
+func TestMarshalType(t *testing.T) {
+	assert := assert.New(t)
+
+	dt := DateTime(time.Unix(0, 0))
+	typ := marshal.MustMarshalType(dt)
+	assert.Equal(DateTimeType, typ)
+
+	v := marshal.MustMarshal(dt)
+	assert.Equal(typ, v.Type())
+}

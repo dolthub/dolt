@@ -34,6 +34,12 @@ func (dt DateTime) MarshalNoms() (types.Value, error) {
 	}), nil
 }
 
+// MarshalNomsType makes DateTime implement marshal.TypeMarshaler and it
+// allows marshal.MarshalType to work with DateTime.
+func (dt DateTime) MarshalNomsType() (*types.Type, error) {
+	return DateTimeType, nil
+}
+
 // UnmarshalNoms makes DateTime implement marshal.Unmarshaler and it allows
 // Noms struct with type DateTimeType able to be unmarshaled onto a DateTime
 // Go struct
