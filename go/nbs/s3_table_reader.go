@@ -106,7 +106,7 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 	n, err = io.ReadFull(result.Body, p)
 
 	if err != nil {
-		d.Chk.Fail("Failed req %s; ranged read from S3\n", "%s\nerror: %v", reqID, input.GoString(), err)
+		d.Chk.Fail("Failed ranged read from S3\n", "req %s\n%s\nerror: %v", reqID, input.GoString(), err)
 	}
 
 	return n, err
