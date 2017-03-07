@@ -213,6 +213,16 @@ func TestLoadSharedConfigFromFile(t *testing.T) {
 			},
 		},
 		{
+			Profile: "assume_role_w_mfa",
+			Expected: sharedConfig{
+				AssumeRole: assumeRoleConfig{
+					RoleARN:       "assume_role_role_arn",
+					SourceProfile: "complete_creds",
+					MFASerial:     "0123456789",
+				},
+			},
+		},
+		{
 			Profile: "does_not_exists",
 			Err:     SharedConfigProfileNotExistsError{Profile: "does_not_exists"},
 		},

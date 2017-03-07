@@ -2280,7 +2280,7 @@ func (c *InputService13ProtocolTest) InputService13TestCaseOperation1Request(inp
 	op := &request.Operation{
 		Name:       opInputService13TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -2337,7 +2337,7 @@ func (c *InputService13ProtocolTest) InputService13TestCaseOperation2Request(inp
 	op := &request.Operation{
 		Name:       opInputService13TestCaseOperation2,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -2983,10 +2983,10 @@ func TestInputService13ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
 	// assert body
 	assert.NotNil(t, r.Body)
 	body, _ := ioutil.ReadAll(r.Body)
-	awstesting.AssertQuery(t, `Token=abc123`, util.Trim(string(body)))
+	awstesting.AssertQuery(t, `Action=OperationName&Token=abc123&Version=2014-01-01`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 
@@ -3005,10 +3005,10 @@ func TestInputService13ProtocolTestIdempotencyTokenAutoFillCase2(t *testing.T) {
 	// assert body
 	assert.NotNil(t, r.Body)
 	body, _ := ioutil.ReadAll(r.Body)
-	awstesting.AssertQuery(t, `Token=00000000-0000-4000-8000-000000000000`, util.Trim(string(body)))
+	awstesting.AssertQuery(t, `Action=OperationName&Token=00000000-0000-4000-8000-000000000000&Version=2014-01-01`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 

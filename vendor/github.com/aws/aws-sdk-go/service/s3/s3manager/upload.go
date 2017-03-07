@@ -241,7 +241,7 @@ type Uploader struct {
 //
 // Example:
 //     // The session the S3 Uploader will use
-//     sess, err := session.NewSession()
+//     sess := session.Must(session.NewSession())
 //
 //     // Create an uploader with the session and default options
 //     uploader := s3manager.NewUploader(sess)
@@ -272,7 +272,7 @@ func NewUploader(c client.ConfigProvider, options ...func(*Uploader)) *Uploader 
 //
 // Example:
 //     // The session the S3 Uploader will use
-//     sess, err := session.NewSession()
+//     sess := session.Must(session.NewSession())
 //
 //     // S3 service client the Upload manager will use.
 //     s3Svc := s3.New(sess)
@@ -608,11 +608,13 @@ func (u *multiuploader) readChunk(ch chan chunk) {
 // part information.
 func (u *multiuploader) send(c chunk) error {
 	req, resp := u.ctx.S3.UploadPartRequest(&s3.UploadPartInput{
-		Bucket:     u.in.Bucket,
-		Key:        u.in.Key,
-		Body:       c.buf,
-		UploadId:   &u.uploadID,
-		PartNumber: &c.num,
+		Bucket:               u.in.Bucket,
+		Key:                  u.in.Key,
+		Body:                 c.buf,
+		UploadId:             &u.uploadID,
+		SSECustomerAlgorithm: u.in.SSECustomerAlgorithm,
+		SSECustomerKey:       u.in.SSECustomerKey,
+		PartNumber:           &c.num,
 	})
 	req.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler("S3Manager"))
 	if err := req.Send(); err != nil {

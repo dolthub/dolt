@@ -545,7 +545,7 @@ var tplInterface = template.Must(template.New("interface").Parse(`
 //        // mock response/functionality
 //    }
 //
-//    TestMyFunc(t *testing.T) {
+//    func TestMyFunc(t *testing.T) {
 //        // Setup Test
 //        mockSvc := &mock{{ .StructName }}Client{}
 //

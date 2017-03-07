@@ -1178,9 +1178,8 @@ const opInputService9TestCaseOperation1 = "OperationName"
 //    }
 func (c *InputService9ProtocolTest) InputService9TestCaseOperation1Request(input *InputService9TestShapeInputShape) (req *request.Request, output *InputService9TestShapeInputService9TestCaseOperation1Output) {
 	op := &request.Operation{
-		Name:       opInputService9TestCaseOperation1,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		Name:     opInputService9TestCaseOperation1,
+		HTTPPath: "/",
 	}
 
 	if input == nil {
@@ -1235,9 +1234,8 @@ const opInputService9TestCaseOperation2 = "OperationName"
 //    }
 func (c *InputService9ProtocolTest) InputService9TestCaseOperation2Request(input *InputService9TestShapeInputShape) (req *request.Request, output *InputService9TestShapeInputService9TestCaseOperation2Output) {
 	op := &request.Operation{
-		Name:       opInputService9TestCaseOperation2,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		Name:     opInputService9TestCaseOperation2,
+		HTTPPath: "/",
 	}
 
 	if input == nil {
@@ -1513,10 +1511,10 @@ func TestInputService9ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
 	// assert body
 	assert.NotNil(t, r.Body)
 	body, _ := ioutil.ReadAll(r.Body)
-	awstesting.AssertQuery(t, `Token=abc123`, util.Trim(string(body)))
+	awstesting.AssertQuery(t, `Action=OperationName&Token=abc123&Version=2014-01-01`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 
@@ -1535,10 +1533,10 @@ func TestInputService9ProtocolTestIdempotencyTokenAutoFillCase2(t *testing.T) {
 	// assert body
 	assert.NotNil(t, r.Body)
 	body, _ := ioutil.ReadAll(r.Body)
-	awstesting.AssertQuery(t, `Token=00000000-0000-4000-8000-000000000000`, util.Trim(string(body)))
+	awstesting.AssertQuery(t, `Action=OperationName&Token=00000000-0000-4000-8000-000000000000&Version=2014-01-01`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 

@@ -16,11 +16,7 @@ var _ time.Duration
 var _ bytes.Buffer
 
 func ExampleDynamoDBStreams_DescribeStream() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := dynamodbstreams.New(sess)
 
@@ -43,11 +39,7 @@ func ExampleDynamoDBStreams_DescribeStream() {
 }
 
 func ExampleDynamoDBStreams_GetRecords() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := dynamodbstreams.New(sess)
 
@@ -69,11 +61,7 @@ func ExampleDynamoDBStreams_GetRecords() {
 }
 
 func ExampleDynamoDBStreams_GetShardIterator() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := dynamodbstreams.New(sess)
 
@@ -97,11 +85,7 @@ func ExampleDynamoDBStreams_GetShardIterator() {
 }
 
 func ExampleDynamoDBStreams_ListStreams() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := dynamodbstreams.New(sess)
 

@@ -670,3 +670,59 @@ func TestReaderAt(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, contentLen, "12")
 }
+
+func TestSSE(t *testing.T) {
+	svc := s3.New(unit.Session)
+	svc.Handlers.Unmarshal.Clear()
+	svc.Handlers.UnmarshalMeta.Clear()
+	svc.Handlers.UnmarshalError.Clear()
+	svc.Handlers.ValidateResponse.Clear()
+	svc.Handlers.Send.Clear()
+	partNum := 0
+	mutex := &sync.Mutex{}
+
+	svc.Handlers.Send.PushBack(func(r *request.Request) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		r.HTTPResponse = &http.Response{
+			StatusCode: 200,
+			Body:       ioutil.NopCloser(bytes.NewReader([]byte{})),
+		}
+		switch data := r.Data.(type) {
+		case *s3.CreateMultipartUploadOutput:
+			data.UploadId = aws.String("UPLOAD-ID")
+		case *s3.UploadPartOutput:
+			input := r.Params.(*s3.UploadPartInput)
+			if input.SSECustomerAlgorithm == nil {
+				t.Fatal("SSECustomerAlgoritm should not be nil")
+			}
+			if input.SSECustomerKey == nil {
+				t.Fatal("SSECustomerKey should not be nil")
+			}
+			partNum++
+			data.ETag = aws.String(fmt.Sprintf("ETAG%d", partNum))
+		case *s3.CompleteMultipartUploadOutput:
+			data.Location = aws.String("https://location")
+			data.VersionId = aws.String("VERSION-ID")
+		case *s3.PutObjectOutput:
+			data.VersionId = aws.String("VERSION-ID")
+		}
+
+	})
+
+	mgr := s3manager.NewUploaderWithClient(svc, func(u *s3manager.Uploader) {
+		u.Concurrency = 5
+	})
+
+	_, err := mgr.Upload(&s3manager.UploadInput{
+		Bucket:               aws.String("Bucket"),
+		Key:                  aws.String("Key"),
+		SSECustomerAlgorithm: aws.String("AES256"),
+		SSECustomerKey:       aws.String("foo"),
+		Body:                 bytes.NewBuffer(make([]byte, 1024*1024*10)),
+	})
+
+	if err != nil {
+		t.Fatal("Expected no error, but received" + err.Error())
+	}
+}

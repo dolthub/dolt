@@ -670,6 +670,41 @@ func (s *GetShardIteratorOutput) SetShardIterator(v string) *GetShardIteratorOut
 	return s
 }
 
+// Contains details about the type of identity that made the request.
+// Please also see https://docs.aws.amazon.com/goto/WebAPI/streams-dynamodb-2012-08-10/Identity
+type Identity struct {
+	_ struct{} `type:"structure"`
+
+	// A unique identifier for the entity that made the call. For Time To Live,
+	// the principalId is "dynamodb.amazonaws.com".
+	PrincipalId *string `type:"string"`
+
+	// The type of the identity. For Time To Live, the type is "Service".
+	Type *string `type:"string"`
+}
+
+// String returns the string representation
+func (s Identity) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s Identity) GoString() string {
+	return s.String()
+}
+
+// SetPrincipalId sets the PrincipalId field's value.
+func (s *Identity) SetPrincipalId(v string) *Identity {
+	s.PrincipalId = &v
+	return s
+}
+
+// SetType sets the Type field's value.
+func (s *Identity) SetType(v string) *Identity {
+	s.Type = &v
+	return s
+}
+
 // Represents the input of a ListStreams operation.
 // Please also see https://docs.aws.amazon.com/goto/WebAPI/streams-dynamodb-2012-08-10/ListStreamsInput
 type ListStreamsInput struct {
@@ -814,6 +849,18 @@ type Record struct {
 	// value, as this number is subject to change at any time. In general, eventVersion
 	// will only increase as the low-level DynamoDB Streams API evolves.
 	EventVersion *string `locationName:"eventVersion" type:"string"`
+
+	// Items that are deleted by the Time to Live process after expiration have
+	// the following fields:
+	//
+	//    * Records[].userIdentity.type
+	//
+	// "Service"
+	//
+	//    * Records[].userIdentity.principalId
+	//
+	// "dynamodb.amazonaws.com"
+	UserIdentity *Identity `locationName:"userIdentity" type:"structure"`
 }
 
 // String returns the string representation
@@ -859,6 +906,12 @@ func (s *Record) SetEventSource(v string) *Record {
 // SetEventVersion sets the EventVersion field's value.
 func (s *Record) SetEventVersion(v string) *Record {
 	s.EventVersion = &v
+	return s
+}
+
+// SetUserIdentity sets the UserIdentity field's value.
+func (s *Record) SetUserIdentity(v *Identity) *Record {
+	s.UserIdentity = v
 	return s
 }
 

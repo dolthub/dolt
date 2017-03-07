@@ -16,11 +16,7 @@ var _ time.Duration
 var _ bytes.Buffer
 
 func ExampleSTS_AssumeRole() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -47,11 +43,7 @@ func ExampleSTS_AssumeRole() {
 }
 
 func ExampleSTS_AssumeRoleWithSAML() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -76,11 +68,7 @@ func ExampleSTS_AssumeRoleWithSAML() {
 }
 
 func ExampleSTS_AssumeRoleWithWebIdentity() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -106,11 +94,7 @@ func ExampleSTS_AssumeRoleWithWebIdentity() {
 }
 
 func ExampleSTS_DecodeAuthorizationMessage() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -131,11 +115,7 @@ func ExampleSTS_DecodeAuthorizationMessage() {
 }
 
 func ExampleSTS_GetCallerIdentity() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -154,11 +134,7 @@ func ExampleSTS_GetCallerIdentity() {
 }
 
 func ExampleSTS_GetFederationToken() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 
@@ -181,11 +157,7 @@ func ExampleSTS_GetFederationToken() {
 }
 
 func ExampleSTS_GetSessionToken() {
-	sess, err := session.NewSession()
-	if err != nil {
-		fmt.Println("failed to create session,", err)
-		return
-	}
+	sess := session.Must(session.NewSession())
 
 	svc := sts.New(sess)
 

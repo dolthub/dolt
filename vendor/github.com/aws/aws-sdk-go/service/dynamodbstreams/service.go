@@ -15,18 +15,6 @@ import (
 // stream records. To learn more about application development with Streams,
 // see Capturing Table Activity with DynamoDB Streams (http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html)
 // in the Amazon DynamoDB Developer Guide.
-//
-// The following are short descriptions of each low-level DynamoDB Streams action:
-//
-//    * DescribeStream - Returns detailed information about a particular stream.
-//
-//    * GetRecords - Retrieves the stream records from within a shard.
-//
-//    * GetShardIterator - Returns information on how to retrieve the streams
-//    record from a shard with a given shard ID.
-//
-//    * ListStreams - Returns a list of all the streams associated with the
-//    current AWS account and endpoint.
 // The service client's operations are safe to be used concurrently.
 // It is not safe to mutate any of the client's properties though.
 // Please also see https://docs.aws.amazon.com/goto/WebAPI/streams-dynamodb-2012-08-10

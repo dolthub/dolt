@@ -1309,7 +1309,7 @@ func (c *InputService7ProtocolTest) InputService7TestCaseOperation1Request(input
 	op := &request.Operation{
 		Name:       opInputService7TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -1366,7 +1366,7 @@ func (c *InputService7ProtocolTest) InputService7TestCaseOperation2Request(input
 	op := &request.Operation{
 		Name:       opInputService7TestCaseOperation2,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -1797,7 +1797,7 @@ func TestInputService7ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
 	awstesting.AssertJSON(t, `{"Token":"abc123"}`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 
@@ -1819,7 +1819,7 @@ func TestInputService7ProtocolTestIdempotencyTokenAutoFillCase2(t *testing.T) {
 	awstesting.AssertJSON(t, `{"Token":"00000000-0000-4000-8000-000000000000"}`, util.Trim(string(body)))
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/path", r.URL.String())
+	awstesting.AssertURL(t, "https://test/", r.URL.String())
 
 	// assert headers
 

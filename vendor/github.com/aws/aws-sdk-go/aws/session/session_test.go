@@ -257,17 +257,7 @@ func TestNewSessionWithOptions_Overrides(t *testing.T) {
 	}
 }
 
-func TestSesisonAssumeRole(t *testing.T) {
-	oldEnv := initSessionTestEnv()
-	defer popEnv(oldEnv)
-
-	os.Setenv("AWS_REGION", "us-east-1")
-	os.Setenv("AWS_SDK_LOAD_CONFIG", "1")
-	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", testConfigFilename)
-	os.Setenv("AWS_PROFILE", "assume_role_w_creds")
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		const respMsg = `
+const assumeRoleRespMsg = `
 <AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
   <AssumeRoleResult>
     <AssumedRoleUser>
@@ -286,7 +276,18 @@ func TestSesisonAssumeRole(t *testing.T) {
   </ResponseMetadata>
 </AssumeRoleResponse>
 `
-		w.Write([]byte(fmt.Sprintf(respMsg, time.Now().Add(15*time.Minute).Format("2006-01-02T15:04:05Z"))))
+
+func TestSesisonAssumeRole(t *testing.T) {
+	oldEnv := initSessionTestEnv()
+	defer popEnv(oldEnv)
+
+	os.Setenv("AWS_REGION", "us-east-1")
+	os.Setenv("AWS_SDK_LOAD_CONFIG", "1")
+	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", testConfigFilename)
+	os.Setenv("AWS_PROFILE", "assume_role_w_creds")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(assumeRoleRespMsg, time.Now().Add(15*time.Minute).Format("2006-01-02T15:04:05Z"))))
 	}))
 
 	s, err := NewSession(&aws.Config{Endpoint: aws.String(server.URL), DisableSSL: aws.Bool(true)})
@@ -297,6 +298,65 @@ func TestSesisonAssumeRole(t *testing.T) {
 	assert.Equal(t, "SECRET", creds.SecretAccessKey)
 	assert.Equal(t, "SESSION_TOKEN", creds.SessionToken)
 	assert.Contains(t, creds.ProviderName, "AssumeRoleProvider")
+}
+
+func TestSessionAssumeRole_WithMFA(t *testing.T) {
+	oldEnv := initSessionTestEnv()
+	defer popEnv(oldEnv)
+
+	os.Setenv("AWS_REGION", "us-east-1")
+	os.Setenv("AWS_SDK_LOAD_CONFIG", "1")
+	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", testConfigFilename)
+	os.Setenv("AWS_PROFILE", "assume_role_w_creds")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, r.FormValue("SerialNumber"), "0123456789")
+		assert.Equal(t, r.FormValue("TokenCode"), "tokencode")
+
+		w.Write([]byte(fmt.Sprintf(assumeRoleRespMsg, time.Now().Add(15*time.Minute).Format("2006-01-02T15:04:05Z"))))
+	}))
+
+	customProviderCalled := false
+	sess, err := NewSessionWithOptions(Options{
+		Profile: "assume_role_w_mfa",
+		Config: aws.Config{
+			Region:     aws.String("us-east-1"),
+			Endpoint:   aws.String(server.URL),
+			DisableSSL: aws.Bool(true),
+		},
+		SharedConfigState: SharedConfigEnable,
+		AssumeRoleTokenProvider: func() (string, error) {
+			customProviderCalled = true
+
+			return "tokencode", nil
+		},
+	})
+	assert.NoError(t, err)
+
+	creds, err := sess.Config.Credentials.Get()
+	assert.NoError(t, err)
+	assert.True(t, customProviderCalled)
+
+	assert.Equal(t, "AKID", creds.AccessKeyID)
+	assert.Equal(t, "SECRET", creds.SecretAccessKey)
+	assert.Equal(t, "SESSION_TOKEN", creds.SessionToken)
+	assert.Contains(t, creds.ProviderName, "AssumeRoleProvider")
+}
+
+func TestSessionAssumeRole_WithMFA_NoTokenProvider(t *testing.T) {
+	oldEnv := initSessionTestEnv()
+	defer popEnv(oldEnv)
+
+	os.Setenv("AWS_REGION", "us-east-1")
+	os.Setenv("AWS_SDK_LOAD_CONFIG", "1")
+	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", testConfigFilename)
+	os.Setenv("AWS_PROFILE", "assume_role_w_creds")
+
+	_, err := NewSessionWithOptions(Options{
+		Profile:           "assume_role_w_mfa",
+		SharedConfigState: SharedConfigEnable,
+	})
+	assert.Equal(t, err, AssumeRoleTokenProviderNotSetError{})
 }
 
 func TestSessionAssumeRole_DisableSharedConfig(t *testing.T) {

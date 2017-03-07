@@ -104,6 +104,7 @@ const (
 	MeteringMarketplaceServiceID          = "metering.marketplace"         // MeteringMarketplace.
 	MobileanalyticsServiceID              = "mobileanalytics"              // Mobileanalytics.
 	MonitoringServiceID                   = "monitoring"                   // Monitoring.
+	MturkRequesterServiceID               = "mturk-requester"              // MturkRequester.
 	OpsworksServiceID                     = "opsworks"                     // Opsworks.
 	OpsworksCmServiceID                   = "opsworks-cm"                  // OpsworksCm.
 	PinpointServiceID                     = "pinpoint"                     // Pinpoint.
@@ -1075,10 +1076,13 @@ var awsPartition = partition{
 				"ap-south-1":     endpoint{},
 				"ap-southeast-1": endpoint{},
 				"ap-southeast-2": endpoint{},
+				"ca-central-1":   endpoint{},
 				"eu-central-1":   endpoint{},
 				"eu-west-1":      endpoint{},
+				"eu-west-2":      endpoint{},
 				"sa-east-1":      endpoint{},
 				"us-east-1":      endpoint{},
+				"us-east-2":      endpoint{},
 				"us-west-1":      endpoint{},
 				"us-west-2":      endpoint{},
 			},
@@ -1108,6 +1112,16 @@ var awsPartition = partition{
 				"us-east-2":      endpoint{},
 				"us-west-1":      endpoint{},
 				"us-west-2":      endpoint{},
+			},
+		},
+		"mturk-requester": service{
+			IsRegionalized: boxedFalse,
+
+			Endpoints: endpoints{
+				"sandbox": endpoint{
+					Hostname: "mturk-requester-sandbox.us-east-1.amazonaws.com",
+				},
+				"us-east-1": endpoint{},
 			},
 		},
 		"opsworks": service{
@@ -1944,6 +1958,12 @@ var awsusgovPartition = partition{
 						Region: "us-gov-west-1",
 					},
 				},
+			},
+		},
+		"kinesis": service{
+
+			Endpoints: endpoints{
+				"us-gov-west-1": endpoint{},
 			},
 		},
 		"kms": service{

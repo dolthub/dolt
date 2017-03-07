@@ -899,15 +899,15 @@ const opInputService7TestCaseOperation1 = "OperationName"
 //    if err == nil { // resp is now filled
 //        fmt.Println(resp)
 //    }
-func (c *InputService7ProtocolTest) InputService7TestCaseOperation1Request(input *InputService7TestShapeInputService7TestCaseOperation1Input) (req *request.Request, output *InputService7TestShapeInputService7TestCaseOperation1Output) {
+func (c *InputService7ProtocolTest) InputService7TestCaseOperation1Request(input *InputService7TestShapeInputShape) (req *request.Request, output *InputService7TestShapeInputService7TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService7TestCaseOperation1,
 		HTTPMethod: "GET",
-		HTTPPath:   "/2014-01-01/jobsByPipeline/{PipelineId}",
+		HTTPPath:   "/path",
 	}
 
 	if input == nil {
-		input = &InputService7TestShapeInputService7TestCaseOperation1Input{}
+		input = &InputService7TestShapeInputShape{}
 	}
 
 	output = &InputService7TestShapeInputService7TestCaseOperation1Output{}
@@ -925,42 +925,87 @@ func (c *InputService7ProtocolTest) InputService7TestCaseOperation1Request(input
 //
 // See the AWS API reference guide for 's
 // API operation InputService7TestCaseOperation1 for usage and error information.
-func (c *InputService7ProtocolTest) InputService7TestCaseOperation1(input *InputService7TestShapeInputService7TestCaseOperation1Input) (*InputService7TestShapeInputService7TestCaseOperation1Output, error) {
+func (c *InputService7ProtocolTest) InputService7TestCaseOperation1(input *InputService7TestShapeInputShape) (*InputService7TestShapeInputService7TestCaseOperation1Output, error) {
 	req, out := c.InputService7TestCaseOperation1Request(input)
 	err := req.Send()
 	return out, err
 }
 
-type InputService7TestShapeInputService7TestCaseOperation1Input struct {
-	_ struct{} `type:"structure"`
+const opInputService7TestCaseOperation2 = "OperationName"
 
-	Ascending *string `location:"querystring" locationName:"Ascending" type:"string"`
+// InputService7TestCaseOperation2Request generates a "aws/request.Request" representing the
+// client's request for the InputService7TestCaseOperation2 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService7TestCaseOperation2 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService7TestCaseOperation2 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService7TestCaseOperation2Request method.
+//    req, resp := client.InputService7TestCaseOperation2Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService7ProtocolTest) InputService7TestCaseOperation2Request(input *InputService7TestShapeInputShape) (req *request.Request, output *InputService7TestShapeInputService7TestCaseOperation2Output) {
+	op := &request.Operation{
+		Name:       opInputService7TestCaseOperation2,
+		HTTPMethod: "GET",
+		HTTPPath:   "/path",
+	}
 
-	PageToken *string `location:"querystring" locationName:"PageToken" type:"string"`
+	if input == nil {
+		input = &InputService7TestShapeInputShape{}
+	}
 
-	PipelineId *string `location:"uri" locationName:"PipelineId" type:"string"`
+	output = &InputService7TestShapeInputService7TestCaseOperation2Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
 }
 
-// SetAscending sets the Ascending field's value.
-func (s *InputService7TestShapeInputService7TestCaseOperation1Input) SetAscending(v string) *InputService7TestShapeInputService7TestCaseOperation1Input {
-	s.Ascending = &v
-	return s
-}
-
-// SetPageToken sets the PageToken field's value.
-func (s *InputService7TestShapeInputService7TestCaseOperation1Input) SetPageToken(v string) *InputService7TestShapeInputService7TestCaseOperation1Input {
-	s.PageToken = &v
-	return s
-}
-
-// SetPipelineId sets the PipelineId field's value.
-func (s *InputService7TestShapeInputService7TestCaseOperation1Input) SetPipelineId(v string) *InputService7TestShapeInputService7TestCaseOperation1Input {
-	s.PipelineId = &v
-	return s
+// InputService7TestCaseOperation2 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService7TestCaseOperation2 for usage and error information.
+func (c *InputService7ProtocolTest) InputService7TestCaseOperation2(input *InputService7TestShapeInputShape) (*InputService7TestShapeInputService7TestCaseOperation2Output, error) {
+	req, out := c.InputService7TestCaseOperation2Request(input)
+	err := req.Send()
+	return out, err
 }
 
 type InputService7TestShapeInputService7TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
+}
+
+type InputService7TestShapeInputService7TestCaseOperation2Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService7TestShapeInputShape struct {
+	_ struct{} `type:"structure"`
+
+	BoolQuery *bool `location:"querystring" locationName:"bool-query" type:"boolean"`
+}
+
+// SetBoolQuery sets the BoolQuery field's value.
+func (s *InputService7TestShapeInputShape) SetBoolQuery(v bool) *InputService7TestShapeInputShape {
+	s.BoolQuery = &v
+	return s
 }
 
 // The service client's operations are safe to be used concurrently.
@@ -1046,7 +1091,7 @@ const opInputService8TestCaseOperation1 = "OperationName"
 func (c *InputService8ProtocolTest) InputService8TestCaseOperation1Request(input *InputService8TestShapeInputService8TestCaseOperation1Input) (req *request.Request, output *InputService8TestShapeInputService8TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService8TestCaseOperation1,
-		HTTPMethod: "POST",
+		HTTPMethod: "GET",
 		HTTPPath:   "/2014-01-01/jobsByPipeline/{PipelineId}",
 	}
 
@@ -1080,8 +1125,6 @@ type InputService8TestShapeInputService8TestCaseOperation1Input struct {
 
 	Ascending *string `location:"querystring" locationName:"Ascending" type:"string"`
 
-	Config *InputService8TestShapeStructType `type:"structure"`
-
 	PageToken *string `location:"querystring" locationName:"PageToken" type:"string"`
 
 	PipelineId *string `location:"uri" locationName:"PipelineId" type:"string"`
@@ -1090,12 +1133,6 @@ type InputService8TestShapeInputService8TestCaseOperation1Input struct {
 // SetAscending sets the Ascending field's value.
 func (s *InputService8TestShapeInputService8TestCaseOperation1Input) SetAscending(v string) *InputService8TestShapeInputService8TestCaseOperation1Input {
 	s.Ascending = &v
-	return s
-}
-
-// SetConfig sets the Config field's value.
-func (s *InputService8TestShapeInputService8TestCaseOperation1Input) SetConfig(v *InputService8TestShapeStructType) *InputService8TestShapeInputService8TestCaseOperation1Input {
-	s.Config = v
 	return s
 }
 
@@ -1113,26 +1150,6 @@ func (s *InputService8TestShapeInputService8TestCaseOperation1Input) SetPipeline
 
 type InputService8TestShapeInputService8TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
-}
-
-type InputService8TestShapeStructType struct {
-	_ struct{} `type:"structure"`
-
-	A *string `type:"string"`
-
-	B *string `type:"string"`
-}
-
-// SetA sets the A field's value.
-func (s *InputService8TestShapeStructType) SetA(v string) *InputService8TestShapeStructType {
-	s.A = &v
-	return s
-}
-
-// SetB sets the B field's value.
-func (s *InputService8TestShapeStructType) SetB(v string) *InputService8TestShapeStructType {
-	s.B = &v
-	return s
 }
 
 // The service client's operations are safe to be used concurrently.
@@ -1252,8 +1269,6 @@ type InputService9TestShapeInputService9TestCaseOperation1Input struct {
 
 	Ascending *string `location:"querystring" locationName:"Ascending" type:"string"`
 
-	Checksum *string `location:"header" locationName:"x-amz-checksum" type:"string"`
-
 	Config *InputService9TestShapeStructType `type:"structure"`
 
 	PageToken *string `location:"querystring" locationName:"PageToken" type:"string"`
@@ -1264,12 +1279,6 @@ type InputService9TestShapeInputService9TestCaseOperation1Input struct {
 // SetAscending sets the Ascending field's value.
 func (s *InputService9TestShapeInputService9TestCaseOperation1Input) SetAscending(v string) *InputService9TestShapeInputService9TestCaseOperation1Input {
 	s.Ascending = &v
-	return s
-}
-
-// SetChecksum sets the Checksum field's value.
-func (s *InputService9TestShapeInputService9TestCaseOperation1Input) SetChecksum(v string) *InputService9TestShapeInputService9TestCaseOperation1Input {
-	s.Checksum = &v
 	return s
 }
 
@@ -1399,7 +1408,7 @@ func (c *InputService10ProtocolTest) InputService10TestCaseOperation1Request(inp
 	op := &request.Operation{
 		Name:       opInputService10TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/2014-01-01/vaults/{vaultName}/archives",
+		HTTPPath:   "/2014-01-01/jobsByPipeline/{PipelineId}",
 	}
 
 	if input == nil {
@@ -1428,32 +1437,22 @@ func (c *InputService10ProtocolTest) InputService10TestCaseOperation1(input *Inp
 }
 
 type InputService10TestShapeInputService10TestCaseOperation1Input struct {
-	_ struct{} `type:"structure" payload:"Body"`
+	_ struct{} `type:"structure"`
 
-	Body io.ReadSeeker `locationName:"body" type:"blob"`
+	Ascending *string `location:"querystring" locationName:"Ascending" type:"string"`
 
-	Checksum *string `location:"header" locationName:"x-amz-sha256-tree-hash" type:"string"`
+	Checksum *string `location:"header" locationName:"x-amz-checksum" type:"string"`
 
-	// VaultName is a required field
-	VaultName *string `location:"uri" locationName:"vaultName" type:"string" required:"true"`
+	Config *InputService10TestShapeStructType `type:"structure"`
+
+	PageToken *string `location:"querystring" locationName:"PageToken" type:"string"`
+
+	PipelineId *string `location:"uri" locationName:"PipelineId" type:"string"`
 }
 
-// Validate inspects the fields of the type to determine if they are valid.
-func (s *InputService10TestShapeInputService10TestCaseOperation1Input) Validate() error {
-	invalidParams := request.ErrInvalidParams{Context: "InputService10TestShapeInputService10TestCaseOperation1Input"}
-	if s.VaultName == nil {
-		invalidParams.Add(request.NewErrParamRequired("VaultName"))
-	}
-
-	if invalidParams.Len() > 0 {
-		return invalidParams
-	}
-	return nil
-}
-
-// SetBody sets the Body field's value.
-func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetBody(v io.ReadSeeker) *InputService10TestShapeInputService10TestCaseOperation1Input {
-	s.Body = v
+// SetAscending sets the Ascending field's value.
+func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetAscending(v string) *InputService10TestShapeInputService10TestCaseOperation1Input {
+	s.Ascending = &v
 	return s
 }
 
@@ -1463,14 +1462,46 @@ func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetChecks
 	return s
 }
 
-// SetVaultName sets the VaultName field's value.
-func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetVaultName(v string) *InputService10TestShapeInputService10TestCaseOperation1Input {
-	s.VaultName = &v
+// SetConfig sets the Config field's value.
+func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetConfig(v *InputService10TestShapeStructType) *InputService10TestShapeInputService10TestCaseOperation1Input {
+	s.Config = v
+	return s
+}
+
+// SetPageToken sets the PageToken field's value.
+func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetPageToken(v string) *InputService10TestShapeInputService10TestCaseOperation1Input {
+	s.PageToken = &v
+	return s
+}
+
+// SetPipelineId sets the PipelineId field's value.
+func (s *InputService10TestShapeInputService10TestCaseOperation1Input) SetPipelineId(v string) *InputService10TestShapeInputService10TestCaseOperation1Input {
+	s.PipelineId = &v
 	return s
 }
 
 type InputService10TestShapeInputService10TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
+}
+
+type InputService10TestShapeStructType struct {
+	_ struct{} `type:"structure"`
+
+	A *string `type:"string"`
+
+	B *string `type:"string"`
+}
+
+// SetA sets the A field's value.
+func (s *InputService10TestShapeStructType) SetA(v string) *InputService10TestShapeStructType {
+	s.A = &v
+	return s
+}
+
+// SetB sets the B field's value.
+func (s *InputService10TestShapeStructType) SetB(v string) *InputService10TestShapeStructType {
+	s.B = &v
+	return s
 }
 
 // The service client's operations are safe to be used concurrently.
@@ -1556,8 +1587,8 @@ const opInputService11TestCaseOperation1 = "OperationName"
 func (c *InputService11ProtocolTest) InputService11TestCaseOperation1Request(input *InputService11TestShapeInputService11TestCaseOperation1Input) (req *request.Request, output *InputService11TestShapeInputService11TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService11TestCaseOperation1,
-		HTTPMethod: "GET",
-		HTTPPath:   "/2014-01-01/{Foo}",
+		HTTPMethod: "POST",
+		HTTPPath:   "/2014-01-01/vaults/{vaultName}/archives",
 	}
 
 	if input == nil {
@@ -1586,20 +1617,21 @@ func (c *InputService11ProtocolTest) InputService11TestCaseOperation1(input *Inp
 }
 
 type InputService11TestShapeInputService11TestCaseOperation1Input struct {
-	_ struct{} `type:"structure"`
+	_ struct{} `type:"structure" payload:"Body"`
 
-	// Bar is automatically base64 encoded/decoded by the SDK.
-	Bar []byte `type:"blob"`
+	Body io.ReadSeeker `locationName:"body" type:"blob"`
 
-	// Foo is a required field
-	Foo *string `location:"uri" locationName:"Foo" type:"string" required:"true"`
+	Checksum *string `location:"header" locationName:"x-amz-sha256-tree-hash" type:"string"`
+
+	// VaultName is a required field
+	VaultName *string `location:"uri" locationName:"vaultName" type:"string" required:"true"`
 }
 
 // Validate inspects the fields of the type to determine if they are valid.
 func (s *InputService11TestShapeInputService11TestCaseOperation1Input) Validate() error {
 	invalidParams := request.ErrInvalidParams{Context: "InputService11TestShapeInputService11TestCaseOperation1Input"}
-	if s.Foo == nil {
-		invalidParams.Add(request.NewErrParamRequired("Foo"))
+	if s.VaultName == nil {
+		invalidParams.Add(request.NewErrParamRequired("VaultName"))
 	}
 
 	if invalidParams.Len() > 0 {
@@ -1608,15 +1640,21 @@ func (s *InputService11TestShapeInputService11TestCaseOperation1Input) Validate(
 	return nil
 }
 
-// SetBar sets the Bar field's value.
-func (s *InputService11TestShapeInputService11TestCaseOperation1Input) SetBar(v []byte) *InputService11TestShapeInputService11TestCaseOperation1Input {
-	s.Bar = v
+// SetBody sets the Body field's value.
+func (s *InputService11TestShapeInputService11TestCaseOperation1Input) SetBody(v io.ReadSeeker) *InputService11TestShapeInputService11TestCaseOperation1Input {
+	s.Body = v
 	return s
 }
 
-// SetFoo sets the Foo field's value.
-func (s *InputService11TestShapeInputService11TestCaseOperation1Input) SetFoo(v string) *InputService11TestShapeInputService11TestCaseOperation1Input {
-	s.Foo = &v
+// SetChecksum sets the Checksum field's value.
+func (s *InputService11TestShapeInputService11TestCaseOperation1Input) SetChecksum(v string) *InputService11TestShapeInputService11TestCaseOperation1Input {
+	s.Checksum = &v
+	return s
+}
+
+// SetVaultName sets the VaultName field's value.
+func (s *InputService11TestShapeInputService11TestCaseOperation1Input) SetVaultName(v string) *InputService11TestShapeInputService11TestCaseOperation1Input {
+	s.VaultName = &v
 	return s
 }
 
@@ -1704,15 +1742,15 @@ const opInputService12TestCaseOperation1 = "OperationName"
 //    if err == nil { // resp is now filled
 //        fmt.Println(resp)
 //    }
-func (c *InputService12ProtocolTest) InputService12TestCaseOperation1Request(input *InputService12TestShapeInputShape) (req *request.Request, output *InputService12TestShapeInputService12TestCaseOperation1Output) {
+func (c *InputService12ProtocolTest) InputService12TestCaseOperation1Request(input *InputService12TestShapeInputService12TestCaseOperation1Input) (req *request.Request, output *InputService12TestShapeInputService12TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService12TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/",
+		HTTPPath:   "/2014-01-01/{Foo}",
 	}
 
 	if input == nil {
-		input = &InputService12TestShapeInputShape{}
+		input = &InputService12TestShapeInputService12TestCaseOperation1Input{}
 	}
 
 	output = &InputService12TestShapeInputService12TestCaseOperation1Output{}
@@ -1730,87 +1768,49 @@ func (c *InputService12ProtocolTest) InputService12TestCaseOperation1Request(inp
 //
 // See the AWS API reference guide for 's
 // API operation InputService12TestCaseOperation1 for usage and error information.
-func (c *InputService12ProtocolTest) InputService12TestCaseOperation1(input *InputService12TestShapeInputShape) (*InputService12TestShapeInputService12TestCaseOperation1Output, error) {
+func (c *InputService12ProtocolTest) InputService12TestCaseOperation1(input *InputService12TestShapeInputService12TestCaseOperation1Input) (*InputService12TestShapeInputService12TestCaseOperation1Output, error) {
 	req, out := c.InputService12TestCaseOperation1Request(input)
 	err := req.Send()
 	return out, err
 }
 
-const opInputService12TestCaseOperation2 = "OperationName"
+type InputService12TestShapeInputService12TestCaseOperation1Input struct {
+	_ struct{} `type:"structure"`
 
-// InputService12TestCaseOperation2Request generates a "aws/request.Request" representing the
-// client's request for the InputService12TestCaseOperation2 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService12TestCaseOperation2 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService12TestCaseOperation2 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService12TestCaseOperation2Request method.
-//    req, resp := client.InputService12TestCaseOperation2Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService12ProtocolTest) InputService12TestCaseOperation2Request(input *InputService12TestShapeInputShape) (req *request.Request, output *InputService12TestShapeInputService12TestCaseOperation2Output) {
-	op := &request.Operation{
-		Name:       opInputService12TestCaseOperation2,
-		HTTPMethod: "POST",
-		HTTPPath:   "/",
-	}
+	// Bar is automatically base64 encoded/decoded by the SDK.
+	Bar []byte `type:"blob"`
 
-	if input == nil {
-		input = &InputService12TestShapeInputShape{}
-	}
-
-	output = &InputService12TestShapeInputService12TestCaseOperation2Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
+	// Foo is a required field
+	Foo *string `location:"uri" locationName:"Foo" type:"string" required:"true"`
 }
 
-// InputService12TestCaseOperation2 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService12TestCaseOperation2 for usage and error information.
-func (c *InputService12ProtocolTest) InputService12TestCaseOperation2(input *InputService12TestShapeInputShape) (*InputService12TestShapeInputService12TestCaseOperation2Output, error) {
-	req, out := c.InputService12TestCaseOperation2Request(input)
-	err := req.Send()
-	return out, err
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *InputService12TestShapeInputService12TestCaseOperation1Input) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "InputService12TestShapeInputService12TestCaseOperation1Input"}
+	if s.Foo == nil {
+		invalidParams.Add(request.NewErrParamRequired("Foo"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
+// SetBar sets the Bar field's value.
+func (s *InputService12TestShapeInputService12TestCaseOperation1Input) SetBar(v []byte) *InputService12TestShapeInputService12TestCaseOperation1Input {
+	s.Bar = v
+	return s
+}
+
+// SetFoo sets the Foo field's value.
+func (s *InputService12TestShapeInputService12TestCaseOperation1Input) SetFoo(v string) *InputService12TestShapeInputService12TestCaseOperation1Input {
+	s.Foo = &v
+	return s
 }
 
 type InputService12TestShapeInputService12TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
-}
-
-type InputService12TestShapeInputService12TestCaseOperation2Output struct {
-	_ struct{} `type:"structure"`
-}
-
-type InputService12TestShapeInputShape struct {
-	_ struct{} `type:"structure" payload:"Foo"`
-
-	Foo []byte `locationName:"foo" type:"blob"`
-}
-
-// SetFoo sets the Foo field's value.
-func (s *InputService12TestShapeInputShape) SetFoo(v []byte) *InputService12TestShapeInputShape {
-	s.Foo = v
-	return s
 }
 
 // The service client's operations are safe to be used concurrently.
@@ -1982,18 +1982,6 @@ func (c *InputService13ProtocolTest) InputService13TestCaseOperation2(input *Inp
 	return out, err
 }
 
-type InputService13TestShapeFooShape struct {
-	_ struct{} `locationName:"foo" type:"structure"`
-
-	Baz *string `locationName:"baz" type:"string"`
-}
-
-// SetBaz sets the Baz field's value.
-func (s *InputService13TestShapeFooShape) SetBaz(v string) *InputService13TestShapeFooShape {
-	s.Baz = &v
-	return s
-}
-
 type InputService13TestShapeInputService13TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
@@ -2005,11 +1993,11 @@ type InputService13TestShapeInputService13TestCaseOperation2Output struct {
 type InputService13TestShapeInputShape struct {
 	_ struct{} `type:"structure" payload:"Foo"`
 
-	Foo *InputService13TestShapeFooShape `locationName:"foo" type:"structure"`
+	Foo []byte `locationName:"foo" type:"blob"`
 }
 
 // SetFoo sets the Foo field's value.
-func (s *InputService13TestShapeInputShape) SetFoo(v *InputService13TestShapeFooShape) *InputService13TestShapeInputShape {
+func (s *InputService13TestShapeInputShape) SetFoo(v []byte) *InputService13TestShapeInputShape {
 	s.Foo = v
 	return s
 }
@@ -2098,7 +2086,7 @@ func (c *InputService14ProtocolTest) InputService14TestCaseOperation1Request(inp
 	op := &request.Operation{
 		Name:       opInputService14TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -2155,7 +2143,7 @@ func (c *InputService14ProtocolTest) InputService14TestCaseOperation2Request(inp
 	op := &request.Operation{
 		Name:       opInputService14TestCaseOperation2,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path?abc=mno",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
@@ -2183,6 +2171,18 @@ func (c *InputService14ProtocolTest) InputService14TestCaseOperation2(input *Inp
 	return out, err
 }
 
+type InputService14TestShapeFooShape struct {
+	_ struct{} `locationName:"foo" type:"structure"`
+
+	Baz *string `locationName:"baz" type:"string"`
+}
+
+// SetBaz sets the Baz field's value.
+func (s *InputService14TestShapeFooShape) SetBaz(v string) *InputService14TestShapeFooShape {
+	s.Baz = &v
+	return s
+}
+
 type InputService14TestShapeInputService14TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
@@ -2192,14 +2192,14 @@ type InputService14TestShapeInputService14TestCaseOperation2Output struct {
 }
 
 type InputService14TestShapeInputShape struct {
-	_ struct{} `type:"structure"`
+	_ struct{} `type:"structure" payload:"Foo"`
 
-	Foo *string `location:"querystring" locationName:"param-name" type:"string"`
+	Foo *InputService14TestShapeFooShape `locationName:"foo" type:"structure"`
 }
 
 // SetFoo sets the Foo field's value.
-func (s *InputService14TestShapeInputShape) SetFoo(v string) *InputService14TestShapeInputShape {
-	s.Foo = &v
+func (s *InputService14TestShapeInputShape) SetFoo(v *InputService14TestShapeFooShape) *InputService14TestShapeInputShape {
+	s.Foo = v
 	return s
 }
 
@@ -2344,7 +2344,7 @@ func (c *InputService15ProtocolTest) InputService15TestCaseOperation2Request(inp
 	op := &request.Operation{
 		Name:       opInputService15TestCaseOperation2,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/path?abc=mno",
 	}
 
 	if input == nil {
@@ -2372,234 +2372,6 @@ func (c *InputService15ProtocolTest) InputService15TestCaseOperation2(input *Inp
 	return out, err
 }
 
-const opInputService15TestCaseOperation3 = "OperationName"
-
-// InputService15TestCaseOperation3Request generates a "aws/request.Request" representing the
-// client's request for the InputService15TestCaseOperation3 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService15TestCaseOperation3 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService15TestCaseOperation3 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService15TestCaseOperation3Request method.
-//    req, resp := client.InputService15TestCaseOperation3Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation3Request(input *InputService15TestShapeInputShape) (req *request.Request, output *InputService15TestShapeInputService15TestCaseOperation3Output) {
-	op := &request.Operation{
-		Name:       opInputService15TestCaseOperation3,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
-	}
-
-	if input == nil {
-		input = &InputService15TestShapeInputShape{}
-	}
-
-	output = &InputService15TestShapeInputService15TestCaseOperation3Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
-}
-
-// InputService15TestCaseOperation3 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService15TestCaseOperation3 for usage and error information.
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation3(input *InputService15TestShapeInputShape) (*InputService15TestShapeInputService15TestCaseOperation3Output, error) {
-	req, out := c.InputService15TestCaseOperation3Request(input)
-	err := req.Send()
-	return out, err
-}
-
-const opInputService15TestCaseOperation4 = "OperationName"
-
-// InputService15TestCaseOperation4Request generates a "aws/request.Request" representing the
-// client's request for the InputService15TestCaseOperation4 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService15TestCaseOperation4 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService15TestCaseOperation4 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService15TestCaseOperation4Request method.
-//    req, resp := client.InputService15TestCaseOperation4Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation4Request(input *InputService15TestShapeInputShape) (req *request.Request, output *InputService15TestShapeInputService15TestCaseOperation4Output) {
-	op := &request.Operation{
-		Name:       opInputService15TestCaseOperation4,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
-	}
-
-	if input == nil {
-		input = &InputService15TestShapeInputShape{}
-	}
-
-	output = &InputService15TestShapeInputService15TestCaseOperation4Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
-}
-
-// InputService15TestCaseOperation4 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService15TestCaseOperation4 for usage and error information.
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation4(input *InputService15TestShapeInputShape) (*InputService15TestShapeInputService15TestCaseOperation4Output, error) {
-	req, out := c.InputService15TestCaseOperation4Request(input)
-	err := req.Send()
-	return out, err
-}
-
-const opInputService15TestCaseOperation5 = "OperationName"
-
-// InputService15TestCaseOperation5Request generates a "aws/request.Request" representing the
-// client's request for the InputService15TestCaseOperation5 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService15TestCaseOperation5 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService15TestCaseOperation5 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService15TestCaseOperation5Request method.
-//    req, resp := client.InputService15TestCaseOperation5Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation5Request(input *InputService15TestShapeInputShape) (req *request.Request, output *InputService15TestShapeInputService15TestCaseOperation5Output) {
-	op := &request.Operation{
-		Name:       opInputService15TestCaseOperation5,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
-	}
-
-	if input == nil {
-		input = &InputService15TestShapeInputShape{}
-	}
-
-	output = &InputService15TestShapeInputService15TestCaseOperation5Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
-}
-
-// InputService15TestCaseOperation5 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService15TestCaseOperation5 for usage and error information.
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation5(input *InputService15TestShapeInputShape) (*InputService15TestShapeInputService15TestCaseOperation5Output, error) {
-	req, out := c.InputService15TestCaseOperation5Request(input)
-	err := req.Send()
-	return out, err
-}
-
-const opInputService15TestCaseOperation6 = "OperationName"
-
-// InputService15TestCaseOperation6Request generates a "aws/request.Request" representing the
-// client's request for the InputService15TestCaseOperation6 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService15TestCaseOperation6 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService15TestCaseOperation6 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService15TestCaseOperation6Request method.
-//    req, resp := client.InputService15TestCaseOperation6Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation6Request(input *InputService15TestShapeInputShape) (req *request.Request, output *InputService15TestShapeInputService15TestCaseOperation6Output) {
-	op := &request.Operation{
-		Name:       opInputService15TestCaseOperation6,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
-	}
-
-	if input == nil {
-		input = &InputService15TestShapeInputShape{}
-	}
-
-	output = &InputService15TestShapeInputService15TestCaseOperation6Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
-}
-
-// InputService15TestCaseOperation6 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService15TestCaseOperation6 for usage and error information.
-func (c *InputService15ProtocolTest) InputService15TestCaseOperation6(input *InputService15TestShapeInputShape) (*InputService15TestShapeInputService15TestCaseOperation6Output, error) {
-	req, out := c.InputService15TestCaseOperation6Request(input)
-	err := req.Send()
-	return out, err
-}
-
 type InputService15TestShapeInputService15TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
@@ -2608,67 +2380,15 @@ type InputService15TestShapeInputService15TestCaseOperation2Output struct {
 	_ struct{} `type:"structure"`
 }
 
-type InputService15TestShapeInputService15TestCaseOperation3Output struct {
-	_ struct{} `type:"structure"`
-}
-
-type InputService15TestShapeInputService15TestCaseOperation4Output struct {
-	_ struct{} `type:"structure"`
-}
-
-type InputService15TestShapeInputService15TestCaseOperation5Output struct {
-	_ struct{} `type:"structure"`
-}
-
-type InputService15TestShapeInputService15TestCaseOperation6Output struct {
-	_ struct{} `type:"structure"`
-}
-
 type InputService15TestShapeInputShape struct {
 	_ struct{} `type:"structure"`
 
-	RecursiveStruct *InputService15TestShapeRecursiveStructType `type:"structure"`
+	Foo *string `location:"querystring" locationName:"param-name" type:"string"`
 }
 
-// SetRecursiveStruct sets the RecursiveStruct field's value.
-func (s *InputService15TestShapeInputShape) SetRecursiveStruct(v *InputService15TestShapeRecursiveStructType) *InputService15TestShapeInputShape {
-	s.RecursiveStruct = v
-	return s
-}
-
-type InputService15TestShapeRecursiveStructType struct {
-	_ struct{} `type:"structure"`
-
-	NoRecurse *string `type:"string"`
-
-	RecursiveList []*InputService15TestShapeRecursiveStructType `type:"list"`
-
-	RecursiveMap map[string]*InputService15TestShapeRecursiveStructType `type:"map"`
-
-	RecursiveStruct *InputService15TestShapeRecursiveStructType `type:"structure"`
-}
-
-// SetNoRecurse sets the NoRecurse field's value.
-func (s *InputService15TestShapeRecursiveStructType) SetNoRecurse(v string) *InputService15TestShapeRecursiveStructType {
-	s.NoRecurse = &v
-	return s
-}
-
-// SetRecursiveList sets the RecursiveList field's value.
-func (s *InputService15TestShapeRecursiveStructType) SetRecursiveList(v []*InputService15TestShapeRecursiveStructType) *InputService15TestShapeRecursiveStructType {
-	s.RecursiveList = v
-	return s
-}
-
-// SetRecursiveMap sets the RecursiveMap field's value.
-func (s *InputService15TestShapeRecursiveStructType) SetRecursiveMap(v map[string]*InputService15TestShapeRecursiveStructType) *InputService15TestShapeRecursiveStructType {
-	s.RecursiveMap = v
-	return s
-}
-
-// SetRecursiveStruct sets the RecursiveStruct field's value.
-func (s *InputService15TestShapeRecursiveStructType) SetRecursiveStruct(v *InputService15TestShapeRecursiveStructType) *InputService15TestShapeRecursiveStructType {
-	s.RecursiveStruct = v
+// SetFoo sets the Foo field's value.
+func (s *InputService15TestShapeInputShape) SetFoo(v string) *InputService15TestShapeInputShape {
+	s.Foo = &v
 	return s
 }
 
@@ -2841,6 +2561,234 @@ func (c *InputService16ProtocolTest) InputService16TestCaseOperation2(input *Inp
 	return out, err
 }
 
+const opInputService16TestCaseOperation3 = "OperationName"
+
+// InputService16TestCaseOperation3Request generates a "aws/request.Request" representing the
+// client's request for the InputService16TestCaseOperation3 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService16TestCaseOperation3 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService16TestCaseOperation3 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService16TestCaseOperation3Request method.
+//    req, resp := client.InputService16TestCaseOperation3Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation3Request(input *InputService16TestShapeInputShape) (req *request.Request, output *InputService16TestShapeInputService16TestCaseOperation3Output) {
+	op := &request.Operation{
+		Name:       opInputService16TestCaseOperation3,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService16TestShapeInputShape{}
+	}
+
+	output = &InputService16TestShapeInputService16TestCaseOperation3Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService16TestCaseOperation3 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService16TestCaseOperation3 for usage and error information.
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation3(input *InputService16TestShapeInputShape) (*InputService16TestShapeInputService16TestCaseOperation3Output, error) {
+	req, out := c.InputService16TestCaseOperation3Request(input)
+	err := req.Send()
+	return out, err
+}
+
+const opInputService16TestCaseOperation4 = "OperationName"
+
+// InputService16TestCaseOperation4Request generates a "aws/request.Request" representing the
+// client's request for the InputService16TestCaseOperation4 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService16TestCaseOperation4 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService16TestCaseOperation4 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService16TestCaseOperation4Request method.
+//    req, resp := client.InputService16TestCaseOperation4Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation4Request(input *InputService16TestShapeInputShape) (req *request.Request, output *InputService16TestShapeInputService16TestCaseOperation4Output) {
+	op := &request.Operation{
+		Name:       opInputService16TestCaseOperation4,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService16TestShapeInputShape{}
+	}
+
+	output = &InputService16TestShapeInputService16TestCaseOperation4Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService16TestCaseOperation4 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService16TestCaseOperation4 for usage and error information.
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation4(input *InputService16TestShapeInputShape) (*InputService16TestShapeInputService16TestCaseOperation4Output, error) {
+	req, out := c.InputService16TestCaseOperation4Request(input)
+	err := req.Send()
+	return out, err
+}
+
+const opInputService16TestCaseOperation5 = "OperationName"
+
+// InputService16TestCaseOperation5Request generates a "aws/request.Request" representing the
+// client's request for the InputService16TestCaseOperation5 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService16TestCaseOperation5 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService16TestCaseOperation5 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService16TestCaseOperation5Request method.
+//    req, resp := client.InputService16TestCaseOperation5Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation5Request(input *InputService16TestShapeInputShape) (req *request.Request, output *InputService16TestShapeInputService16TestCaseOperation5Output) {
+	op := &request.Operation{
+		Name:       opInputService16TestCaseOperation5,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService16TestShapeInputShape{}
+	}
+
+	output = &InputService16TestShapeInputService16TestCaseOperation5Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService16TestCaseOperation5 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService16TestCaseOperation5 for usage and error information.
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation5(input *InputService16TestShapeInputShape) (*InputService16TestShapeInputService16TestCaseOperation5Output, error) {
+	req, out := c.InputService16TestCaseOperation5Request(input)
+	err := req.Send()
+	return out, err
+}
+
+const opInputService16TestCaseOperation6 = "OperationName"
+
+// InputService16TestCaseOperation6Request generates a "aws/request.Request" representing the
+// client's request for the InputService16TestCaseOperation6 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService16TestCaseOperation6 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService16TestCaseOperation6 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService16TestCaseOperation6Request method.
+//    req, resp := client.InputService16TestCaseOperation6Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation6Request(input *InputService16TestShapeInputShape) (req *request.Request, output *InputService16TestShapeInputService16TestCaseOperation6Output) {
+	op := &request.Operation{
+		Name:       opInputService16TestCaseOperation6,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService16TestShapeInputShape{}
+	}
+
+	output = &InputService16TestShapeInputService16TestCaseOperation6Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService16TestCaseOperation6 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService16TestCaseOperation6 for usage and error information.
+func (c *InputService16ProtocolTest) InputService16TestCaseOperation6(input *InputService16TestShapeInputShape) (*InputService16TestShapeInputService16TestCaseOperation6Output, error) {
+	req, out := c.InputService16TestCaseOperation6Request(input)
+	err := req.Send()
+	return out, err
+}
+
 type InputService16TestShapeInputService16TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
@@ -2849,23 +2797,67 @@ type InputService16TestShapeInputService16TestCaseOperation2Output struct {
 	_ struct{} `type:"structure"`
 }
 
+type InputService16TestShapeInputService16TestCaseOperation3Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService16TestShapeInputService16TestCaseOperation4Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService16TestShapeInputService16TestCaseOperation5Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService16TestShapeInputService16TestCaseOperation6Output struct {
+	_ struct{} `type:"structure"`
+}
+
 type InputService16TestShapeInputShape struct {
 	_ struct{} `type:"structure"`
 
-	TimeArg *time.Time `type:"timestamp" timestampFormat:"unix"`
-
-	TimeArgInHeader *time.Time `location:"header" locationName:"x-amz-timearg" type:"timestamp" timestampFormat:"rfc822"`
+	RecursiveStruct *InputService16TestShapeRecursiveStructType `type:"structure"`
 }
 
-// SetTimeArg sets the TimeArg field's value.
-func (s *InputService16TestShapeInputShape) SetTimeArg(v time.Time) *InputService16TestShapeInputShape {
-	s.TimeArg = &v
+// SetRecursiveStruct sets the RecursiveStruct field's value.
+func (s *InputService16TestShapeInputShape) SetRecursiveStruct(v *InputService16TestShapeRecursiveStructType) *InputService16TestShapeInputShape {
+	s.RecursiveStruct = v
 	return s
 }
 
-// SetTimeArgInHeader sets the TimeArgInHeader field's value.
-func (s *InputService16TestShapeInputShape) SetTimeArgInHeader(v time.Time) *InputService16TestShapeInputShape {
-	s.TimeArgInHeader = &v
+type InputService16TestShapeRecursiveStructType struct {
+	_ struct{} `type:"structure"`
+
+	NoRecurse *string `type:"string"`
+
+	RecursiveList []*InputService16TestShapeRecursiveStructType `type:"list"`
+
+	RecursiveMap map[string]*InputService16TestShapeRecursiveStructType `type:"map"`
+
+	RecursiveStruct *InputService16TestShapeRecursiveStructType `type:"structure"`
+}
+
+// SetNoRecurse sets the NoRecurse field's value.
+func (s *InputService16TestShapeRecursiveStructType) SetNoRecurse(v string) *InputService16TestShapeRecursiveStructType {
+	s.NoRecurse = &v
+	return s
+}
+
+// SetRecursiveList sets the RecursiveList field's value.
+func (s *InputService16TestShapeRecursiveStructType) SetRecursiveList(v []*InputService16TestShapeRecursiveStructType) *InputService16TestShapeRecursiveStructType {
+	s.RecursiveList = v
+	return s
+}
+
+// SetRecursiveMap sets the RecursiveMap field's value.
+func (s *InputService16TestShapeRecursiveStructType) SetRecursiveMap(v map[string]*InputService16TestShapeRecursiveStructType) *InputService16TestShapeRecursiveStructType {
+	s.RecursiveMap = v
+	return s
+}
+
+// SetRecursiveStruct sets the RecursiveStruct field's value.
+func (s *InputService16TestShapeRecursiveStructType) SetRecursiveStruct(v *InputService16TestShapeRecursiveStructType) *InputService16TestShapeRecursiveStructType {
+	s.RecursiveStruct = v
 	return s
 }
 
@@ -2949,7 +2941,7 @@ const opInputService17TestCaseOperation1 = "OperationName"
 //    if err == nil { // resp is now filled
 //        fmt.Println(resp)
 //    }
-func (c *InputService17ProtocolTest) InputService17TestCaseOperation1Request(input *InputService17TestShapeInputService17TestCaseOperation1Input) (req *request.Request, output *InputService17TestShapeInputService17TestCaseOperation1Output) {
+func (c *InputService17ProtocolTest) InputService17TestCaseOperation1Request(input *InputService17TestShapeInputShape) (req *request.Request, output *InputService17TestShapeInputService17TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService17TestCaseOperation1,
 		HTTPMethod: "POST",
@@ -2957,7 +2949,7 @@ func (c *InputService17ProtocolTest) InputService17TestCaseOperation1Request(inp
 	}
 
 	if input == nil {
-		input = &InputService17TestShapeInputService17TestCaseOperation1Input{}
+		input = &InputService17TestShapeInputShape{}
 	}
 
 	output = &InputService17TestShapeInputService17TestCaseOperation1Output{}
@@ -2975,26 +2967,95 @@ func (c *InputService17ProtocolTest) InputService17TestCaseOperation1Request(inp
 //
 // See the AWS API reference guide for 's
 // API operation InputService17TestCaseOperation1 for usage and error information.
-func (c *InputService17ProtocolTest) InputService17TestCaseOperation1(input *InputService17TestShapeInputService17TestCaseOperation1Input) (*InputService17TestShapeInputService17TestCaseOperation1Output, error) {
+func (c *InputService17ProtocolTest) InputService17TestCaseOperation1(input *InputService17TestShapeInputShape) (*InputService17TestShapeInputService17TestCaseOperation1Output, error) {
 	req, out := c.InputService17TestCaseOperation1Request(input)
 	err := req.Send()
 	return out, err
 }
 
-type InputService17TestShapeInputService17TestCaseOperation1Input struct {
-	_ struct{} `type:"structure"`
+const opInputService17TestCaseOperation2 = "OperationName"
 
-	TimeArg *time.Time `locationName:"timestamp_location" type:"timestamp" timestampFormat:"unix"`
+// InputService17TestCaseOperation2Request generates a "aws/request.Request" representing the
+// client's request for the InputService17TestCaseOperation2 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService17TestCaseOperation2 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService17TestCaseOperation2 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService17TestCaseOperation2Request method.
+//    req, resp := client.InputService17TestCaseOperation2Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService17ProtocolTest) InputService17TestCaseOperation2Request(input *InputService17TestShapeInputShape) (req *request.Request, output *InputService17TestShapeInputService17TestCaseOperation2Output) {
+	op := &request.Operation{
+		Name:       opInputService17TestCaseOperation2,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService17TestShapeInputShape{}
+	}
+
+	output = &InputService17TestShapeInputService17TestCaseOperation2Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
 }
 
-// SetTimeArg sets the TimeArg field's value.
-func (s *InputService17TestShapeInputService17TestCaseOperation1Input) SetTimeArg(v time.Time) *InputService17TestShapeInputService17TestCaseOperation1Input {
-	s.TimeArg = &v
-	return s
+// InputService17TestCaseOperation2 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService17TestCaseOperation2 for usage and error information.
+func (c *InputService17ProtocolTest) InputService17TestCaseOperation2(input *InputService17TestShapeInputShape) (*InputService17TestShapeInputService17TestCaseOperation2Output, error) {
+	req, out := c.InputService17TestCaseOperation2Request(input)
+	err := req.Send()
+	return out, err
 }
 
 type InputService17TestShapeInputService17TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
+}
+
+type InputService17TestShapeInputService17TestCaseOperation2Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService17TestShapeInputShape struct {
+	_ struct{} `type:"structure"`
+
+	TimeArg *time.Time `type:"timestamp" timestampFormat:"unix"`
+
+	TimeArgInHeader *time.Time `location:"header" locationName:"x-amz-timearg" type:"timestamp" timestampFormat:"rfc822"`
+}
+
+// SetTimeArg sets the TimeArg field's value.
+func (s *InputService17TestShapeInputShape) SetTimeArg(v time.Time) *InputService17TestShapeInputShape {
+	s.TimeArg = &v
+	return s
+}
+
+// SetTimeArgInHeader sets the TimeArgInHeader field's value.
+func (s *InputService17TestShapeInputShape) SetTimeArgInHeader(v time.Time) *InputService17TestShapeInputShape {
+	s.TimeArgInHeader = &v
+	return s
 }
 
 // The service client's operations are safe to be used concurrently.
@@ -3081,7 +3142,7 @@ func (c *InputService18ProtocolTest) InputService18TestCaseOperation1Request(inp
 	op := &request.Operation{
 		Name:       opInputService18TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/",
+		HTTPPath:   "/path",
 	}
 
 	if input == nil {
@@ -3110,14 +3171,14 @@ func (c *InputService18ProtocolTest) InputService18TestCaseOperation1(input *Inp
 }
 
 type InputService18TestShapeInputService18TestCaseOperation1Input struct {
-	_ struct{} `type:"structure" payload:"Foo"`
+	_ struct{} `type:"structure"`
 
-	Foo *string `locationName:"foo" type:"string"`
+	TimeArg *time.Time `locationName:"timestamp_location" type:"timestamp" timestampFormat:"unix"`
 }
 
-// SetFoo sets the Foo field's value.
-func (s *InputService18TestShapeInputService18TestCaseOperation1Input) SetFoo(v string) *InputService18TestShapeInputService18TestCaseOperation1Input {
-	s.Foo = &v
+// SetTimeArg sets the TimeArg field's value.
+func (s *InputService18TestShapeInputService18TestCaseOperation1Input) SetTimeArg(v time.Time) *InputService18TestShapeInputService18TestCaseOperation1Input {
+	s.TimeArg = &v
 	return s
 }
 
@@ -3205,15 +3266,15 @@ const opInputService19TestCaseOperation1 = "OperationName"
 //    if err == nil { // resp is now filled
 //        fmt.Println(resp)
 //    }
-func (c *InputService19ProtocolTest) InputService19TestCaseOperation1Request(input *InputService19TestShapeInputShape) (req *request.Request, output *InputService19TestShapeInputService19TestCaseOperation1Output) {
+func (c *InputService19ProtocolTest) InputService19TestCaseOperation1Request(input *InputService19TestShapeInputService19TestCaseOperation1Input) (req *request.Request, output *InputService19TestShapeInputService19TestCaseOperation1Output) {
 	op := &request.Operation{
 		Name:       opInputService19TestCaseOperation1,
 		HTTPMethod: "POST",
-		HTTPPath:   "/path",
+		HTTPPath:   "/",
 	}
 
 	if input == nil {
-		input = &InputService19TestShapeInputShape{}
+		input = &InputService19TestShapeInputService19TestCaseOperation1Input{}
 	}
 
 	output = &InputService19TestShapeInputService19TestCaseOperation1Output{}
@@ -3231,85 +3292,213 @@ func (c *InputService19ProtocolTest) InputService19TestCaseOperation1Request(inp
 //
 // See the AWS API reference guide for 's
 // API operation InputService19TestCaseOperation1 for usage and error information.
-func (c *InputService19ProtocolTest) InputService19TestCaseOperation1(input *InputService19TestShapeInputShape) (*InputService19TestShapeInputService19TestCaseOperation1Output, error) {
+func (c *InputService19ProtocolTest) InputService19TestCaseOperation1(input *InputService19TestShapeInputService19TestCaseOperation1Input) (*InputService19TestShapeInputService19TestCaseOperation1Output, error) {
 	req, out := c.InputService19TestCaseOperation1Request(input)
 	err := req.Send()
 	return out, err
 }
 
-const opInputService19TestCaseOperation2 = "OperationName"
+type InputService19TestShapeInputService19TestCaseOperation1Input struct {
+	_ struct{} `type:"structure" payload:"Foo"`
 
-// InputService19TestCaseOperation2Request generates a "aws/request.Request" representing the
-// client's request for the InputService19TestCaseOperation2 operation. The "output" return
-// value can be used to capture response data after the request's "Send" method
-// is called.
-//
-// See InputService19TestCaseOperation2 for usage and error information.
-//
-// Creating a request object using this method should be used when you want to inject
-// custom logic into the request's lifecycle using a custom handler, or if you want to
-// access properties on the request object before or after sending the request. If
-// you just want the service response, call the InputService19TestCaseOperation2 method directly
-// instead.
-//
-// Note: You must call the "Send" method on the returned request object in order
-// to execute the request.
-//
-//    // Example sending a request using the InputService19TestCaseOperation2Request method.
-//    req, resp := client.InputService19TestCaseOperation2Request(params)
-//
-//    err := req.Send()
-//    if err == nil { // resp is now filled
-//        fmt.Println(resp)
-//    }
-func (c *InputService19ProtocolTest) InputService19TestCaseOperation2Request(input *InputService19TestShapeInputShape) (req *request.Request, output *InputService19TestShapeInputService19TestCaseOperation2Output) {
-	op := &request.Operation{
-		Name:       opInputService19TestCaseOperation2,
-		HTTPMethod: "POST",
-		HTTPPath:   "/path",
-	}
-
-	if input == nil {
-		input = &InputService19TestShapeInputShape{}
-	}
-
-	output = &InputService19TestShapeInputService19TestCaseOperation2Output{}
-	req = c.newRequest(op, input, output)
-	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
-	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
-	return
+	Foo *string `locationName:"foo" type:"string"`
 }
 
-// InputService19TestCaseOperation2 API operation for .
-//
-// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
-// with awserr.Error's Code and Message methods to get detailed information about
-// the error.
-//
-// See the AWS API reference guide for 's
-// API operation InputService19TestCaseOperation2 for usage and error information.
-func (c *InputService19ProtocolTest) InputService19TestCaseOperation2(input *InputService19TestShapeInputShape) (*InputService19TestShapeInputService19TestCaseOperation2Output, error) {
-	req, out := c.InputService19TestCaseOperation2Request(input)
-	err := req.Send()
-	return out, err
+// SetFoo sets the Foo field's value.
+func (s *InputService19TestShapeInputService19TestCaseOperation1Input) SetFoo(v string) *InputService19TestShapeInputService19TestCaseOperation1Input {
+	s.Foo = &v
+	return s
 }
 
 type InputService19TestShapeInputService19TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
 
-type InputService19TestShapeInputService19TestCaseOperation2Output struct {
+// The service client's operations are safe to be used concurrently.
+// It is not safe to mutate any of the client's properties though.
+type InputService20ProtocolTest struct {
+	*client.Client
+}
+
+// New creates a new instance of the InputService20ProtocolTest client with a session.
+// If additional configuration is needed for the client instance use the optional
+// aws.Config parameter to add your extra config.
+//
+// Example:
+//     // Create a InputService20ProtocolTest client from just a session.
+//     svc := inputservice20protocoltest.New(mySession)
+//
+//     // Create a InputService20ProtocolTest client with additional configuration
+//     svc := inputservice20protocoltest.New(mySession, aws.NewConfig().WithRegion("us-west-2"))
+func NewInputService20ProtocolTest(p client.ConfigProvider, cfgs ...*aws.Config) *InputService20ProtocolTest {
+	c := p.ClientConfig("inputservice20protocoltest", cfgs...)
+	return newInputService20ProtocolTestClient(*c.Config, c.Handlers, c.Endpoint, c.SigningRegion, c.SigningName)
+}
+
+// newClient creates, initializes and returns a new service client instance.
+func newInputService20ProtocolTestClient(cfg aws.Config, handlers request.Handlers, endpoint, signingRegion, signingName string) *InputService20ProtocolTest {
+	svc := &InputService20ProtocolTest{
+		Client: client.New(
+			cfg,
+			metadata.ClientInfo{
+				ServiceName:   "inputservice20protocoltest",
+				SigningName:   signingName,
+				SigningRegion: signingRegion,
+				Endpoint:      endpoint,
+				APIVersion:    "2014-01-01",
+			},
+			handlers,
+		),
+	}
+
+	// Handlers
+	svc.Handlers.Sign.PushBackNamed(v4.SignRequestHandler)
+	svc.Handlers.Build.PushBackNamed(restjson.BuildHandler)
+	svc.Handlers.Unmarshal.PushBackNamed(restjson.UnmarshalHandler)
+	svc.Handlers.UnmarshalMeta.PushBackNamed(restjson.UnmarshalMetaHandler)
+	svc.Handlers.UnmarshalError.PushBackNamed(restjson.UnmarshalErrorHandler)
+
+	return svc
+}
+
+// newRequest creates a new request for a InputService20ProtocolTest operation and runs any
+// custom request initialization.
+func (c *InputService20ProtocolTest) newRequest(op *request.Operation, params, data interface{}) *request.Request {
+	req := c.NewRequest(op, params, data)
+
+	return req
+}
+
+const opInputService20TestCaseOperation1 = "OperationName"
+
+// InputService20TestCaseOperation1Request generates a "aws/request.Request" representing the
+// client's request for the InputService20TestCaseOperation1 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService20TestCaseOperation1 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService20TestCaseOperation1 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService20TestCaseOperation1Request method.
+//    req, resp := client.InputService20TestCaseOperation1Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService20ProtocolTest) InputService20TestCaseOperation1Request(input *InputService20TestShapeInputShape) (req *request.Request, output *InputService20TestShapeInputService20TestCaseOperation1Output) {
+	op := &request.Operation{
+		Name:       opInputService20TestCaseOperation1,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService20TestShapeInputShape{}
+	}
+
+	output = &InputService20TestShapeInputService20TestCaseOperation1Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService20TestCaseOperation1 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService20TestCaseOperation1 for usage and error information.
+func (c *InputService20ProtocolTest) InputService20TestCaseOperation1(input *InputService20TestShapeInputShape) (*InputService20TestShapeInputService20TestCaseOperation1Output, error) {
+	req, out := c.InputService20TestCaseOperation1Request(input)
+	err := req.Send()
+	return out, err
+}
+
+const opInputService20TestCaseOperation2 = "OperationName"
+
+// InputService20TestCaseOperation2Request generates a "aws/request.Request" representing the
+// client's request for the InputService20TestCaseOperation2 operation. The "output" return
+// value can be used to capture response data after the request's "Send" method
+// is called.
+//
+// See InputService20TestCaseOperation2 for usage and error information.
+//
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the InputService20TestCaseOperation2 method directly
+// instead.
+//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
+//
+//    // Example sending a request using the InputService20TestCaseOperation2Request method.
+//    req, resp := client.InputService20TestCaseOperation2Request(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+func (c *InputService20ProtocolTest) InputService20TestCaseOperation2Request(input *InputService20TestShapeInputShape) (req *request.Request, output *InputService20TestShapeInputService20TestCaseOperation2Output) {
+	op := &request.Operation{
+		Name:       opInputService20TestCaseOperation2,
+		HTTPMethod: "POST",
+		HTTPPath:   "/path",
+	}
+
+	if input == nil {
+		input = &InputService20TestShapeInputShape{}
+	}
+
+	output = &InputService20TestShapeInputService20TestCaseOperation2Output{}
+	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
+	return
+}
+
+// InputService20TestCaseOperation2 API operation for .
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for 's
+// API operation InputService20TestCaseOperation2 for usage and error information.
+func (c *InputService20ProtocolTest) InputService20TestCaseOperation2(input *InputService20TestShapeInputShape) (*InputService20TestShapeInputService20TestCaseOperation2Output, error) {
+	req, out := c.InputService20TestCaseOperation2Request(input)
+	err := req.Send()
+	return out, err
+}
+
+type InputService20TestShapeInputService20TestCaseOperation1Output struct {
 	_ struct{} `type:"structure"`
 }
 
-type InputService19TestShapeInputShape struct {
+type InputService20TestShapeInputService20TestCaseOperation2Output struct {
+	_ struct{} `type:"structure"`
+}
+
+type InputService20TestShapeInputShape struct {
 	_ struct{} `type:"structure"`
 
 	Token *string `type:"string" idempotencyToken:"true"`
 }
 
 // SetToken sets the Token field's value.
-func (s *InputService19TestShapeInputShape) SetToken(v string) *InputService19TestShapeInputShape {
+func (s *InputService20TestShapeInputShape) SetToken(v string) *InputService20TestShapeInputShape {
 	s.Token = &v
 	return s
 }
@@ -3446,12 +3635,10 @@ func TestInputService6ProtocolTestStringToStringListMapsInQuerystringCase1(t *te
 
 }
 
-func TestInputService7ProtocolTestURIParameterAndQuerystringParamsCase1(t *testing.T) {
+func TestInputService7ProtocolTestBooleanInQuerystringCase1(t *testing.T) {
 	svc := NewInputService7ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService7TestShapeInputService7TestCaseOperation1Input{
-		Ascending:  aws.String("true"),
-		PageToken:  aws.String("bar"),
-		PipelineId: aws.String("foo"),
+	input := &InputService7TestShapeInputShape{
+		BoolQuery: aws.Bool(true),
 	}
 	req, _ := svc.InputService7TestCaseOperation1Request(input)
 	r := req.HTTPRequest
@@ -3461,20 +3648,35 @@ func TestInputService7ProtocolTestURIParameterAndQuerystringParamsCase1(t *testi
 	assert.NoError(t, req.Error)
 
 	// assert URL
-	awstesting.AssertURL(t, "https://test/2014-01-01/jobsByPipeline/foo?Ascending=true&PageToken=bar", r.URL.String())
+	awstesting.AssertURL(t, "https://test/path?bool-query=true", r.URL.String())
 
 	// assert headers
 
 }
 
-func TestInputService8ProtocolTestURIParameterQuerystringParamsAndJSONBodyCase1(t *testing.T) {
+func TestInputService7ProtocolTestBooleanInQuerystringCase2(t *testing.T) {
+	svc := NewInputService7ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService7TestShapeInputShape{
+		BoolQuery: aws.Bool(false),
+	}
+	req, _ := svc.InputService7TestCaseOperation2Request(input)
+	r := req.HTTPRequest
+
+	// build request
+	restjson.Build(req)
+	assert.NoError(t, req.Error)
+
+	// assert URL
+	awstesting.AssertURL(t, "https://test/path?bool-query=false", r.URL.String())
+
+	// assert headers
+
+}
+
+func TestInputService8ProtocolTestURIParameterAndQuerystringParamsCase1(t *testing.T) {
 	svc := NewInputService8ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
 	input := &InputService8TestShapeInputService8TestCaseOperation1Input{
-		Ascending: aws.String("true"),
-		Config: &InputService8TestShapeStructType{
-			A: aws.String("one"),
-			B: aws.String("two"),
-		},
+		Ascending:  aws.String("true"),
 		PageToken:  aws.String("bar"),
 		PipelineId: aws.String("foo"),
 	}
@@ -3485,11 +3687,6 @@ func TestInputService8ProtocolTestURIParameterQuerystringParamsAndJSONBodyCase1(
 	restjson.Build(req)
 	assert.NoError(t, req.Error)
 
-	// assert body
-	assert.NotNil(t, r.Body)
-	body, _ := ioutil.ReadAll(r.Body)
-	awstesting.AssertJSON(t, `{"Config":{"A":"one","B":"two"}}`, util.Trim(string(body)))
-
 	// assert URL
 	awstesting.AssertURL(t, "https://test/2014-01-01/jobsByPipeline/foo?Ascending=true&PageToken=bar", r.URL.String())
 
@@ -3497,11 +3694,10 @@ func TestInputService8ProtocolTestURIParameterQuerystringParamsAndJSONBodyCase1(
 
 }
 
-func TestInputService9ProtocolTestURIParameterQuerystringParamsHeadersAndJSONBodyCase1(t *testing.T) {
+func TestInputService9ProtocolTestURIParameterQuerystringParamsAndJSONBodyCase1(t *testing.T) {
 	svc := NewInputService9ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
 	input := &InputService9TestShapeInputService9TestCaseOperation1Input{
 		Ascending: aws.String("true"),
-		Checksum:  aws.String("12345"),
 		Config: &InputService9TestShapeStructType{
 			A: aws.String("one"),
 			B: aws.String("two"),
@@ -3525,18 +3721,49 @@ func TestInputService9ProtocolTestURIParameterQuerystringParamsHeadersAndJSONBod
 	awstesting.AssertURL(t, "https://test/2014-01-01/jobsByPipeline/foo?Ascending=true&PageToken=bar", r.URL.String())
 
 	// assert headers
+
+}
+
+func TestInputService10ProtocolTestURIParameterQuerystringParamsHeadersAndJSONBodyCase1(t *testing.T) {
+	svc := NewInputService10ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService10TestShapeInputService10TestCaseOperation1Input{
+		Ascending: aws.String("true"),
+		Checksum:  aws.String("12345"),
+		Config: &InputService10TestShapeStructType{
+			A: aws.String("one"),
+			B: aws.String("two"),
+		},
+		PageToken:  aws.String("bar"),
+		PipelineId: aws.String("foo"),
+	}
+	req, _ := svc.InputService10TestCaseOperation1Request(input)
+	r := req.HTTPRequest
+
+	// build request
+	restjson.Build(req)
+	assert.NoError(t, req.Error)
+
+	// assert body
+	assert.NotNil(t, r.Body)
+	body, _ := ioutil.ReadAll(r.Body)
+	awstesting.AssertJSON(t, `{"Config":{"A":"one","B":"two"}}`, util.Trim(string(body)))
+
+	// assert URL
+	awstesting.AssertURL(t, "https://test/2014-01-01/jobsByPipeline/foo?Ascending=true&PageToken=bar", r.URL.String())
+
+	// assert headers
 	assert.Equal(t, "12345", r.Header.Get("x-amz-checksum"))
 
 }
 
-func TestInputService10ProtocolTestStreamingPayloadCase1(t *testing.T) {
-	svc := NewInputService10ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService10TestShapeInputService10TestCaseOperation1Input{
+func TestInputService11ProtocolTestStreamingPayloadCase1(t *testing.T) {
+	svc := NewInputService11ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService11TestShapeInputService11TestCaseOperation1Input{
 		Body:      bytes.NewReader([]byte("contents")),
 		Checksum:  aws.String("foo"),
 		VaultName: aws.String("name"),
 	}
-	req, _ := svc.InputService10TestCaseOperation1Request(input)
+	req, _ := svc.InputService11TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3556,13 +3783,13 @@ func TestInputService10ProtocolTestStreamingPayloadCase1(t *testing.T) {
 
 }
 
-func TestInputService11ProtocolTestSerializeBlobsInBodyCase1(t *testing.T) {
-	svc := NewInputService11ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService11TestShapeInputService11TestCaseOperation1Input{
+func TestInputService12ProtocolTestSerializeBlobsInBodyCase1(t *testing.T) {
+	svc := NewInputService12ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService12TestShapeInputService12TestCaseOperation1Input{
 		Bar: []byte("Blob param"),
 		Foo: aws.String("foo_name"),
 	}
-	req, _ := svc.InputService11TestCaseOperation1Request(input)
+	req, _ := svc.InputService12TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3581,12 +3808,12 @@ func TestInputService11ProtocolTestSerializeBlobsInBodyCase1(t *testing.T) {
 
 }
 
-func TestInputService12ProtocolTestBlobPayloadCase1(t *testing.T) {
-	svc := NewInputService12ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService12TestShapeInputShape{
+func TestInputService13ProtocolTestBlobPayloadCase1(t *testing.T) {
+	svc := NewInputService13ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService13TestShapeInputShape{
 		Foo: []byte("bar"),
 	}
-	req, _ := svc.InputService12TestCaseOperation1Request(input)
+	req, _ := svc.InputService13TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3605,10 +3832,10 @@ func TestInputService12ProtocolTestBlobPayloadCase1(t *testing.T) {
 
 }
 
-func TestInputService12ProtocolTestBlobPayloadCase2(t *testing.T) {
-	svc := NewInputService12ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService12TestShapeInputShape{}
-	req, _ := svc.InputService12TestCaseOperation2Request(input)
+func TestInputService13ProtocolTestBlobPayloadCase2(t *testing.T) {
+	svc := NewInputService13ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService13TestShapeInputShape{}
+	req, _ := svc.InputService13TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3622,14 +3849,14 @@ func TestInputService12ProtocolTestBlobPayloadCase2(t *testing.T) {
 
 }
 
-func TestInputService13ProtocolTestStructurePayloadCase1(t *testing.T) {
-	svc := NewInputService13ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService13TestShapeInputShape{
-		Foo: &InputService13TestShapeFooShape{
+func TestInputService14ProtocolTestStructurePayloadCase1(t *testing.T) {
+	svc := NewInputService14ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService14TestShapeInputShape{
+		Foo: &InputService14TestShapeFooShape{
 			Baz: aws.String("bar"),
 		},
 	}
-	req, _ := svc.InputService13TestCaseOperation1Request(input)
+	req, _ := svc.InputService14TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3648,10 +3875,10 @@ func TestInputService13ProtocolTestStructurePayloadCase1(t *testing.T) {
 
 }
 
-func TestInputService13ProtocolTestStructurePayloadCase2(t *testing.T) {
-	svc := NewInputService13ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService13TestShapeInputShape{}
-	req, _ := svc.InputService13TestCaseOperation2Request(input)
+func TestInputService14ProtocolTestStructurePayloadCase2(t *testing.T) {
+	svc := NewInputService14ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService14TestShapeInputShape{}
+	req, _ := svc.InputService14TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3665,10 +3892,10 @@ func TestInputService13ProtocolTestStructurePayloadCase2(t *testing.T) {
 
 }
 
-func TestInputService14ProtocolTestOmitsNullQueryParamsButSerializesEmptyStringsCase1(t *testing.T) {
-	svc := NewInputService14ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService14TestShapeInputShape{}
-	req, _ := svc.InputService14TestCaseOperation1Request(input)
+func TestInputService15ProtocolTestOmitsNullQueryParamsButSerializesEmptyStringsCase1(t *testing.T) {
+	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService15TestShapeInputShape{}
+	req, _ := svc.InputService15TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3682,12 +3909,12 @@ func TestInputService14ProtocolTestOmitsNullQueryParamsButSerializesEmptyStrings
 
 }
 
-func TestInputService14ProtocolTestOmitsNullQueryParamsButSerializesEmptyStringsCase2(t *testing.T) {
-	svc := NewInputService14ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService14TestShapeInputShape{
+func TestInputService15ProtocolTestOmitsNullQueryParamsButSerializesEmptyStringsCase2(t *testing.T) {
+	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService15TestShapeInputShape{
 		Foo: aws.String(""),
 	}
-	req, _ := svc.InputService14TestCaseOperation2Request(input)
+	req, _ := svc.InputService15TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3701,14 +3928,14 @@ func TestInputService14ProtocolTestOmitsNullQueryParamsButSerializesEmptyStrings
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase1(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase1(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
 			NoRecurse: aws.String("foo"),
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation1Request(input)
+	req, _ := svc.InputService16TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3727,16 +3954,16 @@ func TestInputService15ProtocolTestRecursiveShapesCase1(t *testing.T) {
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase2(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-			RecursiveStruct: &InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase2(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+			RecursiveStruct: &InputService16TestShapeRecursiveStructType{
 				NoRecurse: aws.String("foo"),
 			},
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation2Request(input)
+	req, _ := svc.InputService16TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3755,20 +3982,20 @@ func TestInputService15ProtocolTestRecursiveShapesCase2(t *testing.T) {
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase3(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-			RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-				RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-					RecursiveStruct: &InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase3(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+			RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+				RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+					RecursiveStruct: &InputService16TestShapeRecursiveStructType{
 						NoRecurse: aws.String("foo"),
 					},
 				},
 			},
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation3Request(input)
+	req, _ := svc.InputService16TestCaseOperation3Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3787,11 +4014,11 @@ func TestInputService15ProtocolTestRecursiveShapesCase3(t *testing.T) {
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase4(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-			RecursiveList: []*InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase4(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+			RecursiveList: []*InputService16TestShapeRecursiveStructType{
 				{
 					NoRecurse: aws.String("foo"),
 				},
@@ -3801,7 +4028,7 @@ func TestInputService15ProtocolTestRecursiveShapesCase4(t *testing.T) {
 			},
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation4Request(input)
+	req, _ := svc.InputService16TestCaseOperation4Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3820,23 +4047,23 @@ func TestInputService15ProtocolTestRecursiveShapesCase4(t *testing.T) {
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase5(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-			RecursiveList: []*InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase5(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+			RecursiveList: []*InputService16TestShapeRecursiveStructType{
 				{
 					NoRecurse: aws.String("foo"),
 				},
 				{
-					RecursiveStruct: &InputService15TestShapeRecursiveStructType{
+					RecursiveStruct: &InputService16TestShapeRecursiveStructType{
 						NoRecurse: aws.String("bar"),
 					},
 				},
 			},
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation5Request(input)
+	req, _ := svc.InputService16TestCaseOperation5Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3855,11 +4082,11 @@ func TestInputService15ProtocolTestRecursiveShapesCase5(t *testing.T) {
 
 }
 
-func TestInputService15ProtocolTestRecursiveShapesCase6(t *testing.T) {
-	svc := NewInputService15ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService15TestShapeInputShape{
-		RecursiveStruct: &InputService15TestShapeRecursiveStructType{
-			RecursiveMap: map[string]*InputService15TestShapeRecursiveStructType{
+func TestInputService16ProtocolTestRecursiveShapesCase6(t *testing.T) {
+	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService16TestShapeInputShape{
+		RecursiveStruct: &InputService16TestShapeRecursiveStructType{
+			RecursiveMap: map[string]*InputService16TestShapeRecursiveStructType{
 				"bar": {
 					NoRecurse: aws.String("bar"),
 				},
@@ -3869,7 +4096,7 @@ func TestInputService15ProtocolTestRecursiveShapesCase6(t *testing.T) {
 			},
 		},
 	}
-	req, _ := svc.InputService15TestCaseOperation6Request(input)
+	req, _ := svc.InputService16TestCaseOperation6Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3888,12 +4115,12 @@ func TestInputService15ProtocolTestRecursiveShapesCase6(t *testing.T) {
 
 }
 
-func TestInputService16ProtocolTestTimestampValuesCase1(t *testing.T) {
-	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService16TestShapeInputShape{
+func TestInputService17ProtocolTestTimestampValuesCase1(t *testing.T) {
+	svc := NewInputService17ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService17TestShapeInputShape{
 		TimeArg: aws.Time(time.Unix(1422172800, 0)),
 	}
-	req, _ := svc.InputService16TestCaseOperation1Request(input)
+	req, _ := svc.InputService17TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3912,12 +4139,12 @@ func TestInputService16ProtocolTestTimestampValuesCase1(t *testing.T) {
 
 }
 
-func TestInputService16ProtocolTestTimestampValuesCase2(t *testing.T) {
-	svc := NewInputService16ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService16TestShapeInputShape{
+func TestInputService17ProtocolTestTimestampValuesCase2(t *testing.T) {
+	svc := NewInputService17ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService17TestShapeInputShape{
 		TimeArgInHeader: aws.Time(time.Unix(1422172800, 0)),
 	}
-	req, _ := svc.InputService16TestCaseOperation2Request(input)
+	req, _ := svc.InputService17TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3932,12 +4159,12 @@ func TestInputService16ProtocolTestTimestampValuesCase2(t *testing.T) {
 
 }
 
-func TestInputService17ProtocolTestNamedLocationsInJSONBodyCase1(t *testing.T) {
-	svc := NewInputService17ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService17TestShapeInputService17TestCaseOperation1Input{
+func TestInputService18ProtocolTestNamedLocationsInJSONBodyCase1(t *testing.T) {
+	svc := NewInputService18ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService18TestShapeInputService18TestCaseOperation1Input{
 		TimeArg: aws.Time(time.Unix(1422172800, 0)),
 	}
-	req, _ := svc.InputService17TestCaseOperation1Request(input)
+	req, _ := svc.InputService18TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3956,12 +4183,12 @@ func TestInputService17ProtocolTestNamedLocationsInJSONBodyCase1(t *testing.T) {
 
 }
 
-func TestInputService18ProtocolTestStringPayloadCase1(t *testing.T) {
-	svc := NewInputService18ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService18TestShapeInputService18TestCaseOperation1Input{
+func TestInputService19ProtocolTestStringPayloadCase1(t *testing.T) {
+	svc := NewInputService19ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService19TestShapeInputService19TestCaseOperation1Input{
 		Foo: aws.String("bar"),
 	}
-	req, _ := svc.InputService18TestCaseOperation1Request(input)
+	req, _ := svc.InputService19TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -3980,12 +4207,12 @@ func TestInputService18ProtocolTestStringPayloadCase1(t *testing.T) {
 
 }
 
-func TestInputService19ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
-	svc := NewInputService19ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService19TestShapeInputShape{
+func TestInputService20ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
+	svc := NewInputService20ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService20TestShapeInputShape{
 		Token: aws.String("abc123"),
 	}
-	req, _ := svc.InputService19TestCaseOperation1Request(input)
+	req, _ := svc.InputService20TestCaseOperation1Request(input)
 	r := req.HTTPRequest
 
 	// build request
@@ -4004,10 +4231,10 @@ func TestInputService19ProtocolTestIdempotencyTokenAutoFillCase1(t *testing.T) {
 
 }
 
-func TestInputService19ProtocolTestIdempotencyTokenAutoFillCase2(t *testing.T) {
-	svc := NewInputService19ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
-	input := &InputService19TestShapeInputShape{}
-	req, _ := svc.InputService19TestCaseOperation2Request(input)
+func TestInputService20ProtocolTestIdempotencyTokenAutoFillCase2(t *testing.T) {
+	svc := NewInputService20ProtocolTest(unit.Session, &aws.Config{Endpoint: aws.String("https://test")})
+	input := &InputService20TestShapeInputShape{}
+	req, _ := svc.InputService20TestCaseOperation2Request(input)
 	r := req.HTTPRequest
 
 	// build request
