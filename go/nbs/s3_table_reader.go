@@ -91,14 +91,14 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 		Range:  aws.String(rangeHeader),
 	}
 	// TODO: go back to just calling GetObject once BUG 3255 is fixed
-	result, reqID, err := func() (*s3.GetObjectOutput, string, error) {
+	result, reqID, reqID2, err := func() (*s3.GetObjectOutput, string, string, error) {
 		if impl, ok := s3tr.s3.(*s3.S3); ok {
 			req, result := impl.GetObjectRequest(input)
 			err := req.Send()
-			return result, req.RequestID, err
+			return result, req.RequestID, req.HTTPRequest.Header.Get("x-amz-id-2"), err
 		}
 		result, err := s3tr.s3.GetObject(input)
-		return result, "FAKE", err
+		return result, "FAKE", "FAKE", err
 	}()
 	d.PanicIfError(err)
 	d.PanicIfFalse(*result.ContentLength == int64(len(p)))
@@ -106,7 +106,7 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 	n, err = io.ReadFull(result.Body, p)
 
 	if err != nil {
-		d.Chk.Fail("Failed ranged read from S3\n", "req %s\n%s\nerror: %v", reqID, input.GoString(), err)
+		d.Chk.Fail("Failed ranged read from S3\n", "req %s\nreq %s\n%s\nerror: %v", reqID, reqID2, input.GoString(), err)
 	}
 
 	return n, err
