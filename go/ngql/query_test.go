@@ -32,7 +32,7 @@ func (suite *QueryGraphQLSuite) SetupTest() {
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {
 	buff := &bytes.Buffer{}
 	Query(v, q, suite.vs, buff)
-	suite.Equal(expect+"\n", string(buff.Bytes()))
+	suite.JSONEq(expect, buff.String())
 }
 
 func (suite *QueryGraphQLSuite) TestScalars() {
