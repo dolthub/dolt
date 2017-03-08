@@ -95,7 +95,7 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 		if impl, ok := s3tr.s3.(*s3.S3); ok {
 			req, result := impl.GetObjectRequest(input)
 			err := req.Send()
-			return result, req.RequestID, req.HTTPRequest.Header.Get("x-amz-id-2"), err
+			return result, req.RequestID, req.HTTPResponse.Header.Get("x-amz-id-2"), err
 		}
 		result, err := s3tr.s3.GetObject(input)
 		return result, "FAKE", "FAKE", err
