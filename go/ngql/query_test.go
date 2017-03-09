@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/suite"
@@ -795,4 +796,41 @@ func (suite *QueryGraphQLSuite) TestMapNullable() {
 		`{"data":{"root":{"values":[1,null,2]}}}`)
 	suite.assertQueryResult(m, `{root{keys(keys:["a","b","c"])}}`,
 		`{"data":{"root":{"keys":["a","b","c"]}}}`)
+}
+
+func (suite *QueryGraphQLSuite) TestStructWithMissingField() {
+	// This simulates the case where there are optional fields
+	tm := NewTypeMap()
+	rootValue := types.NewStruct("", types.StructData{
+		"n": types.Number(42),
+	})
+	rootType := NomsTypeToGraphQLType(types.MakeStructTypeFromFields("", types.FieldMap{
+		"n": types.NumberType,
+		"s": types.StringType,
+	}), false, tm)
+
+	queryObj := graphql.NewObject(graphql.ObjectConfig{
+		Name: rootQueryKey,
+		Fields: graphql.Fields{
+			rootKey: &graphql.Field{
+				Type: rootType,
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					return MaybeGetScalar(rootValue), nil
+				},
+			},
+		}})
+
+	schemaConfig := graphql.SchemaConfig{Query: queryObj}
+	schema, err := graphql.NewSchema(schemaConfig)
+	suite.NoError(err)
+	ctx := NewContext(suite.vs, tm)
+	query := `{root{n s}}`
+
+	r := graphql.Do(graphql.Params{
+		Schema:        schema,
+		RequestString: query,
+		Context:       ctx,
+	})
+
+	suite.Equal(map[string]interface{}{"root": map[string]interface{}{"n": float64(42), "s": nil}}, r.Data)
 }
