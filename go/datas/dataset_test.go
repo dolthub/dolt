@@ -147,11 +147,13 @@ func TestHeadValueFunctions(t *testing.T) {
 	defer store.Close()
 
 	ds1 := store.GetDataset(id1)
+	assert.False(ds1.HasHead())
 
 	// ds1: |a|
 	a := types.String("a")
 	ds1, err := store.CommitValue(ds1, a)
 	assert.NoError(err)
+	assert.True(ds1.HasHead())
 
 	hv := ds1.Head().Get(ValueField)
 	assert.Equal(a, hv)

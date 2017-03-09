@@ -64,6 +64,11 @@ func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
 	return ds.headRef, ds.headRef != types.Ref{}
 }
 
+// HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.
+func (ds Dataset) HasHead() bool {
+	return ds.headRef != types.Ref{}
+}
+
 // HeadRef returns the Ref of the current head Commit, which contains the
 // current root of the Dataset's value tree.
 func (ds Dataset) HeadRef() types.Ref {
