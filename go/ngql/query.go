@@ -58,10 +58,13 @@ func NewContext(vr types.ValueReader, tm *typeMap) context.Context {
 // Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and
 // executes |query| against it, encoding the result to |w|.
 func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) {
+	schemaConfig := graphql.SchemaConfig{}
 	tm := NewTypeMap()
+	queryWithSchemaConfig(rootValue, query, schemaConfig, vr, tm, w)
+}
 
-	queryObj := constructQueryType(rootValue, tm)
-	schemaConfig := graphql.SchemaConfig{Query: queryObj}
+func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vr types.ValueReader, tm *typeMap, w io.Writer) {
+	schemaConfig.Query = constructQueryType(rootValue, tm)
 	schema, _ := graphql.NewSchema(schemaConfig)
 	ctx := NewContext(vr, tm)
 
