@@ -6,6 +6,7 @@ package ngql
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -269,9 +270,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a b} ... on %s{b} ... on %s{c}}}}",
-			getTypeName(list.Get(0).Type()),
-			getTypeName(list.Get(1).Type()),
-			getTypeName(list.Get(2).Type())),
+			GetTypeName(list.Get(0).Type()),
+			GetTypeName(list.Get(1).Type()),
+			GetTypeName(list.Get(2).Type())),
 		`{"data":{"root":{"values":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -290,9 +291,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a} ... on %s{b: a} ... on %s{c: a}}}}",
-			getTypeName(list.Get(0).Type()),
-			getTypeName(list.Get(1).Type()),
-			getTypeName(list.Get(2).Type())),
+			GetTypeName(list.Get(0).Type()),
+			GetTypeName(list.Get(1).Type()),
+			GetTypeName(list.Get(2).Type())),
 		`{"data":{"root":{"values":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -348,7 +349,7 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 	})
 
 	suite.assertQueryResult(s1,
-		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, getTypeName(s1.Type())),
+		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, GetTypeName(s1.Type())),
 		`{"data":{"root":{"a":"aaa","b":{"a":"bbb"}}}}`)
 }
 
@@ -1034,9 +1035,9 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 		`{"data":{"root":{"values":[{"n": "a"}, {"n": "c"}, {"n": "e"}]}}}`)
 }
 
-func (suite *QueryGraphQLSuite) TestArgToNomsValue() {
+func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	test := func(expected types.Value, val interface{}) {
-		suite.Equal(expected, argToNomsValue(val, expected.Type()))
+		suite.Equal(expected, InputToNomsValue(val, expected.Type()))
 	}
 
 	test(types.Number(42), int(42))
@@ -1113,4 +1114,75 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 		"n": types.NumberType,
 		"l": types.MakeListType(types.MakeCycleType(0)),
 	}))
+}
+
+func (suite *QueryGraphQLSuite) TestVariables() {
+	test := func(rootValue types.Value, expected string, query string, vars map[string]interface{}) {
+		tm := NewTypeMap()
+		ctx := NewContext(suite.vs, tm)
+		schema, err := graphql.NewSchema(graphql.SchemaConfig{
+			Query: NewRootQueryObject(rootValue, tm),
+		})
+		suite.NoError(err)
+
+		r := graphql.Do(graphql.Params{
+			Schema:         schema,
+			RequestString:  query,
+			Context:        ctx,
+			VariableValues: vars,
+		})
+		b, err := json.Marshal(r)
+		suite.NoError(err)
+		suite.JSONEq(expected, string(b))
+	}
+
+	v := types.NewList(types.Number(0), types.Number(1), types.Number(2), types.Number(3))
+	test(v, `{"data":{"root":{"values":[0,1,2,3]}}}`, `query Test($c: Int) { root { values(count: $c) } }`, nil)
+	test(v, `{"data":{"root":{"values":[0,1]}}}`, `query Test($c: Int) { root { values(count: $c) } }`, map[string]interface{}{
+		"c": 2,
+	})
+
+	m := types.NewMap(
+		types.String("a"), types.Number(0),
+		types.String("b"), types.Number(1),
+		types.String("c"), types.Number(2),
+		types.String("d"), types.Number(3),
+	)
+	test(m, `{"data":{"root":{"values":[1]}}}`, `query Test($k: String) { root { values(key: $k) } }`, map[string]interface{}{
+		"k": "b",
+	})
+	test(m, `{"data":{"root":{"values":[1, 2]}}}`, `query Test($k: String, $t: String) { root { values(key: $k, through: $t) } }`,
+		map[string]interface{}{
+			"k": "b",
+			"t": "c",
+		})
+	test(m, `{"data":{"root":{"values":[0, 2]}}}`, `query Test($ks: [String!]!) { root { values(keys: $ks) } }`,
+		map[string]interface{}{
+			"ks": []string{"a", "c"},
+		})
+
+	m2 := types.NewMap(
+		types.NewStruct("S", types.StructData{"n": types.String("a")}), types.Number(0),
+		types.NewStruct("S", types.StructData{"n": types.String("b")}), types.Number(1),
+		types.NewStruct("S", types.StructData{"n": types.String("c")}), types.Number(2),
+		types.NewStruct("S", types.StructData{"n": types.String("d")}), types.Number(3),
+	)
+	keyType := m2.Type().Desc.(types.CompoundDesc).ElemTypes[0]
+	q := fmt.Sprintf(`query Test($k: %s) { root { values(key: $k) } }`, GetInputTypeName(keyType))
+	test(m2, `{"data":{"root":{"values":[1]}}}`, q, map[string]interface{}{
+		"k": map[string]interface{}{
+			"n": "b",
+		},
+	})
+	q = fmt.Sprintf(`query Test($ks: [%s!]) { root { values(keys: $ks) } }`, GetInputTypeName(keyType))
+	test(m2, `{"data":{"root":{"values":[0, 3]}}}`, q, map[string]interface{}{
+		"ks": []interface{}{
+			map[string]interface{}{
+				"n": "a",
+			},
+			map[string]interface{}{
+				"n": "d",
+			},
+		},
+	})
 }
