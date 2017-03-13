@@ -17,7 +17,9 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-type typeMap map[typeMapKey]graphql.Type
+// TypeMap is used as a cache in NomsTypeToGraphQLType and
+// NomsTypeToGraphQLInputType.
+type TypeMap map[typeMapKey]graphql.Type
 
 type typeMapKey struct {
 	h             hash.Hash
@@ -25,8 +27,10 @@ type typeMapKey struct {
 	typeMode      graphQLTypeMode
 }
 
-func NewTypeMap() *typeMap {
-	return &typeMap{}
+// NewTypeMap creates a new map that is used as a cache in
+// NomsTypeToGraphQLType and NomsTypeToGraphQLInputType.
+func NewTypeMap() *TypeMap {
+	return &TypeMap{}
 }
 
 // GraphQL has two type systems.
@@ -64,7 +68,7 @@ type getSubvaluesFn func(v types.Value, args map[string]interface{}) interface{}
 // type BooleanValue {
 //   scalarValue: Boolean!
 // }
-func scalarToValue(nomsType *types.Type, scalarType graphql.Type, tm *typeMap) graphql.Type {
+func scalarToValue(nomsType *types.Type, scalarType graphql.Type, tm *TypeMap) graphql.Type {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: fmt.Sprintf("%sValue", GetTypeName(nomsType)),
 		Fields: graphql.Fields{
@@ -88,7 +92,7 @@ func isScalar(nomsType *types.Type) bool {
 
 // NomsTypeToGraphQLType creates a GraphQL type from a Noms type that knows how
 // to resolve the Noms values.
-func NomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap) graphql.Type {
+func NomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *TypeMap) graphql.Type {
 	key := typeMapKey{nomsType.Hash(), boxedIfScalar && isScalar(nomsType), outputMode}
 	gqlType, ok := (*tm)[key]
 	if ok {
@@ -150,7 +154,7 @@ func NomsTypeToGraphQLType(nomsType *types.Type, boxedIfScalar bool, tm *typeMap
 // NomsTypeToGraphQLInputType creates a GraphQL input type from a Noms type.
 // Input types may not be unions or cyclic structs. If we encounter those
 // this returns an error.
-func NomsTypeToGraphQLInputType(nomsType *types.Type, tm *typeMap) (graphql.Type, error) {
+func NomsTypeToGraphQLInputType(nomsType *types.Type, tm *TypeMap) (graphql.Type, error) {
 	key := typeMapKey{nomsType.Hash(), false, inputMode}
 	gqlType, ok := (*tm)[key]
 	if ok {
@@ -207,7 +211,7 @@ func isEmptyNomsUnion(nomsType *types.Type) bool {
 }
 
 // Creates a union of structs type.
-func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
+func unionToGQLUnion(nomsType *types.Type, tm *TypeMap) *graphql.Union {
 	nomsMemberTypes := nomsType.Desc.(types.CompoundDesc).ElemTypes
 	memberTypes := make([]*graphql.Object, len(nomsMemberTypes))
 
@@ -220,7 +224,7 @@ func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
 		Name:  GetTypeName(nomsType),
 		Types: memberTypes,
 		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
-			tm := p.Context.Value(tmKey).(*typeMap)
+			tm := p.Context.Value(tmKey).(*TypeMap)
 			var nomsType *types.Type
 			isScalar := false
 			if v, ok := p.Value.(types.Value); ok {
@@ -246,7 +250,7 @@ func unionToGQLUnion(nomsType *types.Type, tm *typeMap) *graphql.Union {
 	})
 }
 
-func structToGQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
+func structToGQLObject(nomsType *types.Type, tm *TypeMap) *graphql.Object {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: GetTypeName(nomsType),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
@@ -279,7 +283,7 @@ func structToGQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
 	})
 }
 
-func listAndSetToGraphQLInputObject(nomsType *types.Type, tm *typeMap) (graphql.Input, error) {
+func listAndSetToGraphQLInputObject(nomsType *types.Type, tm *TypeMap) (graphql.Input, error) {
 	nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 	elemType, err := NomsTypeToGraphQLInputType(nomsValueType, tm)
 	if err != nil {
@@ -288,7 +292,7 @@ func listAndSetToGraphQLInputObject(nomsType *types.Type, tm *typeMap) (graphql.
 	return graphql.NewList(graphql.NewNonNull(elemType)), nil
 }
 
-func mapToGraphQLInputObject(nomsType *types.Type, tm *typeMap) (graphql.Input, error) {
+func mapToGraphQLInputObject(nomsType *types.Type, tm *TypeMap) (graphql.Input, error) {
 	nomsKeyType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 	nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[1]
 
@@ -305,7 +309,7 @@ func mapToGraphQLInputObject(nomsType *types.Type, tm *typeMap) (graphql.Input, 
 	return graphql.NewList(entryType), nil
 }
 
-func structToGQLInputObject(nomsType *types.Type, tm *typeMap) (graphql.Input, error) {
+func structToGQLInputObject(nomsType *types.Type, tm *TypeMap) (graphql.Input, error) {
 	// Replace pointer cycles with Cycle types. These gets flagged as
 	// errors in NomsTypeToGraphQLInputType.
 	unresolved := types.ToUnresolvedType(nomsType)
@@ -565,7 +569,7 @@ type mapEntry struct {
 //	 key: <KeyType>!
 //	 value: <ValueType>!
 // }
-func mapEntryToGraphQLObject(keyType, valueType graphql.Type, nomsKeyType, nomsValueType *types.Type, tm *typeMap) graphql.Type {
+func mapEntryToGraphQLObject(keyType, valueType graphql.Type, nomsKeyType, nomsValueType *types.Type, tm *TypeMap) graphql.Type {
 	return graphql.NewNonNull(graphql.NewObject(graphql.ObjectConfig{
 		Name: fmt.Sprintf("%s%sEntry", GetTypeName(nomsKeyType), GetTypeName(nomsValueType)),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
@@ -589,7 +593,7 @@ func mapEntryToGraphQLObject(keyType, valueType graphql.Type, nomsKeyType, nomsV
 	}))
 }
 
-func mapEntryToGraphQLInputObject(keyType, valueType graphql.Input, nomsKeyType, nomsValueType *types.Type, tm *typeMap) graphql.Input {
+func mapEntryToGraphQLInputObject(keyType, valueType graphql.Input, nomsKeyType, nomsValueType *types.Type, tm *TypeMap) graphql.Input {
 	return graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: fmt.Sprintf("%s%sEntryInput", GetTypeName(nomsKeyType), GetTypeName(nomsValueType)),
 		Fields: graphql.InputObjectConfigFieldMapThunk(func() graphql.InputObjectConfigFieldMap {
@@ -696,7 +700,7 @@ func argsWithSize() graphql.Fields {
 	}
 }
 
-func listAndSetToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
+func listAndSetToGraphQLObject(nomsType *types.Type, tm *TypeMap) *graphql.Object {
 	nomsValueType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
 	var listType, valueType graphql.Type
 	var keyInputType graphql.Input
@@ -749,7 +753,7 @@ func listAndSetToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Objec
 	})
 }
 
-func mapToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
+func mapToGraphQLObject(nomsType *types.Type, tm *TypeMap) *graphql.Object {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: GetTypeName(nomsType),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {
@@ -827,7 +831,7 @@ func mapAppendEntry(slice []interface{}, k, v types.Value) []interface{} {
 //	 targetHash: String!
 //	 targetValue: <ValueType>!
 // }
-func refToGraphQLObject(nomsType *types.Type, tm *typeMap) *graphql.Object {
+func refToGraphQLObject(nomsType *types.Type, tm *TypeMap) *graphql.Object {
 	return graphql.NewObject(graphql.ObjectConfig{
 		Name: GetTypeName(nomsType),
 		Fields: graphql.FieldsThunk(func() graphql.Fields {

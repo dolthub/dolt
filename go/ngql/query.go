@@ -37,7 +37,7 @@ const (
 
 // NewRootQueryObject creates a "root" query object that can be used to
 // traverse the value tree of rootValue.
-func NewRootQueryObject(rootValue types.Value, tm *typeMap) *graphql.Object {
+func NewRootQueryObject(rootValue types.Value, tm *TypeMap) *graphql.Object {
 	rootNomsType := rootValue.Type()
 	rootType := NomsTypeToGraphQLType(rootNomsType, false, tm)
 
@@ -55,7 +55,7 @@ func NewRootQueryObject(rootValue types.Value, tm *typeMap) *graphql.Object {
 
 // NewContext creates a new context.Context with the extra data added to it
 // that is required by ngql.
-func NewContext(vr types.ValueReader, tm *typeMap) context.Context {
+func NewContext(vr types.ValueReader, tm *TypeMap) context.Context {
 	return context.WithValue(context.WithValue(context.Background(), vrKey, vr), tmKey, tm)
 }
 
@@ -67,7 +67,7 @@ func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Write
 	queryWithSchemaConfig(rootValue, query, schemaConfig, vr, tm, w)
 }
 
-func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vr types.ValueReader, tm *typeMap, w io.Writer) {
+func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vr types.ValueReader, tm *TypeMap, w io.Writer) {
 	schemaConfig.Query = NewRootQueryObject(rootValue, tm)
 	schema, _ := graphql.NewSchema(schemaConfig)
 	ctx := NewContext(vr, tm)

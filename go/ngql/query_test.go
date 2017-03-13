@@ -872,7 +872,7 @@ func (suite *QueryGraphQLSuite) TestMutationWeirdosArgs() {
 	test(`mutation {test(new: "0123456789")}`, `{"data": {"test": "0123456789"}}`, types.BlobType)
 }
 
-func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tm *typeMap, inType graphql.Input, outType graphql.Type, resolver graphql.FieldResolveFn) {
+func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tm *TypeMap, inType graphql.Input, outType graphql.Type, resolver graphql.FieldResolveFn) {
 	buf := &bytes.Buffer{}
 	root := types.Number(0)
 	schemaConfig := graphql.SchemaConfig{
