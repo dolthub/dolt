@@ -7,8 +7,6 @@ package nbs
 import (
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
@@ -108,16 +106,6 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 	n, err = io.ReadFull(result.Body, p)
 
 	if err != nil {
-		// TODO: take out this running of ss once BUG 3255 is fixed
-		cmd := exec.Command("/usr/sbin/ss", "-ntp")
-		if out, err := cmd.CombinedOutput(); err == nil {
-			if _, err = os.Stderr.Write(out); err != nil {
-				fmt.Fprintln(os.Stderr, "Failed writing network connection info", err)
-			}
-		} else {
-			fmt.Fprintln(os.Stderr, "Failed to get network connections:", err)
-		}
-
 		d.Chk.Fail("Failed ranged read from S3\n", "req %s\nreq %s\n%s\nerror: %v", reqID, reqID2, input.GoString(), err)
 	}
 
