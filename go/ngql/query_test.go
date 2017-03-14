@@ -838,11 +838,11 @@ func (suite *QueryGraphQLSuite) TestStructWithMissingField() {
 
 func (suite *QueryGraphQLSuite) TestMutationScalarArgs() {
 	test := func(query, expected string, nomsType *types.Type) {
-		tm := NewTypeMap()
-		inType, err := NomsTypeToGraphQLInputType(nomsType, tm)
+		tc := NewTypeConverter()
+		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
 		suite.NoError(err)
-		outType := NomsTypeToGraphQLType(nomsType, false, tm)
-		suite.assertMutationTypes(query, expected, tm, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
+		outType := tc.NomsTypeToGraphQLType(nomsType)
+		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
 			return p.Args["new"], nil
 		})
 	}
@@ -859,11 +859,11 @@ func (suite *QueryGraphQLSuite) TestMutationScalarArgs() {
 
 func (suite *QueryGraphQLSuite) TestMutationWeirdosArgs() {
 	test := func(query, expected string, nomsType *types.Type) {
-		tm := NewTypeMap()
-		inType, err := NomsTypeToGraphQLInputType(nomsType, tm)
+		tc := NewTypeConverter()
+		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
 		suite.NoError(err)
 		outType := graphql.String
-		suite.assertMutationTypes(query, expected, tm, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
+		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
 			return p.Args["new"], nil
 		})
 	}
@@ -872,7 +872,7 @@ func (suite *QueryGraphQLSuite) TestMutationWeirdosArgs() {
 	test(`mutation {test(new: "0123456789")}`, `{"data": {"test": "0123456789"}}`, types.BlobType)
 }
 
-func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tm *TypeMap, inType graphql.Input, outType graphql.Type, resolver graphql.FieldResolveFn) {
+func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tc *TypeConverter, inType graphql.Input, outType graphql.Type, resolver graphql.FieldResolveFn) {
 	buf := &bytes.Buffer{}
 	root := types.Number(0)
 	schemaConfig := graphql.SchemaConfig{
@@ -891,17 +891,17 @@ func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tm *
 			},
 		}),
 	}
-	queryWithSchemaConfig(root, query, schemaConfig, suite.vs, tm, buf)
+	queryWithSchemaConfig(root, query, schemaConfig, suite.vs, tc, buf)
 	suite.JSONEq(expected, buf.String())
 }
 
 func (suite *QueryGraphQLSuite) TestMutationCollectionArgs() {
 	test := func(query, expected string, expectedArg interface{}, nomsType *types.Type) {
-		tm := NewTypeMap()
-		inType, err := NomsTypeToGraphQLInputType(nomsType, tm)
+		tc := NewTypeConverter()
+		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
 		suite.NoError(err)
 		outType := graphql.Boolean
-		suite.assertMutationTypes(query, expected, tm, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
+		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
 			suite.Equal(expectedArg, p.Args["new"])
 			return true, nil
 		})
@@ -1118,10 +1118,10 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 
 func (suite *QueryGraphQLSuite) TestVariables() {
 	test := func(rootValue types.Value, expected string, query string, vars map[string]interface{}) {
-		tm := NewTypeMap()
-		ctx := NewContext(suite.vs, tm)
+		tc := NewTypeConverter()
+		ctx := tc.NewContext(suite.vs)
 		schema, err := graphql.NewSchema(graphql.SchemaConfig{
-			Query: NewRootQueryObject(rootValue, tm),
+			Query: tc.NewRootQueryObject(rootValue),
 		})
 		suite.NoError(err)
 
@@ -1184,5 +1184,109 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 				"n": "d",
 			},
 		},
+	})
+}
+
+func (suite *QueryGraphQLSuite) TestNameFunc() {
+	test := func(tc *TypeConverter, rootValue types.Value, expected string, query string, vars map[string]interface{}) {
+		ctx := tc.NewContext(suite.vs)
+		schema, err := graphql.NewSchema(graphql.SchemaConfig{
+			Query: tc.NewRootQueryObject(rootValue),
+		})
+		suite.NoError(err)
+
+		r := graphql.Do(graphql.Params{
+			Schema:         schema,
+			RequestString:  query,
+			Context:        ctx,
+			VariableValues: vars,
+		})
+
+		b, err := json.Marshal(r)
+		suite.NoError(err)
+		suite.JSONEq(expected, string(b))
+	}
+
+	aVal := types.NewStruct("A", types.StructData{
+		"a": types.Number(1),
+	})
+	bVal := types.NewStruct("B", types.StructData{
+		"b": types.Number(2),
+	})
+
+	list := types.NewList(aVal, bVal)
+
+	tc := NewTypeConverter()
+	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
+		if nomsType == aVal.Type() {
+			return "A"
+		}
+		if nomsType == bVal.Type() {
+			return "BBB"
+		}
+		return DefaultNameFunc(nomsType, isInputType)
+	}
+
+	query := `query {
+                root {
+                        values {
+                                ... on A {
+                                        a
+                                }
+                                ... on BBB {
+                                        b
+                                }
+                        }
+                }
+        }`
+	expected := `{
+                "data": {
+                        "root": {
+                                "values": [
+                                        {"a": 1},
+                                        {"b": 2}
+                                ]
+                        }
+                }
+        }`
+	test(tc, list, expected, query, nil)
+
+	set := types.NewSet(aVal,
+		types.NewStruct("A", types.StructData{
+			"a": types.Number(2),
+		}),
+		types.NewStruct("A", types.StructData{
+			"a": types.Number(3),
+		}),
+	)
+	tc = NewTypeConverter()
+	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
+		if nomsType == aVal.Type() {
+			if isInputType {
+				return "AI"
+			}
+			return "A"
+		}
+		return DefaultNameFunc(nomsType, isInputType)
+	}
+
+	query = `query ($key: AI!) {
+                root {
+                        values(key: $key) {
+                                a
+                        }
+                }
+        }`
+	expected = `{
+                "data": {
+                        "root": {
+                                "values": [
+                                        {"a": 2}
+                                ]
+                        }
+                }
+        }`
+	test(tc, set, expected, query, map[string]interface{}{
+		"key": map[string]interface{}{"a": 2},
 	})
 }
