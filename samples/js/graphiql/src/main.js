@@ -136,9 +136,12 @@ function graphQLFetcher(graphQLParams) {
     headers.append('Authorization', `Bearer ${params.auth}`);
   }
 
-  const extra = params.extra ? ('&' + params.extra) : '';
+  const vars = graphQLParams.variables ?
+      `&vars=${encodeURIComponent(JSON.stringify(graphQLParams.variables))}` : '';
+
+  const extra = params.extra ? `&${params.extra}` : '';
   return fetch(url, {
-    body: `ds=${params.ds}&query=${encodeURIComponent(graphQLParams.query)}${extra}`,
+    body: `ds=${params.ds}&query=${encodeURIComponent(graphQLParams.query)}${vars}${extra}`,
     headers,
     method: 'POST',
     mode: 'cors',
