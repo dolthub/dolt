@@ -1185,6 +1185,97 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 			},
 		},
 	})
+	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [{}].\nIn element #1: In field \"n\": Expected \"String!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"ks": []interface{}{
+				map[string]interface{}{},
+			},
+		},
+	)
+	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [{\"m\":\"b\",\"n\":\"a\"}].\nIn element #1: In field \"m\": Unknown field.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"ks": []interface{}{
+				map[string]interface{}{
+					"n": "a",
+					"m": "b",
+				},
+			},
+		},
+	)
+	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [{\"n\":null}].\nIn element #1: In field \"n\": Expected \"String!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"ks": []interface{}{
+				map[string]interface{}{
+					"n": nil,
+				},
+			},
+		},
+	)
+	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [null].\nIn element #1: Expected \"SInput_esbrur!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"ks": []interface{}{
+				nil,
+			},
+		},
+	)
+
+	m3 := types.NewMap(
+		types.NewMap(types.Number(0), types.String("zero")), types.Bool(false),
+		types.NewMap(types.Number(1), types.String("one")), types.Bool(true),
+	)
+	keyNomsType := m3.Type().Desc.(types.CompoundDesc).ElemTypes[0]
+	tc := NewTypeConverter()
+	keyGraphQLInputType, err := tc.NomsTypeToGraphQLInputType(keyNomsType)
+	suite.NoError(err)
+	q = fmt.Sprintf(`query Test($k: %s!) { root { values(key: $k) } }`, keyGraphQLInputType.String())
+	test(m3, `{"data":{"root":{"values":[false]}}}`, q, map[string]interface{}{
+		"k": []interface{}{
+			map[string]interface{}{
+				"key":   float64(0),
+				"value": "zero",
+			},
+		},
+	})
+	test(m3, `{"data":null,"errors":[{"message":"Variable \"$k\" got invalid value [{\"key\":0}].\nIn element #1: In field \"value\": Expected \"String!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"k": []interface{}{
+				map[string]interface{}{
+					"key": float64(0),
+				},
+			},
+		})
+	test(m3, `{"data":null,"errors":[{"message":"Variable \"$k\" got invalid value [{\"key\":\"zero\"}].\nIn element #1: In field \"key\": Expected type \"Float\", found \"zero\".\nIn element #2: In field \"value\": Expected \"String!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"k": []interface{}{
+				map[string]interface{}{
+					"key": "zero",
+				},
+			},
+		})
+	test(m3, `{"data":null,"errors":[{"message":"Variable \"$k\" got invalid value [{\"extra\":false,\"key\":0,\"value\":\"zero\"}].\nIn element #1: In field \"extra\": Unknown field.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"k": []interface{}{
+				map[string]interface{}{
+					"key":   float64(0),
+					"value": "zero",
+					"extra": false,
+				},
+			},
+		})
+	test(m3, `{"data":null,"errors":[{"message":"Variable \"$k\" got invalid value [null].\nIn element #1: Expected \"NumberStringEntryInput!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+		q,
+		map[string]interface{}{
+			"k": []interface{}{
+				nil,
+			},
+		})
 }
 
 func (suite *QueryGraphQLSuite) TestNameFunc() {

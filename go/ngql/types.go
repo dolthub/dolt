@@ -380,7 +380,7 @@ func (tc *TypeConverter) structToGQLInputObject(nomsType *types.Type) (graphql.I
 					return
 				}
 				fields[name] = &graphql.InputObjectFieldConfig{
-					Type: fieldType,
+					Type: graphql.NewNonNull(fieldType),
 				}
 			})
 
@@ -643,7 +643,7 @@ func (tc *TypeConverter) mapEntryToGraphQLObject(keyType, valueType graphql.Type
 }
 
 func (tc *TypeConverter) mapEntryToGraphQLInputObject(keyType, valueType graphql.Input, nomsKeyType, nomsValueType *types.Type) graphql.Input {
-	return graphql.NewInputObject(graphql.InputObjectConfig{
+	return graphql.NewNonNull(graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: fmt.Sprintf("%s%sEntryInput", tc.getInputTypeName(nomsKeyType), tc.getInputTypeName(nomsValueType)),
 		Fields: graphql.InputObjectConfigFieldMapThunk(func() graphql.InputObjectConfigFieldMap {
 			return graphql.InputObjectConfigFieldMap{
@@ -655,7 +655,7 @@ func (tc *TypeConverter) mapEntryToGraphQLInputObject(keyType, valueType graphql
 				},
 			}
 		}),
-	})
+	}))
 }
 
 // DefaultNameFunc returns the GraphQL type name for a Noms type.
