@@ -5,9 +5,12 @@
 package nbs
 
 import (
+	"io"
+	"io/ioutil"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 func TestS3TableReader(t *testing.T) {
@@ -52,4 +55,43 @@ func TestS3TableReaderIndexCache(t *testing.T) {
 
 	defer trc.close()
 	assertChunksInReader(chunks, trc, assert)
+}
+
+func TestS3TableReaderFails(t *testing.T) {
+	assert := assert.New(t)
+	fake := makeFakeS3(assert)
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+
+	tableData, h := buildTable(chunks)
+
+	fake.data[h.String()] = tableData
+
+	trc := newS3TableReader(makeFlakyS3(fake), "bucket", h, uint32(len(chunks)), nil, nil)
+	assert.Equal(2, fake.getCount) // constructing the table should have resulted in 2 reads
+
+	defer trc.close()
+	assertChunksInReader(chunks, trc, assert)
+}
+
+type flakyS3 struct {
+	s3svc
+	alreadyFailed map[string]struct{}
+}
+
+func makeFlakyS3(svc s3svc) *flakyS3 {
+	return &flakyS3{svc, map[string]struct{}{}}
+}
+
+func (fs3 *flakyS3) GetObject(input *s3.GetObjectInput) (output *s3.GetObjectOutput, err error) {
+	output, err = fs3.s3svc.GetObject(input)
+	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
+		fs3.alreadyFailed[*input.Key] = struct{}{}
+		output.Body = ioutil.NopCloser(io.LimitReader(output.Body, *(output.ContentLength)/2))
+	}
+	return
 }

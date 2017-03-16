@@ -7,10 +7,13 @@ package nbs
 import (
 	"fmt"
 	"io"
+	"os"
+	"time"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/jpillora/backoff"
 )
 
 const (
@@ -78,36 +81,42 @@ func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err error) {
-	if s3tr.readRl != nil {
-		s3tr.readRl <- struct{}{}
-		defer func() {
-			<-s3tr.readRl
-		}()
-	}
+	read := func() (int, error) {
+		if s3tr.readRl != nil {
+			s3tr.readRl <- struct{}{}
+			defer func() {
+				<-s3tr.readRl
+			}()
+		}
 
-	input := &s3.GetObjectInput{
-		Bucket: aws.String(s3tr.bucket),
-		Key:    aws.String(s3tr.hash().String()),
-		Range:  aws.String(rangeHeader),
-	}
-	// TODO: go back to just calling GetObject once BUG 3255 is fixed
-	result, reqID, reqID2, err := func() (*s3.GetObjectOutput, string, string, error) {
-		if impl, ok := s3tr.s3.(*s3.S3); ok {
-			req, result := impl.GetObjectRequest(input)
-			err := req.Send()
-			return result, req.RequestID, req.HTTPResponse.Header.Get("x-amz-id-2"), err
+		input := &s3.GetObjectInput{
+			Bucket: aws.String(s3tr.bucket),
+			Key:    aws.String(s3tr.hash().String()),
+			Range:  aws.String(rangeHeader),
 		}
 		result, err := s3tr.s3.GetObject(input)
-		return result, "FAKE", "FAKE", err
-	}()
-	d.PanicIfError(err)
-	d.PanicIfFalse(*result.ContentLength == int64(len(p)))
+		d.PanicIfError(err)
+		d.PanicIfFalse(*result.ContentLength == int64(len(p)))
 
-	n, err = io.ReadFull(result.Body, p)
-
-	if err != nil {
-		d.Chk.Fail("Failed ranged read from S3\n", "req %s\nreq %s\n%s\nerror: %v", reqID, reqID2, input.GoString(), err)
+		n, err := io.ReadFull(result.Body, p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed ranged read from S3\n%s\nerror: %v", input.GoString(), err)
+		}
+		return n, err
 	}
 
-	return n, err
+	n, err = read()
+	// We hit the point of diminishing returns investigating #3255, so add retries. In conversations with AWS people, it's not surprising to get transient failures when talking to S3, though SDKs are intended to have their own retrying. The issue may be that, in Go, making the S3 request and reading the data are separate operations, and the SDK kind of can't do its own retrying to handle failures in the latter.
+	if err == io.ErrUnexpectedEOF {
+		b := &backoff.Backoff{
+			Min:    128 * time.Microsecond,
+			Max:    1024 * time.Millisecond,
+			Factor: 2,
+			Jitter: true,
+		}
+		for ; err == io.ErrUnexpectedEOF; n, err = read() {
+			time.Sleep(b.Duration())
+		}
+	}
+	return
 }
