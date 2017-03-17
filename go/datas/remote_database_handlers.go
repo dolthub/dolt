@@ -164,22 +164,15 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		}
 	}()
 
-	var bpe chunks.BackpressureError
 	for ch := range decoded {
 		dc := <-ch
 		if dc.Chunk != nil && dc.Value != nil {
-			if bpe == nil {
-				totalDataWritten += len(dc.Chunk.Data())
-				bpe = vbs.Enqueue(*dc.Chunk, *dc.Value)
-				chunkCount++
-				if chunkCount%100 == 0 {
-					verbose.Log("Enqueued %d chunks", chunkCount)
-				}
-			} else {
-				bpe = append(bpe, dc.Chunk.Hash())
+			totalDataWritten += len(dc.Chunk.Data())
+			vbs.Enqueue(*dc.Chunk, *dc.Value)
+			chunkCount++
+			if chunkCount%100 == 0 {
+				verbose.Log("Enqueued %d chunks", chunkCount)
 			}
-			// If a previous Enqueue() errored, we still need to drain chunkChan
-			// TODO: what about having Deserialize take a 'done' channel to stop it?
 		}
 	}
 
@@ -188,17 +181,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		panic(d.Wrap(fmt.Errorf("Deserialization failure: %v", err)))
 	}
 
-	if bpe == nil {
-		bpe = vbs.Flush()
-	}
-	if bpe != nil {
-		w.WriteHeader(http.StatusTooManyRequests)
-		w.Header().Add("Content-Type", "application/octet-stream")
-		writer := respWriter(req, w)
-		defer writer.Close()
-		serializeHashes(writer, bpe.AsHashes())
-		return
-	}
+	vbs.Flush()
 	w.WriteHeader(http.StatusCreated)
 }
 

@@ -137,25 +137,10 @@ func (s *DynamoStore) Has(h hash.Hash) bool {
 	return <-ch
 }
 
-func (s *DynamoStore) PutMany(chunks []Chunk) (e BackpressureError) {
-	for i, c := range chunks {
-		if s.unwrittenPuts.Has(c) {
-			continue
-		}
-		select {
-		case s.writeQueue <- c:
-			s.requestWg.Add(1)
-			s.unwrittenPuts.Add(c)
-		default:
-			notPut := chunks[i:]
-			e = make(BackpressureError, len(notPut))
-			for j, np := range notPut {
-				e[j] = np.Hash()
-			}
-			return
-		}
+func (s *DynamoStore) PutMany(chunks []Chunk) {
+	for _, c := range chunks {
+		s.Put(c)
 	}
-	return
 }
 
 func (s *DynamoStore) Put(c Chunk) {

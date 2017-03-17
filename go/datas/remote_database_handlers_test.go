@@ -99,40 +99,6 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 	}
 }
 
-func TestHandleWriteValueBackpressure(t *testing.T) {
-	assert := assert.New(t)
-	cs := &backpressureCS{ChunkStore: chunks.NewMemoryStore()}
-	db := NewDatabase(cs)
-
-	l := types.NewList(
-		db.WriteValue(types.Bool(true)),
-		db.WriteValue(types.Bool(false)),
-	)
-	r := db.WriteValue(l)
-	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
-	assert.NoError(err)
-
-	hint := l.Hash()
-	newItem := types.NewEmptyBlob()
-	itemChunk := types.EncodeValue(newItem, nil)
-	l2 := l.Insert(1, types.NewRef(newItem))
-	listChunk := types.EncodeValue(l2, nil)
-
-	body := &bytes.Buffer{}
-	serializeHints(body, map[hash.Hash]struct{}{hint: {}})
-	chunks.Serialize(itemChunk, body)
-	chunks.Serialize(listChunk, body)
-
-	w := httptest.NewRecorder()
-	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
-
-	if assert.Equal(http.StatusTooManyRequests, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		hashes := deserializeHashes(w.Body)
-		assert.Len(hashes, 1)
-		assert.Equal(l2.Hash(), hashes[0])
-	}
-}
-
 func TestBuildWriteValueRequest(t *testing.T) {
 	assert := assert.New(t)
 	input1, input2 := "abc", "def"
@@ -212,8 +178,7 @@ func TestHandleGetRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
-	err := cs.PutMany(chnx)
-	assert.NoError(err)
+	cs.PutMany(chnx)
 
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
 
@@ -316,8 +281,7 @@ func TestHandleHasRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
-	err := cs.PutMany(chnx)
-	assert.NoError(err)
+	cs.PutMany(chnx)
 
 	absent := hash.Parse("00000000000000000000000000000002")
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))

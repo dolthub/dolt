@@ -178,20 +178,10 @@ func (nbs *NomsBlockStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints t
 	nbs.Put(c)
 }
 
-func (nbs *NomsBlockStore) PutMany(chunx []chunks.Chunk) (err chunks.BackpressureError) {
-	for ; len(chunx) > 0; chunx = chunx[1:] {
-		c := chunx[0]
-		a := addr(c.Hash())
-		if !nbs.addChunk(a, c.Data()) {
-			break
-		}
-		nbs.putCount++
-	}
+func (nbs *NomsBlockStore) PutMany(chunx []chunks.Chunk) {
 	for _, c := range chunx {
-		err = append(err, c.Hash())
+		nbs.Put(c)
 	}
-
-	return err
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.

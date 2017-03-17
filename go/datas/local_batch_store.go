@@ -99,27 +99,17 @@ func (lbs *localBatchStore) Flush() {
 	chunkChan := make(chan *chunks.Chunk, 128)
 	go func() {
 		err := lbs.unwrittenPuts.ExtractChunks(lbs.hashes, chunkChan)
-		d.Chk.NoError(err)
+		d.PanicIfError(err)
 		close(chunkChan)
 	}()
 
 	lbs.vbs.Prepare(lbs.hints)
-	var bpe chunks.BackpressureError
 	for c := range chunkChan {
-		if bpe == nil {
-			dc := lbs.vbs.DecodeUnqueued(c)
-			bpe = lbs.vbs.Enqueue(*dc.Chunk, *dc.Value)
-		} else {
-			bpe = append(bpe, c.Hash())
-		}
+		dc := lbs.vbs.DecodeUnqueued(c)
+		lbs.vbs.Enqueue(*dc.Chunk, *dc.Value)
 	}
-	if bpe == nil {
-		bpe = lbs.vbs.Flush()
-	}
-	// Should probably do a thing with bpe. Will need to keep track of chunk hashes that are SechedulePut'd in order to do this :-/
-	if bpe != nil {
-		d.PanicIfError(bpe) // guarded because if bpe == nil, this still fires for some reason. Maybe something to do with custom error type??
-	}
+	lbs.vbs.Flush()
+
 	lbs.unwrittenPuts.Clear(lbs.hashes)
 	lbs.hashes = hash.HashSet{}
 	lbs.hints = types.Hints{}

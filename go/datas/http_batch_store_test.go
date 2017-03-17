@@ -171,7 +171,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 		types.EncodeValue(vals[0], nil),
 		types.EncodeValue(vals[1], nil),
 	}
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 	l := types.NewList(types.NewRef(vals[0]), types.NewRef(vals[1]))
 
 	suite.store.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{
@@ -181,52 +181,6 @@ func (suite *HTTPBatchStoreSuite) TestPutChunkWithHints() {
 	suite.store.Flush()
 
 	suite.Equal(3, suite.cs.Writes)
-}
-
-type backpressureCS struct {
-	chunks.ChunkStore
-	tries int
-}
-
-func (b *backpressureCS) PutMany(chnx []chunks.Chunk) chunks.BackpressureError {
-	if chnx == nil {
-		return nil
-	}
-	b.tries++
-
-	if len(chnx) <= b.tries {
-		return b.ChunkStore.PutMany(chnx)
-	}
-	if bpe := b.ChunkStore.PutMany(chnx[:b.tries]); bpe != nil {
-		return bpe
-	}
-
-	bpe := make(chunks.BackpressureError, len(chnx)-b.tries)
-	for i, c := range chnx[b.tries:] {
-		bpe[i] = c.Hash()
-	}
-	return bpe
-}
-
-func (suite *HTTPBatchStoreSuite) TestPutChunksBackpressure() {
-	bpcs := &backpressureCS{ChunkStore: suite.cs}
-	bs := NewHTTPBatchStoreForTest(bpcs)
-	defer bs.Close()
-	defer bpcs.Close()
-
-	vals := []types.Value{
-		types.String("abc"),
-		types.String("def"),
-	}
-	l := types.NewList()
-	for _, v := range vals {
-		bs.SchedulePut(types.EncodeValue(v, nil), 1, types.Hints{})
-		l = l.Append(types.NewRef(v))
-	}
-	bs.SchedulePut(types.EncodeValue(l, nil), 2, types.Hints{})
-	bs.Flush()
-
-	suite.Equal(6, suite.cs.Writes)
 }
 
 func (suite *HTTPBatchStoreSuite) TestRoot() {
@@ -266,7 +220,7 @@ func (suite *HTTPBatchStoreSuite) TestGet() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 	got := suite.store.Get(chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
 	got = suite.store.Get(chnx[1].Hash())
@@ -279,7 +233,7 @@ func (suite *HTTPBatchStoreSuite) TestGetMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
@@ -316,7 +270,7 @@ func (suite *HTTPBatchStoreSuite) TestGetManySomeCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 	suite.store.SchedulePut(cached, 1, types.Hints{})
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
@@ -334,7 +288,7 @@ func (suite *HTTPBatchStoreSuite) TestGetSame() {
 		chunks.NewChunk([]byte("def")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 	got := suite.store.Get(chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
 	got = suite.store.Get(chnx[1].Hash())
@@ -346,7 +300,7 @@ func (suite *HTTPBatchStoreSuite) TestHas() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.NoError(suite.cs.PutMany(chnx))
+	suite.cs.PutMany(chnx)
 	suite.True(suite.store.Has(chnx[0].Hash()))
 	suite.True(suite.store.Has(chnx[1].Hash()))
 }

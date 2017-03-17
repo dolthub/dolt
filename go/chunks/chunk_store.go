@@ -5,7 +5,6 @@
 package chunks
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -62,25 +61,11 @@ type ChunkSink interface {
 	// Put writes c into the ChunkSink, blocking until the operation is complete.
 	Put(c Chunk)
 
-	// PutMany tries to write chunks into the sink. It will block as it
-	// handles as many as possible, then return a BackpressureError containing
-	// the rest (if any).
-	PutMany(chunks []Chunk) BackpressureError
+	// PutMany writes chunks into the sink, blocking until the operation is complete.
+	PutMany(chunks []Chunk)
 
 	// On return, any previously Put chunks should be durable
 	Flush()
 
 	io.Closer
-}
-
-// BackpressureError is a slice of hash.Hash that indicates some chunks could
-// not be Put(). Caller is free to try to Put them again later.
-type BackpressureError hash.HashSlice
-
-func (b BackpressureError) Error() string {
-	return fmt.Sprintf("Tried to Put %d too many Chunks", len(b))
-}
-
-func (b BackpressureError) AsHashes() hash.HashSlice {
-	return hash.HashSlice(b)
 }

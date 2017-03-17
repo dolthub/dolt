@@ -65,11 +65,10 @@ func (ms *MemoryStore) Put(c Chunk) {
 	ms.data[c.Hash()] = c
 }
 
-func (ms *MemoryStore) PutMany(chunks []Chunk) (e BackpressureError) {
+func (ms *MemoryStore) PutMany(chunks []Chunk) {
 	for _, c := range chunks {
 		ms.Put(c)
 	}
-	return
 }
 
 func (ms *MemoryStore) Len() int {

@@ -209,7 +209,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	}
 
 	root := smallTableStore.Root()
-	suite.NoError(smallTableStore.PutMany(chunx[:testMaxTables]))
+	smallTableStore.PutMany(chunx[:testMaxTables])
 	suite.True(smallTableStore.UpdateRoot(chunx[0].Hash(), root)) // Commit write
 
 	exists, _, mRoot, specs := mm.ParseIfExists(nil)
@@ -218,7 +218,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	suite.Len(specs, testMaxTables)
 
 	root = smallTableStore.Root()
-	suite.NoError(smallTableStore.PutMany(chunx[testMaxTables:]))
+	smallTableStore.PutMany(chunx[testMaxTables:])
 	suite.True(smallTableStore.UpdateRoot(chunx[testMaxTables].Hash(), root)) // Should compact
 
 	exists, _, mRoot, specs = mm.ParseIfExists(nil)

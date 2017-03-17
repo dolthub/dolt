@@ -47,7 +47,7 @@ func TestValidatingBatchingSinkDecodeAlreadyEnqueued(t *testing.T) {
 	c := EncodeValue(v, nil)
 	vbs := NewValidatingBatchingSink(chunks.NewTestStore())
 
-	assert.NoError(t, vbs.Enqueue(c, v))
+	vbs.Enqueue(c, v)
 	dc := vbs.DecodeUnqueued(&c)
 	assert.Nil(t, dc.Chunk)
 	assert.Nil(t, dc.Value)
@@ -106,8 +106,8 @@ func TestValidatingBatchingSinkEnqueueAndFlush(t *testing.T) {
 	cs := chunks.NewTestStore()
 	vbs := NewValidatingBatchingSink(cs)
 
-	assert.NoError(t, vbs.Enqueue(c, v))
-	assert.NoError(t, vbs.Flush())
+	vbs.Enqueue(c, v)
+	vbs.Flush()
 	assert.Equal(t, 1, cs.Writes)
 }
 
@@ -117,9 +117,9 @@ func TestValidatingBatchingSinkEnqueueImplicitFlush(t *testing.T) {
 
 	for i := 0; i <= batchSize; i++ {
 		v := Number(i)
-		assert.NoError(t, vbs.Enqueue(EncodeValue(v, nil), v))
+		vbs.Enqueue(EncodeValue(v, nil), v)
 	}
 	assert.Equal(t, batchSize, cs.Writes)
-	assert.NoError(t, vbs.Flush())
+	vbs.Flush()
 	assert.Equal(t, 1, cs.Writes-batchSize)
 }

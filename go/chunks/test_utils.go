@@ -51,11 +51,10 @@ func (s *TestStore) Put(c Chunk) {
 	s.MemoryStore.Put(c)
 }
 
-func (s *TestStore) PutMany(chunks []Chunk) (e BackpressureError) {
+func (s *TestStore) PutMany(chunks []Chunk) {
 	for _, c := range chunks {
 		s.Put(c)
 	}
-	return
 }
 
 // TestStoreFactory is public, and exposes Stores to ensure that test code can directly query instances vended by this factory.
