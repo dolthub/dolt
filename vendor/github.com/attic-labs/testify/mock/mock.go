@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/stretchr/objx"
 	"github.com/attic-labs/testify/assert"
 )
@@ -47,7 +49,7 @@ type Call struct {
 	totalCalls int
 
 	// Holds a channel that will be used to block the Return until it either
-	// recieves a message or is closed. nil means it returns immediately.
+	// receives a message or is closed. nil means it returns immediately.
 	WaitFor <-chan time.Time
 
 	// Holds a handler used to manipulate arguments content that are passed by
@@ -277,7 +279,7 @@ func (m *Mock) Called(arguments ...interface{}) Arguments {
 	functionPath := runtime.FuncForPC(pc).Name()
 	//Next four lines are required to use GCCGO function naming conventions.
 	//For Ex:  github_com_docker_libkv_store_mock.WatchTree.pN39_github_com_docker_libkv_store_mock.Mock
-	//uses inteface information unlike golang github.com/docker/libkv/store/mock.(*Mock).WatchTree
+	//uses interface information unlike golang github.com/docker/libkv/store/mock.(*Mock).WatchTree
 	//With GCCGO we need to remove interface information starting from pN<dd>.
 	re := regexp.MustCompile("\\.pN\\d+_")
 	if re.MatchString(functionPath) {
@@ -299,7 +301,7 @@ func (m *Mock) Called(arguments ...interface{}) Arguments {
 		closestFound, closestCall := m.findClosestCall(functionName, arguments...)
 
 		if closestFound {
-			panic(fmt.Sprintf("\n\nmock: Unexpected Method Call\n-----------------------------\n\n%s\n\nThe closest call I have is: \n\n%s\n", callString(functionName, arguments, true), callString(functionName, closestCall.Arguments, true)))
+			panic(fmt.Sprintf("\n\nmock: Unexpected Method Call\n-----------------------------\n\n%s\n\nThe closest call I have is: \n\n%s\n\n%s\n", callString(functionName, arguments, true), callString(functionName, closestCall.Arguments, true), diffArguments(arguments, closestCall.Arguments)))
 		} else {
 			panic(fmt.Sprintf("\nassert: mock: I don't know what to return because the method call was unexpected.\n\tEither do Mock.On(\"%s\").Return(...) first, or remove the %s() call.\n\tThis method was unexpected:\n\t\t%s\n\tat: %s", functionName, functionName, callString(functionName, arguments, true), assert.CallerInfo()))
 		}
@@ -341,17 +343,26 @@ func (m *Mock) Called(arguments ...interface{}) Arguments {
 	Assertions
 */
 
+type assertExpectationser interface {
+	AssertExpectations(TestingT) bool
+}
+
 // AssertExpectationsForObjects asserts that everything specified with On and Return
 // of the specified objects was in fact called as expected.
 //
 // Calls may have occurred in any order.
 func AssertExpectationsForObjects(t TestingT, testObjects ...interface{}) bool {
-	var success = true
 	for _, obj := range testObjects {
-		mockObj := obj.(Mock)
-		success = success && mockObj.AssertExpectations(t)
+		if m, ok := obj.(Mock); ok {
+			t.Logf("Deprecated mock.AssertExpectationsForObjects(myMock.Mock) use mock.AssertExpectationsForObjects(myMock)")
+			obj = &m
+		}
+		m := obj.(assertExpectationser)
+		if !m.AssertExpectations(t) {
+			return false
+		}
 	}
-	return success
+	return true
 }
 
 // AssertExpectations asserts that everything specified with On and Return was
@@ -690,4 +701,66 @@ func (args Arguments) Bool(index int) bool {
 		panic(fmt.Sprintf("assert: arguments: Bool(%d) failed because object wasn't correct type: %v", index, args.Get(index)))
 	}
 	return s
+}
+
+func typeAndKind(v interface{}) (reflect.Type, reflect.Kind) {
+	t := reflect.TypeOf(v)
+	k := t.Kind()
+
+	if k == reflect.Ptr {
+		t = t.Elem()
+		k = t.Kind()
+	}
+	return t, k
+}
+
+func diffArguments(expected Arguments, actual Arguments) string {
+	for x := range expected {
+		if diffString := diff(expected[x], actual[x]); diffString != "" {
+			return fmt.Sprintf("Difference found in argument %v:\n\n%s", x, diffString)
+		}
+	}
+
+	return ""
+}
+
+// diff returns a diff of both values as long as both are of the same type and
+// are a struct, map, slice or array. Otherwise it returns an empty string.
+func diff(expected interface{}, actual interface{}) string {
+	if expected == nil || actual == nil {
+		return ""
+	}
+
+	et, ek := typeAndKind(expected)
+	at, _ := typeAndKind(actual)
+
+	if et != at {
+		return ""
+	}
+
+	if ek != reflect.Struct && ek != reflect.Map && ek != reflect.Slice && ek != reflect.Array {
+		return ""
+	}
+
+	e := spewConfig.Sdump(expected)
+	a := spewConfig.Sdump(actual)
+
+	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(e),
+		B:        difflib.SplitLines(a),
+		FromFile: "Expected",
+		FromDate: "",
+		ToFile:   "Actual",
+		ToDate:   "",
+		Context:  1,
+	})
+
+	return diff
+}
+
+var spewConfig = spew.ConfigState{
+	Indent:                  " ",
+	DisablePointerAddresses: true,
+	DisableCapacities:       true,
+	SortKeys:                true,
 }

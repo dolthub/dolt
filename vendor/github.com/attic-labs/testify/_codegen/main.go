@@ -1,5 +1,5 @@
 // This program reads all assertion functions from the assert package and
-// automatically generates the corersponding requires and forwarded assertions
+// automatically generates the corresponding requires and forwarded assertions
 
 package main
 
@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/doc"
+	"go/format"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -77,13 +78,18 @@ func generateCode(importer imports.Importer, funcs []testFunc) error {
 		}
 	}
 
+	code, err := format.Source(buff.Bytes())
+	if err != nil {
+		return err
+	}
+
 	// Write file
 	output, err := outputFile()
 	if err != nil {
 		return err
 	}
 	defer output.Close()
-	_, err = io.Copy(output, buff)
+	_, err = io.Copy(output, bytes.NewReader(code))
 	return err
 }
 
@@ -133,7 +139,7 @@ func analyzeCode(scope *types.Scope, docs *doc.Package) (imports.Importer, []tes
 		if !ok {
 			continue
 		}
-		// Check function signatuer has at least two arguments
+		// Check function signature has at least two arguments
 		sig := fn.Type().(*types.Signature)
 		if sig.Params().Len() < 2 {
 			continue
@@ -157,7 +163,7 @@ func analyzeCode(scope *types.Scope, docs *doc.Package) (imports.Importer, []tes
 	return importer, funcs, nil
 }
 
-// parsePackageSource returns the types scope and the package documentation from the pa
+// parsePackageSource returns the types scope and the package documentation from the package
 func parsePackageSource(pkg string) (*types.Scope, *doc.Package, error) {
 	pd, err := build.Import(pkg, ".", 0)
 	if err != nil {

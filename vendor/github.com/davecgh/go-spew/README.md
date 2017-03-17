@@ -1,10 +1,12 @@
 go-spew
 =======
 
-[![Build Status](https://travis-ci.org/davecgh/go-spew.png?branch=master)]
-(https://travis-ci.org/davecgh/go-spew) [![Coverage Status]
-(https://coveralls.io/repos/davecgh/go-spew/badge.png?branch=master)]
+[![Build Status](https://img.shields.io/travis/davecgh/go-spew.svg)]
+(https://travis-ci.org/davecgh/go-spew) [![ISC License]
+(http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org) [![Coverage Status]
+(https://img.shields.io/coveralls/davecgh/go-spew.svg)]
 (https://coveralls.io/r/davecgh/go-spew?branch=master)
+
 
 Go-spew implements a deep pretty printer for Go data structures to aid in
 debugging.  A comprehensive suite of tests with 100% test coverage is provided
@@ -15,11 +17,11 @@ open source or commercial projects.
 If you're interested in reading about how this package came to life and some
 of the challenges involved in providing a deep pretty printer, there is a blog
 post about it
-[here](https://blog.cyphertite.com/go-spew-a-journey-into-dumping-go-data-structures/).
+[here](https://web.archive.org/web/20160304013555/https://blog.cyphertite.com/go-spew-a-journey-into-dumping-go-data-structures/).
 
 ## Documentation
 
-[![GoDoc](https://godoc.org/github.com/davecgh/go-spew/spew?status.png)]
+[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)]
 (http://godoc.org/github.com/davecgh/go-spew/spew)
 
 Full `go doc` style documentation for the project can be viewed online without
@@ -157,8 +159,17 @@ options. See the ConfigState documentation for more details.
 	which only accept pointer receivers from non-pointer variables.  This option
 	relies on access to the unsafe package, so it will not have any effect when
 	running in environments without access to the unsafe package such as Google
-	App Engine or with the "disableunsafe" build tag specified.
+	App Engine or with the "safe" build tag specified.
 	Pointer method invocation is enabled by default.
+
+* DisablePointerAddresses
+	DisablePointerAddresses specifies whether to disable the printing of
+	pointer addresses. This is useful when diffing data structures in tests.
+
+* DisableCapacities
+	DisableCapacities specifies whether to disable the printing of capacities
+	for arrays, slices, maps and channels. This is useful when diffing data
+	structures in tests.
 
 * ContinueOnMethod
 	Enables recursion into types after invoking error and Stringer interface
@@ -185,10 +196,10 @@ options. See the ConfigState documentation for more details.
 This package relies on the unsafe package to perform some of the more advanced
 features, however it also supports a "limited" mode which allows it to work in
 environments where the unsafe package is not available.  By default, it will
-operate in this mode on Google App Engine.  The "disableunsafe" build tag may
-also be specified to force the package to build without using the unsafe
-package.
+operate in this mode on Google App Engine and when compiled with GopherJS.  The
+"safe" build tag may also be specified to force the package to build without
+using the unsafe package.
 
 ## License
 
-Go-spew is licensed under the liberal ISC License.
+Go-spew is licensed under the [copyfree](http://copyfree.org) ISC License.

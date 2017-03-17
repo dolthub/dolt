@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/testify/require"
 )
 
-var matchMethod = flag.String("m", "", "regular expression to select tests of the suite to run")
+var matchMethod = flag.String("testify.m", "", "regular expression to select tests of the testify suite to run")
 
 // Suite is a basic testing suite with methods for storing and
 // retrieving the current *testing.T context.
@@ -86,7 +86,13 @@ func Run(t *testing.T, suite TestingSuite) {
 					if setupTestSuite, ok := suite.(SetupTestSuite); ok {
 						setupTestSuite.SetupTest()
 					}
+					if beforeTestSuite, ok := suite.(BeforeTest); ok {
+						beforeTestSuite.BeforeTest(methodFinder.Elem().Name(), method.Name)
+					}
 					defer func() {
+						if afterTestSuite, ok := suite.(AfterTest); ok {
+							afterTestSuite.AfterTest(methodFinder.Elem().Name(), method.Name)
+						}
 						if tearDownTestSuite, ok := suite.(TearDownTestSuite); ok {
 							tearDownTestSuite.TearDownTest()
 						}

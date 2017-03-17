@@ -1,9 +1,12 @@
 language: go
-go: 1.2
+go:
+    - 1.5.4
+    - 1.6.3
+    - 1.7
 install:
-    - go get -v code.google.com/p/go.tools/cmd/cover
+    - go get -v golang.org/x/tools/cmd/cover
 script:
-    - go test -v -tags=disableunsafe ./spew
+    - go test -v -tags=safe ./spew
     - go test -v -tags=testcgo ./spew -covermode=count -coverprofile=profile.cov
 after_success:
     - go get -v github.com/mattn/goveralls

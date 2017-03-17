@@ -727,6 +727,7 @@ func Test_AssertExpectationsForObjects_Helper(t *testing.T) {
 	mockedService3.Called(3)
 
 	assert.True(t, AssertExpectationsForObjects(t, mockedService1.Mock, mockedService2.Mock, mockedService3.Mock))
+	assert.True(t, AssertExpectationsForObjects(t, mockedService1, mockedService2, mockedService3))
 
 }
 
@@ -745,6 +746,7 @@ func Test_AssertExpectationsForObjects_Helper_Failed(t *testing.T) {
 
 	tt := new(testing.T)
 	assert.False(t, AssertExpectationsForObjects(tt, mockedService1.Mock, mockedService2.Mock, mockedService3.Mock))
+	assert.False(t, AssertExpectationsForObjects(tt, mockedService1, mockedService2, mockedService3))
 
 }
 
@@ -1127,4 +1129,30 @@ func Test_Arguments_Bool(t *testing.T) {
 	var args = Arguments([]interface{}{"string", 123, true})
 	assert.Equal(t, true, args.Bool(2))
 
+}
+
+func Test_WaitUntil_Parallel(t *testing.T) {
+
+	// make a test impl object
+	var mockedService *TestExampleImplementation = new(TestExampleImplementation)
+
+	ch1 := make(chan time.Time)
+	ch2 := make(chan time.Time)
+
+	mockedService.Mock.On("TheExampleMethod2", true).Return().WaitUntil(ch2).Run(func(args Arguments) {
+		ch1 <- time.Now()
+	})
+
+	mockedService.Mock.On("TheExampleMethod2", false).Return().WaitUntil(ch1)
+
+	// Lock both goroutines on the .WaitUntil method
+	go func() {
+		mockedService.TheExampleMethod2(false)
+	}()
+	go func() {
+		mockedService.TheExampleMethod2(true)
+	}()
+
+	// Allow the first call to execute, so the second one executes afterwards
+	ch2 <- time.Now()
 }

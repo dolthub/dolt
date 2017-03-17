@@ -1,13 +1,15 @@
 {
 	"ImportPath": "github.com/attic-labs/testify",
 	"GoVersion": "go1.5",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
-			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
+			"Comment": "v1.0.0-3-g6d21280",
+			"Rev": "04cdfd42973bb9c8589fd6a731800cf222fde1a9"
 		},
 		{
 			"ImportPath": "github.com/pmezard/go-difflib/difflib",
