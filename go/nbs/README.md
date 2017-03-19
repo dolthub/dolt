@@ -22,7 +22,7 @@ When backed by AWS, NBS stores its data mainly in S3, along with a single 4KB Dy
 
 ## Perf
 
-For the file back-end, perf is substantially better than LevelDB for two reasons (1) LDB does quite alot of compaction which burns IO but doesn't benenfit Noms at all. (2) NBS locates related chunks together and thus reading data from a NBS store can be done quite alot faster. As an example, storing & retrieving a 1.1GB MP4 video file on a MBP i5 2.9Ghz:
+For the file back-end, perf is substantially better than LevelDB mainly because LDB spends substantial IO with the goal of keeping KV pairs in key-order which doesn't benenfit Noms at all. NBS locates related chunks together and thus reading data from a NBS store can be done quite alot faster. As an example, storing & retrieving a 1.1GB MP4 video file on a MBP i5 2.9Ghz:
 
  * LDB
    * Initial import: 44 MB/s, size on disk: 1.1 GB. 
