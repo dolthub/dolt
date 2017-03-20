@@ -5,9 +5,11 @@
 package nbs
 
 import (
-	"io"
 	"io/ioutil"
+	"net"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -91,7 +93,13 @@ func (fs3 *flakyS3) GetObject(input *s3.GetObjectInput) (output *s3.GetObjectOut
 	output, err = fs3.s3svc.GetObject(input)
 	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
 		fs3.alreadyFailed[*input.Key] = struct{}{}
-		output.Body = ioutil.NopCloser(io.LimitReader(output.Body, *(output.ContentLength)/2))
+		output.Body = ioutil.NopCloser(resettingReader{})
 	}
 	return
+}
+
+type resettingReader struct{}
+
+func (rr resettingReader) Read(p []byte) (n int, err error) {
+	return 0, &net.OpError{Op: "read", Net: "tcp", Err: unix.ECONNRESET}
 }

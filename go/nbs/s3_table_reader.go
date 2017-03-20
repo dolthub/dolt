@@ -7,8 +7,11 @@ package nbs
 import (
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
@@ -107,16 +110,23 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 
 	n, err = read()
 	// We hit the point of diminishing returns investigating #3255, so add retries. In conversations with AWS people, it's not surprising to get transient failures when talking to S3, though SDKs are intended to have their own retrying. The issue may be that, in Go, making the S3 request and reading the data are separate operations, and the SDK kind of can't do its own retrying to handle failures in the latter.
-	if err == io.ErrUnexpectedEOF {
+	if isConnReset(err) {
 		b := &backoff.Backoff{
 			Min:    128 * time.Microsecond,
 			Max:    1024 * time.Millisecond,
 			Factor: 2,
 			Jitter: true,
 		}
-		for ; err == io.ErrUnexpectedEOF; n, err = read() {
-			time.Sleep(b.Duration())
+		for ; isConnReset(err); n, err = read() {
+			dur := b.Duration()
+			fmt.Fprintf(os.Stderr, "Retrying S3 read in %s\n", dur.String())
+			time.Sleep(dur)
 		}
 	}
 	return
+}
+
+func isConnReset(err error) bool {
+	nErr, ok := err.(*net.OpError)
+	return ok && nErr.Err == unix.ECONNRESET
 }
