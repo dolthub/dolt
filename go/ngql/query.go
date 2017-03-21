@@ -61,13 +61,7 @@ func (tc *TypeConverter) NewRootQueryObject(rootValue types.Value) *graphql.Obje
 
 // NewContext creates a new context.Context with the extra data added to it
 // that is required by ngql.
-func NewContext(vr types.ValueReader, tm *TypeMap) context.Context {
-	return context.WithValue(context.Background(), vrKey, vr)
-}
-
-// NewContext creates a new context.Context with the extra data added to it
-// that is required by ngql.
-func (tc *TypeConverter) NewContext(vr types.ValueReader) context.Context {
+func NewContext(vr types.ValueReader) context.Context {
 	return context.WithValue(context.Background(), vrKey, vr)
 }
 
@@ -82,7 +76,7 @@ func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Write
 func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vr types.ValueReader, tc *TypeConverter, w io.Writer) {
 	schemaConfig.Query = tc.NewRootQueryObject(rootValue)
 	schema, _ := graphql.NewSchema(schemaConfig)
-	ctx := tc.NewContext(vr)
+	ctx := NewContext(vr)
 
 	r := graphql.Do(graphql.Params{
 		Schema:        schema,

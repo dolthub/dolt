@@ -824,7 +824,7 @@ func (suite *QueryGraphQLSuite) TestStructWithMissingField() {
 	schemaConfig := graphql.SchemaConfig{Query: queryObj}
 	schema, err := graphql.NewSchema(schemaConfig)
 	suite.NoError(err)
-	ctx := NewContext(suite.vs, tm)
+	ctx := NewContext(suite.vs)
 	query := `{root{n s}}`
 
 	r := graphql.Do(graphql.Params{
@@ -1119,7 +1119,7 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 func (suite *QueryGraphQLSuite) TestVariables() {
 	test := func(rootValue types.Value, expected string, query string, vars map[string]interface{}) {
 		tc := NewTypeConverter()
-		ctx := tc.NewContext(suite.vs)
+		ctx := NewContext(suite.vs)
 		schema, err := graphql.NewSchema(graphql.SchemaConfig{
 			Query: tc.NewRootQueryObject(rootValue),
 		})
@@ -1280,7 +1280,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 
 func (suite *QueryGraphQLSuite) TestNameFunc() {
 	test := func(tc *TypeConverter, rootValue types.Value, expected string, query string, vars map[string]interface{}) {
-		ctx := tc.NewContext(suite.vs)
+		ctx := NewContext(suite.vs)
 		schema, err := graphql.NewSchema(graphql.SchemaConfig{
 			Query: tc.NewRootQueryObject(rootValue),
 		})
