@@ -427,7 +427,6 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type, options encode
 		}
 
 		if tags.original {
-			canComputeStructType = false
 			originalFieldIndex = f.Index
 			continue
 		}

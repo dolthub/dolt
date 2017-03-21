@@ -353,14 +353,19 @@ func TestMarshalTypeCanSkipUnexportedField(t *testing.T) {
 }
 
 func TestMarshalTypeOriginal(t *testing.T) {
+	assert := assert.New(t)
+
 	type S struct {
 		Foo int          `noms:",omitempty"`
 		Bar types.Struct `noms:",original"`
 	}
 
 	var s S
-	assertMarshalTypeErrorMessage(t, s, "Type is not supported, type: marshal.S")
-
+	typ, err := MarshalType(s)
+	assert.NoError(err)
+	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
+		"foo": types.NumberType,
+	}).Equals(typ))
 }
 
 func TestMarshalTypeNomsTypes(t *testing.T) {
