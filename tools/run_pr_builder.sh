@@ -33,14 +33,6 @@ pushd ${NOMS_DIR}
 python tools/run-all-js-tests.py
 popd
 
-# The integration test only works after the node tests because the node tests sets up samples/js/node_modules
-SAMPLES_JS=github.com/attic-labs/noms/samples/js
-go test -v ${SAMPLES_JS}/aggregate
-go test -v ${SAMPLES_JS}/counter
-# This test fails
-#go test -v ${SAMPLES_JS}/fs
-go test -v ${SAMPLES_JS}/url_fetch
-
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
 
 bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}
