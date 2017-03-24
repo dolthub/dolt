@@ -128,5 +128,9 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 
 func isConnReset(err error) bool {
 	nErr, ok := err.(*net.OpError)
-	return ok && nErr.Err == unix.ECONNRESET
+	if !ok {
+		return false
+	}
+	scErr, ok := nErr.Err.(*os.SyscallError)
+	return ok && scErr.Err == unix.ECONNRESET
 }

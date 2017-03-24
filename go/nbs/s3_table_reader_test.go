@@ -7,6 +7,7 @@ package nbs
 import (
 	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -101,5 +102,5 @@ func (fs3 *flakyS3) GetObject(input *s3.GetObjectInput) (output *s3.GetObjectOut
 type resettingReader struct{}
 
 func (rr resettingReader) Read(p []byte) (n int, err error) {
-	return 0, &net.OpError{Op: "read", Net: "tcp", Err: unix.ECONNRESET}
+	return 0, &net.OpError{Op: "read", Net: "tcp", Err: &os.SyscallError{Syscall: "read", Err: unix.ECONNRESET}}
 }
