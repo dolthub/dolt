@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -1380,4 +1381,21 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 	test(tc, set, expected, query, map[string]interface{}{
 		"key": map[string]interface{}{"a": 2},
 	})
+}
+
+func TestGetListElementsWithSet(t *testing.T) {
+	assert := assert.New(t)
+	v := types.NewSet(types.Number(0), types.Number(1), types.Number(2))
+	r := getListElements(v, map[string]interface{}{})
+	assert.Equal([]interface{}{float64(0), float64(1), float64(2)}, r)
+
+	r = getListElements(v, map[string]interface{}{
+		atKey: 1,
+	})
+	assert.Equal([]interface{}{float64(1), float64(2)}, r)
+
+	r = getListElements(v, map[string]interface{}{
+		countKey: 2,
+	})
+	assert.Equal([]interface{}{float64(0), float64(1)}, r)
 }

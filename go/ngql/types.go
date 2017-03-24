@@ -399,7 +399,7 @@ var listArgs = graphql.FieldConfigArgument{
 }
 
 func getListElements(v types.Value, args map[string]interface{}) interface{} {
-	l := v.(types.List)
+	l := v.(types.Collection)
 	idx := 0
 	count := int(l.Len())
 	len := count
@@ -424,7 +424,19 @@ func getListElements(v types.Value, args map[string]interface{}) interface{} {
 	}
 
 	values := make([]interface{}, count)
-	iter := l.IteratorAt(uint64(idx))
+
+	// This is a workaround for allowing types.Set as types.List.
+	type listOrSetIterator interface {
+		Next() types.Value
+	}
+
+	var iter listOrSetIterator
+	switch l := l.(type) {
+	case types.List:
+		iter = l.IteratorAt(uint64(idx))
+	case types.Set:
+		iter = l.IteratorAt(uint64(idx))
+	}
 	for i := uint64(0); i < uint64(count); i++ {
 		values[i] = MaybeGetScalar(iter.Next())
 	}
