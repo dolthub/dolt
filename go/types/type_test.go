@@ -16,14 +16,11 @@ func TestTypes(t *testing.T) {
 
 	mapType := MakeMapType(StringType, NumberType)
 	setType := MakeSetType(StringType)
-	mahType := MakeStructType("MahStruct",
-		[]string{"Field1", "Field2"},
-		[]*Type{
-			StringType,
-			BoolType,
-		},
+	mahType := MakeStructType2("MahStruct",
+		StructField{"Field1", StringType, false},
+		StructField{"Field2", BoolType, false},
 	)
-	recType := MakeStructType("RecursiveStruct", []string{"self"}, []*Type{MakeCycleType(0)})
+	recType := MakeStructType2("RecursiveStruct", StructField{"self", MakeCycleType(0), false})
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()
@@ -51,12 +48,9 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Map<String, Number>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
-	mahType := MakeStructType("MahStruct",
-		[]string{"Field1", "Field2"},
-		[]*Type{
-			StringType,
-			BoolType,
-		},
+	mahType := MakeStructType2("MahStruct",
+		StructField{"Field1", StringType, false},
+		StructField{"Field2", BoolType, false},
 	)
 	assert.Equal("struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe())
 }
@@ -95,7 +89,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType("S", []string{n}, []*Type{StringType})
+			MakeStructType2("S", StructField{n, StringType, false})
 		})
 	}
 	assertInvalid("")
@@ -109,7 +103,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType("S", []string{n}, []*Type{StringType})
+		MakeStructType2("S", StructField{n, StringType, false})
 	}
 	assertValid("a")
 	assertValid("A")
@@ -123,7 +117,7 @@ func TestVerifyStructName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType(n, []string{}, []*Type{})
+			MakeStructType2(n)
 		})
 	}
 
@@ -137,7 +131,7 @@ func TestVerifyStructName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType(n, []string{}, []*Type{})
+		MakeStructType2(n)
 	}
 	assertValid("")
 	assertValid("a")
@@ -167,7 +161,7 @@ func TestUnionWithCycles(tt *testing.T) {
 		),
 	})
 
-	t1 := inodeType.Desc.(StructDesc).Field("contents")
+	t1, _ := inodeType.Desc.(StructDesc).Field("contents")
 	t2 := DecodeValue(EncodeValue(t1, nil), nil)
 
 	assert.True(tt, t1.Equals(t2))

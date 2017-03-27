@@ -308,19 +308,14 @@ func TestRecursiveStruct(t *testing.T) {
 	//   }
 	// }
 
-	a := MakeStructType("A",
-		[]string{"b", "c", "d"},
-		[]*Type{
-			MakeCycleType(0),
-			MakeListType(MakeCycleType(0)),
-			MakeStructType("D",
-				[]string{"e", "f"},
-				[]*Type{
-					MakeCycleType(0),
-					MakeCycleType(1),
-				},
-			),
-		})
+	a := MakeStructType2("A",
+		StructField{"b", MakeCycleType(0), false},
+		StructField{"c", MakeListType(MakeCycleType(0)), false},
+		StructField{"d", MakeStructType2("D",
+			StructField{"e", MakeCycleType(0), false},
+			StructField{"f", MakeCycleType(1), false},
+		), false},
+	)
 
 	assertWriteHRSEqual(t, `struct A {
   b: Cycle<0>,
@@ -339,8 +334,7 @@ func TestRecursiveStruct(t *testing.T) {
   },
 })`, a)
 
-	f, _ := a.Desc.(StructDesc).findField("d")
-	d := f.t
+	d, _ := a.Desc.(StructDesc).Field("d")
 
 	assertWriteHRSEqual(t, `struct D {
   e: Cycle<0>,
@@ -365,13 +359,10 @@ func TestUnresolvedRecursiveStruct(t *testing.T) {
 	//   a: A
 	//   b: Cycle<1> (unresolved)
 	// }
-
-	a := MakeStructType("A",
-		[]string{"a", "b"},
-		[]*Type{
-			MakeCycleType(0),
-			MakeCycleType(1),
-		})
+	a := MakeStructType2("A",
+		StructField{"a", MakeCycleType(0), false},
+		StructField{"b", MakeCycleType(1), false},
+	)
 
 	assertWriteHRSEqual(t, `struct A {
   a: Cycle<0>,
@@ -399,7 +390,7 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 }
 
 func TestEmptyCollections(t *testing.T) {
-	a := MakeStructType("Nothing", []string{}, []*Type{})
+	a := MakeStructType2("Nothing")
 	assertWriteTaggedHRSEqual(t, "Type(struct Nothing {})", a)
 	b := NewStruct("Rien", StructData{})
 	assertWriteTaggedHRSEqual(t, "struct Rien {}({})", b)
@@ -422,4 +413,12 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	buf := bytes.Buffer{}
 	WriteEncodedValueMaxLines(&buf, l1, 5)
 	assert.Equal(expected, buf.String())
+}
+
+func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
+	typ := MakeStructType2("S1",
+		StructField{"a", BoolType, false},
+		StructField{"b", BoolType, true})
+	assertWriteHRSEqual(t, "struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
+	assertWriteTaggedHRSEqual(t, "Type(struct S1 {\n  a: Bool,\n  b?: Bool,\n})", typ)
 }

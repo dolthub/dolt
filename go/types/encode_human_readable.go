@@ -186,7 +186,8 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	if desc.Len() > 0 {
 		w.newLine()
 	}
-	desc.IterFields(func(name string, t *Type) {
+	desc.IterFields(func(name string, t *Type, optional bool) {
+		d.PanicIfTrue(optional) // values cannot have optional fields
 		fv := v.Get(name)
 		w.write(name)
 		w.write(": ")
@@ -301,8 +302,11 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 	if desc.Len() > 0 {
 		w.newLine()
 	}
-	desc.IterFields(func(name string, t *Type) {
+	desc.IterFields(func(name string, t *Type, optional bool) {
 		w.write(name)
+		if optional {
+			w.write("?")
+		}
 		w.write(": ")
 		w.writeType(t, parentStructTypes)
 		w.write(",")

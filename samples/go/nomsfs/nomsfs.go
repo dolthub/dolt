@@ -22,6 +22,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/nomdl"
 	"github.com/attic-labs/noms/go/types"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -100,18 +101,28 @@ type mount func(fs pathfs.FileSystem)
 var fsType, inodeType, attrType, directoryType, fileType, symlinkType *types.Type
 
 func init() {
-	inodeType = types.MakeStructType("Inode", []string{"attr", "contents"}, []*types.Type{
-		types.MakeStructType("Attr", []string{"ctime", "gid", "mode", "mtime", "uid", "xattr"}, []*types.Type{types.NumberType, types.NumberType, types.NumberType, types.NumberType, types.NumberType, types.MakeMapType(types.StringType, types.BlobType)}),
-		types.MakeUnionType(types.MakeStructType("Directory", []string{"entries"}, []*types.Type{
-			types.MakeMapType(types.StringType, types.MakeCycleType(1))}),
-			types.MakeStructType("File", []string{"data"}, []*types.Type{types.MakeRefType(types.BlobType)}),
-			types.MakeStructType("Symlink", []string{"targetPath"}, []*types.Type{types.StringType}),
-		),
-	})
+	inodeType = nomdl.MustParseType(`struct Inode {
+          attr: struct Attr {
+            ctime: Number,
+            gid: Number,
+            mode: Number,
+            mtime: Number,
+            uid: Number,
+            xattr: Map<String, Blob>,
+          },
+          contents: struct Symlink {
+              targetPath: String,
+            } | struct File {
+              data: Ref<Blob>,
+            } | struct Directory {
+              entries: Map<String, Cycle<1>>,
+            },
+        }`)
 
 	// Root around for some useful types.
-	attrType = inodeType.Desc.(types.StructDesc).Field("attr")
-	for _, elemType := range inodeType.Desc.(types.StructDesc).Field("contents").Desc.(types.CompoundDesc).ElemTypes {
+	attrType, _ = inodeType.Desc.(types.StructDesc).Field("attr")
+	contentsType, _ := inodeType.Desc.(types.StructDesc).Field("contents")
+	for _, elemType := range contentsType.Desc.(types.CompoundDesc).ElemTypes {
 		switch elemType.Desc.(types.StructDesc).Name {
 		case "Directory":
 			directoryType = elemType
@@ -122,7 +133,7 @@ func init() {
 		}
 	}
 
-	fsType = types.MakeStructType("Filesystem", []string{"root"}, []*types.Type{inodeType})
+	fsType = types.MakeStructType2("Filesystem", types.StructField{"root", inodeType, false})
 }
 
 func start(dataset string, mount mount) {

@@ -139,7 +139,7 @@ func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database) 
 		maxLen := 0
 		if m, ok := commit.MaybeGet(datas.MetaField); ok {
 			meta := m.(types.Struct)
-			meta.Type().Desc.(types.StructDesc).IterFields(func(name string, t *types.Type) {
+			meta.Type().Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
 				maxLen = max(maxLen, len(name))
 			})
 		}
@@ -257,7 +257,7 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 		mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 		pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 		err := d.Try(func() {
-			meta.Type().Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type) {
+			meta.Type().Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
 				v := meta.Get(fieldName)
 				fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
 				types.WriteEncodedValue(pw, v)

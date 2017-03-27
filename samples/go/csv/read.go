@@ -82,16 +82,16 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 
 	kindMap = make([]types.NomsKind, len(fieldMap))
 	fieldOrder = make([]int, len(fieldMap))
-	fieldTypes := make([]*types.Type, len(fieldMap))
+	fields := make([]types.StructField, len(fieldNames))
 
 	for i, fn := range fieldNames {
 		typ := fieldMap[fn]
-		fieldTypes[i] = typ
+		fields[i] = types.StructField{Name: fn, Type: typ}
 		kindMap[i] = typ.Kind()
 		fieldOrder[origOrder[fn]] = i
 	}
 
-	typ = types.MakeStructType(structName, fieldNames, fieldTypes)
+	typ = types.MakeStructType2(structName, fields...)
 	return
 }
 

@@ -20,9 +20,9 @@ func getChunks(v Value) (chunks []Ref) {
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1",
-		[]string{"s", "x"},
-		[]*Type{StringType, BoolType},
+	typ := MakeStructType2("S1",
+		StructField{"s", StringType, false},
+		StructField{"x", BoolType, false},
 	)
 
 	s1 := NewStructWithType(typ, ValueSlice{String("hi"), Bool(true)})
@@ -35,7 +35,7 @@ func TestGenericStructEquals(t *testing.T) {
 func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", []string{"r"}, []*Type{MakeRefType(BoolType)})
+	typ := MakeStructType2("S1", StructField{"r", MakeRefType(BoolType), false})
 
 	b := Bool(true)
 
@@ -59,9 +59,9 @@ func TestGenericStructNew(t *testing.T) {
 	assert.True(ok)
 	assert.True(String("hi").Equals(o))
 
-	typ := MakeStructType("S2",
-		[]string{"b", "o"},
-		[]*Type{BoolType, StringType},
+	typ := MakeStructType2("S2",
+		StructField{"b", BoolType, false},
+		StructField{"o", StringType, false},
 	)
 	assert.Panics(func() { NewStructWithType(typ, nil) })
 	assert.Panics(func() { NewStructWithType(typ, ValueSlice{String("hi")}) })
@@ -78,11 +78,18 @@ func TestGenericStructSet(t *testing.T) {
 
 	// Changes the type
 	s4 := s.Set("b", Number(42))
-	assert.True(MakeStructType("S3", []string{"b", "o"}, []*Type{NumberType, StringType}).Equals(s4.Type()))
+	assert.True(MakeStructType2("S3",
+		StructField{"b", NumberType, false},
+		StructField{"o", StringType, false},
+	).Equals(s4.Type()))
 
 	// Adds a new field
 	s5 := s.Set("x", Number(42))
-	assert.True(MakeStructType("S3", []string{"b", "o", "x"}, []*Type{BoolType, StringType, NumberType}).Equals(s5.Type()))
+	assert.True(MakeStructType2("S3",
+		StructField{"b", BoolType, false},
+		StructField{"o", StringType, false},
+		StructField{"x", NumberType, false},
+	).Equals(s5.Type()))
 
 	// Subtype is not equal.
 	s6 := NewStruct("", StructData{"l": NewList(Number(0), Number(1), Bool(false), Bool(true))})
@@ -215,12 +222,23 @@ func TestEscStructField(t *testing.T) {
 
 func TestCycles(t *testing.T) {
 	// Success is this not recursing infinitely and blowing the stack
-	fileType := MakeStructType("File", []string{"data"}, []*Type{BlobType})
-	directoryType := MakeStructType("Directory", []string{"entries"}, []*Type{MakeMapType(StringType, MakeCycleType(1))})
-	inodeType := MakeStructType("Inode", []string{"contents"}, []*Type{MakeUnionType(directoryType, fileType)})
-	fsType := MakeStructType("Filesystem", []string{"root"}, []*Type{inodeType})
+	fileType := MakeStructType2("File", StructField{"data", BlobType, false})
+	directoryType := MakeStructType2("Directory", StructField{"entries", MakeMapType(StringType, MakeCycleType(1)), false})
+	inodeType := MakeStructType2("Inode", StructField{"contents", MakeUnionType(directoryType, fileType), false})
+	fsType := MakeStructType2("Filesystem", StructField{"root", inodeType, false})
 
 	rootDir := NewStructWithType(directoryType, ValueSlice{NewMap()})
 	rootInode := NewStruct("Inode", StructData{"contents": rootDir})
 	NewStructWithType(fsType, ValueSlice{rootInode})
+}
+
+func TestStructValueMayNotHaveOptionalFields(t *testing.T) {
+	assert := assert.New(t)
+
+	typ := MakeStructType2("Opt",
+		StructField{"x", NumberType, true},
+	)
+	assert.Panics(func() {
+		NewStructWithType(typ, ValueSlice{Number(42)})
+	})
 }

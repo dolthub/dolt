@@ -87,7 +87,7 @@ func (t *Type) WalkValues(cb ValueCallback) {
 			cb(t)
 		}
 	case StructDesc:
-		desc.IterFields(func(name string, t *Type) {
+		desc.IterFields(func(name string, t *Type, opt bool) {
 			cb(t)
 		})
 	case PrimitiveDesc, CycleDesc:

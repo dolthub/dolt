@@ -43,9 +43,20 @@ func createTestData(s *testSuite, buildAsMap bool) []types.Value {
 		sliceLen *= 2
 	}
 
-	typ := types.MakeStructType(structName, s.header, []*types.Type{
-		types.StringType, types.StringType, types.StringType,
-	})
+	typ := types.MakeStructType2(structName,
+		types.StructField{
+			Name: "a",
+			Type: types.StringType,
+		},
+		types.StructField{
+			Name: "b",
+			Type: types.StringType,
+		},
+		types.StructField{
+			Name: "c",
+			Type: types.StringType,
+		},
+	)
 
 	structs := make([]types.Value, sliceLen)
 	for i, row := range s.payload {

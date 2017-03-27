@@ -100,7 +100,7 @@ func (p *Parser) ensureAtEnd() {
 //   Ident
 //
 // StructField :
-//   StructFieldName `:` Type
+//   StructFieldName `?`? `:` Type
 //
 // StructFieldName :
 //   Ident
@@ -172,15 +172,20 @@ func (p *Parser) parseStructType() *types.Type {
 	} else {
 		p.lex.check('{', tok)
 	}
-	fields := types.FieldMap{}
+	fields := []types.StructField{}
 
 	for p.lex.peek() != '}' {
 		p.lex.eat(scanner.Ident)
 
 		fieldName := p.lex.tokenText()
+		optional := p.lex.eatIf('?')
 		p.lex.eat(':')
 		typ := p.parseType()
-		fields[fieldName] = typ
+		fields = append(fields, types.StructField{
+			Name:     fieldName,
+			Type:     typ,
+			Optional: optional,
+		})
 
 		if p.lex.eatIf(',') {
 			continue
@@ -189,7 +194,7 @@ func (p *Parser) parseStructType() *types.Type {
 		break
 	}
 	p.lex.eat('}')
-	return types.MakeStructTypeFromFields(name, fields)
+	return types.MakeStructType2(name, fields...)
 }
 
 func (p *Parser) parseSingleElemType(allowEmptyUnion bool) *types.Type {

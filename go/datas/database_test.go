@@ -128,7 +128,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	suite.False(ds2.HeadValue().Equals(ds1HeadVal))
 	suite.False(ds1.HeadValue().Equals(db2HeadVal))
 
-	suite.Equal("eol076qd3a86icq39aanga5jnqoqc8qf", suite.cs.Root().String())
+	suite.Equal("18d1bke7u54i1v1k89pcb32rtcupahjk", suite.cs.Root().String())
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {

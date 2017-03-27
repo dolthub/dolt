@@ -313,8 +313,11 @@ func (tc *TypeConverter) structToGQLObject(nomsType *types.Type) *graphql.Object
 				},
 			}
 
-			structDesc.IterFields(func(name string, nomsFieldType *types.Type) {
+			structDesc.IterFields(func(name string, nomsFieldType *types.Type, optional bool) {
 				fieldType := tc.nomsTypeToGraphQLType(nomsFieldType, false)
+				if !optional {
+					fieldType = graphql.NewNonNull(fieldType)
+				}
 
 				fields[name] = &graphql.Field{
 					Type: fieldType,
@@ -370,7 +373,7 @@ func (tc *TypeConverter) structToGQLInputObject(nomsType *types.Type) (graphql.I
 			structDesc := unresolved.Desc.(types.StructDesc)
 			fields := make(graphql.InputObjectConfigFieldMap, structDesc.Len())
 
-			structDesc.IterFields(func(name string, nomsFieldType *types.Type) {
+			structDesc.IterFields(func(name string, nomsFieldType *types.Type, optional bool) {
 				if err != nil {
 					return
 				}
@@ -379,8 +382,11 @@ func (tc *TypeConverter) structToGQLInputObject(nomsType *types.Type) (graphql.I
 				if err != nil {
 					return
 				}
+				if !optional {
+					fieldType = graphql.NewNonNull(fieldType)
+				}
 				fields[name] = &graphql.InputObjectFieldConfig{
-					Type: graphql.NewNonNull(fieldType),
+					Type: fieldType,
 				}
 			})
 
@@ -987,8 +993,10 @@ func InputToNomsValue(arg interface{}, nomsType *types.Type) types.Value {
 		desc := nomsType.Desc.(types.StructDesc)
 		data := make(types.StructData, desc.Len())
 		m := arg.(map[string]interface{})
-		desc.IterFields(func(name string, t *types.Type) {
-			data[name] = InputToNomsValue(m[name], t)
+		desc.IterFields(func(name string, t *types.Type, optional bool) {
+			if m[name] != nil || !optional {
+				data[name] = InputToNomsValue(m[name], t)
+			}
 		})
 		return types.NewStruct(desc.Name, data)
 	}

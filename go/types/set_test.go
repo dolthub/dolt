@@ -203,11 +203,11 @@ func TestSetSuite4K(t *testing.T) {
 }
 
 func TestSetSuite1KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, "901lc62988o1epbj29811f5f0u06ep8g", 0, 0, 0, newNumberStruct))
+	suite.Run(t, newSetTestSuite(10, "8rsfsthga429ncs7qjc1r5tam1bj1sge", 0, 0, 0, newNumberStruct))
 }
 
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, "410of8pb7ib5rms4b611490brueqcc7c", 4, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, "p0cqm7agi822essojds6hmknabu5ir8o", 2, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {
@@ -568,7 +568,7 @@ func TestSetFirst(t *testing.T) {
 func TestSetOfStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", []string{"o"}, []*Type{NumberType})
+	typ := MakeStructType2("S1", StructField{"o", NumberType, false})
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
@@ -863,7 +863,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(testSetSize)
 	s := NewSet(nums...)
-	assert.Equal("n9thkv66vt7c35khatmdr84rhk8ip9tv", s.Hash().String())
+	assert.Equal("aghihsmuq8og4a8u1lt900eq4k9j8j4e", s.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }
@@ -1000,4 +1000,23 @@ func TestSetAt(t *testing.T) {
 	assert.Panics(func() {
 		s.At(42)
 	})
+}
+
+func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
+	assert := assert.New(t)
+	list := NewSet(
+		NewStruct("Foo", StructData{
+			"a": Number(1),
+		}),
+		NewStruct("Foo", StructData{
+			"a": Number(2),
+			"b": String("bar"),
+		}),
+	)
+	assert.True(
+		MakeSetType(MakeStructType2("Foo",
+			StructField{"a", NumberType, false},
+			StructField{"b", StringType, true},
+		),
+		).Equals(list.Type()))
 }

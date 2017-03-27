@@ -143,6 +143,14 @@ func TestStructTypes(t *testing.T) {
 		}),
 	}))
 
+	assertParseType(t, `struct S {
+                x?: Number,
+                y: String,
+        }`, types.MakeStructType2("S",
+		types.StructField{"x", types.NumberType, true},
+		types.StructField{"y", types.StringType, false},
+	))
+
 	assertParseError(t, `struct S {
 	        x: Number
 	        y: String
@@ -154,6 +162,9 @@ func TestStructTypes(t *testing.T) {
 	assertParseError(t, `struct S { x`, `Unexpected token EOF, expected ":", example:1:13`)
 	assertParseError(t, `struct S { x: }`, `Unexpected token "}", example:1:16`)
 	assertParseError(t, `struct S { x: `, `Unexpected token EOF, example:1:15`)
+	assertParseError(t, `struct S { x?: `, `Unexpected token EOF, example:1:16`)
+	assertParseError(t, `struct S { x? `, `Unexpected token EOF, expected ":", example:1:15`)
+	assertParseError(t, `struct S { x? Bool`, `Unexpected token Ident, expected ":", example:1:19`)
 	assertParseError(t, `struct S { x: Bool`, `Unexpected token EOF, expected "}", example:1:19`)
 	assertParseError(t, `struct S { x: Bool,`, `Unexpected token EOF, expected Ident, example:1:20`)
 	assertParseError(t, `struct S { x: Bool,,`, `Unexpected token ",", expected Ident, example:1:21`)

@@ -68,21 +68,10 @@ func (c CompoundDesc) HasUnresolvedCycle(visited []*Type) bool {
 
 type TypeMap map[string]*Type
 
-type field struct {
-	name string
-	t    *Type
-}
-
-type fieldSlice []field
-
-func (s fieldSlice) Len() int           { return len(s) }
-func (s fieldSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s fieldSlice) Less(i, j int) bool { return s[i].name < s[j].name }
-
 // StructDesc describes a custom Noms Struct.
 type StructDesc struct {
 	Name   string
-	fields []field
+	fields structFields
 }
 
 func (s StructDesc) Kind() NomsKind {
@@ -91,30 +80,30 @@ func (s StructDesc) Kind() NomsKind {
 
 func (s StructDesc) HasUnresolvedCycle(visited []*Type) bool {
 	for _, field := range s.fields {
-		if field.t.hasUnresolvedCycle(visited) {
+		if field.Type.hasUnresolvedCycle(visited) {
 			return true
 		}
 	}
 	return false
 }
 
-func (s StructDesc) IterFields(cb func(name string, t *Type)) {
+func (s StructDesc) IterFields(cb func(name string, t *Type, optional bool)) {
 	for _, field := range s.fields {
-		cb(field.name, field.t)
+		cb(field.Name, field.Type, field.Optional)
 	}
 }
 
-func (s StructDesc) Field(name string) *Type {
+func (s StructDesc) Field(name string) (typ *Type, optional bool) {
 	f, i := s.findField(name)
 	if i == -1 {
-		return nil
+		return nil, false
 	}
-	return f.t
+	return f.Type, f.Optional
 }
 
-func (s StructDesc) findField(name string) (*field, int) {
-	i := sort.Search(len(s.fields), func(i int) bool { return s.fields[i].name >= name })
-	if i == len(s.fields) || s.fields[i].name != name {
+func (s StructDesc) findField(name string) (*StructField, int) {
+	i := sort.Search(len(s.fields), func(i int) bool { return s.fields[i].Name >= name })
+	if i == len(s.fields) || s.fields[i].Name != name {
 		return nil, -1
 	}
 	return &s.fields[i], i

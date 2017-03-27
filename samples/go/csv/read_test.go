@@ -35,9 +35,15 @@ b,2,false
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
 	assert.Equal(desc.Len(), 3)
-	assert.Equal(types.StringKind, desc.Field("A").Kind())
-	assert.Equal(types.NumberKind, desc.Field("B").Kind())
-	assert.Equal(types.BoolKind, desc.Field("C").Kind())
+
+	assertNotOptional := func(t *types.Type, optional bool) *types.Type {
+		assert.False(optional)
+		return t
+	}
+
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).Kind())
+	assert.Equal(types.NumberKind, assertNotOptional(desc.Field("B")).Kind())
+	assert.Equal(types.BoolKind, assertNotOptional(desc.Field("C")).Kind())
 
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.String("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.String("b")))
@@ -64,13 +70,11 @@ b,2,false
 
 	assert.Equal(uint64(2), m.Len())
 	assert.True(m.Type().Equals(
-		types.MakeMapType(types.StringType, types.MakeStructType("test",
-			[]string{"A", "B", "C"},
-			[]*types.Type{
-				types.StringType,
-				types.NumberType,
-				types.BoolType,
-			}))))
+		types.MakeMapType(types.StringType, types.MakeStructType2("test",
+			types.StructField{"A", types.StringType, false},
+			types.StructField{"B", types.NumberType, false},
+			types.StructField{"C", types.BoolType, false},
+		))))
 
 	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("test", types.StructData{
 		"A": types.String("a"),
@@ -100,8 +104,14 @@ func testTrailingHelper(t *testing.T, dataString string) {
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
 	assert.Equal(desc.Len(), 2)
-	assert.Equal(types.StringKind, desc.Field("A").Kind())
-	assert.Equal(types.StringKind, desc.Field("B").Kind())
+
+	assertNotOptional := func(t *types.Type, optional bool) *types.Type {
+		assert.False(optional)
+		return t
+	}
+
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).Kind())
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("B")).Kind())
 
 	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
 	defer ds2.Close()

@@ -79,7 +79,9 @@ func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {
 func TestValidatingBatchingSinkDecodeInvalidStructFieldOrder(t *testing.T) {
 	data := []interface{}{
 		uint8(TypeKind),
-		uint8(StructKind), "S", uint32(2) /* len */, "b", uint8(NumberKind), "a", uint8(NumberKind),
+		uint8(StructKind), "S", uint32(2), /* len */
+		"b", uint8(NumberKind), false,
+		"a", uint8(NumberKind), false,
 	}
 	assertPanicsOnInvalidChunk(t, data)
 }
@@ -95,7 +97,8 @@ func TestValidatingBatchingSinkDecodeInvalidStructName(t *testing.T) {
 func TestValidatingBatchingSinkDecodeInvalidStructFieldName(t *testing.T) {
 	data := []interface{}{
 		uint8(TypeKind),
-		uint8(StructKind), "S", uint32(1) /* len */, "b ", uint8(NumberKind),
+		uint8(StructKind), "S", uint32(1), /* len */
+		"b ", uint8(NumberKind), false,
 	}
 	assertPanicsOnInvalidChunk(t, data)
 }

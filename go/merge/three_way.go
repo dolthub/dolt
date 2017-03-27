@@ -57,7 +57,8 @@ func newMergeConflict(format string, args ...interface{}) *ErrMergeConflict {
 	return &ErrMergeConflict{fmt.Sprintf(format, args...)}
 }
 
-// Creates a new Policy based on ThreeWay using the provided ResolveFunc.
+// NewThreeWay creates a new Policy based on ThreeWay using the provided
+// ResolveFunc.
 func NewThreeWay(resolve ResolveFunc) Policy {
 	return func(a, b, parent types.Value, vrw types.ValueReadWriter, progress chan struct{}) (merged types.Value, err error) {
 		return ThreeWay(a, b, parent, vrw, resolve, progress)
@@ -258,7 +259,8 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 			field := string(f)
 			data := types.StructData{}
 			desc := targetVal.Type().Desc.(types.StructDesc)
-			desc.IterFields(func(name string, t *types.Type) {
+			desc.IterFields(func(name string, t *types.Type, optional bool) {
+				d.PanicIfTrue(optional) // values cannot have optional fields.
 				if name != field {
 					data[name] = targetVal.Get(name)
 				}

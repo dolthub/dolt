@@ -363,7 +363,9 @@ func TestWriteEmptyStruct(t *testing.T) {
 func TestWriteStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(2) /* len */, "b", uint8(BoolKind), "x", uint8(NumberKind),
+			uint8(StructKind), "S", uint32(2), /* len */
+			"b", uint8(BoolKind), false,
+			"x", uint8(NumberKind), false,
 			uint8(BoolKind), true, uint8(NumberKind), Number(42),
 		},
 		NewStruct("S", StructData{"x": Number(42), "b": Bool(true)}),
@@ -386,7 +388,8 @@ func TestWriteStructWithList(t *testing.T) {
 	// struct S {l: List<String>}({l: ["a", "b"]})
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(StringKind),
+			uint8(StructKind), "S", uint32(1), /* len */
+			"l", uint8(ListKind), uint8(StringKind), false,
 			uint8(ListKind), uint8(StringKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
 		},
 		NewStruct("S", StructData{"l": NewList(String("a"), String("b"))}),
@@ -395,7 +398,7 @@ func TestWriteStructWithList(t *testing.T) {
 	// struct S {l: List<>}({l: []})
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(UnionKind), uint32(0),
+			uint8(StructKind), "S", uint32(1) /* len */, "l", uint8(ListKind), uint8(UnionKind), uint32(0), false,
 			uint8(ListKind), uint8(UnionKind), uint32(0), false, uint32(0), /* len */
 		},
 		NewStruct("S", StructData{"l": NewList()}),
@@ -413,8 +416,8 @@ func TestWriteStructWithStruct(t *testing.T) {
 		[]interface{}{
 			uint8(StructKind), "S",
 			uint32(1), // len
-			"s", uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind),
-			uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind),
+			"s", uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind), false, false,
+			uint8(StructKind), "S2", uint32(1) /* len */, "x", uint8(NumberKind), false,
 			uint8(NumberKind), Number(42),
 		},
 		// {s: {x: 42}}
@@ -425,7 +428,9 @@ func TestWriteStructWithStruct(t *testing.T) {
 func TestWriteStructWithBlob(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1) /* len */, "b", uint8(BlobKind), uint8(BlobKind), false, []byte{0x00, 0x01},
+			uint8(StructKind), "S", uint32(1), /* len */
+			"b", uint8(BlobKind), false,
+			uint8(BlobKind), false, []byte{0x00, 0x01},
 		},
 		NewStruct("S", StructData{"b": NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))}),
 	)
@@ -515,20 +520,26 @@ func TestWriteListOfUnion(t *testing.T) {
 func TestWriteListOfStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
-			uint32(1) /* len */, uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), uint8(NumberKind), Number(42),
+			uint8(ListKind),
+			uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
+			false,
+			uint32(1) /* len */, uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false, uint8(NumberKind), Number(42),
 		},
 		NewList(NewStruct("S", StructData{"x": Number(42)})),
 	)
 }
 
 func TestWriteListOfUnionWithType(t *testing.T) {
-	structType := MakeStructType("S", []string{"x"}, []*Type{NumberType})
+	structType := MakeStructType2("S", StructField{"x", NumberType, false})
 
 	assertEncoding(t,
 		[]interface{}{
 			uint8(ListKind), uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(TypeKind), false,
-			uint32(4) /* len */, uint8(BoolKind), true, uint8(TypeKind), uint8(NumberKind), uint8(TypeKind), uint8(TypeKind), uint8(TypeKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind),
+			uint32(4), /* len */
+			uint8(BoolKind), true,
+			uint8(TypeKind), uint8(NumberKind),
+			uint8(TypeKind), uint8(TypeKind),
+			uint8(TypeKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
 		},
 		NewList(
 			Bool(true),
@@ -566,13 +577,10 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 	//   v: Number
 	// }
 
-	structType := MakeStructType("A6",
-		[]string{"cs", "v"},
-		[]*Type{
-			MakeListType(MakeCycleType(0)),
-			NumberType,
-		})
-
+	structType := MakeStructType2("A6",
+		StructField{"cs", MakeListType(MakeCycleType(0)), false},
+		StructField{"v", NumberType, false},
+	)
 	assertEncoding(t,
 		[]interface{}{
 			uint8(StructKind), "A6", uint32(2) /* len */, "cs", uint8(ListKind), uint8(CycleKind), uint32(0), "v", uint8(NumberKind),

@@ -4,7 +4,9 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"github.com/attic-labs/noms/go/d"
+)
 
 func assertSubtype(t *Type, v Value) {
 	if !isSubtype(t, v.Type(), nil) {
@@ -63,22 +65,43 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 			return false
 		}
 
-		// We may already be computing the subtype for this type if we have a cycle. In that case we exit the recursive check. We may still find that the type is not a subtype but that will be handled at a higher level in the callstack.
+		// We may already be computing the subtype for this type if we have a cycle.
+		// In that case we exit the recursive check. We may still find that the type
+		// is not a subtype but that will be handled at a higher level in the callstack.
 		_, found := indexOfType(requiredType, parentStructTypes)
 		if found {
 			return true
 		}
 
 		j := 0
-		for _, field := range requiredDesc.fields {
-			for ; j < concreteDesc.Len() && concreteDesc.fields[j].name != field.name; j++ {
-			}
-			if j == concreteDesc.Len() {
-				return false
+	outer:
+		for _, requiredField := range requiredDesc.fields {
+			for {
+				if j >= concreteDesc.Len() {
+					if requiredField.Optional {
+						continue outer
+					}
+					return false
+				}
+				concreteField := concreteDesc.fields[j]
+
+				if concreteField.Name == requiredField.Name {
+					if requiredField.Optional {
+						break
+					}
+					if concreteField.Optional {
+						return false
+					}
+					break
+				}
+				if requiredField.Optional && concreteField.Name > requiredField.Name {
+					continue outer
+				}
+				j++
 			}
 
-			f := concreteDesc.fields[j]
-			if !isSubtype(field.t, f.t, append(parentStructTypes, requiredType)) {
+			concreteField := concreteDesc.fields[j]
+			if !isSubtype(requiredField.Type, concreteField.Type, append(parentStructTypes, requiredType)) {
 				return false
 			}
 		}

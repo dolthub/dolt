@@ -440,9 +440,11 @@ func TestEncodeNomsTypePtr(t *testing.T) {
 	primitive := types.StringType
 	testMarshal(S{primitive}, types.NewStruct("S", types.StructData{"type": primitive}))
 
-	complex := types.MakeStructType("Complex",
-		[]string{"stuff"},
-		[]*types.Type{types.StringType},
+	complex := types.MakeStructType2("Complex",
+		types.StructField{
+			Name: "stuff",
+			Type: types.StringType,
+		},
 	)
 	testMarshal(S{complex}, types.NewStruct("S", types.StructData{"type": complex}))
 
@@ -465,10 +467,16 @@ func TestEncodeRecursive(t *testing.T) {
 	})
 	assert.NoError(err)
 
-	typ := types.MakeStructType("Node", []string{"children", "value"}, []*types.Type{
-		types.MakeListType(types.MakeCycleType(0)),
-		types.NumberType,
-	})
+	typ := types.MakeStructType2("Node",
+		types.StructField{
+			Name: "children",
+			Type: types.MakeListType(types.MakeCycleType(0)),
+		},
+		types.StructField{
+			Name: "value",
+			Type: types.NumberType,
+		},
+	)
 	assert.True(typ.Equals(v.Type()))
 
 	assert.True(types.NewStructWithType(typ, types.ValueSlice{

@@ -17,19 +17,17 @@ import (
 func TestNewCommit(t *testing.T) {
 	assert := assert.New(t)
 
-	commitFieldNames := []string{MetaField, ParentsField, ValueField}
-
 	assertTypeEquals := func(e, a *types.Type) {
 		assert.True(a.Equals(e), "Actual: %s\nExpected %s", a.Describe(), e.Describe())
 	}
 
 	commit := NewCommit(types.Number(1), types.NewSet(), types.EmptyStruct)
 	at := commit.Type()
-	et := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+	et := makeCommitStructType(
 		types.EmptyStructType,
 		types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 		types.NumberType,
-	})
+	)
 	assertTypeEquals(et, at)
 
 	// Committing another Number
@@ -41,46 +39,55 @@ func TestNewCommit(t *testing.T) {
 	// Now commit a String
 	commit3 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), types.EmptyStruct)
 	at3 := commit3.Type()
-	et3 := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+	et3 := makeCommitStructType(
 		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+		types.MakeSetType(types.MakeRefType(makeCommitStructType(
 			types.EmptyStructType,
 			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 			types.MakeUnionType(types.NumberType, types.StringType),
-		}))),
+		))),
 		types.StringType,
-	})
+	)
 	assertTypeEquals(et3, at3)
 
 	// Now commit a String with MetaInfo
 	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
-	metaType := types.MakeStructType("Meta", []string{"date", "number"}, []*types.Type{types.StringType, types.NumberType})
+	metaType := types.MakeStructType2("Meta",
+		types.StructField{
+			Name: "date",
+			Type: types.StringType,
+		},
+		types.StructField{
+			Name: "number",
+			Type: types.NumberType,
+		},
+	)
 	assertTypeEquals(metaType, meta.Type())
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
 	at4 := commit4.Type()
-	et4 := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+	et4 := makeCommitStructType(
 		metaType,
-		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+		types.MakeSetType(types.MakeRefType(makeCommitStructType(
 			types.MakeUnionType(types.EmptyStructType, metaType),
 			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 			types.MakeUnionType(types.NumberType, types.StringType),
-		}))),
+		))),
 		types.StringType,
-	})
+	)
 	assertTypeEquals(et4, at4)
 
 	// Merge-commit with different parent types
 	commit5 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
 	at5 := commit5.Type()
-	et5 := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+	et5 := makeCommitStructType(
 		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
+		types.MakeSetType(types.MakeRefType(makeCommitStructType(
 			types.EmptyStructType,
 			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
 			types.MakeUnionType(types.NumberType, types.StringType),
-		}))),
+		))),
 		types.StringType,
-	})
+	)
 	assertTypeEquals(et5, at5)
 }
 

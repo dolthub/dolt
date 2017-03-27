@@ -106,12 +106,12 @@ func structsIntersect(a, b *Type) bool {
 		return false
 	}
 	for i, j := 0, 0; i < len(aDesc.fields) && j < len(bDesc.fields); {
-		aName, bName := aDesc.fields[i].name, bDesc.fields[j].name
+		aName, bName := aDesc.fields[i].Name, bDesc.fields[j].Name
 		if aName < bName {
 			i++
 		} else if bName < aName {
 			j++
-		} else if !containCommonSupertypeImpl(aDesc.fields[i].t, bDesc.fields[j].t) {
+		} else if !containCommonSupertypeImpl(aDesc.fields[i].Type, bDesc.fields[j].Type) {
 			i++
 			j++
 		} else {

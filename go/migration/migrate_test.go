@@ -70,27 +70,25 @@ func TestMigrateFromVersion7(t *testing.T) {
 
 	test(
 		types.NewStructWithType(
-			types.MakeStructType("", []string{"a"}, []*types.Type{types.NumberType}),
+			types.MakeStructType2("", types.StructField{"a", types.NumberType, false}),
 			[]types.Value{types.Number(42)},
 		),
 		v7types.NewStructWithType(
-			v7types.MakeStructType("", []string{"a"}, []*v7types.Type{v7types.NumberType}),
+			v7types.MakeStructType2("", v7types.StructField{"a", v7types.NumberType, false}),
 			[]v7types.Value{v7types.Number(42)},
 		),
 	)
 
 	test(
 		types.NewStructWithType(
-			types.MakeStructType("",
-				[]string{"a"},
-				[]*types.Type{types.MakeListType(types.MakeCycleType(0))},
+			types.MakeStructType2("",
+				types.StructField{"a", types.MakeListType(types.MakeCycleType(0)), false},
 			),
 			[]types.Value{types.NewList()},
 		),
 		v7types.NewStructWithType(
-			v7types.MakeStructType("",
-				[]string{"a"},
-				[]*v7types.Type{v7types.MakeListType(v7types.MakeCycleType(0))},
+			v7types.MakeStructType2("",
+				v7types.StructField{"a", v7types.MakeListType(v7types.MakeCycleType(0)), false},
 			),
 			[]v7types.Value{v7types.NewList()},
 		),
@@ -120,21 +118,44 @@ func TestMigrateFromVersion7(t *testing.T) {
 
 	test(types.MakeCycleType(42), v7types.MakeCycleType(42))
 
-	commitFieldNames := []string{"parents", "value"}
-	commit := types.MakeStructType("Commit", commitFieldNames, []*types.Type{
-		types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit", commitFieldNames, []*types.Type{
-			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-			types.MakeUnionType(types.NumberType, types.StringType),
-		}))),
-		types.StringType,
-	})
+	commit := types.MakeStructType2("Commit",
+		types.StructField{
+			Name: "parents",
+			Type: types.MakeSetType(types.MakeRefType(types.MakeStructType2("Commit",
+				types.StructField{
+					Name: "parents",
+					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+				},
+				types.StructField{
+					Name: "value",
+					Type: types.MakeUnionType(types.NumberType, types.StringType),
+				},
+			))),
+		},
+		types.StructField{
+			Name: "value",
+			Type: types.StringType,
+		},
+	)
 
-	commit7 := v7types.MakeStructType("Commit", commitFieldNames, []*v7types.Type{
-		v7types.MakeSetType(v7types.MakeRefType(v7types.MakeStructType("Commit", commitFieldNames, []*v7types.Type{
-			v7types.MakeSetType(v7types.MakeRefType(v7types.MakeCycleType(0))),
-			v7types.MakeUnionType(v7types.NumberType, v7types.StringType),
-		}))),
-		v7types.StringType,
-	})
+	commit7 := v7types.MakeStructType2("Commit",
+		v7types.StructField{
+			Name: "parents",
+			Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeStructType2("Commit",
+				v7types.StructField{
+					Name: "parents",
+					Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeCycleType(0))),
+				},
+				v7types.StructField{
+					Name: "value",
+					Type: v7types.MakeUnionType(v7types.NumberType, v7types.StringType),
+				},
+			))),
+		},
+		v7types.StructField{
+			Name: "value",
+			Type: v7types.StringType,
+		},
+	)
 	test(commit, commit7)
 }

@@ -62,7 +62,7 @@ func writeValuesFromChan(structChan chan types.Struct, sd types.StructDesc, comm
 	}
 }
 
-// Write takes a types.List l of structs (described by sd) and writes it to output as comma-delineated values.
+// WriteList takes a types.List l of structs (described by sd) and writes it to output as comma-delineated values.
 func WriteList(l types.List, sd types.StructDesc, comma rune, output io.Writer) {
 	structChan := make(chan types.Struct, 1024)
 	go func() {
@@ -84,7 +84,7 @@ func sendMapValuesToChan(m types.Map, structChan chan<- types.Struct) {
 	})
 }
 
-// Write takes a types.Map m of structs (described by sd) and writes it to output as comma-delineated values.
+// WriteMap takes a types.Map m of structs (described by sd) and writes it to output as comma-delineated values.
 func WriteMap(m types.Map, sd types.StructDesc, comma rune, output io.Writer) {
 	structChan := make(chan types.Struct, 1024)
 	go func() {
@@ -95,7 +95,7 @@ func WriteMap(m types.Map, sd types.StructDesc, comma rune, output io.Writer) {
 }
 
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
-	structDesc.IterFields(func(name string, t *types.Type) {
+	structDesc.IterFields(func(name string, t *types.Type, optional bool) {
 		if !types.IsPrimitiveKind(t.Kind()) {
 			d.Panic("Expected primitive kind, found %s", types.KindToString[t.Kind()])
 		}

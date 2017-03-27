@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var EmptyStructType = MakeStructType("", []string{}, []*Type{})
+var EmptyStructType = MakeStructType2("")
 var EmptyStruct = Struct{ValueSlice{}, EmptyStructType, &hash.Hash{}}
 
 type StructData map[string]Value
@@ -35,22 +35,25 @@ func NewStruct(name string, data StructData) Struct {
 	}
 
 	sort.Sort(fieldNames)
-	fieldTypes := make([]*Type, len(data))
+	fields := make(structFields, len(data))
 	values := make(ValueSlice, len(data))
-	for i, fn := range fieldNames {
-		fieldTypes[i] = data[fn].Type()
-		values[i] = data[fn]
+	for i, name := range fieldNames {
+		fields[i] = StructField{name, data[name].Type(), false}
+		values[i] = data[name]
 	}
 
-	return Struct{values, MakeStructType(name, fieldNames, fieldTypes), &hash.Hash{}}
+	return Struct{values, MakeStructType2(name, fields...), &hash.Hash{}}
 }
 
 func NewStructWithType(t *Type, data ValueSlice) Struct {
 	desc := t.Desc.(StructDesc)
 	d.PanicIfFalse(len(data) == len(desc.fields))
 	for i, field := range desc.fields {
+		if field.Optional {
+			d.Panic("Struct values cannot have optional fields (only struct types can)")
+		}
 		v := data[i]
-		assertSubtype(field.t, v)
+		assertSubtype(field.Type, v)
 	}
 	return Struct{data, t, &hash.Hash{}}
 }
@@ -121,11 +124,11 @@ func (s Struct) Get(n string) Value {
 // struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	f, i := s.desc().findField(n)
-	if i == -1 || !f.t.Equals(v.Type()) {
+	if i == -1 || !f.Type.Equals(v.Type()) {
 		// New/change field
 		data := make(StructData, len(s.values)+1)
 		for i, f := range s.desc().fields {
-			data[f.name] = s.values[i]
+			data[f.Name] = s.values[i]
 		}
 		data[n] = v
 		return NewStruct(s.desc().Name, data)
@@ -147,19 +150,17 @@ func (s Struct) Delete(n string) Struct {
 	}
 
 	values := make([]Value, len(s.values)-1)
-	fieldNames := make([]string, len(s.values)-1)
-	fieldTypes := make([]*Type, len(s.values)-1)
+	fields := make(structFields, len(s.values)-1)
 	j := 0
 	for i, v := range s.values {
 		if i != idx {
 			values[j] = v
-			fieldNames[j] = desc.fields[i].name
-			fieldTypes[j] = desc.fields[i].t
+			fields[j] = StructField{desc.fields[i].Name, desc.fields[i].Type, false}
 			j++
 		}
 	}
 
-	newType := MakeStructType(s.desc().Name, fieldNames, fieldTypes)
+	newType := MakeStructType2(s.desc().Name, fields...)
 	return NewStructWithType(newType, values)
 }
 
@@ -171,7 +172,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 	i1, i2 := 0, 0
 	for i1 < len(fs1) && i2 < len(fs2) {
 		f1, f2 := fs1[i1], fs2[i2]
-		fn1, fn2 := f1.name, f2.name
+		fn1, fn2 := f1.Name, f2.Name
 
 		var change ValueChanged
 		if fn1 == fn2 {
@@ -194,13 +195,13 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 	}
 
 	for ; i1 < len(fs1); i1++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs1[i1].name)}) {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs1[i1].Name)}) {
 			return
 		}
 	}
 
 	for ; i2 < len(fs2); i2++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs2[i2].name)}) {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs2[i2].Name)}) {
 			return
 		}
 	}
@@ -289,25 +290,10 @@ func IsValidStructFieldName(name string) bool {
 	return fieldNameRe.MatchString(name)
 }
 
-func verifyFieldNames(names []string) {
-	if len(names) == 0 {
-		return
-	}
-
-	verifyFieldName(names[0])
-
-	for i := 1; i < len(names); i++ {
-		verifyFieldName(names[i])
-		if strings.Compare(names[i-1], names[i]) >= 0 {
-			d.Chk.Fail("Field names must be unique and ordered alphabetically")
-		}
-	}
-}
-
-func verifyFields(fs []field) {
+func verifyFields(fs structFields) {
 	for i, f := range fs {
-		verifyFieldName(f.name)
-		if i > 0 && strings.Compare(fs[i-1].name, f.name) >= 0 {
+		verifyFieldName(f.Name)
+		if i > 0 && strings.Compare(fs[i-1].Name, f.Name) >= 0 {
 			d.Chk.Fail("Field names must be unique and ordered alphabetically")
 		}
 	}

@@ -28,7 +28,7 @@ import "github.com/attic-labs/noms/go/d"
 //     {Map<K1,V1>|Map<K2,V2>...} -> Map<K1|K2,V1|V2>
 // - Each struct group is collapsed like so:
 //     {struct{foo:number,bar:string}, struct{bar:blob, baz:bool}} ->
-//       struct{bar:string|blob}
+//       struct{foo?:number,bar:string|blob,baz?:bool}
 //
 // Anytime any of the above cases generates a union as output, the same process
 // is applied to that union recursively.
@@ -42,31 +42,7 @@ func makeSimplifiedType(in ...*Type) *Type {
 	}
 
 	// Impl de-cycles internally.
-	return makeSimplifiedTypeImpl(ts, false)
-}
-
-// makeSimplifiedType2 returns a type that results from merging all input types.
-//
-// The result is similar makeSimplifiedType with one exception:
-//
-// Each matching Struct found in the input will be merged into a single struct containing all fields
-// found in the input structs.
-//
-// Each struct is expanded like so:
-//     {struct{foo:number,bar:string}, struct{bar:blob, baz:bool}} ->
-//       struct{foo:number, bar:string|blob, baz:bool}
-//
-func makeSimplifedType2(in ...*Type) *Type {
-	ts := make(typeset, len(in))
-	for _, t := range in {
-		// De-cycle so that we handle cycles explicitly below. Otherwise, we would implicitly crawl
-		// cycles and recurse forever.
-		t := ToUnresolvedType(t)
-		ts[t] = struct{}{}
-	}
-
-	// Impl de-cycles internally.
-	return makeSimplifiedTypeImpl(ts, true)
+	return makeSimplifiedTypeImpl(ts)
 }
 
 // typeset is a helper that aggregates the unique set of input types for this algorithm, flattening
@@ -95,7 +71,7 @@ func newTypeset(t ...*Type) typeset {
 // makeSimplifiedTypeImpl is an implementation detail.
 // Warning: Do not call this directly. It assumes its input has been de-cycled using
 // ToUnresolvedType() and will infinitely recurse on cyclic types otherwise.
-func makeSimplifiedTypeImpl(in typeset, merge bool) *Type {
+func makeSimplifiedTypeImpl(in typeset) *Type {
 	type how struct {
 		k NomsKind
 		n string
@@ -133,15 +109,15 @@ func makeSimplifiedTypeImpl(in typeset, merge bool) *Type {
 		var r *Type
 		switch h.k {
 		case RefKind:
-			r = simplifyRefs(ts, merge)
+			r = simplifyRefs(ts)
 		case SetKind:
-			r = simplifySets(ts, merge)
+			r = simplifySets(ts)
 		case ListKind:
-			r = simplifyLists(ts, merge)
+			r = simplifyLists(ts)
 		case MapKind:
-			r = simplifyMaps(ts, merge)
+			r = simplifyMaps(ts)
 		case StructKind:
-			r = simplifyStructs(h.n, ts, merge)
+			r = simplifyStructs(h.n, ts)
 		}
 		out = append(out, r)
 	}
@@ -160,28 +136,28 @@ func makeSimplifiedTypeImpl(in typeset, merge bool) *Type {
 	return staticTypeCache.makeUnionType(out...)
 }
 
-func simplifyRefs(ts typeset, merge bool) *Type {
-	return simplifyContainers(RefKind, MakeRefType, ts, merge)
+func simplifyRefs(ts typeset) *Type {
+	return simplifyContainers(RefKind, MakeRefType, ts)
 }
 
-func simplifySets(ts typeset, merge bool) *Type {
-	return simplifyContainers(SetKind, MakeSetType, ts, merge)
+func simplifySets(ts typeset) *Type {
+	return simplifyContainers(SetKind, MakeSetType, ts)
 }
 
-func simplifyLists(ts typeset, merge bool) *Type {
-	return simplifyContainers(ListKind, MakeListType, ts, merge)
+func simplifyLists(ts typeset) *Type {
+	return simplifyContainers(ListKind, MakeListType, ts)
 }
 
-func simplifyContainers(expectedKind NomsKind, makeContainer func(elem *Type) *Type, ts typeset, merge bool) *Type {
+func simplifyContainers(expectedKind NomsKind, makeContainer func(elem *Type) *Type, ts typeset) *Type {
 	elemTypes := make(typeset, len(ts))
 	for t := range ts {
 		d.Chk.True(expectedKind == t.Kind())
 		elemTypes.Add(t.Desc.(CompoundDesc).ElemTypes[0])
 	}
-	return makeContainer(makeSimplifiedTypeImpl(elemTypes, merge))
+	return makeContainer(makeSimplifiedTypeImpl(elemTypes))
 }
 
-func simplifyMaps(ts typeset, merge bool) *Type {
+func simplifyMaps(ts typeset) *Type {
 	keyTypes := make(typeset, len(ts))
 	valTypes := make(typeset, len(ts))
 	for t := range ts {
@@ -191,68 +167,51 @@ func simplifyMaps(ts typeset, merge bool) *Type {
 		valTypes.Add(desc.ElemTypes[1])
 	}
 	return MakeMapType(
-		makeSimplifiedTypeImpl(keyTypes, merge),
-		makeSimplifiedTypeImpl(valTypes, merge))
+		makeSimplifiedTypeImpl(keyTypes),
+		makeSimplifiedTypeImpl(valTypes))
 }
 
-func simplifyStructs(expectedName string, ts typeset, merge bool) *Type {
-	if merge {
-		return mergeStructs(expectedName, ts)
+func simplifyStructs(expectedName string, ts typeset) *Type {
+	// We gather all the fields/types into allFields. If the number of
+	// times a field name is present is less that then number of types we
+	// are simplifying then the field must be optional.
+	// If we see an optional field we do not increment the count for it and
+	// it will be treated as optional in the end.
+	type fieldTypeInfo struct {
+		count   int
+		typeset typeset
 	}
-	commonFields := map[string]typeset{}
+	allFields := map[string]fieldTypeInfo{}
 
-	first := true
 	for t := range ts {
 		d.Chk.True(StructKind == t.Kind())
 		desc := t.Desc.(StructDesc)
 		d.Chk.True(expectedName == desc.Name)
-		if first {
-			for _, f := range desc.fields {
-				ts := typeset{}
-				ts.Add(f.t)
-				commonFields[f.name] = ts
-			}
-			first = false
-		} else {
-			for n, ts := range commonFields {
-				t := desc.Field(n)
-				if t != nil {
-					ts.Add(t)
-				} else {
-					delete(commonFields, n)
+		desc.IterFields(func(name string, t *Type, optional bool) {
+			fti, ok := allFields[name]
+			if !ok {
+				fti = fieldTypeInfo{
+					count:   0,
+					typeset: typeset{},
 				}
 			}
-		}
-	}
-
-	fm := make(FieldMap, len(ts))
-	for n, ts := range commonFields {
-		fm[n] = makeSimplifiedTypeImpl(ts, false)
-	}
-
-	return MakeStructTypeFromFields(expectedName, fm)
-}
-
-func mergeStructs(expectedName string, ts typeset) *Type {
-	unionFields := map[string]typeset{}
-	for t := range ts {
-		d.Chk.True(StructKind == t.Kind())
-		desc := t.Desc.(StructDesc)
-		d.Chk.True(expectedName == desc.Name)
-		for _, f := range desc.fields {
-			ts, ok := unionFields[f.name]
-			if !ok {
-				ts = typeset{}
+			fti.typeset.Add(t)
+			if !optional {
+				fti.count++
 			}
-			ts.Add(f.t)
-			unionFields[f.name] = ts
-		}
+			allFields[name] = fti
+		})
 	}
 
-	fm := make(FieldMap, len(ts))
-	for n, ts := range unionFields {
-		fm[n] = makeSimplifiedTypeImpl(ts, true)
+	count := len(ts)
+	fields := make(structFields, 0, count)
+	for name, fti := range allFields {
+		fields = append(fields, StructField{
+			Name:     name,
+			Type:     makeSimplifiedTypeImpl(fti.typeset),
+			Optional: fti.count < count,
+		})
 	}
 
-	return MakeStructTypeFromFields(expectedName, fm)
+	return MakeStructType2(expectedName, fields...)
 }
