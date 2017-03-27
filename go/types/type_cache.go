@@ -236,9 +236,6 @@ func checkStructType(t *Type, checkKind checkKindType) {
 		return
 	}
 
-	walkType(t, nil, generateOIDs)
-	walkType(t, nil, checkForUnrolledCycles)
-
 	switch checkKind {
 	case checkKindNormalize:
 		walkType(t, nil, sortUnions)
@@ -246,20 +243,6 @@ func checkStructType(t *Type, checkKind checkKindType) {
 		walkType(t, nil, validateTypes)
 	default:
 		panic("unreachable")
-	}
-}
-
-func generateOIDs(t *Type, _ []*Type) {
-	generateOID(t, false)
-}
-
-func checkForUnrolledCycles(t *Type, parentStructTypes []*Type) {
-	if t.Kind() == StructKind {
-		for _, ttt := range parentStructTypes {
-			if *t.oid == *ttt.oid {
-				panic("unrolled cycle types are not supported; ahl owes you a beer")
-			}
-		}
 	}
 }
 
@@ -277,7 +260,7 @@ func validateTypes(t *Type, _ []*Type) {
 			panic("Invalid union type")
 		}
 		for i := 1; i < len(elemTypes); i++ {
-			if !elemTypes[i-1].oid.Less(*elemTypes[i].oid) {
+			if !unionLess(elemTypes[i-1], elemTypes[i]) {
 				panic("Invalid union order")
 			}
 		}
@@ -305,95 +288,6 @@ func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
 	case StructDesc:
 		for _, f := range desc.fields {
 			walkType(f.t, append(parentStructTypes, t), cb)
-		}
-	}
-}
-
-func generateOID(t *Type, allowUnresolvedCycles bool) {
-	if t.oid == nil {
-		buf := newBinaryNomsWriter()
-		encodeForOID(t, buf, allowUnresolvedCycles, t, nil)
-		oid := hash.Of(buf.data())
-		t.oid = &oid
-	}
-}
-
-func encodeForOID(t *Type, buf nomsWriter, allowUnresolvedCycles bool, root *Type, parentStructTypes []*Type) {
-	// Most types are encoded in a straightforward fashion
-	switch desc := t.Desc.(type) {
-	case CycleDesc:
-		if allowUnresolvedCycles {
-			buf.writeUint8(uint8(desc.Kind()))
-			buf.writeUint32(uint32(desc))
-		} else {
-			panic("found an unexpected unresolved cycle")
-		}
-	case PrimitiveDesc:
-		buf.writeUint8(uint8(desc.Kind()))
-	case CompoundDesc:
-		switch k := desc.Kind(); k {
-		case ListKind, MapKind, RefKind, SetKind:
-			buf.writeUint8(uint8(k))
-			buf.writeUint32(uint32(len(desc.ElemTypes)))
-			for _, tt := range desc.ElemTypes {
-				encodeForOID(tt, buf, allowUnresolvedCycles, root, parentStructTypes)
-			}
-		case UnionKind:
-			buf.writeUint8(uint8(k))
-			if t == root {
-				// If this is where we started we don't need to keep going
-				return
-			}
-
-			buf.writeUint32(uint32(len(desc.ElemTypes)))
-
-			// This is the only subtle case: encode each subordinate type, generate the hash, remove duplicates, and xor the results together to form an order independent encoding.
-			mbuf := newBinaryNomsWriter()
-			oids := make(map[hash.Hash]struct{})
-			for _, elemType := range desc.ElemTypes {
-				h := elemType.oid
-				if h == nil {
-
-					mbuf.reset()
-					encodeForOID(elemType, mbuf, allowUnresolvedCycles, root, parentStructTypes)
-					h2 := hash.Of(mbuf.data())
-					if _, found := indexOfType(elemType, parentStructTypes); !found {
-						elemType.oid = &h2
-					}
-					oids[h2] = struct{}{}
-				} else {
-					oids[*h] = struct{}{}
-					if !allowUnresolvedCycles {
-						checkForUnresolvedCycles(elemType, root, parentStructTypes)
-					}
-				}
-			}
-
-			data := make([]byte, hash.ByteLen)
-			for o := range oids {
-				for i := 0; i < len(data); i++ {
-					data[i] ^= o[i]
-				}
-			}
-			buf.writeBytes(data)
-		default:
-			panic("unknown compound type")
-		}
-	case StructDesc:
-		idx, found := indexOfType(t, parentStructTypes)
-		if found {
-			buf.writeUint8(uint8(CycleKind))
-			buf.writeUint32(uint32(len(parentStructTypes)) - 1 - idx)
-			return
-		}
-
-		buf.writeUint8(uint8(StructKind))
-		buf.writeString(desc.Name)
-
-		parentStructTypes = append(parentStructTypes, t)
-		for _, field := range desc.fields {
-			buf.writeString(field.name)
-			encodeForOID(field.t, buf, allowUnresolvedCycles, root, parentStructTypes)
 		}
 	}
 }
@@ -432,9 +326,6 @@ func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
 	ts := flattenUnionTypes(typeSlice(elemTypes), &seenTypes)
 	if len(ts) == 1 {
 		return ts[0]
-	}
-	for _, tt := range ts {
-		generateOID(tt, true)
 	}
 	// We sort the contituent types to dedup equivalent types in memory; we may need to sort again after cycles are resolved for final encoding.
 	sort.Sort(ts)

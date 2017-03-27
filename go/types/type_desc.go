@@ -137,6 +137,27 @@ func (c CycleDesc) HasUnresolvedCycle(visited []*Type) bool {
 
 type typeSlice []*Type
 
-func (ts typeSlice) Len() int           { return len(ts) }
-func (ts typeSlice) Less(i, j int) bool { return ts[i].oid.Less(*ts[j].oid) }
-func (ts typeSlice) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }
+func (ts typeSlice) Len() int { return len(ts) }
+
+func (ts typeSlice) Less(i, j int) bool {
+	return unionLess(ts[i], ts[j])
+}
+
+func (ts typeSlice) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
+
+func unionLess(ti, tj *Type) bool {
+	if ti == tj {
+		return false
+	}
+
+	ki, kj := ti.Kind(), tj.Kind()
+	if ki == kj {
+		if ki == StructKind {
+			// Due to type simplification, the only thing that matters is the name of the struct.
+			return ti.Desc.(StructDesc).Name < tj.Desc.(StructDesc).Name
+		}
+
+		return false
+	}
+	return ki < kj
+}

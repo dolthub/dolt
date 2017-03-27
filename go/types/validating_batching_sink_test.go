@@ -71,7 +71,7 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {
 	data := []interface{}{
 		uint8(TypeKind),
-		uint8(UnionKind), uint32(2) /* len */, uint8(BoolKind), uint8(NumberKind),
+		uint8(UnionKind), uint32(2) /* len */, uint8(NumberKind), uint8(BoolKind),
 	}
 	assertPanicsOnInvalidChunk(t, data)
 }

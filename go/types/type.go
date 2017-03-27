@@ -22,7 +22,6 @@ import (
 type Type struct {
 	Desc          TypeDesc
 	h             *hash.Hash
-	oid           *hash.Hash
 	id            uint32
 	serialization []byte
 }
@@ -30,7 +29,7 @@ type Type struct {
 const initialTypeBufferSize = 128
 
 func newType(desc TypeDesc, id uint32) *Type {
-	return &Type{desc, &hash.Hash{}, nil, id, nil}
+	return &Type{desc, &hash.Hash{}, id, nil}
 }
 
 func ensureTypeSerialization(t *Type) {

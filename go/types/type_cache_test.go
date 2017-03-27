@@ -197,9 +197,9 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 		[]*Type{ut},
 	)
 
-	assert.True(ut.Desc.(CompoundDesc).ElemTypes[0].Kind() == CycleKind)
-	// That the Struct / Cycle landed in index 1 was found empirically.
-	assert.True(st == st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[1])
+	assert.True(ut.Desc.(CompoundDesc).ElemTypes[6].Kind() == CycleKind)
+	// That the Struct / Cycle landed in index 5 was found empirically.
+	assert.Equal(st, st.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
 	// ut contains an explicit Cycle type; noms must not surrepticiously change existing types so we can be sure that the Union within st is different in that the cycle has been resolved.
 	assert.False(ut == st.Desc.(StructDesc).fields[0].t)
 
@@ -209,22 +209,22 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 		[]string{"foo"},
 		[]*Type{ut2},
 	)
-	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[0].Kind() == CycleKind)
-	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[1])
+	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[6].Kind() == CycleKind)
+	assert.True(st2 == st2.Desc.(StructDesc).fields[0].t.Desc.(CompoundDesc).ElemTypes[5])
 	assert.False(ut2 == st2.Desc.(StructDesc).fields[0].t)
 
 	assert.True(ut == ut2)
 	assert.True(st == st2)
 }
 
-func TestInvalidCyclesAndUnions(t *testing.T) {
+func TestNonNormalizedCycles(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.Panics(func() {
-		MakeStructType("A",
-			[]string{"a"},
-			[]*Type{MakeStructType("A", []string{"a"}, []*Type{MakeCycleType(1)})})
-	})
+	t1 := MakeStructType("A",
+		[]string{"a"},
+		[]*Type{MakeStructType("A", []string{"a"}, []*Type{MakeCycleType(1)})})
+	t2 := t1.Desc.(StructDesc).fields[0].t
+	assert.True(t1.Equals(t2))
 }
 
 func TestMakeStructTypeFromFields(t *testing.T) {
