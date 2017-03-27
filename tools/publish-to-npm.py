@@ -13,7 +13,6 @@ from noms.pushd import pushd
 packages = [
     'babel-preset-noms',
     'eslint-config-noms',
-    'noms',
     'webpack-config',
 ]
 

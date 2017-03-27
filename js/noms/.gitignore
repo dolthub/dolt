@@ -1,6 +1,0 @@
-node_modules
-dist
-generated-docs
-.nyc_output
-coverage.lcov
-coverage

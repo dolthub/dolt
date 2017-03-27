@@ -29,10 +29,6 @@ for d in ${GO_LIST}; do
     fi
 done
 
-pushd ${NOMS_DIR}
-python tools/run-all-js-tests.py
-popd
-
 python -m unittest discover -p "*_test.py" -s $GOPATH/src/github.com/attic-labs/noms/tools
 
 bash <(curl -s https://codecov.io/bash) -t ${COVERALLS_TOKEN}

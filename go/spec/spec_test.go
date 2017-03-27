@@ -69,9 +69,7 @@ func TestMemHashPathSpec(t *testing.T) {
 	assert.Equal("", spec.DatabaseName)
 	assert.False(spec.Path.IsEmpty())
 
-	// This would be a reasonable check, and the equivalent JS test does it, but
-	// it causes the next GetValue to return nil. This is inconsistent with JS.
-	// See https://github.com/attic-labs/noms/issues/2802:
+	// This is a reasonable check but it causes the next GetValue to return nil:
 	// assert.Nil(spec.GetValue())
 
 	spec.GetDatabase().WriteValue(s)

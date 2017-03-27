@@ -22,7 +22,6 @@ type testSuite struct {
 	testValues []*testValue
 }
 
-// please update Go and JS to keep them in sync - see js/src//xp-test.js
 func newTestSuite() *testSuite {
 	testValues := []*testValue{
 		{Bool(true), "g19moobgrm32dn083bokhksuobulq28c", "bool - true"},

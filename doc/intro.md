@@ -38,13 +38,28 @@ A database has two responsibilities: it provides storage of [content-addressed](
 
 A Noms database can be implemented on top of any underlying storage system that provides key/value storage with at least optional optimistic concurrency. We only use optimistic concurrency to store the current value of each dataset. Chunks themselves are immutable.
 
-We have implementations of Noms databases on top of our own file-backed store [Noms Block Store (NBS)](https://github.com/attic-labs/noms/tree/master/go/nbs) (usually used locally), our own [HTTP protocol](https://github.com/attic-labs/noms/blob/master/go/datas/database_server.go) (used for working with a remote database), [Amazon DynamoDB](https://aws.amazon.com/dynamodb/), and [memory](https://github.com/attic-labs/noms/blob/master/js/noms/src/memory-store.js) (mainly used for testing).
+We have implementations of Noms databases on top of our own file-backed store [Noms Block Store (NBS)](https://github.com/attic-labs/noms/tree/master/go/nbs) (usually used locally), our own [HTTP protocol](https://github.com/attic-labs/noms/blob/master/go/datas/database_server.go) (used for working with a remote database), [Amazon DynamoDB](https://aws.amazon.com/dynamodb/), and [memory](https://github.com/attic-labs/noms/blob/master/go/chunks/memory_store.go) (mainly used for testing).
 
-Here's an example of creating an http-backed database using the [JavaScript Noms SDK](js-tour.md):
+Here's an example of creating an http-backed database using the [Go Noms SDK](go-tour.md):
 
-```
-var noms = require('@attic/noms');
-var db = noms.DatabaseSpec.parse('http://localhost:8000').db();
+```go
+package main
+
+import (
+  "fmt"
+  "os"
+
+  "github.com/attic-labs/noms/go/spec"
+)
+
+func main() {
+  sp, err := spec.ForDatabase("http://localhost:8000")
+  if err != nil {
+    fmt.Fprintf(os.Stderr, "Could not access database: %s\n", err)
+    return
+  }
+  defer sp.Close()
+}
 ```
 
 A dataset is nothing more than a named pointer into the DAG. Consider the following command to copy the dataset named `foo` to the dataset named `bar` within a database:
@@ -174,7 +189,7 @@ Because of this sorting, Noms collections can be used as efficient indexes, in t
 
 For example, say you want to quickly be able to find `Person` structs by their age. You could build a map of type `Map<Number, Set<Person>>`. This would allow you to quickly (~log<sub>k</sub>(n) seeks, where `k` is average prolly tree width, which is currently 64) find all the people of an exact age. But it would _also_ allow you to find all people within a range of ages efficiently (~num_results/log<sub>k</sub>(n) seeks), even if the ages are non-integral.
 
-Also, because Noms collections are ordered search trees, it is possible to implement set operations like union and [intersect](https://github.com/attic-labs/noms/blob/d6537c74c58fecebb8c4605c07b0670ed9737e1f/js/src/set.js#L157) efficiently on them.
+Also, because Noms collections are ordered search trees, it is possible to implement set operations like union and intersect efficiently on them.
 
 So, for example, if you wanted to find all the people of a particular age AND having a particular hair color, you could construct a second map having type `Map<String, Set<Person>>`, and intersect the two sets.
 

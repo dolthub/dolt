@@ -16,9 +16,6 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-// IMPORTANT: These tests and in particular the hash of the values should stay in sync with the
-// corresponding tests in js
-
 type countingReader struct {
 	last uint32
 	val  uint32

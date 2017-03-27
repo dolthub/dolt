@@ -89,11 +89,7 @@ You can use `go test` command, e.g:
 
 * `go test $(go list ./... | grep -v /vendor/)` should run every test except from vendor packages.
 
-For JS code, We have a python script to run all js tests.
-
-* `python tools/run-all-js-tests.py`
-
-If you have commit rights, Jenkins automatically runs the Go and JS tests on every PR, then every subsequent patch. To ask Jenkins to immediately run, any committer can reply (no quotes) "Jenkins: test this" to your PR.
+If you have commit rights, Jenkins automatically runs the Go tests on every PR, then every subsequent patch. To ask Jenkins to immediately run, any committer can reply (no quotes) "Jenkins: test this" to your PR.
 
 ### Perf tests
 
