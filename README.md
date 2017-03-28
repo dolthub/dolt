@@ -84,7 +84,7 @@ Noms is currently under heavy development. Attic Labs plans to use it as an inte
 
 ### Data Format
 
-We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/master/go/constants/version.go#L8) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
+We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/v7/go/constants/version.go#L9) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
 
 ### Roadmap
 
