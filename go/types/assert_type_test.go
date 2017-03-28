@@ -390,6 +390,19 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert := assert.New(tt)
 
+	s1 := MakeStructType2("", StructField{"a", NumberType, true})
+	s2 := MakeStructType2("", StructField{"a", NumberType, false})
+	assert.True(IsSubtype(s1, s2))
+	assert.False(IsSubtype(s2, s1))
+
+	s3 := MakeStructType2("", StructField{"a", StringType, false})
+	assert.False(IsSubtype(s1, s3))
+	assert.False(IsSubtype(s3, s1))
+
+	s4 := MakeStructType2("", StructField{"a", StringType, true})
+	assert.False(IsSubtype(s1, s4))
+	assert.False(IsSubtype(s4, s1))
+
 	makeType := func(s string) *Type {
 		if s == "" {
 			return MakeStructType2("")
