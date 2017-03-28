@@ -1,0 +1,20 @@
+[ignore]
+.*/node_modules/babel.*
+.*/node_modules/babylon/.*
+.*/node_modules/d3/.*
+.*/node_modules/fbjs/.*
+.*/node_modules/react/.*
+.*/node_modules/y18n/.*
+.*/node_modules/json5/.*
+
+[include]
+
+[libs]
+
+[options]
+unsafe.enable_getters_and_setters=true
+munge_underscores=true
+suppress_comment=\\(.\\|\n\\)*\\$FlowIssue: .+
+
+[version]
+^0.39.0
