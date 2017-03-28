@@ -72,16 +72,9 @@ We follow a code review protocol dervied from the one that the [Chromium team](h
 2. Add your own fork as a remote to your github repo: `git remote add <username> https://github.com/<username>/noms`.
 3. Push your changes to a branch at your fork: `git push <username> <branch>`
 4. Create a PR using the branch you just created. Usually you can do this by just navigating to https://github.com/attic-labs/noms in a browser - GitHub recognizes the new branch and offers to create a PR for you.
-5. When you're ready for review, use GitHub's _assign_ UI to assign someone to review. Typically nobody will review until you assign someone (because we assume you're still getting it ready for review).
-6. Reviewer will make comments, then say either 'LGTM' (looks good to me) or 'BTY' (back to you).
-7. If the reviewer said LGTM, it means it is ready to merge. If you have commit rights to the respository, go ahead and land the PR. Otherwise the reviewer will land it.
-  * *Important*: Only squash merges are allowed, because we like each commit in master to be a single logical piece of work. _GitHub may generate an odd commit message_, so double check before clicking Confirm!
-8. If the reviewer said BTY, make the requested changes.
-  * *Important*: Please make each round of review comments its own commit. This makes it easy for reviewers to see how your PR has evolved in response to feedback.
-  * *Important*: Please do not rebase on top of master until the end of the review for the same reason - you're trying to make it easy for the reviewer to see your changes in isolation.
-9. Comment on the review with 'PTAL' (please take another look) when you are ready for the next round of review comments.
-
-For very trivial fixes that are time-sensitive (e.g., to unbreak the build), we do review-after-land. In that case, assign someone to review the PR, and add the phrase 'TBR' (to be reviewed) to the PR description.
+5. When you're ready for review, make a comment in the issue asking for a review. Sometimes people won't review until you do this because we're not sure if you think the PR is ready for review.
+6. Iterate with your reviewer using the normal Github review flow.
+7. Once the reviewer is happy with the changes, they will submit them.
 
 ## Running the tests
 
