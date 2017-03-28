@@ -30,7 +30,7 @@ Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` ex
 
 ## Install Noms
 
-Noms is supported on Mac OS X and Linux. While Windows isn't officially supported, you can compile a Windows build from source, and it usually works.
+Noms is supported on Mac OS X and Linux.
 
 1. [Download the latest build](https://s3-us-west-2.amazonaws.com/downloadstable.noms.io/index.html?prefix=jobs/NomsBuildGoBinaries-v7/)
 
