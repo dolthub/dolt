@@ -34,6 +34,13 @@ const (
 	readBufferSize           = 1 << 12 // 4K
 )
 
+var customHTTPTransport = http.Transport{
+	// Since we limit ourselves to a maximum of httpChunkSinkConcurrency concurrent http requests, we think it's OK to up MaxIdleConnsPerHost so that one connection stays open for each concurrent request
+	MaxIdleConnsPerHost: httpChunkSinkConcurrency,
+	// This sets, essentially, an idle-timeout. The timer starts counting AFTER the client has finished sending the entire request to the server. As soon as the client receives the server's response headers, the timeout is canceled.
+	ResponseHeaderTimeout: time.Duration(4) * time.Minute,
+}
+
 // httpBatchStore implements types.BatchStore
 type httpBatchStore struct {
 	host         *url.URL
@@ -60,8 +67,9 @@ func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		d.Panic("Unrecognized scheme: %s", u.Scheme)
 	}
 	buffSink := &httpBatchStore{
-		host:          u,
-		httpClient:    makeHTTPClient(httpChunkSinkConcurrency),
+		host: u,
+		// Custom http.Client to give control of idle connections and timeouts
+		httpClient:    &http.Client{Transport: &customHTTPTransport},
 		auth:          auth,
 		getQueue:      make(chan chunks.ReadRequest, readBufferSize),
 		hasQueue:      make(chan chunks.ReadRequest, readBufferSize),
@@ -87,16 +95,6 @@ type httpDoer interface {
 type writeRequest struct {
 	hints     types.Hints
 	justHints bool
-}
-
-// Use a custom http client rather than http.DefaultClient. We limit ourselves to a maximum of |requestLimit| concurrent http requests, the custom httpClient ups the maxIdleConnsPerHost value so that one connection stays open for each concurrent request.
-func makeHTTPClient(requestLimit int) *http.Client {
-	t := http.Transport(*http.DefaultTransport.(*http.Transport))
-	t.MaxIdleConnsPerHost = requestLimit
-	// This sets, essentially, an idle-timeout. The timer starts counting AFTER the client has finished sending the entire request to the server. As soon as the client receives the server's response headers, the timeout is canceled.
-	t.ResponseHeaderTimeout = time.Duration(4) * time.Minute
-
-	return &http.Client{Transport: &t}
 }
 
 func (bhcs *httpBatchStore) SetReverseFlushOrder() {
