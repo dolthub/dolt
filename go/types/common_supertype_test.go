@@ -136,15 +136,15 @@ func TestContainCommonSupertype(t *testing.T) {
 
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{
-			MakeStructType2("", StructField{"b", BoolType, false}),
-			MakeStructType2("", StructField{"b", BoolType, true}),
+			MakeStructType("", StructField{"b", BoolType, false}),
+			MakeStructType("", StructField{"b", BoolType, true}),
 			true,
 		},
 
 		// struct{a?:Bool} & struct{b?:Bool} -> false
 		{
-			MakeStructType2("", StructField{"a", BoolType, true}),
-			MakeStructType2("", StructField{"b", BoolType, true}),
+			MakeStructType("", StructField{"a", BoolType, true}),
+			MakeStructType("", StructField{"b", BoolType, true}),
 			false,
 		},
 	}

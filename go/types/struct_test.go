@@ -20,7 +20,7 @@ func getChunks(v Value) (chunks []Ref) {
 func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType2("S1",
+	typ := MakeStructType("S1",
 		StructField{"s", StringType, false},
 		StructField{"x", BoolType, false},
 	)
@@ -35,7 +35,7 @@ func TestGenericStructEquals(t *testing.T) {
 func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType2("S1", StructField{"r", MakeRefType(BoolType), false})
+	typ := MakeStructType("S1", StructField{"r", MakeRefType(BoolType), false})
 
 	b := Bool(true)
 
@@ -59,7 +59,7 @@ func TestGenericStructNew(t *testing.T) {
 	assert.True(ok)
 	assert.True(String("hi").Equals(o))
 
-	typ := MakeStructType2("S2",
+	typ := MakeStructType("S2",
 		StructField{"b", BoolType, false},
 		StructField{"o", StringType, false},
 	)
@@ -78,14 +78,14 @@ func TestGenericStructSet(t *testing.T) {
 
 	// Changes the type
 	s4 := s.Set("b", Number(42))
-	assert.True(MakeStructType2("S3",
+	assert.True(MakeStructType("S3",
 		StructField{"b", NumberType, false},
 		StructField{"o", StringType, false},
 	).Equals(s4.Type()))
 
 	// Adds a new field
 	s5 := s.Set("x", Number(42))
-	assert.True(MakeStructType2("S3",
+	assert.True(MakeStructType("S3",
 		StructField{"b", BoolType, false},
 		StructField{"o", StringType, false},
 		StructField{"x", NumberType, false},
@@ -222,10 +222,10 @@ func TestEscStructField(t *testing.T) {
 
 func TestCycles(t *testing.T) {
 	// Success is this not recursing infinitely and blowing the stack
-	fileType := MakeStructType2("File", StructField{"data", BlobType, false})
-	directoryType := MakeStructType2("Directory", StructField{"entries", MakeMapType(StringType, MakeCycleType(1)), false})
-	inodeType := MakeStructType2("Inode", StructField{"contents", MakeUnionType(directoryType, fileType), false})
-	fsType := MakeStructType2("Filesystem", StructField{"root", inodeType, false})
+	fileType := MakeStructType("File", StructField{"data", BlobType, false})
+	directoryType := MakeStructType("Directory", StructField{"entries", MakeMapType(StringType, MakeCycleType(1)), false})
+	inodeType := MakeStructType("Inode", StructField{"contents", MakeUnionType(directoryType, fileType), false})
+	fsType := MakeStructType("Filesystem", StructField{"root", inodeType, false})
 
 	rootDir := NewStructWithType(directoryType, ValueSlice{NewMap()})
 	rootInode := NewStruct("Inode", StructData{"contents": rootDir})
@@ -235,7 +235,7 @@ func TestCycles(t *testing.T) {
 func TestStructValueMayNotHaveOptionalFields(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType2("Opt",
+	typ := MakeStructType("Opt",
 		StructField{"x", NumberType, true},
 	)
 	assert.Panics(func() {

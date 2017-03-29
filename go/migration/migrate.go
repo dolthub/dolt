@@ -156,7 +156,7 @@ func migrateType(source *v7types.Type) *types.Type {
 				Type: migrateType(t),
 			})
 		})
-		return types.MakeStructType2(sd.Name, fields...)
+		return types.MakeStructType(sd.Name, fields...)
 	case v7types.CycleKind:
 		return types.MakeCycleType(uint32(source.Desc.(types.CycleDesc)))
 	}

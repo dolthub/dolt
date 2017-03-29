@@ -76,11 +76,11 @@ func TestTypeCacheRef(t *testing.T) {
 func TestTypeCacheStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeStructType2("Foo",
+	st := MakeStructType("Foo",
 		StructField{"bar", StringType, false},
 		StructField{"foo", NumberType, false},
 	)
-	st2 := MakeStructType2("Foo",
+	st2 := MakeStructType("Foo",
 		StructField{"bar", StringType, false},
 		StructField{"foo", NumberType, false},
 	)
@@ -106,11 +106,11 @@ func TestTypeCacheUnion(t *testing.T) {
 func TestTypeCacheCyclicStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeStructType2("Foo", StructField{"foo", MakeRefType(MakeCycleType(0)), false})
+	st := MakeStructType("Foo", StructField{"foo", MakeRefType(MakeCycleType(0)), false})
 	assert.True(st == st.Desc.(StructDesc).fields[0].Type.Desc.(CompoundDesc).ElemTypes[0])
 	assert.False(st.HasUnresolvedCycle())
 
-	st2 := MakeStructType2("Foo", StructField{"foo", MakeRefType(MakeCycleType(0)), false})
+	st2 := MakeStructType("Foo", StructField{"foo", MakeRefType(MakeCycleType(0)), false})
 	assert.True(st2 == st2.Desc.(StructDesc).fields[0].Type.Desc.(CompoundDesc).ElemTypes[0])
 	assert.True(st == st2)
 }
@@ -122,7 +122,7 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//   bar: Cycle<1>
 	//   foo: Cycle<0>
 	// }
-	st := MakeStructType2("Foo",
+	st := MakeStructType("Foo",
 		StructField{"bar", MakeCycleType(1), false},
 		StructField{"foo", MakeCycleType(0), false},
 	)
@@ -137,7 +137,7 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//     foo: Cycle<0>
 	//   }
 	// }
-	st2 := MakeStructType2("Bar",
+	st2 := MakeStructType("Bar",
 		StructField{"baz", MakeCycleType(1), false},
 		StructField{"foo", st, false},
 	)
@@ -157,7 +157,7 @@ func TestTypeCacheCyclicStruct2(t *testing.T) {
 	//   }
 	//   baz: Cycle<0>
 	// }
-	st3 := MakeStructType2("Baz",
+	st3 := MakeStructType("Baz",
 		StructField{"bar", st2, false},
 		StructField{"baz", MakeCycleType(0), false},
 	)
@@ -177,7 +177,7 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 	assert := assert.New(t)
 
 	ut := MakeUnionType(MakeCycleType(0), NumberType, StringType, BoolType, BlobType, ValueType, TypeType)
-	st := MakeStructType2("Foo", StructField{"foo", ut, false})
+	st := MakeStructType("Foo", StructField{"foo", ut, false})
 
 	assert.True(ut.Desc.(CompoundDesc).ElemTypes[6].Kind() == CycleKind)
 	// That the Struct / Cycle landed in index 5 was found empirically.
@@ -187,7 +187,7 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 
 	// Note that the union in this second case is created with a different ordering of its type arguments.
 	ut2 := MakeUnionType(NumberType, StringType, BoolType, BlobType, ValueType, TypeType, MakeCycleType(0))
-	st2 := MakeStructType2("Foo", StructField{"foo", ut2, false})
+	st2 := MakeStructType("Foo", StructField{"foo", ut2, false})
 	assert.True(ut2.Desc.(CompoundDesc).ElemTypes[6].Kind() == CycleKind)
 	assert.True(st2 == st2.Desc.(StructDesc).fields[0].Type.Desc.(CompoundDesc).ElemTypes[5])
 	assert.False(ut2 == st2.Desc.(StructDesc).fields[0].Type)
@@ -199,10 +199,10 @@ func TestTypeCacheCyclicUnions(t *testing.T) {
 func TestNonNormalizedCycles(t *testing.T) {
 	assert := assert.New(t)
 
-	t1 := MakeStructType2("A",
+	t1 := MakeStructType("A",
 		StructField{
 			"a",
-			MakeStructType2("A", StructField{"a", MakeCycleType(1), false}),
+			MakeStructType("A", StructField{"a", MakeCycleType(1), false}),
 			false,
 		},
 	)
@@ -229,14 +229,14 @@ func TestMakeStructTypeFromFields(t *testing.T) {
 
 func TestMakeUnionTypeStruct(t *testing.T) {
 	assert := assert.New(t)
-	t1 := MakeStructType2("")
-	t2 := MakeStructType2("", StructField{
+	t1 := MakeStructType("")
+	t2 := MakeStructType("", StructField{
 		Name: "b",
 		Type: MakeCycleType(0),
 	})
 	assert.False(t2.Desc.(StructDesc).fields[0].Optional)
 	actual := MakeUnionType(t1, t2)
-	expected := MakeStructType2("", StructField{
+	expected := MakeStructType("", StructField{
 		Name:     "b",
 		Type:     MakeCycleType(0),
 		Optional: true,

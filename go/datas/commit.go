@@ -116,7 +116,7 @@ func findCommonRef(a, b types.RefSlice) types.Ref {
 }
 
 func makeCommitStructType(metaType, parentsType, valueType *types.Type) *types.Type {
-	return types.MakeStructType2("Commit",
+	return types.MakeStructType("Commit",
 		types.StructField{
 			Name: MetaField,
 			Type: metaType,

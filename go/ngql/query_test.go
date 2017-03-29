@@ -829,7 +829,7 @@ func (suite *QueryGraphQLSuite) TestStructWithOptionalField() {
 	rootValue := types.NewStruct("", types.StructData{
 		"n": types.Number(42),
 	})
-	rootType := NomsTypeToGraphQLType(types.MakeStructType2("",
+	rootType := NomsTypeToGraphQLType(types.MakeStructType("",
 		types.StructField{Name: "n", Type: types.NumberType, Optional: false},
 		types.StructField{Name: "s", Type: types.StringType, Optional: true},
 	), false, tm)
@@ -1116,7 +1116,7 @@ func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	expected := types.NewStruct("S", types.StructData{
 		"x": types.Number(42),
 	})
-	expectedType := types.MakeStructType2("S",
+	expectedType := types.MakeStructType("S",
 		types.StructField{Name: "a", Type: types.BoolType, Optional: true},
 		types.StructField{Name: "x", Type: types.NumberType, Optional: false},
 	)

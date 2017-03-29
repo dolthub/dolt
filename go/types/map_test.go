@@ -1314,7 +1314,7 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 	)
 	assert.True(
 		MakeMapType(StringType,
-			MakeStructType2("Foo",
+			MakeStructType("Foo",
 				StructField{"a", NumberType, false},
 				StructField{"b", StringType, true},
 			),
@@ -1334,7 +1334,7 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 	)
 	assert.True(
 		MakeMapType(
-			MakeStructType2("Foo",
+			MakeStructType("Foo",
 				StructField{"a", NumberType, false},
 				StructField{"b", StringType, true},
 			),

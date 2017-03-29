@@ -418,7 +418,7 @@ func TestDecodeNomsTypePtr(t *testing.T) {
 	primitive := types.StringType
 	testUnmarshal(types.NewStruct("S", types.StructData{"type": primitive}), &s, &S{primitive})
 
-	complex := types.MakeStructType2("Complex",
+	complex := types.MakeStructType("Complex",
 		types.StructField{
 			Name: "stuff",
 			Type: types.StringType,
@@ -592,7 +592,7 @@ func TestDecodeRecursive(t *testing.T) {
 		Children []Node
 	}
 
-	typ := types.MakeStructType2("Node",
+	typ := types.MakeStructType("Node",
 		types.StructField{
 			Name: "children",
 			Type: types.MakeListType(types.MakeCycleType(0)),

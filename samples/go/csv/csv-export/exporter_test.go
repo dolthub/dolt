@@ -43,7 +43,7 @@ func createTestData(s *testSuite, buildAsMap bool) []types.Value {
 		sliceLen *= 2
 	}
 
-	typ := types.MakeStructType2(structName,
+	typ := types.MakeStructType(structName,
 		types.StructField{
 			Name: "a",
 			Type: types.StringType,

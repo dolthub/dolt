@@ -133,7 +133,7 @@ func init() {
 		}
 	}
 
-	fsType = types.MakeStructType2("Filesystem", types.StructField{"root", inodeType, false})
+	fsType = types.MakeStructType("Filesystem", types.StructField{"root", inodeType, false})
 }
 
 func start(dataset string, mount mount) {

@@ -16,11 +16,11 @@ func TestTypes(t *testing.T) {
 
 	mapType := MakeMapType(StringType, NumberType)
 	setType := MakeSetType(StringType)
-	mahType := MakeStructType2("MahStruct",
+	mahType := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	recType := MakeStructType2("RecursiveStruct", StructField{"self", MakeCycleType(0), false})
+	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType(0), false})
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()
@@ -48,7 +48,7 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Map<String, Number>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
-	mahType := MakeStructType2("MahStruct",
+	mahType := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
@@ -89,7 +89,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType2("S", StructField{n, StringType, false})
+			MakeStructType("S", StructField{n, StringType, false})
 		})
 	}
 	assertInvalid("")
@@ -103,7 +103,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType2("S", StructField{n, StringType, false})
+		MakeStructType("S", StructField{n, StringType, false})
 	}
 	assertValid("a")
 	assertValid("A")
@@ -117,7 +117,7 @@ func TestVerifyStructName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType2(n)
+			MakeStructType(n)
 		})
 	}
 
@@ -131,7 +131,7 @@ func TestVerifyStructName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType2(n)
+		MakeStructType(n)
 	}
 	assertValid("")
 	assertValid("a")

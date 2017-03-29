@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -388,20 +387,6 @@ func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
 	return staticTypeCache.makeStructType(name, fs)
 }
 
-// MakeStructType is deprecated. Use MakeStructType2 for now.
-func MakeStructType(name string, fieldNames []string, fieldTypes []*Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	if len(fieldNames) != len(fieldTypes) {
-		d.Panic("len(fieldNames) != len(fieldTypes)")
-	}
-	fields := make(structFields, len(fieldNames))
-	for i, name := range fieldNames {
-		fields[i] = StructField{name, fieldTypes[i], false}
-	}
-	return staticTypeCache.makeStructType(name, fields)
-}
-
 // StructField describes a field in a struct type.
 type StructField struct {
 	Name     string
@@ -415,7 +400,7 @@ func (s structFields) Len() int           { return len(s) }
 func (s structFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s structFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
 
-func MakeStructType2(name string, fields ...StructField) *Type {
+func MakeStructType(name string, fields ...StructField) *Type {
 	staticTypeCache.Lock()
 	defer staticTypeCache.Unlock()
 

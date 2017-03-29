@@ -308,10 +308,10 @@ func TestRecursiveStruct(t *testing.T) {
 	//   }
 	// }
 
-	a := MakeStructType2("A",
+	a := MakeStructType("A",
 		StructField{"b", MakeCycleType(0), false},
 		StructField{"c", MakeListType(MakeCycleType(0)), false},
-		StructField{"d", MakeStructType2("D",
+		StructField{"d", MakeStructType("D",
 			StructField{"e", MakeCycleType(0), false},
 			StructField{"f", MakeCycleType(1), false},
 		), false},
@@ -359,7 +359,7 @@ func TestUnresolvedRecursiveStruct(t *testing.T) {
 	//   a: A
 	//   b: Cycle<1> (unresolved)
 	// }
-	a := MakeStructType2("A",
+	a := MakeStructType("A",
 		StructField{"a", MakeCycleType(0), false},
 		StructField{"b", MakeCycleType(1), false},
 	)
@@ -390,7 +390,7 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 }
 
 func TestEmptyCollections(t *testing.T) {
-	a := MakeStructType2("Nothing")
+	a := MakeStructType("Nothing")
 	assertWriteTaggedHRSEqual(t, "Type(struct Nothing {})", a)
 	b := NewStruct("Rien", StructData{})
 	assertWriteTaggedHRSEqual(t, "struct Rien {}({})", b)
@@ -416,7 +416,7 @@ func TestEncodedValueMaxLines(t *testing.T) {
 }
 
 func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
-	typ := MakeStructType2("S1",
+	typ := MakeStructType("S1",
 		StructField{"a", BoolType, false},
 		StructField{"b", BoolType, true})
 	assertWriteHRSEqual(t, "struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)

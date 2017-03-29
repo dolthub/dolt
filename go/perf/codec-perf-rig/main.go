@@ -137,7 +137,7 @@ func createNumber(i uint64) types.Value {
 	return types.Number(i)
 }
 
-var structType = types.MakeStructType2("S1",
+var structType = types.MakeStructType("S1",
 	types.StructField{
 		Name: "bool",
 		Type: types.BoolType,

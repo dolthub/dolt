@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-var EmptyStructType = MakeStructType2("")
+var EmptyStructType = MakeStructType("")
 var EmptyStruct = Struct{ValueSlice{}, EmptyStructType, &hash.Hash{}}
 
 type StructData map[string]Value
@@ -42,7 +42,7 @@ func NewStruct(name string, data StructData) Struct {
 		values[i] = data[name]
 	}
 
-	return Struct{values, MakeStructType2(name, fields...), &hash.Hash{}}
+	return Struct{values, MakeStructType(name, fields...), &hash.Hash{}}
 }
 
 func NewStructWithType(t *Type, data ValueSlice) Struct {
@@ -160,7 +160,7 @@ func (s Struct) Delete(n string) Struct {
 		}
 	}
 
-	newType := MakeStructType2(s.desc().Name, fields...)
+	newType := MakeStructType(s.desc().Name, fields...)
 	return NewStructWithType(newType, values)
 }
 

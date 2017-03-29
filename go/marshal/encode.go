@@ -460,7 +460,7 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type, options encode
 				Optional: fs.omitEmpty,
 			}
 		}
-		structType = types.MakeStructType2(strings.Title(t.Name()), structFields...)
+		structType = types.MakeStructType(strings.Title(t.Name()), structFields...)
 	}
 	return
 }

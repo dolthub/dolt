@@ -70,24 +70,24 @@ func TestMigrateFromVersion7(t *testing.T) {
 
 	test(
 		types.NewStructWithType(
-			types.MakeStructType2("", types.StructField{"a", types.NumberType, false}),
+			types.MakeStructType("", types.StructField{"a", types.NumberType, false}),
 			[]types.Value{types.Number(42)},
 		),
 		v7types.NewStructWithType(
-			v7types.MakeStructType2("", v7types.StructField{"a", v7types.NumberType, false}),
+			v7types.MakeStructType("", v7types.StructField{"a", v7types.NumberType, false}),
 			[]v7types.Value{v7types.Number(42)},
 		),
 	)
 
 	test(
 		types.NewStructWithType(
-			types.MakeStructType2("",
+			types.MakeStructType("",
 				types.StructField{"a", types.MakeListType(types.MakeCycleType(0)), false},
 			),
 			[]types.Value{types.NewList()},
 		),
 		v7types.NewStructWithType(
-			v7types.MakeStructType2("",
+			v7types.MakeStructType("",
 				v7types.StructField{"a", v7types.MakeListType(v7types.MakeCycleType(0)), false},
 			),
 			[]v7types.Value{v7types.NewList()},
@@ -118,10 +118,10 @@ func TestMigrateFromVersion7(t *testing.T) {
 
 	test(types.MakeCycleType(42), v7types.MakeCycleType(42))
 
-	commit := types.MakeStructType2("Commit",
+	commit := types.MakeStructType("Commit",
 		types.StructField{
 			Name: "parents",
-			Type: types.MakeSetType(types.MakeRefType(types.MakeStructType2("Commit",
+			Type: types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit",
 				types.StructField{
 					Name: "parents",
 					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
@@ -138,10 +138,10 @@ func TestMigrateFromVersion7(t *testing.T) {
 		},
 	)
 
-	commit7 := v7types.MakeStructType2("Commit",
+	commit7 := v7types.MakeStructType("Commit",
 		v7types.StructField{
 			Name: "parents",
-			Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeStructType2("Commit",
+			Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeStructType("Commit",
 				v7types.StructField{
 					Name: "parents",
 					Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeCycleType(0))),

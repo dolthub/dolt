@@ -52,7 +52,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String with MetaInfo
 	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
-	metaType := types.MakeStructType2("Meta",
+	metaType := types.MakeStructType("Meta",
 		types.StructField{
 			Name: "date",
 			Type: types.StringType,

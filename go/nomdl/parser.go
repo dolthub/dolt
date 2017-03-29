@@ -194,7 +194,7 @@ func (p *Parser) parseStructType() *types.Type {
 		break
 	}
 	p.lex.eat('}')
-	return types.MakeStructType2(name, fields...)
+	return types.MakeStructType(name, fields...)
 }
 
 func (p *Parser) parseSingleElemType(allowEmptyUnion bool) *types.Type {

@@ -217,5 +217,5 @@ func simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Ty
 		})
 	}
 
-	return MakeStructType2(expectedName, fields...)
+	return MakeStructType(expectedName, fields...)
 }

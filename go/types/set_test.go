@@ -568,7 +568,7 @@ func TestSetFirst(t *testing.T) {
 func TestSetOfStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType2("S1", StructField{"o", NumberType, false})
+	typ := MakeStructType("S1", StructField{"o", NumberType, false})
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
@@ -1014,7 +1014,7 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 		}),
 	)
 	assert.True(
-		MakeSetType(MakeStructType2("Foo",
+		MakeSetType(MakeStructType("Foo",
 			StructField{"a", NumberType, false},
 			StructField{"b", StringType, true},
 		),

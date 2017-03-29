@@ -95,14 +95,14 @@ func TestAssertTypeType(tt *testing.T) {
 }
 
 func TestAssertTypeStruct(tt *testing.T) {
-	t := MakeStructType2("Struct", StructField{"x", BoolType, false})
+	t := MakeStructType("Struct", StructField{"x", BoolType, false})
 
 	v := NewStruct("Struct", StructData{"x": Bool(true)})
 	assertSubtype(t, v)
 	assertAll(tt, t, v)
 	assertSubtype(ValueType, v)
 
-	t2 := MakeStructType2("Struct",
+	t2 := MakeStructType("Struct",
 		StructField{"x", BoolType, false},
 		StructField{"y", StringType, false},
 	)
@@ -208,8 +208,8 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
-	namedT := MakeStructType2("Name", StructField{"x", NumberType, false})
-	anonT := MakeStructType2("", StructField{"x", NumberType, false})
+	namedT := MakeStructType("Name", StructField{"x", NumberType, false})
+	anonT := MakeStructType("", StructField{"x", NumberType, false})
 	namedV := NewStruct("Name", StructData{"x": Number(42)})
 	name2V := NewStruct("foo", StructData{"x": Number(42)})
 	anonV := NewStruct("", StructData{"x": Number(42)})
@@ -224,9 +224,9 @@ func TestAssertTypeStructSubtypeByName(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
-	at := MakeStructType2("")
-	bt := MakeStructType2("", StructField{"x", NumberType, false})
-	ct := MakeStructType2("", StructField{"s", StringType, false}, StructField{"x", NumberType, false})
+	at := MakeStructType("")
+	bt := MakeStructType("", StructField{"x", NumberType, false})
+	ct := MakeStructType("", StructField{"s", StringType, false}, StructField{"x", NumberType, false})
 	av := NewStruct("", StructData{})
 	bv := NewStruct("", StructData{"x": Number(1)})
 	cv := NewStruct("", StructData{"x": Number(2), "s": String("hi")})
@@ -249,13 +249,13 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 		"value":   Number(1),
 		"parents": NewSet(),
 	})
-	t1 := MakeStructType2("Commit",
+	t1 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeUnionType()), false},
 		StructField{"value", NumberType, false},
 	)
 	assertSubtype(t1, c1)
 
-	t11 := MakeStructType2("Commit",
+	t11 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeRefType(t1)), false},
 		StructField{"value", NumberType, false},
 	)
@@ -273,7 +273,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   x: Cycle<0>,
 	//   y: Number,
 	// }
-	t1 := MakeStructType2("",
+	t1 := MakeStructType("",
 		StructField{"x", MakeCycleType(0), false},
 		StructField{"y", NumberType, false},
 	)
@@ -281,7 +281,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   x: Cycle<0>,
 	//   y: Number | String,
 	// }
-	t2 := MakeStructType2("",
+	t2 := MakeStructType("",
 		StructField{"x", MakeCycleType(0), false},
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
@@ -293,7 +293,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   x: Cycle<0> | Number,
 	//   y: Number | String,
 	// }
-	t3 := MakeStructType2("",
+	t3 := MakeStructType("",
 		StructField{"x", MakeUnionType(MakeCycleType(0), NumberType), false},
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
@@ -308,7 +308,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   x: Cycle<0> | Number,
 	//   y: Number,
 	// }
-	t4 := MakeStructType2("",
+	t4 := MakeStructType("",
 		StructField{"x", MakeUnionType(MakeCycleType(0), NumberType), false},
 		StructField{"y", NumberType, false},
 	)
@@ -334,17 +334,17 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   },
 	// }
 
-	tb := MakeStructType2("",
+	tb := MakeStructType("",
 		StructField{
 			"b",
-			MakeStructType2("", StructField{"c", MakeCycleType(1), false}),
+			MakeStructType("", StructField{"c", MakeCycleType(1), false}),
 			false,
 		},
 	)
-	tc := MakeStructType2("",
+	tc := MakeStructType("",
 		StructField{
 			"c",
-			MakeStructType2("", StructField{"b", MakeCycleType(1), false}),
+			MakeStructType("", StructField{"b", MakeCycleType(1), false}),
 			false,
 		},
 	)
@@ -358,7 +358,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	//   a: Number,
 	//   b: struct {},
 	// }
-	t1 := MakeStructType2("",
+	t1 := MakeStructType("",
 		StructField{"a", NumberType, false},
 		StructField{"b", EmptyStructType, false},
 	)
@@ -366,7 +366,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	// struct {
 	//   a: Number,
 	// }
-	t2 := MakeStructType2("", StructField{"a", NumberType, false})
+	t2 := MakeStructType("", StructField{"a", NumberType, false})
 
 	assert.False(tt, IsSubtype(t1, t2))
 	assert.True(tt, IsSubtype(t2, t1))
@@ -375,8 +375,8 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 func TestIsSubtypeCompoundUnion(tt *testing.T) {
 	rt := MakeListType(EmptyStructType)
 
-	st1 := MakeStructType2("One", StructField{"a", NumberType, false})
-	st2 := MakeStructType2("Two", StructField{"b", StringType, false})
+	st1 := MakeStructType("One", StructField{"a", NumberType, false})
+	st2 := MakeStructType("Two", StructField{"b", StringType, false})
 	ct := MakeListType(MakeUnionType(st1, st2))
 
 	assert.True(tt, IsSubtype(rt, ct))
@@ -390,22 +390,22 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert := assert.New(tt)
 
-	s1 := MakeStructType2("", StructField{"a", NumberType, true})
-	s2 := MakeStructType2("", StructField{"a", NumberType, false})
+	s1 := MakeStructType("", StructField{"a", NumberType, true})
+	s2 := MakeStructType("", StructField{"a", NumberType, false})
 	assert.True(IsSubtype(s1, s2))
 	assert.False(IsSubtype(s2, s1))
 
-	s3 := MakeStructType2("", StructField{"a", StringType, false})
+	s3 := MakeStructType("", StructField{"a", StringType, false})
 	assert.False(IsSubtype(s1, s3))
 	assert.False(IsSubtype(s3, s1))
 
-	s4 := MakeStructType2("", StructField{"a", StringType, true})
+	s4 := MakeStructType("", StructField{"a", StringType, true})
 	assert.False(IsSubtype(s1, s4))
 	assert.False(IsSubtype(s4, s1))
 
 	makeType := func(s string) *Type {
 		if s == "" {
-			return MakeStructType2("")
+			return MakeStructType("")
 		}
 
 		fs := strings.Split(s, " ")
@@ -418,7 +418,7 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 			}
 			fields[i] = StructField{f, BoolType, optional}
 		}
-		return MakeStructType2("", fields...)
+		return MakeStructType("", fields...)
 	}
 
 	test := func(t1s, t2s string, exp1, exp2 bool) {
@@ -456,8 +456,8 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	test("a? c? e", "b d e", true, false)
 	test("a? c? e?", "b d", true, false)
 
-	t1 := MakeStructType2("", StructField{"a", BoolType, true})
-	t2 := MakeStructType2("", StructField{"a", NumberType, true})
+	t1 := MakeStructType("", StructField{"a", BoolType, true})
+	t2 := MakeStructType("", StructField{"a", NumberType, true})
 	assert.False(IsSubtype(t1, t2))
 	assert.False(IsSubtype(t2, t1))
 }
