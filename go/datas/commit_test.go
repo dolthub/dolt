@@ -201,3 +201,16 @@ func TestFindCommonAncestor(t *testing.T) {
 		)
 	}
 }
+
+func TestNewCommitRegressionTest(t *testing.T) {
+	c1 := NewCommit(types.String("one"), types.NewSet(), types.EmptyStruct)
+	cx := NewCommit(types.Bool(true), types.NewSet(), types.EmptyStruct)
+	value := types.String("two")
+	parents := types.NewSet(types.NewRef(c1))
+	meta := types.NewStruct("", types.StructData{
+		"basis": cx,
+	})
+
+	// Used to fail
+	NewCommit(value, parents, meta)
+}

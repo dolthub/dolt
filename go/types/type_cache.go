@@ -142,9 +142,8 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 		fs := make(structFields, len(desc.fields))
 		didChange := false
 		for i, f := range desc.fields {
-			fs[i].Name = f.Name
 			st, changed := toUnresolvedType(f.Type, tc, level+1, append(parentStructTypes, t))
-			fs[i].Type = st
+			fs[i] = StructField{f.Name, st, f.Optional}
 			didChange = didChange || changed
 		}
 

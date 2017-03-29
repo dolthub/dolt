@@ -226,3 +226,22 @@ func TestMakeStructTypeFromFields(t *testing.T) {
 		assert.True(v == f)
 	}
 }
+
+func TestMakeUnionTypeStruct(t *testing.T) {
+	assert := assert.New(t)
+	t1 := MakeStructType2("")
+	t2 := MakeStructType2("", StructField{
+		Name: "b",
+		Type: MakeCycleType(0),
+	})
+	assert.False(t2.Desc.(StructDesc).fields[0].Optional)
+	actual := MakeUnionType(t1, t2)
+	expected := MakeStructType2("", StructField{
+		Name:     "b",
+		Type:     MakeCycleType(0),
+		Optional: true,
+	})
+
+	assert.True(expected.Desc.(StructDesc).fields[0].Optional)
+	assert.True(expected.Equals(actual), "Expected %s to equal %s", expected.Describe(), actual.Describe())
+}
