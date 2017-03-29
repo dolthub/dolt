@@ -426,7 +426,15 @@ func MakeStructType2(name string, fields ...StructField) *Type {
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	return makeSimplifiedType(elemTypes...)
+	return makeSimplifiedType(false, elemTypes...)
+}
+
+// MakeUnionTypeIntersectStructs is a bit of strange function. It creates a
+// simplified union type except for structs, where it creates interesection
+// types.
+// This function will go away so do not use it!
+func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
+	return makeSimplifiedType(true, elemTypes...)
 }
 
 func MakeCycleType(level uint32) *Type {
