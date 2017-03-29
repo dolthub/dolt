@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -89,8 +88,13 @@ func Unmarshal(v types.Value, out interface{}) (err error) {
 // Unmarshals a Noms value into a Go value using the same rules as Unmarshal().
 // Panics on failure.
 func MustUnmarshal(v types.Value, out interface{}) {
-	err := Unmarshal(v, out)
-	d.PanicIfError(err)
+	rv := reflect.ValueOf(out)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		panic(&InvalidUnmarshalError{reflect.TypeOf(out)})
+	}
+	rv = rv.Elem()
+	d := typeDecoder(rv.Type(), nomsTags{})
+	d(v, rv)
 }
 
 // Unmarshaler is an interface types can implement to provide their own

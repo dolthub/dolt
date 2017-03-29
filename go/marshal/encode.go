@@ -103,18 +103,16 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 			}
 		}
 	}()
-	rv := reflect.ValueOf(v)
-	encoder := typeEncoder(rv.Type(), nil, nomsTags{})
-	nomsValue = encoder(rv)
+	nomsValue = MustMarshal(v)
 	return
 }
 
 // MustMarshal marshals a Go value to a Noms value using the same rules as
 // Marshal(). Panics on failure.
 func MustMarshal(v interface{}) types.Value {
-	r, err := Marshal(v)
-	d.Chk.NoError(err)
-	return r
+	rv := reflect.ValueOf(v)
+	encoder := typeEncoder(rv.Type(), nil, nomsTags{})
+	return encoder(rv)
 }
 
 // Marshaler is an interface types can implement to provide their own encoding.

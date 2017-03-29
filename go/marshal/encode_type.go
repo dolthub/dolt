@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -35,6 +34,13 @@ func MarshalType(v interface{}) (nt *types.Type, err error) {
 			}
 		}
 	}()
+	nt = MustMarshalType(v)
+	return
+}
+
+// MustMarshalType computes a Noms type from a Go type or panics if there is an
+// error.
+func MustMarshalType(v interface{}) (nt *types.Type) {
 	rv := reflect.ValueOf(v)
 	nt = encodeType(rv.Type(), nil, nomsTags{}, encodeTypeOptions{
 		IgnoreOmitEmpty: true,
@@ -42,18 +48,10 @@ func MarshalType(v interface{}) (nt *types.Type, err error) {
 	})
 
 	if nt == nil {
-		err = &UnsupportedTypeError{Type: rv.Type()}
+		panic(&UnsupportedTypeError{Type: rv.Type()})
 	}
 
 	return
-}
-
-// MustMarshalType computes a Noms type from a Go type or panics if there is an
-// error.
-func MustMarshalType(v interface{}) *types.Type {
-	t, err := MarshalType(v)
-	d.PanicIfError(err)
-	return t
 }
 
 // TypeMarshaler is an interface types can implement to provide their own
