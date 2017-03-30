@@ -245,3 +245,15 @@ func TestMakeUnionTypeStruct(t *testing.T) {
 	assert.True(expected.Desc.(StructDesc).fields[0].Optional)
 	assert.True(expected.Equals(actual), "Expected %s to equal %s", expected.Describe(), actual.Describe())
 }
+
+func TestUnionWithCycles(t *testing.T) {
+	assert := assert.New(t)
+	t1 := MakeUnionType(MakeCycleType(0), MakeCycleType(1))
+	t2 := MakeUnionType(MakeCycleType(1), MakeCycleType(0))
+	assert.True(t1.Equals(t2))
+	assert.Equal(t1, t2)
+
+	t3 := MakeUnionType(MakeCycleType(1), MakeCycleType(0), MakeCycleType(0))
+	assert.True(t1.Equals(t3))
+	assert.Equal(t1, t3)
+}

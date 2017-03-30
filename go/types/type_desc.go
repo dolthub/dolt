@@ -4,7 +4,9 @@
 
 package types
 
-import "sort"
+import (
+	"sort"
+)
 
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
@@ -134,19 +136,24 @@ func (ts typeSlice) Less(i, j int) bool {
 
 func (ts typeSlice) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
 
+// unionLess is used for sorting union types in a predictable order as well as
+// validating the order when reading union types from a chunk.
 func unionLess(ti, tj *Type) bool {
-	if ti == tj {
-		return false
+	if ti.Equals(tj) {
+		panic("unreachable") // unions must not contain the same type twice.
 	}
 
 	ki, kj := ti.Kind(), tj.Kind()
 	if ki == kj {
-		if ki == StructKind {
+		switch ki {
+		case StructKind:
 			// Due to type simplification, the only thing that matters is the name of the struct.
 			return ti.Desc.(StructDesc).Name < tj.Desc.(StructDesc).Name
+		case CycleKind:
+			return ti.Desc.(CycleDesc) < tj.Desc.(CycleDesc)
+		default:
+			panic("unreachable") // We should have folded all other types into one.
 		}
-
-		return false
 	}
 	return ki < kj
 }

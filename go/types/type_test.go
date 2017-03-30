@@ -141,7 +141,7 @@ func TestVerifyStructName(t *testing.T) {
 	assertValid("a0_")
 }
 
-func TestUnionWithCycles(tt *testing.T) {
+func TestStructUnionWithCycles(tt *testing.T) {
 	inodeType := MakeStructTypeFromFields("Inode", FieldMap{
 		"attr": MakeStructTypeFromFields("Attr", FieldMap{
 			"ctime": NumberType,
