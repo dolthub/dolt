@@ -236,3 +236,25 @@ func (tc *TypeCache) simplifyStructs(expectedName string, ts typeset, intersectS
 
 	return tc.makeStructType(expectedName, fields)
 }
+
+func replaceAndCollectStructTypes(tc *TypeCache, t *Type) (*Type, map[string]map[*Type]struct{}) {
+	collected := map[string]map[*Type]struct{}{}
+	out, changed := walkStructTypes(tc, t, nil, func(t *Type, cycle bool) (*Type, bool) {
+		name := t.Desc.(StructDesc).Name
+
+		if !cycle {
+			// Do not collect if a cycle. We will collect when we get it on the wayt back.
+			s := collected[name]
+			if s == nil {
+				s = map[*Type]struct{}{}
+			}
+			s[t] = struct{}{}
+			collected[name] = s
+		}
+		tc.Lock()
+		defer tc.Unlock()
+		return tc.makeStructType(name, nil), true
+	})
+	d.PanicIfFalse(len(collected) > 0 == changed)
+	return out, collected
+}

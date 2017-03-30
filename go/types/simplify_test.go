@@ -271,3 +271,87 @@ func TestMakeSimplifiedUnion(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceAndCollectStructTypes(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(in *Type, expT *Type, expC map[string]map[*Type]struct{}) {
+		actT, actC := replaceAndCollectStructTypes(staticTypeCache, in)
+		assert.True(expT.Equals(actT), "Expected: %s, Actual: %s", expT.Describe(), actT.Describe())
+		assert.Equal(actC, expC)
+	}
+
+	test(
+		MakeStructType("A", StructField{"n", NumberType, false}),
+		MakeStructType("A"),
+		map[string]map[*Type]struct{}{
+			"A": {MakeStructType("A", StructField{"n", NumberType, false}): struct{}{}},
+		},
+	)
+
+	for _, make := range []func(*Type) *Type{MakeListType, MakeSetType, MakeRefType} {
+		test(
+			make(MakeStructType("A", StructField{"n", NumberType, false})),
+			make(MakeStructType("A")),
+			map[string]map[*Type]struct{}{
+				"A": {MakeStructType("A", StructField{"n", NumberType, false}): struct{}{}},
+			},
+		)
+	}
+
+	test(
+		MakeMapType(
+			MakeStructType("A", StructField{"n", NumberType, false}),
+			MakeStructType("A", StructField{"b", BoolType, false}),
+		),
+		MakeMapType(
+			MakeStructType("A"),
+			MakeStructType("A"),
+		),
+		map[string]map[*Type]struct{}{
+			"A": {
+				MakeStructType("A", StructField{"b", BoolType, false}):   struct{}{},
+				MakeStructType("A", StructField{"n", NumberType, false}): struct{}{},
+			},
+		},
+	)
+
+	test(
+		MakeStructType("A",
+			StructField{"b", MakeStructType("B"), false}),
+		MakeStructType("A"),
+		map[string]map[*Type]struct{}{
+			"A": {MakeStructType("A", StructField{"b", MakeStructType("B"), false}): struct{}{}},
+			"B": {MakeStructType("B"): struct{}{}},
+		},
+	)
+
+	test(
+		MakeStructType("A",
+			StructField{"b", MakeStructType("B", StructField{"n", NumberType, true}), false}),
+		MakeStructType("A"),
+		map[string]map[*Type]struct{}{
+			"A": {MakeStructType("A", StructField{"b", MakeStructType("B"), false}): struct{}{}},
+			"B": {MakeStructType("B", StructField{"n", NumberType, true}): struct{}{}},
+		},
+	)
+
+	test(
+		MakeStructType("A", StructField{"n", MakeCycleType(0), false}),
+		MakeStructType("A"),
+		map[string]map[*Type]struct{}{
+			"A": {MakeStructType("A", StructField{"n", MakeStructType("A"), false}): struct{}{}},
+		},
+	)
+
+	test(
+		MakeStructType("A",
+			StructField{"b", MakeStructType("B", StructField{"c", MakeCycleType(1), true}), false}),
+		MakeStructType("A"),
+		map[string]map[*Type]struct{}{
+			"A": {MakeStructType("A", StructField{"b", MakeStructType("B"), false}): struct{}{}},
+			"B": {MakeStructType("B", StructField{"c", MakeStructType("A"), true}): struct{}{}},
+		},
+	)
+
+}
