@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -18,7 +19,7 @@ func assertWriteHRSEqual(t *testing.T, expected string, v Value) {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf, floatFormat: 'g'}
 	w.Write(v)
-	assert.Equal(expected, buf.String())
+	assert.Equal(test.RemoveHashes(expected), test.RemoveHashes(buf.String()))
 }
 
 func assertWriteTaggedHRSEqual(t *testing.T, expected string, v Value) {
@@ -26,7 +27,7 @@ func assertWriteTaggedHRSEqual(t *testing.T, expected string, v Value) {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf, floatFormat: 'g'}
 	w.WriteTagged(v)
-	assert.Equal(expected, buf.String())
+	assert.Equal(test.RemoveHashes(expected), test.RemoveHashes(buf.String()))
 }
 
 func TestWriteHumanReadablePrimitiveValues(t *testing.T) {
@@ -63,8 +64,8 @@ func TestWriteHumanReadableRef(t *testing.T) {
 
 	x := Number(42)
 	rv := vs.WriteValue(x)
-	assertWriteHRSEqual(t, "b828k24s0s43lf9q70l302o6p6k7rfak", rv)
-	assertWriteTaggedHRSEqual(t, "Ref<Number>(b828k24s0s43lf9q70l302o6p6k7rfak)", rv)
+	assertWriteHRSEqual(t, "0123456789abcdefghijklmnopqrstuv", rv)
+	assertWriteTaggedHRSEqual(t, "Ref<Number>(0123456789abcdefghijklmnopqrstuv)", rv)
 }
 
 func TestWriteHumanReadableCollections(t *testing.T) {

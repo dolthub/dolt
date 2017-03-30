@@ -78,7 +78,7 @@ type listTestSuite struct {
 	elems testList
 }
 
-func newListTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *listTestSuite {
+func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *listTestSuite {
 	length := 1 << size
 	elems := newTestList(length)
 	tr := MakeListType(NumberType)
@@ -88,7 +88,6 @@ func newListTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 			col:                    list,
 			expectType:             tr,
 			expectLen:              uint64(length),
-			expectRef:              expectRefStr,
 			expectChunkCount:       expectChunkCount,
 			expectPrependChunkDiff: expectPrependChunkDiff,
 			expectAppendChunkDiff:  expectAppendChunkDiff,
@@ -153,15 +152,15 @@ func (suite *listTestSuite) TestMap() {
 }
 
 func TestListSuite1K(t *testing.T) {
-	suite.Run(t, newListTestSuite(10, "1md2squldk4fo7sg179pbqvdd6a3aa4p", 0, 0, 0))
+	suite.Run(t, newListTestSuite(10, 0, 0, 0))
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, "8h3s3pjmp2ihbr7270iqe446ij3bfmqr", 2, 2, 2))
+	suite.Run(t, newListTestSuite(12, 2, 2, 2))
 }
 
 func TestListSuite8K(t *testing.T) {
-	suite.Run(t, newListTestSuite(14, "v936b655mg56lb9jh7951ielec80et15", 5, 2, 2))
+	suite.Run(t, newListTestSuite(14, 5, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {
@@ -657,22 +656,17 @@ func TestListSet(t *testing.T) {
 }
 
 func TestListFirstNNumbers(t *testing.T) {
-	assert := assert.New(t)
-
 	nums := generateNumbersAsValues(testListSize)
-	s := NewList(nums...)
-	assert.Equal("tqpbqlu036sosdq9kg3lka7sjaklgslg", s.Hash().String())
+	NewList(nums...)
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	assert := assert.New(t)
 
 	nums := generateNumbersAsRefOfStructs(testListSize)
-	s := NewList(nums...)
-	assert.Equal("rf430ib43i82ppu0ucqardrej8jsqiba", s.Hash().String())
+	NewList(nums...)
 }
 
 func TestListModifyAfterRead(t *testing.T) {

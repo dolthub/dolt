@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -35,7 +36,7 @@ func (suite *QueryGraphQLSuite) SetupTest() {
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {
 	buf := &bytes.Buffer{}
 	Query(v, q, suite.vs, buf)
-	suite.JSONEq(expect, buf.String())
+	suite.JSONEq(test.RemoveHashes(expect), test.RemoveHashes(buf.String()))
 }
 
 func (suite *QueryGraphQLSuite) TestScalars() {
@@ -70,7 +71,7 @@ func (suite *QueryGraphQLSuite) TestStructBasic() {
 func (suite *QueryGraphQLSuite) TestEmptyStruct() {
 	s1 := types.NewStruct("", types.StructData{})
 
-	suite.assertQueryResult(s1, "{root{hash}}", `{"data":{"root":{"hash":"c66c33bb6na2m5mk0bek7eqqrl2t7gmv"}}}`)
+	suite.assertQueryResult(s1, "{root{hash}}", `{"data":{"root":{"hash":"0123456789abcdefghijklmnopqrstuv"}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestEmbeddedStruct() {
@@ -262,8 +263,8 @@ func (suite *QueryGraphQLSuite) TestRef() {
 	r := suite.vs.WriteValue(types.Number(100))
 
 	suite.assertQueryResult(r, "{root{targetValue}}", `{"data":{"root":{"targetValue":100}}}`)
-	suite.assertQueryResult(r, "{root{targetHash}}", `{"data":{"root":{"targetHash":"fpbhln9asjlalp10btna9ocuc4nj9v15"}}}`)
-	suite.assertQueryResult(r, "{root{targetValue targetHash}}", `{"data":{"root":{"targetHash":"fpbhln9asjlalp10btna9ocuc4nj9v15","targetValue":100}}}`)
+	suite.assertQueryResult(r, "{root{targetHash}}", `{"data":{"root":{"targetHash":"0123456789abcdefghijklmnopqrstuv"}}}`)
+	suite.assertQueryResult(r, "{root{targetValue targetHash}}", `{"data":{"root":{"targetHash":"0123456789abcdefghijklmnopqrstuv","targetValue":100}}}`)
 
 	r = suite.vs.WriteValue(types.NewStruct("Foo", types.StructData{
 		"a": types.Number(28),
@@ -398,10 +399,10 @@ func (suite *QueryGraphQLSuite) TestNestedCollection() {
 func (suite *QueryGraphQLSuite) TestLoFi() {
 	b := types.NewBlob(bytes.NewBufferString("I am a blob"))
 
-	suite.assertQueryResult(b, "{root}", `{"data":{"root":"h6jkv35uum62a7ovu14uvmhaf0sojgh6"}}`)
+	suite.assertQueryResult(b, "{root}", `{"data":{"root":"0123456789abcdefghijklmnopqrstuv"}}`)
 
 	t := types.StringType
-	suite.assertQueryResult(t, "{root}", `{"data":{"root":"pej65tf21rubhu9cb0oi5gqrkgf26aql"}}`)
+	suite.assertQueryResult(t, "{root}", `{"data":{"root":"0123456789abcdefghijklmnopqrstuv"}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestError() {

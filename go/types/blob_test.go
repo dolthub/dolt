@@ -59,7 +59,7 @@ type blobTestSuite struct {
 	buff []byte
 }
 
-func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *blobTestSuite {
+func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *blobTestSuite {
 	length := 1 << size
 	buff := randomBuff(size)
 	blob := NewBlob(bytes.NewReader(buff))
@@ -68,7 +68,6 @@ func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 			col:                    blob,
 			expectType:             BlobType,
 			expectLen:              uint64(length),
-			expectRef:              expectRefStr,
 			expectChunkCount:       expectChunkCount,
 			expectPrependChunkDiff: expectPrependChunkDiff,
 			expectAppendChunkDiff:  expectAppendChunkDiff,
@@ -96,19 +95,19 @@ func newBlobTestSuite(size uint, expectRefStr string, expectChunkCount int, expe
 }
 
 func TestBlobSuite4K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(12, "5bkejsg826116lmjv13qb2bcp42bntb8", 0, 0, 0))
+	suite.Run(t, newBlobTestSuite(12, 0, 0, 0))
 }
 
 func TestBlobSuite64K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(16, "k7pjegmih3lf4mp35vt8prk808c4itcs", 2, 2, 2))
+	suite.Run(t, newBlobTestSuite(16, 2, 2, 2))
 }
 
 func TestBlobSuite256K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(18, "9c7kamht186iaomc0pnrojkd8jli6qdf", 8, 2, 2))
+	suite.Run(t, newBlobTestSuite(18, 8, 2, 2))
 }
 
 func TestBlobSuite1M(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(20, "qfljcaes345d7g2fi5ta6ujdlok7tjf6", 29, 2, 2))
+	suite.Run(t, newBlobTestSuite(20, 29, 2, 2))
 }
 
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...

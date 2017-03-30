@@ -166,7 +166,7 @@ type mapTestSuite struct {
 	elems testMap
 }
 
-func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *mapTestSuite {
+func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *mapTestSuite {
 	length := 1 << size
 	keyType := gen(0).Type()
 	elems := newSortedTestMap(length, gen)
@@ -177,7 +177,6 @@ func newMapTestSuite(size uint, expectRefStr string, expectChunkCount int, expec
 			col:                    tmap,
 			expectType:             tr,
 			expectLen:              uint64(length),
-			expectRef:              expectRefStr,
 			expectChunkCount:       expectChunkCount,
 			expectPrependChunkDiff: expectPrependChunkDiff,
 			expectAppendChunkDiff:  expectAppendChunkDiff,
@@ -268,19 +267,19 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 }
 
 func TestMapSuite1K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "chqe8pkmi2lhn2buvqai357pgp3sg3t6", 3, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(10, 3, 2, 2, newNumber))
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "v6qlscpd5j6ba89v5ebkijgci2djcpls", 7, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, 7, 2, 2, newNumber))
 }
 
 func TestMapSuite1KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, "dpn6490q0cutprqiagtsqfetb3poeqqv", 2, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(10, 2, 2, 2, newNumberStruct))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, "nqo71g6qe6atgce8ii34mjin1o13fem8", 8, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 8, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -1097,7 +1096,6 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("jmtmv5mjipjrt5s6s6d80louisqhnj62", m.Hash().String())
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
@@ -1118,7 +1116,6 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	assert.Equal("alms3ajecv9ofgqbuug40jfnfsscjlc1", m.Hash().String())
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }

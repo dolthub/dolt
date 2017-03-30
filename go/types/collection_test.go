@@ -11,7 +11,6 @@ type collectionTestSuite struct {
 	col                    Collection
 	expectType             *Type
 	expectLen              uint64
-	expectRef              string
 	expectChunkCount       int
 	expectPrependChunkDiff int
 	expectAppendChunkDiff  int
@@ -22,10 +21,6 @@ type collectionTestSuite struct {
 
 type validateFn func(v2 Collection) bool
 type deltaFn func() Collection
-
-func (suite *collectionTestSuite) TestHash() {
-	suite.Equal(suite.expectRef, suite.col.Hash().String())
-}
 
 func (suite *collectionTestSuite) TestType() {
 	suite.True(suite.expectType.Equals(suite.col.Type()))
