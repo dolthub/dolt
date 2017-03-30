@@ -15,10 +15,24 @@ import (
 //   - test grouping of the various kinds
 //   - test cycles
 
+func simplifyRefs(ts typeset, intersectStructs bool) *Type {
+	return staticTypeCache.simplifyContainers(RefKind, ts, intersectStructs)
+}
+func simplifySets(ts typeset, intersectStructs bool) *Type {
+	return staticTypeCache.simplifyContainers(SetKind, ts, intersectStructs)
+}
+func simplifyLists(ts typeset, intersectStructs bool) *Type {
+	return staticTypeCache.simplifyContainers(ListKind, ts, intersectStructs)
+}
+
+func simplifyMaps(ts typeset, intersectStructs bool) *Type {
+	return staticTypeCache.simplifyMaps(ts, intersectStructs)
+}
+
 func TestSimplifyHelpers(t *testing.T) {
 	structSimplifier := func(n string) func(typeset, bool) *Type {
 		return func(ts typeset, intersectStructs bool) *Type {
-			return simplifyStructs(n, ts, intersectStructs)
+			return staticTypeCache.simplifyStructs(n, ts, intersectStructs)
 		}
 	}
 
@@ -252,7 +266,7 @@ func TestMakeSimplifiedUnion(t *testing.T) {
 		}
 
 		for i, c := range cases {
-			act := makeSimplifiedType(intersectStruct, c.in...)
+			act := staticTypeCache.makeSimplifiedType(intersectStruct, c.in...)
 			assert.True(t, c.out.Equals(act), "Test case as position %d - got %s, expected %s", i, act.Describe(), c.out.Describe())
 		}
 	}

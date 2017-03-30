@@ -1,6 +1,11 @@
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"sort"
+
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
+)
 
 // makeSimplifiedType returns a type that is a supertype of all the input types but is much
 // smaller and less complex than a straight union of all those types would be.
@@ -32,22 +37,21 @@ import "github.com/attic-labs/noms/go/d"
 //
 // Anytime any of the above cases generates a union as output, the same process
 // is applied to that union recursively.
-func makeSimplifiedType(intersectStructs bool, in ...*Type) *Type {
+func (tc *TypeCache) makeSimplifiedType(intersectStructs bool, in ...*Type) *Type {
 	ts := make(typeset, len(in))
 	for _, t := range in {
 		// De-cycle so that we handle cycles explicitly below. Otherwise, we would implicitly crawl
 		// cycles and recurse forever.
-		ut := ToUnresolvedType(t)
-		ts[ut] = struct{}{}
+		ts.Add(ToUnresolvedType(t))
 	}
 
 	// Impl de-cycles internally.
-	return makeSimplifiedTypeImpl(ts, intersectStructs)
+	return tc.makeSimplifiedTypeImpl(ts, intersectStructs)
 }
 
 // typeset is a helper that aggregates the unique set of input types for this algorithm, flattening
 // any unions recursively.
-type typeset map[*Type]struct{}
+type typeset map[hash.Hash]*Type
 
 func (ts typeset) Add(t *Type) {
 	switch t.Kind() {
@@ -56,7 +60,7 @@ func (ts typeset) Add(t *Type) {
 			ts.Add(et)
 		}
 	default:
-		ts[t] = struct{}{}
+		ts[t.Hash()] = t
 	}
 }
 
@@ -71,15 +75,15 @@ func newTypeset(t ...*Type) typeset {
 // makeSimplifiedTypeImpl is an implementation detail.
 // Warning: Do not call this directly. It assumes its input has been de-cycled using
 // ToUnresolvedType() and will infinitely recurse on cyclic types otherwise.
-func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
+func (tc *TypeCache) makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 	type how struct {
 		k NomsKind
 		n string
 	}
 
-	out := make([]*Type, 0, len(in))
+	out := make(typeSlice, 0, len(in))
 	groups := map[how]typeset{}
-	for t := range in {
+	for _, t := range in {
 		var h how
 		switch t.Kind() {
 		case RefKind, SetKind, ListKind, MapKind:
@@ -100,7 +104,7 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 
 	for h, ts := range groups {
 		if len(ts) == 1 {
-			for t := range ts {
+			for _, t := range ts {
 				out = append(out, t)
 			}
 			continue
@@ -109,15 +113,15 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 		var r *Type
 		switch h.k {
 		case RefKind:
-			r = simplifyRefs(ts, intersectStructs)
+			r = tc.simplifyContainers(h.k, ts, intersectStructs)
 		case SetKind:
-			r = simplifySets(ts, intersectStructs)
+			r = tc.simplifyContainers(h.k, ts, intersectStructs)
 		case ListKind:
-			r = simplifyLists(ts, intersectStructs)
+			r = tc.simplifyContainers(h.k, ts, intersectStructs)
 		case MapKind:
-			r = simplifyMaps(ts, intersectStructs)
+			r = tc.simplifyMaps(ts, intersectStructs)
 		case StructKind:
-			r = simplifyStructs(h.n, ts, intersectStructs)
+			r = tc.simplifyStructs(h.n, ts, intersectStructs)
 		}
 		out = append(out, r)
 	}
@@ -131,47 +135,49 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 		return out[0]
 	}
 
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.makeUnionType(out...)
+	sort.Sort(out)
+
+	tc.Lock()
+	defer tc.Unlock()
+
+	return tc.getCompoundType(UnionKind, out...)
 }
 
-func simplifyRefs(ts typeset, intersectStructs bool) *Type {
-	return simplifyContainers(RefKind, MakeRefType, ts, intersectStructs)
-}
-
-func simplifySets(ts typeset, intersectStructs bool) *Type {
-	return simplifyContainers(SetKind, MakeSetType, ts, intersectStructs)
-}
-
-func simplifyLists(ts typeset, intersectStructs bool) *Type {
-	return simplifyContainers(ListKind, MakeListType, ts, intersectStructs)
-}
-
-func simplifyContainers(expectedKind NomsKind, makeContainer func(elem *Type) *Type, ts typeset, intersectStructs bool) *Type {
+func (tc *TypeCache) simplifyContainers(expectedKind NomsKind, ts typeset, intersectStructs bool) *Type {
 	elemTypes := make(typeset, len(ts))
-	for t := range ts {
+	for _, t := range ts {
 		d.Chk.True(expectedKind == t.Kind())
 		elemTypes.Add(t.Desc.(CompoundDesc).ElemTypes[0])
 	}
-	return makeContainer(makeSimplifiedTypeImpl(elemTypes, intersectStructs))
+
+	elemType := tc.makeSimplifiedTypeImpl(elemTypes, intersectStructs)
+
+	tc.Lock()
+	defer tc.Unlock()
+
+	return tc.getCompoundType(expectedKind, elemType)
 }
 
-func simplifyMaps(ts typeset, intersectStructs bool) *Type {
+func (tc *TypeCache) simplifyMaps(ts typeset, intersectStructs bool) *Type {
 	keyTypes := make(typeset, len(ts))
 	valTypes := make(typeset, len(ts))
-	for t := range ts {
+	for _, t := range ts {
 		d.Chk.True(MapKind == t.Kind())
 		desc := t.Desc.(CompoundDesc)
 		keyTypes.Add(desc.ElemTypes[0])
 		valTypes.Add(desc.ElemTypes[1])
 	}
-	return MakeMapType(
-		makeSimplifiedTypeImpl(keyTypes, intersectStructs),
-		makeSimplifiedTypeImpl(valTypes, intersectStructs))
+
+	kt := tc.makeSimplifiedTypeImpl(keyTypes, intersectStructs)
+	vt := tc.makeSimplifiedTypeImpl(valTypes, intersectStructs)
+
+	tc.Lock()
+	defer tc.Unlock()
+
+	return tc.getCompoundType(MapKind, kt, vt)
 }
 
-func simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Type {
+func (tc *TypeCache) simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Type {
 	// We gather all the fields/types into allFields. If the number of
 	// times a field name is present is less that then number of types we
 	// are simplifying then the field must be optional.
@@ -186,7 +192,7 @@ func simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Ty
 	}
 	allFields := map[string]fieldTypeInfo{}
 
-	for t := range ts {
+	for _, t := range ts {
 		d.Chk.True(StructKind == t.Kind())
 		desc := t.Desc.(StructDesc)
 		d.Chk.True(expectedName == desc.Name)
@@ -212,10 +218,15 @@ func simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Ty
 	for name, fti := range allFields {
 		fields = append(fields, StructField{
 			Name:     name,
-			Type:     makeSimplifiedTypeImpl(fti.typeset, intersectStructs),
+			Type:     tc.makeSimplifiedTypeImpl(fti.typeset, intersectStructs),
 			Optional: !(intersectStructs && fti.anyNonOptional) && fti.count < count,
 		})
 	}
 
-	return MakeStructType(expectedName, fields...)
+	sort.Sort(fields)
+
+	tc.Lock()
+	defer tc.Unlock()
+
+	return tc.makeStructType(expectedName, fields)
 }
