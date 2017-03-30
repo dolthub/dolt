@@ -355,3 +355,44 @@ func TestReplaceAndCollectStructTypes(t *testing.T) {
 	)
 
 }
+
+func TestInlineStructTypes(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(in *Type, defs map[string]*Type, expT *Type) {
+		actT := inlineStructTypes(staticTypeCache, in, defs)
+		assert.True(expT.Equals(actT), "Expected: %s, Actual: %s", expT.Describe(), actT.Describe())
+	}
+
+	test(
+		MakeStructType("A"),
+		map[string]*Type{
+			"A": MakeStructType("A", StructField{"n", NumberType, false}),
+		},
+		MakeStructType("A", StructField{"n", NumberType, false}),
+	)
+
+	for _, make := range []func(*Type) *Type{MakeListType, MakeSetType, MakeRefType} {
+		test(
+			make(MakeStructType("A")),
+			map[string]*Type{
+				"A": MakeStructType("A", StructField{"n", NumberType, false}),
+			},
+			make(MakeStructType("A", StructField{"n", NumberType, false})),
+		)
+	}
+
+	test(
+		MakeMapType(
+			MakeStructType("A"),
+			MakeStructType("A"),
+		),
+		map[string]*Type{
+			"A": MakeStructType("A", StructField{"b", BoolType, false}, StructField{"n", NumberType, false}),
+		},
+		MakeMapType(
+			MakeStructType("A", StructField{"b", BoolType, false}, StructField{"n", NumberType, false}),
+			MakeStructType("A", StructField{"b", BoolType, false}, StructField{"n", NumberType, false}),
+		),
+	)
+}
