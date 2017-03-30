@@ -137,6 +137,12 @@ func (tc *TypeCache) makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *
 
 	sort.Sort(out)
 
+	for i := 1; i < len(out); i++ {
+		if !unionLess(out[i-1], out[i]) {
+			panic("Invalid union order!!!")
+		}
+	}
+
 	tc.Lock()
 	defer tc.Unlock()
 
