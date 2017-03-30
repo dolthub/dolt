@@ -41,6 +41,13 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 	case UnionKind:
 		w.writeKind(k)
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
+		for i := 1; i < len(elemTypes); i++ {
+			if !unionLess(elemTypes[i-1], elemTypes[i]) {
+				fmt.Println(elemTypes[i-1].Describe())
+				fmt.Println(elemTypes[i].Describe())
+				panic("Invalid union order in writeType")
+			}
+		}
 		w.writeUint32(uint32(len(elemTypes)))
 		for _, elemType := range elemTypes {
 			w.writeType(elemType, parentStructTypes)
