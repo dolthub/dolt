@@ -1062,7 +1062,7 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 
 func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	test := func(expected types.Value, val interface{}) {
-		suite.Equal(expected, InputToNomsValue(val, expected.Type()))
+		suite.True(expected.Equals(InputToNomsValue(val, expected.Type())))
 	}
 
 	test(types.Number(42), int(42))
@@ -1359,10 +1359,10 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 
 	tc := NewTypeConverter()
 	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
-		if nomsType == aVal.Type() {
+		if nomsType.Equals(aVal.Type()) {
 			return "A"
 		}
-		if nomsType == bVal.Type() {
+		if nomsType.Equals(bVal.Type()) {
 			return "BBB"
 		}
 		return DefaultNameFunc(nomsType, isInputType)
@@ -1402,7 +1402,7 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 	)
 	tc = NewTypeConverter()
 	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
-		if nomsType == aVal.Type() {
+		if nomsType.Equals(aVal.Type()) {
 			if isInputType {
 				return "AI"
 			}

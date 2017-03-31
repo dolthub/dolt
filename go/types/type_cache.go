@@ -279,34 +279,6 @@ func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
 	}
 }
 
-func checkForUnresolvedCycles(t, root *Type, parentStructTypes []*Type) {
-	desc := t.Desc
-
-	switch t.Kind() {
-	case CycleKind:
-		panic("ound an unexpected resolved cycle")
-
-	case ListKind, MapKind, RefKind, SetKind, UnionKind:
-		if t == root {
-			// If this is where we started, we don't need to keep going.
-			break
-		}
-		for _, elemType := range desc.(CompoundDesc).ElemTypes {
-			checkForUnresolvedCycles(elemType, root, parentStructTypes)
-		}
-
-	case StructKind:
-		if _, found := indexOfType(t, parentStructTypes); found {
-			return
-		}
-
-		parentStructTypes = append(parentStructTypes, t)
-		for _, field := range desc.(StructDesc).fields {
-			checkForUnresolvedCycles(field.Type, root, parentStructTypes)
-		}
-	}
-}
-
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
 func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
 	return tc.makeSimplifiedType(false, elemTypes...)

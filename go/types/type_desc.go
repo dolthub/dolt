@@ -139,7 +139,7 @@ func (ts typeSlice) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
 // unionLess is used for sorting union types in a predictable order as well as
 // validating the order when reading union types from a chunk.
 func unionLess(ti, tj *Type) bool {
-	if ti.Equals(tj) {
+	if ti == tj {
 		panic("unreachable") // unions must not contain the same type twice.
 	}
 

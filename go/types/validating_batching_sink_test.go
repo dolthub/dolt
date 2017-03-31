@@ -69,8 +69,6 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 }
 
 func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {
-	t.Skip() // Skippping this because we added a panic in writeType for debugging purpose.
-
 	data := []interface{}{
 		uint8(TypeKind),
 		uint8(UnionKind), uint32(2) /* len */, uint8(NumberKind), uint8(BoolKind),
