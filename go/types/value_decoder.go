@@ -14,18 +14,17 @@ import (
 type valueDecoder struct {
 	nomsReader
 	vr         ValueReader
-	tc         *TypeCache
 	typeDepth  int
 	validating bool
 }
 
 // |tc| must be locked as long as the valueDecoder is being used
-func newValueDecoder(nr nomsReader, vr ValueReader, tc *TypeCache) *valueDecoder {
-	return &valueDecoder{nr, vr, tc, 0, false}
+func newValueDecoder(nr nomsReader, vr ValueReader) *valueDecoder {
+	return &valueDecoder{nr, vr, 0, false}
 }
 
-func newValueDecoderWithValidation(nr nomsReader, vr ValueReader, tc *TypeCache) *valueDecoder {
-	return &valueDecoder{nr, vr, tc, 0, true}
+func newValueDecoderWithValidation(nr nomsReader, vr ValueReader) *valueDecoder {
+	return &valueDecoder{nr, vr, 0, true}
 }
 
 func (r *valueDecoder) readKind() NomsKind {
@@ -54,19 +53,19 @@ func (r *valueDecoder) readTypeInner() *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind:
-		return r.tc.getCompoundType(ListKind, r.readType())
+		return makeCompoundType(ListKind, r.readType())
 	case MapKind:
-		return r.tc.getCompoundType(MapKind, r.readType(), r.readType())
+		return makeCompoundType(MapKind, r.readType(), r.readType())
 	case RefKind:
-		return r.tc.getCompoundType(RefKind, r.readType())
+		return makeCompoundType(RefKind, r.readType())
 	case SetKind:
-		return r.tc.getCompoundType(SetKind, r.readType())
+		return makeCompoundType(SetKind, r.readType())
 	case StructKind:
 		return r.readStructType()
 	case UnionKind:
 		return r.readUnionType()
 	case CycleKind:
-		return r.tc.getCycleType(r.readUint32())
+		return MakeCycleType(r.readUint32())
 	}
 
 	d.PanicIfFalse(IsPrimitiveKind(k))
@@ -202,30 +201,7 @@ func boolToUint32(b bool) uint32 {
 	return 0
 }
 
-func (r *valueDecoder) readCachedStructType() *Type {
-	trie := r.tc.trieRoots[StructKind].Traverse(r.readIdent(r.tc))
-	count := r.readUint32()
-
-	for i := uint32(0); i < count; i++ {
-		trie = trie.Traverse(r.readIdent(r.tc))
-		trie = trie.Traverse(r.readType().id)
-		trie = trie.Traverse(boolToUint32(r.readBool()))
-	}
-
-	return trie.t
-}
-
 func (r *valueDecoder) readStructType() *Type {
-	// Try to decode cached type without allocating
-	pos := r.pos()
-	t := r.readCachedStructType()
-	if t != nil {
-		return t
-	}
-
-	// Cache miss. Go back to read and create type
-	r.seek(pos)
-
 	name := r.readString()
 	count := r.readUint32()
 
@@ -238,7 +214,7 @@ func (r *valueDecoder) readStructType() *Type {
 		}
 	}
 
-	return r.tc.makeStructTypeQuickly(name, fields, checkKindNoValidate)
+	return makeStructTypeQuickly(name, fields, checkKindNoValidate)
 }
 
 func (r *valueDecoder) readUnionType() *Type {
@@ -247,5 +223,5 @@ func (r *valueDecoder) readUnionType() *Type {
 	for i := uint32(0); i < l; i++ {
 		ts[i] = r.readType()
 	}
-	return r.tc.getCompoundType(UnionKind, ts...)
+	return makeCompoundType(UnionKind, ts...)
 }

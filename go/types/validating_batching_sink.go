@@ -24,9 +24,8 @@ type ValidatingBatchingSink struct {
 
 func NewValidatingBatchingSink(cs chunks.ChunkStore) *ValidatingBatchingSink {
 	return &ValidatingBatchingSink{
-		vs:   newLocalValueStore(cs),
-		cs:   cs,
-		pool: sync.Pool{New: func() interface{} { return NewTypeCache() }},
+		vs: newLocalValueStore(cs),
+		cs: cs,
 	}
 }
 
@@ -38,10 +37,8 @@ func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tc := vbs.pool.Get()
-			defer vbs.pool.Put(tc)
 			for c := range foundChunks {
-				v := DecodeFromBytes(c.Data(), vbs.vs, tc.(*TypeCache))
+				v := DecodeFromBytes(c.Data(), vbs.vs)
 				vbs.vs.setHintsForReadValue(v, c.Hash(), false)
 			}
 		}()
@@ -67,9 +64,7 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 	if vbs.vs.isPresent(h) {
 		return DecodedChunk{}
 	}
-	tc := vbs.pool.Get()
-	defer vbs.pool.Put(tc)
-	v := decodeFromBytesWithValidation(c.Data(), vbs.vs, tc.(*TypeCache))
+	v := decodeFromBytesWithValidation(c.Data(), vbs.vs)
 	if getHash(v) != h {
 		d.Panic("Invalid hash found")
 	}

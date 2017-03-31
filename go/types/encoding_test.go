@@ -25,20 +25,6 @@ func (r *nomsTestReader) pos() uint32 {
 	return uint32(r.i)
 }
 
-func (r *nomsTestReader) seek(pos uint32) {
-	r.i = int(pos)
-}
-
-func (r *nomsTestReader) readIdent(tc *TypeCache) uint32 {
-	s := r.readString()
-	id, ok := tc.identTable.entries[s]
-	if !ok {
-		id = tc.identTable.GetId(s)
-	}
-
-	return id
-}
-
 func (r *nomsTestReader) read() interface{} {
 	v := r.a[r.i]
 	r.i++
@@ -134,7 +120,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	assert.EqualValues(t, expect, tw.a)
 
 	ir := &nomsTestReader{expect, 0}
-	dec := newValueDecoder(ir, vs, staticTypeCache)
+	dec := newValueDecoder(ir, vs)
 	v2 := dec.readValue()
 	assert.True(t, ir.atEnd())
 	assert.True(t, v.Equals(v2))
@@ -380,7 +366,7 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		DecodeFromBytes(buff, nil, staticTypeCache)
+		DecodeFromBytes(buff, nil)
 	})
 }
 

@@ -16,17 +16,13 @@ import (
 //   - test cycles
 
 func simplifyRefs(ts typeset, intersectStructs bool) *Type {
-	return staticTypeCache.simplifyContainers(RefKind, ts, intersectStructs)
+	return simplifyContainers(RefKind, ts, intersectStructs)
 }
 func simplifySets(ts typeset, intersectStructs bool) *Type {
-	return staticTypeCache.simplifyContainers(SetKind, ts, intersectStructs)
+	return simplifyContainers(SetKind, ts, intersectStructs)
 }
 func simplifyLists(ts typeset, intersectStructs bool) *Type {
-	return staticTypeCache.simplifyContainers(ListKind, ts, intersectStructs)
-}
-
-func simplifyMaps(ts typeset, intersectStructs bool) *Type {
-	return staticTypeCache.simplifyMaps(ts, intersectStructs)
+	return simplifyContainers(ListKind, ts, intersectStructs)
 }
 
 func TestSimplifyType(t *testing.T) {
@@ -220,7 +216,7 @@ func TestSimplifyType(t *testing.T) {
 		}
 
 		for i, c := range cases {
-			act := staticTypeCache.makeSimplifiedType(intersectStruct, c.in...)
+			act := makeSimplifiedType(intersectStruct, c.in...)
 			assert.True(t, c.out.Equals(act), "Test case as position %d - got %s, wanted %s", i, act.Describe(), c.out.Describe())
 		}
 	}
@@ -322,7 +318,7 @@ func TestMakeSimplifiedUnion(t *testing.T) {
 		}
 
 		for i, c := range cases {
-			act := staticTypeCache.makeSimplifiedType(intersectStruct, c.in...)
+			act := makeSimplifiedType(intersectStruct, c.in...)
 			assert.True(t, c.out.Equals(act), "Test case as position %d - got %s, expected %s", i, act.Describe(), c.out.Describe())
 		}
 	}
@@ -332,7 +328,7 @@ func TestSimplifyStructFields(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(in []structFields, exp structFields) {
-		act := simplifyStructFields(staticTypeCache, in, false)
+		act := simplifyStructFields(in, false)
 		assert.Equal(act, exp)
 	}
 

@@ -27,21 +27,17 @@ func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 	return c
 }
 
-func DecodeFromBytes(data []byte, vr ValueReader, tc *TypeCache) Value {
-	tc.Lock()
-	defer tc.Unlock()
+func DecodeFromBytes(data []byte, vr ValueReader) Value {
 	br := &binaryNomsReader{data, 0}
-	dec := newValueDecoder(br, vr, tc)
+	dec := newValueDecoder(br, vr)
 	v := dec.readValue()
 	d.PanicIfFalse(br.pos() == uint32(len(data)))
 	return v
 }
 
-func decodeFromBytesWithValidation(data []byte, vr ValueReader, tc *TypeCache) Value {
-	tc.Lock()
-	defer tc.Unlock()
+func decodeFromBytesWithValidation(data []byte, vr ValueReader) Value {
 	br := &binaryNomsReader{data, 0}
-	dec := newValueDecoderWithValidation(br, vr, tc)
+	dec := newValueDecoderWithValidation(br, vr)
 	v := dec.readValue()
 	d.PanicIfFalse(br.pos() == uint32(len(data)))
 	return v
@@ -50,7 +46,7 @@ func decodeFromBytesWithValidation(data []byte, vr ValueReader, tc *TypeCache) V
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
 func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	v := DecodeFromBytes(c.Data(), vr, staticTypeCache)
+	v := DecodeFromBytes(c.Data(), vr)
 	if cacher, ok := v.(hashCacher); ok {
 		assignHash(cacher, c.Hash())
 	}
@@ -60,7 +56,6 @@ func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
 
 type nomsReader interface {
 	pos() uint32
-	seek(pos uint32)
 	readBytes() []byte
 	readUint8() uint8
 	readUint32() uint32
@@ -68,7 +63,6 @@ type nomsReader interface {
 	readNumber() Number
 	readBool() bool
 	readString() string
-	readIdent(tc *TypeCache) uint32
 	readHash() hash.Hash
 }
 
@@ -91,10 +85,6 @@ type binaryNomsReader struct {
 
 func (b *binaryNomsReader) pos() uint32 {
 	return b.offset
-}
-
-func (b *binaryNomsReader) seek(pos uint32) {
-	b.offset = pos
 }
 
 func (b *binaryNomsReader) readBytes() []byte {
@@ -155,18 +145,6 @@ func (b *binaryNomsReader) readString() string {
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
 	return v
-}
-
-// Note: It's somewhat of a layering violation that a nomsReaders knows about a TypeCache. The reason why the code is structured this way is that the go compiler can stack-allocate the string which is created from the byte slice, which is a fairly large perf gain.
-func (b *binaryNomsReader) readIdent(tc *TypeCache) uint32 {
-	size := b.readUint32()
-	id, ok := tc.identTable.entries[string(b.buff[b.offset:b.offset+size])]
-	if !ok {
-		id = tc.identTable.GetId(string(b.buff[b.offset : b.offset+size]))
-	}
-
-	b.offset += size
-	return id
 }
 
 func (b *binaryNomsReader) readHash() hash.Hash {
@@ -281,11 +259,6 @@ func (b *binaryNomsWriter) writeHash(h hash.Hash) {
 }
 
 func (b *binaryNomsWriter) appendType(t *Type) {
-	ensureTypeSerialization(t)
-	data := t.serialization
-	size := uint32(len(data))
-	b.ensureCapacity(size)
-
-	copy(b.buff[b.offset:], data)
-	b.offset += size
+	enc := valueEncoder{b, nil}
+	enc.writeType(t, nil)
 }

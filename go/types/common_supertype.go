@@ -80,7 +80,7 @@ func mapsIntersect(a, b *Type) bool {
 		aTypes, bTypes := typeList(a), typeList(b)
 		for _, t := range aTypes {
 			for _, u := range bTypes {
-				if t == u {
+				if t.Equals(u) {
 					return true
 				}
 			}

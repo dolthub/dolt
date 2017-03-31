@@ -4,22 +4,10 @@
 
 package types
 
-import (
-	"sort"
-	"sync"
-)
-
-type TypeCache struct {
-	identTable *identTable
-	trieRoots  map[NomsKind]*typeTrie
-	nextId     uint32
-	mu         *sync.Mutex
-}
-
-var staticTypeCache = NewTypeCache()
+import "sort"
 
 func makePrimitiveType(k NomsKind) *Type {
-	return newType(PrimitiveDesc(k), uint32(k))
+	return newType(PrimitiveDesc(k))
 }
 
 var BoolType = makePrimitiveType(BoolKind)
@@ -29,78 +17,26 @@ var BlobType = makePrimitiveType(BlobKind)
 var TypeType = makePrimitiveType(TypeKind)
 var ValueType = makePrimitiveType(ValueKind)
 
-func NewTypeCache() *TypeCache {
-	return &TypeCache{
-		newIdentTable(),
-		map[NomsKind]*typeTrie{
-			ListKind:   newTypeTrie(),
-			SetKind:    newTypeTrie(),
-			RefKind:    newTypeTrie(),
-			MapKind:    newTypeTrie(),
-			StructKind: newTypeTrie(),
-			CycleKind:  newTypeTrie(),
-			UnionKind:  newTypeTrie(),
-		},
-		256, // The first 255 type ids are reserved for the 8bit space of NomsKinds.
-		&sync.Mutex{},
-	}
+func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
+	return newType(CompoundDesc{kind, elemTypes})
 }
 
-func (tc *TypeCache) Lock() {
-	tc.mu.Lock()
-}
-
-func (tc *TypeCache) Unlock() {
-	tc.mu.Unlock()
-}
-
-func (tc *TypeCache) nextTypeId() uint32 {
-	next := tc.nextId
-	tc.nextId++
-	return next
-}
-
-func (tc *TypeCache) getCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
-	trie := tc.trieRoots[kind]
-	for _, t := range elemTypes {
-		trie = trie.Traverse(t.id)
-	}
-
-	if trie.t == nil {
-		trie.t = newType(CompoundDesc{kind, elemTypes}, tc.nextTypeId())
-	}
-
-	return trie.t
-}
-
-func (tc *TypeCache) makeStructTypeQuickly(name string, fields structFields, checkKind checkKindType) *Type {
-	trie := tc.trieRoots[StructKind].Traverse(tc.identTable.GetId(name))
-	for _, field := range fields {
-		trie = trie.Traverse(tc.identTable.GetId(field.Name))
-		trie = trie.Traverse(field.Type.id)
-		trie = trie.Traverse(boolToUint32(field.Optional))
-	}
-
-	if trie.t == nil {
-		t := newType(StructDesc{name, fields}, 0)
-		if t.HasUnresolvedCycle() {
-			t, _ = toUnresolvedType(t, tc, -1, nil)
-			resolveStructCycles(t, nil)
-			if !t.HasUnresolvedCycle() {
-				checkStructType(t, checkKind)
-			}
+func makeStructTypeQuickly(name string, fields structFields, checkKind checkKindType) *Type {
+	t := newType(StructDesc{name, fields})
+	if t.HasUnresolvedCycle() {
+		t, _ = toUnresolvedType(t, -1, nil)
+		resolveStructCycles(t, nil)
+		if !t.HasUnresolvedCycle() {
+			checkStructType(t, checkKind)
 		}
-		t.id = tc.nextTypeId()
-		trie.t = t
 	}
-
-	return trie.t
+	return t
 }
 
-func (tc *TypeCache) makeStructType(name string, fields structFields) *Type {
+func makeStructType(name string, fields structFields) *Type {
 	verifyStructName(name)
 	verifyFields(fields)
-	return tc.makeStructTypeQuickly(name, fields, checkKindNormalize)
+	return makeStructTypeQuickly(name, fields, checkKindNormalize)
 }
 
 func indexOfType(t *Type, tl []*Type) (uint32, bool) {
@@ -113,11 +49,11 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 }
 
 // Returns a new type where cyclic pointer references are replaced with Cycle<N> types.
-func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Type) (*Type, bool) {
+func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, bool) {
 	i, found := indexOfType(t, parentStructTypes)
 	if found {
 		cycle := CycleDesc(uint32(len(parentStructTypes)) - i - 1)
-		return newType(cycle, 0xfa15e), true // This type is just a placeholder. It doesn't need a real id.
+		return newType(cycle), true // This type is just a placeholder. It doesn't need a real id.
 	}
 
 	switch desc := t.Desc.(type) {
@@ -125,7 +61,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 		ts := make(typeSlice, len(desc.ElemTypes))
 		didChange := false
 		for i, et := range desc.ElemTypes {
-			st, changed := toUnresolvedType(et, tc, level, parentStructTypes)
+			st, changed := toUnresolvedType(et, level, parentStructTypes)
 			ts[i] = st
 			didChange = didChange || changed
 		}
@@ -134,12 +70,12 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return newType(CompoundDesc{t.Kind(), ts}, tc.nextTypeId()), true
+		return newType(CompoundDesc{t.Kind(), ts}), true
 	case StructDesc:
 		fs := make(structFields, len(desc.fields))
 		didChange := false
 		for i, f := range desc.fields {
-			st, changed := toUnresolvedType(f.Type, tc, level+1, append(parentStructTypes, t))
+			st, changed := toUnresolvedType(f.Type, level+1, append(parentStructTypes, t))
 			fs[i] = StructField{f.Name, st, f.Optional}
 			didChange = didChange || changed
 		}
@@ -148,7 +84,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 			return t, false
 		}
 
-		return newType(StructDesc{desc.Name, fs}, tc.nextTypeId()), true
+		return newType(StructDesc{desc.Name, fs}), true
 	case CycleDesc:
 		cycleLevel := int(desc)
 		return t, cycleLevel <= level // Only cycles which can be resolved in the current struct.
@@ -159,7 +95,7 @@ func toUnresolvedType(t *Type, tc *TypeCache, level int, parentStructTypes []*Ty
 
 // ToUnresolvedType replaces cycles (by pointer comparison) in types to Cycle types.
 func ToUnresolvedType(t *Type) *Type {
-	t2, _ := toUnresolvedType(t, staticTypeCache, 0, nil)
+	t2, _ := toUnresolvedType(t, 0, nil)
 	return t2
 }
 
@@ -280,42 +216,24 @@ func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
 }
 
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
-func (tc *TypeCache) makeUnionType(elemTypes ...*Type) *Type {
-	return tc.makeSimplifiedType(false, elemTypes...)
-}
-
-func (tc *TypeCache) getCycleType(level uint32) *Type {
-	trie := tc.trieRoots[CycleKind].Traverse(level)
-
-	if trie.t == nil {
-		trie.t = newType(CycleDesc(level), tc.nextTypeId())
-	}
-
-	return trie.t
+func makeUnionType(elemTypes ...*Type) *Type {
+	return makeSimplifiedType(false, elemTypes...)
 }
 
 func MakeListType(elemType *Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCompoundType(ListKind, elemType)
+	return makeCompoundType(ListKind, elemType)
 }
 
 func MakeSetType(elemType *Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCompoundType(SetKind, elemType)
+	return makeCompoundType(SetKind, elemType)
 }
 
 func MakeRefType(elemType *Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCompoundType(RefKind, elemType)
+	return makeCompoundType(RefKind, elemType)
 }
 
 func MakeMapType(keyType, valType *Type) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCompoundType(MapKind, keyType, valType)
+	return makeCompoundType(MapKind, keyType, valType)
 }
 
 type FieldMap map[string]*Type
@@ -328,7 +246,7 @@ func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
 		i++
 	}
 	sort.Sort(&fs)
-	return staticTypeCache.makeStructType(name, fs)
+	return makeStructType(name, fs)
 }
 
 // StructField describes a field in a struct type.
@@ -348,14 +266,11 @@ func MakeStructType(name string, fields ...StructField) *Type {
 	fs := structFields(fields)
 	sort.Sort(&fs)
 
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-
-	return staticTypeCache.makeStructType(name, fs)
+	return makeStructType(name, fs)
 }
 
 func MakeUnionType(elemTypes ...*Type) *Type {
-	return staticTypeCache.makeUnionType(elemTypes...)
+	return makeUnionType(elemTypes...)
 }
 
 // MakeUnionTypeIntersectStructs is a bit of strange function. It creates a
@@ -363,51 +278,9 @@ func MakeUnionType(elemTypes ...*Type) *Type {
 // types.
 // This function will go away so do not use it!
 func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
-	return staticTypeCache.makeSimplifiedType(true, elemTypes...)
+	return makeSimplifiedType(true, elemTypes...)
 }
 
 func MakeCycleType(level uint32) *Type {
-	staticTypeCache.Lock()
-	defer staticTypeCache.Unlock()
-	return staticTypeCache.getCycleType(level)
-}
-
-// All types in noms are created in a deterministic order. A typeTrie stores types within a typeCache and allows construction of a prexisting type to return the already existing one rather than allocate a new one.
-type typeTrie struct {
-	t       *Type
-	entries map[uint32]*typeTrie
-}
-
-func newTypeTrie() *typeTrie {
-	return &typeTrie{entries: map[uint32]*typeTrie{}}
-}
-
-func (tct *typeTrie) Traverse(typeId uint32) *typeTrie {
-	next, ok := tct.entries[typeId]
-	if !ok {
-		// Insert edge
-		next = newTypeTrie()
-		tct.entries[typeId] = next
-	}
-	return next
-}
-
-type identTable struct {
-	entries map[string]uint32
-	nextId  uint32
-}
-
-func newIdentTable() *identTable {
-	return &identTable{entries: map[string]uint32{}}
-}
-
-func (it *identTable) GetId(ident string) uint32 {
-	id, ok := it.entries[ident]
-	if !ok {
-		id = it.nextId
-		it.nextId++
-		it.entries[ident] = id
-	}
-
-	return id
+	return newType(CycleDesc(level))
 }
