@@ -16,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/status"
@@ -153,7 +154,7 @@ func runUpdate(args []string) int {
 
 func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootObject types.Value, relPath types.Path) {
 	typeCacheMutex := sync.Mutex{}
-	typeCache := map[*types.Type]bool{}
+	typeCache := map[hash.Hash]bool{}
 
 	var txRe *regexp.Regexp
 	if txRegexArg != "" {
@@ -166,7 +167,7 @@ func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootOb
 	types.WalkValues(rootObject, db, func(v types.Value) bool {
 		typ := v.Type()
 		typeCacheMutex.Lock()
-		hasPath, ok := typeCache[typ]
+		hasPath, ok := typeCache[typ.Hash()]
 		typeCacheMutex.Unlock()
 		if !ok || hasPath {
 			pathResolved := false
@@ -177,7 +178,7 @@ func addElementsToGraphBuilder(gb *types.GraphBuilder, db datas.Database, rootOb
 			}
 			if !ok {
 				typeCacheMutex.Lock()
-				typeCache[typ] = pathResolved
+				typeCache[typ.Hash()] = pathResolved
 				typeCacheMutex.Unlock()
 			}
 		}
