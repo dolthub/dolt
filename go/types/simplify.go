@@ -184,52 +184,14 @@ func (tc *TypeCache) simplifyMaps(ts typeset, intersectStructs bool) *Type {
 }
 
 func (tc *TypeCache) simplifyStructs(expectedName string, ts typeset, intersectStructs bool) *Type {
-	// We gather all the fields/types into allFields. If the number of
-	// times a field name is present is less that then number of types we
-	// are simplifying then the field must be optional.
-	// If we see an optional field we do not increment the count for it and
-	// it will be treated as optional in the end.
-
-	// If intersectStructs is true we need to pick the more restrictive version (n: T over n?: T).
-	type fieldTypeInfo struct {
-		anyNonOptional bool
-		count          int
-		typeset        typeset
-	}
-	allFields := map[string]fieldTypeInfo{}
-
+	allFields := make([]structFields, 0, len(ts))
 	for _, t := range ts {
-		d.Chk.True(StructKind == t.Kind())
 		desc := t.Desc.(StructDesc)
-		d.Chk.True(expectedName == desc.Name)
-		desc.IterFields(func(name string, t *Type, optional bool) {
-			fti, ok := allFields[name]
-			if !ok {
-				fti = fieldTypeInfo{
-					count:   0,
-					typeset: typeset{},
-				}
-			}
-			fti.typeset.Add(t)
-			if !optional {
-				fti.count++
-				fti.anyNonOptional = true
-			}
-			allFields[name] = fti
-		})
+		d.PanicIfFalse(expectedName == desc.Name)
+		allFields = append(allFields, desc.fields)
 	}
 
-	count := len(ts)
-	fields := make(structFields, 0, count)
-	for name, fti := range allFields {
-		fields = append(fields, StructField{
-			Name:     name,
-			Type:     tc.makeSimplifiedTypeImpl(fti.typeset, intersectStructs),
-			Optional: !(intersectStructs && fti.anyNonOptional) && fti.count < count,
-		})
-	}
-
-	sort.Sort(fields)
+	fields := simplifyStructFields(tc, allFields, intersectStructs)
 
 	tc.Lock()
 	defer tc.Unlock()
@@ -268,4 +230,54 @@ func inlineStructTypes(tc *TypeCache, t *Type, defs map[string]*Type) *Type {
 	})
 
 	return out
+}
+
+func simplifyStructFields(tc *TypeCache, in []structFields, intersectStructs bool) structFields {
+	// We gather all the fields/types into allFields. If the number of
+	// times a field name is present is less that then number of types we
+	// are simplifying then the field must be optional.
+	// If we see an optional field we do not increment the count for it and
+	// it will be treated as optional in the end.
+
+	// If intersectStructs is true we need to pick the more restrictive version (n: T over n?: T).
+	type fieldTypeInfo struct {
+		anyNonOptional bool
+		count          int
+		typeset        typeset
+	}
+	allFields := map[string]fieldTypeInfo{}
+
+	for _, ff := range in {
+		for _, f := range ff {
+			name := f.Name
+			t := f.Type
+			optional := f.Optional
+			fti, ok := allFields[name]
+			if !ok {
+				fti = fieldTypeInfo{
+					typeset: typeset{},
+				}
+			}
+			fti.typeset.Add(t)
+			if !optional {
+				fti.count++
+				fti.anyNonOptional = true
+			}
+			allFields[name] = fti
+		}
+	}
+
+	count := len(in)
+	fields := make(structFields, 0, count)
+	for name, fti := range allFields {
+		fields = append(fields, StructField{
+			Name:     name,
+			Type:     tc.makeSimplifiedTypeImpl(fti.typeset, intersectStructs),
+			Optional: !(intersectStructs && fti.anyNonOptional) && fti.count < count,
+		})
+	}
+
+	sort.Sort(fields)
+
+	return fields
 }

@@ -396,3 +396,53 @@ func TestInlineStructTypes(t *testing.T) {
 		),
 	)
 }
+
+func TestSimplifyStructFields(t *testing.T) {
+	assert := assert.New(t)
+
+	test := func(in []structFields, exp structFields) {
+		act := simplifyStructFields(staticTypeCache, in, false)
+		assert.Equal(act, exp)
+	}
+
+	test([]structFields{
+		structFields{
+			StructField{"a", BoolType, false},
+		},
+		structFields{
+			StructField{"a", BoolType, false},
+		},
+	},
+		structFields{
+			StructField{"a", BoolType, false},
+		},
+	)
+
+	test([]structFields{
+		structFields{
+			StructField{"a", BoolType, false},
+		},
+		structFields{
+			StructField{"b", BoolType, false},
+		},
+	},
+		structFields{
+			StructField{"a", BoolType, true},
+			StructField{"b", BoolType, true},
+		},
+	)
+
+	test([]structFields{
+		structFields{
+			StructField{"a", BoolType, false},
+		},
+		structFields{
+			StructField{"a", BoolType, true},
+		},
+	},
+		structFields{
+			StructField{"a", BoolType, true},
+		},
+	)
+
+}
