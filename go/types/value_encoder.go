@@ -30,7 +30,7 @@ func (w *valueEncoder) writeRef(r Ref) {
 }
 
 func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
-	k := t.Kind()
+	k := t.TargetKind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
 		w.writeKind(k)
@@ -119,7 +119,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 func (w *valueEncoder) writeValue(v Value) {
 	t := v.Type()
 	w.appendType(t)
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case BlobKind:
 		seq := v.(Blob).sequence()
 		if w.maybeWriteMetaSequence(seq) {
@@ -166,7 +166,7 @@ func (w *valueEncoder) writeValue(v Value) {
 	case StructKind:
 		w.writeStruct(v, t)
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.TargetKind()]))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}

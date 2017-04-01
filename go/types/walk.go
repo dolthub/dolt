@@ -97,7 +97,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 }
 
 func mightContainStructs(t *Type) (mightHaveStructs bool) {
-	if t.Kind() == StructKind || t.Kind() == ValueKind {
+	if t.TargetKind() == StructKind || t.TargetKind() == ValueKind {
 		mightHaveStructs = true
 		return
 	}

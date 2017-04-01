@@ -105,6 +105,10 @@ func (l List) Type() *Type {
 	return l.seq.Type()
 }
 
+func (l List) Kind() NomsKind {
+	return ListKind
+}
+
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {

@@ -46,7 +46,7 @@ type orderedKey struct {
 }
 
 func newOrderedKey(v Value) orderedKey {
-	if isKindOrderedByValue(v.Type().Kind()) {
+	if isKindOrderedByValue(v.Kind()) {
 		return orderedKey{true, v, hash.Hash{}}
 	}
 	return orderedKey{false, v, v.Hash()}
@@ -134,6 +134,10 @@ func (ms metaSequence) Type() *Type {
 	return ms.t
 }
 
+func (ms metaSequence) Kind() NomsKind {
+	return ms.t.TargetKind()
+}
+
 func (ms metaSequence) numLeaves() uint64 {
 	return ms.cumulativeNumberOfLeaves(len(ms.tuples) - 1)
 }
@@ -157,7 +161,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 
 	childIsMeta := false
 	isIndexedSequence := false
-	if ListKind == ms.Type().Kind() {
+	if ListKind == ms.Kind() {
 		isIndexedSequence = true
 	}
 
@@ -187,7 +191,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		return newListLeafSequence(ms.vr, valueItems...)
 	}
 
-	if MapKind == ms.Type().Kind() {
+	if MapKind == ms.Kind() {
 		return newMapLeafSequence(ms.vr, mapItems...)
 	}
 
@@ -309,4 +313,8 @@ func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 
 func (es emptySequence) getChildSequence(i int) sequence {
 	return nil
+}
+
+func (es emptySequence) Kind() NomsKind {
+	panic("empty sequence")
 }

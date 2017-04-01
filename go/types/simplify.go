@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -60,7 +61,7 @@ func makeSimplifiedType(intersectStructs bool, in ...*Type) *Type {
 type typeset map[*Type]struct{}
 
 func (ts typeset) Add(t *Type) {
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case UnionKind:
 		for _, et := range t.Desc.(CompoundDesc).ElemTypes {
 			ts.Add(et)
@@ -91,11 +92,11 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 	groups := map[how]typeset{}
 	for t := range in {
 		var h how
-		switch t.Kind() {
+		switch t.TargetKind() {
 		case RefKind, SetKind, ListKind, MapKind:
-			h = how{k: t.Kind()}
+			h = how{k: t.TargetKind()}
 		case StructKind:
-			h = how{k: t.Kind(), n: t.Desc.(StructDesc).Name}
+			h = how{k: t.TargetKind(), n: t.Desc.(StructDesc).Name}
 		default:
 			out = append(out, t)
 			continue
@@ -127,6 +128,10 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 		case MapKind:
 			r = simplifyMaps(ts, intersectStructs)
 		case StructKind:
+			fmt.Println("Len", len(ts), ts)
+			for k, _ := range ts {
+				fmt.Println(k.Describe(), k)
+			}
 			panic("unreachable") // we have alreade folded structs
 		}
 		out = append(out, r)
@@ -149,7 +154,7 @@ func makeSimplifiedTypeImpl(in typeset, intersectStructs bool) *Type {
 func simplifyContainers(expectedKind NomsKind, ts typeset, intersectStructs bool) *Type {
 	elemTypes := make(typeset, len(ts))
 	for t := range ts {
-		d.Chk.True(expectedKind == t.Kind())
+		d.Chk.True(expectedKind == t.TargetKind())
 		elemTypes.Add(t.Desc.(CompoundDesc).ElemTypes[0])
 	}
 
@@ -162,7 +167,7 @@ func simplifyMaps(ts typeset, intersectStructs bool) *Type {
 	keyTypes := make(typeset, len(ts))
 	valTypes := make(typeset, len(ts))
 	for t := range ts {
-		d.Chk.True(MapKind == t.Kind())
+		d.Chk.True(MapKind == t.TargetKind())
 		desc := t.Desc.(CompoundDesc)
 		keyTypes.Add(desc.ElemTypes[0])
 		valTypes.Add(desc.ElemTypes[1])
@@ -180,7 +185,7 @@ type unsimplifiedStruct struct {
 }
 
 func removeAndCollectStructFields(t *Type, seen map[*Type]*Type, pendingStructs map[string]*unsimplifiedStruct) (*Type, bool) {
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case BoolKind, NumberKind, StringKind, BlobKind, ValueKind, TypeKind:
 		return t, false
 	case ListKind, MapKind, RefKind, SetKind, UnionKind:
@@ -196,7 +201,7 @@ func removeAndCollectStructFields(t *Type, seen map[*Type]*Type, pendingStructs 
 			return t, false
 		}
 
-		return makeCompoundType(t.Kind(), newElemTypes...), true
+		return makeCompoundType(t.TargetKind(), newElemTypes...), true
 
 	case StructKind:
 		newStruct, found := seen[t]

@@ -24,16 +24,16 @@ func ContainCommonSupertype(a, b *Type) bool {
 }
 
 func containCommonSupertypeImpl(a, b *Type) bool {
-	if a.Kind() == ValueKind || b.Kind() == ValueKind {
+	if a.TargetKind() == ValueKind || b.TargetKind() == ValueKind {
 		return true
 	}
-	if a.Kind() == UnionKind || b.Kind() == UnionKind {
+	if a.TargetKind() == UnionKind || b.TargetKind() == UnionKind {
 		return unionsIntersect(a, b)
 	}
-	if a.Kind() != b.Kind() {
+	if a.TargetKind() != b.TargetKind() {
 		return false
 	}
-	switch k := a.Kind(); k {
+	switch k := a.TargetKind(); k {
 	case StructKind:
 		return structsIntersect(a, b)
 	case ListKind, SetKind, RefKind:
@@ -98,7 +98,7 @@ func mapsIntersect(a, b *Type) bool {
 }
 
 func structsIntersect(a, b *Type) bool {
-	d.Chk.True(StructKind == a.Kind() && StructKind == b.Kind())
+	d.Chk.True(StructKind == a.TargetKind() && StructKind == b.TargetKind())
 	aDesc := a.Desc.(StructDesc)
 	bDesc := b.Desc.(StructDesc)
 	// must be either the same name or one has no name

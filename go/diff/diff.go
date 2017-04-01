@@ -86,7 +86,7 @@ func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, l
 }
 
 func (d differ) diff(p types.Path, v1, v2 types.Value) bool {
-	switch v1.Type().Kind() {
+	switch v1.Kind() {
 	case types.ListKind:
 		return d.diffLists(p, v1.(types.List), v2.(types.List))
 	case types.MapKind:
@@ -258,8 +258,8 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 
 // shouldDescend returns true, if Value is not primitive or is a Ref.
 func shouldDescend(v1, v2 types.Value) bool {
-	kind := v1.Type().Kind()
-	return !types.IsPrimitiveKind(kind) && kind == v2.Type().Kind() && kind != types.RefKind
+	kind := v1.Kind()
+	return !types.IsPrimitiveKind(kind) && kind == v2.Kind() && kind != types.RefKind
 }
 
 // stopSent returns true if a message has been sent to this StopChannel

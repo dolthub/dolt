@@ -120,7 +120,7 @@ func migrateType(source *v7types.Type) *types.Type {
 		return dest
 	}
 
-	switch source.Kind() {
+	switch source.TargetKind() {
 	case v7types.BoolKind:
 		return types.BoolType
 	case v7types.NumberKind:
@@ -161,5 +161,5 @@ func migrateType(source *v7types.Type) *types.Type {
 		return types.MakeCycleType(uint32(source.Desc.(types.CycleDesc)))
 	}
 
-	panic(fmt.Sprintf("unreachable kind: %d", source.Kind()))
+	panic(fmt.Sprintf("unreachable kind: %d", source.TargetKind()))
 }

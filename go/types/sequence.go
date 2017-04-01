@@ -15,6 +15,7 @@ type sequence interface {
 	valueReader() ValueReader
 	WalkRefs(cb RefCallback)
 	Type() *Type
+	Kind() NomsKind
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence
 }

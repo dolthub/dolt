@@ -143,7 +143,7 @@ func unionLess(ti, tj *Type) bool {
 		panic("unreachable") // unions must not contain the same type twice.
 	}
 
-	ki, kj := ti.Kind(), tj.Kind()
+	ki, kj := ti.TargetKind(), tj.TargetKind()
 	if ki == kj {
 		switch ki {
 		case StructKind:

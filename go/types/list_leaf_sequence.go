@@ -36,3 +36,7 @@ func (ll listLeafSequence) WalkRefs(cb RefCallback) {
 		v.WalkRefs(cb)
 	}
 }
+
+func (ll listLeafSequence) Kind() NomsKind {
+	return BlobKind
+}

@@ -145,7 +145,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScal
 	// The graphql package has built in support for recursive types using
 	// FieldsThunk which allows the inner type to refer to an outer type by
 	// lazily initializing the fields.
-	switch nomsType.Kind() {
+	switch nomsType.TargetKind() {
 	case types.NumberKind:
 		gqlType = graphql.Float
 		if boxedIfScalar {
@@ -211,7 +211,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLInputType(nomsType *types.Type) (graph
 	}
 
 	var err error
-	switch nomsType.Kind() {
+	switch nomsType.TargetKind() {
 	case types.NumberKind:
 		gqlType = graphql.Float
 
@@ -256,7 +256,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLInputType(nomsType *types.Type) (graph
 }
 
 func isEmptyNomsUnion(nomsType *types.Type) bool {
-	return nomsType.Kind() == types.UnionKind && len(nomsType.Desc.(types.CompoundDesc).ElemTypes) == 0
+	return nomsType.TargetKind() == types.UnionKind && len(nomsType.Desc.(types.CompoundDesc).ElemTypes) == 0
 }
 
 // Creates a union of structs type.
@@ -696,7 +696,7 @@ func GetInputTypeName(nomsType *types.Type) string {
 }
 
 func getTypeName(nomsType *types.Type, suffix string) string {
-	switch nomsType.Kind() {
+	switch nomsType.TargetKind() {
 	case types.BoolKind:
 		return "Boolean"
 
@@ -798,7 +798,7 @@ func (tc *TypeConverter) listAndSetToGraphQLObject(nomsType *types.Type) *graphq
 				var args graphql.FieldConfigArgument
 				var getSubvalues getSubvaluesFn
 
-				switch nomsType.Kind() {
+				switch nomsType.TargetKind() {
 				case types.ListKind:
 					args = listArgs
 					getSubvalues = getListElements
@@ -956,7 +956,7 @@ func MaybeGetScalar(v types.Value) interface{} {
 // InputToNomsValue converts a GraphQL input value (as used in arguments and
 // variables) to a Noms value.
 func InputToNomsValue(arg interface{}, nomsType *types.Type) types.Value {
-	switch nomsType.Kind() {
+	switch nomsType.TargetKind() {
 	case types.BoolKind:
 		return types.Bool(arg.(bool))
 	case types.NumberKind:
@@ -973,7 +973,7 @@ func InputToNomsValue(arg interface{}, nomsType *types.Type) types.Value {
 		for i, v := range sl {
 			vs[i] = InputToNomsValue(v, elemType)
 		}
-		if nomsType.Kind() == types.ListKind {
+		if nomsType.TargetKind() == types.ListKind {
 			return types.NewList(vs...)
 		}
 		return types.NewSet(vs...)

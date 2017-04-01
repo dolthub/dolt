@@ -80,3 +80,7 @@ func (ml mapLeafSequence) Len() uint64 {
 func (ml mapLeafSequence) Empty() bool {
 	return ml.Len() == uint64(0)
 }
+
+func (ml mapLeafSequence) Kind() NomsKind {
+	return MapKind
+}

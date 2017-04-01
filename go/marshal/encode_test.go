@@ -577,7 +577,7 @@ func TestEncodeSet(t *testing.T) {
 		"h": types.StringKind,
 	}
 	for fieldName, kind := range expect {
-		assert.Equal(kind, s.Get(fieldName).Type().Kind())
+		assert.Equal(kind, s.Get(fieldName).Kind())
 	}
 
 	// Test both the Set values are correct, and that the equivalent typed Map

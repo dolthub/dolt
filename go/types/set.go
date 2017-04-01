@@ -121,6 +121,10 @@ func (s Set) Type() *Type {
 	return s.seq.Type()
 }
 
+func (s Set) Kind() NomsKind {
+	return SetKind
+}
+
 func (s Set) First() Value {
 	cur := newCursorAt(s.seq, emptyKey, false, false, false)
 	if !cur.valid() {

@@ -449,7 +449,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 		}
 
 		targetType := getTargetType(reachable)
-		if entry.Type().Kind() == ValueKind && targetType.Kind() != ValueKind {
+		if entry.Type().TargetKind() == ValueKind && targetType.TargetKind() != ValueKind {
 			// We've seen targetHash before, but only in a Ref<Value>, and reachable has a more specific type than that. Deref reachable to check the real type on the chunk it points to, and cache the result if everything checks out.
 			if reachableV == nil {
 				reachableV = lvs.ReadValue(targetHash)
@@ -458,7 +458,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 			lvs.set(targetHash, entry, false)
 		}
 		// At this point, entry should have the most specific type info possible. Unless it matches targetType, or targetType is 'Value', bail.
-		if !(targetType.Kind() == ValueKind || entry.Type().Equals(targetType)) {
+		if !(targetType.TargetKind() == ValueKind || entry.Type().Equals(targetType)) {
 			d.Panic("Value to write contains ref %s, which points to a value of a different type: %s != %s", reachable.TargetHash(), targetType.Describe(), entry.Type().Describe())
 		}
 	}
@@ -468,7 +468,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 
 func getTargetType(refBase Ref) *Type {
 	refType := refBase.Type()
-	d.PanicIfFalse(RefKind == refType.Kind())
+	d.PanicIfFalse(RefKind == refType.TargetKind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]
 }
 

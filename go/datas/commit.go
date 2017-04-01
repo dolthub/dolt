@@ -165,7 +165,7 @@ func makeCommitType(valueType *types.Type, parentsValueTypes []*types.Type, meta
 
 func valueTypesFromParents(parents types.Set, fieldName string) []*types.Type {
 	elemType := getSetElementType(parents.Type())
-	switch elemType.Kind() {
+	switch elemType.TargetKind() {
 	case types.UnionKind:
 		ts := []*types.Type{}
 		for _, rt := range elemType.Desc.(types.CompoundDesc).ElemTypes {
@@ -178,7 +178,7 @@ func valueTypesFromParents(parents types.Set, fieldName string) []*types.Type {
 }
 
 func getSetElementType(t *types.Type) *types.Type {
-	d.PanicIfFalse(t.Kind() == types.SetKind)
+	d.PanicIfFalse(t.TargetKind() == types.SetKind)
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
@@ -187,12 +187,12 @@ func fieldTypeFromRefOfCommit(t *types.Type, fieldName string) *types.Type {
 }
 
 func getRefElementType(t *types.Type) *types.Type {
-	d.PanicIfFalse(t.Kind() == types.RefKind)
+	d.PanicIfFalse(t.TargetKind() == types.RefKind)
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
 func fieldTypeFromCommit(t *types.Type, fieldName string) *types.Type {
-	d.PanicIfFalse(t.Kind() == types.StructKind && t.Desc.(types.StructDesc).Name == "Commit")
+	d.PanicIfFalse(t.TargetKind() == types.StructKind && t.Desc.(types.StructDesc).Name == "Commit")
 	ft, optional := t.Desc.(types.StructDesc).Field(fieldName)
 	d.PanicIfTrue(optional) // commit do not have optional fields.
 	return ft
@@ -203,5 +203,5 @@ func IsCommitType(t *types.Type) bool {
 }
 
 func IsRefOfCommitType(t *types.Type) bool {
-	return t.Kind() == types.RefKind && IsCommitType(getRefElementType(t))
+	return t.TargetKind() == types.RefKind && IsCommitType(getRefElementType(t))
 }

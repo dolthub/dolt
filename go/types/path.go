@@ -230,7 +230,7 @@ func NewIndexIntoKeyPath(idx Value) IndexPath {
 }
 
 func ValueCanBePathIndex(v Value) bool {
-	k := v.Type().Kind()
+	k := v.Kind()
 	return k == StringKind || k == BoolKind || k == NumberKind
 }
 

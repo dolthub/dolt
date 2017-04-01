@@ -25,7 +25,7 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 	}
 
 	// If the concrete type is a union, all component types must be compatible.
-	if concreteType.Kind() == UnionKind {
+	if concreteType.TargetKind() == UnionKind {
 		for _, t := range concreteType.Desc.(CompoundDesc).ElemTypes {
 			if !isSubtype(requiredType, t, parentStructTypes) {
 				return false
@@ -35,7 +35,7 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 	}
 
 	// If the required type is a union, at least one of the component types must be compatible.
-	if requiredType.Kind() == UnionKind {
+	if requiredType.TargetKind() == UnionKind {
 		for _, t := range requiredType.Desc.(CompoundDesc).ElemTypes {
 			if isSubtype(t, concreteType, parentStructTypes) {
 				return true
@@ -44,8 +44,8 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 		return false
 	}
 
-	if requiredType.Kind() != concreteType.Kind() {
-		return requiredType.Kind() == ValueKind
+	if requiredType.TargetKind() != concreteType.TargetKind() {
+		return requiredType.TargetKind() == ValueKind
 	}
 
 	if desc, ok := requiredType.Desc.(CompoundDesc); ok {
@@ -58,7 +58,7 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 		return true
 	}
 
-	if requiredType.Kind() == StructKind {
+	if requiredType.TargetKind() == StructKind {
 		requiredDesc := requiredType.Desc.(StructDesc)
 		concreteDesc := concreteType.Desc.(StructDesc)
 		if requiredDesc.Name != "" && requiredDesc.Name != concreteDesc.Name {
@@ -116,7 +116,7 @@ func isSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool
 // where a concrete type may have be a union type.
 func compoundSubtype(requiredType, concreteType *Type, parentStructTypes []*Type) bool {
 	// If the concrete type is a union then all the types in the union must be subtypes of the required typ. This also means that a compound type with an empty union is going to be a subtype of all compounds, List<> is a subtype of List<T> for all T.
-	if concreteType.Kind() == UnionKind {
+	if concreteType.TargetKind() == UnionKind {
 		for _, ct := range concreteType.Desc.(CompoundDesc).ElemTypes {
 			if !isSubtype(requiredType, ct, parentStructTypes) {
 				return false

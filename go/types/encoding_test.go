@@ -604,6 +604,9 @@ func (bg bogusType) Less(other Value) bool       { return false }
 func (bg bogusType) Hash() hash.Hash             { return hash.Hash{} }
 func (bg bogusType) WalkValues(cb ValueCallback) {}
 func (bg bogusType) WalkRefs(cb RefCallback)     {}
+func (bg bogusType) Kind() NomsKind {
+	return CycleKind
+}
 func (bg bogusType) Type() *Type {
 	return MakeCycleType(0)
 }

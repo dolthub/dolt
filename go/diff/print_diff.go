@@ -154,7 +154,7 @@ func field(w io.Writer, op prefixOp, name, val types.Value) error {
 }
 
 func writeEncodedValue(w io.Writer, v types.Value) error {
-	if v.Type().Kind() != types.BlobKind {
+	if v.Kind() != types.BlobKind {
 		return types.WriteEncodedValue(w, v)
 	}
 	write(w, []byte("Blob ("))

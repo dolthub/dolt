@@ -93,7 +93,7 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 }
 
 func (w *hrsWriter) Write(v Value) {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case BoolKind:
 		w.write(strconv.FormatBool(bool(v.(Bool))))
 	case NumberKind:
@@ -202,7 +202,7 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 
 func (w *hrsWriter) WriteTagged(v Value) {
 	t := v.Type()
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case BoolKind, NumberKind, StringKind:
 		w.Write(v)
 	case BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, CycleKind:
@@ -227,7 +227,7 @@ type lenable interface {
 
 func (w *hrsWriter) writeSize(v Value) {
 	t := v.Type()
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case ListKind, MapKind, SetKind:
 		l := v.(lenable).Len()
 		if l < 4 {
@@ -240,14 +240,14 @@ func (w *hrsWriter) writeSize(v Value) {
 }
 
 func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
-		w.write(KindToString[t.Kind()])
+		w.write(KindToString[t.TargetKind()])
 	case ListKind, RefKind, SetKind, MapKind:
-		w.write(KindToString[t.Kind()])
+		w.write(KindToString[t.TargetKind()])
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
-			if et.Kind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
+			if et.TargetKind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
 				// If one of the element types is an empty union all the other element types must
 				// also be empty union types.
 				break

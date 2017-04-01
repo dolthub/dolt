@@ -22,8 +22,8 @@ func Summary(value1, value2 types.Value) {
 	}
 
 	var singular, plural string
-	if value1.Type().Kind() == value2.Type().Kind() {
-		switch value1.Type().Kind() {
+	if value1.Kind() == value2.Kind() {
+		switch value1.Kind() {
 		case types.StructKind:
 			singular = "field"
 			plural = "fields"
@@ -64,7 +64,7 @@ type diffSummaryProgress struct {
 func diffSummary(ch chan diffSummaryProgress, v1, v2 types.Value) {
 	if !v1.Equals(v2) {
 		if shouldDescend(v1, v2) {
-			switch v1.Type().Kind() {
+			switch v1.Kind() {
 			case types.ListKind:
 				diffSummaryList(ch, v1.(types.List), v2.(types.List))
 			case types.MapKind:

@@ -35,7 +35,7 @@ func (t *Type) Describe() (out string) {
 	return EncodedValue(t)
 }
 
-func (t *Type) Kind() NomsKind {
+func (t *Type) TargetKind() NomsKind {
 	return t.Desc.Kind()
 }
 
@@ -93,6 +93,10 @@ func (t *Type) WalkRefs(cb RefCallback) {
 
 func (t *Type) Type() *Type {
 	return TypeType
+}
+
+func (t *Type) Kind() NomsKind {
+	return TypeKind
 }
 
 func MakePrimitiveType(k NomsKind) *Type {

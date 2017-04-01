@@ -43,3 +43,7 @@ func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 func (sl setLeafSequence) getKey(idx int) orderedKey {
 	return newOrderedKey(sl.data[idx])
 }
+
+func (sl setLeafSequence) Kind() NomsKind {
+	return SetKind
+}

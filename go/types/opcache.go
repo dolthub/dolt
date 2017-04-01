@@ -277,7 +277,7 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value, vrw Valu
 	valuesToEncode := ValueSlice{}
 	for _, gk := range keys {
 		bs = encodeGraphKey(bs, gk, vrw)
-		if !isKindOrderedByValue(gk.Type().Kind()) {
+		if !isKindOrderedByValue(gk.Kind()) {
 			valuesToEncode = append(valuesToEncode, gk)
 		}
 	}
@@ -304,19 +304,19 @@ func encodeGraphValue(bs []byte, v Value, vrw ValueReadWriter) []byte {
 func encodeForGraph(bs []byte, v Value, asValue bool, vrw ValueReadWriter) []byte {
 	// Note: encToSlice() and append() will both grow the backing store of |bs|
 	// as necessary. Always call them when writing to |bs|.
-	if asValue || isKindOrderedByValue(v.Type().Kind()) {
+	if asValue || isKindOrderedByValue(v.Kind()) {
 		// if we're encoding value, then put:
 		// noms-kind(1-byte), serialization-len(4-bytes), serialization(n-bytes)
 		buf := [initialBufferSize]byte{}
 		uint32buf := [4]byte{}
 		encodedVal := encToSlice(v, buf[:], vrw)
 		binary.BigEndian.PutUint32(uint32buf[:], uint32(len(encodedVal)))
-		bs = append(bs, uint8(v.Type().Kind()))
+		bs = append(bs, uint8(v.Kind()))
 		bs = append(bs, uint32buf[:]...)
 		bs = append(bs, encodedVal...)
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
-		bs = append(bs, uint8(v.Type().Kind()))
+		bs = append(bs, uint8(v.Kind()))
 		h := v.Hash()
 		bs = append(bs, h[:]...)
 	}

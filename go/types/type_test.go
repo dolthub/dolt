@@ -57,15 +57,15 @@ func TestTypeRefDescribe(t *testing.T) {
 
 func TestTypeOrdered(t *testing.T) {
 	assert := assert.New(t)
-	assert.True(isKindOrderedByValue(BoolType.Kind()))
-	assert.True(isKindOrderedByValue(NumberType.Kind()))
-	assert.True(isKindOrderedByValue(StringType.Kind()))
-	assert.False(isKindOrderedByValue(BlobType.Kind()))
-	assert.False(isKindOrderedByValue(ValueType.Kind()))
-	assert.False(isKindOrderedByValue(MakeListType(StringType).Kind()))
-	assert.False(isKindOrderedByValue(MakeSetType(StringType).Kind()))
-	assert.False(isKindOrderedByValue(MakeMapType(StringType, ValueType).Kind()))
-	assert.False(isKindOrderedByValue(MakeRefType(StringType).Kind()))
+	assert.True(isKindOrderedByValue(BoolType.TargetKind()))
+	assert.True(isKindOrderedByValue(NumberType.TargetKind()))
+	assert.True(isKindOrderedByValue(StringType.TargetKind()))
+	assert.False(isKindOrderedByValue(BlobType.TargetKind()))
+	assert.False(isKindOrderedByValue(ValueType.TargetKind()))
+	assert.False(isKindOrderedByValue(MakeListType(StringType).TargetKind()))
+	assert.False(isKindOrderedByValue(MakeSetType(StringType).TargetKind()))
+	assert.False(isKindOrderedByValue(MakeMapType(StringType, ValueType).TargetKind()))
+	assert.False(isKindOrderedByValue(MakeRefType(StringType).TargetKind()))
 }
 
 func TestFlattenUnionTypes(t *testing.T) {

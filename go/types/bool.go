@@ -36,3 +36,7 @@ func (v Bool) WalkRefs(cb RefCallback) {
 func (v Bool) Type() *Type {
 	return BoolType
 }
+
+func (v Bool) Kind() NomsKind {
+	return BoolKind
+}

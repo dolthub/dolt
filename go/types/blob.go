@@ -115,6 +115,10 @@ func (b Blob) Type() *Type {
 	return b.seq.Type()
 }
 
+func (b Blob) Kind() NomsKind {
+	return BlobKind
+}
+
 type BlobReader struct {
 	seq           sequence
 	cursor        *sequenceCursor

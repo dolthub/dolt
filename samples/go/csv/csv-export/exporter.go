@@ -57,7 +57,7 @@ func main() {
 			structDesc := csv.GetMapElemDesc(m, db)
 			csv.WriteMap(m, structDesc, comma, os.Stdout)
 		} else {
-			panic(fmt.Sprintf("Expected ListKind or MapKind, found %s", types.KindToString[hv.Type().Kind()]))
+			panic(fmt.Sprintf("Expected ListKind or MapKind, found %s", types.KindToString[hv.Kind()]))
 		}
 	})
 	if err != nil {

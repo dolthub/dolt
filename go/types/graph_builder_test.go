@@ -72,7 +72,7 @@ func TestGraphBuilderEncodeDecodeAsKey(t *testing.T) {
 	numKeys := len(keys)
 	expectedRes := ValueSlice{}
 	for _, k := range keys {
-		if isKindOrderedByValue(k.Type().Kind()) {
+		if isKindOrderedByValue(k.Kind()) {
 			expectedRes = append(expectedRes, k)
 		} else {
 			expectedRes = append(expectedRes, nil)
@@ -258,7 +258,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 		switch c := col.(type) {
 		case Map:
 			c.Iter(func(k, v Value) bool {
-				if isNomsCollectionKind(v.Type().Kind()) {
+				if isNomsCollectionKind(v.Kind()) {
 					newKeys := append(keys, k)
 					generateOps(newKeys, v)
 				} else {

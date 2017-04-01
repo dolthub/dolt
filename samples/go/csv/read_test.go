@@ -30,7 +30,7 @@ b,2,false
 
 	assert.Equal(uint64(2), l.Len())
 
-	assert.Equal(types.StructKind, typ.Kind())
+	assert.Equal(types.StructKind, typ.TargetKind())
 
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
@@ -41,9 +41,9 @@ b,2,false
 		return t
 	}
 
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).Kind())
-	assert.Equal(types.NumberKind, assertNotOptional(desc.Field("B")).Kind())
-	assert.Equal(types.BoolKind, assertNotOptional(desc.Field("C")).Kind())
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).TargetKind())
+	assert.Equal(types.NumberKind, assertNotOptional(desc.Field("B")).TargetKind())
+	assert.Equal(types.BoolKind, assertNotOptional(desc.Field("C")).TargetKind())
 
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.String("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.String("b")))
@@ -99,7 +99,7 @@ func testTrailingHelper(t *testing.T, dataString string) {
 	kinds := KindSlice{types.StringKind, types.StringKind}
 	l, typ := ReadToList(r, "test", headers, kinds, ds1)
 	assert.Equal(uint64(3), l.Len())
-	assert.Equal(types.StructKind, typ.Kind())
+	assert.Equal(types.StructKind, typ.TargetKind())
 
 	desc, ok := typ.Desc.(types.StructDesc)
 	assert.True(ok)
@@ -110,8 +110,8 @@ func testTrailingHelper(t *testing.T, dataString string) {
 		return t
 	}
 
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).Kind())
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("B")).Kind())
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).TargetKind())
+	assert.Equal(types.StringKind, assertNotOptional(desc.Field("B")).TargetKind())
 
 	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
 	defer ds2.Close()

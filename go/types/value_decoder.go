@@ -134,7 +134,7 @@ func (r *valueDecoder) readMetaSequence(t *Type) metaSequence {
 
 func (r *valueDecoder) readValue() Value {
 	t := r.readType()
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case BlobKind:
 		isMeta := r.readBool()
 		if isMeta {
@@ -176,7 +176,7 @@ func (r *valueDecoder) readValue() Value {
 	case TypeKind:
 		return r.readType()
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.Kind()]))
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.TargetKind()]))
 	}
 
 	panic("not reachable")

@@ -157,7 +157,7 @@ func ThreeWay(a, b, parent types.Value, vrw types.ValueReadWriter, resolve Resol
 // a and b cannot be merged if they are of different NomsKind, or if at least one of the two is nil, or if either is a Noms primitive.
 func unmergeable(a, b types.Value) bool {
 	if a != nil && b != nil {
-		aKind, bKind := a.Type().Kind(), b.Type().Kind()
+		aKind, bKind := a.Kind(), b.Kind()
 		return aKind != bKind || types.IsPrimitiveKind(aKind) || types.IsPrimitiveKind(bKind)
 	}
 	return true
@@ -182,7 +182,7 @@ func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged typ
 		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
 	}
 
-	switch a.Type().Kind() {
+	switch a.Kind() {
 	case types.ListKind:
 		if aList, bList, pList, ok := listAssert(a, b, parent); ok {
 			return threeWayListMerge(aList, bList, pList)

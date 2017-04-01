@@ -44,7 +44,7 @@ type csvWriteTestSuite struct {
 func typesToKinds(ts []*types.Type) KindSlice {
 	kinds := make(KindSlice, len(ts))
 	for i, t := range ts {
-		kinds[i] = t.Kind()
+		kinds[i] = t.TargetKind()
 	}
 	return kinds
 }

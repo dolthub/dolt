@@ -28,7 +28,7 @@ func ToRefOfValue(r Ref) Ref {
 
 // Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
 func constructRef(t *Type, target hash.Hash, height uint64) Ref {
-	d.PanicIfFalse(RefKind == t.Kind())
+	d.PanicIfFalse(RefKind == t.TargetKind())
 	return Ref{target, height, t, &hash.Hash{}}
 }
 
@@ -79,4 +79,8 @@ func (r Ref) WalkRefs(cb RefCallback) {
 
 func (r Ref) Type() *Type {
 	return r.t
+}
+
+func (r Ref) Kind() NomsKind {
+	return RefKind
 }

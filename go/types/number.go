@@ -20,7 +20,7 @@ func (v Number) Less(other Value) bool {
 	if v2, ok := other.(Number); ok {
 		return v < v2
 	}
-	return NumberKind < other.Type().Kind()
+	return NumberKind < other.Kind()
 }
 
 func (v Number) Hash() hash.Hash {
@@ -35,4 +35,8 @@ func (v Number) WalkRefs(cb RefCallback) {
 
 func (v Number) Type() *Type {
 	return NumberType
+}
+
+func (v Number) Kind() NomsKind {
+	return NumberKind
 }

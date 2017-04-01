@@ -36,7 +36,10 @@ type Value interface {
 	WalkRefs(RefCallback)
 
 	// Type returns the type of the Noms value. All Noms values carry their runtime Noms type.
+	// DEPRECATED: https://github.com/attic-labs/noms/issues/3184
 	Type() *Type
+
+	Kind() NomsKind
 }
 
 type ValueSlice []Value

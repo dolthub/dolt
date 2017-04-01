@@ -5,7 +5,7 @@
 package types
 
 func valueLess(v1, v2 Value) bool {
-	switch v2.Type().Kind() {
+	switch v2.Kind() {
 	case BoolKind, NumberKind, StringKind:
 		return false
 	default:

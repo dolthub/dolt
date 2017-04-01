@@ -138,6 +138,10 @@ func (m Map) Type() *Type {
 	return m.seq.Type()
 }
 
+func (m Map) Kind() NomsKind {
+	return MapKind
+}
+
 func (m Map) firstOrLast(last bool) (Value, Value) {
 	cur := newCursorAt(m.seq, emptyKey, false, last, false)
 	if !cur.valid() {

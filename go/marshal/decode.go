@@ -540,7 +540,7 @@ func interfaceDecoder(t reflect.Type) decoderFunc {
 }
 
 func getGoTypeForNomsType(nt *types.Type, rt reflect.Type, v types.Value) reflect.Type {
-	switch nt.Kind() {
+	switch nt.TargetKind() {
 	case types.BoolKind:
 		return reflect.TypeOf(false)
 	case types.NumberKind:

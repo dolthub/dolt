@@ -18,7 +18,7 @@ func (s String) Less(other Value) bool {
 	if s2, ok := other.(String); ok {
 		return s < s2
 	}
-	return StringKind < other.Type().Kind()
+	return StringKind < other.Kind()
 }
 
 func (s String) Hash() hash.Hash {
@@ -33,4 +33,8 @@ func (s String) WalkRefs(cb RefCallback) {
 
 func (s String) Type() *Type {
 	return StringType
+}
+
+func (s String) Kind() NomsKind {
+	return StringKind
 }

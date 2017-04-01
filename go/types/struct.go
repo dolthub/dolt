@@ -95,6 +95,10 @@ func (s Struct) Type() *Type {
 	return s.t
 }
 
+func (s Struct) Kind() NomsKind {
+	return StructKind
+}
+
 func (s Struct) desc() StructDesc {
 	return s.t.Desc.(StructDesc)
 }

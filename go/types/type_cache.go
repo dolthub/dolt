@@ -70,7 +70,7 @@ func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, boo
 			return t, false
 		}
 
-		return newType(CompoundDesc{t.Kind(), ts}), true
+		return newType(CompoundDesc{t.TargetKind(), ts}), true
 	case StructDesc:
 		fs := make(structFields, len(desc.fields))
 		didChange := false
@@ -170,13 +170,13 @@ func checkStructType(t *Type, checkKind checkKindType) {
 }
 
 func sortUnions(t *Type, _ []*Type) {
-	if t.Kind() == UnionKind {
+	if t.TargetKind() == UnionKind {
 		sort.Sort(t.Desc.(CompoundDesc).ElemTypes)
 	}
 }
 
 func validateTypes(t *Type, _ []*Type) {
-	switch t.Kind() {
+	switch t.TargetKind() {
 	case UnionKind:
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
 		if len(elemTypes) == 1 {
@@ -195,7 +195,7 @@ func validateTypes(t *Type, _ []*Type) {
 }
 
 func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
-	if t.Kind() == StructKind {
+	if t.TargetKind() == StructKind {
 		if _, found := indexOfType(t, parentStructTypes); found {
 			return
 		}

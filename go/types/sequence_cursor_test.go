@@ -28,6 +28,10 @@ func (ts testSequence) numLeaves() uint64 {
 	return uint64(len(ts.items))
 }
 
+func (ts testSequence) Kind() NomsKind {
+	panic("not reached")
+}
+
 func (ts testSequence) getCompareFn(other sequence) compareFn {
 	obl := other.(testSequence)
 	return func(idx, otherIdx int) bool {
