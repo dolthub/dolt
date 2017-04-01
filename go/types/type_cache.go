@@ -221,18 +221,23 @@ func makeUnionType(elemTypes ...*Type) *Type {
 }
 
 func MakeListType(elemType *Type) *Type {
+	elemType = makeSimplifiedType(false, elemType)
 	return makeCompoundType(ListKind, elemType)
 }
 
 func MakeSetType(elemType *Type) *Type {
+	elemType = makeSimplifiedType(false, elemType)
 	return makeCompoundType(SetKind, elemType)
 }
 
 func MakeRefType(elemType *Type) *Type {
+	elemType = makeSimplifiedType(false, elemType)
 	return makeCompoundType(RefKind, elemType)
 }
 
 func MakeMapType(keyType, valType *Type) *Type {
+	keyType = makeSimplifiedType(false, keyType)
+	valType = makeSimplifiedType(false, valType)
 	return makeCompoundType(MapKind, keyType, valType)
 }
 

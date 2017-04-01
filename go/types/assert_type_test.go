@@ -334,17 +334,17 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   },
 	// }
 
-	tb := MakeStructType("",
+	tb := MakeStructType("A",
 		StructField{
 			"b",
-			MakeStructType("", StructField{"c", MakeCycleType(1), false}),
+			MakeStructType("B", StructField{"c", MakeCycleType(1), false}),
 			false,
 		},
 	)
-	tc := MakeStructType("",
+	tc := MakeStructType("A",
 		StructField{
 			"c",
-			MakeStructType("", StructField{"b", MakeCycleType(1), false}),
+			MakeStructType("B", StructField{"b", MakeCycleType(1), false}),
 			false,
 		},
 	)
@@ -358,7 +358,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	//   a: Number,
 	//   b: struct {},
 	// }
-	t1 := MakeStructType("",
+	t1 := MakeStructType("X",
 		StructField{"a", NumberType, false},
 		StructField{"b", EmptyStructType, false},
 	)
@@ -366,7 +366,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	// struct {
 	//   a: Number,
 	// }
-	t2 := MakeStructType("", StructField{"a", NumberType, false})
+	t2 := MakeStructType("X", StructField{"a", NumberType, false})
 
 	assert.False(tt, IsSubtype(t1, t2))
 	assert.True(tt, IsSubtype(t2, t1))
