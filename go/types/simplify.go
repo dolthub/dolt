@@ -181,7 +181,7 @@ func simplifyMaps(ts typeset, intersectStructs bool) *Type {
 
 type unsimplifiedStruct struct {
 	t         *Type
-	fieldSets []structFields
+	fieldSets []structTypeFields
 }
 
 func removeAndCollectStructFields(t *Type, seen map[*Type]*Type, pendingStructs map[string]*unsimplifiedStruct) (*Type, bool) {
@@ -216,12 +216,12 @@ func removeAndCollectStructFields(t *Type, seen map[*Type]*Type, pendingStructs 
 			newStruct = pending.t
 		} else {
 			newStruct = newType(StructDesc{Name: name})
-			pending = &unsimplifiedStruct{newStruct, []structFields{}}
+			pending = &unsimplifiedStruct{newStruct, []structTypeFields{}}
 			pendingStructs[name] = pending
 		}
 		seen[t] = newStruct
 
-		newFields := make(structFields, len(desc.fields))
+		newFields := make(structTypeFields, len(desc.fields))
 		changed := false
 		for i, f := range desc.fields {
 			nt, c := removeAndCollectStructFields(f.Type, seen, pendingStructs)
@@ -242,7 +242,7 @@ func removeAndCollectStructFields(t *Type, seen map[*Type]*Type, pendingStructs 
 	panic("unreachable") // no more noms kinds
 }
 
-func simplifyStructFields(in []structFields, intersectStructs bool) structFields {
+func simplifyStructFields(in []structTypeFields, intersectStructs bool) structTypeFields {
 	// We gather all the fields/types into allFields. If the number of
 	// times a field name is present is less that then number of types we
 	// are simplifying then the field must be optional.
@@ -278,7 +278,7 @@ func simplifyStructFields(in []structFields, intersectStructs bool) structFields
 	}
 
 	count := len(in)
-	fields := make(structFields, 0, count)
+	fields := make(structTypeFields, 0, count)
 	for name, fti := range allFields {
 		fields = append(fields, StructField{
 			Name:     name,

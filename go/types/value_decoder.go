@@ -186,12 +186,12 @@ func (r *valueDecoder) readStruct(t *Type) Value {
 	// We've read `[StructKind, name, fields, unions` at this point
 	desc := t.Desc.(StructDesc)
 	count := desc.Len()
-	values := make([]Value, count)
-	for i := 0; i < count; i++ {
-		values[i] = r.readValue()
+	valueFields := make(structValueFields, count)
+	for i, tf := range desc.fields {
+		valueFields[i] = structValueField{tf.Name, r.readValue()}
 	}
 
-	return Struct{values, t, &hash.Hash{}}
+	return Struct{desc.Name, valueFields, t, &hash.Hash{}}
 }
 
 func boolToUint32(b bool) uint32 {
@@ -205,7 +205,7 @@ func (r *valueDecoder) readStructType() *Type {
 	name := r.readString()
 	count := r.readUint32()
 
-	fields := make(structFields, count)
+	fields := make(structTypeFields, count)
 	for i := uint32(0); i < count; i++ {
 		fields[i] = StructField{
 			r.readString(),

@@ -173,8 +173,8 @@ func (w *valueEncoder) writeValue(v Value) {
 }
 
 func (w *valueEncoder) writeStruct(v Value, t *Type) {
-	for _, v := range v.(Struct).values {
-		w.writeValue(v)
+	for _, f := range v.(Struct).fields {
+		w.writeValue(f.value)
 	}
 }
 

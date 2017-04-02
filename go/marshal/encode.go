@@ -450,15 +450,15 @@ func typeFields(t reflect.Type, parentStructTypes []reflect.Type, options encode
 	}
 	sort.Sort(fields)
 	if canComputeStructType {
-		structFields := make([]types.StructField, len(fields))
+		structTypeFields := make([]types.StructField, len(fields))
 		for i, fs := range fields {
-			structFields[i] = types.StructField{
+			structTypeFields[i] = types.StructField{
 				Name:     fs.name,
 				Type:     fs.nomsType,
 				Optional: fs.omitEmpty,
 			}
 		}
-		structType = types.MakeStructType(strings.Title(t.Name()), structFields...)
+		structType = types.MakeStructType(strings.Title(t.Name()), structTypeFields...)
 	}
 	return
 }

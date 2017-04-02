@@ -21,7 +21,7 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return newType(CompoundDesc{kind, elemTypes})
 }
 
-func makeStructTypeQuickly(name string, fields structFields, checkKind checkKindType) *Type {
+func makeStructTypeQuickly(name string, fields structTypeFields, checkKind checkKindType) *Type {
 	t := newType(StructDesc{name, fields})
 	if t.HasUnresolvedCycle() {
 		t, _ = toUnresolvedType(t, -1, nil)
@@ -33,7 +33,7 @@ func makeStructTypeQuickly(name string, fields structFields, checkKind checkKind
 	return t
 }
 
-func makeStructType(name string, fields structFields) *Type {
+func makeStructType(name string, fields structTypeFields) *Type {
 	verifyStructName(name)
 	verifyFields(fields)
 	return makeStructTypeQuickly(name, fields, checkKindNormalize)
@@ -72,7 +72,7 @@ func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, boo
 
 		return newType(CompoundDesc{t.TargetKind(), ts}), true
 	case StructDesc:
-		fs := make(structFields, len(desc.fields))
+		fs := make(structTypeFields, len(desc.fields))
 		didChange := false
 		for i, f := range desc.fields {
 			st, changed := toUnresolvedType(f.Type, level+1, append(parentStructTypes, t))
@@ -244,7 +244,7 @@ func MakeMapType(keyType, valType *Type) *Type {
 type FieldMap map[string]*Type
 
 func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
-	fs := make(structFields, len(fields))
+	fs := make(structTypeFields, len(fields))
 	i := 0
 	for k, v := range fields {
 		fs[i] = StructField{k, v, false}
@@ -261,14 +261,14 @@ type StructField struct {
 	Optional bool
 }
 
-type structFields []StructField
+type structTypeFields []StructField
 
-func (s structFields) Len() int           { return len(s) }
-func (s structFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s structFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
+func (s structTypeFields) Len() int           { return len(s) }
+func (s structTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s structTypeFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
 
 func MakeStructType(name string, fields ...StructField) *Type {
-	fs := structFields(fields)
+	fs := structTypeFields(fields)
 	sort.Sort(&fs)
 
 	return makeStructType(name, fs)

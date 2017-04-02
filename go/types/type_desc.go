@@ -73,7 +73,7 @@ type TypeMap map[string]*Type
 // StructDesc describes a custom Noms Struct.
 type StructDesc struct {
 	Name   string
-	fields structFields
+	fields structTypeFields
 }
 
 func (s StructDesc) Kind() NomsKind {

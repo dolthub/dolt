@@ -327,47 +327,47 @@ func TestMakeSimplifiedUnion(t *testing.T) {
 func TestSimplifyStructFields(t *testing.T) {
 	assert := assert.New(t)
 
-	test := func(in []structFields, exp structFields) {
+	test := func(in []structTypeFields, exp structTypeFields) {
 		act := simplifyStructFields(in, false)
 		assert.Equal(act, exp)
 	}
 
-	test([]structFields{
-		structFields{
+	test([]structTypeFields{
+		structTypeFields{
 			StructField{"a", BoolType, false},
 		},
-		structFields{
+		structTypeFields{
 			StructField{"a", BoolType, false},
 		},
 	},
-		structFields{
+		structTypeFields{
 			StructField{"a", BoolType, false},
 		},
 	)
 
-	test([]structFields{
-		structFields{
+	test([]structTypeFields{
+		structTypeFields{
 			StructField{"a", BoolType, false},
 		},
-		structFields{
+		structTypeFields{
 			StructField{"b", BoolType, false},
 		},
 	},
-		structFields{
+		structTypeFields{
 			StructField{"a", BoolType, true},
 			StructField{"b", BoolType, true},
 		},
 	)
 
-	test([]structFields{
-		structFields{
+	test([]structTypeFields{
+		structTypeFields{
 			StructField{"a", BoolType, false},
 		},
-		structFields{
+		structTypeFields{
 			StructField{"a", BoolType, true},
 		},
 	},
-		structFields{
+		structTypeFields{
 			StructField{"a", BoolType, true},
 		},
 	)
