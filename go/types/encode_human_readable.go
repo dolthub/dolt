@@ -173,28 +173,23 @@ func (w *hrsWriter) Write(v Value) {
 }
 
 func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
-	t := v.Type()
-
-	desc := t.Desc.(StructDesc)
 	if printStructName {
-		w.write(desc.Name)
+		w.write(v.name)
 		w.write(" ")
 	}
 	w.write("{")
 	w.indent()
 
-	if desc.Len() > 0 {
+	if len(v.fields) > 0 {
 		w.newLine()
 	}
-	desc.IterFields(func(name string, t *Type, optional bool) {
-		d.PanicIfTrue(optional) // values cannot have optional fields
-		fv := v.Get(name)
-		w.write(name)
+	for _, f := range v.fields {
+		w.write(f.name)
 		w.write(": ")
-		w.Write(fv)
+		w.Write(f.value)
 		w.write(",")
 		w.newLine()
-	})
+	}
 
 	w.outdent()
 	w.write("}")
