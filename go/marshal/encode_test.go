@@ -477,7 +477,7 @@ func TestEncodeRecursive(t *testing.T) {
 			Type: types.NumberType,
 		},
 	)
-	assert.True(typ.Equals(v.Type()))
+	assert.True(typ.Equals(types.TypeOf(v)))
 
 	assert.True(types.NewStructWithType(typ, types.ValueSlice{
 		types.NewList(
@@ -707,7 +707,7 @@ func TestEncodeOriginal(t *testing.T) {
 	st2 := types.MakeStructTypeFromFields("S", types.FieldMap{
 		"foo": types.NumberType,
 	})
-	assert.True(out.Type().Equals(st2))
+	assert.True(types.TypeOf(out).Equals(st2))
 
 	// It's OK to have an empty original field
 	s = S{

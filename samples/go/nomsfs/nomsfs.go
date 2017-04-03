@@ -147,8 +147,8 @@ func start(dataset string, mount mount) {
 
 	hv, ok := ds.MaybeHeadValue()
 	if ok {
-		if !types.IsSubtype(fsType, hv.Type()) {
-			fmt.Fprintf(os.Stderr, "Invalid dataset head: expected type '%s' but found type '%s'\n", fsType.Desc.(types.StructDesc).Name, hv.Type().Desc.(types.StructDesc).Name)
+		if !types.IsSubtype(fsType, types.TypeOf(hv)) {
+			fmt.Fprintf(os.Stderr, "Invalid dataset head: expected type '%s' but found type '%s'\n", fsType.Desc.(types.StructDesc).Name, types.TypeOf(hv).Desc.(types.StructDesc).Name)
 			return
 		}
 	} else {
@@ -509,7 +509,7 @@ func updateMtime(attr types.Struct) types.Struct {
 }
 
 func nodeType(inode types.Value) string {
-	return inode.(types.Struct).Get("contents").Type().Desc.(types.StructDesc).Name
+	return types.TypeOf(inode.(types.Struct).Get("contents")).Desc.(types.StructDesc).Name
 }
 
 func (fs *nomsFS) getNode(inode types.Struct, name string, parent *nNode) *nNode {
@@ -594,7 +594,7 @@ func (fs *nomsFS) getPathComponents(components []string) (*nNode, fuse.Status) {
 		d.Chk.NotEqual(component, "")
 
 		contents := inode.Get("contents")
-		if contents.Type().Desc.(types.StructDesc).Name != "Directory" {
+		if types.TypeOf(contents).Desc.(types.StructDesc).Name != "Directory" {
 			return nil, fuse.ENOTDIR
 		}
 
@@ -657,7 +657,7 @@ func (fs *nomsFS) getPaths(oldPath string, newPath string) (oldNode *nNode, newP
 		}
 
 		contents := inode.Get("contents")
-		if contents.Type().Desc.(types.StructDesc).Name != "Directory" {
+		if types.TypeOf(contents).Desc.(types.StructDesc).Name != "Directory" {
 			return nil, nil, nil, "", fuse.ENOTDIR
 		}
 
@@ -675,7 +675,7 @@ func (fs *nomsFS) getPaths(oldPath string, newPath string) (oldNode *nNode, newP
 	oldNode = sharedNode
 	for _, component := range ocomp[i:] {
 		contents := inode.Get("contents")
-		if contents.Type().Desc.(types.StructDesc).Name != "Directory" {
+		if types.TypeOf(contents).Desc.(types.StructDesc).Name != "Directory" {
 			return nil, nil, nil, "", fuse.ENOTDIR
 		}
 
@@ -693,7 +693,8 @@ func (fs *nomsFS) getPaths(oldPath string, newPath string) (oldNode *nNode, newP
 	newParent = sharedNode
 	for _, component := range ncomp[i:] {
 		contents := inode.Get("contents")
-		if contents.Type().Desc.(types.StructDesc).Name != "Directory" {
+		// TODO: Expose name on struct value
+		if types.TypeOf(contents).Desc.(types.StructDesc).Name != "Directory" {
 			return nil, nil, nil, "", fuse.ENOTDIR
 		}
 
@@ -760,7 +761,7 @@ func (fs *nomsFS) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.
 	at.Owner.Gid = uint32(gid)
 	at.Owner.Uid = uint32(uid)
 
-	switch contents.Type().Desc.(types.StructDesc).Name {
+	switch types.TypeOf(contents).Desc.(types.StructDesc).Name {
 	case "File":
 		blob := contents.Get("data").(types.Ref).TargetValue(fs.db).(types.Blob)
 		at.Mode |= fuse.S_IFREG

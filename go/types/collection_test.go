@@ -23,7 +23,7 @@ type validateFn func(v2 Collection) bool
 type deltaFn func() Collection
 
 func (suite *collectionTestSuite) TestType() {
-	suite.True(suite.expectType.Equals(suite.col.Type()))
+	suite.True(suite.expectType.Equals(TypeOf(suite.col)))
 }
 
 func (suite *collectionTestSuite) TestLen() {
@@ -42,7 +42,7 @@ func (suite *collectionTestSuite) TestChunkCountAndType() {
 	suite.Equal(suite.expectChunkCount, len(chunks))
 	refType := MakeRefType(suite.expectType)
 	for _, r := range chunks {
-		suite.True(refType.Equals(r.Type()))
+		suite.True(refType.Equals(TypeOf(r)))
 	}
 }
 

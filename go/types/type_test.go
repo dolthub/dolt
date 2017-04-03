@@ -34,7 +34,7 @@ func TestTypes(t *testing.T) {
 }
 
 func TestTypeType(t *testing.T) {
-	assert.True(t, BoolType.Type().Equals(TypeType))
+	assert.True(t, TypeOf(BoolType).Equals(TypeType))
 }
 
 func TestTypeRefDescribe(t *testing.T) {

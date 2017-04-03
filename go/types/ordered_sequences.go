@@ -19,7 +19,7 @@ func newSetMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
 	ts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Set<T>>
-		ts[i] = mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
+		ts[i] = TypeOf(mt.ref).Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
 	}
 	t := MakeSetType(MakeUnionType(ts...))
 	return newMetaSequence(tuples, t, vr)
@@ -30,7 +30,7 @@ func newMapMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
 	vts := make([]*Type, len(tuples))
 	for i, mt := range tuples {
 		// Ref<Map<K, V>>
-		ets := mt.ref.Type().Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
+		ets := TypeOf(mt.ref).Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes
 		kts[i] = ets[0]
 		vts[i] = ets[1]
 	}

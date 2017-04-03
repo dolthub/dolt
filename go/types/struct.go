@@ -43,7 +43,7 @@ func NewStruct(name string, data StructData) Struct {
 	typeFields := make(structTypeFields, len(data))
 	i := 0
 	for name, value := range data {
-		typeFields[i] = StructField{name, value.Type(), false}
+		typeFields[i] = StructField{name, TypeOf(value), false}
 		valueFields[i] = structValueField{name, value}
 		i++
 	}
@@ -54,6 +54,8 @@ func NewStruct(name string, data StructData) Struct {
 	return Struct{name, valueFields, MakeStructType(name, typeFields...), &hash.Hash{}}
 }
 
+// NewStructWithType
+// DEPRECATED
 func NewStructWithType(t *Type, data ValueSlice) Struct {
 	desc := t.Desc.(StructDesc)
 	d.PanicIfFalse(len(data) == len(desc.fields))
@@ -103,7 +105,7 @@ func (s Struct) WalkRefs(cb RefCallback) {
 	}
 }
 
-func (s Struct) Type() *Type {
+func (s Struct) typeOf() *Type {
 	return s.t
 }
 
@@ -162,12 +164,12 @@ func (s Struct) Set(n string, v Value) Struct {
 		copy(valueFields, s.fields)
 		valueFields[i].value = v
 
-		if v.Type().Equals(desc.fields[i].Type) {
+		if TypeOf(v).Equals(desc.fields[i].Type) {
 			typ = s.t
 		} else {
 			typeFields := make(structTypeFields, len(s.fields))
 			copy(typeFields, desc.fields)
-			typeFields[i].Type = v.Type()
+			typeFields[i].Type = TypeOf(v)
 			typ = MakeStructType(desc.Name, typeFields...)
 		}
 	} else {
@@ -180,11 +182,16 @@ func (s Struct) Set(n string, v Value) Struct {
 		copy(typeFields[i+1:], desc.fields[i:])
 
 		valueFields[i] = structValueField{n, v}
-		typeFields[i] = StructField{n, v.Type(), false}
+		typeFields[i] = StructField{n, TypeOf(v), false}
 		typ = MakeStructType(desc.Name, typeFields...)
 	}
 
 	return Struct{desc.Name, valueFields, typ, &hash.Hash{}}
+}
+
+// IsZeroValue can be used to test if a struct is the same as Struct{}.
+func (s Struct) IsZeroValue() bool {
+	return s.fields == nil && s.name == "" && s.h == nil && s.t == nil
 }
 
 // Delete returns a new struct where the field name has been removed.
@@ -213,7 +220,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 	if s.Equals(last) {
 		return
 	}
-	fs1, fs2 := s.Type().Desc.(StructDesc).fields, last.Type().Desc.(StructDesc).fields
+	fs1, fs2 := TypeOf(s).Desc.(StructDesc).fields, TypeOf(last).Desc.(StructDesc).fields
 	i1, i2 := 0, 0
 	for i1 < len(fs1) && i2 < len(fs2) {
 		f1, f2 := fs1[i1], fs2[i2]

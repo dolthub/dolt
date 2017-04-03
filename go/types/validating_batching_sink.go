@@ -71,7 +71,7 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 	return DecodedChunk{c, &v}
 }
 
-// Enequeue adds c to the queue of Chunks waiting to be Put into vbs' backing
+// Enqueue adds c to the queue of Chunks waiting to be Put into vbs' backing
 // ChunkStore. It is assumed that v is the Value decoded from c, and so v can
 // be used to validate the ref-completeness of c.  The instance keeps an
 // internal buffer of Chunks, spilling to the ChunkStore when the buffer is
@@ -79,7 +79,7 @@ func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk 
 func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) {
 	h := c.Hash()
 	vbs.vs.ensureChunksInCache(v)
-	vbs.vs.set(h, hintedChunk{v.Type(), h}, false)
+	vbs.vs.set(h, hintedChunk{TypeOf(v), h}, false)
 
 	vbs.batch[vbs.count] = c
 	vbs.count++

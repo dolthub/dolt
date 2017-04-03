@@ -168,7 +168,7 @@ type mapTestSuite struct {
 
 func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *mapTestSuite {
 	length := 1 << size
-	keyType := gen(0).Type()
+	keyType := TypeOf(gen(0))
 	elems := newSortedTestMap(length, gen)
 	tr := MakeMapType(keyType, NumberType)
 	tmap := NewMap(elems.FlattenAll()...)
@@ -1050,22 +1050,22 @@ func TestMapType(t *testing.T) {
 
 	emptyMapType := MakeMapType(MakeUnionType(), MakeUnionType())
 	m := NewMap()
-	assert.True(m.Type().Equals(emptyMapType))
+	assert.True(TypeOf(m).Equals(emptyMapType))
 
 	m2 := m.Remove(String("B"))
-	assert.True(emptyMapType.Equals(m2.Type()))
+	assert.True(emptyMapType.Equals(TypeOf(m2)))
 
 	tr := MakeMapType(StringType, NumberType)
 	m2 = m.Set(String("A"), Number(1))
-	assert.True(tr.Equals(m2.Type()))
+	assert.True(tr.Equals(TypeOf(m2)))
 
 	m2 = m.SetM(String("B"), Number(2), String("C"), Number(2))
-	assert.True(tr.Equals(m2.Type()))
+	assert.True(tr.Equals(TypeOf(m2)))
 
 	m3 := m2.Set(String("A"), Bool(true))
-	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, NumberType)).Equals(m3.Type()), m3.Type().Describe())
+	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, NumberType)).Equals(TypeOf(m3)), TypeOf(m3).Describe())
 	m4 := m3.Set(Bool(true), Number(1))
-	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, NumberType)).Equals(m4.Type()))
+	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, NumberType)).Equals(TypeOf(m4)))
 }
 
 func TestMapChunks(t *testing.T) {
@@ -1155,17 +1155,17 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		m := NewMap(values...)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.sequence())
-		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))
+		assert.True(TypeOf(m).Equals(MakeMapType(NumberType, NumberType)))
 
 		m = m.Set(String("a"), String("a"))
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.sequence())
-		assert.True(m.Type().Equals(MakeMapType(MakeUnionType(NumberType, StringType), MakeUnionType(NumberType, StringType))))
+		assert.True(TypeOf(m).Equals(MakeMapType(MakeUnionType(NumberType, StringType), MakeUnionType(NumberType, StringType))))
 
 		m = m.Remove(String("a"))
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.sequence())
-		assert.True(m.Type().Equals(MakeMapType(NumberType, NumberType)))
+		assert.True(TypeOf(m).Equals(MakeMapType(NumberType, NumberType)))
 	}
 
 	test(10, mapLeafSequence{})
@@ -1315,7 +1315,7 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 				StructField{"a", NumberType, false},
 				StructField{"b", StringType, true},
 			),
-		).Equals(list.Type()))
+		).Equals(TypeOf(list)))
 
 	// transpose
 	list = NewMap(
@@ -1336,6 +1336,6 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 				StructField{"b", StringType, true},
 			),
 			StringType,
-		).Equals(list.Type()))
+		).Equals(TypeOf(list)))
 
 }

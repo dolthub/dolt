@@ -422,7 +422,7 @@ type TypeAnnotation struct {
 }
 
 func (ann TypeAnnotation) Resolve(v Value) Value {
-	return v.Type()
+	return TypeOf(v)
 }
 
 func (ann TypeAnnotation) String() string {

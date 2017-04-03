@@ -23,7 +23,7 @@ func TestCreateCommitMetaStructBasic(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.False(isEmptyStruct(meta))
-	assert.Equal("struct Meta {\n  date: String,\n}", meta.Type().Describe())
+	assert.Equal("struct Meta {\n  date: String,\n}", types.TypeOf(meta).Describe())
 }
 
 func TestCreateCommitMetaStructFromFlags(t *testing.T) {
@@ -34,7 +34,7 @@ func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.Equal("struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		meta.Type().Describe())
+		types.TypeOf(meta).Describe())
 	assert.Equal(types.String(commitMetaDate), meta.Get("date"))
 	assert.Equal(types.String(commitMetaMessage), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))
@@ -55,7 +55,7 @@ func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(nil, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		meta.Type().Describe())
+		types.TypeOf(meta).Describe())
 	assert.Equal(types.String(dateArg), meta.Get("date"))
 	assert.Equal(types.String(messageArg), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))
@@ -77,7 +77,7 @@ func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(nil, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  k4: String,\n  message: String,\n}",
-		meta.Type().Describe())
+		types.TypeOf(meta).Describe())
 	assert.Equal(types.String(dateArg), meta.Get("date"))
 	assert.Equal(types.String(messageArg), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))

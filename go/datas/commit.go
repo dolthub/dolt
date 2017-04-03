@@ -52,7 +52,7 @@ var valueCommitType = makeCommitType(types.ValueType, nil, types.EmptyStructType
 //
 // The new type gets combined as a union type for the value/meta of the inner commit struct.
 func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
-	t := makeCommitType(value.Type(), valueTypesFromParents(parents, ValueField), meta.Type(), valueTypesFromParents(parents, MetaField))
+	t := makeCommitType(types.TypeOf(value), valueTypesFromParents(parents, ValueField), types.TypeOf(meta), valueTypesFromParents(parents, MetaField))
 	return types.NewStructWithType(t, types.ValueSlice{meta, parents, value})
 }
 
@@ -60,11 +60,11 @@ func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.St
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
 func FindCommonAncestor(c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
-	if !IsRefOfCommitType(c1.Type()) {
-		d.Panic("FindCommonAncestor() called on %s", c1.Type().Describe())
+	if !IsRefOfCommitType(types.TypeOf(c1)) {
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe())
 	}
-	if !IsRefOfCommitType(c2.Type()) {
-		d.Panic("FindCommonAncestor() called on %s", c2.Type().Describe())
+	if !IsRefOfCommitType(types.TypeOf(c2)) {
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe())
 	}
 
 	c1Q, c2Q := &types.RefByHeight{c1}, &types.RefByHeight{c2}
@@ -164,7 +164,7 @@ func makeCommitType(valueType *types.Type, parentsValueTypes []*types.Type, meta
 }
 
 func valueTypesFromParents(parents types.Set, fieldName string) []*types.Type {
-	elemType := getSetElementType(parents.Type())
+	elemType := getSetElementType(types.TypeOf(parents))
 	switch elemType.TargetKind() {
 	case types.UnionKind:
 		ts := []*types.Type{}

@@ -292,7 +292,7 @@ func structEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc
 		e = func(v reflect.Value) types.Value {
 			fv := v.FieldByIndex(originalFieldIndex)
 			ret := fv.Interface().(types.Struct)
-			if ret.Type() == nil {
+			if ret.IsZeroValue() {
 				ret = types.NewStruct(t.Name(), nil)
 			}
 			for _, f := range fields {

@@ -33,7 +33,7 @@ func (v Number) WalkValues(cb ValueCallback) {
 func (v Number) WalkRefs(cb RefCallback) {
 }
 
-func (v Number) Type() *Type {
+func (v Number) typeOf() *Type {
 	return NumberType
 }
 

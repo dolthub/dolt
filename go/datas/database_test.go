@@ -536,7 +536,7 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	everything := []types.Value{v1, v2, s1, s2, v3, v4, s3, l1, l2, s4, l3, l4, l5}
 	andMore := make([]types.Value, 0, len(everything)*3+2)
 	for _, v := range everything {
-		andMore = append(andMore, v, v.Type(), suite.db.WriteValue(v))
+		andMore = append(andMore, v, types.TypeOf(v), suite.db.WriteValue(v))
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 

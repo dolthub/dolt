@@ -80,8 +80,9 @@ func MigrateFromVersion7(source v7types.Value, sourceStore v7types.ValueReadWrit
 		dest = <-sc
 		return
 	case v7types.Struct:
-		t := migrateType(source.Type())
-		sd := source.Type().Desc.(v7types.StructDesc)
+		sourceType := types.TypeOf(source)
+		t := migrateType(sourceType)
+		sd := sourceType.Desc.(v7types.StructDesc)
 		fields := make([]types.Value, 0, sd.Len())
 		sd.IterFields(func(name string, _ *v7types.Type, optional bool) {
 			d.PanicIfTrue(optional) // values cannot have optional fields

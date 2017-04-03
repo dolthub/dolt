@@ -119,7 +119,7 @@ type setTestSuite struct {
 
 func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int, gen genValueFn) *setTestSuite {
 	length := 1 << size
-	elemType := gen(0).Type()
+	elemType := TypeOf(gen(0))
 	elems := newSortedTestSet(length, gen)
 	tr := MakeSetType(elemType)
 	set := NewSet(elems...)
@@ -264,17 +264,17 @@ func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int,
 func TestNewSet(t *testing.T) {
 	assert := assert.New(t)
 	s := NewSet()
-	assert.True(MakeSetType(MakeUnionType()).Equals(s.Type()))
+	assert.True(MakeSetType(MakeUnionType()).Equals(TypeOf(s)))
 	assert.Equal(uint64(0), s.Len())
 
 	s = NewSet(Number(0))
-	assert.True(MakeSetType(NumberType).Equals(s.Type()))
+	assert.True(MakeSetType(NumberType).Equals(TypeOf(s)))
 
 	s = NewSet()
-	assert.IsType(MakeSetType(NumberType), s.Type())
+	assert.IsType(MakeSetType(NumberType), TypeOf(s))
 
 	s2 := s.Remove(Number(1))
-	assert.IsType(s.Type(), s2.Type())
+	assert.IsType(TypeOf(s), TypeOf(s2))
 }
 
 func TestSetLen(t *testing.T) {
@@ -795,21 +795,21 @@ func TestSetType(t *testing.T) {
 	assert := assert.New(t)
 
 	s := NewSet()
-	assert.True(s.Type().Equals(MakeSetType(MakeUnionType())))
+	assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType())))
 
 	s = NewSet(Number(0))
-	assert.True(s.Type().Equals(MakeSetType(NumberType)))
+	assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
 
 	s2 := s.Remove(Number(1))
-	assert.True(s2.Type().Equals(MakeSetType(NumberType)))
+	assert.True(TypeOf(s2).Equals(MakeSetType(NumberType)))
 
 	s2 = s.Insert(Number(0), Number(1))
-	assert.True(s.Type().Equals(s2.Type()))
+	assert.True(TypeOf(s).Equals(TypeOf(s2)))
 
 	s3 := s.Insert(Bool(true))
-	assert.True(s3.Type().Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
+	assert.True(TypeOf(s3).Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
 	s4 := s.Insert(Number(3), Bool(true))
-	assert.True(s4.Type().Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
+	assert.True(TypeOf(s4).Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
 }
 
 func TestSetChunks(t *testing.T) {
@@ -835,7 +835,7 @@ func TestSetChunks2(t *testing.T) {
 		set := ts.toSet()
 		set2chunks := getChunks(vs.ReadValue(vs.WriteValue(set).TargetHash()))
 		for i, r := range getChunks(set) {
-			assert.True(r.Type().Equals(set2chunks[i].Type()), "%s != %s", r.Type().Describe(), set2chunks[i].Type().Describe())
+			assert.True(TypeOf(r).Equals(TypeOf(set2chunks[i])), "%s != %s", TypeOf(r).Describe(), TypeOf(set2chunks[i]).Describe())
 		}
 	}
 
@@ -895,17 +895,17 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		s := NewSet(values...)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.sequence())
-		assert.True(s.Type().Equals(MakeSetType(NumberType)))
+		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
 
 		s = s.Insert(String("a"))
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.sequence())
-		assert.True(s.Type().Equals(MakeSetType(MakeUnionType(NumberType, StringType))))
+		assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType(NumberType, StringType))))
 
 		s = s.Remove(String("a"))
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.sequence())
-		assert.True(s.Type().Equals(MakeSetType(NumberType)))
+		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
 	}
 
 	test(10, setLeafSequence{})
@@ -1015,5 +1015,5 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 			StructField{"a", NumberType, false},
 			StructField{"b", StringType, true},
 		),
-		).Equals(list.Type()))
+		).Equals(TypeOf(list)))
 }

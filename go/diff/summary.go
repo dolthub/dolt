@@ -15,7 +15,7 @@ import (
 
 // Summary prints a summary of the diff between two values to stdout.
 func Summary(value1, value2 types.Value) {
-	if datas.IsCommitType(value1.Type()) && datas.IsCommitType(value2.Type()) {
+	if datas.IsCommitType(types.TypeOf(value1)) && datas.IsCommitType(types.TypeOf(value2)) {
 		fmt.Println("Comparing commit values")
 		value1 = value1.(types.Struct).Get(datas.ValueField)
 		value2 = value2.(types.Struct).Get(datas.ValueField)
@@ -74,7 +74,7 @@ func diffSummary(ch chan diffSummaryProgress, v1, v2 types.Value) {
 			case types.StructKind:
 				diffSummaryStructs(ch, v1.(types.Struct), v2.(types.Struct))
 			default:
-				panic("Unrecognized type in diff function: " + v1.Type().Describe() + " and " + v2.Type().Describe())
+				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe() + " and " + types.TypeOf(v2).Describe())
 			}
 		} else {
 			ch <- diffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}
@@ -115,8 +115,9 @@ func diffSummarySet(ch chan<- diffSummaryProgress, v1, v2 types.Set) {
 }
 
 func diffSummaryStructs(ch chan<- diffSummaryProgress, v1, v2 types.Struct) {
-	size1 := uint64(v1.Type().Desc.(types.StructDesc).Len())
-	size2 := uint64(v2.Type().Desc.(types.StructDesc).Len())
+	// TODO: Operate on values directly
+	size1 := uint64(types.TypeOf(v1).Desc.(types.StructDesc).Len())
+	size2 := uint64(types.TypeOf(v2).Desc.(types.StructDesc).Len())
 	diffSummaryValueChanged(ch, size1, size2, func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
 		v2.Diff(v1, changeChan, stopChan)
 	})

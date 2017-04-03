@@ -33,5 +33,5 @@ func TestStringString(t *testing.T) {
 }
 
 func TestStringType(t *testing.T) {
-	assert.True(t, String("hi").Type().Equals(StringType))
+	assert.True(t, TypeOf(String("hi")).Equals(StringType))
 }

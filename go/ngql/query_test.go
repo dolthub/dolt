@@ -296,9 +296,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a b} ... on %s{b} ... on %s{c}}}}",
-			GetTypeName(list.Get(0).Type()),
-			GetTypeName(list.Get(1).Type()),
-			GetTypeName(list.Get(2).Type())),
+			GetTypeName(types.TypeOf(list.Get(0))),
+			GetTypeName(types.TypeOf(list.Get(1))),
+			GetTypeName(types.TypeOf(list.Get(2)))),
 		`{"data":{"root":{"values":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -317,9 +317,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a} ... on %s{b: a} ... on %s{c: a}}}}",
-			GetTypeName(list.Get(0).Type()),
-			GetTypeName(list.Get(1).Type()),
-			GetTypeName(list.Get(2).Type())),
+			GetTypeName(types.TypeOf(list.Get(0))),
+			GetTypeName(types.TypeOf(list.Get(1))),
+			GetTypeName(types.TypeOf(list.Get(2)))),
 		`{"data":{"root":{"values":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -375,7 +375,7 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 	})
 
 	suite.assertQueryResult(s1,
-		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, GetTypeName(s1.Type())),
+		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, GetTypeName(types.TypeOf(s1))),
 		`{"data":{"root":{"a":"aaa","b":{"a":"bbb"}}}}`)
 }
 
@@ -1062,7 +1062,7 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 
 func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	test := func(expected types.Value, val interface{}) {
-		suite.True(expected.Equals(InputToNomsValue(val, expected.Type())))
+		suite.True(expected.Equals(InputToNomsValue(val, types.TypeOf(expected))))
 	}
 
 	test(types.Number(42), int(42))
@@ -1217,7 +1217,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 		types.NewStruct("S", types.StructData{"n": types.String("c")}), types.Number(2),
 		types.NewStruct("S", types.StructData{"n": types.String("d")}), types.Number(3),
 	)
-	keyType := m2.Type().Desc.(types.CompoundDesc).ElemTypes[0]
+	keyType := types.TypeOf(m2).Desc.(types.CompoundDesc).ElemTypes[0]
 	q := fmt.Sprintf(`query Test($k: %s) { root { values(key: $k) } }`, GetInputTypeName(keyType))
 	test(m2, `{"data":{"root":{"values":[1]}}}`, q, map[string]interface{}{
 		"k": map[string]interface{}{
@@ -1277,7 +1277,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 		types.NewMap(types.Number(0), types.String("zero")), types.Bool(false),
 		types.NewMap(types.Number(1), types.String("one")), types.Bool(true),
 	)
-	keyNomsType := m3.Type().Desc.(types.CompoundDesc).ElemTypes[0]
+	keyNomsType := types.TypeOf(m3).Desc.(types.CompoundDesc).ElemTypes[0]
 	tc := NewTypeConverter()
 	keyGraphQLInputType, err := tc.NomsTypeToGraphQLInputType(keyNomsType)
 	suite.NoError(err)
@@ -1359,10 +1359,10 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 
 	tc := NewTypeConverter()
 	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
-		if nomsType.Equals(aVal.Type()) {
+		if nomsType.Equals(types.TypeOf(aVal)) {
 			return "A"
 		}
-		if nomsType.Equals(bVal.Type()) {
+		if nomsType.Equals(types.TypeOf(bVal)) {
 			return "BBB"
 		}
 		return DefaultNameFunc(nomsType, isInputType)
@@ -1402,7 +1402,7 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 	)
 	tc = NewTypeConverter()
 	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
-		if nomsType.Equals(aVal.Type()) {
+		if nomsType.Equals(types.TypeOf(aVal)) {
 			if isInputType {
 				return "AI"
 			}

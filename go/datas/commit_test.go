@@ -22,7 +22,7 @@ func TestNewCommit(t *testing.T) {
 	}
 
 	commit := NewCommit(types.Number(1), types.NewSet(), types.EmptyStruct)
-	at := commit.Type()
+	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
 		types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
@@ -32,13 +32,13 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Number
 	commit2 := NewCommit(types.Number(2), types.NewSet(types.NewRef(commit)), types.EmptyStruct)
-	at2 := commit2.Type()
+	at2 := types.TypeOf(commit2)
 	et2 := et
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
 	commit3 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), types.EmptyStruct)
-	at3 := commit3.Type()
+	at3 := types.TypeOf(commit3)
 	et3 := makeCommitStructType(
 		types.EmptyStructType,
 		types.MakeSetType(types.MakeRefType(makeCommitStructType(
@@ -62,9 +62,9 @@ func TestNewCommit(t *testing.T) {
 			Type: types.NumberType,
 		},
 	)
-	assertTypeEquals(metaType, meta.Type())
+	assertTypeEquals(metaType, types.TypeOf(meta))
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
-	at4 := commit4.Type()
+	at4 := types.TypeOf(commit4)
 	et4 := makeCommitStructType(
 		metaType,
 		types.MakeSetType(types.MakeRefType(makeCommitStructType(
@@ -78,7 +78,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Merge-commit with different parent types
 	commit5 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
-	at5 := commit5.Type()
+	at5 := types.TypeOf(commit5)
 	et5 := makeCommitStructType(
 		types.EmptyStructType,
 		types.MakeSetType(types.MakeRefType(makeCommitStructType(
@@ -98,13 +98,13 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"parents": types.NewSet(),
 		"meta":    types.EmptyStruct,
 	})
-	assert.True(IsCommitType(metaCommit.Type()))
+	assert.True(IsCommitType(types.TypeOf(metaCommit)))
 
 	noMetaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
 		"parents": types.NewSet(),
 	})
-	assert.False(IsCommitType(noMetaCommit.Type()))
+	assert.False(IsCommitType(types.TypeOf(noMetaCommit)))
 }
 
 // Convert list of Struct's to Set<Ref>

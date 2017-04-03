@@ -133,7 +133,7 @@ func WalkDifferentStructs(last, current Value, vr ValueReader) (added, removed m
 			v := (*values)[len(*values)-1]
 			*values = (*values)[:len(*values)-1]
 
-			if !mightContainStructs(v.Type()) {
+			if !mightContainStructs(TypeOf(v)) {
 				continue
 			}
 
@@ -151,7 +151,7 @@ func WalkDifferentStructs(last, current Value, vr ValueReader) (added, removed m
 				for _, mt := range ms.tuples {
 					if mt.child != nil {
 						*values = append(*values, mt.child)
-					} else if mightContainStructs(mt.ref.Type()) {
+					} else if mightContainStructs(TypeOf(mt.ref)) {
 						refs.PushBack(mt.ref)
 					}
 				}

@@ -144,7 +144,7 @@ func (e *UnmarshalTypeMismatchError) Error() string {
 	} else {
 		ts = e.Type.String()
 	}
-	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", e.Value.Type().Describe(), ts, e.details)
+	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", types.TypeOf(e.Value).Describe(), ts, e.details)
 }
 
 func overflowError(v types.Number, t reflect.Type) *UnmarshalTypeMismatchError {
@@ -532,7 +532,8 @@ func interfaceDecoder(t reflect.Type) decoderFunc {
 	}
 
 	return func(v types.Value, rv reflect.Value) {
-		t := getGoTypeForNomsType(v.Type(), rv.Type(), v)
+		// TODO: Go directly from value to go type
+		t := getGoTypeForNomsType(types.TypeOf(v), rv.Type(), v)
 		i := reflect.New(t).Elem()
 		typeDecoder(t, nomsTags{})(v, i)
 		rv.Set(i)

@@ -22,7 +22,7 @@ func (seq leafSequence) valueReader() ValueReader {
 	return seq.vr
 }
 
-func (seq leafSequence) Type() *Type {
+func (seq leafSequence) typeOf() *Type {
 	return seq.t
 }
 

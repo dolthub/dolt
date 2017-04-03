@@ -97,13 +97,13 @@ Continue?
 
 func validate(r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsSubtype(rootType, r.Type()) {
-		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(), r.Type().Describe())
+	if !types.IsSubtype(rootType, types.TypeOf(r)) {
+		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(), types.TypeOf(r).Describe())
 		return false
 	}
 
 	return r.(types.Map).Any(func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(v.Type()) {
+		if !datas.IsRefOfCommitType(types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false
 		}

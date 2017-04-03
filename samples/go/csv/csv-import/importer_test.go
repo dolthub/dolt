@@ -345,7 +345,6 @@ func (s *testSuite) TestCSVImportSkipRecordsTooMany() {
 	s.Equal("", stdout)
 	s.Equal("error: skip-records skipped past EOF\n", stderr)
 	s.Equal(clienttest.ExitError{1}, recoveredErr)
-
 }
 
 func (s *testSuite) TestCSVImportSkipRecordsCustomHeader() {

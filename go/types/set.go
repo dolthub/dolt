@@ -117,8 +117,8 @@ func (s Set) WalkRefs(cb RefCallback) {
 	s.seq.WalkRefs(cb)
 }
 
-func (s Set) Type() *Type {
-	return s.seq.Type()
+func (s Set) typeOf() *Type {
+	return s.seq.typeOf()
 }
 
 func (s Set) Kind() NomsKind {
@@ -135,7 +135,7 @@ func (s Set) First() Value {
 
 func (s Set) At(idx uint64) Value {
 	if idx >= s.Len() {
-		panic(fmt.Errorf("Out of bounds: %s >= %s", idx, s.Len()))
+		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, s.Len()))
 	}
 
 	cur := newCursorAtIndex(s.seq, idx, false)
@@ -240,7 +240,7 @@ func (s Set) IteratorFrom(val Value) SetIterator {
 }
 
 func (s Set) elemType() *Type {
-	return s.Type().Desc.(CompoundDesc).ElemTypes[0]
+	return TypeOf(s).Desc.(CompoundDesc).ElemTypes[0]
 }
 
 func buildSetData(values ValueSlice) ValueSlice {

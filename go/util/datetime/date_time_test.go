@@ -101,5 +101,5 @@ func TestMarshalType(t *testing.T) {
 	assert.Equal(DateTimeType, typ)
 
 	v := marshal.MustMarshal(dt)
-	assert.Equal(typ, v.Type())
+	assert.Equal(typ, types.TypeOf(v))
 }

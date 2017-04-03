@@ -130,7 +130,7 @@ func (ms metaSequence) WalkRefs(cb RefCallback) {
 	}
 }
 
-func (ms metaSequence) Type() *Type {
+func (ms metaSequence) typeOf() *Type {
 	return ms.t
 }
 
@@ -184,7 +184,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 	}
 
 	if childIsMeta {
-		return newMetaSequence(metaItems, ms.Type(), ms.vr)
+		return newMetaSequence(metaItems, ms.typeOf(), ms.vr)
 	}
 
 	if isIndexedSequence {
@@ -295,7 +295,7 @@ func (es emptySequence) valueReader() ValueReader {
 func (es emptySequence) WalkRefs(cb RefCallback) {
 }
 
-func (es emptySequence) Type() *Type {
+func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
 }
 

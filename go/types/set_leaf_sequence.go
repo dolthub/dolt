@@ -12,7 +12,7 @@ type setLeafSequence struct {
 func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
 	ts := make([]*Type, len(v))
 	for i, v := range v {
-		ts[i] = v.Type()
+		ts[i] = TypeOf(v)
 	}
 	t := MakeSetType(MakeUnionType(ts...))
 	return setLeafSequence{leafSequence{vr, len(v), t}, v}

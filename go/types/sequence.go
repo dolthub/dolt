@@ -14,7 +14,7 @@ type sequence interface {
 	numLeaves() uint64
 	valueReader() ValueReader
 	WalkRefs(cb RefCallback)
-	Type() *Type
+	typeOf() *Type
 	Kind() NomsKind
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence

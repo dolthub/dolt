@@ -117,7 +117,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 }
 
 func (w *valueEncoder) writeValue(v Value) {
-	t := v.Type()
+	t := TypeOf(v)
 	w.appendType(t)
 	switch t.TargetKind() {
 	case BlobKind:

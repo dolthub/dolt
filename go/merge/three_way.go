@@ -136,7 +136,7 @@ func NewThreeWay(resolve ResolveFunc) Policy {
 func ThreeWay(a, b, parent types.Value, vrw types.ValueReadWriter, resolve ResolveFunc, progress chan struct{}) (merged types.Value, err error) {
 	describe := func(v types.Value) string {
 		if v != nil {
-			return v.Type().Describe()
+			return types.TypeOf(v).Describe()
 		}
 		return "nil Value"
 	}
@@ -215,9 +215,9 @@ func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged typ
 
 	pDescription := "<nil>"
 	if parent != nil {
-		pDescription = parent.Type().Describe()
+		pDescription = types.TypeOf(parent).Describe()
 	}
-	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", a.Type().Describe(), b.Type().Describe(), pDescription)
+	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", types.TypeOf(a).Describe(), types.TypeOf(b).Describe(), pDescription)
 }
 
 func (m *merger) threeWayMapMerge(a, b, parent types.Map, path types.Path) (merged types.Value, err error) {
@@ -258,7 +258,7 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 		if f, ok := change.V.(types.String); ok {
 			field := string(f)
 			data := types.StructData{}
-			desc := targetVal.Type().Desc.(types.StructDesc)
+			desc := types.TypeOf(targetVal).Desc.(types.StructDesc)
 			desc.IterFields(func(name string, t *types.Type, optional bool) {
 				d.PanicIfTrue(optional) // values cannot have optional fields.
 				if name != field {
@@ -270,7 +270,7 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 			}
 			return structCandidate{types.NewStruct(desc.Name, data)}
 		}
-		panic(fmt.Errorf("Bad key type in diff: %s", change.V.Type().Describe()))
+		panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(change.V).Describe()))
 	}
 	return m.threeWayOrderedSequenceMerge(structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }
@@ -337,7 +337,7 @@ func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Str
 	aStruct, aOk = a.(types.Struct)
 	bStruct, bOk = b.(types.Struct)
 	if aOk && bOk {
-		aDesc, bDesc := a.Type().Desc.(types.StructDesc), b.Type().Desc.(types.StructDesc)
+		aDesc, bDesc := types.TypeOf(a).Desc.(types.StructDesc), types.TypeOf(b).Desc.(types.StructDesc)
 		if aDesc.Name == bDesc.Name {
 			if parent != nil {
 				pStruct, pOk = parent.(types.Struct)

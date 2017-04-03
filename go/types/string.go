@@ -31,7 +31,7 @@ func (s String) WalkValues(cb ValueCallback) {
 func (s String) WalkRefs(cb RefCallback) {
 }
 
-func (s String) Type() *Type {
+func (s String) typeOf() *Type {
 	return StringType
 }
 

@@ -69,7 +69,7 @@ func (ts testSequence) WalkRefs(cb RefCallback) {
 	panic("not reached")
 }
 
-func (ts testSequence) Type() *Type {
+func (ts testSequence) typeOf() *Type {
 	panic("not reached")
 }
 

@@ -276,7 +276,7 @@ func (tc *TypeConverter) unionToGQLUnion(nomsType *types.Type) *graphql.Union {
 			var nomsType *types.Type
 			isScalar := false
 			if v, ok := p.Value.(types.Value); ok {
-				nomsType = v.Type()
+				nomsType = types.TypeOf(v)
 			} else {
 				switch p.Value.(type) {
 				case float64:
@@ -498,7 +498,7 @@ func getSetElements(v types.Value, args map[string]interface{}) interface{} {
 }
 
 func getCollectionArgs(col types.Collection, args map[string]interface{}, factory iteratorFactory) (iter interface{}, nomsKey, nomsThrough types.Value, count uint64, singleExactMatch bool) {
-	typ := col.Type()
+	typ := types.TypeOf(col)
 	length := col.Len()
 	nomsKeyType := typ.Desc.(types.CompoundDesc).ElemTypes[0]
 

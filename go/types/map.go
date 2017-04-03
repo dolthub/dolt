@@ -134,8 +134,8 @@ func (m Map) WalkRefs(cb RefCallback) {
 	m.seq.WalkRefs(cb)
 }
 
-func (m Map) Type() *Type {
-	return m.seq.Type()
+func (m Map) typeOf() *Type {
+	return m.seq.typeOf()
 }
 
 func (m Map) Kind() NomsKind {
@@ -161,7 +161,7 @@ func (m Map) Last() (Value, Value) {
 
 func (m Map) At(idx uint64) (key, value Value) {
 	if idx >= m.Len() {
-		panic(fmt.Errorf("Out of bounds: %s >= %s", idx, m.Len()))
+		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
 	}
 
 	cur := newCursorAtIndex(m.seq, idx, false)
@@ -300,7 +300,7 @@ func (m Map) IterFrom(start Value, cb mapIterCallback) {
 }
 
 func (m Map) elemTypes() []*Type {
-	return m.Type().Desc.(CompoundDesc).ElemTypes
+	return TypeOf(m).Desc.(CompoundDesc).ElemTypes
 }
 
 func buildMapData(values []Value) mapEntrySlice {

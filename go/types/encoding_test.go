@@ -607,7 +607,7 @@ func (bg bogusType) WalkRefs(cb RefCallback)     {}
 func (bg bogusType) Kind() NomsKind {
 	return CycleKind
 }
-func (bg bogusType) Type() *Type {
+func (bg bogusType) typeOf() *Type {
 	return MakeCycleType(0)
 }
 

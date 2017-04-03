@@ -14,7 +14,7 @@ import (
 )
 
 func getElemDesc(s types.Collection, index int) types.StructDesc {
-	t := s.Type().Desc.(types.CompoundDesc).ElemTypes[index]
+	t := types.TypeOf(s).Desc.(types.CompoundDesc).ElemTypes[index]
 	if types.StructKind != t.TargetKind() {
 		d.Panic("Expected StructKind, found %s", types.KindToString[t.Kind()])
 	}
@@ -29,7 +29,7 @@ func GetListElemDesc(l types.List, vr types.ValueReader) types.StructDesc {
 // GetMapElemDesc ensures that m is a types.Map of structs, pulls the types.StructDesc that describes the elements of m out of vr, and returns the StructDesc.
 // If m is a nested types.Map of types.Map, then GetMapElemDesc will descend the levels of the enclosed types.Maps to get to a types.Struct
 func GetMapElemDesc(m types.Map, vr types.ValueReader) types.StructDesc {
-	t := m.Type().Desc.(types.CompoundDesc).ElemTypes[1]
+	t := types.TypeOf(m).Desc.(types.CompoundDesc).ElemTypes[1]
 	if types.StructKind == t.TargetKind() {
 		return t.Desc.(types.StructDesc)
 	} else if types.MapKind == t.TargetKind() {

@@ -37,8 +37,8 @@ func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
 	kts := make([]*Type, len(data))
 	vts := make([]*Type, len(data))
 	for i, e := range data {
-		kts[i] = e.key.Type()
-		vts[i] = e.value.Type()
+		kts[i] = TypeOf(e.key)
+		vts[i] = TypeOf(e.value)
 	}
 	t := MakeMapType(MakeUnionType(kts...), MakeUnionType(vts...))
 	return mapLeafSequence{leafSequence{vr, len(data), t}, data}

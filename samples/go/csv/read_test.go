@@ -69,7 +69,7 @@ b,2,false
 	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, ds)
 
 	assert.Equal(uint64(2), m.Len())
-	assert.True(m.Type().Equals(
+	assert.True(types.TypeOf(m).Equals(
 		types.MakeMapType(types.StringType, types.MakeStructType("test",
 			types.StructField{"A", types.StringType, false},
 			types.StructField{"B", types.NumberType, false},

@@ -33,7 +33,7 @@ func (v Bool) WalkValues(cb ValueCallback) {
 func (v Bool) WalkRefs(cb RefCallback) {
 }
 
-func (v Bool) Type() *Type {
+func (v Bool) typeOf() *Type {
 	return BoolType
 }
 

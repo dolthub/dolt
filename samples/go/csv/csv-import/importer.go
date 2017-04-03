@@ -85,7 +85,7 @@ func main() {
 		}
 		blob, ok := val.(types.Blob)
 		if !ok {
-			d.CheckError(fmt.Errorf("Path %s not a Blob: %s\n", *path, types.EncodedValue(val.Type())))
+			d.CheckError(fmt.Errorf("Path %s not a Blob: %s\n", *path, types.EncodedValue(types.TypeOf(val))))
 		}
 		defer db.Close()
 		preader, pwriter := io.Pipe()

@@ -39,19 +39,19 @@ with the following commands:
     nomdex up --in-path ~/nomsdb::people.value --by .name --out-ds by-name
     nomdex up --in-path ~/nomsdb::people.value --by .geopos.latitude --out-ds by-lat
     nomdex up --in-path ~/nomsdb::people.value --by .geopos.longitude --out-ds by-lng
-    
+
 The following query could be used to find all people with an address near the
 equator:
     nomdex find 'by-lat >= -1.0 and by-lat <= 1.0'
 
 We could also get a list of all people who live near the equator whose name begins with "A":
     nomdex find '(by-name >= "A" and by-name < "B") and (by-lat >= -1.0 and by-lat <= 1.0)'
-   
+
 The query language is simple. It currently supports the following relational operators:
     <, <=, >, >=, =, !=
 Relational expressions are always of the form:
     <index> <relational operator> <constant>   e.g. personId >= 2000.
-    
+
 Indexes are the name given by the --out-ds argument in the 'nomdex up' command.
 Constants are either "strings" (in quotes) or numbers (e.g. 3, 3000, -2, -2.5,
 3.147, etc).
@@ -172,7 +172,7 @@ func openIndex(idxName string, im *indexManager) error {
 		types.MakeUnionType(types.StringType, types.NumberType),
 		types.ValueType)
 
-	if !types.IsSubtype(typ, index.Type()) {
+	if !types.IsSubtype(typ, types.TypeOf(index)) {
 		return fmt.Errorf("%s does not point to a suitable index type:", idxName)
 	}
 

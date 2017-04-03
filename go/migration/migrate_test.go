@@ -107,7 +107,7 @@ func TestMigrateFromVersion7(t *testing.T) {
 	test(types.TypeType, v7types.TypeType)
 	test(types.ValueType, v7types.ValueType)
 	test(types.MakeListType(types.NumberType), v7types.MakeListType(types.NumberType))
-	test(types.MakeListType(types.NumberType).Type(), v7types.MakeListType(types.NumberType).Type())
+	test(types.TypeOf(types.MakeListType(types.NumberType)), v7types.TypeOf(v7types.MakeListType(types.NumberType)))
 
 	test(types.MakeListType(types.NumberType), v7types.MakeListType(v7types.NumberType))
 	test(types.MakeSetType(types.NumberType), v7types.MakeSetType(v7types.NumberType))

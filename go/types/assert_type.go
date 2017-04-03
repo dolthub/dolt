@@ -9,8 +9,8 @@ import (
 )
 
 func assertSubtype(t *Type, v Value) {
-	if !isSubtype(t, v.Type(), nil) {
-		d.Chk.Fail("Invalid type", "%s is not a subtype of %s", v.Type().Describe(), t.Describe())
+	if !isSubtype(t, TypeOf(v), nil) {
+		d.Chk.Fail("Invalid type", "%s is not a subtype of %s", TypeOf(v).Describe(), t.Describe())
 	}
 }
 

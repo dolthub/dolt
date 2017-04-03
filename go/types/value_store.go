@@ -67,7 +67,7 @@ const (
 type chunkCacheEntry interface {
 	Present() bool
 	Hint() hash.Hash
-	Type() *Type
+	typeOf() *Type
 }
 
 type pendingChunk struct {
@@ -158,7 +158,7 @@ func (lvs *ValueStore) setHintsForReadValue(v Value, h hash.Hash, toPending bool
 		lvs.setHintsForReachable(v, h, toPending)
 		// h is trivially a hint for v, so consider putting that in the hintCache. If we got to v by reading some higher-level chunk, this entry gets dropped on the floor because h already has a hint in the hintCache. If we later read some other chunk that references v, setHintsForReachable will overwrite this with a hint pointing to that chunk.
 		// If we don't do this, top-level Values that get read but not written -- such as the existing Head of a Database upon a Commit -- can be erroneously left out during a pull.
-		entry = hintedChunk{v.Type(), h}
+		entry = hintedChunk{TypeOf(v), h}
 	}
 	if cur := lvs.check(h); cur == nil || cur.Hint().IsEmpty() {
 		lvs.set(h, entry, toPending)
@@ -237,7 +237,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1
-	r := constructRef(MakeRefType(v.Type()), h, height)
+	r := constructRef(MakeRefType(TypeOf(v)), h, height)
 	if lvs.isPresent(h) {
 		return r
 	}
@@ -247,7 +247,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	lvs.bufferChunk(v, c, height, hints)
 
 	lvs.setHintsForReachable(v, h, true)
-	lvs.set(h, (*presentChunk)(v.Type()), false)
+	lvs.set(h, (*presentChunk)(TypeOf(v)), false)
 	lvs.valueCache.Drop(h)
 	return r
 }
@@ -449,21 +449,21 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 		}
 
 		targetType := getTargetType(reachable)
-		if entry.Type().TargetKind() == ValueKind && targetType.TargetKind() != ValueKind {
+		if entry.typeOf().TargetKind() == ValueKind && targetType.TargetKind() != ValueKind {
 			// We've seen targetHash before, but only in a Ref<Value>, and reachable has a more specific type than that. Deref reachable to check the real type on the chunk it points to, and cache the result if everything checks out.
 			if reachableV == nil {
 				reachableV = lvs.ReadValue(targetHash)
 			}
-			entry = hintedChunk{reachableV.Type(), entry.Hint()}
+			entry = hintedChunk{TypeOf(reachableV), entry.Hint()}
 			lvs.set(targetHash, entry, false)
 		}
 		// At this point, entry should have the most specific type info possible. Unless it matches targetType, or targetType is 'Value', bail.
-		if !IsSubtype(targetType, entry.Type()) {
+		if !IsSubtype(targetType, entry.typeOf()) {
 			// TODO: This should really be!
 			// if !(targetType.TargetKind() == ValueKind || entry.Type().Equals(targetType)) {
 			// https://github.com/attic-labs/noms/issues/3325
 
-			d.Panic("Value to write contains ref %s, which points to a value of type %s which is not a subtype of %s", reachable.TargetHash(), entry.Type().Describe(), targetType.Describe())
+			d.Panic("Value to write contains ref %s, which points to a value of type %s which is not a subtype of %s", reachable.TargetHash(), entry.typeOf().Describe(), targetType.Describe())
 		}
 	}
 	v.WalkRefs(collectHints)
@@ -471,7 +471,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value, readValues bool) Hints {
 }
 
 func getTargetType(refBase Ref) *Type {
-	refType := refBase.Type()
+	refType := TypeOf(refBase)
 	d.PanicIfFalse(RefKind == refType.TargetKind())
 	return refType.Desc.(CompoundDesc).ElemTypes[0]
 }
@@ -489,7 +489,7 @@ func (h hintedChunk) Hint() (r hash.Hash) {
 	return h.hint
 }
 
-func (h hintedChunk) Type() *Type {
+func (h hintedChunk) typeOf() *Type {
 	return h.t
 }
 
@@ -503,7 +503,7 @@ func (p *presentChunk) Hint() (h hash.Hash) {
 	return
 }
 
-func (p *presentChunk) Type() *Type {
+func (p *presentChunk) typeOf() *Type {
 	return (*Type)(p)
 }
 
@@ -517,6 +517,6 @@ func (a absentChunk) Hint() (r hash.Hash) {
 	return
 }
 
-func (a absentChunk) Type() *Type {
-	panic("Not reached. Should never call Type() on an absentChunk.")
+func (a absentChunk) typeOf() *Type {
+	panic("Not reached. Should never call typeOf() on an absentChunk.")
 }

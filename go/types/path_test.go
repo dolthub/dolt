@@ -406,17 +406,17 @@ func TestPathType(t *testing.T) {
 
 	m.IterAll(func(k, cv Value) {
 		ks := k.(String)
-		assertResolvesTo(assert, cv.Type(), m, fmt.Sprintf("[\"%s\"]@type", ks))
+		assertResolvesTo(assert, TypeOf(cv), m, fmt.Sprintf("[\"%s\"]@type", ks))
 	})
 
 	assertResolvesTo(assert, StringType, m, `["string"]@key@type`)
-	assertResolvesTo(assert, m.Type(), m, `@type`)
+	assertResolvesTo(assert, TypeOf(m), m, `@type`)
 	s := NewStruct("", StructData{
 		"str": String("foo"),
 		"num": Number(42),
 	})
-	assertResolvesTo(assert, s.Get("str").Type(), s, ".str@type")
-	assertResolvesTo(assert, s.Get("num").Type(), s, ".num@type")
+	assertResolvesTo(assert, TypeOf(s.Get("str")), s, ".str@type")
+	assertResolvesTo(assert, TypeOf(s.Get("num")), s, ".num@type")
 }
 
 func TestPathAtAnnotation(t *testing.T) {

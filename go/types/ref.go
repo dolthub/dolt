@@ -17,7 +17,7 @@ type Ref struct {
 }
 
 func NewRef(v Value) Ref {
-	return Ref{v.Hash(), maxChunkHeight(v) + 1, MakeRefType(v.Type()), &hash.Hash{}}
+	return Ref{v.Hash(), maxChunkHeight(v) + 1, MakeRefType(TypeOf(v)), &hash.Hash{}}
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
@@ -77,7 +77,7 @@ func (r Ref) WalkRefs(cb RefCallback) {
 	cb(r)
 }
 
-func (r Ref) Type() *Type {
+func (r Ref) typeOf() *Type {
 	return r.t
 }
 

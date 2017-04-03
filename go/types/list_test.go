@@ -1019,17 +1019,17 @@ func TestListTypeAfterMutations(t *testing.T) {
 		l := NewList(values...)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.sequence())
-		assert.True(l.Type().Equals(MakeListType(NumberType)))
+		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
 
 		l = l.Append(String("a"))
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.sequence())
-		assert.True(l.Type().Equals(MakeListType(MakeUnionType(NumberType, StringType))))
+		assert.True(TypeOf(l).Equals(MakeListType(MakeUnionType(NumberType, StringType))))
 
 		l = l.Splice(l.Len()-1, 1)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.sequence())
-		assert.True(l.Type().Equals(MakeListType(NumberType)))
+		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
 	}
 
 	test(15, listLeafSequence{})
@@ -1134,5 +1134,5 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 			StructField{"a", NumberType, false},
 			StructField{"b", StringType, true},
 		),
-		).Equals(list.Type()))
+		).Equals(TypeOf(list)))
 }

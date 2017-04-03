@@ -196,7 +196,7 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 }
 
 func (w *hrsWriter) WriteTagged(v Value) {
-	t := v.Type()
+	t := TypeOf(v)
 	switch t.TargetKind() {
 	case BoolKind, NumberKind, StringKind:
 		w.Write(v)
@@ -216,15 +216,10 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	}
 }
 
-type lenable interface {
-	Len() uint64
-}
-
 func (w *hrsWriter) writeSize(v Value) {
-	t := v.Type()
-	switch t.TargetKind() {
+	switch v.Kind() {
 	case ListKind, MapKind, SetKind:
-		l := v.(lenable).Len()
+		l := v.(Collection).Len()
 		if l < 4 {
 			return
 		}

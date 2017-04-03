@@ -56,7 +56,7 @@ func (s *testSuite) TestImportFromStdin() {
 	ds := sp.GetDatabase().GetDataset("ds")
 	meta := ds.Head().Get(datas.MetaField).(types.Struct)
 	// The meta should only have a "date" field.
-	metaDesc := meta.Type().Desc.(types.StructDesc)
+	metaDesc := types.TypeOf(meta).Desc.(types.StructDesc)
 	assert.Equal(1, metaDesc.Len())
 	assert.NotNil(metaDesc.Field("date"))
 }
@@ -82,7 +82,7 @@ func (s *testSuite) TestImportFromFile() {
 
 	ds := sp.GetDatabase().GetDataset("ds")
 	meta := ds.Head().Get(datas.MetaField).(types.Struct)
-	metaDesc := meta.Type().Desc.(types.StructDesc)
+	metaDesc := types.TypeOf(meta).Desc.(types.StructDesc)
 	assert.Equal(2, metaDesc.Len())
 	assert.NotNil(metaDesc.Field("date"))
 	assert.Equal(f.Name(), string(meta.Get("file").(types.String)))

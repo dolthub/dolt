@@ -111,8 +111,8 @@ func (b Blob) WalkRefs(cb RefCallback) {
 	b.seq.WalkRefs(cb)
 }
 
-func (b Blob) Type() *Type {
-	return b.seq.Type()
+func (b Blob) typeOf() *Type {
+	return b.seq.typeOf()
 }
 
 func (b Blob) Kind() NomsKind {

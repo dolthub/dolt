@@ -12,7 +12,7 @@ type listLeafSequence struct {
 func newListLeafSequence(vr ValueReader, v ...Value) sequence {
 	ts := make([]*Type, len(v))
 	for i, v := range v {
-		ts[i] = v.Type()
+		ts[i] = TypeOf(v)
 	}
 	t := MakeListType(MakeUnionType(ts...))
 	return listLeafSequence{leafSequence{vr, len(v), t}, v}

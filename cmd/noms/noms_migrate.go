@@ -48,7 +48,7 @@ func runMigrate(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Value not found: %s", args[0]))
 	}
 
-	isCommit := v7datas.IsCommitType(sourceValue.Type())
+	isCommit := v7datas.IsCommitType(v7types.TypeOf(sourceValue))
 
 	vNewDataset, err := spec.ForDataset(args[1])
 	d.CheckError(err)

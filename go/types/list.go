@@ -101,8 +101,8 @@ func (l List) WalkRefs(cb RefCallback) {
 	l.seq.WalkRefs(cb)
 }
 
-func (l List) Type() *Type {
-	return l.seq.Type()
+func (l List) typeOf() *Type {
+	return l.seq.typeOf()
 }
 
 func (l List) Kind() NomsKind {
@@ -137,7 +137,7 @@ func (l List) Map(mf MapFunc) []interface{} {
 }
 
 func (l List) elemType() *Type {
-	return l.seq.Type().Desc.(CompoundDesc).ElemTypes[0]
+	return l.seq.typeOf().Desc.(CompoundDesc).ElemTypes[0]
 }
 
 // Set returns a new list where the valie at the given index have been replaced with v. If idx is

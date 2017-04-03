@@ -91,7 +91,7 @@ func (t *Type) WalkRefs(cb RefCallback) {
 	return
 }
 
-func (t *Type) Type() *Type {
+func (t *Type) typeOf() *Type {
 	return TypeType
 }
 
@@ -135,4 +135,10 @@ func MakePrimitiveTypeByString(p string) *Type {
 	}
 	d.Chk.Fail("invalid type string: %s", p)
 	return nil
+}
+
+// TypeOf returns the type describing the value. This is not an exact type but
+// often a simplification of the concrete type.
+func TypeOf(v Value) *Type {
+	return v.typeOf()
 }
