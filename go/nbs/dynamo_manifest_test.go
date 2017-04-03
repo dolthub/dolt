@@ -79,6 +79,15 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	actual, tableSpecs = mm.Update(nil, actual, newRoot2, nil)
 }
 
+func TestDynamoManifestUpdateEmpty(t *testing.T) {
+	assert := assert.New(t)
+	mm, _ := makeDynamoManifestFake(t)
+
+	actual, tableSpecs := mm.Update(nil, hash.Hash{}, hash.Hash{}, nil)
+	assert.True(actual.IsEmpty())
+	assert.Empty(tableSpecs)
+}
+
 type fakeDDB struct {
 	data    map[string]record
 	assert  *assert.Assertions
@@ -108,7 +117,9 @@ func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput
 		item[nbsVersAttr] = &dynamodb.AttributeValue{S: aws.String(StorageVersion)}
 		item[versAttr] = &dynamodb.AttributeValue{S: aws.String(vers)}
 		item[rootAttr] = &dynamodb.AttributeValue{B: root}
-		item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(specs)}
+		if specs != "" {
+			item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(specs)}
+		}
 	}
 	return &dynamodb.GetItemOutput{Item: item}, nil
 }
@@ -138,9 +149,11 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	m.assert.NotNil(input.Item[rootAttr].B, "root should have been a blob: %+v", input.Item[rootAttr])
 	root := input.Item[rootAttr].B
 
-	m.assert.NotNil(input.Item[tableSpecsAttr], "%s should have been present", tableSpecsAttr)
-	m.assert.NotNil(input.Item[tableSpecsAttr].S, "specs should have been a String: %+v", input.Item[tableSpecsAttr])
-	specs := *input.Item[tableSpecsAttr].S
+	specs := ""
+	if attr, present := input.Item[tableSpecsAttr]; present {
+		m.assert.NotNil(attr.S, "specs should have been a String: %+v", input.Item[tableSpecsAttr])
+		specs = *attr.S
+	}
 
 	mustNotExist := *(input.ConditionExpression) == valueNotExistsOrEqualsExpression
 	current, present := m.data[key]

@@ -57,41 +57,50 @@ func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers strin
 
 	// !exists(dbAttr) => unitialized store
 	if len(result.Item) > 0 {
-		if !validateManifest(result.Item) {
+		valid, hasSpecs := validateManifest(result.Item)
+		if !valid {
 			d.Panic("Malformed manifest for %s: %+v", dm.db, result.Item)
 		}
 		exists = true
 		vers = *result.Item[versAttr].S
 		root = hash.New(result.Item[rootAttr].B)
-		tableSpecs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+		if hasSpecs {
+			tableSpecs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+		}
 	}
 
 	return
 }
 
-func validateManifest(item map[string]*dynamodb.AttributeValue) bool {
-	return len(item) == 5 &&
-		item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
+func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs bool) {
+	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
 		StorageVersion == *item[nbsVersAttr].S &&
 		item[versAttr] != nil && item[versAttr].S != nil &&
-		item[rootAttr] != nil && item[rootAttr].B != nil &&
-		item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil
+		item[rootAttr] != nil && item[rootAttr].B != nil {
+		if len(item) == 5 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
+			return true, true
+		}
+		return len(item) == 4, false
+	}
+	return false, false
 }
 
 func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
 	tableSpecs = specs
 
-	tableInfo := make([]string, 2*len(tableSpecs))
-	formatSpecs(tableSpecs, tableInfo)
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),
 		Item: map[string]*dynamodb.AttributeValue{
-			dbAttr:         {S: aws.String(dm.db)},
-			nbsVersAttr:    {S: aws.String(StorageVersion)},
-			versAttr:       {S: aws.String(constants.NomsVersion)},
-			rootAttr:       {B: newRoot[:]},
-			tableSpecsAttr: {S: aws.String(strings.Join(tableInfo, ":"))},
+			dbAttr:      {S: aws.String(dm.db)},
+			nbsVersAttr: {S: aws.String(StorageVersion)},
+			versAttr:    {S: aws.String(constants.NomsVersion)},
+			rootAttr:    {B: newRoot[:]},
 		},
+	}
+	if len(specs) > 0 {
+		tableInfo := make([]string, 2*len(tableSpecs))
+		formatSpecs(tableSpecs, tableInfo)
+		putArgs.Item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
 	}
 
 	expr := valueEqualsExpression

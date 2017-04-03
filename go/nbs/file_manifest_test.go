@@ -89,6 +89,26 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	assert.Panics(func() { fm.Update(nil, hash.Hash{}, hash.Hash{}, nil) })
 }
 
+func TestFileManifestUpdateEmpty(t *testing.T) {
+	assert := assert.New(t)
+	fm := makeFileManifestTempDir(t)
+	defer os.RemoveAll(fm.dir)
+
+	actual, tableSpecs := fm.Update(nil, hash.Hash{}, hash.Hash{}, nil)
+	assert.True(actual.IsEmpty())
+	assert.Empty(tableSpecs)
+
+	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
+	exists, _, root, tableSpecs := fm2.ParseIfExists(nil)
+	assert.True(exists)
+	assert.True(root.IsEmpty())
+	assert.Empty(tableSpecs)
+
+	actual, tableSpecs = fm2.Update(nil, hash.Hash{}, hash.Hash{}, nil)
+	assert.True(actual.IsEmpty())
+	assert.Empty(tableSpecs)
+}
+
 func TestFileManifestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
