@@ -307,7 +307,7 @@ func TestMarshalTypeSet(t *testing.T) {
 		"d": types.MakeSetType(types.StringType),
 		"e": types.MakeMapType(types.StringType, emptyStructType),
 		"f": types.MakeMapType(types.StringType, types.NumberType),
-		"g": types.MakeListType(types.NumberType),
+		"g": types.MakeSetType(types.NumberType),
 		"h": types.StringType,
 	}).Equals(typ))
 }

@@ -38,16 +38,16 @@ import (
 // into corresponding Go array elements. If the Go map was nil a new map is
 // created if any value is set.
 //
-// To unmarshal Noms sets, it depends on the presence of a `noms:",set"` tag:
-//  - Without (default), Unmarshal decodes into corresponding Go list elements.
-//  - With, Unmarshal decodes into Go map keys corresponding to the set values,
-//    with values struct{}{}. Map values must have struct{} type.
+// To unmarshal a Noms set into a Go map, the field must be tagged with `noms:",set"`,
+// and it must have a type of map[<value-type>]struct{}. Unmarshal decodes into
+// Go map keys corresponding to the set values and assigns each key a value of struct{}{}.
 //
 // When unmarshalling onto interface{} the following rules are used:
 //  - types.Bool -> bool
 //  - types.List -> []T, where T is determined recursively using the same rules.
-//  - types.Set -> depends on `noms:",set"` annotation: without, same as
-//    types.List, with, same as types.Map.
+//  - types.Set -> depends on `noms:",set"` annotation and field type:
+//    - without the annotation, same as types.List
+//    - with the annotation, same as types.Map for map[T]struct{} fields and same as types.List for slice fields
 //  - types.Map -> map[T]V, where T and V is determined recursively using the
 //    same rules.
 //  - types.Number -> float64

@@ -15,7 +15,6 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -32,7 +31,9 @@ import (
 //
 // String values are encoded as Noms types.String.
 //
-// Slices and arrays are encoded as Noms types.List.
+// Slices and arrays are encoded as Noms types.List by default. If a
+// field is tagged with `noms:"set", it will be encoded as Noms types.Set
+// instead.
 //
 // Maps are encoded as Noms types.Map, or a types.Set if the value type is
 // struct{} and the field is tagged with `noms:"set"`.
@@ -228,9 +229,12 @@ func typeEncoder(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags
 	case reflect.Struct:
 		return structEncoder(t, parentStructTypes)
 	case reflect.Slice, reflect.Array:
+		if shouldEncodeAsSet(t, tags) {
+			return setFromListEncoder(t, parentStructTypes)
+		}
 		return listEncoder(t, parentStructTypes)
 	case reflect.Map:
-		if shouldMapEncodeAsSet(t, tags) {
+		if shouldEncodeAsSet(t, tags) {
 			return setEncoder(t, parentStructTypes)
 		}
 		return mapEncoder(t, parentStructTypes)
@@ -477,7 +481,7 @@ func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	e = func(v reflect.Value) types.Value {
 		init.RLock()
 		defer init.RUnlock()
-		values := make([]types.Value, v.Len(), v.Len())
+		values := make([]types.Value, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i))
 		}
@@ -485,6 +489,33 @@ func listEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	}
 
 	encoderCache.set(t, e)
+	elemEncoder = typeEncoder(t.Elem(), parentStructTypes, nomsTags{})
+	return e
+}
+
+// Encode set from array or slice
+func setFromListEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
+	e := setEncoderCache.get(t)
+	if e != nil {
+		return e
+	}
+
+	var elemEncoder encoderFunc
+	// lock e until encoder(s) are initialized
+	var init sync.RWMutex
+	init.Lock()
+	defer init.Unlock()
+	e = func(v reflect.Value) types.Value {
+		init.RLock()
+		defer init.RUnlock()
+		values := make([]types.Value, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			values[i] = elemEncoder(v.Index(i))
+		}
+		return types.NewSet(values...)
+	}
+
+	setEncoderCache.set(t, e)
 	elemEncoder = typeEncoder(t.Elem(), parentStructTypes, nomsTags{})
 	return e
 }
@@ -545,10 +576,16 @@ func mapEncoder(t reflect.Type, parentStructTypes []reflect.Type) encoderFunc {
 	return e
 }
 
-func shouldMapEncodeAsSet(t reflect.Type, tags nomsTags) bool {
-	d.PanicIfFalse(t.Kind() == reflect.Map)
-	// map[T]struct{} `noms:,"set"`
-	return tags.set &&
-		t.Elem().Kind() == reflect.Struct &&
-		t.Elem().NumField() == 0
+func shouldEncodeAsSet(t reflect.Type, tags nomsTags) bool {
+	switch t.Kind() {
+	case reflect.Slice, reflect.Array:
+		return tags.set
+	case reflect.Map:
+		// map[T]struct{} `noms:,"set"`
+		return tags.set &&
+			t.Elem().Kind() == reflect.Struct &&
+			t.Elem().NumField() == 0
+	default:
+		panic(fmt.Errorf("called with unexpected kind %v", t.Kind()))
+	}
 }

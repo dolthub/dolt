@@ -735,7 +735,8 @@ func TestDecodeSet(t *testing.T) {
 		C map[string]struct{} `noms:",set"`
 		D map[string]struct{}
 		E []int
-		F []int
+		F []int `noms:",set"`
+		G []int
 	}
 
 	ns := types.NewStruct("T", types.StructData{
@@ -744,7 +745,8 @@ func TestDecodeSet(t *testing.T) {
 		"c": types.NewSet(types.String("0"), types.String("1"), types.String("2")),
 		"d": types.NewMap(types.String("3"), types.EmptyStruct, types.String("4"), types.EmptyStruct, types.String("5"), types.EmptyStruct),
 		"e": types.NewSet(types.Number(6), types.Number(7), types.Number(8)),
-		"f": types.NewList(types.Number(9), types.Number(10), types.Number(11)),
+		"f": types.NewSet(types.Number(9), types.Number(10), types.Number(11)),
+		"g": types.NewList(types.Number(12), types.Number(13), types.Number(14)),
 	})
 
 	gs := T{}
@@ -756,6 +758,7 @@ func TestDecodeSet(t *testing.T) {
 		D: map[string]struct{}{"3": {}, "4": {}, "5": {}},
 		E: []int{6, 7, 8},
 		F: []int{9, 10, 11},
+		G: []int{12, 13, 14},
 	}, gs)
 
 	ns2 := types.NewStruct("T", types.StructData{
@@ -764,7 +767,8 @@ func TestDecodeSet(t *testing.T) {
 		"c": types.NewSet(),
 		"d": types.NewMap(),
 		"e": types.NewSet(),
-		"f": types.NewList(),
+		"f": types.NewSet(),
+		"g": types.NewList(),
 	})
 
 	gs2 := T{

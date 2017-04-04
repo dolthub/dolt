@@ -132,16 +132,20 @@ func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags,
 		return structEncodeType(t, parentStructTypes, options)
 	case reflect.Array, reflect.Slice:
 		elemType := encodeType(t.Elem(), parentStructTypes, nomsTags{}, options)
-		if elemType != nil {
-			return types.MakeListType(elemType)
+		if elemType == nil {
+			break
 		}
+		if shouldEncodeAsSet(t, tags) {
+			return types.MakeSetType(elemType)
+		}
+		return types.MakeListType(elemType)
 	case reflect.Map:
 		keyType := encodeType(t.Key(), parentStructTypes, nomsTags{}, options)
 		if keyType == nil {
 			break
 		}
 
-		if shouldMapEncodeAsSet(t, tags) {
+		if shouldEncodeAsSet(t, tags) {
 			return types.MakeSetType(keyType)
 		}
 

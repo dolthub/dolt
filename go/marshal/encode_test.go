@@ -559,7 +559,7 @@ func TestEncodeSet(t *testing.T) {
 		map[string]struct{}{"A": {}, "B": {}, "C": {}},
 		map[string]struct{}{"D": {}, "E": {}, "F": {}},
 		map[string]int{},
-		[]int{},
+		[]int{1, 2, 3},
 		"",
 	})
 	assert.NoError(err)
@@ -573,7 +573,7 @@ func TestEncodeSet(t *testing.T) {
 		"d": types.SetKind,
 		"e": types.MapKind,
 		"f": types.MapKind,
-		"g": types.ListKind,
+		"g": types.SetKind,
 		"h": types.StringKind,
 	}
 	for fieldName, kind := range expect {
@@ -602,6 +602,11 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(e.Has(types.String("D")))
 	assert.True(e.Has(types.String("E")))
 	assert.True(e.Has(types.String("F")))
+
+	g := s.Get("g").(types.Set)
+	assert.True(g.Has(types.Number(1)))
+	assert.True(g.Has(types.Number(2)))
+	assert.True(g.Has(types.Number(3)))
 }
 
 func TestEncodeSetWithTags(t *testing.T) {
