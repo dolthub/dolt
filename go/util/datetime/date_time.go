@@ -30,7 +30,7 @@ var DateTimeType = types.MakeStructTypeFromFields("DateTime", types.FieldMap{
 func (dt DateTime) MarshalNoms() (types.Value, error) {
 	t := time.Time(dt)
 	return types.NewStructWithType(DateTimeType, types.ValueSlice{
-		types.Number(float64(t.UnixNano()) * 1e-9),
+		types.Number(float64(t.Unix()) + float64(t.Nanosecond())*1e-9),
 	}), nil
 }
 
@@ -55,4 +55,10 @@ func (dt *DateTime) UnmarshalNoms(v types.Value) error {
 	s, frac := math.Modf(strct.SecSinceEpoch)
 	*dt = DateTime(time.Unix(int64(s), int64(frac*1e9)))
 	return nil
+}
+
+// String() causes DateTime structs to be printed in the same way as time.Time
+// structs.
+func (dt DateTime) String() string {
+	return time.Time(dt).String()
 }

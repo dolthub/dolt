@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/datetime"
 	"github.com/attic-labs/noms/go/util/functions"
 	"github.com/attic-labs/noms/go/util/outputpager"
 	"github.com/attic-labs/noms/go/util/verbose"
@@ -260,7 +262,13 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 			types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
 				v := meta.Get(fieldName)
 				fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
-				types.WriteEncodedValue(pw, v)
+				if types.TypeOf(v).Equals(datetime.DateTimeType) {
+					var dt datetime.DateTime
+					dt.UnmarshalNoms(v)
+					fmt.Fprintf(pw, time.Time(dt).Format(spec.CommitMetaDateFormat))
+				} else {
+					types.WriteEncodedValue(pw, v)
+				}
 				fmt.Fprintf(pw, "\n")
 			})
 		})

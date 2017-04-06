@@ -16,7 +16,8 @@ import (
 func TestBasics(t *testing.T) {
 	assert := assert.New(t)
 
-	dt := DateTime(time.Unix(123, 456))
+	// Since we are using float64 in noms we cannot represent all possible times.
+	dt := DateTime(time.Unix(1234567, 1234567))
 
 	nomsValue, err := marshal.Marshal(dt)
 	assert.NoError(err)
@@ -102,4 +103,28 @@ func TestMarshalType(t *testing.T) {
 
 	v := marshal.MustMarshal(dt)
 	assert.Equal(typ, types.TypeOf(v))
+}
+
+func TestZeroValues(t *testing.T) {
+	assert := assert.New(t)
+
+	dt1 := DateTime{}
+	assert.True(time.Time(dt1).IsZero())
+
+	nomsDate, _ := dt1.MarshalNoms()
+
+	dt2 := DateTime{}
+	marshal.Unmarshal(nomsDate, &dt2)
+	assert.True(time.Time(dt2).IsZero())
+
+	dt3 := DateTime{}
+	dt3.UnmarshalNoms(nomsDate)
+	assert.True(time.Time(dt3).IsZero())
+}
+
+func TestString(t *testing.T) {
+	assert := assert.New(t)
+	dt := DateTime(time.Unix(1234567, 1234567))
+	// Don't test the actual output since that
+	assert.IsType(dt.String(), "s")
 }
