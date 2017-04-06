@@ -5,8 +5,6 @@
 package types
 
 import (
-	"sync"
-
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -15,37 +13,28 @@ import (
 const batchSize = 100
 
 type ValidatingBatchingSink struct {
-	vs    *ValueStore
-	cs    chunks.ChunkStore
-	batch [batchSize]chunks.Chunk
-	count int
-	pool  sync.Pool
+	vs         *ValueStore
+	cs         chunks.ChunkStore
+	validate   bool
+	unresolved hash.HashSet
 }
 
 func NewValidatingBatchingSink(cs chunks.ChunkStore) *ValidatingBatchingSink {
 	return &ValidatingBatchingSink{
-		vs: newLocalValueStore(cs),
-		cs: cs,
+		vs:         newLocalValueStore(cs),
+		cs:         cs,
+		validate:   true,
+		unresolved: hash.HashSet{},
 	}
 }
 
-// Prepare primes the type info cache used to validate Enqueued Chunks by reading the Chunks referenced by the provided hints.
-func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
-	foundChunks := make(chan *chunks.Chunk, batchSize)
-	wg := sync.WaitGroup{}
-	for i := 0; i < batchSize; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for c := range foundChunks {
-				v := DecodeFromBytes(c.Data(), vbs.vs)
-				vbs.vs.setHintsForReadValue(v, c.Hash(), false)
-			}
-		}()
+func NewCompletenessCheckingBatchingSink(cs chunks.ChunkStore) *ValidatingBatchingSink {
+	return &ValidatingBatchingSink{
+		vs:         newLocalValueStore(cs),
+		cs:         cs,
+		validate:   false,
+		unresolved: hash.HashSet{},
 	}
-	vbs.cs.GetMany(hash.HashSet(hints), foundChunks)
-	close(foundChunks)
-	wg.Wait()
 }
 
 // DecodedChunk holds a pointer to a Chunk and the Value that results from
@@ -57,45 +46,50 @@ type DecodedChunk struct {
 
 // DecodeUnqueued decodes c and checks that the hash of the resulting value
 // matches c.Hash(). It returns a DecodedChunk holding both c and a pointer to
-// the decoded Value. However, if c has already been Enqueued, DecodeUnqueued
-// returns an empty DecodedChunk.
+// the decoded Value.
 func (vbs *ValidatingBatchingSink) DecodeUnqueued(c *chunks.Chunk) DecodedChunk {
 	h := c.Hash()
-	if vbs.vs.isPresent(h) {
-		return DecodedChunk{}
+	var v Value
+	if vbs.validate {
+		v = decodeFromBytesWithValidation(c.Data(), vbs.vs)
+	} else {
+		v = DecodeFromBytes(c.Data(), vbs.vs)
 	}
-	v := decodeFromBytesWithValidation(c.Data(), vbs.vs)
+
 	if getHash(v) != h {
 		d.Panic("Invalid hash found")
 	}
 	return DecodedChunk{c, &v}
 }
 
-// Enqueue adds c to the queue of Chunks waiting to be Put into vbs' backing
-// ChunkStore. It is assumed that v is the Value decoded from c, and so v can
-// be used to validate the ref-completeness of c.  The instance keeps an
-// internal buffer of Chunks, spilling to the ChunkStore when the buffer is
-// full.
-func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk, v Value) {
+// Put Puts c into vbs' backing ChunkStore. It is assumed that v is the Value
+// decoded from c, and so v can be used to validate the ref-completeness of c.
+func (vbs *ValidatingBatchingSink) Put(c chunks.Chunk, v Value) {
 	h := c.Hash()
-	vbs.vs.ensureChunksInCache(v)
-	vbs.vs.set(h, hintedChunk{TypeOf(v), h}, false)
-
-	vbs.batch[vbs.count] = c
-	vbs.count++
-
-	if vbs.count == batchSize {
-		vbs.cs.PutMany(vbs.batch[:vbs.count])
-		vbs.count = 0
-	}
+	vbs.unresolved.Remove(h)
+	v.WalkRefs(func(ref Ref) {
+		vbs.unresolved.Insert(ref.TargetHash())
+	})
+	vbs.cs.Put(c)
 }
 
-// Flush Puts any Chunks buffered by Enqueue calls into the backing
-// ChunkStore.
+// Flush makes durable all enqueued Chunks.
 func (vbs *ValidatingBatchingSink) Flush() {
-	if vbs.count > 0 {
-		vbs.cs.PutMany(vbs.batch[:vbs.count])
-	}
 	vbs.cs.Flush()
-	vbs.count = 0
+}
+
+// PanicIfDangling does a Has check on all the references encountered
+// while enqueuing novel chunks. It panics if any of these refs point
+// to Chunks that don't exist in the backing ChunkStore.
+func (vbs *ValidatingBatchingSink) PanicIfDangling() {
+	present := vbs.cs.HasMany(vbs.unresolved)
+	absent := hash.HashSlice{}
+	for h := range vbs.unresolved {
+		if !present.Has(h) {
+			absent = append(absent, h)
+		}
+	}
+	if len(absent) != 0 {
+		d.Panic("Found dangling references to %v", absent)
+	}
 }

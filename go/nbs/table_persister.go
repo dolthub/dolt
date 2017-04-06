@@ -94,7 +94,7 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 				}()
 				rl <- struct{}{}
 
-				s.extract(InsertOrder, c)
+				s.extract(c)
 			}(src, chunks)
 			chunkChans <- chunks
 		}

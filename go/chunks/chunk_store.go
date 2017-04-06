@@ -49,8 +49,13 @@ type ChunkSource interface {
 	// found. Any non-present chunks will silently be ignored.
 	GetMany(hashes hash.HashSet, foundChunks chan *Chunk)
 
-	// Returns true iff the value at the address |h| is contained in the source
+	// Returns true iff the value at the address |h| is contained in the
+	// source
 	Has(h hash.Hash) bool
+
+	// Returns a new HashSet containing any members of |hashes| that are
+	// present in the source.
+	HasMany(hashes hash.HashSet) (present hash.HashSet)
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string

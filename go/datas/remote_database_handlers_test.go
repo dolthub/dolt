@@ -36,14 +36,12 @@ func TestHandleWriteValue(t *testing.T) {
 	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
 	assert.NoError(err)
 
-	hint := l.Hash()
 	newItem := types.NewEmptyBlob()
 	itemChunk := types.EncodeValue(newItem, nil)
 	l2 := l.Insert(1, types.NewRef(newItem))
 	listChunk := types.EncodeValue(l2, nil)
 
 	body := &bytes.Buffer{}
-	serializeHints(body, map[hash.Hash]struct{}{hint: {}})
 	chunks.Serialize(itemChunk, body)
 	chunks.Serialize(listChunk, body)
 
@@ -64,7 +62,6 @@ func TestHandleWriteValuePanic(t *testing.T) {
 	cs := chunks.NewTestStore()
 
 	body := &bytes.Buffer{}
-	serializeHints(body, types.Hints{})
 	body.WriteString("Bogus")
 
 	w := httptest.NewRecorder()
@@ -81,7 +78,6 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 	itemChunk := types.EncodeValue(newItem, nil)
 
 	body := &bytes.Buffer{}
-	serializeHints(body, map[hash.Hash]struct{}{})
 	// Write the same chunk to body enough times to be certain that at least one of the concurrent deserialize/decode passes completes before the last one can continue.
 	for i := 0; i <= writeValueConcurrency; i++ {
 		chunks.Serialize(itemChunk, body)
@@ -112,20 +108,8 @@ func TestBuildWriteValueRequest(t *testing.T) {
 	inChunkChan <- &chnx[1]
 	close(inChunkChan)
 
-	hints := map[hash.Hash]struct{}{
-		hash.Parse("00000000000000000000000000000002"): {},
-		hash.Parse("00000000000000000000000000000003"): {},
-	}
-	compressed := buildWriteValueRequest(inChunkChan, hints)
+	compressed := buildWriteValueRequest(inChunkChan)
 	gr := snappy.NewReader(compressed)
-
-	count := 0
-	for hint := range deserializeHints(gr) {
-		count++
-		_, present := hints[hint]
-		assert.True(present)
-	}
-	assert.Equal(len(hints), count)
 
 	outChunkChan := make(chan *chunks.Chunk, len(chnx))
 	chunks.Deserialize(gr, outChunkChan)

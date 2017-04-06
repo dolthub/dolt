@@ -21,7 +21,9 @@ func TestValueReadWriteRead(t *testing.T) {
 	h := vs.WriteValue(s).TargetHash()
 	vs.Flush(h)
 	v := vs.ReadValue(h) // non-nil
-	assert.True(s.Equals(v))
+	if assert.NotNil(v) {
+		assert.True(s.Equals(v), "%s != %s", EncodedValue(s), EncodedValue(v))
+	}
 }
 
 func TestValueReadMany(t *testing.T) {
@@ -78,105 +80,6 @@ func TestValueWriteFlush(t *testing.T) {
 	assert.Zero(vs.pendingPutSize)
 }
 
-func TestCheckChunksInCache(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	b := NewEmptyBlob()
-	cs.Put(EncodeValue(b, nil))
-	cvs.set(b.Hash(), hintedChunk{TypeOf(b), b.Hash()}, false)
-
-	bref := NewRef(b)
-	assert.NotPanics(func() { cvs.chunkHintsFromCache(bref) })
-}
-
-func TestCheckChunksInCachePostCommit(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	l := NewList()
-	r := NewRef(l)
-	i := 0
-	for r.Height() == 1 {
-		l = l.Append(Number(i))
-		r = NewRef(l)
-		i++
-	}
-
-	h := vs.WriteValue(l).TargetHash()
-	// Hints for leaf sequences should be absent prior to Flush...
-	l.WalkRefs(func(ref Ref) {
-		assert.True(vs.check(ref.TargetHash()).Hint().IsEmpty())
-	})
-	vs.Flush(h)
-	// ...And present afterwards
-	l.WalkRefs(func(ref Ref) {
-		assert.True(vs.check(ref.TargetHash()).Hint() == l.Hash())
-	})
-}
-
-func TestCheckChunksNotInCacheAfterReadingNovelValue(t *testing.T) {
-	assert := assert.New(t)
-	vs := NewTestValueStore()
-
-	l := NewList()
-	r := NewRef(l)
-	i := 0
-	for r.Height() == 1 {
-		l = l.Append(Number(i))
-		r = NewRef(l)
-		i++
-	}
-
-	h := vs.WriteValue(l).TargetHash()
-	// Hints for leaf sequences should be absent prior to ReadValue...
-	l.WalkRefs(func(ref Ref) {
-		assert.True(vs.check(ref.TargetHash()).Hint().IsEmpty())
-	})
-	vs.ReadValue(h)
-	// ...And remain absent!
-	l.WalkRefs(func(ref Ref) {
-		assert.False(vs.check(ref.TargetHash()).Hint() == l.Hash())
-	})
-}
-
-func TestCheckChunksInCacheRefValue(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	l := NewList()
-	r := NewRef(l)
-	i := 0
-	for r.Height() == 1 {
-		l = l.Append(Number(i))
-		r = NewRef(l)
-		i++
-	}
-
-	r = cvs.WriteValue(l)
-	rr := cvs.WriteValue(ToRefOfValue(r))
-	cvs.Flush(rr.TargetHash())
-
-	cvs2 := newLocalValueStore(cs)
-	rv := cvs2.ReadValue(rr.TargetHash()).(Ref)
-	assert.True(ValueType.Equals(getTargetType(rv)))
-	assert.NotPanics(func() { cvs.chunkHintsFromCache(r) })
-}
-
-func TestCheckChunksNotInCache(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	b := NewEmptyBlob()
-	cs.Put(EncodeValue(b, nil))
-
-	bref := NewRef(b)
-	assert.Panics(func() { cvs.chunkHintsFromCache(bref) })
-}
-
 type checkingBatchStore struct {
 	BatchStore
 	a             *assert.Assertions
@@ -189,11 +92,12 @@ func (cbs *checkingBatchStore) expect(rs ...Ref) {
 	}
 }
 
-func (cbs *checkingBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints Hints) {
+func (cbs *checkingBatchStore) SchedulePut(c chunks.Chunk) {
 	if cbs.a.NotZero(len(cbs.expectedOrder)) {
 		cbs.a.Equal(cbs.expectedOrder[0], c.Hash())
 		cbs.expectedOrder = cbs.expectedOrder[1:]
 	}
+	cbs.BatchStore.SchedulePut(c)
 }
 
 func (cbs *checkingBatchStore) Flush() {
@@ -251,92 +155,6 @@ func TestFlushOverSize(t *testing.T) {
 
 	vs.WriteValue(l)
 	vs.Flush(l.Hash())
-}
-
-func TestEnsureChunksInCache(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	b := NewEmptyBlob()
-	s := String("oy")
-	bref := NewRef(b)
-	sref := NewRef(s)
-	l := NewList(bref, sref)
-
-	cs.Put(EncodeValue(b, nil))
-	cs.Put(EncodeValue(s, nil))
-	cs.Put(EncodeValue(l, nil))
-
-	assert.NotPanics(func() { cvs.ensureChunksInCache(bref) })
-	assert.NotPanics(func() { cvs.ensureChunksInCache(l) })
-}
-
-func TestEnsureChunksFails(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	b := NewEmptyBlob()
-	bref := NewRef(b)
-	assert.Panics(func() { cvs.ensureChunksInCache(bref) })
-
-	s := String("oy")
-	cs.Put(EncodeValue(b, nil))
-	cs.Put(EncodeValue(s, nil))
-
-	badRef := constructRef(MakeRefType(MakePrimitiveType(BoolKind)), s.Hash(), 1)
-	l := NewList(bref, badRef)
-
-	cs.Put(EncodeValue(l, nil))
-	assert.Panics(func() { cvs.ensureChunksInCache(l) })
-}
-
-func TestCacheOnReadValue(t *testing.T) {
-	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	cvs := newLocalValueStore(cs)
-
-	b := NewEmptyBlob()
-	bref := cvs.WriteValue(b)
-	r := cvs.WriteValue(bref)
-	cvs.Flush(r.TargetHash())
-
-	cvs2 := newLocalValueStore(cs)
-	v := cvs2.ReadValue(r.TargetHash())
-	assert.True(bref.Equals(v))
-	assert.True(cvs2.isPresent(b.Hash()))
-	assert.True(cvs2.isPresent(bref.Hash()))
-}
-
-func TestHintsOnCache(t *testing.T) {
-	assert := assert.New(t)
-	cvs := newLocalValueStore(chunks.NewTestStore())
-
-	cr1 := cvs.WriteValue(Number(1))
-	cr2 := cvs.WriteValue(Number(2))
-	s1 := NewStruct("", StructData{
-		"a": cr1,
-		"b": cr2,
-	})
-	r := cvs.WriteValue(s1)
-	cvs.Flush(r.TargetHash())
-	v := cvs.ReadValue(r.TargetHash())
-
-	if assert.True(v.Equals(s1)) {
-		cr3 := cvs.WriteValue(Number(3))
-		s2 := NewStruct("", StructData{
-			"a": cr1,
-			"b": cr2,
-			"c": cr3,
-		})
-
-		hints := cvs.chunkHintsFromCache(s2)
-		if assert.Len(hints, 1) {
-			_, present := hints[r.TargetHash()]
-			assert.True(present)
-		}
-	}
 }
 
 func TestPanicOnReadBadVersion(t *testing.T) {

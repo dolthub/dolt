@@ -180,22 +180,13 @@ func (ts tableSet) Compact() (ns tableSet, compactees chunkSources) {
 	return ns, toCompact
 }
 
-func (ts tableSet) extract(order EnumerationOrder, chunks chan<- extractRecord) {
-	// Since new tables are _prepended_ to a tableSet, extracting chunks in ReverseOrder requires iterating ts.novel, then ts.upstream, from front to back, while doing insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
-	if order == ReverseOrder {
-		for _, cs := range ts.novel {
-			cs.extract(order, chunks)
-		}
-		for _, cs := range ts.upstream {
-			cs.extract(order, chunks)
-		}
-		return
-	}
+func (ts tableSet) extract(chunks chan<- extractRecord) {
+	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
 	for i := len(ts.upstream) - 1; i >= 0; i-- {
-		ts.upstream[i].extract(order, chunks)
+		ts.upstream[i].extract(chunks)
 	}
 	for i := len(ts.novel) - 1; i >= 0; i-- {
-		ts.novel[i].extract(order, chunks)
+		ts.novel[i].extract(chunks)
 	}
 }
 

@@ -16,7 +16,6 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -27,8 +26,6 @@ import (
 // names of the tables that hold all the chunks in the store. The number of
 // chunks in each table is also stored in the manifest.
 
-type EnumerationOrder uint8
-
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
 	StorageVersion = "2"
@@ -38,9 +35,6 @@ const (
 	defaultMaxTables           = 128
 
 	defaultIndexCacheSize = (1 << 20) * 8 // 8MB
-
-	InsertOrder EnumerationOrder = iota
-	ReverseOrder
 )
 
 var (
@@ -174,7 +168,7 @@ func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
 	nbs.putCount++
 }
 
-func (nbs *NomsBlockStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
+func (nbs *NomsBlockStore) SchedulePut(c chunks.Chunk) {
 	nbs.Put(c)
 }
 
@@ -227,12 +221,9 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		tables = nbs.tables
-
+		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(reqs, foundChunks, &sync.WaitGroup{})
-			wg.Wait()
-		} else {
-			remaining = true
+			remaining = nbs.mt.getMany(reqs, foundChunks, nil)
 		}
 
 		return
@@ -275,24 +266,17 @@ func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (rea
 	return
 }
 
-func (nbs *NomsBlockStore) extractChunks(order EnumerationOrder, chunkChan chan<- *chunks.Chunk) {
+func (nbs *NomsBlockStore) extractChunks(chunkChan chan<- *chunks.Chunk) {
 	ch := make(chan extractRecord, 1)
 	go func() {
+		defer close(ch)
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
-		// Chunks in nbs.tables were inserted before those in nbs.mt, so extract chunks there _first_ if we're doing InsertOrder...
-		if order == InsertOrder {
-			nbs.tables.extract(order, ch)
-		}
+		// Chunks in nbs.tables were inserted before those in nbs.mt, so extract chunks there _first_
+		nbs.tables.extract(ch)
 		if nbs.mt != nil {
-			nbs.mt.extract(order, ch)
+			nbs.mt.extract(ch)
 		}
-		// ...and do them _second_ if we're doing ReverseOrder
-		if order == ReverseOrder {
-			nbs.tables.extract(order, ch)
-		}
-
-		close(ch)
 	}()
 	for rec := range ch {
 		c := chunks.NewChunkWithHash(hash.Hash(rec.a), rec.data)
@@ -320,6 +304,55 @@ func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
 		return nbs.mt != nil && nbs.mt.has(a), nbs.tables
 	}()
 	return has || tables.has(a)
+}
+
+func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
+	reqs := toHasRecords(hashes)
+
+	tables, remaining := func() (tables chunkReader, remaining bool) {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		tables = nbs.tables
+
+		remaining = true
+		if nbs.mt != nil {
+			remaining = nbs.mt.hasMany(reqs)
+		}
+
+		return
+	}()
+
+	if remaining {
+		tables.hasMany(reqs)
+	}
+	return fromHasRecords(reqs)
+}
+
+func toHasRecords(hashes hash.HashSet) []hasRecord {
+	reqs := make([]hasRecord, len(hashes))
+	idx := 0
+	for h := range hashes {
+		a := addr(h)
+		reqs[idx] = hasRecord{
+			a:      &a,
+			prefix: a.Prefix(),
+			order:  idx,
+		}
+		idx++
+	}
+
+	sort.Sort(hasRecordByPrefix(reqs))
+	return reqs
+}
+
+func fromHasRecords(reqs []hasRecord) hash.HashSet {
+	present := hash.HashSet{}
+	for _, r := range reqs {
+		if r.has {
+			present.Insert(hash.New(r.a[:]))
+		}
+	}
+	return present
 }
 
 func (nbs *NomsBlockStore) Root() hash.Hash {
@@ -371,11 +404,6 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	return nbs.tables.Close()
-}
-
-// types.BatchStore
-func (nbs *NomsBlockStore) AddHints(hints types.Hints) {
-	// noop
 }
 
 func (nbs *NomsBlockStore) Flush() {

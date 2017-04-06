@@ -11,28 +11,6 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestValidatingBatchingSinkPrepare(t *testing.T) {
-	cs := chunks.NewTestStore()
-	hints := Hints{}
-	chnx := []chunks.Chunk{
-		EncodeValue(Number(42), nil),
-		EncodeValue(Number(-7), nil),
-		EncodeValue(String("oy"), nil),
-		EncodeValue(Bool(true), nil),
-		EncodeValue(NewBlob(), nil),
-	}
-	for _, c := range chnx {
-		cs.Put(c)
-		hints[c.Hash()] = struct{}{}
-	}
-
-	vbs := NewValidatingBatchingSink(cs)
-	vbs.Prepare(hints)
-	for h := range hints {
-		vbs.vs.isPresent(h)
-	}
-}
-
 func TestValidatingBatchingSinkDecode(t *testing.T) {
 	v := Number(42)
 	c := EncodeValue(v, nil)
@@ -40,17 +18,6 @@ func TestValidatingBatchingSinkDecode(t *testing.T) {
 
 	dc := vbs.DecodeUnqueued(&c)
 	assert.True(t, v.Equals(*dc.Value))
-}
-
-func TestValidatingBatchingSinkDecodeAlreadyEnqueued(t *testing.T) {
-	v := Number(42)
-	c := EncodeValue(v, nil)
-	vbs := NewValidatingBatchingSink(chunks.NewTestStore())
-
-	vbs.Enqueue(c, v)
-	dc := vbs.DecodeUnqueued(&c)
-	assert.Nil(t, dc.Chunk)
-	assert.Nil(t, dc.Value)
 }
 
 func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
@@ -109,20 +76,54 @@ func TestValidatingBatchingSinkEnqueueAndFlush(t *testing.T) {
 	cs := chunks.NewTestStore()
 	vbs := NewValidatingBatchingSink(cs)
 
-	vbs.Enqueue(c, v)
+	vbs.Put(c, v)
 	vbs.Flush()
 	assert.Equal(t, 1, cs.Writes)
 }
 
-func TestValidatingBatchingSinkEnqueueImplicitFlush(t *testing.T) {
-	cs := chunks.NewTestStore()
-	vbs := NewValidatingBatchingSink(cs)
+func TestValidatingBatchingSinkPanicIfDangling(t *testing.T) {
+	b := Bool(true)
+	r := NewRef(b)
 
-	for i := 0; i <= batchSize; i++ {
-		v := Number(i)
-		vbs.Enqueue(EncodeValue(v, nil), v)
-	}
-	assert.Equal(t, batchSize, cs.Writes)
-	vbs.Flush()
-	assert.Equal(t, 1, cs.Writes-batchSize)
+	t.Run("Panic", func(t *testing.T) {
+		t.Run("PreFlush", func(t *testing.T) {
+			t.Parallel()
+			vbs := NewValidatingBatchingSink(chunks.NewTestStore())
+			vbs.Put(EncodeValue(r, nil), r)
+			assert.Panics(t, vbs.PanicIfDangling)
+		})
+		t.Run("PostFlush", func(t *testing.T) {
+			t.Parallel()
+			vbs := NewValidatingBatchingSink(chunks.NewTestStore())
+			vbs.Put(EncodeValue(r, nil), r)
+			vbs.Flush()
+			assert.Panics(t, vbs.PanicIfDangling)
+		})
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		t.Run("BatchInOrder", func(t *testing.T) {
+			t.Parallel()
+			vbs := NewValidatingBatchingSink(chunks.NewTestStore())
+			vbs.Put(EncodeValue(b, nil), b)
+			vbs.Put(EncodeValue(r, nil), r)
+			assert.NotPanics(t, vbs.PanicIfDangling)
+		})
+		t.Run("BatchOutOfOrder", func(t *testing.T) {
+			t.Parallel()
+			vbs := NewValidatingBatchingSink(chunks.NewTestStore())
+			vbs.Put(EncodeValue(r, nil), r)
+			vbs.Put(EncodeValue(b, nil), b)
+			assert.NotPanics(t, vbs.PanicIfDangling)
+		})
+		t.Run("ExistingChunk", func(t *testing.T) {
+			t.Parallel()
+			cs := chunks.NewTestStore()
+			cs.Put(EncodeValue(b, nil))
+
+			vbs := NewValidatingBatchingSink(cs)
+			vbs.Put(EncodeValue(r, nil), r)
+			assert.NotPanics(t, vbs.PanicIfDangling)
+		})
+	})
 }

@@ -115,9 +115,6 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		progressCh <- PullProgress{doneCount, knownCount + uint64(srcQ.Len()), approxBytesWritten}
 	}
 
-	// hc and reachableChunks aren't goroutine-safe, so only write them here.
-	hc := hintCache{}
-	reachableChunks := hash.HashSet{}
 	sampleSize := uint64(0)
 	sampleCount := uint64(0)
 	for !srcQ.Empty() {
@@ -138,14 +135,10 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			case res := <-srcResChan:
 				for _, reachable := range res.reachables {
 					srcQ.PushBack(reachable)
-					reachableChunks.Insert(reachable.TargetHash())
 				}
 				if res.writeBytes > 0 {
 					sampleSize += uint64(res.writeBytes)
 					sampleCount += 1
-				}
-				if !res.readHash.IsEmpty() {
-					reachableChunks.Remove(res.readHash)
 				}
 				srcWork--
 
@@ -153,7 +146,6 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 			case res := <-sinkResChan:
 				for _, reachable := range res.reachables {
 					sinkQ.PushBack(reachable)
-					hc[reachable.TargetHash()] = res.readHash
 				}
 				sinkWork--
 			case res := <-comResChan:
@@ -163,7 +155,6 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					if !isHeadOfSink {
 						srcQ.PushBack(reachable)
 					}
-					hc[reachable.TargetHash()] = res.readHash
 				}
 				comWork--
 				updateProgress(1, 0, uint64(res.readBytes), 0)
@@ -174,14 +165,6 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		sinkQ.Unique()
 		srcQ.Unique()
 	}
-
-	hints := types.Hints{}
-	for hash := range reachableChunks {
-		if hint, present := hc[hash]; present {
-			hints[hint] = struct{}{}
-		}
-	}
-	sinkDB.validatingBatchStore().AddHints(hints)
 }
 
 type traverseResult struct {
@@ -265,7 +248,7 @@ func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritt
 		if v == nil {
 			d.Panic("Expected decoded chunk to be non-nil.")
 		}
-		sinkDB.validatingBatchStore().SchedulePut(c, srcRef.Height(), types.Hints{})
+		sinkDB.validatingBatchStore().SchedulePut(c)
 		bytesWritten := 0
 		if estimateBytesWritten {
 			// TODO: Probably better to hide this behind the BatchStore abstraction since

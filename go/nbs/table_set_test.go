@@ -101,7 +101,7 @@ func TestTableSetExtract(t *testing.T) {
 	ts = ts.Prepend(mt)
 
 	chunkChan := make(chan extractRecord)
-	go func() { ts.extract(InsertOrder, chunkChan); close(chunkChan) }()
+	go func() { defer close(chunkChan); ts.extract(chunkChan) }()
 	i := 0
 	for rec := range chunkChan {
 		a := computeAddr(testChunks[i])
@@ -109,17 +109,6 @@ func TestTableSetExtract(t *testing.T) {
 		assert.Equal(testChunks[i], rec.data, "Item %d: %s != %s", i, string(testChunks[i]), string(rec.data))
 		assert.Equal(a, rec.a)
 		i++
-	}
-
-	chunkChan = make(chan extractRecord)
-	go func() { ts.extract(ReverseOrder, chunkChan); close(chunkChan) }()
-	i = len(testChunks) - 1
-	for rec := range chunkChan {
-		a := computeAddr(testChunks[i])
-		assert.NotNil(rec.data, "Nothing for", a)
-		assert.Equal(testChunks[i], rec.data, "Item %d: %s != %s", i, string(testChunks[i]), string(rec.data))
-		assert.Equal(a, rec.a)
-		i--
 	}
 
 	ts.Close()

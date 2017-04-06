@@ -184,14 +184,8 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(order EnumerationOrder, chunks chan<- extractRecord) {
-	if order == InsertOrder {
-		for _, haver := range crg {
-			haver.extract(order, chunks)
-		}
-		return
-	}
-	for i := len(crg) - 1; i >= 0; i-- {
-		crg[i].extract(order, chunks)
+func (crg chunkReaderGroup) extract(chunks chan<- extractRecord) {
+	for _, haver := range crg {
+		haver.extract(chunks)
 	}
 }

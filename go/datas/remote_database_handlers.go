@@ -137,7 +137,6 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		reader.Close()
 	}()
 	vbs := types.NewValidatingBatchingSink(cs)
-	vbs.Prepare(deserializeHints(reader))
 
 	// Deserialize chunks from reader in background, recovering from errors
 	errChan := make(chan error)
@@ -168,7 +167,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		dc := <-ch
 		if dc.Chunk != nil && dc.Value != nil {
 			totalDataWritten += len(dc.Chunk.Data())
-			vbs.Enqueue(*dc.Chunk, *dc.Value)
+			vbs.Put(*dc.Chunk, *dc.Value)
 			chunkCount++
 			if chunkCount%100 == 0 {
 				verbose.Log("Enqueued %d chunks", chunkCount)
@@ -178,20 +177,21 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 
 	// If there was an error during chunk deserialization, raise so it can be logged and responded to.
 	if err := <-errChan; err != nil {
-		panic(d.Wrap(fmt.Errorf("Deserialization failure: %v", err)))
+		d.Panic("Deserialization failure: %v", err)
 	}
 
+	vbs.PanicIfDangling()
 	vbs.Flush()
+
 	w.WriteHeader(http.StatusCreated)
 }
 
 // Contents of the returned io.Reader are snappy-compressed.
-func buildWriteValueRequest(chunkChan chan *chunks.Chunk, hints map[hash.Hash]struct{}) io.Reader {
+func buildWriteValueRequest(chunkChan chan *chunks.Chunk) io.Reader {
 	body, pw := io.Pipe()
 
 	go func() {
 		gw := snappy.NewBufferedWriter(pw)
-		serializeHints(gw, hints)
 		for c := range chunkChan {
 			chunks.Serialize(*c, gw)
 		}

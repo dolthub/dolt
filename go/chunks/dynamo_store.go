@@ -137,6 +137,16 @@ func (s *DynamoStore) Has(h hash.Hash) bool {
 	return <-ch
 }
 
+func (s *DynamoStore) HasMany(hashes hash.HashSet) hash.HashSet {
+	present := hash.HashSet{}
+	for h := range hashes {
+		if s.Has(h) {
+			present.Insert(h)
+		}
+	}
+	return present
+}
+
 func (s *DynamoStore) PutMany(chunks []Chunk) {
 	for _, c := range chunks {
 		s.Put(c)

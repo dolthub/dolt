@@ -166,6 +166,6 @@ type panicingChunkSource struct {
 	chunkSource
 }
 
-func (pcs panicingChunkSource) extract(order EnumerationOrder, chunks chan<- extractRecord) {
+func (pcs panicingChunkSource) extract(chunks chan<- extractRecord) {
 	panic("onoes")
 }

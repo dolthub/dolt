@@ -12,16 +12,12 @@ import (
 // Database provides versioned storage for noms values. Each Database instance represents one moment in history. Heads() returns the Commit from each active fork at that moment. The Commit() method returns a new Database, representing a new moment in history.
 type LocalDatabase struct {
 	databaseCommon
-	cs  chunks.ChunkStore
-	vbs *localBatchStore
 }
 
 func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
-	bs := types.NewBatchStoreAdaptor(cs)
+	bs := newLocalBatchStore(cs)
 	return &LocalDatabase{
 		newDatabaseCommon(newCachingChunkHaver(cs), types.NewValueStore(bs), bs),
-		cs,
-		nil,
 	}
 }
 
@@ -53,25 +49,11 @@ func (ldb *LocalDatabase) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset
 }
 
 func (ldb *LocalDatabase) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
-	if ldb.vbs != nil {
-		ldb.vbs.FlushAndDestroyWithoutClose()
-		ldb.vbs = nil
-	}
 	err := updateFunc(ds)
 	return ldb.GetDataset(ds.ID()), err
 }
 
-func (ldb *LocalDatabase) validatingBatchStore() types.BatchStore {
-	if ldb.vbs == nil {
-		ldb.vbs = newLocalBatchStore(ldb.cs)
-	}
-	return ldb.vbs
-}
-
 func (ldb *LocalDatabase) Close() error {
-	if ldb.vbs != nil {
-		ldb.vbs.Destroy()
-		ldb.vbs = nil
-	}
+	ldb.BatchStore().(*localBatchStore).Destroy()
 	return ldb.databaseCommon.Close()
 }

@@ -11,31 +11,27 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 )
 
 type localBatchStore struct {
 	cs            chunks.ChunkStore
-	unwrittenPuts *orderedChunkCache
+	unwrittenPuts *nbs.NomsBlockCache
 	vbs           *types.ValidatingBatchingSink
-	hints         types.Hints
-	hashes        hash.HashSet
-	mu            *sync.Mutex
 	once          sync.Once
 }
 
 func newLocalBatchStore(cs chunks.ChunkStore) *localBatchStore {
 	return &localBatchStore{
 		cs:            cs,
-		unwrittenPuts: newOrderedChunkCache(),
-		vbs:           types.NewValidatingBatchingSink(cs),
-		hints:         types.Hints{},
-		hashes:        hash.HashSet{},
-		mu:            &sync.Mutex{},
+		unwrittenPuts: nbs.NewCache(),
+		vbs:           types.NewCompletenessCheckingBatchingSink(cs),
 	}
 }
 
-// Get checks the internal Chunk cache, proxying to the backing ChunkStore if not present.
+// Get checks the internal Chunk cache, proxying to the backing ChunkStore if
+// not present.
 func (lbs *localBatchStore) Get(h hash.Hash) chunks.Chunk {
 	lbs.once.Do(lbs.expectVersion)
 	if pending := lbs.unwrittenPuts.Get(h); !pending.IsEmpty() {
@@ -45,27 +41,23 @@ func (lbs *localBatchStore) Get(h hash.Hash) chunks.Chunk {
 }
 
 func (lbs *localBatchStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
-	lbs.cs.GetMany(hashes, foundChunks)
-}
-
-// Has checks the internal Chunk cache, proxying to the backing ChunkStore if not present.
-func (lbs *localBatchStore) Has(h hash.Hash) bool {
-	lbs.once.Do(lbs.expectVersion)
-	if lbs.unwrittenPuts.has(h) {
-		return true
+	remaining := make(hash.HashSet, len(hashes))
+	for h := range hashes {
+		remaining.Insert(h)
 	}
-	return lbs.cs.Has(h)
+	localChunks := make(chan *chunks.Chunk)
+	go func() { defer close(localChunks); lbs.unwrittenPuts.GetMany(hashes, localChunks) }()
+	for c := range localChunks {
+		remaining.Remove(c.Hash())
+		foundChunks <- c
+	}
+	lbs.cs.GetMany(remaining, foundChunks)
 }
 
-// SchedulePut simply calls Put on the underlying ChunkStore, and ignores hints.
-func (lbs *localBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
+// SchedulePut simply calls Put on the underlying ChunkStore.
+func (lbs *localBatchStore) SchedulePut(c chunks.Chunk) {
 	lbs.once.Do(lbs.expectVersion)
-
-	lbs.unwrittenPuts.Insert(c, refHeight)
-	lbs.mu.Lock()
-	defer lbs.mu.Unlock()
-	lbs.hashes.Insert(c.Hash())
-	lbs.AddHints(hints)
+	lbs.unwrittenPuts.Insert(c)
 }
 
 func (lbs *localBatchStore) expectVersion() {
@@ -80,17 +72,13 @@ func (lbs *localBatchStore) Root() hash.Hash {
 	return lbs.cs.Root()
 }
 
-// UpdateRoot flushes outstanding writes to the backing ChunkStore before updating its Root, because it's almost certainly the case that the caller wants to point that root at some recently-Put Chunk.
+// UpdateRoot flushes outstanding writes to the backing ChunkStore before
+// updating its Root, because it's almost certainly the case that the caller
+// wants to point that root at some recently-Put Chunk.
 func (lbs *localBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	lbs.once.Do(lbs.expectVersion)
 	lbs.Flush()
 	return lbs.cs.UpdateRoot(current, last)
-}
-
-func (lbs *localBatchStore) AddHints(hints types.Hints) {
-	for h := range hints {
-		lbs.hints[h] = struct{}{}
-	}
 }
 
 func (lbs *localBatchStore) Flush() {
@@ -98,35 +86,30 @@ func (lbs *localBatchStore) Flush() {
 
 	chunkChan := make(chan *chunks.Chunk, 128)
 	go func() {
-		err := lbs.unwrittenPuts.ExtractChunks(lbs.hashes, chunkChan)
-		d.PanicIfError(err)
-		close(chunkChan)
+		defer close(chunkChan)
+		lbs.unwrittenPuts.ExtractChunks(chunkChan)
 	}()
 
-	lbs.vbs.Prepare(lbs.hints)
 	for c := range chunkChan {
 		dc := lbs.vbs.DecodeUnqueued(c)
-		lbs.vbs.Enqueue(*dc.Chunk, *dc.Value)
+		lbs.vbs.Put(*dc.Chunk, *dc.Value)
 	}
+	lbs.vbs.PanicIfDangling()
 	lbs.vbs.Flush()
 
-	lbs.unwrittenPuts.Clear(lbs.hashes)
-	lbs.hashes = hash.HashSet{}
-	lbs.hints = types.Hints{}
-}
-
-// FlushAndDestroyWithoutClose flushes lbs and destroys its cache of unwritten chunks. It's needed because LocalDatabase wraps a localBatchStore around a ChunkStore that's used by a separate BatchStore, so calling Close() on one is semantically incorrect while it still wants to use the other.
-func (lbs *localBatchStore) FlushAndDestroyWithoutClose() {
-	lbs.Flush()
 	lbs.unwrittenPuts.Destroy()
+	lbs.unwrittenPuts = nbs.NewCache()
 }
 
-// Destroy blows away lbs' cache of unwritten chunks without flushing. Used when the owning Database is closing and it isn't semantically correct to flush.
+// Destroy blows away lbs' cache of unwritten chunks without flushing. Used
+// when the owning Database is closing and it isn't semantically correct to
+// flush.
 func (lbs *localBatchStore) Destroy() {
 	lbs.unwrittenPuts.Destroy()
 }
 
-// Close is supposed to close the underlying ChunkStore, but the only place localBatchStore is currently used wants to keep the underlying ChunkStore open after it's done with lbs. Hence, the above method and the panic() here.
+// Close closes the underlying ChunkStore.
 func (lbs *localBatchStore) Close() error {
-	panic("Unreached")
+	lbs.Flush()
+	return lbs.cs.Close()
 }

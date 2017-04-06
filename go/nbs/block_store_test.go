@@ -158,23 +158,13 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 	suite.store.PutMany(chnx)
 
 	chunkChan := make(chan *chunks.Chunk)
-	go func() { suite.store.extractChunks(InsertOrder, chunkChan); close(chunkChan) }()
+	go func() { suite.store.extractChunks(chunkChan); close(chunkChan) }()
 	i := 0
 	for c := range chunkChan {
 		suite.Equal(chnx[i].Data(), c.Data())
 		suite.Equal(chnx[i].Hash(), c.Hash())
 		i++
 	}
-
-	chunkChan = make(chan *chunks.Chunk)
-	go func() { suite.store.extractChunks(ReverseOrder, chunkChan); close(chunkChan) }()
-	i = len(chnx) - 1
-	for c := range chunkChan {
-		suite.Equal(chnx[i].Data(), c.Data())
-		suite.Equal(chnx[i].Hash(), c.Hash())
-		i--
-	}
-
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {

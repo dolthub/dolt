@@ -31,6 +31,10 @@ func newDatabaseCommon(cch *cachingChunkHaver, vs *types.ValueStore, rt chunks.R
 	return databaseCommon{ValueStore: vs, cch: cch, rt: rt, rootHash: rt.Root()}
 }
 
+func (dbc *databaseCommon) validatingBatchStore() types.BatchStore {
+	return dbc.BatchStore()
+}
+
 func (dbc *databaseCommon) Datasets() types.Map {
 	if dbc.datasets == nil {
 		if dbc.rootHash.IsEmpty() {

@@ -26,11 +26,7 @@ func (nb nullBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.C
 	panic("not impl")
 }
 
-func (nb nullBlockStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
-}
-
-func (nb nullBlockStore) AddHints(hints types.Hints) {
-}
+func (nb nullBlockStore) SchedulePut(c chunks.Chunk) {}
 
 func (nb nullBlockStore) Flush() {}
 

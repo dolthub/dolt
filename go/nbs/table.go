@@ -206,7 +206,7 @@ type chunkReader interface {
 	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool
 	count() uint32
 	uncompressedLen() uint64
-	extract(order EnumerationOrder, chunks chan<- extractRecord)
+	extract(chunks chan<- extractRecord)
 }
 
 type chunkSource interface {

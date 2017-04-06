@@ -46,6 +46,11 @@ func (s *TestStore) Has(h hash.Hash) bool {
 	return s.MemoryStore.Has(h)
 }
 
+func (s *TestStore) HasMany(hashes hash.HashSet) hash.HashSet {
+	s.Hases += len(hashes)
+	return s.MemoryStore.HasMany(hashes)
+}
+
 func (s *TestStore) Put(c Chunk) {
 	s.Writes++
 	s.MemoryStore.Put(c)

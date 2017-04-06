@@ -91,17 +91,11 @@ func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg
 	return
 }
 
-func (mt *memTable) extract(order EnumerationOrder, chunks chan<- extractRecord) {
-	if order == InsertOrder {
-		for _, hrec := range mt.order {
-			chunks <- extractRecord{*hrec.a, mt.chunks[*hrec.a]}
-		}
-		return
-	}
-	for i := len(mt.order) - 1; i >= 0; i-- {
-		hrec := mt.order[i]
+func (mt *memTable) extract(chunks chan<- extractRecord) {
+	for _, hrec := range mt.order {
 		chunks <- extractRecord{*hrec.a, mt.chunks[*hrec.a]}
 	}
+	return
 }
 
 func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {

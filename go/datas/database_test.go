@@ -98,8 +98,10 @@ func (suite *DatabaseSuite) TestReadWriteCachePersists() {
 	suite.NoError(err)
 }
 
-func (suite *DatabaseSuite) TestWriteRefToNonexistentValue() {
-	suite.Panics(func() { suite.db.WriteValue(types.NewRef(types.Bool(true))) })
+func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
+	ds := suite.db.GetDataset("foo")
+	r := types.NewRef(types.Bool(true))
+	suite.Panics(func() { suite.db.CommitValue(ds, r) })
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {

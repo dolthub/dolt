@@ -22,7 +22,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
 	"github.com/julienschmidt/httprouter"
@@ -48,16 +47,13 @@ type httpBatchStore struct {
 	auth         string
 	getQueue     chan chunks.ReadRequest
 	hasQueue     chan chunks.ReadRequest
-	writeQueue   chan writeRequest
 	finishedChan chan struct{}
 	rateLimit    chan struct{}
 	requestWg    *sync.WaitGroup
 	workerWg     *sync.WaitGroup
-	flushOrder   nbs.EnumerationOrder
 
 	cacheMu       *sync.RWMutex
 	unwrittenPuts *nbs.NomsBlockCache
-	hints         types.Hints
 }
 
 func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
@@ -73,15 +69,12 @@ func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		auth:          auth,
 		getQueue:      make(chan chunks.ReadRequest, readBufferSize),
 		hasQueue:      make(chan chunks.ReadRequest, readBufferSize),
-		writeQueue:    make(chan writeRequest, writeBufferSize),
 		finishedChan:  make(chan struct{}),
 		rateLimit:     make(chan struct{}, httpChunkSinkConcurrency),
 		requestWg:     &sync.WaitGroup{},
 		workerWg:      &sync.WaitGroup{},
-		flushOrder:    nbs.InsertOrder,
 		cacheMu:       &sync.RWMutex{},
 		unwrittenPuts: nbs.NewCache(),
-		hints:         types.Hints{},
 	}
 	buffSink.batchGetRequests()
 	buffSink.batchHasRequests()
@@ -90,17 +83,6 @@ func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 
 type httpDoer interface {
 	Do(req *http.Request) (resp *http.Response, err error)
-}
-
-type writeRequest struct {
-	hints     types.Hints
-	justHints bool
-}
-
-func (bhcs *httpBatchStore) SetReverseFlushOrder() {
-	bhcs.cacheMu.Lock()
-	defer bhcs.cacheMu.Unlock()
-	bhcs.flushOrder = nbs.ReverseOrder
 }
 
 func (bhcs *httpBatchStore) Flush() {
@@ -116,7 +98,6 @@ func (bhcs *httpBatchStore) Close() (e error) {
 
 	close(bhcs.getQueue)
 	close(bhcs.hasQueue)
-	close(bhcs.writeQueue)
 	close(bhcs.rateLimit)
 
 	bhcs.cacheMu.Lock()
@@ -335,21 +316,10 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 	return
 }
 
-func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints types.Hints) {
+func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk) {
 	bhcs.cacheMu.RLock()
 	defer bhcs.cacheMu.RUnlock()
 	bhcs.unwrittenPuts.Insert(c)
-	for hint := range hints {
-		bhcs.hints[hint] = struct{}{}
-	}
-}
-
-func (bhcs *httpBatchStore) AddHints(hints types.Hints) {
-	bhcs.cacheMu.RLock()
-	defer bhcs.cacheMu.RUnlock()
-	for hint := range hints {
-		bhcs.hints[hint] = struct{}{}
-	}
 }
 
 func (bhcs *httpBatchStore) sendWriteRequests() {
@@ -358,7 +328,6 @@ func (bhcs *httpBatchStore) sendWriteRequests() {
 
 	bhcs.cacheMu.Lock()
 	defer func() {
-		bhcs.flushOrder = nbs.InsertOrder // This needs to happen even if no chunks get written.
 		bhcs.cacheMu.Unlock()
 	}()
 
@@ -369,47 +338,29 @@ func (bhcs *httpBatchStore) sendWriteRequests() {
 	defer func() {
 		bhcs.unwrittenPuts.Destroy()
 		bhcs.unwrittenPuts = nbs.NewCache()
-		bhcs.hints = types.Hints{}
 	}()
 
-	var res *http.Response
-	var err error
-	for tryAgain := true; tryAgain; {
-		verbose.Log("Sending %d chunks", count)
-		chunkChan := make(chan *chunks.Chunk, 1024)
-		go func() {
-			bhcs.unwrittenPuts.ExtractChunks(bhcs.flushOrder, chunkChan)
-			close(chunkChan)
-		}()
+	verbose.Log("Sending %d chunks", count)
+	chunkChan := make(chan *chunks.Chunk, 1024)
+	go func() {
+		bhcs.unwrittenPuts.ExtractChunks(chunkChan)
+		close(chunkChan)
+	}()
 
-		body := buildWriteValueRequest(chunkChan, bhcs.hints)
-		url := *bhcs.host
-		url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
-		// TODO: Make this accept snappy encoding
-		req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
-			"Accept-Encoding":  {"gzip"},
-			"Content-Encoding": {"x-snappy-framed"},
-			"Content-Type":     {"application/octet-stream"},
-		})
+	body := buildWriteValueRequest(chunkChan)
+	url := *bhcs.host
+	url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
+	// TODO: Make this accept snappy encoding
+	req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
+		"Accept-Encoding":  {"gzip"},
+		"Content-Encoding": {"x-snappy-framed"},
+		"Content-Type":     {"application/octet-stream"},
+	})
 
-		res, err = bhcs.httpClient.Do(req)
-		d.PanicIfError(err)
-		expectVersion(res)
-		defer closeResponse(res.Body)
-
-		if tryAgain = res.StatusCode == http.StatusTooManyRequests; tryAgain {
-			reader := res.Body
-			if strings.Contains(res.Header.Get("Content-Encoding"), "gzip") {
-				gr, err := gzip.NewReader(reader)
-				d.PanicIfError(err)
-				defer gr.Close()
-				reader = gr
-			}
-			/*hashes :=*/ deserializeHashes(reader)
-			// TODO: BUG 1259 Since the client must currently send all chunks in one batch, the only thing to do in response to backpressure is send EVERYTHING again. Once batching is again possible, this code should figure out how to resend the chunks indicated by hashes.
-			verbose.Log("Retrying...")
-		}
-	}
+	res, err := bhcs.httpClient.Do(req)
+	d.PanicIfError(err)
+	expectVersion(res)
+	defer closeResponse(res.Body)
 
 	if http.StatusCreated != res.StatusCode {
 		d.Panic("Unexpected response: %s", formatErrorResponse(res))

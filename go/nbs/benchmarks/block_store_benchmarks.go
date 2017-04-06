@@ -29,10 +29,10 @@ func writeToEmptyStore(store types.BatchStore, src *dataSource, t assert.Testing
 
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.SchedulePut(*c, 1, types.Hints{})
+		store.SchedulePut(*c)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	store.SchedulePut(newRoot, 1, types.Hints{})
+	store.SchedulePut(newRoot)
 	assert.True(t, store.UpdateRoot(newRoot.Hash(), root))
 }
 
@@ -49,7 +49,7 @@ func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.Te
 	store := openStore()
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.SchedulePut(*c, 1, types.Hints{})
+		store.SchedulePut(*c)
 	}
 	assert.NoError(t, store.Close())
 }

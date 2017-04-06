@@ -52,6 +52,16 @@ func (ms *MemoryStore) Has(r hash.Hash) bool {
 	return ok
 }
 
+func (ms *MemoryStore) HasMany(hashes hash.HashSet) hash.HashSet {
+	present := hash.HashSet{}
+	for h := range hashes {
+		if ms.Has(h) {
+			present.Insert(h)
+		}
+	}
+	return present
+}
+
 func (ms *MemoryStore) Version() string {
 	return constants.NomsVersion
 }
