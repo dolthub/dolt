@@ -299,10 +299,6 @@ func (m Map) IterFrom(start Value, cb mapIterCallback) {
 	})
 }
 
-func (m Map) elemTypes() []*Type {
-	return TypeOf(m).Desc.(CompoundDesc).ElemTypes
-}
-
 func buildMapData(values []Value) mapEntrySlice {
 	if len(values) == 0 {
 		return mapEntrySlice{}

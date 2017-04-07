@@ -7,17 +7,11 @@ package types
 import "github.com/attic-labs/noms/go/d"
 
 func newListMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
-	ts := make([]*Type, len(tuples))
-	for i, mt := range tuples {
-		// Ref<List<T>>
-		ts[i] = TypeOf(mt.ref).Desc.(CompoundDesc).ElemTypes[0].Desc.(CompoundDesc).ElemTypes[0]
-	}
-	t := MakeListType(MakeUnionType(ts...))
-	return newMetaSequence(tuples, t, vr)
+	return newMetaSequence(tuples, ListKind, vr)
 }
 
 func newBlobMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
-	return newMetaSequence(tuples, BlobType, vr)
+	return newMetaSequence(tuples, BlobKind, vr)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx

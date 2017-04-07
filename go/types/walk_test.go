@@ -146,7 +146,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 	suite.assertVisitedOnce(t3, NumberType)
 	suite.assertVisitedOnce(t3, StringType)
 
-	t4 := MakeCycleType(11)
+	t4 := MakeCycleType("ABC")
 	suite.assertVisitedOnce(t4, t4)
 }
 

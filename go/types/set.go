@@ -239,10 +239,6 @@ func (s Set) IteratorFrom(val Value) SetIterator {
 	}
 }
 
-func (s Set) elemType() *Type {
-	return TypeOf(s).Desc.(CompoundDesc).ElemTypes[0]
-}
-
 func buildSetData(values ValueSlice) ValueSlice {
 	if len(values) == 0 {
 		return ValueSlice{}

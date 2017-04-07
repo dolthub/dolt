@@ -35,8 +35,8 @@ func chunkingConfig() (pattern, window uint32) {
 func smallTestChunks() {
 	chunkConfigMu.Lock()
 	defer chunkConfigMu.Unlock()
-	chunkPattern = uint32(1<<7 - 1) // Avg Chunk Size of 128 bytes
-	chunkWindow = uint32(32)
+	chunkPattern = uint32(1<<8 - 1) // Avg Chunk Size of 256 bytes
+	chunkWindow = uint32(64)
 }
 
 func normalProductionChunks() {
@@ -158,8 +158,4 @@ func (rv *rollingValueHasher) writeHash(h hash.Hash) {
 	for _, b := range h[:] {
 		rv.HashByte(b)
 	}
-}
-
-func (rv *rollingValueHasher) appendType(t *Type) {
-	// Type bytes aren't included in the byte stream we chunk over
 }

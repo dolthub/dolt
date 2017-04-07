@@ -4,32 +4,29 @@
 
 package types
 
-import (
-	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
-)
+import "github.com/attic-labs/noms/go/hash"
 
 type Ref struct {
-	target hash.Hash
-	height uint64
-	t      *Type
-	h      *hash.Hash
+	target     hash.Hash
+	targetType *Type
+	height     uint64
+	h          *hash.Hash
 }
 
 func NewRef(v Value) Ref {
-	return Ref{v.Hash(), maxChunkHeight(v) + 1, MakeRefType(TypeOf(v)), &hash.Hash{}}
+	// TODO: Taking the hash will duplicate the work of computing the type
+	return Ref{v.Hash(), TypeOf(v), maxChunkHeight(v) + 1, &hash.Hash{}}
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
 // with the type 'Ref<Value>'.
 func ToRefOfValue(r Ref) Ref {
-	return Ref{r.TargetHash(), r.Height(), MakeRefType(ValueType), &hash.Hash{}}
+	return Ref{r.TargetHash(), ValueType, r.Height(), &hash.Hash{}}
 }
 
 // Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
-func constructRef(t *Type, target hash.Hash, height uint64) Ref {
-	d.PanicIfFalse(RefKind == t.TargetKind())
-	return Ref{target, height, t, &hash.Hash{}}
+func constructRef(target hash.Hash, targetType *Type, height uint64) Ref {
+	return Ref{target, targetType, height, &hash.Hash{}}
 }
 
 func maxChunkHeight(v Value) (max uint64) {
@@ -51,6 +48,10 @@ func (r Ref) Height() uint64 {
 
 func (r Ref) TargetValue(vr ValueReader) Value {
 	return vr.ReadValue(r.target)
+}
+
+func (r Ref) TargetType() *Type {
+	return r.targetType
 }
 
 // Value interface
@@ -78,7 +79,7 @@ func (r Ref) WalkRefs(cb RefCallback) {
 }
 
 func (r Ref) typeOf() *Type {
-	return r.t
+	return makeCompoundType(RefKind, r.targetType)
 }
 
 func (r Ref) Kind() NomsKind {

@@ -470,7 +470,7 @@ func TestEncodeRecursive(t *testing.T) {
 	typ := types.MakeStructType("Node",
 		types.StructField{
 			Name: "children",
-			Type: types.MakeListType(types.MakeCycleType(0)),
+			Type: types.MakeListType(types.MakeCycleType("Node")),
 		},
 		types.StructField{
 			Name: "value",
@@ -479,18 +479,18 @@ func TestEncodeRecursive(t *testing.T) {
 	)
 	assert.True(typ.Equals(types.TypeOf(v)))
 
-	assert.True(types.NewStructWithType(typ, types.ValueSlice{
-		types.NewList(
-			types.NewStructWithType(typ, types.ValueSlice{
-				types.NewList(),
-				types.Number(2),
+	assert.True(types.NewStruct("Node", types.StructData{
+		"children": types.NewList(
+			types.NewStruct("Node", types.StructData{
+				"children": types.NewList(),
+				"value":    types.Number(2),
 			}),
-			types.NewStructWithType(typ, types.ValueSlice{
-				types.NewList(),
-				types.Number(3),
+			types.NewStruct("Node", types.StructData{
+				"children": types.NewList(),
+				"value":    types.Number(3),
 			}),
 		),
-		types.Number(1),
+		"value": types.Number(1),
 	}).Equals(v))
 }
 
@@ -699,10 +699,9 @@ func TestEncodeOriginal(t *testing.T) {
 	assert.True(MustMarshal(s).Equals(orig.Set("foo", types.Number(43))))
 
 	// Field type of base are preserved
-	st := types.MakeStructTypeFromFields("S", types.FieldMap{
-		"foo": types.MakeUnionType(types.StringType, types.NumberType),
+	orig = types.NewStruct("S", types.StructData{
+		"foo": types.Number(42),
 	})
-	orig = types.NewStructWithType(st, []types.Value{types.Number(42)})
 	err = Unmarshal(orig, &s)
 	assert.NoError(err)
 	s.Foo = 43

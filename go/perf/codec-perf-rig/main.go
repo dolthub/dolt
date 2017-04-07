@@ -153,10 +153,10 @@ var structType = types.MakeStructType("S1",
 )
 
 func createStruct(i uint64) types.Value {
-	return types.NewStructWithType(structType, types.ValueSlice{
-		types.Bool(i%2 == 0),
-		types.Number(i),
-		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
+	return types.NewStruct("S1", types.StructData{
+		"bool": types.Bool(i%2 == 0),
+		"num":  types.Number(i),
+		"str":  types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
 	})
 }
 

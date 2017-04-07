@@ -26,16 +26,17 @@ func (w *valueEncoder) writeKind(kind NomsKind) {
 
 func (w *valueEncoder) writeRef(r Ref) {
 	w.writeHash(r.TargetHash())
+	w.writeType(r.TargetType(), map[string]*Type{})
 	w.writeUint64(r.Height())
 }
 
-func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
+func (w *valueEncoder) writeType(t *Type, seenStructs map[string]*Type) {
 	k := t.TargetKind()
 	switch k {
 	case ListKind, MapKind, RefKind, SetKind:
 		w.writeKind(k)
 		for _, elemType := range t.Desc.(CompoundDesc).ElemTypes {
-			w.writeType(elemType, parentStructTypes)
+			w.writeType(elemType, seenStructs)
 		}
 
 	case UnionKind:
@@ -43,15 +44,13 @@ func (w *valueEncoder) writeType(t *Type, parentStructTypes []*Type) {
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
 		w.writeUint32(uint32(len(elemTypes)))
 		for _, elemType := range elemTypes {
-			w.writeType(elemType, parentStructTypes)
+			w.writeType(elemType, seenStructs)
 		}
 	case StructKind:
-		w.writeStructType(t, parentStructTypes)
-	case CycleKind:
-		w.writeCycle(uint32(t.Desc.(CycleDesc)))
+		w.writeStructType(t, seenStructs)
 	default:
-		w.writeKind(k)
 		d.PanicIfFalse(IsPrimitiveKind(k))
+		w.writeKind(k)
 	}
 }
 
@@ -108,7 +107,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 		if !tuple.key.isOrderedByValue {
 			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
 			d.PanicIfTrue(tuple.key.h.IsEmpty())
-			v = constructRef(MakeRefType(BoolType), tuple.key.h, 0)
+			v = constructRef(tuple.key.h, BoolType, 0)
 		}
 		w.writeValue(v)
 		w.writeUint64(tuple.numLeaves)
@@ -117,9 +116,10 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 }
 
 func (w *valueEncoder) writeValue(v Value) {
-	t := TypeOf(v)
-	w.appendType(t)
-	switch t.TargetKind() {
+	k := v.Kind()
+	w.writeKind(k)
+
+	switch k {
 	case BlobKind:
 		seq := v.(Blob).sequence()
 		if w.maybeWriteMetaSequence(seq) {
@@ -162,19 +162,27 @@ func (w *valueEncoder) writeValue(v Value) {
 	case StringKind:
 		w.writeString(string(v.(String)))
 	case TypeKind:
-		w.writeType(v.(*Type), nil)
+		w.writeType(v.(*Type), map[string]*Type{})
 	case StructKind:
-		w.writeStruct(v, t)
+		w.writeStruct(v.(Struct))
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.TargetKind()]))
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
 	default:
 		d.Chk.Fail("Unknown NomsKind")
 	}
 }
 
-func (w *valueEncoder) writeStruct(v Value, t *Type) {
-	for _, f := range v.(Struct).fields {
-		w.writeValue(f.value)
+func (w *valueEncoder) writeStruct(s Struct) {
+	w.writeString(s.name)
+	w.writeUint32(uint32(len(s.fieldNames)))
+
+	// Write field names first because they will compress better together.
+	for _, name := range s.fieldNames {
+		w.writeString(name)
+	}
+
+	for _, v := range s.values {
+		w.writeValue(v)
 	}
 }
 
@@ -183,24 +191,29 @@ func (w *valueEncoder) writeCycle(i uint32) {
 	w.writeUint32(i)
 }
 
-func (w *valueEncoder) writeStructType(t *Type, parentStructTypes []*Type) {
-	// The runtime representaion of struct types can contain cycles. These cycles are broken when encoding and decoding using special "back ref" placeholders.
-	i, found := indexOfType(t, parentStructTypes)
-	if found {
-		w.writeCycle(uint32(len(parentStructTypes)) - i - 1)
+func (w *valueEncoder) writeStructType(t *Type, seenStructs map[string]*Type) {
+	desc := t.Desc.(StructDesc)
+	name := desc.Name
+
+	if _, ok := seenStructs[name]; ok {
+		w.writeKind(CycleKind)
+		w.writeString(name)
 		return
 	}
-	parentStructTypes = append(parentStructTypes, t)
+	seenStructs[name] = t
 
 	w.writeKind(StructKind)
-	desc := t.Desc.(StructDesc)
 	w.writeString(desc.Name)
-
 	w.writeUint32(uint32(desc.Len()))
 
+	// Write all names, all types and finally all the optional flags.
 	for _, field := range desc.fields {
 		w.writeString(field.Name)
-		w.writeType(field.Type, parentStructTypes)
+	}
+	for _, field := range desc.fields {
+		w.writeType(field.Type, seenStructs)
+	}
+	for _, field := range desc.fields {
 		w.writeBool(field.Optional)
 	}
 }

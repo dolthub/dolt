@@ -310,47 +310,47 @@ func TestRecursiveStruct(t *testing.T) {
 	// }
 
 	a := MakeStructType("A",
-		StructField{"b", MakeCycleType(0), false},
-		StructField{"c", MakeListType(MakeCycleType(0)), false},
+		StructField{"b", MakeCycleType("A"), false},
+		StructField{"c", MakeListType(MakeCycleType("A")), false},
 		StructField{"d", MakeStructType("D",
-			StructField{"e", MakeCycleType(0), false},
-			StructField{"f", MakeCycleType(1), false},
+			StructField{"e", MakeCycleType("D"), false},
+			StructField{"f", MakeCycleType("A"), false},
 		), false},
 	)
 
 	assertWriteHRSEqual(t, `struct A {
-  b: Cycle<0>,
-  c: List<Cycle<0>>,
+  b: Cycle<A>,
+  c: List<Cycle<A>>,
   d: struct D {
-    e: Cycle<0>,
-    f: Cycle<1>,
+    e: Cycle<D>,
+    f: Cycle<A>,
   },
 }`, a)
 	assertWriteTaggedHRSEqual(t, `Type(struct A {
-  b: Cycle<0>,
-  c: List<Cycle<0>>,
+  b: Cycle<A>,
+  c: List<Cycle<A>>,
   d: struct D {
-    e: Cycle<0>,
-    f: Cycle<1>,
+    e: Cycle<D>,
+    f: Cycle<A>,
   },
 })`, a)
 
 	d, _ := a.Desc.(StructDesc).Field("d")
 
 	assertWriteHRSEqual(t, `struct D {
-  e: Cycle<0>,
+  e: Cycle<D>,
   f: struct A {
-    b: Cycle<0>,
-    c: List<Cycle<0>>,
-    d: Cycle<1>,
+    b: Cycle<A>,
+    c: List<Cycle<A>>,
+    d: Cycle<D>,
   },
 }`, d)
 	assertWriteTaggedHRSEqual(t, `Type(struct D {
-  e: Cycle<0>,
+  e: Cycle<D>,
   f: struct A {
-    b: Cycle<0>,
-    c: List<Cycle<0>>,
-    d: Cycle<1>,
+    b: Cycle<A>,
+    c: List<Cycle<A>>,
+    d: Cycle<D>,
   },
 })`, d)
 }
@@ -361,17 +361,17 @@ func TestUnresolvedRecursiveStruct(t *testing.T) {
 	//   b: Cycle<1> (unresolved)
 	// }
 	a := MakeStructType("A",
-		StructField{"a", MakeCycleType(0), false},
-		StructField{"b", MakeCycleType(1), false},
+		StructField{"a", MakeCycleType("A"), false},
+		StructField{"b", MakeCycleType("X"), false},
 	)
 
 	assertWriteHRSEqual(t, `struct A {
-  a: Cycle<0>,
-  b: UnresolvedCycle<1>,
+  a: Cycle<A>,
+  b: UnresolvedCycle<X>,
 }`, a)
 	assertWriteTaggedHRSEqual(t, `Type(struct A {
-  a: Cycle<0>,
-  b: UnresolvedCycle<1>,
+  a: Cycle<A>,
+  b: UnresolvedCycle<X>,
 })`, a)
 }
 

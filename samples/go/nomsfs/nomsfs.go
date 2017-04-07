@@ -115,7 +115,7 @@ func init() {
             } | struct File {
               data: Ref<Blob>,
             } | struct Directory {
-              entries: Map<String, Cycle<1>>,
+              entries: Map<String, Cycle<Inode>>,
             },
         }`)
 
@@ -133,7 +133,10 @@ func init() {
 		}
 	}
 
-	fsType = types.MakeStructType("Filesystem", types.StructField{"root", inodeType, false})
+	fsType = types.MakeStructType("Filesystem", types.StructField{
+		Name: "root",
+		Type: inodeType,
+	})
 }
 
 func start(dataset string, mount mount) {
@@ -153,9 +156,16 @@ func start(dataset string, mount mount) {
 		}
 	} else {
 		rootAttr := makeAttr(0777) // create the root directory with maximally permissive permissions
-		rootDir := types.NewStructWithType(directoryType, types.ValueSlice{types.NewMap()})
-		rootInode := types.NewStructWithType(inodeType, types.ValueSlice{rootAttr, rootDir})
-		hv = types.NewStructWithType(fsType, types.ValueSlice{rootInode})
+		rootDir := types.NewStruct("Directory", types.StructData{
+			"entries": types.NewMap(),
+		})
+		rootInode := types.NewStruct("Inode", types.StructData{
+			"attr":     rootAttr,
+			"contents": rootDir,
+		})
+		hv = types.NewStruct("Filesystem", types.StructData{
+			"root": rootInode,
+		})
 	}
 
 	mount(&nomsFS{
@@ -299,7 +309,9 @@ func (fs *nomsFS) Create(path string, flags uint32, mode uint32, context *fuse.C
 	defer fs.mdLock.Unlock()
 	np, code := fs.createCommon(path, mode, func() types.Value {
 		blob := types.NewEmptyBlob()
-		return types.NewStructWithType(fileType, types.ValueSlice{fs.ds.Database().WriteValue(blob)})
+		return types.NewStruct("File", types.StructData{
+			"data": fs.ds.Database().WriteValue(blob),
+		})
 	})
 	if code != fuse.OK {
 		return nil, code
@@ -318,7 +330,9 @@ func (fs *nomsFS) Mkdir(path string, mode uint32, context *fuse.Context) fuse.St
 	fs.mdLock.Lock()
 	defer fs.mdLock.Unlock()
 	_, code := fs.createCommon(path, mode, func() types.Value {
-		return types.NewStructWithType(directoryType, types.ValueSlice{types.NewMap()})
+		return types.NewStruct("Directory", types.StructData{
+			"entries": types.NewMap(),
+		})
 	})
 
 	return code
@@ -328,7 +342,9 @@ func (fs *nomsFS) Symlink(targetPath string, path string, context *fuse.Context)
 	fs.mdLock.Lock()
 	defer fs.mdLock.Unlock()
 	_, code := fs.createCommon(path, 0755, func() types.Value {
-		return types.NewStructWithType(symlinkType, types.ValueSlice{types.String(targetPath)})
+		return types.NewStruct("Symlink", types.StructData{
+			"targetPath": types.String(targetPath),
+		})
 	})
 
 	return code
@@ -351,7 +367,10 @@ func (fs *nomsFS) createCommon(path string, mode uint32, createContents func() t
 	}
 
 	// Create the new node.
-	inode := types.NewStructWithType(inodeType, types.ValueSlice{makeAttr(mode), createContents()})
+	inode := types.NewStruct("Inode", types.StructData{
+		"attr":     makeAttr(mode),
+		"contents": createContents(),
+	})
 
 	np := fs.getNode(inode, fname, parent)
 
@@ -498,7 +517,14 @@ func makeAttr(mode uint32) types.Struct {
 	gid := types.Number(float64(user.Gid))
 	uid := types.Number(float64(user.Uid))
 
-	return types.NewStructWithType(attrType, types.ValueSlice{ctime, gid, types.Number(mode), mtime, uid, types.NewMap()})
+	return types.NewStruct("Attr", types.StructData{
+		"ctime": ctime,
+		"gid":   gid,
+		"mode":  types.Number(mode),
+		"mtime": mtime,
+		"uid":   uid,
+		"xattr": types.NewMap(),
+	})
 }
 
 func updateMtime(attr types.Struct) types.Struct {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/nomdl"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -25,7 +26,7 @@ func TestNewCommit(t *testing.T) {
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+		types.MakeSetType(types.MakeUnionType()),
 		types.NumberType,
 	)
 	assertTypeEquals(et, at)
@@ -33,61 +34,50 @@ func TestNewCommit(t *testing.T) {
 	// Committing another Number
 	commit2 := NewCommit(types.Number(2), types.NewSet(types.NewRef(commit)), types.EmptyStruct)
 	at2 := types.TypeOf(commit2)
-	et2 := et
+	et2 := nomdl.MustParseType(`struct Commit {
+                meta: struct {},
+                parents: Set<Ref<Cycle<Commit>>>,
+                value: Number,
+        }`)
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
 	commit3 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), types.EmptyStruct)
 	at3 := types.TypeOf(commit3)
-	et3 := makeCommitStructType(
-		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(makeCommitStructType(
-			types.EmptyStructType,
-			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-			types.MakeUnionType(types.NumberType, types.StringType),
-		))),
-		types.StringType,
-	)
+	et3 := nomdl.MustParseType(`struct Commit {
+                meta: struct {},
+                parents: Set<Ref<Cycle<Commit>>>,
+                value: Number | String,
+        }`)
 	assertTypeEquals(et3, at3)
 
 	// Now commit a String with MetaInfo
 	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
-	metaType := types.MakeStructType("Meta",
-		types.StructField{
-			Name: "date",
-			Type: types.StringType,
-		},
-		types.StructField{
-			Name: "number",
-			Type: types.NumberType,
-		},
-	)
+	metaType := nomdl.MustParseType(`struct Meta {
+                date: String,
+                number: Number,
+	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
 	at4 := types.TypeOf(commit4)
-	et4 := makeCommitStructType(
-		metaType,
-		types.MakeSetType(types.MakeRefType(makeCommitStructType(
-			types.MakeUnionType(types.EmptyStructType, metaType),
-			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-			types.MakeUnionType(types.NumberType, types.StringType),
-		))),
-		types.StringType,
-	)
+	et4 := nomdl.MustParseType(`struct Commit {
+                meta: struct {} | struct Meta {
+                        date: String,
+                        number: Number,
+        	},
+                parents: Set<Ref<Cycle<Commit>>>,
+                value: Number | String,
+        }`)
 	assertTypeEquals(et4, at4)
 
 	// Merge-commit with different parent types
 	commit5 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
 	at5 := types.TypeOf(commit5)
-	et5 := makeCommitStructType(
-		types.EmptyStructType,
-		types.MakeSetType(types.MakeRefType(makeCommitStructType(
-			types.EmptyStructType,
-			types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
-			types.MakeUnionType(types.NumberType, types.StringType),
-		))),
-		types.StringType,
-	)
+	et5 := nomdl.MustParseType(`struct Commit {
+                meta: struct {},
+                parents: Set<Ref<Cycle<Commit>>>,
+                value: Number | String,
+        }`)
 	assertTypeEquals(et5, at5)
 }
 

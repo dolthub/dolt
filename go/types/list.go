@@ -136,10 +136,6 @@ func (l List) Map(mf MapFunc) []interface{} {
 	return results
 }
 
-func (l List) elemType() *Type {
-	return l.seq.typeOf().Desc.(CompoundDesc).ElemTypes[0]
-}
-
 // Set returns a new list where the valie at the given index have been replaced with v. If idx is
 // out bounds then this panics.
 func (l List) Set(idx uint64, v Value) List {

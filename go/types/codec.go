@@ -75,7 +75,6 @@ type nomsWriter interface {
 	writeBool(b bool)
 	writeString(v string)
 	writeHash(h hash.Hash)
-	appendType(t *Type)
 }
 
 type binaryNomsReader struct {
@@ -256,9 +255,4 @@ func (b *binaryNomsWriter) writeHash(h hash.Hash) {
 	b.ensureCapacity(hash.ByteLen)
 	copy(b.buff[b.offset:], h[:])
 	b.offset += hash.ByteLen
-}
-
-func (b *binaryNomsWriter) appendType(t *Type) {
-	enc := valueEncoder{b, nil}
-	enc.writeType(t, nil)
 }

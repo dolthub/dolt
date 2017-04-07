@@ -42,7 +42,7 @@ func MarshalType(v interface{}) (nt *types.Type, err error) {
 // error.
 func MustMarshalType(v interface{}) (nt *types.Type) {
 	rv := reflect.ValueOf(v)
-	nt = encodeType(rv.Type(), nil, nomsTags{}, encodeTypeOptions{
+	nt = encodeType(rv.Type(), map[string]reflect.Type{}, nomsTags{}, encodeTypeOptions{
 		IgnoreOmitEmpty: true,
 		ReportErrors:    true,
 	})
@@ -70,7 +70,7 @@ type encodeTypeOptions struct {
 	IgnoreOmitEmpty, ReportErrors bool
 }
 
-func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags, options encodeTypeOptions) *types.Type {
+func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags, options encodeTypeOptions) *types.Type {
 	if t.Implements(typeMarshalerInterface) {
 		v := reflect.Zero(t)
 		typ, err := v.Interface().(TypeMarshaler).MarshalNomsType()
@@ -129,9 +129,9 @@ func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags,
 	case reflect.String:
 		return types.StringType
 	case reflect.Struct:
-		return structEncodeType(t, parentStructTypes, options)
+		return structEncodeType(t, seenStructs, options)
 	case reflect.Array, reflect.Slice:
-		elemType := encodeType(t.Elem(), parentStructTypes, nomsTags{}, options)
+		elemType := encodeType(t.Elem(), seenStructs, nomsTags{}, options)
 		if elemType == nil {
 			break
 		}
@@ -140,7 +140,7 @@ func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags,
 		}
 		return types.MakeListType(elemType)
 	case reflect.Map:
-		keyType := encodeType(t.Key(), parentStructTypes, nomsTags{}, options)
+		keyType := encodeType(t.Key(), seenStructs, nomsTags{}, options)
 		if keyType == nil {
 			break
 		}
@@ -149,7 +149,7 @@ func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags,
 			return types.MakeSetType(keyType)
 		}
 
-		valueType := encodeType(t.Elem(), parentStructTypes, nomsTags{}, options)
+		valueType := encodeType(t.Elem(), seenStructs, nomsTags{}, options)
 		if valueType != nil {
 			return types.MakeMapType(keyType, valueType)
 		}
@@ -164,15 +164,15 @@ func encodeType(t reflect.Type, parentStructTypes []reflect.Type, tags nomsTags,
 // the type but we also need to look at the value. In these cases this returns
 // nil and we have to wait until we have a value to be able to determine the
 // type.
-func structEncodeType(t reflect.Type, parentStructTypes []reflect.Type, options encodeTypeOptions) *types.Type {
-	for i, pst := range parentStructTypes {
-		if pst == t {
-			return types.MakeCycleType(uint32(i))
+func structEncodeType(t reflect.Type, seenStructs map[string]reflect.Type, options encodeTypeOptions) *types.Type {
+	name := t.Name()
+	if name != "" {
+		if _, ok := seenStructs[name]; ok {
+			return types.MakeCycleType(name)
 		}
+		seenStructs[name] = t
 	}
 
-	parentStructTypes = append(parentStructTypes, t)
-
-	_, structType, _ := typeFields(t, parentStructTypes, options)
+	_, structType, _ := typeFields(t, seenStructs, options)
 	return structType
 }

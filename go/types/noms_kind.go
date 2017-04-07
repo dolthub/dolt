@@ -19,11 +19,35 @@ const (
 	MapKind
 	RefKind
 	SetKind
+
+	// Keep StructKind and CycleKind together.
 	StructKind
+	CycleKind
+
 	TypeKind
-	CycleKind // Only used in encoding/decoding.
 	UnionKind
 )
+
+var KindToString = map[NomsKind]string{
+	BlobKind:   "Blob",
+	BoolKind:   "Bool",
+	CycleKind:  "Cycle",
+	ListKind:   "List",
+	MapKind:    "Map",
+	NumberKind: "Number",
+	RefKind:    "Ref",
+	SetKind:    "Set",
+	StructKind: "Struct",
+	StringKind: "String",
+	TypeKind:   "Type",
+	UnionKind:  "Union",
+	ValueKind:  "Value",
+}
+
+// String returns the name of the kind.
+func (k NomsKind) String() string {
+	return KindToString[k]
+}
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {

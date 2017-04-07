@@ -162,7 +162,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("}")
 
 	case TypeKind:
-		w.writeType(v.(*Type), nil)
+		w.writeType(v.(*Type), map[string]*Type{})
 
 	case StructKind:
 		w.writeStruct(v.(Struct), true)
@@ -180,13 +180,13 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	w.write("{")
 	w.indent()
 
-	if len(v.fields) > 0 {
+	if len(v.fieldNames) > 0 {
 		w.newLine()
 	}
-	for _, f := range v.fields {
-		w.write(f.name)
+	for i := 0; i < len(v.fieldNames); i++ {
+		w.write(v.fieldNames[i])
 		w.write(": ")
-		w.Write(f.value)
+		w.Write(v.values[i])
 		w.write(",")
 		w.newLine()
 	}
@@ -201,12 +201,12 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	case BoolKind, NumberKind, StringKind:
 		w.Write(v)
 	case BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, CycleKind:
-		w.writeType(t, nil)
+		w.writeType(t, map[string]*Type{})
 		w.write("(")
 		w.Write(v)
 		w.write(")")
 	case StructKind:
-		w.writeType(t, nil)
+		w.writeType(t, map[string]*Type{})
 		w.write("(")
 		w.writeStruct(v.(Struct), false)
 		w.write(")")
@@ -229,12 +229,12 @@ func (w *hrsWriter) writeSize(v Value) {
 	}
 }
 
-func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
+func (w *hrsWriter) writeType(t *Type, seenStructs map[string]*Type) {
 	switch t.TargetKind() {
 	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
-		w.write(KindToString[t.TargetKind()])
+		w.write(t.TargetKind().String())
 	case ListKind, RefKind, SetKind, MapKind:
-		w.write(KindToString[t.TargetKind()])
+		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 			if et.TargetKind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
@@ -245,7 +245,7 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 			if i != 0 {
 				w.write(", ")
 			}
-			w.writeType(et, parentStructTypes)
+			w.writeType(et, seenStructs)
 			if w.err != nil {
 				break
 			}
@@ -256,16 +256,16 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 			if i != 0 {
 				w.write(" | ")
 			}
-			w.writeType(et, parentStructTypes)
+			w.writeType(et, seenStructs)
 			if w.err != nil {
 				break
 			}
 		}
 	case StructKind:
-		w.writeStructType(t, parentStructTypes)
+		w.writeStructType(t, seenStructs)
 	case CycleKind:
 		// This can happen for types that have unresolved cyclic refs
-		w.write(fmt.Sprintf("UnresolvedCycle<%d>", uint32(t.Desc.(CycleDesc))))
+		w.write(fmt.Sprintf("UnresolvedCycle<%s>", string(t.Desc.(CycleDesc))))
 		if w.err != nil {
 			return
 		}
@@ -274,13 +274,15 @@ func (w *hrsWriter) writeType(t *Type, parentStructTypes []*Type) {
 	}
 }
 
-func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
-	idx, found := indexOfType(t, parentStructTypes)
-	if found {
-		w.write(fmt.Sprintf("Cycle<%d>", uint32(len(parentStructTypes))-1-idx))
+func (w *hrsWriter) writeStructType(t *Type, seenStructs map[string]*Type) {
+	name := t.Desc.(StructDesc).Name
+	if _, ok := seenStructs[name]; ok {
+		w.write(fmt.Sprintf("Cycle<%s>", name))
 		return
 	}
-	parentStructTypes = append(parentStructTypes, t)
+	if name != "" {
+		seenStructs[name] = t
+	}
 
 	desc := t.Desc.(StructDesc)
 	w.write("struct ")
@@ -298,7 +300,7 @@ func (w *hrsWriter) writeStructType(t *Type, parentStructTypes []*Type) {
 			w.write("?")
 		}
 		w.write(": ")
-		w.writeType(t, parentStructTypes)
+		w.writeType(t, seenStructs)
 		w.write(",")
 		w.newLine()
 	})

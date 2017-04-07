@@ -10,7 +10,7 @@ type blobLeafSequence struct {
 }
 
 func newBlobLeafSequence(vr ValueReader, data []byte) sequence {
-	return blobLeafSequence{leafSequence{vr, len(data), BlobType}, data}
+	return blobLeafSequence{leafSequence{vr, len(data), BlobKind}, data}
 }
 
 // sequence interface
@@ -29,6 +29,6 @@ func (bl blobLeafSequence) getItem(idx int) sequenceItem {
 func (bl blobLeafSequence) WalkRefs(cb RefCallback) {
 }
 
-func (bl blobLeafSequence) Kind() NomsKind {
-	return BlobKind
+func (bl blobLeafSequence) typeOf() *Type {
+	return BlobType
 }

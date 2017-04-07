@@ -20,7 +20,7 @@ func TestTypes(t *testing.T) {
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType(0), false})
+	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
 
 	mRef := vs.WriteValue(mapType).TargetHash()
 	setRef := vs.WriteValue(setType).TargetHash()
@@ -150,7 +150,7 @@ func TestStructUnionWithCycles(tt *testing.T) {
 		}),
 		"contents": MakeUnionType(
 			MakeStructTypeFromFields("Directory", FieldMap{
-				"entries": MakeMapType(StringType, MakeCycleType(1)),
+				"entries": MakeMapType(StringType, MakeCycleType("Inode")),
 			}),
 			MakeStructTypeFromFields("File", FieldMap{
 				"data": BlobType,

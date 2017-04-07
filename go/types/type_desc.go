@@ -32,22 +32,6 @@ func (p PrimitiveDesc) HasUnresolvedCycle(visited []*Type) bool {
 	return false
 }
 
-var KindToString = map[NomsKind]string{
-	BlobKind:   "Blob",
-	BoolKind:   "Bool",
-	CycleKind:  "Cycle",
-	ListKind:   "List",
-	MapKind:    "Map",
-	NumberKind: "Number",
-	RefKind:    "Ref",
-	SetKind:    "Set",
-	StructKind: "Struct",
-	StringKind: "String",
-	TypeKind:   "Type",
-	UnionKind:  "Union",
-	ValueKind:  "Value",
-}
-
 // CompoundDesc describes a List, Map, Set, Ref, or Union type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
@@ -116,7 +100,7 @@ func (s StructDesc) Len() int {
 	return len(s.fields)
 }
 
-type CycleDesc uint32
+type CycleDesc string
 
 func (c CycleDesc) Kind() NomsKind {
 	return CycleKind

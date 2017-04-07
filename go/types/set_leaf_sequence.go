@@ -10,12 +10,7 @@ type setLeafSequence struct {
 }
 
 func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
-	ts := make([]*Type, len(v))
-	for i, v := range v {
-		ts[i] = TypeOf(v)
-	}
-	t := MakeSetType(MakeUnionType(ts...))
-	return setLeafSequence{leafSequence{vr, len(v), t}, v}
+	return setLeafSequence{leafSequence{vr, len(v), SetKind}, v}
 }
 
 // sequence interface
@@ -36,6 +31,14 @@ func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 		entry := sl.data[idx]
 		return entry.Equals(osl.data[otherIdx])
 	}
+}
+
+func (sl setLeafSequence) typeOf() *Type {
+	ts := make([]*Type, len(sl.data))
+	for i, v := range sl.data {
+		ts[i] = v.typeOf()
+	}
+	return makeCompoundType(SetKind, makeCompoundType(UnionKind, ts...))
 }
 
 // orderedSequence interface

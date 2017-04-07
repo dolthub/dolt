@@ -193,20 +193,12 @@ func (suite *setTestSuite) TestStreamingSet2() {
 	wg.Wait()
 }
 
-func TestSetSuite1K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, 0, 0, 0, newNumber))
-}
-
 func TestSetSuite4K(t *testing.T) {
 	suite.Run(t, newSetTestSuite(12, 2, 2, 2, newNumber))
 }
 
-func TestSetSuite1KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(10, 0, 0, 0, newNumberStruct))
-}
-
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, 2, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, 14, 2, 2, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {
@@ -567,11 +559,9 @@ func TestSetFirst(t *testing.T) {
 func TestSetOfStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	typ := MakeStructType("S1", StructField{"o", NumberType, false})
-
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
-		elems = append(elems, NewStructWithType(typ, ValueSlice{Number(i)}))
+		elems = append(elems, NewStruct("S1", StructData{"o": Number(i)}))
 	}
 
 	s := NewSet(elems...)

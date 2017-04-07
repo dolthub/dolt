@@ -69,29 +69,21 @@ func TestMigrateFromVersion7(t *testing.T) {
 	}))
 
 	test(
-		types.NewStructWithType(
-			types.MakeStructType("", types.StructField{"a", types.NumberType, false}),
-			[]types.Value{types.Number(42)},
-		),
-		v7types.NewStructWithType(
-			v7types.MakeStructType("", v7types.StructField{"a", v7types.NumberType, false}),
-			[]v7types.Value{v7types.Number(42)},
-		),
+		types.NewStruct("", types.StructData{
+			"a": types.Number(42),
+		}),
+		v7types.NewStruct("", v7types.StructData{
+			"a": v7types.Number(42),
+		}),
 	)
 
 	test(
-		types.NewStructWithType(
-			types.MakeStructType("",
-				types.StructField{"a", types.MakeListType(types.MakeCycleType(0)), false},
-			),
-			[]types.Value{types.NewList()},
-		),
-		v7types.NewStructWithType(
-			v7types.MakeStructType("",
-				v7types.StructField{"a", v7types.MakeListType(v7types.MakeCycleType(0)), false},
-			),
-			[]v7types.Value{v7types.NewList()},
-		),
+		types.NewStruct("", types.StructData{
+			"a": types.NewList(),
+		}),
+		v7types.NewStruct("", v7types.StructData{
+			"a": v7types.NewList(),
+		}),
 	)
 
 	r := sourceStore.WriteValue(v7types.Number(123))
@@ -116,7 +108,14 @@ func TestMigrateFromVersion7(t *testing.T) {
 	test(types.MakeUnionType(), v7types.MakeUnionType())
 	test(types.MakeUnionType(types.StringType, types.BoolType), v7types.MakeUnionType(v7types.StringType, v7types.BoolType))
 
-	test(types.MakeCycleType(42), v7types.MakeCycleType(42))
+	// Cannot use equals on unresolved cycles.
+	{
+		expected := types.MakeCycleType("Abc")
+		source := v7types.MakeCycleType("Abc")
+		actual, err := MigrateFromVersion7(source, sourceStore, sinkStore)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	}
 
 	commit := types.MakeStructType("Commit",
 		types.StructField{
@@ -124,7 +123,7 @@ func TestMigrateFromVersion7(t *testing.T) {
 			Type: types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit",
 				types.StructField{
 					Name: "parents",
-					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType(0))),
+					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType("Comit"))),
 				},
 				types.StructField{
 					Name: "value",
@@ -144,7 +143,7 @@ func TestMigrateFromVersion7(t *testing.T) {
 			Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeStructType("Commit",
 				v7types.StructField{
 					Name: "parents",
-					Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeCycleType(0))),
+					Type: v7types.MakeSetType(v7types.MakeRefType(v7types.MakeCycleType("Commit"))),
 				},
 				v7types.StructField{
 					Name: "value",

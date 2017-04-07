@@ -4,7 +4,11 @@
 
 package types
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/attic-labs/noms/go/d"
+)
 
 func makePrimitiveType(k NomsKind) *Type {
 	return newType(PrimitiveDesc(k))
@@ -24,8 +28,8 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 func makeStructTypeQuickly(name string, fields structTypeFields, checkKind checkKindType) *Type {
 	t := newType(StructDesc{name, fields})
 	if t.HasUnresolvedCycle() {
-		t, _ = toUnresolvedType(t, -1, nil)
-		resolveStructCycles(t, nil)
+		t, _ = toUnresolvedType(t, map[string]*Type{})
+		resolveStructCycles(t, map[string]*Type{})
 		if !t.HasUnresolvedCycle() {
 			checkStructType(t, checkKind)
 		}
@@ -48,20 +52,14 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 	return 0, false
 }
 
-// Returns a new type where cyclic pointer references are replaced with Cycle<N> types.
-func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, bool) {
-	i, found := indexOfType(t, parentStructTypes)
-	if found {
-		cycle := CycleDesc(uint32(len(parentStructTypes)) - i - 1)
-		return newType(cycle), true // This type is just a placeholder. It doesn't need a real id.
-	}
-
+// Returns a new type where cyclic pointer references are replaced with Cycle<Name> types.
+func toUnresolvedType(t *Type, seenStructs map[string]*Type) (*Type, bool) {
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		ts := make(typeSlice, len(desc.ElemTypes))
 		didChange := false
 		for i, et := range desc.ElemTypes {
-			st, changed := toUnresolvedType(et, level, parentStructTypes)
+			st, changed := toUnresolvedType(et, seenStructs)
 			ts[i] = st
 			didChange = didChange || changed
 		}
@@ -72,22 +70,33 @@ func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, boo
 
 		return newType(CompoundDesc{t.TargetKind(), ts}), true
 	case StructDesc:
+		name := desc.Name
+		if name != "" {
+			if _, ok := seenStructs[name]; ok {
+				return newType(CycleDesc(name)), true
+			}
+		}
+
+		nt := newType(StructDesc{Name: name})
+		if name != "" {
+			seenStructs[name] = nt
+		}
+
 		fs := make(structTypeFields, len(desc.fields))
 		didChange := false
 		for i, f := range desc.fields {
-			st, changed := toUnresolvedType(f.Type, level+1, append(parentStructTypes, t))
+			st, changed := toUnresolvedType(f.Type, seenStructs)
 			fs[i] = StructField{f.Name, st, f.Optional}
 			didChange = didChange || changed
 		}
 
-		if !didChange {
-			return t, false
-		}
-
-		return newType(StructDesc{desc.Name, fs}), true
+		desc.fields = fs
+		nt.Desc = desc
+		return nt, true
 	case CycleDesc:
-		cycleLevel := int(desc)
-		return t, cycleLevel <= level // Only cycles which can be resolved in the current struct.
+		cycleName := string(desc)
+		_, ok := seenStructs[cycleName]
+		return t, ok // Only cycles which can be resolved in the current struct.
 	}
 
 	return t, false
@@ -95,27 +104,31 @@ func toUnresolvedType(t *Type, level int, parentStructTypes []*Type) (*Type, boo
 
 // ToUnresolvedType replaces cycles (by pointer comparison) in types to Cycle types.
 func ToUnresolvedType(t *Type) *Type {
-	t2, _ := toUnresolvedType(t, 0, nil)
+	t2, _ := toUnresolvedType(t, map[string]*Type{})
 	return t2
 }
 
 // Drops cycles and replaces them with pointers to parent structs
-func resolveStructCycles(t *Type, parentStructTypes []*Type) *Type {
+func resolveStructCycles(t *Type, seenStructs map[string]*Type) *Type {
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		for i, et := range desc.ElemTypes {
-			desc.ElemTypes[i] = resolveStructCycles(et, parentStructTypes)
+			desc.ElemTypes[i] = resolveStructCycles(et, seenStructs)
 		}
 
 	case StructDesc:
+		name := desc.Name
+		if name != "" {
+			seenStructs[name] = t
+		}
 		for i, f := range desc.fields {
-			desc.fields[i].Type = resolveStructCycles(f.Type, append(parentStructTypes, t))
+			desc.fields[i].Type = resolveStructCycles(f.Type, seenStructs)
 		}
 
 	case CycleDesc:
-		idx := uint32(desc)
-		if idx < uint32(len(parentStructTypes)) {
-			return parentStructTypes[uint32(len(parentStructTypes))-1-idx]
+		name := string(desc)
+		if nt, ok := seenStructs[name]; ok {
+			return nt
 		}
 	}
 
@@ -217,28 +230,23 @@ func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
 
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
 func makeUnionType(elemTypes ...*Type) *Type {
-	return makeSimplifiedType(false, elemTypes...)
+	return simplifyType(makeCompoundType(UnionKind, elemTypes...), false)
 }
 
 func MakeListType(elemType *Type) *Type {
-	elemType = makeSimplifiedType(false, elemType)
-	return makeCompoundType(ListKind, elemType)
+	return simplifyType(makeCompoundType(ListKind, elemType), false)
 }
 
 func MakeSetType(elemType *Type) *Type {
-	elemType = makeSimplifiedType(false, elemType)
-	return makeCompoundType(SetKind, elemType)
+	return simplifyType(makeCompoundType(SetKind, elemType), false)
 }
 
 func MakeRefType(elemType *Type) *Type {
-	elemType = makeSimplifiedType(false, elemType)
-	return makeCompoundType(RefKind, elemType)
+	return simplifyType(makeCompoundType(RefKind, elemType), false)
 }
 
 func MakeMapType(keyType, valType *Type) *Type {
-	keyType = makeSimplifiedType(false, keyType)
-	valType = makeSimplifiedType(false, valType)
-	return makeCompoundType(MapKind, keyType, valType)
+	return simplifyType(makeCompoundType(MapKind, keyType, valType), false)
 }
 
 type FieldMap map[string]*Type
@@ -283,9 +291,12 @@ func MakeUnionType(elemTypes ...*Type) *Type {
 // types.
 // This function will go away so do not use it!
 func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
-	return makeSimplifiedType(true, elemTypes...)
+	return simplifyType(makeCompoundType(UnionKind, elemTypes...), true)
 }
 
-func MakeCycleType(level uint32) *Type {
-	return newType(CycleDesc(level))
+func MakeCycleType(name string) *Type {
+	if name == "" {
+		d.Panic("Cycle type must have a non empty name")
+	}
+	return newType(CycleDesc(name))
 }

@@ -7,7 +7,7 @@ package types
 type leafSequence struct {
 	vr     ValueReader
 	length int
-	t      *Type
+	kind   NomsKind
 }
 
 func (seq leafSequence) seqLen() int {
@@ -22,10 +22,10 @@ func (seq leafSequence) valueReader() ValueReader {
 	return seq.vr
 }
 
-func (seq leafSequence) typeOf() *Type {
-	return seq.t
-}
-
 func (seq leafSequence) getChildSequence(idx int) sequence {
 	return nil
+}
+
+func (seq leafSequence) Kind() NomsKind {
+	return seq.kind
 }

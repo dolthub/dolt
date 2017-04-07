@@ -16,60 +16,54 @@ import (
 )
 
 var EmptyStructType = MakeStructType("")
-var EmptyStruct = Struct{"", structValueFields{}, EmptyStructType, &hash.Hash{}}
+var EmptyStruct = Struct{"", []string{}, []Value{}, &hash.Hash{}}
 
 type StructData map[string]Value
 
-type structValueField struct {
-	name  string
-	value Value
+type Struct struct {
+	name       string
+	fieldNames []string
+	values     []Value
+	h          *hash.Hash
 }
 
-type structValueFields []structValueField
+func validateStruct(s Struct) Struct {
+	verifyStructName(s.name)
 
-func (fs structValueFields) Len() int           { return len(fs) }
-func (fs structValueFields) Swap(i, j int)      { fs[i], fs[j] = fs[j], fs[i] }
-func (fs structValueFields) Less(i, j int) bool { return fs[i].name < fs[j].name }
+	d.PanicIfFalse(len(s.fieldNames) == len(s.values))
 
-type Struct struct {
-	name   string
-	fields structValueFields
-	t      *Type
-	h      *hash.Hash
+	if len(s.fieldNames) == 0 {
+		return s
+	}
+
+	verifyFieldName(s.fieldNames[0])
+	for i := 1; i < len(s.fieldNames); i++ {
+		verifyFieldName(s.fieldNames[i])
+		d.PanicIfFalse(s.fieldNames[i] > s.fieldNames[i-1])
+	}
+	return s
+}
+
+func newStruct(name string, fieldNames []string, values []Value) Struct {
+	return Struct{name, fieldNames, values, &hash.Hash{}}
 }
 
 func NewStruct(name string, data StructData) Struct {
-	valueFields := make(structValueFields, len(data))
-	typeFields := make(structTypeFields, len(data))
+	fieldNames := make([]string, len(data))
+	values := make([]Value, len(data))
+
 	i := 0
-	for name, value := range data {
-		typeFields[i] = StructField{name, TypeOf(value), false}
-		valueFields[i] = structValueField{name, value}
+	for name, _ := range data {
+		fieldNames[i] = name
 		i++
 	}
 
-	sort.Sort(typeFields)
-	sort.Sort(valueFields)
-
-	return Struct{name, valueFields, MakeStructType(name, typeFields...), &hash.Hash{}}
-}
-
-// NewStructWithType
-// DEPRECATED
-func NewStructWithType(t *Type, data ValueSlice) Struct {
-	desc := t.Desc.(StructDesc)
-	d.PanicIfFalse(len(data) == len(desc.fields))
-	typeFields := t.Desc.(StructDesc).fields
-	valueFields := make(structValueFields, len(typeFields))
-	for i, typeField := range typeFields {
-		if typeField.Optional {
-			d.Panic("Struct values cannot have optional fields (only struct types can)")
-		}
-		v := data[i]
-		assertSubtype(typeField.Type, v)
-		valueFields[i] = structValueField{typeField.Name, v}
+	sort.Sort(sort.StringSlice(fieldNames))
+	for i = 0; i < len(fieldNames); i++ {
+		values[i] = data[fieldNames[i]]
 	}
-	return Struct{desc.Name, valueFields, t, &hash.Hash{}}
+
+	return validateStruct(newStruct(name, fieldNames, values))
 }
 
 func (s Struct) hashPointer() *hash.Hash {
@@ -94,27 +88,49 @@ func (s Struct) Hash() hash.Hash {
 }
 
 func (s Struct) WalkValues(cb ValueCallback) {
-	for _, f := range s.fields {
-		cb(f.value)
+	for _, v := range s.values {
+		cb(v)
 	}
 }
 
 func (s Struct) WalkRefs(cb RefCallback) {
-	for _, f := range s.fields {
-		f.value.WalkRefs(cb)
+	for _, v := range s.values {
+		v.WalkRefs(cb)
 	}
 }
 
 func (s Struct) typeOf() *Type {
-	return s.t
+	typeFields := make(structTypeFields, len(s.fieldNames))
+	for i := 0; i < len(s.fieldNames); i++ {
+		typeFields[i] = StructField{
+			Name:     s.fieldNames[i],
+			Optional: false,
+			Type:     s.values[i].typeOf(),
+		}
+	}
+	return makeStructTypeQuickly(s.name, typeFields, checkKindNoValidate)
+}
+
+// Len is the number of fields in the struct.
+func (s Struct) Len() int {
+	return len(s.fieldNames)
+}
+
+// Name is the name of the struct.
+func (s Struct) Name() string {
+	return s.name
+}
+
+// IterFields iterates over the fields, calling cb for every field in the
+// struct.
+func (s Struct) IterFields(cb func(name string, value Value)) {
+	for i := 0; i < len(s.fieldNames); i++ {
+		cb(s.fieldNames[i], s.values[i])
+	}
 }
 
 func (s Struct) Kind() NomsKind {
 	return StructKind
-}
-
-func (s Struct) desc() StructDesc {
-	return s.t.Desc.(StructDesc)
 }
 
 // MaybeGet returns the value of a field in the struct. If the struct does not a have a field with
@@ -124,16 +140,17 @@ func (s Struct) MaybeGet(n string) (Value, bool) {
 	if i == -1 {
 		return nil, false
 	}
-	return s.fields[i].value, true
+
+	return s.values[i], true
 }
 
 func (s Struct) searchField(name string) int {
-	return sort.Search(len(s.fields), func(i int) bool { return s.fields[i].name >= name })
+	return sort.Search(len(s.fieldNames), func(i int) bool { return s.fieldNames[i] >= name })
 }
 
 func (s Struct) findField(name string) int {
 	i := s.searchField(name)
-	if i == len(s.fields) || s.fields[i].name != name {
+	if i == len(s.fieldNames) || s.fieldNames[i] != name {
 		return -1
 	}
 	return i
@@ -146,7 +163,7 @@ func (s Struct) Get(n string) Value {
 	if i == -1 {
 		d.Chk.Fail(fmt.Sprintf(`Struct has no field "%s"`, n))
 	}
-	return s.fields[i].value
+	return s.values[i]
 }
 
 // Set returns a new struct where the field name has been set to value. If name is not an
@@ -154,44 +171,33 @@ func (s Struct) Get(n string) Value {
 // struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	i := s.searchField(n)
-	var valueFields structValueFields
-	desc := s.desc()
-	var typ *Type
 
-	if i != len(s.fields) && s.fields[i].name == n {
+	if i != len(s.fieldNames) && s.fieldNames[i] == n {
 		// Found
-		valueFields = make(structValueFields, len(s.fields))
-		copy(valueFields, s.fields)
-		valueFields[i].value = v
+		values := make([]Value, len(s.fieldNames))
+		copy(values, s.values)
+		values[i] = v
 
-		if TypeOf(v).Equals(desc.fields[i].Type) {
-			typ = s.t
-		} else {
-			typeFields := make(structTypeFields, len(s.fields))
-			copy(typeFields, desc.fields)
-			typeFields[i].Type = TypeOf(v)
-			typ = MakeStructType(desc.Name, typeFields...)
-		}
-	} else {
-		// Not found.
-		valueFields = make(structValueFields, len(s.fields)+1)
-		typeFields := make(structTypeFields, len(s.fields)+1)
-		copy(valueFields[:i], s.fields[:i])
-		copy(valueFields[i+1:], s.fields[i:])
-		copy(typeFields[:i], desc.fields[:i])
-		copy(typeFields[i+1:], desc.fields[i:])
-
-		valueFields[i] = structValueField{n, v}
-		typeFields[i] = StructField{n, TypeOf(v), false}
-		typ = MakeStructType(desc.Name, typeFields...)
+		// No need to validate
+		return newStruct(s.name, s.fieldNames, values)
 	}
 
-	return Struct{desc.Name, valueFields, typ, &hash.Hash{}}
+	fieldNames := make([]string, len(s.fieldNames)+1)
+	copy(fieldNames[:i], s.fieldNames[:i])
+	fieldNames[i] = n
+	copy(fieldNames[i+1:], s.fieldNames[i:])
+
+	values := make([]Value, len(s.fieldNames)+1)
+	copy(values[:i], s.values[:i])
+	values[i] = v
+	copy(values[i+1:], s.values[i:])
+
+	return validateStruct(newStruct(s.name, fieldNames, values))
 }
 
 // IsZeroValue can be used to test if a struct is the same as Struct{}.
 func (s Struct) IsZeroValue() bool {
-	return s.fields == nil && s.name == "" && s.h == nil && s.t == nil
+	return s.fieldNames == nil && s.values == nil && s.name == "" && s.h == nil
 }
 
 // Delete returns a new struct where the field name has been removed.
@@ -202,33 +208,30 @@ func (s Struct) Delete(n string) Struct {
 		return s
 	}
 
-	desc := s.desc()
+	fieldNames := make([]string, len(s.fieldNames)-1)
+	copy(fieldNames[:i], s.fieldNames[:i])
+	copy(fieldNames[i:], s.fieldNames[i+1:])
 
-	valueFields := make(structValueFields, len(s.fields)-1)
-	typeFields := make(structTypeFields, len(s.fields)-1)
+	values := make([]Value, len(s.fieldNames)-1)
+	copy(values[:i], s.values[:i])
+	copy(values[i:], s.values[i+1:])
 
-	copy(valueFields[:i], s.fields[:i])
-	copy(valueFields[i:], s.fields[i+1:])
-	copy(typeFields[:i], desc.fields[:i])
-	copy(typeFields[i:], desc.fields[i+1:])
-
-	typ := MakeStructType(s.desc().Name, typeFields...)
-	return Struct{desc.Name, valueFields, typ, &hash.Hash{}}
+	// No need to validate
+	return newStruct(s.name, fieldNames, values)
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	fs1, fs2 := TypeOf(s).Desc.(StructDesc).fields, TypeOf(last).Desc.(StructDesc).fields
+	fn1, fn2 := s.fieldNames, last.fieldNames
 	i1, i2 := 0, 0
-	for i1 < len(fs1) && i2 < len(fs2) {
-		f1, f2 := fs1[i1], fs2[i2]
-		fn1, fn2 := f1.Name, f2.Name
+	for i1 < len(fn1) && i2 < len(fn2) {
+		fn1, fn2 := fn1[i1], fn2[i2]
 
 		var change ValueChanged
 		if fn1 == fn2 {
-			if !s.fields[i1].value.Equals(last.fields[i2].value) {
+			if !s.values[i1].Equals(last.values[i2]) {
 				change = ValueChanged{ChangeType: DiffChangeModified, V: String(fn1)}
 			}
 			i1++
@@ -246,14 +249,14 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		}
 	}
 
-	for ; i1 < len(fs1); i1++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fs1[i1].Name)}) {
+	for ; i1 < len(fn1); i1++ {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1[i1])}) {
 			return
 		}
 	}
 
-	for ; i2 < len(fs2); i2++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fs2[i2].Name)}) {
+	for ; i2 < len(fn2); i2++ {
+		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn2[i2])}) {
 			return
 		}
 	}

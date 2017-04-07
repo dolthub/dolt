@@ -29,8 +29,8 @@ var DateTimeType = types.MakeStructTypeFromFields("DateTime", types.FieldMap{
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms() (types.Value, error) {
 	t := time.Time(dt)
-	return types.NewStructWithType(DateTimeType, types.ValueSlice{
-		types.Number(float64(t.Unix()) + float64(t.Nanosecond())*1e-9),
+	return types.NewStruct("DateTime", types.StructData{
+		"secSinceEpoch": types.Number(float64(t.Unix()) + float64(t.Nanosecond())*1e-9),
 	}), nil
 }
 

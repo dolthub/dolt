@@ -80,20 +80,16 @@ func MigrateFromVersion7(source v7types.Value, sourceStore v7types.ValueReadWrit
 		dest = <-sc
 		return
 	case v7types.Struct:
-		sourceType := types.TypeOf(source)
-		t := migrateType(sourceType)
-		sd := sourceType.Desc.(v7types.StructDesc)
-		fields := make([]types.Value, 0, sd.Len())
-		sd.IterFields(func(name string, _ *v7types.Type, optional bool) {
-			d.PanicIfTrue(optional) // values cannot have optional fields
+		fields := make(map[string]types.Value, source.Len())
+		source.IterFields(func(name string, v v7types.Value) {
+			var nv types.Value
+			nv, err = MigrateFromVersion7(v, sourceStore, sinkStore)
 			if err == nil {
-				var fv types.Value
-				fv, err = MigrateFromVersion7(source.Get(name), sourceStore, sinkStore)
-				fields = append(fields, fv)
+				fields[name] = nv
 			}
 		})
 		if err == nil {
-			dest = types.NewStructWithType(t, fields)
+			dest = types.NewStruct(source.Name(), fields)
 		}
 		return
 	case *v7types.Type:
@@ -159,7 +155,7 @@ func migrateType(source *v7types.Type) *types.Type {
 		})
 		return types.MakeStructType(sd.Name, fields...)
 	case v7types.CycleKind:
-		return types.MakeCycleType(uint32(source.Desc.(types.CycleDesc)))
+		return types.MakeCycleType(string(source.Desc.(types.CycleDesc)))
 	}
 
 	panic(fmt.Sprintf("unreachable kind: %d", source.TargetKind()))

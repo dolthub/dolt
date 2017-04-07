@@ -215,8 +215,8 @@ func (suite *QueryGraphQLSuite) TestSetOfStruct() {
 	)
 
 	suite.assertQueryResult(set, "{root{values{a b}}}",
-		`{"data":{"root":{"values":[{"a":-20.102,"b":"bar"},{"a":28,"b":"foo"},{"a":5,"b":"baz"}]}}}`)
-	suite.assertQueryResult(set, "{root{values{a}}}", `{"data":{"root":{"values":[{"a":-20.102},{"a":28},{"a":5}]}}}`)
+		`{"data":{"root":{"values":[{"a":28,"b":"foo"},{"a":-20.102,"b":"bar"},{"a":5,"b":"baz"}]}}}`)
+	suite.assertQueryResult(set, "{root{values{a}}}", `{"data":{"root":{"values":[{"a":28},{"a":-20.102},{"a":5}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestMapBasic() {
@@ -334,34 +334,28 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfScalars() {
 }
 
 func (suite *QueryGraphQLSuite) TestCyclicStructs() {
-	typ := types.MakeStructTypeFromFields("A", types.FieldMap{
-		"a": types.StringType,
-		"b": types.MakeSetType(types.MakeCycleType(0)),
-	})
-
-	// Struct A {
+	// struct A {
 	//  a: "aaa"
-	//  b: Set(Struct A {
+	//  b: Set(struct A {
 	// 	 a: "bbb"
 	// 	 b: Set()
 	//  })
 	// }
 
-	s1 := types.NewStructWithType(typ, types.ValueSlice{
-		types.String("aaa"),
-		types.NewSet(types.NewStructWithType(typ, types.ValueSlice{types.String("bbb"), types.NewSet()})),
+	s1 := types.NewStruct("A", types.StructData{
+		"a": types.String("aaa"),
+		"b": types.NewSet(
+			types.NewStruct("A", types.StructData{
+				"a": types.String("bbb"),
+				"b": types.NewSet(),
+			})),
 	})
 
 	suite.assertQueryResult(s1, "{root{a b{values{a}}}}", `{"data":{"root":{"a":"aaa","b":{"values":[{"a":"bbb"}]}}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
-	typ := types.MakeStructTypeFromFields("A", types.FieldMap{
-		"a": types.StringType,
-		"b": types.MakeUnionType(types.NumberType, types.MakeCycleType(0)),
-	})
-
-	// Struct A {
+	// struct A {
 	//  a: "aaa"
 	//  b: Struct A {
 	// 	 a: "bbb"
@@ -369,14 +363,67 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 	//  })
 	// }
 
-	s1 := types.NewStructWithType(typ, types.ValueSlice{
-		types.String("aaa"),
-		types.NewStructWithType(typ, types.ValueSlice{types.String("bbb"), types.Number(42)}),
+	// struct A {
+	//   a: String,
+	//   b: Number | Cycle<0>,
+	// }
+
+	s1 := types.NewStruct("A", types.StructData{
+		"a": types.String("aaa"),
+		"b": types.NewStruct("A", types.StructData{
+			"a": types.String("bbb"),
+			"b": types.Number(42),
+		}),
 	})
 
 	suite.assertQueryResult(s1,
-		fmt.Sprintf(`{root{a b {... on %s{a}}}}`, GetTypeName(types.TypeOf(s1))),
-		`{"data":{"root":{"a":"aaa","b":{"a":"bbb"}}}}`)
+		`{
+                        root{
+                                a
+                                b {
+                                        a
+                                        b {
+                                                scalarValue
+                                        }
+                                }
+                        }
+                }
+                `,
+		`{
+                        "data": {
+                                "root": {
+                                        "a": "aaa",
+                                        "b": {
+                                                "a": "bbb",
+                                                "b": {
+                                                        "scalarValue": 42
+                                                }
+                                        }
+                                }
+                        }
+                }`)
+
+	suite.assertQueryResult(s1,
+		fmt.Sprintf(`{
+	                root{
+	                        a
+	                        b {
+	                                ... on %s {
+	                                        a
+	                                }
+	                        }
+	                }
+	        }`, GetTypeName(types.TypeOf(s1))),
+		`{
+	                "data": {
+	                        "root": {
+	                                "a": "aaa",
+	                                "b": {
+	                                        "a": "bbb"
+	                                }
+	                        }
+	                }
+	        }`)
 }
 
 func (suite *QueryGraphQLSuite) TestNestedCollection() {
@@ -978,7 +1025,7 @@ func (suite *QueryGraphQLSuite) TestMapWithComplexKeys() {
 	suite.assertQueryResult(m, `{root{values(key: [])}}`, `{"data":{"root":{"values":[]}}}`)
 
 	// The ordering here depends on the hash of the value...
-	suite.assertQueryResult(m, `{root{values(key: ["e"], through: ["c"])}}`, `{"data":{"root":{"values":[3, 4, 2]}}}`)
+	suite.assertQueryResult(m, `{root{values(key: ["a"], through: ["e"])}}`, `{"data":{"root":{"values":[1, 4, 3]}}}`)
 
 	suite.assertQueryResult(m, `{root{values(keys: [["a"],["b"],["c"]])}}`, `{"data":{"root":{"values":[1, null, 2]}}}`)
 	suite.assertQueryResult(m, `{
@@ -1014,7 +1061,7 @@ func (suite *QueryGraphQLSuite) TestMapWithComplexKeys() {
 	suite.assertQueryResult(m2, `{root{values(key: {n: "e"})}}`, `{"data":{"root":{"values":[3]}}}`)
 	suite.assertQueryResult(m2, `{root{values(key: {n: "x"})}}`, `{"data":{"root":{"values":[]}}}`)
 	// The order is based on hash
-	suite.assertQueryResult(m2, `{root{values(key: {n: "e"}, through: {n: "a"})}}`, `{"data":{"root":{"values":[3,1]}}}`)
+	suite.assertQueryResult(m2, `{root{values(key: {n: "c"}, through: {n: "g"})}}`, `{"data":{"root":{"values":[2,4]}}}`)
 	suite.assertQueryResult(m2, `{root{values(keys: [{n: "a"}, {n: "b"}, {n: "c"}])}}`,
 		`{"data":{"root":{"values":[1, null, 2]}}}`)
 	suite.assertQueryResult(m2, `{root{keys(keys: [{n: "a"}, {n: "b"}, {n: "c"}]) { n }}}`,
@@ -1034,8 +1081,8 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 	suite.assertQueryResult(s, `{root{values(key: []) { values }}}`, `{"data":{"root":{"values":[]}}}`)
 
 	// The ordering here depends on the hash of the value...
-	suite.assertQueryResult(s, `{root{values(key: ["e"], through: ["c"]) { values }}}`,
-		`{"data":{"root":{"values":[{"values":["e"]},{"values":["g"]},{"values":["c"]}]}}}`)
+	suite.assertQueryResult(s, `{root{values(key: ["c"], through: ["g"]) { values }}}`,
+		`{"data":{"root":{"values":[{"values":["c"]},{"values":["a"]},{"values":["g"]}]}}}`)
 
 	s2 := types.NewSet(
 		types.NewStruct("", types.StructData{
@@ -1056,8 +1103,8 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 		`{"data":{"root":{"values":[{"n": "e"}]}}}`)
 	suite.assertQueryResult(s2, `{root{values(key: {n: "x"}) { n } }}`, `{"data":{"root":{"values":[]}}}`)
 	// The order is based on hash
-	suite.assertQueryResult(s2, `{root{values(key: {n: "e"}, through: {n: "c"}) { n }}}`,
-		`{"data":{"root":{"values":[{"n": "e"}, {"n": "a"}, {"n": "c"}]}}}`)
+	suite.assertQueryResult(s2, `{root{values(key: {n: "c"}, through: {n: "e"}) { n }}}`,
+		`{"data":{"root":{"values":[{"n": "c"}, {"n": "g"}, {"n": "e"}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
@@ -1157,12 +1204,12 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 	test(types.MakeMapType(ut, ut))
 	test(types.MakeStructTypeFromFields("", types.FieldMap{"u": ut}))
 
-	test(types.MakeStructTypeFromFields("", types.FieldMap{
-		"l": types.MakeListType(types.MakeCycleType(0)),
+	test(types.MakeStructTypeFromFields("S", types.FieldMap{
+		"l": types.MakeListType(types.MakeCycleType("S")),
 	}))
-	test(types.MakeStructTypeFromFields("", types.FieldMap{
+	test(types.MakeStructTypeFromFields("S", types.FieldMap{
 		"n": types.NumberType,
-		"l": types.MakeListType(types.MakeCycleType(0)),
+		"l": types.MakeListType(types.MakeCycleType("S")),
 	}))
 }
 
@@ -1264,7 +1311,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 			},
 		},
 	)
-	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [null].\nIn element #1: Expected \"SInput_3jqubf!\", found null.","locations":[{"line":1,"column":12}]}]}`,
+	test(m2, `{"data":null,"errors":[{"message":"Variable \"$ks\" got invalid value [null].\nIn element #1: Expected \"SInput_i451mq!\", found null.","locations":[{"line":1,"column":12}]}]}`,
 		q,
 		map[string]interface{}{
 			"ks": []interface{}{

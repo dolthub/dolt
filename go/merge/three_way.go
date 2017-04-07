@@ -258,17 +258,15 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 		if f, ok := change.V.(types.String); ok {
 			field := string(f)
 			data := types.StructData{}
-			desc := types.TypeOf(targetVal).Desc.(types.StructDesc)
-			desc.IterFields(func(name string, t *types.Type, optional bool) {
-				d.PanicIfTrue(optional) // values cannot have optional fields.
+			targetVal.IterFields(func(name string, v types.Value) {
 				if name != field {
-					data[name] = targetVal.Get(name)
+					data[name] = v
 				}
 			})
 			if change.ChangeType == types.DiffChangeAdded || change.ChangeType == types.DiffChangeModified {
 				data[field] = newVal
 			}
-			return structCandidate{types.NewStruct(desc.Name, data)}
+			return structCandidate{types.NewStruct(targetVal.Name(), data)}
 		}
 		panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(change.V).Describe()))
 	}
@@ -337,12 +335,11 @@ func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Str
 	aStruct, aOk = a.(types.Struct)
 	bStruct, bOk = b.(types.Struct)
 	if aOk && bOk {
-		aDesc, bDesc := types.TypeOf(a).Desc.(types.StructDesc), types.TypeOf(b).Desc.(types.StructDesc)
-		if aDesc.Name == bDesc.Name {
+		if aStruct.Name() == bStruct.Name() {
 			if parent != nil {
 				pStruct, pOk = parent.(types.Struct)
 			} else {
-				pStruct, pOk = types.NewStruct(aDesc.Name, nil), true
+				pStruct, pOk = types.NewStruct(aStruct.Name(), nil), true
 			}
 			return aStruct, bStruct, pStruct, pOk
 		}

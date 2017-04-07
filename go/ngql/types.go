@@ -273,28 +273,27 @@ func (tc *TypeConverter) unionToGQLUnion(nomsType *types.Type) *graphql.Union {
 		Name:  tc.getTypeName(nomsType),
 		Types: memberTypes,
 		ResolveType: func(p graphql.ResolveTypeParams) *graphql.Object {
-			var nomsType *types.Type
-			isScalar := false
 			if v, ok := p.Value.(types.Value); ok {
-				nomsType = types.TypeOf(v)
-			} else {
-				switch p.Value.(type) {
-				case float64:
-					nomsType = types.NumberType
-					isScalar = true
-				case string:
-					nomsType = types.StringType
-					isScalar = true
-				case bool:
-					nomsType = types.BoolType
-					isScalar = true
+				// We cannot just get the type of the value here. GraphQL requires
+				// us to return one of the types in memberTypes.
+				for i, t := range nomsMemberTypes {
+					if types.IsSubtype(t, types.TypeOf(v)) {
+						return memberTypes[i]
+					}
 				}
+				return nil
 			}
-			name := tc.getTypeName(nomsType)
-			key := typeMapKey{name, isScalar}
-			memberType := tc.tm[key]
-			// Union member types must be graphql.Object.
-			return memberType.(*graphql.Object)
+
+			var nomsType *types.Type
+			switch p.Value.(type) {
+			case float64:
+				nomsType = types.NumberType
+			case string:
+				nomsType = types.StringType
+			case bool:
+				nomsType = types.BoolType
+			}
+			return tc.nomsTypeToGraphQLType(nomsType, true).(*graphql.Object)
 		},
 	})
 }
@@ -322,7 +321,7 @@ func (tc *TypeConverter) structToGQLObject(nomsType *types.Type) *graphql.Object
 				fields[name] = &graphql.Field{
 					Type: fieldType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-						if field, ok := p.Source.(types.Struct).MaybeGet(p.Info.FieldName); ok {
+						if field, ok := p.Source.(types.Struct).MaybeGet(name); ok {
 							return MaybeGetScalar(field), nil
 						}
 						return nil, nil

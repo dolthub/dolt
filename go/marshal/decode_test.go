@@ -592,28 +592,18 @@ func TestDecodeRecursive(t *testing.T) {
 		Children []Node
 	}
 
-	typ := types.MakeStructType("Node",
-		types.StructField{
-			Name: "children",
-			Type: types.MakeListType(types.MakeCycleType(0)),
-		},
-		types.StructField{
-			Name: "value",
-			Type: types.NumberType,
-		},
-	)
-	v := types.NewStructWithType(typ, types.ValueSlice{
-		types.NewList(
-			types.NewStructWithType(typ, types.ValueSlice{
-				types.NewList(),
-				types.Number(2),
+	v := types.NewStruct("Node", types.StructData{
+		"children": types.NewList(
+			types.NewStruct("Node", types.StructData{
+				"children": types.NewList(),
+				"value":    types.Number(2),
 			}),
-			types.NewStructWithType(typ, types.ValueSlice{
-				types.NewList(),
-				types.Number(3),
+			types.NewStruct("Node", types.StructData{
+				"children": types.NewList(),
+				"value":    types.Number(3),
 			}),
 		),
-		types.Number(1),
+		"value": types.Number(1),
 	})
 
 	var n Node

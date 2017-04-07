@@ -80,12 +80,12 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 
 type metaSequence struct {
 	tuples []metaTuple
-	t      *Type
+	kind   NomsKind
 	vr     ValueReader
 }
 
-func newMetaSequence(tuples []metaTuple, t *Type, vr ValueReader) metaSequence {
-	return metaSequence{tuples, t, vr}
+func newMetaSequence(tuples []metaTuple, kind NomsKind, vr ValueReader) metaSequence {
+	return metaSequence{tuples, kind, vr}
 }
 
 func (ms metaSequence) data() []metaTuple {
@@ -131,11 +131,15 @@ func (ms metaSequence) WalkRefs(cb RefCallback) {
 }
 
 func (ms metaSequence) typeOf() *Type {
-	return ms.t
+	ts := make(typeSlice, len(ms.tuples))
+	for i, mt := range ms.tuples {
+		ts[i] = mt.ref.TargetType()
+	}
+	return makeCompoundType(UnionKind, ts...)
 }
 
 func (ms metaSequence) Kind() NomsKind {
-	return ms.t.TargetKind()
+	return ms.kind
 }
 
 func (ms metaSequence) numLeaves() uint64 {
@@ -184,7 +188,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 	}
 
 	if childIsMeta {
-		return newMetaSequence(metaItems, ms.typeOf(), ms.vr)
+		return newMetaSequence(metaItems, ms.kind, ms.vr)
 	}
 
 	if isIndexedSequence {
@@ -267,7 +271,7 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	if !mt.key.isOrderedByValue {
 		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
 		d.PanicIfTrue(mt.key.h.IsEmpty())
-		v = constructRef(MakeRefType(BoolType), mt.key.h, 0)
+		v = constructRef(mt.key.h, BoolType, 0)
 	}
 
 	hashValueBytes(mt.ref, rv)
@@ -295,10 +299,6 @@ func (es emptySequence) valueReader() ValueReader {
 func (es emptySequence) WalkRefs(cb RefCallback) {
 }
 
-func (es emptySequence) typeOf() *Type {
-	panic("empty sequence")
-}
-
 func (es emptySequence) getCompareFn(other sequence) compareFn {
 	return func(idx, otherIdx int) bool { panic("empty sequence") }
 }
@@ -316,5 +316,9 @@ func (es emptySequence) getChildSequence(i int) sequence {
 }
 
 func (es emptySequence) Kind() NomsKind {
+	panic("empty sequence")
+}
+
+func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
 }

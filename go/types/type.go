@@ -140,5 +140,5 @@ func MakePrimitiveTypeByString(p string) *Type {
 // TypeOf returns the type describing the value. This is not an exact type but
 // often a simplification of the concrete type.
 func TypeOf(v Value) *Type {
-	return v.typeOf()
+	return simplifyType(v.typeOf(), false)
 }

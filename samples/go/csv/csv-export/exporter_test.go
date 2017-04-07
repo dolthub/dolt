@@ -43,21 +43,6 @@ func createTestData(s *testSuite, buildAsMap bool) []types.Value {
 		sliceLen *= 2
 	}
 
-	typ := types.MakeStructType(structName,
-		types.StructField{
-			Name: "a",
-			Type: types.StringType,
-		},
-		types.StructField{
-			Name: "b",
-			Type: types.StringType,
-		},
-		types.StructField{
-			Name: "c",
-			Type: types.StringType,
-		},
-	)
-
 	structs := make([]types.Value, sliceLen)
 	for i, row := range s.payload {
 		fields := make(types.ValueSlice, len(s.header))
@@ -66,9 +51,17 @@ func createTestData(s *testSuite, buildAsMap bool) []types.Value {
 		}
 		if buildAsMap {
 			structs[i*2] = fields[0]
-			structs[i*2+1] = types.NewStructWithType(typ, fields)
+			structs[i*2+1] = types.NewStruct(structName, types.StructData{
+				"a": fields[0],
+				"b": fields[1],
+				"c": fields[2],
+			})
 		} else {
-			structs[i] = types.NewStructWithType(typ, fields)
+			structs[i] = types.NewStruct(structName, types.StructData{
+				"a": fields[0],
+				"b": fields[1],
+				"c": fields[2],
+			})
 		}
 	}
 	return structs

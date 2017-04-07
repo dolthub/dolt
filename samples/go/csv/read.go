@@ -41,7 +41,7 @@ func StringsToKinds(strs []string) KindSlice {
 func KindsToStrings(kinds KindSlice) []string {
 	strs := make([]string, len(kinds))
 	for i, k := range kinds {
-		strs[i] = types.KindToString[k]
+		strs[i] = k.String()
 	}
 	return strs
 }
@@ -113,7 +113,13 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 		}
 
 		fields := readFieldsFromRow(row, headers, fieldOrder, kindMap)
-		valueChan <- types.NewStructWithType(t, fields)
+		data := make(types.StructData, len(fields))
+		i := 0
+		t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
+			data[name] = fields[i]
+			i++
+		})
+		valueChan <- types.NewStruct(structName, data)
 	}
 
 	return <-listChan, t
@@ -205,7 +211,13 @@ func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKey
 
 		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
 		graphKeys, mapKey := primaryKeyValuesFromFields(fields, fieldOrder, pkIndices)
-		gb.MapSet(graphKeys, mapKey, types.NewStructWithType(t, fields))
+		data := make(types.StructData, len(fields))
+		i := 0
+		t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
+			data[name] = fields[i]
+			i++
+		})
+		gb.MapSet(graphKeys, mapKey, types.NewStruct(structName, data))
 	}
 	return gb.Build().(types.Map)
 }

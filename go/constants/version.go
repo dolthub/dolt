@@ -11,7 +11,7 @@ import (
 )
 
 // TODO: generate this from some central thing with go generate.
-const NomsVersion = "7.5"
+const NomsVersion = "7.6"
 const NOMS_VERSION_NEXT_ENV_NAME = "NOMS_VERSION_NEXT"
 const NOMS_VERSION_NEXT_ENV_VALUE = "1"
 

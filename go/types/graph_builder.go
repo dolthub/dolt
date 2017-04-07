@@ -313,5 +313,5 @@ func commonPrefixCount(stack graphStack, keys ValueSlice) int {
 }
 
 func (e *graphStackElem) String() string {
-	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(e.key), KindToString[e.kind], e.ch)
+	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(e.key), e.kind, e.ch)
 }

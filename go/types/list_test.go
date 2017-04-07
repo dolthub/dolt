@@ -151,16 +151,12 @@ func (suite *listTestSuite) TestMap() {
 	}
 }
 
-func TestListSuite1K(t *testing.T) {
-	suite.Run(t, newListTestSuite(10, 0, 0, 0))
-}
-
 func TestListSuite4K(t *testing.T) {
 	suite.Run(t, newListTestSuite(12, 2, 2, 2))
 }
 
 func TestListSuite8K(t *testing.T) {
-	suite.Run(t, newListTestSuite(14, 5, 2, 2))
+	suite.Run(t, newListTestSuite(14, 11, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {

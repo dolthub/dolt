@@ -16,7 +16,7 @@ import (
 func getElemDesc(s types.Collection, index int) types.StructDesc {
 	t := types.TypeOf(s).Desc.(types.CompoundDesc).ElemTypes[index]
 	if types.StructKind != t.TargetKind() {
-		d.Panic("Expected StructKind, found %s", types.KindToString[t.Kind()])
+		d.Panic("Expected StructKind, found %s", t.Kind())
 	}
 	return t.Desc.(types.StructDesc)
 }
@@ -36,7 +36,7 @@ func GetMapElemDesc(m types.Map, vr types.ValueReader) types.StructDesc {
 		_, v := m.First()
 		return GetMapElemDesc(v.(types.Map), vr)
 	}
-	panic(fmt.Sprintf("Expected StructKind or MapKind, found %s", types.KindToString[t.Kind()]))
+	panic(fmt.Sprintf("Expected StructKind or MapKind, found %s", t.Kind().String()))
 }
 
 func writeValuesFromChan(structChan chan types.Struct, sd types.StructDesc, comma rune, output io.Writer) {
@@ -97,7 +97,7 @@ func WriteMap(m types.Map, sd types.StructDesc, comma rune, output io.Writer) {
 func getFieldNamesFromStruct(structDesc types.StructDesc) (fieldNames []string) {
 	structDesc.IterFields(func(name string, t *types.Type, optional bool) {
 		if !types.IsPrimitiveKind(t.TargetKind()) {
-			d.Panic("Expected primitive kind, found %s", types.KindToString[t.TargetKind()])
+			d.Panic("Expected primitive kind, found %s", t.TargetKind().String())
 		}
 		fieldNames = append(fieldNames, name)
 	})

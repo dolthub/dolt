@@ -6,7 +6,6 @@ package nomdl
 
 import (
 	"io"
-	"strconv"
 	"strings"
 	"text/scanner"
 
@@ -75,7 +74,7 @@ func (p *Parser) ensureAtEnd() {
 //   StructType
 //
 // CycleType :
-//   `Cycle` `<` uint32 `>`
+//   `Cycle` `<` StructName `>`
 //
 // ListType :
 //   `List` `<` Type? `>`
@@ -209,14 +208,10 @@ func (p *Parser) parseSingleElemType(allowEmptyUnion bool) *types.Type {
 
 func (p *Parser) parseCycleType() *types.Type {
 	p.lex.eat('<')
-	tok := p.lex.eat(scanner.Int)
-	s, err := strconv.ParseUint(p.lex.tokenText(), 10, 32)
-	if err != nil {
-		p.lex.unexpectedToken(tok)
-		return nil
-	}
+	p.lex.eat(scanner.Ident)
+	name := p.lex.tokenText()
 	p.lex.eat('>')
-	return types.MakeCycleType(uint32(s))
+	return types.MakeCycleType(name)
 }
 
 func (p *Parser) parseMapType() *types.Type {

@@ -80,11 +80,14 @@ func TestCompoundTypes(t *testing.T) {
 	assertParseError(t, "Ref<", `Unexpected token EOF, example:1:5`)
 	assertParseError(t, "Ref", `Unexpected token EOF, expected "<", example:1:4`)
 
-	assertParseType(t, "Cycle<42>", types.MakeCycleType(42))
-	assertParseError(t, "Cycle<-123>", `Unexpected token "-", expected Int, example:1:8`)
-	assertParseError(t, "Cycle<12.3>", `Unexpected token Float, expected Int, example:1:11`)
-	assertParseError(t, "Cycle<>", `Unexpected token ">", expected Int, example:1:8`)
-	assertParseError(t, "Cycle<", `Unexpected token EOF, expected Int, example:1:7`)
+	// Cannot use Equals on unresolved cycles.
+	ct := MustParseType("Cycle<Abc>")
+	assert.Equal(t, ct, types.MakeCycleType("Abc"))
+
+	assertParseError(t, "Cycle<-123>", `Unexpected token "-", expected Ident, example:1:8`)
+	assertParseError(t, "Cycle<12.3>", `Unexpected token Float, expected Ident, example:1:11`)
+	assertParseError(t, "Cycle<>", `Unexpected token ">", expected Ident, example:1:8`)
+	assertParseError(t, "Cycle<", `Unexpected token EOF, expected Ident, example:1:7`)
 	assertParseError(t, "Cycle", `Unexpected token EOF, expected "<", example:1:6`)
 
 	assertParseType(t, "Map<>", types.MakeMapType(types.MakeUnionType(), types.MakeUnionType()))

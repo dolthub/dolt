@@ -16,7 +16,7 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-const testMapSize = 1000
+const testMapSize = 8000
 
 type genValueFn func(i int) Value
 
@@ -266,20 +266,12 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 	wg.Wait()
 }
 
-func TestMapSuite1K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, 3, 2, 2, newNumber))
-}
-
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 7, 2, 2, newNumber))
-}
-
-func TestMapSuite1KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(10, 2, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 2, 2, 2, newNumber))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 8, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 19, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -1169,7 +1161,7 @@ func TestMapTypeAfterMutations(t *testing.T) {
 	}
 
 	test(10, mapLeafSequence{})
-	test(1000, metaSequence{})
+	test(8000, metaSequence{})
 }
 
 func TestCompoundMapWithValuesOfEveryType(t *testing.T) {

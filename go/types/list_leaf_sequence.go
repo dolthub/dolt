@@ -10,12 +10,7 @@ type listLeafSequence struct {
 }
 
 func newListLeafSequence(vr ValueReader, v ...Value) sequence {
-	ts := make([]*Type, len(v))
-	for i, v := range v {
-		ts[i] = TypeOf(v)
-	}
-	t := MakeListType(MakeUnionType(ts...))
-	return listLeafSequence{leafSequence{vr, len(v), t}, v}
+	return listLeafSequence{leafSequence{vr, len(v), ListKind}, v}
 }
 
 // sequence interface
@@ -37,6 +32,10 @@ func (ll listLeafSequence) WalkRefs(cb RefCallback) {
 	}
 }
 
-func (ll listLeafSequence) Kind() NomsKind {
-	return BlobKind
+func (ll listLeafSequence) typeOf() *Type {
+	ts := make([]*Type, len(ll.values))
+	for i, v := range ll.values {
+		ts[i] = v.typeOf()
+	}
+	return makeCompoundType(ListKind, makeCompoundType(UnionKind, ts...))
 }

@@ -31,15 +31,16 @@ func (r *valueDecoder) readKind() NomsKind {
 	return NomsKind(r.readUint8())
 }
 
-func (r *valueDecoder) readRef(t *Type) Ref {
+func (r *valueDecoder) readRef() Ref {
 	h := r.readHash()
+	targetType := r.readType(map[string]*Type{})
 	height := r.readUint64()
-	return constructRef(t, h, height)
+	return constructRef(h, targetType, height)
 }
 
-func (r *valueDecoder) readType() *Type {
+func (r *valueDecoder) readType(seenStructs map[string]*Type) *Type {
 	r.typeDepth++
-	t := r.readTypeInner()
+	t := r.readTypeInner(seenStructs)
 	r.typeDepth--
 	if r.typeDepth == 0 {
 		if r.validating {
@@ -49,23 +50,26 @@ func (r *valueDecoder) readType() *Type {
 	return t
 }
 
-func (r *valueDecoder) readTypeInner() *Type {
+func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind:
-		return makeCompoundType(ListKind, r.readType())
+		return makeCompoundType(ListKind, r.readType(seenStructs))
 	case MapKind:
-		return makeCompoundType(MapKind, r.readType(), r.readType())
+		return makeCompoundType(MapKind, r.readType(seenStructs), r.readType(seenStructs))
 	case RefKind:
-		return makeCompoundType(RefKind, r.readType())
+		return makeCompoundType(RefKind, r.readType(seenStructs))
 	case SetKind:
-		return makeCompoundType(SetKind, r.readType())
+		return makeCompoundType(SetKind, r.readType(seenStructs))
 	case StructKind:
-		return r.readStructType()
+		return r.readStructType(seenStructs)
 	case UnionKind:
-		return r.readUnionType()
+		return r.readUnionType(seenStructs)
 	case CycleKind:
-		return MakeCycleType(r.readUint32())
+		name := r.readString()
+		t, ok := seenStructs[name]
+		d.PanicIfFalse(ok)
+		return t
 	}
 
 	d.PanicIfFalse(IsPrimitiveKind(k))
@@ -89,17 +93,17 @@ func (r *valueDecoder) readValueSequence() ValueSlice {
 	return data
 }
 
-func (r *valueDecoder) readListLeafSequence(t *Type) sequence {
+func (r *valueDecoder) readListLeafSequence() sequence {
 	data := r.readValueSequence()
-	return listLeafSequence{leafSequence{r.vr, len(data), t}, data}
+	return listLeafSequence{leafSequence{r.vr, len(data), ListKind}, data}
 }
 
-func (r *valueDecoder) readSetLeafSequence(t *Type) orderedSequence {
+func (r *valueDecoder) readSetLeafSequence() orderedSequence {
 	data := r.readValueSequence()
-	return setLeafSequence{leafSequence{r.vr, len(data), t}, data}
+	return setLeafSequence{leafSequence{r.vr, len(data), SetKind}, data}
 }
 
-func (r *valueDecoder) readMapLeafSequence(t *Type) orderedSequence {
+func (r *valueDecoder) readMapLeafSequence() orderedSequence {
 	count := r.readUint32()
 	data := []mapEntry{}
 	for i := uint32(0); i < count; i++ {
@@ -108,10 +112,10 @@ func (r *valueDecoder) readMapLeafSequence(t *Type) orderedSequence {
 		data = append(data, mapEntry{k, v})
 	}
 
-	return mapLeafSequence{leafSequence{r.vr, len(data), t}, data}
+	return mapLeafSequence{leafSequence{r.vr, len(data), MapKind}, data}
 }
 
-func (r *valueDecoder) readMetaSequence(t *Type) metaSequence {
+func (r *valueDecoder) readMetaSequence(k NomsKind) metaSequence {
 	count := r.readUint32()
 
 	data := []metaTuple{}
@@ -129,16 +133,16 @@ func (r *valueDecoder) readMetaSequence(t *Type) metaSequence {
 		data = append(data, newMetaTuple(ref, key, numLeaves, nil))
 	}
 
-	return newMetaSequence(data, t, r.vr)
+	return newMetaSequence(data, k, r.vr)
 }
 
 func (r *valueDecoder) readValue() Value {
-	t := r.readType()
-	switch t.TargetKind() {
+	k := r.readKind()
+	switch k {
 	case BlobKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newBlob(r.readMetaSequence(t))
+			return newBlob(r.readMetaSequence(k))
 		}
 
 		return newBlob(r.readBlobLeafSequence())
@@ -151,47 +155,52 @@ func (r *valueDecoder) readValue() Value {
 	case ListKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newList(r.readMetaSequence(t))
+			return newList(r.readMetaSequence(k))
 		}
 
-		return newList(r.readListLeafSequence(t))
+		return newList(r.readListLeafSequence())
 	case MapKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newMap(r.readMetaSequence(t))
+			return newMap(r.readMetaSequence(k))
 		}
 
-		return newMap(r.readMapLeafSequence(t))
+		return newMap(r.readMapLeafSequence())
 	case RefKind:
-		return r.readRef(t)
+		return r.readRef()
 	case SetKind:
 		isMeta := r.readBool()
 		if isMeta {
-			return newSet(r.readMetaSequence(t))
+			return newSet(r.readMetaSequence(k))
 		}
 
-		return newSet(r.readSetLeafSequence(t))
+		return newSet(r.readSetLeafSequence())
 	case StructKind:
-		return r.readStruct(t)
+		return r.readStruct()
 	case TypeKind:
-		return r.readType()
+		return r.readType(map[string]*Type{})
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", KindToString[t.TargetKind()]))
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
 	}
 
 	panic("not reachable")
 }
 
-func (r *valueDecoder) readStruct(t *Type) Value {
-	// We've read `[StructKind, name, fields, unions` at this point
-	desc := t.Desc.(StructDesc)
-	count := desc.Len()
-	valueFields := make(structValueFields, count)
-	for i, tf := range desc.fields {
-		valueFields[i] = structValueField{tf.Name, r.readValue()}
+func (r *valueDecoder) readStruct() Value {
+	name := r.readString()
+	count := r.readUint32()
+
+	fieldNames := make([]string, count)
+	for i := uint32(0); i < count; i++ {
+		fieldNames[i] = r.readString()
 	}
 
-	return Struct{desc.Name, valueFields, t, &hash.Hash{}}
+	values := make([]Value, count)
+	for i := uint32(0); i < count; i++ {
+		values[i] = r.readValue()
+	}
+
+	return Struct{name, fieldNames, values, &hash.Hash{}}
 }
 
 func boolToUint32(b bool) uint32 {
@@ -201,27 +210,34 @@ func boolToUint32(b bool) uint32 {
 	return 0
 }
 
-func (r *valueDecoder) readStructType() *Type {
+func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 	name := r.readString()
 	count := r.readUint32()
-
 	fields := make(structTypeFields, count)
+
+	t := newType(StructDesc{name, fields})
+	seenStructs[name] = t
+
 	for i := uint32(0); i < count; i++ {
-		fields[i] = StructField{
-			r.readString(),
-			r.readType(),
-			r.readBool(),
+		t.Desc.(StructDesc).fields[i] = StructField{
+			Name: r.readString(),
 		}
 	}
+	for i := uint32(0); i < count; i++ {
+		t.Desc.(StructDesc).fields[i].Type = r.readType(seenStructs)
+	}
+	for i := uint32(0); i < count; i++ {
+		t.Desc.(StructDesc).fields[i].Optional = r.readBool()
+	}
 
-	return makeStructTypeQuickly(name, fields, checkKindNoValidate)
+	return t
 }
 
-func (r *valueDecoder) readUnionType() *Type {
+func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
 	l := r.readUint32()
 	ts := make(typeSlice, l)
 	for i := uint32(0); i < l; i++ {
-		ts[i] = r.readType()
+		ts[i] = r.readType(seenStructs)
 	}
 	return makeCompoundType(UnionKind, ts...)
 }

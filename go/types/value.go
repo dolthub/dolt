@@ -35,14 +35,12 @@ type Value interface {
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
 	WalkRefs(RefCallback)
 
-	// Type returns the type of the Noms value. All Noms values carry their runtime Noms type.
-	// DEPRECATED: https://github.com/attic-labs/noms/issues/3184
-	// Type() *Type
-
 	// Kind is the NomsKind describing the kind of value this is.
 	Kind() NomsKind
 
-	// typeOf is the internal implementation of types.TypeOf.
+	// typeOf is the internal implementation of types.TypeOf. It is not normalized
+	// and unions might have a single element, duplicates and be in the wrong
+	// order.
 	typeOf() *Type
 }
 
