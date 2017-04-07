@@ -122,13 +122,18 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 		case StructKind:
 			desc := t.Desc.(StructDesc)
 			name := desc.Name
+
 			if name != "" {
 				ensureInstance(name)
 				if seenStructs.has(t) {
 					return namedStructs[name].instance
 				}
-				seenStructs.add(t)
+			} else if seenStructs.has(t) {
+				// It is OK to use the same unnamed struct type in multiple places.
+				// Do not clone it again.
+				return t
 			}
+			seenStructs.add(t)
 
 			fields := make(structTypeFields, len(desc.fields))
 			for i, f := range desc.fields {

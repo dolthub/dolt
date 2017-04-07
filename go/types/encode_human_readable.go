@@ -162,7 +162,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("}")
 
 	case TypeKind:
-		w.writeType(v.(*Type), map[string]*Type{})
+		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
 		w.writeStruct(v.(Struct), true)
@@ -201,12 +201,12 @@ func (w *hrsWriter) WriteTagged(v Value) {
 	case BoolKind, NumberKind, StringKind:
 		w.Write(v)
 	case BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, CycleKind:
-		w.writeType(t, map[string]*Type{})
+		w.writeType(t, map[*Type]struct{}{})
 		w.write("(")
 		w.Write(v)
 		w.write(")")
 	case StructKind:
-		w.writeType(t, map[string]*Type{})
+		w.writeType(t, map[*Type]struct{}{})
 		w.write("(")
 		w.writeStruct(v.(Struct), false)
 		w.write(")")
@@ -229,7 +229,7 @@ func (w *hrsWriter) writeSize(v Value) {
 	}
 }
 
-func (w *hrsWriter) writeType(t *Type, seenStructs map[string]*Type) {
+func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
 	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
 		w.write(t.TargetKind().String())
@@ -274,15 +274,13 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[string]*Type) {
 	}
 }
 
-func (w *hrsWriter) writeStructType(t *Type, seenStructs map[string]*Type) {
+func (w *hrsWriter) writeStructType(t *Type, seenStructs map[*Type]struct{}) {
 	name := t.Desc.(StructDesc).Name
-	if _, ok := seenStructs[name]; ok {
+	if _, ok := seenStructs[t]; ok {
 		w.write(fmt.Sprintf("Cycle<%s>", name))
 		return
 	}
-	if name != "" {
-		seenStructs[name] = t
-	}
+	seenStructs[t] = struct{}{}
 
 	desc := t.Desc.(StructDesc)
 	w.write("struct ")
