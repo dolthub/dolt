@@ -13,6 +13,7 @@ import (
 
 	"github.com/attic-labs/graphql"
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/test"
 	"github.com/attic-labs/testify/assert"
@@ -1494,4 +1495,36 @@ func TestGetListElementsWithSet(t *testing.T) {
 		countKey: 2,
 	})
 	assert.Equal([]interface{}{float64(0), float64(1)}, r)
+}
+
+func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
+	assert := assert.New(t)
+
+	type User struct {
+		ID string `noms:"id"`
+	}
+	type Account struct {
+		PendingUsers map[string]User
+		Users        map[string]User
+	}
+
+	var a Account
+	typ := marshal.MustMarshalType(a)
+	tc := NewTypeConverter()
+	_, err := tc.NomsTypeToGraphQLInputType(typ)
+	assert.NoError(err)
+}
+
+func TestErrorOnCyclicTypeRefsInputType(t *testing.T) {
+	assert := assert.New(t)
+
+	type Node struct {
+		Children map[string]Node
+	}
+
+	var n Node
+	typ := marshal.MustMarshalType(n)
+	tc := NewTypeConverter()
+	_, err := tc.NomsTypeToGraphQLInputType(typ)
+	assert.Error(err)
 }

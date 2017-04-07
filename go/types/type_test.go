@@ -171,3 +171,40 @@ func TestStructUnionWithCycles(tt *testing.T) {
 	// We do not remake Union types after putting their component types into
 	// their canonical ordering.
 }
+
+func TestHasStructCycles(tt *testing.T) {
+	assert := assert.New(tt)
+
+	assert.False(HasStructCycles(BoolType))
+	assert.False(HasStructCycles(BlobType))
+	assert.False(HasStructCycles(NumberType))
+	assert.False(HasStructCycles(StringType))
+	assert.False(HasStructCycles(TypeType))
+	assert.False(HasStructCycles(ValueType))
+	assert.False(HasStructCycles(MakeCycleType("Abc")))
+
+	assert.False(HasStructCycles(MakeStructType("")))
+	assert.False(HasStructCycles(MakeStructType("A")))
+
+	assert.True(HasStructCycles(
+		MakeStructType("A", StructField{"a", MakeStructType("A"), false})))
+	assert.True(HasStructCycles(
+		MakeStructType("A", StructField{"a", MakeCycleType("A"), false})))
+	assert.True(HasStructCycles(
+		MakeSetType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))
+	assert.True(HasStructCycles(
+		MakeStructType("A", StructField{"a", MakeSetType(MakeCycleType("A")), false})))
+
+	assert.False(HasStructCycles(
+		MakeMapType(
+			MakeStructType("A"),
+			MakeStructType("A"),
+		),
+	))
+	assert.False(HasStructCycles(
+		MakeMapType(
+			MakeStructType("A"),
+			MakeCycleType("A"),
+		),
+	))
+}

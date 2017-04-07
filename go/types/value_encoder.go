@@ -49,7 +49,9 @@ func (w *valueEncoder) writeType(t *Type, seenStructs map[string]*Type) {
 	case StructKind:
 		w.writeStructType(t, seenStructs)
 	default:
-		d.PanicIfFalse(IsPrimitiveKind(k))
+		if !IsPrimitiveKind(k) {
+			d.Panic("Expected primitive noms kind, got %s", k.String())
+		}
 		w.writeKind(k)
 	}
 }

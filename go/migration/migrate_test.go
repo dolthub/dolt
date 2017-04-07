@@ -123,7 +123,7 @@ func TestMigrateFromVersion7(t *testing.T) {
 			Type: types.MakeSetType(types.MakeRefType(types.MakeStructType("Commit",
 				types.StructField{
 					Name: "parents",
-					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType("Comit"))),
+					Type: types.MakeSetType(types.MakeRefType(types.MakeCycleType("Commit"))),
 				},
 				types.StructField{
 					Name: "value",

@@ -203,6 +203,11 @@ func NomsTypeToGraphQLInputType(nomsType *types.Type, tm *TypeMap) (graphql.Inpu
 }
 
 func (tc *TypeConverter) nomsTypeToGraphQLInputType(nomsType *types.Type) (graphql.Input, error) {
+	// GraphQL input types do not support cycles.
+	if types.HasStructCycles(nomsType) {
+		return nil, errors.New("GraphQL input type cannot contain cycles")
+	}
+
 	name := tc.getInputTypeName(nomsType)
 	key := typeMapKey{name, false}
 	gqlType, ok := tc.tm[key]
@@ -241,7 +246,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLInputType(nomsType *types.Type) (graph
 		gqlType = graphql.String
 
 	case types.CycleKind:
-		return nil, errors.New("GraphQL input type cannot contain cycles")
+		panic("not reachable") // This is handled at the top of nomsTypeToGraphQLInputType
 
 	default:
 		panic("not reached")
@@ -361,15 +366,11 @@ func (tc *TypeConverter) mapToGraphQLInputObject(nomsType *types.Type) (graphql.
 }
 
 func (tc *TypeConverter) structToGQLInputObject(nomsType *types.Type) (graphql.Input, error) {
-	// Replace pointer cycles with Cycle types. These gets flagged as
-	// errors in NomsTypeToGraphQLInputType.
-	unresolved := types.ToUnresolvedType(nomsType)
-
 	var err error
 	rv := graphql.NewInputObject(graphql.InputObjectConfig{
 		Name: tc.getInputTypeName(nomsType),
 		Fields: graphql.InputObjectConfigFieldMapThunk(func() graphql.InputObjectConfigFieldMap {
-			structDesc := unresolved.Desc.(types.StructDesc)
+			structDesc := nomsType.Desc.(types.StructDesc)
 			fields := make(graphql.InputObjectConfigFieldMap, structDesc.Len())
 
 			structDesc.IterFields(func(name string, nomsFieldType *types.Type, optional bool) {

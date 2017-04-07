@@ -108,7 +108,7 @@ func (s Struct) typeOf() *Type {
 			Type:     s.values[i].typeOf(),
 		}
 	}
-	return makeStructTypeQuickly(s.name, typeFields, checkKindNoValidate)
+	return makeStructTypeQuickly(s.name, typeFields)
 }
 
 // Len is the number of fields in the struct.

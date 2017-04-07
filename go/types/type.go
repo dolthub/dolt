@@ -142,3 +142,83 @@ func MakePrimitiveTypeByString(p string) *Type {
 func TypeOf(v Value) *Type {
 	return simplifyType(v.typeOf(), false)
 }
+
+// HasStructCycles determines if the type contains any struct cycles.
+func HasStructCycles(t *Type) bool {
+	return hasStructCycles(t, map[string]int{})
+}
+
+func hasStructCycles(t *Type, seenStructs map[string]int) bool {
+	switch desc := t.Desc.(type) {
+	case CompoundDesc:
+		for _, et := range desc.ElemTypes {
+			b := hasStructCycles(et, seenStructs)
+			if b {
+				return true
+			}
+		}
+
+	case StructDesc:
+		name := desc.Name
+		if name != "" {
+			if seenStructs[name] > 0 {
+				return true
+			}
+			seenStructs[name]++
+			defer func() { seenStructs[name]-- }()
+		}
+		for _, f := range desc.fields {
+			b := hasStructCycles(f.Type, seenStructs)
+			if b {
+				return true
+			}
+		}
+
+	case CycleDesc:
+		name := string(desc)
+		if seenStructs[name] > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolveCycleTypes replaces Cycle<Name> with pointers to the previously seen
+// struct with the same name.
+func resolveCycleTypes(t *Type) *Type {
+	return resolveCycleTypesImpl(t, map[string]*Type{})
+}
+
+func resolveCycleTypesImpl(t *Type, seenStructs map[string]*Type) *Type {
+	switch desc := t.Desc.(type) {
+	case CompoundDesc:
+		elemTypes := make(typeSlice, len(desc.ElemTypes))
+		for i, et := range desc.ElemTypes {
+			elemTypes[i] = resolveCycleTypesImpl(et, seenStructs)
+		}
+		return makeCompoundType(desc.Kind(), elemTypes...)
+
+	case StructDesc:
+		name := desc.Name
+		if name != "" {
+			if tt, ok := seenStructs[name]; ok {
+				return tt
+			}
+			seenStructs[name] = t
+		}
+		fields := make(structTypeFields, len(desc.fields))
+		for i, f := range desc.fields {
+			fields[i] = StructField{f.Name, resolveCycleTypesImpl(f.Type, seenStructs), f.Optional}
+		}
+		return makeStructTypeQuickly(name, fields)
+
+	case CycleDesc:
+		name := string(desc)
+		if tt, ok := seenStructs[name]; ok {
+			return tt
+		}
+	}
+
+	return t
+}

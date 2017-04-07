@@ -65,7 +65,7 @@ func TestSimplifyType(t *testing.T) {
 			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(), act.Describe())
 		}
 		testSame := func(t *Type) {
-			test(t, t)
+			test(t, resolveCycleTypes(t))
 		}
 
 		testSame(BlobType)
