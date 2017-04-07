@@ -72,9 +72,9 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 
 	// Simulate another process writing a manifest after construction.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
-	newRoot := hash.Of([]byte("new root"))
+	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	// state in store shouldn't change
 	assert.Equal(hash.Hash{}, store.Root())
@@ -88,9 +88,9 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 
 	// Simulate another process having already written a manifest.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
-	newRoot := hash.Of([]byte("new root"))
+	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	store := newNomsBlockStore(fm, tt, defaultMemTableSize, defaultMaxTables)
 	defer store.Close()
@@ -107,9 +107,9 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 
 	// Simulate another process writing a manifest behind store's back.
 	chunks := [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
-	newRoot := hash.Of([]byte("new root"))
+	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	src := tt.p.Compact(createMemTable(chunks), nil)
-	fm.set(constants.NomsVersion, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 
 	newRoot2 := hash.Of([]byte("new root 2"))
 	assert.False(store.UpdateRoot(newRoot2, hash.Hash{}))
@@ -141,46 +141,52 @@ func assertDataInStore(slices [][]byte, store chunks.ChunkSource, assert *assert
 // fakeManifest simulates a fileManifest without touching disk.
 type fakeManifest struct {
 	version    string
+	lock       addr
 	root       hash.Hash
 	tableSpecs []tableSpec
 	mu         sync.RWMutex
 }
 
-// ParseIfExists returns any fake manifest data the caller has injected using Update() or set(). It treats an empty |fm.root| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(readHook func()) (exists bool, vers string, root hash.Hash, tableSpecs []tableSpec) {
+// ParseIfExists returns any fake manifest data the caller has injected using
+// Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
+func (fm *fakeManifest) ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	if fm.root != (hash.Hash{}) {
-		return true, fm.version, fm.root, fm.tableSpecs
+	if fm.lock != (addr{}) {
+		return true, fm.version, fm.lock, fm.root, fm.tableSpecs
 	}
-	return false, "", hash.Hash{}, nil
+	return false, "", addr{}, hash.Hash{}, nil
 }
 
-// Update checks whether |root| == |fm.root| and, if so, updates internal fake manifest state as per the manifest.Update() contract: |fm.root| is set to |newRoot|, and the contents of |specs| are merged into |fm.tableSpecs|. If |root| != |fm.root|, then the update fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
+// Update checks whether |lastLock| == |fm.lock| and, if so, updates internal
+// fake manifest state as per the manifest.Update() contract: |fm.lock| is set
+// to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
+// are merged into |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
+// fails. Regardless of success or failure, the current state is returned.
+func (fm *fakeManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
-	if fm.root != root {
-		return fm.root, fm.tableSpecs
-	}
-	fm.version = constants.NomsVersion
-	fm.root = newRoot
+	if fm.lock == lastLock {
+		fm.version = constants.NomsVersion
+		fm.lock = newLock
+		fm.root = newRoot
 
-	known := map[addr]struct{}{}
-	for _, t := range fm.tableSpecs {
-		known[t.name] = struct{}{}
-	}
+		known := map[addr]struct{}{}
+		for _, t := range fm.tableSpecs {
+			known[t.name] = struct{}{}
+		}
 
-	for _, t := range specs {
-		if _, present := known[t.name]; !present {
-			fm.tableSpecs = append(fm.tableSpecs, t)
+		for _, t := range specs {
+			if _, present := known[t.name]; !present {
+				fm.tableSpecs = append(fm.tableSpecs, t)
+			}
 		}
 	}
-	return fm.root, fm.tableSpecs
+	return fm.lock, fm.root, fm.tableSpecs
 }
 
-func (fm *fakeManifest) set(version string, root hash.Hash, specs []tableSpec) {
-	fm.version, fm.root, fm.tableSpecs = version, root, specs
+func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs []tableSpec) {
+	fm.version, fm.lock, fm.root, fm.tableSpecs = version, lock, root, specs
 }
 
 func newFakeTableSet() tableSet {

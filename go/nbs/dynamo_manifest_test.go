@@ -30,18 +30,20 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	assert := assert.New(t)
 	mm, ddb := makeDynamoManifestFake(t)
 
-	exists, vers, root, tableSpecs := mm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs := mm.ParseIfExists(nil)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
+	newLock := computeAddr([]byte("locker"))
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	ddb.put(db, newRoot[:], "0", tableName.String()+":"+"0")
+	ddb.put(db, newLock[:], newRoot[:], "0", tableName.String()+":"+"0")
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, root, tableSpecs = mm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs = mm.ParseIfExists(nil)
 	assert.True(exists)
 	assert.Equal("0", vers)
+	assert.Equal(newLock, lock)
 	assert.Equal(newRoot, root)
 	if assert.Len(tableSpecs, 1) {
 		assert.Equal(tableName.String(), tableSpecs[0].name.String())
@@ -54,36 +56,60 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	mm, ddb := makeDynamoManifestFake(t)
 
 	// Simulate another process having already put old Noms data in dir/.
+	lock := computeAddr([]byte("locker"))
 	badRoot := hash.Of([]byte("bad root"))
-	ddb.put(db, badRoot[:], "0", "")
+	ddb.put(db, lock[:], badRoot[:], "0", "")
 
-	assert.Panics(func() { mm.Update(nil, badRoot, hash.Hash{}, nil) })
+	assert.Panics(func() { mm.Update(lock, addr{}, nil, hash.Hash{}, nil) })
 }
 
 func TestDynamoManifestUpdate(t *testing.T) {
 	assert := assert.New(t)
-	mm, _ := makeDynamoManifestFake(t)
+	mm, ddb := makeDynamoManifestFake(t)
 
 	// First, test winning the race against another process.
-	newRoot := hash.Of([]byte("new root"))
+	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	specs := []tableSpec{{computeAddr([]byte("a")), 3}}
-	actual, tableSpecs := mm.Update(specs, hash.Hash{}, newRoot, nil)
+	lock, actual, tableSpecs := mm.Update(addr{}, newLock, specs, newRoot, func() {
+		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
+		lock := computeAddr([]byte("nolock"))
+		newRoot2 := hash.Of([]byte("noroot"))
+		ddb.put(db, lock[:], newRoot2[:], constants.NomsVersion, "")
+	})
+	assert.Equal(newLock, lock)
 	assert.Equal(newRoot, actual)
 	assert.Equal(specs, tableSpecs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	newRoot2 := hash.Of([]byte("new root 2"))
-	actual, tableSpecs = mm.Update(nil, hash.Hash{}, newRoot2, nil)
+	newLock2, newRoot2 := computeAddr([]byte("locker 2")), hash.Of([]byte("new root 2"))
+	lock, actual, tableSpecs = mm.Update(addr{}, newLock2, nil, newRoot2, nil)
+	assert.Equal(newLock, lock)
 	assert.Equal(newRoot, actual)
 	assert.Equal(specs, tableSpecs)
-	actual, tableSpecs = mm.Update(nil, actual, newRoot2, nil)
+	lock, actual, tableSpecs = mm.Update(lock, newLock2, nil, newRoot2, nil)
+	assert.Equal(newLock2, lock)
+	assert.Equal(newRoot2, actual)
+	assert.Empty(tableSpecs)
+
+	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
+	jerkLock := computeAddr([]byte("jerk"))
+	tableName := computeAddr([]byte("table1"))
+	ddb.put(db, jerkLock[:], newRoot2[:], constants.NomsVersion, tableName.String()+":1")
+
+	newLock3, newRoot3 := computeAddr([]byte("locker 3")), hash.Of([]byte("new root 3"))
+	lock, actual, tableSpecs = mm.Update(lock, newLock3, nil, newRoot3, nil)
+	assert.Equal(jerkLock, lock)
+	assert.Equal(newRoot2, actual)
+	assert.Equal([]tableSpec{{tableName, 1}}, tableSpecs)
 }
 
 func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	assert := assert.New(t)
 	mm, _ := makeDynamoManifestFake(t)
 
-	actual, tableSpecs := mm.Update(nil, hash.Hash{}, hash.Hash{}, nil)
+	l := computeAddr([]byte{0x01})
+	lock, actual, tableSpecs := mm.Update(addr{}, l, nil, hash.Hash{}, nil)
+	assert.Equal(l, lock)
 	assert.True(actual.IsEmpty())
 	assert.Empty(tableSpecs)
 }
@@ -95,7 +121,7 @@ type fakeDDB struct {
 }
 
 type record struct {
-	root        []byte
+	lock, root  []byte
 	vers, specs string
 }
 
@@ -111,12 +137,13 @@ func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput
 	m.assert.NotNil(key, "key should have been a String: %+v", input.Key[dbAttr])
 
 	item := map[string]*dynamodb.AttributeValue{}
-	root, vers, specs := m.get(*key)
-	if root != nil {
+	lock, root, vers, specs := m.get(*key)
+	if lock != nil {
 		item[dbAttr] = &dynamodb.AttributeValue{S: key}
 		item[nbsVersAttr] = &dynamodb.AttributeValue{S: aws.String(StorageVersion)}
 		item[versAttr] = &dynamodb.AttributeValue{S: aws.String(vers)}
 		item[rootAttr] = &dynamodb.AttributeValue{B: root}
+		item[lockAttr] = &dynamodb.AttributeValue{B: lock}
 		if specs != "" {
 			item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(specs)}
 		}
@@ -124,12 +151,12 @@ func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput
 	return &dynamodb.GetItemOutput{Item: item}, nil
 }
 
-func (m *fakeDDB) get(k string) ([]byte, string, string) {
-	return m.data[k].root, m.data[k].vers, m.data[k].specs
+func (m *fakeDDB) get(k string) ([]byte, []byte, string, string) {
+	return m.data[k].lock, m.data[k].root, m.data[k].vers, m.data[k].specs
 }
 
-func (m *fakeDDB) put(k string, r []byte, v string, s string) {
-	m.data[k] = record{r, v, s}
+func (m *fakeDDB) put(k string, l, r []byte, v string, s string) {
+	m.data[k] = record{l, r, v, s}
 }
 
 func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -145,7 +172,11 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 	m.assert.NotNil(input.Item[versAttr].S, "nbsVers should have been a String: %+v", input.Item[versAttr])
 	m.assert.Equal(constants.NomsVersion, *input.Item[versAttr].S)
 
-	m.assert.NotNil(input.Item[rootAttr], "%s should have present", rootAttr)
+	m.assert.NotNil(input.Item[lockAttr], "%s should have been present", lockAttr)
+	m.assert.NotNil(input.Item[lockAttr].B, "lock should have been a blob: %+v", input.Item[lockAttr])
+	lock := input.Item[lockAttr].B
+
+	m.assert.NotNil(input.Item[rootAttr], "%s should havebeen  present", rootAttr)
 	m.assert.NotNil(input.Item[rootAttr].B, "root should have been a blob: %+v", input.Item[rootAttr])
 	root := input.Item[rootAttr].B
 
@@ -164,12 +195,12 @@ func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
-	m.put(key, root, constants.NomsVersion, specs)
+	m.put(key, lock, root, constants.NomsVersion, specs)
 	m.numPuts++
 
 	return &dynamodb.PutItemOutput{}, nil
 }
 
 func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
-	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.root, expressionAttrVals[":prev"].B)
+	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
 }

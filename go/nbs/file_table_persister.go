@@ -32,6 +32,10 @@ func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint
 		d.PanicIfError(err)
 		defer checkClose(temp)
 		io.Copy(temp, bytes.NewReader(data))
+		index := parseTableIndex(data)
+		if ftp.indexCache != nil {
+			ftp.indexCache.put(name, index)
+		}
 		return temp.Name()
 	}()
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))

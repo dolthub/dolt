@@ -67,6 +67,10 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		buff, err = unix.Mmap(int(f.Fd()), aligned, int(fi.Size()-aligned), unix.PROT_READ, unix.MAP_SHARED)
 		d.PanicIfError(err)
 		index = parseTableIndex(buff[indexOffset-aligned:])
+
+		if indexCache != nil {
+			indexCache.put(h, index)
+		}
 	}
 	success = true
 

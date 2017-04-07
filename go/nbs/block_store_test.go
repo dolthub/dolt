@@ -174,13 +174,17 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	interloper.UpdateRoot(c1.Hash(), interloper.Root()) // Commit write
+	interloper.Flush()
 
 	suite.store.Put(c2)
 	suite.store.Flush() // Commit write
 
-	// And reading c2 via the API should work...
+	// Reading c2 via the API should work...
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
+	// And so should reading c1 via the API
+	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
+
+	suite.True(interloper.UpdateRoot(c1.Hash(), interloper.Root())) // Commit root
 
 	// Updating from stale root should fail...
 	suite.False(suite.store.UpdateRoot(c2.Hash(), root))
@@ -202,7 +206,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	smallTableStore.PutMany(chunx[:testMaxTables])
 	suite.True(smallTableStore.UpdateRoot(chunx[0].Hash(), root)) // Commit write
 
-	exists, _, mRoot, specs := mm.ParseIfExists(nil)
+	exists, _, _, mRoot, specs := mm.ParseIfExists(nil)
 	suite.True(exists)
 	suite.Equal(chunx[0].Hash(), mRoot)
 	suite.Len(specs, testMaxTables)
@@ -211,7 +215,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	smallTableStore.PutMany(chunx[testMaxTables:])
 	suite.True(smallTableStore.UpdateRoot(chunx[testMaxTables].Hash(), root)) // Should compact
 
-	exists, _, mRoot, specs = mm.ParseIfExists(nil)
+	exists, _, _, mRoot, specs = mm.ParseIfExists(nil)
 	suite.True(exists)
 	suite.Equal(chunx[testMaxTables].Hash(), mRoot)
 	suite.Len(specs, testMaxTables)

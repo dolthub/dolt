@@ -19,6 +19,7 @@ import (
 const (
 	tableName      = "attic-nbs"
 	dbAttr         = "db"
+	lockAttr       = "lock"
 	rootAttr       = "root"
 	versAttr       = "vers"
 	nbsVersAttr    = "nbsVers"
@@ -26,8 +27,8 @@ const (
 )
 
 var (
-	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", rootAttr, versAttr)
-	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+rootAttr+") or %s", valueEqualsExpression)
+	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", lockAttr, versAttr)
+	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+lockAttr+") or %s", valueEqualsExpression)
 )
 
 type ddbsvc interface {
@@ -41,11 +42,11 @@ type dynamoManifest struct {
 	ddbsvc    ddbsvc
 }
 
-func newDynamoManifest(table, namespace string, ddb ddbsvc) *dynamoManifest {
-	return &dynamoManifest{table: table, db: namespace, ddbsvc: ddb}
+func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
+	return dynamoManifest{table: table, db: namespace, ddbsvc: ddb}
 }
 
-func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers string, root hash.Hash, tableSpecs []tableSpec) {
+func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
 	result, err := dm.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
 		TableName:      aws.String(dm.table),
@@ -64,6 +65,7 @@ func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers strin
 		exists = true
 		vers = *result.Item[versAttr].S
 		root = hash.New(result.Item[rootAttr].B)
+		copy(lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
 			tableSpecs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
 		}
@@ -76,18 +78,17 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
 		StorageVersion == *item[nbsVersAttr].S &&
 		item[versAttr] != nil && item[versAttr].S != nil &&
+		item[lockAttr] != nil && item[lockAttr].B != nil &&
 		item[rootAttr] != nil && item[rootAttr].B != nil {
-		if len(item) == 5 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
+		if len(item) == 6 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
 			return true, true
 		}
-		return len(item) == 4, false
+		return len(item) == 5, false
 	}
 	return false, false
 }
 
-func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writeHook func()) (actual hash.Hash, tableSpecs []tableSpec) {
-	tableSpecs = specs
-
+func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),
 		Item: map[string]*dynamodb.AttributeValue{
@@ -95,37 +96,38 @@ func (dm dynamoManifest) Update(specs []tableSpec, root, newRoot hash.Hash, writ
 			nbsVersAttr: {S: aws.String(StorageVersion)},
 			versAttr:    {S: aws.String(constants.NomsVersion)},
 			rootAttr:    {B: newRoot[:]},
+			lockAttr:    {B: newLock[:]},
 		},
 	}
 	if len(specs) > 0 {
-		tableInfo := make([]string, 2*len(tableSpecs))
-		formatSpecs(tableSpecs, tableInfo)
+		tableInfo := make([]string, 2*len(specs))
+		formatSpecs(specs, tableInfo)
 		putArgs.Item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
 	}
 
 	expr := valueEqualsExpression
-	if root.IsEmpty() {
+	if lastLock == (addr{}) {
 		expr = valueNotExistsOrEqualsExpression
 	}
 
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
-		":prev": {B: root[:]},
+		":prev": {B: lastLock[:]},
 		":vers": {S: aws.String(constants.NomsVersion)},
 	}
 
-	_, err := dm.ddbsvc.PutItem(&putArgs)
-	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
+	_, ddberr := dm.ddbsvc.PutItem(&putArgs)
+	if ddberr != nil {
+		if awsErr, ok := ddberr.(awserr.Error); ok {
 			if awsErr.Code() == "ConditionalCheckFailedException" {
-				exists, vers, actual, tableSpecs := dm.ParseIfExists(nil)
+				exists, vers, lock, actual, tableSpecs := dm.ParseIfExists(nil)
 				d.Chk.True(exists)
 				d.Chk.True(vers == constants.NomsVersion)
-				return actual, tableSpecs
+				return lock, actual, tableSpecs
 			} // TODO handle other aws errors?
 		}
-		d.Chk.NoError(err)
+		d.Chk.NoError(ddberr)
 	}
 
-	return newRoot, tableSpecs
+	return newLock, newRoot, specs
 }
