@@ -327,7 +327,9 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 				}
 			}
 			if err != nil {
-				d.PanicIfFalse(io.EOF == err)
+				if err != io.EOF {
+					panic(err)
+				}
 				if offset > 0 {
 					makeChunk()
 				}
