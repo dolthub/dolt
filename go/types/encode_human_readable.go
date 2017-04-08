@@ -264,8 +264,11 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	case StructKind:
 		w.writeStructType(t, seenStructs)
 	case CycleKind:
+		name := string(t.Desc.(CycleDesc))
+		d.PanicIfTrue(name == "")
+
 		// This can happen for types that have unresolved cyclic refs
-		w.write(fmt.Sprintf("UnresolvedCycle<%s>", string(t.Desc.(CycleDesc))))
+		w.write(fmt.Sprintf("UnresolvedCycle<%s>", name))
 		if w.err != nil {
 			return
 		}

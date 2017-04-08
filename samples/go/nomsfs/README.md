@@ -36,7 +36,7 @@ fs
 > noms show /var/tmp/nomsfs::fs
 struct Commit {
   meta: struct {},
-  parents: Set<Ref<Cycle<0>>>,
+  parents: Set<Ref<Cycle<Commit>>>,
   value: struct Filesystem {
     root: struct Inode {
       attr: struct Attr {

@@ -87,6 +87,7 @@ func toUnresolvedType(t *Type, seenStructs map[string]*Type) (*Type, bool) {
 		return nt, true
 	case CycleDesc:
 		cycleName := string(desc)
+		d.PanicIfTrue(cycleName == "")
 		_, ok := seenStructs[cycleName]
 		return t, ok // Only cycles which can be resolved in the current struct.
 	}
@@ -202,8 +203,6 @@ func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
 }
 
 func MakeCycleType(name string) *Type {
-	if name == "" {
-		d.Panic("Cycle type must have a non empty name")
-	}
+	d.PanicIfTrue(name == "")
 	return newType(CycleDesc(name))
 }

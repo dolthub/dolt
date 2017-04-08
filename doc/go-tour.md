@@ -200,7 +200,7 @@ people
 > noms show http://localhost:8000::people
 struct Commit {
   meta: struct {},
-  parents: Set<Ref<Cycle<0>>>,
+  parents: Set<Ref<Cycle<Commit>>>,
   value: List<struct Person {
     given: String,
     male: Bool,

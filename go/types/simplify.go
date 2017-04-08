@@ -148,6 +148,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 
 		case CycleKind:
 			name := string(t.Desc.(CycleDesc))
+			d.PanicIfTrue(name == "")
 			ensureInstance(name)
 			return getNamedStruct(name, t)
 

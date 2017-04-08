@@ -366,7 +366,7 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 
 	// struct A {
 	//   a: String,
-	//   b: Number | Cycle<0>,
+	//   b: Number | Cycle<A>,
 	// }
 
 	s1 := types.NewStruct("A", types.StructData{

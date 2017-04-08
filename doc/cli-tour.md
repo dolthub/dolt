@@ -107,7 +107,7 @@ You can see the entire serialization of any object in the database with `noms sh
 
 struct Commit {
   meta: struct {},
-  parents: Set<Ref<Cycle<0>>>,
+  parents: Set<Ref<Cycle<Commit>>>,
   value: List<struct Row {
     Actor1: String,
     Actor2: String,
@@ -181,4 +181,4 @@ The `noms diff` command can show you the differences between any two values. Let
 -   "Locations": "Epic Roasthouse (399 Embarcadero)"
 +   "Locations": "Epic Roadhouse (399 Embarcadero)"
 ```
-  
+
