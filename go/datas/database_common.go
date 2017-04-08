@@ -127,7 +127,7 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 				// This covers all cases where currentHeadRef is not an ancestor of commit, including the following edge cases:
 				//   - commit is a duplicate of currentHead.
 				//   - we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
-				if !currentHeadRef.Equals(ancestorRef) || currentHeadRef.Equals(commitRef) {
+				if currentHeadRef.TargetHash() != ancestorRef.TargetHash() || currentHeadRef.TargetHash() == commitRef.TargetHash() {
 					if mergePolicy == nil {
 						return ErrMergeNeeded
 					}

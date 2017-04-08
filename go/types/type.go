@@ -187,15 +187,15 @@ func hasStructCycles(t *Type, seenStructs map[string]int) bool {
 // resolveCycleTypes replaces Cycle<Name> with pointers to the previously seen
 // struct with the same name.
 func resolveCycleTypes(t *Type) *Type {
-	return resolveCycleTypesImpl(t, map[string]*Type{})
+	return resolveCycleTypesImpl(t, map[string]*Type{}, typeset{})
 }
 
-func resolveCycleTypesImpl(t *Type, seenStructs map[string]*Type) *Type {
+func resolveCycleTypesImpl(t *Type, seenStructs map[string]*Type, seenUnnamed typeset) *Type {
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		elemTypes := make(typeSlice, len(desc.ElemTypes))
 		for i, et := range desc.ElemTypes {
-			elemTypes[i] = resolveCycleTypesImpl(et, seenStructs)
+			elemTypes[i] = resolveCycleTypesImpl(et, seenStructs, seenUnnamed)
 		}
 		return makeCompoundType(desc.Kind(), elemTypes...)
 
@@ -206,10 +206,15 @@ func resolveCycleTypesImpl(t *Type, seenStructs map[string]*Type) *Type {
 				return tt
 			}
 			seenStructs[name] = t
+		} else {
+			if seenUnnamed.has(t) {
+				return t
+			}
+			seenUnnamed.add(t)
 		}
 		fields := make(structTypeFields, len(desc.fields))
 		for i, f := range desc.fields {
-			fields[i] = StructField{f.Name, resolveCycleTypesImpl(f.Type, seenStructs), f.Optional}
+			fields[i] = StructField{f.Name, resolveCycleTypesImpl(f.Type, seenStructs, seenUnnamed), f.Optional}
 		}
 		return makeStructTypeQuickly(name, fields)
 
