@@ -20,26 +20,26 @@ import "github.com/attic-labs/noms/go/d"
 //      - else return true
 func ContainCommonSupertype(a, b *Type) bool {
 	// Avoid cycles internally.
-	return containCommonSupertypeImpl(ToUnresolvedType(a), ToUnresolvedType(b))
+	return containCommonSupertypeImpl(a, b, nil, nil)
 }
 
-func containCommonSupertypeImpl(a, b *Type) bool {
+func containCommonSupertypeImpl(a, b *Type, aVisited, bVisited []*Type) bool {
 	if a.TargetKind() == ValueKind || b.TargetKind() == ValueKind {
 		return true
 	}
 	if a.TargetKind() == UnionKind || b.TargetKind() == UnionKind {
-		return unionsIntersect(a, b)
+		return unionsIntersect(a, b, aVisited, bVisited)
 	}
 	if a.TargetKind() != b.TargetKind() {
 		return false
 	}
 	switch k := a.TargetKind(); k {
 	case StructKind:
-		return structsIntersect(a, b)
+		return structsIntersect(a, b, aVisited, bVisited)
 	case ListKind, SetKind, RefKind:
-		return containersIntersect(k, a, b)
+		return containersIntersect(k, a, b, aVisited, bVisited)
 	case MapKind:
-		return mapsIntersect(a, b)
+		return mapsIntersect(a, b, aVisited, bVisited)
 	default:
 		return true
 	}
@@ -48,11 +48,11 @@ func containCommonSupertypeImpl(a, b *Type) bool {
 
 // Checks for intersection between types that may be unions. If either or
 // both is a union, union, tests all types for intersection.
-func unionsIntersect(a, b *Type) bool {
+func unionsIntersect(a, b *Type, aVisited, bVisited []*Type) bool {
 	aTypes, bTypes := typeList(a), typeList(b)
 	for _, t := range aTypes {
 		for _, u := range bTypes {
-			if containCommonSupertypeImpl(t, u) {
+			if containCommonSupertypeImpl(t, u, aVisited, bVisited) {
 				return true
 			}
 		}
@@ -68,12 +68,12 @@ func typeList(t *Type) typeSlice {
 	return typeSlice{t}
 }
 
-func containersIntersect(kind NomsKind, a, b *Type) bool {
+func containersIntersect(kind NomsKind, a, b *Type, aVisited, bVisited []*Type) bool {
 	d.Chk.True(kind == a.Desc.Kind() && kind == b.Desc.Kind())
-	return containCommonSupertypeImpl(a.Desc.(CompoundDesc).ElemTypes[0], b.Desc.(CompoundDesc).ElemTypes[0])
+	return containCommonSupertypeImpl(a.Desc.(CompoundDesc).ElemTypes[0], b.Desc.(CompoundDesc).ElemTypes[0], aVisited, bVisited)
 }
 
-func mapsIntersect(a, b *Type) bool {
+func mapsIntersect(a, b *Type, aVisited, bVisited []*Type) bool {
 	// true if a and b are the same or (if either is a union) there is
 	// common type between them.
 	hasCommonType := func(a, b *Type) bool {
@@ -94,10 +94,17 @@ func mapsIntersect(a, b *Type) bool {
 	if !hasCommonType(aDesc.ElemTypes[0], bDesc.ElemTypes[0]) {
 		return false
 	}
-	return containCommonSupertypeImpl(aDesc.ElemTypes[1], bDesc.ElemTypes[1])
+	return containCommonSupertypeImpl(aDesc.ElemTypes[1], bDesc.ElemTypes[1], aVisited, bVisited)
 }
 
-func structsIntersect(a, b *Type) bool {
+func structsIntersect(a, b *Type, aVisited, bVisited []*Type) bool {
+	_, aFound := indexOfType(a, aVisited)
+	_, bFound := indexOfType(b, bVisited)
+
+	if aFound && bFound {
+		return true
+	}
+
 	d.Chk.True(StructKind == a.TargetKind() && StructKind == b.TargetKind())
 	aDesc := a.Desc.(StructDesc)
 	bDesc := b.Desc.(StructDesc)
@@ -111,7 +118,7 @@ func structsIntersect(a, b *Type) bool {
 			i++
 		} else if bName < aName {
 			j++
-		} else if !containCommonSupertypeImpl(aDesc.fields[i].Type, bDesc.fields[j].Type) {
+		} else if !containCommonSupertypeImpl(aDesc.fields[i].Type, bDesc.fields[j].Type, append(aVisited, a), append(bVisited, b)) {
 			i++
 			j++
 		} else {

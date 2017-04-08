@@ -44,63 +44,6 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 	return 0, false
 }
 
-// Returns a new type where cyclic pointer references are replaced with Cycle<Name> types.
-func toUnresolvedType(t *Type, seenStructs map[string]*Type) (*Type, bool) {
-	switch desc := t.Desc.(type) {
-	case CompoundDesc:
-		ts := make(typeSlice, len(desc.ElemTypes))
-		didChange := false
-		for i, et := range desc.ElemTypes {
-			st, changed := toUnresolvedType(et, seenStructs)
-			ts[i] = st
-			didChange = didChange || changed
-		}
-
-		if !didChange {
-			return t, false
-		}
-
-		return newType(CompoundDesc{t.TargetKind(), ts}), true
-	case StructDesc:
-		name := desc.Name
-		if name != "" {
-			if _, ok := seenStructs[name]; ok {
-				return newType(CycleDesc(name)), true
-			}
-		}
-
-		nt := newType(StructDesc{Name: name})
-		if name != "" {
-			seenStructs[name] = nt
-		}
-
-		fs := make(structTypeFields, len(desc.fields))
-		didChange := false
-		for i, f := range desc.fields {
-			st, changed := toUnresolvedType(f.Type, seenStructs)
-			fs[i] = StructField{f.Name, st, f.Optional}
-			didChange = didChange || changed
-		}
-
-		desc.fields = fs
-		nt.Desc = desc
-		return nt, true
-	case CycleDesc:
-		cycleName := string(desc)
-		d.PanicIfTrue(cycleName == "")
-		_, ok := seenStructs[cycleName]
-		return t, ok // Only cycles which can be resolved in the current struct.
-	}
-
-	return t, false
-}
-
-// ToUnresolvedType replaces cycles (by pointer comparison) in types to Cycle types.
-func ToUnresolvedType(t *Type) *Type {
-	t2, _ := toUnresolvedType(t, map[string]*Type{})
-	return t2
-}
-
 func validateType(t *Type) {
 	validateTypeImpl(t, map[string]struct{}{})
 }

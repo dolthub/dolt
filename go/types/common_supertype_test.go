@@ -148,6 +148,23 @@ func TestContainCommonSupertype(t *testing.T) {
 			MakeStructType("", StructField{"b", BoolType, true}),
 			false,
 		},
+
+		// struct A {b: struct {a: Cycle<A>}} & struct {b: Struct A {b: struct {b: Cycle<A>}}} -> false
+		{
+			MakeStructType("A",
+				StructField{"a", MakeStructType("",
+					StructField{"a", MakeCycleType("A"), false},
+				), false},
+			),
+			MakeStructType("",
+				StructField{"a", MakeStructType("A",
+					StructField{"a", MakeStructType("",
+						StructField{"a", MakeCycleType("A"), false},
+					), false},
+				), false},
+			),
+			true,
+		},
 	}
 
 	for i, c := range cases {
