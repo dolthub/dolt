@@ -181,7 +181,9 @@ func TestHasStructCycles(tt *testing.T) {
 	assert.False(HasStructCycles(StringType))
 	assert.False(HasStructCycles(TypeType))
 	assert.False(HasStructCycles(ValueType))
-	assert.False(HasStructCycles(MakeCycleType("Abc")))
+	assert.Panics(func() {
+		HasStructCycles(MakeCycleType("Abc"))
+	})
 
 	assert.False(HasStructCycles(MakeStructType("")))
 	assert.False(HasStructCycles(MakeStructType("A")))
@@ -207,4 +209,15 @@ func TestHasStructCycles(tt *testing.T) {
 			MakeCycleType("A"),
 		),
 	))
+
+	assert.False(HasStructCycles(
+		MakeStructType("",
+			StructField{"a", MakeStructType("",
+				StructField{"b", BoolType, false},
+			), false},
+			StructField{"b", MakeStructType("",
+				StructField{"b", BoolType, false},
+			), false},
+		)),
+	)
 }

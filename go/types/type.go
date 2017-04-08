@@ -37,19 +37,6 @@ func (t *Type) TargetKind() NomsKind {
 	return t.Desc.Kind()
 }
 
-func (t *Type) hasUnresolvedCycle(visited []*Type) bool {
-	_, found := indexOfType(t, visited)
-	if found {
-		return false
-	}
-
-	return t.Desc.HasUnresolvedCycle(append(visited, t))
-}
-
-func (t *Type) HasUnresolvedCycle() bool {
-	return t.hasUnresolvedCycle(nil)
-}
-
 // Value interface
 func (t *Type) Equals(other Value) (res bool) {
 	return t == other || t.Hash() == other.Hash()
@@ -97,25 +84,6 @@ func (t *Type) Kind() NomsKind {
 	return TypeKind
 }
 
-func MakePrimitiveType(k NomsKind) *Type {
-	switch k {
-	case BoolKind:
-		return BoolType
-	case NumberKind:
-		return NumberType
-	case StringKind:
-		return StringType
-	case BlobKind:
-		return BlobType
-	case ValueKind:
-		return ValueType
-	case TypeKind:
-		return TypeType
-	}
-	d.Chk.Fail("invalid NomsKind: %d", k)
-	return nil
-}
-
 // TypeOf returns the type describing the value. This is not an exact type but
 // often a simplification of the concrete type.
 func TypeOf(v Value) *Type {
@@ -124,83 +92,43 @@ func TypeOf(v Value) *Type {
 
 // HasStructCycles determines if the type contains any struct cycles.
 func HasStructCycles(t *Type) bool {
-	return hasStructCycles(t, map[string]int{})
+	return hasStructCycles(t, nil)
 }
 
-func hasStructCycles(t *Type, seenStructs map[string]int) bool {
+func hasStructCycles(t *Type, visited []*Type) bool {
+	if _, found := indexOfType(t, visited); found {
+		return true
+	}
+
 	switch desc := t.Desc.(type) {
 	case CompoundDesc:
 		for _, et := range desc.ElemTypes {
-			b := hasStructCycles(et, seenStructs)
+			b := hasStructCycles(et, visited)
 			if b {
 				return true
 			}
 		}
 
 	case StructDesc:
-		name := desc.Name
-		if name != "" {
-			if seenStructs[name] > 0 {
-				return true
-			}
-			seenStructs[name]++
-			defer func() { seenStructs[name]-- }()
-		}
 		for _, f := range desc.fields {
-			b := hasStructCycles(f.Type, seenStructs)
+			b := hasStructCycles(f.Type, append(visited, t))
 			if b {
 				return true
 			}
 		}
 
 	case CycleDesc:
-		name := string(desc)
-		d.PanicIfTrue(name == "")
-		if seenStructs[name] > 0 {
-			return true
-		}
+		panic("unexpected unresolved cycle")
 	}
 
 	return false
 }
 
-// resolveCycleTypes replaces Cycle<Name> with pointers to the previously seen
-// struct with the same name.
-func resolveCycleTypes(t *Type) *Type {
-	return resolveCycleTypesImpl(t, map[string]*Type{})
-}
-
-func resolveCycleTypesImpl(t *Type, seenStructs map[string]*Type) *Type {
-	switch desc := t.Desc.(type) {
-	case CompoundDesc:
-		elemTypes := make(typeSlice, len(desc.ElemTypes))
-		for i, et := range desc.ElemTypes {
-			elemTypes[i] = resolveCycleTypesImpl(et, seenStructs)
-		}
-		return makeCompoundType(desc.Kind(), elemTypes...)
-
-	case StructDesc:
-		name := desc.Name
-		if name != "" {
-			if tt, ok := seenStructs[name]; ok {
-				return tt
-			}
-			seenStructs[name] = t
-		}
-
-		fields := make(structTypeFields, len(desc.fields))
-		for i, f := range desc.fields {
-			fields[i] = StructField{f.Name, resolveCycleTypesImpl(f.Type, seenStructs), f.Optional}
-		}
-		return makeStructTypeQuickly(name, fields)
-
-	case CycleDesc:
-		name := string(desc)
-		d.PanicIfTrue(name == "")
-		if tt, ok := seenStructs[name]; ok {
-			return tt
+func indexOfType(t *Type, tl []*Type) (uint32, bool) {
+	for i, tt := range tl {
+		if tt == t {
+			return uint32(i), true
 		}
 	}
-
-	return t
+	return 0, false
 }

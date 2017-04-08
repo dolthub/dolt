@@ -14,17 +14,16 @@ import (
 type valueDecoder struct {
 	nomsReader
 	vr         ValueReader
-	typeDepth  int
 	validating bool
 }
 
 // |tc| must be locked as long as the valueDecoder is being used
 func newValueDecoder(nr nomsReader, vr ValueReader) *valueDecoder {
-	return &valueDecoder{nr, vr, 0, false}
+	return &valueDecoder{nr, vr, false}
 }
 
 func newValueDecoderWithValidation(nr nomsReader, vr ValueReader) *valueDecoder {
-	return &valueDecoder{nr, vr, 0, true}
+	return &valueDecoder{nr, vr, true}
 }
 
 func (r *valueDecoder) readKind() NomsKind {
@@ -33,20 +32,15 @@ func (r *valueDecoder) readKind() NomsKind {
 
 func (r *valueDecoder) readRef() Ref {
 	h := r.readHash()
-	targetType := r.readType(map[string]*Type{})
+	targetType := r.readType()
 	height := r.readUint64()
 	return constructRef(h, targetType, height)
 }
 
-func (r *valueDecoder) readType(seenStructs map[string]*Type) *Type {
-	r.typeDepth++
-	t := r.readTypeInner(seenStructs)
-	r.typeDepth--
-	if r.typeDepth == 0 {
-		t = resolveCycleTypes(t)
-		if r.validating {
-			validateType(t)
-		}
+func (r *valueDecoder) readType() *Type {
+	t := r.readTypeInner(map[string]*Type{})
+	if r.validating {
+		validateType(t)
 	}
 	return t
 }
@@ -55,13 +49,13 @@ func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
 	k := r.readKind()
 	switch k {
 	case ListKind:
-		return makeCompoundType(ListKind, r.readType(seenStructs))
+		return makeCompoundType(ListKind, r.readTypeInner(seenStructs))
 	case MapKind:
-		return makeCompoundType(MapKind, r.readType(seenStructs), r.readType(seenStructs))
+		return makeCompoundType(MapKind, r.readTypeInner(seenStructs), r.readTypeInner(seenStructs))
 	case RefKind:
-		return makeCompoundType(RefKind, r.readType(seenStructs))
+		return makeCompoundType(RefKind, r.readTypeInner(seenStructs))
 	case SetKind:
-		return makeCompoundType(SetKind, r.readType(seenStructs))
+		return makeCompoundType(SetKind, r.readTypeInner(seenStructs))
 	case StructKind:
 		return r.readStructType(seenStructs)
 	case UnionKind:
@@ -180,7 +174,7 @@ func (r *valueDecoder) readValue() Value {
 	case StructKind:
 		return r.readStruct()
 	case TypeKind:
-		return r.readType(map[string]*Type{})
+		return r.readType()
 	case CycleKind, UnionKind, ValueKind:
 		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
 	}
@@ -226,7 +220,7 @@ func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 		}
 	}
 	for i := uint32(0); i < count; i++ {
-		t.Desc.(StructDesc).fields[i].Type = r.readType(seenStructs)
+		t.Desc.(StructDesc).fields[i].Type = r.readTypeInner(seenStructs)
 	}
 	for i := uint32(0); i < count; i++ {
 		t.Desc.(StructDesc).fields[i].Optional = r.readBool()
@@ -239,7 +233,7 @@ func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
 	l := r.readUint32()
 	ts := make(typeSlice, l)
 	for i := uint32(0); i < l; i++ {
-		ts[i] = r.readType(seenStructs)
+		ts[i] = r.readTypeInner(seenStructs)
 	}
 	return makeCompoundType(UnionKind, ts...)
 }
