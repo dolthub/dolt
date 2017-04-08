@@ -68,6 +68,7 @@ func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
 		return r.readUnionType(seenStructs)
 	case CycleKind:
 		name := r.readString()
+		d.PanicIfTrue(name == "") // cycles to anonymous structs are disallowed
 		t, ok := seenStructs[name]
 		d.PanicIfFalse(ok)
 		return t

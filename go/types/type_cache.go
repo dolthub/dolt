@@ -100,30 +100,6 @@ func ToUnresolvedType(t *Type) *Type {
 	return t2
 }
 
-// We normalize structs during their construction iff they have no unresolved
-// cycles. Normalizing applies a canonical ordering to the composite types of a
-// union and serializes all types under the struct. To ensure a consistent
-// ordering of the composite types of a union, we generate a unique "order id"
-// or OID for each of those types. The OID is the hash of a unique type
-// encoding that is independent of the extant order of types within any
-// subordinate unions. This encoding for most types is a straightforward
-// serialization of its components; for unions the encoding is a bytewise XOR
-// of the hashes of each of its composite type encodings.
-//
-// We require a consistent order of types within a union to ensure that
-// equivalent types have a single persistent encoding and, therefore, a single
-// hash. The method described above fails for "unrolled" cycles whereby two
-// equivalent, but uniquely described structures, would have different OIDs.
-// Consider for example the following two types that, while equivalent, do not
-// yield the same OID:
-//
-//   Struct A { a: Cycle<0> }
-//   Struct A { a: Struct A { a: Cycle<1> } }
-//
-// We explicitly disallow this sort of redundantly expressed type. If a
-// non-Byzantine use of such a construction arises, we can attempt to simplify
-// the expansive type or find another means of comparison.
-
 func validateType(t *Type) {
 	validateTypeImpl(t, map[string]struct{}{})
 }
@@ -156,27 +132,6 @@ func validateTypeImpl(t *Type, seenStructs map[string]struct{}) {
 		verifyFields(desc.fields)
 		for _, f := range desc.fields {
 			validateTypeImpl(f.Type, seenStructs)
-		}
-	}
-}
-
-func walkType(t *Type, parentStructTypes []*Type, cb func(*Type, []*Type)) {
-	if t.TargetKind() == StructKind {
-		if _, found := indexOfType(t, parentStructTypes); found {
-			return
-		}
-	}
-
-	cb(t, parentStructTypes)
-
-	switch desc := t.Desc.(type) {
-	case CompoundDesc:
-		for _, tt := range desc.ElemTypes {
-			walkType(tt, parentStructTypes, cb)
-		}
-	case StructDesc:
-		for _, f := range desc.fields {
-			walkType(f.Type, append(parentStructTypes, t), cb)
 		}
 	}
 }

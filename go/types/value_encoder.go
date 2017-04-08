@@ -188,21 +188,18 @@ func (w *valueEncoder) writeStruct(s Struct) {
 	}
 }
 
-func (w *valueEncoder) writeCycle(i uint32) {
-	w.writeKind(CycleKind)
-	w.writeUint32(i)
-}
-
 func (w *valueEncoder) writeStructType(t *Type, seenStructs map[string]*Type) {
 	desc := t.Desc.(StructDesc)
 	name := desc.Name
 
-	if _, ok := seenStructs[name]; ok {
-		w.writeKind(CycleKind)
-		w.writeString(name)
-		return
+	if name != "" {
+		if _, ok := seenStructs[name]; ok {
+			w.writeKind(CycleKind)
+			w.writeString(name)
+			return
+		}
+		seenStructs[name] = t
 	}
-	seenStructs[name] = t
 
 	w.writeKind(StructKind)
 	w.writeString(desc.Name)

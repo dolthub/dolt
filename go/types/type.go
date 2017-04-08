@@ -24,8 +24,6 @@ type Type struct {
 	h    *hash.Hash
 }
 
-const initialTypeBufferSize = 128
-
 func newType(desc TypeDesc) *Type {
 	return &Type{desc, &hash.Hash{}}
 }
@@ -115,25 +113,6 @@ func MakePrimitiveType(k NomsKind) *Type {
 		return TypeType
 	}
 	d.Chk.Fail("invalid NomsKind: %d", k)
-	return nil
-}
-
-func MakePrimitiveTypeByString(p string) *Type {
-	switch p {
-	case "Bool":
-		return BoolType
-	case "Number":
-		return NumberType
-	case "String":
-		return StringType
-	case "Blob":
-		return BlobType
-	case "Value":
-		return ValueType
-	case "Type":
-		return TypeType
-	}
-	d.Chk.Fail("invalid type string: %s", p)
 	return nil
 }
 
