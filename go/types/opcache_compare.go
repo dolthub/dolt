@@ -143,7 +143,10 @@ func compareEncodedNomsValues(a, b []byte) int {
 		}
 		return 1
 	case StringKind:
-		res := bytes.Compare(a[1+uint32Size:], b[1+uint32Size:])
+		// Skip past uvarint-encoded string length
+		_, aCount := binary.Uvarint(a[1:])
+		_, bCount := binary.Uvarint(b[1:])
+		res := bytes.Compare(a[1+aCount:], b[1+bCount:])
 		return res
 	}
 	panic("unreachable")

@@ -33,7 +33,7 @@ func (r *valueDecoder) readKind() NomsKind {
 func (r *valueDecoder) readRef() Ref {
 	h := r.readHash()
 	targetType := r.readType()
-	height := r.readUint64()
+	height := r.readCount()
 	return constructRef(h, targetType, height)
 }
 
@@ -78,7 +78,7 @@ func (r *valueDecoder) readBlobLeafSequence() sequence {
 }
 
 func (r *valueDecoder) readValueSequence() ValueSlice {
-	count := r.readUint32()
+	count := uint32(r.readCount())
 
 	data := ValueSlice{}
 	for i := uint32(0); i < count; i++ {
@@ -100,9 +100,9 @@ func (r *valueDecoder) readSetLeafSequence() orderedSequence {
 }
 
 func (r *valueDecoder) readMapLeafSequence() orderedSequence {
-	count := r.readUint32()
+	count := r.readCount()
 	data := []mapEntry{}
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		k := r.readValue()
 		v := r.readValue()
 		data = append(data, mapEntry{k, v})
@@ -112,10 +112,10 @@ func (r *valueDecoder) readMapLeafSequence() orderedSequence {
 }
 
 func (r *valueDecoder) readMetaSequence(k NomsKind) metaSequence {
-	count := r.readUint32()
+	count := r.readCount()
 
 	data := []metaTuple{}
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		ref := r.readValue().(Ref)
 		v := r.readValue()
 		var key orderedKey
@@ -125,7 +125,7 @@ func (r *valueDecoder) readMetaSequence(k NomsKind) metaSequence {
 		} else {
 			key = newOrderedKey(v)
 		}
-		numLeaves := r.readUint64()
+		numLeaves := r.readCount()
 		data = append(data, newMetaTuple(ref, key, numLeaves, nil))
 	}
 
@@ -184,15 +184,15 @@ func (r *valueDecoder) readValue() Value {
 
 func (r *valueDecoder) readStruct() Value {
 	name := r.readString()
-	count := r.readUint32()
+	count := r.readCount()
 
 	fieldNames := make([]string, count)
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		fieldNames[i] = r.readString()
 	}
 
 	values := make([]Value, count)
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		values[i] = r.readValue()
 	}
 
@@ -208,21 +208,21 @@ func boolToUint32(b bool) uint32 {
 
 func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 	name := r.readString()
-	count := r.readUint32()
+	count := r.readCount()
 	fields := make(structTypeFields, count)
 
 	t := newType(StructDesc{name, fields})
 	seenStructs[name] = t
 
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		t.Desc.(StructDesc).fields[i] = StructField{
 			Name: r.readString(),
 		}
 	}
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		t.Desc.(StructDesc).fields[i].Type = r.readTypeInner(seenStructs)
 	}
-	for i := uint32(0); i < count; i++ {
+	for i := uint64(0); i < count; i++ {
 		t.Desc.(StructDesc).fields[i].Optional = r.readBool()
 	}
 
@@ -230,9 +230,9 @@ func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 }
 
 func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
-	l := r.readUint32()
+	l := r.readCount()
 	ts := make(typeSlice, l)
-	for i := uint32(0); i < l; i++ {
+	for i := uint64(0); i < l; i++ {
 		ts[i] = r.readTypeInner(seenStructs)
 	}
 	return makeCompoundType(UnionKind, ts...)

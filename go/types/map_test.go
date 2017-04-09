@@ -271,7 +271,7 @@ func TestMapSuite4K(t *testing.T) {
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 19, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 18, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {

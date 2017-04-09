@@ -16,7 +16,7 @@ const initialBufferSize = 2048
 
 func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
 	w := newBinaryNomsWriter()
-	enc := newValueEncoder(w, vw)
+	enc := newValueEncoder(w, vw, false)
 	enc.writeValue(v)
 
 	c := chunks.NewChunk(w.data())
@@ -58,8 +58,7 @@ type nomsReader interface {
 	pos() uint32
 	readBytes() []byte
 	readUint8() uint8
-	readUint32() uint32
-	readUint64() uint64
+	readCount() uint64
 	readNumber() Number
 	readBool() bool
 	readString() string
@@ -69,8 +68,7 @@ type nomsReader interface {
 type nomsWriter interface {
 	writeBytes(v []byte)
 	writeUint8(v uint8)
-	writeUint32(v uint32)
-	writeUint64(v uint64)
+	writeCount(count uint64)
 	writeNumber(v Number)
 	writeBool(b bool)
 	writeString(v string)
@@ -87,7 +85,7 @@ func (b *binaryNomsReader) pos() uint32 {
 }
 
 func (b *binaryNomsReader) readBytes() []byte {
-	size := b.readUint32()
+	size := uint32(b.readCount())
 
 	buff := make([]byte, size, size)
 	copy(buff, b.buff[b.offset:b.offset+size])
@@ -101,27 +99,9 @@ func (b *binaryNomsReader) readUint8() uint8 {
 	return v
 }
 
-func (b *binaryNomsReader) readUint32() uint32 {
-	// Big-Endian
-	v := uint32(b.buff[b.offset])<<24 |
-		uint32(b.buff[b.offset+1])<<16 |
-		uint32(b.buff[b.offset+2])<<8 |
-		uint32(b.buff[b.offset+3])
-	b.offset += 4
-	return v
-}
-
-func (b *binaryNomsReader) readUint64() uint64 {
-	// Big-Endian
-	v := uint64(b.buff[b.offset])<<56 |
-		uint64(b.buff[b.offset+1])<<48 |
-		uint64(b.buff[b.offset+2])<<40 |
-		uint64(b.buff[b.offset+3])<<32 |
-		uint64(b.buff[b.offset+4])<<24 |
-		uint64(b.buff[b.offset+5])<<16 |
-		uint64(b.buff[b.offset+6])<<8 |
-		uint64(b.buff[b.offset+7])
-	b.offset += 8
+func (b *binaryNomsReader) readCount() uint64 {
+	v, count := binary.Uvarint(b.buff[b.offset:])
+	b.offset += uint32(count)
 	return v
 }
 
@@ -139,7 +119,7 @@ func (b *binaryNomsReader) readBool() bool {
 }
 
 func (b *binaryNomsReader) readString() string {
-	size := b.readUint32()
+	size := uint32(b.readCount())
 
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
@@ -188,7 +168,7 @@ func (b *binaryNomsWriter) ensureCapacity(n uint32) {
 
 func (b *binaryNomsWriter) writeBytes(v []byte) {
 	size := uint32(len(v))
-	b.writeUint32(size)
+	b.writeCount(uint64(size))
 
 	b.ensureCapacity(size)
 	copy(b.buff[b.offset:], v)
@@ -201,28 +181,10 @@ func (b *binaryNomsWriter) writeUint8(v uint8) {
 	b.offset++
 }
 
-func (b *binaryNomsWriter) writeUint32(v uint32) {
-	b.ensureCapacity(4)
-	// Big-Endian
-	b.buff[b.offset] = byte(v >> 24)
-	b.buff[b.offset+1] = byte(v >> 16)
-	b.buff[b.offset+2] = byte(v >> 8)
-	b.buff[b.offset+3] = byte(v)
-	b.offset += 4
-}
-
-func (b *binaryNomsWriter) writeUint64(v uint64) {
-	b.ensureCapacity(8)
-	// Big-Endian
-	b.buff[b.offset] = byte(v >> 56)
-	b.buff[b.offset+1] = byte(v >> 48)
-	b.buff[b.offset+2] = byte(v >> 40)
-	b.buff[b.offset+3] = byte(v >> 32)
-	b.buff[b.offset+4] = byte(v >> 24)
-	b.buff[b.offset+5] = byte(v >> 16)
-	b.buff[b.offset+6] = byte(v >> 8)
-	b.buff[b.offset+7] = byte(v)
-	b.offset += 8
+func (b *binaryNomsWriter) writeCount(v uint64) {
+	b.ensureCapacity(binary.MaxVarintLen64 * 2)
+	count := binary.PutUvarint(b.buff[b.offset:], v)
+	b.offset += uint32(count)
 }
 
 func (b *binaryNomsWriter) writeNumber(v Number) {
@@ -244,7 +206,7 @@ func (b *binaryNomsWriter) writeBool(v bool) {
 
 func (b *binaryNomsWriter) writeString(v string) {
 	size := uint32(len(v))
-	b.writeUint32(size)
+	b.writeCount(uint64(size))
 
 	b.ensureCapacity(size)
 	copy(b.buff[b.offset:], v)

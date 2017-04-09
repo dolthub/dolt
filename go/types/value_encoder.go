@@ -13,11 +13,12 @@ import (
 
 type valueEncoder struct {
 	nomsWriter
-	vw ValueWriter
+	vw             ValueWriter
+	forRollingHash bool
 }
 
-func newValueEncoder(w nomsWriter, vw ValueWriter) *valueEncoder {
-	return &valueEncoder{w, vw}
+func newValueEncoder(w nomsWriter, vw ValueWriter, forRollingHash bool) *valueEncoder {
+	return &valueEncoder{w, vw, forRollingHash}
 }
 
 func (w *valueEncoder) writeKind(kind NomsKind) {
@@ -26,8 +27,10 @@ func (w *valueEncoder) writeKind(kind NomsKind) {
 
 func (w *valueEncoder) writeRef(r Ref) {
 	w.writeHash(r.TargetHash())
-	w.writeType(r.TargetType(), map[string]*Type{})
-	w.writeUint64(r.Height())
+	if !w.forRollingHash {
+		w.writeType(r.TargetType(), map[string]*Type{})
+	}
+	w.writeCount(r.Height())
 }
 
 func (w *valueEncoder) writeType(t *Type, seenStructs map[string]*Type) {
@@ -42,7 +45,7 @@ func (w *valueEncoder) writeType(t *Type, seenStructs map[string]*Type) {
 	case UnionKind:
 		w.writeKind(k)
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
-		w.writeUint32(uint32(len(elemTypes)))
+		w.writeCount(uint64(len(elemTypes)))
 		for _, elemType := range elemTypes {
 			w.writeType(elemType, seenStructs)
 		}
@@ -62,7 +65,7 @@ func (w *valueEncoder) writeBlobLeafSequence(seq blobLeafSequence) {
 
 func (w *valueEncoder) writeValueSlice(values ValueSlice) {
 	count := uint32(len(values))
-	w.writeUint32(count)
+	w.writeCount(uint64(count))
 
 	for i := uint32(0); i < count; i++ {
 		w.writeValue(values[i])
@@ -79,7 +82,7 @@ func (w *valueEncoder) writeSetLeafSequence(seq setLeafSequence) {
 
 func (w *valueEncoder) writeMapLeafSequence(seq mapLeafSequence) {
 	count := uint32(len(seq.data))
-	w.writeUint32(count)
+	w.writeCount(uint64(count))
 
 	for i := uint32(0); i < count; i++ {
 		w.writeValue(seq.data[i].key)
@@ -97,7 +100,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 	w.writeBool(true) // a meta sequence
 
 	count := ms.seqLen()
-	w.writeUint32(uint32(count))
+	w.writeCount(uint64(count))
 	for i := 0; i < count; i++ {
 		tuple := ms.getItem(i).(metaTuple)
 		if tuple.child != nil && w.vw != nil {
@@ -112,7 +115,7 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 			v = constructRef(tuple.key.h, BoolType, 0)
 		}
 		w.writeValue(v)
-		w.writeUint64(tuple.numLeaves)
+		w.writeCount(tuple.numLeaves)
 	}
 	return true
 }
@@ -176,7 +179,7 @@ func (w *valueEncoder) writeValue(v Value) {
 
 func (w *valueEncoder) writeStruct(s Struct) {
 	w.writeString(s.name)
-	w.writeUint32(uint32(len(s.fieldNames)))
+	w.writeCount(uint64(len(s.fieldNames)))
 
 	// Write field names first because they will compress better together.
 	for _, name := range s.fieldNames {
@@ -203,7 +206,7 @@ func (w *valueEncoder) writeStructType(t *Type, seenStructs map[string]*Type) {
 
 	w.writeKind(StructKind)
 	w.writeString(desc.Name)
-	w.writeUint32(uint32(desc.Len()))
+	w.writeCount(uint64(desc.Len()))
 
 	// Write all names, all types and finally all the optional flags.
 	for _, field := range desc.fields {

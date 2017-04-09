@@ -69,7 +69,7 @@ func newRollingValueHasher() *rollingValueHasher {
 		pattern: pattern,
 		window:  window,
 	}
-	rv.enc = newValueEncoder(rv, nil)
+	rv.enc = newValueEncoder(rv, nil, true)
 	return rv
 }
 
@@ -103,24 +103,12 @@ func (rv *rollingValueHasher) writeUint8(v uint8) {
 	rv.HashByte(byte(v))
 }
 
-func (rv *rollingValueHasher) writeUint32(v uint32) {
-	// Big-Endian
-	rv.HashByte(byte(v >> 24))
-	rv.HashByte(byte(v >> 16))
-	rv.HashByte(byte(v >> 8))
-	rv.HashByte(byte(v))
-}
-
-func (rv *rollingValueHasher) writeUint64(v uint64) {
-	// Big-Endian
-	rv.HashByte(byte(v >> 56))
-	rv.HashByte(byte(v >> 48))
-	rv.HashByte(byte(v >> 40))
-	rv.HashByte(byte(v >> 32))
-	rv.HashByte(byte(v >> 24))
-	rv.HashByte(byte(v >> 16))
-	rv.HashByte(byte(v >> 8))
-	rv.HashByte(byte(v))
+func (rv *rollingValueHasher) writeCount(v uint64) {
+	buff := [binary.MaxVarintLen64]byte{}
+	count := binary.PutUvarint(buff[:], v)
+	for i := 0; i < count; i++ {
+		rv.HashByte(buff[i])
+	}
 }
 
 func (rv *rollingValueHasher) hashVarint(n int64) {
@@ -147,7 +135,7 @@ func (rv *rollingValueHasher) writeBool(v bool) {
 
 func (rv *rollingValueHasher) writeString(v string) {
 	size := uint32(len(v))
-	rv.writeUint32(size)
+	rv.writeCount(uint64(size))
 
 	for i := 0; i < len(v); i++ {
 		rv.HashByte(v[i])

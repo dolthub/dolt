@@ -47,11 +47,7 @@ func (r *nomsTestReader) readUint8() uint8 {
 	return r.read().(uint8)
 }
 
-func (r *nomsTestReader) readUint32() uint32 {
-	return r.read().(uint32)
-}
-
-func (r *nomsTestReader) readUint64() uint64 {
+func (r *nomsTestReader) readCount() uint64 {
 	return r.read().(uint64)
 }
 
@@ -87,11 +83,7 @@ func (w *nomsTestWriter) writeUint8(v uint8) {
 	w.write(v)
 }
 
-func (w *nomsTestWriter) writeUint32(v uint32) {
-	w.write(v)
-}
-
-func (w *nomsTestWriter) writeUint64(v uint64) {
+func (w *nomsTestWriter) writeCount(v uint64) {
 	w.write(v)
 }
 
@@ -110,7 +102,7 @@ func (w *nomsTestWriter) writeHash(h hash.Hash) {
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	vs := NewTestValueStore()
 	tw := &nomsTestWriter{}
-	enc := valueEncoder{tw, vs}
+	enc := valueEncoder{tw, vs, false}
 	enc.writeValue(v)
 	assert.EqualValues(t, expect, tw.a)
 
@@ -251,7 +243,7 @@ func TestWriteSimpleBlob(t *testing.T) {
 func TestWriteList(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(4) /* len */, uint8(NumberKind), Number(0), uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
+			uint8(ListKind), false, uint64(4) /* len */, uint8(NumberKind), Number(0), uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
 		},
 		NewList(Number(0), Number(1), Number(2), Number(3)),
 	)
@@ -261,9 +253,9 @@ func TestWriteListOfList(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			uint8(ListKind), false,
-			uint32(2), // len
-			uint8(ListKind), false, uint32(1) /* len */, uint8(NumberKind), Number(0),
-			uint8(ListKind), false, uint32(3) /* len */, uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
+			uint64(2), // len
+			uint8(ListKind), false, uint64(1) /* len */, uint8(NumberKind), Number(0),
+			uint8(ListKind), false, uint64(3) /* len */, uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
 		},
 		NewList(NewList(Number(0)), NewList(Number(1), Number(2), Number(3))),
 	)
@@ -272,7 +264,7 @@ func TestWriteListOfList(t *testing.T) {
 func TestWriteSet(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(SetKind), false, uint32(4), /* len */
+			uint8(SetKind), false, uint64(4), /* len */
 			uint8(NumberKind), Number(0), uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
 		},
 		NewSet(Number(3), Number(1), Number(2), Number(0)),
@@ -282,9 +274,9 @@ func TestWriteSet(t *testing.T) {
 func TestWriteSetOfSet(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(SetKind), false, uint32(2), // len
-			uint8(SetKind), false, uint32(3) /* len */, uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
-			uint8(SetKind), false, uint32(1) /* len */, uint8(NumberKind), Number(0),
+			uint8(SetKind), false, uint64(2), // len
+			uint8(SetKind), false, uint64(3) /* len */, uint8(NumberKind), Number(1), uint8(NumberKind), Number(2), uint8(NumberKind), Number(3),
+			uint8(SetKind), false, uint64(1) /* len */, uint8(NumberKind), Number(0),
 		},
 		NewSet(NewSet(Number(0)), NewSet(Number(1), Number(2), Number(3))),
 	)
@@ -293,7 +285,7 @@ func TestWriteSetOfSet(t *testing.T) {
 func TestWriteMap(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(MapKind), false, uint32(2), /* len */
+			uint8(MapKind), false, uint64(2), /* len */
 			uint8(StringKind), "a", uint8(BoolKind), false, uint8(StringKind), "b", uint8(BoolKind), true,
 		},
 		NewMap(String("a"), Bool(false), String("b"), Bool(true)),
@@ -303,9 +295,9 @@ func TestWriteMap(t *testing.T) {
 func TestWriteMapOfMap(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(MapKind), false, uint32(1), // len
-			uint8(MapKind), false, uint32(1) /* len */, uint8(StringKind), "a", uint8(NumberKind), Number(0),
-			uint8(SetKind), false, uint32(1) /* len */, uint8(BoolKind), true,
+			uint8(MapKind), false, uint64(1), // len
+			uint8(MapKind), false, uint64(1) /* len */, uint8(StringKind), "a", uint8(NumberKind), Number(0),
+			uint8(SetKind), false, uint64(1) /* len */, uint8(BoolKind), true,
 		},
 		NewMap(NewMap(String("a"), Number(0)), NewSet(Bool(true))),
 	)
@@ -319,7 +311,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			uint8(BlobKind), true,
-			uint32(3), // len
+			uint64(3), // len
 			uint8(RefKind), r1.String(), uint8(BlobKind), uint64(11), uint8(NumberKind), Number(20), uint64(20),
 			uint8(RefKind), r2.String(), uint8(BlobKind), uint64(22), uint8(NumberKind), Number(40), uint64(40),
 			uint8(RefKind), r3.String(), uint8(BlobKind), uint64(33), uint8(NumberKind), Number(60), uint64(60),
@@ -335,7 +327,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 func TestWriteEmptyStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(0), /* len */
+			uint8(StructKind), "S", uint64(0), /* len */
 		},
 		NewStruct("S", nil),
 	)
@@ -344,7 +336,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 func TestWriteStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(2), /* len */
+			uint8(StructKind), "S", uint64(2), /* len */
 			"b", "x", uint8(BoolKind), true, uint8(NumberKind), Number(42),
 		},
 		NewStruct("S", StructData{"x": Number(42), "b": Bool(true)}),
@@ -367,8 +359,8 @@ func TestWriteStructWithList(t *testing.T) {
 	// struct S {l: List<String>}({l: ["a", "b"]})
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1), /* len */
-			"l", uint8(ListKind), false, uint32(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
+			uint8(StructKind), "S", uint64(1), /* len */
+			"l", uint8(ListKind), false, uint64(2) /* len */, uint8(StringKind), "a", uint8(StringKind), "b",
 		},
 		NewStruct("S", StructData{"l": NewList(String("a"), String("b"))}),
 	)
@@ -376,8 +368,8 @@ func TestWriteStructWithList(t *testing.T) {
 	// struct S {l: List<>}({l: []})
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1), /* len */
-			"l", uint8(ListKind), false, uint32(0), /* len */
+			uint8(StructKind), "S", uint64(1), /* len */
+			"l", uint8(ListKind), false, uint64(0), /* len */
 		},
 		NewStruct("S", StructData{"l": NewList()}),
 	)
@@ -392,8 +384,8 @@ func TestWriteStructWithStruct(t *testing.T) {
 	// }
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1), // len
-			"s", uint8(StructKind), "S2", uint32(1), /* len */
+			uint8(StructKind), "S", uint64(1), // len
+			"s", uint8(StructKind), "S2", uint64(1), /* len */
 			"x", uint8(NumberKind), Number(42),
 		},
 		// {s: {x: 42}}
@@ -404,7 +396,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 func TestWriteStructWithBlob(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "S", uint32(1), /* len */
+			uint8(StructKind), "S", uint64(1), /* len */
 			"b", uint8(BlobKind), false, []byte{0x00, 0x01},
 		},
 		NewStruct("S", StructData{"b": NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))}),
@@ -416,7 +408,7 @@ func TestWriteCompoundList(t *testing.T) {
 	list2 := newList(newListLeafSequence(nil, Number(1), Number(2), Number(3)))
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), true, uint32(2), // len,
+			uint8(ListKind), true, uint64(2), // len,
 			uint8(RefKind), list1.Hash().String(), uint8(ListKind), uint8(NumberKind), uint64(1), uint8(NumberKind), Number(1), uint64(1),
 			uint8(RefKind), list2.Hash().String(), uint8(ListKind), uint8(NumberKind), uint64(1), uint8(NumberKind), Number(3), uint64(3),
 		},
@@ -433,7 +425,7 @@ func TestWriteCompoundSet(t *testing.T) {
 
 	assertEncoding(t,
 		[]interface{}{
-			uint8(SetKind), true, uint32(2), // len,
+			uint8(SetKind), true, uint64(2), // len,
 			uint8(RefKind), set1.Hash().String(), uint8(SetKind), uint8(NumberKind), uint64(1), uint8(NumberKind), Number(1), uint64(2),
 			uint8(RefKind), set2.Hash().String(), uint8(SetKind), uint8(NumberKind), uint64(1), uint8(NumberKind), Number(4), uint64(3),
 		},
@@ -461,7 +453,7 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 
 	assertEncoding(t,
 		[]interface{}{
-			uint8(SetKind), true, uint32(2), // len,
+			uint8(SetKind), true, uint64(2), // len,
 			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
 			uint8(RefKind), set1.Hash().String(), uint8(SetKind), uint8(BlobKind), uint64(1), uint8(RefKind), blob1.Hash().String(), uint8(BoolKind), uint64(0), uint64(2),
 			uint8(RefKind), set2.Hash().String(), uint8(SetKind), uint8(BlobKind), uint64(1), uint8(RefKind), blob4.Hash().String(), uint8(BoolKind), uint64(0), uint64(3),
@@ -478,7 +470,7 @@ func TestWriteListOfUnion(t *testing.T) {
 		// Note that the order of members in a union is determined based on a hash computation; the particular ordering of Number, Bool, String was determined empirically. This must not change unless deliberately and explicitly revving the persistent format.
 		[]interface{}{
 			uint8(ListKind), false,
-			uint32(4) /* len */, uint8(StringKind), "0", uint8(NumberKind), Number(1), uint8(StringKind), "2", uint8(BoolKind), true,
+			uint64(4) /* len */, uint8(StringKind), "0", uint8(NumberKind), Number(1), uint8(StringKind), "2", uint8(BoolKind), true,
 		},
 		NewList(
 			String("0"),
@@ -492,8 +484,8 @@ func TestWriteListOfUnion(t *testing.T) {
 func TestWriteListOfStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(1), /* len */
-			uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), Number(42),
+			uint8(ListKind), false, uint64(1), /* len */
+			uint8(StructKind), "S", uint64(1) /* len */, "x", uint8(NumberKind), Number(42),
 		},
 		NewList(NewStruct("S", StructData{"x": Number(42)})),
 	)
@@ -504,11 +496,11 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(4), /* len */
+			uint8(ListKind), false, uint64(4), /* len */
 			uint8(BoolKind), true,
 			uint8(TypeKind), uint8(NumberKind),
 			uint8(TypeKind), uint8(TypeKind),
-			uint8(TypeKind), uint8(StructKind), "S", uint32(1) /* len */, "x", uint8(NumberKind), false,
+			uint8(TypeKind), uint8(StructKind), "S", uint64(1) /* len */, "x", uint8(NumberKind), false,
 		},
 		NewList(
 			Bool(true),
@@ -533,7 +525,7 @@ func TestWriteRef(t *testing.T) {
 func TestWriteListOfTypes(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(2), /* len */
+			uint8(ListKind), false, uint64(2), /* len */
 			uint8(TypeKind), uint8(BoolKind), uint8(TypeKind), uint8(StringKind),
 		},
 		NewList(BoolType, StringType),
@@ -547,8 +539,8 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 	// }
 	assertEncoding(t,
 		[]interface{}{
-			uint8(StructKind), "A6", uint32(2) /* len */, "cs", uint8(ListKind), uint8(CycleKind), uint32(0), "v", uint8(NumberKind),
-			uint8(ListKind), uint8(UnionKind), uint32(0) /* len */, false, uint32(0), /* len */
+			uint8(StructKind), "A6", uint64(2) /* len */, "cs", uint8(ListKind), uint8(CycleKind), uint64(0), "v", uint8(NumberKind),
+			uint8(ListKind), uint8(UnionKind), uint64(0) /* len */, false, uint64(0), /* len */
 			uint8(NumberKind), Number(42),
 		},
 		// {v: 42, cs: [{v: 555, cs: []}]}
@@ -559,7 +551,7 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 func TestWriteUnionList(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(3), /* len */
+			uint8(ListKind), false, uint64(3), /* len */
 			uint8(NumberKind), Number(23), uint8(StringKind), "hi", uint8(NumberKind), Number(42),
 		},
 		NewList(Number(23), String("hi"), Number(42)),
@@ -569,7 +561,7 @@ func TestWriteUnionList(t *testing.T) {
 func TestWriteEmptyUnionList(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
-			uint8(ListKind), false, uint32(0), /* len */
+			uint8(ListKind), false, uint64(0), /* len */
 		},
 		NewList(),
 	)

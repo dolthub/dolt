@@ -142,17 +142,6 @@ func TestNomsDiffPrintSet(t *testing.T) {
 	}
 
 	expected2 := `(root) {
-+   {  // 4 items
-+     "m1": "m-one",
-+     "m3": "m-three-diff",
-+     "m4": {  // 4 items
-+       "a1": "a-one-diff",
-+       "a2": "a-two",
-+       "a3": "a-three",
-+       "a4": "a-four",
-+     },
-+     "v2": "m-two",
-+   }
 -   {  // 4 items
 -     "m1": "m-one",
 -     "m3": "m-three",
@@ -164,11 +153,22 @@ func TestNomsDiffPrintSet(t *testing.T) {
 -     },
 -     "v2": "m-two",
 -   }
++   {  // 4 items
++     "m1": "m-one",
++     "m3": "m-three-diff",
++     "m4": {  // 4 items
++       "a1": "a-one-diff",
++       "a2": "a-two",
++       "a3": "a-three",
++       "a4": "a-four",
++     },
++     "v2": "m-two",
++   }
   }
 `
 	expectedPaths2 := []string{
-		fmt.Sprintf("[#%s]", mm3x.Hash()),
 		fmt.Sprintf("[#%s]", mm3.Hash()),
+		fmt.Sprintf("[#%s]", mm3x.Hash()),
 	}
 
 	s1 := createSet("one", "three", "five", "seven", "nine")
@@ -205,7 +205,7 @@ func TestNomsDiffPrintStop(t *testing.T) {
 `
 
 	expected2 := `(root) {
-+   {  // 4 items
+-   {  // 4 items
 `
 
 	s1 := createSet("one", "three", "five", "seven", "nine")
