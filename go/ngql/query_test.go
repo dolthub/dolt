@@ -441,7 +441,8 @@ func (suite *QueryGraphQLSuite) TestNestedCollection() {
 
 	suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":2}}}`)
 	suite.assertQueryResult(list, "{root{values(count:1){size}}}", `{"data":{"root":{"values":[{"size":2}]}}}`)
-	suite.assertQueryResult(list, "{root{values(at:1,count:1){values(count:1){entries{key value}}}}}", `{"data":{"root":{"values":[{"values":[{"entries":[{"key":30,"value":"baz"}]}]}]}}}`)
+	suite.assertQueryResult(list, "{root{values(at:1,count:1){values(count:1){entries{key value}}}}}",
+		`{"data":{"root":{"values":[{"values":[{"entries":[{"key":40,"value":"bat"}]}]}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestLoFi() {

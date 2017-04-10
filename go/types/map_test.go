@@ -267,11 +267,11 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 2, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, 9, 2, 2, newNumber))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 18, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 13, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {

@@ -111,7 +111,7 @@ func (b *binaryNomsReader) readNumber() Number {
 	b.offset += uint32(count)
 	exp, count2 := binary.Varint(b.buff[b.offset:])
 	b.offset += uint32(count2)
-	return Number(intExpToFloat64(i, int(exp)))
+	return Number(fracExpToFloat(i, int(exp)))
 }
 
 func (b *binaryNomsReader) readBool() bool {

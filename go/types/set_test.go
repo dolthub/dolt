@@ -194,11 +194,11 @@ func (suite *setTestSuite) TestStreamingSet2() {
 }
 
 func TestSetSuite4K(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, 2, 2, 2, newNumber))
+	suite.Run(t, newSetTestSuite(12, 6, 8, 2, newNumber))
 }
 
 func TestSetSuite4KStructs(t *testing.T) {
-	suite.Run(t, newSetTestSuite(12, 6, 2, 2, newNumberStruct))
+	suite.Run(t, newSetTestSuite(12, 6, 2, 8, newNumberStruct))
 }
 
 func getTestNativeOrderSet(scale int) testSet {

@@ -6,13 +6,11 @@ package types
 
 import "math"
 
-const maxSafeInteger = float64(9007199254740991) // 2 ** 53 -1
-
 func float64IsInt(f float64) bool {
 	return math.Trunc(f) == f
 }
 
-// convert float64 to int64 where f == i / 2^exp
+// convert float64 to int64 where f == i * 2^exp
 func float64ToIntExp(f float64) (int64, int) {
 	if f == 0 {
 		return 0, 0
@@ -21,28 +19,22 @@ func float64ToIntExp(f float64) (int64, int) {
 	isNegative := math.Signbit(f)
 	f = math.Abs(f)
 
-	exp := 0
-	// Really large float, bring down to max safe integer so that it can be correctly represented by float64.
-	for f > maxSafeInteger {
-		f /= 2
+	frac, exp := math.Frexp(f)
+	// frac is  [.5, 1)
+	// Move frac up until it is an integer.
+	for !float64IsInt(frac) {
+		frac *= 2
 		exp--
 	}
 
-	for !float64IsInt(f) {
-		f *= 2
-		exp++
-	}
 	if isNegative {
-		f *= -1
+		frac *= -1
 	}
-	return int64(f), exp
+
+	return int64(frac), exp
 }
 
-// returns float value == i / 2^exp
-func intExpToFloat64(i int64, exp int) float64 {
-	if exp == 0 {
-		return float64(i)
-	}
-
-	return float64(i) / math.Pow(2, float64(exp))
+// fracExpToFloat returns frac * 2 ** exp
+func fracExpToFloat(frac int64, exp int) float64 {
+	return float64(frac) * math.Pow(2, float64(exp))
 }
