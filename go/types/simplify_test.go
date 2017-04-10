@@ -64,6 +64,20 @@ func TestSimplifyType(t *testing.T) {
 			act := simplifyType(in, intersectStructs)
 			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(), act.Describe())
 		}
+		testSame := func(t *Type) {
+			test(t, t)
+		}
+
+		testSame(BlobType)
+		testSame(BoolType)
+		testSame(NumberType)
+		testSame(StringType)
+		testSame(TypeType)
+		testSame(ValueType)
+		testSame(makeCompoundType(ListKind, BoolType))
+		testSame(makeCompoundType(SetKind, BoolType))
+		testSame(makeCompoundType(RefKind, BoolType))
+		testSame(makeCompoundType(MapKind, BoolType, NumberType))
 
 		{
 			// Cannot do equals on cycle types
@@ -74,12 +88,20 @@ func TestSimplifyType(t *testing.T) {
 
 		test(makeCompoundType(UnionKind, BoolType), BoolType)
 		test(makeCompoundType(UnionKind, BoolType, BoolType), BoolType)
+		testSame(makeCompoundType(UnionKind, BoolType, NumberType))
 		test(makeCompoundType(UnionKind, NumberType, BoolType), makeCompoundType(UnionKind, BoolType, NumberType))
 		test(makeCompoundType(UnionKind, NumberType, BoolType), makeCompoundType(UnionKind, BoolType, NumberType))
 
+		testSame(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType, NumberType)))
 		test(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType)), makeCompoundType(ListKind, BoolType))
 		test(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType, BoolType)), makeCompoundType(ListKind, BoolType))
 
+		testSame(makeStructType("", nil))
+		testSame(makeStructType("", structTypeFields{}))
+		testSame(makeStructType("", structTypeFields{
+			StructField{"b", BoolType, false},
+			StructField{"s", StringType, !intersectStructs},
+		}))
 		test(
 			makeStructType("", structTypeFields{
 				StructField{"a", BoolType, false},
@@ -90,6 +112,17 @@ func TestSimplifyType(t *testing.T) {
 				StructField{"b", NumberType, false},
 			}),
 		)
+		// non named structs do not create cycles.
+		testSame(makeStructType("", structTypeFields{
+			StructField{"b", BoolType, false},
+			StructField{
+				"s",
+				makeStructType("", structTypeFields{
+					StructField{"c", StringType, false},
+				}),
+				!intersectStructs,
+			},
+		}))
 
 		// merge non named structs in unions
 		test(
@@ -172,12 +205,29 @@ func TestSimplifyType(t *testing.T) {
 			assert.Equal(exp, act, "Expected: %s\nActual: %s", exp.Describe(), act.Describe())
 		}
 
+		testSame(makeStructType("A", nil))
+		testSame(makeStructType("A", structTypeFields{}))
+		testSame(makeStructType("A", structTypeFields{
+			StructField{"a", BoolType, !intersectStructs},
+		}))
 		test(
 			makeStructType("A", structTypeFields{
 				StructField{"a", makeCompoundType(UnionKind, BoolType, BoolType, NumberType), false},
 			}),
 			makeStructType("A", structTypeFields{
 				StructField{"a", makeCompoundType(UnionKind, BoolType, NumberType), false},
+			}),
+		)
+
+		testSame(
+			makeStructType("A", structTypeFields{
+				StructField{
+					"a",
+					makeStructType("B", structTypeFields{
+						StructField{"b", BoolType, !intersectStructs},
+					}),
+					false,
+				},
 			}),
 		)
 
@@ -234,6 +284,19 @@ func TestSimplifyType(t *testing.T) {
 				exp,
 			)
 		}
+
+		// Non named do not get merged outside unions
+		testSame(
+			makeCompoundType(MapKind,
+				makeStructType("", structTypeFields{
+					StructField{"a", BoolType, false},
+					StructField{"b", StringType, false},
+				}),
+				makeStructType("", structTypeFields{
+					StructField{"b", BoolType, false},
+				}),
+			),
+		)
 
 		// Cycle in union
 		{
