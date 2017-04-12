@@ -5,6 +5,8 @@
 package types
 
 import (
+	"fmt"
+	"os"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -44,15 +46,15 @@ type ValueReadWriter interface {
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
 type ValueStore struct {
-	bs             BatchStore
-	pendingMu      sync.RWMutex
-	pendingPuts    map[hash.Hash]chunks.Chunk
-	pendingPutMax  uint64
-	pendingPutSize uint64
-	pendingParents map[hash.Hash]uint64 // chunk Hash -> ref height
-	valueCache     *sizecache.SizeCache
-	opcStore       opCacheStore
-	once           sync.Once
+	bs                   BatchStore
+	bufferMu             sync.RWMutex
+	bufferedChunks       map[hash.Hash]chunks.Chunk
+	bufferedChunksMax    uint64
+	bufferedChunkSize    uint64
+	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
+	valueCache           *sizecache.SizeCache
+	opcStore             opCacheStore
+	once                 sync.Once
 }
 
 const (
@@ -85,10 +87,10 @@ func newValueStoreWithCacheAndPending(bs BatchStore, cacheSize, pendingMax uint6
 	return &ValueStore{
 		bs: bs,
 
-		pendingMu:      sync.RWMutex{},
-		pendingPuts:    map[hash.Hash]chunks.Chunk{},
-		pendingPutMax:  pendingMax,
-		pendingParents: map[hash.Hash]uint64{},
+		bufferMu:             sync.RWMutex{},
+		bufferedChunks:       map[hash.Hash]chunks.Chunk{},
+		bufferedChunksMax:    pendingMax,
+		withBufferedChildren: map[hash.Hash]uint64{},
 
 		valueCache: sizecache.New(cacheSize),
 		once:       sync.Once{},
@@ -111,9 +113,9 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	}
 
 	chunk := func() chunks.Chunk {
-		lvs.pendingMu.RLock()
-		defer lvs.pendingMu.RUnlock()
-		if pending, ok := lvs.pendingPuts[h]; ok {
+		lvs.bufferMu.RLock()
+		defer lvs.bufferMu.RUnlock()
+		if pending, ok := lvs.bufferedChunks[h]; ok {
 			return pending
 		}
 		return chunks.EmptyChunk
@@ -141,7 +143,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		return v
 	}
 
-	// First, see which hashes can be found in either the Value cache or pendingPuts. Put the rest into a new HashSet to be requested en masse from the BatchStore.
+	// First, see which hashes can be found in either the Value cache or bufferedChunks. Put the rest into a new HashSet to be requested en masse from the BatchStore.
 	remaining := hash.HashSet{}
 	for h := range hashes {
 		if v, ok := lvs.valueCache.Get(h); ok {
@@ -152,9 +154,9 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		}
 
 		chunk := func() chunks.Chunk {
-			lvs.pendingMu.RLock()
-			defer lvs.pendingMu.RUnlock()
-			if pending, ok := lvs.pendingPuts[h]; ok {
+			lvs.bufferMu.RLock()
+			defer lvs.bufferMu.RUnlock()
+			if pending, ok := lvs.bufferedChunks[h]; ok {
 				return pending
 			}
 			return chunks.EmptyChunk
@@ -221,26 +223,31 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 //    chunk may also be presently buffered (any grandchildren will have been
 //    flushed).
 // 2. The total data occupied by buffered chunks does not exceed
-//    lvs.pendingPutMax
+//    lvs.bufferedChunksMax
 func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
-	lvs.pendingMu.Lock()
-	defer lvs.pendingMu.Unlock()
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
 	h := c.Hash()
 	d.PanicIfTrue(height == 0)
-	lvs.pendingPuts[h] = c
-	lvs.pendingPutSize += uint64(len(c.Data()))
+	lvs.bufferedChunks[h] = c
+	lvs.bufferedChunkSize += uint64(len(c.Data()))
 
 	putChildren := func(parent hash.Hash) (dataPut int) {
-		pending, present := lvs.pendingPuts[parent]
-		d.PanicIfFalse(present)
-		v := DecodeValue(pending, lvs)
-		v.WalkRefs(func(grandchildRef Ref) {
-			if pending, present := lvs.pendingPuts[grandchildRef.TargetHash()]; present {
+		pending, isBuffered := lvs.bufferedChunks[parent]
+		if !isBuffered {
+			fmt.Fprintf(os.Stderr, "While buffering chunk for %s, encountered %s which has buffered children, but is not buffered itself.\n", h, parent)
+			pending = lvs.bs.Get(parent)
+		}
+		pv := DecodeValue(pending, lvs)
+		pv.WalkRefs(func(grandchildRef Ref) {
+			gch := grandchildRef.TargetHash()
+			if pending, present := lvs.bufferedChunks[gch]; present {
 				lvs.bs.SchedulePut(pending)
 				dataPut += len(pending.Data())
-				delete(lvs.pendingPuts, grandchildRef.TargetHash())
+				delete(lvs.bufferedChunks, gch)
 			}
 		})
+		delete(lvs.withBufferedChildren, parent)
 		return
 	}
 
@@ -248,26 +255,20 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	if height > 1 {
 		v.WalkRefs(func(childRef Ref) {
 			childHash := childRef.TargetHash()
-			if _, present := lvs.pendingPuts[childHash]; present {
-				lvs.pendingParents[h] = height
-			} else {
-				// Shouldn't be able to be in pendingParents without being in pendingPuts
-				_, present := lvs.pendingParents[childHash]
-				d.Chk.False(present)
+			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
+				lvs.withBufferedChildren[h] = height
 			}
-
-			if _, present := lvs.pendingParents[childHash]; present {
-				lvs.pendingPutSize -= uint64(putChildren(childHash))
-				delete(lvs.pendingParents, childHash)
+			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
+				lvs.bufferedChunkSize -= uint64(putChildren(childHash))
 			}
 		})
 	}
 
 	// Enforce invariant (2)
-	for lvs.pendingPutSize > lvs.pendingPutMax {
+	for lvs.bufferedChunkSize > lvs.bufferedChunksMax {
 		var tallest hash.Hash
 		var height uint64 = 0
-		for parent, ht := range lvs.pendingParents {
+		for parent, ht := range lvs.withBufferedChildren {
 			if ht > height {
 				tallest = parent
 				height = ht
@@ -275,44 +276,43 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 		}
 		if height == 0 { // This can happen if there are no pending parents
 			var chunk chunks.Chunk
-			for tallest, chunk = range lvs.pendingPuts {
+			for tallest, chunk = range lvs.bufferedChunks {
 				// Any pendingPut is as good as another in this case, so take the first one
 				break
 			}
 			lvs.bs.SchedulePut(chunk)
-			lvs.pendingPutSize -= uint64(len(chunk.Data()))
-			delete(lvs.pendingPuts, tallest)
+			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
+			delete(lvs.bufferedChunks, tallest)
 			continue
 		}
 
-		lvs.pendingPutSize -= uint64(putChildren(tallest))
-		delete(lvs.pendingParents, tallest)
+		lvs.bufferedChunkSize -= uint64(putChildren(tallest))
 	}
 }
 
 func (lvs *ValueStore) Flush(root hash.Hash) {
 	func() {
-		lvs.pendingMu.Lock()
-		defer lvs.pendingMu.Unlock()
+		lvs.bufferMu.Lock()
+		defer lvs.bufferMu.Unlock()
 
-		pending, present := lvs.pendingPuts[root]
+		pending, present := lvs.bufferedChunks[root]
 		if !present {
 			return
 		}
 
+		v := DecodeValue(pending, lvs)
 		put := func(h hash.Hash, chunk chunks.Chunk) uint64 {
 			lvs.bs.SchedulePut(chunk)
-			delete(lvs.pendingPuts, h)
+			delete(lvs.bufferedChunks, h)
 			return uint64(len(chunk.Data()))
 		}
-		v := DecodeValue(pending, lvs)
 		v.WalkRefs(func(reachable Ref) {
-			if pending, present := lvs.pendingPuts[reachable.TargetHash()]; present {
-				lvs.pendingPutSize -= put(reachable.TargetHash(), pending)
+			if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
+				lvs.bufferedChunkSize -= put(reachable.TargetHash(), pending)
 			}
 		})
-		delete(lvs.pendingParents, root) // If not present, this is idempotent
-		lvs.pendingPutSize -= put(root, pending)
+		delete(lvs.withBufferedChildren, root) // If not present, this is idempotent
+		lvs.bufferedChunkSize -= put(root, pending)
 	}()
 	lvs.bs.Flush()
 }

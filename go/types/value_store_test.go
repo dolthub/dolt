@@ -72,12 +72,12 @@ func TestValueWriteFlush(t *testing.T) {
 	for _, v := range vals {
 		hashes.Insert(vs.WriteValue(v).TargetHash())
 	}
-	assert.NotZero(vs.pendingPutSize)
+	assert.NotZero(vs.bufferedChunkSize)
 
 	for h := range hashes {
 		vs.Flush(h)
 	}
-	assert.Zero(vs.pendingPutSize)
+	assert.Zero(vs.bufferedChunkSize)
 }
 
 type checkingBatchStore struct {
@@ -93,7 +93,7 @@ func (cbs *checkingBatchStore) expect(rs ...Ref) {
 }
 
 func (cbs *checkingBatchStore) SchedulePut(c chunks.Chunk) {
-	if cbs.a.NotZero(len(cbs.expectedOrder)) {
+	if cbs.a.NotZero(len(cbs.expectedOrder), "Unexpected Put of %s", c.Hash()) {
 		cbs.a.Equal(cbs.expectedOrder[0], c.Hash())
 		cbs.expectedOrder = cbs.expectedOrder[1:]
 	}
@@ -155,6 +155,43 @@ func TestFlushOverSize(t *testing.T) {
 
 	vs.WriteValue(l)
 	vs.Flush(l.Hash())
+}
+
+func TestTolerateTopDown(t *testing.T) {
+	assert := assert.New(t)
+	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	vs := NewValueStore(bs)
+	// Once the L-ML-S portion of this graph is written once, it's legal to make a Struct ST that contains a ref directly to ML and write it. Then you can write S and ML and Flush ST, which contitutes top-down writing.
+	//       L  ST
+	//        \ /
+	//        ML
+	//        /
+	//       S
+	S := String("oy")
+	sr := vs.WriteValue(S)
+	bs.expect(sr)
+
+	ML := NewList(sr)
+	mlr := vs.WriteValue(ML)
+	bs.expect(mlr)
+
+	L := NewList(mlr)
+	lr := vs.WriteValue(L)
+	bs.expect(lr)
+
+	vs.Flush(L.Hash())
+
+	assert.Zero(len(vs.bufferedChunks))
+
+	ST := NewStruct("", StructData{"r": mlr})
+	str := vs.WriteValue(ST)
+	vs.WriteValue(S)  // S into bufferedChunks
+	vs.WriteValue(ML) // ML into bufferedChunks AND pendingParents
+	bs.expect(mlr, str)
+	vs.Flush(ST.Hash())
+
+	bs.expect(sr)
+	vs.WriteValue(L)
 }
 
 func TestPanicOnReadBadVersion(t *testing.T) {
