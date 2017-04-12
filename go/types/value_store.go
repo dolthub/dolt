@@ -236,7 +236,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 		pending, isBuffered := lvs.bufferedChunks[parent]
 		if !isBuffered {
 			fmt.Fprintf(os.Stderr, "While buffering chunk for %s, encountered %s which has buffered children, but is not buffered itself.\n", h, parent)
-			pending = lvs.bs.Get(parent)
+			return
 		}
 		pv := DecodeValue(pending, lvs)
 		pv.WalkRefs(func(grandchildRef Ref) {
