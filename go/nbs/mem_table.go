@@ -93,7 +93,7 @@ func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg
 
 func (mt *memTable) extract(chunks chan<- extractRecord) {
 	for _, hrec := range mt.order {
-		chunks <- extractRecord{*hrec.a, mt.chunks[*hrec.a]}
+		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a]}
 	}
 	return
 }

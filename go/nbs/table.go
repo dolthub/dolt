@@ -197,6 +197,7 @@ func (hs getRecordByPrefix) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 type extractRecord struct {
 	a    addr
 	data []byte
+	err  interface{} // only set when there was a panic during extraction.
 }
 
 type chunkReader interface {

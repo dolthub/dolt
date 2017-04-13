@@ -429,7 +429,7 @@ func (tr tableReader) extract(chunks chan<- extractRecord) {
 
 	sendChunk := func(i uint32) {
 		localOffset := tr.offsets[i] - tr.offsets[0]
-		chunks <- extractRecord{hashes[i], tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])}
+		chunks <- extractRecord{a: hashes[i], data: tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])}
 	}
 
 	for i := uint32(0); i < tr.chunkCount; i++ {

@@ -72,15 +72,8 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 
 	// Use "channel of channels" ordered-concurrency pattern so that chunks from a given table stay together, preserving whatever locality was present in that table.
 	chunkChans := make(chan chan extractRecord)
-	type errRec struct {
-		name addr
-		err  interface{}
-	}
-	// TODO: remove/clean up this error reporting. BUG 3148
-	errChan := make(chan errRec, len(sources)) // This way we don't have to worry about sends on errChan ever blocking
 	go func() {
 		defer close(chunkChans)
-		defer close(errChan)
 		wg := sync.WaitGroup{}
 		for _, src := range sources {
 			chunks := make(chan extractRecord)
@@ -89,7 +82,7 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 				defer func() { close(c); wg.Done(); <-rl }()
 				defer func() {
 					if r := recover(); r != nil {
-						errChan <- errRec{s.hash(), r}
+						c <- extractRecord{a: s.hash(), err: r}
 					}
 				}()
 				rl <- struct{}{}
@@ -101,24 +94,24 @@ func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, 
 		wg.Wait()
 	}()
 
+	errString := ""
 	known := map[addr]struct{}{}
 	for chunks := range chunkChans {
-		for chunk := range chunks {
-			if _, present := known[chunk.a]; !present {
-				tw.addChunk(chunk.a, chunk.data)
-				known[chunk.a] = struct{}{}
+		for rec := range chunks {
+			if rec.err != nil {
+				errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", rec.a, rec.err)
+				continue
+			}
+			if _, present := known[rec.a]; !present {
+				tw.addChunk(rec.a, rec.data)
+				known[rec.a] = struct{}{}
 			}
 		}
 	}
 
-	errString := ""
-	for e := range errChan {
-		errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", e.name, e.err)
-	}
 	if errString != "" {
 		panic(fmt.Errorf(errString))
 	}
-
 	tableSize, name := tw.finish()
 	return name, buff[:tableSize], uint32(len(known))
 }
