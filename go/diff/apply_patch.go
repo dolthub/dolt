@@ -70,7 +70,7 @@ func Apply(root types.Value, patch Patch) types.Value {
 		for i, pp := range tail {
 			top := stack.top()
 			parent := top.newestValue()
-			oldValue := pp.Resolve(parent)
+			oldValue := pp.Resolve(parent, nil)
 			var newValue types.Value
 			if i == len(tail)-1 { // last pathPart in this path
 				newValue = oldValue
@@ -143,7 +143,7 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					newPart := types.IndexPath{Index: part.Index}
-					ov := newPart.Resolve(parent)
+					ov := newPart.Resolve(parent, nil)
 					return el.Remove(part.Index).Set(top.newValue, ov)
 				}
 				return el.Set(part.Index, top.newValue)
@@ -170,7 +170,7 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}
-			k := keyPart.Resolve(parent)
+			k := keyPart.Resolve(parent, nil)
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				k := top.newKeyValue

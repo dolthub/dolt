@@ -58,7 +58,7 @@ func poke() (win bool) {
 		return
 	}
 
-	oldVal := inPath.Resolve(inRoot)
+	oldVal := inPath.Resolve(inRoot, db)
 	if oldVal == nil {
 		fmt.Fprintf(os.Stderr, "No value at path '%s' - cannot update\n", inPath.String())
 		return

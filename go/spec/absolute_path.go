@@ -97,7 +97,7 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 	}
 
 	if val != nil && p.Path != nil {
-		val = p.Path.Resolve(val)
+		val = p.Path.Resolve(val, db)
 	}
 	return
 }

@@ -67,7 +67,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 		}
 
 		lastPart := d.Path[len(d.Path)-1]
-		parentEl := parentPath.Resolve(v1)
+		parentEl := parentPath.Resolve(v1, nil)
 
 		var key types.Value
 		var pfunc printFunc = line
@@ -81,7 +81,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 				// is a ref to the key. We need the actual key, not a ref to it.
 				hip1 := hip
 				hip1.IntoKey = true
-				key = hip1.Resolve(parent)
+				key = hip1.Resolve(parent, nil)
 			} else {
 				panic("unexpected Path type")
 			}

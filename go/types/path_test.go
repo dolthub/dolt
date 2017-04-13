@@ -5,11 +5,11 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
-	"bytes"
-
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -19,9 +19,13 @@ func hashIdx(v Value) string {
 }
 
 func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
+	assertResolvesToWithVR(assert, expect, ref, str, nil)
+}
+
+func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str string, vr ValueReader) {
 	p, err := ParsePath(str)
 	assert.NoError(err)
-	actual := p.Resolve(ref)
+	actual := p.Resolve(ref, vr)
 	if expect == nil {
 		if actual != nil {
 			assert.Fail("", "Expected nil, but got %s", EncodedValue(actual))
@@ -417,6 +421,24 @@ func TestPathType(t *testing.T) {
 	})
 	assertResolvesTo(assert, TypeOf(s.Get("str")), s, ".str@type")
 	assertResolvesTo(assert, TypeOf(s.Get("num")), s, ".num@type")
+}
+
+func TestPathTarget(t *testing.T) {
+	assert := assert.New(t)
+
+	s := NewStruct("", StructData{
+		"foo": String("bar"),
+	})
+	vs := NewValueStore(NewBatchStoreAdaptor(chunks.NewMemoryStore()))
+	r := vs.WriteValue(s)
+	s2 := NewStruct("", StructData{
+		"ref": r,
+	})
+
+	assertResolvesToWithVR(assert, nil, String("notref"), `@target`, vs)
+	assertResolvesToWithVR(assert, s, r, `@target`, vs)
+	assertResolvesToWithVR(assert, String("bar"), r, `@target.foo`, vs)
+	assertResolvesToWithVR(assert, String("bar"), s2, `.ref@target.foo`, vs)
 }
 
 func TestPathAtAnnotation(t *testing.T) {

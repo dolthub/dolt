@@ -189,7 +189,7 @@ func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database) 
 		}
 
 		if showValue {
-			_, err = writeCommitLines(node, path, maxLines, lineno, w)
+			_, err = writeCommitLines(node, path, maxLines, lineno, w, db)
 		} else {
 			_, err = writeDiffLines(node, path, db, maxLines, lineno, w)
 		}
@@ -277,13 +277,13 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 	return lineno, nil
 }
 
-func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
 	genPrefix := func(pw *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(pw.NumLines)+1))
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(node.commit)
+	v := path.Resolve(node.commit, db)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
@@ -325,8 +325,8 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(parentCommit) },
-		func() { neu = path.Resolve(node.commit) },
+		func() { old = path.Resolve(parentCommit, db) },
+		func() { neu = path.Resolve(node.commit, db) },
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization

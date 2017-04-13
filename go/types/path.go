@@ -31,7 +31,7 @@ var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 type Path []PathPart
 
 type PathPart interface {
-	Resolve(v Value) Value
+	Resolve(v Value, vr ValueReader) Value
 	String() string
 }
 
@@ -122,6 +122,12 @@ func constructPath(p Path, str string) (Path, error) {
 			}
 			return Path{}, fmt.Errorf("Cannot use @key annotation on: %s", lastPart.String())
 
+		case "target":
+			if hasArg {
+				return Path{}, fmt.Errorf("@target annotation does not support arguments")
+			}
+			return constructPath(append(p, TargetAnnotation{}), rem)
+
 		case "type":
 			if hasArg {
 				return Path{}, fmt.Errorf("@type annotation does not support arguments")
@@ -140,13 +146,15 @@ func constructPath(p Path, str string) (Path, error) {
 	}
 }
 
-func (p Path) Resolve(v Value) (resolved Value) {
+// Resolves a path relative to some value.
+// A ValueReader is required to resolve paths that contain the @target annotation.
+func (p Path) Resolve(v Value, vr ValueReader) (resolved Value) {
 	resolved = v
 	for _, part := range p {
 		if resolved == nil {
 			break
 		}
-		resolved = part.Resolve(resolved)
+		resolved = part.Resolve(resolved, vr)
 	}
 
 	return
@@ -193,7 +201,7 @@ func NewFieldPath(name string) FieldPath {
 	return FieldPath{name}
 }
 
-func (fp FieldPath) Resolve(v Value) Value {
+func (fp FieldPath) Resolve(v Value, vr ValueReader) Value {
 	if s, ok := v.(Struct); ok {
 		if fv, ok := s.MaybeGet(fp.Name); ok {
 			return fv
@@ -239,7 +247,7 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 	return IndexPath{idx, intoKey}
 }
 
-func (ip IndexPath) Resolve(v Value) Value {
+func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
 	switch v := v.(type) {
 	case List:
 		if n, ok := ip.Index.(Number); ok {
@@ -308,7 +316,7 @@ func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
 	return HashIndexPath{h, intoKey}
 }
 
-func (hip HashIndexPath) Resolve(v Value) (res Value) {
+func (hip HashIndexPath) Resolve(v Value, vr ValueReader) (res Value) {
 	var seq orderedSequence
 	var getCurrentValue func(cur *sequenceCursor) Value
 
@@ -421,12 +429,31 @@ Switch:
 type TypeAnnotation struct {
 }
 
-func (ann TypeAnnotation) Resolve(v Value) Value {
+func (ann TypeAnnotation) Resolve(v Value, vr ValueReader) Value {
 	return TypeOf(v)
 }
 
 func (ann TypeAnnotation) String() string {
 	return "@type"
+}
+
+// TargetAnnotation is a PathPart annotation to resolve to the targetValue of the Ref it is resolved on.
+type TargetAnnotation struct {
+}
+
+func (ann TargetAnnotation) Resolve(v Value, vr ValueReader) Value {
+	if vr == nil {
+		d.Panic("@target annotation requires a database to resolve against")
+	}
+	if r, ok := v.(Ref); ok {
+		return r.TargetValue(vr)
+	} else {
+		return nil
+	}
+}
+
+func (ann TargetAnnotation) String() string {
+	return "@target"
 }
 
 // AtAnnotation is a PathPart annotation that gets the value of a collection at
@@ -448,7 +475,7 @@ func NewAtAnnotationIntoKeyPath(idx int64) AtAnnotation {
 	return AtAnnotation{idx, true}
 }
 
-func (ann AtAnnotation) Resolve(v Value) Value {
+func (ann AtAnnotation) Resolve(v Value, vr ValueReader) Value {
 	var absIndex uint64
 	if col, ok := v.(Collection); !ok {
 		return nil
