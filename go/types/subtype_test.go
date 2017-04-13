@@ -437,3 +437,273 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert.False(IsSubtype(t1, t2))
 	assert.False(IsSubtype(t2, t1))
 }
+
+func TestIsValueSubtypeOf(tt *testing.T) {
+	assert := assert.New(tt)
+
+	assertTrue := func(v Value, t *Type) {
+		assert.True(IsValueSubtypeOf(v, t))
+	}
+
+	assertFalse := func(v Value, t *Type) {
+		assert.False(IsValueSubtypeOf(v, t))
+	}
+
+	allTypes := []struct {
+		v Value
+		t *Type
+	}{
+		{Bool(true), BoolType},
+		{Number(42), NumberType},
+		{String("s"), StringType},
+		{NewEmptyBlob(), BlobType},
+		{BoolType, TypeType},
+		{NewList(Number(42)), MakeListType(NumberType)},
+		{NewSet(Number(42)), MakeSetType(NumberType)},
+		{NewRef(Number(42)), MakeRefType(NumberType)},
+		{NewMap(Number(42), String("a")), MakeMapType(NumberType, StringType)},
+		{NewStruct("A", StructData{}), MakeStructType("A")},
+		// Not including CycleType or Union here
+	}
+	for i, rec := range allTypes {
+		for j, rec2 := range allTypes {
+			if i == j {
+				assertTrue(rec.v, rec.t)
+			} else {
+				assertFalse(rec.v, rec2.t)
+				assertFalse(rec2.v, rec.t)
+			}
+		}
+	}
+
+	for _, rec := range allTypes {
+		assertTrue(rec.v, ValueType)
+	}
+
+	assertTrue(Bool(true), MakeUnionType(BoolType, NumberType))
+	assertTrue(Number(123), MakeUnionType(BoolType, NumberType))
+	assertFalse(String("abc"), MakeUnionType(BoolType, NumberType))
+	assertFalse(String("abc"), MakeUnionType())
+
+	assertTrue(NewList(), MakeListType(NumberType))
+	assertTrue(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
+	assertFalse(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(BoolType))
+	assertTrue(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(MakeUnionType(NumberType, BoolType)))
+	assertTrue(NewList(Number(0), Bool(true)), MakeListType(MakeUnionType(NumberType, BoolType)))
+	assertFalse(NewList(Number(0)), MakeListType(MakeUnionType()))
+	assertTrue(NewList(), MakeListType(MakeUnionType()))
+
+	{
+		newChunkedList := func(vs ...Value) List {
+			newSequenceMetaTuple := func(v Value) metaTuple {
+				seq := newListLeafSequence(nil, v)
+				list := newList(seq)
+				return newMetaTuple(NewRef(list), newOrderedKey(v), 1, list)
+			}
+
+			tuples := make([]metaTuple, len(vs))
+			for i, v := range vs {
+				tuples[i] = newSequenceMetaTuple(v)
+			}
+			return newList(newListMetaSequence(tuples, nil))
+		}
+
+		assertTrue(newChunkedList(Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
+		assertFalse(newChunkedList(Number(0), Number(1), Number(2), Number(3)), MakeListType(BoolType))
+		assertTrue(newChunkedList(Number(0), Number(1), Number(2), Number(3)), MakeListType(MakeUnionType(NumberType, BoolType)))
+		assertTrue(newChunkedList(Number(0), Bool(true)), MakeListType(MakeUnionType(NumberType, BoolType)))
+		assertFalse(newChunkedList(Number(0)), MakeListType(MakeUnionType()))
+	}
+
+	assertTrue(NewSet(), MakeSetType(NumberType))
+	assertTrue(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
+	assertFalse(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
+	assertTrue(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+	assertTrue(NewSet(Number(0), Bool(true)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+	assertFalse(NewSet(Number(0)), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(), MakeSetType(MakeUnionType()))
+
+	{
+		newChunkedSet := func(vs ...Value) Set {
+			newSequenceMetaTuple := func(v Value) metaTuple {
+				seq := newSetLeafSequence(nil, v)
+				set := newSet(seq)
+				return newMetaTuple(NewRef(set), newOrderedKey(v), 1, set)
+			}
+
+			tuples := make([]metaTuple, len(vs))
+			for i, v := range vs {
+				tuples[i] = newSequenceMetaTuple(v)
+			}
+			return newSet(newSetMetaSequence(tuples, nil))
+		}
+		assertTrue(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
+		assertFalse(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
+		assertTrue(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+		assertTrue(newChunkedSet(Number(0), Bool(true)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+		assertFalse(newChunkedSet(Number(0)), MakeSetType(MakeUnionType()))
+	}
+
+	assertTrue(NewMap(), MakeMapType(NumberType, StringType))
+	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))
+	assertFalse(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(BoolType, StringType))
+	assertFalse(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, BoolType))
+	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+	assertTrue(NewMap(Number(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+	assertTrue(NewMap(Number(0), String("a"), Number(1), Bool(true)), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+	assertFalse(NewMap(Number(0), String("a")), MakeMapType(MakeUnionType(), StringType))
+	assertFalse(NewMap(Number(0), String("a")), MakeMapType(NumberType, MakeUnionType()))
+	assertTrue(NewMap(), MakeMapType(MakeUnionType(), MakeUnionType()))
+
+	{
+		newChunkedMap := func(vs ...Value) Map {
+			newSequenceMetaTuple := func(e mapEntry) metaTuple {
+				seq := newMapLeafSequence(nil, e)
+				m := newMap(seq)
+				return newMetaTuple(NewRef(m), newOrderedKey(e.key), 1, m)
+			}
+
+			tuples := make([]metaTuple, len(vs)/2)
+			for i := 0; i < len(vs); i += 2 {
+				tuples[i/2] = newSequenceMetaTuple(mapEntry{vs[i], vs[i+1]})
+			}
+			return newMap(newMapMetaSequence(tuples, nil))
+		}
+
+		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))
+		assertFalse(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(BoolType, StringType))
+		assertFalse(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, BoolType))
+		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+		assertTrue(newChunkedMap(Number(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), Bool(true)), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+		assertFalse(newChunkedMap(Number(0), String("a")), MakeMapType(MakeUnionType(), StringType))
+		assertFalse(newChunkedMap(Number(0), String("a")), MakeMapType(NumberType, MakeUnionType()))
+	}
+
+	assertTrue(NewRef(Number(1)), MakeRefType(NumberType))
+	assertFalse(NewRef(Number(1)), MakeRefType(BoolType))
+	assertTrue(NewRef(Number(1)), MakeRefType(MakeUnionType(NumberType, BoolType)))
+	assertFalse(NewRef(Number(1)), MakeRefType(MakeUnionType()))
+
+	assertTrue(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct", StructField{"x", BoolType, false}),
+	)
+	assertTrue(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct", StructField{"x", BoolType, true}),
+	)
+	assertTrue(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct"),
+	)
+	assertTrue(
+		NewStruct("Struct", StructData{}),
+		MakeStructType("Struct"),
+	)
+	assertFalse(
+		NewStruct("", StructData{"x": Bool(true)}),
+		MakeStructType("Struct"),
+	)
+	assertFalse(
+		NewStruct("struct", StructData{"x": Bool(true)}), // lower case name
+		MakeStructType("Struct"),
+	)
+	assertTrue(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct", StructField{"x", MakeUnionType(BoolType, NumberType), true}),
+	)
+	assertTrue(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct", StructField{"y", BoolType, true}),
+	)
+	assertFalse(
+		NewStruct("Struct", StructData{"x": Bool(true)}),
+		MakeStructType("Struct", StructField{"x", StringType, true}),
+	)
+
+	assertTrue(
+		NewStruct("Node", StructData{
+			"value": Number(1),
+			"children": NewList(
+				NewStruct("Node", StructData{
+					"value":    Number(2),
+					"children": NewList(),
+				}),
+			),
+		}),
+		MakeStructType("Node",
+			StructField{"value", NumberType, false},
+			StructField{"children", MakeListType(MakeCycleType("Node")), false},
+		),
+	)
+
+	assertFalse( // inner Node has wrong type.
+		NewStruct("Node", StructData{
+			"value": Number(1),
+			"children": NewList(
+				NewStruct("Node", StructData{
+					"value":    Bool(true),
+					"children": NewList(),
+				}),
+			),
+		}),
+		MakeStructType("Node",
+			StructField{"value", NumberType, false},
+			StructField{"children", MakeListType(MakeCycleType("Node")), false},
+		),
+	)
+
+	{
+		node := func(value Value, children ...Value) Value {
+			childrenAsRefs := make(ValueSlice, len(children))
+			for i, c := range children {
+				childrenAsRefs[i] = NewRef(c)
+			}
+			rv := NewStruct("Node", StructData{
+				"value":    value,
+				"children": NewList(childrenAsRefs...),
+			})
+			return rv
+		}
+
+		requiredType := MakeStructType("Node",
+			StructField{"value", NumberType, false},
+			StructField{"children", MakeListType(MakeRefType(MakeCycleType("Node"))), false},
+		)
+
+		assertTrue(
+			node(Number(0), node(Number(1)), node(Number(2), node(Number(3)))),
+			requiredType,
+		)
+		assertFalse(
+			node(Number(0),
+				node(Number(1)),
+				node(Number(2), node(String("no"))),
+			),
+			requiredType,
+		)
+	}
+
+	{
+		t1 := MakeStructType("A",
+			StructField{"a", NumberType, false},
+			StructField{"b", MakeCycleType("A"), false},
+		)
+		t2 := MakeStructType("A",
+			StructField{"a", NumberType, false},
+			StructField{"b", MakeCycleType("A"), true},
+		)
+		v := NewStruct("A", StructData{
+			"a": Number(1),
+			"b": NewStruct("A", StructData{
+				"a": Number(2),
+			}),
+		})
+
+		assertFalse(v, t1)
+		assertTrue(v, t2)
+	}
+}

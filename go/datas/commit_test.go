@@ -88,12 +88,14 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"parents": types.NewSet(),
 		"meta":    types.EmptyStruct,
 	})
+	assert.True(IsCommit(metaCommit))
 	assert.True(IsCommitType(types.TypeOf(metaCommit)))
 
 	noMetaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
 		"parents": types.NewSet(),
 	})
+	assert.False(IsCommit(noMetaCommit))
 	assert.False(IsCommitType(types.TypeOf(noMetaCommit)))
 }
 

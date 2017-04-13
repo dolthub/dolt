@@ -131,6 +131,10 @@ func IsCommitType(t *types.Type) bool {
 	return types.IsSubtype(valueCommitType, t)
 }
 
+func IsCommit(v types.Value) bool {
+	return types.IsValueSubtypeOf(v, valueCommitType)
+}
+
 func IsRefOfCommitType(t *types.Type) bool {
 	return t.TargetKind() == types.RefKind && IsCommitType(getRefElementType(t))
 }

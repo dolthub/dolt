@@ -282,7 +282,7 @@ func (tc *TypeConverter) unionToGQLUnion(nomsType *types.Type) *graphql.Union {
 				// We cannot just get the type of the value here. GraphQL requires
 				// us to return one of the types in memberTypes.
 				for i, t := range nomsMemberTypes {
-					if types.IsSubtype(t, types.TypeOf(v)) {
+					if types.IsValueSubtypeOf(v, t) {
 						return memberTypes[i]
 					}
 				}

@@ -87,7 +87,7 @@ func runLog(args []string) int {
 	}
 
 	origCommit, ok := database.ReadValue(absPath.Hash).(types.Struct)
-	if !ok || !datas.IsCommitType(types.TypeOf(origCommit)) {
+	if !ok || !datas.IsCommit(origCommit) {
 		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 

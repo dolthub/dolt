@@ -15,7 +15,7 @@ import (
 
 // Summary prints a summary of the diff between two values to stdout.
 func Summary(value1, value2 types.Value) {
-	if datas.IsCommitType(types.TypeOf(value1)) && datas.IsCommitType(types.TypeOf(value2)) {
+	if datas.IsCommit(value1) && datas.IsCommit(value2) {
 		fmt.Println("Comparing commit values")
 		value1 = value1.(types.Struct).Get(datas.ValueField)
 		value2 = value2.(types.Struct).Get(datas.ValueField)
