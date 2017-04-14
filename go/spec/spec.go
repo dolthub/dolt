@@ -10,11 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
-	"os"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
@@ -181,12 +182,9 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 func parseAWSSpec(awsURL string) chunks.ChunkStore {
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
+	d.PanicIfFalse(len(parts) == 2)
 	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-	ddb := dynamodb.New(sess)
-	if len(parts) == 1 {
-		return chunks.NewDynamoStore(parts[0], u.Path, ddb, false)
-	}
-	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), ddb, 1<<28)
+	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
