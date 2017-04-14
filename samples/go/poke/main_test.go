@@ -86,7 +86,7 @@ func (s *testSuite) TestWin() {
 		v, _, _, _ := types.ParsePathIndex(vs)
 		p, err := types.ParsePath(pathToCheck)
 		s.NoError(err)
-		actual := p.Resolve(r)
+		actual := p.Resolve(r, dsSpec.GetDatabase())
 		s.True(actual.Equals(v), "value at path %s incorrect (expected: %#v, got: %#v)", p.String(), v, actual)
 	}
 }
