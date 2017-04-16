@@ -5,8 +5,6 @@
 package types
 
 import (
-	"fmt"
-	"os"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -235,7 +233,6 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	putChildren := func(parent hash.Hash) (dataPut int) {
 		pending, isBuffered := lvs.bufferedChunks[parent]
 		if !isBuffered {
-			fmt.Fprintf(os.Stderr, "While buffering chunk for %s, encountered %s which has buffered children, but is not buffered itself.\n", h, parent)
 			return
 		}
 		pv := DecodeValue(pending, lvs)
