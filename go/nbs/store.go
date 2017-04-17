@@ -439,6 +439,16 @@ func (nbs *NomsBlockStore) Close() (err error) {
 }
 
 func (nbs *NomsBlockStore) Flush() {
+	anyPossiblyNovelChunks := func() bool {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		return nbs.mt != nil || len(nbs.tables.novel) > 0
+	}
+
+	if !anyPossiblyNovelChunks() {
+		return
+	}
+
 	b := &backoff.Backoff{
 		Min:    128 * time.Microsecond,
 		Max:    10 * time.Second,
