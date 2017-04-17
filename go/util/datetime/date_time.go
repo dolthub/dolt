@@ -14,9 +14,10 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-// DateTime is an alias for time.Time that allows us to marshal date time to
-// Noms.
-type DateTime time.Time
+// DateTime implements marshaling of time.Time to and from Noms.
+type DateTime struct {
+	time.Time
+}
 
 // DateTimeType is the Noms type used to represent date time objects in Noms.
 // The field secSinceEpoch may contain fractions in cases where seconds are
@@ -28,9 +29,8 @@ var DateTimeType = types.MakeStructTypeFromFields("DateTime", types.FieldMap{
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms() (types.Value, error) {
-	t := time.Time(dt)
 	return types.NewStruct("DateTime", types.StructData{
-		"secSinceEpoch": types.Number(float64(t.Unix()) + float64(t.Nanosecond())*1e-9),
+		"secSinceEpoch": types.Number(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9),
 	}), nil
 }
 
@@ -53,12 +53,6 @@ func (dt *DateTime) UnmarshalNoms(v types.Value) error {
 	}
 
 	s, frac := math.Modf(strct.SecSinceEpoch)
-	*dt = DateTime(time.Unix(int64(s), int64(frac*1e9)))
+	*dt = DateTime{time.Unix(int64(s), int64(frac*1e9))}
 	return nil
-}
-
-// String() causes DateTime structs to be printed in the same way as time.Time
-// structs.
-func (dt DateTime) String() string {
-	return time.Time(dt).String()
 }

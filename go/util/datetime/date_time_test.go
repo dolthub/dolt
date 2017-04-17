@@ -17,7 +17,7 @@ func TestBasics(t *testing.T) {
 	assert := assert.New(t)
 
 	// Since we are using float64 in noms we cannot represent all possible times.
-	dt := DateTime(time.Unix(1234567, 1234567))
+	dt := DateTime{time.Unix(1234567, 1234567)}
 
 	nomsValue, err := marshal.Marshal(dt)
 	assert.NoError(err)
@@ -26,7 +26,7 @@ func TestBasics(t *testing.T) {
 	err = marshal.Unmarshal(nomsValue, &dt2)
 	assert.NoError(err)
 
-	assert.True(time.Time(dt).Equal(time.Time(dt2)))
+	assert.True(dt.Equal(dt2.Time))
 }
 
 func TestUnmarshal(t *testing.T) {
@@ -36,7 +36,7 @@ func TestUnmarshal(t *testing.T) {
 		var dt DateTime
 		err := marshal.Unmarshal(v, &dt)
 		assert.NoError(err)
-		assert.True(time.Time(dt).Equal(t))
+		assert.True(dt.Equal(t))
 	}
 
 	for _, name := range []string{"DateTime", "Date", "xxx", ""} {
@@ -85,19 +85,19 @@ func TestMarshal(t *testing.T) {
 		}).Equals(v))
 	}
 
-	test(DateTime(time.Unix(0, 0)), 0)
-	test(DateTime(time.Unix(42, 0)), 42)
-	test(DateTime(time.Unix(42, 123456789)), 42.123456789)
-	test(DateTime(time.Unix(123456789, 123456789)), 123456789.123456789)
-	test(DateTime(time.Unix(-42, 0)), -42)
-	test(DateTime(time.Unix(-42, -123456789)), -42.123456789)
-	test(DateTime(time.Unix(-123456789, -123456789)), -123456789.123456789)
+	test(DateTime{time.Unix(0, 0)}, 0)
+	test(DateTime{time.Unix(42, 0)}, 42)
+	test(DateTime{time.Unix(42, 123456789)}, 42.123456789)
+	test(DateTime{time.Unix(123456789, 123456789)}, 123456789.123456789)
+	test(DateTime{time.Unix(-42, 0)}, -42)
+	test(DateTime{time.Unix(-42, -123456789)}, -42.123456789)
+	test(DateTime{time.Unix(-123456789, -123456789)}, -123456789.123456789)
 }
 
 func TestMarshalType(t *testing.T) {
 	assert := assert.New(t)
 
-	dt := DateTime(time.Unix(0, 0))
+	dt := DateTime{time.Unix(0, 0)}
 	typ := marshal.MustMarshalType(dt)
 	assert.Equal(DateTimeType, typ)
 
@@ -109,22 +109,22 @@ func TestZeroValues(t *testing.T) {
 	assert := assert.New(t)
 
 	dt1 := DateTime{}
-	assert.True(time.Time(dt1).IsZero())
+	assert.True(dt1.IsZero())
 
 	nomsDate, _ := dt1.MarshalNoms()
 
 	dt2 := DateTime{}
 	marshal.Unmarshal(nomsDate, &dt2)
-	assert.True(time.Time(dt2).IsZero())
+	assert.True(dt2.IsZero())
 
 	dt3 := DateTime{}
 	dt3.UnmarshalNoms(nomsDate)
-	assert.True(time.Time(dt3).IsZero())
+	assert.True(dt3.IsZero())
 }
 
 func TestString(t *testing.T) {
 	assert := assert.New(t)
-	dt := DateTime(time.Unix(1234567, 1234567))
+	dt := DateTime{time.Unix(1234567, 1234567)}
 	// Don't test the actual output since that
 	assert.IsType(dt.String(), "s")
 }

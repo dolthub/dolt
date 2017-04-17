@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"
@@ -265,7 +264,7 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 				if types.TypeOf(v).Equals(datetime.DateTimeType) {
 					var dt datetime.DateTime
 					dt.UnmarshalNoms(v)
-					fmt.Fprintf(pw, time.Time(dt).Format(spec.CommitMetaDateFormat))
+					fmt.Fprintf(pw, dt.Format(spec.CommitMetaDateFormat))
 				} else {
 					types.WriteEncodedValue(pw, v)
 				}
