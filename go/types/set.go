@@ -205,7 +205,7 @@ func (s Set) Has(v Value) bool {
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAt(s.seq, emptyKey, false, false, true)
+	cur := newCursorAt(s.seq, emptyKey, false, false, false)
 	cur.iter(func(v interface{}) bool {
 		return cb(v.(Value))
 	})
@@ -227,14 +227,14 @@ func (s Set) Iterator() SetIterator {
 
 func (s Set) IteratorAt(idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(s.seq, idx, true),
+		cursor: newCursorAtIndex(s.seq, idx, false),
 		s:      s,
 	}
 }
 
 func (s Set) IteratorFrom(val Value) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtValue(s.seq, val, false, false, true),
+		cursor: newCursorAtValue(s.seq, val, false, false, false),
 		s:      s,
 	}
 }

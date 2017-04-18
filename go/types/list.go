@@ -205,7 +205,7 @@ type listIterFunc func(v Value, index uint64) (stop bool)
 // iteration stops.
 func (l List) Iter(f listIterFunc) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx, true)
+	cur := newCursorAtIndex(l.seq, idx, false)
 	cur.iter(func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
@@ -240,7 +240,7 @@ func (l List) Iterator() ListIterator {
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(l.seq, index, true),
+		newCursorAtIndex(l.seq, index, false),
 	}
 }
 

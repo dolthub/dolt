@@ -245,7 +245,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(m.seq, emptyKey, false, false, true)
+	cur := newCursorAt(m.seq, emptyKey, false, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -270,13 +270,13 @@ func (m Map) Iterator() MapIterator {
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(m.seq, pos, true),
+		cursor: newCursorAtIndex(m.seq, pos, false),
 	}
 }
 
 func (m Map) IteratorFrom(key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(m.seq, key, false, false, true),
+		cursor: newCursorAtValue(m.seq, key, false, false, false),
 	}
 }
 
@@ -292,7 +292,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(m.seq, start, false, false, true)
+	cur := newCursorAtValue(m.seq, start, false, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
