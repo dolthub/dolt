@@ -44,7 +44,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 	suite.DBDir2 = path.Join(suite.TempDir, "db2")
 	suite.out = stdOutput
 	suite.err = errOutput
-	exit.Exit = mockExit
+	exit.Exit = MockExit
 
 	os.Mkdir(suite.DBDir, 0777)
 	os.Mkdir(suite.DBDir2, 0777)
@@ -114,6 +114,6 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 }
 
 // Mock exit.Exit() implementation for use during testing.
-func mockExit(status int) {
+func MockExit(status int) {
 	panic(ExitError{status})
 }
