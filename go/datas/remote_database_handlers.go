@@ -136,7 +136,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		io.Copy(ioutil.Discard, reader)
 		reader.Close()
 	}()
-	vbs := types.NewValidatingBatchingSink(cs)
+	vdc := types.NewValidatingDecoder(cs)
 
 	// Deserialize chunks from reader in background, recovering from errors
 	errChan := make(chan error)
@@ -158,16 +158,19 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			decoded <- ch
 
 			go func(ch chan types.DecodedChunk, c *chunks.Chunk) {
-				ch <- vbs.DecodeUnqueued(c)
+				ch <- vdc.Decode(c)
 			}(ch, c)
 		}
 	}()
 
+	cc := newCompletenessChecker()
 	for ch := range decoded {
 		dc := <-ch
 		if dc.Chunk != nil && dc.Value != nil {
+			cc.AddRefs(*dc.Value)
+
 			totalDataWritten += len(dc.Chunk.Data())
-			vbs.Put(*dc.Chunk, *dc.Value)
+			cs.Put(*dc.Chunk)
 			chunkCount++
 			if chunkCount%100 == 0 {
 				verbose.Log("Enqueued %d chunks", chunkCount)
@@ -180,8 +183,8 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		d.Panic("Deserialization failure: %v", err)
 	}
 
-	vbs.PanicIfDangling()
-	vbs.Flush()
+	cc.PanicIfDangling(cs)
+	cs.Flush()
 
 	w.WriteHeader(http.StatusCreated)
 }

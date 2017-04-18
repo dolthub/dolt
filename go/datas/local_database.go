@@ -54,6 +54,5 @@ func (ldb *LocalDatabase) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) e
 }
 
 func (ldb *LocalDatabase) Close() error {
-	ldb.BatchStore().(*localBatchStore).Destroy()
 	return ldb.databaseCommon.Close()
 }
