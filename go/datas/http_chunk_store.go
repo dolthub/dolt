@@ -59,7 +59,7 @@ type httpChunkStore struct {
 	version string
 }
 
-func NewHTTPChunkStore(baseURL, auth string) *httpChunkStore {
+func NewHTTPChunkStore(baseURL, auth string) chunks.ChunkStore {
 	// Custom http.Client to give control of idle connections and timeouts
 	return newHTTPChunkStoreWithClient(baseURL, auth, &http.Client{Transport: &customHTTPTransport})
 }
@@ -356,12 +356,6 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 		reader = ioutil.NopCloser(sr)
 	}
 	return
-}
-
-func (hcs *httpChunkStore) SchedulePut(c chunks.Chunk) {
-	hcs.cacheMu.RLock()
-	defer hcs.cacheMu.RUnlock()
-	hcs.unwrittenPuts.Insert(c)
 }
 
 func (hcs *httpChunkStore) Put(c chunks.Chunk) {

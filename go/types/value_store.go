@@ -74,11 +74,7 @@ func NewTestValueStore() *ValueStore {
 // ChunkStore and manages its lifetime. Calling Close on the returned
 // ValueStore will Close() cs.
 func NewValueStore(cs chunks.ChunkStore) *ValueStore {
-	return NewValueStoreWithCache(cs, defaultValueCacheSize)
-}
-
-func NewValueStoreWithCache(cs chunks.ChunkStore, cacheSize uint64) *ValueStore {
-	return newValueStoreWithCacheAndPending(cs, cacheSize, defaultPendingPutMax)
+	return newValueStoreWithCacheAndPending(cs, defaultValueCacheSize, defaultPendingPutMax)
 }
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
@@ -320,7 +316,6 @@ func (lvs *ValueStore) Flush() {
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
 				v := DecodeValue(pending, lvs)
-				// TODO: Consider gathering up the hashes of the referenced, buffered chunks, doing a HasMany() and only writing chunks that aren't in the ChunkStore
 				v.WalkRefs(func(reachable Ref) {
 					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
 						put(reachable.TargetHash(), pending)

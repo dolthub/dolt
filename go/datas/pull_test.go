@@ -85,7 +85,7 @@ func (suite *RemoteToRemoteSuite) SetupTest() {
 }
 
 func makeRemoteDb(cs chunks.ChunkStore) Database {
-	return &RemoteDatabaseClient{newDatabaseCommon(NewHTTPChunkStoreForTest(cs))}
+	return &RemoteDatabaseClient{newDatabaseCommon(newHTTPChunkStoreForTest(cs))}
 }
 
 func (suite *PullSuite) sinkIsLocal() bool {

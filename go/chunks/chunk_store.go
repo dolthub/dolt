@@ -32,12 +32,14 @@ type Factory interface {
 // can store any hash, but it is typically used by higher layers (such as
 // Database) to store a hash to a value that represents the current state and
 // entire history of a database.
+// TODO: Does having a separate RootTracker make sense anymore? BUG 3402
 type RootTracker interface {
 	// Rebase brings this RootTracker into sync with the persistent storage's
 	// current root.
 	Rebase()
 
-	// Root returns the currently cached root value.
+	// Root returns the root of the database as of the time the RootTracker
+	// was opened or the most recent call to Rebase.
 	Root() hash.Hash
 
 	// Commit atomically attempts to persist all novel Chunks and update the
@@ -45,7 +47,6 @@ type RootTracker interface {
 	// root in persistent storage, returns false.
 	// TODO: is last now redundant? Maybe this should just try to update from
 	// the cached root to current?
-	// TODO: Does having a separate RootTracker make sense anymore? BUG 3402
 	Commit(current, last hash.Hash) bool
 }
 
@@ -68,13 +69,13 @@ type ChunkSource interface {
 	// present in the source.
 	HasMany(hashes hash.HashSet) (present hash.HashSet)
 
-	// Put caches c in the ChunkSink. Upon return, c must be visible to
+	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// PutMany(), Get(), GetMany(), Has() and HasMany().
 	Put(c Chunk)
 
-	// PutMany caches chunks in the ChunkSink. Upon return, all members of
+	// PutMany caches chunks in the ChunkSource. Upon return, all members of
 	// chunks must be visible to subsequent Get and Has calls, but must not be
 	// persistent until a call to Flush(). PutMany may be called concurrently
 	// with other calls to Put(), PutMany(), Get(), GetMany(), Has() and

@@ -49,10 +49,10 @@ func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) 
 
 func (suite *HTTPChunkStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.store = NewHTTPChunkStoreForTest(suite.cs)
+	suite.store = newHTTPChunkStoreForTest(suite.cs)
 }
 
-func NewHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
+func newHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.WriteValuePath,
@@ -134,7 +134,7 @@ func (suite *HTTPChunkStoreSuite) TearDownTest() {
 
 func (suite *HTTPChunkStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.String("abc"), nil)
-	suite.store.SchedulePut(c)
+	suite.store.Put(c)
 	suite.store.Flush()
 
 	suite.Equal(1, suite.cs.Writes)
@@ -147,10 +147,10 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	}
 	l := types.NewList()
 	for _, val := range vals {
-		suite.store.SchedulePut(types.EncodeValue(val, nil))
+		suite.store.Put(types.EncodeValue(val, nil))
 		l = l.Append(types.NewRef(val))
 	}
-	suite.store.SchedulePut(types.EncodeValue(l, nil))
+	suite.store.Put(types.EncodeValue(l, nil))
 	suite.store.Flush()
 
 	suite.Equal(3, suite.cs.Writes)
@@ -236,8 +236,7 @@ func (suite *HTTPChunkStoreSuite) TestGetManyAllCached() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.store.SchedulePut(chnx[0])
-	suite.store.SchedulePut(chnx[1])
+	suite.store.PutMany(chnx)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
 	foundChunks := make(chan *chunks.Chunk)
