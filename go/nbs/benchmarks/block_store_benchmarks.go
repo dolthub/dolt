@@ -10,11 +10,10 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
 
-type storeOpenFn func() types.BatchStore
+type storeOpenFn func() chunks.ChunkStore
 
 func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.TestingT) bool {
 	store := refreshStore()
@@ -23,17 +22,17 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 	return true
 }
 
-func writeToEmptyStore(store types.BatchStore, src *dataSource, t assert.TestingT) {
+func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.TestingT) {
 	root := store.Root()
 	assert.Equal(t, hash.Hash{}, root)
 
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.SchedulePut(*c)
+		store.Put(*c)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	store.SchedulePut(newRoot)
-	assert.True(t, store.UpdateRoot(newRoot.Hash(), root))
+	store.Put(newRoot)
+	assert.True(t, store.Commit(newRoot.Hash(), root))
 }
 
 func goReadChunks(src *dataSource) <-chan *chunks.Chunk {
@@ -49,7 +48,7 @@ func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.Te
 	store := openStore()
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.SchedulePut(*c)
+		store.Put(*c)
 	}
 	assert.NoError(t, store.Close())
 }

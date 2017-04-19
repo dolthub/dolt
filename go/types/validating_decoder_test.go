@@ -22,7 +22,7 @@ func TestValidatingBatchingSinkDecode(t *testing.T) {
 
 func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	cs := chunks.NewTestStore()
-	vs := newLocalValueStore(cs)
+	vs := NewValueStore(cs)
 	r := &nomsTestReader{data, 0}
 	dec := newValueDecoder(r, vs)
 	v := dec.readValue()

@@ -27,7 +27,10 @@ type Database interface {
 	// WriteValue(). WriteValue() writes v to this Database, though v is not
 	// guaranteed to be be persistent until after a subsequent Commit(). The
 	// return value is the Ref of v.
+	// Written values won't be persisted until a commit-alike
 	types.ValueReadWriter
+
+	// Close must have no side-effects
 	io.Closer
 
 	// Datasets returns the root of the database which is a
@@ -94,11 +97,11 @@ type Database interface {
 	// Regardless, Datasets() is updated to match backing storage upon return.
 	FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error)
 
-	// validatingBatchStore returns the BatchStore used to read and write
+	// validatingChunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by
 	// clients.
-	validatingBatchStore() types.BatchStore
+	validatingChunkStore() chunks.ChunkStore
 
 	has(h hash.Hash) bool
 }

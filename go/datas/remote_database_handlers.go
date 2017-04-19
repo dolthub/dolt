@@ -284,7 +284,7 @@ func handleGetBlob(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 		d.Panic("h failed to parse")
 	}
 
-	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+	vs := types.NewValueStore(cs)
 	v := vs.ReadValue(h)
 	b, ok := v.(types.Blob)
 	if !ok {
@@ -342,8 +342,7 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 		d.Panic("Expected get method.")
 	}
 
-	rootRef := rt.Root()
-	fmt.Fprintf(w, "%v", rootRef.String())
+	fmt.Fprintf(w, "%v", rt.Root().String())
 	w.Header().Add("content-type", "text/plain")
 }
 
@@ -364,7 +363,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	}
 	current := hash.Parse(tokens[0])
 
-	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+	vs := types.NewValueStore(cs)
 
 	// Ensure that proposed new Root is present in cs
 	proposed := vs.ReadValue(current)
@@ -377,7 +376,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	if !last.IsEmpty() {
 		lastVal := vs.ReadValue(last)
 		if lastVal == nil {
-			d.Panic("Can't UpdateRoot from a non-present Chunk")
+			d.Panic("Can't Commit from a non-present Chunk")
 		}
 
 		datasets = lastVal.(types.Map)
@@ -391,8 +390,10 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		assertMapOfStringToRefOfCommit(m, datasets, vs)
 	}
 
-	if !cs.UpdateRoot(current, last) {
+	if !cs.Commit(current, last) {
 		w.WriteHeader(http.StatusConflict)
+		w.Header().Add("content-type", "text/plain")
+		fmt.Fprintf(w, "%v", cs.Root().String())
 		return
 	}
 }

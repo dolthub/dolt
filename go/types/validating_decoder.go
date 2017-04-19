@@ -14,9 +14,7 @@ type ValidatingDecoder struct {
 }
 
 func NewValidatingDecoder(cs chunks.ChunkStore) *ValidatingDecoder {
-	return &ValidatingDecoder{
-		newLocalValueStore(cs),
-	}
+	return &ValidatingDecoder{NewValueStore(cs)}
 }
 
 // DecodedChunk holds a pointer to a Chunk and the Value that results from

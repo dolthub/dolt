@@ -26,7 +26,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("rmnjb8cjc5tblj21ed4qs821649eduie", h.String())
 
-	suite.Store.UpdateRoot(h, suite.Store.Root()) // Commit writes
+	suite.Store.Commit(h, suite.Store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input, h, suite.Store, suite.Assert())
@@ -39,7 +39,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	suite.Store.Put(c)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.Store, suite.Assert())
-	suite.Store.UpdateRoot(h, suite.Store.Root()) // Commit writes
+	suite.Store.Commit(h, suite.Store.Root()) // Commit writes
 
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
@@ -51,7 +51,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePutMany() {
 	c1, c2 := NewChunk([]byte(input1)), NewChunk([]byte(input2))
 	suite.Store.PutMany([]Chunk{c1, c2})
 
-	suite.Store.UpdateRoot(c1.Hash(), suite.Store.Root()) // Commit writes
+	suite.Store.Commit(c1.Hash(), suite.Store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.Store, suite.Assert())
@@ -69,11 +69,11 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 	newRoot := hash.Parse("8la6qjbh81v85r6q67lqbfrkmpds14lg")
 
 	// Try to update root with bogus oldRoot
-	result := suite.Store.UpdateRoot(newRoot, bogusRoot)
+	result := suite.Store.Commit(newRoot, bogusRoot)
 	suite.False(result)
 
 	// Now do a valid root update
-	result = suite.Store.UpdateRoot(newRoot, oldRoot)
+	result = suite.Store.Commit(newRoot, oldRoot)
 	suite.True(result)
 }
 
@@ -87,7 +87,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	oldRoot := suite.Store.Root()
 	suite.True(oldRoot.IsEmpty())
 	newRoot := hash.Parse("11111222223333344444555556666677")
-	suite.True(suite.Store.UpdateRoot(newRoot, oldRoot))
+	suite.True(suite.Store.Commit(newRoot, oldRoot))
 
 	suite.Equal(constants.NomsVersion, suite.Store.Version())
 }

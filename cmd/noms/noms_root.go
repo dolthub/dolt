@@ -85,7 +85,7 @@ Continue?
 		return 0
 	}
 
-	ok = rt.UpdateRoot(h, currRoot)
+	ok = rt.Commit(h, currRoot)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "Optimistic concurrency failure")
 		return 1

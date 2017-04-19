@@ -11,7 +11,6 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/dustin/go-humanize"
 )
 
@@ -20,7 +19,7 @@ type fileBlockStore struct {
 	w  io.WriteCloser
 }
 
-func newFileBlockStore(w io.WriteCloser) types.BatchStore {
+func newFileBlockStore(w io.WriteCloser) chunks.ChunkStore {
 	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
 }
 
@@ -32,8 +31,26 @@ func (fb fileBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.C
 	panic("not impl")
 }
 
-func (fb fileBlockStore) SchedulePut(c chunks.Chunk) {
+func (fb fileBlockStore) Has(h hash.Hash) bool {
+	panic("not impl")
+}
+
+func (fb fileBlockStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
+	panic("not impl")
+}
+
+func (fb fileBlockStore) Put(c chunks.Chunk) {
 	io.Copy(fb.bw, bytes.NewReader(c.Data()))
+}
+
+func (fb fileBlockStore) PutMany(chunks []chunks.Chunk) {
+	for _, c := range chunks {
+		fb.Put(c)
+	}
+}
+
+func (fb fileBlockStore) Version() string {
+	panic("not impl")
 }
 
 func (fb fileBlockStore) Flush() {}
@@ -43,11 +60,13 @@ func (fb fileBlockStore) Close() error {
 	return nil
 }
 
+func (fb fileBlockStore) Rebase() {}
+
 func (fb fileBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }
 
-func (fb fileBlockStore) UpdateRoot(current, last hash.Hash) bool {
+func (fb fileBlockStore) Commit(current, last hash.Hash) bool {
 	fb.bw.Flush()
 	return true
 }

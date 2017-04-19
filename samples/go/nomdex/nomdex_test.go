@@ -17,10 +17,6 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-func TestCSVImporter(t *testing.T) {
-	suite.Run(t, &testSuite{})
-}
-
 type TestObj struct {
 	Key    int
 	Fname  string

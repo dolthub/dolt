@@ -16,9 +16,9 @@ func TestGetRequestBatch(t *testing.T) {
 	assert := assert.New(t)
 	r0 := hash.Parse("00000000000000000000000000000000")
 	c1 := NewChunk([]byte("abc"))
-	r1 := c1.Hash()
+	h1 := c1.Hash()
 	c2 := NewChunk([]byte("123"))
-	r2 := c2.Hash()
+	h2 := c2.Hash()
 
 	tally := func(b bool, trueCnt, falseCnt *int) {
 		if b {
@@ -36,18 +36,18 @@ func TestGetRequestBatch(t *testing.T) {
 
 	batch := ReadBatch{
 		r0: []OutstandingRequest{OutstandingHas(req0chan), OutstandingGet(req1chan)},
-		r1: []OutstandingRequest{OutstandingHas(req2chan)},
-		r2: []OutstandingRequest{OutstandingHas(req3chan), OutstandingGet(req4chan)},
+		h1: []OutstandingRequest{OutstandingHas(req2chan)},
+		h2: []OutstandingRequest{OutstandingHas(req3chan), OutstandingGet(req4chan)},
 	}
 	go func() {
-		for requestedRef, reqs := range batch {
+		for requestedHash, reqs := range batch {
 			for _, req := range reqs {
-				if requestedRef == r1 {
-					req.Satisfy(&c1)
-					delete(batch, r1)
-				} else if requestedRef == r2 {
-					req.Satisfy(&c2)
-					delete(batch, r2)
+				if requestedHash == h1 {
+					req.Satisfy(h1, &c1)
+					delete(batch, h1)
+				} else if requestedHash == h2 {
+					req.Satisfy(h2, &c2)
+					delete(batch, h2)
 				}
 			}
 		}
@@ -104,10 +104,10 @@ func TestGetManyRequestBatch(t *testing.T) {
 		for reqHash, reqs := range batch {
 			for _, req := range reqs {
 				if reqHash == h1 {
-					req.Satisfy(&c1)
+					req.Satisfy(h1, &c1)
 					delete(batch, h1)
 				} else if reqHash == h2 {
-					req.Satisfy(&c2)
+					req.Satisfy(h2, &c2)
 					delete(batch, h2)
 				}
 			}
@@ -117,6 +117,47 @@ func TestGetManyRequestBatch(t *testing.T) {
 
 	for c := range chunks {
 		hashes.Remove(c.Hash())
+	}
+	assert.Len(hashes, 1)
+	assert.True(hashes.Has(h0))
+}
+
+func TestHasManyRequestBatch(t *testing.T) {
+	assert := assert.New(t)
+	h0 := hash.Parse("00000000000000000000000000000000")
+	c1 := NewChunk([]byte("abc"))
+	h1 := c1.Hash()
+	c2 := NewChunk([]byte("123"))
+	h2 := c2.Hash()
+
+	found := make(chan hash.Hash)
+	hashes := hash.NewHashSet(h0, h1, h2)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(hashes))
+	go func() { wg.Wait(); close(found) }()
+
+	req := NewHasManyRequest(hashes, wg, found)
+	batch := ReadBatch{}
+	for h := range req.Hashes() {
+		batch[h] = []OutstandingRequest{req.Outstanding()}
+	}
+	go func() {
+		for reqHash, reqs := range batch {
+			for _, req := range reqs {
+				if reqHash == h1 {
+					req.Satisfy(h1, &EmptyChunk)
+					delete(batch, h1)
+				} else if reqHash == h2 {
+					req.Satisfy(h2, &EmptyChunk)
+					delete(batch, h2)
+				}
+			}
+		}
+		batch.Close()
+	}()
+
+	for h := range found {
+		hashes.Remove(h)
 	}
 	assert.Len(hashes, 1)
 	assert.True(hashes.Has(h0))

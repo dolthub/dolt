@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/graphql"
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/test"
@@ -30,8 +29,7 @@ func TestQueryGraphQL(t *testing.T) {
 }
 
 func (suite *QueryGraphQLSuite) SetupTest() {
-	cs := chunks.NewTestStore()
-	suite.vs = types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+	suite.vs = types.NewTestValueStore()
 }
 
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {

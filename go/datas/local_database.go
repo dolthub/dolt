@@ -15,10 +15,7 @@ type LocalDatabase struct {
 }
 
 func newLocalDatabase(cs chunks.ChunkStore) *LocalDatabase {
-	bs := newLocalBatchStore(cs)
-	return &LocalDatabase{
-		newDatabaseCommon(newCachingChunkHaver(cs), types.NewValueStore(bs), bs),
-	}
+	return &LocalDatabase{newDatabaseCommon(newValidatingChunkStore(cs))}
 }
 
 func (ldb *LocalDatabase) GetDataset(datasetID string) Dataset {

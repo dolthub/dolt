@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -429,7 +428,7 @@ func TestPathTarget(t *testing.T) {
 	s := NewStruct("", StructData{
 		"foo": String("bar"),
 	})
-	vs := NewValueStore(NewBatchStoreAdaptor(chunks.NewMemoryStore()))
+	vs := NewTestValueStore()
 	r := vs.WriteValue(s)
 	s2 := NewStruct("", StructData{
 		"ref": r,

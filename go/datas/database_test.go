@@ -60,8 +60,7 @@ type RemoteDatabaseSuite struct {
 func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
-		hbs := NewHTTPBatchStoreForTest(cs)
-		return &RemoteDatabaseClient{newDatabaseCommon(newCachingChunkHaver(hbs), types.NewValueStore(hbs), hbs)}
+		return &RemoteDatabaseClient{newDatabaseCommon(NewHTTPChunkStoreForTest(cs))}
 	}
 	suite.db = suite.makeDb(suite.cs)
 }
@@ -311,11 +310,11 @@ type waitDuringUpdateRootChunkStore struct {
 	preUpdateRootHook func()
 }
 
-func (w *waitDuringUpdateRootChunkStore) UpdateRoot(current, last hash.Hash) bool {
+func (w *waitDuringUpdateRootChunkStore) Commit(current, last hash.Hash) bool {
 	if w.preUpdateRootHook != nil {
 		w.preUpdateRootHook()
 	}
-	return w.ChunkStore.UpdateRoot(current, last)
+	return w.ChunkStore.Commit(current, last)
 }
 
 func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {

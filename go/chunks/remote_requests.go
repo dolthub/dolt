@@ -43,6 +43,16 @@ type HasRequest struct {
 	ch     chan<- bool
 }
 
+func NewHasManyRequest(hashes hash.HashSet, wg *sync.WaitGroup, ch chan<- hash.Hash) HasManyRequest {
+	return HasManyRequest{hashes, wg, ch}
+}
+
+type HasManyRequest struct {
+	hashes hash.HashSet
+	wg     *sync.WaitGroup
+	ch     chan<- hash.Hash
+}
+
 func (g GetRequest) Hashes() hash.HashSet {
 	return g.hashes
 }
@@ -67,8 +77,16 @@ func (h HasRequest) Outstanding() OutstandingRequest {
 	return OutstandingHas(h.ch)
 }
 
+func (h HasManyRequest) Hashes() hash.HashSet {
+	return h.hashes
+}
+
+func (h HasManyRequest) Outstanding() OutstandingRequest {
+	return OutstandingHasMany{h.wg, h.ch}
+}
+
 type OutstandingRequest interface {
-	Satisfy(c *Chunk)
+	Satisfy(h hash.Hash, c *Chunk)
 	Fail()
 }
 
@@ -78,8 +96,12 @@ type OutstandingGetMany struct {
 	ch chan<- *Chunk
 }
 type OutstandingHas chan<- bool
+type OutstandingHasMany struct {
+	wg *sync.WaitGroup
+	ch chan<- hash.Hash
+}
 
-func (r OutstandingGet) Satisfy(c *Chunk) {
+func (r OutstandingGet) Satisfy(h hash.Hash, c *Chunk) {
 	r <- c
 	close(r)
 }
@@ -89,7 +111,7 @@ func (r OutstandingGet) Fail() {
 	close(r)
 }
 
-func (ogm OutstandingGetMany) Satisfy(c *Chunk) {
+func (ogm OutstandingGetMany) Satisfy(h hash.Hash, c *Chunk) {
 	ogm.ch <- c
 	ogm.wg.Done()
 }
@@ -98,14 +120,23 @@ func (ogm OutstandingGetMany) Fail() {
 	ogm.wg.Done()
 }
 
-func (h OutstandingHas) Satisfy(c *Chunk) {
-	h <- true
-	close(h)
+func (oh OutstandingHas) Satisfy(h hash.Hash, c *Chunk) {
+	oh <- true
+	close(oh)
 }
 
-func (h OutstandingHas) Fail() {
-	h <- false
-	close(h)
+func (oh OutstandingHas) Fail() {
+	oh <- false
+	close(oh)
+}
+
+func (ohm OutstandingHasMany) Satisfy(h hash.Hash, c *Chunk) {
+	ohm.ch <- h
+	ohm.wg.Done()
+}
+
+func (ohm OutstandingHasMany) Fail() {
+	ohm.wg.Done()
 }
 
 // ReadBatch represents a set of queued Get/Has requests, each of which are blocking on a receive channel for a response.

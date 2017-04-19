@@ -41,6 +41,12 @@ func (nbc *NomsBlockCache) Has(hash hash.Hash) bool {
 	return nbc.chunks.Has(hash)
 }
 
+// HasMany returns a set containing the members of hashes present in the
+// cache.
+func (nbc *NomsBlockCache) HasMany(hashes hash.HashSet) hash.HashSet {
+	return nbc.chunks.HasMany(hashes)
+}
+
 // Get retrieves the chunk referenced by hash. If the chunk is not present,
 // Get returns the empty Chunk.
 func (nbc *NomsBlockCache) Get(hash hash.Hash) chunks.Chunk {

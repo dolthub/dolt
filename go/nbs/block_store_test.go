@@ -67,7 +67,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("rmnjb8cjc5tblj21ed4qs821649eduie", h.String())
 
-	suite.store.UpdateRoot(h, suite.store.Root()) // Commit writes
+	suite.store.Commit(h, suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input, h, suite.store, suite.Assert())
@@ -80,7 +80,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	suite.store.Put(c)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.store, suite.Assert())
-	suite.store.UpdateRoot(h, suite.store.Root()) // Commit writes
+	suite.store.Commit(h, suite.store.Root()) // Commit writes
 
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
@@ -92,7 +92,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	suite.store.PutMany([]chunks.Chunk{c1, c2})
 
-	suite.store.UpdateRoot(c1.Hash(), suite.store.Root()) // Commit writes
+	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -109,7 +109,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	suite.store.PutMany([]chunks.Chunk{c1, c2})
 
-	suite.store.UpdateRoot(c1.Hash(), suite.store.Root()) // Commit writes
+	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -129,7 +129,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 		chnx[i] = chunks.NewChunk(data)
 	}
 	suite.store.PutMany(chnx)
-	suite.store.UpdateRoot(chnx[0].Hash(), suite.store.Root()) // Commit writes
+	suite.store.Commit(chnx[0].Hash(), suite.store.Root()) // Commit writes
 
 	hashes := make(hash.HashSlice, len(chnx))
 	for i, c := range chnx {
@@ -184,12 +184,52 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	// And so should reading c1 via the API
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
 
-	suite.True(interloper.UpdateRoot(c1.Hash(), interloper.Root())) // Commit root
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root())) // Commit root
 
 	// Updating from stale root should fail...
-	suite.False(suite.store.UpdateRoot(c2.Hash(), root))
+	suite.False(suite.store.Commit(c2.Hash(), root))
 	// ...but new root should succeed
-	suite.True(suite.store.UpdateRoot(c2.Hash(), suite.store.Root()))
+	suite.True(suite.store.Commit(c2.Hash(), suite.store.Root()))
+}
+
+func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
+	input1, input2 := []byte("abc"), []byte("def")
+	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
+	root := suite.store.Root()
+
+	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper.Put(c1)
+	interloper.Flush()
+
+	suite.store.Put(c2)
+
+	// Reading c2 via the API should work pre-rebase
+	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
+	// Shouldn't have c1 yet.
+	suite.False(suite.store.Has(c1.Hash()))
+
+	suite.store.Rebase()
+
+	// Reading c2 via the API should work post-rebase
+	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
+	// And so should reading c1 via the API
+	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
+
+	// Commit interloper root
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root()))
+
+	// suite.store should still have its initial root
+	suite.EqualValues(root, suite.store.Root())
+	suite.store.Rebase()
+
+	// Rebase grabbed the new root, so updating should now succeed!
+	suite.True(suite.store.Commit(c2.Hash(), suite.store.Root()))
+
+	// Interloper shouldn't see c2 yet....
+	suite.False(interloper.Has(c2.Hash()))
+	interloper.Rebase()
+	// ...but post-rebase it must
+	assertInputInStore(input2, c2.Hash(), interloper, suite.Assert())
 }
 
 func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
@@ -204,7 +244,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 
 	root := smallTableStore.Root()
 	smallTableStore.PutMany(chunx[:testMaxTables])
-	suite.True(smallTableStore.UpdateRoot(chunx[0].Hash(), root)) // Commit write
+	suite.True(smallTableStore.Commit(chunx[0].Hash(), root)) // Commit write
 
 	exists, _, _, mRoot, specs := mm.ParseIfExists(nil)
 	suite.True(exists)
@@ -213,7 +253,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 
 	root = smallTableStore.Root()
 	smallTableStore.PutMany(chunx[testMaxTables:])
-	suite.True(smallTableStore.UpdateRoot(chunx[testMaxTables].Hash(), root)) // Should compact
+	suite.True(smallTableStore.Commit(chunx[testMaxTables].Hash(), root)) // Should compact
 
 	exists, _, _, mRoot, specs = mm.ParseIfExists(nil)
 	suite.True(exists)

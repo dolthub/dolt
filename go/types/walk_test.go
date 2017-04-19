@@ -29,7 +29,7 @@ type WalkAllTestSuite struct {
 
 func (suite *WalkAllTestSuite) SetupTest() {
 	suite.ts = chunks.NewTestStore()
-	suite.vs = NewValueStore(NewBatchStoreAdaptor(suite.ts))
+	suite.vs = NewValueStore(suite.ts)
 }
 
 func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
@@ -244,7 +244,7 @@ type WalkTestSuite struct {
 
 func (suite *WalkTestSuite) SetupTest() {
 	suite.ts = chunks.NewTestStore()
-	suite.vs = NewValueStore(NewBatchStoreAdaptor(suite.ts))
+	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
 	suite.shouldSee = NewList(suite.shouldSeeItem)
 	suite.deadValue = Number(0xDEADBEEF)
@@ -263,7 +263,7 @@ func TestWalkDifferentStructsTestSuite(t *testing.T) {
 
 func (suite *WalkDifferentStructsTestSuite) SetupTest() {
 	suite.ts = chunks.NewTestStore()
-	suite.vs = NewValueStore(NewBatchStoreAdaptor(suite.ts))
+	suite.vs = NewValueStore(suite.ts)
 }
 
 func (suite *WalkDifferentStructsTestSuite) AssertDiffs(last, current Value, expectAdded, expectRemoved []Value) {
@@ -338,11 +338,10 @@ func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
 	// Big, committed collections of structs
 	h1 := suite.vs.WriteValue(l1).TargetHash()
 	h2 := suite.vs.WriteValue(l2).TargetHash()
-	suite.vs.Flush(h1)
-	suite.vs.Flush(h2)
+	suite.vs.Flush()
 
 	// Use a fresh value store to avoid cached chunks
-	nvs := NewValueStore(NewBatchStoreAdaptor(suite.ts))
+	nvs := NewValueStore(suite.ts)
 
 	l1 = nvs.ReadValue(h1).(List)
 	l2 = nvs.ReadValue(h2).(List)

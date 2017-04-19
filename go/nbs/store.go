@@ -356,13 +356,24 @@ func fromHasRecords(reqs []hasRecord) hash.HashSet {
 	return present
 }
 
+func (nbs *NomsBlockStore) Rebase() {
+	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
+		var dropped chunkSources
+		nbs.tables, dropped = nbs.tables.Rebase(tableSpecs)
+		dropped.close()
+	}
+}
+
 func (nbs *NomsBlockStore) Root() hash.Hash {
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
 	return nbs.root
 }
 
-func (nbs *NomsBlockStore) UpdateRoot(current, last hash.Hash) bool {
+func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 	b := &backoff.Backoff{
 		Min:    128 * time.Microsecond,
 		Max:    10 * time.Second,

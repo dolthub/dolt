@@ -14,7 +14,6 @@ import (
 // ChunkStore implementation for.
 type ChunkStore interface {
 	ChunkSource
-	ChunkSink
 	RootTracker
 }
 
@@ -34,11 +33,23 @@ type Factory interface {
 // Database) to store a hash to a value that represents the current state and
 // entire history of a database.
 type RootTracker interface {
+	// Rebase brings this RootTracker into sync with the persistent storage's
+	// current root.
+	Rebase()
+
+	// Root returns the currently cached root value.
 	Root() hash.Hash
-	UpdateRoot(current, last hash.Hash) bool
+
+	// Commit atomically attempts to persist all novel Chunks and update the
+	// persisted root hash from last to current. If last doesn't match the
+	// root in persistent storage, returns false.
+	// TODO: is last now redundant? Maybe this should just try to update from
+	// the cached root to current?
+	// TODO: Does having a separate RootTracker make sense anymore? BUG 3402
+	Commit(current, last hash.Hash) bool
 }
 
-// ChunkSource is a place to get chunks from.
+// ChunkSource is a place chunks live.
 type ChunkSource interface {
 	// Get the Chunk for the value of the hash in the store. If the hash is
 	// absent from the store nil is returned.
@@ -57,19 +68,24 @@ type ChunkSource interface {
 	// present in the source.
 	HasMany(hashes hash.HashSet) (present hash.HashSet)
 
-	// Returns the NomsVersion with which this ChunkSource is compatible.
-	Version() string
-}
-
-// ChunkSink is a place to put chunks.
-type ChunkSink interface {
-	// Put writes c into the ChunkSink, blocking until the operation is complete.
+	// Put caches c in the ChunkSink. Upon return, c must be visible to
+	// subsequent Get and Has calls, but must not be persistent until a call
+	// to Flush(). Put may be called concurrently with other calls to Put(),
+	// PutMany(), Get(), GetMany(), Has() and HasMany().
 	Put(c Chunk)
 
-	// PutMany writes chunks into the sink, blocking until the operation is complete.
+	// PutMany caches chunks in the ChunkSink. Upon return, all members of
+	// chunks must be visible to subsequent Get and Has calls, but must not be
+	// persistent until a call to Flush(). PutMany may be called concurrently
+	// with other calls to Put(), PutMany(), Get(), GetMany(), Has() and
+	// HasMany().
 	PutMany(chunks []Chunk)
 
-	// On return, any previously Put chunks should be durable
+	// Returns the NomsVersion with which this ChunkSource is compatible.
+	Version() string
+
+	// On return, any previously Put chunks must be durable. It is not safe to
+	// call Flush() concurrently with Put() or PutMany().
 	Flush()
 
 	io.Closer

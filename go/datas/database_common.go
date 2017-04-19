@@ -27,12 +27,17 @@ var (
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
 
-func newDatabaseCommon(cch *cachingChunkHaver, vs *types.ValueStore, rt chunks.RootTracker) databaseCommon {
-	return databaseCommon{ValueStore: vs, cch: cch, rt: rt, rootHash: rt.Root()}
+func newDatabaseCommon(cs chunks.ChunkStore) databaseCommon {
+	return databaseCommon{
+		ValueStore: types.NewValueStore(cs),
+		cch:        newCachingChunkHaver(cs),
+		rt:         cs,
+		rootHash:   cs.Root(),
+	}
 }
 
-func (dbc *databaseCommon) validatingBatchStore() types.BatchStore {
-	return dbc.BatchStore()
+func (dbc *databaseCommon) validatingChunkStore() chunks.ChunkStore {
+	return dbc.ChunkStore()
 }
 
 func (dbc *databaseCommon) Datasets() types.Map {
@@ -81,10 +86,10 @@ func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Root(), nil }()
 
 	currentRootHash, currentDatasets := dbc.getRootAndDatasets()
-	commitRef := dbc.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
+	commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Set(types.String(ds.ID()), types.ToRefOfValue(commitRef))
-	return dbc.tryUpdateRoot(currentDatasets, currentRootHash)
+	return dbc.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
 func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error {
@@ -98,7 +103,7 @@ func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error
 	return dbc.doCommit(ds.ID(), commit, nil)
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
+// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
 	if !IsCommit(commit) {
 		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
@@ -109,7 +114,7 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
 		currentRootHash, currentDatasets := dbc.getRootAndDatasets()
-		commitRef := dbc.WriteValue(commit) // will be orphaned if the tryUpdateRoot() below fails
+		commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
@@ -142,12 +147,12 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 			}
 		}
 		currentDatasets = currentDatasets.Set(types.String(datasetID), types.ToRefOfValue(commitRef))
-		err = dbc.tryUpdateRoot(currentDatasets, currentRootHash)
+		err = dbc.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
 }
 
-// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to UpdateRoot below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
+// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Root(), nil }()
 
@@ -163,7 +168,7 @@ func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 	var err error
 	for {
 		currentDatasets = currentDatasets.Remove(datasetID)
-		err = dbc.tryUpdateRoot(currentDatasets, currentRootHash)
+		err = dbc.tryCommitChunks(currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
 		}
@@ -188,12 +193,15 @@ func (dbc *databaseCommon) getRootAndDatasets() (currentRootHash hash.Hash, curr
 	return
 }
 
-func (dbc *databaseCommon) tryUpdateRoot(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
-	// TODO: This Map will be orphaned if the UpdateRoot below fails
+func (dbc *databaseCommon) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
+	// TODO: This Map will be orphaned if the Commit below fails
 	newRootHash := dbc.WriteValue(currentDatasets).TargetHash()
-	dbc.Flush(newRootHash)
+
+	// TODO: We've always been sorta sad that we Flush() the embedded ValueStore here, and then Commit() the composed ChunkStore below. That leads to two consecutive make-Chunks-durable operations on the underlying ChunkStore, and the latter won't actually have any novel Chunks. The problem arises from the fact that most users of ValueStore don't have access to the underlying ChunkStore, but Database _does_. ValueStore buffers Chunks, and most users who call Flush() need it to dump those Chunks into the ChunkStore and then make those Chunks durable. At this callsite, though, we only want to get those down into the ChunkStore, because we know that we're going to call Commit() later, which will make those Chunks durable. It's a conundrum :-/
+	dbc.Flush()
+
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
-	if !dbc.rt.UpdateRoot(newRootHash, currentRootHash) {
+	if !dbc.rt.Commit(newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}
 	return

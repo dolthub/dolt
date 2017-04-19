@@ -12,9 +12,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/nbs"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
@@ -75,19 +75,19 @@ func main() {
 	open := newNullBlockStore
 	wrote := false
 	var writeDB func()
-	var refresh func() types.BatchStore
+	var refresh func() chunks.ChunkStore
 	if *toNBS != "" || *toFile != "" || *toAWS != "" {
 		var reset func()
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
 			defer os.RemoveAll(dir)
-			open = func() types.BatchStore { return nbs.NewLocalStore(dir, bufSize) }
+			open = func() chunks.ChunkStore { return nbs.NewLocalStore(dir, bufSize) }
 			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
 
 		} else if *toFile != "" {
 			dir := makeTempDir(*toFile, pb)
 			defer os.RemoveAll(dir)
-			open = func() types.BatchStore {
+			open = func() chunks.ChunkStore {
 				f, err := ioutil.TempFile(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
@@ -96,7 +96,7 @@ func main() {
 
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() types.BatchStore {
+			open = func() chunks.ChunkStore {
 				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
@@ -112,21 +112,21 @@ func main() {
 		}
 
 		writeDB = func() { wrote = ensureNovelWrite(wrote, open, src, pb) }
-		refresh = func() types.BatchStore {
+		refresh = func() chunks.ChunkStore {
 			reset()
 			return open()
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() types.BatchStore { return nbs.NewLocalStore(*useNBS, bufSize) }
+			open = func() chunks.ChunkStore { return nbs.NewLocalStore(*useNBS, bufSize) }
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() types.BatchStore {
+			open = func() chunks.ChunkStore {
 				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}
-		refresh = func() types.BatchStore { panic("WriteNovel unsupported with --useLDB and --useNBS") }
+		refresh = func() chunks.ChunkStore { panic("WriteNovel unsupported with --useLDB and --useNBS") }
 	}
 
 	benchmarks := []struct {

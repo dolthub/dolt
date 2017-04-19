@@ -19,7 +19,7 @@ func TestValueReadWriteRead(t *testing.T) {
 	vs := NewTestValueStore()
 	assert.Nil(vs.ReadValue(s.Hash())) // nil
 	h := vs.WriteValue(s).TargetHash()
-	vs.Flush(h)
+	vs.Flush()
 	v := vs.ReadValue(h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(s), EncodedValue(v))
@@ -35,7 +35,7 @@ func TestValueReadMany(t *testing.T) {
 	for _, v := range vals {
 		h := vs.WriteValue(v).TargetHash()
 		hashes.Insert(h)
-		vs.Flush(h)
+		vs.Flush()
 	}
 
 	// Get one Value into vs's Value cache
@@ -74,39 +74,37 @@ func TestValueWriteFlush(t *testing.T) {
 	}
 	assert.NotZero(vs.bufferedChunkSize)
 
-	for h := range hashes {
-		vs.Flush(h)
-	}
+	vs.Flush()
 	assert.Zero(vs.bufferedChunkSize)
 }
 
-type checkingBatchStore struct {
-	BatchStore
+type checkingChunkStore struct {
+	chunks.ChunkStore
 	a             *assert.Assertions
 	expectedOrder hash.HashSlice
 }
 
-func (cbs *checkingBatchStore) expect(rs ...Ref) {
+func (cbs *checkingChunkStore) expect(rs ...Ref) {
 	for _, r := range rs {
 		cbs.expectedOrder = append(cbs.expectedOrder, r.TargetHash())
 	}
 }
 
-func (cbs *checkingBatchStore) SchedulePut(c chunks.Chunk) {
+func (cbs *checkingChunkStore) Put(c chunks.Chunk) {
 	if cbs.a.NotZero(len(cbs.expectedOrder), "Unexpected Put of %s", c.Hash()) {
 		cbs.a.Equal(cbs.expectedOrder[0], c.Hash())
 		cbs.expectedOrder = cbs.expectedOrder[1:]
 	}
-	cbs.BatchStore.SchedulePut(c)
+	cbs.ChunkStore.Put(c)
 }
 
-func (cbs *checkingBatchStore) Flush() {
+func (cbs *checkingChunkStore) Flush() {
 	cbs.a.Empty(cbs.expectedOrder)
 }
 
 func TestFlushOrder(t *testing.T) {
 	assert := assert.New(t)
-	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	bs := &checkingChunkStore{chunks.NewTestStore(), assert, nil}
 	vs := NewValueStore(bs)
 	// Graph, which should be flushed grandchildren-first, bottom-up
 	//         l
@@ -140,12 +138,12 @@ func TestFlushOrder(t *testing.T) {
 
 	r := vs.WriteValue(l)
 	bs.expect(r)
-	vs.Flush(l.Hash())
+	vs.Flush()
 }
 
 func TestFlushOverSize(t *testing.T) {
 	assert := assert.New(t)
-	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	bs := &checkingChunkStore{chunks.NewTestStore(), assert, nil}
 	vs := newValueStoreWithCacheAndPending(bs, 0, 10)
 
 	s := String("oy")
@@ -154,12 +152,12 @@ func TestFlushOverSize(t *testing.T) {
 	bs.expect(sr, NewRef(l))
 
 	vs.WriteValue(l)
-	vs.Flush(l.Hash())
+	vs.Flush()
 }
 
 func TestTolerateTopDown(t *testing.T) {
 	assert := assert.New(t)
-	bs := &checkingBatchStore{NewBatchStoreAdaptor(chunks.NewTestStore()), assert, nil}
+	bs := &checkingChunkStore{chunks.NewTestStore(), assert, nil}
 	vs := NewValueStore(bs)
 	// Once the L-ML-S portion of this graph is written once, it's legal to make a Struct ST that contains a ref directly to ML and write it. Then you can write S and ML and Flush ST, which contitutes top-down writing.
 	//       L  ST
@@ -179,29 +177,29 @@ func TestTolerateTopDown(t *testing.T) {
 	lr := vs.WriteValue(L)
 	bs.expect(lr)
 
-	vs.Flush(L.Hash())
+	vs.Flush()
 
 	assert.Zero(len(vs.bufferedChunks))
 
 	ST := NewStruct("", StructData{"r": mlr})
-	str := vs.WriteValue(ST)
-	vs.WriteValue(S)  // S into bufferedChunks
-	vs.WriteValue(ML) // ML into bufferedChunks AND pendingParents
-	bs.expect(mlr, str)
-	vs.Flush(ST.Hash())
+	str := vs.WriteValue(ST) // ST into bufferedChunks
+	vs.WriteValue(S)         // S into bufferedChunks
+	vs.WriteValue(ML)        // ML into bufferedChunks AND withBufferedChunks
 
-	bs.expect(sr)
-	vs.WriteValue(L)
+	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S
+	// So, it'll look at ML, the one parent it knows about, first and write its child (S). Then, it'll write ML, and then it'll flush the remaining buffered chunks, which is just ST.
+	bs.expect(sr, mlr, str)
+	vs.Flush()
 }
 
 func TestPanicOnReadBadVersion(t *testing.T) {
-	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
+	cvs := NewValueStore(&badVersionStore{TestStore: chunks.NewTestStore()})
 	assert.Panics(t, func() { cvs.ReadValue(hash.Hash{}) })
 }
 
 func TestPanicOnWriteBadVersion(t *testing.T) {
-	cvs := newLocalValueStore(&badVersionStore{chunks.NewTestStore()})
-	assert.Panics(t, func() { r := cvs.WriteValue(NewEmptyBlob()); cvs.Flush(r.TargetHash()) })
+	cvs := NewValueStore(&badVersionStore{TestStore: chunks.NewTestStore()})
+	assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()); cvs.Flush() })
 }
 
 type badVersionStore struct {

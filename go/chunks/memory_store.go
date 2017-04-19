@@ -14,9 +14,9 @@ import (
 
 // An in-memory implementation of store.ChunkStore. Useful mainly for tests.
 type MemoryStore struct {
-	data map[hash.Hash]Chunk
-	memoryRootTracker
-	mu sync.RWMutex
+	data     map[hash.Hash]Chunk
+	rootHash hash.Hash
+	mu       sync.RWMutex
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -66,6 +66,7 @@ func (ms *MemoryStore) Version() string {
 	return constants.NomsVersion
 }
 
+// TODO: enforce non-persistence of novel chunks BUG 3400
 func (ms *MemoryStore) Put(c Chunk) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -88,6 +89,21 @@ func (ms *MemoryStore) Len() int {
 }
 
 func (ms *MemoryStore) Flush() {}
+
+func (ms *MemoryStore) Rebase() {}
+
+func (ms *MemoryStore) Root() hash.Hash {
+	return ms.rootHash
+}
+
+func (ms *MemoryStore) Commit(current, last hash.Hash) bool {
+	if last != ms.rootHash {
+		return false
+	}
+
+	ms.rootHash = current
+	return true
+}
 
 func (ms *MemoryStore) Close() error {
 	return nil

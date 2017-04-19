@@ -302,7 +302,7 @@ func TestHandleGetRoot(t *testing.T) {
 	cs := chunks.NewTestStore()
 	c := chunks.NewChunk([]byte("abc"))
 	cs.Put(c)
-	assert.True(cs.UpdateRoot(c.Hash(), hash.Hash{}))
+	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
 
 	w := httptest.NewRecorder()
 	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
@@ -318,7 +318,7 @@ func TestHandleGetBase(t *testing.T) {
 	cs := chunks.NewTestStore()
 	c := chunks.NewChunk([]byte("abc"))
 	cs.Put(c)
-	assert.True(cs.UpdateRoot(c.Hash(), hash.Hash{}))
+	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
 
 	w := httptest.NewRecorder()
 	HandleBaseGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
@@ -331,18 +331,18 @@ func TestHandleGetBase(t *testing.T) {
 func TestHandlePostRoot(t *testing.T) {
 	assert := assert.New(t)
 	cs := chunks.NewTestStore()
-	vs := types.NewValueStore(types.NewBatchStoreAdaptor(cs))
+	vs := types.NewValueStore(cs)
 
 	commit := buildTestCommit(types.String("head"))
 	commitRef := vs.WriteValue(commit)
 	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
 	firstHeadRef := vs.WriteValue(firstHead)
-	vs.Flush(firstHeadRef.TargetHash())
+	vs.Flush()
 
 	commit = buildTestCommit(types.String("second"), commitRef)
 	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
-	vs.Flush(newHeadRef.TargetHash())
+	vs.Flush()
 
 	// First attempt should fail, as 'last' won't match.
 	u := &url.URL{}
@@ -357,7 +357,7 @@ func TestHandlePostRoot(t *testing.T) {
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
-	assert.True(cs.UpdateRoot(firstHeadRef.TargetHash(), hash.Hash{}))
+	assert.True(cs.Commit(firstHeadRef.TargetHash(), hash.Hash{}))
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))

@@ -31,7 +31,7 @@ const bytesWrittenSampleRate = .10
 // TODO: Get rid of this (BUG 2982)
 func PullWithFlush(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	Pull(srcDB, sinkDB, sourceRef, sinkHeadRef, concurrency, progressCh)
-	sinkDB.validatingBatchStore().Flush()
+	sinkDB.validatingChunkStore().Flush()
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB. sinkHeadRef
@@ -242,16 +242,15 @@ func getChunks(v types.Value) (chunks []types.Ref) {
 func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritten bool) traverseSourceResult {
 	h := srcRef.TargetHash()
 	if !sinkDB.has(h) {
-		srcBS := srcDB.validatingBatchStore()
-		c := srcBS.Get(h)
+		c := srcDB.validatingChunkStore().Get(h)
 		v := types.DecodeValue(c, srcDB)
 		if v == nil {
 			d.Panic("Expected decoded chunk to be non-nil.")
 		}
-		sinkDB.validatingBatchStore().SchedulePut(c)
+		sinkDB.validatingChunkStore().Put(c)
 		bytesWritten := 0
 		if estimateBytesWritten {
-			// TODO: Probably better to hide this behind the BatchStore abstraction since
+			// TODO: Probably better to hide this behind the ChunkStore abstraction since
 			// write size is implementation specific.
 			bytesWritten = len(snappy.Encode(nil, c.Data()))
 		}

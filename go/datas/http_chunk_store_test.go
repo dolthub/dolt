@@ -21,14 +21,14 @@ import (
 
 const testAuthToken = "aToken123"
 
-func TestHTTPBatchStore(t *testing.T) {
-	suite.Run(t, &HTTPBatchStoreSuite{})
+func TestHTTPChunkStore(t *testing.T) {
+	suite.Run(t, &HTTPChunkStoreSuite{})
 }
 
-type HTTPBatchStoreSuite struct {
+type HTTPChunkStoreSuite struct {
 	suite.Suite
 	cs    *chunks.TestStore
-	store *httpBatchStore
+	store *httpChunkStore
 }
 
 type inlineServer struct {
@@ -47,12 +47,12 @@ func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) 
 		nil
 }
 
-func (suite *HTTPBatchStoreSuite) SetupTest() {
+func (suite *HTTPChunkStoreSuite) SetupTest() {
 	suite.cs = chunks.NewTestStore()
-	suite.store = NewHTTPBatchStoreForTest(suite.cs)
+	suite.store = NewHTTPChunkStoreForTest(suite.cs)
 }
 
-func NewHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
+func NewHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.WriteValuePath,
@@ -84,12 +84,10 @@ func NewHTTPBatchStoreForTest(cs chunks.ChunkStore) *httpBatchStore {
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
-	hcs := NewHTTPBatchStore("http://localhost:9000", "")
-	hcs.httpClient = serv
-	return hcs
+	return newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
 }
 
-func newAuthenticatingHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite, hostUrl string) *httpBatchStore {
+func newAuthenticatingHTTPChunkStoreForTest(suite *HTTPChunkStoreSuite, hostUrl string) *httpChunkStore {
 	authenticate := func(req *http.Request) {
 		suite.Equal(testAuthToken, req.URL.Query().Get("access_token"))
 	}
@@ -102,12 +100,16 @@ func newAuthenticatingHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite, hostUrl 
 			HandleRootPost(w, req, ps, suite.cs)
 		},
 	)
-	hcs := NewHTTPBatchStore(hostUrl, "")
-	hcs.httpClient = serv
-	return hcs
+	serv.GET(
+		constants.RootPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			HandleRootGet(w, req, ps, suite.cs)
+		},
+	)
+	return newHTTPChunkStoreWithClient(hostUrl, "", serv)
 }
 
-func newBadVersionHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite) *httpBatchStore {
+func newBadVersionHTTPChunkStoreForTest(suite *HTTPChunkStoreSuite) *httpChunkStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.RootPath,
@@ -116,17 +118,21 @@ func newBadVersionHTTPBatchStoreForTest(suite *HTTPBatchStoreSuite) *httpBatchSt
 			w.Header().Set(NomsVersionHeader, "BAD")
 		},
 	)
-	hcs := NewHTTPBatchStore("http://localhost", "")
-	hcs.httpClient = serv
-	return hcs
+	serv.GET(
+		constants.RootPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			HandleRootGet(w, req, ps, suite.cs)
+		},
+	)
+	return newHTTPChunkStoreWithClient("http://localhost", "", serv)
 }
 
-func (suite *HTTPBatchStoreSuite) TearDownTest() {
+func (suite *HTTPChunkStoreSuite) TearDownTest() {
 	suite.store.Close()
 	suite.cs.Close()
 }
 
-func (suite *HTTPBatchStoreSuite) TestPutChunk() {
+func (suite *HTTPChunkStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.String("abc"), nil)
 	suite.store.SchedulePut(c)
 	suite.store.Flush()
@@ -134,7 +140,7 @@ func (suite *HTTPBatchStoreSuite) TestPutChunk() {
 	suite.Equal(1, suite.cs.Writes)
 }
 
-func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
+func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	vals := []types.Value{
 		types.String("abc"),
 		types.String("def"),
@@ -150,39 +156,50 @@ func (suite *HTTPBatchStoreSuite) TestPutChunksInOrder() {
 	suite.Equal(3, suite.cs.Writes)
 }
 
-func (suite *HTTPBatchStoreSuite) TestRoot() {
+func (suite *HTTPChunkStoreSuite) TestRebase() {
+	suite.Equal(hash.Hash{}, suite.store.Root())
 	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
-	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.True(suite.cs.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
+	suite.Equal(hash.Hash{}, suite.store.Root())       // shouldn't be visible yet
+
+	suite.store.Rebase()
 	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
-func (suite *HTTPBatchStoreSuite) TestVersionMismatch() {
-	store := newBadVersionHTTPBatchStoreForTest(suite)
+func (suite *HTTPChunkStoreSuite) TestRoot() {
+	c := types.EncodeValue(types.NewMap(), nil)
+	suite.cs.Put(c)
+	suite.True(suite.store.Commit(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.cs.Root())
+}
+
+func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
+	store := newBadVersionHTTPChunkStoreForTest(suite)
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
-	suite.Panics(func() { store.UpdateRoot(c.Hash(), hash.Hash{}) })
+	suite.Panics(func() { store.Commit(c.Hash(), hash.Hash{}) })
 }
 
-func (suite *HTTPBatchStoreSuite) TestUpdateRoot() {
+func (suite *HTTPChunkStoreSuite) TestCommit() {
 	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
-	suite.True(suite.store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.True(suite.store.Commit(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
-func (suite *HTTPBatchStoreSuite) TestUpdateRootWithParams() {
+func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
-	store := newAuthenticatingHTTPBatchStoreForTest(suite, u)
+	store := newAuthenticatingHTTPChunkStoreForTest(suite, u)
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap(), nil)
 	suite.cs.Put(c)
-	suite.True(store.UpdateRoot(c.Hash(), hash.Hash{}))
+	suite.True(store.Commit(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.cs.Root())
 }
 
-func (suite *HTTPBatchStoreSuite) TestGet() {
+func (suite *HTTPChunkStoreSuite) TestGet() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
@@ -194,13 +211,14 @@ func (suite *HTTPBatchStoreSuite) TestGet() {
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
-func (suite *HTTPBatchStoreSuite) TestGetMany() {
+func (suite *HTTPChunkStoreSuite) TestGetMany() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 	suite.cs.PutMany(chnx)
+	suite.cs.Flush()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
@@ -213,7 +231,7 @@ func (suite *HTTPBatchStoreSuite) TestGetMany() {
 	suite.True(hashes.Has(notPresent))
 }
 
-func (suite *HTTPBatchStoreSuite) TestGetManyAllCached() {
+func (suite *HTTPChunkStoreSuite) TestGetManyAllCached() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
@@ -231,14 +249,15 @@ func (suite *HTTPBatchStoreSuite) TestGetManyAllCached() {
 	suite.Len(hashes, 0)
 }
 
-func (suite *HTTPBatchStoreSuite) TestGetManySomeCached() {
+func (suite *HTTPChunkStoreSuite) TestGetManySomeCached() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
 	suite.cs.PutMany(chnx)
-	suite.store.SchedulePut(cached)
+	suite.cs.Flush()
+	suite.store.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
 	foundChunks := make(chan *chunks.Chunk)
@@ -250,7 +269,7 @@ func (suite *HTTPBatchStoreSuite) TestGetManySomeCached() {
 	suite.Len(hashes, 0)
 }
 
-func (suite *HTTPBatchStoreSuite) TestGetSame() {
+func (suite *HTTPChunkStoreSuite) TestGetSame() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("def")),
 		chunks.NewChunk([]byte("def")),
@@ -262,7 +281,7 @@ func (suite *HTTPBatchStoreSuite) TestGetSame() {
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
-func (suite *HTTPBatchStoreSuite) TestHas() {
+func (suite *HTTPChunkStoreSuite) TestHas() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
@@ -270,4 +289,58 @@ func (suite *HTTPBatchStoreSuite) TestHas() {
 	suite.cs.PutMany(chnx)
 	suite.True(suite.store.Has(chnx[0].Hash()))
 	suite.True(suite.store.Has(chnx[1].Hash()))
+}
+
+func (suite *HTTPChunkStoreSuite) TestHasMany() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	suite.cs.PutMany(chnx)
+	suite.cs.Flush()
+	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
+	present := suite.store.HasMany(hashes)
+
+	suite.Len(present, len(chnx))
+	for _, c := range chnx {
+		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+	}
+	suite.False(present.Has(notPresent))
+}
+
+func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	suite.store.PutMany(chnx)
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
+	present := suite.store.HasMany(hashes)
+
+	suite.Len(present, len(chnx))
+	for _, c := range chnx {
+		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+	}
+}
+
+func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	cached := chunks.NewChunk([]byte("ghi"))
+	suite.cs.PutMany(chnx)
+	suite.cs.Flush()
+	suite.store.Put(cached)
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
+	present := suite.store.HasMany(hashes)
+
+	suite.Len(present, len(chnx)+1)
+	for _, c := range chnx {
+		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+	}
 }

@@ -7,14 +7,13 @@ package main
 import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 )
 
 type nullBlockStore struct {
 	bogus int32
 }
 
-func newNullBlockStore() types.BatchStore {
+func newNullBlockStore() chunks.ChunkStore {
 	return nullBlockStore{}
 }
 
@@ -26,7 +25,21 @@ func (nb nullBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.C
 	panic("not impl")
 }
 
-func (nb nullBlockStore) SchedulePut(c chunks.Chunk) {}
+func (nb nullBlockStore) Has(h hash.Hash) bool {
+	panic("not impl")
+}
+
+func (nb nullBlockStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
+	panic("not impl")
+}
+
+func (nb nullBlockStore) Put(c chunks.Chunk) {}
+
+func (nb nullBlockStore) PutMany(chunks []chunks.Chunk) {}
+
+func (nb nullBlockStore) Version() string {
+	panic("not impl")
+}
 
 func (nb nullBlockStore) Flush() {}
 
@@ -34,10 +47,12 @@ func (nb nullBlockStore) Close() error {
 	return nil
 }
 
+func (nb nullBlockStore) Rebase() {}
+
 func (nb nullBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }
 
-func (nb nullBlockStore) UpdateRoot(current, last hash.Hash) bool {
+func (nb nullBlockStore) Commit(current, last hash.Hash) bool {
 	return true
 }

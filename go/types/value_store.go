@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/util/sizecache"
@@ -37,22 +38,25 @@ type ValueReadWriter interface {
 	opCache() opCache
 }
 
-// ValueStore provides methods to read and write Noms Values to a BatchStore.
+// ValueStore provides methods to read and write Noms Values to a ChunkStore.
 // It minimally validates Values as they're written, but does not guarantee
-// that these Values are persisted through the BatchStore until a subsequent
+// that these Values are persisted through the ChunkStore until a subsequent
 // Flush.
 // Currently, WriteValue validates the following properties of a Value v:
 // - v can be correctly serialized and its Ref taken
 type ValueStore struct {
-	bs                   BatchStore
+	cs                   chunks.ChunkStore
 	bufferMu             sync.RWMutex
 	bufferedChunks       map[hash.Hash]chunks.Chunk
 	bufferedChunksMax    uint64
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
 	valueCache           *sizecache.SizeCache
-	opcStore             opCacheStore
-	once                 sync.Once
+
+	opcOnce  sync.Once
+	opcStore opCacheStore
+
+	versOnce sync.Once
 }
 
 const (
@@ -63,46 +67,52 @@ const (
 // NewTestValueStore creates a simple struct that satisfies ValueReadWriter
 // and is backed by a chunks.TestStore.
 func NewTestValueStore() *ValueStore {
-	return newLocalValueStore(chunks.NewTestStore())
-}
-
-func newLocalValueStore(cs chunks.ChunkStore) *ValueStore {
-	return NewValueStore(NewBatchStoreAdaptor(cs))
+	return NewValueStore(chunks.NewTestStore())
 }
 
 // NewValueStore returns a ValueStore instance that owns the provided
-// BatchStore and manages its lifetime. Calling Close on the returned
-// ValueStore will Close bs.
-func NewValueStore(bs BatchStore) *ValueStore {
-	return NewValueStoreWithCache(bs, defaultValueCacheSize)
+// ChunkStore and manages its lifetime. Calling Close on the returned
+// ValueStore will Close() cs.
+func NewValueStore(cs chunks.ChunkStore) *ValueStore {
+	return NewValueStoreWithCache(cs, defaultValueCacheSize)
 }
 
-func NewValueStoreWithCache(bs BatchStore, cacheSize uint64) *ValueStore {
-	return newValueStoreWithCacheAndPending(bs, cacheSize, defaultPendingPutMax)
+func NewValueStoreWithCache(cs chunks.ChunkStore, cacheSize uint64) *ValueStore {
+	return newValueStoreWithCacheAndPending(cs, cacheSize, defaultPendingPutMax)
 }
 
-func newValueStoreWithCacheAndPending(bs BatchStore, cacheSize, pendingMax uint64) *ValueStore {
+func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
 	return &ValueStore{
-		bs: bs,
+		cs: cs,
 
 		bufferMu:             sync.RWMutex{},
 		bufferedChunks:       map[hash.Hash]chunks.Chunk{},
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
 
+		opcOnce:    sync.Once{},
 		valueCache: sizecache.New(cacheSize),
-		once:       sync.Once{},
+
+		versOnce: sync.Once{},
 	}
 }
 
-func (lvs *ValueStore) BatchStore() BatchStore {
-	return lvs.bs
+func (lvs *ValueStore) expectVersion() {
+	dataVersion := lvs.cs.Version()
+	if constants.NomsVersion != dataVersion {
+		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
+	}
+}
+
+func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
+	return lvs.cs
 }
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error
 // for the requested chunk to be empty; in this case, the function simply
 // returns nil.
 func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
+	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.valueCache.Get(h); ok {
 		if v == nil {
 			return nil
@@ -119,7 +129,7 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 		return chunks.EmptyChunk
 	}()
 	if chunk.IsEmpty() {
-		chunk = lvs.bs.Get(h)
+		chunk = lvs.cs.Get(h)
 	}
 	if chunk.IsEmpty() {
 		lvs.valueCache.Add(h, 0, nil)
@@ -135,13 +145,14 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 // return, |foundValues| will have been fully sent all Values which have been
 // found. Any non-present Values will silently be ignored.
 func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Value) {
+	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk, toPending bool) Value {
 		v := DecodeValue(*chunk, lvs)
 		lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
 		return v
 	}
 
-	// First, see which hashes can be found in either the Value cache or bufferedChunks. Put the rest into a new HashSet to be requested en masse from the BatchStore.
+	// First, see which hashes can be found in either the Value cache or bufferedChunks. Put the rest into a new HashSet to be requested en masse from the ChunkStore.
 	remaining := hash.HashSet{}
 	for h := range hashes {
 		if v, ok := lvs.valueCache.Get(h); ok {
@@ -171,11 +182,11 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		return
 	}
 
-	// Request remaining hashes from BatchStore, processing the found chunks as they come in.
+	// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 	foundChunks := make(chan *chunks.Chunk, 16)
 	foundHashes := hash.HashSet{}
 
-	go func() { lvs.bs.GetMany(remaining, foundChunks); close(foundChunks) }()
+	go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
 	for c := range foundChunks {
 		h := c.Hash()
 		foundHashes[h] = struct{}{}
@@ -186,7 +197,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		remaining.Remove(h) // Avoid concurrent access with the call to GetMany above
 	}
 
-	// Any remaining hashes weren't found in the BatchStore should be recorded as not present.
+	// Any remaining hashes weren't found in the ChunkStore should be recorded as not present.
 	for h := range remaining {
 		lvs.valueCache.Add(h, 0, nil)
 	}
@@ -196,6 +207,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
+	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
 	c := EncodeValue(v, lvs)
@@ -214,7 +226,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 
 // bufferChunk enqueues c (which is the serialization of v) within this
 // ValueStore. Buffered chunks are flushed progressively to the underlying
-// BatchStore in a way which attempts to locate children and grandchildren
+// ChunkStore in a way which attempts to locate children and grandchildren
 // sequentially together. The following invariants are retained:
 //
 // 1. For any given chunk currently in the buffer, only direct children of the
@@ -225,12 +237,20 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
-	h := c.Hash()
 	d.PanicIfTrue(height == 0)
-	lvs.bufferedChunks[h] = c
-	lvs.bufferedChunkSize += uint64(len(c.Data()))
+	h := c.Hash()
+	if _, present := lvs.bufferedChunks[h]; !present {
+		lvs.bufferedChunks[h] = c
+		lvs.bufferedChunkSize += uint64(len(c.Data()))
+	}
 
-	putChildren := func(parent hash.Hash) (dataPut int) {
+	put := func(h hash.Hash, c chunks.Chunk) {
+		lvs.cs.Put(c)
+		lvs.bufferedChunkSize -= uint64(len(c.Data()))
+		delete(lvs.bufferedChunks, h)
+	}
+
+	putChildren := func(parent hash.Hash) {
 		pending, isBuffered := lvs.bufferedChunks[parent]
 		if !isBuffered {
 			return
@@ -239,9 +259,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 		pv.WalkRefs(func(grandchildRef Ref) {
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
-				lvs.bs.SchedulePut(pending)
-				dataPut += len(pending.Data())
-				delete(lvs.bufferedChunks, gch)
+				put(gch, pending)
 			}
 		})
 		delete(lvs.withBufferedChildren, parent)
@@ -256,7 +274,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 				lvs.withBufferedChildren[h] = height
 			}
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
-				lvs.bufferedChunkSize -= uint64(putChildren(childHash))
+				putChildren(childHash)
 			}
 		})
 	}
@@ -277,55 +295,64 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 				// Any pendingPut is as good as another in this case, so take the first one
 				break
 			}
-			lvs.bs.SchedulePut(chunk)
-			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
-			delete(lvs.bufferedChunks, tallest)
+			put(tallest, chunk)
 			continue
 		}
 
-		lvs.bufferedChunkSize -= uint64(putChildren(tallest))
+		putChildren(tallest)
 	}
 }
 
-func (lvs *ValueStore) Flush(root hash.Hash) {
+// Flush() flushes all bufferedChunks to the ChunkStore, with best-effort
+// locality, and then flushes the ChunkStore to make the Chunks durable.
+// TODO: Is flushing the ChunkStore the right semantics?
+func (lvs *ValueStore) Flush() {
 	func() {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
-		pending, present := lvs.bufferedChunks[root]
-		if !present {
-			return
+		put := func(h hash.Hash, chunk chunks.Chunk) {
+			lvs.cs.Put(chunk)
+			delete(lvs.bufferedChunks, h)
+			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 		}
 
-		v := DecodeValue(pending, lvs)
-		put := func(h hash.Hash, chunk chunks.Chunk) uint64 {
-			lvs.bs.SchedulePut(chunk)
-			delete(lvs.bufferedChunks, h)
-			return uint64(len(chunk.Data()))
-		}
-		v.WalkRefs(func(reachable Ref) {
-			if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
-				lvs.bufferedChunkSize -= put(reachable.TargetHash(), pending)
+		for parent := range lvs.withBufferedChildren {
+			if pending, present := lvs.bufferedChunks[parent]; present {
+				v := DecodeValue(pending, lvs)
+				// TODO: Consider gathering up the hashes of the referenced, buffered chunks, doing a HasMany() and only writing chunks that aren't in the ChunkStore
+				v.WalkRefs(func(reachable Ref) {
+					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
+						put(reachable.TargetHash(), pending)
+					}
+				})
+				put(parent, pending)
 			}
-		})
-		delete(lvs.withBufferedChildren, root) // If not present, this is idempotent
-		lvs.bufferedChunkSize -= put(root, pending)
+		}
+		for _, c := range lvs.bufferedChunks {
+			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
+			lvs.cs.Put(c)
+			lvs.bufferedChunkSize -= uint64(len(c.Data()))
+		}
+		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
+		lvs.withBufferedChildren = map[hash.Hash]uint64{}
+		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 	}()
-	lvs.bs.Flush()
+	lvs.cs.Flush()
 }
 
-// Close closes the underlying BatchStore
+// Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
 	if lvs.opcStore != nil {
 		err := lvs.opcStore.destroy()
 		d.Chk.NoError(err, "Attempt to clean up opCacheStore failed, error: %s\n", err)
 		lvs.opcStore = nil
 	}
-	return lvs.bs.Close()
+	return lvs.cs.Close()
 }
 
 func (lvs *ValueStore) opCache() opCache {
-	lvs.once.Do(func() {
+	lvs.opcOnce.Do(func() {
 		lvs.opcStore = newLdbOpCacheStore(lvs)
 	})
 	return lvs.opcStore.opCache()

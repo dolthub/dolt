@@ -40,8 +40,7 @@ var customHTTPTransport = http.Transport{
 	ResponseHeaderTimeout: time.Duration(4) * time.Minute,
 }
 
-// httpBatchStore implements types.BatchStore
-type httpBatchStore struct {
+type httpChunkStore struct {
 	host         *url.URL
 	httpClient   httpDoer
 	auth         string
@@ -54,18 +53,26 @@ type httpBatchStore struct {
 
 	cacheMu       *sync.RWMutex
 	unwrittenPuts *nbs.NomsBlockCache
+
+	rootMu  *sync.RWMutex
+	root    hash.Hash
+	version string
 }
 
-func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
+func NewHTTPChunkStore(baseURL, auth string) *httpChunkStore {
+	// Custom http.Client to give control of idle connections and timeouts
+	return newHTTPChunkStoreWithClient(baseURL, auth, &http.Client{Transport: &customHTTPTransport})
+}
+
+func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChunkStore {
 	u, err := url.Parse(baseURL)
 	d.PanicIfError(err)
 	if u.Scheme != "http" && u.Scheme != "https" {
 		d.Panic("Unrecognized scheme: %s", u.Scheme)
 	}
-	buffSink := &httpBatchStore{
-		host: u,
-		// Custom http.Client to give control of idle connections and timeouts
-		httpClient:    &http.Client{Transport: &customHTTPTransport},
+	hcs := &httpChunkStore{
+		host:          u,
+		httpClient:    client,
 		auth:          auth,
 		getQueue:      make(chan chunks.ReadRequest, readBufferSize),
 		hasQueue:      make(chan chunks.ReadRequest, readBufferSize),
@@ -75,60 +82,66 @@ func NewHTTPBatchStore(baseURL, auth string) *httpBatchStore {
 		workerWg:      &sync.WaitGroup{},
 		cacheMu:       &sync.RWMutex{},
 		unwrittenPuts: nbs.NewCache(),
+		rootMu:        &sync.RWMutex{},
 	}
-	buffSink.batchGetRequests()
-	buffSink.batchHasRequests()
-	return buffSink
+	hcs.root, hcs.version = hcs.getRoot(false)
+	hcs.batchGetRequests()
+	hcs.batchHasRequests()
+	return hcs
 }
 
 type httpDoer interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 
-func (bhcs *httpBatchStore) Flush() {
-	bhcs.sendWriteRequests()
-	bhcs.requestWg.Wait()
+func (hcs *httpChunkStore) Version() string {
+	return hcs.version
+}
+
+func (hcs *httpChunkStore) Flush() {
+	hcs.sendWriteRequests()
+	hcs.requestWg.Wait()
 	return
 }
 
-func (bhcs *httpBatchStore) Close() (e error) {
-	close(bhcs.finishedChan)
-	bhcs.requestWg.Wait()
-	bhcs.workerWg.Wait()
+func (hcs *httpChunkStore) Close() (e error) {
+	close(hcs.finishedChan)
+	hcs.requestWg.Wait()
+	hcs.workerWg.Wait()
 
-	close(bhcs.getQueue)
-	close(bhcs.hasQueue)
-	close(bhcs.rateLimit)
+	close(hcs.getQueue)
+	close(hcs.hasQueue)
+	close(hcs.rateLimit)
 
-	bhcs.cacheMu.Lock()
-	defer bhcs.cacheMu.Unlock()
-	bhcs.unwrittenPuts.Destroy()
+	hcs.cacheMu.Lock()
+	defer hcs.cacheMu.Unlock()
+	hcs.unwrittenPuts.Destroy()
 	return
 }
 
-func (bhcs *httpBatchStore) Get(h hash.Hash) chunks.Chunk {
+func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
-		bhcs.cacheMu.RLock()
-		defer bhcs.cacheMu.RUnlock()
-		return bhcs.unwrittenPuts.Get(h)
+		hcs.cacheMu.RLock()
+		defer hcs.cacheMu.RUnlock()
+		return hcs.unwrittenPuts.Get(h)
 	}
 	if pending := checkCache(h); !pending.IsEmpty() {
 		return pending
 	}
 
 	ch := make(chan *chunks.Chunk)
-	bhcs.requestWg.Add(1)
-	bhcs.getQueue <- chunks.NewGetRequest(h, ch)
+	hcs.requestWg.Add(1)
+	hcs.getQueue <- chunks.NewGetRequest(h, ch)
 	return *(<-ch)
 }
 
-func (bhcs *httpBatchStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (hcs *httpChunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	cachedChunks := make(chan *chunks.Chunk)
 	go func() {
-		bhcs.cacheMu.RLock()
-		defer bhcs.cacheMu.RUnlock()
+		hcs.cacheMu.RLock()
+		defer hcs.cacheMu.RUnlock()
 		defer close(cachedChunks)
-		bhcs.unwrittenPuts.GetMany(hashes, cachedChunks)
+		hcs.unwrittenPuts.GetMany(hashes, cachedChunks)
 	}()
 	remaining := hash.HashSet{}
 	for h := range hashes {
@@ -144,53 +157,82 @@ func (bhcs *httpBatchStore) GetMany(hashes hash.HashSet, foundChunks chan *chunk
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(remaining))
-	bhcs.requestWg.Add(1)
-	bhcs.getQueue <- chunks.NewGetManyRequest(remaining, wg, foundChunks)
+	hcs.requestWg.Add(1)
+	hcs.getQueue <- chunks.NewGetManyRequest(remaining, wg, foundChunks)
 	wg.Wait()
 }
 
-func (bhcs *httpBatchStore) batchGetRequests() {
-	bhcs.batchReadRequests(bhcs.getQueue, bhcs.getRefs)
+func (hcs *httpChunkStore) batchGetRequests() {
+	hcs.batchReadRequests(hcs.getQueue, hcs.getRefs)
 }
 
-func (bhcs *httpBatchStore) Has(h hash.Hash) bool {
+func (hcs *httpChunkStore) Has(h hash.Hash) bool {
 	checkCache := func(h hash.Hash) bool {
-		bhcs.cacheMu.RLock()
-		defer bhcs.cacheMu.RUnlock()
-		return bhcs.unwrittenPuts.Has(h)
+		hcs.cacheMu.RLock()
+		defer hcs.cacheMu.RUnlock()
+		return hcs.unwrittenPuts.Has(h)
 	}
 	if checkCache(h) {
 		return true
 	}
 
 	ch := make(chan bool)
-	bhcs.requestWg.Add(1)
-	bhcs.hasQueue <- chunks.NewHasRequest(h, ch)
+	hcs.requestWg.Add(1)
+	hcs.hasQueue <- chunks.NewHasRequest(h, ch)
 	return <-ch
 }
 
-func (bhcs *httpBatchStore) batchHasRequests() {
-	bhcs.batchReadRequests(bhcs.hasQueue, bhcs.hasRefs)
+func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
+	func() {
+		hcs.cacheMu.RLock()
+		defer hcs.cacheMu.RUnlock()
+		present = hcs.unwrittenPuts.HasMany(hashes)
+	}()
+	remaining := hash.HashSet{}
+	for h := range hashes {
+		if !present.Has(h) {
+			remaining.Insert(h)
+		}
+	}
+	if len(remaining) == 0 {
+		return present
+	}
+
+	foundChunks := make(chan hash.Hash)
+	wg := &sync.WaitGroup{}
+	wg.Add(len(remaining))
+	hcs.requestWg.Add(1)
+	hcs.hasQueue <- chunks.NewHasManyRequest(remaining, wg, foundChunks)
+	go func() { defer close(foundChunks); wg.Wait() }()
+
+	for found := range foundChunks {
+		present.Insert(found)
+	}
+	return present
+}
+
+func (hcs *httpChunkStore) batchHasRequests() {
+	hcs.batchReadRequests(hcs.hasQueue, hcs.hasRefs)
 }
 
 type batchGetter func(hashes hash.HashSet, batch chunks.ReadBatch)
 
-func (bhcs *httpBatchStore) batchReadRequests(queue <-chan chunks.ReadRequest, getter batchGetter) {
-	bhcs.workerWg.Add(1)
+func (hcs *httpChunkStore) batchReadRequests(queue <-chan chunks.ReadRequest, getter batchGetter) {
+	hcs.workerWg.Add(1)
 	go func() {
-		defer bhcs.workerWg.Done()
+		defer hcs.workerWg.Done()
 
 		for done := false; !done; {
 			select {
 			case req := <-queue:
-				bhcs.sendReadRequests(req, queue, getter)
-			case <-bhcs.finishedChan:
+				hcs.sendReadRequests(req, queue, getter)
+			case <-hcs.finishedChan:
 				done = true
 			}
 			// Drain queue before returning
 			select {
 			case req := <-queue:
-				bhcs.sendReadRequests(req, queue, getter)
+				hcs.sendReadRequests(req, queue, getter)
 			default:
 				//drained!
 			}
@@ -198,7 +240,7 @@ func (bhcs *httpBatchStore) batchReadRequests(queue <-chan chunks.ReadRequest, g
 	}()
 }
 
-func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
+func (hcs *httpChunkStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
 	batch := chunks.ReadBatch{}
 	hashes := hash.HashSet{}
 
@@ -221,31 +263,31 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 		}
 	}
 
-	bhcs.rateLimit <- struct{}{}
+	hcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
-			bhcs.requestWg.Add(-count)
+			hcs.requestWg.Add(-count)
 			batch.Close()
 		}()
 
 		getter(hashes, batch)
-		<-bhcs.rateLimit
+		<-hcs.rateLimit
 	}()
 }
 
-func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
+func (hcs *httpChunkStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
 	// POST http://<host>/getRefs/. Post body: ref=hash0&ref=hash1& Response will be chunk data if present, 404 if absent.
-	u := *bhcs.host
-	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.GetRefsPath)
+	u := *hcs.host
+	u.Path = httprouter.CleanPath(hcs.host.Path + constants.GetRefsPath)
 
-	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
+	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
 
-	res, err := bhcs.httpClient.Do(req)
+	res, err := hcs.httpClient.Do(req)
 	d.Chk.NoError(err)
-	expectVersion(res)
+	expectVersion(hcs.version, res)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
@@ -257,26 +299,27 @@ func (bhcs *httpBatchStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 	go func() { defer close(chunkChan); chunks.Deserialize(reader, chunkChan) }()
 
 	for c := range chunkChan {
-		for _, or := range batch[c.Hash()] {
-			go or.Satisfy(c)
+		h := c.Hash()
+		for _, or := range batch[h] {
+			go or.Satisfy(h, c)
 		}
 		delete(batch, c.Hash())
 	}
 }
 
-func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
+func (hcs *httpChunkStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
 	// POST http://<host>/hasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|".
-	u := *bhcs.host
-	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.HasRefsPath)
+	u := *hcs.host
+	u.Path = httprouter.CleanPath(hcs.host.Path + constants.HasRefsPath)
 
-	req := newRequest("POST", bhcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
+	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
 
-	res, err := bhcs.httpClient.Do(req)
+	res, err := hcs.httpClient.Do(req)
 	d.Chk.NoError(err)
-	expectVersion(res)
+	expectVersion(hcs.version, res)
 	reader := resBodyReader(res)
 	defer closeResponse(reader)
 
@@ -291,8 +334,7 @@ func (bhcs *httpBatchStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch)
 		d.PanicIfFalse(scanner.Scan())
 		if scanner.Text() == "true" {
 			for _, outstanding := range batch[h] {
-				// This is a little gross, but OutstandingHas.Satisfy() expects a chunk. It ignores it, though, and just sends 'true' over the channel it's holding.
-				outstanding.Satisfy(&chunks.EmptyChunk)
+				outstanding.Satisfy(h, &chunks.EmptyChunk)
 			}
 		} else {
 			for _, outstanding := range batch[h] {
@@ -316,50 +358,64 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 	return
 }
 
-func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk) {
-	bhcs.cacheMu.RLock()
-	defer bhcs.cacheMu.RUnlock()
-	bhcs.unwrittenPuts.Insert(c)
+func (hcs *httpChunkStore) SchedulePut(c chunks.Chunk) {
+	hcs.cacheMu.RLock()
+	defer hcs.cacheMu.RUnlock()
+	hcs.unwrittenPuts.Insert(c)
 }
 
-func (bhcs *httpBatchStore) sendWriteRequests() {
-	bhcs.rateLimit <- struct{}{}
-	defer func() { <-bhcs.rateLimit }()
+func (hcs *httpChunkStore) Put(c chunks.Chunk) {
+	hcs.cacheMu.RLock()
+	defer hcs.cacheMu.RUnlock()
+	hcs.unwrittenPuts.Insert(c)
+}
 
-	bhcs.cacheMu.Lock()
+func (hcs *httpChunkStore) PutMany(chunx []chunks.Chunk) {
+	hcs.cacheMu.RLock()
+	defer hcs.cacheMu.RUnlock()
+	for _, c := range chunx {
+		hcs.unwrittenPuts.Insert(c)
+	}
+}
+
+func (hcs *httpChunkStore) sendWriteRequests() {
+	hcs.rateLimit <- struct{}{}
+	defer func() { <-hcs.rateLimit }()
+
+	hcs.cacheMu.Lock()
 	defer func() {
-		bhcs.cacheMu.Unlock()
+		hcs.cacheMu.Unlock()
 	}()
 
-	count := bhcs.unwrittenPuts.Count()
+	count := hcs.unwrittenPuts.Count()
 	if count == 0 {
 		return
 	}
 	defer func() {
-		bhcs.unwrittenPuts.Destroy()
-		bhcs.unwrittenPuts = nbs.NewCache()
+		hcs.unwrittenPuts.Destroy()
+		hcs.unwrittenPuts = nbs.NewCache()
 	}()
 
 	verbose.Log("Sending %d chunks", count)
 	chunkChan := make(chan *chunks.Chunk, 1024)
 	go func() {
-		bhcs.unwrittenPuts.ExtractChunks(chunkChan)
+		hcs.unwrittenPuts.ExtractChunks(chunkChan)
 		close(chunkChan)
 	}()
 
 	body := buildWriteValueRequest(chunkChan)
-	url := *bhcs.host
-	url.Path = httprouter.CleanPath(bhcs.host.Path + constants.WriteValuePath)
+	url := *hcs.host
+	url.Path = httprouter.CleanPath(hcs.host.Path + constants.WriteValuePath)
 	// TODO: Make this accept snappy encoding
-	req := newRequest("POST", bhcs.auth, url.String(), body, http.Header{
+	req := newRequest("POST", hcs.auth, url.String(), body, http.Header{
 		"Accept-Encoding":  {"gzip"},
 		"Content-Encoding": {"x-snappy-framed"},
 		"Content-Type":     {"application/octet-stream"},
 	})
 
-	res, err := bhcs.httpClient.Do(req)
+	res, err := hcs.httpClient.Do(req)
 	d.PanicIfError(err)
-	expectVersion(res)
+	expectVersion(hcs.version, res)
 	defer closeResponse(res.Body)
 
 	if http.StatusCreated != res.StatusCode {
@@ -368,33 +424,54 @@ func (bhcs *httpBatchStore) sendWriteRequests() {
 	verbose.Log("Finished sending %d hashes", count)
 }
 
-func (bhcs *httpBatchStore) Root() hash.Hash {
+func (hcs *httpChunkStore) Root() hash.Hash {
+	hcs.rootMu.RLock()
+	defer hcs.rootMu.RUnlock()
+	return hcs.root
+}
+
+func (hcs *httpChunkStore) Rebase() {
+	root, _ := hcs.getRoot(true)
+	hcs.rootMu.Lock()
+	defer hcs.rootMu.Unlock()
+	hcs.root = root
+}
+
+func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string) {
 	// GET http://<host>/root. Response will be ref of root.
-	res := bhcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
-	expectVersion(res)
+	res := hcs.requestRoot("GET", hash.Hash{}, hash.Hash{})
+	if checkVers {
+		expectVersion(hcs.version, res)
+	}
 	defer closeResponse(res.Body)
 
 	if http.StatusOK != res.StatusCode {
 		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
 	}
 	data, err := ioutil.ReadAll(res.Body)
-	d.Chk.NoError(err)
-	return hash.Parse(string(data))
+	d.PanicIfError(err)
+
+	return hash.Parse(string(data)), res.Header.Get(NomsVersionHeader)
 }
 
-// UpdateRoot flushes outstanding writes to the backing ChunkStore before updating its Root, because it's almost certainly the case that the caller wants to point that root at some recently-Put Chunk.
-func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
-	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
-	bhcs.Flush()
+func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
+	hcs.rootMu.Lock()
+	defer hcs.rootMu.Unlock()
+	hcs.Flush()
 
-	res := bhcs.requestRoot("POST", current, last)
-	expectVersion(res)
+	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
+	res := hcs.requestRoot("POST", current, last)
+	expectVersion(hcs.version, res)
 	defer closeResponse(res.Body)
 
 	switch res.StatusCode {
 	case http.StatusOK:
+		hcs.root = current
 		return true
 	case http.StatusConflict:
+		data, err := ioutil.ReadAll(res.Body)
+		d.PanicIfError(err)
+		hcs.root = hash.Parse(string(data))
 		return false
 	default:
 		buf := bytes.Buffer{}
@@ -408,9 +485,9 @@ func (bhcs *httpBatchStore) UpdateRoot(current, last hash.Hash) bool {
 	}
 }
 
-func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) *http.Response {
-	u := *bhcs.host
-	u.Path = httprouter.CleanPath(bhcs.host.Path + constants.RootPath)
+func (hcs *httpChunkStore) requestRoot(method string, current, last hash.Hash) *http.Response {
+	u := *hcs.host
+	u.Path = httprouter.CleanPath(hcs.host.Path + constants.RootPath)
 	if method == "POST" {
 		if current.IsEmpty() {
 			d.Panic("Unexpected empty value")
@@ -421,9 +498,9 @@ func (bhcs *httpBatchStore) requestRoot(method string, current, last hash.Hash) 
 		u.RawQuery = params.Encode()
 	}
 
-	req := newRequest(method, bhcs.auth, u.String(), nil, nil)
+	req := newRequest(method, hcs.auth, u.String(), nil, nil)
 
-	res, err := bhcs.httpClient.Do(req)
+	res, err := hcs.httpClient.Do(req)
 	d.PanicIfError(err)
 
 	return res
@@ -450,17 +527,17 @@ func formatErrorResponse(res *http.Response) string {
 	return fmt.Sprintf("%s:\n%s\n", res.Status, data)
 }
 
-func expectVersion(res *http.Response) {
+func expectVersion(expected string, res *http.Response) {
 	dataVersion := res.Header.Get(NomsVersionHeader)
-	if constants.NomsVersion != dataVersion {
+	if expected != dataVersion {
 		b, _ := ioutil.ReadAll(res.Body)
 		res.Body.Close()
-		d.PanicIfError(fmt.Errorf(
-			"Version mismatch\n\r"+
-				"\tSDK version '%s' is incompatible with data of version: '%s'\n\r"+
+		d.Panic(
+			"Version skew\n\r"+
+				"\tServer data version changed from '%s' to '%s'\n\r"+
 				"\tHTTP Response: %d (%s): %s\n",
-			constants.NomsVersion, dataVersion,
-			res.StatusCode, res.Status, string(b)))
+			expected, dataVersion,
+			res.StatusCode, res.Status, string(b))
 	}
 }
 
