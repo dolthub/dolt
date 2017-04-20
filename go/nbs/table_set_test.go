@@ -10,6 +10,8 @@ import (
 	"sort"
 	"testing"
 
+	"encoding/binary"
+
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -115,59 +117,71 @@ func TestTableSetExtract(t *testing.T) {
 }
 
 func TestTableSetCompact(t *testing.T) {
-	assert := assert.New(t)
-	ts := newFakeTableSet()
-	defer ts.Close()
-	assert.Empty(ts.ToSpecs())
+	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
+	makeTestTableSet := func(tableSizes []uint32) tableSet {
+		count := uint32(0)
+		nextChunk := func() (chunk []byte) {
+			chunk = make([]byte, 4)
+			binary.BigEndian.PutUint32(chunk, count)
+			count++
+			return chunk
+		}
 
-	moreChunks := append(testChunks, []byte("booboo"))
-	for _, c := range moreChunks {
-		mt := newMemTable(testMemTableSize)
-		mt.addChunk(computeAddr(c), c)
-		ts = ts.Prepend(mt)
+		ts := newFakeTableSet()
+		for _, s := range tableSizes {
+			mt := newMemTable(testMemTableSize)
+			for i := uint32(0); i < s; i++ {
+				c := nextChunk()
+				mt.addChunk(computeAddr(c), c)
+			}
+			ts = ts.Prepend(mt)
+		}
+		return ts
 	}
 
-	// Put in one larger table, to be sure that it's not selected for compaction
-	extraChunks := [][]byte{[]byte("fubu"), []byte("fubar")}
-	mt := newMemTable(testMemTableSize)
-	mt.addChunk(computeAddr(extraChunks[0]), extraChunks[0])
-	mt.addChunk(computeAddr(extraChunks[1]), extraChunks[1])
-	ts = ts.Prepend(mt)
-	ts = ts.Flatten()
-	bigTable := ts.upstream[0]
-	assert.Equal(5, ts.Size())
-
-	var compacted chunkSources
-	ts, compacted = ts.Compact() // Should compact len/2 smallest (7/2 == 3) tables into 1, leaving 4 tables
-	assert.NoError(compacted.close())
-
-	assert.Equal(4, ts.Size())
-	assert.Contains(ts.upstream, bigTable)
-	assertChunksInReader(moreChunks, ts, assert)
-	assertChunksInReader(extraChunks, ts, assert)
-
-	ts, compacted = ts.Compact() // Should compact len/2 smallest (4/2 == 2) tables into 1, leaving 3 tables
-	assert.NoError(compacted.close())
-
-	// After two waves of compaction on a set of tables of size 2, 1, 1, 1, 1 there should be 3 tables, each with 2 chunks in it.
-	assert.Equal(3, ts.Size())
-	for _, source := range ts.upstream {
-		assert.EqualValues(2, source.count())
+	// Returns the set of and chunk count upstream tables
+	getSortedSizes := func(ts tableSet) (sorted []uint32) {
+		sort.Sort(chunkSourcesByAscendingCount(ts.upstream))
+		sorted = make([]uint32, len(ts.upstream))
+		for i := 0; i < len(sorted); i++ {
+			sorted[i] = ts.upstream[i].count()
+		}
+		return
 	}
-	assertChunksInReader(moreChunks, ts, assert)
-	assertChunksInReader(extraChunks, ts, assert)
 
-	ts, compacted = ts.Compact() // Should compact max(2, len/2) smallest (2 > 3/2 == 2) tables into 1
-	assert.NoError(compacted.close())
-	// After one last compaction there should be 2 tables, one of size 4 and one of size 2.
-	if assert.Equal(2, ts.Size()) {
-		sources := make(chunkSources, 2)
-		copy(sources, ts.upstream)
-		sort.Sort(chunkSourcesByDescendingCount(sources))
-		assert.EqualValues(4, sources[0].count())
-		assert.EqualValues(2, sources[1].count())
-		assertChunksInReader(moreChunks, ts, assert)
-		assertChunksInReader(extraChunks, ts, assert)
+	tc := []struct {
+		name        string
+		precompact  []uint32
+		postcompact []uint32
+	}{
+		{"uniform", []uint32{1, 1, 1, 1, 1}, []uint32{5}},
+		{"all but last", []uint32{1, 1, 1, 1, 5}, []uint32{4, 5}},
+		{"all", []uint32{5, 5, 10}, []uint32{10, 10}},
+		{"first four", []uint32{5, 6, 10, 11, 35, 64}, []uint32{32, 35, 64}},
+		{"log, first two", []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{3, 4, 8, 16, 32, 64}},
+		{"log, all", []uint32{2, 3, 4, 8, 16, 32, 64}, []uint32{129}},
+	}
+
+	for _, c := range tc {
+		t.Run(c.name, func(t *testing.T) {
+			assert := assert.New(t)
+			ts := makeTestTableSet(c.precompact)
+			ts2, _ := ts.Flatten().Compact()
+			assert.Equal(c.postcompact, getSortedSizes(ts2))
+			assertContainAll(t, ts, ts2)
+			ts.Close()
+			ts2.Close()
+		})
+	}
+}
+
+func assertContainAll(t *testing.T, expect, actual tableSet) {
+	chunkChan := make(chan extractRecord, expect.count())
+	expect.extract(chunkChan)
+	close(chunkChan)
+
+	for rec := range chunkChan {
+		assert.True(t, actual.has(rec.a))
 	}
 }
 

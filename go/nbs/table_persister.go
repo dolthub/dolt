@@ -42,18 +42,18 @@ func (sic indexCache) put(name addr, idx tableIndex) {
 	sic.cache.Add(name, indexSize, idx)
 }
 
-type chunkSourcesByDescendingCount chunkSources
+type chunkSourcesByAscendingCount chunkSources
 
-func (csbc chunkSourcesByDescendingCount) Len() int { return len(csbc) }
-func (csbc chunkSourcesByDescendingCount) Less(i, j int) bool {
+func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc) }
+func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	srcI, srcJ := csbc[i], csbc[j]
 	if srcI.count() == srcJ.count() {
 		hi, hj := srcI.hash(), srcJ.hash()
-		return bytes.Compare(hi[:], hj[:]) > 0
+		return bytes.Compare(hi[:], hj[:]) < 0
 	}
-	return srcI.count() > srcJ.count()
+	return srcI.count() < srcJ.count()
 }
-func (csbc chunkSourcesByDescendingCount) Swap(i, j int) { csbc[i], csbc[j] = csbc[j], csbc[i] }
+func (csbc chunkSourcesByAscendingCount) Swap(i, j int) { csbc[i], csbc[j] = csbc[j], csbc[i] }
 
 func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, data []byte, chunkCount uint32) {
 	d.Chk.True(rl != nil)

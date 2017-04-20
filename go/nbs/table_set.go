@@ -147,12 +147,9 @@ func (ts tableSet) Prepend(mt *memTable) tableSet {
 	return newTs
 }
 
-// Compact returns a new tableSet that's smaller than |ts|. It takes the
-// max(2, len(ts)/2) smallest upstream tables, compacts them into a single
-// large table, then returns a new tableSet with novel = ts.novel, and
-// upstream set to this new large table and the not-compacted members of
-// ts.upstream. The compactees are returned separately so that the caller can
-// close them if she so chooses.
+// Compact returns a new tableSet that's smaller than |ts|. It chooses to compact the N smallest
+// (by number of chunks) tables which can be compacted into a new table such that upon replacing
+// the N input tables, the  resulting table will still have the fewest chunks in the tableSet.
 func (ts tableSet) Compact() (ns tableSet, compactees chunkSources) {
 	ns = tableSet{
 		novel: make(chunkSources, len(ts.novel)),
@@ -161,21 +158,21 @@ func (ts tableSet) Compact() (ns tableSet, compactees chunkSources) {
 	}
 	copy(ns.novel, ts.novel)
 
-	max := func(a, b int) int {
-		if a > b {
-			return a
-		}
-		return b
-	}
-
 	sortedUpstream := make(chunkSources, len(ts.upstream))
 	copy(sortedUpstream, ts.upstream)
-	sort.Sort(chunkSourcesByDescendingCount(sortedUpstream))
+	sort.Sort(chunkSourcesByAscendingCount(sortedUpstream))
 
-	partition := len(sortedUpstream) - max(2, len(sortedUpstream)/2)
-	toCompact := sortedUpstream[partition:]
+	partition := 2
+	sum := sortedUpstream[0].count() + sortedUpstream[1].count()
+	for partition < len(sortedUpstream) && sum > sortedUpstream[partition].count() {
+		sum += sortedUpstream[partition].count()
+		partition++
+	}
+
+	toCompact := sortedUpstream[:partition]
+
 	compacted := ts.p.CompactAll(toCompact)
-	ns.upstream = append(chunkSources{compacted}, sortedUpstream[:partition]...)
+	ns.upstream = append(chunkSources{compacted}, sortedUpstream[partition:]...)
 
 	return ns, toCompact
 }

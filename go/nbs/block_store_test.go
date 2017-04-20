@@ -258,7 +258,7 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	exists, _, _, mRoot, specs = mm.ParseIfExists(nil)
 	suite.True(exists)
 	suite.Equal(chunx[testMaxTables].Hash(), mRoot)
-	suite.Len(specs, testMaxTables)
+	suite.Len(specs, 2)
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

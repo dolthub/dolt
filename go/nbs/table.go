@@ -30,9 +30,6 @@ import (
    | (Chunk Length) Chunk Data | (Uint32) CRC32 |
    +---------------------------+----------------+
 
-     -Address suffix is the 4 least-significant bytes of the Chunk's address. Used (e.g. in place
-      of CRC32) as a checksum and a filter against false positive reads costing more than one IOP.
-
    Index:
    +------------+---------+----------+
    | Prefix Map | Lengths | Suffixes |
