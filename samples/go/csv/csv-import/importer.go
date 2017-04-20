@@ -169,7 +169,7 @@ func main() {
 
 	var value types.Value
 	if dest == destList {
-		value, _ = csv.ReadToList(cr, *name, headers, kinds, db)
+		value = csv.ReadToList(cr, *name, headers, kinds, db)
 	} else {
 		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, db)
 	}

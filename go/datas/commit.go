@@ -20,6 +20,8 @@ const (
 	commitName   = "Commit"
 )
 
+var commitTemplate = types.MakeStructTemplate(commitName, []string{MetaField, ParentsField, ValueField})
+
 var valueCommitType = nomdl.MustParseType(`struct Commit {
         meta: struct {},
         parents: Set<Ref<Cycle<Commit>>>,
@@ -39,11 +41,7 @@ var valueCommitType = nomdl.MustParseType(`struct Commit {
 // ```
 // where M is a struct type and T is any type.
 func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
-	return types.NewStruct(commitName, types.StructData{
-		MetaField:    meta,
-		ParentsField: parents,
-		ValueField:   value,
-	})
+	return commitTemplate.NewStruct([]types.Value{meta, parents, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if

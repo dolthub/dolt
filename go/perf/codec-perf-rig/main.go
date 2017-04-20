@@ -152,11 +152,13 @@ var structType = types.MakeStructType("S1",
 	},
 )
 
+var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
+
 func createStruct(i uint64) types.Value {
-	return types.NewStruct("S1", types.StructData{
-		"bool": types.Bool(i%2 == 0),
-		"num":  types.Number(i),
-		"str":  types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)),
+	return structTemplate.NewStruct([]types.Value{
+		types.Bool(i%2 == 0), // "bool"
+		types.Number(i),      // "num"
+		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"
 	})
 }
 

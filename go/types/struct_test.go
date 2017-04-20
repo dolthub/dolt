@@ -204,3 +204,76 @@ func TestEscStructField(t *testing.T) {
 		assert.Equal(expected, EscapeStructField(orig))
 	}
 }
+
+func TestMakeStructTemplate(t *testing.T) {
+	assert := assert.New(t)
+
+	assertInvalidStructName := func(n string) {
+		assert.Panics(func() {
+			MakeStructTemplate(n, []string{})
+		})
+	}
+
+	assertInvalidStructName(" ")
+	assertInvalidStructName(" a")
+	assertInvalidStructName("a ")
+	assertInvalidStructName("0")
+	assertInvalidStructName("_")
+	assertInvalidStructName("0a")
+	assertInvalidStructName("_a")
+	assertInvalidStructName("💩")
+
+	assertValidStructName := func(n string) {
+		MakeStructTemplate(n, []string{})
+	}
+
+	assertValidStructName("")
+	assertValidStructName("a")
+	assertValidStructName("A")
+	assertValidStructName("a0")
+	assertValidStructName("a_")
+	assertValidStructName("a0_")
+
+	assertInvalidFieldName := func(n string) {
+		assert.Panics(func() {
+			MakeStructTemplate("", []string{n})
+		})
+	}
+
+	assertInvalidFieldName("")
+	assertInvalidFieldName(" ")
+	assertInvalidFieldName(" a")
+	assertInvalidFieldName("a ")
+	assertInvalidFieldName("0")
+	assertInvalidFieldName("_")
+	assertInvalidFieldName("0a")
+	assertInvalidFieldName("_a")
+	assertInvalidFieldName("💩")
+
+	assertValidFieldName := func(n string) {
+		MakeStructTemplate("", []string{n})
+	}
+
+	assertValidFieldName("a")
+	assertValidFieldName("A")
+	assertValidFieldName("a0")
+	assertValidFieldName("a_")
+	assertValidFieldName("a0_")
+
+	assertInvalidFieldOrder := func(n []string) {
+		assert.Panics(func() {
+			MakeStructTemplate("", n)
+		})
+	}
+
+	assertInvalidFieldOrder([]string{"a", "a"})
+	assertInvalidFieldOrder([]string{"b", "a"})
+	assertInvalidFieldOrder([]string{"a", "c", "b"})
+
+	assertValidFieldOrder := func(n []string) {
+		MakeStructTemplate("", n)
+	}
+
+	assertValidFieldOrder([]string{"a", "b"})
+	assertValidFieldOrder([]string{"a", "b", "c"})
+}

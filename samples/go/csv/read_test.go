@@ -26,24 +26,9 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	l, typ := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, ds)
 
 	assert.Equal(uint64(2), l.Len())
-
-	assert.Equal(types.StructKind, typ.TargetKind())
-
-	desc, ok := typ.Desc.(types.StructDesc)
-	assert.True(ok)
-	assert.Equal(desc.Len(), 3)
-
-	assertNotOptional := func(t *types.Type, optional bool) *types.Type {
-		assert.False(optional)
-		return t
-	}
-
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).TargetKind())
-	assert.Equal(types.NumberKind, assertNotOptional(desc.Field("B")).TargetKind())
-	assert.Equal(types.BoolKind, assertNotOptional(desc.Field("C")).TargetKind())
 
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.String("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.String("b")))
@@ -97,21 +82,8 @@ func testTrailingHelper(t *testing.T, dataString string) {
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l, typ := ReadToList(r, "test", headers, kinds, ds1)
+	l := ReadToList(r, "test", headers, kinds, ds1)
 	assert.Equal(uint64(3), l.Len())
-	assert.Equal(types.StructKind, typ.TargetKind())
-
-	desc, ok := typ.Desc.(types.StructDesc)
-	assert.True(ok)
-	assert.Equal(desc.Len(), 2)
-
-	assertNotOptional := func(t *types.Type, optional bool) *types.Type {
-		assert.False(optional)
-		return t
-	}
-
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("A")).TargetKind())
-	assert.Equal(types.StringKind, assertNotOptional(desc.Field("B")).TargetKind())
 
 	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
 	defer ds2.Close()
@@ -207,7 +179,7 @@ func TestEscapeFieldNames(t *testing.T) {
 	headers := []string{"A A", "B"}
 	kinds := KindSlice{types.NumberKind, types.NumberKind}
 
-	l, _ := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 
@@ -225,7 +197,7 @@ func TestDefaults(t *testing.T) {
 	headers := []string{"A", "B", "C", "D"}
 	kinds := KindSlice{types.NumberKind, types.NumberKind, types.BoolKind, types.StringKind}
 
-	l, _ := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(1), l.Len())
 	row := l.Get(0).(types.Struct)
 	assert.Equal(types.Number(42), row.Get("A"))
@@ -242,7 +214,7 @@ func TestBooleanStrings(t *testing.T) {
 	headers := []string{"T", "F"}
 	kinds := KindSlice{types.BoolKind, types.BoolKind}
 
-	l, _ := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, ds)
 	assert.Equal(uint64(5), l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
 		row := l.Get(i).(types.Struct)

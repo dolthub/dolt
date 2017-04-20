@@ -97,7 +97,7 @@ func startReadingCsvTestExpectationFile(s *csvWriteTestSuite) (cr *csv.Reader, h
 func createTestList(s *csvWriteTestSuite) types.List {
 	ds := datas.NewDatabase(chunks.NewMemoryStore())
 	cr, headers := startReadingCsvTestExpectationFile(s)
-	l, _ := ReadToList(cr, TEST_ROW_STRUCT_NAME, headers, typesToKinds(s.fieldTypes), ds)
+	l := ReadToList(cr, TEST_ROW_STRUCT_NAME, headers, typesToKinds(s.fieldTypes), ds)
 	return l
 }
 

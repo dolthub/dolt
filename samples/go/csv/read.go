@@ -54,12 +54,12 @@ func EscapeStructFieldFromCSV(input string) string {
 	return types.CamelCaseFieldName(input)
 }
 
-// MakeStructTypeFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
-func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSlice) (typ *types.Type, fieldOrder []int, kindMap []types.NomsKind) {
+// MakeStructTemplateFromHeaders creates a struct type from the headers using |kinds| as the type of each field. If |kinds| is empty, default to strings.
+func MakeStructTemplateFromHeaders(headers []string, structName string, kinds KindSlice) (temp types.StructTemplate, fieldOrder []int, kindMap []types.NomsKind) {
 	useStringType := len(kinds) == 0
 	d.PanicIfFalse(useStringType || len(headers) == len(kinds))
 
-	fieldMap := make(types.TypeMap, len(headers))
+	fieldMap := make(map[string]types.NomsKind, len(headers))
 	origOrder := make(map[string]int, len(headers))
 	fieldNames := make(sort.StringSlice, len(headers))
 
@@ -74,7 +74,7 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 		if ok {
 			d.Panic(`Duplicate field name "%s"`, key)
 		}
-		fieldMap[fn] = types.MakePrimitiveType(kind)
+		fieldMap[fn] = kind
 		fieldNames[i] = fn
 	}
 
@@ -82,24 +82,21 @@ func MakeStructTypeFromHeaders(headers []string, structName string, kinds KindSl
 
 	kindMap = make([]types.NomsKind, len(fieldMap))
 	fieldOrder = make([]int, len(fieldMap))
-	fields := make([]types.StructField, len(fieldNames))
 
 	for i, fn := range fieldNames {
-		typ := fieldMap[fn]
-		fields[i] = types.StructField{Name: fn, Type: typ}
-		kindMap[i] = typ.TargetKind()
+		kindMap[i] = fieldMap[fn]
 		fieldOrder[origOrder[fn]] = i
 	}
 
-	typ = types.MakeStructType(structName, fields...)
+	temp = types.MakeStructTemplate(structName, fieldNames)
 	return
 }
 
 // ReadToList takes a CSV reader and reads data into a typed List of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 // In addition to the list, ReadToList returns the typeDef of the structs in the list.
-func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List, t *types.Type) {
-	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headers, structName, kinds)
+func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSlice, vrw types.ValueReadWriter) (l types.List) {
+	temp, fieldOrder, kindMap := MakeStructTemplateFromHeaders(headers, structName, kinds)
 	valueChan := make(chan types.Value, 128) // TODO: Make this a function param?
 	listChan := types.NewStreamingList(vrw, valueChan)
 
@@ -113,16 +110,10 @@ func ReadToList(r *csv.Reader, structName string, headers []string, kinds KindSl
 		}
 
 		fields := readFieldsFromRow(row, headers, fieldOrder, kindMap)
-		data := make(types.StructData, len(fields))
-		i := 0
-		t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
-			data[name] = fields[i]
-			i++
-		})
-		valueChan <- types.NewStruct(structName, data)
+		valueChan <- temp.NewStruct(fields)
 	}
 
-	return <-listChan, t
+	return <-listChan
 }
 
 // getFieldIndexByHeaderName takes the collection of headers and the name to search for and returns the index of name within the headers or -1 if not found
@@ -196,7 +187,7 @@ func primaryKeyValuesFromFields(fields types.ValueSlice, fieldOrder, pkIndices [
 // ReadToMap takes a CSV reader and reads data into a typed Map of structs. Each row gets read into a struct named structName, described by headers. If the original data contained headers it is expected that the input reader has already read those and are pointing at the first data row.
 // If kinds is non-empty, it will be used to type the fields in the generated structs; otherwise, they will be left as string-fields.
 func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKeys []string, kinds KindSlice, vrw types.ValueReadWriter) types.Map {
-	t, fieldOrder, kindMap := MakeStructTypeFromHeaders(headersRaw, structName, kinds)
+	temp, fieldOrder, kindMap := MakeStructTemplateFromHeaders(headersRaw, structName, kinds)
 	pkIndices := getPkIndices(primaryKeys, headersRaw)
 	d.Chk.True(len(pkIndices) >= 1, "No primary key defined when reading into map")
 	gb := types.NewGraphBuilder(vrw, types.MapKind, false)
@@ -211,13 +202,8 @@ func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKey
 
 		fields := readFieldsFromRow(row, headersRaw, fieldOrder, kindMap)
 		graphKeys, mapKey := primaryKeyValuesFromFields(fields, fieldOrder, pkIndices)
-		data := make(types.StructData, len(fields))
-		i := 0
-		t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
-			data[name] = fields[i]
-			i++
-		})
-		gb.MapSet(graphKeys, mapKey, types.NewStruct(structName, data))
+		st := temp.NewStruct(fields)
+		gb.MapSet(graphKeys, mapKey, st)
 	}
 	return gb.Build().(types.Map)
 }
