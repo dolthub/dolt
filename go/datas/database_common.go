@@ -17,7 +17,7 @@ import (
 type databaseCommon struct {
 	*types.ValueStore
 	cch      *cachingChunkHaver
-	rt       chunks.RootTracker
+	rt       rootTracker
 	rootHash hash.Hash
 	datasets *types.Map
 }
@@ -26,6 +26,12 @@ var (
 	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
 )
+
+// rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
+type rootTracker interface {
+	Root() hash.Hash
+	Commit(current, last hash.Hash) bool
+}
 
 func newDatabaseCommon(cs chunks.ChunkStore) databaseCommon {
 	return databaseCommon{

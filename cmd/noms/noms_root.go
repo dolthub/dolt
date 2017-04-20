@@ -43,10 +43,10 @@ func runRoot(args []string) int {
 	}
 
 	cfg := config.NewResolver()
-	rt, err := cfg.GetRootTracker(args[0])
+	cs, err := cfg.GetChunkStore(args[0])
 	d.CheckErrorNoUsage(err)
 
-	currRoot := rt.Root()
+	currRoot := cs.Root()
 
 	if updateRoot == "" {
 		fmt.Println(currRoot)
@@ -62,6 +62,7 @@ func runRoot(args []string) int {
 		return 1
 	}
 
+	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
 	db, err := cfg.GetDatabase(args[0])
 	d.CheckErrorNoUsage(err)
 	defer db.Close()
@@ -85,7 +86,7 @@ Continue?
 		return 0
 	}
 
-	ok = rt.Commit(h, currRoot)
+	ok = cs.Commit(h, currRoot)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "Optimistic concurrency failure")
 		return 1

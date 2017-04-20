@@ -155,7 +155,7 @@ func createMemTable(chunks [][]byte) *memTable {
 	return mt
 }
 
-func assertDataInStore(slices [][]byte, store chunks.ChunkSource, assert *assert.Assertions) {
+func assertDataInStore(slices [][]byte, store chunks.ChunkStore, assert *assert.Assertions) {
 	for _, data := range slices {
 		assert.True(store.Has(chunks.NewChunk(data).Hash()))
 	}

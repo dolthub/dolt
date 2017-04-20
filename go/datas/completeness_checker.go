@@ -30,7 +30,7 @@ func (cc *completenessChecker) AddRefs(v types.Value) {
 
 // PanicIfDangling panics if any refs in unresolved point to chunks not
 // present in cs.
-func (cc *completenessChecker) PanicIfDangling(cs chunks.ChunkSource) {
+func (cc *completenessChecker) PanicIfDangling(cs chunks.ChunkStore) {
 	present := cs.HasMany(cc.unresolved)
 	absent := hash.HashSlice{}
 	for h := range cc.unresolved {
