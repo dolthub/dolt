@@ -266,16 +266,20 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 	}
 
 	seenStructs[t.Name()] = t
-	fields, structType, originalFieldIndex := typeFields(t, seenStructs, encodeTypeOptions{})
-	if structType != nil {
-		// TODO: Have typeFields return name?
-		name := structType.Desc.(types.StructDesc).Name
+	fields, _, knownShape, originalFieldIndex := typeFields(t, seenStructs, false)
+	if knownShape {
+		fieldNames := make([]string, len(fields))
+		for i, f := range fields {
+			fieldNames[i] = f.name
+		}
+
+		structTemplate := types.MakeStructTemplate(strings.Title(t.Name()), fieldNames)
 		e = func(v reflect.Value) types.Value {
-			structData := make(types.StructData, len(fields))
-			for _, f := range fields {
-				structData[f.name] = f.encoder(v.Field(f.index))
+			values := make(types.ValueSlice, len(fields))
+			for i, f := range fields {
+				values[i] = f.encoder(v.Field(f.index))
 			}
-			return types.NewStruct(name, structData)
+			return structTemplate.NewStruct(values)
 		}
 	} else if originalFieldIndex == nil {
 		// Slower path: cannot precompute the Noms type since there are Noms collections,
@@ -421,8 +425,8 @@ func validateField(f reflect.StructField, t reflect.Type) {
 	}
 }
 
-func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, options encodeTypeOptions) (fields fieldSlice, structType *types.Type, originalFieldIndex []int) {
-	canComputeStructType := true
+func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType bool) (fields fieldSlice, structType *types.Type, knownShape bool, originalFieldIndex []int) {
+	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		tags := getTags(f)
@@ -435,14 +439,17 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, options enc
 			continue
 		}
 
+		var nt *types.Type
 		validateField(f, t)
-		nt := encodeType(f.Type, seenStructs, tags, options)
-		if nt == nil {
-			canComputeStructType = false
+		if computeType {
+			nt = encodeType(f.Type, seenStructs, tags)
+			if nt == nil {
+				knownShape = false
+			}
 		}
 
-		if tags.omitEmpty && !options.IgnoreOmitEmpty {
-			canComputeStructType = false
+		if tags.omitEmpty && !computeType {
+			knownShape = false
 		}
 
 		fields = append(fields, field{
@@ -455,7 +462,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, options enc
 
 	}
 	sort.Sort(fields)
-	if canComputeStructType {
+	if knownShape && computeType {
 		structTypeFields := make([]types.StructField, len(fields))
 		for i, fs := range fields {
 			structTypeFields[i] = types.StructField{

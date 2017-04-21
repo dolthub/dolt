@@ -224,7 +224,9 @@ func TestMakeStructTemplate(t *testing.T) {
 	assertInvalidStructName("💩")
 
 	assertValidStructName := func(n string) {
-		MakeStructTemplate(n, []string{})
+		template := MakeStructTemplate(n, []string{})
+		str := template.NewStruct(nil)
+		assert.Equal(n, str.Name())
 	}
 
 	assertValidStructName("")
@@ -276,4 +278,11 @@ func TestMakeStructTemplate(t *testing.T) {
 
 	assertValidFieldOrder([]string{"a", "b"})
 	assertValidFieldOrder([]string{"a", "b", "c"})
+
+	template := MakeStructTemplate("A", []string{"a", "b"})
+	str := template.NewStruct([]Value{Number(42), Bool(true)})
+	assert.True(NewStruct("A", StructData{
+		"a": Number(42),
+		"b": Bool(true),
+	}).Equals(str))
 }

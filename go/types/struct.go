@@ -66,11 +66,16 @@ func NewStruct(name string, data StructData) Struct {
 	return validateStruct(newStruct(name, fieldNames, values))
 }
 
+// StructTemplate allows creating a template for structs with a known shape
+// (name and fields). If a lot of structs of the same shape are being created
+// then using a StructTemplate makes that slightly more efficient.
 type StructTemplate struct {
 	name       string
 	fieldNames []string
 }
 
+// MakeStructTemplate creates a new StructTemplate or panics if the name and
+// fields are not valid.
 func MakeStructTemplate(name string, fieldNames []string) (t StructTemplate) {
 	t = StructTemplate{name, fieldNames}
 
@@ -86,6 +91,8 @@ func MakeStructTemplate(name string, fieldNames []string) (t StructTemplate) {
 	return
 }
 
+// NewStruct creates a new Struct from the StructTemplate. The order of the
+// values must match the order of the field names of the StructTemplate.
 func (st StructTemplate) NewStruct(values []Value) Struct {
 	d.PanicIfFalse(len(st.fieldNames) == len(values))
 	return newStruct(st.name, st.fieldNames, values)
