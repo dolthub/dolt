@@ -12,18 +12,26 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-// An in-memory implementation of store.ChunkStore. Useful mainly for tests.
-type MemoryStore struct {
+// MemoryStorage provides a "persistent" storage layer to back multiple
+// MemoryStoreViews. A MemoryStorage instance holds the ground truth for the
+// root and set of chunks that are visible to all MemoryStoreViews vended by
+// NewView(), allowing them to implement the transaction-style semantics that
+// ChunkStore requires.
+type MemoryStorage struct {
 	data     map[hash.Hash]Chunk
 	rootHash hash.Hash
 	mu       sync.RWMutex
 }
 
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{}
+// NewView vends a MemoryStoreView backed by this MemoryStorage. It's
+// initialized with the currently "persisted" root.
+func (ms *MemoryStorage) NewView() ChunkStore {
+	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash}
 }
 
-func (ms *MemoryStore) Get(h hash.Hash) Chunk {
+// Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
+// present.
+func (ms *MemoryStorage) Get(h hash.Hash) Chunk {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
@@ -32,7 +40,76 @@ func (ms *MemoryStore) Get(h hash.Hash) Chunk {
 	return EmptyChunk
 }
 
-func (ms *MemoryStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+// Has returns true if the Chunk with the Hash h is present in ms.data, false
+// if not.
+func (ms *MemoryStorage) Has(r hash.Hash) bool {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	_, ok := ms.data[r]
+	return ok
+}
+
+// PutAll adds all of chunks to ms.data.
+func (ms *MemoryStorage) PutAll(chunks map[hash.Hash]Chunk) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if ms.data == nil {
+		ms.data = map[hash.Hash]Chunk{}
+	}
+	for h, c := range chunks {
+		ms.data[h] = c
+	}
+}
+
+// Len returns the number of Chunks in ms.data.
+func (ms *MemoryStorage) Len() int {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return len(ms.data)
+}
+
+// Root returns the currently "persisted" root hash of this in-memory store.
+func (ms *MemoryStorage) Root() hash.Hash {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.rootHash
+}
+
+// UpdateRoot checks the "persisted" root against last and, iff it matches,
+// updates the root to current and returns true. Otherwise returns false.
+func (ms *MemoryStorage) UpdateRoot(current, last hash.Hash) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if last != ms.rootHash {
+		return false
+	}
+	ms.rootHash = current
+	return true
+}
+
+// MemoryStoreView is an in-memory implementation of store.ChunkStore. Useful
+// mainly for tests.
+// The proper way to get one:
+// storage := &MemoryStorage{}
+// ms := storage.NewView()
+type MemoryStoreView struct {
+	pending  map[hash.Hash]Chunk
+	rootHash hash.Hash
+	mu       sync.RWMutex
+
+	storage *MemoryStorage
+}
+
+func (ms *MemoryStoreView) Get(h hash.Hash) Chunk {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	if c, ok := ms.pending[h]; ok {
+		return c
+	}
+	return ms.storage.Get(h)
+}
+
+func (ms *MemoryStoreView) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
 	for h := range hashes {
 		c := ms.Get(h)
 		if !c.IsEmpty() {
@@ -42,17 +119,16 @@ func (ms *MemoryStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
 	return
 }
 
-func (ms *MemoryStore) Has(r hash.Hash) bool {
+func (ms *MemoryStoreView) Has(h hash.Hash) bool {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	if ms.data == nil {
-		return false
+	if _, ok := ms.pending[h]; ok {
+		return true
 	}
-	_, ok := ms.data[r]
-	return ok
+	return ms.storage.Has(h)
 }
 
-func (ms *MemoryStore) HasMany(hashes hash.HashSet) hash.HashSet {
+func (ms *MemoryStoreView) HasMany(hashes hash.HashSet) hash.HashSet {
 	present := hash.HashSet{}
 	for h := range hashes {
 		if ms.Has(h) {
@@ -62,72 +138,89 @@ func (ms *MemoryStore) HasMany(hashes hash.HashSet) hash.HashSet {
 	return present
 }
 
-func (ms *MemoryStore) Version() string {
+func (ms *MemoryStoreView) Version() string {
 	return constants.NomsVersion
 }
 
-// TODO: enforce non-persistence of novel chunks BUG 3400
-func (ms *MemoryStore) Put(c Chunk) {
+func (ms *MemoryStoreView) Put(c Chunk) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	if ms.data == nil {
-		ms.data = map[hash.Hash]Chunk{}
+	if ms.pending == nil {
+		ms.pending = map[hash.Hash]Chunk{}
 	}
-	ms.data[c.Hash()] = c
+	ms.pending[c.Hash()] = c
 }
 
-func (ms *MemoryStore) PutMany(chunks []Chunk) {
+func (ms *MemoryStoreView) PutMany(chunks []Chunk) {
 	for _, c := range chunks {
 		ms.Put(c)
 	}
 }
 
-func (ms *MemoryStore) Len() int {
+func (ms *MemoryStoreView) Len() int {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return len(ms.data)
+	return len(ms.pending) + ms.storage.Len()
 }
 
-func (ms *MemoryStore) Flush() {}
+func (ms *MemoryStoreView) Flush() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.storage.PutAll(ms.pending)
+	ms.pending = nil
+}
 
-func (ms *MemoryStore) Rebase() {}
+func (ms *MemoryStoreView) Rebase() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.rootHash = ms.storage.Root()
+}
 
-func (ms *MemoryStore) Root() hash.Hash {
+func (ms *MemoryStoreView) Root() hash.Hash {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 	return ms.rootHash
 }
 
-func (ms *MemoryStore) Commit(current, last hash.Hash) bool {
+func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	if last != ms.rootHash {
 		return false
 	}
+	ms.storage.PutAll(ms.pending)
+	ms.pending = nil
 
-	ms.rootHash = current
-	return true
+	success := ms.storage.UpdateRoot(current, last)
+	if success {
+		ms.rootHash = current
+	}
+	return success
 }
 
-func (ms *MemoryStore) Close() error {
+func (ms *MemoryStoreView) Close() error {
 	return nil
 }
 
-func NewMemoryStoreFactory() Factory {
-	return &MemoryStoreFactory{map[string]*MemoryStore{}}
+type memoryStoreFactory struct {
+	stores map[string]*MemoryStorage
 }
 
-type MemoryStoreFactory struct {
-	stores map[string]*MemoryStore
+func newMemoryStoreFactory() *memoryStoreFactory {
+	return &memoryStoreFactory{map[string]*MemoryStorage{}}
 }
 
-func (f *MemoryStoreFactory) CreateStore(ns string) ChunkStore {
+func (f *memoryStoreFactory) CreateStore(ns string) ChunkStore {
 	if f.stores == nil {
-		d.Panic("Cannot use MemoryStore after Shutter().")
+		d.Panic("Cannot use memoryStoreFactory after Shutter().")
 	}
-	if cs, present := f.stores[ns]; present {
-		return cs
+	if ms, present := f.stores[ns]; present {
+		return ms.NewView()
 	}
-	f.stores[ns] = NewMemoryStore()
-	return f.stores[ns]
+	f.stores[ns] = &MemoryStorage{}
+	return f.stores[ns].NewView()
 }
 
-func (f *MemoryStoreFactory) Shutter() {
-	f.stores = map[string]*MemoryStore{}
+func (f *memoryStoreFactory) Shutter() {
+	f.stores = nil
 }

@@ -35,7 +35,8 @@ func isEncodedOutOfLine(v Value) int {
 
 func TestIncrementalLoadList(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
 	expected := NewList(testVals...)
@@ -64,7 +65,8 @@ func TestIncrementalLoadList(t *testing.T) {
 
 func SkipTestIncrementalLoadSet(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
 	expected := NewSet(testVals...)
@@ -84,7 +86,8 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 
 func SkipTestIncrementalLoadMap(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
 	expected := NewMap(testVals...)
@@ -105,7 +108,8 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 
 func SkipTestIncrementalAddRef(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
 	expectedItem := Number(42)

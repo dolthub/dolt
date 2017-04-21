@@ -341,7 +341,6 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 	if req.Method != "GET" {
 		d.Panic("Expected get method.")
 	}
-
 	fmt.Fprintf(w, "%v", rt.Root().String())
 	w.Header().Add("content-type", "text/plain")
 }

@@ -5,7 +5,6 @@
 package chunks
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/attic-labs/testify/suite"
@@ -20,16 +19,9 @@ type MemoryStoreTestSuite struct {
 }
 
 func (suite *MemoryStoreTestSuite) SetupTest() {
-	suite.Store = NewMemoryStore()
+	suite.Factory = newMemoryStoreFactory()
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {
-	suite.Store.Close()
-}
-
-func (suite *MemoryStoreTestSuite) TestBadSerialization() {
-	bad := []byte{0, 1} // Not enough bytes to read first length
-	ch := make(chan *Chunk)
-	defer close(ch)
-	suite.Error(Deserialize(bytes.NewReader(bad), ch))
+	suite.Factory.Shutter()
 }

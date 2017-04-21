@@ -25,8 +25,8 @@ import (
 
 func TestHandleWriteValue(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	db := NewDatabase(cs)
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewView())
 
 	l := types.NewList(
 		db.WriteValue(types.Bool(true)),
@@ -46,10 +46,10 @@ func TestHandleWriteValue(t *testing.T) {
 	chunks.Serialize(listChunk, body)
 
 	w := httptest.NewRecorder()
-	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, storage.NewView())
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		db2 := NewDatabase(cs)
+		db2 := NewDatabase(storage.NewView())
 		v := db2.ReadValue(l2.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(l2), "%+v != %+v", v, l2)
@@ -59,20 +59,20 @@ func TestHandleWriteValue(t *testing.T) {
 
 func TestHandleWriteValuePanic(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
 
 	body := &bytes.Buffer{}
 	body.WriteString("Bogus")
 
 	w := httptest.NewRecorder()
-	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, storage.NewView())
 
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 
 func TestHandleWriteValueDupChunks(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
 
 	newItem := types.NewEmptyBlob()
 	itemChunk := types.EncodeValue(newItem, nil)
@@ -84,10 +84,10 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, cs)
+	HandleWriteValue(w, newRequest("POST", "", "", body, nil), params{}, storage.NewView())
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
-		db := NewDatabase(cs)
+		db := NewDatabase(storage.NewView())
 		v := db.ReadValue(newItem.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(newItem), "%+v != %+v", v, newItem)
@@ -156,13 +156,15 @@ func TestBuildHashesRequest(t *testing.T) {
 
 func TestHandleGetRefs(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
+	cs := storage.NewView()
 	input1, input2 := "abc", "def"
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
 	cs.PutMany(chnx)
+	cs.Flush()
 
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
 
@@ -173,7 +175,7 @@ func TestHandleGetRefs(t *testing.T) {
 			"Content-Type": {"application/x-www-form-urlencoded"},
 		}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
@@ -198,8 +200,8 @@ func TestHandleGetBlob(t *testing.T) {
 	assert := assert.New(t)
 
 	blobContents := "I am a blob"
-	cs := chunks.NewTestStore()
-	db := NewDatabase(cs)
+	storage := &chunks.MemoryStorage{}
+	db := NewDatabase(storage.NewView())
 	ds := db.GetDataset("foo")
 
 	// Test missing h
@@ -208,7 +210,7 @@ func TestHandleGetBlob(t *testing.T) {
 		w,
 		newRequest("GET", "", "/getBlob/", strings.NewReader(""), http.Header{}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
@@ -220,7 +222,7 @@ func TestHandleGetBlob(t *testing.T) {
 		w,
 		newRequest("GET", "", fmt.Sprintf("/getBlob/?h=%s", b.Hash().String()), strings.NewReader(""), http.Header{}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
@@ -234,7 +236,7 @@ func TestHandleGetBlob(t *testing.T) {
 		w,
 		newRequest("GET", "", fmt.Sprintf("/getBlob/?h=%s", r.TargetHash().String()), strings.NewReader(""), http.Header{}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
@@ -252,20 +254,22 @@ func TestHandleGetBlob(t *testing.T) {
 		w,
 		newRequest("GET", "", fmt.Sprintf("/getBlob/?h=%s", r2.TargetHash().String()), strings.NewReader(""), http.Header{}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 
 func TestHandleHasRefs(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
 	input1, input2 := "abc", "def"
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
+	cs := storage.NewView()
 	cs.PutMany(chnx)
+	cs.Flush()
 
 	absent := hash.Parse("00000000000000000000000000000002")
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
@@ -277,7 +281,7 @@ func TestHandleHasRefs(t *testing.T) {
 			"Content-Type": {"application/x-www-form-urlencoded"},
 		}),
 		params{},
-		cs,
+		storage.NewView(),
 	)
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
@@ -299,13 +303,14 @@ func TestHandleHasRefs(t *testing.T) {
 
 func TestHandleGetRoot(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
+	cs := storage.NewView()
 	c := chunks.NewChunk([]byte("abc"))
 	cs.Put(c)
 	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
 
 	w := httptest.NewRecorder()
-	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
+	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, storage.NewView())
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		root := hash.Parse(string(w.Body.Bytes()))
@@ -315,13 +320,10 @@ func TestHandleGetRoot(t *testing.T) {
 
 func TestHandleGetBase(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
-	c := chunks.NewChunk([]byte("abc"))
-	cs.Put(c)
-	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
+	storage := &chunks.MemoryStorage{}
 
 	w := httptest.NewRecorder()
-	HandleBaseGet(w, newRequest("GET", "", "", nil, nil), params{}, cs)
+	HandleBaseGet(w, newRequest("GET", "", "", nil, nil), params{}, storage.NewView())
 
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		assert.Equal([]byte(nomsBaseHTML), w.Body.Bytes())
@@ -330,7 +332,8 @@ func TestHandleGetBase(t *testing.T) {
 
 func TestHandlePostRoot(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
+	cs := storage.NewView()
 	vs := types.NewValueStore(cs)
 
 	commit := buildTestCommit(types.String("head"))
@@ -343,6 +346,7 @@ func TestHandlePostRoot(t *testing.T) {
 	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
 	vs.Flush()
+	cs.Flush()
 
 	// First attempt should fail, as 'last' won't match.
 	u := &url.URL{}
@@ -353,13 +357,13 @@ func TestHandlePostRoot(t *testing.T) {
 	url := u.String()
 
 	w := httptest.NewRecorder()
-	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
 	assert.True(cs.Commit(firstHeadRef.TargetHash(), hash.Hash{}))
 	w = httptest.NewRecorder()
-	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 
@@ -369,11 +373,13 @@ func buildTestCommit(v types.Value, parents ...types.Value) types.Struct {
 
 func TestRejectPostRoot(t *testing.T) {
 	assert := assert.New(t)
-	cs := chunks.NewTestStore()
+	storage := &chunks.MemoryStorage{}
+	cs := storage.NewView()
 
 	newHead := types.NewMap(types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead, nil)
 	cs.Put(chunk)
+	cs.Flush()
 
 	// Attempt should fail, as newHead isn't the right type.
 	u := &url.URL{}
@@ -384,7 +390,7 @@ func TestRejectPostRoot(t *testing.T) {
 	url := u.String()
 
 	w := httptest.NewRecorder()
-	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, cs)
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }
 

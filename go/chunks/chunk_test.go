@@ -10,6 +10,13 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
+func TestChunk(t *testing.T) {
+	c := NewChunk([]byte("abc"))
+	h := c.Hash()
+	// See http://www.di-mgt.com.au/sha_testvectors.html
+	assert.Equal(t, "rmnjb8cjc5tblj21ed4qs821649eduie", h.String())
+}
+
 func TestChunkWriteAfterCloseFails(t *testing.T) {
 	assert := assert.New(t)
 	input := "abc"

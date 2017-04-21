@@ -16,7 +16,8 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
-	store := NewDatabase(chunks.NewMemoryStore())
+	stg := &chunks.MemoryStorage{}
+	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
 	ds1 := store.GetDataset(id1)
@@ -63,7 +64,8 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
-	store := NewDatabase(chunks.NewMemoryStore())
+	stg := &chunks.MemoryStorage{}
+	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
 	dsx := store.GetDataset(id1)
@@ -91,7 +93,8 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
-	store := NewDatabase(chunks.NewMemoryStore())
+	stg := &chunks.MemoryStorage{}
+	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
 	a := types.String("a")
@@ -128,7 +131,8 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 
 func TestIdValidation(t *testing.T) {
 	assert := assert.New(t)
-	store := NewDatabase(chunks.NewMemoryStore())
+	stg := &chunks.MemoryStorage{}
+	store := NewDatabase(stg.NewView())
 
 	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
 	for _, id := range invalidDatasetNames {
@@ -143,7 +147,8 @@ func TestHeadValueFunctions(t *testing.T) {
 
 	id1 := "testdataset"
 	id2 := "otherdataset"
-	store := NewDatabase(chunks.NewMemoryStore())
+	stg := &chunks.MemoryStorage{}
+	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
 	ds1 := store.GetDataset(id1)

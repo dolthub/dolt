@@ -174,7 +174,8 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "nbs":
 		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
 	case "mem":
-		return chunks.NewMemoryStore()
+		storage := &chunks.MemoryStorage{}
+		return storage.NewView()
 	}
 	panic("unreachable")
 }
@@ -270,7 +271,8 @@ func (sp Spec) createDatabase() datas.Database {
 		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
 	case "mem":
-		return datas.NewDatabase(chunks.NewMemoryStore())
+		storage := &chunks.MemoryStorage{}
+		return datas.NewDatabase(storage.NewView())
 	}
 	panic("unreachable")
 }

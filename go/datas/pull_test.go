@@ -34,10 +34,15 @@ func TestRemoteToRemotePulls(t *testing.T) {
 
 type PullSuite struct {
 	suite.Suite
-	sinkCS   *chunks.TestStore
-	sourceCS *chunks.TestStore
+	sinkCS   *chunks.TestStoreView
+	sourceCS *chunks.TestStoreView
 	sink     Database
 	source   Database
+}
+
+func makeTestStoreViews() (ts1, ts2 *chunks.TestStoreView) {
+	st1, st2 := &chunks.TestStorage{}, &chunks.TestStorage{}
+	return st1.NewView(), st2.NewView()
 }
 
 type LocalToLocalSuite struct {
@@ -45,8 +50,7 @@ type LocalToLocalSuite struct {
 }
 
 func (suite *LocalToLocalSuite) SetupTest() {
-	suite.sinkCS = chunks.NewTestStore()
-	suite.sourceCS = chunks.NewTestStore()
+	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = NewDatabase(suite.sinkCS)
 	suite.source = NewDatabase(suite.sourceCS)
 }
@@ -56,8 +60,7 @@ type RemoteToLocalSuite struct {
 }
 
 func (suite *RemoteToLocalSuite) SetupTest() {
-	suite.sinkCS = chunks.NewTestStore()
-	suite.sourceCS = chunks.NewTestStore()
+	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = NewDatabase(suite.sinkCS)
 	suite.source = makeRemoteDb(suite.sourceCS)
 }
@@ -67,8 +70,7 @@ type LocalToRemoteSuite struct {
 }
 
 func (suite *LocalToRemoteSuite) SetupTest() {
-	suite.sinkCS = chunks.NewTestStore()
-	suite.sourceCS = chunks.NewTestStore()
+	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = makeRemoteDb(suite.sinkCS)
 	suite.source = NewDatabase(suite.sourceCS)
 }
@@ -78,8 +80,7 @@ type RemoteToRemoteSuite struct {
 }
 
 func (suite *RemoteToRemoteSuite) SetupTest() {
-	suite.sinkCS = chunks.NewTestStore()
-	suite.sourceCS = chunks.NewTestStore()
+	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = makeRemoteDb(suite.sinkCS)
 	suite.source = makeRemoteDb(suite.sourceCS)
 }

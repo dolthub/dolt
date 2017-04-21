@@ -67,7 +67,8 @@ const (
 // NewTestValueStore creates a simple struct that satisfies ValueReadWriter
 // and is backed by a chunks.TestStore.
 func NewTestValueStore() *ValueStore {
-	return NewValueStore(chunks.NewTestStore())
+	ts := &chunks.TestStorage{}
+	return NewValueStore(ts.NewView())
 }
 
 // NewValueStore returns a ValueStore instance that owns the provided

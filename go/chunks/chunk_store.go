@@ -14,7 +14,7 @@ import (
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
 	// Get the Chunk for the value of the hash in the store. If the hash is
-	// absent from the store nil is returned.
+	// absent from the store EmptyChunk is returned.
 	Get(h hash.Hash) Chunk
 
 	// GetMany gets the Chunks with |hashes| from the store. On return,

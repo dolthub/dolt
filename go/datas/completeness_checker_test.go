@@ -13,6 +13,7 @@ import (
 )
 
 func TestCompletenessChecker(t *testing.T) {
+	storage := &chunks.TestStorage{}
 	b := types.Bool(true)
 	r := types.NewRef(b)
 
@@ -23,11 +24,11 @@ func TestCompletenessChecker(t *testing.T) {
 			cc := newCompletenessChecker()
 			cc.AddRefs(badRef)
 			cc.AddRefs(r)
-			assert.Panics(t, func() { cc.PanicIfDangling(chunks.NewTestStore()) })
+			assert.Panics(t, func() { cc.PanicIfDangling(storage.NewView()) })
 		})
 		t.Run("SomeBad", func(t *testing.T) {
 			t.Parallel()
-			cs := chunks.NewTestStore()
+			cs := storage.NewView()
 			cs.Put(types.EncodeValue(b, nil))
 
 			cc := newCompletenessChecker()
@@ -40,7 +41,7 @@ func TestCompletenessChecker(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		t.Run("PendingChunk", func(t *testing.T) {
 			t.Parallel()
-			cs := chunks.NewTestStore()
+			cs := storage.NewView()
 			cs.Put(types.EncodeValue(b, nil))
 
 			cc := newCompletenessChecker()
@@ -49,7 +50,7 @@ func TestCompletenessChecker(t *testing.T) {
 		})
 		t.Run("ExistingChunk", func(t *testing.T) {
 			t.Parallel()
-			cs := chunks.NewTestStore()
+			cs := storage.NewView()
 			cs.Put(types.EncodeValue(b, nil))
 
 			cc := newCompletenessChecker()

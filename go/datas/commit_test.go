@@ -119,7 +119,8 @@ func toValuesString(refSet types.Set, vr types.ValueReader) string {
 
 func TestFindCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
-	db := NewDatabase(chunks.NewTestStore())
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
 	// Add a commit and return it

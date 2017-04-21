@@ -10,6 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -24,11 +25,12 @@ func TestWalkAllTestSuite(t *testing.T) {
 type WalkAllTestSuite struct {
 	suite.Suite
 	vs *ValueStore
-	ts *chunks.TestStore
+	ts *chunks.TestStoreView
 }
 
 func (suite *WalkAllTestSuite) SetupTest() {
-	suite.ts = chunks.NewTestStore()
+	storage := &chunks.TestStorage{}
+	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 }
 
@@ -65,7 +67,6 @@ func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	r := suite.vs.WriteValue(blob)
 	suite.True(r.Height() > 1)
 	outBlob := suite.vs.ReadValue(r.TargetHash()).(Blob)
-	suite.NotNil(suite.ts)
 	suite.Equal(suite.ts.Reads, 0)
 	suite.assertCallbackCount(outBlob, 1)
 	suite.Equal(suite.ts.Reads, 0)
@@ -243,7 +244,8 @@ type WalkTestSuite struct {
 }
 
 func (suite *WalkTestSuite) SetupTest() {
-	suite.ts = chunks.NewTestStore()
+	storage := &chunks.TestStorage{}
+	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
 	suite.shouldSee = NewList(suite.shouldSeeItem)
@@ -251,56 +253,44 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.mustSkip = NewList(suite.deadValue)
 }
 
-type WalkDifferentStructsTestSuite struct {
-	suite.Suite
-	vs *ValueStore
-	ts *chunks.TestStore
-}
+func TestWalkDifferentStructsBasic(t *testing.T) {
+	assert := assert.New(t)
+	storage := &chunks.TestStorage{}
+	vs := NewValueStore(storage.NewView())
+	assertDiffs := func(vr ValueReader, last, current Value, expectAdded, expectRemoved []Value) {
+		equalIgnoreOrder := func(expect []Value, actual map[hash.Hash]Struct) {
+			hashes := hash.HashSet{}
+			for _, v := range expect {
+				hashes.Insert(v.Hash())
+			}
 
-func TestWalkDifferentStructsTestSuite(t *testing.T) {
-	suite.Run(t, &WalkDifferentStructsTestSuite{})
-}
-
-func (suite *WalkDifferentStructsTestSuite) SetupTest() {
-	suite.ts = chunks.NewTestStore()
-	suite.vs = NewValueStore(suite.ts)
-}
-
-func (suite *WalkDifferentStructsTestSuite) AssertDiffs(last, current Value, expectAdded, expectRemoved []Value) {
-	equalIgnoreOrder := func(expect []Value, actual map[hash.Hash]Struct) {
-		hashes := hash.HashSet{}
-		for _, v := range expect {
-			hashes.Insert(v.Hash())
+			assert.Equal(len(hashes), len(actual))
+			for h := range actual {
+				_, ok := hashes[h]
+				assert.True(ok)
+			}
 		}
 
-		suite.Equal(len(hashes), len(actual))
-		for h := range actual {
-			_, ok := hashes[h]
-			suite.True(ok)
-		}
+		added, removed := WalkDifferentStructs(last, current, vr)
+		equalIgnoreOrder(expectAdded, added)
+		equalIgnoreOrder(expectRemoved, removed)
 	}
 
-	added, removed := WalkDifferentStructs(last, current, suite.vs)
-	equalIgnoreOrder(expectAdded, added)
-	equalIgnoreOrder(expectRemoved, removed)
-}
-
-func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
 	// Nothing plus nothing is nothing
-	suite.AssertDiffs(nil, nil, []Value{}, []Value{})
+	assertDiffs(vs, nil, nil, []Value{}, []Value{})
 
 	s1 := NewStruct("s", StructData{
 		"n": Number(1),
 	})
 
 	// Top level struct.
-	suite.AssertDiffs(nil, s1, []Value{s1}, []Value{})
+	assertDiffs(vs, nil, s1, []Value{s1}, []Value{})
 
 	// Same Struct
-	suite.AssertDiffs(s1, s1, []Value{}, []Value{})
+	assertDiffs(vs, s1, s1, []Value{}, []Value{})
 
 	// Removed.
-	suite.AssertDiffs(s1, nil, []Value{}, []Value{s1})
+	assertDiffs(vs, s1, nil, []Value{}, []Value{s1})
 
 	// Collections of structs
 	s2 := NewStruct("s", StructData{
@@ -316,9 +306,9 @@ func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
 	l1 := NewList(s2, s4)
 	l2 := NewList(s1, s2, s3)
 
-	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
-	suite.AssertDiffs(l1, l1, []Value{}, []Value{})
-	suite.AssertDiffs(l2, l1, []Value{s4}, []Value{s1, s3})
+	assertDiffs(vs, l1, l2, []Value{s1, s3}, []Value{s4})
+	assertDiffs(vs, l1, l1, []Value{}, []Value{})
+	assertDiffs(vs, l2, l1, []Value{s4}, []Value{s1, s3})
 
 	// Big, uncommitted collections of structs
 	bl := NewList()
@@ -331,28 +321,29 @@ func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
 	l1 = bl.Append(s2, s4)
 	l2 = bl.Append(s1, s2, s3)
 
-	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
-	suite.AssertDiffs(l1, l1, []Value{}, []Value{})
-	suite.AssertDiffs(l2, l1, []Value{s4}, []Value{s1, s3})
+	assertDiffs(vs, l1, l2, []Value{s1, s3}, []Value{s4})
+	assertDiffs(vs, l1, l1, []Value{}, []Value{})
+	assertDiffs(vs, l2, l1, []Value{s4}, []Value{s1, s3})
 
 	// Big, committed collections of structs
-	h1 := suite.vs.WriteValue(l1).TargetHash()
-	h2 := suite.vs.WriteValue(l2).TargetHash()
-	suite.vs.Flush()
+	h1 := vs.WriteValue(l1).TargetHash()
+	h2 := vs.WriteValue(l2).TargetHash()
+	vs.Flush()
 
-	// Use a fresh value store to avoid cached chunks
-	nvs := NewValueStore(suite.ts)
+	// Use a fresh value store to avoid cached chunks and ensure we're seeing the chunks persisted by the above Flush()
+	ts := storage.NewView()
+	nvs := NewValueStore(ts)
 
 	l1 = nvs.ReadValue(h1).(List)
 	l2 = nvs.ReadValue(h2).(List)
 
-	suite.ts.Reads = 0
-	suite.AssertDiffs(nil, l2, []Value{s1, s2, s3}, []Value{})
-	suite.Equal(1, suite.ts.Reads) // Type information gets used to avoid loads
+	ts.Reads = 0
+	assertDiffs(nvs, nil, l2, []Value{s1, s2, s3}, []Value{})
+	assert.Equal(1, ts.Reads) // Type information gets used to avoid loads
 
-	suite.ts.Reads = 0
-	suite.AssertDiffs(l1, l2, []Value{s1, s3}, []Value{s4})
-	suite.Equal(1, suite.ts.Reads) // Chunk diff gets used to avoid loading common subtrees
+	ts.Reads = 0
+	assertDiffs(nvs, l1, l2, []Value{s1, s3}, []Value{s4})
+	assert.Equal(1, ts.Reads) // Chunk diff gets used to avoid loading common subtrees
 
 	// Structs inside structs whose fields will be simplified away.
 	s5 := NewStruct("s", StructData{
@@ -368,7 +359,7 @@ func (suite *WalkDifferentStructsTestSuite) TestWalkStructsBasic() {
 	l1 = bl.Append(s5, s6)
 	l2 = bl.Append(s6, s7)
 
-	suite.AssertDiffs(nil, l1, []Value{s5, s6, s1, s2}, []Value{})
-	suite.AssertDiffs(nil, l2, []Value{s6, s7, s2, s3}, []Value{})
-	suite.AssertDiffs(l1, l2, []Value{s7, s3}, []Value{s5, s1})
+	assertDiffs(nvs, nil, l1, []Value{s5, s6, s1, s2}, []Value{})
+	assertDiffs(nvs, nil, l2, []Value{s6, s7, s2, s3}, []Value{})
+	assertDiffs(nvs, l1, l2, []Value{s7, s3}, []Value{s5, s1})
 }

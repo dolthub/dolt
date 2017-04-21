@@ -36,3 +36,10 @@ func TestSerializeRoundTrip(t *testing.T) {
 	}
 	assert.Len(chnx, 0)
 }
+
+func TestBadSerialization(t *testing.T) {
+	bad := []byte{0, 1} // Not enough bytes to read first length
+	ch := make(chan *Chunk)
+	defer close(ch)
+	assert.Error(t, Deserialize(bytes.NewReader(bad), ch))
+}

@@ -14,21 +14,22 @@ import (
 func TestValidatingBatchingSinkDecode(t *testing.T) {
 	v := Number(42)
 	c := EncodeValue(v, nil)
-	vdc := NewValidatingDecoder(chunks.NewTestStore())
+	storage := &chunks.TestStorage{}
+	vdc := NewValidatingDecoder(storage.NewView())
 
 	dc := vdc.Decode(&c)
 	assert.True(t, v.Equals(*dc.Value))
 }
 
 func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
-	cs := chunks.NewTestStore()
-	vs := NewValueStore(cs)
+	storage := &chunks.TestStorage{}
+	vs := NewValueStore(storage.NewView())
 	r := &nomsTestReader{data, 0}
 	dec := newValueDecoder(r, vs)
 	v := dec.readValue()
 
 	c := EncodeValue(v, nil)
-	vdc := NewValidatingDecoder(cs)
+	vdc := NewValidatingDecoder(storage.NewView())
 
 	assert.Panics(t, func() {
 		vdc.Decode(&c)

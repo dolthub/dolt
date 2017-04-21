@@ -13,7 +13,8 @@ import (
 
 func TestCachingChunkHaver(t *testing.T) {
 	assert := assert.New(t)
-	ts := chunks.NewTestStore()
+	storage := &chunks.TestStorage{}
+	ts := storage.NewView()
 	ccs := newCachingChunkHaver(ts)
 	input := "abc"
 
@@ -24,9 +25,11 @@ func TestCachingChunkHaver(t *testing.T) {
 	assert.Equal(ts.Hases, 1)
 
 	ts.Put(c)
+	ts.Flush()
+	ts = storage.NewView()
 	ccs = newCachingChunkHaver(ts)
 	assert.True(ccs.Has(c.Hash()))
-	assert.Equal(ts.Hases, 2)
+	assert.Equal(ts.Hases, 1)
 	assert.True(ccs.Has(c.Hash()))
-	assert.Equal(ts.Hases, 2)
+	assert.Equal(ts.Hases, 1)
 }

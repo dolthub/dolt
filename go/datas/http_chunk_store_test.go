@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 	"github.com/julienschmidt/httprouter"
 )
@@ -27,8 +28,8 @@ func TestHTTPChunkStore(t *testing.T) {
 
 type HTTPChunkStoreSuite struct {
 	suite.Suite
-	cs    *chunks.TestStore
-	store *httpChunkStore
+	serverCS *chunks.TestStoreView
+	http     *httpChunkStore
 }
 
 type inlineServer struct {
@@ -48,96 +49,107 @@ func (serv inlineServer) Do(req *http.Request) (resp *http.Response, err error) 
 }
 
 func (suite *HTTPChunkStoreSuite) SetupTest() {
-	suite.cs = chunks.NewTestStore()
-	suite.store = newHTTPChunkStoreForTest(suite.cs)
+	storage := &chunks.TestStorage{}
+	suite.serverCS = storage.NewView()
+	suite.http = newHTTPChunkStoreForTest(suite.serverCS)
 }
 
 func newHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
+	// Ideally, this function (and its bretheren below) would take a *TestStorage and mint a fresh TestStoreView in each handler call below. That'd break a bunch of tests in pull_test.go that want to pass in a single TestStoreView and then inspect it after doing a bunch of work. The cs.Rebase() calls here are a good compromise for now, but BUG 3415 tracks Making This Right.
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.WriteValuePath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			HandleWriteValue(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.GetRefsPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			HandleGetRefs(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.HasRefsPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			HandleHasRefs(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			HandleRootPost(w, req, ps, cs)
 		},
 	)
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
 	return newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
 }
 
-func newAuthenticatingHTTPChunkStoreForTest(suite *HTTPChunkStoreSuite, hostUrl string) *httpChunkStore {
+func newAuthenticatingHTTPChunkStoreForTest(assert *assert.Assertions, cs chunks.ChunkStore, hostUrl string) *httpChunkStore {
 	authenticate := func(req *http.Request) {
-		suite.Equal(testAuthToken, req.URL.Query().Get("access_token"))
+		assert.Equal(testAuthToken, req.URL.Query().Get("access_token"))
 	}
 
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
 			authenticate(req)
-			HandleRootPost(w, req, ps, suite.cs)
+			HandleRootPost(w, req, ps, cs)
 		},
 	)
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			HandleRootGet(w, req, ps, suite.cs)
+			cs.Rebase()
+			HandleRootGet(w, req, ps, cs)
 		},
 	)
 	return newHTTPChunkStoreWithClient(hostUrl, "", serv)
 }
 
-func newBadVersionHTTPChunkStoreForTest(suite *HTTPChunkStoreSuite) *httpChunkStore {
+func newBadVersionHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv := inlineServer{httprouter.New()}
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			HandleRootPost(w, req, ps, suite.cs)
+			cs.Rebase()
+			HandleRootPost(w, req, ps, cs)
 			w.Header().Set(NomsVersionHeader, "BAD")
 		},
 	)
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			HandleRootGet(w, req, ps, suite.cs)
+			cs.Rebase()
+			HandleRootGet(w, req, ps, cs)
 		},
 	)
 	return newHTTPChunkStoreWithClient("http://localhost", "", serv)
 }
 
 func (suite *HTTPChunkStoreSuite) TearDownTest() {
-	suite.store.Close()
-	suite.cs.Close()
+	suite.http.Close()
+	suite.serverCS.Close()
 }
 
 func (suite *HTTPChunkStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.String("abc"), nil)
-	suite.store.Put(c)
-	suite.store.Flush()
+	suite.http.Put(c)
+	suite.http.Flush()
 
-	suite.Equal(1, suite.cs.Writes)
+	suite.Equal(1, suite.serverCS.Writes)
 }
 
 func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
@@ -147,56 +159,56 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	}
 	l := types.NewList()
 	for _, val := range vals {
-		suite.store.Put(types.EncodeValue(val, nil))
+		suite.http.Put(types.EncodeValue(val, nil))
 		l = l.Append(types.NewRef(val))
 	}
-	suite.store.Put(types.EncodeValue(l, nil))
-	suite.store.Flush()
+	suite.http.Put(types.EncodeValue(l, nil))
+	suite.http.Flush()
 
-	suite.Equal(3, suite.cs.Writes)
+	suite.Equal(3, suite.serverCS.Writes)
 }
 
 func (suite *HTTPChunkStoreSuite) TestRebase() {
-	suite.Equal(hash.Hash{}, suite.store.Root())
+	suite.Equal(hash.Hash{}, suite.http.Root())
 	c := types.EncodeValue(types.NewMap(), nil)
-	suite.cs.Put(c)
-	suite.True(suite.cs.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
-	suite.Equal(hash.Hash{}, suite.store.Root())       // shouldn't be visible yet
+	suite.serverCS.Put(c)
+	suite.True(suite.serverCS.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
+	suite.Equal(hash.Hash{}, suite.http.Root())              // shouldn't be visible yet
 
-	suite.store.Rebase()
-	suite.Equal(c.Hash(), suite.cs.Root())
+	suite.http.Rebase()
+	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
 func (suite *HTTPChunkStoreSuite) TestRoot() {
 	c := types.EncodeValue(types.NewMap(), nil)
-	suite.cs.Put(c)
-	suite.True(suite.store.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.cs.Root())
+	suite.serverCS.Put(c)
+	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
 func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
-	store := newBadVersionHTTPChunkStoreForTest(suite)
+	store := newBadVersionHTTPChunkStoreForTest(suite.serverCS)
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap(), nil)
-	suite.cs.Put(c)
+	suite.serverCS.Put(c)
 	suite.Panics(func() { store.Commit(c.Hash(), hash.Hash{}) })
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommit() {
 	c := types.EncodeValue(types.NewMap(), nil)
-	suite.cs.Put(c)
-	suite.True(suite.store.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.cs.Root())
+	suite.serverCS.Put(c)
+	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
-	store := newAuthenticatingHTTPChunkStoreForTest(suite, u)
+	store := newAuthenticatingHTTPChunkStoreForTest(suite.Assert(), suite.serverCS, u)
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap(), nil)
-	suite.cs.Put(c)
+	suite.serverCS.Put(c)
 	suite.True(store.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.cs.Root())
+	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
 func (suite *HTTPChunkStoreSuite) TestGet() {
@@ -204,10 +216,10 @@ func (suite *HTTPChunkStoreSuite) TestGet() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.cs.PutMany(chnx)
-	got := suite.store.Get(chnx[0].Hash())
+	suite.serverCS.PutMany(chnx)
+	got := suite.http.Get(chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
-	got = suite.store.Get(chnx[1].Hash())
+	got = suite.http.Get(chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
@@ -217,12 +229,12 @@ func (suite *HTTPChunkStoreSuite) TestGetMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
-	suite.cs.PutMany(chnx)
-	suite.cs.Flush()
+	suite.serverCS.PutMany(chnx)
+	suite.serverCS.Flush()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -236,11 +248,11 @@ func (suite *HTTPChunkStoreSuite) TestGetManyAllCached() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.store.PutMany(chnx)
+	suite.http.PutMany(chnx)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -254,13 +266,13 @@ func (suite *HTTPChunkStoreSuite) TestGetManySomeCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
-	suite.cs.PutMany(chnx)
-	suite.cs.Flush()
-	suite.store.Put(cached)
+	suite.serverCS.PutMany(chnx)
+	suite.serverCS.Flush()
+	suite.http.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.store.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -273,10 +285,10 @@ func (suite *HTTPChunkStoreSuite) TestGetSame() {
 		chunks.NewChunk([]byte("def")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.cs.PutMany(chnx)
-	got := suite.store.Get(chnx[0].Hash())
+	suite.serverCS.PutMany(chnx)
+	got := suite.http.Get(chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
-	got = suite.store.Get(chnx[1].Hash())
+	got = suite.http.Get(chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
@@ -285,9 +297,9 @@ func (suite *HTTPChunkStoreSuite) TestHas() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.cs.PutMany(chnx)
-	suite.True(suite.store.Has(chnx[0].Hash()))
-	suite.True(suite.store.Has(chnx[1].Hash()))
+	suite.serverCS.PutMany(chnx)
+	suite.True(suite.http.Has(chnx[0].Hash()))
+	suite.True(suite.http.Has(chnx[1].Hash()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestHasMany() {
@@ -295,12 +307,12 @@ func (suite *HTTPChunkStoreSuite) TestHasMany() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.cs.PutMany(chnx)
-	suite.cs.Flush()
+	suite.serverCS.PutMany(chnx)
+	suite.serverCS.Flush()
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
-	present := suite.store.HasMany(hashes)
+	present := suite.http.HasMany(hashes)
 
 	suite.Len(present, len(chnx))
 	for _, c := range chnx {
@@ -314,10 +326,11 @@ func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
 		chunks.NewChunk([]byte("abc")),
 		chunks.NewChunk([]byte("def")),
 	}
-	suite.store.PutMany(chnx)
+	suite.http.PutMany(chnx)
+	suite.serverCS.Flush()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
-	present := suite.store.HasMany(hashes)
+	present := suite.http.HasMany(hashes)
 
 	suite.Len(present, len(chnx))
 	for _, c := range chnx {
@@ -331,12 +344,12 @@ func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
-	suite.cs.PutMany(chnx)
-	suite.cs.Flush()
-	suite.store.Put(cached)
+	suite.serverCS.PutMany(chnx)
+	suite.serverCS.Flush()
+	suite.http.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
-	present := suite.store.HasMany(hashes)
+	present := suite.http.HasMany(hashes)
 
 	suite.Len(present, len(chnx)+1)
 	for _, c := range chnx {

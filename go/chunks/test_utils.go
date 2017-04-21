@@ -5,6 +5,7 @@
 package chunks
 
 import (
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
@@ -16,69 +17,74 @@ func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.
 }
 
 func assertInputNotInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {
-	data := s.Get(h)
-	assert.Nil(data, "Shouldn't have gotten data for %s", h.String())
+	chunk := s.Get(h)
+	assert.True(chunk.IsEmpty(), "Shouldn't get non-empty chunk for %s: %v", h.String(), chunk)
 }
 
-type TestStore struct {
-	MemoryStore
+type TestStorage struct {
+	MemoryStorage
+}
+
+func (t *TestStorage) NewView() *TestStoreView {
+	return &TestStoreView{ChunkStore: t.MemoryStorage.NewView()}
+}
+
+type TestStoreView struct {
+	ChunkStore
 	Reads  int
 	Hases  int
 	Writes int
 }
 
-func NewTestStore() *TestStore {
-	return &TestStore{}
-}
-
-func (s *TestStore) Get(h hash.Hash) Chunk {
+func (s *TestStoreView) Get(h hash.Hash) Chunk {
 	s.Reads++
-	return s.MemoryStore.Get(h)
+	return s.ChunkStore.Get(h)
 }
 
-func (s *TestStore) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+func (s *TestStoreView) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
 	s.Reads += len(hashes)
-	s.MemoryStore.GetMany(hashes, foundChunks)
+	s.ChunkStore.GetMany(hashes, foundChunks)
 }
 
-func (s *TestStore) Has(h hash.Hash) bool {
+func (s *TestStoreView) Has(h hash.Hash) bool {
 	s.Hases++
-	return s.MemoryStore.Has(h)
+	return s.ChunkStore.Has(h)
 }
 
-func (s *TestStore) HasMany(hashes hash.HashSet) hash.HashSet {
+func (s *TestStoreView) HasMany(hashes hash.HashSet) hash.HashSet {
 	s.Hases += len(hashes)
-	return s.MemoryStore.HasMany(hashes)
+	return s.ChunkStore.HasMany(hashes)
 }
 
-func (s *TestStore) Put(c Chunk) {
+func (s *TestStoreView) Put(c Chunk) {
 	s.Writes++
-	s.MemoryStore.Put(c)
+	s.ChunkStore.Put(c)
 }
 
-func (s *TestStore) PutMany(chunks []Chunk) {
-	for _, c := range chunks {
-		s.Put(c)
-	}
+func (s *TestStoreView) PutMany(chunks []Chunk) {
+	s.Writes += len(chunks)
+	s.ChunkStore.PutMany(chunks)
 }
 
-// TestStoreFactory is public, and exposes Stores to ensure that test code can directly query instances vended by this factory.
 type TestStoreFactory struct {
-	Stores map[string]*TestStore
+	stores map[string]*TestStorage
 }
 
 func NewTestStoreFactory() *TestStoreFactory {
-	return &TestStoreFactory{map[string]*TestStore{}}
+	return &TestStoreFactory{map[string]*TestStorage{}}
 }
 
 func (f *TestStoreFactory) CreateStore(ns string) ChunkStore {
-	if cs, present := f.Stores[ns]; present {
-		return cs
+	if f.stores == nil {
+		d.Panic("Cannot use TestStoreFactory after Shutter().")
 	}
-	f.Stores[ns] = NewTestStore()
-	return f.Stores[ns]
+	if ts, present := f.stores[ns]; present {
+		return ts.NewView()
+	}
+	f.stores[ns] = &TestStorage{}
+	return f.stores[ns].NewView()
 }
 
 func (f *TestStoreFactory) Shutter() {
-	f.Stores = map[string]*TestStore{}
+	f.stores = nil
 }

@@ -53,8 +53,8 @@ func main() {
 			valueFn := valueFns[j]
 
 			// Build One-Time
-			ms := chunks.NewMemoryStore()
-			db := datas.NewDatabase(ms)
+			storage := &chunks.MemoryStorage{}
+			db := datas.NewDatabase(storage.NewView())
 			ds := db.GetDataset("test")
 			t1 := time.Now()
 			col := buildFns[i](buildCount, valueFn)
@@ -69,8 +69,8 @@ func main() {
 			readDuration := time.Since(t1)
 
 			// Build Incrementally
-			ms = chunks.NewMemoryStore()
-			db = datas.NewDatabase(ms)
+			storage = &chunks.MemoryStorage{}
+			db = datas.NewDatabase(storage.NewView())
 			ds = db.GetDataset("test")
 			t1 = time.Now()
 			col = buildIncrFns[i](insertCount, valueFn)
@@ -89,8 +89,8 @@ func main() {
 
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
-	ms := chunks.NewMemoryStore()
-	db := datas.NewDatabase(ms)
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	ds := db.GetDataset("test")
 
 	blobBytes := makeBlobBytes(*blobSize)
@@ -99,7 +99,7 @@ func main() {
 	db.CommitValue(ds, blob)
 	buildDuration := time.Since(t1)
 
-	db = datas.NewDatabase(ms)
+	db = datas.NewDatabase(storage.NewView())
 	ds = db.GetDataset("test")
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)

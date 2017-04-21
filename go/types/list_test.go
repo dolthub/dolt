@@ -944,7 +944,9 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 
 	assert := assert.New(t)
 
-	cs1 := chunks.NewTestStore()
+	storage := &chunks.TestStorage{}
+
+	cs1 := storage.NewView()
 	vs1 := NewValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(nums1...)
@@ -952,7 +954,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	vs1.Flush()
 	refList1 := vs1.ReadValue(hash1).(List)
 
-	cs2 := chunks.NewTestStore()
+	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(nums2...)

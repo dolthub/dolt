@@ -106,7 +106,8 @@ func TestParsing(t *testing.T) {
 		{`index1 != "whassup"`, re7},
 	}
 
-	db := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	_, err := db.CommitValue(db.GetDataset("index1"), types.NewMap(types.String("one"), types.NewSet(types.String("two"))))
 	assert.NoError(err)
 

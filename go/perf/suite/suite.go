@@ -491,7 +491,8 @@ func (suite *PerfSuite) getGitHead(dir string) string {
 func (suite *PerfSuite) StartRemoteDatabase() (host string, stopFn func()) {
 	var chunkStore chunks.ChunkStore
 	if *perfMemFlag {
-		chunkStore = chunks.NewMemoryStore()
+		st := &chunks.MemoryStorage{}
+		chunkStore = st.NewView()
 	} else {
 		dbDir := suite.TempDir()
 		chunkStore = nbs.NewLocalStore(dbDir, 128*(1<<20))

@@ -15,9 +15,6 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-// writesOnCommit allows tests to adjust for how many writes databaseCommon performs on Commit()
-const writesOnCommit = 2
-
 func TestLocalDatabase(t *testing.T) {
 	suite.Run(t, &LocalDatabaseSuite{})
 }
@@ -27,7 +24,8 @@ func TestRemoteDatabase(t *testing.T) {
 }
 
 func TestValidateRef(t *testing.T) {
-	db := newLocalDatabase(chunks.NewTestStore())
+	st := &chunks.TestStorage{}
+	db := newLocalDatabase(st.NewView())
 	defer db.Close()
 	b := types.Bool(true)
 	r := db.WriteValue(b)
@@ -38,9 +36,9 @@ func TestValidateRef(t *testing.T) {
 
 type DatabaseSuite struct {
 	suite.Suite
-	cs     *chunks.TestStore
-	db     Database
-	makeDb func(chunks.ChunkStore) Database
+	storage *chunks.TestStorage
+	db      Database
+	makeDb  func(chunks.ChunkStore) Database
 }
 
 type LocalDatabaseSuite struct {
@@ -48,9 +46,9 @@ type LocalDatabaseSuite struct {
 }
 
 func (suite *LocalDatabaseSuite) SetupTest() {
-	suite.cs = chunks.NewTestStore()
+	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = NewDatabase
-	suite.db = suite.makeDb(suite.cs)
+	suite.db = suite.makeDb(suite.storage.NewView())
 }
 
 type RemoteDatabaseSuite struct {
@@ -58,43 +56,15 @@ type RemoteDatabaseSuite struct {
 }
 
 func (suite *RemoteDatabaseSuite) SetupTest() {
-	suite.cs = chunks.NewTestStore()
+	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
 		return &RemoteDatabaseClient{newDatabaseCommon(newHTTPChunkStoreForTest(cs))}
 	}
-	suite.db = suite.makeDb(suite.cs)
+	suite.db = suite.makeDb(suite.storage.NewView())
 }
 
 func (suite *DatabaseSuite) TearDownTest() {
 	suite.db.Close()
-	suite.cs.Close()
-}
-
-func (suite *DatabaseSuite) TestReadWriteCache() {
-	var v types.Value = types.Bool(true)
-	r := suite.db.WriteValue(v)
-	suite.NotEqual(hash.Hash{}, r.TargetHash())
-	_, err := suite.db.CommitValue(suite.db.GetDataset("foo"), r)
-	suite.NoError(err)
-	suite.Equal(1, suite.cs.Writes-writesOnCommit)
-
-	v = suite.db.ReadValue(r.TargetHash())
-	suite.True(v.Equals(types.Bool(true)))
-}
-
-func (suite *DatabaseSuite) TestReadWriteCachePersists() {
-	var err error
-	var v types.Value = types.Bool(true)
-	r := suite.db.WriteValue(v)
-	suite.NotEqual(hash.Hash{}, r.TargetHash())
-	ds := suite.db.GetDataset("foo")
-	ds, err = suite.db.CommitValue(ds, r)
-	suite.NoError(err)
-	suite.Equal(1, suite.cs.Writes-writesOnCommit)
-
-	// Explicitly commit a Ref to a Value written prior to a previous Commit operation. If the r/w cache failed to persist across Commit() calls, then the below would have a validation failure.
-	_, err = suite.db.CommitValue(ds, r)
-	suite.NoError(err)
 }
 
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
@@ -110,24 +80,24 @@ func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	id1, id2 := "testdataset", "othertestdataset"
 
-	db1 := suite.makeDb(suite.cs)
+	db1 := suite.makeDb(suite.storage.NewView())
 	defer db1.Close()
 	ds1 := db1.GetDataset(id1)
 	ds1HeadVal := types.String("Commit value for " + id1)
 	ds1, err := db1.CommitValue(ds1, ds1HeadVal)
 	suite.NoError(err)
 
-	db2 := suite.makeDb(suite.cs)
+	db2 := suite.makeDb(suite.storage.NewView())
 	defer db2.Close()
 	ds2 := db2.GetDataset(id2)
-	db2HeadVal := types.String("Commit value for " + id2)
-	ds2, err = db2.CommitValue(ds2, db2HeadVal)
+	ds2HeadVal := types.String("Commit value for " + id2)
+	ds2, err = db2.CommitValue(ds2, ds2HeadVal)
 	suite.NoError(err)
 
 	suite.EqualValues(ds1HeadVal, ds1.HeadValue())
-	suite.EqualValues(db2HeadVal, ds2.HeadValue())
+	suite.EqualValues(ds2HeadVal, ds2.HeadValue())
 	suite.False(ds2.HeadValue().Equals(ds1HeadVal))
-	suite.False(ds1.HeadValue().Equals(db2HeadVal))
+	suite.False(ds1.HeadValue().Equals(ds2HeadVal))
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
@@ -186,7 +156,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 
 	// Get a fresh database, and verify that both datasets are present
-	newDB := suite.makeDb(suite.cs)
+	newDB := suite.makeDb(suite.storage.NewView())
 	defer newDB.Close()
 	datasets2 := newDB.Datasets()
 	suite.Equal(uint64(2), datasets2.Len())
@@ -296,8 +266,8 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	_, present := suite.db.GetDataset(datasetID1).MaybeHead()
 	suite.False(present, "Dataset %s should not be present", datasetID1)
 
-	// Get a fresh database, and verify that only ds1 is present
-	newDB := suite.makeDb(suite.cs)
+	// Get a fresh database, and verify that only ds2 is present
+	newDB := suite.makeDb(suite.storage.NewView())
 	defer newDB.Close()
 	datasets = newDB.Datasets()
 	suite.Equal(uint64(1), datasets.Len())
@@ -331,9 +301,9 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	suite.True(ds1.HeadValue().Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	w := &waitDuringUpdateRootChunkStore{suite.cs, nil}
-	db := suite.makeDb(w)
-	defer db.Close()
+	w := &waitDuringUpdateRootChunkStore{suite.storage.NewView(), nil}
+	interloper := suite.makeDb(w)
+	defer interloper.Close()
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
 	// ds1: |a| <- |b|
@@ -347,9 +317,9 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	}
 
 	// Attempted Concurrent change, which should proceed without a problem
-	ds1 = db.GetDataset(datasetID)
+	ds1 = interloper.GetDataset(datasetID)
 	c := types.String("c")
-	ds1, err = db.CommitValue(ds1, c)
+	ds1, err = interloper.CommitValue(ds1, c)
 	suite.NoError(err)
 	suite.True(ds1.HeadValue().Equals(c))
 
@@ -366,7 +336,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 
 	// Attempted Concurrent change, which should fail due to the above
 	nope := types.String("nope")
-	ds1, err = db.CommitValue(ds1, nope)
+	ds1, err = interloper.CommitValue(ds1, nope)
 	suite.Error(err)
 	v := ds1.HeadValue()
 	suite.True(v.Equals(e), "%s", v.(types.String))
@@ -386,9 +356,9 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.True(ds1.HeadValue().Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	w := &waitDuringUpdateRootChunkStore{suite.cs, nil}
-	db := suite.makeDb(w)
-	defer db.Close()
+	w := &waitDuringUpdateRootChunkStore{suite.storage.NewView(), nil}
+	interloper := suite.makeDb(w)
+	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
 	// ds1: |a| <- |b| <- |e|
@@ -401,8 +371,8 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 		w.preUpdateRootHook = nil
 	}
 
-	// Attempted Concurrent change, which should fail due to the above
-	ds1, err = db.Delete(ds1)
+	// Attempted concurrent change, which should fail due to the above
+	ds1, err = interloper.Delete(ds1)
 	suite.Error(err)
 	suite.True(ds1.HeadValue().Equals(e))
 
@@ -417,8 +387,8 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 		w.preUpdateRootHook = nil
 	}
 
-	// Attempted Concurrent change, which should proceed without a problem
-	ds1, err = db.Delete(ds1)
+	// Attempted concurrent change, which should proceed without a problem
+	ds1, err = interloper.Delete(ds1)
 	suite.NoError(err)
 	_, present := ds1.MaybeHeadRef()
 	suite.False(present, "Dataset %s should not be present", datasetID)

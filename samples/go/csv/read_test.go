@@ -17,7 +17,8 @@ import (
 
 func TestReadToList(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 
 	dataString := `a,1,true
 b,2,false
@@ -26,7 +27,7 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	l := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, db)
 
 	assert.Equal(uint64(2), l.Len())
 
@@ -42,7 +43,8 @@ b,2,false
 
 func TestReadToMap(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 
 	dataString := `a,1,true
 b,2,false
@@ -51,7 +53,7 @@ b,2,false
 
 	headers := []string{"A", "B", "C"}
 	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
-	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, ds)
+	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, db)
 
 	assert.Equal(uint64(2), m.Len())
 	assert.True(types.TypeOf(m).Equals(
@@ -75,20 +77,22 @@ b,2,false
 
 func testTrailingHelper(t *testing.T, dataString string) {
 	assert := assert.New(t)
-	ds1 := datas.NewDatabase(chunks.NewMemoryStore())
-	defer ds1.Close()
+	storage := &chunks.MemoryStorage{}
+	db1 := datas.NewDatabase(storage.NewView())
+	defer db1.Close()
 
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	l := ReadToList(r, "test", headers, kinds, ds1)
+	l := ReadToList(r, "test", headers, kinds, db1)
 	assert.Equal(uint64(3), l.Len())
 
-	ds2 := datas.NewDatabase(chunks.NewMemoryStore())
-	defer ds2.Close()
+	storage = &chunks.MemoryStorage{}
+	db2 := datas.NewDatabase(storage.NewView())
+	defer db2.Close()
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
-	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, ds2)
+	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, db2)
 	assert.Equal(uint64(3), m.Len())
 }
 
@@ -143,7 +147,8 @@ func TestEscapeStructFieldFromCSV(t *testing.T) {
 
 func TestReadParseError(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 
 	dataString := `a,"b`
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
@@ -157,47 +162,50 @@ func TestReadParseError(t *testing.T) {
 			_, ok := r.(*csv.ParseError)
 			assert.True(ok, "Should be a ParseError")
 		}()
-		ReadToList(r, "test", headers, kinds, ds)
+		ReadToList(r, "test", headers, kinds, db)
 	}()
 }
 
 func TestDuplicateHeaderName(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	dataString := "1,2\n3,4\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A", "A"}
 	kinds := KindSlice{types.StringKind, types.StringKind}
-	assert.Panics(func() { ReadToList(r, "test", headers, kinds, ds) })
+	assert.Panics(func() { ReadToList(r, "test", headers, kinds, db) })
 }
 
 func TestEscapeFieldNames(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	dataString := "1,2\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A A", "B"}
 	kinds := KindSlice{types.NumberKind, types.NumberKind}
 
-	l := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, db)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
-	m := ReadToMap(r, "test", headers, []string{"1"}, kinds, ds)
+	m := ReadToMap(r, "test", headers, []string{"1"}, kinds, db)
 	assert.Equal(uint64(1), l.Len())
 	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 }
 
 func TestDefaults(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	dataString := "42,,,\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A", "B", "C", "D"}
 	kinds := KindSlice{types.NumberKind, types.NumberKind, types.BoolKind, types.StringKind}
 
-	l := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, db)
 	assert.Equal(uint64(1), l.Len())
 	row := l.Get(0).(types.Struct)
 	assert.Equal(types.Number(42), row.Get("A"))
@@ -208,13 +216,14 @@ func TestDefaults(t *testing.T) {
 
 func TestBooleanStrings(t *testing.T) {
 	assert := assert.New(t)
-	ds := datas.NewDatabase(chunks.NewMemoryStore())
+	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 	dataString := "true,false\n1,0\ny,n\nY,N\nY,\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"T", "F"}
 	kinds := KindSlice{types.BoolKind, types.BoolKind}
 
-	l := ReadToList(r, "test", headers, kinds, ds)
+	l := ReadToList(r, "test", headers, kinds, db)
 	assert.Equal(uint64(5), l.Len())
 	for i := uint64(0); i < l.Len(); i++ {
 		row := l.Get(i).(types.Struct)
