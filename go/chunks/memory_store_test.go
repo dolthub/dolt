@@ -19,7 +19,7 @@ type MemoryStoreTestSuite struct {
 }
 
 func (suite *MemoryStoreTestSuite) SetupTest() {
-	suite.Factory = newMemoryStoreFactory()
+	suite.Factory = NewMemoryStoreFactory()
 }
 
 func (suite *MemoryStoreTestSuite) TearDownTest() {

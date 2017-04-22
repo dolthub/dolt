@@ -191,13 +191,17 @@ func (ms *MemoryStoreView) Close() error {
 
 type memoryStoreFactory struct {
 	stores map[string]*MemoryStorage
+	mu     *sync.Mutex
 }
 
-func newMemoryStoreFactory() *memoryStoreFactory {
-	return &memoryStoreFactory{map[string]*MemoryStorage{}}
+func NewMemoryStoreFactory() Factory {
+	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 
 func (f *memoryStoreFactory) CreateStore(ns string) ChunkStore {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.stores == nil {
 		d.Panic("Cannot use memoryStoreFactory after Shutter().")
 	}
