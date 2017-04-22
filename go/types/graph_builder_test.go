@@ -58,7 +58,7 @@ func SafeEquals(v1, v2 Value) bool {
 
 func TestGraphBuilderEncodeDecodeAsKey(t *testing.T) {
 	assert := assert.New(t)
-	vrw := NewTestValueStore()
+	vrw := newTestValueStore()
 	defer vrw.Close()
 
 	struct1 := NewStruct("teststruct", StructData{
@@ -94,7 +94,7 @@ func TestGraphBuilderEncodeDecodeAsKey(t *testing.T) {
 
 func TestGraphBuilderEncodeDecodeAsValue(t *testing.T) {
 	assert := assert.New(t)
-	vrw := NewTestValueStore()
+	vrw := newTestValueStore()
 	defer vrw.Close()
 
 	struct1 := NewStruct("teststruct", StructData{
@@ -125,7 +125,7 @@ func TestGraphBuilderEncodeDecodeAsValue(t *testing.T) {
 func TestGraphBuilderMapSetGraphOp(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	opc := vs.opCache()
@@ -242,7 +242,7 @@ func shuffle(a []testGraphOp) {
 func TestGraphBuilderNestedMapSet(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	expected := createTestMap(3, 4, valGen)
@@ -301,7 +301,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 }
 
 func ExampleGraphBuilder_Build() {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	gb := NewGraphBuilder(vs, MapKind, false)

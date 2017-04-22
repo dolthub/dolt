@@ -164,7 +164,7 @@ func TestHandleGetRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input2)),
 	}
 	cs.PutMany(chnx)
-	cs.Flush()
+	persistChunks(cs)
 
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
 
@@ -269,7 +269,7 @@ func TestHandleHasRefs(t *testing.T) {
 	}
 	cs := storage.NewView()
 	cs.PutMany(chnx)
-	cs.Flush()
+	persistChunks(cs)
 
 	absent := hash.Parse("00000000000000000000000000000002")
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
@@ -336,6 +336,12 @@ func TestHandlePostRoot(t *testing.T) {
 	cs := storage.NewView()
 	vs := types.NewValueStore(cs)
 
+	// Empty -> Empty should be OK.
+	url := buildPostRootURL(hash.Hash{}, hash.Hash{})
+	w := httptest.NewRecorder()
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
+	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+
 	commit := buildTestCommit(types.String("head"))
 	commitRef := vs.WriteValue(commit)
 	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
@@ -346,17 +352,11 @@ func TestHandlePostRoot(t *testing.T) {
 	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
 	vs.Flush()
-	cs.Flush()
+	persistChunks(cs)
 
 	// First attempt should fail, as 'last' won't match.
-	u := &url.URL{}
-	queryParams := url.Values{}
-	queryParams.Add("last", firstHeadRef.TargetHash().String())
-	queryParams.Add("current", newHeadRef.TargetHash().String())
-	u.RawQuery = queryParams.Encode()
-	url := u.String()
-
-	w := httptest.NewRecorder()
+	url = buildPostRootURL(newHeadRef.TargetHash(), firstHeadRef.TargetHash())
+	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
@@ -365,6 +365,15 @@ func TestHandlePostRoot(t *testing.T) {
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+}
+
+func buildPostRootURL(current, last hash.Hash) string {
+	u := &url.URL{}
+	queryParams := url.Values{}
+	queryParams.Add("last", last.String())
+	queryParams.Add("current", current.String())
+	u.RawQuery = queryParams.Encode()
+	return u.String()
 }
 
 func buildTestCommit(v types.Value, parents ...types.Value) types.Struct {
@@ -379,17 +388,31 @@ func TestRejectPostRoot(t *testing.T) {
 	newHead := types.NewMap(types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead, nil)
 	cs.Put(chunk)
-	cs.Flush()
+	persistChunks(cs)
 
 	// Attempt should fail, as newHead isn't the right type.
-	u := &url.URL{}
-	queryParams := url.Values{}
-	queryParams.Add("last", chunks.EmptyChunk.Hash().String())
-	queryParams.Add("current", chunk.Hash().String())
-	u.RawQuery = queryParams.Encode()
-	url := u.String()
-
+	url := buildPostRootURL(chunk.Hash(), hash.Hash{})
 	w := httptest.NewRecorder()
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
+	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+
+	// Put in a legit commit
+	vs := types.NewValueStore(cs)
+	commit := buildTestCommit(types.String("commit"))
+	head := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
+	headRef := vs.WriteValue(head)
+	vs.Flush()
+	assert.True(cs.Commit(headRef.TargetHash(), hash.Hash{}))
+
+	// Attempt to update head to empty hash should fail
+	url = buildPostRootURL(hash.Hash{}, headRef.TargetHash())
+	w = httptest.NewRecorder()
+	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
+	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+
+	// Attempt to update from a non-present chunks should fail
+	url = buildPostRootURL(headRef.TargetHash(), chunks.EmptyChunk.Hash())
+	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 }

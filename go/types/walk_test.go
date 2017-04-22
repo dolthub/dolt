@@ -328,7 +328,7 @@ func TestWalkDifferentStructsBasic(t *testing.T) {
 	// Big, committed collections of structs
 	h1 := vs.WriteValue(l1).TargetHash()
 	h2 := vs.WriteValue(l2).TargetHash()
-	vs.Flush()
+	vs.persist()
 
 	// Use a fresh value store to avoid cached chunks and ensure we're seeing the chunks persisted by the above Flush()
 	ts := storage.NewView()

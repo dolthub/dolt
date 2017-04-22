@@ -7,6 +7,7 @@ package diff
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
@@ -164,7 +165,8 @@ func TestNestedLists(t *testing.T) {
 func TestUpdateNode(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := types.NewTestValueStore()
+	storage := &chunks.MemoryStorage{}
+	vs := types.NewValueStore(storage.NewView())
 	defer vs.Close()
 
 	doTest := func(pp types.PathPart, parent, ov, nv, exp types.Value, f testFunc) {

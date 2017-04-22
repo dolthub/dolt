@@ -24,6 +24,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
+	"github.com/jpillora/backoff"
 )
 
 type URLParams interface {
@@ -183,8 +184,10 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		d.Panic("Deserialization failure: %v", err)
 	}
 
-	cc.PanicIfDangling(cs)
-	cs.Flush()
+	if chunkCount > 0 {
+		cc.PanicIfDangling(cs)
+		persistChunks(cs)
+	}
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -238,6 +241,18 @@ type wc struct {
 
 func (wc wc) Close() error {
 	return nil
+}
+
+func persistChunks(cs chunks.ChunkStore) {
+	b := &backoff.Backoff{
+		Min:    128 * time.Microsecond,
+		Max:    10 * time.Second,
+		Factor: 2,
+		Jitter: true,
+	}
+	for !cs.Commit(cs.Root(), cs.Root()) {
+		time.Sleep(b.Duration())
+	}
 }
 
 func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
@@ -364,12 +379,6 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 
 	vs := types.NewValueStore(cs)
 
-	// Ensure that proposed new Root is present in cs
-	proposed := vs.ReadValue(current)
-	if proposed == nil {
-		d.Panic("Can't set Root to a non-present Chunk")
-	}
-
 	// Even though the Root is actually a Map<String, Ref<Commit>>, its Noms Type is Map<String, Ref<Value>> in order to prevent the root chunk from getting bloated with type info. That means that the Value of the proposed new Root needs to be manually type-checked. The simplest way to do that would be to iterate over the whole thing and pull the target of each Ref from |cs|. That's a lot of reads, though, and it's more efficient to just read the Value indicated by |last|, diff the proposed new root against it, and validate whatever new entries appear.
 	datasets := types.NewMap()
 	if !last.IsEmpty() {
@@ -381,12 +390,19 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		datasets = lastVal.(types.Map)
 	}
 
-	// Ensure that proposed new Root is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
+	// Only allowed to skip this check if both last and current are empty, because that represents the special case of someone flushing chunks into an empty store.
+	if !last.IsEmpty() || !current.IsEmpty() {
+		// Ensure that proposed new Root is present in cs, is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
+		proposed := vs.ReadValue(current)
+		if proposed == nil {
+			d.Panic("Can't set Root to a non-present Chunk")
+		}
 
-	if m, ok := proposed.(types.Map); !ok {
-		d.Panic("Root of a Database must be a Map")
-	} else if !m.Empty() {
-		assertMapOfStringToRefOfCommit(m, datasets, vs)
+		if m, ok := proposed.(types.Map); !ok {
+			d.Panic("Root of a Database must be a Map")
+		} else if !m.Empty() {
+			assertMapOfStringToRefOfCommit(m, datasets, vs)
+		}
 	}
 
 	if !cs.Commit(current, last) {

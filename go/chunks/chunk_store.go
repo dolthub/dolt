@@ -46,10 +46,6 @@ type ChunkStore interface {
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string
 
-	// On return, any previously Put chunks must be durable. It is not safe to
-	// call Flush() concurrently with Put() or PutMany().
-	Flush()
-
 	// Rebase brings this ChunkStore into sync with the persistent storage's
 	// current root.
 	Rebase()

@@ -244,14 +244,14 @@ func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) {
 }
 
 func (suite *mapTestSuite) TestStreamingMap() {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 	suite.createStreamingMap(vs)
 }
 
 func (suite *mapTestSuite) TestStreamingMap2() {
 	wg := sync.WaitGroup{}
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	wg.Add(2)
@@ -402,7 +402,7 @@ func TestMapHas(t *testing.T) {
 
 	assert := assert.New(t)
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	doTest := func(tm testMap) {
 		m := tm.toMap()
 		m2 := vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
@@ -462,8 +462,8 @@ func TestMapRemove(t *testing.T) {
 
 	doTest(128, getTestNativeOrderMap(32))
 	doTest(64, getTestRefValueOrderMap(4))
-	doTest(64, getTestRefToNativeOrderMap(4, NewTestValueStore()))
-	doTest(64, getTestRefToValueOrderMap(4, NewTestValueStore()))
+	doTest(64, getTestRefToNativeOrderMap(4, newTestValueStore()))
+	doTest(64, getTestRefToValueOrderMap(4, newTestValueStore()))
 }
 
 func TestMapRemoveNonexistentKey(t *testing.T) {
@@ -524,8 +524,8 @@ func TestMapFirst2(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
 }
 
 func TestMapLast(t *testing.T) {
@@ -572,8 +572,8 @@ func TestMapLast2(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
 }
 
 func TestMapSetGet(t *testing.T) {
@@ -644,8 +644,8 @@ func TestMapSet(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderMap(9))
 	doTest(128, 1, getTestNativeOrderMap(32))
 	doTest(64, 1, getTestRefValueOrderMap(4))
-	doTest(64, 1, getTestRefToNativeOrderMap(4, NewTestValueStore()))
-	doTest(64, 1, getTestRefToValueOrderMap(4, NewTestValueStore()))
+	doTest(64, 1, getTestRefToNativeOrderMap(4, newTestValueStore()))
+	doTest(64, 1, getTestRefToValueOrderMap(4, newTestValueStore()))
 }
 
 func TestMapSetExistingKeyToNewValue(t *testing.T) {
@@ -721,8 +721,8 @@ func TestMapMaybeGet(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(2))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
 }
 
 func TestMapIter(t *testing.T) {
@@ -795,8 +795,8 @@ func TestMapIter2(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
 }
 
 func TestMapAny(t *testing.T) {
@@ -835,8 +835,8 @@ func TestMapIterAll(t *testing.T) {
 
 	doTest(getTestNativeOrderMap(16))
 	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
 }
 
 func TestMapEquals(t *testing.T) {
@@ -1096,7 +1096,7 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
@@ -1118,7 +1118,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	m := getTestNativeOrderMap(2).toMap()
 	// Drop chunk values.
 	m = vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
@@ -1225,7 +1225,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	reload := func(m Map) Map {
 		return vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
 	}

@@ -64,9 +64,9 @@ const (
 	defaultPendingPutMax  = 1 << 28 // 256MB
 )
 
-// NewTestValueStore creates a simple struct that satisfies ValueReadWriter
+// newTestValueStore creates a simple struct that satisfies ValueReadWriter
 // and is backed by a chunks.TestStore.
-func NewTestValueStore() *ValueStore {
+func newTestValueStore() *ValueStore {
 	ts := &chunks.TestStorage{}
 	return NewValueStore(ts.NewView())
 }
@@ -300,9 +300,9 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 }
 
-// Flush() flushes all bufferedChunks to the ChunkStore, with best-effort
-// locality, and then flushes the ChunkStore to make the Chunks durable.
-// TODO: Is flushing the ChunkStore the right semantics?
+// Flush() puts all bufferedChunks into the ChunkStore, with best-effort
+// locality. NB: The Chunks will not be made durable unless the caller also
+// Commits to the underlying ChunkStore.
 func (lvs *ValueStore) Flush() {
 	func() {
 		lvs.bufferMu.Lock()
@@ -334,7 +334,14 @@ func (lvs *ValueStore) Flush() {
 		lvs.withBufferedChildren = map[hash.Hash]uint64{}
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 	}()
-	lvs.cs.Flush()
+}
+
+// persist() calls Flush(), but also flushes the ChunkStore to make the Chunks
+// durable. If you're using this outside of tests, you're probably holding it
+// wrong.
+func (lvs *ValueStore) persist() {
+	lvs.Flush()
+	d.PanicIfFalse(lvs.cs.Commit(lvs.cs.Root(), lvs.cs.Root()))
 }
 
 // Close closes the underlying ChunkStore

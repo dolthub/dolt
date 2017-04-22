@@ -113,7 +113,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	suite.Equal(constants.NomsVersion, store.Version())
 }
 
-func (suite *ChunkStoreTestSuite) TestChunkStoreFlush() {
+func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	store1, store2 := suite.Factory.CreateStore("ns"), suite.Factory.CreateStore("ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
@@ -125,7 +125,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreFlush() {
 	// ...but not store2.
 	assertInputNotInStore(input, h, store2, suite.Assert())
 
-	store1.Flush()
+	store1.Commit(store1.Root(), store1.Root())
 	store2.Rebase()
 	// Now, reading c from store2 via the API should work...
 	assertInputInStore(input, h, store2, suite.Assert())

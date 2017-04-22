@@ -23,7 +23,7 @@ type OpCacheSuite struct {
 }
 
 func (suite *OpCacheSuite) SetupTest() {
-	suite.vs = NewTestValueStore()
+	suite.vs = newTestValueStore()
 }
 
 func (suite *OpCacheSuite) TearDownTest() {

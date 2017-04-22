@@ -25,7 +25,8 @@ func TestCachingChunkHaver(t *testing.T) {
 	assert.Equal(ts.Hases, 1)
 
 	ts.Put(c)
-	ts.Flush()
+	assert.True(ts.Commit(ts.Root(), ts.Root()))
+
 	ts = storage.NewView()
 	ccs = newCachingChunkHaver(ts)
 	assert.True(ccs.Has(c.Hash()))

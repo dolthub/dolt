@@ -172,13 +172,13 @@ func (suite *setTestSuite) createStreamingSet(vs *ValueStore) {
 }
 
 func (suite *setTestSuite) TestStreamingSet() {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 	suite.createStreamingSet(vs)
 }
 
 func (suite *setTestSuite) TestStreamingSet2() {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	defer vs.Close()
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -374,7 +374,7 @@ func TestSetHas2(t *testing.T) {
 
 	assert := assert.New(t)
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	doTest := func(ts testSet) {
 		set := ts.toSet()
 		set2 := vs.ReadValue(vs.WriteValue(set).TargetHash()).(Set)
@@ -459,8 +459,8 @@ func TestSetInsert2(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderSet(9))
 	doTest(64, 1, getTestNativeOrderSet(32))
 	doTest(32, 1, getTestRefValueOrderSet(4))
-	doTest(32, 1, getTestRefToNativeOrderSet(4, NewTestValueStore()))
-	doTest(32, 1, getTestRefToValueOrderSet(4, NewTestValueStore()))
+	doTest(32, 1, getTestRefToNativeOrderSet(4, newTestValueStore()))
+	doTest(32, 1, getTestRefToValueOrderSet(4, newTestValueStore()))
 }
 
 func TestSetInsertExistingValue(t *testing.T) {
@@ -527,8 +527,8 @@ func TestSetRemove2(t *testing.T) {
 	doTest(18, 3, getTestNativeOrderSet(9))
 	doTest(64, 1, getTestNativeOrderSet(32))
 	doTest(32, 1, getTestRefValueOrderSet(4))
-	doTest(32, 1, getTestRefToNativeOrderSet(4, NewTestValueStore()))
-	doTest(32, 1, getTestRefToValueOrderSet(4, NewTestValueStore()))
+	doTest(32, 1, getTestRefToNativeOrderSet(4, newTestValueStore()))
+	doTest(32, 1, getTestRefToValueOrderSet(4, newTestValueStore()))
 }
 
 func TestSetRemoveNonexistentValue(t *testing.T) {
@@ -615,8 +615,8 @@ func TestSetIter2(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderSet(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, newTestValueStore()))
 }
 
 func TestSetIterAll(t *testing.T) {
@@ -650,8 +650,8 @@ func TestSetIterAll2(t *testing.T) {
 
 	doTest(getTestNativeOrderSet(16))
 	doTest(getTestRefValueOrderSet(2))
-	doTest(getTestRefToNativeOrderSet(2, NewTestValueStore()))
-	doTest(getTestRefToValueOrderSet(2, NewTestValueStore()))
+	doTest(getTestRefToNativeOrderSet(2, newTestValueStore()))
+	doTest(getTestRefToValueOrderSet(2, newTestValueStore()))
 }
 
 func testSetOrder(assert *assert.Assertions, valueType *Type, value []Value, expectOrdering []Value) {
@@ -820,7 +820,7 @@ func TestSetChunks2(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	doTest := func(ts testSet) {
 		set := ts.toSet()
 		set2chunks := getChunks(vs.ReadValue(vs.WriteValue(set).TargetHash()))
@@ -860,7 +860,7 @@ func TestSetModifyAfterRead(t *testing.T) {
 	defer normalProductionChunks()
 
 	assert := assert.New(t)
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	set := getTestNativeOrderSet(2).toSet()
 	// Drop chunk values.
 	set = vs.ReadValue(vs.WriteValue(set).TargetHash()).(Set)
@@ -958,7 +958,7 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	reload := func(s Set) Set {
 		return vs.ReadValue(vs.WriteValue(s).TargetHash()).(Set)
 	}

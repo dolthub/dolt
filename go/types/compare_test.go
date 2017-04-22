@@ -57,7 +57,7 @@ func TestCompareEmpties(t *testing.T) {
 
 func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	assert := assert.New(t)
-	vrw := NewTestValueStore()
+	vrw := newTestValueStore()
 	defer vrw.Close()
 
 	nums := ValueSlice{Number(1), Number(2), Number(3)}
@@ -114,7 +114,7 @@ func TestComparePrimitives(t *testing.T) {
 func TestCompareEncodedKeys(t *testing.T) {
 	assert := assert.New(t)
 	comp := opCacheComparer{}
-	vrw := NewTestValueStore()
+	vrw := newTestValueStore()
 	defer vrw.Close()
 
 	k1 := ValueSlice{String("one"), Number(3)}

@@ -41,7 +41,7 @@ func TestIncrementalLoadList(t *testing.T) {
 
 	expected := NewList(testVals...)
 	hash := vs.WriteValue(expected).TargetHash()
-	vs.Flush()
+	vs.persist()
 
 	actualVar := vs.ReadValue(hash)
 	actual := actualVar.(List)

@@ -60,7 +60,7 @@ func TestWriteHumanReadablePrimitiveValues(t *testing.T) {
 }
 
 func TestWriteHumanReadableRef(t *testing.T) {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 
 	x := Number(42)
 	rv := vs.WriteValue(x)

@@ -201,6 +201,11 @@ func (suite *HTTPChunkStoreSuite) TestCommit() {
 	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
+func (suite *HTTPChunkStoreSuite) TestEmptyHashCommit() {
+	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+	suite.Equal(hash.Hash{}, suite.serverCS.Root())
+}
+
 func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
 	store := newAuthenticatingHTTPChunkStoreForTest(suite.Assert(), suite.serverCS, u)
@@ -230,7 +235,7 @@ func (suite *HTTPChunkStoreSuite) TestGetMany() {
 	}
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 	suite.serverCS.PutMany(chnx)
-	suite.serverCS.Flush()
+	persistChunks(suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
@@ -267,7 +272,7 @@ func (suite *HTTPChunkStoreSuite) TestGetManySomeCached() {
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
 	suite.serverCS.PutMany(chnx)
-	suite.serverCS.Flush()
+	persistChunks(suite.serverCS)
 	suite.http.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
@@ -308,7 +313,7 @@ func (suite *HTTPChunkStoreSuite) TestHasMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	suite.serverCS.PutMany(chnx)
-	suite.serverCS.Flush()
+	persistChunks(suite.serverCS)
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
@@ -327,7 +332,7 @@ func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	suite.http.PutMany(chnx)
-	suite.serverCS.Flush()
+	persistChunks(suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
 	present := suite.http.HasMany(hashes)
@@ -345,7 +350,7 @@ func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
 	suite.serverCS.PutMany(chnx)
-	suite.serverCS.Flush()
+	persistChunks(suite.serverCS)
 	suite.http.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())

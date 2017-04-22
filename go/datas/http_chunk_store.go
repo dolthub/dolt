@@ -483,9 +483,6 @@ func (hcs *httpChunkStore) requestRoot(method string, current, last hash.Hash) *
 	u := *hcs.host
 	u.Path = httprouter.CleanPath(hcs.host.Path + constants.RootPath)
 	if method == "POST" {
-		if current.IsEmpty() {
-			d.Panic("Unexpected empty value")
-		}
 		params := u.Query()
 		params.Add("last", last.String())
 		params.Add("current", current.String())

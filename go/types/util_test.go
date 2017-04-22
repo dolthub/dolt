@@ -66,7 +66,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 }
 
 func generateNumbersAsRefOfStructs(n int) []Value {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	nums := []Value{}
 	for i := 0; i < n; i++ {
 		r := vs.WriteValue(NewStruct("num", StructData{"n": Number(i)}))

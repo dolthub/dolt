@@ -12,7 +12,7 @@ import (
 
 func TestTypes(t *testing.T) {
 	assert := assert.New(t)
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 
 	mapType := MakeMapType(StringType, NumberType)
 	setType := MakeSetType(StringType)

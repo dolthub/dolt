@@ -100,7 +100,7 @@ func (w *nomsTestWriter) writeHash(h hash.Hash) {
 }
 
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	tw := &nomsTestWriter{}
 	enc := valueEncoder{tw, vs, false}
 	enc.writeValue(v)
@@ -115,7 +115,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 
 func TestRoundTrips(t *testing.T) {
 	assertRoundTrips := func(v Value) {
-		vs := NewTestValueStore()
+		vs := newTestValueStore()
 		out := DecodeValue(EncodeValue(v, vs), vs)
 		assert.True(t, v.Equals(out))
 	}
@@ -173,7 +173,7 @@ func TestRoundTrips(t *testing.T) {
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	t := func(f float64, s string) {
 		v := Number(f)
 		err := d.Try(func() {
@@ -320,7 +320,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 			newMetaTuple(constructRef(r1, BlobType, 11), orderedKeyFromInt(20), 20, nil),
 			newMetaTuple(constructRef(r2, BlobType, 22), orderedKeyFromInt(40), 40, nil),
 			newMetaTuple(constructRef(r3, BlobType, 33), orderedKeyFromInt(60), 60, nil),
-		}, NewTestValueStore())),
+		}, newTestValueStore())),
 	)
 }
 

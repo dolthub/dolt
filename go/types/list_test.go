@@ -257,7 +257,7 @@ func TestStreamingListCreation(t *testing.T) {
 	}
 	assert := assert.New(t)
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	simpleList := getTestList()
 
 	cl := NewList(simpleList...)
@@ -671,7 +671,7 @@ func TestListModifyAfterRead(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 
 	list := getTestList().toList()
 	// Drop chunk values.
@@ -951,7 +951,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(nums1...)
 	hash1 := vs1.WriteValue(l1).TargetHash()
-	vs1.Flush()
+	vs1.persist()
 	refList1 := vs1.ReadValue(hash1).(List)
 
 	cs2 := storage.NewView()
@@ -959,7 +959,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(nums2...)
 	hash2 := vs2.WriteValue(l2).TargetHash()
-	vs2.Flush()
+	vs2.persist()
 	refList2 := vs2.ReadValue(hash2).(List)
 
 	// diff lists without value store
@@ -1040,7 +1040,7 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	reload := func(l List) List {
 		return vs.ReadValue(vs.WriteValue(l).TargetHash()).(List)
 	}
@@ -1065,7 +1065,7 @@ func TestListConcat(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	reload := func(vs *ValueStore, l List) List {
 		return vs.ReadValue(vs.WriteValue(l).TargetHash()).(List)
 	}

@@ -49,18 +49,6 @@ func (ms *MemoryStorage) Has(r hash.Hash) bool {
 	return ok
 }
 
-// PutAll adds all of chunks to ms.data.
-func (ms *MemoryStorage) PutAll(chunks map[hash.Hash]Chunk) {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	if ms.data == nil {
-		ms.data = map[hash.Hash]Chunk{}
-	}
-	for h, c := range chunks {
-		ms.data[h] = c
-	}
-}
-
 // Len returns the number of Chunks in ms.data.
 func (ms *MemoryStorage) Len() int {
 	ms.mu.RLock()
@@ -75,13 +63,20 @@ func (ms *MemoryStorage) Root() hash.Hash {
 	return ms.rootHash
 }
 
-// UpdateRoot checks the "persisted" root against last and, iff it matches,
-// updates the root to current and returns true. Otherwise returns false.
-func (ms *MemoryStorage) UpdateRoot(current, last hash.Hash) bool {
+// Update checks the "persisted" root against last and, iff it matches,
+// updates the root to current, adds all of novel to ms.data, and returns
+// true. Otherwise returns false.
+func (ms *MemoryStorage) Update(current, last hash.Hash, novel map[hash.Hash]Chunk) bool {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if last != ms.rootHash {
 		return false
+	}
+	if ms.data == nil {
+		ms.data = map[hash.Hash]Chunk{}
+	}
+	for h, c := range novel {
+		ms.data[h] = c
 	}
 	ms.rootHash = current
 	return true
@@ -163,13 +158,6 @@ func (ms *MemoryStoreView) Len() int {
 	return len(ms.pending) + ms.storage.Len()
 }
 
-func (ms *MemoryStoreView) Flush() {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	ms.storage.PutAll(ms.pending)
-	ms.pending = nil
-}
-
 func (ms *MemoryStoreView) Rebase() {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -188,13 +176,12 @@ func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
 	if last != ms.rootHash {
 		return false
 	}
-	ms.storage.PutAll(ms.pending)
-	ms.pending = nil
 
-	success := ms.storage.UpdateRoot(current, last)
+	success := ms.storage.Update(current, last, ms.pending)
 	if success {
-		ms.rootHash = current
+		ms.pending = nil
 	}
+	ms.rootHash = ms.storage.Root()
 	return success
 }
 

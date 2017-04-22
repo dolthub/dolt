@@ -428,7 +428,7 @@ func TestPathTarget(t *testing.T) {
 	s := NewStruct("", StructData{
 		"foo": String("bar"),
 	})
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	r := vs.WriteValue(s)
 	s2 := NewStruct("", StructData{
 		"ref": r,

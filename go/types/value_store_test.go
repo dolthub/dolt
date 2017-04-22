@@ -16,10 +16,10 @@ func TestValueReadWriteRead(t *testing.T) {
 	assert := assert.New(t)
 
 	s := String("hello")
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	assert.Nil(vs.ReadValue(s.Hash())) // nil
 	h := vs.WriteValue(s).TargetHash()
-	vs.Flush()
+	vs.persist()
 	v := vs.ReadValue(h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(s), EncodedValue(v))
@@ -51,12 +51,12 @@ func TestValueReadMany(t *testing.T) {
 	assert := assert.New(t)
 
 	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	hashes := hash.HashSet{}
 	for _, v := range vals {
 		h := vs.WriteValue(v).TargetHash()
 		hashes.Insert(h)
-		vs.Flush()
+		vs.persist()
 	}
 
 	// Get one Value into vs's Value cache
@@ -88,14 +88,14 @@ func TestValueWriteFlush(t *testing.T) {
 	assert := assert.New(t)
 
 	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	hashes := hash.HashSet{}
 	for _, v := range vals {
 		hashes.Insert(vs.WriteValue(v).TargetHash())
 	}
 	assert.NotZero(vs.bufferedChunkSize)
 
-	vs.Flush()
+	vs.persist()
 	assert.Zero(vs.bufferedChunkSize)
 }
 
@@ -160,7 +160,7 @@ func TestFlushOrder(t *testing.T) {
 
 	r := vs.WriteValue(l)
 	ccs.expect(r)
-	vs.Flush()
+	vs.persist()
 }
 
 func TestFlushOverSize(t *testing.T) {
@@ -175,7 +175,7 @@ func TestFlushOverSize(t *testing.T) {
 	ccs.expect(sr, NewRef(l))
 
 	vs.WriteValue(l)
-	vs.Flush()
+	vs.persist()
 }
 
 func TestTolerateTopDown(t *testing.T) {
@@ -201,7 +201,7 @@ func TestTolerateTopDown(t *testing.T) {
 	lr := vs.WriteValue(L)
 	ccs.expect(lr)
 
-	vs.Flush()
+	vs.persist()
 
 	assert.Zero(len(vs.bufferedChunks))
 
@@ -213,7 +213,7 @@ func TestTolerateTopDown(t *testing.T) {
 	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S
 	// So, it'll look at ML, the one parent it knows about, first and write its child (S). Then, it'll write ML, and then it'll flush the remaining buffered chunks, which is just ST.
 	ccs.expect(sr, mlr, str)
-	vs.Flush()
+	vs.persist()
 }
 
 func TestPanicOnBadVersion(t *testing.T) {

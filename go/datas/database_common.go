@@ -211,7 +211,6 @@ func (dbc *databaseCommon) tryCommitChunks(currentDatasets types.Map, currentRoo
 	// TODO: This Map will be orphaned if the Commit below fails
 	newRootHash := dbc.WriteValue(currentDatasets).TargetHash()
 
-	// TODO: We've always been sorta sad that we Flush() the embedded ValueStore here, and then Commit() the composed ChunkStore below. That leads to two consecutive make-Chunks-durable operations on the underlying ChunkStore, and the latter won't actually have any novel Chunks. The problem arises from the fact that most users of ValueStore don't have access to the underlying ChunkStore, but Database _does_. ValueStore buffers Chunks, and most users who call Flush() need it to dump those Chunks into the ChunkStore and then make those Chunks durable. At this callsite, though, we only want to get those down into the ChunkStore, because we know that we're going to call Commit() later, which will make those Chunks durable. It's a conundrum :-/
 	dbc.Flush()
 
 	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404

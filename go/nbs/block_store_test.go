@@ -174,10 +174,10 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	interloper.Flush()
+	suite.True(interloper.Commit(interloper.Root(), interloper.Root()))
 
 	suite.store.Put(c2)
-	suite.store.Flush() // Commit write
+	suite.True(suite.store.Commit(suite.store.Root(), suite.store.Root()))
 
 	// Reading c2 via the API should work...
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
@@ -192,6 +192,24 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	suite.True(suite.store.Commit(c2.Hash(), suite.store.Root()))
 }
 
+func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
+	input1 := []byte("abc")
+	c1 := chunks.NewChunk(input1)
+
+	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper.Put(c1)
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root()))
+
+	suite.False(suite.store.Has(c1.Hash()))
+	suite.Equal(hash.Hash{}, suite.store.Root())
+	// Should Rebase, even though there's no work to do.
+	suite.True(suite.store.Commit(suite.store.Root(), suite.store.Root()))
+
+	// Reading c1 via the API should work
+	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
+	suite.True(suite.store.Has(c1.Hash()))
+}
+
 func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
@@ -199,7 +217,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	interloper.Flush()
+	suite.True(interloper.Commit(interloper.Root(), interloper.Root()))
 
 	suite.store.Put(c2)
 

@@ -31,7 +31,7 @@ const bytesWrittenSampleRate = .10
 // TODO: Get rid of this (BUG 2982)
 func PullWithFlush(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	Pull(srcDB, sinkDB, sourceRef, sinkHeadRef, concurrency, progressCh)
-	sinkDB.validatingChunkStore().Flush()
+	persistChunks(sinkDB.validatingChunkStore())
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB. sinkHeadRef

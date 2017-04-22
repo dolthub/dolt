@@ -13,7 +13,7 @@ import (
 
 func TestEnsureHash(t *testing.T) {
 	assert := assert.New(t)
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	count := byte(1)
 	mockGetRef := func(v Value) hash.Hash {
 		h := hash.Hash{}

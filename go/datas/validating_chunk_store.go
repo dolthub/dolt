@@ -51,13 +51,6 @@ func (vcs *validatingChunkStore) Commit(current, last hash.Hash) bool {
 	return vcs.ChunkStore.Commit(current, last)
 }
 
-// Flush validates pending chunks for ref-completeness before calling
-// Flush() on the underlying ChunkStore.
-func (vcs *validatingChunkStore) Flush() {
-	vcs.validate()
-	vcs.ChunkStore.Flush()
-}
-
 func (vcs *validatingChunkStore) validate() {
 	vcs.mu.Lock()
 	defer vcs.mu.Unlock()

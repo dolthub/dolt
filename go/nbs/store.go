@@ -374,6 +374,17 @@ func (nbs *NomsBlockStore) Root() hash.Hash {
 }
 
 func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
+	anyPossiblyNovelChunks := func() bool {
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+		return nbs.mt != nil || len(nbs.tables.novel) > 0
+	}
+
+	if !anyPossiblyNovelChunks() && current == last {
+		nbs.Rebase()
+		return true
+	}
+
 	b := &backoff.Backoff{
 		Min:    128 * time.Microsecond,
 		Max:    10 * time.Second,
@@ -447,26 +458,4 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	return nbs.tables.Close()
-}
-
-func (nbs *NomsBlockStore) Flush() {
-	anyPossiblyNovelChunks := func() bool {
-		nbs.mu.Lock()
-		defer nbs.mu.Unlock()
-		return nbs.mt != nil || len(nbs.tables.novel) > 0
-	}
-
-	if !anyPossiblyNovelChunks() {
-		return
-	}
-
-	b := &backoff.Backoff{
-		Min:    128 * time.Microsecond,
-		Max:    10 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
-	for nbs.updateManifest(nbs.root, nbs.root) != nil {
-		time.Sleep(b.Duration())
-	}
 }

@@ -237,7 +237,7 @@ func TestBlobConcat(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	reload := func(b Blob) Blob {
 		return vs.ReadValue(vs.WriteValue(b).TargetHash()).(Blob)
 	}
@@ -317,7 +317,7 @@ func TestStreamingParallelBlob(t *testing.T) {
 		readers[i] = bytes.NewReader(buff[i*chunkSize : (i+1)*chunkSize])
 	}
 
-	vs := NewTestValueStore()
+	vs := newTestValueStore()
 	blob := NewStreamingBlob(vs, readers...)
 	outBuff := &bytes.Buffer{}
 	blob.Reader().Copy(outBuff)

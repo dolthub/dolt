@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/graphql"
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/test"
@@ -29,7 +30,8 @@ func TestQueryGraphQL(t *testing.T) {
 }
 
 func (suite *QueryGraphQLSuite) SetupTest() {
-	suite.vs = types.NewTestValueStore()
+	storage := &chunks.MemoryStorage{}
+	suite.vs = types.NewValueStore(storage.NewView())
 }
 
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {

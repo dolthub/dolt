@@ -7,6 +7,7 @@ package merge
 import (
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
@@ -24,7 +25,8 @@ type ThreeWayMergeSuite struct {
 }
 
 func (s *ThreeWayMergeSuite) SetupTest() {
-	s.vs = types.NewTestValueStore()
+	storage := &chunks.MemoryStorage{}
+	s.vs = types.NewValueStore(storage.NewView())
 }
 
 func (s *ThreeWayMergeSuite) TearDownTest() {
