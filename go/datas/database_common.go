@@ -18,7 +18,6 @@ type databaseCommon struct {
 	*types.ValueStore
 	cch      *cachingChunkHaver
 	rt       rootTracker
-	rootHash hash.Hash
 	datasets *types.Map
 }
 
@@ -28,25 +27,17 @@ var (
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
-type rootTracker struct {
-	cs chunks.ChunkStore
-}
-
-func (rt rootTracker) Rebase() hash.Hash {
-	rt.cs.Rebase()
-	return rt.cs.Root()
-}
-
-func (rt rootTracker) Commit(current, last hash.Hash) bool {
-	return rt.cs.Commit(current, last)
+type rootTracker interface {
+	Rebase()
+	Root() hash.Hash
+	Commit(current, last hash.Hash) bool
 }
 
 func newDatabaseCommon(cs chunks.ChunkStore) databaseCommon {
 	return databaseCommon{
 		ValueStore: types.NewValueStore(cs),
 		cch:        newCachingChunkHaver(cs),
-		rt:         rootTracker{cs},
-		rootHash:   cs.Root(),
+		rt:         cs,
 	}
 }
 
@@ -56,11 +47,11 @@ func (dbc *databaseCommon) validatingChunkStore() chunks.ChunkStore {
 
 func (dbc *databaseCommon) Datasets() types.Map {
 	if dbc.datasets == nil {
-		if dbc.rootHash.IsEmpty() {
+		if rootHash := dbc.rt.Root(); rootHash.IsEmpty() {
 			emptyMap := types.NewMap()
 			dbc.datasets = &emptyMap
 		} else {
-			dbc.datasets = dbc.datasetsFromRef(dbc.rootHash)
+			dbc.datasets = dbc.datasetsFromRef(rootHash)
 		}
 	}
 
@@ -88,6 +79,14 @@ func (dbc *databaseCommon) has(h hash.Hash) bool {
 	return dbc.cch.Has(h)
 }
 
+func (dbc *databaseCommon) Rebase() {
+	cached := dbc.rt.Root()
+	dbc.rt.Rebase()
+	if dbc.rt.Root() != cached {
+		dbc.datasets = nil
+	}
+}
+
 func (dbc *databaseCommon) Close() error {
 	return dbc.ValueStore.Close()
 }
@@ -97,9 +96,8 @@ func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 		return nil
 	}
 	commit := dbc.validateRefAsCommit(newHeadRef)
-	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Rebase(), nil }()
 
-	currentRootHash, currentDatasets := dbc.getRootAndDatasets()
+	currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
 	commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Set(types.String(ds.ID()), types.ToRefOfValue(commitRef))
@@ -122,12 +120,11 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 	if !IsCommit(commit) {
 		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
-	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Rebase(), nil }()
 
 	// This could loop forever, given enough simultaneous committers. BUG 2565
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
-		currentRootHash, currentDatasets := dbc.getRootAndDatasets()
+		currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
 		commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
@@ -168,10 +165,8 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
-	defer func() { dbc.rootHash, dbc.datasets = dbc.rt.Rebase(), nil }()
-
 	datasetID := types.String(datasetIDstr)
-	currentRootHash, currentDatasets := dbc.getRootAndDatasets()
+	currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
 	var initialHead types.Ref
 	if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead {
 		return nil
@@ -187,7 +182,7 @@ func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 			break
 		}
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
-		currentRootHash, currentDatasets = dbc.getRootAndDatasets()
+		currentRootHash, currentDatasets = dbc.rt.Root(), dbc.Datasets()
 		if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded
 			break
@@ -196,24 +191,13 @@ func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 	return err
 }
 
-func (dbc *databaseCommon) getRootAndDatasets() (currentRootHash hash.Hash, currentDatasets types.Map) {
-	currentRootHash = dbc.rt.Rebase()
-	currentDatasets = dbc.Datasets()
-
-	if currentRootHash != currentDatasets.Hash() && !currentRootHash.IsEmpty() {
-		// The root has been advanced.
-		currentDatasets = *dbc.datasetsFromRef(currentRootHash)
-	}
-	return
-}
-
 func (dbc *databaseCommon) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
-	// TODO: This Map will be orphaned if the Commit below fails
 	newRootHash := dbc.WriteValue(currentDatasets).TargetHash()
 
 	dbc.Flush()
 
-	// If the root has been updated by another process in the short window since we read it, this call will fail. See issue #404
+	// Since dbc.rt.Commit() updates the root, dbc.datasets would be out of date upon return. So, nil it out.
+	defer func() { dbc.datasets = nil }()
 	if !dbc.rt.Commit(newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}

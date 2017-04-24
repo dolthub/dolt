@@ -129,7 +129,6 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 		chunk = lvs.cs.Get(h)
 	}
 	if chunk.IsEmpty() {
-		lvs.valueCache.Add(h, 0, nil)
 		return nil
 	}
 
@@ -189,15 +188,6 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		foundHashes[h] = struct{}{}
 		foundValues <- decode(h, c, false)
 	}
-
-	for h := range foundHashes {
-		remaining.Remove(h) // Avoid concurrent access with the call to GetMany above
-	}
-
-	// Any remaining hashes weren't found in the ChunkStore should be recorded as not present.
-	for h := range remaining {
-		lvs.valueCache.Add(h, 0, nil)
-	}
 }
 
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns
@@ -217,7 +207,6 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	}
 
 	lvs.bufferChunk(v, c, height)
-	lvs.valueCache.Drop(h) // valueCache may have an entry saying h is not present. Clear that.
 	return r
 }
 

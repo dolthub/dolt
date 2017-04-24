@@ -77,6 +77,44 @@ func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
 	suite.Nil(suite.db.ReadValue(hash.Hash{}))
 }
 
+func (suite *DatabaseSuite) TestRebase() {
+	datasetID := "ds1"
+	ds1 := suite.db.GetDataset(datasetID)
+	var err error
+
+	// Setup:
+	// ds1: |a| <- |b|
+	ds1, err = suite.db.CommitValue(ds1, types.String("a"))
+	b := types.String("b")
+	ds1, err = suite.db.CommitValue(ds1, b)
+	suite.NoError(err)
+	suite.True(ds1.HeadValue().Equals(b))
+
+	interloper := suite.makeDb(suite.storage.NewView())
+	defer interloper.Close()
+
+	// Concurrent change, to move root out from under my feet:
+	// ds1: |a| <- |b| <- |e|
+	e := types.String("e")
+	iDS, concErr := interloper.CommitValue(interloper.GetDataset(datasetID), e)
+	suite.NoError(concErr)
+	suite.True(iDS.HeadValue().Equals(e))
+
+	// suite.ds shouldn't see the above change yet
+	suite.True(suite.db.GetDataset(datasetID).HeadValue().Equals(b))
+
+	suite.db.Rebase()
+	suite.True(suite.db.GetDataset(datasetID).HeadValue().Equals(e))
+
+	cs := suite.storage.NewView()
+	noChangeDB := suite.makeDb(cs)
+	noChangeDB.Datasets()
+	cs.Reads = 0 // New baseline
+
+	noChangeDB.Rebase()
+	suite.Zero(cs.Reads)
+}
+
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	id1, id2 := "testdataset", "othertestdataset"
 
@@ -301,42 +339,34 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	suite.True(ds1.HeadValue().Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	w := &waitDuringUpdateRootChunkStore{suite.storage.NewView(), nil}
-	interloper := suite.makeDb(w)
+	interloper := suite.makeDb(suite.storage.NewView())
 	defer interloper.Close()
 
-	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
+	// Change ds2 behind suite.db's back. This shouldn't block changes to ds1 via suite.db below.
 	// ds1: |a| <- |b|
 	// ds2: |stuff|
-	w.preUpdateRootHook = func() {
-		e := types.String("stuff")
-		ds2, concErr := suite.db.CommitValue(suite.db.GetDataset("ds2"), e)
-		suite.NoError(concErr)
-		suite.True(ds2.HeadValue().Equals(e))
-		w.preUpdateRootHook = nil
-	}
+	stf := types.String("stuff")
+	ds2, concErr := interloper.CommitValue(interloper.GetDataset("ds2"), stf)
+	suite.NoError(concErr)
+	suite.True(ds2.HeadValue().Equals(stf))
 
-	// Attempted Concurrent change, which should proceed without a problem
-	ds1 = interloper.GetDataset(datasetID)
+	// Change ds1 via suite.db, which should proceed without a problem
 	c := types.String("c")
-	ds1, err = interloper.CommitValue(ds1, c)
+	ds1, err = suite.db.CommitValue(ds1, c)
 	suite.NoError(err)
 	suite.True(ds1.HeadValue().Equals(c))
 
-	// Concurrent change, to move root out from under my feet:
+	// Change ds1 behind suite.db's back. Will block changes to ds1 below.
 	// ds1: |a| <- |b| <- |c| <- |e|
 	e := types.String("e")
-	w.preUpdateRootHook = func() {
-		ds := suite.db.GetDataset(datasetID)
-		ds, concErr := suite.db.Commit(ds, e, CommitOptions{Parents: types.NewSet(ds1.HeadRef())})
-		suite.NoError(concErr)
-		suite.True(ds.HeadValue().Equals(e))
-		w.preUpdateRootHook = nil
-	}
+	interloper.Rebase()
+	iDS, concErr := interloper.CommitValue(interloper.GetDataset("ds1"), e)
+	suite.NoError(concErr)
+	suite.True(iDS.HeadValue().Equals(e))
 
 	// Attempted Concurrent change, which should fail due to the above
 	nope := types.String("nope")
-	ds1, err = interloper.CommitValue(ds1, nope)
+	ds1, err = suite.db.CommitValue(ds1, nope)
 	suite.Error(err)
 	v := ds1.HeadValue()
 	suite.True(v.Equals(e), "%s", v.(types.String))
@@ -356,39 +386,31 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.True(ds1.HeadValue().Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	w := &waitDuringUpdateRootChunkStore{suite.storage.NewView(), nil}
-	interloper := suite.makeDb(w)
+	interloper := suite.makeDb(suite.storage.NewView())
 	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
 	// ds1: |a| <- |b| <- |e|
 	e := types.String("e")
-	w.preUpdateRootHook = func() {
-		ds := suite.db.GetDataset(datasetID)
-		ds, concErr := suite.db.Commit(ds, e, CommitOptions{Parents: types.NewSet(ds1.HeadRef())})
-		suite.NoError(concErr)
-		suite.True(ds.HeadValue().Equals(e))
-		w.preUpdateRootHook = nil
-	}
+	iDS, concErr := interloper.CommitValue(interloper.GetDataset(datasetID), e)
+	suite.NoError(concErr)
+	suite.True(iDS.HeadValue().Equals(e))
 
-	// Attempted concurrent change, which should fail due to the above
-	ds1, err = interloper.Delete(ds1)
+	// Attempt to delete ds1 via suite.db, which should fail due to the above
+	ds1, err = suite.db.Delete(ds1)
 	suite.Error(err)
 	suite.True(ds1.HeadValue().Equals(e))
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
 	// ds1: |a| <- |b| <- |e|
 	// ds2: |stuff|
-	w.preUpdateRootHook = func() {
-		e := types.String("stuff")
-		ds, concErr := suite.db.CommitValue(suite.db.GetDataset("other"), e)
-		suite.NoError(concErr)
-		suite.True(ds.HeadValue().Equals(e))
-		w.preUpdateRootHook = nil
-	}
+	stf := types.String("stuff")
+	iDS, concErr = interloper.CommitValue(suite.db.GetDataset("other"), stf)
+	suite.NoError(concErr)
+	suite.True(iDS.HeadValue().Equals(stf))
 
-	// Attempted concurrent change, which should proceed without a problem
-	ds1, err = interloper.Delete(ds1)
+	// Attempted concurrent delete, which should proceed without a problem
+	ds1, err = suite.db.Delete(ds1)
 	suite.NoError(err)
 	_, present := ds1.MaybeHeadRef()
 	suite.False(present, "Dataset %s should not be present", datasetID)
