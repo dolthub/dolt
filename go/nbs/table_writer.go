@@ -128,8 +128,6 @@ func (tw *tableWriter) writeIndex() {
 	suffixesOffset := lengthsOffset + numRecords*lengthSize // skip size for each record
 	for _, pi := range tw.prefixes {
 		binary.BigEndian.PutUint64(pfxScratch[:], pi.prefix)
-		tw.blockHash.Write(pfxScratch[:])
-		tw.blockHash.Write(pi.suffix)
 
 		// hash prefix
 		n := uint64(copy(tw.buff[tw.pos:], pfxScratch[:]))
@@ -149,6 +147,7 @@ func (tw *tableWriter) writeIndex() {
 		n = uint64(copy(tw.buff[offset:], pi.suffix))
 		d.Chk.True(n == addrSuffixSize)
 	}
+	tw.blockHash.Write(tw.buff[suffixesOffset : suffixesOffset+numRecords*addrSuffixSize])
 	tw.pos = suffixesOffset + numRecords*addrSuffixSize
 }
 

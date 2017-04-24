@@ -30,7 +30,7 @@ import (
 
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
-	StorageVersion = "3"
+	StorageVersion = "4"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultAWSReadLimit        = 1024
