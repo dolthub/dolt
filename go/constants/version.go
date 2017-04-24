@@ -10,8 +10,7 @@ import (
 	"os"
 )
 
-// TODO: generate this from some central thing with go generate.
-const NomsVersion = "7.8"
+const NomsVersion = "7.9"
 const NOMS_VERSION_NEXT_ENV_NAME = "NOMS_VERSION_NEXT"
 const NOMS_VERSION_NEXT_ENV_VALUE = "1"
 
