@@ -45,7 +45,7 @@ func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint
 		s3p.multipartUpload(data, name.String())
 		verbose.Log("Compacted table of %d Kb in %s", len(data)/1024, time.Since(t1))
 
-		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name}
+		s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name, readRl: s3p.readRl}
 		index := parseTableIndex(data)
 		if s3p.indexCache != nil {
 			s3p.indexCache.put(name, index)
