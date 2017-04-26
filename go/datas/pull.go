@@ -31,7 +31,7 @@ const bytesWrittenSampleRate = .10
 // TODO: Get rid of this (BUG 2982)
 func PullWithFlush(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency int, progressCh chan PullProgress) {
 	Pull(srcDB, sinkDB, sourceRef, sinkHeadRef, concurrency, progressCh)
-	persistChunks(sinkDB.validatingChunkStore())
+	persistChunks(sinkDB.chunkStore())
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB. sinkHeadRef
@@ -42,12 +42,12 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 	srcQ, sinkQ := &types.RefByHeight{sourceRef}, &types.RefByHeight{sinkHeadRef}
 
 	// If the sourceRef points to an object already in sinkDB, there's nothing to do.
-	if sinkDB.has(sourceRef.TargetHash()) {
+	if sinkDB.chunkStore().Has(sourceRef.TargetHash()) {
 		return
 	}
 
 	// We generally expect that sourceRef descends from sinkHeadRef, so that walking down from sinkHeadRef yields useful hints. If it's not even in the srcDB, then just clear out sinkQ right now and don't bother.
-	if !srcDB.has(sinkHeadRef.TargetHash()) {
+	if !srcDB.chunkStore().Has(sinkHeadRef.TargetHash()) {
 		sinkQ.PopBack()
 	}
 
@@ -236,13 +236,13 @@ func getChunks(v types.Value) (chunks []types.Ref) {
 
 func traverseSource(srcRef types.Ref, srcDB, sinkDB Database, estimateBytesWritten bool) traverseSourceResult {
 	h := srcRef.TargetHash()
-	if !sinkDB.has(h) {
-		c := srcDB.validatingChunkStore().Get(h)
+	if !sinkDB.chunkStore().Has(h) {
+		c := srcDB.chunkStore().Get(h)
 		v := types.DecodeValue(c, srcDB)
 		if v == nil {
 			d.Panic("Expected decoded chunk to be non-nil.")
 		}
-		sinkDB.validatingChunkStore().Put(c)
+		sinkDB.chunkStore().Put(c)
 		bytesWritten := 0
 		if estimateBytesWritten {
 			// TODO: Probably better to hide this behind the ChunkStore abstraction since

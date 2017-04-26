@@ -153,7 +153,7 @@ func (suite *PullSuite) TestPullEverything() {
 	suite.Equal(0, suite.sinkCS.Reads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.validatingChunkStore())
+	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(l.Equals(v.Get(ValueField)))
@@ -197,7 +197,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.validatingChunkStore())
+	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
@@ -245,7 +245,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	suite.Equal(preReads, suite.sinkCS.Reads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.validatingChunkStore())
+	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
@@ -292,7 +292,7 @@ func (suite *PullSuite) SkipTestPullUpdates() {
 	suite.Equal(expectedReads, suite.sinkCS.Reads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.validatingChunkStore())
+	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))

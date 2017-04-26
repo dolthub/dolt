@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -100,15 +99,17 @@ type Database interface {
 	// Regardless, Datasets() is updated to match backing storage upon return.
 	FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error)
 
-	// validatingChunkStore returns the ChunkStore used to read and write
+	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by
 	// clients.
-	validatingChunkStore() chunks.ChunkStore
-
-	has(h hash.Hash) bool
+	chunkStore() chunks.ChunkStore
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
+	if _, ok := cs.(*httpChunkStore); !ok {
+		cs = newValidatingChunkStore(cs)
+	}
+
 	return newDatabase(cs)
 }

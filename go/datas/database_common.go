@@ -16,9 +16,7 @@ import (
 
 type database struct {
 	*types.ValueStore
-	cch      *cachingChunkHaver
-	rt       rootTracker
-	datasets *types.Map
+	rt rootTracker
 }
 
 var (
@@ -35,28 +33,22 @@ type rootTracker interface {
 
 func newDatabase(cs chunks.ChunkStore) *database {
 	return &database{
-		ValueStore: types.NewValueStore(cs),
-		cch:        newCachingChunkHaver(cs),
+		ValueStore: types.NewValueStore(cs), // ValueStore is responsible for closing |cs|
 		rt:         cs,
 	}
 }
 
-func (db *database) validatingChunkStore() chunks.ChunkStore {
+func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
 }
 
 func (db *database) Datasets() types.Map {
-	if db.datasets == nil {
-		if rootHash := db.rt.Root(); rootHash.IsEmpty() {
-			emptyMap := types.NewMap()
-			db.datasets = &emptyMap
-		} else {
-			rootMap := db.ReadValue(rootHash).(types.Map)
-			db.datasets = &rootMap
-		}
+	rootHash := db.rt.Root()
+	if rootHash.IsEmpty() {
+		return types.NewMap()
 	}
 
-	return *db.datasets
+	return db.ReadValue(rootHash).(types.Map)
 }
 
 func (db *database) GetDataset(datasetID string) Dataset {
@@ -71,16 +63,8 @@ func (db *database) GetDataset(datasetID string) Dataset {
 	return Dataset{db: db, id: datasetID}
 }
 
-func (db *database) has(h hash.Hash) bool {
-	return db.cch.Has(h)
-}
-
 func (db *database) Rebase() {
-	cached := db.rt.Root()
 	db.rt.Rebase()
-	if db.rt.Root() != cached {
-		db.datasets = nil
-	}
 }
 
 func (db *database) Close() error {
@@ -215,8 +199,6 @@ func (db *database) tryCommitChunks(currentDatasets types.Map, currentRootHash h
 
 	db.Flush()
 
-	// Since db.rt.Commit() updates the root, db.datasets would be out of date upon return. So, nil it out.
-	defer func() { db.datasets = nil }()
 	if !db.rt.Commit(newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}
