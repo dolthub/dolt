@@ -25,7 +25,7 @@ func TestRemoteDatabase(t *testing.T) {
 
 func TestValidateRef(t *testing.T) {
 	st := &chunks.TestStorage{}
-	db := NewDatabase(st.NewView()).(*databaseCommon)
+	db := NewDatabase(st.NewView()).(*database)
 	defer db.Close()
 	b := types.Bool(true)
 	r := db.WriteValue(b)

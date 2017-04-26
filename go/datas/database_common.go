@@ -14,7 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-type databaseCommon struct {
+type database struct {
 	*types.ValueStore
 	cch      *cachingChunkHaver
 	rt       rootTracker
@@ -33,105 +33,105 @@ type rootTracker interface {
 	Commit(current, last hash.Hash) bool
 }
 
-func newDatabaseCommon(cs chunks.ChunkStore) *databaseCommon {
-	return &databaseCommon{
+func newDatabase(cs chunks.ChunkStore) *database {
+	return &database{
 		ValueStore: types.NewValueStore(cs),
 		cch:        newCachingChunkHaver(cs),
 		rt:         cs,
 	}
 }
 
-func (dbc *databaseCommon) validatingChunkStore() chunks.ChunkStore {
-	return dbc.ChunkStore()
+func (db *database) validatingChunkStore() chunks.ChunkStore {
+	return db.ChunkStore()
 }
 
-func (dbc *databaseCommon) Datasets() types.Map {
-	if dbc.datasets == nil {
-		if rootHash := dbc.rt.Root(); rootHash.IsEmpty() {
+func (db *database) Datasets() types.Map {
+	if db.datasets == nil {
+		if rootHash := db.rt.Root(); rootHash.IsEmpty() {
 			emptyMap := types.NewMap()
-			dbc.datasets = &emptyMap
+			db.datasets = &emptyMap
 		} else {
-			rootMap := dbc.ReadValue(rootHash).(types.Map)
-			dbc.datasets = &rootMap
+			rootMap := db.ReadValue(rootHash).(types.Map)
+			db.datasets = &rootMap
 		}
 	}
 
-	return *dbc.datasets
+	return *db.datasets
 }
 
-func (dbc *databaseCommon) GetDataset(datasetID string) Dataset {
+func (db *database) GetDataset(datasetID string) Dataset {
 	if !DatasetFullRe.MatchString(datasetID) {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
-	if r, ok := dbc.Datasets().MaybeGet(types.String(datasetID)); ok {
-		head := r.(types.Ref).TargetValue(dbc)
+	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
+		head := r.(types.Ref).TargetValue(db)
 		d.PanicIfFalse(IsCommit(head))
-		return Dataset{dbc, datasetID, types.NewRef(head)}
+		return Dataset{db, datasetID, types.NewRef(head)}
 	}
-	return Dataset{db: dbc, id: datasetID}
+	return Dataset{db: db, id: datasetID}
 }
 
-func (dbc *databaseCommon) has(h hash.Hash) bool {
-	return dbc.cch.Has(h)
+func (db *database) has(h hash.Hash) bool {
+	return db.cch.Has(h)
 }
 
-func (dbc *databaseCommon) Rebase() {
-	cached := dbc.rt.Root()
-	dbc.rt.Rebase()
-	if dbc.rt.Root() != cached {
-		dbc.datasets = nil
+func (db *database) Rebase() {
+	cached := db.rt.Root()
+	db.rt.Rebase()
+	if db.rt.Root() != cached {
+		db.datasets = nil
 	}
 }
 
-func (dbc *databaseCommon) Close() error {
-	return dbc.ValueStore.Close()
+func (db *database) Close() error {
+	return db.ValueStore.Close()
 }
 
-func (dbc *databaseCommon) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doSetHead(ds, newHeadRef) })
+func (db *database) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	return db.doHeadUpdate(ds, func(ds Dataset) error { return db.doSetHead(ds, newHeadRef) })
 }
 
-func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
+func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
 		return nil
 	}
-	commit := dbc.validateRefAsCommit(newHeadRef)
+	commit := db.validateRefAsCommit(newHeadRef)
 
-	currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
-	commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
+	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
+	commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Set(types.String(ds.ID()), types.ToRefOfValue(commitRef))
-	return dbc.tryCommitChunks(currentDatasets, currentRootHash)
+	return db.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
-func (dbc *databaseCommon) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doFastForward(ds, newHeadRef) })
+func (db *database) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	return db.doHeadUpdate(ds, func(ds Dataset) error { return db.doFastForward(ds, newHeadRef) })
 }
 
-func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error {
+func (db *database) doFastForward(ds Dataset, newHeadRef types.Ref) error {
 	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
 		return nil
 	} else if newHeadRef.Height() <= currentHeadRef.Height() {
 		return ErrMergeNeeded
 	}
 
-	commit := dbc.validateRefAsCommit(newHeadRef)
-	return dbc.doCommit(ds.ID(), commit, nil)
+	commit := db.validateRefAsCommit(newHeadRef)
+	return db.doCommit(ds.ID(), commit, nil)
 }
 
-func (dbc *databaseCommon) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	return dbc.doHeadUpdate(
+func (db *database) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	return db.doHeadUpdate(
 		ds,
-		func(ds Dataset) error { return dbc.doCommit(ds.ID(), buildNewCommit(ds, v, opts), opts.Policy) },
+		func(ds Dataset) error { return db.doCommit(ds.ID(), buildNewCommit(ds, v, opts), opts.Policy) },
 	)
 }
 
-func (dbc *databaseCommon) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
-	return dbc.Commit(ds, v, CommitOptions{})
+func (db *database) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
+	return db.Commit(ds, v, CommitOptions{})
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
+func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
 	if !IsCommit(commit) {
 		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
@@ -139,8 +139,8 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 	// This could loop forever, given enough simultaneous committers. BUG 2565
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
-		currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
-		commitRef := dbc.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
+		currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
+		commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
@@ -148,9 +148,9 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				head := r.(types.Ref).TargetValue(dbc)
+				head := r.(types.Ref).TargetValue(db)
 				currentHeadRef := types.NewRef(head)
-				ancestorRef, found := FindCommonAncestor(commitRef, currentHeadRef, dbc)
+				ancestorRef, found := FindCommonAncestor(commitRef, currentHeadRef, db)
 				if !found {
 					return ErrMergeNeeded
 				}
@@ -163,29 +163,29 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 						return ErrMergeNeeded
 					}
 
-					ancestor, currentHead := dbc.validateRefAsCommit(ancestorRef), dbc.validateRefAsCommit(currentHeadRef)
-					merged, err := mergePolicy(commit.Get(ValueField), currentHead.Get(ValueField), ancestor.Get(ValueField), dbc, nil)
+					ancestor, currentHead := db.validateRefAsCommit(ancestorRef), db.validateRefAsCommit(currentHeadRef)
+					merged, err := mergePolicy(commit.Get(ValueField), currentHead.Get(ValueField), ancestor.Get(ValueField), db, nil)
 					if err != nil {
 						return err
 					}
-					commitRef = dbc.WriteValue(NewCommit(merged, types.NewSet(commitRef, currentHeadRef), types.EmptyStruct))
+					commitRef = db.WriteValue(NewCommit(merged, types.NewSet(commitRef, currentHeadRef), types.EmptyStruct))
 				}
 			}
 		}
 		currentDatasets = currentDatasets.Set(types.String(datasetID), types.ToRefOfValue(commitRef))
-		err = dbc.tryCommitChunks(currentDatasets, currentRootHash)
+		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
 }
 
-func (dbc *databaseCommon) Delete(ds Dataset) (Dataset, error) {
-	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doDelete(ds.ID()) })
+func (db *database) Delete(ds Dataset) (Dataset, error) {
+	return db.doHeadUpdate(ds, func(ds Dataset) error { return db.doDelete(ds.ID()) })
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
+func (db *database) doDelete(datasetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
-	currentRootHash, currentDatasets := dbc.rt.Root(), dbc.Datasets()
+	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
 	var initialHead types.Ref
 	if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead {
 		return nil
@@ -196,12 +196,12 @@ func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 	var err error
 	for {
 		currentDatasets = currentDatasets.Remove(datasetID)
-		err = dbc.tryCommitChunks(currentDatasets, currentRootHash)
+		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
 		}
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
-		currentRootHash, currentDatasets = dbc.rt.Root(), dbc.Datasets()
+		currentRootHash, currentDatasets = db.rt.Root(), db.Datasets()
 		if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded
 			break
@@ -210,21 +210,21 @@ func (dbc *databaseCommon) doDelete(datasetIDstr string) error {
 	return err
 }
 
-func (dbc *databaseCommon) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
-	newRootHash := dbc.WriteValue(currentDatasets).TargetHash()
+func (db *database) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
+	newRootHash := db.WriteValue(currentDatasets).TargetHash()
 
-	dbc.Flush()
+	db.Flush()
 
-	// Since dbc.rt.Commit() updates the root, dbc.datasets would be out of date upon return. So, nil it out.
-	defer func() { dbc.datasets = nil }()
-	if !dbc.rt.Commit(newRootHash, currentRootHash) {
+	// Since db.rt.Commit() updates the root, db.datasets would be out of date upon return. So, nil it out.
+	defer func() { db.datasets = nil }()
+	if !db.rt.Commit(newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}
 	return
 }
 
-func (dbc *databaseCommon) validateRefAsCommit(r types.Ref) types.Struct {
-	v := dbc.ReadValue(r.TargetHash())
+func (db *database) validateRefAsCommit(r types.Ref) types.Struct {
+	v := db.ReadValue(r.TargetHash())
 
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
@@ -251,7 +251,7 @@ func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct 
 	return NewCommit(v, parents, meta)
 }
 
-func (dbc *databaseCommon) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
+func (db *database) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
 	err := updateFunc(ds)
-	return dbc.GetDataset(ds.ID()), err
+	return db.GetDataset(ds.ID()), err
 }
