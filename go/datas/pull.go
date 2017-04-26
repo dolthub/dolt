@@ -51,11 +51,6 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 		sinkQ.PopBack()
 	}
 
-	// Since we expect sinkHeadRef to descend from sourceRef, we assume srcDB has a superset of the data in sinkDB. There are some cases where, logically, the code wants to read data it knows to be in sinkDB. In this case, it doesn't actually matter which Database the data comes from, so as an optimization we use whichever is a LocalDatabase -- if either is.
-	mostLocalDB := srcDB
-	if _, ok := sinkDB.(*LocalDatabase); ok {
-		mostLocalDB = sinkDB
-	}
 	// traverseWorker below takes refs off of {src,sink,com}Chan, processes them to figure out what reachable refs should be traversed, and then sends the results to {srcRes,sinkRes,comRes}Chan.
 	// sending to (or closing) the 'done' channel causes traverseWorkers to exit.
 	srcChan := make(chan types.Ref)
@@ -92,9 +87,9 @@ func Pull(srcDB, sinkDB Database, sourceRef, sinkHeadRef types.Ref, concurrency 
 					takeSample := rand.Float64() < bytesWrittenSampleRate
 					srcResChan <- traverseSource(srcRef, srcDB, sinkDB, takeSample)
 				case sinkRef := <-sinkChan:
-					sinkResChan <- traverseSink(sinkRef, mostLocalDB)
+					sinkResChan <- traverseSink(sinkRef, srcDB)
 				case comRef := <-comChan:
-					comResChan <- traverseCommon(comRef, sinkHeadRef, mostLocalDB)
+					comResChan <- traverseCommon(comRef, sinkHeadRef, srcDB)
 				case <-done:
 					workerWg.Done()
 					return

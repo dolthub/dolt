@@ -110,5 +110,5 @@ type Database interface {
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
-	return newLocalDatabase(cs)
+	return newDatabaseCommon(cs)
 }

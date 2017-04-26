@@ -25,7 +25,7 @@ func TestRemoteDatabase(t *testing.T) {
 
 func TestValidateRef(t *testing.T) {
 	st := &chunks.TestStorage{}
-	db := newLocalDatabase(st.NewView())
+	db := NewDatabase(st.NewView()).(*databaseCommon)
 	defer db.Close()
 	b := types.Bool(true)
 	r := db.WriteValue(b)
@@ -58,7 +58,7 @@ type RemoteDatabaseSuite struct {
 func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
-		return &RemoteDatabaseClient{newDatabaseCommon(newHTTPChunkStoreForTest(cs))}
+		return NewDatabase(newHTTPChunkStoreForTest(cs))
 	}
 	suite.db = suite.makeDb(suite.storage.NewView())
 }

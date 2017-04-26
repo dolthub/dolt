@@ -21,7 +21,7 @@ var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 // Dataset is a named Commit within a Database.
 type Dataset struct {
-	store   Database
+	db      Database
 	id      string
 	headRef types.Ref
 }
@@ -29,7 +29,7 @@ type Dataset struct {
 // Database returns the Database object in which this Dataset is stored.
 // WARNING: This method is under consideration for deprecation.
 func (ds Dataset) Database() Database {
-	return ds.store
+	return ds.db
 }
 
 // ID returns the name of this Dataset.

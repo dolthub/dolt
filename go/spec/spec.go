@@ -264,7 +264,7 @@ func (sp Spec) Close() error {
 func (sp Spec) createDatabase() datas.Database {
 	switch sp.Protocol {
 	case "http", "https":
-		return datas.NewRemoteDatabase(sp.Href(), sp.Options.Authorization)
+		return datas.NewDatabase(datas.NewHTTPChunkStore(sp.Href(), sp.Options.Authorization))
 	case "aws":
 		return datas.NewDatabase(parseAWSSpec(sp.Href()))
 	case "nbs":

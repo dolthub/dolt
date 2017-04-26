@@ -273,7 +273,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 		serverHost, stopServerFn := suite.StartRemoteDatabase()
 		suite.DatabaseSpec = serverHost
-		suite.Database = datas.NewRemoteDatabase(serverHost, "")
+		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(serverHost, ""))
 
 		if t, ok := suiteT.(SetupRepSuite); ok {
 			t.SetupRep()

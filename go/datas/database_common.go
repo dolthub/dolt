@@ -33,8 +33,8 @@ type rootTracker interface {
 	Commit(current, last hash.Hash) bool
 }
 
-func newDatabaseCommon(cs chunks.ChunkStore) databaseCommon {
-	return databaseCommon{
+func newDatabaseCommon(cs chunks.ChunkStore) *databaseCommon {
+	return &databaseCommon{
 		ValueStore: types.NewValueStore(cs),
 		cch:        newCachingChunkHaver(cs),
 		rt:         cs,
@@ -51,28 +51,24 @@ func (dbc *databaseCommon) Datasets() types.Map {
 			emptyMap := types.NewMap()
 			dbc.datasets = &emptyMap
 		} else {
-			dbc.datasets = dbc.datasetsFromRef(rootHash)
+			rootMap := dbc.ReadValue(rootHash).(types.Map)
+			dbc.datasets = &rootMap
 		}
 	}
 
 	return *dbc.datasets
 }
 
-func (dbc *databaseCommon) datasetsFromRef(datasetsRef hash.Hash) *types.Map {
-	c := dbc.ReadValue(datasetsRef).(types.Map)
-	return &c
-}
-
-func getDataset(db Database, datasetID string) Dataset {
+func (dbc *databaseCommon) GetDataset(datasetID string) Dataset {
 	if !DatasetFullRe.MatchString(datasetID) {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
-	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
-		head := r.(types.Ref).TargetValue(db)
+	if r, ok := dbc.Datasets().MaybeGet(types.String(datasetID)); ok {
+		head := r.(types.Ref).TargetValue(dbc)
 		d.PanicIfFalse(IsCommit(head))
-		return Dataset{db, datasetID, types.NewRef(head)}
+		return Dataset{dbc, datasetID, types.NewRef(head)}
 	}
-	return Dataset{store: db, id: datasetID}
+	return Dataset{db: dbc, id: datasetID}
 }
 
 func (dbc *databaseCommon) has(h hash.Hash) bool {
@@ -91,6 +87,10 @@ func (dbc *databaseCommon) Close() error {
 	return dbc.ValueStore.Close()
 }
 
+func (dbc *databaseCommon) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doSetHead(ds, newHeadRef) })
+}
+
 func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
 		return nil
@@ -104,6 +104,10 @@ func (dbc *databaseCommon) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	return dbc.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
+func (dbc *databaseCommon) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
+	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doFastForward(ds, newHeadRef) })
+}
+
 func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error {
 	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
 		return nil
@@ -113,6 +117,17 @@ func (dbc *databaseCommon) doFastForward(ds Dataset, newHeadRef types.Ref) error
 
 	commit := dbc.validateRefAsCommit(newHeadRef)
 	return dbc.doCommit(ds.ID(), commit, nil)
+}
+
+func (dbc *databaseCommon) Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	return dbc.doHeadUpdate(
+		ds,
+		func(ds Dataset) error { return dbc.doCommit(ds.ID(), buildNewCommit(ds, v, opts), opts.Policy) },
+	)
+}
+
+func (dbc *databaseCommon) CommitValue(ds Dataset, v types.Value) (Dataset, error) {
+	return dbc.Commit(ds, v, CommitOptions{})
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
@@ -161,6 +176,10 @@ func (dbc *databaseCommon) doCommit(datasetID string, commit types.Struct, merge
 		err = dbc.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
+}
+
+func (dbc *databaseCommon) Delete(ds Dataset) (Dataset, error) {
+	return dbc.doHeadUpdate(ds, func(ds Dataset) error { return dbc.doDelete(ds.ID()) })
 }
 
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
@@ -230,4 +249,9 @@ func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct 
 		meta = types.EmptyStruct
 	}
 	return NewCommit(v, parents, meta)
+}
+
+func (dbc *databaseCommon) doHeadUpdate(ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
+	err := updateFunc(ds)
+	return dbc.GetDataset(ds.ID()), err
 }
