@@ -128,7 +128,9 @@ func TestGraphBuilderMapSetGraphOp(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	opc := vs.opCache()
+	opcStore := newLdbOpCacheStore(vs)
+	opc := opcStore.opCache()
+	defer opcStore.destroy()
 
 	struct1 := NewStruct("teststruct", StructData{
 		"f1": String("v1"),

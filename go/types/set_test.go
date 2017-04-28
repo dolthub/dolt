@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"sort"
 	"sync"
@@ -137,7 +138,12 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				l2.IterAll(func(v Value) {
 					out = append(out, v)
 				})
-				return ValueSlice(elems).Equals(out)
+				exp := ValueSlice(elems)
+				rv := exp.Equals(out)
+				if !rv {
+					printBadCollections(exp, out)
+				}
+				return rv
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)
@@ -154,6 +160,15 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 		},
 		elems: elems,
 	}
+}
+
+var mutex sync.Mutex
+
+func printBadCollections(expected, actual ValueSlice) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	fmt.Println("expected:", expected)
+	fmt.Println("actual:", actual)
 }
 
 func (suite *setTestSuite) createStreamingSet(vs *ValueStore) {

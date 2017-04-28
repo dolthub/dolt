@@ -31,6 +31,10 @@ func (suite *OpCacheSuite) TearDownTest() {
 }
 
 func (suite *OpCacheSuite) TestMapSet() {
+	opCacheStore := newLdbOpCacheStore(suite.vs)
+	oc := opCacheStore.opCache()
+	defer opCacheStore.destroy()
+
 	entries := mapEntrySlice{
 		{NewList(Number(8), Number(0)), String("ahoy")},
 		{String("A key"), NewBlob(bytes.NewBufferString("A value"))},
@@ -42,7 +46,6 @@ func (suite *OpCacheSuite) TestMapSet() {
 		{String("struct"), NewStruct("thing2", nil)},
 		{Number(42), String("other")},
 	}
-	oc := suite.vs.opCache()
 	for _, entry := range entries {
 		oc.GraphMapSet(nil, entry.key, entry.value)
 	}
@@ -61,6 +64,10 @@ func (suite *OpCacheSuite) TestMapSet() {
 }
 
 func (suite *OpCacheSuite) TestSetInsert() {
+	opCacheStore := newLdbOpCacheStore(suite.vs)
+	oc := opCacheStore.opCache()
+	defer opCacheStore.destroy()
+
 	entries := ValueSlice{
 		NewList(Number(8), Number(0)),
 		String("ahoy"),
@@ -76,7 +83,6 @@ func (suite *OpCacheSuite) TestSetInsert() {
 		NewStruct("thing2", nil),
 		String("other"),
 	}
-	oc := suite.vs.opCache()
 	for _, entry := range entries {
 		oc.GraphSetInsert(nil, entry)
 	}
@@ -95,6 +101,10 @@ func (suite *OpCacheSuite) TestSetInsert() {
 }
 
 func (suite *OpCacheSuite) TestListAppend() {
+	opCacheStore := newLdbOpCacheStore(suite.vs)
+	oc := opCacheStore.opCache()
+	defer opCacheStore.destroy()
+
 	entries := ValueSlice{
 		NewList(Number(8), Number(0)),
 		String("ahoy"),
@@ -110,7 +120,6 @@ func (suite *OpCacheSuite) TestListAppend() {
 		NewStruct("thing2", nil),
 		String("other"),
 	}
-	oc := suite.vs.opCache()
 	for _, entry := range entries {
 		oc.GraphListAppend(nil, entry)
 	}

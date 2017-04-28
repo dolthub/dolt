@@ -49,20 +49,21 @@ import (
 )
 
 type GraphBuilder struct {
-	oc      opCache
-	vrw     ValueReadWriter
-	stack   graphStack
-	verbose bool
-	mutex   sync.Mutex
+	opcStore opCacheStore
+	oc       opCache
+	vrw      ValueReadWriter
+	stack    graphStack
+	verbose  bool
+	mutex    sync.Mutex
 }
 
 // NewGraphBuilder() returns an new GraphBuilder object.
 func NewGraphBuilder(vrw ValueReadWriter, rootKind NomsKind, verbose bool) *GraphBuilder {
-	return newGraphBuilder(vrw, vrw.opCache(), rootKind, verbose)
+	return newGraphBuilder(vrw, newLdbOpCacheStore(vrw), rootKind, verbose)
 }
 
-func newGraphBuilder(vrw ValueReadWriter, opc opCache, rootKind NomsKind, verbose bool) *GraphBuilder {
-	b := &GraphBuilder{oc: opc, vrw: vrw, verbose: verbose}
+func newGraphBuilder(vrw ValueReadWriter, opcStore opCacheStore, rootKind NomsKind, verbose bool) *GraphBuilder {
+	b := &GraphBuilder{oc: opcStore.opCache(), opcStore: opcStore, vrw: vrw, verbose: verbose}
 	b.pushNewKeyOnStack(String("ROOT"), rootKind)
 	return b
 }
@@ -112,19 +113,23 @@ type graphOpContainer struct {
 // object.
 func (b *GraphBuilder) Build() Value {
 	var opc opCache
+	var opcStore opCacheStore
 
-	checkFirstCall := func() {
+	defer func() {
+		opcStore.destroy()
+	}()
+
+	// Use function here to take advantage fo the deferred call to mutex.Unlock()
+	func() {
 		b.mutex.Lock()
 		defer b.mutex.Unlock()
 
 		if b.oc == nil {
 			d.Panic("Can only call Build() once")
 		}
-		opc = b.oc
-		b.oc = nil
-	}
-
-	checkFirstCall()
+		opcStore, opc = b.opcStore, b.oc
+		b.opcStore, b.oc = nil, nil
+	}()
 
 	iter := opc.NewIterator()
 	defer iter.Release()

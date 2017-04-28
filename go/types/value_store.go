@@ -35,7 +35,6 @@ type ValueWriter interface {
 type ValueReadWriter interface {
 	ValueReader
 	ValueWriter
-	opCache() opCache
 }
 
 // ValueStore provides methods to read and write Noms Values to a ChunkStore.
@@ -52,9 +51,6 @@ type ValueStore struct {
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
 	valueCache           *sizecache.SizeCache
-
-	opcOnce  sync.Once
-	opcStore opCacheStore
 
 	versOnce sync.Once
 }
@@ -86,9 +82,7 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		bufferedChunks:       map[hash.Hash]chunks.Chunk{},
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
-
-		opcOnce:    sync.Once{},
-		valueCache: sizecache.New(cacheSize),
+		valueCache:           sizecache.New(cacheSize),
 
 		versOnce: sync.Once{},
 	}
@@ -335,19 +329,7 @@ func (lvs *ValueStore) persist() {
 
 // Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
-	if lvs.opcStore != nil {
-		err := lvs.opcStore.destroy()
-		d.Chk.NoError(err, "Attempt to clean up opCacheStore failed, error: %s\n", err)
-		lvs.opcStore = nil
-	}
 	return lvs.cs.Close()
-}
-
-func (lvs *ValueStore) opCache() opCache {
-	lvs.opcOnce.Do(func() {
-		lvs.opcStore = newLdbOpCacheStore(lvs)
-	})
-	return lvs.opcStore.opCache()
 }
 
 func getTargetType(refBase Ref) *Type {
