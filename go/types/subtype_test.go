@@ -706,4 +706,16 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(v, t1)
 		assertTrue(v, t2)
 	}
+
+	{
+		t := MakeStructType("A",
+			StructField{"aa", NumberType, true},
+			StructField{"bb", BoolType, false},
+		)
+		v := NewStruct("A", StructData{
+			"a": Number(1),
+			"b": Bool(true),
+		})
+		assertFalse(v, t)
+	}
 }

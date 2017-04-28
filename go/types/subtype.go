@@ -159,10 +159,7 @@ func IsValueSubtypeOf(v Value, t *Type) bool {
 
 		for _, f := range desc.fields {
 			fv, ok := s.MaybeGet(f.Name)
-			if !ok {
-				return f.Optional
-			}
-			if !IsValueSubtypeOf(fv, f.Type) {
+			if (!ok && !f.Optional) || (ok && !IsValueSubtypeOf(fv, f.Type)) {
 				return false
 			}
 		}
