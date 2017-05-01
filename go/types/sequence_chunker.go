@@ -129,7 +129,7 @@ func (sc *sequenceChunker) resume() {
 }
 
 func (sc *sequenceChunker) Append(item sequenceItem) {
-	d.PanicIfFalse(item != nil)
+	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
 	sc.rv.ClearLastBoundary()
 	sc.hashValueBytes(item, sc.rv)

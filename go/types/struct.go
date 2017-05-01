@@ -37,9 +37,12 @@ func validateStruct(s Struct) Struct {
 	}
 
 	verifyFieldName(s.fieldNames[0])
+	d.PanicIfTrue(s.values[0] == nil)
+
 	for i := 1; i < len(s.fieldNames); i++ {
 		verifyFieldName(s.fieldNames[i])
 		d.PanicIfFalse(s.fieldNames[i] > s.fieldNames[i-1])
+		d.PanicIfTrue(s.values[i] == nil)
 	}
 	return s
 }

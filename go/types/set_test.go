@@ -1022,3 +1022,12 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 		),
 		).Equals(TypeOf(list)))
 }
+
+func TestSetWithNil(t *testing.T) {
+	assert.Panics(t, func() {
+		NewSet(nil)
+	})
+	assert.Panics(t, func() {
+		NewSet(Number(42), nil)
+	})
+}

@@ -311,6 +311,8 @@ func buildMapData(values []Value) mapEntrySlice {
 	kvs := make(mapEntrySlice, len(values)/2)
 
 	for i := 0; i < len(values); i += 2 {
+		d.PanicIfTrue(values[i] == nil)
+		d.PanicIfTrue(values[i+1] == nil)
 		entry := mapEntry{values[i], values[i+1]}
 		kvs[i/2] = entry
 	}

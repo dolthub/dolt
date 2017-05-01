@@ -1331,3 +1331,18 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 		).Equals(TypeOf(list)))
 
 }
+
+func TestMapWithNil(t *testing.T) {
+	assert.Panics(t, func() {
+		NewMap(nil, Number(42))
+	})
+	assert.Panics(t, func() {
+		NewSet(Number(42), nil)
+	})
+	assert.Panics(t, func() {
+		NewMap(String("a"), String("b"), nil, Number(42))
+	})
+	assert.Panics(t, func() {
+		NewSet(String("a"), String("b"), Number(42), nil)
+	})
+}

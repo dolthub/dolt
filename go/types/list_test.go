@@ -1134,3 +1134,12 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 		),
 		).Equals(TypeOf(list)))
 }
+
+func TestListWithNil(t *testing.T) {
+	assert.Panics(t, func() {
+		NewList(nil)
+	})
+	assert.Panics(t, func() {
+		NewList(Number(42), nil)
+	})
+}

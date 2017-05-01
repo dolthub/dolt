@@ -286,3 +286,17 @@ func TestMakeStructTemplate(t *testing.T) {
 		"b": Bool(true),
 	}).Equals(str))
 }
+
+func TestStructWithNil(t *testing.T) {
+	assert.Panics(t, func() {
+		NewStruct("A", StructData{
+			"a": nil,
+		})
+	})
+	assert.Panics(t, func() {
+		NewStruct("A", StructData{
+			"a": Number(42),
+			"b": nil,
+		})
+	})
+}
