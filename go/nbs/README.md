@@ -10,7 +10,7 @@ NBS can run in two configurations: either backed by local disk, or backed by Ama
 
 When backed by local disk, NBS is significantly faster than LevelDB for our workloads and supports full multiprocess concurrency.
 
-When backed by AWS, NBS stores its data mainly in S3, along with a single 4KB DynamoDB item. This configuration makes Noms "[effectively CA](https://research.google.com/pubs/pub45855.html)", in the sense that Noms is always consistent, and Noms+NBS is as available as DynamoDB and S3 are. This configuration also gives Noms the cost profile of S3 with power closer to that of a traditional database.
+When backed by AWS, NBS stores its data mainly in S3, along with a single DynamoDB item. This configuration makes Noms "[effectively CA](https://research.google.com/pubs/pub45855.html)", in the sense that Noms is always consistent, and Noms+NBS is as available as DynamoDB and S3 are. This configuration also gives Noms the cost profile of S3 with power closer to that of a traditional database.
 
 ## Details
 
