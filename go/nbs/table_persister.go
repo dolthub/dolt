@@ -6,7 +6,10 @@ package nbs
 
 import (
 	"bytes"
+	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -14,7 +17,7 @@ import (
 )
 
 type tablePersister interface {
-	Compact(mt *memTable, haver chunkReader) chunkSource
+	Persist(mt *memTable, haver chunkReader) chunkSource
 	CompactAll(sources chunkSources) chunkSource
 	Open(name addr, chunkCount uint32) chunkSource
 }
@@ -54,6 +57,112 @@ func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	return srcI.count() < srcJ.count()
 }
 func (csbc chunkSourcesByAscendingCount) Swap(i, j int) { csbc[i], csbc[j] = csbc[j], csbc[i] }
+
+type chunkSourcesByDescendingDataSize []sourceWithSize
+
+func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds) }
+func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
+	swsI, swsJ := csbds[i], csbds[j]
+	if swsI.dataLen == swsJ.dataLen {
+		hi, hj := swsI.source.hash(), swsJ.source.hash()
+		return bytes.Compare(hi[:], hj[:]) < 0
+	}
+	return swsI.dataLen > swsJ.dataLen
+}
+func (csbds chunkSourcesByDescendingDataSize) Swap(i, j int) { csbds[i], csbds[j] = csbds[j], csbds[i] }
+
+type sourceWithSize struct {
+	source  chunkSource
+	dataLen uint64
+}
+
+type compactionPlan struct {
+	sources             chunkSourcesByDescendingDataSize
+	mergedIndex         []byte
+	chunkCount          uint32
+	totalCompressedData uint64
+}
+
+func (cp compactionPlan) lengths() []byte {
+	lengthsStart := uint64(cp.chunkCount) * prefixTupleSize
+	return cp.mergedIndex[lengthsStart : lengthsStart+uint64(cp.chunkCount)*lengthSize]
+}
+
+func (cp compactionPlan) suffixes() []byte {
+	suffixesStart := uint64(cp.chunkCount) * (prefixTupleSize + lengthSize)
+	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
+}
+
+func planCompaction(sources chunkSources) (plan compactionPlan) {
+	var totalUncompressedData uint64
+	for _, src := range sources {
+		totalUncompressedData += src.uncompressedLen()
+		index := src.index()
+		plan.chunkCount += index.chunkCount
+
+		// Calculate the amount of chunk data in |src|
+		chunkDataLen := calcChunkDataLen(index)
+		plan.sources = append(plan.sources, sourceWithSize{src, chunkDataLen})
+		plan.totalCompressedData += chunkDataLen
+	}
+	sort.Sort(plan.sources)
+
+	lengthsPos := lengthsOffset(plan.chunkCount)
+	suffixesPos := suffixesOffset(plan.chunkCount)
+	plan.mergedIndex = make([]byte, indexSize(plan.chunkCount)+footerSize)
+
+	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
+	var ordinalOffset uint32
+	for _, sws := range plan.sources {
+		index := sws.source.index()
+
+		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
+		for j, prefix := range index.prefixes {
+			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + index.ordinals[j]}
+			prefixIndexRecs = append(prefixIndexRecs, rec)
+		}
+		ordinalOffset += sws.source.count()
+
+		// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
+		// Bring over the lengths block, in order
+		for _, length := range index.lengths {
+			binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], length)
+			lengthsPos += lengthSize
+		}
+
+		// Bring over the suffixes block, in order
+		n := copy(plan.mergedIndex[suffixesPos:], index.suffixes)
+		d.Chk.True(n == len(index.suffixes))
+		suffixesPos += uint64(n)
+	}
+
+	// Sort all prefixTuples by hash and then insert them starting at the beginning of plan.mergedIndex
+	sort.Sort(prefixIndexRecs)
+	var pfxPos uint64
+	for _, pi := range prefixIndexRecs {
+		binary.BigEndian.PutUint64(plan.mergedIndex[pfxPos:], pi.prefix)
+		pfxPos += addrPrefixSize
+		binary.BigEndian.PutUint32(plan.mergedIndex[pfxPos:], pi.order)
+		pfxPos += ordinalSize
+	}
+
+	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
+	return plan
+}
+
+func nameFromSuffixes(suffixes []byte) (name addr) {
+	sha := sha512.New()
+	sha.Write(suffixes)
+
+	var h []byte
+	h = sha.Sum(h) // Appends hash to h
+	copy(name[:], h)
+	return
+}
+
+func calcChunkDataLen(index tableIndex) uint64 {
+	return index.offsets[index.chunkCount-1] + uint64(index.lengths[index.chunkCount-1])
+}
 
 func compactSourcesToBuffer(sources chunkSources, rl chan struct{}) (name addr, data []byte, chunkCount uint32) {
 	d.Chk.True(rl != nil)

@@ -5,19 +5,21 @@
 package nbs
 
 import (
+	"bytes"
+	"io"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 )
 
-func newCompactingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}) *compactingChunkSource {
-	ccs := &compactingChunkSource{mt: mt}
+func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}) *persistingChunkSource {
+	ccs := &persistingChunkSource{mt: mt}
 	ccs.wg.Add(1)
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		cs := p.Compact(mt, haver)
+		cs := p.Persist(mt, haver)
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
@@ -28,7 +30,7 @@ func newCompactingChunkSource(mt *memTable, haver chunkReader, p tablePersister,
 	return ccs
 }
 
-type compactingChunkSource struct {
+type persistingChunkSource struct {
 	mu sync.RWMutex
 	mt *memTable
 
@@ -36,7 +38,7 @@ type compactingChunkSource struct {
 	cs chunkSource
 }
 
-func (ccs *compactingChunkSource) getReader() chunkReader {
+func (ccs *persistingChunkSource) getReader() chunkReader {
 	ccs.mu.RLock()
 	defer ccs.mu.RUnlock()
 	if ccs.mt != nil {
@@ -45,61 +47,73 @@ func (ccs *compactingChunkSource) getReader() chunkReader {
 	return ccs.cs
 }
 
-func (ccs *compactingChunkSource) has(h addr) bool {
+func (ccs *persistingChunkSource) has(h addr) bool {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
 	return cr.has(h)
 }
 
-func (ccs *compactingChunkSource) hasMany(addrs []hasRecord) bool {
+func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) bool {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
 	return cr.hasMany(addrs)
 }
 
-func (ccs *compactingChunkSource) get(h addr) []byte {
+func (ccs *persistingChunkSource) get(h addr) []byte {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
 	return cr.get(h)
 }
 
-func (ccs *compactingChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool {
+func (ccs *persistingChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
 	return cr.getMany(reqs, foundChunks, wg)
 }
 
-func (ccs *compactingChunkSource) close() error {
+func (ccs *persistingChunkSource) close() error {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.close()
 }
 
-func (ccs *compactingChunkSource) count() uint32 {
+func (ccs *persistingChunkSource) count() uint32 {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.count()
 }
 
-func (ccs *compactingChunkSource) uncompressedLen() uint64 {
+func (ccs *persistingChunkSource) uncompressedLen() uint64 {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.uncompressedLen()
 }
 
-func (ccs *compactingChunkSource) hash() addr {
+func (ccs *persistingChunkSource) hash() addr {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.hash()
 }
 
-func (ccs *compactingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
+func (ccs *persistingChunkSource) index() tableIndex {
+	ccs.wg.Wait()
+	d.Chk.True(ccs.cs != nil)
+	return ccs.cs.index()
+}
+
+func (ccs *persistingChunkSource) reader() io.Reader {
+	ccs.wg.Wait()
+	d.Chk.True(ccs.cs != nil)
+	return ccs.cs.reader()
+}
+
+func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
-func (ccs *compactingChunkSource) extract(chunks chan<- extractRecord) {
+func (ccs *persistingChunkSource) extract(chunks chan<- extractRecord) {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
 	ccs.cs.extract(chunks)
@@ -136,7 +150,15 @@ func (ecs emptyChunkSource) uncompressedLen() uint64 {
 }
 
 func (ecs emptyChunkSource) hash() addr {
-	return addr{} // TODO: is this legal?
+	return addr{}
+}
+
+func (ecs emptyChunkSource) index() tableIndex {
+	return tableIndex{}
+}
+
+func (ecs emptyChunkSource) reader() io.Reader {
+	return &bytes.Buffer{}
 }
 
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {

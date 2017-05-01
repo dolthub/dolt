@@ -10,9 +10,9 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestCompactingChunkStoreEmpty(t *testing.T) {
+func TestPersistingChunkStoreEmpty(t *testing.T) {
 	mt := newMemTable(testMemTableSize)
-	ccs := newCompactingChunkSource(mt, nil, newFakeTablePersister(), make(chan struct{}, 1))
+	ccs := newPersistingChunkSource(mt, nil, newFakeTablePersister(), make(chan struct{}, 1))
 	assert.Equal(t, addr{}, ccs.hash())
 	assert.Zero(t, ccs.count())
 }
@@ -22,12 +22,12 @@ type pausingFakeTablePersister struct {
 	trigger <-chan struct{}
 }
 
-func (ftp pausingFakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
+func (ftp pausingFakeTablePersister) Persist(mt *memTable, haver chunkReader) chunkSource {
 	<-ftp.trigger
-	return ftp.tablePersister.Compact(mt, haver)
+	return ftp.tablePersister.Persist(mt, haver)
 }
 
-func TestCompactingChunkStore(t *testing.T) {
+func TestPersistingChunkStore(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(testMemTableSize)
 
@@ -36,7 +36,7 @@ func TestCompactingChunkStore(t *testing.T) {
 	}
 
 	trigger := make(chan struct{})
-	ccs := newCompactingChunkSource(mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1))
+	ccs := newPersistingChunkSource(mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1))
 
 	assertChunksInReader(testChunks, ccs, assert)
 	assert.EqualValues(mt.count(), ccs.getReader().count())

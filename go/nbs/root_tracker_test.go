@@ -142,7 +142,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, tt tableSet, store *Nom
 func interloperWrite(fm *fakeManifest, tt tableSet, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src := tt.p.Compact(createMemTable(persisted), nil)
+	src := tt.p.Persist(createMemTable(persisted), nil)
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 	return
 }
@@ -224,7 +224,7 @@ type fakeTablePersister struct {
 	sources map[addr]tableReader
 }
 
-func (ftp fakeTablePersister) Compact(mt *memTable, haver chunkReader) chunkSource {
+func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader) chunkSource {
 	if mt.count() > 0 {
 		name, data, chunkCount := mt.write(haver)
 		if chunkCount > 0 {
@@ -261,4 +261,8 @@ func (csa chunkSourceAdapter) close() error {
 
 func (csa chunkSourceAdapter) hash() addr {
 	return csa.h
+}
+
+func (csa chunkSourceAdapter) index() tableIndex {
+	return csa.tableIndex
 }

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -117,6 +118,40 @@ func (m *fakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, er
 	return &s3.UploadPartOutput{ETag: aws.String(etag)}, nil
 }
 
+func (m *fakeS3) UploadPartCopy(input *s3.UploadPartCopyInput) (*s3.UploadPartCopyOutput, error) {
+	m.assert.NotNil(input.Bucket, "Bucket is a required field")
+	m.assert.NotNil(input.Key, "Key is a required field")
+	m.assert.NotNil(input.PartNumber, "PartNumber is a required field")
+	m.assert.NotNil(input.UploadId, "UploadId is a required field")
+	m.assert.NotNil(input.CopySource, "CopySource is a required field")
+
+	unescaped, err := url.QueryUnescape(*input.CopySource)
+	m.assert.NoError(err)
+	slash := strings.LastIndex(unescaped, "/")
+	m.assert.NotEqual(-1, slash, "Malformed CopySource %s", unescaped)
+	src := unescaped[slash+1:]
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	obj, present := m.data[src]
+	if !present {
+		return nil, mockAWSError("NoSuchKey")
+	}
+	if input.CopySourceRange != nil {
+		start, end := parseRange(*input.CopySourceRange, len(obj))
+		obj = obj[start:end]
+	}
+	etag := hash.Of(obj).String() + time.Now().String()
+	m.parts[etag] = obj
+
+	inProgress, present := m.inProgress[*input.Key]
+	m.assert.True(present)
+	m.assert.Equal(inProgress.uploadID, *input.UploadId)
+	inProgress.etags = append(inProgress.etags, etag)
+	m.inProgress[*input.Key] = inProgress
+	return &s3.UploadPartCopyOutput{CopyPartResult: &s3.CopyPartResult{ETag: aws.String(etag)}}, nil
+}
+
 func (m *fakeS3) CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput) (*s3.CompleteMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
@@ -142,6 +177,8 @@ func (m *fakeS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	obj, present := m.data[*input.Key]
 	if !present {
 		return nil, mockAWSError("NoSuchKey")
@@ -183,6 +220,8 @@ func (m *fakeS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error
 
 	buff := &bytes.Buffer{}
 	io.Copy(buff, input.Body)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.data[*input.Key] = buff.Bytes()
 
 	return &s3.PutObjectOutput{}, nil

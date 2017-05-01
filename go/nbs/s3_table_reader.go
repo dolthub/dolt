@@ -36,6 +36,7 @@ type s3svc interface {
 	AbortMultipartUpload(input *s3.AbortMultipartUploadInput) (*s3.AbortMultipartUploadOutput, error)
 	CreateMultipartUpload(input *s3.CreateMultipartUploadInput) (*s3.CreateMultipartUploadOutput, error)
 	UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, error)
+	UploadPartCopy(input *s3.UploadPartCopyInput) (*s3.UploadPartCopyOutput, error)
 	CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput) (*s3.CompleteMultipartUploadOutput, error)
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
@@ -77,10 +78,17 @@ func (s3tr *s3TableReader) hash() addr {
 	return s3tr.h
 }
 
+func (s3tr *s3TableReader) index() tableIndex {
+	return s3tr.tableIndex
+}
+
 func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
-	end := off + int64(len(p)) - 1 // insanely, the HTTP range header specifies ranges inclusively.
-	rangeHeader := fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, end)
-	return s3tr.readRange(p, rangeHeader)
+	return s3tr.readRange(p, s3RangeHeader(off, int64(len(p))))
+}
+
+func s3RangeHeader(off, length int64) string {
+	lastByte := off + length - 1 // insanely, the HTTP range header specifies ranges inclusively.
+	return fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, lastByte)
 }
 
 func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err error) {

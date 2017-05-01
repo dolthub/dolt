@@ -436,3 +436,18 @@ func (tr tableReader) extract(chunks chan<- extractRecord) {
 		sendChunk(i)
 	}
 }
+
+func (tr tableReader) reader() io.Reader {
+	return &readerAdapter{tr.r, 0}
+}
+
+type readerAdapter struct {
+	rat io.ReaderAt
+	off int64
+}
+
+func (ra *readerAdapter) Read(p []byte) (n int, err error) {
+	n, err = ra.rat.ReadAt(p, ra.off)
+	ra.off += int64(n)
+	return
+}

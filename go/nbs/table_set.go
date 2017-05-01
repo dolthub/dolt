@@ -16,7 +16,7 @@ const concurrentCompactions = 5
 
 func newS3TableSet(s3 s3svc, bucket string, indexCache *indexCache, readRl chan struct{}) tableSet {
 	return tableSet{
-		p:  s3TablePersister{s3, bucket, defaultS3PartSize, indexCache, readRl},
+		p:  s3TablePersister{s3, bucket, defaultS3PartSize, minS3PartSize, maxS3PartSize, indexCache, readRl},
 		rl: make(chan struct{}, concurrentCompactions),
 	}
 }
@@ -141,7 +141,7 @@ func (ts tableSet) Prepend(mt *memTable) tableSet {
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newCompactingChunkSource(mt, ts, ts.p, ts.rl)
+	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl)
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
 	return newTs

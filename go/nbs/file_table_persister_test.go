@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func TestFSTablePersisterCompact(t *testing.T) {
+func TestFSTablePersisterPersist(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(testMemTableSize)
 
@@ -26,7 +27,7 @@ func TestFSTablePersisterCompact(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
 
-	src := fts.Compact(mt, nil)
+	src := fts.Persist(mt, nil)
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
@@ -35,7 +36,7 @@ func TestFSTablePersisterCompact(t *testing.T) {
 	}
 }
 
-func TestFSTablePersisterCompactNoData(t *testing.T) {
+func TestFSTablePersisterPersistNoData(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(testMemTableSize)
 	existingTable := newMemTable(testMemTableSize)
@@ -49,7 +50,7 @@ func TestFSTablePersisterCompactNoData(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
 
-	src := fts.Compact(mt, existingTable)
+	src := fts.Persist(mt, existingTable)
 	assert.True(src.count() == 0)
 
 	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
@@ -62,7 +63,10 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 	sources := make(chunkSources, len(testChunks))
 
 	for i, c := range testChunks {
-		sources[i] = bytesToChunkSource(c)
+		randChunk := make([]byte, (i+1)*13)
+		_, err := rand.Read(randChunk)
+		assert.NoError(err)
+		sources[i] = bytesToChunkSource(c, randChunk)
 	}
 
 	dir := makeTempDir(assert)
@@ -80,16 +84,19 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 
 func TestFSTablePersisterCompactAllDups(t *testing.T) {
 	assert := assert.New(t)
-	assert.True(len(testChunks) > 1, "Whoops, this test isn't meaningful")
-	sources := make(chunkSources, len(testChunks))
-
-	for i := range testChunks {
-		sources[i] = bytesToChunkSource(testChunks...)
-	}
-
 	dir := makeTempDir(assert)
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
+
+	reps := 3
+	sources := make(chunkSources, reps)
+	for i := 0; i < reps; i++ {
+		mt := newMemTable(1 << 10)
+		for _, c := range testChunks {
+			mt.addChunk(computeAddr(c), c)
+		}
+		sources[i] = fts.Persist(mt, nil)
+	}
 	src := fts.CompactAll(sources)
 
 	if assert.True(src.count() > 0) {
@@ -97,6 +104,6 @@ func TestFSTablePersisterCompactAllDups(t *testing.T) {
 		assert.NoError(err)
 		tr := newTableReader(parseTableIndex(buff), bytes.NewReader(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
-		assert.EqualValues(len(testChunks), tr.count())
+		assert.EqualValues(reps*len(testChunks), tr.count())
 	}
 }

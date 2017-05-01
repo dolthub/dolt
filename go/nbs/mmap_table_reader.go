@@ -91,3 +91,7 @@ func (mmtr *mmapTableReader) close() (err error) {
 func (mmtr *mmapTableReader) hash() addr {
 	return mmtr.h
 }
+
+func (mmtr *mmapTableReader) index() tableIndex {
+	return mmtr.tableIndex
+}

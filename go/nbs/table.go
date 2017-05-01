@@ -10,6 +10,7 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"hash/crc32"
+	"io"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -212,6 +213,10 @@ type chunkSource interface {
 	close() error
 	hash() addr
 	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
+
+	// opens a Reader to the first byte of the chunkData segment of this table.
+	reader() io.Reader
+	index() tableIndex
 }
 
 type chunkSources []chunkSource

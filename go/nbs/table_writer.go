@@ -48,6 +48,14 @@ func indexSize(numChunks uint32) uint64 {
 	return uint64(numChunks) * (addrSuffixSize + lengthSize + prefixTupleSize)
 }
 
+func lengthsOffset(numChunks uint32) uint64 {
+	return uint64(numChunks) * prefixTupleSize
+}
+
+func suffixesOffset(numChunks uint32) uint64 {
+	return uint64(numChunks) * (prefixTupleSize + lengthSize)
+}
+
 // len(buff) must be >= maxTableSize(numChunks, totalData)
 func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
 	if snapper == nil {
@@ -123,9 +131,9 @@ func (tw *tableWriter) writeIndex() {
 
 	pfxScratch := [addrPrefixSize]byte{}
 
-	numRecords := uint64(len(tw.prefixes))
-	lengthsOffset := tw.pos + numRecords*prefixTupleSize    // skip prefix and ordinal for each record
-	suffixesOffset := lengthsOffset + numRecords*lengthSize // skip size for each record
+	numRecords := uint32(len(tw.prefixes))
+	lengthsOffset := tw.pos + lengthsOffset(numRecords)   // skip prefix and ordinal for each record
+	suffixesOffset := tw.pos + suffixesOffset(numRecords) // skip size for each record
 	for _, pi := range tw.prefixes {
 		binary.BigEndian.PutUint64(pfxScratch[:], pi.prefix)
 
@@ -147,21 +155,26 @@ func (tw *tableWriter) writeIndex() {
 		n = uint64(copy(tw.buff[offset:], pi.suffix))
 		d.Chk.True(n == addrSuffixSize)
 	}
-	tw.blockHash.Write(tw.buff[suffixesOffset : suffixesOffset+numRecords*addrSuffixSize])
-	tw.pos = suffixesOffset + numRecords*addrSuffixSize
+	suffixesLen := uint64(numRecords) * addrSuffixSize
+	tw.blockHash.Write(tw.buff[suffixesOffset : suffixesOffset+suffixesLen])
+	tw.pos = suffixesOffset + suffixesLen
 }
 
 func (tw *tableWriter) writeFooter() {
+	tw.pos += writeFooter(tw.buff[tw.pos:], uint32(len(tw.prefixes)), tw.totalUncompressedData)
+}
+
+func writeFooter(dst []byte, chunkCount uint32, uncData uint64) (consumed uint64) {
 	// chunk count
-	chunkCount := uint32(len(tw.prefixes))
-	binary.BigEndian.PutUint32(tw.buff[tw.pos:], chunkCount)
-	tw.pos += uint32Size
+	binary.BigEndian.PutUint32(dst[consumed:], chunkCount)
+	consumed += uint32Size
 
 	// total uncompressed chunk data
-	binary.BigEndian.PutUint64(tw.buff[tw.pos:], tw.totalUncompressedData)
-	tw.pos += uint64Size
+	binary.BigEndian.PutUint64(dst[consumed:], uncData)
+	consumed += uint64Size
 
 	// magic number
-	copy(tw.buff[tw.pos:], magicNumber)
-	tw.pos += magicNumberSize
+	copy(dst[consumed:], magicNumber)
+	consumed += magicNumberSize
+	return
 }
