@@ -262,8 +262,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
 
-	assert.True(tt, isSubtype(t2, t1, nil))
-	assert.False(tt, isSubtype(t1, t2, nil))
+	assert.True(tt, isSubtypeTopLevel(t2, t1))
+	assert.False(tt, isSubtypeTopLevel(t1, t2))
 
 	// struct S {
 	//   x: Cycle<S> | Number,
@@ -274,11 +274,11 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
 
-	assert.True(tt, isSubtype(t3, t1, nil))
-	assert.False(tt, isSubtype(t1, t3, nil))
+	assert.True(tt, isSubtypeTopLevel(t3, t1))
+	assert.False(tt, isSubtypeTopLevel(t1, t3))
 
-	assert.True(tt, isSubtype(t3, t2, nil))
-	assert.False(tt, isSubtype(t2, t3, nil))
+	assert.True(tt, isSubtypeTopLevel(t3, t2))
+	assert.False(tt, isSubtypeTopLevel(t2, t3))
 
 	// struct S {
 	//   x: Cycle<S> | Number,
@@ -379,27 +379,9 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert.False(IsSubtype(s1, s4))
 	assert.False(IsSubtype(s4, s1))
 
-	makeType := func(s string) *Type {
-		if s == "" {
-			return MakeStructType("")
-		}
-
-		fs := strings.Split(s, " ")
-		fields := make([]StructField, len(fs))
-		for i, f := range fs {
-			optional := false
-			if f[len(f)-1:] == "?" {
-				f = f[:len(f)-1]
-				optional = true
-			}
-			fields[i] = StructField{f, BoolType, optional}
-		}
-		return MakeStructType("", fields...)
-	}
-
 	test := func(t1s, t2s string, exp1, exp2 bool) {
-		t1 := makeType(t1s)
-		t2 := makeType(t2s)
+		t1 := makeTestStructFromFieldNames(t1s)
+		t2 := makeTestStructFromFieldNames(t2s)
 		assert.Equal(exp1, IsSubtype(t1, t2))
 		assert.Equal(exp2, IsSubtype(t2, t1))
 		assert.False(t1.Equals(t2))
@@ -436,6 +418,63 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	t2 := MakeStructType("", StructField{"a", NumberType, true})
 	assert.False(IsSubtype(t1, t2))
 	assert.False(IsSubtype(t2, t1))
+}
+
+func makeTestStructFromFieldNames(s string) *Type {
+	if s == "" {
+		return MakeStructType("")
+	}
+
+	fs := strings.Split(s, " ")
+	fields := make([]StructField, len(fs))
+	for i, f := range fs {
+		optional := false
+		if f[len(f)-1:] == "?" {
+			f = f[:len(f)-1]
+			optional = true
+		}
+		fields[i] = StructField{f, BoolType, optional}
+	}
+	return MakeStructType("", fields...)
+}
+
+func TestIsSubtypeDisallowExtraStructFields(tt *testing.T) {
+	assert := assert.New(tt)
+
+	test := func(t1s, t2s string, exp1, exp2 bool) {
+		t1 := makeTestStructFromFieldNames(t1s)
+		t2 := makeTestStructFromFieldNames(t2s)
+		assert.Equal(exp1, IsSubtypeDisallowExtraStructFields(t1, t2))
+		assert.Equal(exp2, IsSubtypeDisallowExtraStructFields(t2, t1))
+		assert.False(t1.Equals(t2))
+	}
+
+	test("n?", "n", true, false)
+	test("", "n", false, false)
+	test("", "n?", false, true)
+
+	test("a b?", "a", true, false)
+	test("a b?", "a b", true, false)
+	test("a b? c", "a b c", true, false)
+	test("b? c", "a b c", false, false)
+	test("b? c", "b c", true, false)
+
+	test("a c e", "a b c d e", false, false)
+	test("a c e?", "a b c d e", false, false)
+	test("a c? e", "a b c d e", false, false)
+	test("a c? e?", "a b c d e", false, false)
+	test("a? c e", "a b c d e", false, false)
+	test("a? c e?", "a b c d e", false, false)
+	test("a? c? e", "a b c d e", false, false)
+	test("a? c? e?", "a b c d e", false, false)
+
+	test("a c e?", "a b c d", false, false)
+	test("a c? e", "a b d e", false, false)
+	test("a c? e?", "a b d", false, false)
+	test("a? c e", "b c d e", false, false)
+	test("a? c e?", "b c d", false, false)
+	test("a? c? e", "b d e", false, false)
+	test("a? c? e?", "b d", false, false)
 }
 
 func TestIsValueSubtypeOf(tt *testing.T) {
