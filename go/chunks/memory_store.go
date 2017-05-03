@@ -146,12 +146,6 @@ func (ms *MemoryStoreView) Put(c Chunk) {
 	ms.pending[c.Hash()] = c
 }
 
-func (ms *MemoryStoreView) PutMany(chunks []Chunk) {
-	for _, c := range chunks {
-		ms.Put(c)
-	}
-}
-
 func (ms *MemoryStoreView) Len() int {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()

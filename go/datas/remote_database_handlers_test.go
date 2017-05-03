@@ -163,7 +163,9 @@ func TestHandleGetRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
-	cs.PutMany(chnx)
+	for _, c := range chnx {
+		cs.Put(c)
+	}
 	persistChunks(cs)
 
 	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
@@ -268,7 +270,9 @@ func TestHandleHasRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input2)),
 	}
 	cs := storage.NewView()
-	cs.PutMany(chnx)
+	for _, c := range chnx {
+		cs.Put(c)
+	}
 	persistChunks(cs)
 
 	absent := hash.Parse("00000000000000000000000000000002")

@@ -61,11 +61,6 @@ func (s *TestStoreView) Put(c Chunk) {
 	s.ChunkStore.Put(c)
 }
 
-func (s *TestStoreView) PutMany(chunks []Chunk) {
-	s.Writes += len(chunks)
-	s.ChunkStore.PutMany(chunks)
-}
-
 type TestStoreFactory struct {
 	stores map[string]*TestStorage
 }

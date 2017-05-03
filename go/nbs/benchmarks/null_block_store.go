@@ -35,8 +35,6 @@ func (nb nullBlockStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
 
 func (nb nullBlockStore) Put(c chunks.Chunk) {}
 
-func (nb nullBlockStore) PutMany(chunks []chunks.Chunk) {}
-
 func (nb nullBlockStore) Version() string {
 	panic("not impl")
 }

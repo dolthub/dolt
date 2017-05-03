@@ -43,12 +43,6 @@ func (fb fileBlockStore) Put(c chunks.Chunk) {
 	io.Copy(fb.bw, bytes.NewReader(c.Data()))
 }
 
-func (fb fileBlockStore) PutMany(chunks []chunks.Chunk) {
-	for _, c := range chunks {
-		fb.Put(c)
-	}
-}
-
 func (fb fileBlockStore) Version() string {
 	panic("not impl")
 }

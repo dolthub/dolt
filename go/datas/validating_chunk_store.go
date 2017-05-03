@@ -32,18 +32,6 @@ func (vcs *validatingChunkStore) Put(c chunks.Chunk) {
 	vcs.cc.AddRefs(types.DecodeValue(c, nil))
 }
 
-// PutMany calls PutMany on the underlying ChunkStore and adds any refs in c
-// to a pool of unresolved refs which are validated against the underlying
-// ChunkStore during Flush() or Commit().
-func (vcs *validatingChunkStore) PutMany(chunks []chunks.Chunk) {
-	vcs.ChunkStore.PutMany(chunks)
-	vcs.mu.Lock()
-	defer vcs.mu.Unlock()
-	for _, c := range chunks {
-		vcs.cc.AddRefs(types.DecodeValue(c, nil))
-	}
-}
-
 // Commit validates pending chunks for ref-completeness before calling
 // Commit() on the underlying ChunkStore.
 func (vcs *validatingChunkStore) Commit(current, last hash.Hash) bool {

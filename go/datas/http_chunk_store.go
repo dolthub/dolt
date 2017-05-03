@@ -364,14 +364,6 @@ func (hcs *httpChunkStore) Put(c chunks.Chunk) {
 	hcs.unwrittenPuts.Insert(c)
 }
 
-func (hcs *httpChunkStore) PutMany(chunx []chunks.Chunk) {
-	hcs.cacheMu.RLock()
-	defer hcs.cacheMu.RUnlock()
-	for _, c := range chunx {
-		hcs.unwrittenPuts.Insert(c)
-	}
-}
-
 func (hcs *httpChunkStore) sendWriteRequests() {
 	hcs.rateLimit <- struct{}{}
 	defer func() { <-hcs.rateLimit }()

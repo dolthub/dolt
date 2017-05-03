@@ -171,16 +171,6 @@ func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
 	nbs.putCount++
 }
 
-func (nbs *NomsBlockStore) SchedulePut(c chunks.Chunk) {
-	nbs.Put(c)
-}
-
-func (nbs *NomsBlockStore) PutMany(chunx []chunks.Chunk) {
-	for _, c := range chunx {
-		nbs.Put(c)
-	}
-}
-
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
 func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 	nbs.mu.Lock()

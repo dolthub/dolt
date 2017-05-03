@@ -27,17 +27,6 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	assertInputInStore(input, h, store, suite.Assert())
 }
 
-func (suite *ChunkStoreTestSuite) TestChunkStorePutMany() {
-	store := suite.Factory.CreateStore("ns")
-	input1, input2 := "abc", "def"
-	c1, c2 := NewChunk([]byte(input1)), NewChunk([]byte(input2))
-	store.PutMany([]Chunk{c1, c2})
-
-	// And reading it via the API should work.
-	assertInputInStore(input1, c1.Hash(), store, suite.Assert())
-	assertInputInStore(input2, c2.Hash(), store, suite.Assert())
-}
-
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 	store := suite.Factory.CreateStore("ns")
 	oldRoot := store.Root()
@@ -71,29 +60,6 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	store.Commit(h, store.Root()) // Commit persists Chunks
 	assertInputInStore(input, h, store, suite.Assert())
 	assertInputInStore(input, h, suite.Factory.CreateStore(name), suite.Assert())
-}
-
-func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPutMany() {
-	name := "ns"
-	store := suite.Factory.CreateStore(name)
-	inputs := []string{"abc", "def"}
-	chunx := []Chunk{NewChunk([]byte(inputs[0])), NewChunk([]byte(inputs[1]))}
-	store.PutMany(chunx)
-
-	for i, c := range chunx {
-		// Reading from store via the API should work...
-		assertInputInStore(inputs[i], c.Hash(), store, suite.Assert())
-		// ...but Chunks shouldn't be persisted yet
-		assertInputNotInStore(inputs[i], c.Hash(), suite.Factory.CreateStore(name), suite.Assert())
-	}
-
-	store.Commit(chunx[0].Hash(), store.Root()) // Commit writes
-
-	// Now Chunks should be visible everywhere
-	for i, c := range chunx {
-		assertInputInStore(inputs[i], c.Hash(), store, suite.Assert())
-		assertInputInStore(inputs[i], c.Hash(), suite.Factory.CreateStore(name), suite.Assert())
-	}
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreGetNonExisting() {

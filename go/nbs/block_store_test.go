@@ -90,7 +90,8 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	suite.store.PutMany([]chunks.Chunk{c1, c2})
+	suite.store.Put(c1)
+	suite.store.Put(c2)
 
 	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
@@ -107,7 +108,8 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	rand.Read(input1)
 	rand.Read(input2)
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	suite.store.PutMany([]chunks.Chunk{c1, c2})
+	suite.store.Put(c1)
+	suite.store.Put(c2)
 
 	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
@@ -127,8 +129,8 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	chnx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {
 		chnx[i] = chunks.NewChunk(data)
+		suite.store.Put(chnx[i])
 	}
-	suite.store.PutMany(chnx)
 	suite.store.Commit(chnx[0].Hash(), suite.store.Root()) // Commit writes
 
 	hashes := make(hash.HashSlice, len(chnx))
@@ -155,7 +157,9 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 	rand.Read(input1)
 	rand.Read(input2)
 	chnx := []chunks.Chunk{chunks.NewChunk(input1), chunks.NewChunk(input2)}
-	suite.store.PutMany(chnx)
+	for _, c := range chnx {
+		suite.store.Put(c)
+	}
 
 	chunkChan := make(chan *chunks.Chunk)
 	go func() { suite.store.extractChunks(chunkChan); close(chunkChan) }()
@@ -261,7 +265,9 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	}
 
 	root := smallTableStore.Root()
-	smallTableStore.PutMany(chunx[:testMaxTables])
+	for _, c := range chunx[:testMaxTables] {
+		smallTableStore.Put(c)
+	}
 	suite.True(smallTableStore.Commit(chunx[0].Hash(), root)) // Commit write
 
 	exists, _, _, mRoot, specs := mm.ParseIfExists(nil)
@@ -270,7 +276,10 @@ func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	suite.Len(specs, testMaxTables)
 
 	root = smallTableStore.Root()
-	smallTableStore.PutMany(chunx[testMaxTables:])
+	for _, c := range chunx[testMaxTables:] {
+		smallTableStore.Put(c)
+	}
+
 	suite.True(smallTableStore.Commit(chunx[testMaxTables].Hash(), root)) // Should compact
 
 	exists, _, _, mRoot, specs = mm.ParseIfExists(nil)

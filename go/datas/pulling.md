@@ -17,7 +17,7 @@ The approach is to explore the chunk graph of both sink and source in order of d
       - let `c` = `source.batchStore().Get(srcRef.targetHash)`
       - let `v` = `types.DecodeValue(c, source)`
       - insert all child refs, `cr`, from `v` into `srcQ` and into reachableRefs
-      - `sink.batchStore().SchedulePut(c, srcRef.height, no hints)`
+      - `sink.batchStore().Put(c, srcRef.height, no hints)`
         - (hints will all be gathered and handed to sink.batchStore at the end)
 
 

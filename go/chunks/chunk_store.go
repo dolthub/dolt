@@ -33,15 +33,8 @@ type ChunkStore interface {
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
-	// PutMany(), Get(), GetMany(), Has() and HasMany().
+	// Get(), GetMany(), Has() and HasMany().
 	Put(c Chunk)
-
-	// PutMany caches chunks in the ChunkSource. Upon return, all members of
-	// chunks must be visible to subsequent Get and Has calls, but must not be
-	// persistent until a call to Flush(). PutMany may be called concurrently
-	// with other calls to Put(), PutMany(), Get(), GetMany(), Has() and
-	// HasMany().
-	PutMany(chunks []Chunk)
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string
