@@ -192,6 +192,10 @@ func (tr tableReader) uncompressedLen() uint64 {
 	return tr.totalUncompressedData
 }
 
+func (tr tableReader) index() tableIndex {
+	return tr.tableIndex
+}
+
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) bool {
 	ordinal := tr.lookupOrdinal(h)

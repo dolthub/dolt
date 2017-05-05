@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -236,14 +237,54 @@ func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader) chunkSour
 }
 
 func (ftp fakeTablePersister) CompactAll(sources chunkSources) chunkSource {
-	rl := make(chan struct{}, 32)
-	defer close(rl)
-	name, data, chunkCount := compactSourcesToBuffer(sources, rl)
+	name, data, chunkCount := compactSourcesToBuffer(sources)
 	if chunkCount > 0 {
 		ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
 		return chunkSourceAdapter{ftp.sources[name], name}
 	}
 	return emptyChunkSource{}
+}
+
+func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32) {
+	totalData := uint64(0)
+	for _, src := range sources {
+		chunkCount += src.count()
+		totalData += src.uncompressedLen()
+	}
+	if chunkCount == 0 {
+		return
+	}
+
+	maxSize := maxTableSize(uint64(chunkCount), totalData)
+	buff := make([]byte, maxSize) // This can blow up RAM
+	tw := newTableWriter(buff, nil)
+	errString := ""
+
+	for _, src := range sources {
+		chunks := make(chan extractRecord)
+		go func() {
+			defer close(chunks)
+			defer func() {
+				if r := recover(); r != nil {
+					chunks <- extractRecord{a: src.hash(), err: r}
+				}
+			}()
+			src.extract(chunks)
+		}()
+		for rec := range chunks {
+			if rec.err != nil {
+				errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", rec.a, rec.err)
+				continue
+			}
+			tw.addChunk(rec.a, rec.data)
+		}
+	}
+
+	if errString != "" {
+		panic(fmt.Errorf(errString))
+	}
+	tableSize, name := tw.finish()
+	return name, buff[:tableSize], chunkCount
 }
 
 func (ftp fakeTablePersister) Open(name addr, chunkCount uint32) chunkSource {

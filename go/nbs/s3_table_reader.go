@@ -78,10 +78,6 @@ func (s3tr *s3TableReader) hash() addr {
 	return s3tr.h
 }
 
-func (s3tr *s3TableReader) index() tableIndex {
-	return s3tr.tableIndex
-}
-
 func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
 	return s3tr.readRange(p, s3RangeHeader(off, int64(len(p))))
 }

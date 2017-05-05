@@ -350,22 +350,3 @@ func bytesToChunkSource(bs ...[]byte) chunkSource {
 	rdr := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
 	return chunkSourceAdapter{rdr, name}
 }
-
-func TestCompactSourcesToBufferPanic(t *testing.T) {
-	assert := assert.New(t)
-	rl := make(chan struct{}, 1)
-	defer close(rl)
-
-	src := bytesToChunkSource([]byte("hello"))
-	pcs := panicingChunkSource{src}
-
-	assert.Panics(func() { compactSourcesToBuffer(chunkSources{pcs}, rl) })
-}
-
-type panicingChunkSource struct {
-	chunkSource
-}
-
-func (pcs panicingChunkSource) extract(chunks chan<- extractRecord) {
-	panic("onoes")
-}

@@ -27,7 +27,13 @@ type manifest interface {
 	// return values are undefined. The |readHook| parameter allows race
 	// condition testing. If it is non-nil, it will be invoked while the
 	// implementation is guaranteeing exclusive access to the manifest.
-	ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec)
+	ParseIfExists(readHook func()) (
+		exists bool,
+		vers string,
+		lock addr,
+		root hash.Hash,
+		tableSpecs []tableSpec,
+	)
 
 	// Update optimistically tries to write a new manifest containing
 	// |newRoot| and the tables referenced by |specs|. If |lastLock| matches
@@ -44,7 +50,16 @@ type manifest interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec)
+	Update(
+		lastLock, newLock addr,
+		specs []tableSpec,
+		newRoot hash.Hash,
+		writeHook func(),
+	) (
+		lock addr,
+		actual hash.Hash,
+		tableSpecs []tableSpec,
+	)
 }
 
 type tableSpec struct {
