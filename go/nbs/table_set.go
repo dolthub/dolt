@@ -7,6 +7,7 @@ package nbs
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -59,10 +60,10 @@ func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) get(h addr) []byte {
+func (ts tableSet) get(h addr, stats *Stats) []byte {
 	f := func(css chunkSources) []byte {
 		for _, haver := range css {
-			if data := haver.get(h); data != nil {
+			if data := haver.get(h, stats); data != nil {
 				return data
 			}
 		}
@@ -74,10 +75,10 @@ func (ts tableSet) get(h addr) []byte {
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) (remaining bool) {
+func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	f := func(css chunkSources) (remaining bool) {
 		for _, haver := range css {
-			if !haver.getMany(reqs, foundChunks, wg) {
+			if !haver.getMany(reqs, foundChunks, wg, stats) {
 				return false
 			}
 		}
@@ -134,14 +135,14 @@ func (ts tableSet) Size() int {
 
 // Prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) Prepend(mt *memTable) tableSet {
+func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
 	newTs := tableSet{
 		novel:    make(chunkSources, len(ts.novel)+1),
 		upstream: make(chunkSources, len(ts.upstream)),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl)
+	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl, stats)
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
 	return newTs
@@ -150,7 +151,9 @@ func (ts tableSet) Prepend(mt *memTable) tableSet {
 // Compact returns a new tableSet that's smaller than |ts|. It chooses to compact the N smallest
 // (by number of chunks) tables which can be compacted into a new table such that upon replacing
 // the N input tables, the  resulting table will still have the fewest chunks in the tableSet.
-func (ts tableSet) Compact() (ns tableSet, compactees chunkSources) {
+func (ts tableSet) Compact(stats *Stats) (ns tableSet, compactees chunkSources) {
+	t1 := time.Now()
+
 	ns = tableSet{
 		novel: make(chunkSources, len(ts.novel)),
 		p:     ts.p,
@@ -171,8 +174,12 @@ func (ts tableSet) Compact() (ns tableSet, compactees chunkSources) {
 
 	toCompact := sortedUpstream[:partition]
 
-	compacted := ts.p.CompactAll(toCompact)
+	compacted := ts.p.CompactAll(toCompact, stats)
 	ns.upstream = append(chunkSources{compacted}, sortedUpstream[partition:]...)
+
+	stats.ConjoinLatency.SampleTime(time.Since(t1))
+	stats.TablesPerConjoin.SampleLen(len(toCompact))
+	stats.ChunksPerConjoin.Sample(uint64(compacted.count()))
 
 	return ns, toCompact
 }

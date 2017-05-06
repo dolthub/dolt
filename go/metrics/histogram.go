@@ -27,7 +27,14 @@ import (
 //
 // Only implemented: Log2-based histogram
 type Histogram struct {
-	buckets [bucketCount]uint64
+	buckets  [bucketCount]uint64
+	ToString ToStringFunc
+}
+
+type ToStringFunc func(v uint64) string
+
+func identToString(v uint64) string {
+	return fmt.Sprintf("%d", v)
 }
 
 const bucketCount = 63
@@ -57,13 +64,13 @@ func (h *Histogram) SampleLen(l int) {
 	h.Sample(uint64(l))
 }
 
-func (h *Histogram) bucketVal(bucket int) uint64 {
+func (h Histogram) bucketVal(bucket int) uint64 {
 	return 1 << (uint64(bucket))
 }
 
 // The bucket sum is reported as the mid-point value of a bucket multiplied by
 // the number of samples in the bucket
-func (h *Histogram) bucketSum(bucket int) uint64 {
+func (h Histogram) bucketSum(bucket int) uint64 {
 	return h.buckets[bucket] * (h.bucketVal(bucket) + h.bucketVal(bucket+1)) / 2
 }
 
@@ -79,19 +86,17 @@ func (h Histogram) Sum() uint64 {
 
 // Add returns a new Histogram which is the result of adding this and other
 // bucket-wise.
-func (h Histogram) Add(other *Histogram) Histogram {
-	nh := Histogram{}
+func (h *Histogram) Add(other Histogram) {
 	for i := 0; i < bucketCount; i++ {
-		nh.buckets[i] = h.buckets[i] + other.buckets[i]
+		h.buckets[i] += other.buckets[i]
 	}
-	return nh
 }
 
 // Delta returns a new Histogram whcih is the result of subtracting other from
 // this bucket-wise. The intent is to capture changes in the state of histogram
 // which is collecting samples over some time period. It will panic if any
 // bucket from other is larger than the corresponding bucket in this.
-func (h Histogram) Delta(other *Histogram) Histogram {
+func (h Histogram) Delta(other Histogram) Histogram {
 	nh := Histogram{}
 	for i := 0; i < bucketCount; i++ {
 		c := h.buckets[i]
@@ -122,21 +127,24 @@ func (h Histogram) Samples() uint64 {
 }
 
 func (h Histogram) String() string {
-	return fmt.Sprintf("Mean: %d, Sum: %d, Samples: %d", h.Mean(), h.Sum(), h.Samples())
+	f := h.ToString
+	if f == nil {
+		f = identToString
+	}
+	return fmt.Sprintf("Mean: %s, Sum: %s, Samples: %d", f(h.Mean()), f(h.Sum()), h.Samples())
 }
 
-// TimeHistogram stringifies values using humanize over time values
-type TimeHistogram Histogram
+func NewTimeHistogram() Histogram {
+	return Histogram{ToString: timeToString}
+}
 
-func (h TimeHistogram) String() string {
-	return fmt.Sprintf("Mean: %s, Sum: %s, Samples: %d", time.Duration(Histogram(h).Mean()), time.Duration(Histogram(h).Sum()), Histogram(h).Samples())
+func timeToString(v uint64) string {
+	return time.Duration(v).String()
 }
 
 // ByteHistogram stringifies values using humanize over byte values
-type ByteHistogram Histogram
-
-func (h ByteHistogram) String() string {
-	return fmt.Sprintf("Mean: %s, Sum: %s, Samples: %d", humanize.Bytes(Histogram(h).Mean()), humanize.Bytes(Histogram(h).Sum()), Histogram(h).Samples())
+func NewByteHistogram() Histogram {
+	return Histogram{ToString: humanize.Bytes}
 }
 
 const colWidth = 100
@@ -144,6 +152,11 @@ const colWidth = 100
 // Report returns an ASCII graph of the non-zero range of normalized buckets.
 // IOW, it returns a basic graph of the histogram
 func (h Histogram) Report() string {
+	ts := h.ToString
+	if ts == nil {
+		ts = identToString
+	}
+
 	maxSamples := uint64(0)
 	firstNonEmpty := 0
 	lastNonEmpty := 0
@@ -162,13 +175,17 @@ func (h Histogram) Report() string {
 		}
 	}
 
+	if maxSamples == 0 {
+		return ""
+	}
+
 	val := uint64(1)
 
 	p := func(bucket int) string {
 		samples := h.buckets[bucket]
 		val := h.bucketVal(bucket)
 		adj := samples * colWidth / maxSamples
-		return fmt.Sprintf("%s> %d: (%d)", strings.Repeat("-", int(adj)), val, samples)
+		return fmt.Sprintf("%s> %s: (%d)", strings.Repeat("-", int(adj)), ts(val), samples)
 	}
 
 	lines := make([]string, 0)

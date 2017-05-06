@@ -201,8 +201,8 @@ type extractRecord struct {
 type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
-	get(h addr) []byte
-	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool
+	get(h addr, stats *Stats) []byte
+	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
 	count() uint32
 	uncompressedLen() uint64
 	extract(chunks chan<- extractRecord)

@@ -27,7 +27,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
 
-	src := fts.Persist(mt, nil)
+	src := fts.Persist(mt, nil, &Stats{})
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
@@ -50,7 +50,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
 
-	src := fts.Persist(mt, existingTable)
+	src := fts.Persist(mt, existingTable, &Stats{})
 	assert.True(src.count() == 0)
 
 	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
@@ -72,7 +72,7 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 	dir := makeTempDir(assert)
 	defer os.RemoveAll(dir)
 	fts := fsTablePersister{dir: dir}
-	src := fts.CompactAll(sources)
+	src := fts.CompactAll(sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -95,9 +95,9 @@ func TestFSTablePersisterCompactAllDups(t *testing.T) {
 		for _, c := range testChunks {
 			mt.addChunk(computeAddr(c), c)
 		}
-		sources[i] = fts.Persist(mt, nil)
+		sources[i] = fts.Persist(mt, nil, &Stats{})
 	}
-	src := fts.CompactAll(sources)
+	src := fts.CompactAll(sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))

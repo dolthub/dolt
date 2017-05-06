@@ -15,8 +15,8 @@ import (
 )
 
 type tablePersister interface {
-	Persist(mt *memTable, haver chunkReader) chunkSource
-	CompactAll(sources chunkSources) chunkSource
+	Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource
+	CompactAll(sources chunkSources, stats *Stats) chunkSource
 	Open(name addr, chunkCount uint32) chunkSource
 }
 
@@ -91,7 +91,7 @@ func (cp compactionPlan) suffixes() []byte {
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
 }
 
-func planCompaction(sources chunkSources) (plan compactionPlan) {
+func planCompaction(sources chunkSources, stats *Stats) (plan compactionPlan) {
 	var totalUncompressedData uint64
 	for _, src := range sources {
 		totalUncompressedData += src.uncompressedLen()
@@ -145,6 +145,8 @@ func planCompaction(sources chunkSources) (plan compactionPlan) {
 	}
 
 	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
+
+	stats.BytesPerConjoin.Sample(uint64(plan.totalCompressedData) + uint64(len(plan.mergedIndex)))
 	return plan
 }
 

@@ -59,6 +59,8 @@ type NomsBlockStore struct {
 	mtSize    uint64
 	maxTables int
 	putCount  uint64
+
+	stats *Stats
 }
 
 type AWSStoreFactory struct {
@@ -155,6 +157,7 @@ func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64, maxTables 
 		nomsVersion: constants.NomsVersion,
 		mtSize:      memTableSize,
 		maxTables:   maxTables,
+		stats:       NewStats(),
 	}
 
 	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
@@ -166,9 +169,12 @@ func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64, maxTables 
 }
 
 func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
+	t1 := time.Now()
 	a := addr(c.Hash())
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
 	nbs.putCount++
+
+	nbs.stats.PutLatency.SampleTime(time.Since(t1))
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
@@ -179,7 +185,7 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		nbs.tables = nbs.tables.Prepend(nbs.mt)
+		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
 	}
@@ -187,26 +193,39 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 }
 
 func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
+	t1 := time.Now()
+	defer func() {
+		nbs.stats.GetLatency.SampleTime(time.Since(t1))
+		nbs.stats.ChunksPerGet.Sample(1)
+	}()
+
 	a := addr(h)
 	data, tables := func() (data []byte, tables chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
-			data = nbs.mt.get(a)
+			data = nbs.mt.get(a, nbs.stats)
 		}
 		return data, nbs.tables
 	}()
 	if data != nil {
 		return chunks.NewChunkWithHash(h, data)
 	}
-	if data := tables.get(a); data != nil {
+	if data := tables.get(a, nbs.stats); data != nil {
 		return chunks.NewChunkWithHash(h, data)
 	}
+
 	return chunks.EmptyChunk
 }
 
 func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	t1 := time.Now()
 	reqs := toGetRecords(hashes)
+
+	defer func() {
+		nbs.stats.GetLatency.SampleTime(time.Since(t1))
+		nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
+	}()
 
 	wg := &sync.WaitGroup{}
 
@@ -216,16 +235,17 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(reqs, foundChunks, nil)
+			remaining = nbs.mt.getMany(reqs, foundChunks, nil, nbs.stats)
 		}
 
 		return
 	}()
 
 	if remaining {
-		tables.getMany(reqs, foundChunks, wg)
+		tables.getMany(reqs, foundChunks, wg, nbs.stats)
 		wg.Wait()
 	}
+
 }
 
 func toGetRecords(hashes hash.HashSet) []getRecord {
@@ -290,16 +310,26 @@ func (nbs *NomsBlockStore) Count() uint32 {
 }
 
 func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
+	t1 := time.Now()
+	defer func() {
+		nbs.stats.HasLatency.SampleTime(time.Since(t1))
+		nbs.stats.AddressesPerHas.Sample(1)
+	}()
+
 	a := addr(h)
 	has, tables := func() (bool, chunkReader) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		return nbs.mt != nil && nbs.mt.has(a), nbs.tables
 	}()
-	return has || tables.has(a)
+	has = has || tables.has(a)
+
+	return has
 }
 
 func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
+	t1 := time.Now()
+
 	reqs := toHasRecords(hashes)
 
 	tables, remaining := func() (tables chunkReader, remaining bool) {
@@ -318,6 +348,12 @@ func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
 	if remaining {
 		tables.hasMany(reqs)
 	}
+
+	if len(hashes) > 0 {
+		nbs.stats.HasLatency.SampleTime(time.Since(t1))
+		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
+	}
+
 	return fromHasRecords(reqs)
 }
 
@@ -409,7 +445,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
-		nbs.tables = nbs.tables.Prepend(nbs.mt)
+		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
 		nbs.mt = nil
 	}
 
@@ -423,7 +459,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if shouldCompact() {
-		candidate, compactees = candidate.Compact() // Compact() must only compact upstream tables (BUG 3142)
+		candidate, compactees = candidate.Compact(nbs.stats) // Compact() must only compact upstream tables (BUG 3142)
 	}
 
 	specs := candidate.ToSpecs()
@@ -459,4 +495,8 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	return nbs.tables.Close()
+}
+
+func (nbs *NomsBlockStore) Stats() Stats {
+	return *nbs.stats
 }

@@ -13,7 +13,7 @@ import (
 func TestHistogramBucketValue(t *testing.T) {
 	assert := assert.New(t)
 
-	h := &Histogram{}
+	h := Histogram{}
 	assert.Equal(uint64(1<<0), h.bucketVal(0))
 	assert.Equal(uint64(1<<1), h.bucketVal(1))
 	assert.Equal(uint64(1<<2), h.bucketVal(2))
@@ -25,7 +25,7 @@ func TestHistogramBasic(t *testing.T) {
 
 	assert := assert.New(t)
 
-	h := &Histogram{}
+	h := Histogram{}
 
 	h.Sample(1)
 	h.Sample(1)
@@ -58,17 +58,37 @@ func TestHistogramBasic(t *testing.T) {
 func TestHistogramAdd(t *testing.T) {
 	assert := assert.New(t)
 
-	h := &Histogram{}
+	h := Histogram{}
 	h.Sample(1)  // sampled as 1.5
 	h.Sample(2)  // sampled as 3
 	h.Sample(10) // sampled as 12
 
-	h2 := &Histogram{}
+	h2 := Histogram{}
 	h2.Sample(3)          // sampled as 3
 	h2.Sample(1073741854) // sampled as 1,610,612,736
 
-	h3 := h.Add(h2)
-	assert.Equal(uint64(5), h3.Samples())
-	assert.Equal(uint64(1610612755), h3.Sum())
-	assert.Equal(uint64(1610612755)/uint64(5), h3.Mean())
+	h.Add(h2)
+	assert.Equal(uint64(5), h.Samples())
+	assert.Equal(uint64(1610612755), h.Sum())
+	assert.Equal(uint64(1610612755)/uint64(5), h.Mean())
+}
+
+func TestHistogramString(t *testing.T) {
+	assert := assert.New(t)
+
+	h := Histogram{}
+	h.Sample(1)  // sampled as 1.5
+	h.Sample(2)  // sampled as 3
+	h.Sample(10) // sampled as 12
+	h.Sample(3034030343)
+
+	assert.Equal("Mean: 805306372, Sum: 3221225488, Samples: 4", h.String())
+
+	th := NewTimeHistogram()
+	th.Add(h)
+	assert.Equal("Mean: 805.306372ms, Sum: 3.221225488s, Samples: 4", th.String())
+
+	bh := NewByteHistogram()
+	bh.Add(h)
+	assert.Equal("Mean: 805 MB, Sum: 3.2 GB, Samples: 4", bh.String())
 }

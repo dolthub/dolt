@@ -10,6 +10,7 @@ import (
 	"io"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -204,7 +205,7 @@ func (tr tableReader) has(h addr) bool {
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
-func (tr tableReader) get(h addr) (data []byte) {
+func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
 	ordinal := tr.lookupOrdinal(h)
 	if ordinal == tr.count() {
 		return
@@ -213,7 +214,13 @@ func (tr tableReader) get(h addr) (data []byte) {
 	offset := tr.offsets[ordinal]
 	length := uint64(tr.lengths[ordinal])
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
+
+	t1 := time.Now()
 	n, err := tr.r.ReadAt(buff, int64(offset))
+	stats.BytesPerRead.Sample(length)
+	stats.ChunksPerRead.SampleLen(1)
+	stats.ReadLatency.SampleTime(time.Since(t1))
+
 	d.Chk.NoError(err)
 	d.Chk.True(n == int(length))
 	data = tr.parseChunk(buff)
@@ -234,10 +241,24 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-func (tr tableReader) readAtOffsets(readStart, readEnd uint64, reqs []getRecord, offsets offsetRecSlice, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) {
+func (tr tableReader) readAtOffsets(
+	readStart, readEnd uint64,
+	reqs []getRecord,
+	offsets offsetRecSlice,
+	foundChunks chan *chunks.Chunk,
+	wg *sync.WaitGroup,
+	stats *Stats,
+) {
+
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
+
+	t1 := time.Now()
 	n, err := tr.r.ReadAt(buff, int64(readStart))
+	stats.BytesPerRead.Sample(readLength)
+	stats.ChunksPerRead.SampleLen(len(offsets))
+	stats.ReadLatency.SampleTime(time.Since(t1))
+
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == readLength)
 
@@ -252,11 +273,17 @@ func (tr tableReader) readAtOffsets(readStart, readEnd uint64, reqs []getRecord,
 	}
 
 	wg.Done()
+
 }
 
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
-func (tr tableReader) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) (remaining bool) {
+func (tr tableReader) getMany(
+	reqs []getRecord,
+	foundChunks chan *chunks.Chunk,
+	wg *sync.WaitGroup,
+	stats *Stats,
+) (remaining bool) {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	var offsetRecords offsetRecSlice
@@ -291,13 +318,13 @@ func (tr tableReader) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, 
 		}
 
 		wg.Add(1)
-		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg)
+		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg, stats)
 		batch = nil
 	}
 
 	if batch != nil {
 		wg.Add(1)
-		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg)
+		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg, stats)
 		batch = nil
 	}
 

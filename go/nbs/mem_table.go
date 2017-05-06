@@ -74,11 +74,11 @@ func (mt *memTable) hasMany(addrs []hasRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) get(h addr) []byte {
+func (mt *memTable) get(h addr, stats *Stats) []byte {
 	return mt.chunks[h]
 }
 
-func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) (remaining bool) {
+func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
@@ -98,7 +98,7 @@ func (mt *memTable) extract(chunks chan<- extractRecord) {
 	return
 }
 
-func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint32) {
+func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32) {
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
@@ -117,6 +117,11 @@ func (mt *memTable) write(haver chunkReader) (name addr, data []byte, count uint
 		}
 	}
 	tableSize, name := tw.finish()
+
+	if count > 0 {
+		stats.BytesPerPersist.Sample(uint64(tableSize))
+		stats.ChunksPerPersist.Sample(uint64(count))
+	}
 
 	return name, buff[:tableSize], count
 }

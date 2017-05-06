@@ -31,12 +31,12 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	assertChunksInReader(chunks, mt, assert)
 
 	for _, c := range chunks {
-		assert.Equal(bytes.Compare(c, mt.get(computeAddr(c))), 0)
+		assert.Equal(bytes.Compare(c, mt.get(computeAddr(c), &Stats{})), 0)
 	}
 
 	notPresent := []byte("nope")
 	assert.False(mt.has(computeAddr(notPresent)))
-	assert.Nil(mt.get(computeAddr(notPresent)))
+	assert.Nil(mt.get(computeAddr(notPresent), &Stats{}))
 }
 
 func TestMemTableAddOverflowChunk(t *testing.T) {
@@ -89,7 +89,7 @@ func TestMemTableWrite(t *testing.T) {
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
-	_, data, count := mt.write(chunkReaderGroup{tr1, tr2})
+	_, data, count := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	assert.Equal(uint32(1), count)
 
 	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
@@ -113,7 +113,7 @@ func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	}
 	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should trigger a panic
 
-	assert.Panics(func() { mt.write(nil) })
+	assert.Panics(func() { mt.write(nil, &Stats{}) })
 }
 
 type outOfLineSnappy struct {
@@ -143,9 +143,9 @@ func (crg chunkReaderGroup) has(h addr) bool {
 	return false
 }
 
-func (crg chunkReaderGroup) get(h addr) []byte {
+func (crg chunkReaderGroup) get(h addr, stats *Stats) []byte {
 	for _, haver := range crg {
-		if data := haver.get(h); data != nil {
+		if data := haver.get(h, stats); data != nil {
 			return data
 		}
 	}
@@ -161,9 +161,9 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
 	return true
 }
 
-func (crg chunkReaderGroup) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) (remaining bool) {
+func (crg chunkReaderGroup) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, haver := range crg {
-		if !haver.getMany(reqs, foundChunks, wg) {
+		if !haver.getMany(reqs, foundChunks, wg, stats) {
 			return false
 		}
 	}

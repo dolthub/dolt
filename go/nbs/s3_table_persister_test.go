@@ -27,7 +27,7 @@ func TestS3TablePersisterPersist(t *testing.T) {
 	sz := calcPartSize(mt, 3)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: sz, indexCache: cache}
 
-	src := s3p.Persist(mt, nil)
+	src := s3p.Persist(mt, nil, &Stats{})
 	assert.NotNil(cache.get(src.hash()))
 
 	if assert.True(src.count() > 0) {
@@ -52,7 +52,7 @@ func TestS3TablePersisterPersistSinglePart(t *testing.T) {
 	s3svc := makeFakeS3(assert)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: calcPartSize(mt, 1)}
 
-	src := s3p.Persist(mt, nil)
+	src := s3p.Persist(mt, nil, &Stats{})
 	if assert.True(src.count() > 0) {
 		if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
 			assertChunksInReader(testChunks, r, assert)
@@ -71,7 +71,7 @@ func TestS3TablePersisterPersistAbort(t *testing.T) {
 	s3svc := &failingFakeS3{makeFakeS3(assert), sync.Mutex{}, 1}
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: calcPartSize(mt, 4)}
 
-	assert.Panics(func() { s3p.Persist(mt, nil) })
+	assert.Panics(func() { s3p.Persist(mt, nil, &Stats{}) })
 }
 
 type failingFakeS3 struct {
@@ -103,7 +103,7 @@ func TestS3TablePersisterCompactNoData(t *testing.T) {
 	s3svc := makeFakeS3(assert)
 	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: 1 << 10}
 
-	src := s3p.Persist(mt, existingTable)
+	src := s3p.Persist(mt, existingTable, &Stats{})
 	assert.True(src.count() == 0)
 
 	_, present := s3svc.data[src.hash().String()]
@@ -122,7 +122,7 @@ func TestS3TablePersisterDividePlan(t *testing.T) {
 	tooBig := bytesToChunkSource(bigUns...)
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
-	plan := planCompaction(sources)
+	plan := planCompaction(sources, &Stats{})
 	copies, manuals, _ := dividePlan(plan, minPartSize, maxPartSize)
 
 	perTableDataSize := map[string]int64{}
@@ -187,7 +187,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			for i := 0; i < len(chunks); i++ {
 				mt := newMemTable(uint64(2 * targetPartSize))
 				mt.addChunk(computeAddr(chunks[i]), chunks[i])
-				sources = append(sources, s3p.Persist(mt, nil))
+				sources = append(sources, s3p.Persist(mt, nil, &Stats{}))
 			}
 			return
 		}
@@ -199,7 +199,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
-			src := s3p.CompactAll(sources)
+			src := s3p.CompactAll(sources, &Stats{})
 			assert.NotNil(cache.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -215,7 +215,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
 
 			sources := makeSources(s3p, smallChunks)
-			src := s3p.CompactAll(sources)
+			src := s3p.CompactAll(sources, &Stats{})
 			assert.NotNil(cache.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -246,9 +246,9 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			for _, b := range bu {
 				mt.addChunk(computeAddr(b), b)
 			}
-			sources[i] = s3p.Persist(mt, nil)
+			sources[i] = s3p.Persist(mt, nil, &Stats{})
 		}
-		src := s3p.CompactAll(sources)
+		src := s3p.CompactAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -278,9 +278,9 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			rand.Read(medChunks[i])
 			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
 		}
-		sources := chunkSources{s3p.Persist(mt, nil), s3p.Persist(mtb, nil)}
+		sources := chunkSources{s3p.Persist(mt, nil, &Stats{}), s3p.Persist(mtb, nil, &Stats{})}
 
-		src := s3p.CompactAll(sources)
+		src := s3p.CompactAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -301,7 +301,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 		for i := 0; i < len(smallChunks); i++ {
 			mt := newMemTable(uint64(2 * targetPartSize))
 			mt.addChunk(computeAddr(smallChunks[i]), smallChunks[i])
-			sources[i] = s3p.Persist(mt, nil)
+			sources[i] = s3p.Persist(mt, nil, &Stats{})
 		}
 
 		// Now, add a table with big chunks that will require more than one upload copy part.
@@ -309,7 +309,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 		for _, b := range bigUns1 {
 			mt.addChunk(computeAddr(b), b)
 		}
-		sources = append(sources, s3p.Persist(mt, nil))
+		sources = append(sources, s3p.Persist(mt, nil, &Stats{}))
 
 		// Last, some tables that should be directly upload-copyable
 		medChunks := make([][]byte, 2)
@@ -319,9 +319,9 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			rand.Read(medChunks[i])
 			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
 		}
-		sources = append(sources, s3p.Persist(mt, nil))
+		sources = append(sources, s3p.Persist(mt, nil, &Stats{}))
 
-		src := s3p.CompactAll(sources)
+		src := s3p.CompactAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {

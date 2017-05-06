@@ -143,7 +143,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, tt tableSet, store *Nom
 func interloperWrite(fm *fakeManifest, tt tableSet, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src := tt.p.Persist(createMemTable(persisted), nil)
+	src := tt.p.Persist(createMemTable(persisted), nil, &Stats{})
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 	return
 }
@@ -225,9 +225,9 @@ type fakeTablePersister struct {
 	sources map[addr]tableReader
 }
 
-func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader) chunkSource {
+func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	if mt.count() > 0 {
-		name, data, chunkCount := mt.write(haver)
+		name, data, chunkCount := mt.write(haver, stats)
 		if chunkCount > 0 {
 			ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
 			return chunkSourceAdapter{ftp.sources[name], name}
@@ -236,7 +236,7 @@ func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader) chunkSour
 	return emptyChunkSource{}
 }
 
-func (ftp fakeTablePersister) CompactAll(sources chunkSources) chunkSource {
+func (ftp fakeTablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
 	name, data, chunkCount := compactSourcesToBuffer(sources)
 	if chunkCount > 0 {
 		ftp.sources[name] = newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)

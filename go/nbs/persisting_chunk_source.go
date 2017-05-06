@@ -8,24 +8,31 @@ import (
 	"bytes"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 )
 
-func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}) *persistingChunkSource {
+func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
+	t1 := time.Now()
+
 	ccs := &persistingChunkSource{mt: mt}
 	ccs.wg.Add(1)
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		cs := p.Persist(mt, haver)
+		cs := p.Persist(mt, haver, stats)
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
 		ccs.cs = cs
 		ccs.mt = nil
 		<-rl
+
+		if cs.count() > 0 {
+			stats.PersistLatency.SampleTime(time.Since(t1))
+		}
 	}()
 	return ccs
 }
@@ -59,16 +66,16 @@ func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) bool {
 	return cr.hasMany(addrs)
 }
 
-func (ccs *persistingChunkSource) get(h addr) []byte {
+func (ccs *persistingChunkSource) get(h addr, stats *Stats) []byte {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
-	return cr.get(h)
+	return cr.get(h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool {
+func (ccs *persistingChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
-	return cr.getMany(reqs, foundChunks, wg)
+	return cr.getMany(reqs, foundChunks, wg, stats)
 }
 
 func (ccs *persistingChunkSource) close() error {
@@ -129,11 +136,11 @@ func (ecs emptyChunkSource) hasMany(addrs []hasRecord) bool {
 	return true
 }
 
-func (ecs emptyChunkSource) get(h addr) []byte {
+func (ecs emptyChunkSource) get(h addr, stats *Stats) []byte {
 	return nil
 }
 
-func (ecs emptyChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup) bool {
+func (ecs emptyChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
 	return true
 }
 

@@ -53,9 +53,9 @@ func TestSimple(t *testing.T) {
 
 	assertChunksInReader(chunks, tr, assert)
 
-	assert.Equal(string(chunks[0]), string(tr.get(computeAddr(chunks[0]))))
-	assert.Equal(string(chunks[1]), string(tr.get(computeAddr(chunks[1]))))
-	assert.Equal(string(chunks[2]), string(tr.get(computeAddr(chunks[2]))))
+	assert.Equal(string(chunks[0]), string(tr.get(computeAddr(chunks[0]), &Stats{})))
+	assert.Equal(string(chunks[1]), string(tr.get(computeAddr(chunks[1]), &Stats{})))
+	assert.Equal(string(chunks[2]), string(tr.get(computeAddr(chunks[2]), &Stats{})))
 
 	notPresent := [][]byte{
 		[]byte("yo"),
@@ -65,9 +65,9 @@ func TestSimple(t *testing.T) {
 
 	assertChunksNotInReader(notPresent, tr, assert)
 
-	assert.NotEqual(string(notPresent[0]), string(tr.get(computeAddr(notPresent[0]))))
-	assert.NotEqual(string(notPresent[1]), string(tr.get(computeAddr(notPresent[1]))))
-	assert.NotEqual(string(notPresent[2]), string(tr.get(computeAddr(notPresent[2]))))
+	assert.NotEqual(string(notPresent[0]), string(tr.get(computeAddr(notPresent[0]), &Stats{})))
+	assert.NotEqual(string(notPresent[1]), string(tr.get(computeAddr(notPresent[1]), &Stats{})))
+	assert.NotEqual(string(notPresent[2]), string(tr.get(computeAddr(notPresent[2]), &Stats{})))
 }
 
 func assertChunksInReader(chunks [][]byte, r chunkReader, assert *assert.Assertions) {
@@ -175,7 +175,7 @@ func TestGetMany(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(getBatch, chunkChan, wg)
+	tr.getMany(getBatch, chunkChan, wg, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 
@@ -264,14 +264,14 @@ func Test65k(t *testing.T) {
 		data := dataFn(i)
 		h := computeAddr(data)
 		assert.True(tr.has(computeAddr(data)))
-		assert.Equal(string(data), string(tr.get(h)))
+		assert.Equal(string(data), string(tr.get(h, &Stats{})))
 	}
 
 	for i := count; i < count*2; i++ {
 		data := dataFn(i)
 		h := computeAddr(data)
 		assert.False(tr.has(computeAddr(data)))
-		assert.NotEqual(string(data), string(tr.get(h)))
+		assert.NotEqual(string(data), string(tr.get(h, &Stats{})))
 	}
 }
 
@@ -315,7 +315,7 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	wg := &sync.WaitGroup{}
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(getBatch, chunkChan, wg)
+	tr.getMany(getBatch, chunkChan, wg, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 

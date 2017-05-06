@@ -43,8 +43,8 @@ type s3UploadedPart struct {
 	etag string
 }
 
-func (s3p s3TablePersister) Persist(mt *memTable, haver chunkReader) chunkSource {
-	return s3p.persistTable(mt.write(haver))
+func (s3p s3TablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+	return s3p.persistTable(mt.write(haver, stats))
 }
 
 func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
@@ -199,8 +199,8 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p s3TablePersister) CompactAll(sources chunkSources) chunkSource {
-	plan := planCompaction(sources)
+func (s3p s3TablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
+	plan := planCompaction(sources, stats)
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}
 	}

@@ -23,8 +23,8 @@ func (ftp fsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
 	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache)
 }
 
-func (ftp fsTablePersister) Persist(mt *memTable, haver chunkReader) chunkSource {
-	return ftp.persistTable(mt.write(haver))
+func (ftp fsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+	return ftp.persistTable(mt.write(haver, stats))
 }
 
 func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
@@ -47,8 +47,8 @@ func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint
 	return ftp.Open(name, chunkCount)
 }
 
-func (ftp fsTablePersister) CompactAll(sources chunkSources) chunkSource {
-	plan := planCompaction(sources)
+func (ftp fsTablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
+	plan := planCompaction(sources, stats)
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}
 	}
@@ -77,5 +77,6 @@ func (ftp fsTablePersister) CompactAll(sources chunkSources) chunkSource {
 
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 	d.PanicIfError(err)
+
 	return ftp.Open(name, plan.chunkCount)
 }
