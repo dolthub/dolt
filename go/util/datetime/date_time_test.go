@@ -128,3 +128,8 @@ func TestString(t *testing.T) {
 	// Don't test the actual output since that
 	assert.IsType(dt.String(), "s")
 }
+
+func TestEpoch(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal(Epoch, DateTime{time.Unix(0, 0)})
+}

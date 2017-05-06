@@ -28,6 +28,10 @@ var DateTimeType = types.MakeStructTypeFromFields("DateTime", types.FieldMap{
 
 var dateTimeTemplate = types.MakeStructTemplate("DateTime", []string{"secSinceEpoch"})
 
+// Epoch is the unix Epoch. This time is very consistent,
+// which makes it useful for testing or checking for uninitialized values
+var Epoch = DateTime{time.Unix(0, 0)}
+
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms() (types.Value, error) {
