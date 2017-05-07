@@ -158,6 +158,7 @@ func (h Histogram) Report() string {
 	}
 
 	maxSamples := uint64(0)
+	foundFirstNonEmpty := false
 	firstNonEmpty := 0
 	lastNonEmpty := 0
 	for i := 0; i < bucketCount; i++ {
@@ -165,7 +166,8 @@ func (h Histogram) Report() string {
 
 		if samples > 0 {
 			lastNonEmpty = i
-			if firstNonEmpty == 0 {
+			if !foundFirstNonEmpty {
+				foundFirstNonEmpty = true
 				firstNonEmpty = i
 			}
 		}
