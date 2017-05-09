@@ -80,6 +80,14 @@ func getCurrentKey(cur *sequenceCursor) orderedKey {
 	return seq.getKey(cur.idx)
 }
 
+func getMapValue(cur *sequenceCursor) Value {
+	if ml, ok := cur.seq.(mapLeafSequence); ok {
+		return ml.getValue(cur.idx)
+	}
+
+	return nil
+}
+
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {

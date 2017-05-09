@@ -225,9 +225,9 @@ func (m *merger) threeWayMapMerge(a, b, parent types.Map, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return mapCandidate{target.getValue().(types.Map).Set(change.V, newVal)}
+			return mapCandidate{target.getValue().(types.Map).Set(change.Key, newVal)}
 		case types.DiffChangeRemoved:
-			return mapCandidate{target.getValue().(types.Map).Remove(change.V)}
+			return mapCandidate{target.getValue().(types.Map).Remove(change.Key)}
 		default:
 			panic("Not Reached")
 		}
@@ -255,7 +255,7 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 		defer updateProgress(m.progress)
 		// Right now, this always iterates over all fields to create a new Struct, because there's no API for adding/removing a field from an existing struct type.
 		targetVal := target.getValue().(types.Struct)
-		if f, ok := change.V.(types.String); ok {
+		if f, ok := change.Key.(types.String); ok {
 			field := string(f)
 			data := types.StructData{}
 			targetVal.IterFields(func(name string, v types.Value) {
@@ -268,7 +268,7 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 			}
 			return structCandidate{types.NewStruct(targetVal.Name(), data)}
 		}
-		panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(change.V).Describe()))
+		panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(change.Key).Describe()))
 	}
 	return m.threeWayOrderedSequenceMerge(structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }

@@ -20,8 +20,8 @@ const (
 )
 
 type ValueChanged struct {
-	ChangeType DiffChangeType
-	V          Value
+	ChangeType              DiffChangeType
+	Key, OldValue, NewValue Value
 }
 
 func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change ValueChanged) bool {
@@ -170,17 +170,17 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(lastKey) {
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, getMapValue(currentCur)}) {
 					return false
 				}
 				currentCur.advance()
 			} else if lastKey.Less(currentKey) {
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, getMapValue(lastCur), nil}) {
 					return false
 				}
 				lastCur.advance()
 			} else {
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v}) {
+				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, getMapValue(lastCur), getMapValue(currentCur)}) {
 					return false
 				}
 				lastCur.advance()
@@ -190,13 +190,13 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 	}
 
 	for lastCur.valid() {
-		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v}) {
+		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v, getMapValue(lastCur), nil}) {
 			return false
 		}
 		lastCur.advance()
 	}
 	for currentCur.valid() {
-		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v}) {
+		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v, nil, getMapValue(currentCur)}) {
 			return false
 		}
 		currentCur.advance()

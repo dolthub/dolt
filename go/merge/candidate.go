@@ -36,10 +36,10 @@ func (mc mapCandidate) get(k types.Value) types.Value {
 
 func (mc mapCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
-	if kind := change.V.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.NumberKind {
-		out = append(out, types.NewIndexPath(change.V))
+	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.NumberKind {
+		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.V.Hash()))
+		out = append(out, types.NewHashIndexPath(change.Key.Hash()))
 	}
 	return
 }
@@ -62,10 +62,10 @@ func (sc setCandidate) get(k types.Value) types.Value {
 
 func (sc setCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
-	if kind := change.V.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.NumberKind {
-		out = append(out, types.NewIndexPath(change.V))
+	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.NumberKind {
+		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.V.Hash()))
+		out = append(out, types.NewHashIndexPath(change.Key.Hash()))
 	}
 	return
 }
@@ -92,9 +92,9 @@ func (sc structCandidate) get(key types.Value) types.Value {
 
 func (sc structCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
-	str, ok := change.V.(types.String)
+	str, ok := change.Key.(types.String)
 	if !ok {
-		d.Panic("Field names must be strings, not %s", types.TypeOf(change.V).Describe())
+		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe())
 	}
 	return append(out, types.NewFieldPath(string(str)))
 }

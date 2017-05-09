@@ -267,15 +267,15 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		var change ValueChanged
 		if fn1 == fn2 {
 			if !s.values[i1].Equals(last.values[i2]) {
-				change = ValueChanged{ChangeType: DiffChangeModified, V: String(fn1)}
+				change = ValueChanged{DiffChangeModified, String(fn1), last.values[i2], s.values[i1]}
 			}
 			i1++
 			i2++
 		} else if fn1 < fn2 {
-			change = ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1)}
+			change = ValueChanged{DiffChangeAdded, String(fn1), nil, s.values[i1]}
 			i1++
 		} else {
-			change = ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn2)}
+			change = ValueChanged{DiffChangeRemoved, String(fn2), last.values[i2], nil}
 			i2++
 		}
 
@@ -285,13 +285,13 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 	}
 
 	for ; i1 < len(fn1); i1++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeAdded, V: String(fn1[i1])}) {
+		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1[i1]), nil, s.values[i1]}) {
 			return
 		}
 	}
 
 	for ; i2 < len(fn2); i2++ {
-		if !sendChange(changes, closeChan, ValueChanged{ChangeType: DiffChangeRemoved, V: String(fn2[i2])}) {
+		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2[i2]), last.values[i2], nil}) {
 			return
 		}
 	}

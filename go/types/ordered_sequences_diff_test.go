@@ -48,11 +48,11 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
-			added = append(added, change.V)
+			added = append(added, change.Key)
 		} else if change.ChangeType == DiffChangeRemoved {
-			removed = append(removed, change.V)
+			removed = append(removed, change.Key)
 		} else {
-			modified = append(modified, change.V)
+			modified = append(modified, change.Key)
 		}
 	}
 	return
@@ -204,11 +204,11 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		}()
 
 		expected := []ValueChanged{
-			{DiffChangeAdded, Number(3)},
-			{DiffChangeAdded, Number(4)},
+			{DiffChangeAdded, Number(3), nil, nil},
+			{DiffChangeAdded, Number(4), nil, nil},
 			{},
-			{DiffChangeRemoved, Number(3)},
-			{DiffChangeRemoved, Number(4)},
+			{DiffChangeRemoved, Number(3), nil, nil},
+			{DiffChangeRemoved, Number(4), nil, nil},
 		}
 
 		i := 0

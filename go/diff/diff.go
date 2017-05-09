@@ -224,18 +224,18 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 			break
 		}
 
-		k := kf(change.V)
+		k := kf(change.Key)
 		p1 := p.Append(ppf(k))
 
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.V), NewKeyValue: k}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.Key), NewKeyValue: k}
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeRemoved:
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1(change.V), NewValue: nil}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1(change.Key), NewValue: nil}
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeModified:
-			c1, c2 := v1(change.V), v2(change.V)
+			c1, c2 := v1(change.Key), v2(change.Key)
 			if shouldDescend(c1, c2) {
 				stop = d.diff(p1, c1, c2)
 			} else {

@@ -79,6 +79,10 @@ func (ml mapLeafSequence) getKey(idx int) orderedKey {
 	return newOrderedKey(ml.data[idx].key)
 }
 
+func (ml mapLeafSequence) getValue(idx int) Value {
+	return ml.data[idx].value
+}
+
 // Collection interface
 func (ml mapLeafSequence) Len() uint64 {
 	return uint64(len(ml.data))

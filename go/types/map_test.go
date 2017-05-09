@@ -310,11 +310,11 @@ func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modif
 	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
-			added = append(added, change.V)
+			added = append(added, change.Key)
 		} else if change.ChangeType == DiffChangeRemoved {
-			removed = append(removed, change.V)
+			removed = append(removed, change.Key)
 		} else {
-			modified = append(modified, change.V)
+			modified = append(modified, change.Key)
 		}
 	}
 	return
