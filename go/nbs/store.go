@@ -40,11 +40,15 @@ const (
 )
 
 var (
-	indexCacheOnce   = sync.Once{}
+	cacheOnce        = sync.Once{}
 	globalIndexCache *indexCache
+	globalFDCache    *fdCache
 )
 
-func makeGlobalIndexCache() { globalIndexCache = newIndexCache(defaultIndexCacheSize) }
+func makeGlobalCaches() {
+	globalIndexCache = newIndexCache(defaultIndexCacheSize)
+	globalFDCache = newFDCache(defaultMaxTables)
+}
 
 type NomsBlockStore struct {
 	mm           manifest
@@ -64,11 +68,9 @@ type NomsBlockStore struct {
 }
 
 type AWSStoreFactory struct {
-	s3            s3svc
-	ddb           ddbsvc
-	table, bucket string
-	indexCache    *indexCache
-	readRl        chan struct{}
+	ddb       ddbsvc
+	persister tablePersister
+	table     string
 }
 
 func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize uint64) chunks.Factory {
@@ -76,20 +78,33 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
 	}
-	return &AWSStoreFactory{s3.New(sess), dynamodb.New(sess), table, bucket, indexCache, make(chan struct{}, defaultAWSReadLimit)}
+	return &AWSStoreFactory{
+		dynamodb.New(sess),
+		&s3TablePersister{
+			s3.New(sess),
+			bucket,
+			defaultS3PartSize,
+			minS3PartSize,
+			maxS3PartSize,
+			indexCache,
+			make(chan struct{}, defaultAWSReadLimit),
+		},
+		table,
+	}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newAWSStore(asf.table, ns, asf.bucket, asf.s3, asf.ddb, defaultMemTableSize, asf.indexCache, asf.readRl)
+	return newAWSStore(asf.table, ns, asf.ddb, asf.persister, defaultMemTableSize, defaultMaxTables)
 }
 
 func (asf *AWSStoreFactory) Shutter() {
 }
 
 type LocalStoreFactory struct {
-	dir        string
-	indexCache *indexCache
-	maxTables  int
+	dir       string
+	persister tablePersister
+	maxTables int
+	fc        *fdCache
 }
 
 func CheckDir(dir string) error {
@@ -111,40 +126,52 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chun
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
 	}
-	return &LocalStoreFactory{dir, indexCache, maxTables}
+	fc := newFDCache(maxTables)
+	return &LocalStoreFactory{dir, newFSTablePersister(dir, fc, indexCache), maxTables, fc}
 }
 
 func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	err := os.MkdirAll(path, 0777)
 	d.PanicIfError(err)
-	return newLocalStore(path, defaultMemTableSize, lsf.indexCache, lsf.maxTables)
+	return newLocalStore(path, defaultMemTableSize, lsf.persister, lsf.maxTables)
 }
 
 func (lsf *LocalStoreFactory) Shutter() {
+	lsf.fc.Drop()
 }
 
 func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
-	indexCacheOnce.Do(makeGlobalIndexCache)
-	return newAWSStore(table, ns, bucket, s3, ddb, memTableSize, globalIndexCache, make(chan struct{}, 32))
+	cacheOnce.Do(makeGlobalCaches)
+	p := &s3TablePersister{
+		s3,
+		bucket,
+		defaultS3PartSize,
+		minS3PartSize,
+		maxS3PartSize,
+		globalIndexCache,
+		make(chan struct{}, 32),
+	}
+	return newAWSStore(table, ns, ddb, p, memTableSize, defaultMaxTables)
 }
 
-func newAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, indexCache *indexCache, readRl chan struct{}) *NomsBlockStore {
+func newAWSStore(table, ns string, ddb ddbsvc, p tablePersister, memTableSize uint64, maxTables int) *NomsBlockStore {
 	d.PanicIfTrue(ns == "")
 	mm := newDynamoManifest(table, ns, ddb)
-	ts := newS3TableSet(s3, bucket, indexCache, readRl)
-	return newNomsBlockStore(mm, ts, memTableSize, defaultMaxTables)
+	ts := newTableSet(p)
+	return newNomsBlockStore(mm, ts, memTableSize, maxTables)
 }
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
-	indexCacheOnce.Do(makeGlobalIndexCache)
-	return newLocalStore(dir, memTableSize, globalIndexCache, defaultMaxTables)
+	cacheOnce.Do(makeGlobalCaches)
+	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
+	return newLocalStore(dir, memTableSize, p, defaultMaxTables)
 }
 
-func newLocalStore(dir string, memTableSize uint64, indexCache *indexCache, maxTables int) *NomsBlockStore {
+func newLocalStore(dir string, memTableSize uint64, p tablePersister, maxTables int) *NomsBlockStore {
 	err := CheckDir(dir)
 	d.PanicIfError(err)
-	return newNomsBlockStore(fileManifest{dir}, newFSTableSet(dir, indexCache), memTableSize, maxTables)
+	return newNomsBlockStore(fileManifest{dir}, newTableSet(p), memTableSize, maxTables)
 }
 
 func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64, maxTables int) *NomsBlockStore {
@@ -162,7 +189,7 @@ func newNomsBlockStore(mm manifest, ts tableSet, memTableSize uint64, maxTables 
 
 	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
-		nbs.tables, _ = nbs.tables.Rebase(tableSpecs)
+		nbs.tables = nbs.tables.Rebase(tableSpecs)
 	}
 
 	return nbs
@@ -389,9 +416,7 @@ func (nbs *NomsBlockStore) Rebase() {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
-		var dropped chunkSources
-		nbs.tables, dropped = nbs.tables.Rebase(tableSpecs)
-		dropped.close()
+		nbs.tables = nbs.tables.Rebase(tableSpecs)
 	}
 }
 
@@ -450,7 +475,6 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	candidate := nbs.tables
-	var compactees chunkSources
 
 	shouldCompact := func() bool {
 		// As the number of tables grows from 1 to maxTables, the probability of compacting, grows from 0 to 1
@@ -459,7 +483,8 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if shouldCompact() {
-		candidate, compactees = candidate.Compact(nbs.stats) // Compact() must only compact upstream tables (BUG 3142)
+		// TODO: the 'compactees' return value will be useful in the next stage of BUG 3462
+		candidate, _ = candidate.Compact(nbs.stats) // Compact() must only compact upstream tables (BUG 3142)
 	}
 
 	specs := candidate.ToSpecs()
@@ -468,12 +493,9 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	if nl != lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		// Regardless of what happened, we're going to start fresh by re-opening all the new tables from upstream, and re-calculating which tables to compact, so close all the compactees as well as any chunkSources that are dropped during Rebase().
-		compactees.close()
-		var dropped chunkSources
 		nbs.manifestLock = lock
 		nbs.root = actual
-		nbs.tables, dropped = candidate.Rebase(tableNames)
-		dropped.close()
+		nbs.tables = candidate.Rebase(tableNames)
 
 		if last != actual {
 			return errOptimisticLockFailedRoot
@@ -482,7 +504,6 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	nbs.tables = candidate.Flatten()
-	compactees.close()
 	nbs.nomsVersion, nbs.manifestLock, nbs.root = constants.NomsVersion, lock, current
 	return nil
 }
@@ -492,9 +513,7 @@ func (nbs *NomsBlockStore) Version() string {
 }
 
 func (nbs *NomsBlockStore) Close() (err error) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-	return nbs.tables.Close()
+	return
 }
 
 func (nbs *NomsBlockStore) Stats() Stats {

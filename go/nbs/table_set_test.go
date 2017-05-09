@@ -41,7 +41,6 @@ func TestTableSetPrepend(t *testing.T) {
 	secondSpecs := ts.ToSpecs()
 	assert.Len(secondSpecs, 2)
 	assert.Equal(firstSpecs, secondSpecs[1:])
-	ts.Close()
 }
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
@@ -62,7 +61,6 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 
 	specs := ts.ToSpecs()
 	assert.Len(specs, 2)
-	ts.Close()
 }
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
@@ -83,7 +81,6 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 
 	ts = ts.Flatten()
 	assert.EqualValues(ts.Size(), 2)
-	ts.Close()
 }
 
 func TestTableSetExtract(t *testing.T) {
@@ -112,8 +109,6 @@ func TestTableSetExtract(t *testing.T) {
 		assert.Equal(a, rec.a)
 		i++
 	}
-
-	ts.Close()
 }
 
 func TestTableSetCompact(t *testing.T) {
@@ -169,8 +164,6 @@ func TestTableSetCompact(t *testing.T) {
 			ts2, _ := ts.Flatten().Compact(&Stats{})
 			assert.Equal(c.postcompact, getSortedSizes(ts2))
 			assertContainAll(t, ts, ts2)
-			ts.Close()
-			ts2.Close()
 		})
 	}
 }
@@ -195,6 +188,9 @@ func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(assert)
 	defer os.RemoveAll(dir)
+	fc := newFDCache(defaultMaxTables)
+	defer fc.Drop()
+	persister := newFSTablePersister(dir, fc, nil)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
 		for _, c := range chunks {
@@ -204,21 +200,17 @@ func TestTableSetRebase(t *testing.T) {
 		}
 		return ts
 	}
-	fullTS := newFSTableSet(dir, nil)
+	fullTS := newTableSet(persister)
 	assert.Empty(fullTS.ToSpecs())
 	fullTS = insert(fullTS, testChunks...)
 	fullTS = fullTS.Flatten()
 
-	ts := newFSTableSet(dir, nil)
+	ts := newTableSet(persister)
 	ts = insert(ts, testChunks[0])
 	assert.Equal(1, ts.Size())
 	ts = ts.Flatten()
 	ts = insert(ts, []byte("novel"))
 
-	ts, dropped := ts.Rebase(fullTS.ToSpecs())
-	assert.Len(dropped, 1)
+	ts = ts.Rebase(fullTS.ToSpecs())
 	assert.Equal(4, ts.Size())
-	dropped.close()
-	ts.Close()
-	fullTS.Close()
 }

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -17,8 +18,8 @@ import (
 
 type mmapTableReader struct {
 	tableReader
-	f *os.File
-	h addr
+	fc *fdCache
+	h  addr
 }
 
 const (
@@ -36,15 +37,11 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache) chunkSource {
-	success := false
-	f, err := os.Open(filepath.Join(dir, h.String()))
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) chunkSource {
+	path := filepath.Join(dir, h.String())
+	f, err := fc.RefFile(path)
 	d.PanicIfError(err)
-	defer func() {
-		if !success {
-			d.PanicIfError(f.Close())
-		}
-	}()
+	defer fc.UnrefFile(path)
 
 	fi, err := f.Stat()
 	d.PanicIfError(err)
@@ -71,18 +68,31 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		err = unix.Munmap(buff)
 		d.PanicIfError(err)
 	}
-	success = true
 
-	source := &mmapTableReader{newTableReader(index, f, fileBlockSize), f, h}
+	source := &mmapTableReader{
+		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
+		fc,
+		h,
+	}
 
 	d.PanicIfFalse(chunkCount == source.count())
 	return source
 }
 
-func (mmtr *mmapTableReader) close() (err error) {
-	return mmtr.f.Close()
-}
-
 func (mmtr *mmapTableReader) hash() addr {
 	return mmtr.h
+}
+
+type cacheReaderAt struct {
+	path string
+	fc   *fdCache
+}
+
+func (cra *cacheReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	var r io.ReaderAt
+	if r, err = cra.fc.RefFile(cra.path); err != nil {
+		return
+	}
+	defer cra.fc.UnrefFile(cra.path)
+	return r.ReadAt(p, off)
 }

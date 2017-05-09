@@ -15,18 +15,8 @@ import (
 
 const concurrentCompactions = 5
 
-func newS3TableSet(s3 s3svc, bucket string, indexCache *indexCache, readRl chan struct{}) tableSet {
-	return tableSet{
-		p:  s3TablePersister{s3, bucket, defaultS3PartSize, minS3PartSize, maxS3PartSize, indexCache, readRl},
-		rl: make(chan struct{}, concurrentCompactions),
-	}
-}
-
-func newFSTableSet(dir string, indexCache *indexCache) tableSet {
-	return tableSet{
-		p:  fsTablePersister{dir, indexCache},
-		rl: make(chan struct{}, concurrentCompactions),
-	}
+func newTableSet(persister tablePersister) tableSet {
+	return tableSet{p: persister, rl: make(chan struct{}, concurrentCompactions)}
 }
 
 // tableSet is an immutable set of persistable chunkSources.
@@ -148,9 +138,10 @@ func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
 	return newTs
 }
 
-// Compact returns a new tableSet that's smaller than |ts|. It chooses to compact the N smallest
-// (by number of chunks) tables which can be compacted into a new table such that upon replacing
-// the N input tables, the  resulting table will still have the fewest chunks in the tableSet.
+// Compact returns a new tableSet that's smaller than |ts|. It chooses to
+// compact the N smallest (by number of chunks) tables which can be compacted
+// into a new table such that upon replacing the N input tables, the
+// resulting table will still have the fewest chunks in the tableSet.
 func (ts tableSet) Compact(stats *Stats) (ns tableSet, compactees chunkSources) {
 	t1 := time.Now()
 
@@ -212,25 +203,19 @@ func (ts tableSet) Flatten() (flattened tableSet) {
 }
 
 // Rebase returns a new tableSet holding the novel tables managed by |ts| and
-// those specified by |specs|. Tables in |ts.upstream| that are not referenced
-// by |specs| are returned in |dropped| so that the caller can close() them
-// appropriately.
-func (ts tableSet) Rebase(specs []tableSpec) (merged tableSet, dropped chunkSources) {
-	merged = tableSet{
+// those specified by |specs|.
+func (ts tableSet) Rebase(specs []tableSpec) tableSet {
+	merged := tableSet{
 		novel:    make(chunkSources, 0, len(ts.novel)),
 		upstream: make(chunkSources, 0, len(specs)),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	dropped = make(chunkSources, len(ts.upstream))
-	copy(dropped, ts.upstream)
 
-	// Rebase the novel tables, dropping those that are actually empty (usually due to de-duping during table compaction)
+	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
 	for _, t := range ts.novel {
 		if t.count() > 0 {
 			merged.novel = append(merged.novel, t)
-		} else {
-			dropped = append(dropped, t)
 		}
 	}
 
@@ -257,7 +242,7 @@ func (ts tableSet) Rebase(specs []tableSpec) (merged tableSet, dropped chunkSour
 
 	wg.Wait()
 	merged.upstream = append(merged.upstream, openedTables...)
-	return merged, dropped
+	return merged
 }
 
 func (ts tableSet) ToSpecs() []tableSpec {
@@ -272,12 +257,4 @@ func (ts tableSet) ToSpecs() []tableSpec {
 		tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
 	}
 	return tableSpecs
-}
-
-func (ts tableSet) Close() (err error) {
-	err = ts.novel.close()
-	if e := ts.upstream.close(); e != nil {
-		err = e // TODO: somehow coalesce these errors??
-	}
-	return
 }

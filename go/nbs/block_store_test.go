@@ -257,7 +257,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
 	testMaxTables := 5
 	mm := fileManifest{suite.dir}
-	smallTableStore := newNomsBlockStore(mm, newFSTableSet(suite.dir, nil), 2, testMaxTables)
+	fc := newFDCache(testMaxTables)
+	defer fc.Drop()
+	smallTableStore := newNomsBlockStore(mm, newTableSet(newFSTablePersister(suite.dir, fc, nil)), 2, testMaxTables)
 	inputs := [][]byte{[]byte("ab"), []byte("cd"), []byte("ef"), []byte("gh"), []byte("ij"), []byte("kl")}
 	chunx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {

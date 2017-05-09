@@ -70,10 +70,6 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexC
 	return source
 }
 
-func (s3tr *s3TableReader) close() error {
-	return nil
-}
-
 func (s3tr *s3TableReader) hash() addr {
 	return s3tr.h
 }

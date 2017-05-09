@@ -210,7 +210,6 @@ type chunkReader interface {
 
 type chunkSource interface {
 	chunkReader
-	close() error
 	hash() addr
 	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
 
@@ -220,12 +219,3 @@ type chunkSource interface {
 }
 
 type chunkSources []chunkSource
-
-func (css chunkSources) close() (err error) {
-	for _, haver := range css {
-		if e := haver.close(); e != nil {
-			err = e // TODO: somehow coalesce these errors??
-		}
-	}
-	return
-}

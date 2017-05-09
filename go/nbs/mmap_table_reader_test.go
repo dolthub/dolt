@@ -19,6 +19,9 @@ func TestMmapTableReader(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
+	fc := newFDCache(1)
+	defer fc.Drop()
+
 	chunks := [][]byte{
 		[]byte("hello2"),
 		[]byte("goodbye2"),
@@ -29,7 +32,6 @@ func TestMmapTableReader(t *testing.T) {
 	err = ioutil.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	assert.NoError(err)
 
-	trc := newMmapTableReader(dir, h, uint32(len(chunks)), nil)
-	defer trc.close()
+	trc := newMmapTableReader(dir, h, uint32(len(chunks)), nil, fc)
 	assertChunksInReader(chunks, trc, assert)
 }

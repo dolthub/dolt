@@ -78,12 +78,6 @@ func (ccs *persistingChunkSource) getMany(reqs []getRecord, foundChunks chan *ch
 	return cr.getMany(reqs, foundChunks, wg, stats)
 }
 
-func (ccs *persistingChunkSource) close() error {
-	ccs.wg.Wait()
-	d.Chk.True(ccs.cs != nil)
-	return ccs.cs.close()
-}
-
 func (ccs *persistingChunkSource) count() uint32 {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
@@ -142,10 +136,6 @@ func (ecs emptyChunkSource) get(h addr, stats *Stats) []byte {
 
 func (ecs emptyChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
 	return true
-}
-
-func (ecs emptyChunkSource) close() error {
-	return nil
 }
 
 func (ecs emptyChunkSource) count() uint32 {

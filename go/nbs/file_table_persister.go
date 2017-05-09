@@ -14,20 +14,26 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
+	d.PanicIfTrue(fc == nil)
+	return &fsTablePersister{dir, fc, indexCache}
+}
+
 type fsTablePersister struct {
 	dir        string
+	fc         *fdCache
 	indexCache *indexCache
 }
 
-func (ftp fsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache)
+func (ftp *fsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
+	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
 }
 
-func (ftp fsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	return ftp.persistTable(mt.write(haver, stats))
 }
 
-func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
+func (ftp *fsTablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
 	if chunkCount == 0 {
 		return emptyChunkSource{}
 	}
@@ -47,8 +53,9 @@ func (ftp fsTablePersister) persistTable(name addr, data []byte, chunkCount uint
 	return ftp.Open(name, chunkCount)
 }
 
-func (ftp fsTablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
 	plan := planCompaction(sources, stats)
+
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}
 	}
@@ -62,8 +69,8 @@ func (ftp fsTablePersister) CompactAll(sources chunkSources, stats *Stats) chunk
 		for _, sws := range plan.sources {
 			r := sws.source.reader()
 			n, err := io.CopyN(temp, r, int64(sws.dataLen))
-			d.PanicIfFalse(uint64(n) == sws.dataLen)
 			d.PanicIfError(err)
+			d.PanicIfFalse(uint64(n) == sws.dataLen)
 		}
 		_, err = temp.Write(plan.mergedIndex)
 		d.PanicIfError(err)

@@ -14,9 +14,22 @@ import (
 	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
+// tablePersister allows interaction with persistent storage. It provides
+// primitives for pushing the contents of a memTable to persistent storage,
+// opening persistent tables for reading, and conjoining a number of existing
+// chunkSources into one.
 type tablePersister interface {
+	// Persist makes the contents of mt durable. Chunks already present in
+	// |haver| may be dropped in the process.
 	Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource
+
+	// CompactAll conjoins all chunks in |sources| into a single, new
+	// chunkSource.
 	CompactAll(sources chunkSources, stats *Stats) chunkSource
+
+	// Open a table named |name|, containing |chunkCount| chunks. The
+	// tablePersister is responsible for managing the lifetime of the returned
+	// chunkSource. TODO: Is that actually true? Or can we get rid of explicit 'close'
 	Open(name addr, chunkCount uint32) chunkSource
 }
 
