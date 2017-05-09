@@ -47,7 +47,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 				continue
 			}
 
-			if col, ok := v.(Collection); ok && isMetaSequence(col.sequence()) {
+			if col, ok := v.(Collection); ok && !col.sequence().isLeaf() {
 				ms := col.sequence().(metaSequence)
 				for _, mt := range ms.tuples {
 					if mt.child != nil {
@@ -146,7 +146,7 @@ func WalkDifferentStructs(last, current Value, vr ValueReader) (added, removed m
 				continue
 			}
 
-			if col, ok := v.(Collection); ok && isMetaSequence(col.sequence()) {
+			if col, ok := v.(Collection); ok && !col.sequence().isLeaf() {
 				ms := col.sequence().(metaSequence)
 				for _, mt := range ms.tuples {
 					if mt.child != nil {

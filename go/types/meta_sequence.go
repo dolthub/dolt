@@ -146,17 +146,26 @@ func (ms metaSequence) numLeaves() uint64 {
 	return ms.cumulativeNumberOfLeaves(len(ms.tuples) - 1)
 }
 
+func (ms metaSequence) isLeaf() bool {
+	return false
+}
+
 // metaSequence interface
 func (ms metaSequence) getChildSequence(idx int) sequence {
 	mt := ms.tuples[idx]
 	return mt.getChildSequence(ms.vr)
 }
 
+// REMOVE: https://github.com/attic-labs/noms/issues/3464
+func (ms metaSequence) childLevelIsLeaf() bool {
+	return ms.getChildSequence(0).isLeaf()
+}
+
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
 	if length == 0 {
-		return emptySequence{}
+		return emptySequence{ms.childLevelIsLeaf()}
 	}
 
 	metaItems := []metaTuple{}
@@ -249,11 +258,6 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	return
 }
 
-func isMetaSequence(seq sequence) bool {
-	_, seqIsMeta := seq.(metaSequence)
-	return seqIsMeta
-}
-
 func readMetaTupleValue(item sequenceItem, vr ValueReader) Value {
 	mt := item.(metaTuple)
 	if mt.child != nil {
@@ -278,7 +282,9 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	hashValueBytes(v, rv)
 }
 
-type emptySequence struct{}
+type emptySequence struct {
+	leaf bool
+}
 
 func (es emptySequence) getItem(idx int) sequenceItem {
 	panic("empty sequence")
@@ -307,6 +313,10 @@ func (es emptySequence) getKey(idx int) orderedKey {
 	panic("empty sequence")
 }
 
+func (es emptySequence) getValue(idx int) Value {
+	panic("empty sequence")
+}
+
 func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("empty sequence")
 }
@@ -321,4 +331,8 @@ func (es emptySequence) Kind() NomsKind {
 
 func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
+}
+
+func (es emptySequence) isLeaf() bool {
+	return es.leaf
 }

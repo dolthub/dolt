@@ -32,3 +32,7 @@ func (bl blobLeafSequence) WalkRefs(cb RefCallback) {
 func (bl blobLeafSequence) typeOf() *Type {
 	return BlobType
 }
+
+func (bl blobLeafSequence) isLeaf() bool {
+	return true
+}

@@ -1190,7 +1190,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	}
 
 	m := NewMap(kvs...)
-	for i := 1; !isMetaSequence(m.sequence()); i++ {
+	for i := 1; m.sequence().isLeaf(); i++ {
 		k := Number(i)
 		kvs = append(kvs, k, v)
 		m = m.Set(k, v)

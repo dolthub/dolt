@@ -30,7 +30,7 @@ type sequenceCursor struct {
 //  c1    c2    c3    c3  <- |curChan|
 //
 func readAheadLeafCursors(sc *sequenceCursor, curChan chan chan *sequenceCursor, stopChan chan struct{}) {
-	d.Chk.False(isMetaSequence(sc.seq))
+	d.Chk.True(sc.seq.isLeaf())
 
 	parentCursor := sc.parent
 	if parentCursor == nil {
@@ -79,7 +79,7 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int, readAhead 
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	readAhead = readAhead && isMetaSequence(seq) && seq.valueReader() != nil
+	readAhead = readAhead && !seq.isLeaf() && seq.valueReader() != nil
 	return &sequenceCursor{parent, seq, idx, readAhead, nil}
 }
 

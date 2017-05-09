@@ -69,6 +69,10 @@ func (ml mapLeafSequence) typeOf() *Type {
 	return makeCompoundType(MapKind, makeCompoundType(UnionKind, kts...), makeCompoundType(UnionKind, vts...))
 }
 
+func (ml mapLeafSequence) isLeaf() bool {
+	return true
+}
+
 // orderedSequence interface
 
 func (ml mapLeafSequence) getKey(idx int) orderedKey {

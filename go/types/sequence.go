@@ -18,4 +18,5 @@ type sequence interface {
 	Kind() NomsKind
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence
+	isLeaf() bool
 }

@@ -38,10 +38,9 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 		if last {
 			idx = -1
 		}
-		seqIsMeta := isMetaSequence(seq)
 		cur = newSequenceCursor(cur, seq, idx, readAhead)
 		if key != emptyKey {
-			if !seekTo(cur, key, forInsertion && seqIsMeta) {
+			if !seekTo(cur, key, forInsertion && !seq.isLeaf()) {
 				return cur
 			}
 		}

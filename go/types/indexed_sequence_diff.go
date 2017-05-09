@@ -29,7 +29,7 @@ func indexedSequenceDiff(last sequence, lastHeight int, lastOffset uint64, curre
 		func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
 
 	for _, splice := range initialSplices {
-		if !isMetaSequence(last) {
+		if last.isLeaf() {
 			// This is a leaf sequence, we can just report the splice, but it's indices must be offset.
 			splice.SpAt += lastOffset
 			if splice.SpAdded > 0 {

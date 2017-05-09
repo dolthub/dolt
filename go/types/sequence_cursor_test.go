@@ -48,6 +48,10 @@ func (ts testSequence) getChildSequence(idx int) sequence {
 	return testSequence{child.([]interface{})}
 }
 
+func (ts testSequence) isLeaf() bool {
+	panic("not reached")
+}
+
 // Value interface
 func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")

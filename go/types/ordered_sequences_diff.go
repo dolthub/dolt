@@ -130,7 +130,7 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan, lastHeight, currentHeight-1)
 	}
 
-	if !isMetaSequence(last) && !isMetaSequence(current) {
+	if last.isLeaf() && current.isLeaf() {
 		return orderedSequenceDiffLeftRight(last, current, changes, stopChan)
 	}
 

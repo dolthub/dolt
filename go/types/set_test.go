@@ -945,7 +945,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	}
 
 	s := NewSet(vs...)
-	for i := 1; !isMetaSequence(s.sequence()); i++ {
+	for i := 1; s.sequence().isLeaf(); i++ {
 		v := Number(i)
 		vs = append(vs, v)
 		s = s.Insert(v)

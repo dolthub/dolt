@@ -41,6 +41,10 @@ func (sl setLeafSequence) typeOf() *Type {
 	return makeCompoundType(SetKind, makeCompoundType(UnionKind, ts...))
 }
 
+func (sl setLeafSequence) isLeaf() bool {
+	return true
+}
+
 // orderedSequence interface
 
 func (sl setLeafSequence) getKey(idx int) orderedKey {
