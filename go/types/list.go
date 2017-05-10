@@ -41,7 +41,7 @@ func NewList(values ...Value) List {
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
 func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
-	out := make(chan List)
+	out := make(chan List, 1)
 	go func() {
 		defer close(out)
 		ch := newEmptyListSequenceChunker(vrw, vrw)

@@ -40,8 +40,7 @@ func NewMap(kv ...Value) Map {
 
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	var k Value
-
-	outChan := make(chan Map)
+	outChan := make(chan Map, 1)
 	go func() {
 		defer close(outChan)
 		gb := NewGraphBuilder(vrw, MapKind, false)

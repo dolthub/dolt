@@ -32,7 +32,7 @@ func NewSet(v ...Value) Set {
 }
 
 func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
-	outChan := make(chan Set)
+	outChan := make(chan Set, 1)
 	go func() {
 		defer close(outChan)
 		gb := NewGraphBuilder(vrw, SetKind, false)
