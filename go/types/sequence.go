@@ -19,4 +19,6 @@ type sequence interface {
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence
 	isLeaf() bool
+	getCompositeChildSequence(start uint64, length uint64, height int) sequence
+	cumulativeNumberOfLeaves(idx int) uint64
 }

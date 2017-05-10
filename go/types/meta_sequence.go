@@ -156,16 +156,11 @@ func (ms metaSequence) getChildSequence(idx int) sequence {
 	return mt.getChildSequence(ms.vr)
 }
 
-// REMOVE: https://github.com/attic-labs/noms/issues/3464
-func (ms metaSequence) childLevelIsLeaf() bool {
-	return ms.getChildSequence(0).isLeaf()
-}
-
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
-func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
 	if length == 0 {
-		return emptySequence{ms.childLevelIsLeaf()}
+		return emptySequence{height - 1}
 	}
 
 	metaItems := []metaTuple{}
@@ -283,7 +278,7 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 }
 
 type emptySequence struct {
-	leaf bool
+	height int
 }
 
 func (es emptySequence) getItem(idx int) sequenceItem {
@@ -333,6 +328,14 @@ func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
 }
 
+func (es emptySequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
+	d.PanicIfFalse(es.height > 1)
+	d.PanicIfFalse(es.height == height)
+	d.PanicIfFalse(start == 0)
+	d.PanicIfFalse(length == 0)
+	return emptySequence{height - 1}
+}
+
 func (es emptySequence) isLeaf() bool {
-	return es.leaf
+	return es.height == 1
 }

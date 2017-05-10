@@ -15,12 +15,12 @@ func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice S
 
 func indexedSequenceDiff(last sequence, lastHeight int, lastOffset uint64, current sequence, currentHeight int, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
 	if lastHeight > currentHeight {
-		lastChild := last.(metaSequence).getCompositeChildSequence(0, uint64(last.seqLen()))
+		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen()), lastHeight)
 		return indexedSequenceDiff(lastChild, lastHeight-1, lastOffset, current, currentHeight, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	if currentHeight > lastHeight {
-		currentChild := current.(metaSequence).getCompositeChildSequence(0, uint64(current.seqLen()))
+		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen()), currentHeight)
 		return indexedSequenceDiff(last, lastHeight, lastOffset, currentChild, currentHeight-1, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
@@ -42,26 +42,23 @@ func indexedSequenceDiff(last sequence, lastHeight int, lastOffset uint64, curre
 			continue
 		}
 
-		lastMeta := last.(metaSequence)
-		currentMeta := current.(metaSequence)
-
 		if splice.SpRemoved == 0 || splice.SpAdded == 0 {
 			// An entire subtree was removed at a meta level. We must do some math to map the splice from the meta level into the leaf coordinates.
 			beginRemoveIndex := uint64(0)
 			if splice.SpAt > 0 {
-				beginRemoveIndex = lastMeta.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+				beginRemoveIndex = last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
 			}
 			endRemoveIndex := uint64(0)
 			if splice.SpAt+splice.SpRemoved > 0 {
-				endRemoveIndex = lastMeta.cumulativeNumberOfLeaves(int(splice.SpAt+splice.SpRemoved) - 1)
+				endRemoveIndex = last.cumulativeNumberOfLeaves(int(splice.SpAt+splice.SpRemoved) - 1)
 			}
 			beginAddIndex := uint64(0)
 			if splice.SpFrom > 0 {
-				beginAddIndex = currentMeta.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+				beginAddIndex = current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
 			}
 			endAddIndex := uint64(0)
 			if splice.SpFrom+splice.SpAdded > 0 {
-				endAddIndex = currentMeta.cumulativeNumberOfLeaves(int(splice.SpFrom+splice.SpAdded) - 1)
+				endAddIndex = current.cumulativeNumberOfLeaves(int(splice.SpFrom+splice.SpAdded) - 1)
 			}
 
 			splice.SpAt = lastOffset + beginRemoveIndex
@@ -79,15 +76,15 @@ func indexedSequenceDiff(last sequence, lastHeight int, lastOffset uint64, curre
 		}
 
 		// Meta sequence splice which includes removed & added sub-sequences. Must recurse down.
-		lastChild := lastMeta.getCompositeChildSequence(splice.SpAt, splice.SpRemoved)
-		currentChild := currentMeta.getCompositeChildSequence(splice.SpFrom, splice.SpAdded)
+		lastChild := last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved, lastHeight)
+		currentChild := current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded, currentHeight)
 		lastChildOffset := lastOffset
 		if splice.SpAt > 0 {
-			lastChildOffset += lastMeta.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+			lastChildOffset += last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
 		}
 		currentChildOffset := currentOffset
 		if splice.SpFrom > 0 {
-			currentChildOffset += currentMeta.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+			currentChildOffset += current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
 		}
 		if ok := indexedSequenceDiff(lastChild, lastHeight-1, lastChildOffset, currentChild, currentHeight-1, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
 			return false

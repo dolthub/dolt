@@ -29,3 +29,15 @@ func (seq leafSequence) getChildSequence(idx int) sequence {
 func (seq leafSequence) Kind() NomsKind {
 	return seq.kind
 }
+
+func (seq leafSequence) isLeaf() bool {
+	return true
+}
+
+func (seq leafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	return uint64(idx) + 1
+}
+
+func (seq leafSequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
+	panic("getCompositeChildSequence called on a leaf sequence")
+}

@@ -28,6 +28,14 @@ func (ts testSequence) numLeaves() uint64 {
 	return uint64(len(ts.items))
 }
 
+func (ts testSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+	panic("not reached")
+}
+
+func (ts testSequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
+	panic("not reached")
+}
+
 func (ts testSequence) Kind() NomsKind {
 	panic("not reached")
 }

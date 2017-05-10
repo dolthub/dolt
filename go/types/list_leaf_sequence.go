@@ -39,7 +39,3 @@ func (ll listLeafSequence) typeOf() *Type {
 	}
 	return makeCompoundType(ListKind, makeCompoundType(UnionKind, ts...))
 }
-
-func (ll listLeafSequence) isLeaf() bool {
-	return true
-}

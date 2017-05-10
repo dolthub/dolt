@@ -121,12 +121,12 @@ func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, c
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
 func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}, lastHeight, currentHeight int) bool {
 	if lastHeight > currentHeight {
-		lastChild := last.(metaSequence).getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
+		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen()), lastHeight).(orderedSequence)
 		return orderedSequenceDiffInternalNodes(lastChild, current, changes, stopChan, lastHeight-1, currentHeight)
 	}
 
 	if currentHeight > lastHeight {
-		currentChild := current.(metaSequence).getCompositeChildSequence(0, uint64(current.seqLen())).(orderedSequence)
+		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen()), currentHeight).(orderedSequence)
 		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan, lastHeight, currentHeight-1)
 	}
 
@@ -142,10 +142,10 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 		var lastChild, currentChild orderedSequence
 		functions.All(
 			func() {
-				lastChild = last.(metaSequence).getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
+				lastChild = last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved, lastHeight).(orderedSequence)
 			},
 			func() {
-				currentChild = current.(metaSequence).getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
+				currentChild = current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded, currentHeight).(orderedSequence)
 			},
 		)
 		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, stopChan, lastHeight-1, currentHeight-1); !ok {
