@@ -39,13 +39,6 @@ func init() {
 
 func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) chunkSource {
 	path := filepath.Join(dir, h.String())
-	f, err := fc.RefFile(path)
-	d.PanicIfError(err)
-	defer fc.UnrefFile(path)
-
-	fi, err := f.Stat()
-	d.PanicIfError(err)
-	d.PanicIfTrue(fi.Size() < 0)
 
 	var index tableIndex
 	found := false
@@ -54,6 +47,13 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 	}
 
 	if !found {
+		f, err := fc.RefFile(path)
+		d.PanicIfError(err)
+		defer fc.UnrefFile(path)
+
+		fi, err := f.Stat()
+		d.PanicIfError(err)
+		d.PanicIfTrue(fi.Size() < 0)
 		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
 		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
 		aligned := indexOffset / pageSize * pageSize // Thanks, integer arithmetic!
@@ -69,14 +69,12 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		d.PanicIfError(err)
 	}
 
-	source := &mmapTableReader{
+	d.PanicIfFalse(chunkCount == index.chunkCount)
+	return &mmapTableReader{
 		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
 		fc,
 		h,
 	}
-
-	d.PanicIfFalse(chunkCount == source.count())
-	return source
 }
 
 func (mmtr *mmapTableReader) hash() addr {
