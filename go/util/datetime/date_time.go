@@ -32,6 +32,11 @@ var dateTimeTemplate = types.MakeStructTemplate("DateTime", []string{"secSinceEp
 // which makes it useful for testing or checking for uninitialized values
 var Epoch = DateTime{time.Unix(0, 0)}
 
+// Now is an alias for a DateTime initialized with time.Now()
+func Now() DateTime {
+	return DateTime{time.Now()}
+}
+
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms() (types.Value, error) {
