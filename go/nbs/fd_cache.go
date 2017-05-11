@@ -36,44 +36,58 @@ type fdCacheEntry struct {
 // indicating why the file could not be opened. If the cache already had an
 // entry for |path|, RefFile increments its refcount and returns the cached
 // pointer. If not, it opens the file and caches the pointer for others to
-// use. This is intended for clients that hold fds for extremely short
-// periods.
-// If reffing a currently unopened file causes the cache to grow beyond
-// |fc.targetSize|, RefFile makes a best effort to shrink the cache by dumping
-// entries with a zero refcount. If there aren't enough zero refcount entries
-// to drop to get the cache back to |fc.targetSize|, the cache will remain
-// over |fc.targetSize| until the next call to RefFile().
+// use. If RefFile returns an error, it's guaranteed that no refCounts were
+// changed, so it's an error to make a subsequent call to UnrefFile().
+// This is intended for clients that hold fds for extremely short periods.
 func (fc *fdCache) RefFile(path string) (f *os.File, err error) {
-	// Anonymous function to scope locking
-	f, err = func() (f *os.File, err error) {
-		fc.mu.Lock()
-		defer fc.mu.Unlock()
+	refFile := func() *os.File {
 		if ce, present := fc.cache[path]; present {
 			ce.refCount++
 			fc.cache[path] = ce
-			return ce.f, nil
+			return ce.f
 		}
-		return nil, nil
-	}()
-	if f != nil || err != nil {
-		return f, err
+		return nil
 	}
 
-	// Very much want this to be outside the lock
-	f, err = os.Open(path)
+	f = func() *os.File {
+		fc.mu.Lock()
+		defer fc.mu.Unlock()
+		return refFile()
+	}()
+	if f != nil {
+		return f, nil
+	}
 
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	defer fc.maybeShrinkCache()
+	// Very much want this to be outside the lock, but the downside is that multiple callers may get here concurrently. That means we need to deal with the raciness below.
+	f, err = os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if cached := refFile(); cached != nil {
+		// Someone beat us to it, so close f and return cached fd
+		f.Close()
+		return cached, nil
+	}
+	// I won the race!
 	fc.cache[path] = fdCacheEntry{f: f, refCount: 1}
 	return f, nil
 }
 
-// DO NOT CALL unless holding fc.mu
-func (fc *fdCache) maybeShrinkCache() {
+// UnrefFile reduces the refcount of the entry at |path|. If the cache is over
+// |fc.targetSize|, UnrefFile makes a best effort to shrink the cache by dumping
+// entries with a zero refcount. If there aren't enough zero refcount entries
+// to drop to get the cache back to |fc.targetSize|, the cache will remain
+// over |fc.targetSize| until the next call to UnrefFile().
+func (fc *fdCache) UnrefFile(path string) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if ce, present := fc.cache[path]; present {
+		ce.refCount--
+		fc.cache[path] = ce
+	}
 	if len(fc.cache) > fc.targetSize {
 		// Sadly, we can't remove items from a map while iterating, so we'll record the stuff we want to drop and then do it after
 		needed := len(fc.cache) - fc.targetSize
@@ -94,18 +108,6 @@ func (fc *fdCache) maybeShrinkCache() {
 			delete(fc.cache, p)
 		}
 	}
-}
-
-// UnrefFile reduces the refcount of the entry at |path|. Does not try to
-// shrink the cache if it's over |fc.targetSize|.
-func (fc *fdCache) UnrefFile(path string) {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	if ce, present := fc.cache[path]; present {
-		ce.refCount--
-		fc.cache[path] = ce
-	}
-	fc.maybeShrinkCache()
 }
 
 // Drop dumps the entire cache and closes all currently open files.

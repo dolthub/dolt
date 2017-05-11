@@ -54,13 +54,8 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	fts.Open(name, 1)
 
 	present := fc.reportEntries()
-	assert.Contains(present, filepath.Join(dir, name.String()))
-
-	for _, name := range names {
-		if !contains(present, filepath.Join(dir, name.String())) {
-			assert.Panics(func() { fts.Open(name, 1) })
-		}
-	}
+	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
+	assert.Len(present, cacheSize)
 }
 
 func writeTableData(dir string, chunx ...[]byte) (name addr, err error) {
@@ -164,9 +159,8 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	assert.NoError(err)
 
 	present := fc.reportEntries()
-	assert.Contains(present, filepath.Join(dir, src.hash().String()))
-
-	assert.Panics(func() { fts.Open(name, uint32(len(testChunks))) })
+	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
+	assert.Len(present, 1)
 }
 
 func TestFSTablePersisterCompactAll(t *testing.T) {
@@ -198,15 +192,9 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 		assertChunksInReader(testChunks, tr, assert)
 	}
 
-	// The compacted table should have evicted only one table from the cache.
-	inCache := fc.reportEntries()
-	notInCache := chunkSources{}
-	for _, src := range sources {
-		if !contains(inCache, filepath.Join(dir, src.hash().String())) {
-			notInCache = append(notInCache, src)
-		}
-	}
-	assert.Len(notInCache, 1)
+	present := fc.reportEntries()
+	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
+	assert.Len(present, len(sources))
 }
 
 func TestFSTablePersisterCompactAllDups(t *testing.T) {
