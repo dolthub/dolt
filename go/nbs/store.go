@@ -201,7 +201,11 @@ func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
 	nbs.putCount++
 
-	nbs.stats.PutLatency.SampleTime(time.Since(t1))
+	dur := time.Since(t1) // This actually was 0 sometimes: see attic BUG 1787
+	if dur == 0 {
+		dur = time.Duration(1)
+	}
+	nbs.stats.PutLatency.SampleTime(dur)
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
