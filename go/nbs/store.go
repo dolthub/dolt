@@ -483,8 +483,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if shouldCompact() {
-		// TODO: the 'compactees' return value will be useful in the next stage of BUG 3462
-		candidate, _ = candidate.Compact(nbs.stats) // Compact() must only compact upstream tables (BUG 3142)
+		candidate = candidate.Compact(nbs.stats) // Compact() must only compact upstream tables (BUG 3142)
 	}
 
 	specs := candidate.ToSpecs()
@@ -492,7 +491,6 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	lock, actual, tableNames := nbs.mm.Update(nbs.manifestLock, nl, specs, current, nil)
 	if nl != lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
-		// Regardless of what happened, we're going to start fresh by re-opening all the new tables from upstream, and re-calculating which tables to compact, so close all the compactees as well as any chunkSources that are dropped during Rebase().
 		nbs.manifestLock = lock
 		nbs.root = actual
 		nbs.tables = candidate.Rebase(tableNames)

@@ -21,9 +21,18 @@ func newTableSet(persister tablePersister) tableSet {
 
 // tableSet is an immutable set of persistable chunkSources.
 type tableSet struct {
-	novel, upstream chunkSources
-	p               tablePersister
-	rl              chan struct{}
+	// novel chunkSources contain chunks that have not yet been pushed upstream
+	novel chunkSources
+
+	// compactees holds precisely the chunkSources that were conjoined to build the members of compacted. If compacted is empty, compactees is also. The members of compactees are split out of upstream during Compact(), though they still represent actual persisted tables.
+	compacted  chunkSources
+	compactees chunkSources
+
+	// upstream holds the set of already-persisted chunkSources that this tableSet references.
+	upstream chunkSources
+
+	p  tablePersister
+	rl chan struct{}
 }
 
 func (ts tableSet) has(h addr) bool {
@@ -35,7 +44,7 @@ func (ts tableSet) has(h addr) bool {
 		}
 		return false
 	}
-	return f(ts.novel) || f(ts.upstream)
+	return f(ts.novel) || f(ts.compacted) || f(ts.upstream)
 }
 
 func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
@@ -47,7 +56,7 @@ func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
 		}
 		return true
 	}
-	return f(ts.novel) && f(ts.upstream)
+	return f(ts.novel) && f(ts.compacted) && f(ts.upstream)
 }
 
 func (ts tableSet) get(h addr, stats *Stats) []byte {
@@ -62,6 +71,9 @@ func (ts tableSet) get(h addr, stats *Stats) []byte {
 	if data := f(ts.novel); data != nil {
 		return data
 	}
+	if data := f(ts.compacted); data != nil {
+		return data
+	}
 	return f(ts.upstream)
 }
 
@@ -74,7 +86,7 @@ func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg 
 		}
 		return true
 	}
-	return f(ts.novel) && f(ts.upstream)
+	return f(ts.novel) && f(ts.compacted) && f(ts.upstream)
 }
 
 func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool) {
@@ -92,6 +104,11 @@ func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, spl
 	reads, split, remaining = f(ts.novel)
 	if remaining {
 		var rds int
+		rds, split, remaining = f(ts.compacted)
+		reads += rds
+	}
+	if remaining {
+		var rds int
 		rds, split, remaining = f(ts.upstream)
 		reads += rds
 	}
@@ -105,7 +122,7 @@ func (ts tableSet) count() uint32 {
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+	return f(ts.novel) + f(ts.compacted) + f(ts.upstream)
 }
 
 func (ts tableSet) uncompressedLen() uint64 {
@@ -115,25 +132,29 @@ func (ts tableSet) uncompressedLen() uint64 {
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+	return f(ts.novel) + f(ts.compacted) + f(ts.upstream)
 }
 
 // Size returns the number of tables in this tableSet.
 func (ts tableSet) Size() int {
-	return len(ts.novel) + len(ts.upstream)
+	return len(ts.novel) + len(ts.compacted) + len(ts.upstream)
 }
 
 // Prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
 func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
 	newTs := tableSet{
-		novel:    make(chunkSources, len(ts.novel)+1),
-		upstream: make(chunkSources, len(ts.upstream)),
-		p:        ts.p,
-		rl:       ts.rl,
+		novel:      make(chunkSources, len(ts.novel)+1),
+		compacted:  make(chunkSources, len(ts.compacted)),
+		compactees: make(chunkSources, len(ts.compactees)),
+		upstream:   make(chunkSources, len(ts.upstream)),
+		p:          ts.p,
+		rl:         ts.rl,
 	}
 	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl, stats)
 	copy(newTs.novel[1:], ts.novel)
+	copy(newTs.compacted, ts.compacted)
+	copy(newTs.compactees, ts.compactees)
 	copy(newTs.upstream, ts.upstream)
 	return newTs
 }
@@ -142,15 +163,19 @@ func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
 // compact the N smallest (by number of chunks) tables which can be compacted
 // into a new table such that upon replacing the N input tables, the
 // resulting table will still have the fewest chunks in the tableSet.
-func (ts tableSet) Compact(stats *Stats) (ns tableSet, compactees chunkSources) {
+func (ts tableSet) Compact(stats *Stats) tableSet {
 	t1 := time.Now()
 
-	ns = tableSet{
-		novel: make(chunkSources, len(ts.novel)),
-		p:     ts.p,
-		rl:    ts.rl,
+	ns := tableSet{
+		novel:      make(chunkSources, len(ts.novel)),
+		compacted:  make(chunkSources, len(ts.compacted)+1),
+		compactees: make(chunkSources, len(ts.compactees)),
+		p:          ts.p,
+		rl:         ts.rl,
 	}
 	copy(ns.novel, ts.novel)
+	copy(ns.compacted[1:], ts.compacted) // leave the first slot for the newly compacted table
+	copy(ns.compactees, ts.compactees)
 
 	sortedUpstream := make(chunkSources, len(ts.upstream))
 	copy(sortedUpstream, ts.upstream)
@@ -165,51 +190,63 @@ func (ts tableSet) Compact(stats *Stats) (ns tableSet, compactees chunkSources) 
 
 	toCompact := sortedUpstream[:partition]
 
-	compacted := ts.p.CompactAll(toCompact, stats)
-	ns.upstream = append(chunkSources{compacted}, sortedUpstream[partition:]...)
+	ns.compacted[0] = ts.p.CompactAll(toCompact, stats)
+	ns.upstream = append(ns.upstream, sortedUpstream[partition:]...)
+	ns.compactees = append(ns.compactees, toCompact...)
 
 	stats.ConjoinLatency.SampleTime(time.Since(t1))
 	stats.TablesPerConjoin.SampleLen(len(toCompact))
-	stats.ChunksPerConjoin.Sample(uint64(compacted.count()))
+	stats.ChunksPerConjoin.Sample(uint64(ns.compacted[0].count()))
 
-	return ns, toCompact
+	return ns
 }
 
 func (ts tableSet) extract(chunks chan<- extractRecord) {
-	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
+	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream, followed by ts.compacted, followed by ts.novel in back to front order.
 	for i := len(ts.upstream) - 1; i >= 0; i-- {
 		ts.upstream[i].extract(chunks)
+	}
+	for i := len(ts.compacted) - 1; i >= 0; i-- {
+		ts.compacted[i].extract(chunks)
 	}
 	for i := len(ts.novel) - 1; i >= 0; i-- {
 		ts.novel[i].extract(chunks)
 	}
 }
 
-// Flatten returns a new tableSet with |upstream| set to the union of ts.novel
-// and ts.upstream.
+// Flatten returns a new tableSet with |upstream| set to the union of ts.novel,
+// |ts.compacted|, and |ts.upstream|. |ts.compactees| is dropped.
 func (ts tableSet) Flatten() (flattened tableSet) {
 	flattened = tableSet{
 		upstream: make(chunkSources, 0, ts.Size()),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	for _, src := range ts.novel {
-		if src.count() > 0 {
-			flattened.upstream = append(flattened.upstream, src)
+	f := func(srcs chunkSources) {
+		for _, src := range srcs {
+			if src.count() > 0 {
+				flattened.upstream = append(flattened.upstream, src)
+			}
 		}
 	}
+	f(ts.novel)
+	flattened.upstream = append(flattened.upstream, ts.compacted...)
 	flattened.upstream = append(flattened.upstream, ts.upstream...)
 	return
 }
 
 // Rebase returns a new tableSet holding the novel tables managed by |ts| and
-// those specified by |specs|.
+// those specified by |specs|. If |ts.compacted| is not nil, Rebase runs
+// through |ts.compactees| and checks to see if every element is still
+// mentioned in |specs|. If all of them are still there, Rebase copies
+// compaction state from |ts| to the new tableSet. Specifically,
+// |ts.compacted| and |ts.compactees| are copied to the new tableSet, while
+// the compactees are dropped from the new set of upstream tables.
 func (ts tableSet) Rebase(specs []tableSpec) tableSet {
 	merged := tableSet{
-		novel:    make(chunkSources, 0, len(ts.novel)),
-		upstream: make(chunkSources, 0, len(specs)),
-		p:        ts.p,
-		rl:       ts.rl,
+		novel: make(chunkSources, 0, len(ts.novel)),
+		p:     ts.p,
+		rl:    ts.rl,
 	}
 
 	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
@@ -219,29 +256,54 @@ func (ts tableSet) Rebase(specs []tableSpec) tableSet {
 		}
 	}
 
+	// Only keep locally-performed compactions if ALL compactees are still present upstream
+	keepCompactions, compacteeSet := func() (bool, map[addr]struct{}) {
+		specsNames := map[addr]struct{}{}
+		for _, spec := range specs {
+			specsNames[spec.name] = struct{}{}
+		}
+		set := map[addr]struct{}{}
+		for _, compactee := range ts.compactees {
+			if _, present := specsNames[compactee.hash()]; !present {
+				return false, nil
+			}
+			set[compactee.hash()] = struct{}{}
+		}
+		return true, set
+	}()
+	if keepCompactions {
+		merged.compacted = make(chunkSources, len(ts.compacted))
+		merged.compactees = make(chunkSources, len(ts.compactees))
+		copy(merged.compacted, ts.compacted)
+		copy(merged.compactees, ts.compactees)
+	}
+
 	// Create a list of tables to open so we can open them in parallel.
 	tablesToOpen := map[addr]tableSpec{}
 	for _, spec := range specs {
-		if _, present := tablesToOpen[spec.name]; !present { // Filter out dups
+		if !keepCompactions {
+			tablesToOpen[spec.name] = spec
+			continue
+		}
+		if _, present := compacteeSet[spec.name]; !present { // Filter out compactees
 			tablesToOpen[spec.name] = spec
 		}
 	}
 
 	// Open all the new upstream tables concurrently
-	openedTables := make(chunkSources, len(tablesToOpen))
+	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
 	i := 0
 	for _, spec := range tablesToOpen {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			openedTables[idx] = ts.p.Open(spec.name, spec.chunkCount)
+			merged.upstream[idx] = ts.p.Open(spec.name, spec.chunkCount)
 			wg.Done()
 		}(i, spec)
 		i++
 	}
-
 	wg.Wait()
-	merged.upstream = append(merged.upstream, openedTables...)
+
 	return merged
 }
 
@@ -251,6 +313,10 @@ func (ts tableSet) ToSpecs() []tableSpec {
 		if src.count() > 0 {
 			tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
 		}
+	}
+	for _, src := range ts.compacted {
+		d.Chk.True(src.count() > 0)
+		tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
 	}
 	for _, src := range ts.upstream {
 		d.Chk.True(src.count() > 0)
