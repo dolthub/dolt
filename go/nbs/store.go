@@ -101,10 +101,10 @@ func (asf *AWSStoreFactory) Shutter() {
 }
 
 type LocalStoreFactory struct {
-	dir       string
-	persister tablePersister
-	maxTables int
-	fc        *fdCache
+	dir        string
+	maxTables  int
+	fc         *fdCache
+	indexCache *indexCache
 }
 
 func CheckDir(dir string) error {
@@ -127,14 +127,14 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chun
 		indexCache = newIndexCache(indexCacheSize)
 	}
 	fc := newFDCache(maxTables)
-	return &LocalStoreFactory{dir, newFSTablePersister(dir, fc, indexCache), maxTables, fc}
+	return &LocalStoreFactory{dir, maxTables, fc, indexCache}
 }
 
 func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	err := os.MkdirAll(path, 0777)
 	d.PanicIfError(err)
-	return newLocalStore(path, defaultMemTableSize, lsf.persister, lsf.maxTables)
+	return newLocalStore(path, defaultMemTableSize, lsf.fc, lsf.indexCache, lsf.maxTables)
 }
 
 func (lsf *LocalStoreFactory) Shutter() {
@@ -164,13 +164,13 @@ func newAWSStore(table, ns string, ddb ddbsvc, p tablePersister, memTableSize ui
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
 	cacheOnce.Do(makeGlobalCaches)
-	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	return newLocalStore(dir, memTableSize, p, defaultMaxTables)
+	return newLocalStore(dir, memTableSize, globalFDCache, globalIndexCache, defaultMaxTables)
 }
 
-func newLocalStore(dir string, memTableSize uint64, p tablePersister, maxTables int) *NomsBlockStore {
+func newLocalStore(dir string, memTableSize uint64, fc *fdCache, indexCache *indexCache, maxTables int) *NomsBlockStore {
 	err := CheckDir(dir)
 	d.PanicIfError(err)
+	p := newFSTablePersister(dir, fc, indexCache)
 	return newNomsBlockStore(fileManifest{dir}, newTableSet(p), memTableSize, maxTables)
 }
 
