@@ -141,7 +141,7 @@ func runUpdate(args []string) int {
 		return 1
 	}
 
-	gb := types.NewGraphBuilder(db, types.MapKind, true)
+	gb := types.NewGraphBuilder(db, types.MapKind)
 	addElementsToGraphBuilder(gb, db, rootObject, relPath)
 	indexMap := gb.Build().(types.Map)
 

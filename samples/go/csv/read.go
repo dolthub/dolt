@@ -190,7 +190,7 @@ func ReadToMap(r *csv.Reader, structName string, headersRaw []string, primaryKey
 	temp, fieldOrder, kindMap := MakeStructTemplateFromHeaders(headersRaw, structName, kinds)
 	pkIndices := getPkIndices(primaryKeys, headersRaw)
 	d.Chk.True(len(pkIndices) >= 1, "No primary key defined when reading into map")
-	gb := types.NewGraphBuilder(vrw, types.MapKind, false)
+	gb := types.NewGraphBuilder(vrw, types.MapKind)
 
 	for {
 		row, err := r.Read()

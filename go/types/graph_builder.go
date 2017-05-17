@@ -44,8 +44,6 @@ import (
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/util/status"
-	"github.com/dustin/go-humanize"
 )
 
 type GraphBuilder struct {
@@ -53,17 +51,16 @@ type GraphBuilder struct {
 	oc       opCache
 	vrw      ValueReadWriter
 	stack    graphStack
-	verbose  bool
 	mutex    sync.Mutex
 }
 
 // NewGraphBuilder() returns an new GraphBuilder object.
-func NewGraphBuilder(vrw ValueReadWriter, rootKind NomsKind, verbose bool) *GraphBuilder {
-	return newGraphBuilder(vrw, newLdbOpCacheStore(vrw), rootKind, verbose)
+func NewGraphBuilder(vrw ValueReadWriter, rootKind NomsKind) *GraphBuilder {
+	return newGraphBuilder(vrw, newLdbOpCacheStore(vrw), rootKind)
 }
 
-func newGraphBuilder(vrw ValueReadWriter, opcStore opCacheStore, rootKind NomsKind, verbose bool) *GraphBuilder {
-	b := &GraphBuilder{oc: opcStore.opCache(), opcStore: opcStore, vrw: vrw, verbose: verbose}
+func newGraphBuilder(vrw ValueReadWriter, opcStore opCacheStore, rootKind NomsKind) *GraphBuilder {
+	b := &GraphBuilder{oc: opcStore.opCache(), opcStore: opcStore, vrw: vrw}
 	b.pushNewKeyOnStack(String("ROOT"), rootKind)
 	return b
 }
@@ -133,7 +130,6 @@ func (b *GraphBuilder) Build() Value {
 
 	iter := opc.NewIterator()
 	defer iter.Release()
-	keyCnt := int64(0)
 
 	// start up a go routine that will do the reading from graphBuilder's private
 	// ldb opCache.
@@ -183,10 +179,6 @@ func (b *GraphBuilder) Build() Value {
 				b.pushNewKeyOnStack(keys[b.stack.lastIdx()], kind)
 				b.appendItemToCurrentTopOfStack(kind, item)
 			}
-			if b.verbose {
-				keyCnt++
-				status.Printf("Added %s keys to graph", humanize.Comma(keyCnt))
-			}
 		}
 	}
 
@@ -196,9 +188,6 @@ func (b *GraphBuilder) Build() Value {
 		b.popKeyFromStack()
 	}
 	res := b.stack.pop().done()
-	if b.verbose {
-		status.Done()
-	}
 	return res
 
 }

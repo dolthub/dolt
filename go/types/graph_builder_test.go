@@ -248,7 +248,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 	defer vs.Close()
 
 	expected := createTestMap(3, 4, valGen)
-	b := NewGraphBuilder(vs, MapKind, false)
+	b := NewGraphBuilder(vs, MapKind)
 
 	ops := []testGraphOp{}
 
@@ -306,7 +306,7 @@ func ExampleGraphBuilder_Build() {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	gb := NewGraphBuilder(vs, MapKind, false)
+	gb := NewGraphBuilder(vs, MapKind)
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("John"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Mary"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Frieda"))
