@@ -38,22 +38,34 @@ func NewMap(kv ...Value) Map {
 	return newMap(ch.Done().(orderedSequence))
 }
 
+// NewStreamingMap takes an input channel of values and returns a output
+// channel that will produce a finished Map. Values sent to the input channel
+// must be alternating keys and values. (e.g. k1, v1, k2, v2...). Moreover keys
+// need to be added to the channel in Noms sortorder, adding key values to the
+// input channel out of order will result in a panic. Once the input channel is
+// closed by the caller, a finished Map will be sent to the output channel. See
+// graph_builder.go for building collections with values that are not in order.
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	var k Value
 	outChan := make(chan Map, 1)
 	go func() {
 		defer close(outChan)
-		gb := NewGraphBuilder(vrw, MapKind, false)
+		ch := newEmptyMapSequenceChunker(vrw, vrw)
+		var lastK Value
+		nextIsKey := true
 		for v := range kvs {
-			if k == nil {
+			d.PanicIfTrue(v == nil)
+			if nextIsKey {
 				k = v
+				d.PanicIfFalse(lastK == nil || lastK.Less(k))
+				lastK = k
+				nextIsKey = false
 				continue
 			}
-			gb.MapSet(nil, k, v)
-			k = nil
+			ch.Append(mapEntry{key: k, value: v})
+			nextIsKey = true
 		}
-		d.PanicIfFalse(k == nil)
-		outChan <- gb.Build().(Map)
+		outChan <- newMap(ch.Done().(orderedSequence))
 	}()
 	return outChan
 }

@@ -228,14 +228,9 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 }
 
 func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) {
-	randomized := make(mapEntrySlice, len(suite.elems.entries))
-	for i, j := range rand.Perm(len(randomized)) {
-		randomized[j] = suite.elems.entries[i]
-	}
-
 	kvChan := make(chan Value)
 	mapChan := NewStreamingMap(vs, kvChan)
-	for _, entry := range randomized {
+	for _, entry := range suite.elems.entries {
 		kvChan <- entry.key
 		kvChan <- entry.value
 	}

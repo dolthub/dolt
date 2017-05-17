@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -31,15 +32,26 @@ func NewSet(v ...Value) Set {
 	return newSet(ch.Done().(orderedSequence))
 }
 
+// NewStreamingSet takes an input channel of values and returns a output
+// channel that will produce a finished Set. Values that are sent to the input
+// channel must be in Noms sortorder, adding values to the input channel
+// out of order will result in a panic. Once the input channel is closed
+// by the caller, a finished Set will be sent to the output channel. See
+// graph_builder.go for building collections with values that are not in order.
 func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
 	outChan := make(chan Set, 1)
 	go func() {
 		defer close(outChan)
-		gb := NewGraphBuilder(vrw, SetKind, false)
+		ch := newEmptySetSequenceChunker(vrw, vrw)
+		var lastV Value
 		for v := range vals {
-			gb.SetInsert(nil, v)
+			d.PanicIfTrue(v == nil)
+			if lastV != nil {
+				d.PanicIfFalse(lastV == nil || lastV.Less(v))
+			}
+			ch.Append(v)
 		}
-		outChan <- gb.Build().(Set)
+		outChan <- newSet(ch.Done().(orderedSequence))
 	}()
 	return outChan
 }

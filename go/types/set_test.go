@@ -172,14 +172,9 @@ func printBadCollections(expected, actual ValueSlice) {
 }
 
 func (suite *setTestSuite) createStreamingSet(vs *ValueStore) {
-	randomized := make(ValueSlice, len(suite.elems))
-	for i, j := range rand.Perm(len(randomized)) {
-		randomized[j] = suite.elems[i]
-	}
-
 	vChan := make(chan Value)
 	setChan := NewStreamingSet(vs, vChan)
-	for _, entry := range randomized {
+	for _, entry := range suite.elems {
 		vChan <- entry
 	}
 	close(vChan)
