@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
@@ -348,6 +349,60 @@ func TestMapDiff(t *testing.T) {
 	assert.Equal(t, testMapAdded, mapDiffAdded, "testMap.diff != map.diff")
 	assert.Equal(t, testMapRemoved, mapDiffRemoved, "testMap.diff != map.diff")
 	assert.Equal(t, testMapModified, mapDiffModified, "testMap.diff != map.diff")
+}
+
+func TestMapMutationReadWriteCount(t *testing.T) {
+	// This test is a sanity check that we are reading a "reasonable" number of
+	// sequences while mutating maps.
+	// TODO: We are currently un-reasonable.
+	temp := MakeStructTemplate("Foo", []string{"Bool", "Number", "String1", "String2"})
+
+	newLargeStruct := func(i int) Value {
+		return temp.NewStruct([]Value{
+			Bool(i%2 == 0),
+			Number(i),
+			String(fmt.Sprintf("I AM A REALLY REALY REALL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
+			String(fmt.Sprintf("I am a bit shorted and also more chill: %d", i)),
+		})
+	}
+
+	m := newRandomTestMap(4000, newLargeStruct).toMap()
+	every := 100
+
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
+	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
+	r := vs.WriteValue(m)
+	vs.Flush()
+
+	cs.Writes = 0
+	cs.Reads = 0
+
+	m2 := vs.ReadValue(r.TargetHash()).(Map)
+	i := 0
+	readCount := 0
+	writeCount := 0
+
+	m.IterAll(func(k, v Value) {
+		if i%every == 0 {
+			s := v.(Struct)
+
+			s = s.Set("Number", Number(float64(s.Get("Number").(Number))+1))
+			m2 = m2.Set(k, s)
+			r := vs.WriteValue(m2)
+			vs.Flush()
+			readCount += cs.Reads
+			writeCount += cs.Writes
+			cs.Reads = 0
+			cs.Writes = 0
+			m2 = vs.ReadValue(r.TargetHash()).(Map)
+		}
+		i++
+	})
+
+	assert.Equal(t, uint64(3), NewRef(m).Height())
+	assert.Equal(t, 205, readCount)
+	assert.Equal(t, 123, writeCount)
 }
 
 func TestNewMap(t *testing.T) {
