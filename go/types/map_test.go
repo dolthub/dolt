@@ -228,7 +228,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 	}
 }
 
-func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) {
+func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) Map {
 	kvChan := make(chan Value)
 	mapChan := NewStreamingMap(vs, kvChan)
 	for _, entry := range suite.elems.entries {
@@ -236,13 +236,14 @@ func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) {
 		kvChan <- entry.value
 	}
 	close(kvChan)
-	suite.True(suite.validate(<-mapChan), "map not valid")
+	return <-mapChan
 }
 
 func (suite *mapTestSuite) TestStreamingMap() {
 	vs := newTestValueStore()
 	defer vs.Close()
-	suite.createStreamingMap(vs)
+	m := suite.createStreamingMap(vs)
+	suite.True(suite.validate(m), "map not valid")
 }
 
 func (suite *mapTestSuite) TestStreamingMap2() {
@@ -251,15 +252,18 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 	defer vs.Close()
 
 	wg.Add(2)
+	var m1, m2 Map
 	go func() {
-		suite.createStreamingMap(vs)
+		m1 = suite.createStreamingMap(vs)
 		wg.Done()
 	}()
 	go func() {
-		suite.createStreamingMap(vs)
+		m2 = suite.createStreamingMap(vs)
 		wg.Done()
 	}()
 	wg.Wait()
+	suite.True(suite.validate(m1), "map 'm1' not valid")
+	suite.True(suite.validate(m2), "map 'm2' not valid")
 }
 
 func TestMapSuite4K(t *testing.T) {

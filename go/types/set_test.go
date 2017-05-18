@@ -171,20 +171,21 @@ func printBadCollections(expected, actual ValueSlice) {
 	fmt.Println("actual:", actual)
 }
 
-func (suite *setTestSuite) createStreamingSet(vs *ValueStore) {
+func (suite *setTestSuite) createStreamingSet(vs *ValueStore) Set {
 	vChan := make(chan Value)
 	setChan := NewStreamingSet(vs, vChan)
 	for _, entry := range suite.elems {
 		vChan <- entry
 	}
 	close(vChan)
-	suite.True(suite.validate(<-setChan))
+	return <-setChan
 }
 
 func (suite *setTestSuite) TestStreamingSet() {
 	vs := newTestValueStore()
 	defer vs.Close()
-	suite.createStreamingSet(vs)
+	s := suite.createStreamingSet(vs)
+	suite.True(suite.validate(s))
 }
 
 func (suite *setTestSuite) TestStreamingSet2() {
@@ -192,15 +193,18 @@ func (suite *setTestSuite) TestStreamingSet2() {
 	defer vs.Close()
 	wg := sync.WaitGroup{}
 	wg.Add(2)
+	var s1, s2 Set
 	go func() {
-		suite.createStreamingSet(vs)
+		s1 = suite.createStreamingSet(vs)
 		wg.Done()
 	}()
 	go func() {
-		suite.createStreamingSet(vs)
+		s2 = suite.createStreamingSet(vs)
 		wg.Done()
 	}()
 	wg.Wait()
+	suite.True(suite.validate(s1))
+	suite.True(suite.validate(s2))
 }
 
 func TestSetSuite4K(t *testing.T) {
