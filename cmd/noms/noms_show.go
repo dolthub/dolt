@@ -29,12 +29,14 @@ var nomsShow = &util.Command{
 }
 
 var showRaw = false
+var showStats = false
 
 func setupShowFlags() *flag.FlagSet {
 	showFlagSet := flag.NewFlagSet("show", flag.ExitOnError)
 	outputpager.RegisterOutputpagerFlags(showFlagSet)
 	verbose.RegisterVerboseFlags(showFlagSet)
 	showFlagSet.BoolVar(&showRaw, "raw", false, "If true, dumps the raw binary version of the data")
+	showFlagSet.BoolVar(&showStats, "stats", false, "If true, reports statistics related to the value")
 	return showFlagSet
 }
 
@@ -49,11 +51,21 @@ func runShow(args []string) int {
 		return 0
 	}
 
+	if showRaw && showStats {
+		fmt.Fprintln(os.Stderr, "--raw and --stats are mutually exclusive")
+		return 0
+	}
+
 	if showRaw {
 		ch := types.EncodeValue(value, database)
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
 		d.CheckError(err)
+		return 0
+	}
+
+	if showStats {
+		types.WriteValueStats(os.Stdout, value, database)
 		return 0
 	}
 
