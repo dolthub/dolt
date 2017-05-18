@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
@@ -254,40 +256,116 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	assertInputInStore(input2, c2.Hash(), interloper, suite.Assert())
 }
 
-func (suite *BlockStoreSuite) TestCompactOnUpdateRoot() {
-	testMaxTables := 5
-	mm := fileManifest{suite.dir}
-	fc := newFDCache(testMaxTables)
-	defer fc.Drop()
-	smallTableStore := newNomsBlockStore(mm, newTableSet(newFSTablePersister(suite.dir, fc, nil)), 2, testMaxTables)
-	inputs := [][]byte{[]byte("ab"), []byte("cd"), []byte("ef"), []byte("gh"), []byte("ij"), []byte("kl")}
-	chunx := make([]chunks.Chunk, len(inputs))
-	for i, data := range inputs {
-		chunx[i] = chunks.NewChunk(data)
+func TestBlockStoreConjoinOnCommit(t *testing.T) {
+	stats := &Stats{}
+	assertContainAll := func(t *testing.T, store chunks.ChunkStore, srcs ...chunkSource) {
+		rdrs := make(chunkReaderGroup, len(srcs))
+		for i, src := range srcs {
+			rdrs[i] = src
+		}
+		chunkChan := make(chan extractRecord, rdrs.count())
+		rdrs.extract(chunkChan)
+		close(chunkChan)
+
+		for rec := range chunkChan {
+			assert.True(t, store.Has(hash.Hash(rec.a)))
+		}
 	}
 
-	root := smallTableStore.Root()
-	for _, c := range chunx[:testMaxTables] {
-		smallTableStore.Put(c)
+	newChunk := chunks.NewChunk([]byte("gnu"))
+
+	t.Run("NoConjoin", func(t *testing.T) {
+		mm := &fakeManifest{}
+		p := newFakeTablePersister()
+		c := &fakeConjoiner{}
+
+		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+
+		root := smallTableStore.Root()
+		smallTableStore.Put(newChunk)
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
+		assert.True(t, smallTableStore.Has(newChunk.Hash()))
+	})
+
+	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
+		srcs := chunkSources{}
+		for _, sp := range conjoinees {
+			srcs = append(srcs, p.Open(sp.name, sp.chunkCount))
+		}
+		conjoined := p.ConjoinAll(srcs, stats)
+		cannedSpecs := []tableSpec{{conjoined.hash(), conjoined.count()}}
+		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}
-	suite.True(smallTableStore.Commit(chunx[0].Hash(), root)) // Commit write
 
-	exists, _, _, mRoot, specs := mm.ParseIfExists(nil)
-	suite.True(exists)
-	suite.Equal(chunx[0].Hash(), mRoot)
-	suite.Len(specs, testMaxTables)
+	t.Run("ConjoinSuccess", func(t *testing.T) {
+		mm := &fakeManifest{}
+		p := newFakeTablePersister()
 
-	root = smallTableStore.Root()
-	for _, c := range chunx[testMaxTables:] {
-		smallTableStore.Put(c)
+		srcs := makeTestSrcs([]uint32{1, 1, 3, 7}, p)
+		upstream := toSpecs(srcs)
+		mm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		c := &fakeConjoiner{
+			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
+		}
+
+		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+
+		root := smallTableStore.Root()
+		smallTableStore.Put(newChunk)
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
+		assert.True(t, smallTableStore.Has(newChunk.Hash()))
+		assertContainAll(t, smallTableStore, srcs...)
+	})
+
+	t.Run("ConjoinRetry", func(t *testing.T) {
+		mm := &fakeManifest{}
+		p := newFakeTablePersister()
+
+		srcs := makeTestSrcs([]uint32{1, 1, 3, 7, 13}, p)
+		upstream := toSpecs(srcs)
+		mm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		c := &fakeConjoiner{
+			[]cannedConjoin{
+				makeCanned(upstream[:2], upstream[2:], p),
+				makeCanned(upstream[:4], upstream[4:], p),
+			},
+		}
+
+		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+
+		root := smallTableStore.Root()
+		smallTableStore.Put(newChunk)
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
+		assert.True(t, smallTableStore.Has(newChunk.Hash()))
+		assertContainAll(t, smallTableStore, srcs...)
+	})
+}
+
+type cannedConjoin struct {
+	should bool
+	specs  []tableSpec // Must name tables that are already persisted
+}
+
+type fakeConjoiner struct {
+	canned []cannedConjoin
+}
+
+func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
+	if len(fc.canned) == 0 {
+		return false
 	}
+	return fc.canned[0].should
+}
 
-	suite.True(smallTableStore.Commit(chunx[testMaxTables].Hash(), root)) // Should compact
+func (fc *fakeConjoiner) Conjoin(mm manifest, p tablePersister, novelCount int, stats *Stats) {
+	d.PanicIfTrue(len(fc.canned) == 0)
+	canned := fc.canned[0]
+	fc.canned = fc.canned[1:]
 
-	exists, _, _, mRoot, specs = mm.ParseIfExists(nil)
-	suite.True(exists)
-	suite.Equal(chunx[testMaxTables].Hash(), mRoot)
-	suite.Len(specs, 2)
+	_, _, lock, root, _ := mm.ParseIfExists(nil)
+	newLock := generateLockHash(root, canned.specs)
+	lock, _, _ = mm.Update(lock, newLock, canned.specs, root, nil)
+	d.PanicIfFalse(lock == newLock)
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

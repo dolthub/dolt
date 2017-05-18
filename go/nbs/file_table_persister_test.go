@@ -163,7 +163,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	assert.Len(present, 1)
 }
 
-func TestFSTablePersisterCompactAll(t *testing.T) {
+func TestFSTablePersisterConjoinAll(t *testing.T) {
 	assert := assert.New(t)
 	assert.True(len(testChunks) > 1, "Whoops, this test isn't meaningful")
 	sources := make(chunkSources, len(testChunks))
@@ -183,7 +183,7 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 		sources[i] = fts.Open(name, 2)
 	}
 
-	src := fts.CompactAll(sources, &Stats{})
+	src := fts.ConjoinAll(sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -197,7 +197,7 @@ func TestFSTablePersisterCompactAll(t *testing.T) {
 	assert.Len(present, len(sources))
 }
 
-func TestFSTablePersisterCompactAllDups(t *testing.T) {
+func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(assert)
 	defer os.RemoveAll(dir)
@@ -214,7 +214,7 @@ func TestFSTablePersisterCompactAllDups(t *testing.T) {
 		}
 		sources[i] = fts.Persist(mt, nil, &Stats{})
 	}
-	src := fts.CompactAll(sources, &Stats{})
+	src := fts.ConjoinAll(sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))

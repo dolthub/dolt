@@ -32,6 +32,10 @@ type fileManifest struct {
 	dir string
 }
 
+func (fm fileManifest) Name() string {
+	return fm.dir
+}
+
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
 // them, it takes the lock, parses the manifest and returns its contents,
 // setting |exists| to true. If not, it sets |exists| to false and returns. In

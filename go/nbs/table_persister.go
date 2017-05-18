@@ -23,9 +23,9 @@ type tablePersister interface {
 	// |haver| may be dropped in the process.
 	Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource
 
-	// CompactAll conjoins all chunks in |sources| into a single, new
+	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource.
-	CompactAll(sources chunkSources, stats *Stats) chunkSource
+	ConjoinAll(sources chunkSources, stats *Stats) chunkSource
 
 	// Open a table named |name|, containing |chunkCount| chunks. The
 	// tablePersister is responsible for managing the lifetime of the returned
@@ -104,7 +104,7 @@ func (cp compactionPlan) suffixes() []byte {
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
 }
 
-func planCompaction(sources chunkSources, stats *Stats) (plan compactionPlan) {
+func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 	var totalUncompressedData uint64
 	for _, src := range sources {
 		totalUncompressedData += src.uncompressedLen()

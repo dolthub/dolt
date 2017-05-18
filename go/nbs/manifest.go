@@ -60,6 +60,9 @@ type manifest interface {
 		actual hash.Hash,
 		tableSpecs []tableSpec,
 	)
+
+	// Name returns a stable, unique identifier for the store this manifest describes.
+	Name() string
 }
 
 type tableSpec struct {

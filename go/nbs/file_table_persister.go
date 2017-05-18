@@ -53,8 +53,8 @@ func (ftp *fsTablePersister) persistTable(name addr, data []byte, chunkCount uin
 	return ftp.Open(name, chunkCount)
 }
 
-func (ftp *fsTablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
-	plan := planCompaction(sources, stats)
+func (ftp *fsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+	plan := planConjoin(sources, stats)
 
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}

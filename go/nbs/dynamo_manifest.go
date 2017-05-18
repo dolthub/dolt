@@ -46,6 +46,10 @@ func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
 	return dynamoManifest{table: table, db: namespace, ddbsvc: ddb}
 }
 
+func (dm dynamoManifest) Name() string {
+	return dm.table + dm.db
+}
+
 func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
 	result, err := dm.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(

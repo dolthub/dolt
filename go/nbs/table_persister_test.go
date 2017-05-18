@@ -32,7 +32,7 @@ func TestPlanCompaction(t *testing.T) {
 		sources = append(sources, src)
 	}
 
-	plan := planCompaction(sources, &Stats{})
+	plan := planConjoin(sources, &Stats{})
 
 	var totalChunks uint32
 	for i, src := range sources {

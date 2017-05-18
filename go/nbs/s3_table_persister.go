@@ -199,8 +199,8 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p s3TablePersister) CompactAll(sources chunkSources, stats *Stats) chunkSource {
-	plan := planCompaction(sources, stats)
+func (s3p s3TablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+	plan := planConjoin(sources, stats)
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}
 	}

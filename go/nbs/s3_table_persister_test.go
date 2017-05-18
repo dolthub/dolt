@@ -90,7 +90,7 @@ func (m *failingFakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOut
 	return nil, mockAWSError("MalformedXML")
 }
 
-func TestS3TablePersisterCompactNoData(t *testing.T) {
+func TestS3TablePersisterConjoinNoData(t *testing.T) {
 	assert := assert.New(t)
 	mt := newMemTable(testMemTableSize)
 	existingTable := newMemTable(testMemTableSize)
@@ -122,7 +122,7 @@ func TestS3TablePersisterDividePlan(t *testing.T) {
 	tooBig := bytesToChunkSource(bigUns...)
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
-	plan := planCompaction(sources, &Stats{})
+	plan := planConjoin(sources, &Stats{})
 	copies, manuals, _ := dividePlan(plan, minPartSize, maxPartSize)
 
 	perTableDataSize := map[string]int64{}
@@ -164,7 +164,7 @@ func TestS3TablePersisterCalcPartSizes(t *testing.T) {
 	testPartSizes(max + max/2)
 }
 
-func TestS3TablePersisterCompactAll(t *testing.T) {
+func TestS3TablePersisterConjoinAll(t *testing.T) {
 	targetPartSize := uint64(1024)
 	minPartSize, maxPartSize := targetPartSize, 5*targetPartSize
 
@@ -199,7 +199,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
-			src := s3p.CompactAll(sources, &Stats{})
+			src := s3p.ConjoinAll(sources, &Stats{})
 			assert.NotNil(cache.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -215,7 +215,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
 
 			sources := makeSources(s3p, smallChunks)
-			src := s3p.CompactAll(sources, &Stats{})
+			src := s3p.ConjoinAll(sources, &Stats{})
 			assert.NotNil(cache.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -248,7 +248,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 			}
 			sources[i] = s3p.Persist(mt, nil, &Stats{})
 		}
-		src := s3p.CompactAll(sources, &Stats{})
+		src := s3p.ConjoinAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -280,7 +280,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 		}
 		sources := chunkSources{s3p.Persist(mt, nil, &Stats{}), s3p.Persist(mtb, nil, &Stats{})}
 
-		src := s3p.CompactAll(sources, &Stats{})
+		src := s3p.ConjoinAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -321,7 +321,7 @@ func TestS3TablePersisterCompactAll(t *testing.T) {
 		}
 		sources = append(sources, s3p.Persist(mt, nil, &Stats{}))
 
-		src := s3p.CompactAll(sources, &Stats{})
+		src := s3p.ConjoinAll(sources, &Stats{})
 		assert.NotNil(cache.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
