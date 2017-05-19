@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -262,8 +263,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
 
-	assert.True(tt, isSubtypeTopLevel(t2, t1))
-	assert.False(tt, isSubtypeTopLevel(t1, t2))
+	assert.True(tt, IsSubtype(t2, t1))
+	assert.False(tt, IsSubtype(t1, t2))
 
 	// struct S {
 	//   x: Cycle<S> | Number,
@@ -274,11 +275,11 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(NumberType, StringType), false},
 	)
 
-	assert.True(tt, isSubtypeTopLevel(t3, t1))
-	assert.False(tt, isSubtypeTopLevel(t1, t3))
+	assert.True(tt, IsSubtype(t3, t1))
+	assert.False(tt, IsSubtype(t1, t3))
 
-	assert.True(tt, isSubtypeTopLevel(t3, t2))
-	assert.False(tt, isSubtypeTopLevel(t2, t3))
+	assert.True(tt, IsSubtype(t3, t2))
+	assert.False(tt, IsSubtype(t2, t3))
 
 	// struct S {
 	//   x: Cycle<S> | Number,
@@ -380,8 +381,8 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert.False(IsSubtype(s4, s1))
 
 	test := func(t1s, t2s string, exp1, exp2 bool) {
-		t1 := makeTestStructFromFieldNames(t1s)
-		t2 := makeTestStructFromFieldNames(t2s)
+		t1 := makeTestStructTypeFromFieldNames(t1s)
+		t2 := makeTestStructTypeFromFieldNames(t2s)
 		assert.Equal(exp1, IsSubtype(t1, t2))
 		assert.Equal(exp2, IsSubtype(t2, t1))
 		assert.False(t1.Equals(t2))
@@ -420,7 +421,7 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert.False(IsSubtype(t2, t1))
 }
 
-func makeTestStructFromFieldNames(s string) *Type {
+func makeTestStructTypeFromFieldNames(s string) *Type {
 	if s == "" {
 		return MakeStructType("")
 	}
@@ -438,12 +439,29 @@ func makeTestStructFromFieldNames(s string) *Type {
 	return MakeStructType("", fields...)
 }
 
+func makeTestStructFromFieldNames(s string) Struct {
+	t := makeTestStructTypeFromFieldNames(s)
+	fields := t.Desc.(StructDesc).fields
+	d.Chk.NotEmpty(fields)
+
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
+		fieldNames[i] = field.Name
+	}
+	vals := make([]Value, len(fields))
+	for i, _ := range fields {
+		vals[i] = Bool(true)
+	}
+
+	return newStruct("", fieldNames, vals)
+}
+
 func TestIsSubtypeDisallowExtraStructFields(tt *testing.T) {
 	assert := assert.New(tt)
 
 	test := func(t1s, t2s string, exp1, exp2 bool) {
-		t1 := makeTestStructFromFieldNames(t1s)
-		t2 := makeTestStructFromFieldNames(t2s)
+		t1 := makeTestStructTypeFromFieldNames(t1s)
+		t2 := makeTestStructTypeFromFieldNames(t2s)
 		assert.Equal(exp1, IsSubtypeDisallowExtraStructFields(t1, t2))
 		assert.Equal(exp2, IsSubtypeDisallowExtraStructFields(t2, t1))
 		assert.False(t1.Equals(t2))
@@ -757,4 +775,24 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		})
 		assertFalse(v, t)
 	}
+}
+
+func TestIsValueSubtypeOfDetails(tt *testing.T) {
+	a := assert.New(tt)
+
+	test := func(vString, tString string, exp1, exp2 bool) {
+		v := makeTestStructFromFieldNames(vString)
+		t := makeTestStructTypeFromFieldNames(tString)
+		isSub, hasExtra := IsValueSubtypeOfDetails(v, t)
+		a.Equal(exp1, isSub, "expected %t for IsSub, received: %t", exp1, isSub)
+		if isSub {
+			a.Equal(exp2, hasExtra, "expected %t for hasExtra, received: %t", exp2, hasExtra)
+		}
+	}
+
+	test("x", "x", true, false)
+	test("x", "", true, true)
+	test("x", "x? y?", true, false)
+	test("x z", "x? y?", true, true)
+	test("x", "x y", false, false)
 }
