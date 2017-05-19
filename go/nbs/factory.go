@@ -18,6 +18,7 @@ import (
 
 const (
 	defaultAWSReadLimit = 1024
+	awsMaxTables        = 128
 )
 
 type AWSStoreFactory struct {
@@ -44,7 +45,7 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 			make(chan struct{}, defaultAWSReadLimit),
 		},
 		table,
-		newAsyncConjoiner(defaultMaxTables),
+		newAsyncConjoiner(awsMaxTables),
 	}
 }
 
@@ -73,7 +74,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chunks.Factory {
+func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxOpenFiles int) chunks.Factory {
 	err := checkDir(dir)
 	d.PanicIfError(err)
 
@@ -81,8 +82,8 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxTables int) chun
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
 	}
-	fc := newFDCache(maxTables)
-	return &LocalStoreFactory{dir, fc, indexCache, newAsyncConjoiner(maxTables)}
+	fc := newFDCache(maxOpenFiles)
+	return &LocalStoreFactory{dir, fc, indexCache, newAsyncConjoiner(defaultMaxTables)}
 }
 
 func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {

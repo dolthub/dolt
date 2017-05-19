@@ -26,7 +26,7 @@ const (
 	StorageVersion = "4"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
-	defaultMaxTables           = 128
+	defaultMaxTables           = 256
 
 	defaultIndexCacheSize = (1 << 20) * 8 // 8MB
 )
