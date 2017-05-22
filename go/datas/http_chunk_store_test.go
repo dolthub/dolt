@@ -331,13 +331,13 @@ func (suite *HTTPChunkStoreSuite) TestHasMany() {
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
-	present := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(hashes)
 
-	suite.Len(present, len(chnx))
+	suite.Len(absent, 1)
 	for _, c := range chnx {
-		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+		suite.False(absent.Has(c.Hash()), "%s present in %v", c.Hash(), absent)
 	}
-	suite.False(present.Has(notPresent))
+	suite.True(absent.Has(notPresent))
 }
 
 func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
@@ -351,11 +351,11 @@ func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
 	persistChunks(suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
-	present := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(hashes)
 
-	suite.Len(present, len(chnx))
+	suite.Len(absent, 0)
 	for _, c := range chnx {
-		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+		suite.False(absent.Has(c.Hash()), "%s present in %v", c.Hash(), absent)
 	}
 }
 
@@ -372,10 +372,11 @@ func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
 	suite.http.Put(cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
-	present := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(hashes)
 
-	suite.Len(present, len(chnx)+1)
+	suite.Len(absent, 0)
 	for _, c := range chnx {
-		suite.True(present.Has(c.Hash()), "%s not present in %v", c.Hash(), present)
+		suite.False(absent.Has(c.Hash()), "%s present in %v", c.Hash(), absent)
 	}
+	suite.False(absent.Has(cached.Hash()), "%s present in %v", cached.Hash(), absent)
 }

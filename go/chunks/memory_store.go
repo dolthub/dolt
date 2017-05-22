@@ -124,13 +124,13 @@ func (ms *MemoryStoreView) Has(h hash.Hash) bool {
 }
 
 func (ms *MemoryStoreView) HasMany(hashes hash.HashSet) hash.HashSet {
-	present := hash.HashSet{}
+	absent := hash.HashSet{}
 	for h := range hashes {
-		if ms.Has(h) {
-			present.Insert(h)
+		if !ms.Has(h) {
+			absent.Insert(h)
 		}
 	}
-	return present
+	return absent
 }
 
 func (ms *MemoryStoreView) Version() string {

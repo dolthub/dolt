@@ -154,6 +154,27 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	suite.True(found.Equals(hashes))
 }
 
+func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	for _, c := range chnx {
+		suite.store.Put(c)
+	}
+	suite.store.Commit(chnx[0].Hash(), suite.store.Root()) // Commit writes
+	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
+
+	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
+	absent := suite.store.HasMany(hashes)
+
+	suite.Len(absent, 1)
+	for _, c := range chnx {
+		suite.False(absent.Has(c.Hash()), "%s present in %v", c.Hash(), absent)
+	}
+	suite.True(absent.Has(notPresent))
+}
+
 func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
 	rand.Read(input1)

@@ -38,7 +38,7 @@ const (
 	// servers must set in every request/response.
 	NomsVersionHeader = "x-noms-vers"
 	nomsBaseHTML      = "<html><head></head><body><p>Hi. This is a Noms HTTP server.</p><p>To learn more, visit <a href=\"https://github.com/attic-labs/noms\">our GitHub project</a>.</p></body></html>"
-	maxGetBatchSize   = 1 << 11 // Limit GetMany() to ~8MB of data
+	maxGetBatchSize   = 1 << 14 // Limit GetMany() to ~16k chunks, or ~64MB of data
 )
 
 var (
@@ -276,7 +276,7 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 		chunkChan := make(chan *chunks.Chunk, maxGetBatchSize)
 		go func() {
-			cs.GetMany(hashes.HashSet(), chunkChan)
+			cs.GetMany(batch.HashSet(), chunkChan)
 			close(chunkChan)
 		}()
 
@@ -347,8 +347,9 @@ func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	writer := respWriter(req, w)
 	defer writer.Close()
 
-	for _, h := range hashes {
-		fmt.Fprintf(writer, "%s %t\n", h, cs.Has(h))
+	absent := cs.HasMany(hashes.HashSet())
+	for h := range absent {
+		fmt.Fprintln(writer, h.String())
 	}
 }
 

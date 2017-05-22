@@ -178,37 +178,33 @@ func (hcs *httpChunkStore) Has(h hash.Hash) bool {
 
 	ch := make(chan bool)
 	hcs.requestWg.Add(1)
-	hcs.hasQueue <- chunks.NewHasRequest(h, ch)
+	hcs.hasQueue <- chunks.NewAbsentRequest(h, ch)
 	return <-ch
 }
 
-func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
+func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
+	var remaining hash.HashSet
 	func() {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		present = hcs.unwrittenPuts.HasMany(hashes)
+		remaining = hcs.unwrittenPuts.HasMany(hashes)
 	}()
-	remaining := hash.HashSet{}
-	for h := range hashes {
-		if !present.Has(h) {
-			remaining.Insert(h)
-		}
-	}
 	if len(remaining) == 0 {
-		return present
+		return remaining
 	}
 
 	foundChunks := make(chan hash.Hash)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(remaining))
 	hcs.requestWg.Add(1)
-	hcs.hasQueue <- chunks.NewHasManyRequest(remaining, wg, foundChunks)
+	hcs.hasQueue <- chunks.NewAbsentManyRequest(remaining, wg, foundChunks)
 	go func() { defer close(foundChunks); wg.Wait() }()
 
+	absent = hash.HashSet{}
 	for found := range foundChunks {
-		present.Insert(found)
+		absent.Insert(found)
 	}
-	return present
+	return absent
 }
 
 func (hcs *httpChunkStore) batchHasRequests() {
@@ -331,15 +327,8 @@ func (hcs *httpChunkStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) 
 	scanner.Split(bufio.ScanWords)
 	for scanner.Scan() {
 		h := hash.Parse(scanner.Text())
-		d.PanicIfFalse(scanner.Scan())
-		if scanner.Text() == "true" {
-			for _, outstanding := range batch[h] {
-				outstanding.Satisfy(h, &chunks.EmptyChunk)
-			}
-		} else {
-			for _, outstanding := range batch[h] {
-				outstanding.Fail()
-			}
+		for _, outstanding := range batch[h] {
+			outstanding.Satisfy(h, &chunks.EmptyChunk)
 		}
 		delete(batch, h)
 	}

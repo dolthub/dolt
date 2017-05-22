@@ -23,12 +23,12 @@ type ChunkStore interface {
 	GetMany(hashes hash.HashSet, foundChunks chan *Chunk)
 
 	// Returns true iff the value at the address |h| is contained in the
-	// source
+	// store
 	Has(h hash.Hash) bool
 
 	// Returns a new HashSet containing any members of |hashes| that are
-	// present in the source.
-	HasMany(hashes hash.HashSet) (present hash.HashSet)
+	// absent from the store.
+	HasMany(hashes hash.HashSet) (absent hash.HashSet)
 
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call

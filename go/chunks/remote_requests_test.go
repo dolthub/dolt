@@ -35,9 +35,9 @@ func TestGetRequestBatch(t *testing.T) {
 	req4chan := make(chan *Chunk, 1)
 
 	batch := ReadBatch{
-		r0: []OutstandingRequest{OutstandingHas(req0chan), OutstandingGet(req1chan)},
-		h1: []OutstandingRequest{OutstandingHas(req2chan)},
-		h2: []OutstandingRequest{OutstandingHas(req3chan), OutstandingGet(req4chan)},
+		r0: []OutstandingRequest{OutstandingAbsent(req0chan), OutstandingGet(req1chan)},
+		h1: []OutstandingRequest{OutstandingAbsent(req2chan)},
+		h2: []OutstandingRequest{OutstandingAbsent(req3chan), OutstandingGet(req4chan)},
 	}
 	go func() {
 		for requestedHash, reqs := range batch {
@@ -63,10 +63,10 @@ func TestGetRequestBatch(t *testing.T) {
 		assert.EqualValues(c2.Hash(), c.Hash())
 	}
 
-	assert.Equal(1, r1True)
-	assert.Equal(0, r1False)
-	assert.Equal(1, r2True)
-	assert.Equal(0, r2False)
+	assert.Equal(0, r1True)
+	assert.Equal(1, r1False)
+	assert.Equal(0, r2True)
+	assert.Equal(1, r2False)
 
 	go batch.Close()
 	var r0True, r0False int
@@ -76,8 +76,8 @@ func TestGetRequestBatch(t *testing.T) {
 	for c := range req1chan {
 		assert.EqualValues(EmptyChunk.Hash(), c.Hash())
 	}
-	assert.Equal(0, r0True)
-	assert.Equal(1, r0False)
+	assert.Equal(1, r0True)
+	assert.Equal(0, r0False)
 }
 
 func TestGetManyRequestBatch(t *testing.T) {
@@ -122,7 +122,7 @@ func TestGetManyRequestBatch(t *testing.T) {
 	assert.True(hashes.Has(h0))
 }
 
-func TestHasManyRequestBatch(t *testing.T) {
+func TestAbsentManyRequestBatch(t *testing.T) {
 	assert := assert.New(t)
 	h0 := hash.Parse("00000000000000000000000000000000")
 	c1 := NewChunk([]byte("abc"))
@@ -136,7 +136,7 @@ func TestHasManyRequestBatch(t *testing.T) {
 	wg.Add(len(hashes))
 	go func() { wg.Wait(); close(found) }()
 
-	req := NewHasManyRequest(hashes, wg, found)
+	req := NewAbsentManyRequest(hashes, wg, found)
 	batch := ReadBatch{}
 	for h := range req.Hashes() {
 		batch[h] = []OutstandingRequest{req.Outstanding()}

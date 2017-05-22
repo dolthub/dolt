@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const NomsVersion = "7.9"
+const NomsVersion = "7.10"
 const NOMS_VERSION_NEXT_ENV_NAME = "NOMS_VERSION_NEXT"
 const NOMS_VERSION_NEXT_ENV_VALUE = "1"
 

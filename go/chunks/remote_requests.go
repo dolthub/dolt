@@ -34,20 +34,20 @@ type GetManyRequest struct {
 	ch     chan<- *Chunk
 }
 
-func NewHasRequest(r hash.Hash, ch chan<- bool) HasRequest {
-	return HasRequest{hash.HashSet{r: struct{}{}}, ch}
+func NewAbsentRequest(r hash.Hash, ch chan<- bool) AbsentRequest {
+	return AbsentRequest{hash.HashSet{r: struct{}{}}, ch}
 }
 
-type HasRequest struct {
+type AbsentRequest struct {
 	hashes hash.HashSet
 	ch     chan<- bool
 }
 
-func NewHasManyRequest(hashes hash.HashSet, wg *sync.WaitGroup, ch chan<- hash.Hash) HasManyRequest {
-	return HasManyRequest{hashes, wg, ch}
+func NewAbsentManyRequest(hashes hash.HashSet, wg *sync.WaitGroup, ch chan<- hash.Hash) AbsentManyRequest {
+	return AbsentManyRequest{hashes, wg, ch}
 }
 
-type HasManyRequest struct {
+type AbsentManyRequest struct {
 	hashes hash.HashSet
 	wg     *sync.WaitGroup
 	ch     chan<- hash.Hash
@@ -69,20 +69,20 @@ func (g GetManyRequest) Outstanding() OutstandingRequest {
 	return OutstandingGetMany{g.wg, g.ch}
 }
 
-func (h HasRequest) Hashes() hash.HashSet {
+func (h AbsentRequest) Hashes() hash.HashSet {
 	return h.hashes
 }
 
-func (h HasRequest) Outstanding() OutstandingRequest {
-	return OutstandingHas(h.ch)
+func (h AbsentRequest) Outstanding() OutstandingRequest {
+	return OutstandingAbsent(h.ch)
 }
 
-func (h HasManyRequest) Hashes() hash.HashSet {
+func (h AbsentManyRequest) Hashes() hash.HashSet {
 	return h.hashes
 }
 
-func (h HasManyRequest) Outstanding() OutstandingRequest {
-	return OutstandingHasMany{h.wg, h.ch}
+func (h AbsentManyRequest) Outstanding() OutstandingRequest {
+	return OutstandingAbsentMany{h.wg, h.ch}
 }
 
 type OutstandingRequest interface {
@@ -95,8 +95,8 @@ type OutstandingGetMany struct {
 	wg *sync.WaitGroup
 	ch chan<- *Chunk
 }
-type OutstandingHas chan<- bool
-type OutstandingHasMany struct {
+type OutstandingAbsent chan<- bool
+type OutstandingAbsentMany struct {
 	wg *sync.WaitGroup
 	ch chan<- hash.Hash
 }
@@ -120,22 +120,22 @@ func (ogm OutstandingGetMany) Fail() {
 	ogm.wg.Done()
 }
 
-func (oh OutstandingHas) Satisfy(h hash.Hash, c *Chunk) {
-	oh <- true
-	close(oh)
-}
-
-func (oh OutstandingHas) Fail() {
+func (oh OutstandingAbsent) Satisfy(h hash.Hash, c *Chunk) {
 	oh <- false
 	close(oh)
 }
 
-func (ohm OutstandingHasMany) Satisfy(h hash.Hash, c *Chunk) {
+func (oh OutstandingAbsent) Fail() {
+	oh <- true
+	close(oh)
+}
+
+func (ohm OutstandingAbsentMany) Satisfy(h hash.Hash, c *Chunk) {
 	ohm.ch <- h
 	ohm.wg.Done()
 }
 
-func (ohm OutstandingHasMany) Fail() {
+func (ohm OutstandingAbsentMany) Fail() {
 	ohm.wg.Done()
 }
 

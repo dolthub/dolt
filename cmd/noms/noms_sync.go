@@ -64,18 +64,17 @@ func runSync(args []string) int {
 		var last datas.PullProgress
 
 		for info := range progressCh {
+			last = info
 			if info.KnownCount == 1 {
 				// It's better to print "up to date" than "0% (0/1); 100% (1/1)".
 				continue
 			}
 
-			last = info
 			if status.WillPrint() {
 				pct := 100.0 * float64(info.DoneCount) / float64(info.KnownCount)
 				status.Printf("Syncing - %.2f%% (%s/s)", pct, bytesPerSec(info.ApproxWrittenBytes, start))
 			}
 		}
-
 		lastProgressCh <- last
 	}()
 
@@ -84,7 +83,7 @@ func runSync(args []string) int {
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-		datas.PullWithFlush(sourceStore, sinkDB, sourceRef, sinkRef, p, progressCh)
+		datas.Pull(sourceStore, sinkDB, sourceRef, progressCh)
 
 		var err error
 		sinkDataset, err = sinkDB.FastForward(sinkDataset, sourceRef)

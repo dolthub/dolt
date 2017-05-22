@@ -55,16 +55,18 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.NoError(err)
 	sourceDB.Close()
 
+	// Pull from a hash to a not-yet-existing dataset in a new DB
 	sourceSpec := spec.CreateValueSpecString("nbs", s.DBDir, "#"+source1HeadRef.String())
 	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
+	s.Regexp("Synced", sout)
 
-	s.Regexp("Created", sout)
 	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
 	dest := db.GetDataset("dest")
 	s.True(types.Number(42).Equals(dest.HeadValue()))
 	db.Close()
 
+	// Pull from a dataset in one DB to an existing dataset in another
 	sourceDataset := spec.CreateValueSpecString("nbs", s.DBDir, "src")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
@@ -74,8 +76,19 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.True(types.Number(43).Equals(dest.HeadValue()))
 	db.Close()
 
+	// Pull when sink dataset is already up to date
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("up to date", sout)
+
+	// Pull from a source dataset to a not-yet-existing dataset in another DB, BUT all the needed chunks already exists in the sink.
+	sinkDatasetSpec = spec.CreateValueSpecString("nbs", s.DBDir2, "dest2")
+	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
+	s.Regexp("Created", sout)
+
+	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
+	dest = db.GetDataset("dest2")
+	s.True(types.Number(43).Equals(dest.HeadValue()))
+	db.Close()
 }
 
 func (s *nomsSyncTestSuite) TestSync_Issue2598() {

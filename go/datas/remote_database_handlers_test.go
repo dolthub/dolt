@@ -264,19 +264,17 @@ func TestHandleGetBlob(t *testing.T) {
 func TestHandleHasRefs(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
-	input1, input2 := "abc", "def"
+	input1, input2, input3 := "abc", "def", "ghi"
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte(input1)),
 		chunks.NewChunk([]byte(input2)),
 	}
+	present := chunks.NewChunk([]byte(input3))
 	cs := storage.NewView()
-	for _, c := range chnx {
-		cs.Put(c)
-	}
+	cs.Put(present)
 	persistChunks(cs)
 
-	absent := hash.Parse("00000000000000000000000000000002")
-	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), absent))
+	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), present.Hash()))
 
 	w := httptest.NewRecorder()
 	HandleHasRefs(
@@ -288,20 +286,19 @@ func TestHandleHasRefs(t *testing.T) {
 		storage.NewView(),
 	)
 
+	absent := hash.HashSet{}
 	if assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		scanner := bufio.NewScanner(w.Body)
 		scanner.Split(bufio.ScanWords)
 		for scanner.Scan() {
-			h := hash.Parse(scanner.Text())
-			scanner.Scan()
-			if scanner.Text() == "true" {
-				assert.Equal(chnx[0].Hash(), h)
-				chnx = chnx[1:]
-			} else {
-				assert.Equal(absent, h)
-			}
+			absent.Insert(hash.Parse(scanner.Text()))
 		}
-		assert.Empty(chnx)
+	}
+	if assert.Len(absent, len(chnx)) {
+		for _, c := range chnx {
+			assert.True(absent.Has(c.Hash()))
+		}
+		assert.False(absent.Has(present.Hash()))
 	}
 }
 

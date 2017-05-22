@@ -175,8 +175,10 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 	reqs := toGetRecords(hashes)
 
 	defer func() {
-		nbs.stats.GetLatency.SampleTime(time.Since(t1))
-		nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
+		if len(hashes) > 0 {
+			nbs.stats.GetLatency.SampleTime(time.Since(t1))
+			nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
+		}
 	}()
 
 	wg := &sync.WaitGroup{}
@@ -306,7 +308,13 @@ func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
 		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
 	}
 
-	return fromHasRecords(reqs)
+	absent := hash.HashSet{}
+	for _, r := range reqs {
+		if !r.has {
+			absent.Insert(hash.New(r.a[:]))
+		}
+	}
+	return absent
 }
 
 func toHasRecords(hashes hash.HashSet) []hasRecord {
@@ -324,16 +332,6 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 
 	sort.Sort(hasRecordByPrefix(reqs))
 	return reqs
-}
-
-func fromHasRecords(reqs []hasRecord) hash.HashSet {
-	present := hash.HashSet{}
-	for _, r := range reqs {
-		if r.has {
-			present.Insert(hash.New(r.a[:]))
-		}
-	}
-	return present
 }
 
 func (nbs *NomsBlockStore) Rebase() {

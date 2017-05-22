@@ -5,12 +5,10 @@
 package datas
 
 import (
-	"sort"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
 	"github.com/attic-labs/testify/suite"
 )
 
@@ -34,10 +32,11 @@ func TestRemoteToRemotePulls(t *testing.T) {
 
 type PullSuite struct {
 	suite.Suite
-	sinkCS   *chunks.TestStoreView
-	sourceCS *chunks.TestStoreView
-	sink     Database
-	source   Database
+	sinkCS      *chunks.TestStoreView
+	sourceCS    *chunks.TestStoreView
+	sink        Database
+	source      Database
+	commitReads int // The number of reads triggered by commit differs across chunk store impls
 }
 
 func makeTestStoreViews() (ts1, ts2 *chunks.TestStoreView) {
@@ -73,6 +72,7 @@ func (suite *LocalToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = makeRemoteDb(suite.sinkCS)
 	suite.source = NewDatabase(suite.sourceCS)
+	suite.commitReads = 1
 }
 
 type RemoteToRemoteSuite struct {
@@ -83,6 +83,7 @@ func (suite *RemoteToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
 	suite.sink = makeRemoteDb(suite.sinkCS)
 	suite.source = makeRemoteDb(suite.sourceCS)
+	suite.commitReads = 1
 }
 
 func makeRemoteDb(cs chunks.ChunkStore) Database {
@@ -145,15 +146,16 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 //
 // Sink: Nada
 func (suite *PullSuite) TestPullEverything() {
+	expectedReads := suite.sinkCS.Reads
+
 	l := buildListOfHeight(2, suite.source)
 	sourceRef := suite.commitToSource(l, types.NewSet())
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, types.Ref{}, 2, pt.Ch)
-	suite.Equal(0, suite.sinkCS.Reads)
+	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
+	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(l.Equals(v.Get(ValueField)))
@@ -180,7 +182,7 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, types.NewSet())
+	suite.commitToSink(sinkL, types.NewSet())
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(2, suite.source)
@@ -192,12 +194,11 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
+	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
 
-	suite.Equal(expectedReads, suite.sinkCS.Reads)
+	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
@@ -239,13 +240,11 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
+	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
 
-	// No objects read from sink, since sink Head is not an ancestor of source HEAD.
-	suite.Equal(preReads, suite.sinkCS.Reads)
+	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
@@ -267,9 +266,9 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                         \ -3-> L2 -1-> N
 //                                 \ -2-> L1 -1-> N
 //                                         \ -1-> L0
-func (suite *PullSuite) SkipTestPullUpdates() {
+func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, types.NewSet())
+	suite.commitToSink(sinkL, types.NewSet())
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(4, suite.source)
@@ -283,16 +282,11 @@ func (suite *PullSuite) SkipTestPullUpdates() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, sinkRef, 2, pt.Ch)
+	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
 
-	// if suite.sinkIsLocal() {
-	// 	// 2 objects read from sink: L3 and L2 (when considering the shared commit C1).
-	// 	expectedReads += 2
-	// }
-	suite.Equal(expectedReads, suite.sinkCS.Reads)
+	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	persistChunks(suite.sink.chunkStore())
 	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
@@ -323,32 +317,4 @@ func buildListOfHeight(height int, vw types.ValueWriter) types.List {
 		l = types.NewList(r1, r2)
 	}
 	return l
-}
-
-// Note: This test is asserting that findCommon correctly separates refs which are exclusive to |taller| from those which are |common|.
-func TestFindCommon(t *testing.T) {
-	taller := &types.RefByHeight{}
-	shorter := &types.RefByHeight{}
-
-	for i := 0; i < 50; i++ {
-		shorter.PushBack(types.NewRef(types.Number(i)))
-	}
-
-	for i := 50; i < 250; i++ {
-		shorter.PushBack(types.NewRef(types.Number(i)))
-		taller.PushBack(types.NewRef(types.Number(i)))
-	}
-
-	for i := 250; i < 275; i++ {
-		taller.PushBack(types.NewRef(types.Number(i)))
-	}
-
-	sort.Sort(shorter)
-	sort.Sort(taller)
-
-	tallRefs, comRefs := findCommon(taller, shorter, 1)
-	assert.Equal(t, 25, len(tallRefs))
-	assert.Equal(t, 200, len(comRefs))
-	assert.Equal(t, 0, len(*taller))
-	assert.Equal(t, 50, len(*shorter))
 }
