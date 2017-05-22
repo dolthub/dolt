@@ -7,6 +7,7 @@ package nbs
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
@@ -50,7 +51,10 @@ func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
-func (dm dynamoManifest) ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+	t1 := time.Now()
+	defer func() { stats.ReadManifestLatency.SampleTime(time.Since(t1)) }()
+
 	result, err := dm.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
 		TableName:      aws.String(dm.table),
@@ -92,7 +96,10 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	return false, false
 }
 
-func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTime(time.Since(t1)) }()
+
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),
 		Item: map[string]*dynamodb.AttributeValue{
@@ -124,7 +131,7 @@ func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRo
 	if ddberr != nil {
 		if awsErr, ok := ddberr.(awserr.Error); ok {
 			if awsErr.Code() == "ConditionalCheckFailedException" {
-				exists, vers, lock, actual, tableSpecs := dm.ParseIfExists(nil)
+				exists, vers, lock, actual, tableSpecs := dm.ParseIfExists(stats, nil)
 				d.Chk.True(exists)
 				d.Chk.True(vers == constants.NomsVersion)
 				return lock, actual, tableSpecs

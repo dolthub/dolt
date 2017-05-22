@@ -21,6 +21,9 @@ func TestStats(t *testing.T) {
 	assert.NoError(err)
 	store := NewLocalStore(dir, testMemTableSize)
 
+	// Opening a new store will still incur some read IO, to discover that the manifest doesn't exist
+	assert.EqualValues(1, store.Stats().ReadManifestLatency.Samples())
+
 	i1, i2, i3, i4, i5 := []byte("abc"), []byte("def"), []byte("ghi"), []byte("jkl"), []byte("mno")
 
 	c1, c2, c3, c4, c5 := chunks.NewChunk(i1), chunks.NewChunk(i2), chunks.NewChunk(i3), chunks.NewChunk(i4), chunks.NewChunk(i5)
@@ -47,12 +50,15 @@ func TestStats(t *testing.T) {
 
 	store.Commit(store.Root(), store.Root())
 
-	// No we have write IO
+	// Commit will update the manifest
+	assert.EqualValues(1, store.Stats().WriteManifestLatency.Samples())
+
+	// Now we have write IO
 	assert.Equal(uint64(1), store.Stats().PersistLatency.Samples())
 	assert.Equal(uint64(3), store.Stats().ChunksPerPersist.Sum())
 	assert.Equal(uint64(192), store.Stats().BytesPerPersist.Sum())
 
-	// Now some gets that will incure read IO
+	// Now some gets that will incur read IO
 	store.Get(c1.Hash())
 	store.Get(c2.Hash())
 	store.Get(c3.Hash())

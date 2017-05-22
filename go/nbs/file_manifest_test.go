@@ -28,8 +28,9 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
+	stats := &Stats{}
 
-	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(stats, nil)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -40,7 +41,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, lock, root, tableSpecs = fm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs = fm.ParseIfExists(stats, nil)
 	assert.True(exists)
 	assert.Equal("0", vers)
 	assert.Equal(jerk, lock)
@@ -55,6 +56,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
+	stats := &Stats{}
 
 	// Simulate another process writing a manifest.
 	lock := computeAddr([]byte("locker"))
@@ -64,7 +66,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(func() {
+	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
 		lock := computeAddr([]byte("newlock"))
 		badRoot := hash.Of([]byte("bad root"))
@@ -85,34 +87,36 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
+	stats := &Stats{}
 
 	// Simulate another process having already put old Noms data in dir/.
 	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String()}, ":"))
 	assert.NoError(err)
 
-	assert.Panics(func() { fm.Update(addr{}, addr{}, nil, hash.Hash{}, nil) })
+	assert.Panics(func() { fm.Update(addr{}, addr{}, nil, hash.Hash{}, stats, nil) })
 }
 
 func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
+	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	lock, actual, tableSpecs := fm.Update(addr{}, l, nil, hash.Hash{}, nil)
+	lock, actual, tableSpecs := fm.Update(addr{}, l, nil, hash.Hash{}, stats, nil)
 	assert.Equal(l, lock)
 	assert.True(actual.IsEmpty())
 	assert.Empty(tableSpecs)
 
 	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
-	exists, _, lock, root, tableSpecs := fm2.ParseIfExists(nil)
+	exists, _, lock, root, tableSpecs := fm2.ParseIfExists(stats, nil)
 	assert.True(exists)
 	assert.Equal(l, lock)
 	assert.True(root.IsEmpty())
 	assert.Empty(tableSpecs)
 
 	l2 := computeAddr([]byte{0x02})
-	lock, actual, tableSpecs = fm2.Update(l, l2, nil, hash.Hash{}, nil)
+	lock, actual, tableSpecs = fm2.Update(l, l2, nil, hash.Hash{}, stats, nil)
 	assert.Equal(l2, lock)
 	assert.True(actual.IsEmpty())
 	assert.Empty(tableSpecs)
@@ -122,11 +126,12 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
 	defer os.RemoveAll(fm.dir)
+	stats := &Stats{}
 
 	// First, test winning the race against another process.
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	specs := []tableSpec{{computeAddr([]byte("a")), 3}}
-	lock, actual, tableSpecs := fm.Update(addr{}, newLock, specs, newRoot, func() {
+	lock, actual, tableSpecs := fm.Update(addr{}, newLock, specs, newRoot, stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -139,11 +144,11 @@ func TestFileManifestUpdate(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	newLock2, newRoot2 := computeAddr([]byte("locker 2")), hash.Of([]byte("new root 2"))
-	lock, actual, tableSpecs = fm.Update(addr{}, newLock2, nil, newRoot2, nil)
+	lock, actual, tableSpecs = fm.Update(addr{}, newLock2, nil, newRoot2, stats, nil)
 	assert.Equal(newLock, lock)
 	assert.Equal(newRoot, actual)
 	assert.Equal(specs, tableSpecs)
-	lock, actual, tableSpecs = fm.Update(newLock, newLock2, nil, newRoot2, nil)
+	lock, actual, tableSpecs = fm.Update(newLock, newLock2, nil, newRoot2, stats, nil)
 	assert.Equal(newLock2, lock)
 	assert.Equal(newRoot2, actual)
 	assert.Empty(tableSpecs)
@@ -155,7 +160,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert.NoError(err)
 
 	newLock3, newRoot3 := computeAddr([]byte("locker 3")), hash.Of([]byte("new root 3"))
-	lock, actual, tableSpecs = fm.Update(lock, newLock3, nil, newRoot3, nil)
+	lock, actual, tableSpecs = fm.Update(lock, newLock3, nil, newRoot3, stats, nil)
 	assert.Equal(jerkLock, lock)
 	assert.Equal(newRoot2, actual)
 	assert.Equal([]tableSpec{{tableName, 1}}, tableSpecs)

@@ -108,7 +108,7 @@ func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize 
 		stats:       NewStats(),
 	}
 
-	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
+	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
 		nbs.tables = nbs.tables.Rebase(tableSpecs)
 	}
@@ -335,7 +335,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase() {
-	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nil); exists {
+	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
@@ -397,7 +397,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		nbs.c.Conjoin(nbs.mm, nbs.p, nbs.tables.Novel(), nbs.stats)
-		exists, _, lock, actual, upstream := nbs.mm.ParseIfExists(nil)
+		exists, _, lock, actual, upstream := nbs.mm.ParseIfExists(nbs.stats, nil)
 		d.PanicIfFalse(exists)
 
 		nbs.manifestLock = lock
@@ -408,7 +408,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	specs := nbs.tables.ToSpecs()
 	nl := generateLockHash(current, specs)
-	lock, actual, tableNames := nbs.mm.Update(nbs.manifestLock, nl, specs, current, nil)
+	lock, actual, tableNames := nbs.mm.Update(nbs.manifestLock, nl, specs, current, nbs.stats, nil)
 	if nl != lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		nbs.manifestLock = lock

@@ -159,7 +159,7 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				conjoin(fm, p, alwaysConjoin, stats)
-				exists, _, _, _, newUpstream := fm.ParseIfExists(nil)
+				exists, _, _, _, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream))
 				assertContainAll(t, p, upstream, newUpstream)
@@ -185,7 +185,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(upstream, newTable))
 				}}
 				conjoin(u, p, alwaysConjoin, stats)
-				exists, _, _, _, newUpstream := fm.ParseIfExists(nil)
+				exists, _, _, _, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream))
 				assertContainAll(t, p, append(upstream, newTable), newUpstream)
@@ -203,7 +203,7 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream[1:])
 				}}
 				conjoin(u, p, alwaysConjoin, stats)
-				exists, _, _, _, newUpstream := fm.ParseIfExists(nil)
+				exists, _, _, _, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream))
 			})
@@ -218,7 +218,7 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				conjoin(fm, p, neverConjoin, stats)
-				exists, _, _, _, newUpstream := fm.ParseIfExists(nil)
+				exists, _, _, _, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact, getSortedSizes(newUpstream))
 				assertContainAll(t, p, upstream, newUpstream)
@@ -232,9 +232,9 @@ type updatePreemptManifest struct {
 	preUpdate func()
 }
 
-func (u updatePreemptManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (u updatePreemptManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
 	if u.preUpdate != nil {
 		u.preUpdate()
 	}
-	return u.manifest.Update(lastLock, newLock, specs, newRoot, writeHook)
+	return u.manifest.Update(lastLock, newLock, specs, newRoot, stats, writeHook)
 }

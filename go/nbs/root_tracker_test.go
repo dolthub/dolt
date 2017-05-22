@@ -175,7 +175,7 @@ func (fm *fakeManifest) Name() string { return fm.name }
 
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	if fm.lock != (addr{}) {
@@ -189,7 +189,7 @@ func (fm *fakeManifest) ParseIfExists(readHook func()) (exists bool, vers string
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (fm *fakeManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.lock == lastLock {

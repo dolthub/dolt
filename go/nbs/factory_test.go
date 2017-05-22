@@ -20,6 +20,7 @@ func TestLocalStoreFactory(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	f := NewLocalStoreFactory(dir, 0, 8)
+	stats := &Stats{}
 
 	dbName := "db"
 	store := f.CreateStore(dbName)
@@ -29,7 +30,7 @@ func TestLocalStoreFactory(t *testing.T) {
 	assert.True(store.Commit(c.Hash(), hash.Hash{}))
 
 	dbDir := filepath.Join(dir, dbName)
-	exists, _, _, _, specs := fileManifest{dbDir}.ParseIfExists(nil)
+	exists, _, _, _, specs := fileManifest{dbDir}.ParseIfExists(stats, nil)
 	assert.True(exists)
 	assert.Len(specs, 1)
 

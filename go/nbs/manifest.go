@@ -27,7 +27,7 @@ type manifest interface {
 	// return values are undefined. The |readHook| parameter allows race
 	// condition testing. If it is non-nil, it will be invoked while the
 	// implementation is guaranteeing exclusive access to the manifest.
-	ParseIfExists(readHook func()) (
+	ParseIfExists(stats *Stats, readHook func()) (
 		exists bool,
 		vers string,
 		lock addr,
@@ -54,6 +54,7 @@ type manifest interface {
 		lastLock, newLock addr,
 		specs []tableSpec,
 		newRoot hash.Hash,
+		stats *Stats,
 		writeHook func(),
 	) (
 		lock addr,

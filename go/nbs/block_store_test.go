@@ -383,9 +383,9 @@ func (fc *fakeConjoiner) Conjoin(mm manifest, p tablePersister, novelCount int, 
 	canned := fc.canned[0]
 	fc.canned = fc.canned[1:]
 
-	_, _, lock, root, _ := mm.ParseIfExists(nil)
+	_, _, lock, root, _ := mm.ParseIfExists(stats, nil)
 	newLock := generateLockHash(root, canned.specs)
-	lock, _, _ = mm.Update(lock, newLock, canned.specs, root, nil)
+	lock, _, _ = mm.Update(lock, newLock, canned.specs, root, stats, nil)
 	d.PanicIfFalse(lock == newLock)
 }
 

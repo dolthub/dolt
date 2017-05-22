@@ -29,8 +29,9 @@ func makeDynamoManifestFake(t *testing.T) (mm manifest, ddb *fakeDDB) {
 func TestDynamoManifestParseIfExists(t *testing.T) {
 	assert := assert.New(t)
 	mm, ddb := makeDynamoManifestFake(t)
+	stats := &Stats{}
 
-	exists, vers, lock, root, tableSpecs := mm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs := mm.ParseIfExists(stats, nil)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -40,7 +41,7 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	ddb.put(db, newLock[:], newRoot[:], "0", tableName.String()+":"+"0")
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, lock, root, tableSpecs = mm.ParseIfExists(nil)
+	exists, vers, lock, root, tableSpecs = mm.ParseIfExists(stats, nil)
 	assert.True(exists)
 	assert.Equal("0", vers)
 	assert.Equal(newLock, lock)
@@ -54,23 +55,25 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	assert := assert.New(t)
 	mm, ddb := makeDynamoManifestFake(t)
+	stats := &Stats{}
 
 	// Simulate another process having already put old Noms data in dir/.
 	lock := computeAddr([]byte("locker"))
 	badRoot := hash.Of([]byte("bad root"))
 	ddb.put(db, lock[:], badRoot[:], "0", "")
 
-	assert.Panics(func() { mm.Update(lock, addr{}, nil, hash.Hash{}, nil) })
+	assert.Panics(func() { mm.Update(lock, addr{}, nil, hash.Hash{}, stats, nil) })
 }
 
 func TestDynamoManifestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	mm, ddb := makeDynamoManifestFake(t)
+	stats := &Stats{}
 
 	// First, test winning the race against another process.
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
 	specs := []tableSpec{{computeAddr([]byte("a")), 3}}
-	lock, actual, tableSpecs := mm.Update(addr{}, newLock, specs, newRoot, func() {
+	lock, actual, tableSpecs := mm.Update(addr{}, newLock, specs, newRoot, stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -82,11 +85,11 @@ func TestDynamoManifestUpdate(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	newLock2, newRoot2 := computeAddr([]byte("locker 2")), hash.Of([]byte("new root 2"))
-	lock, actual, tableSpecs = mm.Update(addr{}, newLock2, nil, newRoot2, nil)
+	lock, actual, tableSpecs = mm.Update(addr{}, newLock2, nil, newRoot2, stats, nil)
 	assert.Equal(newLock, lock)
 	assert.Equal(newRoot, actual)
 	assert.Equal(specs, tableSpecs)
-	lock, actual, tableSpecs = mm.Update(lock, newLock2, nil, newRoot2, nil)
+	lock, actual, tableSpecs = mm.Update(lock, newLock2, nil, newRoot2, stats, nil)
 	assert.Equal(newLock2, lock)
 	assert.Equal(newRoot2, actual)
 	assert.Empty(tableSpecs)
@@ -97,7 +100,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	ddb.put(db, jerkLock[:], newRoot2[:], constants.NomsVersion, tableName.String()+":1")
 
 	newLock3, newRoot3 := computeAddr([]byte("locker 3")), hash.Of([]byte("new root 3"))
-	lock, actual, tableSpecs = mm.Update(lock, newLock3, nil, newRoot3, nil)
+	lock, actual, tableSpecs = mm.Update(lock, newLock3, nil, newRoot3, stats, nil)
 	assert.Equal(jerkLock, lock)
 	assert.Equal(newRoot2, actual)
 	assert.Equal([]tableSpec{{tableName, 1}}, tableSpecs)
@@ -106,9 +109,10 @@ func TestDynamoManifestUpdate(t *testing.T) {
 func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	assert := assert.New(t)
 	mm, _ := makeDynamoManifestFake(t)
+	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	lock, actual, tableSpecs := mm.Update(addr{}, l, nil, hash.Hash{}, nil)
+	lock, actual, tableSpecs := mm.Update(addr{}, l, nil, hash.Hash{}, stats, nil)
 	assert.Equal(l, lock)
 	assert.True(actual.IsEmpty())
 	assert.Empty(tableSpecs)

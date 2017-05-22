@@ -31,19 +31,24 @@ type Stats struct {
 	BytesPerConjoin  metrics.Histogram
 	ChunksPerConjoin metrics.Histogram
 	TablesPerConjoin metrics.Histogram
+
+	ReadManifestLatency  metrics.Histogram
+	WriteManifestLatency metrics.Histogram
 }
 
 func NewStats() *Stats {
 	return &Stats{
-		GetLatency:      metrics.NewTimeHistogram(),
-		ReadLatency:     metrics.NewTimeHistogram(),
-		BytesPerRead:    metrics.NewByteHistogram(),
-		HasLatency:      metrics.NewTimeHistogram(),
-		PutLatency:      metrics.NewTimeHistogram(),
-		PersistLatency:  metrics.NewTimeHistogram(),
-		BytesPerPersist: metrics.NewByteHistogram(),
-		ConjoinLatency:  metrics.NewTimeHistogram(),
-		BytesPerConjoin: metrics.NewByteHistogram(),
+		GetLatency:           metrics.NewTimeHistogram(),
+		ReadLatency:          metrics.NewTimeHistogram(),
+		BytesPerRead:         metrics.NewByteHistogram(),
+		HasLatency:           metrics.NewTimeHistogram(),
+		PutLatency:           metrics.NewTimeHistogram(),
+		PersistLatency:       metrics.NewTimeHistogram(),
+		BytesPerPersist:      metrics.NewByteHistogram(),
+		ConjoinLatency:       metrics.NewTimeHistogram(),
+		BytesPerConjoin:      metrics.NewByteHistogram(),
+		ReadManifestLatency:  metrics.NewTimeHistogram(),
+		WriteManifestLatency: metrics.NewTimeHistogram(),
 	}
 }
 
@@ -92,6 +97,9 @@ func (s Stats) Delta(other Stats) Stats {
 		s.BytesPerConjoin.Delta(other.BytesPerConjoin),
 		s.ChunksPerConjoin.Delta(other.ChunksPerConjoin),
 		s.TablesPerConjoin.Delta(other.TablesPerConjoin),
+
+		s.ReadManifestLatency.Delta(other.ReadManifestLatency),
+		s.WriteManifestLatency.Delta(other.WriteManifestLatency),
 	}
 }
 

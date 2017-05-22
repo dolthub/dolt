@@ -106,7 +106,7 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 		Jitter: true,
 	}
 
-	exists, _, lock, root, upstream := mm.ParseIfExists(nil)
+	exists, _, lock, root, upstream := mm.ParseIfExists(stats, nil)
 	d.PanicIfFalse(exists)
 	// This conjoin may have been requested by someone with an out-of-date notion of what's upstream. Verify that we actually still believe a conjoin is needed and, if not, return early
 	if !needsConjoin(len(upstream)) {
@@ -125,7 +125,7 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 		specs = append(specs, keepers...)
 
 		nl := generateLockHash(root, specs)
-		lock, root, upstream = mm.Update(lock, nl, specs, root, nil)
+		lock, root, upstream = mm.Update(lock, nl, specs, root, stats, nil)
 
 		if nl == lock {
 			return
