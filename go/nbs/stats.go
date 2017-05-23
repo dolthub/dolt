@@ -105,21 +105,23 @@ func (s Stats) Delta(other Stats) Stats {
 
 func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
-GetLatency:       %s
-ChunksPerGet:     %s
-ReadLatency:      %s
-ChunksPerRead:    %s
-BytesPerRead:     %s
-HasLatency:       %s
-AddressesHasGet:  %s
-PutLatency:       %s
-PersistLatency:   %s
-ChunksPerPersist: %s
-BytesPerPersist:  %s
-ConjoinLatency:   %s
-ChunksPerConjoin: %s
-BytesPerConjoin:  %s
-TablesPerConjoin: %s
+GetLatency:           %s
+ChunksPerGet:         %s
+ReadLatency:          %s
+ChunksPerRead:        %s
+BytesPerRead:         %s
+HasLatency:           %s
+AddressesHasGet:      %s
+PutLatency:           %s
+PersistLatency:       %s
+ChunksPerPersist:     %s
+BytesPerPersist:      %s
+ConjoinLatency:       %s
+ChunksPerConjoin:     %s
+BytesPerConjoin:      %s
+TablesPerConjoin:     %s
+ReadManifestLatency:  %s
+WriteManifestLatency: %s
 `,
 		s.GetLatency,
 		s.ChunksPerGet,
@@ -140,5 +142,7 @@ TablesPerConjoin: %s
 		s.ConjoinLatency,
 		s.ChunksPerConjoin,
 		s.BytesPerConjoin,
-		s.TablesPerConjoin)
+		s.TablesPerConjoin,
+		s.ReadManifestLatency,
+		s.WriteManifestLatency)
 }
