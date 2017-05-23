@@ -54,6 +54,11 @@ type ChunkStore interface {
 	// the cached root to current?
 	Commit(current, last hash.Hash) bool
 
+	// Stats may return some kind of struct that reports statistics about the
+	// ChunkStore instance. The type is implementation-dependent, and impls
+	// may return nil
+	Stats() interface{}
+
 	io.Closer
 }
 

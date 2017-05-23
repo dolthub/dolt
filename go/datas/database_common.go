@@ -42,6 +42,10 @@ func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
 }
 
+func (db *database) Stats() interface{} {
+	return db.ChunkStore().Stats()
+}
+
 func (db *database) Datasets() types.Map {
 	rootHash := db.rt.Root()
 	if rootHash.IsEmpty() {

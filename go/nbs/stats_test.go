@@ -17,12 +17,16 @@ import (
 func TestStats(t *testing.T) {
 	assert := assert.New(t)
 
+	stats := func(store *NomsBlockStore) Stats {
+		return store.Stats().(Stats)
+	}
+
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 	store := NewLocalStore(dir, testMemTableSize)
 
 	// Opening a new store will still incur some read IO, to discover that the manifest doesn't exist
-	assert.EqualValues(1, store.Stats().ReadManifestLatency.Samples())
+	assert.EqualValues(1, stats(store).ReadManifestLatency.Samples())
 
 	i1, i2, i3, i4, i5 := []byte("abc"), []byte("def"), []byte("ghi"), []byte("jkl"), []byte("mno")
 
@@ -32,39 +36,39 @@ func TestStats(t *testing.T) {
 	store.Put(c1)
 	store.Put(c2)
 	store.Put(c3)
-	assert.Equal(uint64(3), store.Stats().PutLatency.Samples())
-	assert.Equal(uint64(0), store.Stats().PersistLatency.Samples())
+	assert.Equal(uint64(3), stats(store).PutLatency.Samples())
+	assert.Equal(uint64(0), stats(store).PersistLatency.Samples())
 
 	assert.True(store.Has(c1.Hash()))
 	assert.True(store.Has(c2.Hash()))
 	assert.True(store.Has(c3.Hash()))
-	assert.Equal(uint64(3), store.Stats().HasLatency.Samples())
-	assert.Equal(uint64(4), store.Stats().AddressesPerHas.Sum())
+	assert.Equal(uint64(3), stats(store).HasLatency.Samples())
+	assert.Equal(uint64(4), stats(store).AddressesPerHas.Sum())
 
 	assert.False(store.Get(c1.Hash()).IsEmpty())
 	assert.False(store.Get(c2.Hash()).IsEmpty())
 	assert.False(store.Get(c3.Hash()).IsEmpty())
-	assert.Equal(uint64(3), store.Stats().GetLatency.Samples())
-	assert.Equal(uint64(0), store.Stats().ReadLatency.Samples())
-	assert.Equal(uint64(4), store.Stats().ChunksPerGet.Sum())
+	assert.Equal(uint64(3), stats(store).GetLatency.Samples())
+	assert.Equal(uint64(0), stats(store).ReadLatency.Samples())
+	assert.Equal(uint64(4), stats(store).ChunksPerGet.Sum())
 
 	store.Commit(store.Root(), store.Root())
 
 	// Commit will update the manifest
-	assert.EqualValues(1, store.Stats().WriteManifestLatency.Samples())
+	assert.EqualValues(1, stats(store).WriteManifestLatency.Samples())
 
 	// Now we have write IO
-	assert.Equal(uint64(1), store.Stats().PersistLatency.Samples())
-	assert.Equal(uint64(3), store.Stats().ChunksPerPersist.Sum())
-	assert.Equal(uint64(192), store.Stats().BytesPerPersist.Sum())
+	assert.Equal(uint64(1), stats(store).PersistLatency.Samples())
+	assert.Equal(uint64(3), stats(store).ChunksPerPersist.Sum())
+	assert.Equal(uint64(192), stats(store).BytesPerPersist.Sum())
 
 	// Now some gets that will incur read IO
 	store.Get(c1.Hash())
 	store.Get(c2.Hash())
 	store.Get(c3.Hash())
-	assert.Equal(uint64(3), store.Stats().ReadLatency.Samples())
-	assert.Equal(uint64(36), store.Stats().BytesPerRead.Sum())
-	assert.Equal(uint64(4), store.Stats().ChunksPerRead.Sum())
+	assert.Equal(uint64(3), stats(store).ReadLatency.Samples())
+	assert.Equal(uint64(36), stats(store).BytesPerRead.Sum())
+	assert.Equal(uint64(4), stats(store).ChunksPerRead.Sum())
 
 	// Try A GetMany
 	chnx := make([]chunks.Chunk, 3)
@@ -77,9 +81,9 @@ func TestStats(t *testing.T) {
 	}
 	chunkChan := make(chan *chunks.Chunk, 3)
 	store.GetMany(hashes.HashSet(), chunkChan)
-	assert.Equal(uint64(4), store.Stats().ReadLatency.Samples())
-	assert.Equal(uint64(60), store.Stats().BytesPerRead.Sum())
-	assert.Equal(uint64(7), store.Stats().ChunksPerRead.Sum())
+	assert.Equal(uint64(4), stats(store).ReadLatency.Samples())
+	assert.Equal(uint64(60), stats(store).BytesPerRead.Sum())
+	assert.Equal(uint64(7), stats(store).ChunksPerRead.Sum())
 
 	// Force a conjoin
 	store.c = newAsyncConjoiner(2)
@@ -88,7 +92,7 @@ func TestStats(t *testing.T) {
 	store.Put(c5)
 	store.Commit(store.Root(), store.Root())
 
-	assert.Equal(uint64(1), store.Stats().ConjoinLatency.Samples())
+	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats
 
 	defer store.Close()

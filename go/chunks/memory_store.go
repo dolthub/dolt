@@ -179,6 +179,10 @@ func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
 	return success
 }
 
+func (ms *MemoryStoreView) Stats() interface{} {
+	return nil
+}
+
 func (ms *MemoryStoreView) Close() error {
 	return nil
 }

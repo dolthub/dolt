@@ -434,6 +434,6 @@ func (nbs *NomsBlockStore) Close() (err error) {
 	return
 }
 
-func (nbs *NomsBlockStore) Stats() Stats {
+func (nbs *NomsBlockStore) Stats() interface{} {
 	return *nbs.stats
 }

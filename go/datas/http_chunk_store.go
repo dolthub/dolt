@@ -119,6 +119,10 @@ func (hcs *httpChunkStore) Close() (e error) {
 	return
 }
 
+func (hcs *httpChunkStore) Stats() interface{} {
+	return nil
+}
+
 func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
 		hcs.cacheMu.RLock()

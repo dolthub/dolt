@@ -56,6 +56,10 @@ func (fb fileBlockStore) Close() error {
 
 func (fb fileBlockStore) Rebase() {}
 
+func (fb fileBlockStore) Stats() interface{} {
+	return nil
+}
+
 func (fb fileBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }

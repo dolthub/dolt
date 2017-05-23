@@ -99,6 +99,11 @@ type Database interface {
 	// Regardless, Datasets() is updated to match backing storage upon return.
 	FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error)
 
+	// Stats may return some kind of struct that reports statistics about the
+	// ChunkStore that backs this Database instance. The type is
+	// implementation-dependent, and impls may return nil
+	Stats() interface{}
+
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by

@@ -47,6 +47,10 @@ func (nb nullBlockStore) Close() error {
 
 func (nb nullBlockStore) Rebase() {}
 
+func (nb nullBlockStore) Stats() interface{} {
+	return nil
+}
+
 func (nb nullBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }
