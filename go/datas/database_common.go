@@ -59,12 +59,12 @@ func (db *database) GetDataset(datasetID string) Dataset {
 	if !DatasetFullRe.MatchString(datasetID) {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
+	var head types.Value
 	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
-		head := r.(types.Ref).TargetValue(db)
-		d.PanicIfFalse(IsCommit(head))
-		return Dataset{db, datasetID, types.NewRef(head)}
+		head = r.(types.Ref).TargetValue(db)
 	}
-	return Dataset{db: db, id: datasetID}
+
+	return newDataset(db, datasetID, head)
 }
 
 func (db *database) Rebase() {

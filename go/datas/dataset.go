@@ -21,9 +21,14 @@ var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 // Dataset is a named Commit within a Database.
 type Dataset struct {
-	db      Database
-	id      string
-	headRef types.Ref
+	db   Database
+	id   string
+	head types.Value
+}
+
+func newDataset(db Database, id string, head types.Value) Dataset {
+	d.PanicIfFalse(head == nil || IsCommit(head))
+	return Dataset{db, id, head}
 }
 
 // Database returns the Database object in which this Dataset is stored.
@@ -41,10 +46,10 @@ func (ds Dataset) ID() string {
 // the current root of the Dataset's value tree, if available. If not, it
 // returns a new Commit and 'false'.
 func (ds Dataset) MaybeHead() (types.Struct, bool) {
-	if r, ok := ds.MaybeHeadRef(); ok {
-		return r.TargetValue(ds.Database()).(types.Struct), true
+	if ds.head == nil {
+		return types.Struct{}, false
 	}
-	return types.Struct{}, false
+	return ds.head.(types.Struct), true
 }
 
 // Head returns the current head Commit, which contains the current root of
@@ -61,12 +66,15 @@ func (ds Dataset) Head() types.Struct {
 // which contains the current root of the Dataset's value tree, if available.
 // If not, it returns an empty Ref and 'false'.
 func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
-	return ds.headRef, ds.headRef != types.Ref{}
+	if ds.head == nil {
+		return types.Ref{}, false
+	}
+	return types.NewRef(ds.head), true
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.
 func (ds Dataset) HasHead() bool {
-	return ds.headRef != types.Ref{}
+	return ds.head != nil
 }
 
 // HeadRef returns the Ref of the current head Commit, which contains the
