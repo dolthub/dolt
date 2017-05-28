@@ -293,13 +293,21 @@ func (tr tableReader) getMany(
 ) (remaining bool) {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
-	var offsetRecords offsetRecSlice
-	offsetRecords, remaining = tr.findOffsets(reqs)
+	offsetRecords, remaining := tr.findOffsets(reqs)
+	tr.getManyAtOffsets(reqs, offsetRecords, foundChunks, wg, stats)
+	return remaining
+}
 
+func (tr tableReader) getManyAtOffsets(
+	reqs []getRecord,
+	offsetRecords offsetRecSlice,
+	foundChunks chan *chunks.Chunk,
+	wg *sync.WaitGroup,
+	stats *Stats,
+) {
 	// Now |offsetRecords| contains all locations within the table which must be search (note
 	// that there may be duplicates of a particular location). Sort by offset and scan forward,
 	// grouping sequences of reads into large physical reads.
-	sort.Sort(offsetRecords)
 
 	var batch offsetRecSlice
 	var readStart, readEnd uint64
@@ -342,7 +350,8 @@ func (tr tableReader) getMany(
 // address) to build the set of table locations which must be read in order to
 // find each chunk specified by |reqs|. If this table contains all requested
 // chunks remaining will be set to false upon return. If some are not here,
-// then remaining will be true.
+// then remaining will be true. The result offsetRecSlice is sorted in offset
+// order.
 func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool) {
 	filterIdx := uint32(0)
 	filterLen := uint32(len(tr.prefixes))
@@ -378,6 +387,8 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 			}
 		}
 	}
+
+	sort.Sort(ors)
 	return ors, remaining
 }
 
@@ -418,9 +429,8 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 
 	// Now |offsetRecords| contains all locations within the table which must
 	// be searched (note that there may be duplicates of a particular
-	// location). Sort by offset and scan forward, grouping sequences of reads
-	// into large physical reads.
-	sort.Sort(offsetRecords)
+	// location). Scan forward, grouping sequences of reads into large physical
+	// reads.
 
 	var readStart, readEnd uint64
 	readStarted := false

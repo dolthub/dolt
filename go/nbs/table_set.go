@@ -66,6 +66,16 @@ func (ts tableSet) get(h addr, stats *Stats) []byte {
 func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	f := func(css chunkSources) (remaining bool) {
 		for _, haver := range css {
+			if rp, ok := haver.(chunkReadPlanner); ok {
+				offsets, remaining := rp.findOffsets(reqs)
+				go rp.getManyAtOffsets(reqs, offsets, foundChunks, wg, stats)
+				if !remaining {
+					return false
+				}
+
+				continue
+			}
+
 			if !haver.getMany(reqs, foundChunks, wg, stats) {
 				return false
 			}

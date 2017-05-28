@@ -208,6 +208,17 @@ type chunkReader interface {
 	extract(chunks chan<- extractRecord)
 }
 
+type chunkReadPlanner interface {
+	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
+	getManyAtOffsets(
+		reqs []getRecord,
+		offsetRecords offsetRecSlice,
+		foundChunks chan *chunks.Chunk,
+		wg *sync.WaitGroup,
+		stats *Stats,
+	) (remaining bool)
+}
+
 type chunkSource interface {
 	chunkReader
 	hash() addr
