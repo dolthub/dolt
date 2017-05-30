@@ -28,18 +28,21 @@ const (
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
 
-	defaultIndexCacheSize = (1 << 20) * 8 // 8MB
+	defaultIndexCacheSize    = (1 << 20) * 8 // 8MB
+	defaultManifestCacheSize = 1 << 23       // 8MB
 )
 
 var (
-	cacheOnce        = sync.Once{}
-	globalIndexCache *indexCache
-	globalFDCache    *fdCache
-	globalConjoiner  conjoiner
+	cacheOnce           = sync.Once{}
+	globalIndexCache    *indexCache
+	globalManifestCache *manifestCache
+	globalFDCache       *fdCache
+	globalConjoiner     conjoiner
 )
 
 func makeGlobalCaches() {
 	globalIndexCache = newIndexCache(defaultIndexCacheSize)
+	globalManifestCache = newManifestCache(defaultManifestCacheSize)
 	globalFDCache = newFDCache(defaultMaxTables)
 	globalConjoiner = newAsyncConjoiner(defaultMaxTables)
 }
@@ -73,25 +76,22 @@ func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize ui
 		globalIndexCache,
 		make(chan struct{}, 32),
 	}
-	return newAWSStore(table, ns, ddb, p, globalConjoiner, memTableSize)
+	return newAWSStore(table, ns, ddb, globalManifestCache, p, globalConjoiner, memTableSize)
 }
 
-func newAWSStore(table, ns string, ddb ddbsvc, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
+func newAWSStore(table, ns string, ddb ddbsvc, mc *manifestCache, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
 	d.PanicIfTrue(ns == "")
-	mm := newDynamoManifest(table, ns, ddb)
+	mm := newDynamoManifest(table, ns, ddb, mc)
 	return newNomsBlockStore(mm, p, c, memTableSize)
 }
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
 	cacheOnce.Do(makeGlobalCaches)
-	return newLocalStore(dir, memTableSize, globalFDCache, globalIndexCache, globalConjoiner)
-}
+	d.PanicIfError(checkDir(dir))
 
-func newLocalStore(dir string, memTableSize uint64, fc *fdCache, indexCache *indexCache, c conjoiner) *NomsBlockStore {
-	err := checkDir(dir)
-	d.PanicIfError(err)
-	p := newFSTablePersister(dir, fc, indexCache)
-	return newNomsBlockStore(fileManifest{dir}, p, c, memTableSize)
+	mm := newFileManifest(dir, globalManifestCache)
+	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
+	return newNomsBlockStore(mm, p, globalConjoiner, memTableSize)
 }
 
 func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
@@ -108,9 +108,9 @@ func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize 
 		stats:       NewStats(),
 	}
 
-	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
-		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
-		nbs.tables = nbs.tables.Rebase(tableSpecs)
+	if exists, contents := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
+		nbs.nomsVersion, nbs.manifestLock, nbs.root = contents.vers, contents.lock, contents.root
+		nbs.tables = nbs.tables.Rebase(contents.specs)
 	}
 
 	return nbs
@@ -335,11 +335,11 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase() {
-	if exists, vers, lock, root, tableSpecs := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
+	if exists, contents := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
-		nbs.nomsVersion, nbs.manifestLock, nbs.root = vers, lock, root
-		nbs.tables = nbs.tables.Rebase(tableSpecs)
+		nbs.nomsVersion, nbs.manifestLock, nbs.root = contents.vers, contents.lock, contents.root
+		nbs.tables = nbs.tables.Rebase(contents.specs)
 	}
 }
 
@@ -397,32 +397,37 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		nbs.c.Conjoin(nbs.mm, nbs.p, nbs.tables.Novel(), nbs.stats)
-		exists, _, lock, actual, upstream := nbs.mm.ParseIfExists(nbs.stats, nil)
+		exists, upstream := nbs.mm.ParseIfExists(nbs.stats, nil)
 		d.PanicIfFalse(exists)
 
-		nbs.manifestLock = lock
-		nbs.root = actual
-		nbs.tables = nbs.tables.Rebase(upstream)
+		nbs.manifestLock = upstream.lock
+		nbs.root = upstream.root
+		nbs.tables = nbs.tables.Rebase(upstream.specs)
 		return errOptimisticLockFailedTables
 	}
 
 	specs := nbs.tables.ToSpecs()
-	nl := generateLockHash(current, specs)
-	lock, actual, tableNames := nbs.mm.Update(nbs.manifestLock, nl, specs, current, nbs.stats, nil)
-	if nl != lock {
+	newContents := manifestContents{
+		vers:  constants.NomsVersion,
+		root:  current,
+		lock:  generateLockHash(current, specs),
+		specs: specs,
+	}
+	upstream := nbs.mm.Update(nbs.manifestLock, newContents, nbs.stats, nil)
+	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
-		nbs.manifestLock = lock
-		nbs.root = actual
-		nbs.tables = nbs.tables.Rebase(tableNames)
+		nbs.manifestLock = upstream.lock
+		nbs.root = upstream.root
+		nbs.tables = nbs.tables.Rebase(upstream.specs)
 
-		if last != actual {
+		if last != upstream.root {
 			return errOptimisticLockFailedRoot
 		}
 		return errOptimisticLockFailedTables
 	}
 
 	nbs.tables = nbs.tables.Flatten()
-	nbs.nomsVersion, nbs.manifestLock, nbs.root = constants.NomsVersion, lock, current
+	nbs.nomsVersion, nbs.manifestLock, nbs.root = constants.NomsVersion, newContents.lock, current
 	return nil
 }
 

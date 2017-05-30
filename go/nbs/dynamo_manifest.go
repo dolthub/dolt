@@ -37,21 +37,22 @@ type ddbsvc interface {
 	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 }
 
-// It assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
+// dynamoManifest assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
 type dynamoManifest struct {
 	table, db string
 	ddbsvc    ddbsvc
+	cache     *manifestCache
 }
 
-func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
-	return dynamoManifest{table: table, db: namespace, ddbsvc: ddb}
+func newDynamoManifest(table, namespace string, ddb ddbsvc, cache *manifestCache) manifest {
+	return dynamoManifest{table, namespace, ddb, cache}
 }
 
 func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
-func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTime(time.Since(t1)) }()
 
@@ -71,14 +72,14 @@ func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bo
 			d.Panic("Malformed manifest for %s: %+v", dm.db, result.Item)
 		}
 		exists = true
-		vers = *result.Item[versAttr].S
-		root = hash.New(result.Item[rootAttr].B)
-		copy(lock[:], result.Item[lockAttr].B)
+		contents.vers = *result.Item[versAttr].S
+		contents.root = hash.New(result.Item[rootAttr].B)
+		copy(contents.lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
-			tableSpecs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+			contents.specs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
 		}
 	}
-
+	dm.cache.Put(dm.Name(), contents.size(), contents)
 	return
 }
 
@@ -96,23 +97,28 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	return false, false
 }
 
-func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+	if upstream, hit := dm.cache.Get(dm.Name()); hit {
+		if lastLock != upstream.lock {
+			return upstream
+		}
+	}
+
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTime(time.Since(t1)) }()
-
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:      {S: aws.String(dm.db)},
 			nbsVersAttr: {S: aws.String(StorageVersion)},
-			versAttr:    {S: aws.String(constants.NomsVersion)},
-			rootAttr:    {B: newRoot[:]},
-			lockAttr:    {B: newLock[:]},
+			versAttr:    {S: aws.String(newContents.vers)},
+			rootAttr:    {B: newContents.root[:]},
+			lockAttr:    {B: newContents.lock[:]},
 		},
 	}
-	if len(specs) > 0 {
-		tableInfo := make([]string, 2*len(specs))
-		formatSpecs(specs, tableInfo)
+	if len(newContents.specs) > 0 {
+		tableInfo := make([]string, 2*len(newContents.specs))
+		formatSpecs(newContents.specs, tableInfo)
 		putArgs.Item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
 	}
 
@@ -124,21 +130,25 @@ func (dm dynamoManifest) Update(lastLock, newLock addr, specs []tableSpec, newRo
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
 		":prev": {B: lastLock[:]},
-		":vers": {S: aws.String(constants.NomsVersion)},
+		":vers": {S: aws.String(newContents.vers)},
 	}
 
 	_, ddberr := dm.ddbsvc.PutItem(&putArgs)
 	if ddberr != nil {
-		if awsErr, ok := ddberr.(awserr.Error); ok {
-			if awsErr.Code() == "ConditionalCheckFailedException" {
-				exists, vers, lock, actual, tableSpecs := dm.ParseIfExists(stats, nil)
-				d.Chk.True(exists)
-				d.Chk.True(vers == constants.NomsVersion)
-				return lock, actual, tableSpecs
-			} // TODO handle other aws errors?
-		}
-		d.Chk.NoError(ddberr)
+		if errIsConditionalCheckFailed(ddberr) {
+			exists, upstream := dm.ParseIfExists(stats, nil) // Updates dm.cache
+			d.Chk.True(exists)
+			d.Chk.True(upstream.vers == constants.NomsVersion)
+			return upstream
+		} // TODO handle other aws errors?
+		d.PanicIfError(ddberr)
 	}
 
-	return newLock, newRoot, specs
+	dm.cache.Put(dm.Name(), newContents.size(), newContents)
+	return newContents
+}
+
+func errIsConditionalCheckFailed(err error) bool {
+	awsErr, ok := err.(awserr.Error)
+	return ok && awsErr.Code() == "ConditionalCheckFailedException"
 }

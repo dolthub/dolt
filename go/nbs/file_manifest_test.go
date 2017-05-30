@@ -18,10 +18,10 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-func makeFileManifestTempDir(t *testing.T) *fileManifest {
+func makeFileManifestTempDir(t *testing.T) fileManifest {
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
-	return &fileManifest{dir: dir}
+	return fileManifest{dir, newManifestCache(defaultManifestCacheSize)}
 }
 
 func TestFileManifestLoadIfExists(t *testing.T) {
@@ -30,7 +30,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	defer os.RemoveAll(fm.dir)
 	stats := &Stats{}
 
-	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(stats, nil)
+	exists, upstream := fm.ParseIfExists(stats, nil)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -41,14 +41,14 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, lock, root, tableSpecs = fm.ParseIfExists(stats, nil)
+	exists, upstream = fm.ParseIfExists(stats, nil)
 	assert.True(exists)
-	assert.Equal("0", vers)
-	assert.Equal(jerk, lock)
-	assert.Equal(newRoot, root)
-	if assert.Len(tableSpecs, 1) {
-		assert.Equal(tableName.String(), tableSpecs[0].name.String())
-		assert.Equal(uint32(0), tableSpecs[0].chunkCount)
+	assert.Equal("0", upstream.vers)
+	assert.Equal(jerk, upstream.lock)
+	assert.Equal(newRoot, upstream.root)
+	if assert.Len(upstream.specs, 1) {
+		assert.Equal(tableName.String(), upstream.specs[0].name.String())
+		assert.Equal(uint32(0), upstream.specs[0].chunkCount)
 	}
 }
 
@@ -66,7 +66,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, vers, lock, root, tableSpecs := fm.ParseIfExists(stats, func() {
+	exists, upstream := fm.ParseIfExists(stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
 		lock := computeAddr([]byte("newlock"))
 		badRoot := hash.Of([]byte("bad root"))
@@ -75,11 +75,11 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	})
 
 	assert.True(exists)
-	assert.Equal(constants.NomsVersion, vers)
-	assert.Equal(newRoot, root)
-	if assert.Len(tableSpecs, 1) {
-		assert.Equal(tableName.String(), tableSpecs[0].name.String())
-		assert.Equal(uint32(0), tableSpecs[0].chunkCount)
+	assert.Equal(constants.NomsVersion, upstream.vers)
+	assert.Equal(newRoot, upstream.root)
+	if assert.Len(upstream.specs, 1) {
+		assert.Equal(tableName.String(), upstream.specs[0].name.String())
+		assert.Equal(uint32(0), upstream.specs[0].chunkCount)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String()}, ":"))
 	assert.NoError(err)
 
-	assert.Panics(func() { fm.Update(addr{}, addr{}, nil, hash.Hash{}, stats, nil) })
+	assert.Panics(func() { fm.Update(addr{}, manifestContents{}, stats, nil) })
 }
 
 func TestFileManifestUpdateEmpty(t *testing.T) {
@@ -103,23 +103,23 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	lock, actual, tableSpecs := fm.Update(addr{}, l, nil, hash.Hash{}, stats, nil)
-	assert.Equal(l, lock)
-	assert.True(actual.IsEmpty())
-	assert.Empty(tableSpecs)
+	upstream := fm.Update(addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
+	assert.Equal(l, upstream.lock)
+	assert.True(upstream.root.IsEmpty())
+	assert.Empty(upstream.specs)
 
-	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
-	exists, _, lock, root, tableSpecs := fm2.ParseIfExists(stats, nil)
+	fm2 := newFileManifest(fm.dir, newManifestCache(0)) // Open existent, but empty manifest
+	exists, upstream := fm2.ParseIfExists(stats, nil)
 	assert.True(exists)
-	assert.Equal(l, lock)
-	assert.True(root.IsEmpty())
-	assert.Empty(tableSpecs)
+	assert.Equal(l, upstream.lock)
+	assert.True(upstream.root.IsEmpty())
+	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	lock, actual, tableSpecs = fm2.Update(l, l2, nil, hash.Hash{}, stats, nil)
-	assert.Equal(l2, lock)
-	assert.True(actual.IsEmpty())
-	assert.Empty(tableSpecs)
+	upstream = fm2.Update(l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
+	assert.Equal(l2, upstream.lock)
+	assert.True(upstream.root.IsEmpty())
+	assert.Empty(upstream.specs)
 }
 
 func TestFileManifestUpdate(t *testing.T) {
@@ -129,41 +129,45 @@ func TestFileManifestUpdate(t *testing.T) {
 	stats := &Stats{}
 
 	// First, test winning the race against another process.
-	newLock, newRoot := computeAddr([]byte("locker")), hash.Of([]byte("new root"))
-	specs := []tableSpec{{computeAddr([]byte("a")), 3}}
-	lock, actual, tableSpecs := fm.Update(addr{}, newLock, specs, newRoot, stats, func() {
+	contents := manifestContents{
+		vers:  constants.NomsVersion,
+		lock:  computeAddr([]byte("locker")),
+		root:  hash.Of([]byte("new root")),
+		specs: []tableSpec{{computeAddr([]byte("a")), 3}},
+	}
+	upstream := fm.Update(addr{}, contents, stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
 		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String()}, ":"))
 		assert.NoError(err, string(b))
 	})
-	assert.Equal(newLock, lock)
-	assert.Equal(newRoot, actual)
-	assert.Equal(specs, tableSpecs)
+	assert.Equal(contents.lock, upstream.lock)
+	assert.Equal(contents.root, upstream.root)
+	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	newLock2, newRoot2 := computeAddr([]byte("locker 2")), hash.Of([]byte("new root 2"))
-	lock, actual, tableSpecs = fm.Update(addr{}, newLock2, nil, newRoot2, stats, nil)
-	assert.Equal(newLock, lock)
-	assert.Equal(newRoot, actual)
-	assert.Equal(specs, tableSpecs)
-	lock, actual, tableSpecs = fm.Update(newLock, newLock2, nil, newRoot2, stats, nil)
-	assert.Equal(newLock2, lock)
-	assert.Equal(newRoot2, actual)
-	assert.Empty(tableSpecs)
+	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2"))}
+	upstream = fm.Update(addr{}, contents2, stats, nil)
+	assert.Equal(contents.lock, upstream.lock)
+	assert.Equal(contents.root, upstream.root)
+	assert.Equal(contents.specs, upstream.specs)
+	upstream = fm.Update(upstream.lock, contents2, stats, nil)
+	assert.Equal(contents2.lock, upstream.lock)
+	assert.Equal(contents2.root, upstream.root)
+	assert.Empty(upstream.specs)
 
 	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
 	jerkLock := computeAddr([]byte("jerk"))
 	tableName := computeAddr([]byte("table1"))
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), newRoot2.String(), tableName.String(), "1"}, ":"))
+	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), tableName.String(), "1"}, ":"))
 	assert.NoError(err)
 
-	newLock3, newRoot3 := computeAddr([]byte("locker 3")), hash.Of([]byte("new root 3"))
-	lock, actual, tableSpecs = fm.Update(lock, newLock3, nil, newRoot3, stats, nil)
-	assert.Equal(jerkLock, lock)
-	assert.Equal(newRoot2, actual)
-	assert.Equal([]tableSpec{{tableName, 1}}, tableSpecs)
+	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3"))}
+	upstream = fm.Update(upstream.lock, contents3, stats, nil)
+	assert.Equal(jerkLock, upstream.lock)
+	assert.Equal(contents2.root, upstream.root)
+	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)
 }
 
 // tryClobberManifest simulates another process trying to access dir/manifestFileName concurrently. To avoid deadlock, it does a non-blocking lock of dir/lockFileName. If it can get the lock, it clobbers the manifest.

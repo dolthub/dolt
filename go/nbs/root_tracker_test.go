@@ -164,24 +164,22 @@ func assertDataInStore(slices [][]byte, store chunks.ChunkStore, assert *assert.
 
 // fakeManifest simulates a fileManifest without touching disk.
 type fakeManifest struct {
-	name, version string
-	lock          addr
-	root          hash.Hash
-	tableSpecs    []tableSpec
-	mu            sync.RWMutex
+	name     string
+	contents manifestContents
+	mu       sync.RWMutex
 }
 
 func (fm *fakeManifest) Name() string { return fm.name }
 
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	if fm.lock != (addr{}) {
-		return true, fm.version, fm.lock, fm.root, fm.tableSpecs
+	if fm.contents.lock != (addr{}) {
+		return true, fm.contents
 	}
-	return false, "", addr{}, hash.Hash{}, nil
+	return false, manifestContents{}
 }
 
 // Update checks whether |lastLock| == |fm.lock| and, if so, updates internal
@@ -189,21 +187,19 @@ func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists boo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (fm *fakeManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
-	if fm.lock == lastLock {
-		fm.version = constants.NomsVersion
-		fm.lock = newLock
-		fm.root = newRoot
-		fm.tableSpecs = make([]tableSpec, len(specs))
-		copy(fm.tableSpecs, specs)
+	if fm.contents.lock == lastLock {
+		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, nil}
+		fm.contents.specs = make([]tableSpec, len(newContents.specs))
+		copy(fm.contents.specs, newContents.specs)
 	}
-	return fm.lock, fm.root, fm.tableSpecs
+	return fm.contents
 }
 
 func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs []tableSpec) {
-	fm.version, fm.lock, fm.root, fm.tableSpecs = version, lock, root, specs
+	fm.contents = manifestContents{version, lock, root, specs}
 }
 
 func newFakeTableSet() tableSet {

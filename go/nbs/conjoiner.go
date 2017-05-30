@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/jpillora/backoff"
 )
@@ -106,10 +107,10 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 		Jitter: true,
 	}
 
-	exists, _, lock, root, upstream := mm.ParseIfExists(stats, nil)
+	exists, upstream := mm.ParseIfExists(stats, nil)
 	d.PanicIfFalse(exists)
 	// This conjoin may have been requested by someone with an out-of-date notion of what's upstream. Verify that we actually still believe a conjoin is needed and, if not, return early
-	if !needsConjoin(len(upstream)) {
+	if !needsConjoin(len(upstream.specs)) {
 		return
 	}
 
@@ -118,23 +119,28 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 
 	for {
 		if conjoinees == nil {
-			conjoined, conjoinees, keepers = conjoinTables(p, upstream, stats)
+			conjoined, conjoinees, keepers = conjoinTables(p, upstream.specs, stats)
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
 		specs = append(specs, keepers...)
 
-		nl := generateLockHash(root, specs)
-		lock, root, upstream = mm.Update(lock, nl, specs, root, stats, nil)
+		newContents := manifestContents{
+			vers:  constants.NomsVersion,
+			root:  upstream.root,
+			lock:  generateLockHash(upstream.root, specs),
+			specs: specs,
+		}
+		upstream = mm.Update(upstream.lock, newContents, stats, nil)
 
-		if nl == lock {
+		if newContents.lock == upstream.lock {
 			return
 		}
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		// If we can re-use the conjoin we already performed, we want to try again. Currently, we will only do so if ALL conjoinees are still present upstream. If we can't re-use...then someone else almost certainly landed a conjoin upstream. In this case, bail and let clients ask again if they think they still can't proceed.
 		conjoineeSet := map[addr]struct{}{}
 		upstreamNames := map[addr]struct{}{}
-		for _, spec := range upstream {
+		for _, spec := range upstream.specs {
 			upstreamNames[spec.name] = struct{}{}
 		}
 		for _, c := range conjoinees {
@@ -144,9 +150,9 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 			conjoineeSet[c.name] = struct{}{}
 		}
 
-		// Filter conjoinees out of upstream to generate new set of keepers
-		keepers = make([]tableSpec, 0, len(upstream)-len(conjoinees))
-		for _, spec := range upstream {
+		// Filter conjoinees out of upstream.specs to generate new set of keepers
+		keepers = make([]tableSpec, 0, len(upstream.specs)-len(conjoinees))
+		for _, spec := range upstream.specs {
 			if _, present := conjoineeSet[spec.name]; !present {
 				keepers = append(keepers, spec)
 			}

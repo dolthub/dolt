@@ -383,10 +383,15 @@ func (fc *fakeConjoiner) Conjoin(mm manifest, p tablePersister, novelCount int, 
 	canned := fc.canned[0]
 	fc.canned = fc.canned[1:]
 
-	_, _, lock, root, _ := mm.ParseIfExists(stats, nil)
-	newLock := generateLockHash(root, canned.specs)
-	lock, _, _ = mm.Update(lock, newLock, canned.specs, root, stats, nil)
-	d.PanicIfFalse(lock == newLock)
+	_, contents := mm.ParseIfExists(stats, nil)
+	newContents := manifestContents{
+		vers:  constants.NomsVersion,
+		root:  contents.root,
+		specs: canned.specs,
+		lock:  generateLockHash(contents.root, canned.specs),
+	}
+	contents = mm.Update(contents.lock, newContents, stats, nil)
+	d.PanicIfFalse(contents.lock == newContents.lock)
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

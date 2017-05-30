@@ -21,13 +21,18 @@ const (
 	awsMaxTables        = 128
 )
 
+// AWSStoreFactory vends NomsBlockStores built on top of DynamoDB and S3.
 type AWSStoreFactory struct {
-	ddb       ddbsvc
-	persister tablePersister
-	table     string
-	conjoiner conjoiner
+	ddb           ddbsvc
+	persister     tablePersister
+	table         string
+	manifestCache *manifestCache
+	conjoiner     conjoiner
 }
 
+// NewAWSStoreFactory returns a ChunkStore factory that vends NomsBlockStore
+// instances that store manifests in the named DynamoDB table, and chunk data
+// in the named S3 bucket. All connections to AWS services share |sess|.
 func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize uint64) chunks.Factory {
 	var indexCache *indexCache
 	if indexCacheSize > 0 {
@@ -45,22 +50,24 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 			make(chan struct{}, defaultAWSReadLimit),
 		},
 		table,
+		newManifestCache(defaultManifestCacheSize),
 		newAsyncConjoiner(awsMaxTables),
 	}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newAWSStore(asf.table, ns, asf.ddb, asf.persister, asf.conjoiner, defaultMemTableSize)
+	return newAWSStore(asf.table, ns, asf.ddb, asf.manifestCache, asf.persister, asf.conjoiner, defaultMemTableSize)
 }
 
 func (asf *AWSStoreFactory) Shutter() {
 }
 
 type LocalStoreFactory struct {
-	dir        string
-	fc         *fdCache
-	indexCache *indexCache
-	conjoiner  conjoiner
+	dir           string
+	fc            *fdCache
+	indexCache    *indexCache
+	manifestCache *manifestCache
+	conjoiner     conjoiner
 }
 
 func checkDir(dir string) error {
@@ -83,14 +90,17 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxOpenFiles int) c
 		indexCache = newIndexCache(indexCacheSize)
 	}
 	fc := newFDCache(maxOpenFiles)
-	return &LocalStoreFactory{dir, fc, indexCache, newAsyncConjoiner(defaultMaxTables)}
+	mc := newManifestCache(defaultManifestCacheSize)
+	return &LocalStoreFactory{dir, fc, indexCache, mc, newAsyncConjoiner(defaultMaxTables)}
 }
 
 func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
-	err := os.MkdirAll(path, 0777)
-	d.PanicIfError(err)
-	return newLocalStore(path, defaultMemTableSize, lsf.fc, lsf.indexCache, lsf.conjoiner)
+	d.PanicIfError(os.MkdirAll(path, 0777))
+
+	mm := newFileManifest(path, lsf.manifestCache)
+	p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
+	return newNomsBlockStore(mm, p, lsf.conjoiner, defaultMemTableSize)
 }
 
 func (lsf *LocalStoreFactory) Shutter() {

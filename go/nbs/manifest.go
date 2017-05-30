@@ -10,6 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
 type manifest interface {
@@ -18,52 +19,71 @@ type manifest interface {
 	// defining how to find and parse the desired manifest, e.g. a
 	// particularly-named file in a given directory. Implementations are also
 	// responsible for managing whatever concurrency guarantees they require
-	// for correctness.
-	// If the manifest exists, |exists| is set to true and manifest data is
-	// returned, including the version of the Noms data in the store, the root
-	// hash.Hash of the store, and a tableSpec describing every table that
-	// comprises the store.
+	// for correctness. If the manifest exists, |exists| is set to true and
+	// manifest data is returned, including the version of the Noms data in
+	// the store, the root root hash.Hash of the store, and a tableSpec
+	// describing every table that comprises the store.
 	// If the manifest doesn't exist, |exists| is set to false and the other
 	// return values are undefined. The |readHook| parameter allows race
 	// condition testing. If it is non-nil, it will be invoked while the
 	// implementation is guaranteeing exclusive access to the manifest.
-	ParseIfExists(stats *Stats, readHook func()) (
-		exists bool,
-		vers string,
-		lock addr,
-		root hash.Hash,
-		tableSpecs []tableSpec,
-	)
+	ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents)
 
 	// Update optimistically tries to write a new manifest containing
-	// |newRoot| and the tables referenced by |specs|. If |lastLock| matches
-	// the lock hash in the currently persisted manifest (logically, the lock
-	// that would be returned by ParseIfExists), then Update succeeds and
-	// subsequent calls to both Update and ParseIfExists will reflect a
-	// manifest containing |newLock|, |newRoot| and |tables|. If not, Update
-	// fails. Regardless, |lock|, |actual| and |tableSpecs| will reflect the
-	// current state of the world upon return. Callers should check that
-	// |actual| == |newRoot| and, if not, merge any desired new table
-	// information with the contents of |tableSpecs| before trying again.
+	// |newContents|. If |lastLock| matches the lock hash in the currently
+	// persisted manifest (logically, the lock that would be returned by
+	// ParseIfExists), then Update succeeds and subsequent calls to both
+	// Update and ParseIfExists will reflect a manifest containing
+	// |newContents|. If not, Update fails. Regardless, the returned
+	// manifestContents will reflect the current state of the world. Callers
+	// should check that the returned root == the proposed root and, if not,
+	// merge any desired new table information with the contents of the
+	// returned []tableSpec before trying again.
 	// Concrete implementations are responsible for ensuring that concurrent
 	// Update calls (and ParseIfExists calls) are correct.
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(
-		lastLock, newLock addr,
-		specs []tableSpec,
-		newRoot hash.Hash,
-		stats *Stats,
-		writeHook func(),
-	) (
-		lock addr,
-		actual hash.Hash,
-		tableSpecs []tableSpec,
-	)
+	Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents
 
 	// Name returns a stable, unique identifier for the store this manifest describes.
 	Name() string
+}
+
+type manifestContents struct {
+	vers  string
+	lock  addr
+	root  hash.Hash
+	specs []tableSpec
+}
+
+func (mc manifestContents) size() (size uint64) {
+	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
+	for _, sp := range mc.specs {
+		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
+	}
+	return
+}
+
+func newManifestCache(maxSize uint64) *manifestCache {
+	return &manifestCache{sizecache.New(maxSize)}
+}
+
+type manifestCache struct {
+	sc *sizecache.SizeCache
+}
+
+func (mc *manifestCache) Get(db string) (contents manifestContents, present bool) {
+	var cached interface{}
+	if cached, present = mc.sc.Get(db); present {
+		contents = cached.(manifestContents)
+	}
+	return
+}
+
+func (mc *manifestCache) Put(db string, size uint64, contents manifestContents) {
+	mc.sc.Drop(db)
+	mc.sc.Add(db, size, contents)
 }
 
 type tableSpec struct {

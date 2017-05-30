@@ -30,7 +30,12 @@ const (
 // |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
 // | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
 type fileManifest struct {
-	dir string
+	dir   string
+	cache *manifestCache
+}
+
+func newFileManifest(dir string, cache *manifestCache) manifest {
+	return fileManifest{dir, cache}
 }
 
 func (fm fileManifest) Name() string {
@@ -43,7 +48,7 @@ func (fm fileManifest) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manfiest file lock.
 // This is to allow for race condition testing.
-func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, vers string, lock addr, root hash.Hash, tableSpecs []tableSpec) {
+func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTime(time.Since(t1)) }()
 
@@ -63,9 +68,10 @@ func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool
 		if f != nil {
 			defer checkClose(f)
 			exists = true
-			vers, lock, root, tableSpecs = parseManifest(f)
+			contents = parseManifest(f)
 		}
 	}
+	fm.cache.Put(fm.Name(), contents.size(), contents)
 	return
 }
 
@@ -79,7 +85,7 @@ func openIfExists(path string) *os.File {
 	return f
 }
 
-func parseManifest(r io.Reader) (nomsVersion string, lock addr, root hash.Hash, specs []tableSpec) {
+func parseManifest(r io.Reader) manifestContents {
 	manifest, err := ioutil.ReadAll(r)
 	d.PanicIfError(err)
 
@@ -89,20 +95,30 @@ func parseManifest(r io.Reader) (nomsVersion string, lock addr, root hash.Hash, 
 	}
 	d.PanicIfFalse(StorageVersion == string(slices[0]))
 
-	return slices[1], ParseAddr([]byte(slices[2])), hash.Parse(slices[3]), parseSpecs(slices[4:])
+	return manifestContents{
+		vers:  slices[1],
+		lock:  ParseAddr([]byte(slices[2])),
+		root:  hash.Parse(slices[3]),
+		specs: parseSpecs(slices[4:]),
+	}
 }
 
-func (fm fileManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot hash.Hash, stats *Stats, writeHook func()) (lock addr, actual hash.Hash, tableSpecs []tableSpec) {
+func (fm fileManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+	if upstream, hit := fm.cache.Get(fm.Name()); hit {
+		if lastLock != upstream.lock {
+			return upstream
+		}
+	}
+
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTime(time.Since(t1)) }()
-
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath := func() string {
 		temp, err := ioutil.TempFile(fm.dir, "nbs_manifest_")
 		d.PanicIfError(err)
 		defer checkClose(temp)
-		writeManifest(temp, newLock, newRoot, specs)
+		writeManifest(temp, newContents)
 		return temp.Name()
 	}()
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
@@ -116,32 +132,34 @@ func (fm fileManifest) Update(lastLock, newLock addr, specs []tableSpec, newRoot
 	}
 
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
+	var upstream manifestContents
 	manifestPath := filepath.Join(fm.dir, manifestFileName)
 	func() {
 		if f := openIfExists(manifestPath); f != nil {
 			defer checkClose(f)
 
-			var mVers string
-			mVers, lock, actual, tableSpecs = parseManifest(f)
-			d.PanicIfFalse(constants.NomsVersion == mVers)
+			upstream = parseManifest(f)
+			d.PanicIfFalse(constants.NomsVersion == upstream.vers)
 		} else {
 			d.Chk.True(lastLock == addr{})
 		}
 	}()
 
-	if lastLock != lock {
-		return lock, actual, tableSpecs
+	if lastLock == upstream.lock {
+		rerr := os.Rename(tempManifestPath, manifestPath)
+		d.PanicIfError(rerr)
+		upstream = newContents
 	}
-	rerr := os.Rename(tempManifestPath, manifestPath)
-	d.PanicIfError(rerr)
-	return newLock, newRoot, specs
+
+	fm.cache.Put(fm.Name(), upstream.size(), upstream)
+	return upstream
 }
 
-func writeManifest(temp io.Writer, lock addr, root hash.Hash, specs []tableSpec) {
-	strs := make([]string, 2*len(specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = StorageVersion, constants.NomsVersion, lock.String(), root.String()
+func writeManifest(temp io.Writer, contents manifestContents) {
+	strs := make([]string, 2*len(contents.specs)+4)
+	strs[0], strs[1], strs[2], strs[3] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String()
 	tableInfo := strs[4:]
-	formatSpecs(specs, tableInfo)
+	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 	d.PanicIfError(err)
 }
