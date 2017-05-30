@@ -36,7 +36,9 @@ type SpecOptions struct {
 	Authorization string
 }
 
-// Spec locates a Noms database, dataset, or value globally.
+// Spec locates a Noms database, dataset, or value globally. Spec caches
+// its database instance, providing a consistent view of the data. It 
+// therefore does not reflect new commits in the db, by design.
 type Spec struct {
 	// Protocol is one of "mem", "ldb", "http", or "https".
 	Protocol string
