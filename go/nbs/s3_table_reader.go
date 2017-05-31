@@ -30,6 +30,7 @@ type s3TableReader struct {
 	bucket string
 	h      addr
 	readRl chan struct{}
+	tc     *fsTableCache
 }
 
 type s3svc interface {
@@ -42,8 +43,8 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}) chunkSource {
-	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl}
+func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}, tc *fsTableCache) chunkSource {
+	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl, tc: tc}
 
 	var index tableIndex
 	found := false
@@ -74,7 +75,25 @@ func (s3tr *s3TableReader) hash() addr {
 	return s3tr.h
 }
 
-func (s3tr *s3TableReader) ReadAt(p []byte, off int64) (n int, err error) {
+func (s3tr *s3TableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+	t1 := time.Now()
+
+	if s3tr.tc != nil {
+		r := s3tr.tc.checkout(s3tr.hash())
+		if r != nil {
+			defer func() {
+				stats.FileBytesPerRead.Sample(uint64(len(p)))
+				stats.FileReadLatency.SampleTime(roundedSince(t1))
+			}()
+			defer s3tr.tc.checkin(s3tr.hash())
+			return r.ReadAt(p, off)
+		}
+	}
+
+	defer func() {
+		stats.S3BytesPerRead.Sample(uint64(len(p)))
+		stats.S3ReadLatency.SampleTime(roundedSince(t1))
+	}()
 	return s3tr.readRange(p, s3RangeHeader(off, int64(len(p))))
 }
 

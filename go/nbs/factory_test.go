@@ -16,7 +16,7 @@ import (
 
 func TestLocalStoreFactory(t *testing.T) {
 	assert := assert.New(t)
-	dir := makeTempDir(assert)
+	dir := makeTempDir(t)
 	defer os.RemoveAll(dir)
 
 	f := NewLocalStoreFactory(dir, 0, 8)

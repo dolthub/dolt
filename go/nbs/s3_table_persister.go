@@ -32,10 +32,11 @@ type s3TablePersister struct {
 	targetPartSize, minPartSize, maxPartSize uint64
 	indexCache                               *indexCache
 	readRl                                   chan struct{}
+	tc                                       *fsTableCache
 }
 
 func (s3p s3TablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache, s3p.readRl)
+	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache, s3p.readRl, s3p.tc)
 }
 
 type s3UploadedPart struct {
@@ -52,6 +53,9 @@ func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint
 		return emptyChunkSource{}
 	}
 	t1 := time.Now()
+	if s3p.tc != nil {
+		go s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
+	}
 	s3p.multipartUpload(data, name.String())
 	verbose.Log("Compacted table of %d Kb in %s", len(data)/1024, time.Since(t1))
 
@@ -209,7 +213,21 @@ func (s3p s3TablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunk
 	s3p.executeCompactionPlan(plan, name.String())
 	verbose.Log("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
+	if s3p.tc != nil {
+		go s3p.loadIntoCache(name) // load conjoined table to the cache
+	}
 	return s3p.newReaderFromIndexData(plan.mergedIndex, name)
+}
+
+func (s3p s3TablePersister) loadIntoCache(name addr) {
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(s3p.bucket),
+		Key:    aws.String(name.String()),
+	}
+	result, err := s3p.s3.GetObject(input)
+	d.PanicIfError(err)
+
+	s3p.tc.store(name, result.Body, uint64(*result.ContentLength))
 }
 
 func (s3p s3TablePersister) executeCompactionPlan(plan compactionPlan, key string) {

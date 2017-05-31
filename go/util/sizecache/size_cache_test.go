@@ -6,6 +6,7 @@ package sizecache
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 
@@ -74,6 +75,23 @@ func TestSizeCache(t *testing.T) {
 	assert.Equal(uint64(800), c.totalSize)
 	assert.Equal(4, c.lru.Len())
 	assert.Equal(4, len(c.cache))
+}
+
+func TestSizeCacheWithExpiry(t *testing.T) {
+	expired := []string{}
+	expire := func(key interface{}) {
+		expired = append(expired, key.(string))
+	}
+
+	c := NewWithExpireCallback(5, expire)
+	data := []string{"a", "b", "c", "d", "e"}
+	for i, k := range data {
+		c.Add(k, 1, i)
+	}
+
+	c.Add("big", 5, "thing")
+	sort.Sort(sort.StringSlice(expired))
+	assert.Equal(t, data, expired)
 }
 
 func concurrencySizeCacheTest(data []string) {

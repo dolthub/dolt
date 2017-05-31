@@ -17,7 +17,7 @@ import (
 )
 
 func TestFDCache(t *testing.T) {
-	dir := makeTempDir(assert.New(t))
+	dir := makeTempDir(t)
 	defer os.RemoveAll(dir)
 
 	paths := [3]string{}

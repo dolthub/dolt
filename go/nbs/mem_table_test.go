@@ -84,18 +84,30 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _ := buildTable(chunks[1:2])
 	td2, _ := buildTable(chunks[2:])
-	tr1 := newTableReader(parseTableIndex(td1), bytes.NewReader(td1), fileBlockSize)
-	tr2 := newTableReader(parseTableIndex(td2), bytes.NewReader(td2), fileBlockSize)
+	tr1 := newTableReader(parseTableIndex(td1), tableReaderAtFromBytes(td1), fileBlockSize)
+	tr2 := newTableReader(parseTableIndex(td2), tableReaderAtFromBytes(td2), fileBlockSize)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	assert.Equal(uint32(1), count)
 
-	outReader := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
+	outReader := newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
+}
+
+type tableReaderAtAdapter struct {
+	*bytes.Reader
+}
+
+func tableReaderAtFromBytes(b []byte) tableReaderAt {
+	return tableReaderAtAdapter{bytes.NewReader(b)}
+}
+
+func (adapter tableReaderAtAdapter) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+	return adapter.ReadAt(p, off)
 }
 
 func TestMemTableSnappyWriteOutOfLine(t *testing.T) {

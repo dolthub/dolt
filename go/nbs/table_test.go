@@ -10,8 +10,6 @@ import (
 	"sort"
 	"testing"
 
-	"bytes"
-
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -49,7 +47,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -92,7 +90,7 @@ func TestHasMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -138,7 +136,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	length, _ := tw.finish()
 	buff = buff[:length]
 
-	tr := newTableReader(parseTableIndex(buff), bytes.NewReader(buff), fileBlockSize)
+	tr := newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -162,7 +160,7 @@ func TestGetMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(data)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
@@ -197,7 +195,7 @@ func TestCalcReads(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), 0)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), 0)
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
@@ -228,7 +226,7 @@ func TestExtract(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
@@ -258,7 +256,7 @@ func Test65k(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -303,7 +301,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	}
 
 	tableData, _ := buildTable(data)
-	tr := newTableReader(parseTableIndex(tableData), bytes.NewReader(tableData), fileBlockSize)
+	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	getBatch := make([]getRecord, len(data))
 	for i := 0; i < count; i++ {

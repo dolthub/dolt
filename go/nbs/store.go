@@ -75,6 +75,7 @@ func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize ui
 		maxS3PartSize,
 		globalIndexCache,
 		make(chan struct{}, 32),
+		nil,
 	}
 	return newAWSStore(table, ns, ddb, globalManifestCache, p, globalConjoiner, memTableSize)
 }
@@ -122,11 +123,7 @@ func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
 	nbs.putCount++
 
-	dur := time.Since(t1) // This actually was 0 sometimes: see attic BUG 1787
-	if dur == 0 {
-		dur = time.Duration(1)
-	}
-	nbs.stats.PutLatency.SampleTime(dur)
+	nbs.stats.PutLatency.SampleTime(roundedSince(t1))
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
@@ -147,7 +144,7 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 	t1 := time.Now()
 	defer func() {
-		nbs.stats.GetLatency.SampleTime(time.Since(t1))
+		nbs.stats.GetLatency.SampleTime(roundedSince(t1))
 		nbs.stats.ChunksPerGet.Sample(1)
 	}()
 
@@ -176,7 +173,7 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 
 	defer func() {
 		if len(hashes) > 0 {
-			nbs.stats.GetLatency.SampleTime(time.Since(t1))
+			nbs.stats.GetLatency.SampleTime(roundedSince(t1))
 			nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
 		}
 	}()
@@ -266,7 +263,7 @@ func (nbs *NomsBlockStore) Count() uint32 {
 func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
 	t1 := time.Now()
 	defer func() {
-		nbs.stats.HasLatency.SampleTime(time.Since(t1))
+		nbs.stats.HasLatency.SampleTime(roundedSince(t1))
 		nbs.stats.AddressesPerHas.Sample(1)
 	}()
 
@@ -304,7 +301,7 @@ func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
 	}
 
 	if len(hashes) > 0 {
-		nbs.stats.HasLatency.SampleTime(time.Since(t1))
+		nbs.stats.HasLatency.SampleTime(roundedSince(t1))
 		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
 	}
 

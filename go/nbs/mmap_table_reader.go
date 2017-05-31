@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -86,11 +87,19 @@ type cacheReaderAt struct {
 	fc   *fdCache
 }
 
-func (cra *cacheReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+func (cra *cacheReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
 	var r io.ReaderAt
+	t1 := time.Now()
+
 	if r, err = cra.fc.RefFile(cra.path); err != nil {
 		return
 	}
+	defer func() {
+		stats.FileBytesPerRead.Sample(uint64(len(p)))
+		stats.FileReadLatency.SampleTime(roundedSince(t1))
+	}()
+
 	defer cra.fc.UnrefFile(cra.path)
+
 	return r.ReadAt(p, off)
 }

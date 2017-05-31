@@ -14,9 +14,10 @@ type Stats struct {
 	GetLatency   metrics.Histogram
 	ChunksPerGet metrics.Histogram
 
-	ReadLatency   metrics.Histogram
-	BytesPerRead  metrics.Histogram
-	ChunksPerRead metrics.Histogram
+	FileReadLatency  metrics.Histogram
+	FileBytesPerRead metrics.Histogram
+	S3ReadLatency    metrics.Histogram
+	S3BytesPerRead   metrics.Histogram
 
 	HasLatency      metrics.Histogram
 	AddressesPerHas metrics.Histogram
@@ -39,8 +40,10 @@ type Stats struct {
 func NewStats() *Stats {
 	return &Stats{
 		GetLatency:           metrics.NewTimeHistogram(),
-		ReadLatency:          metrics.NewTimeHistogram(),
-		BytesPerRead:         metrics.NewByteHistogram(),
+		FileReadLatency:      metrics.NewTimeHistogram(),
+		FileBytesPerRead:     metrics.NewByteHistogram(),
+		S3ReadLatency:        metrics.NewTimeHistogram(),
+		S3BytesPerRead:       metrics.NewByteHistogram(),
 		HasLatency:           metrics.NewTimeHistogram(),
 		PutLatency:           metrics.NewTimeHistogram(),
 		PersistLatency:       metrics.NewTimeHistogram(),
@@ -56,9 +59,11 @@ func (s *Stats) Add(other Stats) {
 	s.GetLatency.Add(other.GetLatency)
 	s.ChunksPerGet.Add(other.ChunksPerGet)
 
-	s.ReadLatency.Add(other.ReadLatency)
-	s.BytesPerRead.Add(other.BytesPerRead)
-	s.ChunksPerRead.Add(other.ChunksPerRead)
+	s.FileReadLatency.Add(other.FileReadLatency)
+	s.FileBytesPerRead.Add(other.FileBytesPerRead)
+
+	s.S3ReadLatency.Add(other.S3ReadLatency)
+	s.S3BytesPerRead.Add(other.S3BytesPerRead)
 
 	s.HasLatency.Add(other.HasLatency)
 	s.AddressesPerHas.Add(other.AddressesPerHas)
@@ -80,9 +85,11 @@ func (s Stats) Delta(other Stats) Stats {
 		s.GetLatency.Delta(other.GetLatency),
 		s.ChunksPerGet.Delta(other.ChunksPerGet),
 
-		s.ReadLatency.Delta(other.ReadLatency),
-		s.BytesPerRead.Delta(other.BytesPerRead),
-		s.ChunksPerRead.Delta(other.ChunksPerRead),
+		s.FileReadLatency.Delta(other.FileReadLatency),
+		s.FileBytesPerRead.Delta(other.FileBytesPerRead),
+
+		s.S3ReadLatency.Delta(other.S3ReadLatency),
+		s.S3BytesPerRead.Delta(other.S3BytesPerRead),
 
 		s.HasLatency.Delta(other.HasLatency),
 		s.AddressesPerHas.Delta(other.AddressesPerHas),
@@ -107,9 +114,10 @@ func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
 GetLatency:           %s
 ChunksPerGet:         %s
-ReadLatency:          %s
-ChunksPerRead:        %s
-BytesPerRead:         %s
+FileReadLatency:      %s
+FileBytesPerRead:     %s
+S3ReadLatency:        %s
+S3BytesPerRead:       %s
 HasLatency:           %s
 AddressesHasGet:      %s
 PutLatency:           %s
@@ -126,9 +134,11 @@ WriteManifestLatency: %s
 		s.GetLatency,
 		s.ChunksPerGet,
 
-		s.ReadLatency,
-		s.ChunksPerRead,
-		s.BytesPerRead,
+		s.FileReadLatency,
+		s.FileBytesPerRead,
+
+		s.S3ReadLatency,
+		s.S3BytesPerRead,
 
 		s.HasLatency,
 		s.AddressesPerHas,

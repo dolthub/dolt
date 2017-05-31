@@ -18,6 +18,7 @@ import (
 
 const (
 	defaultAWSReadLimit = 1024
+	awsMaxOpenFiles     = 8192
 	awsMaxTables        = 128
 )
 
@@ -33,11 +34,16 @@ type AWSStoreFactory struct {
 // NewAWSStoreFactory returns a ChunkStore factory that vends NomsBlockStore
 // instances that store manifests in the named DynamoDB table, and chunk data
 // in the named S3 bucket. All connections to AWS services share |sess|.
-func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize uint64) chunks.Factory {
+func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheSize, tableCacheSize uint64, tableCacheDir string) chunks.Factory {
 	var indexCache *indexCache
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
 	}
+	var tc *fsTableCache
+	if tableCacheSize > 0 {
+		tc = newFSTableCache(tableCacheDir, tableCacheSize, awsMaxOpenFiles)
+	}
+
 	return &AWSStoreFactory{
 		dynamodb.New(sess),
 		&s3TablePersister{
@@ -48,6 +54,7 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, indexCacheS
 			maxS3PartSize,
 			indexCache,
 			make(chan struct{}, defaultAWSReadLimit),
+			tc,
 		},
 		table,
 		newManifestCache(defaultManifestCacheSize),

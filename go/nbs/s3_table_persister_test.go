@@ -5,7 +5,6 @@
 package nbs
 
 import (
-	"bytes"
 	"math/rand"
 	"sync"
 	"testing"
@@ -23,12 +22,12 @@ func TestS3TablePersisterPersist(t *testing.T) {
 	}
 
 	s3svc := makeFakeS3(assert)
-	cache := newIndexCache(1024)
+	ic := newIndexCache(1024)
 	sz := calcPartSize(mt, 3)
-	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: sz, indexCache: cache}
+	s3p := s3TablePersister{s3: s3svc, bucket: "bucket", targetPartSize: sz, indexCache: ic}
 
 	src := s3p.Persist(mt, nil, &Stats{})
-	assert.NotNil(cache.get(src.hash()))
+	assert.NotNil(ic.get(src.hash()))
 
 	if assert.True(src.count() > 0) {
 		if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -168,9 +167,13 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 	targetPartSize := uint64(1024)
 	minPartSize, maxPartSize := targetPartSize, 5*targetPartSize
 
-	cache := newIndexCache(1024)
+	ic := newIndexCache(1024)
 	rl := make(chan struct{}, 8)
 	defer close(rl)
+
+	newPersister := func(s3svc s3svc) s3TablePersister {
+		return s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, ic, rl, nil}
+	}
 
 	smallChunks := [][]byte{}
 	rnd := rand.New(rand.NewSource(0))
@@ -195,12 +198,12 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 		t.Run("TotalUnderMinSize", func(t *testing.T) {
 			assert := assert.New(t)
 			s3svc := makeFakeS3(assert)
-			s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
+			s3p := newPersister(s3svc)
 
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
 			src := s3p.ConjoinAll(sources, &Stats{})
-			assert.NotNil(cache.get(src.hash()))
+			assert.NotNil(ic.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
 				if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -212,11 +215,11 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 		t.Run("TotalOverMinSize", func(t *testing.T) {
 			assert := assert.New(t)
 			s3svc := makeFakeS3(assert)
-			s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
+			s3p := newPersister(s3svc)
 
 			sources := makeSources(s3p, smallChunks)
 			src := s3p.ConjoinAll(sources, &Stats{})
-			assert.NotNil(cache.get(src.hash()))
+			assert.NotNil(ic.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
 				if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -237,7 +240,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 	t.Run("AllOverMax", func(t *testing.T) {
 		assert := assert.New(t)
 		s3svc := makeFakeS3(assert)
-		s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
+		s3p := newPersister(s3svc)
 
 		// Make 2 chunk sources that each have >maxPartSize chunk data
 		sources := make(chunkSources, 2)
@@ -249,7 +252,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 			sources[i] = s3p.Persist(mt, nil, &Stats{})
 		}
 		src := s3p.ConjoinAll(sources, &Stats{})
-		assert.NotNil(cache.get(src.hash()))
+		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
 			if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -262,7 +265,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 	t.Run("SomeOverMax", func(t *testing.T) {
 		assert := assert.New(t)
 		s3svc := makeFakeS3(assert)
-		s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
+		s3p := newPersister(s3svc)
 
 		// Add one chunk source that has >maxPartSize data
 		mtb := newMemTable(uint64(2 * maxPartSize))
@@ -281,7 +284,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 		sources := chunkSources{s3p.Persist(mt, nil, &Stats{}), s3p.Persist(mtb, nil, &Stats{})}
 
 		src := s3p.ConjoinAll(sources, &Stats{})
-		assert.NotNil(cache.get(src.hash()))
+		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
 			if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -294,7 +297,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 	t.Run("Mix", func(t *testing.T) {
 		assert := assert.New(t)
 		s3svc := makeFakeS3(assert)
-		s3p := s3TablePersister{s3svc, "bucket", targetPartSize, minPartSize, maxPartSize, cache, rl}
+		s3p := newPersister(s3svc)
 
 		// Start with small tables. Since total > minPartSize, will require more than one part to upload.
 		sources := make(chunkSources, len(smallChunks))
@@ -322,7 +325,7 @@ func TestS3TablePersisterConjoinAll(t *testing.T) {
 		sources = append(sources, s3p.Persist(mt, nil, &Stats{}))
 
 		src := s3p.ConjoinAll(sources, &Stats{})
-		assert.NotNil(cache.get(src.hash()))
+		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
 			if r := s3svc.readerForTable(src.hash()); assert.NotNil(r) {
@@ -347,6 +350,6 @@ func bytesToChunkSource(bs ...[]byte) chunkSource {
 	}
 	tableSize, name := tw.finish()
 	data := buff[:tableSize]
-	rdr := newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize)
+	rdr := newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize)
 	return chunkSourceAdapter{rdr, name}
 }

@@ -26,10 +26,14 @@ type tableIndex struct {
 	suffixes              []byte
 }
 
+type tableReaderAt interface {
+	ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error)
+}
+
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
 type tableReader struct {
 	tableIndex
-	r         io.ReaderAt
+	r         tableReaderAt
 	blockSize uint64
 }
 
@@ -139,7 +143,7 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
-func newTableReader(index tableIndex, r io.ReaderAt, blockSize uint64) tableReader {
+func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableReader {
 	return tableReader{index, r, blockSize}
 }
 
@@ -215,12 +219,7 @@ func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
 	length := uint64(tr.lengths[ordinal])
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
 
-	t1 := time.Now()
-	n, err := tr.r.ReadAt(buff, int64(offset))
-	stats.BytesPerRead.Sample(length)
-	stats.ChunksPerRead.SampleLen(1)
-	stats.ReadLatency.SampleTime(roundedSince(t1))
-
+	n, err := tr.r.ReadAtWithStats(buff, int64(offset), stats)
 	d.Chk.NoError(err)
 	d.Chk.True(n == int(length))
 	data = tr.parseChunk(buff)
@@ -260,11 +259,7 @@ func (tr tableReader) readAtOffsets(
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
 
-	t1 := time.Now()
-	n, err := tr.r.ReadAt(buff, int64(readStart))
-	stats.BytesPerRead.Sample(readLength)
-	stats.ChunksPerRead.SampleLen(len(offsets))
-	stats.ReadLatency.SampleTime(roundedSince(t1))
+	n, err := tr.r.ReadAtWithStats(buff, int64(readStart), stats)
 
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == readLength)
@@ -471,7 +466,7 @@ func (tr tableReader) extract(chunks chan<- extractRecord) {
 	}
 	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
 	buff := make([]byte, chunkLen)
-	n, err := tr.r.ReadAt(buff, int64(tr.offsets[0]))
+	n, err := tr.r.ReadAtWithStats(buff, int64(tr.offsets[0]), &Stats{})
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == chunkLen)
 
@@ -490,12 +485,12 @@ func (tr tableReader) reader() io.Reader {
 }
 
 type readerAdapter struct {
-	rat io.ReaderAt
+	rat tableReaderAt
 	off int64
 }
 
 func (ra *readerAdapter) Read(p []byte) (n int, err error) {
-	n, err = ra.rat.ReadAt(p, ra.off)
+	n, err = ra.rat.ReadAtWithStats(p, ra.off, &Stats{})
 	ra.off += int64(n)
 	return
 }

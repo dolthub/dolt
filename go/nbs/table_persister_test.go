@@ -5,7 +5,6 @@
 package nbs
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/attic-labs/testify/assert"
@@ -27,7 +26,7 @@ func TestPlanCompaction(t *testing.T) {
 			totalUnc += uint64(len(chnk))
 		}
 		data, name := buildTable(content)
-		src := chunkSourceAdapter{newTableReader(parseTableIndex(data), bytes.NewReader(data), fileBlockSize), name}
+		src := chunkSourceAdapter{newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize), name}
 		dataLens = append(dataLens, uint64(len(data))-indexSize(src.count())-footerSize)
 		sources = append(sources, src)
 	}
@@ -45,7 +44,7 @@ func TestPlanCompaction(t *testing.T) {
 	assert.Equal(totalChunks, idx.chunkCount)
 	assert.Equal(totalUnc, idx.totalUncompressedData)
 
-	tr := newTableReader(idx, bytes.NewReader(nil), fileBlockSize)
+	tr := newTableReader(idx, tableReaderAtFromBytes(nil), fileBlockSize)
 	for _, content := range tableContents {
 		assertChunksInReader(content, tr, assert)
 	}

@@ -49,7 +49,7 @@ func TestStats(t *testing.T) {
 	assert.False(store.Get(c2.Hash()).IsEmpty())
 	assert.False(store.Get(c3.Hash()).IsEmpty())
 	assert.Equal(uint64(3), stats(store).GetLatency.Samples())
-	assert.Equal(uint64(0), stats(store).ReadLatency.Samples())
+	assert.Equal(uint64(0), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(4), stats(store).ChunksPerGet.Sum())
 
 	store.Commit(store.Root(), store.Root())
@@ -66,9 +66,8 @@ func TestStats(t *testing.T) {
 	store.Get(c1.Hash())
 	store.Get(c2.Hash())
 	store.Get(c3.Hash())
-	assert.Equal(uint64(3), stats(store).ReadLatency.Samples())
-	assert.Equal(uint64(36), stats(store).BytesPerRead.Sum())
-	assert.Equal(uint64(4), stats(store).ChunksPerRead.Sum())
+	assert.Equal(uint64(3), stats(store).FileReadLatency.Samples())
+	assert.Equal(uint64(36), stats(store).FileBytesPerRead.Sum())
 
 	// Try A GetMany
 	chnx := make([]chunks.Chunk, 3)
@@ -81,9 +80,8 @@ func TestStats(t *testing.T) {
 	}
 	chunkChan := make(chan *chunks.Chunk, 3)
 	store.GetMany(hashes.HashSet(), chunkChan)
-	assert.Equal(uint64(4), stats(store).ReadLatency.Samples())
-	assert.Equal(uint64(60), stats(store).BytesPerRead.Sum())
-	assert.Equal(uint64(7), stats(store).ChunksPerRead.Sum())
+	assert.Equal(uint64(4), stats(store).FileReadLatency.Samples())
+	assert.Equal(uint64(60), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
 	store.c = newAsyncConjoiner(2)

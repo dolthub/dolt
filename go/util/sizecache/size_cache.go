@@ -27,10 +27,25 @@ type SizeCache struct {
 	mu        sync.Mutex
 	lru       list.List
 	cache     map[interface{}]sizeCacheEntry
+	expireCb  func(elm interface{})
 }
 
+type ExpireCallback func(key interface{})
+
+// New creates a SizeCache that will hold up to |maxSize| item data.
 func New(maxSize uint64) *SizeCache {
-	return &SizeCache{maxSize: maxSize, cache: map[interface{}]sizeCacheEntry{}}
+	return NewWithExpireCallback(maxSize, nil)
+}
+
+// NewWithExpireCallback creates a SizeCache that will hold up to |maxSize|
+// item data, and will call cb(key) when the item corresponding with that key
+// expires.
+func NewWithExpireCallback(maxSize uint64, cb ExpireCallback) *SizeCache {
+	return &SizeCache{
+		maxSize:  maxSize,
+		cache:    map[interface{}]sizeCacheEntry{},
+		expireCb: cb,
+	}
 }
 
 // entry() checks if the value is in the cache. If not in the cache, it returns an
@@ -88,6 +103,9 @@ func (c *SizeCache) Add(key interface{}, size uint64, value interface{}) {
 			delete(c.cache, key1)
 			c.totalSize -= ce.size
 			c.lru.Remove(el)
+			if c.expireCb != nil {
+				c.expireCb(key1)
+			}
 			el = next
 		}
 	}

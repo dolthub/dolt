@@ -17,7 +17,8 @@ import (
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
 // opening persistent tables for reading, and conjoining a number of existing
-// chunkSources into one.
+// chunkSources into one. A tablePersister implementation must be goroutine-
+// safe.
 type tablePersister interface {
 	// Persist makes the contents of mt durable. Chunks already present in
 	// |haver| may be dropped in the process.
@@ -27,9 +28,7 @@ type tablePersister interface {
 	// chunkSource.
 	ConjoinAll(sources chunkSources, stats *Stats) chunkSource
 
-	// Open a table named |name|, containing |chunkCount| chunks. The
-	// tablePersister is responsible for managing the lifetime of the returned
-	// chunkSource. TODO: Is that actually true? Or can we get rid of explicit 'close'
+	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(name addr, chunkCount uint32) chunkSource
 }
 

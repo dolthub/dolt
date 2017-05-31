@@ -155,6 +155,11 @@ func ParseAddr(b []byte) (h addr) {
 	return
 }
 
+func ValidateAddr(s string) bool {
+	_, err := encoding.DecodeString(s)
+	return err == nil
+}
+
 type addrSlice []addr
 
 func (hs addrSlice) Len() int           { return len(hs) }
