@@ -14,6 +14,8 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+const tempTablePrefix = "nbs_table_"
+
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
 	d.PanicIfTrue(fc == nil)
 	return &fsTablePersister{dir, fc, indexCache}
@@ -38,7 +40,7 @@ func (ftp *fsTablePersister) persistTable(name addr, data []byte, chunkCount uin
 		return emptyChunkSource{}
 	}
 	tempName := func() string {
-		temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
+		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
 		d.PanicIfError(err)
 		defer checkClose(temp)
 		io.Copy(temp, bytes.NewReader(data))
@@ -62,7 +64,7 @@ func (ftp *fsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chun
 
 	name := nameFromSuffixes(plan.suffixes())
 	tempName := func() string {
-		temp, err := ioutil.TempFile(ftp.dir, "nbs_table_")
+		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
 		d.PanicIfError(err)
 		defer checkClose(temp)
 

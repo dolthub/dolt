@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -44,6 +45,9 @@ func (ftc *fsTableCache) init(concurrency int) {
 		isTableFile := func(info os.FileInfo) bool {
 			return info.Mode().IsRegular() && ValidateAddr(info.Name())
 		}
+		isTempTableFile := func(info os.FileInfo) bool {
+			return info.Mode().IsRegular() && strings.HasPrefix(info.Name(), tempTablePrefix)
+		}
 		defer close(errc)
 		defer close(infos)
 		// No select needed for this send, since errc is buffered.
@@ -52,6 +56,10 @@ func (ftc *fsTableCache) init(concurrency int) {
 				return err
 			}
 			if path == ftc.dir {
+				return nil
+			}
+			if isTempTableFile(info) {
+				os.Remove(path)
 				return nil
 			}
 			if !isTableFile(info) {
@@ -96,7 +104,7 @@ func (ftc *fsTableCache) checkin(h addr) {
 func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) {
 	path := filepath.Join(ftc.dir, h.String())
 	tempName := func() string {
-		temp, err := ioutil.TempFile(ftc.dir, "nbs_table_")
+		temp, err := ioutil.TempFile(ftc.dir, tempTablePrefix)
 		d.PanicIfError(err)
 		defer checkClose(temp)
 		io.Copy(temp, data)
