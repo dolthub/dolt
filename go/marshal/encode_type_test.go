@@ -111,11 +111,64 @@ func TestMarshalTypeInvalidTypes(t *testing.T) {
 }
 
 func TestMarshalTypeEmbeddedStruct(t *testing.T) {
-	type EmbeddedStruct struct{}
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		B bool
+	}
 	type TestStruct struct {
 		EmbeddedStruct
+		A int
 	}
-	assertMarshalTypeErrorMessage(t, TestStruct{EmbeddedStruct{}}, "Embedded structs are not supported, type: marshal.TestStruct")
+
+	var s TestStruct
+	typ := MustMarshalType(s)
+
+	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
+		"a": types.NumberType,
+		"b": types.BoolType,
+	}).Equals(typ))
+}
+
+func TestMarshalTypeEmbeddedStructSkip(t *testing.T) {
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		B bool
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"-"`
+		A              int
+	}
+
+	var s TestStruct
+	typ := MustMarshalType(s)
+
+	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
+		"a": types.NumberType,
+	}).Equals(typ))
+}
+
+func TestMarshalTypeEmbeddedStructNamed(t *testing.T) {
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		B bool
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"em"`
+		A              int
+	}
+
+	var s TestStruct
+	typ := MustMarshalType(s)
+
+	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
+		"a": types.NumberType,
+		"em": types.MakeStructTypeFromFields("EmbeddedStruct", types.FieldMap{
+			"b": types.BoolType,
+		}),
+	}).Equals(typ))
 }
 
 func TestMarshalTypeEncodeNonExportedField(t *testing.T) {

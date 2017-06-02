@@ -164,12 +164,99 @@ func TestInvalidTypes(t *testing.T) {
 	assertEncodeErrorMessage(t, &x, "Type is not supported, type: *int")
 }
 
+func TestEncodeEmbeddedStructSkip(t *testing.T) {
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		X int
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"-"`
+		Y              int
+	}
+	s := TestStruct{EmbeddedStruct{1}, 2}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("TestStruct", types.StructData{
+		"y": types.Number(2),
+	}).Equals(v))
+}
+
+func TestEncodeEmbeddedStructWithName(t *testing.T) {
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		X int
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"em"`
+		Y              int
+	}
+	s := TestStruct{EmbeddedStruct{1}, 2}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("TestStruct", types.StructData{
+		"em": types.NewStruct("EmbeddedStruct", types.StructData{
+			"x": types.Number(1),
+		}),
+		"y": types.Number(2),
+	}).Equals(v))
+}
+
 func TestEncodeEmbeddedStruct(t *testing.T) {
-	type EmbeddedStruct struct{}
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		X int
+	}
 	type TestStruct struct {
 		EmbeddedStruct
 	}
-	assertEncodeErrorMessage(t, TestStruct{EmbeddedStruct{}}, "Embedded structs are not supported, type: marshal.TestStruct")
+	s := TestStruct{EmbeddedStruct{1}}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("TestStruct", types.StructData{
+		"x": types.Number(1),
+	}).Equals(v))
+
+	type TestOuter struct {
+		A int
+		TestStruct
+		B int
+	}
+	s2 := TestOuter{0, TestStruct{EmbeddedStruct{1}}, 2}
+	v2, err := Marshal(s2)
+	assert.NoError(err)
+	assert.True(types.NewStruct("TestOuter", types.StructData{
+		"a": types.Number(0),
+		"b": types.Number(2),
+		"x": types.Number(1),
+	}).Equals(v2))
+}
+
+func TestEncodeEmbeddedStructOriginal(t *testing.T) {
+	assert := assert.New(t)
+
+	type EmbeddedStruct struct {
+		X int
+		O types.Struct `noms:",original"`
+		B bool
+	}
+	type TestStruct struct {
+		EmbeddedStruct
+	}
+	s := TestStruct{
+		EmbeddedStruct: EmbeddedStruct{
+			X: 1,
+			B: true,
+		},
+	}
+	v, err := Marshal(s)
+	assert.NoError(err)
+	assert.True(types.NewStruct("TestStruct", types.StructData{
+		"b": types.Bool(true),
+		"x": types.Number(1),
+	}).Equals(v))
 }
 
 func TestEncodeNonExportedField(t *testing.T) {

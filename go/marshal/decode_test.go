@@ -319,12 +319,96 @@ func TestDecodeMissingField(t *testing.T) {
 }
 
 func TestDecodeEmbeddedStruct(tt *testing.T) {
-	type EmbeddedStruct struct{}
+	assert := assert.New(tt)
+
+	type EmbeddedStruct struct {
+		X int
+	}
 	type TestStruct struct {
 		EmbeddedStruct
 	}
 	var ts TestStruct
-	assertDecodeErrorMessage(tt, types.String("hi"), &ts, "Embedded structs are not supported, type: marshal.TestStruct")
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"x": types.Number(1),
+	}), &ts)
+	assert.NoError(err)
+	assert.Equal(TestStruct{EmbeddedStruct{1}}, ts)
+
+	type OuterTest struct {
+		Y bool
+		TestStruct
+	}
+	var ts2 OuterTest
+	err = Unmarshal(types.NewStruct("S", types.StructData{
+		"x": types.Number(2),
+		"y": types.Bool(true),
+	}), &ts2)
+	assert.NoError(err)
+	assert.Equal(OuterTest{true, TestStruct{EmbeddedStruct{2}}}, ts2)
+}
+
+func TestDecodeEmbeddedStructSkip(tt *testing.T) {
+	assert := assert.New(tt)
+
+	type EmbeddedStruct struct {
+		X int
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"-"`
+		Y              int
+	}
+	ts := TestStruct{EmbeddedStruct: EmbeddedStruct{42}}
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"y": types.Number(2),
+	}), &ts)
+	assert.NoError(err)
+	assert.Equal(TestStruct{EmbeddedStruct{42}, 2}, ts)
+}
+
+func TestDecodeEmbeddedStructNamed(tt *testing.T) {
+	assert := assert.New(tt)
+
+	type EmbeddedStruct struct {
+		X int
+	}
+	type TestStruct struct {
+		EmbeddedStruct `noms:"em"`
+		Y              int
+	}
+	ts := TestStruct{EmbeddedStruct: EmbeddedStruct{42}}
+	err := Unmarshal(types.NewStruct("S", types.StructData{
+		"em": types.NewStruct("S", types.StructData{
+			"x": types.Number(1),
+		}),
+		"y": types.Number(2),
+	}), &ts)
+	assert.NoError(err)
+	assert.Equal(TestStruct{EmbeddedStruct{1}, 2}, ts)
+}
+
+func TestDecodeEmbeddedStructOriginal(tt *testing.T) {
+	assert := assert.New(tt)
+
+	type EmbeddedStruct struct {
+		X int
+		O types.Struct `noms:",original"`
+	}
+	type TestStruct struct {
+		EmbeddedStruct
+	}
+	var ts TestStruct
+	nomsStruct := types.NewStruct("S", types.StructData{
+		"x": types.Number(1),
+	})
+	err := Unmarshal(nomsStruct, &ts)
+	assert.NoError(err)
+	expected := TestStruct{
+		EmbeddedStruct: EmbeddedStruct{
+			X: 1,
+			O: nomsStruct,
+		},
+	}
+	assert.Equal(expected, ts)
 }
 
 func TestDecodeNonExportedField(tt *testing.T) {

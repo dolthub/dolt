@@ -280,9 +280,42 @@ func (c *decoderCacheT) set(t reflect.Type, d decoderFunc) {
 type decField struct {
 	name      string
 	decoder   decoderFunc
-	index     int
+	index     []int
 	omitEmpty bool
 	original  bool
+}
+
+func structDecoderFields(t reflect.Type) []decField {
+	fields := make([]decField, 0, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		index := make([]int, 1)
+		index[0] = i
+		f := t.Field(i)
+		tags := getTags(f)
+		if tags.skip {
+			continue
+		}
+
+		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
+			embeddedFields := structDecoderFields(f.Type)
+			for _, ef := range embeddedFields {
+				ef.index = append(index, ef.index...)
+				fields = append(fields, ef)
+			}
+			continue
+		}
+
+		validateField(f, t)
+
+		fields = append(fields, decField{
+			name:      tags.name,
+			decoder:   typeDecoder(f.Type, tags),
+			index:     index,
+			omitEmpty: tags.omitEmpty,
+			original:  tags.original,
+		})
+	}
+	return fields
 }
 
 func structDecoder(t reflect.Type) decoderFunc {
@@ -295,24 +328,7 @@ func structDecoder(t reflect.Type) decoderFunc {
 		return d
 	}
 
-	fields := make([]decField, 0, t.NumField())
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		tags := getTags(f)
-		if tags.skip {
-			continue
-		}
-
-		validateField(f, t)
-
-		fields = append(fields, decField{
-			name:      tags.name,
-			decoder:   typeDecoder(f.Type, tags),
-			index:     i,
-			omitEmpty: tags.omitEmpty,
-			original:  tags.original,
-		})
-	}
+	fields := structDecoderFields(t)
 
 	d = func(v types.Value, rv reflect.Value) {
 		s, ok := v.(types.Struct)
@@ -321,7 +337,7 @@ func structDecoder(t reflect.Type) decoderFunc {
 		}
 
 		for _, f := range fields {
-			sf := rv.Field(f.index)
+			sf := rv.FieldByIndex(f.index)
 			if f.original {
 				if sf.Type() != reflect.TypeOf(s) {
 					panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", field with tag \"original\" must have type Struct"})

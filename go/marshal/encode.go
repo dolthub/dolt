@@ -13,8 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"unicode"
 
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -78,10 +78,10 @@ import (
 // The name of the Noms struct is the name of the Go struct where the first
 // character is changed to upper case.
 //
-// Anonymous struct fields are currently not supported.
-//
-// Embedded structs are currently not supported (which is the same as anonymous
-// struct fields).
+// Anonymous struct fields are usually marshaled as if their inner exported
+// fields were fields in the outer struct, subject to the usual Go visibility.
+// An anonymous struct field with a name given in its Noms tag is treated as
+// having that name, rather than being anonymous.
 //
 // Noms values (values implementing types.Value) are copied over without any
 // change.
@@ -165,6 +165,7 @@ type nomsTags struct {
 	original  bool
 	set       bool
 	skip      bool
+	hasName   bool
 }
 
 var nomsValueInterface = reflect.TypeOf((*types.Value)(nil)).Elem()
@@ -266,7 +267,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 	}
 
 	seenStructs[t.Name()] = t
-	fields, _, knownShape, originalFieldIndex := typeFields(t, seenStructs, false)
+	fields, _, knownShape, originalFieldIndex := typeFields(t, seenStructs, false, false)
 	if knownShape {
 		fieldNames := make([]string, len(fields))
 		for i, f := range fields {
@@ -277,7 +278,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 		e = func(v reflect.Value) types.Value {
 			values := make(types.ValueSlice, len(fields))
 			for i, f := range fields {
-				values[i] = f.encoder(v.Field(f.index))
+				values[i] = f.encoder(v.FieldByIndex(f.index))
 			}
 			return structTemplate.NewStruct(values)
 		}
@@ -288,7 +289,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 		e = func(v reflect.Value) types.Value {
 			data := make(types.StructData, len(fields))
 			for _, f := range fields {
-				fv := v.Field(f.index)
+				fv := v.FieldByIndex(f.index)
 				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
 					continue
 				}
@@ -306,7 +307,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 				ret = types.NewStruct(t.Name(), nil)
 			}
 			for _, f := range fields {
-				fv := v.Field(f.index)
+				fv := v.FieldByIndex(f.index)
 				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
 					continue
 				}
@@ -344,7 +345,7 @@ func isEmptyValue(v reflect.Value) bool {
 type field struct {
 	name      string
 	encoder   encoderFunc
-	index     int
+	index     []int
 	nomsType  *types.Type
 	omitEmpty bool
 }
@@ -395,6 +396,7 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 		tags.name = strings.ToLower(f.Name[:1]) + f.Name[1:]
 	} else {
 		tags.name = tagsSlice[0]
+		tags.hasName = true
 	}
 
 	if !types.IsValidStructFieldName(tags.name) {
@@ -417,17 +419,19 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 }
 
 func validateField(f reflect.StructField, t reflect.Type) {
-	if f.Anonymous {
-		panic(&UnsupportedTypeError{t, "Embedded structs are not supported"})
-	}
-	if unicode.IsLower(rune(f.Name[0])) { // we only allow ascii so this is fine
+	// PkgPath is the package path that qualifies a lower case (unexported)
+	// field name. It is empty for upper case (exported) field names.
+	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
+	if f.PkgPath != "" && !f.Anonymous { // unexported
 		panic(&UnsupportedTypeError{t, "Non exported fields are not supported"})
 	}
 }
 
-func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType bool) (fields fieldSlice, structType *types.Type, knownShape bool, originalFieldIndex []int) {
+func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, structType *types.Type, knownShape bool, originalFieldIndex []int) {
 	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
+		index := make([]int, 1)
+		index[0] = i
 		f := t.Field(i)
 		tags := getTags(f)
 		if tags.skip {
@@ -436,6 +440,24 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 
 		if tags.original {
 			originalFieldIndex = f.Index
+			continue
+		}
+
+		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
+			embeddedFields, embeddedStructType, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(f.Type, seenStructs, computeType, true)
+			if embeddedOriginalFieldIndex != nil {
+				originalFieldIndex = append(index, embeddedOriginalFieldIndex...)
+			}
+			knownShape = knownShape && embeddedKnownShape
+
+			// Should not compute the struct type as we traverse embedded structs.
+			d.PanicIfFalse(embeddedStructType == nil)
+
+			for _, ef := range embeddedFields {
+				ef.index = append(index, ef.index...)
+				fields = append(fields, ef)
+			}
+
 			continue
 		}
 
@@ -455,13 +477,20 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		fields = append(fields, field{
 			name:      tags.name,
 			encoder:   typeEncoder(f.Type, seenStructs, tags),
-			index:     i,
+			index:     index,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
 		})
-
 	}
+
+	if embedded {
+		// fields gets sorted once we return to the caller when computing the
+		// embedded fields.
+		return
+	}
+
 	sort.Sort(fields)
+
 	if knownShape && computeType {
 		structTypeFields := make([]types.StructField, len(fields))
 		for i, fs := range fields {
@@ -473,6 +502,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		}
 		structType = types.MakeStructType(strings.Title(t.Name()), structTypeFields...)
 	}
+
 	return
 }
 
