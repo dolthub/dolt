@@ -1010,3 +1010,41 @@ func TestMarshalerErrors(t *testing.T) {
 	m3 := panicsMarshaler{}
 	assert.Panics(func() { Marshal(m3) })
 }
+
+type TestStructWithNameImpl struct {
+	X int
+}
+
+func (ts TestStructWithNameImpl) MarshalNomsStructName() string {
+	return "A"
+}
+func TestMarshalStructName(t *testing.T) {
+	assert := assert.New(t)
+
+	ts := TestStructWithNameImpl{
+		X: 1,
+	}
+	v := MustMarshal(ts)
+	assert.True(types.NewStruct("A", types.StructData{
+		"x": types.Number(1),
+	}).Equals(v), types.EncodedValue(v))
+}
+
+type TestStructWithNameImpl2 struct {
+	X int
+}
+
+func (ts TestStructWithNameImpl2) MarshalNomsStructName() string {
+	return ""
+}
+func TestMarshalStructName2(t *testing.T) {
+	assert := assert.New(t)
+
+	ts := TestStructWithNameImpl2{
+		X: 1,
+	}
+	v := MustMarshal(ts)
+	assert.True(types.NewStruct("", types.StructData{
+		"x": types.Number(1),
+	}).Equals(v), types.EncodedValue(v))
+}

@@ -17,7 +17,8 @@ import (
 // MarshalType computes a Noms type from a Go type
 //
 // The rules for MarshalType is the same as for Marshal, except for omitempty
-// is ignored since that cannot be determined statically.
+// which leads to an optional field since it depends on the runtime value and
+// can lead to the property not being present.
 //
 // If a Go struct contains a noms tag with original the field is skipped since
 // the Noms type depends on the original Noms value which is not available.
@@ -157,6 +158,20 @@ func structEncodeType(t reflect.Type, seenStructs map[string]reflect.Type) *type
 		seenStructs[name] = t
 	}
 
-	_, structType, _, _ := typeFields(t, seenStructs, true, false)
+	fields, knownShape, _ := typeFields(t, seenStructs, true, false)
+
+	var structType *types.Type
+	if knownShape {
+		structTypeFields := make([]types.StructField, len(fields))
+		for i, fs := range fields {
+			structTypeFields[i] = types.StructField{
+				Name:     fs.name,
+				Type:     fs.nomsType,
+				Optional: fs.omitEmpty,
+			}
+		}
+		structType = types.MakeStructType(getStructName(t), structTypeFields...)
+	}
+
 	return structType
 }

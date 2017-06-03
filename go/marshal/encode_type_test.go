@@ -542,3 +542,19 @@ func TestTypeMarshalerErrors(t *testing.T) {
 	var m3 panicsMarshaler
 	assert.Panics(func() { MarshalType(m3) })
 }
+
+func TestMarshalTypeStructName(t *testing.T) {
+	assert := assert.New(t)
+
+	var ts TestStructWithNameImpl
+	typ := MustMarshalType(ts)
+	assert.True(types.MakeStructType("A", types.StructField{"x", types.NumberType, false}).Equals(typ), typ.Describe())
+}
+
+func TestMarshalTypeStructName2(t *testing.T) {
+	assert := assert.New(t)
+
+	var ts TestStructWithNameImpl2
+	typ := MustMarshalType(ts)
+	assert.True(types.MakeStructType("", types.StructField{"x", types.NumberType, false}).Equals(typ), typ.Describe())
+}

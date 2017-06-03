@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -76,7 +75,9 @@ import (
 //   Field int `noms:",omitempty"
 //
 // The name of the Noms struct is the name of the Go struct where the first
-// character is changed to upper case.
+// character is changed to upper case. You can also implement the
+// StructNameMarshaler interface to get more control over the actual struct
+// name.
 //
 // Anonymous struct fields are usually marshaled as if their inner exported
 // fields were fields in the outer struct, subject to the usual Go visibility.
@@ -122,6 +123,12 @@ type Marshaler interface {
 	// nil is not a valid return val - if both val and err are nil, Marshal will
 	// panic.
 	MarshalNoms() (val types.Value, err error)
+}
+
+// StructNameMarshaler is an interface that can be implemented to define the
+// name of a Noms struct.
+type StructNameMarshaler interface {
+	MarshalNomsStructName() string
 }
 
 // UnsupportedTypeError is returned by encode when attempting to encode a type
@@ -171,6 +178,7 @@ type nomsTags struct {
 var nomsValueInterface = reflect.TypeOf((*types.Value)(nil)).Elem()
 var emptyInterface = reflect.TypeOf((*interface{})(nil)).Elem()
 var marshalerInterface = reflect.TypeOf((*Marshaler)(nil)).Elem()
+var structNameMarshalerInterface = reflect.TypeOf((*StructNameMarshaler)(nil)).Elem()
 
 type encoderFunc func(v reflect.Value) types.Value
 
@@ -256,6 +264,14 @@ func typeEncoder(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsT
 	}
 }
 
+func getStructName(t reflect.Type) string {
+	if t.Implements(structNameMarshalerInterface) {
+		v := reflect.Zero(t)
+		return v.Interface().(StructNameMarshaler).MarshalNomsStructName()
+	}
+	return strings.Title(t.Name())
+}
+
 func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	if t.Implements(nomsValueInterface) {
 		return nomsValueEncoder
@@ -266,15 +282,17 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 		return e
 	}
 
+	structName := getStructName(t)
+
 	seenStructs[t.Name()] = t
-	fields, _, knownShape, originalFieldIndex := typeFields(t, seenStructs, false, false)
+	fields, knownShape, originalFieldIndex := typeFields(t, seenStructs, false, false)
 	if knownShape {
 		fieldNames := make([]string, len(fields))
 		for i, f := range fields {
 			fieldNames[i] = f.name
 		}
 
-		structTemplate := types.MakeStructTemplate(strings.Title(t.Name()), fieldNames)
+		structTemplate := types.MakeStructTemplate(structName, fieldNames)
 		e = func(v reflect.Value) types.Value {
 			values := make(types.ValueSlice, len(fields))
 			for i, f := range fields {
@@ -285,7 +303,6 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 	} else if originalFieldIndex == nil {
 		// Slower path: cannot precompute the Noms type since there are Noms collections,
 		// but at least there are a set number of fields.
-		name := strings.Title(t.Name())
 		e = func(v reflect.Value) types.Value {
 			data := make(types.StructData, len(fields))
 			for _, f := range fields {
@@ -295,7 +312,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 				}
 				data[f.name] = f.encoder(fv)
 			}
-			return types.NewStruct(name, data)
+			return types.NewStruct(structName, data)
 		}
 	} else {
 		// Slowest path - we are extending some other struct. We need to start with the
@@ -304,7 +321,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 			fv := v.FieldByIndex(originalFieldIndex)
 			ret := fv.Interface().(types.Struct)
 			if ret.IsZeroValue() {
-				ret = types.NewStruct(t.Name(), nil)
+				ret = types.NewStruct(structName, nil)
 			}
 			for _, f := range fields {
 				fv := v.FieldByIndex(f.index)
@@ -427,7 +444,7 @@ func validateField(f reflect.StructField, t reflect.Type) {
 	}
 }
 
-func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, structType *types.Type, knownShape bool, originalFieldIndex []int) {
+func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
 	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
 		index := make([]int, 1)
@@ -444,14 +461,11 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		}
 
 		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
-			embeddedFields, embeddedStructType, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(f.Type, seenStructs, computeType, true)
+			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(f.Type, seenStructs, computeType, true)
 			if embeddedOriginalFieldIndex != nil {
 				originalFieldIndex = append(index, embeddedOriginalFieldIndex...)
 			}
 			knownShape = knownShape && embeddedKnownShape
-
-			// Should not compute the struct type as we traverse embedded structs.
-			d.PanicIfFalse(embeddedStructType == nil)
 
 			for _, ef := range embeddedFields {
 				ef.index = append(index, ef.index...)
@@ -483,25 +497,10 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		})
 	}
 
-	if embedded {
-		// fields gets sorted once we return to the caller when computing the
-		// embedded fields.
-		return
+	if !embedded {
+		sort.Sort(fields)
 	}
-
-	sort.Sort(fields)
-
-	if knownShape && computeType {
-		structTypeFields := make([]types.StructField, len(fields))
-		for i, fs := range fields {
-			structTypeFields[i] = types.StructField{
-				Name:     fs.name,
-				Type:     fs.nomsType,
-				Optional: fs.omitEmpty,
-			}
-		}
-		structType = types.MakeStructType(strings.Title(t.Name()), structTypeFields...)
-	}
+	// If embedded then the fields gets sorted once we return to the caller.
 
 	return
 }
