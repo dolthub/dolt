@@ -46,6 +46,11 @@ func TestMarshalTypeType(tt *testing.T) {
 	var m map[uint32]string
 	t(types.MakeMapType(types.NumberType, types.StringType), m)
 
+	t(types.MakeListType(types.ValueType), types.List{})
+	t(types.MakeSetType(types.ValueType), types.Set{})
+	t(types.MakeMapType(types.ValueType, types.ValueType), types.Map{})
+	t(types.MakeRefType(types.ValueType), types.Ref{})
+
 	type TestStruct struct {
 		Str string
 		Num float64
@@ -106,8 +111,6 @@ func assertMarshalTypeErrorMessage(t *testing.T, v interface{}, expectedMessage 
 
 func TestMarshalTypeInvalidTypes(t *testing.T) {
 	assertMarshalTypeErrorMessage(t, make(chan int), "Type is not supported, type: chan int")
-	l := types.NewList()
-	assertMarshalTypeErrorMessage(t, l, "Cannot marshal type types.List, it requires type parameters")
 }
 
 func TestMarshalTypeEmbeddedStruct(t *testing.T) {
@@ -176,14 +179,6 @@ func TestMarshalTypeEncodeNonExportedField(t *testing.T) {
 		x int
 	}
 	assertMarshalTypeErrorMessage(t, TestStruct{1}, "Non exported fields are not supported, type: marshal.TestStruct")
-}
-
-func TestMarshalTypeEncodeNomsTypeWithTypeParameters(t *testing.T) {
-
-	assertMarshalTypeErrorMessage(t, types.NewList(), "Cannot marshal type types.List, it requires type parameters")
-	assertMarshalTypeErrorMessage(t, types.NewSet(), "Cannot marshal type types.Set, it requires type parameters")
-	assertMarshalTypeErrorMessage(t, types.NewMap(), "Cannot marshal type types.Map, it requires type parameters")
-	assertMarshalTypeErrorMessage(t, types.NewRef(types.NewSet()), "Cannot marshal type types.Ref, it requires type parameters")
 }
 
 func TestMarshalTypeEncodeTaggingSkip(t *testing.T) {

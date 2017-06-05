@@ -96,10 +96,20 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 			return types.BlobType
 		case "Bool":
 			return types.BoolType
+		case "List":
+			return types.MakeListType(types.ValueType)
+		case "Map":
+			return types.MakeMapType(types.ValueType, types.ValueType)
 		case "Number":
 			return types.NumberType
+		case "Ref":
+			return types.MakeRefType(types.ValueType)
+		case "Set":
+			return types.MakeSetType(types.ValueType)
 		case "String":
 			return types.StringType
+		case "Value":
+			return types.ValueType
 		}
 
 		err := fmt.Errorf("Cannot marshal type %s, it requires type parameters", t)

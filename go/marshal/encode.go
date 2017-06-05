@@ -352,7 +352,7 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.Float() == 0
 	case reflect.Struct:
 		z := reflect.Zero(v.Type())
-		return z.Interface() == v.Interface()
+		return reflect.DeepEqual(z.Interface(), v.Interface())
 	case reflect.Interface:
 		return v.IsNil()
 	}
