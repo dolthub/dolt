@@ -17,6 +17,12 @@ import (
 	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
+type tableCache interface {
+	checkout(h addr) io.ReaderAt
+	checkin(h addr)
+	store(h addr, data io.Reader, size uint64)
+}
+
 type fsTableCache struct {
 	dir   string
 	cache *sizecache.SizeCache

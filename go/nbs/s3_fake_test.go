@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
@@ -28,9 +29,9 @@ func (m mockAWSError) Code() string    { return string(m) }
 func (m mockAWSError) Message() string { return string(m) }
 func (m mockAWSError) OrigErr() error  { return nil }
 
-func makeFakeS3(a *assert.Assertions) *fakeS3 {
+func makeFakeS3(t *testing.T) *fakeS3 {
 	return &fakeS3{
-		assert:     a,
+		assert:     assert.New(t),
 		data:       map[string][]byte{},
 		inProgress: map[string]fakeS3Multipart{},
 		parts:      map[string][]byte{},

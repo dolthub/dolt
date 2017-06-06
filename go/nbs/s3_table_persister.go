@@ -32,7 +32,7 @@ type s3TablePersister struct {
 	targetPartSize, minPartSize, maxPartSize uint64
 	indexCache                               *indexCache
 	readRl                                   chan struct{}
-	tc                                       *fsTableCache
+	tc                                       tableCache
 }
 
 func (s3p s3TablePersister) Open(name addr, chunkCount uint32) chunkSource {
@@ -45,10 +45,7 @@ type s3UploadedPart struct {
 }
 
 func (s3p s3TablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
-	return s3p.persistTable(mt.write(haver, stats))
-}
-
-func (s3p s3TablePersister) persistTable(name addr, data []byte, chunkCount uint32) chunkSource {
+	name, data, chunkCount := mt.write(haver, stats)
 	if chunkCount == 0 {
 		return emptyChunkSource{}
 	}

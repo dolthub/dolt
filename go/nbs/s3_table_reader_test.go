@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"bytes"
 	"io/ioutil"
 	"net"
 	"os"
@@ -17,8 +18,7 @@ import (
 )
 
 func TestS3TableReader(t *testing.T) {
-	assert := assert.New(t)
-	s3 := makeFakeS3(assert)
+	s3 := makeFakeS3(t)
 
 	chunks := [][]byte{
 		[]byte("hello2"),
@@ -29,53 +29,59 @@ func TestS3TableReader(t *testing.T) {
 	tableData, h := buildTable(chunks)
 	s3.data[h.String()] = tableData
 
-	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil, nil)
-	assertChunksInReader(chunks, trc, assert)
-}
+	t.Run("NoIndexCache", func(t *testing.T) {
+		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil, nil)
+		assertChunksInReader(chunks, trc, assert.New(t))
+	})
 
-func TestS3TableReaderIndexCache(t *testing.T) {
-	assert := assert.New(t)
-	s3 := makeFakeS3(assert)
+	t.Run("WithIndexCache", func(t *testing.T) {
+		assert := assert.New(t)
+		index := parseTableIndex(tableData)
+		cache := newIndexCache(1024)
+		cache.put(h, index)
 
-	chunks := [][]byte{
-		[]byte("hello2"),
-		[]byte("goodbye2"),
-		[]byte("badbye2"),
-	}
+		baseline := s3.getCount
+		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache, nil, nil)
 
-	tableData, h := buildTable(chunks)
+		// constructing the table reader shouldn't have resulted in any reads
+		assert.Zero(s3.getCount - baseline)
+		assertChunksInReader(chunks, trc, assert)
+	})
 
-	s3.data[h.String()] = tableData
+	t.Run("TolerateFailingReads", func(t *testing.T) {
+		assert := assert.New(t)
 
-	index := parseTableIndex(tableData)
-	cache := newIndexCache(1024)
-	cache.put(h, index)
+		baseline := s3.getCount
+		trc := newS3TableReader(makeFlakyS3(s3), "bucket", h, uint32(len(chunks)), nil, nil, nil)
+		// constructing the table reader should have resulted in 2 reads
+		assert.Equal(2, s3.getCount-baseline)
+		assertChunksInReader(chunks, trc, assert)
+	})
 
-	trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache, nil, nil)
+	t.Run("WithTableCache", func(t *testing.T) {
+		assert := assert.New(t)
+		dir := makeTempDir(t)
+		defer os.RemoveAll(dir)
+		stats := &Stats{}
 
-	assert.Equal(0, s3.getCount) // constructing the table shouldn't have resulted in any reads
+		tc := newFSTableCache(dir, uint64(2*len(tableData)), 4)
+		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil, tc)
+		tra := trc.(tableReaderAt)
 
-	assertChunksInReader(chunks, trc, assert)
-}
+		// First, read when table is not yet cached
+		scratch := make([]byte, len(tableData))
+		baseline := s3.getCount
+		_, err := tra.ReadAtWithStats(scratch, 0, stats)
+		assert.NoError(err)
+		assert.True(s3.getCount > baseline)
 
-func TestS3TableReaderFails(t *testing.T) {
-	assert := assert.New(t)
-	fake := makeFakeS3(assert)
-
-	chunks := [][]byte{
-		[]byte("hello2"),
-		[]byte("goodbye2"),
-		[]byte("badbye2"),
-	}
-
-	tableData, h := buildTable(chunks)
-
-	fake.data[h.String()] = tableData
-
-	trc := newS3TableReader(makeFlakyS3(fake), "bucket", h, uint32(len(chunks)), nil, nil, nil)
-	assert.Equal(2, fake.getCount) // constructing the table should have resulted in 2 reads
-
-	assertChunksInReader(chunks, trc, assert)
+		// Cache the table and read again
+		tc.store(h, bytes.NewReader(tableData), uint64(len(tableData)))
+		baseline = s3.getCount
+		_, err = tra.ReadAtWithStats(scratch, 0, stats)
+		assert.NoError(err)
+		assert.Zero(s3.getCount - baseline)
+	})
 }
 
 type flakyS3 struct {

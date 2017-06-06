@@ -30,7 +30,7 @@ type s3TableReader struct {
 	bucket string
 	h      addr
 	readRl chan struct{}
-	tc     *fsTableCache
+	tc     tableCache
 }
 
 type s3svc interface {
@@ -43,7 +43,7 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}, tc *fsTableCache) chunkSource {
+func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}, tc tableCache) chunkSource {
 	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl, tc: tc}
 
 	var index tableIndex
