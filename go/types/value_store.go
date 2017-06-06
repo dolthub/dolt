@@ -50,14 +50,14 @@ type ValueStore struct {
 	bufferedChunksMax    uint64
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
-	valueCache           *sizecache.SizeCache
+	decodedChunks        *sizecache.SizeCache
 
 	versOnce sync.Once
 }
 
 const (
-	defaultValueCacheSize = 1 << 25 // 32MB
-	defaultPendingPutMax  = 1 << 28 // 256MB
+	defaultDecodedChunksSize = 1 << 25 // 32MB
+	defaultPendingPutMax     = 1 << 28 // 256MB
 )
 
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
@@ -71,7 +71,7 @@ func newTestValueStore() *ValueStore {
 // ChunkStore and manages its lifetime. Calling Close on the returned
 // ValueStore will Close() cs.
 func NewValueStore(cs chunks.ChunkStore) *ValueStore {
-	return newValueStoreWithCacheAndPending(cs, defaultValueCacheSize, defaultPendingPutMax)
+	return newValueStoreWithCacheAndPending(cs, defaultDecodedChunksSize, defaultPendingPutMax)
 }
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
@@ -82,7 +82,7 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		bufferedChunks:       map[hash.Hash]chunks.Chunk{},
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
-		valueCache:           sizecache.New(cacheSize),
+		decodedChunks:        sizecache.New(cacheSize),
 
 		versOnce: sync.Once{},
 	}
@@ -104,10 +104,8 @@ func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 // returns nil.
 func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	lvs.versOnce.Do(lvs.expectVersion)
-	if v, ok := lvs.valueCache.Get(h); ok {
-		if v == nil {
-			return nil
-		}
+	if v, ok := lvs.decodedChunks.Get(h); ok {
+		d.PanicIfTrue(v == nil)
 		return v.(Value)
 	}
 
@@ -127,7 +125,8 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	}
 
 	v := DecodeValue(chunk, lvs)
-	lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
+	d.PanicIfTrue(v == nil)
+	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v
 }
 
@@ -138,17 +137,17 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk, toPending bool) Value {
 		v := DecodeValue(*chunk, lvs)
-		lvs.valueCache.Add(h, uint64(len(chunk.Data())), v)
+		d.PanicIfTrue(v == nil)
+		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v
 	}
 
 	// First, see which hashes can be found in either the Value cache or bufferedChunks. Put the rest into a new HashSet to be requested en masse from the ChunkStore.
 	remaining := hash.HashSet{}
 	for h := range hashes {
-		if v, ok := lvs.valueCache.Get(h); ok {
-			if v != nil {
-				foundValues <- v.(Value)
-			}
+		if v, ok := lvs.decodedChunks.Get(h); ok {
+			d.PanicIfTrue(v == nil)
+			foundValues <- v.(Value)
 			continue
 		}
 
@@ -174,12 +173,10 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 
 	// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 	foundChunks := make(chan *chunks.Chunk, 16)
-	foundHashes := hash.HashSet{}
 
 	go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
 	for c := range foundChunks {
 		h := c.Hash()
-		foundHashes[h] = struct{}{}
 		foundValues <- decode(h, c, false)
 	}
 }
@@ -196,10 +193,6 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(h, TypeOf(v), height)
-	if v, ok := lvs.valueCache.Get(h); ok && v != nil {
-		return r
-	}
-
 	lvs.bufferChunk(v, c, height)
 	return r
 }
