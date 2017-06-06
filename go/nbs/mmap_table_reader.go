@@ -96,7 +96,7 @@ func (cra *cacheReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n 
 	}
 	defer func() {
 		stats.FileBytesPerRead.Sample(uint64(len(p)))
-		stats.FileReadLatency.SampleTime(roundedSince(t1))
+		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
 
 	defer cra.fc.UnrefFile(cra.path)

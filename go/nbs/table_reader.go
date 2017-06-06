@@ -10,7 +10,6 @@ import (
 	"io"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -226,13 +225,6 @@ func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
 	d.Chk.True(data != nil)
 
 	return
-}
-
-func roundedSince(t1 time.Time) time.Duration {
-	if dur := time.Since(t1); dur > 0 {
-		return dur
-	}
-	return time.Duration(1)
 }
 
 type offsetRec struct {

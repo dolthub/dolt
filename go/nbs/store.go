@@ -109,6 +109,11 @@ func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize 
 		stats:       NewStats(),
 	}
 
+	t1 := time.Now()
+	defer func() {
+		nbs.stats.OpenLatency.SampleTimeSince(t1)
+	}()
+
 	if exists, contents := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = contents.vers, contents.lock, contents.root
 		nbs.tables = nbs.tables.Rebase(contents.specs)
@@ -123,7 +128,7 @@ func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
 	nbs.putCount++
 
-	nbs.stats.PutLatency.SampleTime(roundedSince(t1))
+	nbs.stats.PutLatency.SampleTimeSince(t1)
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
@@ -144,7 +149,7 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 	t1 := time.Now()
 	defer func() {
-		nbs.stats.GetLatency.SampleTime(roundedSince(t1))
+		nbs.stats.GetLatency.SampleTimeSince(t1)
 		nbs.stats.ChunksPerGet.Sample(1)
 	}()
 
@@ -173,7 +178,7 @@ func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 
 	defer func() {
 		if len(hashes) > 0 {
-			nbs.stats.GetLatency.SampleTime(roundedSince(t1))
+			nbs.stats.GetLatency.SampleTimeSince(t1)
 			nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
 		}
 	}()
@@ -263,7 +268,7 @@ func (nbs *NomsBlockStore) Count() uint32 {
 func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
 	t1 := time.Now()
 	defer func() {
-		nbs.stats.HasLatency.SampleTime(roundedSince(t1))
+		nbs.stats.HasLatency.SampleTimeSince(t1)
 		nbs.stats.AddressesPerHas.Sample(1)
 	}()
 
@@ -301,7 +306,7 @@ func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
 	}
 
 	if len(hashes) > 0 {
-		nbs.stats.HasLatency.SampleTime(roundedSince(t1))
+		nbs.stats.HasLatency.SampleTimeSince(t1)
 		nbs.stats.AddressesPerHas.SampleLen(len(reqs))
 	}
 
@@ -347,6 +352,11 @@ func (nbs *NomsBlockStore) Root() hash.Hash {
 }
 
 func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
+	t1 := time.Now()
+	defer func() {
+		nbs.stats.CommitLatency.SampleTimeSince(t1)
+	}()
+
 	anyPossiblyNovelChunks := func() bool {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()

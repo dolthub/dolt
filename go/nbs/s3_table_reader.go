@@ -83,7 +83,7 @@ func (s3tr *s3TableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n
 		if r != nil {
 			defer func() {
 				stats.FileBytesPerRead.Sample(uint64(len(p)))
-				stats.FileReadLatency.SampleTime(roundedSince(t1))
+				stats.FileReadLatency.SampleTimeSince(t1)
 			}()
 			defer s3tr.tc.checkin(s3tr.hash())
 			return r.ReadAt(p, off)
@@ -92,7 +92,7 @@ func (s3tr *s3TableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n
 
 	defer func() {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
-		stats.S3ReadLatency.SampleTime(roundedSince(t1))
+		stats.S3ReadLatency.SampleTimeSince(t1)
 	}()
 	return s3tr.readRange(p, s3RangeHeader(off, int64(len(p))))
 }

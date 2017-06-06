@@ -52,9 +52,14 @@ func (h *Histogram) Sample(v uint64) {
 	h.buckets[pot-1]++
 }
 
-// SampleTime is a convenience wrapper around Sample which internally type
-// asserts the time.Duration to a uint64
-func (h *Histogram) SampleTime(d time.Duration) {
+// SampleTimeSince is a convenience wrapper around Sample which takes the
+// duration since |t|, if 0, rounds to 1 and passes to Sample() as an uint64
+// number of nanoseconds.
+func (h *Histogram) SampleTimeSince(t time.Time) {
+	d := time.Since(t)
+	if d == 0 {
+		d = 1
+	}
 	h.Sample(uint64(d))
 }
 

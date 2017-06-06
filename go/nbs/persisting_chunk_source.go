@@ -31,7 +31,7 @@ func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister,
 		<-rl
 
 		if cs.count() > 0 {
-			stats.PersistLatency.SampleTime(roundedSince(t1))
+			stats.PersistLatency.SampleTimeSince(t1)
 		}
 	}()
 	return ccs

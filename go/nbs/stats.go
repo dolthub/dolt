@@ -11,6 +11,9 @@ import (
 )
 
 type Stats struct {
+	OpenLatency   metrics.Histogram
+	CommitLatency metrics.Histogram
+
 	GetLatency   metrics.Histogram
 	ChunksPerGet metrics.Histogram
 
@@ -39,6 +42,8 @@ type Stats struct {
 
 func NewStats() *Stats {
 	return &Stats{
+		OpenLatency:          metrics.NewTimeHistogram(),
+		CommitLatency:        metrics.NewTimeHistogram(),
 		GetLatency:           metrics.NewTimeHistogram(),
 		FileReadLatency:      metrics.NewTimeHistogram(),
 		FileBytesPerRead:     metrics.NewByteHistogram(),
@@ -56,6 +61,9 @@ func NewStats() *Stats {
 }
 
 func (s *Stats) Add(other Stats) {
+	s.OpenLatency.Add(other.OpenLatency)
+	s.CommitLatency.Add(other.CommitLatency)
+
 	s.GetLatency.Add(other.GetLatency)
 	s.ChunksPerGet.Add(other.ChunksPerGet)
 
@@ -82,6 +90,9 @@ func (s *Stats) Add(other Stats) {
 
 func (s Stats) Delta(other Stats) Stats {
 	return Stats{
+		s.OpenLatency.Delta(other.OpenLatency),
+		s.CommitLatency.Delta(other.CommitLatency),
+
 		s.GetLatency.Delta(other.GetLatency),
 		s.ChunksPerGet.Delta(other.ChunksPerGet),
 
@@ -112,6 +123,8 @@ func (s Stats) Delta(other Stats) Stats {
 
 func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
+OpenLatecy:           %s
+CommitLatency:        %s
 GetLatency:           %s
 ChunksPerGet:         %s
 FileReadLatency:      %s
@@ -131,6 +144,9 @@ TablesPerConjoin:     %s
 ReadManifestLatency:  %s
 WriteManifestLatency: %s
 `,
+		s.OpenLatency,
+		s.CommitLatency,
+
 		s.GetLatency,
 		s.ChunksPerGet,
 

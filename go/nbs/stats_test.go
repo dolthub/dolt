@@ -25,6 +25,8 @@ func TestStats(t *testing.T) {
 	assert.NoError(err)
 	store := NewLocalStore(dir, testMemTableSize)
 
+	assert.EqualValues(1, stats(store).OpenLatency.Samples())
+
 	// Opening a new store will still incur some read IO, to discover that the manifest doesn't exist
 	assert.EqualValues(1, stats(store).ReadManifestLatency.Samples())
 
@@ -56,6 +58,7 @@ func TestStats(t *testing.T) {
 
 	// Commit will update the manifest
 	assert.EqualValues(1, stats(store).WriteManifestLatency.Samples())
+	assert.EqualValues(1, stats(store).CommitLatency.Samples())
 
 	// Now we have write IO
 	assert.Equal(uint64(1), stats(store).PersistLatency.Samples())

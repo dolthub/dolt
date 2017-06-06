@@ -54,7 +54,7 @@ func (dm dynamoManifest) Name() string {
 
 func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()
-	defer func() { stats.ReadManifestLatency.SampleTime(roundedSince(t1)) }()
+	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
 	result, err := dm.ddbsvc.GetItem(&dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
@@ -105,7 +105,7 @@ func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, sta
 	}
 
 	t1 := time.Now()
-	defer func() { stats.WriteManifestLatency.SampleTime(roundedSince(t1)) }()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),

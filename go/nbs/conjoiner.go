@@ -180,7 +180,7 @@ func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoi
 	toConjoin, toKeep := chooseConjoinees(sources)
 	conjoinedSrc := p.ConjoinAll(toConjoin, stats)
 
-	stats.ConjoinLatency.SampleTime(roundedSince(t1))
+	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
 	stats.ChunksPerConjoin.Sample(uint64(conjoinedSrc.count()))
 
