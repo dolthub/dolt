@@ -14,9 +14,9 @@ import (
 
 const initialBufferSize = 2048
 
-func EncodeValue(v Value, vw ValueWriter) chunks.Chunk {
+func EncodeValue(v Value) chunks.Chunk {
 	w := newBinaryNomsWriter()
-	enc := newValueEncoder(w, vw, false)
+	enc := newValueEncoder(w, false)
 	enc.writeValue(v)
 
 	c := chunks.NewChunk(w.data())

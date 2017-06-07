@@ -90,7 +90,7 @@ func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) {
 }
 
 func compressedSize(v Value) uint64 {
-	chunk := EncodeValue(v, nil)
+	chunk := EncodeValue(v)
 	compressed := snappy.Encode(nil, chunk.Data())
 	return uint64(len(compressed))
 }

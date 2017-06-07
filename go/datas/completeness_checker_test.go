@@ -29,7 +29,7 @@ func TestCompletenessChecker(t *testing.T) {
 		t.Run("SomeBad", func(t *testing.T) {
 			t.Parallel()
 			cs := storage.NewView()
-			cs.Put(types.EncodeValue(b, nil))
+			cs.Put(types.EncodeValue(b))
 
 			cc := newCompletenessChecker()
 			cc.AddRefs(badRef)
@@ -42,7 +42,7 @@ func TestCompletenessChecker(t *testing.T) {
 		t.Run("PendingChunk", func(t *testing.T) {
 			t.Parallel()
 			cs := storage.NewView()
-			cs.Put(types.EncodeValue(b, nil))
+			cs.Put(types.EncodeValue(b))
 
 			cc := newCompletenessChecker()
 			cc.AddRefs(r)
@@ -51,7 +51,7 @@ func TestCompletenessChecker(t *testing.T) {
 		t.Run("ExistingChunk", func(t *testing.T) {
 			t.Parallel()
 			cs := storage.NewView()
-			cs.Put(types.EncodeValue(b, nil))
+			cs.Put(types.EncodeValue(b))
 
 			cc := newCompletenessChecker()
 			cc.AddRefs(r)

@@ -69,7 +69,7 @@ func newRollingValueHasher() *rollingValueHasher {
 		pattern: pattern,
 		window:  window,
 	}
-	rv.enc = newValueEncoder(rv, nil, true)
+	rv.enc = newValueEncoder(rv, true)
 	return rv
 }
 

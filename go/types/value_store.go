@@ -185,10 +185,18 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
+	iterateUncommittedChildren(v, func(sv Value) {
+		lvs.writeValueInternal(sv)
+	})
+
+	return lvs.writeValueInternal(v)
+}
+
+func (lvs *ValueStore) writeValueInternal(v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
-	// Encoding v causes any child chunks, e.g. internal nodes if v is a meta sequence, to get written. That needs to happen before we try to validate v.
-	c := EncodeValue(v, lvs)
+
+	c := EncodeValue(v)
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1

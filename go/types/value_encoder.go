@@ -13,12 +13,11 @@ import (
 
 type valueEncoder struct {
 	nomsWriter
-	vw             ValueWriter
 	forRollingHash bool
 }
 
-func newValueEncoder(w nomsWriter, vw ValueWriter, forRollingHash bool) *valueEncoder {
-	return &valueEncoder{w, vw, forRollingHash}
+func newValueEncoder(w nomsWriter, forRollingHash bool) *valueEncoder {
+	return &valueEncoder{w, forRollingHash}
 }
 
 func (w *valueEncoder) writeKind(kind NomsKind) {
@@ -103,10 +102,6 @@ func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
 	w.writeCount(uint64(count))
 	for i := 0; i < count; i++ {
 		tuple := ms.getItem(i).(metaTuple)
-		if tuple.child != nil && w.vw != nil {
-			// Write unwritten chunked sequences. Chunks are lazily written so that intermediate chunked structures like NewList().Append(x).Append(y) don't cause unnecessary churn.
-			w.vw.WriteValue(tuple.child)
-		}
 		w.writeValue(tuple.ref)
 		v := tuple.key.v
 		if !tuple.key.isOrderedByValue {

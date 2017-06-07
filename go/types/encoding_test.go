@@ -102,7 +102,7 @@ func (w *nomsTestWriter) writeHash(h hash.Hash) {
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	vs := newTestValueStore()
 	tw := &nomsTestWriter{}
-	enc := valueEncoder{tw, vs, false}
+	enc := valueEncoder{tw, false}
 	enc.writeValue(v)
 	assert.EqualValues(t, expect, tw.a)
 
@@ -116,7 +116,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 func TestRoundTrips(t *testing.T) {
 	assertRoundTrips := func(v Value) {
 		vs := newTestValueStore()
-		out := DecodeValue(EncodeValue(v, vs), vs)
+		out := DecodeValue(EncodeValue(v), vs)
 		assert.True(t, v.Equals(out))
 	}
 
@@ -173,11 +173,10 @@ func TestRoundTrips(t *testing.T) {
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
-	vs := newTestValueStore()
 	t := func(f float64, s string) {
 		v := Number(f)
 		err := d.Try(func() {
-			EncodeValue(v, vs)
+			EncodeValue(v)
 		})
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), s)
@@ -345,7 +344,7 @@ func TestWriteStruct(t *testing.T) {
 
 func TestWriteStructTooMuchData(t *testing.T) {
 	s := NewStruct("S", StructData{"x": Number(42), "b": Bool(true)})
-	c := EncodeValue(s, nil)
+	c := EncodeValue(s)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
 	copy(buff, data)
@@ -584,6 +583,6 @@ func (bg bogusType) typeOf() *Type {
 func TestBogusValueWithUnresolvedCycle(t *testing.T) {
 	g := bogusType(1)
 	assert.Panics(t, func() {
-		EncodeValue(g, nil)
+		EncodeValue(g)
 	})
 }

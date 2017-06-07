@@ -339,3 +339,35 @@ func (es emptySequence) getCompositeChildSequence(start uint64, length uint64, h
 func (es emptySequence) isLeaf() bool {
 	return es.height == 1
 }
+
+// Invokes |cb| on all "uncommitted" ptree nodes reachable from |v| in
+// "bottom-up" order. It will only follow refs in the case of an in-memory
+// reference to an uncommitted child. Note that |v| maybe not necessarily be
+// a collection, but a collection with uncommitted children maybe be reachable
+// from it (e.g. a Struct).
+func iterateUncommittedChildren(v Value, cb func(sv Value)) {
+	if _, ok := v.(*Type); ok {
+		// Types can be in-memory cyclic, but they cannot reference uncommitted
+		// nodes. Just avoid traversing into them.
+		return
+	}
+
+	if c, ok := v.(Collection); ok {
+		if ms, ok := c.sequence().(metaSequence); ok {
+			// Only traverse uncommitted children of meta sequences
+			for _, mt := range ms.tuples {
+				if mt.child != nil {
+					iterateUncommittedChildren(mt.child, cb)
+					cb(mt.child)
+				}
+			}
+			return
+		}
+	}
+
+	// Traverse subvalues in search of nested collections with uncommitted
+	// ptree nodes.
+	v.WalkValues(func(v Value) {
+		iterateUncommittedChildren(v, cb)
+	})
+}

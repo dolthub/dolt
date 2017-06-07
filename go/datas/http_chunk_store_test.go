@@ -145,7 +145,7 @@ func (suite *HTTPChunkStoreSuite) TearDownTest() {
 }
 
 func (suite *HTTPChunkStoreSuite) TestPutChunk() {
-	c := types.EncodeValue(types.String("abc"), nil)
+	c := types.EncodeValue(types.String("abc"))
 	suite.http.Put(c)
 	suite.http.Flush()
 
@@ -159,10 +159,10 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	}
 	l := types.NewList()
 	for _, val := range vals {
-		suite.http.Put(types.EncodeValue(val, nil))
+		suite.http.Put(types.EncodeValue(val))
 		l = l.Append(types.NewRef(val))
 	}
-	suite.http.Put(types.EncodeValue(l, nil))
+	suite.http.Put(types.EncodeValue(l))
 	suite.http.Flush()
 
 	suite.Equal(3, suite.serverCS.Writes)
@@ -170,7 +170,7 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 
 func (suite *HTTPChunkStoreSuite) TestRebase() {
 	suite.Equal(hash.Hash{}, suite.http.Root())
-	c := types.EncodeValue(types.NewMap(), nil)
+	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
 	suite.True(suite.serverCS.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
 	suite.Equal(hash.Hash{}, suite.http.Root())              // shouldn't be visible yet
@@ -180,7 +180,7 @@ func (suite *HTTPChunkStoreSuite) TestRebase() {
 }
 
 func (suite *HTTPChunkStoreSuite) TestRoot() {
-	c := types.EncodeValue(types.NewMap(), nil)
+	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
 	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root())
@@ -189,13 +189,13 @@ func (suite *HTTPChunkStoreSuite) TestRoot() {
 func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
 	store := newBadVersionHTTPChunkStoreForTest(suite.serverCS)
 	defer store.Close()
-	c := types.EncodeValue(types.NewMap(), nil)
+	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
 	suite.Panics(func() { store.Commit(c.Hash(), hash.Hash{}) })
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommit() {
-	c := types.EncodeValue(types.NewMap(), nil)
+	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
 	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root())
@@ -210,7 +210,7 @@ func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	u := fmt.Sprintf("http://localhost:9000?access_token=%s&other=19", testAuthToken)
 	store := newAuthenticatingHTTPChunkStoreForTest(suite.Assert(), suite.serverCS, u)
 	defer store.Close()
-	c := types.EncodeValue(types.NewMap(), nil)
+	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
 	suite.True(store.Commit(c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root())

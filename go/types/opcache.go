@@ -336,9 +336,19 @@ func decodeValue(bs []byte, asValue bool, vr ValueReader) ([]byte, Value) {
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
 func encToSlice(v Value, initBuf []byte, vw ValueWriter) []byte {
+	// TODO: This is really unfortunate because WriteValue, in the case of
+	// ValueStore will internally also iterateUncommittedChildren. The problem
+	// here is a lack of clarity in the contract of ValueWriter. It's not explicit
+	// that WriteValue is responsible for writing uncommitted child nodes of
+	// ptrees, nor is there sufficient public API for any implementor of it to do
+	// so.
+	iterateUncommittedChildren(v, func(sv Value) {
+		vw.WriteValue(v)
+	})
+
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter and valueEncoder?
 	w := &binaryNomsWriter{initBuf, 0}
-	enc := newValueEncoder(w, vw, false)
+	enc := newValueEncoder(w, false)
 	enc.writeValue(v)
 	return w.data()
 }

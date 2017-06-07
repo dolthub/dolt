@@ -16,7 +16,7 @@ func getHash(v Value) hash.Hash {
 }
 
 func getHashNoOverride(v Value) hash.Hash {
-	return EncodeValue(v, nil).Hash()
+	return EncodeValue(v).Hash()
 }
 
 func EnsureHash(h *hash.Hash, v Value) hash.Hash {

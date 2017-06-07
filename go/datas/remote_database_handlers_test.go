@@ -37,9 +37,9 @@ func TestHandleWriteValue(t *testing.T) {
 	assert.NoError(err)
 
 	newItem := types.NewEmptyBlob()
-	itemChunk := types.EncodeValue(newItem, nil)
+	itemChunk := types.EncodeValue(newItem)
 	l2 := l.Insert(1, types.NewRef(newItem))
-	listChunk := types.EncodeValue(l2, nil)
+	listChunk := types.EncodeValue(l2)
 
 	body := &bytes.Buffer{}
 	chunks.Serialize(itemChunk, body)
@@ -75,7 +75,7 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 
 	newItem := types.NewEmptyBlob()
-	itemChunk := types.EncodeValue(newItem, nil)
+	itemChunk := types.EncodeValue(newItem)
 
 	body := &bytes.Buffer{}
 	// Write the same chunk to body enough times to be certain that at least one of the concurrent deserialize/decode passes completes before the last one can continue.
@@ -387,7 +387,7 @@ func TestRejectPostRoot(t *testing.T) {
 	cs := storage.NewView()
 
 	newHead := types.NewMap(types.String("dataset1"), types.String("Not a Head"))
-	chunk := types.EncodeValue(newHead, nil)
+	chunk := types.EncodeValue(newHead)
 	cs.Put(chunk)
 	persistChunks(cs)
 
