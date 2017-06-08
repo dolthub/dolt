@@ -32,15 +32,10 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 	oldRoot := store.Root()
 	suite.True(oldRoot.IsEmpty())
 
-	bogusRoot := hash.Parse("8habda5skfek1265pc5d5l1orptn5dr0")
 	newRoot := hash.Parse("8la6qjbh81v85r6q67lqbfrkmpds14lg")
 
-	// Try to update root with bogus oldRoot
-	result := store.Commit(newRoot, bogusRoot)
-	suite.False(result)
-
 	// Now do a valid root update
-	result = store.Commit(newRoot, oldRoot)
+	result := store.Commit(newRoot)
 	suite.True(result)
 }
 
@@ -57,7 +52,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	// ...but it shouldn't be persisted yet
 	assertInputNotInStore(input, h, suite.Factory.CreateStore(name), suite.Assert())
 
-	store.Commit(h, store.Root()) // Commit persists Chunks
+	store.Commit(h) // Commit persists Chunks
 	assertInputInStore(input, h, store, suite.Assert())
 	assertInputInStore(input, h, suite.Factory.CreateStore(name), suite.Assert())
 }
@@ -74,7 +69,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 	oldRoot := store.Root()
 	suite.True(oldRoot.IsEmpty())
 	newRoot := hash.Parse("11111222223333344444555556666677")
-	suite.True(store.Commit(newRoot, oldRoot))
+	suite.True(store.Commit(newRoot))
 
 	suite.Equal(constants.NomsVersion, store.Version())
 }
@@ -91,7 +86,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	// ...but not store2.
 	assertInputNotInStore(input, h, store2, suite.Assert())
 
-	store1.Commit(store1.Root(), store1.Root())
+	store1.Commit(store1.Root())
 	store2.Rebase()
 	// Now, reading c from store2 via the API should work...
 	assertInputInStore(input, h, store2, suite.Assert())

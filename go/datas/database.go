@@ -112,9 +112,5 @@ type Database interface {
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
-	if _, ok := cs.(*httpChunkStore); !ok {
-		cs = newValidatingChunkStore(cs)
-	}
-
 	return newDatabase(cs)
 }

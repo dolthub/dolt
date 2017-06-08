@@ -19,7 +19,7 @@ func TestValueReadWriteRead(t *testing.T) {
 	vs := newTestValueStore()
 	assert.Nil(vs.ReadValue(s.Hash())) // nil
 	h := vs.WriteValue(s).TargetHash()
-	vs.persist()
+	vs.Commit(vs.Root())
 	v := vs.ReadValue(h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(s), EncodedValue(v))
@@ -35,7 +35,7 @@ func TestReadWriteCache(t *testing.T) {
 	var v Value = Bool(true)
 	r := vs.WriteValue(v)
 	assert.NotEqual(hash.Hash{}, r.TargetHash())
-	vs.Flush()
+	vs.Commit(vs.Root())
 	assert.Equal(1, ts.Writes)
 
 	v = vs.ReadValue(r.TargetHash())
@@ -56,7 +56,7 @@ func TestValueReadMany(t *testing.T) {
 	for _, v := range vals {
 		h := vs.WriteValue(v).TargetHash()
 		hashes.Insert(h)
-		vs.persist()
+		vs.Commit(vs.Root())
 	}
 
 	// Get one Value into vs's Value cache
@@ -95,7 +95,7 @@ func TestValueWriteFlush(t *testing.T) {
 	}
 	assert.NotZero(vs.bufferedChunkSize)
 
-	vs.persist()
+	vs.Commit(vs.Root())
 	assert.Zero(vs.bufferedChunkSize)
 }
 
@@ -160,7 +160,7 @@ func TestFlushOrder(t *testing.T) {
 
 	r := vs.WriteValue(l)
 	ccs.expect(r)
-	vs.persist()
+	vs.Commit(vs.Root())
 }
 
 func TestFlushOverSize(t *testing.T) {
@@ -175,7 +175,7 @@ func TestFlushOverSize(t *testing.T) {
 	ccs.expect(sr, NewRef(l))
 
 	vs.WriteValue(l)
-	vs.persist()
+	vs.Commit(vs.Root())
 }
 
 func TestTolerateTopDown(t *testing.T) {
@@ -201,7 +201,7 @@ func TestTolerateTopDown(t *testing.T) {
 	lr := vs.WriteValue(L)
 	ccs.expect(lr)
 
-	vs.persist()
+	vs.Commit(vs.Root())
 
 	assert.Zero(len(vs.bufferedChunks))
 
@@ -213,7 +213,7 @@ func TestTolerateTopDown(t *testing.T) {
 	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S
 	// So, it'll look at ML, the one parent it knows about, first and write its child (S). Then, it'll write ML, and then it'll flush the remaining buffered chunks, which is just ST.
 	ccs.expect(sr, mlr, str)
-	vs.persist()
+	vs.Commit(vs.Root())
 }
 
 func TestPanicOnBadVersion(t *testing.T) {
@@ -224,8 +224,35 @@ func TestPanicOnBadVersion(t *testing.T) {
 	})
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
-		assert.Panics(t, func() { cvs.WriteValue(NewEmptyBlob()); cvs.Flush() })
+		assert.Panics(t, func() {
+			cvs.WriteValue(NewEmptyBlob())
+			cvs.Commit(cvs.Root())
+		})
 	})
+}
+
+func TestPanicIfDangling(t *testing.T) {
+	assert := assert.New(t)
+	vs := newTestValueStore()
+
+	r := NewRef(Bool(true))
+	l := NewList(r)
+	vs.WriteValue(l)
+
+	assert.Panics(func() {
+		vs.Commit(vs.Root())
+	})
+}
+
+func TestSkipEnforceCompleteness(t *testing.T) {
+	vs := newTestValueStore()
+	vs.SetEnforceCompleteness(false)
+
+	r := NewRef(Bool(true))
+	l := NewList(r)
+	vs.WriteValue(l)
+
+	vs.Commit(vs.Root())
 }
 
 type badVersionStore struct {

@@ -64,7 +64,7 @@ func (fb fileBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }
 
-func (fb fileBlockStore) Commit(current, last hash.Hash) bool {
+func (fb fileBlockStore) Commit(current hash.Hash) bool {
 	fb.bw.Flush()
 	return true
 }

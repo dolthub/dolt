@@ -98,7 +98,7 @@ func (suite *diffTestSuite) TestDiff() {
 	rw := func(col Collection) Collection {
 		vs := newTestValueStore()
 		h := vs.WriteValue(col).TargetHash()
-		vs.persist()
+		vs.Commit(vs.Root())
 		return vs.ReadValue(h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }

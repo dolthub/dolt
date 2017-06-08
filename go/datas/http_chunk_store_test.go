@@ -172,8 +172,8 @@ func (suite *HTTPChunkStoreSuite) TestRebase() {
 	suite.Equal(hash.Hash{}, suite.http.Root())
 	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
-	suite.True(suite.serverCS.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
-	suite.Equal(hash.Hash{}, suite.http.Root())              // shouldn't be visible yet
+	suite.True(suite.serverCS.Commit(c.Hash())) // change happens behind our backs
+	suite.Equal(hash.Hash{}, suite.http.Root()) // shouldn't be visible yet
 
 	suite.http.Rebase()
 	suite.Equal(c.Hash(), suite.serverCS.Root())
@@ -182,7 +182,7 @@ func (suite *HTTPChunkStoreSuite) TestRebase() {
 func (suite *HTTPChunkStoreSuite) TestRoot() {
 	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
-	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
+	suite.True(suite.http.Commit(c.Hash()))
 	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
@@ -191,18 +191,18 @@ func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
-	suite.Panics(func() { store.Commit(c.Hash(), hash.Hash{}) })
+	suite.Panics(func() { store.Commit(c.Hash()) })
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommit() {
 	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
-	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
+	suite.True(suite.http.Commit(c.Hash()))
 	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 
 func (suite *HTTPChunkStoreSuite) TestEmptyHashCommit() {
-	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+	suite.True(suite.http.Commit(hash.Hash{}))
 	suite.Equal(hash.Hash{}, suite.serverCS.Root())
 }
 
@@ -212,7 +212,7 @@ func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	defer store.Close()
 	c := types.EncodeValue(types.NewMap())
 	suite.serverCS.Put(c)
-	suite.True(store.Commit(c.Hash(), hash.Hash{}))
+	suite.True(store.Commit(c.Hash()))
 	suite.Equal(c.Hash(), suite.serverCS.Root())
 }
 

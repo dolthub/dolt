@@ -351,7 +351,7 @@ func (nbs *NomsBlockStore) Root() hash.Hash {
 	return nbs.root
 }
 
-func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
+func (nbs *NomsBlockStore) Commit(current hash.Hash) bool {
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.CommitLatency.SampleTimeSince(t1)
@@ -363,7 +363,7 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 		return nbs.mt != nil || len(nbs.tables.novel) > 0
 	}
 
-	if !anyPossiblyNovelChunks() && current == last {
+	if !anyPossiblyNovelChunks() && current == nbs.root {
 		nbs.Rebase()
 		return true
 	}
@@ -375,9 +375,9 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 		Jitter: true,
 	}
 	for {
-		if err := nbs.updateManifest(current, last); err == nil {
+		if err := nbs.updateManifest(current); err == nil {
 			return true
-		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
+		} else if err == errOptimisticLockFailedRoot {
 			return false
 		}
 		time.Sleep(b.Duration())
@@ -385,17 +385,13 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 }
 
 var (
-	errLastRootMismatch           = fmt.Errorf("last does not match nbs.Root()")
 	errOptimisticLockFailedRoot   = fmt.Errorf("Root moved")
 	errOptimisticLockFailedTables = fmt.Errorf("Tables changed")
 )
 
-func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
+func (nbs *NomsBlockStore) updateManifest(current hash.Hash) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	if nbs.root != last {
-		return errLastRootMismatch
-	}
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
 		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
@@ -420,6 +416,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 		lock:  generateLockHash(current, specs),
 		specs: specs,
 	}
+	last := nbs.root
 	upstream := nbs.mm.Update(nbs.manifestLock, newContents, nbs.stats, nil)
 	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.

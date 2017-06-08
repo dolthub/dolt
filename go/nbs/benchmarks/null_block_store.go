@@ -55,6 +55,6 @@ func (nb nullBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }
 
-func (nb nullBlockStore) Commit(current, last hash.Hash) bool {
+func (nb nullBlockStore) Commit(current hash.Hash) bool {
 	return true
 }

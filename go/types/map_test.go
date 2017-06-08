@@ -377,7 +377,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	cs := ts.NewView()
 	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
 	r := vs.WriteValue(m)
-	vs.Flush()
+	vs.Commit(vs.Root())
 
 	cs.Writes = 0
 	cs.Reads = 0
@@ -394,7 +394,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 			s = s.Set("Number", Number(float64(s.Get("Number").(Number))+1))
 			m2 = m2.Set(k, s)
 			r := vs.WriteValue(m2)
-			vs.Flush()
+			vs.Commit(vs.Root())
 			readCount += cs.Reads
 			writeCount += cs.Writes
 			cs.Reads = 0

@@ -308,7 +308,7 @@ func TestHandleGetRoot(t *testing.T) {
 	cs := storage.NewView()
 	c := chunks.NewChunk([]byte("abc"))
 	cs.Put(c)
-	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
+	assert.True(cs.Commit(c.Hash()))
 
 	w := httptest.NewRecorder()
 	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, storage.NewView())
@@ -347,13 +347,12 @@ func TestHandlePostRoot(t *testing.T) {
 	commitRef := vs.WriteValue(commit)
 	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
 	firstHeadRef := vs.WriteValue(firstHead)
-	vs.Flush()
+	vs.Commit(vs.Root())
 
 	commit = buildTestCommit(types.String("second"), commitRef)
 	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
-	vs.Flush()
-	persistChunks(cs)
+	vs.Commit(vs.Root())
 
 	// First attempt should fail, as 'last' won't match.
 	url = buildPostRootURL(newHeadRef.TargetHash(), firstHeadRef.TargetHash())
@@ -362,7 +361,7 @@ func TestHandlePostRoot(t *testing.T) {
 	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Now, update the root manually to 'last' and try again.
-	assert.True(cs.Commit(firstHeadRef.TargetHash(), hash.Hash{}))
+	assert.True(cs.Commit(firstHeadRef.TargetHash()))
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
@@ -402,8 +401,7 @@ func TestRejectPostRoot(t *testing.T) {
 	commit := buildTestCommit(types.String("commit"))
 	head := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	headRef := vs.WriteValue(head)
-	vs.Flush()
-	assert.True(cs.Commit(headRef.TargetHash(), hash.Hash{}))
+	assert.True(vs.Commit(headRef.TargetHash()))
 
 	// Attempt to update head to empty hash should fail
 	url = buildPostRootURL(hash.Hash{}, headRef.TargetHash())

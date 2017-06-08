@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -27,7 +26,7 @@ func TestLocalStoreFactory(t *testing.T) {
 
 	c := chunks.NewChunk([]byte{0xff})
 	store.Put(c)
-	assert.True(store.Commit(c.Hash(), hash.Hash{}))
+	assert.True(store.Commit(c.Hash()))
 
 	dbDir := filepath.Join(dir, dbName)
 	exists, contents := newFileManifest(dbDir, newManifestCache(0)).ParseIfExists(stats, nil)

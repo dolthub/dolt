@@ -50,9 +50,18 @@ type ValueStore struct {
 	bufferedChunksMax    uint64
 	bufferedChunkSize    uint64
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
+	unresolvedRefs       hash.HashSet
+	enforceCompleteness  bool
 	decodedChunks        *sizecache.SizeCache
 
 	versOnce sync.Once
+}
+
+func PanicIfDangling(unresolved hash.HashSet, cs chunks.ChunkStore) {
+	absent := cs.HasMany(unresolved)
+	if len(absent) != 0 {
+		d.Panic("Found dangling references to %v", absent)
+	}
 }
 
 const (
@@ -83,8 +92,9 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 		bufferedChunksMax:    pendingMax,
 		withBufferedChildren: map[hash.Hash]uint64{},
 		decodedChunks:        sizecache.New(cacheSize),
-
-		versOnce: sync.Once{},
+		unresolvedRefs:       hash.HashSet{},
+		enforceCompleteness:  true,
+		versOnce:             sync.Once{},
 	}
 }
 
@@ -93,6 +103,10 @@ func (lvs *ValueStore) expectVersion() {
 	if constants.NomsVersion != dataVersion {
 		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	}
+}
+
+func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
+	lvs.enforceCompleteness = enforce
 }
 
 func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
@@ -218,6 +232,7 @@ func (lvs *ValueStore) writeValueInternal(v Value) Ref {
 func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+
 	d.PanicIfTrue(height == 0)
 	h := c.Hash()
 	if _, present := lvs.bufferedChunks[h]; !present {
@@ -253,6 +268,10 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
+			} else if lvs.enforceCompleteness {
+				// If the childRef isn't presently buffered, we must consider it an
+				// unresolved ref.
+				lvs.unresolvedRefs.Insert(childHash)
 			}
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
 				putChildren(childHash)
@@ -284,11 +303,22 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 }
 
-// Flush() puts all bufferedChunks into the ChunkStore, with best-effort
-// locality. NB: The Chunks will not be made durable unless the caller also
-// Commits to the underlying ChunkStore.
-func (lvs *ValueStore) Flush() {
-	func() {
+func (lvs *ValueStore) Root() hash.Hash {
+	return lvs.cs.Root()
+}
+
+func (lvs *ValueStore) Rebase() {
+	lvs.cs.Rebase()
+}
+
+// Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
+// locality, and attempts to Commit, updating the root to |current| (or keeping
+// it the same as Root()). If the root has moved since this ValueStore was
+// opened, or last Rebased(), it will return false and will have internally
+// rebased. Until Commit() succeeds, no work of the ValueStore will be visible
+// to other readers of the underlying ChunkStore.
+func (lvs *ValueStore) Commit(current hash.Hash) bool {
+	return func() bool {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
@@ -317,15 +347,34 @@ func (lvs *ValueStore) Flush() {
 		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
 		lvs.withBufferedChildren = map[hash.Hash]uint64{}
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
-	}()
-}
 
-// persist() calls Flush(), but also flushes the ChunkStore to make the Chunks
-// durable. If you're using this outside of tests, you're probably holding it
-// wrong.
-func (lvs *ValueStore) persist() {
-	lvs.Flush()
-	d.PanicIfFalse(lvs.cs.Commit(lvs.cs.Root(), lvs.cs.Root()))
+		if lvs.enforceCompleteness {
+			checkCurrent := false
+			if (current != hash.Hash{} && current != lvs.Root()) {
+				if _, ok := lvs.bufferedChunks[current]; !ok {
+					// If the client is attempting to move the root and the referenced
+					// value isn't still buffered, we need to ensure that it is contained
+					// in the ChunkStore.
+					lvs.unresolvedRefs.Insert(current)
+				}
+			}
+
+			if checkCurrent {
+			}
+
+			PanicIfDangling(lvs.unresolvedRefs, lvs.cs)
+		}
+
+		if !lvs.cs.Commit(current) {
+			return false
+		}
+
+		if lvs.enforceCompleteness {
+			lvs.unresolvedRefs = hash.HashSet{}
+		}
+
+		return true
+	}()
 }
 
 // Close closes the underlying ChunkStore

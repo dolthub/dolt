@@ -164,11 +164,13 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		}
 	}()
 
-	cc := newCompletenessChecker()
+	unresolvedRefs := hash.HashSet{}
 	for ch := range decoded {
 		dc := <-ch
 		if dc.Chunk != nil && dc.Value != nil {
-			cc.AddRefs(*dc.Value)
+			(*dc.Value).WalkRefs(func(r types.Ref) {
+				unresolvedRefs.Insert(r.TargetHash())
+			})
 
 			totalDataWritten += len(dc.Chunk.Data())
 			cs.Put(*dc.Chunk)
@@ -185,7 +187,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	}
 
 	if chunkCount > 0 {
-		cc.PanicIfDangling(cs)
+		types.PanicIfDangling(unresolvedRefs, cs)
 		persistChunks(cs)
 	}
 
@@ -250,7 +252,7 @@ func persistChunks(cs chunks.ChunkStore) {
 		Factor: 2,
 		Jitter: true,
 	}
-	for !cs.Commit(cs.Root(), cs.Root()) {
+	for !cs.Commit(cs.Root()) {
 		time.Sleep(b.Duration())
 	}
 }
@@ -406,7 +408,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		}
 	}
 
-	if !cs.Commit(current, last) {
+	if last != cs.Root() || !cs.Commit(current) {
 		w.WriteHeader(http.StatusConflict)
 		w.Header().Add("content-type", "text/plain")
 		fmt.Fprintf(w, "%v", cs.Root().String())
