@@ -350,9 +350,9 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 }
 
 func (nbs *NomsBlockStore) Rebase() {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
 	if exists, contents := nbs.mm.ParseIfExists(nbs.stats, nil); exists {
-		nbs.mu.Lock()
-		defer nbs.mu.Unlock()
 		nbs.nomsVersion, nbs.manifestLock, nbs.root = contents.vers, contents.lock, contents.root
 		nbs.tables = nbs.tables.Rebase(contents.specs)
 	}
