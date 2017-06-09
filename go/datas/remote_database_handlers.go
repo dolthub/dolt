@@ -24,7 +24,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/golang/snappy"
-	"github.com/jpillora/backoff"
 )
 
 type URLParams interface {
@@ -246,14 +245,7 @@ func (wc wc) Close() error {
 }
 
 func persistChunks(cs chunks.ChunkStore) {
-	b := &backoff.Backoff{
-		Min:    128 * time.Microsecond,
-		Max:    10 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
 	for !cs.Commit(cs.Root(), cs.Root()) {
-		time.Sleep(b.Duration())
 	}
 }
 

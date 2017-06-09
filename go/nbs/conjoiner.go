@@ -11,7 +11,6 @@ import (
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
-	"github.com/jpillora/backoff"
 )
 
 type conjoiner interface {
@@ -100,13 +99,6 @@ func (c *asyncConjoiner) runAndNotify(id string, f func()) {
 }
 
 func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *Stats) {
-	b := &backoff.Backoff{
-		Min:    128 * time.Microsecond,
-		Max:    10 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
-
 	exists, upstream := mm.ParseIfExists(stats, nil)
 	d.PanicIfFalse(exists)
 	// This conjoin may have been requested by someone with an out-of-date notion of what's upstream. Verify that we actually still believe a conjoin is needed and, if not, return early
@@ -157,7 +149,6 @@ func conjoin(mm manifest, p tablePersister, needsConjoin func(int) bool, stats *
 				keepers = append(keepers, spec)
 			}
 		}
-		time.Sleep(b.Duration())
 	}
 }
 

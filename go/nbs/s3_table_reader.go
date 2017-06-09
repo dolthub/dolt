@@ -130,6 +130,7 @@ func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err e
 	n, err = read()
 	// We hit the point of diminishing returns investigating #3255, so add retries. In conversations with AWS people, it's not surprising to get transient failures when talking to S3, though SDKs are intended to have their own retrying. The issue may be that, in Go, making the S3 request and reading the data are separate operations, and the SDK kind of can't do its own retrying to handle failures in the latter.
 	if isConnReset(err) {
+		// We are backing off here because its possible and likely that the rate of requests to S3 is the underlying issue.
 		b := &backoff.Backoff{
 			Min:    128 * time.Microsecond,
 			Max:    1024 * time.Millisecond,

@@ -14,7 +14,6 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/jpillora/backoff"
 )
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
@@ -381,19 +380,12 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 		return true
 	}
 
-	b := &backoff.Backoff{
-		Min:    128 * time.Microsecond,
-		Max:    10 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
 	for {
 		if err := nbs.updateManifest(current, last); err == nil {
 			return true
 		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
 			return false
 		}
-		time.Sleep(b.Duration())
 	}
 }
 
