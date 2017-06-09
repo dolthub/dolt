@@ -62,7 +62,17 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	return newAWSStore(asf.table, ns, asf.ddb, asf.manifestCache, asf.persister, asf.conjoiner, defaultMemTableSize)
+	mm := newDynamoManifest(asf.table, ns, asf.ddb, asf.manifestCache)
+	return newNomsBlockStore(mm, asf.persister, asf.conjoiner, defaultMemTableSize)
+}
+
+func (asf *AWSStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
+	mm := newDynamoManifest(asf.table, ns, asf.ddb, asf.manifestCache)
+
+	if contents, present := asf.manifestCache.Get(mm.Name()); present {
+		return newNomsBlockStoreWithContents(mm, contents, asf.persister, asf.conjoiner, defaultMemTableSize)
+	}
+	return nil
 }
 
 func (asf *AWSStoreFactory) Shutter() {
@@ -107,6 +117,19 @@ func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	mm := newFileManifest(path, lsf.manifestCache)
 	p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
 	return newNomsBlockStore(mm, p, lsf.conjoiner, defaultMemTableSize)
+}
+
+func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
+	path := path.Join(lsf.dir, ns)
+	mm := newFileManifest(path, lsf.manifestCache)
+
+	if contents, present := lsf.manifestCache.Get(mm.Name()); present {
+		_, err := os.Stat(path)
+		d.PanicIfTrue(os.IsNotExist(err))
+		p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
+		return newNomsBlockStoreWithContents(mm, contents, p, lsf.conjoiner, defaultMemTableSize)
+	}
+	return nil
 }
 
 func (lsf *LocalStoreFactory) Shutter() {

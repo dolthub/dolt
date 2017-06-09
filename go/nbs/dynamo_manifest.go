@@ -45,6 +45,8 @@ type dynamoManifest struct {
 }
 
 func newDynamoManifest(table, namespace string, ddb ddbsvc, cache *manifestCache) manifest {
+	d.PanicIfTrue(table == "")
+	d.PanicIfTrue(namespace == "")
 	return dynamoManifest{table, namespace, ddb, cache}
 }
 

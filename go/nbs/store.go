@@ -77,13 +77,8 @@ func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize ui
 		make(chan struct{}, 32),
 		nil,
 	}
-	return newAWSStore(table, ns, ddb, globalManifestCache, p, globalConjoiner, memTableSize)
-}
-
-func newAWSStore(table, ns string, ddb ddbsvc, mc *manifestCache, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
-	d.PanicIfTrue(ns == "")
-	mm := newDynamoManifest(table, ns, ddb, mc)
-	return newNomsBlockStore(mm, p, c, memTableSize)
+	mm := newDynamoManifest(table, ns, ddb, globalManifestCache)
+	return newNomsBlockStore(mm, p, globalConjoiner, memTableSize)
 }
 
 func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
@@ -120,6 +115,24 @@ func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize 
 	}
 
 	return nbs
+}
+
+func newNomsBlockStoreWithContents(mm manifest, mc manifestContents, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
+	if memTableSize == 0 {
+		memTableSize = defaultMemTableSize
+	}
+	return &NomsBlockStore{
+		mm:     mm,
+		p:      p,
+		c:      c,
+		mtSize: memTableSize,
+		stats:  NewStats(),
+
+		nomsVersion:  mc.vers,
+		manifestLock: mc.lock,
+		root:         mc.root,
+		tables:       newTableSet(p).Rebase(mc.specs),
+	}
 }
 
 func (nbs *NomsBlockStore) Put(c chunks.Chunk) {

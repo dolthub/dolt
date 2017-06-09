@@ -193,6 +193,10 @@ func NewMemoryStoreFactory() Factory {
 	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 
+func (f *memoryStoreFactory) CreateStoreFromCache(ns string) ChunkStore {
+	return f.CreateStore(ns)
+}
+
 func (f *memoryStoreFactory) CreateStore(ns string) ChunkStore {
 	f.mu.Lock()
 	defer f.mu.Unlock()

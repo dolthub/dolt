@@ -7,9 +7,12 @@ package nbs
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/constants"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
 
@@ -35,4 +38,13 @@ func TestLocalStoreFactory(t *testing.T) {
 
 	_, err := os.Stat(filepath.Join(dbDir, contents.specs[0].name.String()))
 	assert.NoError(err)
+
+	// Simulate another process writing a manifest.
+	lock := computeAddr([]byte("locker"))
+	newRoot := hash.Of([]byte("new root"))
+	err = clobberManifest(dbDir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), contents.specs[0].name.String(), "1"}, ":"))
+	assert.NoError(err)
+
+	cached := f.CreateStoreFromCache(dbName)
+	assert.Equal(c.Hash(), cached.Root())
 }
