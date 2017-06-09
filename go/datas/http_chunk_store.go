@@ -280,6 +280,13 @@ func (hcs *httpChunkStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) 
 	u := *hcs.host
 	u.Path = httprouter.CleanPath(hcs.host.Path + constants.GetRefsPath)
 
+	// Indicate to the server that we're OK reading chunks from any store that knows about our root
+	q := "root=" + hcs.root.String()
+	if u.RawQuery != "" {
+		q = u.RawQuery + "&" + q
+	}
+	u.RawQuery = q
+
 	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},

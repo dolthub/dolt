@@ -307,6 +307,39 @@ func (suite *HTTPChunkStoreSuite) TestGetSame() {
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
+func (suite *HTTPChunkStoreSuite) TestGetWithRoot() {
+	chnx := []chunks.Chunk{
+		chunks.NewChunk([]byte("abc")),
+		chunks.NewChunk([]byte("def")),
+	}
+	for _, c := range chnx {
+		suite.serverCS.Put(c)
+	}
+	suite.serverCS.Commit(chnx[0].Hash(), hash.Hash{})
+
+	serv := inlineServer{httprouter.New()}
+	serv.GET(
+		constants.RootPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			suite.serverCS.Rebase()
+			HandleRootGet(w, req, ps, suite.serverCS)
+		},
+	)
+	serv.POST(
+		constants.GetRefsPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			r := req.URL.Query().Get("root")
+			suite.Equal(chnx[0].Hash().String(), r)
+			suite.serverCS.Rebase()
+			HandleGetRefs(w, req, ps, suite.serverCS)
+		},
+	)
+	store := newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
+
+	got := store.Get(chnx[1].Hash())
+	suite.Equal(chnx[1].Hash(), got.Hash())
+}
+
 func (suite *HTTPChunkStoreSuite) TestHas() {
 	chnx := []chunks.Chunk{
 		chunks.NewChunk([]byte("abc")),
