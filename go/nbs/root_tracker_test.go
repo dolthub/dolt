@@ -32,7 +32,7 @@ func TestChunkStoreVersion(t *testing.T) {
 
 	assert.Equal(constants.NomsVersion, store.Version())
 	newRoot := hash.Of([]byte("new root"))
-	if assert.True(store.Commit(newRoot)) {
+	if assert.True(store.Commit(newRoot, hash.Hash{})) {
 		assert.Equal(constants.NomsVersion, store.Version())
 	}
 }
@@ -70,7 +70,7 @@ func TestChunkStoreUpdateRoot(t *testing.T) {
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
 	store.Put(newRootChunk)
-	if assert.True(store.Commit(newRoot)) {
+	if assert.True(store.Commit(newRoot, hash.Hash{})) {
 		assert.True(store.Has(newRoot))
 		assert.Equal(newRoot, store.Root())
 	}
@@ -78,7 +78,7 @@ func TestChunkStoreUpdateRoot(t *testing.T) {
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
 	store.Put(secondRootChunk)
-	if assert.True(store.Commit(secondRoot)) {
+	if assert.True(store.Commit(secondRoot, newRoot)) {
 		assert.Equal(secondRoot, store.Root())
 		assert.True(store.Has(newRoot))
 		assert.True(store.Has(secondRoot))
@@ -123,12 +123,12 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 	defer store.Close()
 
 	// Simulate another process writing a manifest behind store's back.
-	_, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	newRoot2 := hash.Of([]byte("new root 2"))
-	assert.False(store.Commit(newRoot2))
+	assert.False(store.Commit(newRoot2, hash.Hash{}))
 	assertDataInStore(chunks, store, assert)
-	assert.True(store.Commit(newRoot2))
+	assert.True(store.Commit(newRoot2, newRoot))
 }
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {

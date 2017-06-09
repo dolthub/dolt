@@ -48,10 +48,9 @@ type ChunkStore interface {
 	Root() hash.Hash
 
 	// Commit atomically attempts to persist all novel Chunks and update the
-	// persisted root hash to current. If the underlying root has changed this
-	// the ChunkStore was opened (or last Rebased), it will return false and
-	// have tranparently Rebased.
-	Commit(current hash.Hash) bool
+	// persisted root hash from last to current (or keeps it the same).
+	// If last doesn't match the root in persistent storage, returns false.
+	Commit(current, last hash.Hash) bool
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore instance. The type is implementation-dependent, and impls

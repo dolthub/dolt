@@ -164,11 +164,14 @@ func (ms *MemoryStoreView) Root() hash.Hash {
 	return ms.rootHash
 }
 
-func (ms *MemoryStoreView) Commit(current hash.Hash) bool {
+func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+	if last != ms.rootHash {
+		return false
+	}
 
-	success := ms.storage.Update(current, ms.rootHash, ms.pending)
+	success := ms.storage.Update(current, last, ms.pending)
 	if success {
 		ms.pending = nil
 	}

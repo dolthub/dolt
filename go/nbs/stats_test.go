@@ -54,7 +54,7 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(0), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(4), stats(store).ChunksPerGet.Sum())
 
-	store.Commit(store.Root())
+	store.Commit(store.Root(), store.Root())
 
 	// Commit will update the manifest
 	assert.EqualValues(1, stats(store).WriteManifestLatency.Samples())
@@ -89,9 +89,9 @@ func TestStats(t *testing.T) {
 	// Force a conjoin
 	store.c = newAsyncConjoiner(2)
 	store.Put(c4)
-	store.Commit(store.Root())
+	store.Commit(store.Root(), store.Root())
 	store.Put(c5)
-	store.Commit(store.Root())
+	store.Commit(store.Root(), store.Root())
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats

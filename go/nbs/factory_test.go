@@ -29,7 +29,7 @@ func TestLocalStoreFactory(t *testing.T) {
 
 	c := chunks.NewChunk([]byte{0xff})
 	store.Put(c)
-	assert.True(store.Commit(c.Hash()))
+	assert.True(store.Commit(c.Hash(), hash.Hash{}))
 
 	dbDir := filepath.Join(dir, dbName)
 	exists, contents := newFileManifest(dbDir, newManifestCache(0)).ParseIfExists(stats, nil)

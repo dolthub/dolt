@@ -252,7 +252,7 @@ func persistChunks(cs chunks.ChunkStore) {
 		Factor: 2,
 		Jitter: true,
 	}
-	for !cs.Commit(cs.Root()) {
+	for !cs.Commit(cs.Root(), cs.Root()) {
 		time.Sleep(b.Duration())
 	}
 }
@@ -408,7 +408,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		}
 	}
 
-	if last != cs.Root() || !cs.Commit(current) {
+	if !cs.Commit(current, last) {
 		w.WriteHeader(http.StatusConflict)
 		w.Header().Add("content-type", "text/plain")
 		fmt.Fprintf(w, "%v", cs.Root().String())

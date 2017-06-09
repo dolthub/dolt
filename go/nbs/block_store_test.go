@@ -69,7 +69,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("rmnjb8cjc5tblj21ed4qs821649eduie", h.String())
 
-	suite.store.Commit(h) // Commit writes
+	suite.store.Commit(h, suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input, h, suite.store, suite.Assert())
@@ -82,7 +82,7 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 	suite.store.Put(c)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.store, suite.Assert())
-	suite.store.Commit(h) // Commit writes
+	suite.store.Commit(h, suite.store.Root()) // Commit writes
 
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
@@ -95,7 +95,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	suite.store.Put(c1)
 	suite.store.Put(c2)
 
-	suite.store.Commit(c1.Hash()) // Commit writes
+	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -113,7 +113,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	suite.store.Put(c1)
 	suite.store.Put(c2)
 
-	suite.store.Commit(c1.Hash()) // Commit writes
+	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -133,7 +133,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 		chnx[i] = chunks.NewChunk(data)
 		suite.store.Put(chnx[i])
 	}
-	suite.store.Commit(chnx[0].Hash()) // Commit writes
+	suite.store.Commit(chnx[0].Hash(), suite.store.Root()) // Commit writes
 
 	hashes := make(hash.HashSlice, len(chnx))
 	for i, c := range chnx {
@@ -162,7 +162,7 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 	for _, c := range chnx {
 		suite.store.Put(c)
 	}
-	suite.store.Commit(chnx[0].Hash()) // Commit writes
+	suite.store.Commit(chnx[0].Hash(), suite.store.Root()) // Commit writes
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
@@ -197,25 +197,26 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
+	root := suite.store.Root()
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	suite.True(interloper.Commit(interloper.Root()))
+	suite.True(interloper.Commit(interloper.Root(), interloper.Root()))
 
 	suite.store.Put(c2)
-	suite.True(suite.store.Commit(suite.store.Root()))
+	suite.True(suite.store.Commit(suite.store.Root(), suite.store.Root()))
 
 	// Reading c2 via the API should work...
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
 	// And so should reading c1 via the API
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
 
-	suite.True(interloper.Commit(c1.Hash())) // Commit root
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root())) // Commit root
 
 	// Updating from stale root should fail...
-	suite.False(suite.store.Commit(c2.Hash()))
+	suite.False(suite.store.Commit(c2.Hash(), root))
 	// ...but new root should succeed
-	suite.True(suite.store.Commit(c2.Hash()))
+	suite.True(suite.store.Commit(c2.Hash(), suite.store.Root()))
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
@@ -224,12 +225,12 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	suite.True(interloper.Commit(c1.Hash()))
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root()))
 
 	suite.False(suite.store.Has(c1.Hash()))
 	suite.Equal(hash.Hash{}, suite.store.Root())
 	// Should Rebase, even though there's no work to do.
-	suite.True(suite.store.Commit(suite.store.Root()))
+	suite.True(suite.store.Commit(suite.store.Root(), suite.store.Root()))
 
 	// Reading c1 via the API should work
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -243,7 +244,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 	interloper := NewLocalStore(suite.dir, testMemTableSize)
 	interloper.Put(c1)
-	suite.True(interloper.Commit(interloper.Root()))
+	suite.True(interloper.Commit(interloper.Root(), interloper.Root()))
 
 	suite.store.Put(c2)
 
@@ -260,14 +261,14 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
 
 	// Commit interloper root
-	suite.True(interloper.Commit(c1.Hash()))
+	suite.True(interloper.Commit(c1.Hash(), interloper.Root()))
 
 	// suite.store should still have its initial root
 	suite.EqualValues(root, suite.store.Root())
 	suite.store.Rebase()
 
 	// Rebase grabbed the new root, so updating should now succeed!
-	suite.True(suite.store.Commit(c2.Hash()))
+	suite.True(suite.store.Commit(c2.Hash(), suite.store.Root()))
 
 	// Interloper shouldn't see c2 yet....
 	suite.False(interloper.Has(c2.Hash()))
@@ -301,8 +302,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
 
+		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
-		assert.True(t, smallTableStore.Commit(newChunk.Hash()))
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
 		assert.True(t, smallTableStore.Has(newChunk.Hash()))
 	})
 
@@ -329,8 +331,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
 
+		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
-		assert.True(t, smallTableStore.Commit(newChunk.Hash()))
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
 		assert.True(t, smallTableStore.Has(newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})
@@ -351,8 +354,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
 
+		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
-		assert.True(t, smallTableStore.Commit(newChunk.Hash()))
+		assert.True(t, smallTableStore.Commit(newChunk.Hash(), root))
 		assert.True(t, smallTableStore.Has(newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})

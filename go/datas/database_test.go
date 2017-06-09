@@ -337,11 +337,11 @@ type waitDuringUpdateRootChunkStore struct {
 	preUpdateRootHook func()
 }
 
-func (w *waitDuringUpdateRootChunkStore) Commit(current hash.Hash) bool {
+func (w *waitDuringUpdateRootChunkStore) Commit(current, last hash.Hash) bool {
 	if w.preUpdateRootHook != nil {
 		w.preUpdateRootHook()
 	}
-	return w.ChunkStore.Commit(current)
+	return w.ChunkStore.Commit(current, last)
 }
 
 func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {

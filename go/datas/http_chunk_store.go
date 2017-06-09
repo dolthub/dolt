@@ -433,13 +433,13 @@ func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string)
 	return hash.Parse(string(data)), res.Header.Get(NomsVersionHeader)
 }
 
-func (hcs *httpChunkStore) Commit(current hash.Hash) bool {
+func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
 	hcs.Flush()
 
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
-	res := hcs.requestRoot("POST", current, hcs.root)
+	res := hcs.requestRoot("POST", current, last)
 	expectVersion(hcs.version, res)
 	defer closeResponse(res.Body)
 
