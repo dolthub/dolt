@@ -60,12 +60,16 @@ import (
 //  - a Noms value is not appropriate for a given target type
 //  - a Noms number overflows the target type
 //  - a Noms list is decoded into a Go array of a different length
-//
 func Unmarshal(v types.Value, out interface{}) (err error) {
+	return UnmarshalOpt(v, Opt{}, out)
+}
+
+// UnmarshalOpt is like Unmarshal but provides additional options.
+func UnmarshalOpt(v types.Value, opt Opt, out interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
-			case *UnmarshalTypeMismatchError, *UnsupportedTypeError, *InvalidTagError:
+			case *UnmarshalTypeMismatchError, *UnsupportedTypeError, *InvalidTagError, *InvalidUnmarshalError:
 				err = r.(error)
 			case *unmarshalNomsError:
 				err = r.err
@@ -75,25 +79,27 @@ func Unmarshal(v types.Value, out interface{}) (err error) {
 		}
 	}()
 
-	rv := reflect.ValueOf(out)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return &InvalidUnmarshalError{reflect.TypeOf(out)}
-	}
-	rv = rv.Elem()
-	d := typeDecoder(rv.Type(), nomsTags{})
-	d(v, rv)
+	MustUnmarshalOpt(v, opt, out)
 	return
 }
 
 // Unmarshals a Noms value into a Go value using the same rules as Unmarshal().
 // Panics on failure.
 func MustUnmarshal(v types.Value, out interface{}) {
+	MustUnmarshalOpt(v, Opt{}, out)
+}
+
+// MustUnmarshalOpt is like MustUnmarshal but with additional options.
+func MustUnmarshalOpt(v types.Value, opt Opt, out interface{}) {
 	rv := reflect.ValueOf(out)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		panic(&InvalidUnmarshalError{reflect.TypeOf(out)})
 	}
 	rv = rv.Elem()
-	d := typeDecoder(rv.Type(), nomsTags{})
+	nt := nomsTags{
+		set: opt.Set,
+	}
+	d := typeDecoder(rv.Type(), nt)
 	d(v, rv)
 }
 

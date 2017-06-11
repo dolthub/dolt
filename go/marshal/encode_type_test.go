@@ -360,6 +360,43 @@ func TestMarshalTypeSet(t *testing.T) {
 	}).Equals(typ))
 }
 
+func TestEncodeTypeOpt(t *testing.T) {
+	assert := assert.New(t)
+
+	tc := []struct {
+		in       interface{}
+		opt      Opt
+		wantType *types.Type
+	}{
+		{
+			[]string{},
+			Opt{},
+			types.MakeListType(types.StringType),
+		},
+		{
+			[]string{},
+			Opt{Set: true},
+			types.MakeSetType(types.StringType),
+		},
+		{
+			map[string]struct{}{},
+			Opt{},
+			types.MakeMapType(types.StringType, types.MakeStructType("")),
+		},
+		{
+			map[string]struct{}{},
+			Opt{Set: true},
+			types.MakeSetType(types.StringType),
+		},
+	}
+
+	for _, t := range tc {
+		r, err := MarshalTypeOpt(t.in, t.opt)
+		assert.True(t.wantType.Equals(r))
+		assert.Nil(err)
+	}
+}
+
 func TestMarshalTypeSetWithTags(t *testing.T) {
 	assert := assert.New(t)
 

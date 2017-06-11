@@ -23,6 +23,11 @@ import (
 // If a Go struct contains a noms tag with original the field is skipped since
 // the Noms type depends on the original Noms value which is not available.
 func MarshalType(v interface{}) (nt *types.Type, err error) {
+	return MarshalTypeOpt(v, Opt{})
+}
+
+// MarshalTypeOpt is like MarshalType but with additional options.
+func MarshalTypeOpt(v interface{}, opt Opt) (nt *types.Type, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -35,15 +40,23 @@ func MarshalType(v interface{}) (nt *types.Type, err error) {
 			}
 		}
 	}()
-	nt = MustMarshalType(v)
+	nt = MustMarshalTypeOpt(v, opt)
 	return
 }
 
 // MustMarshalType computes a Noms type from a Go type or panics if there is an
 // error.
 func MustMarshalType(v interface{}) (nt *types.Type) {
+	return MustMarshalTypeOpt(v, Opt{})
+}
+
+// MustMarshalTypeOpt is like MustMarshalType but provides additional options.
+func MustMarshalTypeOpt(v interface{}, opt Opt) (nt *types.Type) {
 	rv := reflect.ValueOf(v)
-	nt = encodeType(rv.Type(), map[string]reflect.Type{}, nomsTags{})
+	tags := nomsTags{
+		set: opt.Set,
+	}
+	nt = encodeType(rv.Type(), map[string]reflect.Type{}, tags)
 
 	if nt == nil {
 		panic(&UnsupportedTypeError{Type: rv.Type()})

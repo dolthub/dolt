@@ -854,6 +854,57 @@ func TestDecodeSet(t *testing.T) {
 	}, gs2)
 }
 
+func TestDecodeOpt(t *testing.T) {
+	assert := assert.New(t)
+
+	tc := []struct {
+		in        types.Value
+		opt       Opt
+		onto      interface{}
+		wantValue interface{}
+		wantError string
+	}{
+		{
+			types.NewSet(types.String("a"), types.String("b")),
+			Opt{},
+			&[]string{},
+			&[]string{"a", "b"},
+			"",
+		},
+		{
+			types.NewSet(types.String("a"), types.String("b")),
+			Opt{Set: true},
+			&[]string{},
+			&[]string{"a", "b"},
+			"",
+		},
+		{
+			types.NewSet(types.String("a"), types.String("b")),
+			Opt{Set: true},
+			&map[string]struct{}{},
+			&map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
+			"",
+		},
+		{
+			types.NewSet(types.String("a"), types.String("b")),
+			Opt{},
+			&map[string]struct{}{},
+			&map[string]struct{}{},
+			"Cannot unmarshal Set<String> into Go value of type map[string]struct {}, field missing \"set\" tag",
+		},
+	}
+
+	for _, t := range tc {
+		err := UnmarshalOpt(t.in, t.opt, t.onto)
+		assert.Equal(t.wantValue, t.onto)
+		if t.wantError == "" {
+			assert.Nil(err)
+		} else {
+			assert.Equal(t.wantError, err.Error())
+		}
+	}
+}
+
 func TestDecodeNamedSet(t *testing.T) {
 	assert := assert.New(t)
 

@@ -91,8 +91,12 @@ import (
 //
 // Go pointers, complex, function are not supported. Attempting to encode such a
 // value causes Marshal to return an UnsupportedTypeError.
-//
-func Marshal(v interface{}) (nomsValue types.Value, err error) {
+func Marshal(v interface{}) (types.Value, error) {
+	return MarshalOpt(v, Opt{})
+}
+
+// MarshalOpt is like Marshal but provides additional options.
+func MarshalOpt(v interface{}, opt Opt) (nomsValue types.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -105,15 +109,23 @@ func Marshal(v interface{}) (nomsValue types.Value, err error) {
 			}
 		}
 	}()
-	nomsValue = MustMarshal(v)
+	nomsValue = MustMarshalOpt(v, opt)
 	return
 }
 
 // MustMarshal marshals a Go value to a Noms value using the same rules as
 // Marshal(). Panics on failure.
 func MustMarshal(v interface{}) types.Value {
+	return MustMarshalOpt(v, Opt{})
+}
+
+// MustMarshalOpt is like MustMarshal, but with additional options.
+func MustMarshalOpt(v interface{}, opt Opt) types.Value {
 	rv := reflect.ValueOf(v)
-	encoder := typeEncoder(rv.Type(), map[string]reflect.Type{}, nomsTags{})
+	nt := nomsTags{
+		set: opt.Set,
+	}
+	encoder := typeEncoder(rv.Type(), map[string]reflect.Type{}, nt)
 	return encoder(rv)
 }
 
@@ -164,6 +176,11 @@ type marshalNomsError struct {
 
 func (e *marshalNomsError) Error() string {
 	return e.err.Error()
+}
+
+type Opt struct {
+	// Marshal []T or map[T]struct{} to Set<T>, or Unmarhsal Set<T> to map[T]struct{}.
+	Set bool
 }
 
 type nomsTags struct {

@@ -696,6 +696,43 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(g.Has(types.Number(3)))
 }
 
+func TestEncodeOpt(t *testing.T) {
+	assert := assert.New(t)
+
+	tc := []struct {
+		in        interface{}
+		opt       Opt
+		wantValue types.Value
+	}{
+		{
+			[]string{"a", "b"},
+			Opt{},
+			types.NewList(types.String("a"), types.String("b")),
+		},
+		{
+			[]string{"a", "b"},
+			Opt{Set: true},
+			types.NewSet(types.String("a"), types.String("b")),
+		},
+		{
+			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
+			Opt{},
+			types.NewMap(types.String("a"), types.NewStruct("", nil), types.String("b"), types.NewStruct("", nil)),
+		},
+		{
+			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
+			Opt{Set: true},
+			types.NewSet(types.String("a"), types.String("b")),
+		},
+	}
+
+	for _, t := range tc {
+		r, err := MarshalOpt(t.in, t.opt)
+		assert.Equal(t.wantValue, r)
+		assert.Nil(err)
+	}
+}
+
 func TestEncodeSetWithTags(t *testing.T) {
 	assert := assert.New(t)
 
