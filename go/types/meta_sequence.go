@@ -79,13 +79,15 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 }
 
 type metaSequence struct {
-	tuples []metaTuple
 	kind   NomsKind
+	level  uint64
+	tuples []metaTuple
 	vr     ValueReader
 }
 
-func newMetaSequence(tuples []metaTuple, kind NomsKind, vr ValueReader) metaSequence {
-	return metaSequence{tuples, kind, vr}
+func newMetaSequence(kind NomsKind, level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
+	d.PanicIfFalse(level > 0)
+	return metaSequence{kind, level, tuples, vr}
 }
 
 func (ms metaSequence) data() []metaTuple {
@@ -146,7 +148,12 @@ func (ms metaSequence) numLeaves() uint64 {
 	return ms.cumulativeNumberOfLeaves(len(ms.tuples) - 1)
 }
 
+func (ms metaSequence) treeLevel() uint64 {
+	return ms.level
+}
+
 func (ms metaSequence) isLeaf() bool {
+	d.PanicIfTrue(ms.level == 0)
 	return false
 }
 
@@ -158,9 +165,10 @@ func (ms metaSequence) getChildSequence(idx int) sequence {
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
-func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
+func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+	d.PanicIfFalse(ms.level > 0)
 	if length == 0 {
-		return emptySequence{height - 1}
+		return emptySequence{ms.level - 1}
 	}
 
 	metaItems := []metaTuple{}
@@ -192,7 +200,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64, he
 	}
 
 	if childIsMeta {
-		return newMetaSequence(metaItems, ms.kind, ms.vr)
+		return newMetaSequence(ms.kind, ms.level-1, metaItems, ms.vr)
 	}
 
 	if isIndexedSequence {
@@ -278,7 +286,7 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 }
 
 type emptySequence struct {
-	height int
+	level uint64
 }
 
 func (es emptySequence) getItem(idx int) sequenceItem {
@@ -328,16 +336,19 @@ func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
 }
 
-func (es emptySequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
-	d.PanicIfFalse(es.height > 1)
-	d.PanicIfFalse(es.height == height)
+func (es emptySequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+	d.PanicIfFalse(es.level > 0)
 	d.PanicIfFalse(start == 0)
 	d.PanicIfFalse(length == 0)
-	return emptySequence{height - 1}
+	return emptySequence{es.level - 1}
+}
+
+func (es emptySequence) treeLevel() uint64 {
+	return es.level
 }
 
 func (es emptySequence) isLeaf() bool {
-	return es.height == 1
+	return es.level == 0
 }
 
 // Invokes |cb| on all "uncommitted" ptree nodes reachable from |v| in

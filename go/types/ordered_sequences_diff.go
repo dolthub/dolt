@@ -110,24 +110,19 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
 func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	var lastHeight, currentHeight int
-	functions.All(
-		func() { lastHeight = newCursorAt(last, emptyKey, false, false, false).depth() },
-		func() { currentHeight = newCursorAt(current, emptyKey, false, false, false).depth() },
-	)
-	return orderedSequenceDiffInternalNodes(last, current, changes, stopChan, lastHeight, currentHeight)
+	return orderedSequenceDiffInternalNodes(last, current, changes, stopChan)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}, lastHeight, currentHeight int) bool {
-	if lastHeight > currentHeight {
-		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen()), lastHeight).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(lastChild, current, changes, stopChan, lastHeight-1, currentHeight)
+func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+	if last.treeLevel() > current.treeLevel() {
+		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
+		return orderedSequenceDiffInternalNodes(lastChild, current, changes, stopChan)
 	}
 
-	if currentHeight > lastHeight {
-		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen()), currentHeight).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan, lastHeight, currentHeight-1)
+	if current.treeLevel() > last.treeLevel() {
+		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen())).(orderedSequence)
+		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan)
 	}
 
 	if last.isLeaf() && current.isLeaf() {
@@ -142,13 +137,13 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 		var lastChild, currentChild orderedSequence
 		functions.All(
 			func() {
-				lastChild = last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved, lastHeight).(orderedSequence)
+				lastChild = last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
 			},
 			func() {
-				currentChild = current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded, currentHeight).(orderedSequence)
+				currentChild = current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
 			},
 		)
-		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, stopChan, lastHeight-1, currentHeight-1); !ok {
+		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, stopChan); !ok {
 			return false
 		}
 	}

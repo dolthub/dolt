@@ -405,8 +405,28 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	})
 
 	assert.Equal(t, uint64(3), NewRef(m).Height())
-	assert.Equal(t, 205, readCount)
-	assert.Equal(t, 123, writeCount)
+	assert.Equal(t, 125, readCount)
+	assert.Equal(t, 124, writeCount)
+}
+
+func TestMapInfiniteChunkBug(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	keyLen := chunkWindow + 1
+
+	buff := &bytes.Buffer{}
+	for i := uint32(0); i < keyLen; i++ {
+		buff.WriteString("s")
+	}
+
+	prefix := buff.String()
+
+	m := NewMap()
+
+	for i := 0; i < 10000; i++ {
+		m = m.Set(String(prefix+fmt.Sprintf("%d", i)), Number(i))
+	}
 }
 
 func TestNewMap(t *testing.T) {

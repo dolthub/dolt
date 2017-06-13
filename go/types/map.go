@@ -221,7 +221,7 @@ func (m Map) Remove(k Value) Map {
 }
 
 func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, m.seq.valueReader(), nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
+	ch := newSequenceChunker(cur, 0, m.seq.valueReader(), nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -346,7 +346,8 @@ func buildMapData(values []Value) mapEntrySlice {
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+		d.PanicIfFalse(level == 0)
 		mapData := make([]mapEntry, len(items), len(items))
 
 		for i, v := range items {

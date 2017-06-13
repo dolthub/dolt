@@ -34,20 +34,20 @@ func TestEnsureHash(t *testing.T) {
 	}()
 
 	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))
-	cb := newBlob(newBlobMetaSequence([]metaTuple{{Ref{}, newOrderedKey(Number(2)), 2, bl}}, vs))
+	cb := newBlob(newBlobMetaSequence(1, []metaTuple{{Ref{}, newOrderedKey(Number(2)), 2, bl}}, vs))
 
 	ll := newList(newListLeafSequence(nil, String("foo")))
-	cl := newList(newMetaSequence([]metaTuple{{Ref{}, newOrderedKey(Number(1)), 1, ll}}, ListKind, vs))
+	cl := newList(newMetaSequence(ListKind, 1, []metaTuple{{Ref{}, newOrderedKey(Number(1)), 1, ll}}, vs))
 
 	newStringOrderedKey := func(s string) orderedKey {
 		return newOrderedKey(String(s))
 	}
 
 	ml := newMap(newMapLeafSequence(nil, mapEntry{String("foo"), String("bar")}))
-	cm := newMap(newMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, ml}}, MapKind, vs))
+	cm := newMap(newMetaSequence(MapKind, 1, []metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, ml}}, vs))
 
 	sl := newSet(newSetLeafSequence(nil, String("foo")))
-	cps := newSet(newMetaSequence([]metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, sl}}, SetKind, vs))
+	cps := newSet(newMetaSequence(SetKind, 1, []metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, sl}}, vs))
 
 	count = byte(1)
 	values := []Value{

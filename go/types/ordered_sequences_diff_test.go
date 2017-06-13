@@ -191,8 +191,8 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	m1 := newSetSequenceMt(Number(1), Number(2))
 	m2 := newSetSequenceMt(Number(3), Number(4))
 	m3 := newSetSequenceMt(Number(5), Number(6))
-	s1 := newSetMetaSequence([]metaTuple{m1, m3}, nil)
-	s2 := newSetMetaSequence([]metaTuple{m1, m2, m3}, nil)
+	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, nil)
+	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, nil)
 
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)

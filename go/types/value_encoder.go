@@ -90,13 +90,14 @@ func (w *valueEncoder) writeMapLeafSequence(seq mapLeafSequence) {
 }
 
 func (w *valueEncoder) maybeWriteMetaSequence(seq sequence) bool {
-	ms, ok := seq.(metaSequence)
-	if !ok {
-		w.writeBool(false) // not a meta sequence
+	if seq.isLeaf() {
+		w.writeCount(0) // leaf
 		return false
 	}
 
-	w.writeBool(true) // a meta sequence
+	ms := seq.(metaSequence)
+	d.PanicIfFalse(ms.level > 0)
+	w.writeCount(ms.level)
 
 	count := ms.seqLen()
 	w.writeCount(uint64(count))
@@ -176,13 +177,9 @@ func (w *valueEncoder) writeStruct(s Struct) {
 	w.writeString(s.name)
 	w.writeCount(uint64(len(s.fieldNames)))
 
-	// Write field names first because they will compress better together.
-	for _, name := range s.fieldNames {
+	for i, name := range s.fieldNames {
 		w.writeString(name)
-	}
-
-	for _, v := range s.values {
-		w.writeValue(v)
+		w.writeValue(s.values[i])
 	}
 }
 

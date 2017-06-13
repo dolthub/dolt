@@ -268,19 +268,18 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 		return
 	}
 
-	lastCur := newCursorAtIndex(last.seq, 0, false)
-	lCur := newCursorAtIndex(l.seq, 0, false)
-	indexedSequenceDiff(last.seq, lastCur.depth(), 0, l.seq, lCur.depth(), 0, changes, closeChan, maxSpliceMatrixSize)
+	indexedSequenceDiff(last.seq, 0, l.seq, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
-	return newSequenceChunker(cur, vr, nil, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
+	return newSequenceChunker(cur, 0, vr, nil, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func makeListLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+		d.PanicIfFalse(level == 0)
 		values := make([]Value, len(items))
 
 		for i, v := range items {

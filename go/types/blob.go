@@ -67,7 +67,7 @@ func (b Blob) Concat(other Blob) Blob {
 }
 
 func (b Blob) newChunker(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
-	return newSequenceChunker(cur, vr, nil, makeBlobLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(BlobKind, vr), hashValueByte)
+	return newSequenceChunker(cur, 0, vr, nil, makeBlobLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(BlobKind, vr), hashValueByte)
 }
 
 // Collection interface
@@ -209,7 +209,8 @@ func (cbr *BlobReader) updateReader() {
 }
 
 func makeBlobLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+		d.PanicIfFalse(level == 0)
 		buff := make([]byte, len(items))
 
 		for i, v := range items {
@@ -278,7 +279,7 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]
-	rv := newRollingValueHasher()
+	rv := newRollingValueHasher(0)
 	offset := 0
 	addByte := func(b byte) bool {
 		if offset >= len(chunkBytes) {
@@ -295,6 +296,7 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 	mtChan := make(chan chan metaTuple, runtime.NumCPU())
 
 	makeChunk := func() {
+		rv.Reset()
 		cp := make([]byte, offset)
 		copy(cp, chunkBytes[0:offset])
 
@@ -322,7 +324,6 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 			n, err := r.Read(readBuff[:])
 			for i := 0; i < n; i++ {
 				if addByte(readBuff[i]) {
-					rv.ClearLastBoundary()
 					makeChunk()
 				}
 			}

@@ -562,7 +562,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i, v := range vs {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newList(newListMetaSequence(tuples, nil))
+			return newList(newListMetaSequence(1, tuples, nil))
 		}
 
 		assertTrue(newChunkedList(Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
@@ -592,7 +592,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i, v := range vs {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newSet(newSetMetaSequence(tuples, nil))
+			return newSet(newSetMetaSequence(1, tuples, nil))
 		}
 		assertTrue(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
 		assertFalse(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
@@ -625,7 +625,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i := 0; i < len(vs); i += 2 {
 				tuples[i/2] = newSequenceMetaTuple(mapEntry{vs[i], vs[i+1]})
 			}
-			return newMap(newMapMetaSequence(tuples, nil))
+			return newMap(newMapMetaSequence(1, tuples, nil))
 		}
 
 		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))

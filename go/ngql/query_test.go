@@ -216,8 +216,8 @@ func (suite *QueryGraphQLSuite) TestSetOfStruct() {
 	)
 
 	suite.assertQueryResult(set, "{root{values{a b}}}",
-		`{"data":{"root":{"values":[{"a":-20.102,"b":"bar"},{"a":5,"b":"baz"},{"a":28,"b":"foo"}]}}}`)
-	suite.assertQueryResult(set, "{root{values{a}}}", `{"data":{"root":{"values":[{"a":-20.102},{"a":5},{"a":28}]}}}`)
+		`{"data":{"root":{"values":[{"a":28,"b":"foo"},{"a":5,"b":"baz"},{"a":-20.102,"b":"bar"}]}}}`)
+	suite.assertQueryResult(set, "{root{values{a}}}", `{"data":{"root":{"values":[{"a":28},{"a":5},{"a":-20.102}]}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestMapBasic() {

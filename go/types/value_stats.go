@@ -41,18 +41,18 @@ func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
 	fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
 	fmt.Fprintf(w, treeLevelHeader)
 
-	level := uint64(newCursorAtIndex(v.(Collection).sequence(), 0, false).depth())
+	level := int64(v.(Collection).sequence().treeLevel())
 	nodes := ValueSlice{v}
 
-	// TODO: For level 1, use NBS to fetch leaf sizes without actually reading leaf data.
-	for level > 0 {
+	// TODO: For level 0, use NBS to fetch leaf sizes without actually reading leaf data.
+	for level >= 0 {
 		children := RefSlice{}
 		visited := hash.HashSet{}
 		chunkCount, valueCount, byteSize := uint64(0), uint64(0), uint64(0)
 
 		for _, n := range nodes {
 			chunkCount++
-			if level > 1 {
+			if level > 0 {
 				n.WalkRefs(func(r Ref) {
 					children = append(children, r)
 				})
@@ -69,7 +69,7 @@ func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
 			}
 		}
 
-		printTreeLevel(w, level, valueCount, chunkCount, byteSize)
+		printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
 
 		nodes = loadNextLevel(children, vr)
 		level--

@@ -32,7 +32,11 @@ func (ts testSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompositeChildSequence(start uint64, length uint64, height int) sequence {
+func (ts testSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+	panic("not reached")
+}
+
+func (ts testSequence) treeLevel() uint64 {
 	panic("not reached")
 }
 

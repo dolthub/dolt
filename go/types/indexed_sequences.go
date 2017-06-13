@@ -6,12 +6,12 @@ package types
 
 import "github.com/attic-labs/noms/go/d"
 
-func newListMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
-	return newMetaSequence(tuples, ListKind, vr)
+func newListMetaSequence(level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
+	return newMetaSequence(ListKind, level, tuples, vr)
 }
 
-func newBlobMetaSequence(tuples []metaTuple, vr ValueReader) metaSequence {
-	return newMetaSequence(tuples, BlobKind, vr)
+func newBlobMetaSequence(level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
+	return newMetaSequence(BlobKind, level, tuples, vr)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx
@@ -49,7 +49,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
 func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
 
@@ -61,10 +61,10 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkF
 
 		var col Collection
 		if kind == ListKind {
-			col = newList(newListMetaSequence(tuples, source))
+			col = newList(newListMetaSequence(level, tuples, source))
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
-			col = newBlob(newBlobMetaSequence(tuples, source))
+			col = newBlob(newBlobMetaSequence(level, tuples, source))
 		}
 		return col, orderedKeyFromSum(tuples), numLeaves
 	}

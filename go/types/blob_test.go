@@ -103,11 +103,11 @@ func TestBlobSuite64K(t *testing.T) {
 }
 
 func TestBlobSuite256K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(18, 8, 2, 2))
+	suite.Run(t, newBlobTestSuite(18, 6, 2, 2))
 }
 
 func TestBlobSuite1M(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(20, 29, 2, 2))
+	suite.Run(t, newBlobTestSuite(20, 23, 2, 2))
 }
 
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...

@@ -189,7 +189,7 @@ func (s Set) Remove(values ...Value) Set {
 }
 
 func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	ch := newSequenceChunker(cur, s.seq.valueReader(), nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
+	ch := newSequenceChunker(cur, 0, s.seq.valueReader(), nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
 	for deleteCount > 0 {
 		ch.Skip()
 		deleteCount--
@@ -271,7 +271,8 @@ func buildSetData(values ValueSlice) ValueSlice {
 }
 
 func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
-	return func(items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+		d.PanicIfFalse(level == 0)
 		setData := make([]Value, len(items), len(items))
 
 		for i, v := range items {

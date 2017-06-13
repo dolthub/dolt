@@ -111,7 +111,7 @@ func (r *valueDecoder) readMapLeafSequence() orderedSequence {
 	return mapLeafSequence{leafSequence{r.vr, len(data), MapKind}, data}
 }
 
-func (r *valueDecoder) readMetaSequence(k NomsKind) metaSequence {
+func (r *valueDecoder) readMetaSequence(k NomsKind, level uint64) metaSequence {
 	count := r.readCount()
 
 	data := []metaTuple{}
@@ -129,16 +129,16 @@ func (r *valueDecoder) readMetaSequence(k NomsKind) metaSequence {
 		data = append(data, newMetaTuple(ref, key, numLeaves, nil))
 	}
 
-	return newMetaSequence(data, k, r.vr)
+	return newMetaSequence(k, level, data, r.vr)
 }
 
 func (r *valueDecoder) readValue() Value {
 	k := r.readKind()
 	switch k {
 	case BlobKind:
-		isMeta := r.readBool()
-		if isMeta {
-			return newBlob(r.readMetaSequence(k))
+		level := r.readCount()
+		if level > 0 {
+			return newBlob(r.readMetaSequence(k, level))
 		}
 
 		return newBlob(r.readBlobLeafSequence())
@@ -149,25 +149,25 @@ func (r *valueDecoder) readValue() Value {
 	case StringKind:
 		return String(r.readString())
 	case ListKind:
-		isMeta := r.readBool()
-		if isMeta {
-			return newList(r.readMetaSequence(k))
+		level := r.readCount()
+		if level > 0 {
+			return newList(r.readMetaSequence(k, level))
 		}
 
 		return newList(r.readListLeafSequence())
 	case MapKind:
-		isMeta := r.readBool()
-		if isMeta {
-			return newMap(r.readMetaSequence(k))
+		level := r.readCount()
+		if level > 0 {
+			return newMap(r.readMetaSequence(k, level))
 		}
 
 		return newMap(r.readMapLeafSequence())
 	case RefKind:
 		return r.readRef()
 	case SetKind:
-		isMeta := r.readBool()
-		if isMeta {
-			return newSet(r.readMetaSequence(k))
+		level := r.readCount()
+		if level > 0 {
+			return newSet(r.readMetaSequence(k, level))
 		}
 
 		return newSet(r.readSetLeafSequence())
@@ -187,12 +187,9 @@ func (r *valueDecoder) readStruct() Value {
 	count := r.readCount()
 
 	fieldNames := make([]string, count)
-	for i := uint64(0); i < count; i++ {
-		fieldNames[i] = r.readString()
-	}
-
 	values := make([]Value, count)
 	for i := uint64(0); i < count; i++ {
+		fieldNames[i] = r.readString()
 		values[i] = r.readValue()
 	}
 

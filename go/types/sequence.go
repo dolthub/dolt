@@ -18,7 +18,8 @@ type sequence interface {
 	Kind() NomsKind
 	getCompareFn(other sequence) compareFn
 	getChildSequence(idx int) sequence
+	treeLevel() uint64
 	isLeaf() bool
-	getCompositeChildSequence(start uint64, length uint64, height int) sequence
+	getCompositeChildSequence(start uint64, length uint64) sequence
 	cumulativeNumberOfLeaves(idx int) uint64
 }
