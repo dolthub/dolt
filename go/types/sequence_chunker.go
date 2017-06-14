@@ -73,13 +73,15 @@ func (sc *sequenceChunker) resume() {
 	}
 }
 
-func (sc *sequenceChunker) Append(item sequenceItem) {
+func (sc *sequenceChunker) Append(item sequenceItem) bool {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
 	sc.hashValueBytes(item, sc.rv)
 	if sc.rv.crossedBoundary {
 		sc.handleChunkBoundary()
+		return true
 	}
+	return false
 }
 
 func (sc *sequenceChunker) Skip() {
@@ -208,15 +210,8 @@ func (sc *sequenceChunker) finalizeCursor() {
 		}
 		first = false
 
-		item := sc.cur.current()
-		sc.current = append(sc.current, item)
-		sc.hashValueBytes(item, sc.rv)
-
-		if sc.rv.crossedBoundary {
-			sc.handleChunkBoundary()
-			if sc.cur.atLastItem() {
-				break // boundary occurred at same place in old & new sequence
-			}
+		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
+			break // boundary occurred at same place in old & new sequence
 		}
 	}
 }
