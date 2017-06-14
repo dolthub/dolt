@@ -85,16 +85,7 @@ func (sc *sequenceChunker) Append(item sequenceItem) bool {
 }
 
 func (sc *sequenceChunker) Skip() {
-	if sc.cur.advance() && sc.cur.indexInChunk() == 0 {
-		// Advancing moved our cursor into the next chunk. We need to advance our parent's cursor, so that when our parent writes out the remaining chunks it doesn't include the chunk that we skipped.
-		sc.skipParentIfExists()
-	}
-}
-
-func (sc *sequenceChunker) skipParentIfExists() {
-	if sc.parent != nil && sc.parent.cur != nil {
-		sc.parent.Skip()
-	}
+	sc.cur.advance()
 }
 
 func (sc *sequenceChunker) createParent() {
@@ -102,7 +93,7 @@ func (sc *sequenceChunker) createParent() {
 	var parent *sequenceCursor
 	if sc.cur != nil && sc.cur.parent != nil {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
-		parent = sc.cur.parent.clone()
+		parent = sc.cur.parent
 	}
 	sc.parent = newSequenceChunker(parent, sc.level+1, sc.vr, sc.vw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
 	sc.parent.isLeaf = false
@@ -193,25 +184,17 @@ func (sc *sequenceChunker) Done() sequence {
 
 // If we are mutating an existing sequence, appending subsequent items in the sequence until we reach a pre-existing chunk boundary or the end of the sequence.
 func (sc *sequenceChunker) finalizeCursor() {
-	if !sc.cur.valid() {
-		// The cursor is past the end, and due to the way cursors work, the parent cursor will actually point to its last chunk. We need to force it to point past the end so that our parent's Done() method doesn't add the last chunk twice.
-		sc.skipParentIfExists()
-		return
-	}
-
-	// TODO: I feel like it should be possible to exit early if we find ourserlves
-	// at the first item in a chunk and sc.current is empty.
-
-	first := true
 	for ; sc.cur.valid(); sc.cur.advance() {
-		if first || sc.cur.indexInChunk() == 0 {
-			// Every time we step into a chunk from the original sequence, that chunk will no longer exist in the new sequence. The parent must be instructed to skip it.
-			sc.skipParentIfExists()
-		}
-		first = false
-
 		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
 			break // boundary occurred at same place in old & new sequence
 		}
+	}
+
+	if sc.cur.parent != nil {
+		sc.cur.parent.advance()
+
+		// Invalidate this cursor, since it is now inconsistent with its parent
+		sc.cur.parent = nil
+		sc.cur.seq = nil
 	}
 }

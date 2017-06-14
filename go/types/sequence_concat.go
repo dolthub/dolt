@@ -25,17 +25,19 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 	}
 	chunker := newSequenceChunker(newCursorAtIndex(fst, fst.numLeaves(), false), vr)
 
-	for cur, ch := newCursorAtIndex(snd, 0, false), chunker; cur != nil; cur = cur.parent {
-		// If fst is shallower than snd, its cur will have a parent whereas the
-		// chunker to snd won't. In that case, create a parent for fst.
-		// Note that if the inverse is true - snd is shallower than fst - this just
-		// means higher chunker levels will still have cursors from fst... which
-		// point to the end, so finalisation won't do anything. This is correct.
-		if ch.parent == nil {
-			ch.createParent()
+	for cur, ch := newCursorAtIndex(snd, 0, false), chunker; ch != nil; ch = ch.parent {
+		// Note that if snd is shallower than fst, then higher chunkers will have
+		// their cursors set to nil. This has the effect of "dropping" the final
+		// item in each of those sequences.
+		ch.cur = cur
+		if cur != nil {
+			cur = cur.parent
+			if cur != nil && ch.parent == nil {
+				// If fst is shallower than snd, its cur will have a parent whereas the
+				// chunker to snd won't. In that case, create a parent for fst.
+				ch.createParent()
+			}
 		}
-		ch.cur = cur.clone()
-		ch = ch.parent
 	}
 
 	return chunker.Done()
