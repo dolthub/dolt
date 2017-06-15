@@ -5,6 +5,7 @@
 package types
 
 import "github.com/attic-labs/noms/go/d"
+import "fmt"
 
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
@@ -199,6 +200,31 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 }
 
 type cursorIterCallback func(item interface{}) bool
+
+func (cur *sequenceCursor) String() string {
+	if cur.parent == nil {
+		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence)).Hash().String(), cur.seq.seqLen(), cur.idx)
+	}
+
+	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence)).Hash().String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
+}
+
+func (cur *sequenceCursor) compare(other *sequenceCursor) int {
+	if cur.parent != nil {
+		d.PanicIfFalse(other.parent != nil)
+		p := cur.parent.compare(other.parent)
+		if p != 0 {
+			return p
+		}
+
+	}
+
+	// TODO: It'd be nice here to assert that the two sequences are the same
+	// but there isn't a good way to that at this point because the containing
+	// collection of the sequence isn't available.
+	d.PanicIfFalse(cur.seq.seqLen() == other.seq.seqLen())
+	return cur.idx - other.idx
+}
 
 // iter iterates forward from the current position
 func (cur *sequenceCursor) iter(cb cursorIterCallback) {

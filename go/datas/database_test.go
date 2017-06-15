@@ -265,7 +265,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds1, err = suite.db.CommitValue(ds1, v)
 	ds1First := ds1
 	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(ds1, v.Set(types.String("Friends"), types.Bool(true)))
+	ds1, err = suite.db.CommitValue(ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Build(suite.db))
 	suite.NoError(err)
 
 	ds2, err = suite.db.CommitValue(ds2, types.String("Goodbye"))
@@ -280,7 +280,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
 	// Merge policies
-	newV := v.Set(types.String("Friends"), types.Bool(false))
+	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Build(suite.db)
 	_, err = suite.db.Commit(ds1, newV, newOptsWithMerge(merge.None, ds1First.HeadRef()))
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
@@ -288,7 +288,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	suite.NoError(err)
 	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(types.String("Friends"))))
 
-	newV = v.Set(types.String("Friends"), types.Number(47))
+	newV = v.Edit().Set(types.String("Friends"), types.Number(47)).Build(suite.db)
 	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(merge.Ours, ds1First.HeadRef()))
 	suite.NoError(err)
 	suite.True(types.Number(47).Equals(ours.HeadValue().(types.Map).Get(types.String("Friends"))))

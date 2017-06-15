@@ -13,11 +13,12 @@ import (
 func TestMapIterator(t *testing.T) {
 	assert := assert.New(t)
 
-	m := NewMap()
+	me := NewMap().Edit()
 	for i := 0; i < 5; i++ {
-		m = m.Set(String(string(byte(65+i))), Number(i))
+		me.Set(String(string(byte(65+i))), Number(i))
 	}
 
+	m := me.Build(nil)
 	test := func(it MapIterator, start int, msg string) {
 		for i := start; i < 5; i++ {
 			k, v := it.Next()

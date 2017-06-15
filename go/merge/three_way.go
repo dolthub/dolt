@@ -225,9 +225,9 @@ func (m *merger) threeWayMapMerge(a, b, parent types.Map, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return mapCandidate{target.getValue().(types.Map).Set(change.Key, newVal)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Build(nil)}
 		case types.DiffChangeRemoved:
-			return mapCandidate{target.getValue().(types.Map).Remove(change.Key)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Build(nil)}
 		default:
 			panic("Not Reached")
 		}

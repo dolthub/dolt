@@ -193,52 +193,6 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 	return entry.value, true
 }
 
-func (m Map) Set(key Value, val Value) Map {
-	return m.SetM(key, val)
-}
-
-func (m Map) SetM(kv ...Value) Map {
-	if len(kv) == 0 {
-		return m
-	}
-	d.PanicIfFalse(len(kv)%2 == 0)
-
-	k, v, tail := kv[0], kv[1], kv[2:]
-
-	cur, found := m.getCursorAtValue(k, false)
-	deleteCount := uint64(0)
-	if found {
-		deleteCount = 1
-	}
-	return m.splice(cur, deleteCount, mapEntry{k, v}).SetM(tail...)
-}
-
-func (m Map) Remove(k Value) Map {
-	if cur, found := m.getCursorAtValue(k, false); found {
-		return m.splice(cur, 1)
-	}
-	return m
-}
-
-func (m Map) splice(cur *sequenceCursor, deleteCount uint64, vs ...mapEntry) Map {
-	ch := newSequenceChunker(cur, 0, m.seq.valueReader(), nil, makeMapLeafChunkFn(m.seq.valueReader()), newOrderedMetaSequenceChunkFn(MapKind, m.seq.valueReader()), mapHashValueBytes)
-	for deleteCount > 0 {
-		ch.Skip()
-		deleteCount--
-	}
-
-	for _, v := range vs {
-		ch.Append(v)
-	}
-	return newMap(ch.Done().(orderedSequence))
-}
-
-func (m Map) getCursorAtValue(v Value, readAhead bool) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtValue(m.seq, v, true, false, readAhead)
-	found = cur.idx < cur.seq.seqLen() && cur.current().(mapEntry).key.Equals(v)
-	return
-}
-
 func (m Map) Has(key Value) bool {
 	cur := newCursorAtValue(m.seq, key, false, false, false)
 	if !cur.valid() {
@@ -308,6 +262,10 @@ func (m Map) IterFrom(start Value, cb mapIterCallback) {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})
+}
+
+func (m Map) Edit() *MapEditor {
+	return NewMapEditor(m)
 }
 
 func buildMapData(values []Value) mapEntrySlice {

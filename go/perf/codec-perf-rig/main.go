@@ -218,13 +218,13 @@ func buildMap(count uint64, createFn createValueFn) types.Collection {
 }
 
 func buildMapIncrementally(count uint64, createFn createValueFn) types.Collection {
-	m := types.NewMap()
+	me := types.NewMap().Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
-		m = m.Set(createFn(i), createFn(i+1))
+		me.Set(createFn(i), createFn(i+1))
 	}
 
-	return m
+	return me.Build(nil)
 }
 
 func readMap(c types.Collection) {

@@ -58,7 +58,7 @@ func newSequenceChunker(cur *sequenceCursor, level uint64, vr ValueReader, vw Va
 }
 
 func (sc *sequenceChunker) resume() {
-	if sc.cur.parent != nil {
+	if sc.cur.parent != nil && sc.parent == nil {
 		sc.createParent()
 	}
 
@@ -70,6 +70,67 @@ func (sc *sequenceChunker) resume() {
 
 	for ; sc.cur.idx < idx; sc.cur.advance() {
 		sc.Append(sc.cur.current())
+	}
+}
+
+// advanceTo advances the sequenceChunker to the next "spine" at which
+// modifications to the prolly-tree should take place
+func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
+	// There are four basic situations which must be handled when advancing to a
+	// new chunking position:
+	//
+	// Case (1): |sc.cur| and |next| are exactly aligned. In this case, there's
+	//           nothing to do. Just assign sc.cur = next.
+	//
+	// Case (2): |sc.cur| is "ahead" of |next|. This can only have resulted from
+	//           advancing of a lower level causing |sc.cur| to advance. In this
+	//           case, we advance |next| until the cursors are aligned and then
+	//           process as if Case (1):
+	//
+	// Case (3+4): |sc.cur| is "behind" |next|, we must consume elements in
+	//             |sc.cur| until either:
+	//
+	//   Case (3): |sc.cur| aligns with |next|. In this case, we just assign
+	//             sc.cur = next.
+	//   Case (4): A boundary is encountered which is aligned with a boundary
+	//             in the previous state. This is the critical case, as is allows
+	//             us to skip over large parts of the tree. In this case, we align
+	//             parent chunkers then sc.resume() at |next|
+
+	for sc.cur.compare(next) > 0 {
+		next.advance() // Case (2)
+	}
+
+	// If neither loop above and below are entered, it is Case (1). If the loop
+	// below is entered but Case (4) isn't reached, then it is Case (3).
+	reachedNext := true
+	for sc.cur.compare(next) < 0 {
+		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
+			if sc.cur.parent != nil {
+				// We logically stepped out of the present sequence, so we need to
+				// advance the parent if it exists
+				sc.cur.parent.advance()
+
+				// Invalidate this cursor, since it is now inconsistent with its parent
+				sc.cur.parent = nil
+				sc.cur.seq = nil
+			}
+
+			reachedNext = false // Case (4)
+			break
+		}
+
+		sc.cur.advance()
+		d.PanicIfFalse(sc.cur.valid())
+	}
+
+	if sc.parent != nil && next.parent != nil {
+		sc.parent.advanceTo(next.parent)
+	}
+
+	sc.cur = next
+	if !reachedNext {
+		sc.resume() // Case (4)
 	}
 }
 
