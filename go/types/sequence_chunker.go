@@ -121,7 +121,6 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 		}
 
 		sc.cur.advance()
-		d.PanicIfFalse(sc.cur.valid())
 	}
 
 	if sc.parent != nil && next.parent != nil {

@@ -32,6 +32,9 @@ func (me *MapEditor) Build(vrw ValueReadWriter) Map {
 	}
 
 	vr := me.m.sequence().valueReader()
+	if vrw != nil {
+		vr = vrw
+	}
 
 	me.normalize()
 
