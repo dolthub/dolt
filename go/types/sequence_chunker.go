@@ -107,9 +107,12 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 	for sc.cur.compare(next) < 0 {
 		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
 			if sc.cur.parent != nil {
-				// We logically stepped out of the present sequence, so we need to
-				// advance the parent if it exists
-				sc.cur.parent.advance()
+				// Note: Logically, what is happening here is that we are consuming the
+				// item at the current level. Logically, we'd call sc.cur.advance(),
+				// but that would force loading of the next sequence, which we don't
+				// need for any reason, so instead we advance the parent and take care
+				// not to allow it to step outside the sequence.
+				sc.cur.parent.advanceMaybeAllowPastEnd(false)
 
 				// Invalidate this cursor, since it is now inconsistent with its parent
 				sc.cur.parent = nil
