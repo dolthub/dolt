@@ -349,7 +349,6 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
 		if lvs.enforceCompleteness {
-			checkCurrent := false
 			if (current != hash.Hash{} && current != lvs.Root()) {
 				if _, ok := lvs.bufferedChunks[current]; !ok {
 					// If the client is attempting to move the root and the referenced
@@ -357,9 +356,6 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 					// in the ChunkStore.
 					lvs.unresolvedRefs.Insert(current)
 				}
-			}
-
-			if checkCurrent {
 			}
 
 			PanicIfDangling(lvs.unresolvedRefs, lvs.cs)
