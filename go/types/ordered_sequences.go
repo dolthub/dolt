@@ -95,8 +95,11 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vr ValueReader) makeChunkFn {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
 
+		var lastKey orderedKey
 		for i, v := range items {
 			mt := v.(metaTuple)
+			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(mt.key))
+			lastKey = mt.key
 			tuples[i] = mt // chunk is written when the root sequence is written
 			numLeaves += mt.numLeaves
 		}
