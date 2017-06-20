@@ -308,8 +308,12 @@ func makeMapLeafChunkFn(vr ValueReader) makeChunkFn {
 		d.PanicIfFalse(level == 0)
 		mapData := make([]mapEntry, len(items), len(items))
 
+		var lastKey Value
 		for i, v := range items {
-			mapData[i] = v.(mapEntry)
+			entry := v.(mapEntry)
+			d.PanicIfFalse(lastKey == nil || lastKey.Less(entry.key))
+			lastKey = entry.key
+			mapData[i] = entry
 		}
 
 		m := newMap(newMapLeafSequence(vr, mapData...))
