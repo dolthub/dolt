@@ -107,13 +107,6 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 	for sc.cur.compare(next) < 0 {
 		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
 			if sc.cur.parent != nil {
-
-				if sc.cur.parent.compare(next.parent) < 0 {
-					// Case (4): We stopped consuming items on this level before entering
-					// the sequence referenced by |next|
-					reachedNext = false
-				}
-
 				// Note: Logically, what is happening here is that we are consuming the
 				// item at the current level. Logically, we'd call sc.cur.advance(),
 				// but that would force loading of the next sequence, which we don't
@@ -126,6 +119,7 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 				sc.cur.seq = nil
 			}
 
+			reachedNext = false // Case (4)
 			break
 		}
 

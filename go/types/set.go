@@ -275,12 +275,8 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 		d.PanicIfFalse(level == 0)
 		setData := make([]Value, len(items), len(items))
 
-		var lastValue Value
-		for i, item := range items {
-			v := item.(Value)
-			d.PanicIfFalse(lastValue == nil || lastValue.Less(v))
-			lastValue = v
-			setData[i] = v
+		for i, v := range items {
+			setData[i] = v.(Value)
 		}
 
 		set := newSet(newSetLeafSequence(vr, setData...))
