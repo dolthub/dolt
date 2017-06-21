@@ -81,16 +81,17 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	datasetID := "ds1"
 	ds1 := suite.db.GetDataset(datasetID)
 
-	s := types.NewSet()
+	se := types.NewSet().Edit()
 	for i := 0; i < 100; i++ {
-		s = s.Insert(suite.db.WriteValue(types.Number(100)))
+		se.Insert(suite.db.WriteValue(types.Number(100)))
 	}
+	s := se.Set(nil)
 
 	ds1, err := suite.db.CommitValue(ds1, s)
 	suite.NoError(err)
 
 	s = ds1.HeadValue().(types.Set)
-	s = s.Insert(types.NewRef(types.Number(1000))) // danging ref
+	s = s.Edit().Insert(types.NewRef(types.Number(1000))).Set(nil) // danging ref
 	suite.Panics(func() {
 		ds1, err = suite.db.CommitValue(ds1, s)
 	})
@@ -265,7 +266,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds1, err = suite.db.CommitValue(ds1, v)
 	ds1First := ds1
 	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Build(suite.db))
+	ds1, err = suite.db.CommitValue(ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Map(suite.db))
 	suite.NoError(err)
 
 	ds2, err = suite.db.CommitValue(ds2, types.String("Goodbye"))
@@ -280,7 +281,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
 	// Merge policies
-	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Build(suite.db)
+	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map(suite.db)
 	_, err = suite.db.Commit(ds1, newV, newOptsWithMerge(merge.None, ds1First.HeadRef()))
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
@@ -288,7 +289,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	suite.NoError(err)
 	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(types.String("Friends"))))
 
-	newV = v.Edit().Set(types.String("Friends"), types.Number(47)).Build(suite.db)
+	newV = v.Edit().Set(types.String("Friends"), types.Number(47)).Map(suite.db)
 	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(merge.Ours, ds1First.HeadRef()))
 	suite.NoError(err)
 	suite.True(types.Number(47).Equals(ours.HeadValue().(types.Map).Get(types.String("Friends"))))

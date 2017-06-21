@@ -12,6 +12,10 @@ import (
 type Bool bool
 
 // Value interface
+func (v Bool) Value(vrw ValueReadWriter) Value {
+	return v
+}
+
 func (v Bool) Equals(other Value) bool {
 	return v == other
 }

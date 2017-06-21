@@ -17,16 +17,25 @@ import (
 // Note: The implementation biases performance towards a usage which applies
 // edits in key-order.
 type MapEditor struct {
-	m          Map
-	edits      mapEntrySlice // edits may contain duplicate key values, in which case, the last edit of a given key is used
-	normalized bool
+	m                 Map
+	edits             mapEditSlice // edits may contain duplicate key values, in which case, the last edit of a given key is used
+	normalized        bool
+	removeEmptyValues bool // TODO-Make configurable
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, mapEntrySlice{}, true}
+	return &MapEditor{m, mapEditSlice{}, true, true}
 }
 
-func (me *MapEditor) Build(vrw ValueReadWriter) Map {
+func (me *MapEditor) Kind() NomsKind {
+	return MapKind
+}
+
+func (me *MapEditor) Value(vrw ValueReadWriter) Value {
+	return me.Map(vrw)
+}
+
+func (me *MapEditor) Map(vrw ValueReadWriter) Map {
 	if len(me.edits) == 0 {
 		return me.m // no edits
 	}
@@ -38,14 +47,58 @@ func (me *MapEditor) Build(vrw ValueReadWriter) Map {
 
 	me.normalize()
 
-	var ch *sequenceChunker
-	for i, kv := range me.edits {
-		if i+1 < len(me.edits) && me.edits[i+1].key.Equals(kv.key) {
-			continue // next edit supercedes this one
+	cursChan := make(chan chan *sequenceCursor)
+	kvsChan := make(chan chan mapEntry)
+
+	go func() {
+		for i, edit := range me.edits {
+			if i+1 < len(me.edits) && me.edits[i+1].key.Equals(edit.key) {
+				continue // next edit supercedes this one
+			}
+
+			edit := edit
+
+			// TODO: Use ReadMany
+			cc := make(chan *sequenceCursor, 1)
+			cursChan <- cc
+
+			go func() {
+				cc <- newCursorAtValue(me.m.seq, edit.key, true, false, false)
+			}()
+
+			kvc := make(chan mapEntry, 1)
+			kvsChan <- kvc
+
+			if edit.value == nil {
+				kvc <- mapEntry{edit.key, nil}
+				continue
+			}
+
+			if v, ok := edit.value.(Value); ok {
+				kvc <- mapEntry{edit.key, v}
+				continue
+			}
+
+			go func() {
+				sv := edit.value.Value(vrw)
+				if e, ok := sv.(Emptyable); ok {
+					if e.Empty() {
+						sv = nil
+					}
+				}
+
+				kvc <- mapEntry{edit.key, sv}
+			}()
 		}
 
-		// TODO: Parallelize loading of cursors
-		cur := newCursorAtValue(me.m.seq, kv.key, true, false, false)
+		close(cursChan)
+		close(kvsChan)
+	}()
+
+	var ch *sequenceChunker
+	for cc := range cursChan {
+		cur := <-cc
+		kv := <-<-kvsChan
 
 		var existingValue Value
 		if cur.idx < cur.seq.seqLen() {
@@ -84,17 +137,17 @@ func (me *MapEditor) Build(vrw ValueReadWriter) Map {
 	return newMap(ch.Done().(orderedSequence))
 }
 
-func (me *MapEditor) Set(k, v Value) *MapEditor {
+func (me *MapEditor) Set(k Value, v Valuable) *MapEditor {
 	d.PanicIfTrue(v == nil)
 	me.set(k, v)
 	return me
 }
 
-func (me *MapEditor) SetM(kv ...Value) *MapEditor {
+func (me *MapEditor) SetM(kv ...Valuable) *MapEditor {
 	d.PanicIfFalse(len(kv)%2 == 0)
 
 	for i := 0; i < len(kv); i += 2 {
-		me.Set(kv[i], kv[i+1])
+		me.Set(kv[i].(Value), kv[i+1])
 	}
 	return me
 }
@@ -104,9 +157,12 @@ func (me *MapEditor) Remove(k Value) *MapEditor {
 	return me
 }
 
-func (me *MapEditor) Get(k Value) Value {
+func (me *MapEditor) Get(k Value) Valuable {
 	if idx, found := me.findEdit(k); found {
-		return me.edits[idx].value
+		v := me.edits[idx].value
+		if v != nil {
+			return v
+		}
 	}
 
 	return me.m.Get(k)
@@ -120,19 +176,19 @@ func (me *MapEditor) Has(k Value) bool {
 	return me.m.Has(k)
 }
 
-func (me *MapEditor) set(k, v Value) {
+func (me *MapEditor) set(k Value, v Valuable) {
 	if len(me.edits) == 0 {
-		me.edits = append(me.edits, mapEntry{k, v})
+		me.edits = append(me.edits, mapEdit{k, v})
 		return
 	}
 
 	final := me.edits[len(me.edits)-1]
 	if final.key.Equals(k) {
-		me.edits[len(me.edits)-1] = mapEntry{k, v}
+		me.edits[len(me.edits)-1] = mapEdit{k, v}
 		return // update the last edit
 	}
 
-	me.edits = append(me.edits, mapEntry{k, v})
+	me.edits = append(me.edits, mapEdit{k, v})
 
 	if me.normalized && final.key.Less(k) {
 		// fast-path: edits take place in key-order
@@ -178,3 +234,14 @@ func (me *MapEditor) normalize() {
 	// TODO: GC duplicate keys over some threshold of collectable memory?
 	me.normalized = true
 }
+
+type mapEdit struct {
+	key   Value
+	value Valuable
+}
+
+type mapEditSlice []mapEdit
+
+func (mes mapEditSlice) Len() int           { return len(mes) }
+func (mes mapEditSlice) Swap(i, j int)      { mes[i], mes[j] = mes[j], mes[i] }
+func (mes mapEditSlice) Less(i, j int) bool { return mes[i].key.Less(mes[j].key) }

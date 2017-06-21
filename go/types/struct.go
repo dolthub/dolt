@@ -101,11 +101,19 @@ func (st StructTemplate) NewStruct(values []Value) Struct {
 	return newStruct(st.name, st.fieldNames, values)
 }
 
+func (s Struct) Empty() bool {
+	return len(s.fieldNames) == 0
+}
+
 func (s Struct) hashPointer() *hash.Hash {
 	return s.h
 }
 
 // Value interface
+func (s Struct) Value(vrw ValueReadWriter) Value {
+	return s
+}
+
 func (s Struct) Equals(other Value) bool {
 	return s.Hash() == other.Hash()
 }

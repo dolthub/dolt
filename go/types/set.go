@@ -103,6 +103,10 @@ func (s Set) hashPointer() *hash.Hash {
 }
 
 // Value interface
+func (s Set) Value(vrw ValueReadWriter) Value {
+	return s
+}
+
 func (s Set) Equals(other Value) bool {
 	return s.Hash() == other.Hash()
 }
@@ -154,55 +158,6 @@ func (s Set) At(idx uint64) Value {
 	return cur.current().(Value)
 }
 
-func (s Set) Insert(values ...Value) Set {
-	if len(values) == 0 {
-		return s
-	}
-
-	head, tail := values[0], values[1:]
-
-	var res Set
-	if cur, found := s.getCursorAtValue(head, false); !found {
-		res = s.splice(cur, 0, head)
-	} else {
-		res = s
-	}
-
-	return res.Insert(tail...)
-}
-
-func (s Set) Remove(values ...Value) Set {
-	if len(values) == 0 {
-		return s
-	}
-
-	head, tail := values[0], values[1:]
-
-	var res Set
-	if cur, found := s.getCursorAtValue(head, false); found {
-		res = s.splice(cur, 1)
-	} else {
-		res = s
-	}
-
-	return res.Remove(tail...)
-}
-
-func (s Set) splice(cur *sequenceCursor, deleteCount uint64, vs ...Value) Set {
-	ch := newSequenceChunker(cur, 0, s.seq.valueReader(), nil, makeSetLeafChunkFn(s.seq.valueReader()), newOrderedMetaSequenceChunkFn(SetKind, s.seq.valueReader()), hashValueBytes)
-	for deleteCount > 0 {
-		ch.Skip()
-		deleteCount--
-	}
-
-	for _, v := range vs {
-		ch.Append(v)
-	}
-
-	ns := newSet(ch.Done().(orderedSequence))
-	return ns
-}
-
 func (s Set) getCursorAtValue(v Value, readAhead bool) (cur *sequenceCursor, found bool) {
 	cur = newCursorAtValue(s.seq, v, true, false, readAhead)
 	found = cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
@@ -249,6 +204,10 @@ func (s Set) IteratorFrom(val Value) SetIterator {
 		cursor: newCursorAtValue(s.seq, val, false, false, false),
 		s:      s,
 	}
+}
+
+func (s Set) Edit() *SetEditor {
+	return NewSetEditor(s)
 }
 
 func buildSetData(values ValueSlice) ValueSlice {

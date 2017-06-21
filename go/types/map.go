@@ -117,6 +117,10 @@ func (m Map) hashPointer() *hash.Hash {
 }
 
 // Value interface
+func (m Map) Value(vrw ValueReadWriter) Value {
+	return m
+}
+
 func (m Map) Equals(other Value) bool {
 	return m.Hash() == other.Hash()
 }

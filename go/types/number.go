@@ -12,6 +12,10 @@ import (
 type Number float64
 
 // Value interface
+func (v Number) Value(vrw ValueReadWriter) Value {
+	return v
+}
+
 func (v Number) Equals(other Value) bool {
 	return v == other
 }

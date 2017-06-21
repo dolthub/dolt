@@ -25,7 +25,7 @@ func TestRefInSet(t *testing.T) {
 
 	s := NewSet()
 	r := NewRef(s)
-	s = s.Insert(r)
+	s = s.Edit().Insert(r).Set(nil)
 	r2 := s.First()
 	assert.True(r.Equals(r2))
 }
@@ -35,7 +35,7 @@ func TestRefInMap(t *testing.T) {
 
 	m := NewMap()
 	r := NewRef(m)
-	m = m.Edit().Set(Number(0), r).Set(r, Number(1)).Build(nil)
+	m = m.Edit().Set(Number(0), r).Set(r, Number(1)).Map(nil)
 	r2 := m.Get(Number(0))
 	assert.True(r.Equals(r2))
 

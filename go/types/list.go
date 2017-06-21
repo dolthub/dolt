@@ -74,6 +74,9 @@ func (l List) hashPointer() *hash.Hash {
 }
 
 // Value interface
+func (l List) Value(vrw ValueReadWriter) Value {
+	return l
+}
 
 func (l List) Equals(other Value) bool {
 	return l.Hash() == other.Hash()

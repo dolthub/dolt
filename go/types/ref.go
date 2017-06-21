@@ -55,6 +55,10 @@ func (r Ref) TargetType() *Type {
 }
 
 // Value interface
+func (r Ref) Value(vrw ValueReadWriter) Value {
+	return r
+}
+
 func (r Ref) Equals(other Value) bool {
 	return r.Hash() == other.Hash()
 }

@@ -11,8 +11,23 @@ import (
 type ValueCallback func(v Value)
 type RefCallback func(ref Ref)
 
+// Valuable is an interface from which a Value can be retrieved.
+type Valuable interface {
+	// Kind is the NomsKind describing the kind of value this is.
+	Kind() NomsKind
+
+	Value(vrw ValueReadWriter) Value
+}
+
+// Emptyable is an interface for Values which may or may not be empty
+type Emptyable interface {
+	Empty() bool
+}
+
 // Value is the interface all Noms values implement.
 type Value interface {
+	Valuable
+
 	// Equals determines if two different Noms values represents the same underlying value.
 	Equals(other Value) bool
 
@@ -34,9 +49,6 @@ type Value interface {
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
 	WalkRefs(RefCallback)
-
-	// Kind is the NomsKind describing the kind of value this is.
-	Kind() NomsKind
 
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong

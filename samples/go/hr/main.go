@@ -83,7 +83,7 @@ func addPerson(db datas.Database, ds datas.Dataset) {
 		return
 	}
 
-	_, err = db.CommitValue(ds, getPersons(ds).Edit().Set(types.Number(id), np).Build(nil))
+	_, err = db.CommitValue(ds, getPersons(ds).Edit().Set(types.Number(id), np).Map(nil))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return

@@ -225,9 +225,9 @@ func (m *merger) threeWayMapMerge(a, b, parent types.Map, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Build(nil)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Map(nil)}
 		case types.DiffChangeRemoved:
-			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Build(nil)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Map(nil)}
 		default:
 			panic("Not Reached")
 		}
@@ -240,9 +240,9 @@ func (m *merger) threeWaySetMerge(a, b, parent types.Set, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return setCandidate{target.getValue().(types.Set).Insert(newVal)}
+			return setCandidate{target.getValue().(types.Set).Edit().Insert(newVal).Set(nil)}
 		case types.DiffChangeRemoved:
-			return setCandidate{target.getValue().(types.Set).Remove(newVal)}
+			return setCandidate{target.getValue().(types.Set).Edit().Remove(newVal).Set(nil)}
 		default:
 			panic("Not Reached")
 		}

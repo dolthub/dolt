@@ -426,7 +426,7 @@ func (fs *nomsFS) removeCommon(path string, typeCheck func(inode types.Value)) f
 	dir := parent.inode.Get("contents").(types.Struct)
 	entries := dir.Get("entries").(types.Map)
 
-	entries = entries.Edit().Remove(types.String(np.name)).Build(nil)
+	entries = entries.Edit().Remove(types.String(np.name)).Map(nil)
 	dir = dir.Set("entries", entries)
 
 	fs.deleteNode(np)
@@ -586,7 +586,7 @@ func (fs *nomsFS) splice(np *nNode) {
 		dir := np.parent.inode.Get("contents").(types.Struct)
 		entries := dir.Get("entries").(types.Map)
 
-		entries = entries.Edit().Set(types.String(np.name), np.inode).Build(nil)
+		entries = entries.Edit().Set(types.String(np.name), np.inode).Map(nil)
 		dir = dir.Set("entries", entries)
 
 		fs.updateNode(np.parent, np.parent.inode.Set("contents", dir))
@@ -651,7 +651,7 @@ func (fs *nomsFS) Rename(oldPath string, newPath string, context *fuse.Context) 
 	dir := oparent.inode.Get("contents").(types.Struct)
 	entries := dir.Get("entries").(types.Map)
 
-	entries = entries.Edit().Remove(types.String(np.name)).Build(nil)
+	entries = entries.Edit().Remove(types.String(np.name)).Map(nil)
 	dir = dir.Set("entries", entries)
 
 	fs.updateNode(oparent, oparent.inode.Set("contents", dir))
@@ -745,7 +745,7 @@ func (fs *nomsFS) splices(np1, np2, npShared *nNode) {
 			dir := np.parent.inode.Get("contents").(types.Struct)
 			entries := dir.Get("entries").(types.Map)
 
-			entries = entries.Edit().Set(types.String(np.name), np.inode).Build(nil)
+			entries = entries.Edit().Set(types.String(np.name), np.inode).Map(nil)
 			dir = dir.Set("entries", entries)
 
 			fs.updateNode(np.parent, np.parent.inode.Set("contents", dir))
@@ -899,7 +899,7 @@ func (fs *nomsFS) RemoveXAttr(path string, key string, context *fuse.Context) fu
 	attr := np.inode.Get("attr").(types.Struct)
 	xattr := attr.Get("xattr").(types.Map)
 
-	xattr = xattr.Edit().Remove(types.String(key)).Build(nil)
+	xattr = xattr.Edit().Remove(types.String(key)).Map(nil)
 	attr = attr.Set("xattr", xattr)
 	inode = inode.Set("attr", attr)
 
@@ -923,7 +923,7 @@ func (fs *nomsFS) SetXAttr(path string, key string, data []byte, flags int, cont
 	xattr := attr.Get("xattr").(types.Map)
 	blob := types.NewBlob(bytes.NewReader(data))
 
-	xattr = xattr.Edit().Set(types.String(key), blob).Build(nil)
+	xattr = xattr.Edit().Set(types.String(key), blob).Map(nil)
 	attr = attr.Set("xattr", xattr)
 	inode = inode.Set("attr", attr)
 

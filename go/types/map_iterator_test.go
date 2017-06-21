@@ -18,7 +18,7 @@ func TestMapIterator(t *testing.T) {
 		me.Set(String(string(byte(65+i))), Number(i))
 	}
 
-	m := me.Build(nil)
+	m := me.Map(nil)
 	test := func(it MapIterator, start int, msg string) {
 		for i := start; i < 5; i++ {
 			k, v := it.Next()

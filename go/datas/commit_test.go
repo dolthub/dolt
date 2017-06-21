@@ -101,11 +101,11 @@ func TestCommitWithoutMetaField(t *testing.T) {
 
 // Convert list of Struct's to Set<Ref>
 func toRefSet(commits ...types.Struct) types.Set {
-	set := types.NewSet()
+	set := types.NewSet().Edit()
 	for _, p := range commits {
-		set = set.Insert(types.NewRef(p))
+		set.Insert(types.NewRef(p))
 	}
-	return set
+	return set.Set(nil)
 }
 
 // Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s

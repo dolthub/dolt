@@ -169,7 +169,7 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 }
 
 func (suite *WalkTestSuite) TestSkipSetElement() {
-	wholeSet := NewSet(suite.mustSkip, suite.shouldSee).Insert(suite.shouldSee)
+	wholeSet := NewSet(suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(nil)
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.Contains(reached, v, "Doesn't contain %+v", v)

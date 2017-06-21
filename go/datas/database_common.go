@@ -93,7 +93,7 @@ func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
 	commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
-	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Build(nil)
+	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map(nil)
 	return db.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
@@ -165,7 +165,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 				}
 			}
 		}
-		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Build(nil)
+		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map(nil)
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
@@ -188,7 +188,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 
 	var err error
 	for {
-		currentDatasets = currentDatasets.Edit().Remove(datasetID).Build(nil)
+		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map(nil)
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
@@ -229,7 +229,7 @@ func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct 
 	if (parents == types.Set{}) {
 		parents = types.NewSet()
 		if headRef, ok := ds.MaybeHeadRef(); ok {
-			parents = parents.Insert(headRef)
+			parents = parents.Edit().Insert(headRef).Set(nil)
 		}
 	}
 

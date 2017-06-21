@@ -88,6 +88,10 @@ func (b Blob) hashPointer() *hash.Hash {
 }
 
 // Value interface
+func (b Blob) Value(vrw ValueReadWriter) Value {
+	return b
+}
+
 func (b Blob) Equals(other Value) bool {
 	return b.Hash() == other.Hash()
 }

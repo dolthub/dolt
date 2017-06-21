@@ -38,6 +38,10 @@ func (t *Type) TargetKind() NomsKind {
 }
 
 // Value interface
+func (t *Type) Value(vrw ValueReadWriter) Value {
+	return t
+}
+
 func (t *Type) Equals(other Value) (res bool) {
 	return t == other || t.Hash() == other.Hash()
 }
