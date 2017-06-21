@@ -22,7 +22,7 @@ const (
 
 func makeDynamoManifestFake(t *testing.T) (mm manifest, ddb *fakeDDB) {
 	ddb = makeFakeDDB(assert.New(t))
-	mm = newDynamoManifest(table, db, ddb, newManifestCache(0))
+	mm = newDynamoManifest(table, db, ddb)
 	return
 }
 

@@ -41,13 +41,12 @@ type ddbsvc interface {
 type dynamoManifest struct {
 	table, db string
 	ddbsvc    ddbsvc
-	cache     *manifestCache
 }
 
-func newDynamoManifest(table, namespace string, ddb ddbsvc, cache *manifestCache) manifest {
+func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
 	d.PanicIfTrue(table == "")
 	d.PanicIfTrue(namespace == "")
-	return dynamoManifest{table, namespace, ddb, cache}
+	return dynamoManifest{table, namespace, ddb}
 }
 
 func (dm dynamoManifest) Name() string {
@@ -81,7 +80,6 @@ func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bo
 			contents.specs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
 		}
 	}
-	dm.cache.Put(dm.Name(), contents.size(), contents)
 	return
 }
 
@@ -100,12 +98,6 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 }
 
 func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
-	if upstream, hit := dm.cache.Get(dm.Name()); hit {
-		if lastLock != upstream.lock {
-			return upstream
-		}
-	}
-
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -139,7 +131,7 @@ func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, sta
 	_, ddberr := dm.ddbsvc.PutItem(&putArgs)
 	if ddberr != nil {
 		if errIsConditionalCheckFailed(ddberr) {
-			exists, upstream := dm.ParseIfExists(stats, nil) // Updates dm.cache
+			exists, upstream := dm.ParseIfExists(stats, nil)
 			d.Chk.True(exists)
 			d.Chk.True(upstream.vers == constants.NomsVersion)
 			return upstream
@@ -147,7 +139,6 @@ func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, sta
 		d.PanicIfError(ddberr)
 	}
 
-	dm.cache.Put(dm.Name(), newContents.size(), newContents)
 	return newContents
 }
 

@@ -21,7 +21,7 @@ import (
 func makeFileManifestTempDir(t *testing.T) fileManifest {
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
-	return fileManifest{dir, newManifestCache(defaultManifestCacheSize)}
+	return fileManifest{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
 
 func TestFileManifestLoadIfExists(t *testing.T) {
@@ -108,7 +108,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2 := newFileManifest(fm.dir, newManifestCache(0)) // Open existent, but empty manifest
+	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
 	exists, upstream := fm2.ParseIfExists(stats, nil)
 	assert.True(exists)
 	assert.Equal(l, upstream.lock)

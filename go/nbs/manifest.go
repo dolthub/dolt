@@ -7,10 +7,10 @@ package nbs
 import (
 	"crypto/sha512"
 	"strconv"
+	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/sizecache"
 )
 
 type manifest interface {
@@ -65,25 +65,35 @@ func (mc manifestContents) size() (size uint64) {
 	return
 }
 
-func newManifestCache(maxSize uint64) *manifestCache {
-	return &manifestCache{sizecache.New(maxSize)}
+type cachingManifest struct {
+	mm    manifest
+	mu    *sync.Mutex
+	cache *manifestCache
 }
 
-type manifestCache struct {
-	sc *sizecache.SizeCache
-}
-
-func (mc *manifestCache) Get(db string) (contents manifestContents, present bool) {
-	var cached interface{}
-	if cached, present = mc.sc.Get(db); present {
-		contents = cached.(manifestContents)
-	}
+func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	exists, contents = cm.mm.ParseIfExists(stats, readHook)
+	cm.cache.Put(cm.Name(), contents)
 	return
 }
 
-func (mc *manifestCache) Put(db string, size uint64, contents manifestContents) {
-	mc.sc.Drop(db)
-	mc.sc.Add(db, size, contents)
+func (cm cachingManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if upstream, hit := cm.cache.Get(cm.Name()); hit {
+		if lastLock != upstream.lock {
+			return upstream
+		}
+	}
+	contents := cm.mm.Update(lastLock, newContents, stats, writeHook)
+	cm.cache.Put(cm.Name(), contents)
+	return contents
+}
+
+func (cm cachingManifest) Name() string {
+	return cm.mm.Name()
 }
 
 type tableSpec struct {
