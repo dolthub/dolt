@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	tableName      = "attic-nbs"
 	dbAttr         = "db"
 	lockAttr       = "lck" // 'lock' is a reserved word in dynamo
 	rootAttr       = "root"
