@@ -103,12 +103,10 @@ type OutstandingAbsentMany struct {
 
 func (r OutstandingGet) Satisfy(h hash.Hash, c *Chunk) {
 	r <- c
-	close(r)
 }
 
 func (r OutstandingGet) Fail() {
 	r <- &EmptyChunk
-	close(r)
 }
 
 func (ogm OutstandingGetMany) Satisfy(h hash.Hash, c *Chunk) {
@@ -122,12 +120,10 @@ func (ogm OutstandingGetMany) Fail() {
 
 func (oh OutstandingAbsent) Satisfy(h hash.Hash, c *Chunk) {
 	oh <- false
-	close(oh)
 }
 
 func (oh OutstandingAbsent) Fail() {
 	oh <- true
-	close(oh)
 }
 
 func (ohm OutstandingAbsentMany) Satisfy(h hash.Hash, c *Chunk) {

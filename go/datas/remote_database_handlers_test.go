@@ -134,11 +134,11 @@ func serializeChunks(chnx []chunks.Chunk, assert *assert.Assertions) io.Reader {
 
 func TestBuildHashesRequest(t *testing.T) {
 	assert := assert.New(t)
-	hashes := map[hash.Hash]struct{}{
-		hash.Parse("00000000000000000000000000000002"): {},
-		hash.Parse("00000000000000000000000000000003"): {},
+	batch := chunks.ReadBatch{
+		hash.Parse("00000000000000000000000000000002"): nil,
+		hash.Parse("00000000000000000000000000000003"): nil,
 	}
-	r := buildHashesRequest(hashes)
+	r := buildHashesRequest(batch)
 	b, err := ioutil.ReadAll(r)
 	assert.NoError(err)
 
@@ -147,9 +147,9 @@ func TestBuildHashesRequest(t *testing.T) {
 	assert.NotEmpty(urlValues)
 
 	queryRefs := urlValues["ref"]
-	assert.Len(queryRefs, len(hashes))
+	assert.Len(queryRefs, len(batch))
 	for _, r := range queryRefs {
-		_, present := hashes[hash.Parse(r)]
+		_, present := batch[hash.Parse(r)]
 		assert.True(present, "Query contains %s, which is not in initial refs", r)
 	}
 }

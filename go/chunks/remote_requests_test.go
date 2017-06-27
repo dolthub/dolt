@@ -14,7 +14,7 @@ import (
 
 func TestGetRequestBatch(t *testing.T) {
 	assert := assert.New(t)
-	r0 := hash.Parse("00000000000000000000000000000000")
+	h0 := hash.Parse("00000000000000000000000000000000")
 	c1 := NewChunk([]byte("abc"))
 	h1 := c1.Hash()
 	c2 := NewChunk([]byte("123"))
@@ -33,9 +33,10 @@ func TestGetRequestBatch(t *testing.T) {
 	req2chan := make(chan bool, 1)
 	req3chan := make(chan bool, 1)
 	req4chan := make(chan *Chunk, 1)
+	defer func() { close(req0chan); close(req1chan); close(req2chan); close(req3chan); close(req4chan) }()
 
 	batch := ReadBatch{
-		r0: []OutstandingRequest{OutstandingAbsent(req0chan), OutstandingGet(req1chan)},
+		h0: []OutstandingRequest{OutstandingAbsent(req0chan), OutstandingGet(req1chan)},
 		h1: []OutstandingRequest{OutstandingAbsent(req2chan)},
 		h2: []OutstandingRequest{OutstandingAbsent(req3chan), OutstandingGet(req4chan)},
 	}
@@ -51,33 +52,27 @@ func TestGetRequestBatch(t *testing.T) {
 				}
 			}
 		}
+		batch.Close()
 	}()
-	var r1True, r1False, r2True, r2False int
-	for b := range req2chan {
-		tally(b, &r1True, &r1False)
-	}
-	for b := range req3chan {
-		tally(b, &r2True, &r2False)
-	}
-	for c := range req4chan {
-		assert.EqualValues(c2.Hash(), c.Hash())
-	}
 
-	assert.Equal(0, r1True)
-	assert.Equal(1, r1False)
-	assert.Equal(0, r2True)
-	assert.Equal(1, r2False)
+	var r0True, r0False, r2True, r2False, r3True, r3False int
+	b := <-req0chan
+	tally(b, &r0True, &r0False)
+	c := <-req1chan
+	assert.EqualValues(EmptyChunk.Hash(), c.Hash())
+	b = <-req2chan
+	tally(b, &r2True, &r2False)
+	b = <-req3chan
+	tally(b, &r3True, &r3False)
+	c = <-req4chan
+	assert.EqualValues(c2.Hash(), c.Hash())
 
-	go batch.Close()
-	var r0True, r0False int
-	for b := range req0chan {
-		tally(b, &r0True, &r0False)
-	}
-	for c := range req1chan {
-		assert.EqualValues(EmptyChunk.Hash(), c.Hash())
-	}
 	assert.Equal(1, r0True)
 	assert.Equal(0, r0False)
+	assert.Equal(0, r2True)
+	assert.Equal(1, r2False)
+	assert.Equal(0, r3True)
+	assert.Equal(1, r3False)
 }
 
 func TestGetManyRequestBatch(t *testing.T) {

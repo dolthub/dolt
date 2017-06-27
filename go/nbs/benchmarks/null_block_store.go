@@ -39,8 +39,6 @@ func (nb nullBlockStore) Version() string {
 	panic("not impl")
 }
 
-func (nb nullBlockStore) Flush() {}
-
 func (nb nullBlockStore) Close() error {
 	return nil
 }

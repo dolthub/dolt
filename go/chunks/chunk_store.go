@@ -57,6 +57,10 @@ type ChunkStore interface {
 	// may return nil
 	Stats() interface{}
 
+	// Close tears down any resources in use by the implementation. After
+	// Close(), the ChunkStore may not be used again. It is NOT SAFE to call
+	// Close() concurrently with any other ChunkStore method; behavior is
+	// undefined and probably crashy.
 	io.Closer
 }
 

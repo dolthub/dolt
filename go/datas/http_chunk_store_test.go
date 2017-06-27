@@ -147,8 +147,9 @@ func (suite *HTTPChunkStoreSuite) TearDownTest() {
 func (suite *HTTPChunkStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.String("abc"))
 	suite.http.Put(c)
-	suite.http.Flush()
+	suite.True(suite.http.Has(c.Hash()))
 
+	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
 	suite.Equal(1, suite.serverCS.Writes)
 }
 
@@ -163,7 +164,7 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 		l = l.Append(types.NewRef(val))
 	}
 	suite.http.Put(types.EncodeValue(l))
-	suite.http.Flush()
+	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
 
 	suite.Equal(3, suite.serverCS.Writes)
 }

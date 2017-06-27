@@ -47,8 +47,6 @@ func (fb fileBlockStore) Version() string {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Flush() {}
-
 func (fb fileBlockStore) Close() error {
 	fb.w.Close()
 	return nil

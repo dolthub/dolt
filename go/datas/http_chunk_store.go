@@ -29,7 +29,6 @@ import (
 
 const (
 	httpChunkSinkConcurrency = 6
-	writeBufferSize          = 1 << 12 // 4K
 	readBufferSize           = 1 << 12 // 4K
 )
 
@@ -48,7 +47,6 @@ type httpChunkStore struct {
 	hasQueue     chan chunks.ReadRequest
 	finishedChan chan struct{}
 	rateLimit    chan struct{}
-	requestWg    *sync.WaitGroup
 	workerWg     *sync.WaitGroup
 
 	cacheMu       *sync.RWMutex
@@ -74,11 +72,10 @@ func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChu
 		host:          u,
 		httpClient:    client,
 		auth:          auth,
-		getQueue:      make(chan chunks.ReadRequest, readBufferSize),
-		hasQueue:      make(chan chunks.ReadRequest, readBufferSize),
+		getQueue:      make(chan chunks.ReadRequest),
+		hasQueue:      make(chan chunks.ReadRequest),
 		finishedChan:  make(chan struct{}),
 		rateLimit:     make(chan struct{}, httpChunkSinkConcurrency),
-		requestWg:     &sync.WaitGroup{},
 		workerWg:      &sync.WaitGroup{},
 		cacheMu:       &sync.RWMutex{},
 		unwrittenPuts: nbs.NewCache(),
@@ -98,15 +95,8 @@ func (hcs *httpChunkStore) Version() string {
 	return hcs.version
 }
 
-func (hcs *httpChunkStore) Flush() {
-	hcs.sendWriteRequests()
-	hcs.requestWg.Wait()
-	return
-}
-
 func (hcs *httpChunkStore) Close() (e error) {
 	close(hcs.finishedChan)
-	hcs.requestWg.Wait()
 	hcs.workerWg.Wait()
 
 	close(hcs.getQueue)
@@ -134,8 +124,14 @@ func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	}
 
 	ch := make(chan *chunks.Chunk)
-	hcs.requestWg.Add(1)
-	hcs.getQueue <- chunks.NewGetRequest(h, ch)
+	defer close(ch)
+
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to Get %s from closed ChunkStore", h)
+	case hcs.getQueue <- chunks.NewGetRequest(h, ch):
+	}
+
 	return *(<-ch)
 }
 
@@ -161,8 +157,11 @@ func (hcs *httpChunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(remaining))
-	hcs.requestWg.Add(1)
-	hcs.getQueue <- chunks.NewGetManyRequest(remaining, wg, foundChunks)
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to GetMany from closed ChunkStore")
+	case hcs.getQueue <- chunks.NewGetManyRequest(remaining, wg, foundChunks):
+	}
 	wg.Wait()
 }
 
@@ -181,8 +180,13 @@ func (hcs *httpChunkStore) Has(h hash.Hash) bool {
 	}
 
 	ch := make(chan bool)
-	hcs.requestWg.Add(1)
-	hcs.hasQueue <- chunks.NewAbsentRequest(h, ch)
+	defer close(ch)
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to Has %s on closed ChunkStore", h)
+	case hcs.hasQueue <- chunks.NewAbsentRequest(h, ch):
+	}
+
 	return <-ch
 }
 
@@ -200,8 +204,11 @@ func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
 	foundChunks := make(chan hash.Hash)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(remaining))
-	hcs.requestWg.Add(1)
-	hcs.hasQueue <- chunks.NewAbsentManyRequest(remaining, wg, foundChunks)
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to HasMany on closed ChunkStore")
+	case hcs.hasQueue <- chunks.NewAbsentManyRequest(remaining, wg, foundChunks):
+	}
 	go func() { defer close(foundChunks); wg.Wait() }()
 
 	absent = hash.HashSet{}
@@ -215,13 +222,12 @@ func (hcs *httpChunkStore) batchHasRequests() {
 	hcs.batchReadRequests(hcs.hasQueue, hcs.hasRefs)
 }
 
-type batchGetter func(hashes hash.HashSet, batch chunks.ReadBatch)
+type batchGetter func(batch chunks.ReadBatch)
 
 func (hcs *httpChunkStore) batchReadRequests(queue <-chan chunks.ReadRequest, getter batchGetter) {
 	hcs.workerWg.Add(1)
 	go func() {
 		defer hcs.workerWg.Done()
-
 		for done := false; !done; {
 			select {
 			case req := <-queue:
@@ -229,32 +235,23 @@ func (hcs *httpChunkStore) batchReadRequests(queue <-chan chunks.ReadRequest, ge
 			case <-hcs.finishedChan:
 				done = true
 			}
-			// Drain queue before returning
-			select {
-			case req := <-queue:
-				hcs.sendReadRequests(req, queue, getter)
-			default:
-				//drained!
-			}
 		}
 	}()
 }
 
 func (hcs *httpChunkStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
 	batch := chunks.ReadBatch{}
-	hashes := hash.HashSet{}
 
 	count := 0
 	addReq := func(req chunks.ReadRequest) {
 		for h := range req.Hashes() {
 			batch[h] = append(batch[h], req.Outstanding())
-			hashes.Insert(h)
 		}
 		count++
 	}
 
 	addReq(req)
-	for drained := false; !drained && len(hashes) < readBufferSize; {
+	for drained := false; !drained && len(batch) < readBufferSize; {
 		select {
 		case req := <-queue:
 			addReq(req)
@@ -265,17 +262,14 @@ func (hcs *httpChunkStore) sendReadRequests(req chunks.ReadRequest, queue <-chan
 
 	hcs.rateLimit <- struct{}{}
 	go func() {
-		defer func() {
-			hcs.requestWg.Add(-count)
-			batch.Close()
-		}()
+		defer batch.Close()
 
-		getter(hashes, batch)
+		getter(batch)
 		<-hcs.rateLimit
 	}()
 }
 
-func (hcs *httpChunkStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
+func (hcs *httpChunkStore) getRefs(batch chunks.ReadBatch) {
 	// POST http://<host>/getRefs/. Post body: ref=hash0&ref=hash1& Response will be chunk data if present, 404 if absent.
 	u := *hcs.host
 	u.Path = httprouter.CleanPath(hcs.host.Path + constants.GetRefsPath)
@@ -287,7 +281,7 @@ func (hcs *httpChunkStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) 
 	}
 	u.RawQuery = q
 
-	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
+	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(batch), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
@@ -314,12 +308,12 @@ func (hcs *httpChunkStore) getRefs(hashes hash.HashSet, batch chunks.ReadBatch) 
 	}
 }
 
-func (hcs *httpChunkStore) hasRefs(hashes hash.HashSet, batch chunks.ReadBatch) {
+func (hcs *httpChunkStore) hasRefs(batch chunks.ReadBatch) {
 	// POST http://<host>/hasRefs/. Post body: ref=sha1---&ref=sha1---& Response will be text of lines containing "|ref| |bool|".
 	u := *hcs.host
 	u.Path = httprouter.CleanPath(hcs.host.Path + constants.HasRefsPath)
 
-	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(hashes), http.Header{
+	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(batch), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
 		"Content-Type":    {"application/x-www-form-urlencoded"},
 	})
@@ -443,7 +437,7 @@ func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string)
 func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
-	hcs.Flush()
+	hcs.sendWriteRequests()
 
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	res := hcs.requestRoot("POST", current, last)

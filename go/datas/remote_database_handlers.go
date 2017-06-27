@@ -322,10 +322,10 @@ func extractHashes(req *http.Request) hash.HashSlice {
 	return hashes
 }
 
-func buildHashesRequest(hashes map[hash.Hash]struct{}) io.Reader {
+func buildHashesRequest(batch chunks.ReadBatch) io.Reader {
 	values := &url.Values{}
-	for r := range hashes {
-		values.Add("ref", r.String())
+	for h := range batch {
+		values.Add("ref", h.String())
 	}
 	return strings.NewReader(values.Encode())
 }
