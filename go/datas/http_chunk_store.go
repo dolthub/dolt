@@ -96,6 +96,9 @@ func (hcs *httpChunkStore) Version() string {
 }
 
 func (hcs *httpChunkStore) Close() (e error) {
+	hcs.rootMu.Lock()
+	defer hcs.rootMu.Unlock()
+
 	close(hcs.finishedChan)
 	hcs.workerWg.Wait()
 
@@ -355,53 +358,36 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 func (hcs *httpChunkStore) Put(c chunks.Chunk) {
 	hcs.cacheMu.RLock()
 	defer hcs.cacheMu.RUnlock()
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to Put %s into closed ChunkStore", c.Hash())
+	default:
+	}
 	hcs.unwrittenPuts.Insert(c)
 }
 
-func (hcs *httpChunkStore) sendWriteRequests() {
-	hcs.rateLimit <- struct{}{}
-	defer func() { <-hcs.rateLimit }()
-
-	hcs.cacheMu.Lock()
-	defer func() {
-		hcs.cacheMu.Unlock()
-	}()
-
-	count := hcs.unwrittenPuts.Count()
-	if count == 0 {
-		return
-	}
-	defer func() {
-		hcs.unwrittenPuts.Destroy()
-		hcs.unwrittenPuts = nbs.NewCache()
-	}()
-
-	verbose.Log("Sending %d chunks", count)
+func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
 	chunkChan := make(chan *chunks.Chunk, 1024)
 	go func() {
-		hcs.unwrittenPuts.ExtractChunks(chunkChan)
+		p.ExtractChunks(chunkChan)
 		close(chunkChan)
 	}()
 
 	body := buildWriteValueRequest(chunkChan)
-	url := *hcs.host
-	url.Path = httprouter.CleanPath(hcs.host.Path + constants.WriteValuePath)
-	// TODO: Make this accept snappy encoding
-	req := newRequest("POST", hcs.auth, url.String(), body, http.Header{
+	req := newRequest("POST", auth, u.String(), body, http.Header{
 		"Accept-Encoding":  {"gzip"},
 		"Content-Encoding": {"x-snappy-framed"},
 		"Content-Type":     {"application/octet-stream"},
 	})
 
-	res, err := hcs.httpClient.Do(req)
+	res, err := cli.Do(req)
 	d.PanicIfError(err)
-	expectVersion(hcs.version, res)
+	expectVersion(vers, res)
 	defer closeResponse(res.Body)
 
 	if http.StatusCreated != res.StatusCode {
 		d.Panic("Unexpected response: %s", formatErrorResponse(res))
 	}
-	verbose.Log("Finished sending %d hashes", count)
 }
 
 func (hcs *httpChunkStore) Root() hash.Hash {
@@ -437,7 +423,25 @@ func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string)
 func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
-	hcs.sendWriteRequests()
+	hcs.cacheMu.Lock()
+	defer hcs.cacheMu.Unlock()
+
+	select {
+	case <-hcs.finishedChan:
+		d.Panic("Tried to Commit %s to closed ChunkStore", current)
+	case hcs.rateLimit <- struct{}{}:
+		defer func() { <-hcs.rateLimit }()
+	}
+
+	if count := hcs.unwrittenPuts.Count(); count > 0 {
+		url := *hcs.host
+		url.Path = httprouter.CleanPath(hcs.host.Path + constants.WriteValuePath)
+		verbose.Log("Sending %d chunks", count)
+		sendWriteRequest(url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
+		verbose.Log("Finished sending %d hashes", count)
+		hcs.unwrittenPuts.Destroy()
+		hcs.unwrittenPuts = nbs.NewCache()
+	}
 
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
 	res := hcs.requestRoot("POST", current, last)
