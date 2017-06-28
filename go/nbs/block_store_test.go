@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -296,7 +297,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	newChunk := chunks.NewChunk([]byte("gnu"))
 
 	t.Run("NoConjoin", func(t *testing.T) {
-		mm := &fakeManifest{}
+		mm := cachingManifest{&fakeManifest{}, &sync.Mutex{}, newManifestCache(0)}
 		p := newFakeTablePersister()
 		c := &fakeConjoiner{}
 
@@ -319,17 +320,17 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	}
 
 	t.Run("ConjoinSuccess", func(t *testing.T) {
-		mm := &fakeManifest{}
+		fm := &fakeManifest{}
 		p := newFakeTablePersister()
 
 		srcs := makeTestSrcs([]uint32{1, 1, 3, 7}, p)
 		upstream := toSpecs(srcs)
-		mm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}, p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
@@ -339,12 +340,12 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	})
 
 	t.Run("ConjoinRetry", func(t *testing.T) {
-		mm := &fakeManifest{}
+		fm := &fakeManifest{}
 		p := newFakeTablePersister()
 
 		srcs := makeTestSrcs([]uint32{1, 1, 3, 7, 13}, p)
 		upstream := toSpecs(srcs)
-		mm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				makeCanned(upstream[:2], upstream[2:], p),
@@ -352,7 +353,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}, p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)

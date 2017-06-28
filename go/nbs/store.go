@@ -34,7 +34,7 @@ const (
 var (
 	cacheOnce           = sync.Once{}
 	globalIndexCache    *indexCache
-	makeCachingManifest func(manifest) manifest
+	makeCachingManifest func(manifest) cachingManifest
 	globalFDCache       *fdCache
 	globalConjoiner     conjoiner
 )
@@ -46,11 +46,11 @@ func makeGlobalCaches() {
 
 	cacheMu := &sync.Mutex{}
 	manifestCache := newManifestCache(defaultManifestCacheSize)
-	makeCachingManifest = func(mm manifest) manifest { return cachingManifest{mm, cacheMu, manifestCache} }
+	makeCachingManifest = func(mm manifest) cachingManifest { return cachingManifest{mm, cacheMu, manifestCache} }
 }
 
 type NomsBlockStore struct {
-	mm           manifest
+	mm           cachingManifest
 	p            tablePersister
 	c            conjoiner
 	manifestLock addr
@@ -92,7 +92,7 @@ func NewLocalStore(dir string, memTableSize uint64) *NomsBlockStore {
 	return newNomsBlockStore(mm, p, globalConjoiner, memTableSize)
 }
 
-func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
+func newNomsBlockStore(mm cachingManifest, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -119,7 +119,7 @@ func newNomsBlockStore(mm manifest, p tablePersister, c conjoiner, memTableSize 
 	return nbs
 }
 
-func newNomsBlockStoreWithContents(mm manifest, mc manifestContents, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
+func newNomsBlockStoreWithContents(mm cachingManifest, mc manifestContents, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -405,6 +405,22 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 		return errLastRootMismatch
 	}
 
+	handleOptimisticLockFailure := func(upstream manifestContents) error {
+		nbs.manifestLock = upstream.lock
+		nbs.root = upstream.root
+		nbs.tables = nbs.tables.Rebase(upstream.specs)
+
+		if last != upstream.root {
+			return errOptimisticLockFailedRoot
+		}
+		return errOptimisticLockFailedTables
+	}
+
+	if upstream, doomed := nbs.mm.updateWillFail(nbs.manifestLock); doomed {
+		// Pre-emptive optimistic lock failure. Someone else in-process moved to the root, the set of tables, or both out from under us.
+		return handleOptimisticLockFailure(upstream)
+	}
+
 	if nbs.mt != nil && nbs.mt.count() > 0 {
 		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
 		nbs.mt = nil
@@ -431,14 +447,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	upstream := nbs.mm.Update(nbs.manifestLock, newContents, nbs.stats, nil)
 	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
-		nbs.manifestLock = upstream.lock
-		nbs.root = upstream.root
-		nbs.tables = nbs.tables.Rebase(upstream.specs)
-
-		if last != upstream.root {
-			return errOptimisticLockFailedRoot
-		}
-		return errOptimisticLockFailedTables
+		return handleOptimisticLockFailure(upstream)
 	}
 
 	nbs.tables = nbs.tables.Flatten()

@@ -60,7 +60,7 @@ func TestChunkStoreRebase(t *testing.T) {
 	assertDataInStore(chunks, store, assert)
 }
 
-func TestChunkStoreUpdateRoot(t *testing.T) {
+func TestChunkStoreCommit(t *testing.T) {
 	assert := assert.New(t)
 	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
@@ -104,12 +104,13 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
+	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}
 	p := newFakeTablePersister()
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
-	store := newNomsBlockStore(fm, p, newAsyncConjoiner(defaultMaxTables), defaultMemTableSize)
+	store := newNomsBlockStore(mm, p, newAsyncConjoiner(defaultMaxTables), defaultMemTableSize)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root())
@@ -117,7 +118,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assertDataInStore(chunks, store, assert)
 }
 
-func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
+func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
@@ -131,10 +132,42 @@ func TestChunkStoreUpdateRootOptimisticLockFail(t *testing.T) {
 	assert.True(store.Commit(newRoot2, newRoot))
 }
 
+func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
+	assert := assert.New(t)
+	fm := &fakeManifest{}
+	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(defaultManifestCacheSize)}
+	p := newFakeTablePersister()
+	c := newAsyncConjoiner(defaultMaxTables)
+
+	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	defer store.Close()
+
+	// Simulate another goroutine writing a manifest behind store's back.
+	interloper := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	defer interloper.Close()
+
+	chunk := chunks.NewChunk([]byte("hello"))
+	interloper.Put(chunk)
+	assert.True(interloper.Commit(chunk.Hash(), hash.Hash{}))
+
+	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
+	chunk = chunks.NewChunk([]byte("goodbye"))
+	store.Put(chunk)
+	assert.NotNil(store.mt)
+	assert.False(store.Commit(chunk.Hash(), hash.Hash{}))
+	assert.NotNil(store.mt)
+
+	assert.True(store.Commit(chunk.Hash(), store.Root()))
+	assert.Nil(store.mt)
+	assert.Equal(chunk.Hash(), store.Root())
+	assert.Equal(constants.NomsVersion, store.Version())
+}
+
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
 	fm = &fakeManifest{}
+	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}
 	p = newFakeTablePersister()
-	store = newNomsBlockStore(fm, p, newAsyncConjoiner(defaultMaxTables), 0)
+	store = newNomsBlockStore(mm, p, newAsyncConjoiner(defaultMaxTables), 0)
 	return
 }
 

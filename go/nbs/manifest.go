@@ -71,6 +71,17 @@ type cachingManifest struct {
 	cache *manifestCache
 }
 
+func (cm cachingManifest) updateWillFail(lastLock addr) (cached manifestContents, doomed bool) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if upstream, hit := cm.cache.Get(cm.Name()); hit {
+		if lastLock != upstream.lock {
+			doomed, cached = true, upstream
+		}
+	}
+	return
+}
+
 func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
