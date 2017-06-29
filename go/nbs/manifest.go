@@ -7,6 +7,7 @@ package nbs
 import (
 	"crypto/sha512"
 	"strconv"
+	"time"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -70,7 +71,7 @@ type cachingManifest struct {
 }
 
 func (cm cachingManifest) updateWillFail(lastLock addr) (cached manifestContents, doomed bool) {
-	if upstream, hit := cm.cache.Get(cm.Name()); hit {
+	if upstream, _, hit := cm.cache.Get(cm.Name()); hit {
 		if lastLock != upstream.lock {
 			doomed, cached = true, upstream
 		}
@@ -79,8 +80,18 @@ func (cm cachingManifest) updateWillFail(lastLock addr) (cached manifestContents
 }
 
 func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+	entryTime := time.Now()
+
 	cm.cache.Lock(cm.Name())
 	defer cm.cache.Unlock(cm.Name())
+
+	cached, t, hit := cm.cache.Get(cm.Name())
+
+	if hit && t.After(entryTime) {
+		// Cache contains a manifest which is newer than entry time.
+		return true, cached
+	}
+
 	exists, contents = cm.mm.ParseIfExists(stats, readHook)
 	cm.cache.Put(cm.Name(), contents)
 	return
@@ -89,7 +100,7 @@ func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists b
 func (cm cachingManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	cm.cache.Lock(cm.Name())
 	defer cm.cache.Unlock(cm.Name())
-	if upstream, hit := cm.cache.Get(cm.Name()); hit {
+	if upstream, _, hit := cm.cache.Get(cm.Name()); hit {
 		if lastLock != upstream.lock {
 			return upstream
 		}

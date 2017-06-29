@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"container/list"
+	"time"
 
 	"sync"
 
@@ -24,6 +25,7 @@ func newManifestCache(maxSize uint64) *manifestCache {
 type manifestCacheEntry struct {
 	lruEntry *list.Element
 	contents manifestContents
+	t        time.Time
 }
 
 type manifestCache struct {
@@ -38,12 +40,12 @@ type manifestCache struct {
 // Get() checks the searches the cache for an entry. If it exists, it moves it's
 // lru entry to the back of the queue and returns (value, true). Otherwise, it
 // returns (nil, false).
-func (mc *manifestCache) Get(db string) (contents manifestContents, present bool) {
+func (mc *manifestCache) Get(db string) (contents manifestContents, t time.Time, present bool) {
 	mc.cond.L.Lock()
 	defer mc.cond.L.Unlock()
 
 	if entry, ok := mc.entry(db); ok {
-		contents, present = entry.contents, true
+		contents, t, present = entry.contents, entry.t, true
 	}
 	return
 }
@@ -104,7 +106,7 @@ func (mc *manifestCache) Put(db string, contents manifestContents) {
 
 	if contents.size() <= mc.maxSize {
 		newEl := mc.lru.PushBack(db)
-		ce := manifestCacheEntry{lruEntry: newEl, contents: contents}
+		ce := manifestCacheEntry{lruEntry: newEl, contents: contents, t: time.Now()}
 		mc.cache[db] = ce
 		mc.totalSize += ce.contents.size()
 		for el := mc.lru.Front(); el != nil && mc.totalSize > mc.maxSize; {

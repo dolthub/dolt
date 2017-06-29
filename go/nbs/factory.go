@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -71,7 +72,7 @@ func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 func (asf *AWSStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
 	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache}
 
-	contents, present := func() (manifestContents, bool) {
+	contents, _, present := func() (manifestContents, time.Time, bool) {
 		return asf.manifestCache.Get(mm.Name())
 	}()
 	if present {
@@ -134,7 +135,7 @@ func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore 
 	path := path.Join(lsf.dir, ns)
 	mm := cachingManifest{fileManifest{path}, lsf.manifestCache}
 
-	contents, present := func() (manifestContents, bool) {
+	contents, _, present := func() (manifestContents, time.Time, bool) {
 		lsf.manifestCacheMu.Lock()
 		defer lsf.manifestCacheMu.Unlock()
 		return lsf.manifestCache.Get(mm.Name())

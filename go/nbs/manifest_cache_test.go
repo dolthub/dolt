@@ -23,11 +23,11 @@ func TestSizeCache(t *testing.T) {
 		c.Put(dbA, contentsA)
 		c.Put(dbB, contentsB)
 
-		cont, present := c.Get(dbA)
+		cont, _, present := c.Get(dbA)
 		assert.True(present)
 		assert.Equal(contentsA, cont)
 
-		cont, present = c.Get(dbB)
+		cont, _, present = c.Get(dbB)
 		assert.True(present)
 		assert.Equal(contentsB, cont)
 	})
@@ -49,40 +49,40 @@ func TestSizeCache(t *testing.T) {
 
 		lru := len(keys) - int(capacity)
 		for _, db := range keys[:lru] {
-			_, present := c.Get(db)
+			_, _, present := c.Get(db)
 			assert.False(present)
 		}
 		for _, db := range keys[lru:] {
-			_, present := c.Get(db)
+			_, _, present := c.Get(db)
 			assert.True(present)
 		}
 
 		// Bump |keys[lru]| to the back of the queue, making |keys[lru+1]| the next one to be dropped
-		_, ok := c.Get(keys[lru])
+		_, _, ok := c.Get(keys[lru])
 		assert.True(ok)
 		lru++
 		c.Put("novel", manifestContents{})
-		_, ok = c.Get(keys[lru])
+		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
 		// |keys[lru]| is gone, so |keys[lru+1]| is next
 		lru++
 
 		// Putting a bigger value will dump multiple existing entries
 		c.Put("big", manifestContents{vers: "big version"})
-		_, ok = c.Get(keys[lru])
+		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
 		lru++
-		_, ok = c.Get(keys[lru])
+		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
 		lru++
 
 		// Make sure expected stuff is still in the cache
 		for i := lru; i < len(keys); i++ {
-			_, ok := c.Get(keys[i])
+			_, _, ok := c.Get(keys[i])
 			assert.True(ok)
 		}
 		for _, key := range []string{"novel", "big"} {
-			_, ok := c.Get(key)
+			_, _, ok := c.Get(key)
 			assert.True(ok)
 		}
 	})
@@ -90,14 +90,14 @@ func TestSizeCache(t *testing.T) {
 	t.Run("TooLargeValue", func(t *testing.T) {
 		c := newManifestCache(16)
 		c.Put("db", manifestContents{})
-		_, ok := c.Get("db")
+		_, _, ok := c.Get("db")
 		assert.False(t, ok)
 	})
 
 	t.Run("ZeroSizeCache", func(t *testing.T) {
 		c := newManifestCache(0)
 		c.Put("db", manifestContents{})
-		_, ok := c.Get("db")
+		_, _, ok := c.Get("db")
 		assert.False(t, ok)
 	})
 
