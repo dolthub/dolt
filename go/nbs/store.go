@@ -44,9 +44,8 @@ func makeGlobalCaches() {
 	globalFDCache = newFDCache(defaultMaxTables)
 	globalConjoiner = newAsyncConjoiner(defaultMaxTables)
 
-	cacheMu := &sync.Mutex{}
 	manifestCache := newManifestCache(defaultManifestCacheSize)
-	makeCachingManifest = func(mm manifest) cachingManifest { return cachingManifest{mm, cacheMu, manifestCache} }
+	makeCachingManifest = func(mm manifest) cachingManifest { return cachingManifest{mm, manifestCache} }
 }
 
 type NomsBlockStore struct {

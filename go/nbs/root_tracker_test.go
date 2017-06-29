@@ -104,7 +104,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}
+	mm := cachingManifest{fm, newManifestCache(0)}
 	p := newFakeTablePersister()
 
 	// Simulate another process writing a manifest behind store's back.
@@ -135,7 +135,7 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(defaultManifestCacheSize)}
+	mm := cachingManifest{fm, newManifestCache(defaultManifestCacheSize)}
 	p := newFakeTablePersister()
 	c := newAsyncConjoiner(defaultMaxTables)
 
@@ -165,7 +165,7 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
 	fm = &fakeManifest{}
-	mm := cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}
+	mm := cachingManifest{fm, newManifestCache(0)}
 	p = newFakeTablePersister()
 	store = newNomsBlockStore(mm, p, newAsyncConjoiner(defaultMaxTables), 0)
 	return

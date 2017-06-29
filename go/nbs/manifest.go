@@ -7,7 +7,6 @@ package nbs
 import (
 	"crypto/sha512"
 	"strconv"
-	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -67,13 +66,10 @@ func (mc manifestContents) size() (size uint64) {
 
 type cachingManifest struct {
 	mm    manifest
-	mu    *sync.Mutex
 	cache *manifestCache
 }
 
 func (cm cachingManifest) updateWillFail(lastLock addr) (cached manifestContents, doomed bool) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
 	if upstream, hit := cm.cache.Get(cm.Name()); hit {
 		if lastLock != upstream.lock {
 			doomed, cached = true, upstream
@@ -83,16 +79,16 @@ func (cm cachingManifest) updateWillFail(lastLock addr) (cached manifestContents
 }
 
 func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+	cm.cache.Lock(cm.Name())
+	defer cm.cache.Unlock(cm.Name())
 	exists, contents = cm.mm.ParseIfExists(stats, readHook)
 	cm.cache.Put(cm.Name(), contents)
 	return
 }
 
 func (cm cachingManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+	cm.cache.Lock(cm.Name())
+	defer cm.cache.Unlock(cm.Name())
 	if upstream, hit := cm.cache.Get(cm.Name()); hit {
 		if lastLock != upstream.lock {
 			return upstream

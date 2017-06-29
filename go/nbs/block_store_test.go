@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -297,7 +296,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	newChunk := chunks.NewChunk([]byte("gnu"))
 
 	t.Run("NoConjoin", func(t *testing.T) {
-		mm := cachingManifest{&fakeManifest{}, &sync.Mutex{}, newManifestCache(0)}
+		mm := cachingManifest{&fakeManifest{}, newManifestCache(0)}
 		p := newFakeTablePersister()
 		c := &fakeConjoiner{}
 
@@ -330,7 +329,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore := newNomsBlockStore(cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(cachingManifest{fm, newManifestCache(0)}, p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
@@ -353,7 +352,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore := newNomsBlockStore(cachingManifest{fm, &sync.Mutex{}, newManifestCache(0)}, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(cachingManifest{fm, newManifestCache(0)}, p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)

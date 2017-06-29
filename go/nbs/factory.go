@@ -29,8 +29,7 @@ type AWSStoreFactory struct {
 	table     string
 	conjoiner conjoiner
 
-	manifestCacheMu sync.Mutex
-	manifestCache   *manifestCache
+	manifestCache *manifestCache
 }
 
 // NewAWSStoreFactory returns a ChunkStore factory that vends NomsBlockStore
@@ -65,16 +64,14 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), &asf.manifestCacheMu, asf.manifestCache}
+	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache}
 	return newNomsBlockStore(mm, asf.persister, asf.conjoiner, defaultMemTableSize)
 }
 
 func (asf *AWSStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
-	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), &asf.manifestCacheMu, asf.manifestCache}
+	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache}
 
 	contents, present := func() (manifestContents, bool) {
-		asf.manifestCacheMu.Lock()
-		defer asf.manifestCacheMu.Unlock()
 		return asf.manifestCache.Get(mm.Name())
 	}()
 	if present {
@@ -128,14 +125,14 @@ func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	d.PanicIfError(os.MkdirAll(path, 0777))
 
-	mm := cachingManifest{fileManifest{path}, &lsf.manifestCacheMu, lsf.manifestCache}
+	mm := cachingManifest{fileManifest{path}, lsf.manifestCache}
 	p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
 	return newNomsBlockStore(mm, p, lsf.conjoiner, defaultMemTableSize)
 }
 
 func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
-	mm := cachingManifest{fileManifest{path}, &lsf.manifestCacheMu, lsf.manifestCache}
+	mm := cachingManifest{fileManifest{path}, lsf.manifestCache}
 
 	contents, present := func() (manifestContents, bool) {
 		lsf.manifestCacheMu.Lock()
