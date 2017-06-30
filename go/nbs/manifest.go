@@ -92,8 +92,9 @@ func (cm cachingManifest) ParseIfExists(stats *Stats, readHook func()) (exists b
 		return true, cached
 	}
 
+	t = time.Now()
 	exists, contents = cm.mm.ParseIfExists(stats, readHook)
-	cm.cache.Put(cm.Name(), contents)
+	cm.cache.Put(cm.Name(), contents, t)
 	return
 }
 
@@ -105,8 +106,9 @@ func (cm cachingManifest) Update(lastLock addr, newContents manifestContents, st
 			return upstream
 		}
 	}
+	t := time.Now()
 	contents := cm.mm.Update(lastLock, newContents, stats, writeHook)
-	cm.cache.Put(cm.Name(), contents)
+	cm.cache.Put(cm.Name(), contents, t)
 	return contents
 }
 

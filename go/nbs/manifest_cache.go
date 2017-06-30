@@ -93,8 +93,9 @@ func (mc *manifestCache) entry(key string) (manifestCacheEntry, bool) {
 // back of the queue as long it's size does not exceed maxSize. If the
 // addition of this entry causes the size of the cache to exceed maxSize, the
 // necessary entries at the front of the queue will be deleted in order to
-// keep the total cache size below maxSize.
-func (mc *manifestCache) Put(db string, contents manifestContents) {
+// keep the total cache size below maxSize. |t| must be *prior* to initiating
+// the call which read/wrote |contents|.
+func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) {
 	mc.cond.L.Lock()
 	defer mc.cond.L.Unlock()
 
@@ -106,7 +107,7 @@ func (mc *manifestCache) Put(db string, contents manifestContents) {
 
 	if contents.size() <= mc.maxSize {
 		newEl := mc.lru.PushBack(db)
-		ce := manifestCacheEntry{lruEntry: newEl, contents: contents, t: time.Now()}
+		ce := manifestCacheEntry{lruEntry: newEl, contents: contents, t: t}
 		mc.cache[db] = ce
 		mc.totalSize += ce.contents.size()
 		for el := mc.lru.Front(); el != nil && mc.totalSize > mc.maxSize; {
