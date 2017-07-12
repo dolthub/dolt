@@ -44,6 +44,8 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 	var index tableIndex
 	found := false
 	if indexCache != nil {
+		indexCache.lockEntry(h)
+		defer indexCache.unlockEntry(h)
 		index, found = indexCache.get(h)
 	}
 

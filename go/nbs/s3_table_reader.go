@@ -49,6 +49,8 @@ func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexC
 	var index tableIndex
 	found := false
 	if indexCache != nil {
+		indexCache.lockEntry(h)
+		defer indexCache.unlockEntry(h)
 		index, found = indexCache.get(h)
 	}
 

@@ -9,6 +9,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"sort"
+	"sync"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/util/sizecache"
@@ -32,25 +33,54 @@ type tablePersister interface {
 	Open(name addr, chunkCount uint32) chunkSource
 }
 
+// indexCache provides sized storage for table indices. While getting and/or
+// setting the cache entry for a given table name, the caller MUST hold the
+// lock that for that entry.
 type indexCache struct {
-	cache *sizecache.SizeCache
+	cache  *sizecache.SizeCache
+	cond   *sync.Cond
+	locked map[addr]struct{}
 }
 
-// Returns an indexCache which will burn roughly |size| bytes of memory
+// Returns an indexCache which will burn roughly |size| bytes of memory.
 func newIndexCache(size uint64) *indexCache {
-	return &indexCache{sizecache.New(size)}
+	return &indexCache{sizecache.New(size), sync.NewCond(&sync.Mutex{}), map[addr]struct{}{}}
 }
 
-func (sic indexCache) get(name addr) (tableIndex, bool) {
-	idx, found := sic.cache.Get(name)
-	if found {
+// Take an exclusive lock on the cache entry for |name|. Callers must do this
+// before calling get(addr) or put(addr, index)
+func (sic *indexCache) lockEntry(name addr) {
+	sic.cond.L.Lock()
+	defer sic.cond.L.Unlock()
+
+	for {
+		if _, present := sic.locked[name]; !present {
+			sic.locked[name] = struct{}{}
+			break
+		}
+		sic.cond.Wait()
+	}
+}
+
+func (sic *indexCache) unlockEntry(name addr) {
+	sic.cond.L.Lock()
+	defer sic.cond.L.Unlock()
+
+	_, ok := sic.locked[name]
+	d.PanicIfFalse(ok)
+	delete(sic.locked, name)
+
+	sic.cond.Broadcast()
+}
+
+func (sic *indexCache) get(name addr) (tableIndex, bool) {
+	if idx, found := sic.cache.Get(name); found {
 		return idx.(tableIndex), true
 	}
-
 	return tableIndex{}, false
 }
 
-func (sic indexCache) put(name addr, idx tableIndex) {
+func (sic *indexCache) put(name addr, idx tableIndex) {
 	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
 	sic.cache.Add(name, indexSize, idx)
 }

@@ -46,6 +46,8 @@ func (ftp *fsTablePersister) persistTable(name addr, data []byte, chunkCount uin
 		io.Copy(temp, bytes.NewReader(data))
 		index := parseTableIndex(data)
 		if ftp.indexCache != nil {
+			ftp.indexCache.lockEntry(name)
+			defer ftp.indexCache.unlockEntry(name)
 			ftp.indexCache.put(name, index)
 		}
 		return temp.Name()

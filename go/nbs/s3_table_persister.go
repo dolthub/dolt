@@ -63,6 +63,8 @@ func (s3p s3TablePersister) newReaderFromIndexData(idxData []byte, name addr) *s
 	s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name, readRl: s3p.readRl}
 	index := parseTableIndex(idxData)
 	if s3p.indexCache != nil {
+		s3p.indexCache.lockEntry(name)
+		defer s3p.indexCache.unlockEntry(name)
 		s3p.indexCache.put(name, index)
 	}
 	s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize)
