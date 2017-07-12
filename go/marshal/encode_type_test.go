@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/attic-labs/noms/go/nomdl"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
@@ -589,4 +590,28 @@ func TestMarshalTypeStructName2(t *testing.T) {
 	var ts TestStructWithNameImpl2
 	typ := MustMarshalType(ts)
 	assert.True(types.MakeStructType("", types.StructField{"x", types.NumberType, false}).Equals(typ), typ.Describe())
+}
+
+type OutPhoto struct {
+	Faces             []OutFace `noms:",set"`
+	SomeOtherFacesSet []OutFace `noms:",set"`
+}
+
+type OutFace struct {
+	Blob types.Ref
+}
+
+func (f OutFace) MarshalNomsStructName() string {
+	return "Face"
+}
+
+func TestMarshalTypeOutface(t *testing.T) {
+	typ := MustMarshalType(OutPhoto{})
+	expectedType := nomdl.MustParseType(`struct OutPhoto {
+          faces: Set<struct Face {
+            blob: Ref<Value>,
+          }>,
+          someOtherFacesSet: Set<Cycle<Face>>,
+        }`)
+	assert.True(t, typ.Equals(expectedType))
 }

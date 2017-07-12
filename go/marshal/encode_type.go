@@ -173,7 +173,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 // nil and we have to wait until we have a value to be able to determine the
 // type.
 func structEncodeType(t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
-	name := t.Name()
+	name := getStructName(t)
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
 			return types.MakeCycleType(name)
