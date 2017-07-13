@@ -34,7 +34,7 @@ func main() {
 	flag.Parse(true)
 
 	buildCount := *count
-	insertCount := buildCount / 50
+	insertCount := buildCount
 	defer profile.MaybeStartProfile().Stop()
 
 	collectionTypes := []string{"List", "Set", "Map"}
@@ -172,12 +172,12 @@ func buildList(count uint64, createFn createValueFn) types.Collection {
 }
 
 func buildListIncrementally(count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList()
+	l := types.NewList().Edit()
 	for i := uint64(0); i < count; i++ {
-		l = l.Insert(i, createFn(i))
+		l.Insert(i, createFn(i))
 	}
 
-	return l
+	return l.List(nil)
 }
 
 func readList(c types.Collection) {

@@ -158,12 +158,12 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 		types.String("abc"),
 		types.String("def"),
 	}
-	l := types.NewList()
+	le := types.NewList().Edit()
 	for _, val := range vals {
 		suite.http.Put(types.EncodeValue(val))
-		l = l.Append(types.NewRef(val))
+		le.Append(types.NewRef(val))
 	}
-	suite.http.Put(types.EncodeValue(l))
+	suite.http.Put(types.EncodeValue(le.List(nil)))
 	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
 
 	suite.Equal(3, suite.serverCS.Writes)

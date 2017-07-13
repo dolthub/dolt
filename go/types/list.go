@@ -53,6 +53,10 @@ func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	return out
 }
 
+func (l List) Edit() *ListEditor {
+	return NewListEditor(l)
+}
+
 // Collection interface
 
 // Len returns the number of elements in the list.
@@ -139,47 +143,6 @@ func (l List) Map(mf MapFunc) []interface{} {
 	return results
 }
 
-// Set returns a new list where the valie at the given index have been replaced with v. If idx is
-// out bounds then this panics.
-func (l List) Set(idx uint64, v Value) List {
-	d.PanicIfFalse(idx < l.Len())
-	return l.Splice(idx, 1, v)
-}
-
-// Append returns a new list where vs have been appended to the resulting list.
-func (l List) Append(vs ...Value) List {
-	return l.Splice(l.Len(), 0, vs...)
-}
-
-// Splice returns a new list where deleteCount values have been removed at idx and vs have been
-// inserted instead.
-// This function panics if idx or deleteCount is out of bounds.
-func (l List) Splice(idx uint64, deleteCount uint64, vs ...Value) List {
-	if deleteCount == 0 && len(vs) == 0 {
-		return l
-	}
-
-	d.PanicIfFalse(idx <= l.Len())
-	d.PanicIfFalse(idx+deleteCount <= l.Len())
-
-	cur := newCursorAtIndex(l.seq, idx, false)
-	ch := l.newChunker(cur, l.seq.valueReader())
-	for deleteCount > 0 {
-		ch.Skip()
-		deleteCount--
-	}
-
-	for _, v := range vs {
-		ch.Append(v)
-	}
-	return newList(ch.Done())
-}
-
-// Insert returns a new list where vs values have been inserted at idx.
-func (l List) Insert(idx uint64, vs ...Value) List {
-	return l.Splice(idx, 0, vs...)
-}
-
 // Concat returns a new List comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
@@ -188,18 +151,6 @@ func (l List) Concat(other List) List {
 		return l.newChunker(cur, vr)
 	})
 	return newList(seq)
-}
-
-// Remove returns a new list where the items at index start (inclusive) through end (exclusive) have
-// been removed. This panics if end is smaller than start.
-func (l List) Remove(start uint64, end uint64) List {
-	d.PanicIfFalse(start <= end)
-	return l.Splice(start, end-start)
-}
-
-// RemoveAt returns a new list where a single element at index idx have been removed.
-func (l List) RemoveAt(idx uint64) List {
-	return l.Splice(idx, 1)
 }
 
 type listIterFunc func(v Value, index uint64) (stop bool)

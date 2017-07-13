@@ -17,14 +17,13 @@ import (
 // Note: The implementation biases performance towards a usage which applies
 // edits in key-order.
 type MapEditor struct {
-	m                 Map
-	edits             mapEditSlice // edits may contain duplicate key values, in which case, the last edit of a given key is used
-	normalized        bool
-	removeEmptyValues bool // TODO-Make configurable
+	m          Map
+	edits      mapEditSlice // edits may contain duplicate key values, in which case, the last edit of a given key is used
+	normalized bool
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, mapEditSlice{}, true, true}
+	return &MapEditor{m, mapEditSlice{}, true}
 }
 
 func (me *MapEditor) Kind() NomsKind {

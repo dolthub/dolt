@@ -15,7 +15,7 @@ func TestRefInList(t *testing.T) {
 
 	l := NewList()
 	r := NewRef(l)
-	l = l.Append(r)
+	l = l.Edit().Append(r).List(nil)
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
 }

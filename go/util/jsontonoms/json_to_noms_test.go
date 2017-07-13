@@ -29,13 +29,13 @@ func (suite *LibTestSuite) TestPrimitiveTypes() {
 func (suite *LibTestSuite) TestCompositeTypes() {
 	// [false true]
 	suite.EqualValues(
-		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		types.NewList().Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(nil),
 		NomsValueFromDecodedJSON([]interface{}{false, true}, false))
 
 	// [[false true]]
 	suite.EqualValues(
-		types.NewList().Append(
-			types.NewList().Append(types.Bool(false)).Append(types.Bool(true))),
+		types.NewList().Edit().Append(
+			types.NewList().Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(nil)).List(nil),
 		NomsValueFromDecodedJSON([]interface{}{[]interface{}{false, true}}, false))
 
 	// {"string": "string",
@@ -46,7 +46,7 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 		types.String("string"),
 		types.String("string"),
 		types.String("list"),
-		types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		types.NewList().Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(nil),
 		types.String("map"),
 		types.NewMap(
 			types.String("nested"),
@@ -67,7 +67,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 	// }
 	tstruct := types.NewStruct("", types.StructData{
 		"string": types.String("string"),
-		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		"list":   types.NewList().Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(nil),
 		"struct": types.NewStruct("", types.StructData{
 			"nested": types.String("string"),
 		}),
@@ -90,7 +90,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithNamedStruct() {
 	// }
 	tstruct := types.NewStruct("TStruct1", types.StructData{
 		"string": types.String("string"),
-		"list":   types.NewList().Append(types.Bool(false)).Append(types.Bool(true)),
+		"list":   types.NewList().Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(nil),
 		"struct": types.NewStruct("Id", types.StructData{
 			"owner": types.String("string"),
 			"value": types.String("string"),

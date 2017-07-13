@@ -124,14 +124,14 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				if realIdx > el.Len() {
-					nv = el.Append(top.newValue)
+					nv = el.Edit().Append(top.newValue).List(nil)
 				} else {
-					nv = el.Insert(realIdx, top.newValue)
+					nv = el.Edit().Insert(realIdx, top.newValue).List(nil)
 				}
 			case types.DiffChangeRemoved:
-				nv = el.RemoveAt(realIdx)
+				nv = el.Edit().RemoveAt(realIdx).List(nil)
 			case types.DiffChangeModified:
-				nv = el.Set(realIdx, top.newValue)
+				nv = el.Edit().Set(realIdx, top.newValue).List(nil)
 			}
 			return nv
 		case types.Map:

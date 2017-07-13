@@ -111,7 +111,7 @@ func merge(s1, s2 types.Splice) types.Splice {
 }
 
 func apply(source, target types.List, offset uint64, s types.Splice) types.List {
-	toAdd := make(types.ValueSlice, s.SpAdded)
+	toAdd := make([]types.Valuable, s.SpAdded)
 	iter := source.IteratorAt(s.SpFrom)
 	for i := 0; uint64(i) < s.SpAdded; i++ {
 		v := iter.Next()
@@ -120,7 +120,7 @@ func apply(source, target types.List, offset uint64, s types.Splice) types.List 
 		}
 		toAdd[i] = v
 	}
-	return target.Splice(s.SpAt+offset, s.SpRemoved, toAdd...)
+	return target.Edit().Splice(s.SpAt+offset, s.SpRemoved, toAdd...).List(nil)
 }
 
 func describeSplice(s types.Splice) string {
