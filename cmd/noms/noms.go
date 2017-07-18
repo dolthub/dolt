@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"path"
@@ -64,6 +65,9 @@ func main() {
 		util.Help(args[1:])
 		return
 	}
+
+	// Don't prefix log messages with timestamp when running interactively
+	log.SetFlags(0)
 
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] {

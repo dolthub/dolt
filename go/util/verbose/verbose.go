@@ -5,7 +5,7 @@
 package verbose
 
 import (
-	"fmt"
+	"log"
 
 	flag "github.com/juju/gnuflag"
 )
@@ -45,9 +45,9 @@ func SetQuiet(q bool) {
 func Log(format string, args ...interface{}) {
 	if Verbose() {
 		if len(args) > 0 {
-			fmt.Printf(format+"\n", args...)
+			log.Printf(format+"\n", args...)
 		} else {
-			fmt.Println(format)
+			log.Println(format)
 		}
 	}
 }

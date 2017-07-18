@@ -6,6 +6,7 @@ package datas
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -56,7 +57,7 @@ func (s *RemoteDatabaseServer) Run() {
 	d.Chk.NoError(err)
 	s.port, err = strconv.Atoi(port)
 	d.Chk.NoError(err)
-	fmt.Printf("Listening on port %d...\n", s.port)
+	log.Printf("Listening on port %d...\n", s.port)
 
 	router := httprouter.New()
 

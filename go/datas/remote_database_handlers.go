@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -97,7 +98,7 @@ func createHandler(hndlr Handler, versionCheck bool) Handler {
 		w.Header().Set(NomsVersionHeader, constants.NomsVersion)
 
 		if versionCheck && req.Header.Get(NomsVersionHeader) != constants.NomsVersion {
-			verbose.Log("Returning version mismatch error")
+			log.Printf("returning version mismatch error")
 			http.Error(
 				w,
 				fmt.Sprintf("Error: SDK version %s is incompatible with data of version %s", req.Header.Get(NomsVersionHeader), constants.NomsVersion),
@@ -109,7 +110,7 @@ func createHandler(hndlr Handler, versionCheck bool) Handler {
 		err := d.Try(func() { hndlr(w, req, ps, cs) })
 		if err != nil {
 			err = d.Unwrap(err)
-			verbose.Log("Returning bad request:\n%v\n", err)
+			log.Printf("returning bad request error: %v", err)
 			http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusBadRequest)
 			return
 		}

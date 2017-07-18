@@ -37,11 +37,11 @@ func NewResolver() *Resolver {
 
 // Print replacement if one occurred
 func (r *Resolver) verbose(orig string, replacement string) string {
-	if verbose.Verbose() && orig != replacement {
+	if orig != replacement {
 		if orig == "" {
 			orig = `""`
 		}
-		fmt.Printf("\tresolving %s -> %s\n", orig, replacement)
+		verbose.Log("\tresolving %s -> %s\n", orig, replacement)
 	}
 	return replacement
 }
