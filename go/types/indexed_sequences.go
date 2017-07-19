@@ -4,7 +4,10 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/hash"
+)
 
 func newListMetaSequence(level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
 	return newMetaSequence(ListKind, level, tuples, vr)
@@ -76,4 +79,74 @@ func orderedKeyFromSum(msd []metaTuple) orderedKey {
 		sum += mt.numLeaves
 	}
 	return orderedKeyFromUint64(sum)
+}
+
+// loads the set of leaf sequences which contain the items [startIdx -> endIdx).
+// Returns the set of sequences and the offset within the first sequence which corresponds to |startIdx|.
+func loadLeafSequences(vr ValueReader, seqs []sequence, startIdx, endIdx uint64) ([]sequence, uint64) {
+	if seqs[0].isLeaf() {
+		for _, s := range seqs {
+			d.PanicIfFalse(s.isLeaf())
+		}
+
+		return seqs, startIdx
+	}
+
+	level := seqs[0].treeLevel()
+	childTuples := []metaTuple{}
+
+	cum := uint64(0)
+	for _, s := range seqs {
+		d.PanicIfFalse(s.treeLevel() == level)
+		ms := s.(metaSequence)
+
+		for _, mt := range ms.tuples {
+			if cum == 0 && mt.numLeaves <= startIdx {
+				// skip tuples whose items are < startIdx
+				startIdx -= mt.numLeaves
+				endIdx -= mt.numLeaves
+				continue
+			}
+
+			childTuples = append(childTuples, mt)
+			cum += mt.numLeaves
+			if cum >= endIdx {
+				break
+			}
+		}
+	}
+
+	hs := hash.HashSet{}
+	for _, mt := range childTuples {
+		if mt.child != nil {
+			continue
+		}
+		hs.Insert(mt.ref.TargetHash())
+	}
+
+	// Fetch committed child sequences in a single batch
+	fetched := make(map[hash.Hash]sequence, len(hs))
+	if len(hs) > 0 {
+		valueChan := make(chan Value, len(hs))
+		go func() {
+			d.PanicIfTrue(vr == nil)
+			vr.ReadManyValues(hs, valueChan)
+			close(valueChan)
+		}()
+		for value := range valueChan {
+			fetched[value.Hash()] = value.(Collection).sequence()
+		}
+	}
+
+	childSeqs := make([]sequence, len(childTuples))
+	for i, mt := range childTuples {
+		if mt.child != nil {
+			childSeqs[i] = mt.child.sequence()
+			continue
+		}
+
+		childSeqs[i] = fetched[mt.ref.TargetHash()]
+	}
+
+	return loadLeafSequences(vr, childSeqs, startIdx, endIdx)
 }

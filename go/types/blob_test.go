@@ -74,7 +74,7 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 			validate: func(v2 Collection) bool {
 				b2 := v2.(Blob)
 				outBuff := &bytes.Buffer{}
-				b2.Reader().Copy(outBuff)
+				b2.Copy(outBuff)
 				return bytes.Compare(outBuff.Bytes(), buff) == 0
 			},
 			prependOne: func() Collection {
@@ -320,6 +320,6 @@ func TestStreamingParallelBlob(t *testing.T) {
 	vs := newTestValueStore()
 	blob := NewStreamingBlob(vs, readers...)
 	outBuff := &bytes.Buffer{}
-	blob.Reader().Copy(outBuff)
+	blob.Copy(outBuff)
 	assert.True(bytes.Compare(buff, outBuff.Bytes()) == 0)
 }

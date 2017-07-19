@@ -90,7 +90,7 @@ func main() {
 		defer db.Close()
 		preader, pwriter := io.Pipe()
 		go func() {
-			blob.Reader().Copy(pwriter)
+			blob.Copy(pwriter)
 			pwriter.Close()
 		}()
 		r = preader

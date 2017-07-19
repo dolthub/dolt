@@ -104,7 +104,7 @@ func main() {
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
 	buff := &bytes.Buffer{}
-	blob.Reader().Copy(buff)
+	blob.Copy(buff)
 	outBytes := buff.Bytes()
 	readDuration := time.Since(t1)
 	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)

@@ -25,6 +25,8 @@ import (
 	"github.com/attic-labs/noms/go/nomdl"
 	"github.com/attic-labs/noms/go/types"
 
+	"io"
+
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
@@ -449,18 +451,14 @@ func (nfile nomsFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	ref := file.(types.Struct).Get("data").(types.Ref)
 	blob := ref.TargetValue(nfile.fs.db).(types.Blob)
 
-	br := blob.Reader()
+	n, err := blob.ReadAt(dest, off)
+	if err == nil || err == io.EOF && uint64(off)+uint64(n) == blob.Len() {
+		// Blob.ReadAt returns IOF if the end of the buffer is reached with this read
+		return fuse.ReadResultData(dest[:n]), fuse.OK
 
-	_, err := br.Seek(off, 0)
-	if err != nil {
-		return nil, fuse.EIO
-	}
-	n, err := br.Read(dest)
-	if err != nil {
-		return fuse.ReadResultData(dest[:n]), fuse.EIO
 	}
 
-	return fuse.ReadResultData(dest[:n]), fuse.OK
+	return fuse.ReadResultData(dest[:n]), fuse.EIO
 }
 
 func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
@@ -862,9 +860,8 @@ func (fs *nomsFS) GetXAttr(path string, attribute string, context *fuse.Context)
 	}
 
 	blob := v.(types.Blob)
-
 	data := make([]byte, blob.Len())
-	blob.Reader().Read(data)
+	blob.ReadAt(data, 0)
 
 	return data, fuse.OK
 }

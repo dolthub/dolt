@@ -55,7 +55,7 @@ func main() {
 
 	filePath := flag.Arg(1)
 	if filePath == "" {
-		blob.Reader().Copy(os.Stdout)
+		blob.Copy(os.Stdout)
 		return
 	}
 
@@ -71,7 +71,7 @@ func main() {
 	preader, pwriter := io.Pipe()
 
 	go func() {
-		blob.Reader().Copy(pwriter)
+		blob.Copy(pwriter)
 		pwriter.Close()
 	}()
 
