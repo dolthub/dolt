@@ -29,6 +29,7 @@ const (
 
 	defaultIndexCacheSize    = (1 << 20) * 8 // 8MB
 	defaultManifestCacheSize = 1 << 23       // 8MB
+	preflushChunkCount       = 8
 )
 
 var (
@@ -372,6 +373,22 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 		nbs.Rebase()
 		return true
 	}
+
+	func() {
+		// This is unfortunate. We want to serialize commits to the same store
+		// so that we avoid writing a bunch of unreachable small tables which result
+		// from optismistic lock failures. However, this means that the time to
+		// write tables is included in "commit" time and if all commits are
+		// serialized, it means alot more waiting. Allow "non-trivial" tables to be
+		// persisted outside of the commit-lock.
+		nbs.mu.Lock()
+		defer nbs.mu.Unlock()
+
+		if nbs.mt != nil && nbs.mt.count() > preflushChunkCount {
+			nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
+			nbs.mt = nil
+		}
+	}()
 
 	nbs.mm.LockForUpdate()
 	defer nbs.mm.UnlockForUpdate()
