@@ -293,10 +293,14 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 	}
 
+	makeManifestManager := func(m manifest) manifestManager {
+		return manifestManager{m, newManifestCache(0), newManifestLocks()}
+	}
+
 	newChunk := chunks.NewChunk([]byte("gnu"))
 
 	t.Run("NoConjoin", func(t *testing.T) {
-		mm := cachingManifest{&fakeManifest{}, newManifestCache(0)}
+		mm := makeManifestManager(&fakeManifest{})
 		p := newFakeTablePersister()
 		c := &fakeConjoiner{}
 
@@ -329,7 +333,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore := newNomsBlockStore(cachingManifest{fm, newManifestCache(0)}, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(makeManifestManager(fm), p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
@@ -352,7 +356,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore := newNomsBlockStore(cachingManifest{fm, newManifestCache(0)}, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(makeManifestManager(fm), p, c, testMemTableSize)
 
 		root := smallTableStore.Root()
 		smallTableStore.Put(newChunk)
@@ -378,20 +382,20 @@ func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
 	return fc.canned[0].should
 }
 
-func (fc *fakeConjoiner) Conjoin(mm manifest, p tablePersister, novelCount int, stats *Stats) {
+func (fc *fakeConjoiner) Conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
 	d.PanicIfTrue(len(fc.canned) == 0)
 	canned := fc.canned[0]
 	fc.canned = fc.canned[1:]
 
-	_, contents := mm.ParseIfExists(stats, nil)
 	newContents := manifestContents{
 		vers:  constants.NomsVersion,
-		root:  contents.root,
+		root:  upstream.root,
 		specs: canned.specs,
-		lock:  generateLockHash(contents.root, canned.specs),
+		lock:  generateLockHash(upstream.root, canned.specs),
 	}
-	contents = mm.Update(contents.lock, newContents, stats, nil)
-	d.PanicIfFalse(contents.lock == newContents.lock)
+	upstream = mm.Update(upstream.lock, newContents, stats, nil)
+	d.PanicIfFalse(upstream.lock == newContents.lock)
+	return upstream
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

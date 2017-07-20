@@ -87,7 +87,7 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(60), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
-	store.c = newAsyncConjoiner(2)
+	store.c = inlineConjoiner{2}
 	store.Put(c4)
 	store.Commit(store.Root(), store.Root())
 	store.Put(c5)

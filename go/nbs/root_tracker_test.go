@@ -104,13 +104,13 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := cachingManifest{fm, newManifestCache(0)}
+	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p := newFakeTablePersister()
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
-	store := newNomsBlockStore(mm, p, newAsyncConjoiner(defaultMaxTables), defaultMemTableSize)
+	store := newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root())
@@ -135,9 +135,9 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
-	mm := cachingManifest{fm, newManifestCache(defaultManifestCacheSize)}
+	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
 	p := newFakeTablePersister()
-	c := newAsyncConjoiner(defaultMaxTables)
+	c := inlineConjoiner{defaultMaxTables}
 
 	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
 	defer store.Close()
@@ -163,11 +163,87 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
+func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
+	assert := assert.New(t)
+	fm := &fakeManifest{name: "foo"}
+	upm := &updatePreemptManifest{manifest: fm}
+	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
+	p := newFakeTablePersister()
+	c := inlineConjoiner{defaultMaxTables}
+
+	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	defer store.Close()
+
+	// store.Commit() should lock out calls to mm.Fetch()
+	wg := sync.WaitGroup{}
+	fetched := manifestContents{}
+	upm.preUpdate = func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, fetched = mm.Fetch(nil)
+		}()
+	}
+
+	rootChunk := chunks.NewChunk([]byte("new root"))
+	store.Put(rootChunk)
+	assert.True(store.Commit(rootChunk.Hash(), store.Root()))
+
+	wg.Wait()
+	assert.Equal(store.Root(), fetched.root)
+}
+
+func TestChunkStoreSerializeCommits(t *testing.T) {
+	assert := assert.New(t)
+	fm := &fakeManifest{name: "foo"}
+	upm := &updatePreemptManifest{manifest: fm}
+	mc := newManifestCache(defaultManifestCacheSize)
+	l := newManifestLocks()
+	p := newFakeTablePersister()
+	c := inlineConjoiner{defaultMaxTables}
+
+	store := newNomsBlockStore(manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	defer store.Close()
+
+	storeChunk := chunks.NewChunk([]byte("store"))
+	interloperChunk := chunks.NewChunk([]byte("interloper"))
+	updateCount := 0
+
+	interloper := newNomsBlockStore(
+		manifestManager{
+			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
+		},
+		p,
+		c,
+		defaultMemTableSize)
+	defer interloper.Close()
+
+	wg := sync.WaitGroup{}
+	upm.preUpdate = func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			interloper.Put(interloperChunk)
+			assert.True(interloper.Commit(interloper.Root(), interloper.Root()))
+		}()
+
+		updateCount++
+	}
+
+	store.Put(storeChunk)
+	assert.True(store.Commit(store.Root(), store.Root()))
+
+	wg.Wait()
+	assert.Equal(2, updateCount)
+	assert.True(interloper.Has(storeChunk.Hash()))
+	assert.True(interloper.Has(interloperChunk.Hash()))
+}
+
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
 	fm = &fakeManifest{}
-	mm := cachingManifest{fm, newManifestCache(0)}
+	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
-	store = newNomsBlockStore(mm, p, newAsyncConjoiner(defaultMaxTables), 0)
+	store = newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, 0)
 	return
 }
 

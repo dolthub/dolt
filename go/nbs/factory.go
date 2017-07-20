@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
-	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -30,6 +28,7 @@ type AWSStoreFactory struct {
 	table     string
 	conjoiner conjoiner
 
+	manifestLocks *manifestLocks
 	manifestCache *manifestCache
 }
 
@@ -59,22 +58,21 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 			tc,
 		},
 		table:         table,
-		conjoiner:     newAsyncConjoiner(awsMaxTables),
+		conjoiner:     inlineConjoiner{awsMaxTables},
+		manifestLocks: newManifestLocks(),
 		manifestCache: newManifestCache(defaultManifestCacheSize),
 	}
 }
 
 func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
-	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache}
+	mm := manifestManager{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache, asf.manifestLocks}
 	return newNomsBlockStore(mm, asf.persister, asf.conjoiner, defaultMemTableSize)
 }
 
 func (asf *AWSStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
-	mm := cachingManifest{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache}
+	mm := manifestManager{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache, asf.manifestLocks}
 
-	contents, _, present := func() (manifestContents, time.Time, bool) {
-		return asf.manifestCache.Get(mm.Name())
-	}()
+	contents, _, present := asf.manifestCache.Get(mm.Name())
 	if present {
 		return newNomsBlockStoreWithContents(mm, contents, asf.persister, asf.conjoiner, defaultMemTableSize)
 	}
@@ -90,8 +88,8 @@ type LocalStoreFactory struct {
 	indexCache *indexCache
 	conjoiner  conjoiner
 
-	manifestCacheMu sync.Mutex
-	manifestCache   *manifestCache
+	manifestLocks *manifestLocks
+	manifestCache *manifestCache
 }
 
 func checkDir(dir string) error {
@@ -117,8 +115,9 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxOpenFiles int) c
 		dir:           dir,
 		fc:            newFDCache(maxOpenFiles),
 		indexCache:    indexCache,
+		conjoiner:     inlineConjoiner{defaultMaxTables},
+		manifestLocks: newManifestLocks(),
 		manifestCache: newManifestCache(defaultManifestCacheSize),
-		conjoiner:     newAsyncConjoiner(defaultMaxTables),
 	}
 }
 
@@ -126,20 +125,16 @@ func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	d.PanicIfError(os.MkdirAll(path, 0777))
 
-	mm := cachingManifest{fileManifest{path}, lsf.manifestCache}
+	mm := manifestManager{fileManifest{path}, lsf.manifestCache, lsf.manifestLocks}
 	p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
 	return newNomsBlockStore(mm, p, lsf.conjoiner, defaultMemTableSize)
 }
 
 func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
-	mm := cachingManifest{fileManifest{path}, lsf.manifestCache}
+	mm := manifestManager{fileManifest{path}, lsf.manifestCache, lsf.manifestLocks}
 
-	contents, _, present := func() (manifestContents, time.Time, bool) {
-		lsf.manifestCacheMu.Lock()
-		defer lsf.manifestCacheMu.Unlock()
-		return lsf.manifestCache.Get(mm.Name())
-	}()
+	contents, _, present := lsf.manifestCache.Get(mm.Name())
 	if present {
 		_, err := os.Stat(path)
 		d.PanicIfTrue(os.IsNotExist(err))

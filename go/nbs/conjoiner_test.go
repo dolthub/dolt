@@ -8,57 +8,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"sort"
-	"sync"
 	"testing"
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/testify/assert"
 )
-
-func TestAsyncConjoinerAwait(t *testing.T) {
-	runTest := func(t *testing.T, names ...string) {
-		c := newAsyncConjoiner(defaultMaxTables)
-
-		// mu protects |conjoins|
-		mu := sync.Mutex{}
-		conjoins := map[string]int{}
-
-		// |trigger| ensures the goroutines will all await() concurrently
-		trigger := &sync.WaitGroup{}
-		trigger.Add(len(names))
-
-		// |wg| allows the test to wait for all the goroutines started below
-		wg := sync.WaitGroup{}
-		for _, n := range names {
-			wg.Add(1)
-			go func(db string) {
-				defer wg.Done()
-				c.await(db, func() {
-					trigger.Wait()
-					mu.Lock()
-					defer mu.Unlock()
-					cnt := conjoins[db]
-					cnt++
-					conjoins[db] = cnt
-				}, trigger)
-			}(n)
-		}
-		wg.Wait()
-
-		for _, n := range names {
-			assert.EqualValues(t, 1, conjoins[n], "Wrong num conjoins for %s", n)
-		}
-	}
-
-	t.Run("AllDifferent", func(t *testing.T) {
-		runTest(t, "foo", "bar", "baz")
-	})
-
-	t.Run("Concurrent", func(t *testing.T) {
-		runTest(t, "foo", "foo", "bar", "foo", "baz")
-	})
-}
 
 type tableSpecsByAscendingCount []tableSpec
 
@@ -128,11 +83,11 @@ func TestConjoin(t *testing.T) {
 		}
 	}
 
-	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream []tableSpec) {
+	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = newFakeTablePersister()
-		upstream = makeTestTableSpecs(sizes, p)
 		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, upstream)
+		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p))
+		_, upstream = fm.ParseIfExists(nil, nil)
 		return
 	}
 
@@ -150,7 +105,6 @@ func TestConjoin(t *testing.T) {
 	}
 
 	stats := &Stats{}
-	alwaysConjoin := func(int) bool { return true }
 	startLock, startRoot := computeAddr([]byte("lock")), hash.Of([]byte("root"))
 	t.Run("Success", func(t *testing.T) {
 		// Compact some tables, no one interrupts
@@ -158,11 +112,11 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				conjoin(fm, p, alwaysConjoin, stats)
+				conjoin(upstream, fm, p, stats)
 				exists, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
-				assertContainAll(t, p, upstream, newUpstream.specs)
+				assertContainAll(t, p, upstream.specs, newUpstream.specs)
 			})
 		}
 	})
@@ -182,13 +136,14 @@ func TestConjoin(t *testing.T) {
 
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(upstream, newTable))
+					specs := append([]tableSpec{}, upstream.specs...)
+					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
-				conjoin(u, p, alwaysConjoin, stats)
+				conjoin(upstream, u, p, stats)
 				exists, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
-				assertContainAll(t, p, append(upstream, newTable), newUpstream.specs)
+				assertContainAll(t, p, append(upstream.specs, newTable), newUpstream.specs)
 			})
 		}
 	})
@@ -200,28 +155,12 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream[1:])
+					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
-				conjoin(u, p, alwaysConjoin, stats)
+				conjoin(upstream, u, p, stats)
 				exists, newUpstream := fm.ParseIfExists(stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream.specs))
-			})
-		}
-	})
-
-	neverConjoin := func(int) bool { return false }
-	t.Run("ExitEarly", func(t *testing.T) {
-		// conjoin called with out-of-date manifest; no longer needs a conjoin
-		for _, c := range tc {
-			t.Run(c.name, func(t *testing.T) {
-				fm, p, upstream := setup(startLock, startRoot, c.precompact)
-
-				conjoin(fm, p, neverConjoin, stats)
-				exists, newUpstream := fm.ParseIfExists(stats, nil)
-				assert.True(t, exists)
-				assert.Equal(t, c.precompact, getSortedSizes(newUpstream.specs))
-				assertContainAll(t, p, upstream, newUpstream.specs)
 			})
 		}
 	})

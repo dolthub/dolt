@@ -17,8 +17,7 @@ func newManifestCache(maxSize uint64) *manifestCache {
 	return &manifestCache{
 		maxSize: maxSize,
 		cache:   map[string]manifestCacheEntry{},
-		locked:  map[string]struct{}{},
-		cond:    sync.NewCond(&sync.Mutex{}),
+		mu:      &sync.Mutex{},
 	}
 }
 
@@ -31,49 +30,22 @@ type manifestCacheEntry struct {
 type manifestCache struct {
 	totalSize uint64
 	maxSize   uint64
+	mu        *sync.Mutex
 	lru       list.List
 	cache     map[string]manifestCacheEntry
-	locked    map[string]struct{}
-	cond      *sync.Cond
 }
 
 // Get() checks the searches the cache for an entry. If it exists, it moves it's
 // lru entry to the back of the queue and returns (value, true). Otherwise, it
 // returns (nil, false).
 func (mc *manifestCache) Get(db string) (contents manifestContents, t time.Time, present bool) {
-	mc.cond.L.Lock()
-	defer mc.cond.L.Unlock()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
 
 	if entry, ok := mc.entry(db); ok {
 		contents, t, present = entry.contents, entry.t, true
 	}
 	return
-}
-
-func (mc *manifestCache) Lock(db string) {
-	mc.cond.L.Lock()
-	defer mc.cond.L.Unlock()
-
-	for {
-		_, ok := mc.locked[db]
-		if ok {
-			mc.cond.Wait()
-		} else {
-			mc.locked[db] = struct{}{}
-			break
-		}
-	}
-}
-
-func (mc *manifestCache) Unlock(db string) {
-	mc.cond.L.Lock()
-	defer mc.cond.L.Unlock()
-
-	_, ok := mc.locked[db]
-	d.PanicIfFalse(ok)
-	delete(mc.locked, db)
-
-	mc.cond.Broadcast()
 }
 
 // entry() checks if the value is in the cache. If not in the cache, it returns an
@@ -96,8 +68,8 @@ func (mc *manifestCache) entry(key string) (manifestCacheEntry, bool) {
 // keep the total cache size below maxSize. |t| must be *prior* to initiating
 // the call which read/wrote |contents|.
 func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) {
-	mc.cond.L.Lock()
-	defer mc.cond.L.Unlock()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
 
 	if entry, ok := mc.entry(db); ok {
 		mc.totalSize -= entry.contents.size()
