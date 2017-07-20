@@ -443,20 +443,17 @@ func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 		hcs.unwrittenPuts = nbs.NewCache()
 	}
 
-	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated.
+	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated. Regardless, the server returns its current root for this store
 	res := hcs.requestRoot("POST", current, last)
 	expectVersion(hcs.version, res)
 	defer closeResponse(res.Body)
 
+	var success bool
 	switch res.StatusCode {
 	case http.StatusOK:
-		hcs.root = current
-		return true
+		success = true
 	case http.StatusConflict:
-		data, err := ioutil.ReadAll(res.Body)
-		d.PanicIfError(err)
-		hcs.root = hash.Parse(string(data))
-		return false
+		success = false
 	default:
 		buf := bytes.Buffer{}
 		buf.ReadFrom(res.Body)
@@ -467,6 +464,10 @@ func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 				body))
 		return false
 	}
+	data, err := ioutil.ReadAll(res.Body)
+	d.PanicIfError(err)
+	hcs.root = hash.Parse(string(data))
+	return success
 }
 
 func (hcs *httpChunkStore) requestRoot(method string, current, last hash.Hash) *http.Response {

@@ -337,11 +337,16 @@ func TestHandlePostRoot(t *testing.T) {
 	cs := storage.NewView()
 	vs := types.NewValueStore(cs)
 
+	validate := func(code int, root hash.Hash, w *httptest.ResponseRecorder) {
+		assert.Equal(code, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+		assert.Equal(root, hash.Parse(string(w.Body.Bytes())))
+	}
+
 	// Empty -> Empty should be OK.
 	url := buildPostRootURL(hash.Hash{}, hash.Hash{})
 	w := httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
-	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+	validate(http.StatusOK, hash.Hash{}, w)
 
 	commit := buildTestCommit(types.String("head"))
 	commitRef := vs.WriteValue(commit)
@@ -358,13 +363,13 @@ func TestHandlePostRoot(t *testing.T) {
 	url = buildPostRootURL(newHeadRef.TargetHash(), firstHeadRef.TargetHash())
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
-	assert.Equal(http.StatusConflict, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+	validate(http.StatusConflict, hash.Hash{}, w)
 
 	// Now, update the root manually to 'last' and try again.
 	assert.True(cs.Commit(firstHeadRef.TargetHash(), hash.Hash{}))
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
-	assert.Equal(http.StatusOK, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
+	validate(http.StatusOK, newHeadRef.TargetHash(), w)
 }
 
 func buildPostRootURL(current, last hash.Hash) string {
