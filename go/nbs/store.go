@@ -414,9 +414,6 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 		return errLastRootMismatch
 	}
 
-	nbs.mm.LockOutFetch()
-	defer nbs.mm.AllowFetch()
-
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
 		nbs.upstream = upstream
 		nbs.tables = nbs.tables.Rebase(upstream.specs)

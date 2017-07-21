@@ -126,11 +126,11 @@ type manifestManager struct {
 	locks *manifestLocks
 }
 
-func (mm manifestManager) LockOutFetch() {
+func (mm manifestManager) lockOutFetch() {
 	mm.locks.lockForFetch(mm.Name())
 }
 
-func (mm manifestManager) AllowFetch() {
+func (mm manifestManager) allowFetch() {
 	mm.locks.unlockForFetch(mm.Name())
 }
 
@@ -154,8 +154,8 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 func (mm manifestManager) Fetch(stats *Stats) (exists bool, contents manifestContents) {
 	entryTime := time.Now()
 
-	mm.LockOutFetch()
-	defer mm.AllowFetch()
+	mm.lockOutFetch()
+	defer mm.allowFetch()
 
 	cached, t, hit := mm.cache.Get(mm.Name())
 
@@ -180,6 +180,10 @@ func (mm manifestManager) Update(lastLock addr, newContents manifestContents, st
 		}
 	}
 	t := time.Now()
+
+	mm.lockOutFetch()
+	defer mm.allowFetch()
+
 	contents := mm.m.Update(lastLock, newContents, stats, writeHook)
 	mm.cache.Put(mm.Name(), contents, t)
 	return contents
