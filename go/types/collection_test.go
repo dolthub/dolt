@@ -66,17 +66,7 @@ func (suite *collectionTestSuite) TestAppendChunkDiff() {
 }
 
 func deriveCollectionHeight(c Collection) uint64 {
-	// Note: not using mt.ref.Height() because the purpose of this method is to be redundant.
-	seq := c.sequence()
-	if seq.seqLen() == 0 {
-		return 0
-	}
-	item := seq.getItem(0)
-	if mt, ok := item.(metaTuple); ok {
-		return 1 + deriveCollectionHeight(mt.child)
-	}
-
-	return 0
+	return c.sequence().treeLevel()
 }
 
 func getRefHeightOfCollection(c Collection) uint64 {
