@@ -294,7 +294,7 @@ func (fs *nomsFS) Truncate(path string, size uint64, context *fuse.Context) fuse
 	ref := file.Get("data").(types.Ref)
 	blob := ref.TargetValue(fs.db).(types.Blob)
 
-	blob = blob.Splice(size, blob.Len()-size, nil)
+	blob = blob.Edit().Splice(size, blob.Len()-size, nil).Blob(nil)
 	ref = fs.db.WriteValue(blob)
 	file = file.Set("data", ref)
 
@@ -481,7 +481,7 @@ func (nfile nomsFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 		del = ll - oo
 	}
 
-	blob = blob.Splice(uint64(off), del, data)
+	blob = blob.Edit().Splice(uint64(off), del, data).Blob(nil)
 	ref = nfile.fs.db.WriteValue(blob)
 	file = file.Set("data", ref)
 

@@ -210,22 +210,22 @@ func TestBlobSplice(t *testing.T) {
 	blob := NewEmptyBlob()
 	buf := new(bytes.Buffer)
 
-	blob = blob.Splice(0, 0, []byte("I'll do anything"))
+	blob = blob.Edit().Splice(0, 0, []byte("I'll do anything")).Blob(nil)
 	buf.Reset()
 	buf.ReadFrom(blob.Reader())
 	assert.Equal(buf.String(), "I'll do anything")
 
-	blob = blob.Splice(16, 0, []byte(" for arv"))
+	blob = blob.Edit().Splice(16, 0, []byte(" for arv")).Blob(nil)
 	buf.Reset()
 	buf.ReadFrom(blob.Reader())
 	assert.Equal(buf.String(), "I'll do anything for arv")
 
-	blob = blob.Splice(0, 0, []byte("Yes, "))
+	blob = blob.Edit().Splice(0, 0, []byte("Yes, ")).Blob(nil)
 	buf.Reset()
 	buf.ReadFrom(blob.Reader())
 	assert.Equal(buf.String(), "Yes, I'll do anything for arv")
 
-	blob = blob.Splice(5, 20, []byte("it's hard to satisfy"))
+	blob = blob.Edit().Splice(5, 20, []byte("it's hard to satisfy")).Blob(nil)
 	buf.Reset()
 	buf.ReadFrom(blob.Reader())
 	assert.Equal(buf.String(), "Yes, it's hard to satisfy arv")

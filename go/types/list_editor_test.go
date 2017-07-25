@@ -175,7 +175,7 @@ func AsValuables(vs []Value) []Valuable {
 	return res
 }
 
-func TestSpliceFuzzer(t *testing.T) {
+func TestListSpliceFuzzer(t *testing.T) {
 	startCount := 1000
 	rounds := 1000
 	splices := 100

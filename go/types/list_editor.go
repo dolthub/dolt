@@ -5,7 +5,6 @@
 package types
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -117,7 +116,7 @@ func (le *ListEditor) List(vrw ValueReadWriter) List {
 	return newList(ch.Done())
 }
 
-func collapse(newEdit, edit *listEdit) bool {
+func collapseListEdit(newEdit, edit *listEdit) bool {
 	if newEdit.idx+newEdit.removed < edit.idx ||
 		edit.idx+uint64(len(edit.inserted)) < newEdit.idx {
 		return false
@@ -179,13 +178,6 @@ func (le *ListEditor) Len() uint64 {
 	return uint64(int64(le.l.Len()) + delta)
 }
 
-func (le *ListEditor) dump() {
-	fmt.Println("ListEditor", le.Len())
-	for edit := le.edits; edit != nil; edit = edit.next {
-		fmt.Println("Edit", edit.idx, edit.removed, edit.inserted)
-	}
-}
-
 func (le *ListEditor) Splice(idx uint64, deleteCount uint64, vs ...Valuable) *ListEditor {
 	for _, sv := range vs {
 		d.PanicIfTrue(sv == nil)
@@ -197,7 +189,7 @@ func (le *ListEditor) Splice(idx uint64, deleteCount uint64, vs ...Valuable) *Li
 	edit := le.edits
 
 	for edit != nil {
-		if collapse(ne, edit) {
+		if collapseListEdit(ne, edit) {
 			if last == nil {
 				le.edits = edit.next
 			} else {
