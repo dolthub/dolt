@@ -86,7 +86,6 @@ func conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, st
 			}
 		}
 	}
-	panic("Not Reached")
 }
 
 func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {

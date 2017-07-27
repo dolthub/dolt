@@ -44,6 +44,7 @@ type s3svc interface {
 }
 
 func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}, tc tableCache) chunkSource {
+	d.PanicIfTrue(bucket == "")
 	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl, tc: tc}
 
 	var index tableIndex

@@ -11,6 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -19,6 +20,8 @@ import (
 const (
 	defaultAWSReadLimit = 1024
 	awsMaxTables        = 128
+
+	defaultSmallTableCacheSize = 1 << 26 // 64MB
 )
 
 // AWSStoreFactory vends NomsBlockStores built on top of DynamoDB and S3.
@@ -45,17 +48,19 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 		tc = newFSTableCache(tableCacheDir, tableCacheSize, maxOpenFiles)
 	}
 
+	ddb := dynamodb.New(sess)
 	return &AWSStoreFactory{
-		ddb: dynamodb.New(sess),
-		persister: &s3TablePersister{
+		ddb: ddb,
+		persister: &awsTablePersister{
 			s3.New(sess),
 			bucket,
-			defaultS3PartSize,
-			minS3PartSize,
-			maxS3PartSize,
+			ddb,
+			table,
+			awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 			indexCache,
 			make(chan struct{}, defaultAWSReadLimit),
 			tc,
+			sizecache.New(defaultSmallTableCacheSize),
 		},
 		table:         table,
 		conjoiner:     inlineConjoiner{awsMaxTables},

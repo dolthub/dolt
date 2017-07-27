@@ -66,14 +66,15 @@ type NomsBlockStore struct {
 
 func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
 	cacheOnce.Do(makeGlobalCaches)
-	p := &s3TablePersister{
+	p := &awsTablePersister{
 		s3,
 		bucket,
-		defaultS3PartSize,
-		minS3PartSize,
-		maxS3PartSize,
+		ddb,
+		table,
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		make(chan struct{}, 32),
+		nil,
 		nil,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
