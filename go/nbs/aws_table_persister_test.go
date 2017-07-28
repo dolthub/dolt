@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -124,6 +125,28 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			if assert.True(src.count() > 0) {
 				if r := ddb.readerForTable(src.hash()); assert.NotNil(r) {
 					assertChunksInReader(testChunks, r, assert)
+				}
+			}
+		})
+
+		t.Run("CacheOnOpen", func(t *testing.T) {
+			assert := assert.New(t)
+
+			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
+			tc := sizecache.New(maxDynamoItemSize)
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits, dynamoTC: tc}
+
+			tableData, name := buildTable(testChunks)
+			ddb.putData(fmtTableName(name), tableData)
+
+			src := s3p.Open(name, uint32(len(testChunks)))
+			if assert.True(src.count() > 0) {
+				if r := ddb.readerForTable(src.hash()); assert.NotNil(r) {
+					assertChunksInReader(testChunks, r, assert)
+				}
+				if data, present := dynamoTableCacheMaybeGet(tc, name); assert.True(present) {
+					assert.Equal(tableData, data)
 				}
 			}
 		})

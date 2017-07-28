@@ -66,6 +66,7 @@ func (s3p awsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
 		}
 		data, err := tryDynamoTableRead(s3p.ddb, s3p.table, name)
 		if data != nil {
+			dynamoTableCacheMaybeAdd(s3p.dynamoTC, name, data) // TODO: stop doing this as part of BUG 3607
 			return newDynamoTableReader(s3p.ddb, s3p.table, name, chunkCount, data, s3p.indexCache, s3p.dynamoTC)
 		}
 		d.PanicIfTrue(err == nil) // There MUST be either data or an error

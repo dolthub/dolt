@@ -21,7 +21,7 @@ const (
 	defaultAWSReadLimit = 1024
 	awsMaxTables        = 128
 
-	defaultSmallTableCacheSize = 1 << 28 // 256MB
+	defaultSmallTableCacheSize = 1 << 30 // 1GB
 )
 
 // AWSStoreFactory vends NomsBlockStores built on top of DynamoDB and S3.
