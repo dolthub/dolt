@@ -10,6 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/attic-labs/testify/assert"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func TestDynamoTableReader(t *testing.T) {
@@ -23,6 +24,28 @@ func TestDynamoTableReader(t *testing.T) {
 
 	tableData, h := buildTable(chunks)
 	ddb.putData(fmtTableName(h), tableData)
+
+	t.Run("DynamoGet", func(t *testing.T) {
+		test := func(ddb ddbsvc) {
+			assert := assert.New(t)
+			data, err := tryDynamoTableRead(ddb, "table", h)
+			assert.NoError(err)
+			assert.Equal(tableData, data)
+
+			data, err = tryDynamoTableRead(ddb, "table", computeAddr([]byte{}))
+			assert.Error(err)
+			assert.IsType(tableNotInDynamoErr{}, err)
+			assert.Nil(data)
+		}
+
+		t.Run("EventuallyConsistentSuccess", func(t *testing.T) {
+			test(ddb)
+		})
+
+		t.Run("EventuallyConsistentFailure", func(t *testing.T) {
+			test(&eventuallyConsistentDDB{ddb})
+		})
+	})
 
 	t.Run("NoIndexCache", func(t *testing.T) {
 		trc := newDynamoTableReader(ddb, "table", h, uint32(len(chunks)), tableData, nil, nil)
@@ -66,4 +89,15 @@ func TestDynamoTableReader(t *testing.T) {
 		assert.NoError(err)
 		assert.Zero(ddb.numGets - baseline)
 	})
+}
+
+type eventuallyConsistentDDB struct {
+	ddbsvc
+}
+
+func (ec *eventuallyConsistentDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+	if input.ConsistentRead != nil && *(input.ConsistentRead) {
+		return ec.ddbsvc.GetItem(input)
+	}
+	return &dynamodb.GetItemOutput{}, nil
 }

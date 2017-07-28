@@ -7,6 +7,7 @@ package nbs
 import (
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
@@ -115,21 +116,31 @@ func dynamoTableCacheMaybeAdd(tc *sizecache.SizeCache, name addr, data []byte) {
 }
 
 func tryDynamoTableRead(ddb ddbsvc, table string, name addr) (data []byte, err error) {
-	result, rerr := ddb.GetItem(&dynamodb.GetItemInput{
-		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
-		TableName:      aws.String(table),
+	try := func(input *dynamodb.GetItemInput) (data []byte, err error) {
+		result, rerr := ddb.GetItem(input)
+		if rerr != nil {
+			return nil, rerr
+		} else if len(result.Item) == 0 {
+			return nil, tableNotInDynamoErr{name.String(), table}
+		} else if result.Item[dataAttr] == nil || result.Item[dataAttr].B == nil {
+			return nil, fmt.Errorf("NBS table %s in DynamoDB table %s is malformed", name, table)
+		}
+		return result.Item[dataAttr].B, nil
+	}
+
+	input := dynamodb.GetItemInput{
+		TableName: aws.String(table),
 		Key: map[string]*dynamodb.AttributeValue{
 			dbAttr: {S: aws.String(fmtTableName(name))},
 		},
-	})
-	if rerr != nil {
-		return nil, rerr
-	} else if len(result.Item) == 0 {
-		return nil, tableNotInDynamoErr{name.String(), table}
-	} else if result.Item[dataAttr] == nil || result.Item[dataAttr].B == nil {
-		return nil, fmt.Errorf("NBS table %s in DynamoDB table %s is malformed", name, table)
 	}
-	return result.Item[dataAttr].B, nil
+	data, err = try(&input)
+	if _, isNotFound := err.(tableNotInDynamoErr); isNotFound {
+		log.Printf("Eventually consistent read for %s failed; trying fully-consistent", name)
+		input.ConsistentRead = aws.Bool(true)
+		return try(&input)
+	}
+	return data, err
 }
 
 func fmtTableName(name addr) string {
