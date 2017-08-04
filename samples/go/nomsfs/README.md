@@ -10,7 +10,7 @@ Nomsfs builds on the [Go FUSE imlementation](https://github.com/hanwen/go-fuse) 
 
 ## Usage
 
-Make sure FUSE is installed. On Mac OS X remember to run `/Library/Filesystems/osxfusefs.fs/Support/load_osxfusefs`.
+Make sure FUSE is installed. On Mac OS X remember to run `/Library/Filesystems/osxfuse.fs/Contents/Resources/load_osxfuse`.
 
 
 Build with `go build` (or just run with `go run nomsfs.go`); test with `go test`.
@@ -118,9 +118,8 @@ Mounting a dataset in multiple locations is not supported, but may be added in t
 ## Troubleshooting
 
 `Mount failed: no FUSE devices found`
-Make sure FUSE is installed. If you're on Mac OS X make sure the kernel module is loaded by executing `/Library/Filesystems/osxfusefs.fs/Support/load_osxfusefs`.
+Make sure FUSE is installed. If you're on Mac OS X make sure the kernel module is loaded by executing `/Library/Filesystems/osxfuse.fs/Contents/Resources/load_osxfuse`.
 
 ## Contributing
 
 Issues welcome; testing welcome; code welcome. Feel free to pitch in!
-
