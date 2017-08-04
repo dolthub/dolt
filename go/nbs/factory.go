@@ -21,7 +21,7 @@ const (
 	defaultAWSReadLimit = 1024
 	awsMaxTables        = 128
 
-	defaultSmallTableCacheSize = 1 << 30 // 1GB
+	defaultSmallTableCacheSize = 1 << 28 // 256MB
 )
 
 // AWSStoreFactory vends NomsBlockStores built on top of DynamoDB and S3.
@@ -49,18 +49,17 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 	}
 
 	ddb := dynamodb.New(sess)
+	readRateLimiter := make(chan struct{}, defaultAWSReadLimit)
 	return &AWSStoreFactory{
 		ddb: ddb,
 		persister: &awsTablePersister{
 			s3.New(sess),
 			bucket,
-			ddb,
-			table,
+			readRateLimiter,
+			tc,
+			&ddbTableStore{ddb, table, readRateLimiter, sizecache.New(defaultSmallTableCacheSize)},
 			awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 			indexCache,
-			make(chan struct{}, defaultAWSReadLimit),
-			tc,
-			sizecache.New(defaultSmallTableCacheSize),
 		},
 		table:         table,
 		conjoiner:     inlineConjoiner{awsMaxTables},

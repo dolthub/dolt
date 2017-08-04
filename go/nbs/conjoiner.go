@@ -95,7 +95,7 @@ func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoi
 	for i, spec := range upstream {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			sources[idx] = p.Open(spec.name, spec.chunkCount)
+			sources[idx] = p.Open(spec.name, spec.chunkCount, stats)
 			wg.Done()
 		}(i, spec)
 		i++

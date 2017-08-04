@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/util/sizecache"
 	"github.com/attic-labs/noms/go/util/verbose"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -33,13 +32,11 @@ const (
 type awsTablePersister struct {
 	s3         s3svc
 	bucket     string
-	ddb        ddbsvc
-	table      string
-	limits     awsLimits
-	indexCache *indexCache
 	readRl     chan struct{}
 	tc         tableCache
-	dynamoTC   *sizecache.SizeCache // TODO: merge this and above as part of BUG 3601
+	ddb        *ddbTableStore
+	limits     awsLimits
+	indexCache *indexCache
 }
 
 type awsLimits struct {
@@ -48,32 +45,27 @@ type awsLimits struct {
 	chunkMax                     uint32
 }
 
-func (al awsLimits) tableFitsInDynamo(name addr, data []byte, chunkCount uint32) bool {
-	calcItemSize := func(n addr, d []byte) int {
-		return len(dbAttr) + len(tablePrefix) + len(n.String()) + len(dataAttr) + len(d)
+func (al awsLimits) tableFitsInDynamo(name addr, dataLen int, chunkCount uint32) bool {
+	calcItemSize := func(n addr, dataLen int) int {
+		return len(dbAttr) + len(tablePrefix) + len(n.String()) + len(dataAttr) + dataLen
 	}
-	return chunkCount <= al.chunkMax && calcItemSize(name, data) < al.itemMax
+	return chunkCount <= al.chunkMax && calcItemSize(name, dataLen) < al.itemMax
 }
 
 func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
 	return chunkCount <= al.chunkMax
 }
 
-func (s3p awsTablePersister) Open(name addr, chunkCount uint32) chunkSource {
-	if s3p.limits.tableMayBeInDynamo(chunkCount) {
-		if data, present := dynamoTableCacheMaybeGet(s3p.dynamoTC, name); present {
-			return newDynamoTableReader(s3p.ddb, s3p.table, name, chunkCount, data, s3p.indexCache, s3p.dynamoTC)
-		}
-		data, err := tryDynamoTableRead(s3p.ddb, s3p.table, name)
-		if data != nil {
-			dynamoTableCacheMaybeAdd(s3p.dynamoTC, name, data) // TODO: stop doing this as part of BUG 3607
-			return newDynamoTableReader(s3p.ddb, s3p.table, name, chunkCount, data, s3p.indexCache, s3p.dynamoTC)
-		}
-		d.PanicIfTrue(err == nil) // There MUST be either data or an error
-		d.PanicIfNotType(err, tableNotInDynamoErr{})
-	}
-
-	return newS3TableReader(s3p.s3, s3p.bucket, name, chunkCount, s3p.indexCache, s3p.readRl, s3p.tc)
+func (s3p awsTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
+	return newAWSChunkSource(
+		s3p.ddb,
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc},
+		s3p.limits,
+		name,
+		chunkCount,
+		s3p.indexCache,
+		stats,
+	)
 }
 
 type s3UploadedPart struct {
@@ -86,29 +78,27 @@ func (s3p awsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Sta
 	if chunkCount == 0 {
 		return emptyChunkSource{}
 	}
-	if s3p.limits.tableFitsInDynamo(name, data, chunkCount) {
-		dynamoTableWrite(s3p.ddb, s3p.table, name, data)
-		dynamoTableCacheMaybeAdd(s3p.dynamoTC, name, data)
-		return newDynamoTableReader(s3p.ddb, s3p.table, name, chunkCount, data, s3p.indexCache, s3p.dynamoTC)
+	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
+		s3p.ddb.Write(name, data)
+		return s3p.newReaderFromIndexData(data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name})
 	}
 
 	if s3p.tc != nil {
 		go s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
 	}
 	s3p.multipartUpload(data, name.String())
-	return s3p.newReaderFromIndexData(data, name)
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc}, name}
+	return s3p.newReaderFromIndexData(data, name, tra)
 }
 
-func (s3p awsTablePersister) newReaderFromIndexData(idxData []byte, name addr) *s3TableReader {
-	s3tr := &s3TableReader{s3: s3p.s3, bucket: s3p.bucket, h: name, readRl: s3p.readRl}
+func (s3p awsTablePersister) newReaderFromIndexData(idxData []byte, name addr, tra tableReaderAt) chunkSource {
 	index := parseTableIndex(idxData)
 	if s3p.indexCache != nil {
 		s3p.indexCache.lockEntry(name)
 		defer s3p.indexCache.unlockEntry(name)
 		s3p.indexCache.put(name, index)
 	}
-	s3tr.tableReader = newTableReader(index, s3tr, s3BlockSize)
-	return s3tr
+	return &awsChunkSource{newTableReader(index, tra, s3BlockSize), name}
 }
 
 func (s3p awsTablePersister) multipartUpload(data []byte, key string) {
@@ -255,7 +245,8 @@ func (s3p awsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chun
 	if s3p.tc != nil {
 		go s3p.loadIntoCache(name) // load conjoined table to the cache
 	}
-	return s3p.newReaderFromIndexData(plan.mergedIndex, name)
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc}, name}
+	return s3p.newReaderFromIndexData(plan.mergedIndex, name, tra)
 }
 
 func (s3p awsTablePersister) loadIntoCache(name addr) {

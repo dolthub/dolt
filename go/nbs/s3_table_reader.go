@@ -24,13 +24,9 @@ const (
 	s3BlockSize   = (1 << 10) * 512 // 512K
 )
 
-type s3TableReader struct {
-	tableReader
-	s3     s3svc
-	bucket string
-	h      addr
-	readRl chan struct{}
-	tc     tableCache
+type s3TableReaderAt struct {
+	s3 *s3ObjectReader
+	h  addr
 }
 
 type s3svc interface {
@@ -43,52 +39,29 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func newS3TableReader(s3 s3svc, bucket string, h addr, chunkCount uint32, indexCache *indexCache, readRl chan struct{}, tc tableCache) chunkSource {
-	d.PanicIfTrue(bucket == "")
-	source := &s3TableReader{s3: s3, bucket: bucket, h: h, readRl: readRl, tc: tc}
-
-	var index tableIndex
-	found := false
-	if indexCache != nil {
-		indexCache.lockEntry(h)
-		defer indexCache.unlockEntry(h)
-		index, found = indexCache.get(h)
-	}
-
-	if !found {
-		size := indexSize(chunkCount) + footerSize
-		buff := make([]byte, size)
-
-		n, err := source.readRange(buff, fmt.Sprintf("%s=-%d", s3RangePrefix, size))
-		d.PanicIfError(err)
-		d.PanicIfFalse(size == uint64(n))
-		index = parseTableIndex(buff)
-
-		if indexCache != nil {
-			indexCache.put(h, index)
-		}
-	}
-
-	source.tableReader = newTableReader(index, source, s3BlockSize)
-	d.PanicIfFalse(chunkCount == source.count())
-	return source
+func (s3tra *s3TableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+	return s3tra.s3.ReadAt(s3tra.h, p, off, stats)
 }
 
-func (s3tr *s3TableReader) hash() addr {
-	return s3tr.h
+// TODO: Bring all the multipart upload and remote-conjoin stuff over here and make this a better analogue to ddbTableStore
+type s3ObjectReader struct {
+	s3     s3svc
+	bucket string
+	readRl chan struct{}
+	tc     tableCache
 }
 
-func (s3tr *s3TableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (s3or *s3ObjectReader) ReadAt(name addr, p []byte, off int64, stats *Stats) (n int, err error) {
 	t1 := time.Now()
 
-	if s3tr.tc != nil {
-		r := s3tr.tc.checkout(s3tr.hash())
+	if s3or.tc != nil {
+		r := s3or.tc.checkout(name)
 		if r != nil {
 			defer func() {
 				stats.FileBytesPerRead.Sample(uint64(len(p)))
 				stats.FileReadLatency.SampleTimeSince(t1)
 			}()
-			defer s3tr.tc.checkin(s3tr.hash())
+			defer s3or.tc.checkin(name)
 			return r.ReadAt(p, off)
 		}
 	}
@@ -97,7 +70,7 @@ func (s3tr *s3TableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}()
-	return s3tr.readRange(p, s3RangeHeader(off, int64(len(p))))
+	return s3or.readRange(name, p, s3RangeHeader(off, int64(len(p))))
 }
 
 func s3RangeHeader(off, length int64) string {
@@ -105,21 +78,30 @@ func s3RangeHeader(off, length int64) string {
 	return fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, lastByte)
 }
 
-func (s3tr *s3TableReader) readRange(p []byte, rangeHeader string) (n int, err error) {
+func (s3or *s3ObjectReader) ReadFromEnd(name addr, p []byte, stats *Stats) (n int, err error) {
+	// TODO: enable this to use the tableCache. The wrinkle is the tableCache currently just returns a ReaderAt, which doesn't give you the length of the object that backs it, so you can't calculate an offset if all you know is that you want the last N bytes.
+	defer func(t1 time.Time) {
+		stats.S3BytesPerRead.Sample(uint64(len(p)))
+		stats.S3ReadLatency.SampleTimeSince(t1)
+	}(time.Now())
+	return s3or.readRange(name, p, fmt.Sprintf("%s=-%d", s3RangePrefix, len(p)))
+}
+
+func (s3or *s3ObjectReader) readRange(name addr, p []byte, rangeHeader string) (n int, err error) {
 	read := func() (int, error) {
-		if s3tr.readRl != nil {
-			s3tr.readRl <- struct{}{}
+		if s3or.readRl != nil {
+			s3or.readRl <- struct{}{}
 			defer func() {
-				<-s3tr.readRl
+				<-s3or.readRl
 			}()
 		}
 
 		input := &s3.GetObjectInput{
-			Bucket: aws.String(s3tr.bucket),
-			Key:    aws.String(s3tr.hash().String()),
+			Bucket: aws.String(s3or.bucket),
+			Key:    aws.String(name.String()),
 			Range:  aws.String(rangeHeader),
 		}
-		result, err := s3tr.s3.GetObject(input)
+		result, err := s3or.s3.GetObject(input)
 		d.PanicIfError(err)
 		d.PanicIfFalse(*result.ContentLength == int64(len(p)))
 

@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-func TestS3TableReader(t *testing.T) {
+func TestS3TableReaderAt(t *testing.T) {
 	s3 := makeFakeS3(t)
 
 	chunks := [][]byte{
@@ -29,33 +29,17 @@ func TestS3TableReader(t *testing.T) {
 	tableData, h := buildTable(chunks)
 	s3.data[h.String()] = tableData
 
-	t.Run("NoIndexCache", func(t *testing.T) {
-		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil, nil)
-		assertChunksInReader(chunks, trc, assert.New(t))
-	})
-
-	t.Run("WithIndexCache", func(t *testing.T) {
-		assert := assert.New(t)
-		index := parseTableIndex(tableData)
-		cache := newIndexCache(1024)
-		cache.put(h, index)
-
-		baseline := s3.getCount
-		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), cache, nil, nil)
-
-		// constructing the table reader shouldn't have resulted in any reads
-		assert.Zero(s3.getCount - baseline)
-		assertChunksInReader(chunks, trc, assert)
-	})
-
 	t.Run("TolerateFailingReads", func(t *testing.T) {
 		assert := assert.New(t)
 
 		baseline := s3.getCount
-		trc := newS3TableReader(makeFlakyS3(s3), "bucket", h, uint32(len(chunks)), nil, nil, nil)
+		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, nil}, h}
+		scratch := make([]byte, len(tableData))
+		_, err := tra.ReadAtWithStats(scratch, 0, &Stats{})
+		assert.NoError(err)
 		// constructing the table reader should have resulted in 2 reads
 		assert.Equal(2, s3.getCount-baseline)
-		assertChunksInReader(chunks, trc, assert)
+		assert.Equal(tableData, scratch)
 	})
 
 	t.Run("WithTableCache", func(t *testing.T) {
@@ -65,8 +49,7 @@ func TestS3TableReader(t *testing.T) {
 		stats := &Stats{}
 
 		tc := newFSTableCache(dir, uint64(2*len(tableData)), 4)
-		trc := newS3TableReader(s3, "bucket", h, uint32(len(chunks)), nil, nil, tc)
-		tra := trc.(tableReaderAt)
+		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc}, h}
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData))

@@ -129,6 +129,6 @@ func TestTableSetRebase(t *testing.T) {
 	ts = ts.Flatten()
 	ts = insert(ts, []byte("novel"))
 
-	ts = ts.Rebase(fullTS.ToSpecs())
+	ts = ts.Rebase(fullTS.ToSpecs(), nil)
 	assert.Equal(4, ts.Size())
 }

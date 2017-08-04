@@ -69,7 +69,7 @@ func TestConjoin(t *testing.T) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
 			for _, sp := range specs {
-				srcs = append(srcs, p.Open(sp.name, sp.chunkCount))
+				srcs = append(srcs, p.Open(sp.name, sp.chunkCount, nil))
 			}
 			return
 		}

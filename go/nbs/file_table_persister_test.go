@@ -35,14 +35,14 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			names = append(names, name)
 		}
 		for _, name := range names {
-			fts.Open(name, 1)
+			fts.Open(name, 1, nil)
 		}
 		removeTables(dir, names...)
 	}()
 
 	// Tables should still be cached, even though they're gone from disk
 	for i, name := range names {
-		src := fts.Open(name, 1)
+		src := fts.Open(name, 1, nil)
 		h := computeAddr([]byte{byte(i)})
 		assert.True(src.has(h))
 	}
@@ -50,7 +50,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	// Kick a table out of the cache
 	name, err := writeTableData(dir, []byte{0xff})
 	assert.NoError(err)
-	fts.Open(name, 1)
+	fts.Open(name, 1, nil)
 
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
@@ -156,7 +156,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	}()
 
 	// Table should still be cached, even though it's gone from disk
-	src := fts.Open(name, uint32(len(testChunks)))
+	src := fts.Open(name, uint32(len(testChunks)), nil)
 	assertChunksInReader(testChunks, src, assert)
 
 	// Evict |name| from cache
@@ -185,7 +185,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		assert.NoError(err)
 		name, err := writeTableData(dir, c, randChunk)
 		assert.NoError(err)
-		sources[i] = fts.Open(name, 2)
+		sources[i] = fts.Open(name, 2, nil)
 	}
 
 	src := fts.ConjoinAll(sources, &Stats{})

@@ -66,16 +66,15 @@ type NomsBlockStore struct {
 
 func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
 	cacheOnce.Do(makeGlobalCaches)
+	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
 		s3,
 		bucket,
-		ddb,
-		table,
+		readRateLimiter,
+		nil,
+		&ddbTableStore{ddb, table, readRateLimiter, nil},
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
-		make(chan struct{}, 32),
-		nil,
-		nil,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -109,7 +108,7 @@ func newNomsBlockStore(mm manifestManager, p tablePersister, c conjoiner, memTab
 
 	if exists, contents := nbs.mm.Fetch(nbs.stats); exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(contents.specs)
+		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
 	}
 
 	return nbs
@@ -119,15 +118,16 @@ func newNomsBlockStoreWithContents(mm manifestManager, mc manifestContents, p ta
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
+	stats := NewStats()
 	return &NomsBlockStore{
 		mm:     mm,
 		p:      p,
 		c:      c,
 		mtSize: memTableSize,
-		stats:  NewStats(),
+		stats:  stats,
 
 		upstream: mc,
-		tables:   newTableSet(p).Rebase(mc.specs),
+		tables:   newTableSet(p).Rebase(mc.specs, stats),
 	}
 }
 
@@ -350,7 +350,7 @@ func (nbs *NomsBlockStore) Rebase() {
 	defer nbs.mu.Unlock()
 	if exists, contents := nbs.mm.Fetch(nbs.stats); exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(contents.specs)
+		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
 	}
 }
 
@@ -417,7 +417,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
 		nbs.upstream = upstream
-		nbs.tables = nbs.tables.Rebase(upstream.specs)
+		nbs.tables = nbs.tables.Rebase(upstream.specs, nbs.stats)
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
@@ -437,7 +437,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		nbs.upstream = nbs.c.Conjoin(nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-		nbs.tables = nbs.tables.Rebase(nbs.upstream.specs)
+		nbs.tables = nbs.tables.Rebase(nbs.upstream.specs, nbs.stats)
 		return errOptimisticLockFailedTables
 	}
 

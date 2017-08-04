@@ -28,10 +28,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 	t.Run("PersistToS3", func(t *testing.T) {
 		t.Run("InMultipleParts", func(t *testing.T) {
 			assert := assert.New(t)
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			ic := newIndexCache(1024)
 			limits := awsLimits{partTarget: calcPartSize(mt, 3)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits, indexCache: ic}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, indexCache: ic}
 
 			src := s3p.Persist(mt, nil, &Stats{})
 			assert.NotNil(ic.get(src.hash()))
@@ -44,10 +44,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		})
 
 		t.Run("CacheTable", func(t *testing.T) {
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			limits := awsLimits{partTarget: calcPartSize(mt, 3)}
 			tc := &waitOnStoreTableCache{readers: map[addr]io.ReaderAt{}}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits, tc: tc}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, tc: tc}
 
 			// Persist and wait until tc.store() has completed
 			tc.storeWG.Add(1)
@@ -55,7 +55,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			tc.storeWG.Wait()
 
 			// Now, open the table that should have been cached by the above Persist() and read out all the chunks. All the reads should be serviced from tc.
-			rdr := s3p.Open(src.hash(), src.count())
+			rdr := s3p.Open(src.hash(), src.count(), &Stats{})
 			baseline := s3svc.getCount
 			ch := make(chan extractRecord)
 			go func() { defer close(ch); rdr.extract(ch) }()
@@ -67,9 +67,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		t.Run("InSinglePart", func(t *testing.T) {
 			assert := assert.New(t)
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			limits := awsLimits{partTarget: calcPartSize(mt, 1)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits}
 
 			src := s3p.Persist(mt, nil, &Stats{})
 			if assert.True(src.count() > 0) {
@@ -90,9 +90,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				assert.True(existingTable.addChunk(computeAddr(c), c))
 			}
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			limits := awsLimits{partTarget: 1 << 10}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits}
 
 			src := s3p.Persist(mt, existingTable, &Stats{})
 			assert.True(src.count() == 0)
@@ -105,9 +105,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			assert := assert.New(t)
 
 			s3svc := &failingFakeS3{makeFakeS3(t), sync.Mutex{}, 1}
-			ddb := makeFakeDDB(t)
+			ddb := makeFakeDTS(makeFakeDDB(t), nil)
 			limits := awsLimits{partTarget: calcPartSize(mt, 4)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits}
 
 			assert.Panics(func() { s3p.Persist(mt, nil, &Stats{}) })
 		})
@@ -117,9 +117,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		t.Run("Success", func(t *testing.T) {
 			assert := assert.New(t)
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			ddb := makeFakeDDB(t)
+			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits}
 
 			src := s3p.Persist(mt, nil, &Stats{})
 			if assert.True(src.count() > 0) {
@@ -132,21 +133,23 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		t.Run("CacheOnOpen", func(t *testing.T) {
 			assert := assert.New(t)
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
-			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
 			tc := sizecache.New(maxDynamoItemSize)
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits, dynamoTC: tc}
+			ddb := makeFakeDDB(t)
+			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, tc)
+			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
+
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits}
 
 			tableData, name := buildTable(testChunks)
 			ddb.putData(fmtTableName(name), tableData)
 
-			src := s3p.Open(name, uint32(len(testChunks)))
+			src := s3p.Open(name, uint32(len(testChunks)), &Stats{})
 			if assert.True(src.count() > 0) {
 				if r := ddb.readerForTable(src.hash()); assert.NotNil(r) {
 					assertChunksInReader(testChunks, r, assert)
 				}
-				if data, present := dynamoTableCacheMaybeGet(tc, name); assert.True(present) {
-					assert.Equal(tableData, data)
+				if data, present := tc.Get(name); assert.True(present) {
+					assert.Equal(tableData, data.([]byte))
 				}
 			}
 		})
@@ -154,9 +157,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		t.Run("FailTooManyChunks", func(t *testing.T) {
 			assert := assert.New(t)
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			ddb := makeFakeDDB(t)
+			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 1, partTarget: calcPartSize(mt, 1)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits}
 
 			src := s3p.Persist(mt, nil, &Stats{})
 			if assert.True(src.count() > 0) {
@@ -171,9 +175,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		t.Run("FailItemTooBig", func(t *testing.T) {
 			assert := assert.New(t)
 
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			ddb := makeFakeDDB(t)
+			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
 			limits := awsLimits{itemMax: 0, chunkMax: 2 * mt.count(), partTarget: calcPartSize(mt, 1)}
-			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, table: "table", limits: limits}
+			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits}
 
 			src := s3p.Persist(mt, nil, &Stats{})
 			if assert.True(src.count() > 0) {
@@ -185,6 +190,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			}
 		})
 	})
+}
+func makeFakeDTS(ddb ddbsvc, tc *sizecache.SizeCache) *ddbTableStore {
+	return &ddbTableStore{ddb, "table", nil, tc}
 }
 
 type waitOnStoreTableCache struct {
@@ -287,8 +295,8 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 	rl := make(chan struct{}, 8)
 	defer close(rl)
 
-	newPersister := func(s3svc s3svc, ddb ddbsvc) awsTablePersister {
-		return awsTablePersister{s3svc, "bucket", ddb, "table", awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount}, ic, rl, nil, nil}
+	newPersister := func(s3svc s3svc, ddb *ddbTableStore) awsTablePersister {
+		return awsTablePersister{s3svc, "bucket", rl, nil, ddb, awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount}, ic}
 	}
 
 	smallChunks := [][]byte{}
@@ -313,7 +321,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		t.Run("TotalUnderMinSize", func(t *testing.T) {
 			assert := assert.New(t)
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			s3p := newPersister(s3svc, ddb)
 
 			chunks := smallChunks[:len(smallChunks)-1]
@@ -330,7 +338,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		t.Run("TotalOverMinSize", func(t *testing.T) {
 			assert := assert.New(t)
-			s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+			s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 			s3p := newPersister(s3svc, ddb)
 
 			sources := makeSources(s3p, smallChunks)
@@ -355,7 +363,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 	t.Run("AllOverMax", func(t *testing.T) {
 		assert := assert.New(t)
-		s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+		s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 		s3p := newPersister(s3svc, ddb)
 
 		// Make 2 chunk sources that each have >maxPartSize chunk data
@@ -380,7 +388,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 	t.Run("SomeOverMax", func(t *testing.T) {
 		assert := assert.New(t)
-		s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+		s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 		s3p := newPersister(s3svc, ddb)
 
 		// Add one chunk source that has >maxPartSize data
@@ -412,7 +420,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 	t.Run("Mix", func(t *testing.T) {
 		assert := assert.New(t)
-		s3svc, ddb := makeFakeS3(t), makeFakeDDB(t)
+		s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
 		s3p := newPersister(s3svc, ddb)
 
 		// Start with small tables. Since total > minPartSize, will require more than one part to upload.

@@ -21,13 +21,10 @@ const (
 	tablePrefix = "*" // I want to use NBS table names as keys when they are written to DynamoDB, but a bare table name is a legal Noms Database name as well. To avoid collisions, dynamoTableReader prepends this prefix (which is not a legal character in a Noms Database name).
 )
 
-// dynamoTableReader assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
-type dynamoTableReader struct {
-	tableReader
-	ddb   ddbsvc
-	table string
-	h     addr
-	tc    *sizecache.SizeCache
+// dynamoTableReaderAt assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
+type dynamoTableReaderAt struct {
+	ddb *ddbTableStore
+	h   addr
 }
 
 type tableNotInDynamoErr struct {
@@ -38,61 +35,9 @@ func (t tableNotInDynamoErr) Error() string {
 	return fmt.Sprintf("NBS table %s not present in DynamoDB table %s", t.nbs, t.dynamo)
 }
 
-func newDynamoTableReader(ddb ddbsvc, table string, h addr, chunkCount uint32, data []byte, indexCache *indexCache, tc *sizecache.SizeCache) chunkSource {
-	d.PanicIfTrue(table == "")
-	source := &dynamoTableReader{ddb: ddb, table: table, h: h, tc: tc}
-
-	var index tableIndex
-	found := false
-	if indexCache != nil {
-		indexCache.lockEntry(h)
-		defer indexCache.unlockEntry(h)
-		index, found = indexCache.get(h)
-	}
-
-	if !found {
-		index = parseTableIndex(data)
-		if indexCache != nil {
-			indexCache.put(h, index)
-		}
-	}
-
-	source.tableReader = newTableReader(index, source, fileBlockSize)
-	d.PanicIfFalse(chunkCount == source.count())
-	return source
-}
-
-func (dtr *dynamoTableReader) hash() addr {
-	return dtr.h
-}
-
-func (dtr *dynamoTableReader) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
-	t1 := time.Now()
-	if data, present := dynamoTableCacheMaybeGet(dtr.tc, dtr.hash()); present {
-		defer func() {
-			stats.MemBytesPerRead.Sample(uint64(len(p)))
-			stats.MemReadLatency.SampleTimeSince(t1)
-		}()
-		n = copy(p, data[off:])
-		if n < len(p) {
-			err = io.ErrUnexpectedEOF
-		}
-		return
-	}
-
-	defer func() {
-		stats.DynamoBytesPerRead.Sample(uint64(len(p)))
-		stats.DynamoReadLatency.SampleTimeSince(t1)
-	}()
-	return dtr.readRange(p, off)
-}
-
-func (dtr *dynamoTableReader) readRange(p []byte, off int64) (n int, err error) {
-	data, err := tryDynamoTableRead(dtr.ddb, dtr.table, dtr.h)
+func (dtra *dynamoTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+	data, err := dtra.ddb.ReadTable(dtra.h, stats)
 	d.PanicIfError(err)
-
-	dynamoTableCacheMaybeAdd(dtr.tc, dtr.hash(), data)
-
 	n = copy(p, data[off:])
 	if n < len(p) {
 		err = io.ErrUnexpectedEOF
@@ -100,36 +45,61 @@ func (dtr *dynamoTableReader) readRange(p []byte, off int64) (n int, err error) 
 	return
 }
 
-func dynamoTableCacheMaybeGet(tc *sizecache.SizeCache, name addr) (data []byte, present bool) {
-	if tc != nil {
-		if i, present := tc.Get(name); present {
-			return i.([]byte), true
+type ddbTableStore struct {
+	ddb    ddbsvc
+	table  string
+	readRl chan struct{}
+	cache  *sizecache.SizeCache // TODO: merge this with tableCache as part of BUG 3601
+}
+
+func (dts *ddbTableStore) ReadTable(name addr, stats *Stats) (data []byte, err error) {
+	t1 := time.Now()
+	if dts.cache != nil {
+		if i, present := dts.cache.Get(name); present {
+			data = i.([]byte)
+			defer func() {
+				stats.MemBytesPerRead.Sample(uint64(len(data)))
+				stats.MemReadLatency.SampleTimeSince(t1)
+			}()
+			return data, nil
 		}
 	}
-	return
-}
 
-func dynamoTableCacheMaybeAdd(tc *sizecache.SizeCache, name addr, data []byte) {
-	if tc != nil {
-		tc.Add(name, uint64(len(data)), data)
+	data, err = dts.readTable(name)
+	if data != nil {
+		defer func() {
+			stats.DynamoBytesPerRead.Sample(uint64(len(data)))
+			stats.DynamoReadLatency.SampleTimeSince(t1)
+		}()
 	}
+
+	if dts.cache != nil && err == nil {
+		dts.cache.Add(name, uint64(len(data)), data)
+	}
+	return data, err
 }
 
-func tryDynamoTableRead(ddb ddbsvc, table string, name addr) (data []byte, err error) {
+func (dts *ddbTableStore) readTable(name addr) (data []byte, err error) {
 	try := func(input *dynamodb.GetItemInput) (data []byte, err error) {
-		result, rerr := ddb.GetItem(input)
+		if dts.readRl != nil {
+			dts.readRl <- struct{}{}
+			defer func() {
+				<-dts.readRl
+			}()
+		}
+		result, rerr := dts.ddb.GetItem(input)
 		if rerr != nil {
 			return nil, rerr
 		} else if len(result.Item) == 0 {
-			return nil, tableNotInDynamoErr{name.String(), table}
+			return nil, tableNotInDynamoErr{name.String(), dts.table}
 		} else if result.Item[dataAttr] == nil || result.Item[dataAttr].B == nil {
-			return nil, fmt.Errorf("NBS table %s in DynamoDB table %s is malformed", name, table)
+			return nil, fmt.Errorf("NBS table %s in DynamoDB table %s is malformed", name, dts.table)
 		}
 		return result.Item[dataAttr].B, nil
 	}
 
 	input := dynamodb.GetItemInput{
-		TableName: aws.String(table),
+		TableName: aws.String(dts.table),
 		Key: map[string]*dynamodb.AttributeValue{
 			dbAttr: {S: aws.String(fmtTableName(name))},
 		},
@@ -147,13 +117,17 @@ func fmtTableName(name addr) string {
 	return tablePrefix + name.String()
 }
 
-func dynamoTableWrite(ddb ddbsvc, table string, name addr, data []byte) error {
-	_, err := ddb.PutItem(&dynamodb.PutItemInput{
-		TableName: aws.String(table),
+func (dts *ddbTableStore) Write(name addr, data []byte) error {
+	_, err := dts.ddb.PutItem(&dynamodb.PutItemInput{
+		TableName: aws.String(dts.table),
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:   {S: aws.String(fmtTableName(name))},
 			dataAttr: {B: data},
 		},
 	})
+
+	if dts.cache != nil && err == nil {
+		dts.cache.Add(name, uint64(len(data)), data)
+	}
 	return err
 }

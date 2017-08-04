@@ -5,7 +5,6 @@
 package nbs
 
 import (
-	"os"
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
@@ -13,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-func TestDynamoTableReader(t *testing.T) {
+func TestDynamoTableReaderAt(t *testing.T) {
 	ddb := makeFakeDDB(t)
 
 	chunks := [][]byte{
@@ -25,56 +24,76 @@ func TestDynamoTableReader(t *testing.T) {
 	tableData, h := buildTable(chunks)
 	ddb.putData(fmtTableName(h), tableData)
 
-	t.Run("DynamoGet", func(t *testing.T) {
-		test := func(ddb ddbsvc) {
-			assert := assert.New(t)
-			data, err := tryDynamoTableRead(ddb, "table", h)
-			assert.NoError(err)
-			assert.Equal(tableData, data)
+	t.Run("ddbTableStore", func(t *testing.T) {
+		t.Run("ReadTable", func(t *testing.T) {
+			test := func(dts *ddbTableStore) {
+				assert := assert.New(t)
+				data, err := dts.ReadTable(h, &Stats{})
+				assert.NoError(err)
+				assert.Equal(tableData, data)
 
-			data, err = tryDynamoTableRead(ddb, "table", computeAddr([]byte{}))
-			assert.Error(err)
-			assert.IsType(tableNotInDynamoErr{}, err)
-			assert.Nil(data)
-		}
+				data, err = dts.ReadTable(computeAddr([]byte{}), &Stats{})
+				assert.Error(err)
+				assert.IsType(tableNotInDynamoErr{}, err)
+				assert.Nil(data)
+			}
 
-		t.Run("EventuallyConsistentSuccess", func(t *testing.T) {
-			test(ddb)
+			t.Run("EventuallyConsistentSuccess", func(t *testing.T) {
+				test(&ddbTableStore{ddb, "table", nil, nil})
+			})
+
+			t.Run("EventuallyConsistentFailure", func(t *testing.T) {
+				test(&ddbTableStore{&eventuallyConsistentDDB{ddb}, "table", nil, nil})
+			})
+
+			t.Run("WithCache", func(t *testing.T) {
+				tc := sizecache.New(uint64(2 * len(tableData)))
+				dts := &ddbTableStore{ddb, "table", nil, tc}
+				test(dts)
+
+				// Table should have been cached on read
+				baseline := ddb.numGets
+				_, err := dts.ReadTable(h, &Stats{})
+				assert.NoError(t, err)
+				assert.Zero(t, ddb.numGets-baseline)
+			})
 		})
 
-		t.Run("EventuallyConsistentFailure", func(t *testing.T) {
-			test(&eventuallyConsistentDDB{ddb})
+		t.Run("WriteTable", func(t *testing.T) {
+			t.Run("WithoutCache", func(t *testing.T) {
+				assert := assert.New(t)
+
+				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, nil}
+				assert.NoError(dts.Write(h, tableData))
+
+				data, err := dts.ReadTable(h, &Stats{})
+				assert.NoError(err)
+				assert.Equal(tableData, data)
+			})
+
+			t.Run("WithCache", func(t *testing.T) {
+				assert := assert.New(t)
+
+				tc := sizecache.New(uint64(2 * len(tableData)))
+				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, tc}
+				assert.NoError(dts.Write(h, tableData))
+
+				// Table should have been cached on write
+				baseline := ddb.numGets
+				data, err := dts.ReadTable(h, &Stats{})
+				assert.NoError(err)
+				assert.Equal(tableData, data)
+				assert.Zero(ddb.numGets - baseline)
+			})
 		})
 	})
 
-	t.Run("NoIndexCache", func(t *testing.T) {
-		trc := newDynamoTableReader(ddb, "table", h, uint32(len(chunks)), tableData, nil, nil)
-		assertChunksInReader(chunks, trc, assert.New(t))
-	})
-
-	t.Run("WithIndexCache", func(t *testing.T) {
+	t.Run("ReadAtWithCache", func(t *testing.T) {
 		assert := assert.New(t)
-		index := parseTableIndex(tableData)
-		cache := newIndexCache(1024)
-		cache.put(h, index)
-
-		baseline := ddb.numGets
-		trc := newDynamoTableReader(ddb, "table", h, uint32(len(chunks)), tableData, cache, nil)
-
-		// constructing the table reader shouldn't have resulted in any reads
-		assert.Zero(ddb.numGets - baseline)
-		assertChunksInReader(chunks, trc, assert)
-	})
-
-	t.Run("WithTableCache", func(t *testing.T) {
-		assert := assert.New(t)
-		dir := makeTempDir(t)
-		defer os.RemoveAll(dir)
 		stats := &Stats{}
 
 		tc := sizecache.New(uint64(2 * len(tableData)))
-		trc := newDynamoTableReader(ddb, "table", h, uint32(len(chunks)), tableData, nil, tc)
-		tra := trc.(tableReaderAt)
+		tra := &dynamoTableReaderAt{&ddbTableStore{ddb, "table", nil, tc}, h}
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData)/4)

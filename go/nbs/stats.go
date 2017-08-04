@@ -14,6 +14,9 @@ type Stats struct {
 	OpenLatency   metrics.Histogram
 	CommitLatency metrics.Histogram
 
+	IndexReadLatency  metrics.Histogram
+	IndexBytesPerRead metrics.Histogram
+
 	GetLatency   metrics.Histogram
 	ChunksPerGet metrics.Histogram
 
@@ -49,6 +52,8 @@ func NewStats() *Stats {
 	return &Stats{
 		OpenLatency:          metrics.NewTimeHistogram(),
 		CommitLatency:        metrics.NewTimeHistogram(),
+		IndexReadLatency:     metrics.NewTimeHistogram(),
+		IndexBytesPerRead:    metrics.NewByteHistogram(),
 		GetLatency:           metrics.NewTimeHistogram(),
 		FileReadLatency:      metrics.NewTimeHistogram(),
 		FileBytesPerRead:     metrics.NewByteHistogram(),
@@ -72,6 +77,9 @@ func NewStats() *Stats {
 func (s *Stats) Add(other Stats) {
 	s.OpenLatency.Add(other.OpenLatency)
 	s.CommitLatency.Add(other.CommitLatency)
+
+	s.IndexReadLatency.Add(other.IndexReadLatency)
+	s.IndexBytesPerRead.Add(other.IndexBytesPerRead)
 
 	s.GetLatency.Add(other.GetLatency)
 	s.ChunksPerGet.Add(other.ChunksPerGet)
@@ -107,6 +115,9 @@ func (s Stats) Delta(other Stats) Stats {
 	return Stats{
 		s.OpenLatency.Delta(other.OpenLatency),
 		s.CommitLatency.Delta(other.CommitLatency),
+
+		s.IndexReadLatency.Delta(other.IndexReadLatency),
+		s.IndexBytesPerRead.Delta(other.IndexBytesPerRead),
 
 		s.GetLatency.Delta(other.GetLatency),
 		s.ChunksPerGet.Delta(other.ChunksPerGet),
@@ -146,14 +157,16 @@ func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
 OpenLatecy:           %s
 CommitLatency:        %s
+IndexReadLatency:     %s
+IndexBytesPerRead:    %s
 GetLatency:           %s
 ChunksPerGet:         %s
 FileReadLatency:      %s
 FileBytesPerRead:     %s
 S3ReadLatency:        %s
 S3BytesPerRead:       %s
-MemReadLatency:    %s
-MemBytesPerRead:   %s
+MemReadLatency:       %s
+MemBytesPerRead:      %s
 DynamoReadLatency:    %s
 DynamoBytesPerRead:   %s
 HasLatency:           %s
@@ -171,6 +184,9 @@ WriteManifestLatency: %s
 `,
 		s.OpenLatency,
 		s.CommitLatency,
+
+		s.IndexReadLatency,
+		s.IndexBytesPerRead,
 
 		s.GetLatency,
 		s.ChunksPerGet,

@@ -315,7 +315,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
 		srcs := chunkSources{}
 		for _, sp := range conjoinees {
-			srcs = append(srcs, p.Open(sp.name, sp.chunkCount))
+			srcs = append(srcs, p.Open(sp.name, sp.chunkCount, nil))
 		}
 		conjoined := p.ConjoinAll(srcs, stats)
 		cannedSpecs := []tableSpec{{conjoined.hash(), conjoined.count()}}

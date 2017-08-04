@@ -389,7 +389,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 	return name, buff[:tableSize], chunkCount
 }
 
-func (ftp fakeTablePersister) Open(name addr, chunkCount uint32) chunkSource {
+func (ftp fakeTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
 	ftp.mu.RLock()
 	defer ftp.mu.RUnlock()
 	return chunkSourceAdapter{ftp.sources[name], name}
