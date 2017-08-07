@@ -19,6 +19,7 @@ import (
 type tableWriter struct {
 	buff                  []byte
 	pos                   uint64
+	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockHash             hash.Hash
@@ -76,6 +77,7 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	// Compress data straight into tw.buff
 	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
+	tw.totalCompressedData += dataLength
 
 	// BUG 3156 indicated that, sometimes, snappy decided that there's not enough space in tw.buff[tw.pos:] to encode into.
 	// This _should never happen anymore be_, because we iterate over all chunks to be added and sum the max amount of space that snappy says it might need.
