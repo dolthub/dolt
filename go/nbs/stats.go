@@ -35,9 +35,10 @@ type Stats struct {
 
 	PutLatency metrics.Histogram
 
-	PersistLatency   metrics.Histogram
-	BytesPerPersist  metrics.Histogram
-	ChunksPerPersist metrics.Histogram
+	PersistLatency         metrics.Histogram
+	BytesPerPersist        metrics.Histogram
+	LogicalBytesPerPersist metrics.Histogram
+	ChunksPerPersist       metrics.Histogram
 
 	ConjoinLatency   metrics.Histogram
 	BytesPerConjoin  metrics.Histogram
@@ -50,27 +51,28 @@ type Stats struct {
 
 func NewStats() *Stats {
 	return &Stats{
-		OpenLatency:          metrics.NewTimeHistogram(),
-		CommitLatency:        metrics.NewTimeHistogram(),
-		IndexReadLatency:     metrics.NewTimeHistogram(),
-		IndexBytesPerRead:    metrics.NewByteHistogram(),
-		GetLatency:           metrics.NewTimeHistogram(),
-		FileReadLatency:      metrics.NewTimeHistogram(),
-		FileBytesPerRead:     metrics.NewByteHistogram(),
-		S3ReadLatency:        metrics.NewTimeHistogram(),
-		S3BytesPerRead:       metrics.NewByteHistogram(),
-		MemReadLatency:       metrics.NewTimeHistogram(),
-		MemBytesPerRead:      metrics.NewByteHistogram(),
-		DynamoReadLatency:    metrics.NewTimeHistogram(),
-		DynamoBytesPerRead:   metrics.NewByteHistogram(),
-		HasLatency:           metrics.NewTimeHistogram(),
-		PutLatency:           metrics.NewTimeHistogram(),
-		PersistLatency:       metrics.NewTimeHistogram(),
-		BytesPerPersist:      metrics.NewByteHistogram(),
-		ConjoinLatency:       metrics.NewTimeHistogram(),
-		BytesPerConjoin:      metrics.NewByteHistogram(),
-		ReadManifestLatency:  metrics.NewTimeHistogram(),
-		WriteManifestLatency: metrics.NewTimeHistogram(),
+		OpenLatency:            metrics.NewTimeHistogram(),
+		CommitLatency:          metrics.NewTimeHistogram(),
+		IndexReadLatency:       metrics.NewTimeHistogram(),
+		IndexBytesPerRead:      metrics.NewByteHistogram(),
+		GetLatency:             metrics.NewTimeHistogram(),
+		FileReadLatency:        metrics.NewTimeHistogram(),
+		FileBytesPerRead:       metrics.NewByteHistogram(),
+		S3ReadLatency:          metrics.NewTimeHistogram(),
+		S3BytesPerRead:         metrics.NewByteHistogram(),
+		MemReadLatency:         metrics.NewTimeHistogram(),
+		MemBytesPerRead:        metrics.NewByteHistogram(),
+		DynamoReadLatency:      metrics.NewTimeHistogram(),
+		DynamoBytesPerRead:     metrics.NewByteHistogram(),
+		HasLatency:             metrics.NewTimeHistogram(),
+		PutLatency:             metrics.NewTimeHistogram(),
+		PersistLatency:         metrics.NewTimeHistogram(),
+		BytesPerPersist:        metrics.NewByteHistogram(),
+		LogicalBytesPerPersist: metrics.NewByteHistogram(),
+		ConjoinLatency:         metrics.NewTimeHistogram(),
+		BytesPerConjoin:        metrics.NewByteHistogram(),
+		ReadManifestLatency:    metrics.NewTimeHistogram(),
+		WriteManifestLatency:   metrics.NewTimeHistogram(),
 	}
 }
 
@@ -103,6 +105,7 @@ func (s *Stats) Add(other Stats) {
 
 	s.PersistLatency.Add(other.PersistLatency)
 	s.BytesPerPersist.Add(other.BytesPerPersist)
+	s.LogicalBytesPerPersist.Add(other.LogicalBytesPerPersist)
 	s.ChunksPerPersist.Add(other.ChunksPerPersist)
 
 	s.ConjoinLatency.Add(other.ConjoinLatency)
@@ -141,6 +144,7 @@ func (s Stats) Delta(other Stats) Stats {
 
 		s.PersistLatency.Delta(other.PersistLatency),
 		s.BytesPerPersist.Delta(other.BytesPerPersist),
+		s.LogicalBytesPerPersist.Delta(other.LogicalBytesPerPersist),
 		s.ChunksPerPersist.Delta(other.ChunksPerPersist),
 
 		s.ConjoinLatency.Delta(other.ConjoinLatency),
@@ -155,32 +159,33 @@ func (s Stats) Delta(other Stats) Stats {
 
 func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
-OpenLatecy:           %s
-CommitLatency:        %s
-IndexReadLatency:     %s
-IndexBytesPerRead:    %s
-GetLatency:           %s
-ChunksPerGet:         %s
-FileReadLatency:      %s
-FileBytesPerRead:     %s
-S3ReadLatency:        %s
-S3BytesPerRead:       %s
-MemReadLatency:       %s
-MemBytesPerRead:      %s
-DynamoReadLatency:    %s
-DynamoBytesPerRead:   %s
-HasLatency:           %s
-AddressesHasGet:      %s
-PutLatency:           %s
-PersistLatency:       %s
-ChunksPerPersist:     %s
-BytesPerPersist:      %s
-ConjoinLatency:       %s
-ChunksPerConjoin:     %s
-BytesPerConjoin:      %s
-TablesPerConjoin:     %s
-ReadManifestLatency:  %s
-WriteManifestLatency: %s
+OpenLatecy:             %s
+CommitLatency:          %s
+IndexReadLatency:       %s
+IndexBytesPerRead:      %s
+GetLatency:             %s
+ChunksPerGet:           %s
+FileReadLatency:        %s
+FileBytesPerRead:       %s
+S3ReadLatency:          %s
+S3BytesPerRead:         %s
+MemReadLatency:         %s
+MemBytesPerRead:        %s
+DynamoReadLatency:      %s
+DynamoBytesPerRead:     %s
+HasLatency:             %s
+AddressesHasGet:        %s
+PutLatency:             %s
+PersistLatency:         %s
+ChunksPerPersist:       %s
+BytesPerPersist:        %s
+ConjoinLatency:         %s
+ChunksPerConjoin:       %s
+BytesPerConjoin:        %s
+LogicalBytesPerPersist: %s
+TablesPerConjoin:       %s
+ReadManifestLatency:    %s
+WriteManifestLatency:   %s
 `,
 		s.OpenLatency,
 		s.CommitLatency,
@@ -211,6 +216,7 @@ WriteManifestLatency: %s
 		s.PersistLatency,
 		s.ChunksPerPersist,
 		s.BytesPerPersist,
+		s.LogicalBytesPerPersist,
 
 		s.ConjoinLatency,
 		s.ChunksPerConjoin,
