@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,35 +16,18 @@ import (
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/progressreader"
 	"github.com/attic-labs/noms/go/util/status"
-	"github.com/attic-labs/noms/go/util/verbose"
 	humanize "github.com/dustin/go-humanize"
-	flag "github.com/juju/gnuflag"
 )
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s <dataset> [<file>]\n", os.Args[0])
-		flag.PrintDefaults()
-	}
-
-	verbose.RegisterVerboseFlags(flag.CommandLine)
-	profile.RegisterProfileFlags(flag.CommandLine)
-
-	flag.Parse(true)
-
-	if flag.NArg() != 1 && flag.NArg() != 2 {
-		d.CheckError(errors.New("expected dataset and optional file flag"))
-	}
-
+func nomsBlobGet(ds string, filePath string) int {
 	cfg := config.NewResolver()
 	var blob types.Blob
-	path := flag.Arg(0)
-	if db, val, err := cfg.GetPath(path); err != nil {
+	if db, val, err := cfg.GetPath(ds); err != nil {
 		d.CheckErrorNoUsage(err)
 	} else if val == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", path))
+		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))
 	} else if b, ok := val.(types.Blob); !ok {
-		d.CheckErrorNoUsage(fmt.Errorf("Value at %s is not a blob", path))
+		d.CheckErrorNoUsage(fmt.Errorf("Value at %s is not a blob", ds))
 	} else {
 		defer db.Close()
 		blob = b
@@ -53,10 +35,9 @@ func main() {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	filePath := flag.Arg(1)
 	if filePath == "" {
 		blob.Copy(os.Stdout)
-		return
+		return 0
 	}
 
 	// Note: overwrites any existing file.
@@ -83,4 +64,5 @@ func main() {
 
 	io.Copy(file, blobReader)
 	status.Done()
+	return 0
 }

@@ -9,38 +9,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/go/util/verbose"
-	flag "github.com/juju/gnuflag"
 )
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s <file> <dataset>\n", os.Args[0])
-		flag.PrintDefaults()
-	}
-
-	var concurrencyArg = flag.Int("concurrency", runtime.NumCPU(), "number of concurrent HTTP calls to retrieve remote resources")
-
-	verbose.RegisterVerboseFlags(flag.CommandLine)
-	profile.RegisterProfileFlags(flag.CommandLine)
-
-	flag.Parse(true)
-
-	if len(flag.Args()) != 2 {
-		d.CheckError(errors.New("expected file and dataset flags"))
-	}
-
-	filePath := flag.Arg(0)
-	if filePath == "" {
-		d.CheckErrorNoUsage(errors.New("Empty file path"))
-	}
-
+func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 	info, err := os.Stat(filePath)
 	if err != nil {
 		d.CheckError(errors.New("couldn't stat file"))
@@ -49,7 +25,7 @@ func main() {
 	defer profile.MaybeStartProfile().Stop()
 
 	fileSize := info.Size()
-	chunkSize := fileSize / int64(*concurrencyArg)
+	chunkSize := fileSize / int64(concurrency)
 	if chunkSize < (1 << 20) {
 		chunkSize = 1 << 20
 	}
@@ -69,10 +45,10 @@ func main() {
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(flag.Arg(1))
+	db, ds, err := cfg.GetDataset(dsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
-		return
+		return 1
 	}
 	defer db.Close()
 
@@ -81,6 +57,7 @@ func main() {
 	_, err = db.CommitValue(ds, blob)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
-		return
+		return 1
 	}
+	return 0
 }

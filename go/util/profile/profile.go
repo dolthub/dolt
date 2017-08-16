@@ -18,6 +18,9 @@ var (
 	cpuProfile      string
 	memProfile      string
 	blockProfile    string
+	cpuProfileVal   *string
+	memProfileVal   *string
+	blockProfileVal *string
 	flagsRegistered = false
 )
 
@@ -27,6 +30,18 @@ func RegisterProfileFlags(flags *flag.FlagSet) {
 		flags.StringVar(&cpuProfile, "cpuprofile", "", "write cpu profile to file")
 		flags.StringVar(&memProfile, "memprofile", "", "write memory profile to this file")
 		flags.StringVar(&blockProfile, "blockprofile", "", "write block profile to this file")
+	}
+}
+
+func ApplyProfileFlags(cpuProfileVal *string, memProfileVal *string, blockProfileVal *string) {
+	if cpuProfileVal != nil {
+		cpuProfile = *cpuProfileVal
+	}
+	if memProfileVal != nil {
+		memProfile = *memProfileVal
+	}
+	if blockProfileVal != nil {
+		blockProfile = *blockProfileVal
 	}
 }
 

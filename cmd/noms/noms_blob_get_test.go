@@ -17,15 +17,15 @@ import (
 	"github.com/attic-labs/testify/suite"
 )
 
-func TestBlobGet(t *testing.T) {
-	suite.Run(t, &bgSuite{})
+func TestNomsBlobGet(t *testing.T) {
+	suite.Run(t, &nbeSuite{})
 }
 
-type bgSuite struct {
+type nbeSuite struct {
 	clienttest.ClientTestSuite
 }
 
-func (s *bgSuite) TestBlobGet() {
+func (s *nbeSuite) TestNomsBlobGet() {
 	blobBytes := []byte("hello")
 	blob := types.NewBlob(bytes.NewBuffer(blobBytes))
 
@@ -39,13 +39,13 @@ func (s *bgSuite) TestBlobGet() {
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())
 	filePath := filepath.Join(s.TempDir, "out")
-	s.MustRun(main, []string{hashSpec, filePath})
+	s.MustRun(main, []string{"blob", "export", hashSpec, filePath})
 
 	fileBytes, err := ioutil.ReadFile(filePath)
 	s.NoError(err)
 	s.Equal(blobBytes, fileBytes)
 
-	stdout, _ := s.MustRun(main, []string{hashSpec})
+	stdout, _ := s.MustRun(main, []string{"blob", "export", hashSpec})
 	fmt.Println("stdout:", stdout)
 	s.Equal(blobBytes, []byte(stdout))
 }
