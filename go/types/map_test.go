@@ -254,6 +254,33 @@ func (suite *mapTestSuite) TestStreamingMap() {
 	suite.True(suite.validate(m), "map not valid")
 }
 
+func (suite *mapTestSuite) TestStreamingMapOrder() {
+	vs := newTestValueStore()
+	defer vs.Close()
+
+	entries := make(mapEntrySlice, len(suite.elems.entries))
+	copy(entries, suite.elems.entries)
+	entries[0], entries[1] = entries[1], entries[0]
+
+	kvChan := make(chan Value, len(entries)*2)
+	for _, e := range entries {
+		kvChan <- e.key
+		kvChan <- e.value
+	}
+	close(kvChan)
+
+	readInput := func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+		readMapInput(vrw, kvs, outChan)
+	}
+
+	testFunc := func() {
+		outChan := newStreamingMap(vs, kvChan, readInput)
+		<-outChan
+	}
+
+	suite.Panics(testFunc)
+}
+
 func (suite *mapTestSuite) TestStreamingMap2() {
 	wg := sync.WaitGroup{}
 	vs := newTestValueStore()

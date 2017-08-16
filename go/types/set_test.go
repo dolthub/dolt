@@ -188,6 +188,30 @@ func (suite *setTestSuite) TestStreamingSet() {
 	suite.True(suite.validate(s))
 }
 
+func (suite *setTestSuite) TestStreamingSetOrder() {
+	vs := newTestValueStore()
+	defer vs.Close()
+
+	elems := make(testSet, len(suite.elems))
+	copy(elems, suite.elems)
+	elems[0], elems[1] = elems[1], elems[0]
+	vChan := make(chan Value, len(elems))
+	for _, e := range elems {
+		vChan <- e
+	}
+	close(vChan)
+
+	readInput := func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+		readSetInput(vrw, vChan, outChan)
+	}
+
+	testFunc := func() {
+		outChan := newStreamingSet(vs, vChan, readInput)
+		<-outChan
+	}
+	suite.Panics(testFunc)
+}
+
 func (suite *setTestSuite) TestStreamingSet2() {
 	vs := newTestValueStore()
 	defer vs.Close()

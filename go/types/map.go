@@ -46,28 +46,38 @@ func NewMap(kv ...Value) Map {
 // closed by the caller, a finished Map will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
 func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
-	var k Value
+	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+		go readMapInput(vrw, kvs, outChan)
+	})
+}
+
+type streamingMapReadFunc func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map)
+
+func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMapReadFunc) <-chan Map {
 	outChan := make(chan Map, 1)
-	go func() {
-		defer close(outChan)
-		ch := newEmptyMapSequenceChunker(vrw, vrw)
-		var lastK Value
-		nextIsKey := true
-		for v := range kvs {
-			d.PanicIfTrue(v == nil)
-			if nextIsKey {
-				k = v
-				d.PanicIfFalse(lastK == nil || lastK.Less(k))
-				lastK = k
-				nextIsKey = false
-				continue
-			}
-			ch.Append(mapEntry{key: k, value: v})
-			nextIsKey = true
-		}
-		outChan <- newMap(ch.Done().(orderedSequence))
-	}()
+	readFunc(vrw, kvs, outChan)
 	return outChan
+}
+
+func readMapInput(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+	defer close(outChan)
+	ch := newEmptyMapSequenceChunker(vrw, vrw)
+	var lastK Value
+	nextIsKey := true
+	var k Value
+	for v := range kvs {
+		d.PanicIfTrue(v == nil)
+		if nextIsKey {
+			k = v
+			d.PanicIfFalse(lastK == nil || lastK.Less(k))
+			lastK = k
+			nextIsKey = false
+			continue
+		}
+		ch.Append(mapEntry{key: k, value: v})
+		nextIsKey = true
+	}
+	outChan <- newMap(ch.Done().(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,

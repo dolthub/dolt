@@ -38,22 +38,33 @@ func NewSet(v ...Value) Set {
 // out of order will result in a panic. Once the input channel is closed
 // by the caller, a finished Set will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingSet(vrw ValueReadWriter, vals <-chan Value) <-chan Set {
+func NewStreamingSet(vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
+	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+		go readSetInput(vrw, vChan, outChan)
+	})
+}
+
+type streamingSetReadFunc func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set)
+
+func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streamingSetReadFunc) <-chan Set {
 	outChan := make(chan Set, 1)
-	go func() {
-		defer close(outChan)
-		ch := newEmptySetSequenceChunker(vrw, vrw)
-		var lastV Value
-		for v := range vals {
-			d.PanicIfTrue(v == nil)
-			if lastV != nil {
-				d.PanicIfFalse(lastV == nil || lastV.Less(v))
-			}
-			ch.Append(v)
-		}
-		outChan <- newSet(ch.Done().(orderedSequence))
-	}()
+	readFunc(vrw, vChan, outChan)
 	return outChan
+}
+
+func readSetInput(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+	defer close(outChan)
+	ch := newEmptySetSequenceChunker(vrw, vrw)
+	var lastV Value
+	for v := range vChan {
+		d.PanicIfTrue(v == nil)
+		if lastV != nil {
+			d.PanicIfFalse(lastV.Less(v))
+		}
+		lastV = v
+		ch.Append(v)
+	}
+	outChan <- newSet(ch.Done().(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
