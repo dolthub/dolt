@@ -75,27 +75,38 @@ func generateNumbersAsRefOfStructs(n int) []Value {
 	return nums
 }
 
-func chunkDiffCount(c1 []Ref, c2 []Ref) int {
+func leafCount(c Collection) int {
+	leaves, _ := loadLeafNodes([]Collection{c}, 0, c.Len())
+	return len(leaves)
+}
+
+func leafDiffCount(c1, c2 Collection) int {
 	count := 0
 	hashes := make(map[hash.Hash]int)
 
-	for _, r := range c1 {
-		hashes[r.TargetHash()]++
+	leaves1, _ := loadLeafNodes([]Collection{c1}, 0, c1.Len())
+	leaves2, _ := loadLeafNodes([]Collection{c2}, 0, c2.Len())
+
+	for _, l := range leaves1 {
+		hashes[l.Hash()]++
 	}
 
-	for _, r := range c2 {
-		if c, ok := hashes[r.TargetHash()]; ok {
+	for _, l := range leaves2 {
+		if c, ok := hashes[l.Hash()]; ok {
 			if c == 1 {
-				delete(hashes, r.TargetHash())
+				delete(hashes, l.Hash())
 			} else {
-				hashes[r.TargetHash()] = c - 1
+				hashes[l.Hash()] = c - 1
 			}
 		} else {
 			count++
 		}
 	}
 
-	count += len(hashes)
+	for _, c := range hashes {
+		count += c
+	}
+
 	return count
 }
 

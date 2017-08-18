@@ -56,13 +56,12 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 		return
 	}
 
-	root := b.sequence()
-	leaves, localStart := loadLeafSequences(root.valueReader(), []sequence{root}, startIdx, endIdx)
+	leaves, localStart := loadLeafNodes([]Collection{b}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 
-	for _, s := range leaves {
-		bl := s.(blobLeafSequence)
+	for _, b := range leaves {
+		bl := b.sequence().(blobLeafSequence)
 
 		localEnd := endIdx
 		leafLength := uint64(len(bl.data))

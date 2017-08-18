@@ -81,22 +81,25 @@ func orderedKeyFromSum(msd []metaTuple) orderedKey {
 	return orderedKeyFromUint64(sum)
 }
 
-// loads the set of leaf sequences which contain the items [startIdx -> endIdx).
-// Returns the set of sequences and the offset within the first sequence which corresponds to |startIdx|.
-func loadLeafSequences(vr ValueReader, seqs []sequence, startIdx, endIdx uint64) ([]sequence, uint64) {
-	if seqs[0].isLeaf() {
-		for _, s := range seqs {
-			d.PanicIfFalse(s.isLeaf())
+// loads the set of leaf nodes which contain the items [startIdx -> endIdx).
+// Returns the set of nodes and the offset within the first sequence which corresponds to |startIdx|.
+func loadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64) {
+	vr := cols[0].sequence().valueReader()
+
+	if cols[0].sequence().isLeaf() {
+		for _, c := range cols {
+			d.PanicIfFalse(c.sequence().isLeaf())
 		}
 
-		return seqs, startIdx
+		return cols, startIdx
 	}
 
-	level := seqs[0].treeLevel()
+	level := cols[0].sequence().treeLevel()
 	childTuples := []metaTuple{}
 
 	cum := uint64(0)
-	for _, s := range seqs {
+	for _, c := range cols {
+		s := c.sequence()
 		d.PanicIfFalse(s.treeLevel() == level)
 		ms := s.(metaSequence)
 
@@ -125,7 +128,7 @@ func loadLeafSequences(vr ValueReader, seqs []sequence, startIdx, endIdx uint64)
 	}
 
 	// Fetch committed child sequences in a single batch
-	fetched := make(map[hash.Hash]sequence, len(hs))
+	fetched := make(map[hash.Hash]Collection, len(hs))
 	if len(hs) > 0 {
 		valueChan := make(chan Value, len(hs))
 		go func() {
@@ -134,19 +137,19 @@ func loadLeafSequences(vr ValueReader, seqs []sequence, startIdx, endIdx uint64)
 			close(valueChan)
 		}()
 		for value := range valueChan {
-			fetched[value.Hash()] = value.(Collection).sequence()
+			fetched[value.Hash()] = value.(Collection)
 		}
 	}
 
-	childSeqs := make([]sequence, len(childTuples))
+	childCols := make([]Collection, len(childTuples))
 	for i, mt := range childTuples {
 		if mt.child != nil {
-			childSeqs[i] = mt.child.sequence()
+			childCols[i] = mt.child.(Collection)
 			continue
 		}
 
-		childSeqs[i] = fetched[mt.ref.TargetHash()]
+		childCols[i] = fetched[mt.ref.TargetHash()]
 	}
 
-	return loadLeafSequences(vr, childSeqs, startIdx, endIdx)
+	return loadLeafNodes(childCols, startIdx, endIdx)
 }

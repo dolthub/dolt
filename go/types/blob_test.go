@@ -95,7 +95,7 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 }
 
 func TestBlobSuite4K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(12, 0, 0, 0))
+	suite.Run(t, newBlobTestSuite(12, 1, 2, 2))
 }
 
 func TestBlobSuite64K(t *testing.T) {
