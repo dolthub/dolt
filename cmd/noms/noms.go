@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/noms/cmd/noms/splore"
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/profile"
@@ -30,6 +31,7 @@ var commands = []*util.Command{
 	nomsRoot,
 	nomsServe,
 	nomsShow,
+	splore.NomsSplore,
 	nomsSync,
 	nomsVersion,
 }
@@ -203,12 +205,21 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	show.Flag("stats", "If true, reports statistics related to the value").Bool()
 	show.Arg("object", "a noms object").Required().String()
 
+	// sync
 	sync := noms.Command("sync", `Moves datasets between or within databases
 See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object and dataset arguments.
 `)
 	sync.Flag("parallelism", "").Short('p').Default("512").Int()
 	sync.Arg("source-object", "a noms source object").Required().String()
 	sync.Arg("dest-dataset", "a noms dataset").Required().String()
+
+	// splore
+	splore := noms.Command("splore", `Interactively explore a Noms database using a web browser.
+See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the path argument.
+`)
+	splore.Flag("port", "Server port. Defaults to a random port.").Short('p').Int()
+	splore.Flag("browser", "Immediately open a web browser.").Short('b').Bool()
+	splore.Arg("database or path", "The noms database or path to splore.").Required().String()
 
 	// version
 	noms.Command("version", "Print the noms version")
