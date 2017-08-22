@@ -31,16 +31,13 @@ var commands = []*util.Command{
 	nomsRoot,
 	nomsServe,
 	nomsShow,
-	splore.NomsSplore,
 	nomsSync,
 	nomsVersion,
 }
 
-type commandHandler func(input string) (exitCode int)
-type command func(*kingpin.Application) (*kingpin.CmdClause, commandHandler)
-
-var kingpinCommands = []command{
+var kingpinCommands = []util.KingpinCommand{
 	nomsBlob,
+	splore.Cmd,
 }
 
 var actions = []string{
@@ -76,7 +73,7 @@ func main() {
 	// set up docs for non-kingpin commands
 	addNomsDocs(noms)
 
-	handlers := map[string]commandHandler{}
+	handlers := map[string]util.KingpinHandler{}
 
 	// install kingpin handlers
 	for _, cmdFunction := range kingpinCommands {
@@ -85,14 +82,15 @@ func main() {
 	}
 
 	input := kingpin.MustParse(noms.Parse(os.Args[1:]))
-	if handler := handlers[strings.Split(input, " ")[0]]; handler != nil {
-		handler(input)
-	}
 
 	// apply global flags
 	profile.ApplyProfileFlags(cpuProfileVal, memProfileVal, blockProfileVal)
 	verbose.SetVerbose(*verboseVal)
 	verbose.SetQuiet(*quietVal)
+
+	if handler := handlers[strings.Split(input, " ")[0]]; handler != nil {
+		handler(input)
+	}
 
 	// fall back to previous (non-kingpin) noms commands
 
@@ -212,14 +210,6 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	sync.Flag("parallelism", "").Short('p').Default("512").Int()
 	sync.Arg("source-object", "a noms source object").Required().String()
 	sync.Arg("dest-dataset", "a noms dataset").Required().String()
-
-	// splore
-	splore := noms.Command("splore", `Interactively explore a Noms database using a web browser.
-See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the path argument.
-`)
-	splore.Flag("port", "Server port. Defaults to a random port.").Short('p').Int()
-	splore.Flag("browser", "Immediately open a web browser.").Short('b').Bool()
-	splore.Arg("database or path", "The noms database or path to splore.").Required().String()
 
 	// version
 	noms.Command("version", "Print the noms version")

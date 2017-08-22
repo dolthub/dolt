@@ -18,23 +18,11 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
 	humanize "github.com/dustin/go-humanize"
-	flag "github.com/juju/gnuflag"
 	"github.com/skratchdot/open-golang/open"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
-var (
-	NomsSplore = &util.Command{
-		Run:       run,
-		Flags:     setupFlags,
-		Nargs:     1,
-		UsageLine: "splore",
-	}
-
-	browse    = false
-	httpServe = http.Serve
-	mux       = &http.ServeMux{}
-	port      = 0
-)
+var httpServe = http.Serve // override for tests
 
 const indexHtml = `<!DOCTYPE html>
 <html>
@@ -49,14 +37,6 @@ const indexHtml = `<!DOCTYPE html>
 		<script src="/out.js"></script>
 	</body>
 </html>`
-
-func setupFlags() *flag.FlagSet {
-	flagSet := flag.NewFlagSet("splore", flag.ExitOnError)
-	flagSet.BoolVar(&browse, "b", false, "Immediately open a web browser.")
-	flagSet.IntVar(&port, "p", 0, "Server port. Defaults to a random port.")
-	verbose.RegisterVerboseFlags(flagSet)
-	return flagSet
-}
 
 type node struct {
 	nodeInfo
@@ -75,19 +55,31 @@ type nodeChild struct {
 	Value nodeInfo `json:"value"`
 }
 
-func run(args []string) int {
+func Cmd(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+	splore := noms.Command("splore", `Interactively explore a Noms database using a web browser.
+See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the path argument.
+`)
+	port := splore.Flag("port", "Server port. Defaults to a random port.").Short('p').Int()
+	browser := splore.Flag("browser", "Immediately open a web browser.").Short('b').Bool()
+	spec := splore.Arg("database or path", "The noms database or path to splore.").Required().String()
+	return splore, func(input string) (exitCode int) {
+		return run(&http.ServeMux{}, *port, *browser, *spec)
+	}
+}
+
+func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 	var sp spec.Spec
 	var getValue func() types.Value
 
 	cfg := config.NewResolver()
-	if pathSp, err := spec.ForPath(cfg.ResolvePathSpec(args[0])); err == nil {
+	if pathSp, err := spec.ForPath(cfg.ResolvePathSpec(spStr)); err == nil {
 		sp = pathSp
 		getValue = func() types.Value { return sp.GetValue() }
-	} else if dbSp, err := spec.ForDatabase(cfg.ResolveDbSpec(args[0])); err == nil {
+	} else if dbSp, err := spec.ForDatabase(cfg.ResolveDbSpec(spStr)); err == nil {
 		sp = dbSp
 		getValue = func() types.Value { return sp.GetDatabase().Datasets() }
 	} else {
-		d.CheckError(fmt.Errorf("Not a path or database: %s", args[0]))
+		d.CheckError(fmt.Errorf("Not a path or database: %s", spStr))
 	}
 
 	defer sp.Close()
@@ -144,7 +136,7 @@ func run(args []string) int {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	d.PanicIfError(err)
 
-	if browse {
+	if browser {
 		open.Run("http://" + l.Addr().String())
 	}
 

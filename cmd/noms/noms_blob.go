@@ -8,11 +8,12 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-func nomsBlob(noms *kingpin.Application) (*kingpin.CmdClause, commandHandler) {
+func nomsBlob(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	blob := noms.Command("blob", "interact with blobs in a dataset")
 
 	blobPut := blob.Command("put", "imports a blob to a dataset")

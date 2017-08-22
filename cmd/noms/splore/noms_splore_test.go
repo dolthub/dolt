@@ -41,10 +41,7 @@ func TestNomsSplore(t *testing.T) {
 			return nil
 		}
 
-		go func() {
-			mux = &http.ServeMux{} // reset mux each run to clear http.Handle calls
-			run([]string{"nbs:" + dir})
-		}()
+		go func() { run(&http.ServeMux{}, 0, false, "nbs:"+dir) }()
 		l := <-lchan
 		defer l.Close()
 
