@@ -318,6 +318,14 @@ func extractHashes(req *http.Request) hash.HashSlice {
 	return deserializeHashes(reader)
 }
 
+func BuildHashesRequestForTest(hashes hash.HashSet) io.ReadCloser {
+	batch := chunks.ReadBatch{}
+	for h := range hashes {
+		batch[h] = nil
+	}
+	return buildHashesRequest(batch)
+}
+
 func buildHashesRequest(batch chunks.ReadBatch) io.ReadCloser {
 	body, pw := io.Pipe()
 	go func() {
