@@ -139,18 +139,12 @@ func TestBuildHashesRequest(t *testing.T) {
 		hash.Parse("00000000000000000000000000000003"): nil,
 	}
 	r := buildHashesRequest(batch)
-	b, err := ioutil.ReadAll(r)
-	assert.NoError(err)
+	defer r.Close()
+	requested := deserializeHashes(r)
 
-	urlValues, err := url.ParseQuery(string(b))
-	assert.NoError(err)
-	assert.NotEmpty(urlValues)
-
-	queryRefs := urlValues["ref"]
-	assert.Len(queryRefs, len(batch))
-	for _, r := range queryRefs {
-		_, present := batch[hash.Parse(r)]
-		assert.True(present, "Query contains %s, which is not in initial refs", r)
+	for _, h := range requested {
+		_, present := batch[h]
+		assert.True(present, "Query contains %s, which is not in initial refs", h)
 	}
 }
 
@@ -168,13 +162,13 @@ func TestHandleGetRefs(t *testing.T) {
 	}
 	persistChunks(cs)
 
-	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash()))
+	body := buildHashesRequest(chunks.ReadBatch{chnx[0].Hash(): nil, chnx[1].Hash(): nil})
 
 	w := httptest.NewRecorder()
 	HandleGetRefs(
 		w,
 		newRequest("POST", "", "", body, http.Header{
-			"Content-Type": {"application/x-www-form-urlencoded"},
+			"Content-Type": {"application/octet-stream"},
 		}),
 		params{},
 		storage.NewView(),
@@ -274,13 +268,17 @@ func TestHandleHasRefs(t *testing.T) {
 	cs.Put(present)
 	persistChunks(cs)
 
-	body := strings.NewReader(fmt.Sprintf("ref=%s&ref=%s&ref=%s", chnx[0].Hash(), chnx[1].Hash(), present.Hash()))
+	body := buildHashesRequest(chunks.ReadBatch{
+		chnx[0].Hash(): nil,
+		chnx[1].Hash(): nil,
+		present.Hash(): nil,
+	})
 
 	w := httptest.NewRecorder()
 	HandleHasRefs(
 		w,
 		newRequest("POST", "", "", body, http.Header{
-			"Content-Type": {"application/x-www-form-urlencoded"},
+			"Content-Type": {"application/octet-stream"},
 		}),
 		params{},
 		storage.NewView(),

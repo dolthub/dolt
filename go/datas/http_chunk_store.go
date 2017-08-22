@@ -28,13 +28,13 @@ import (
 )
 
 const (
-	httpChunkSinkConcurrency = 6
-	readBufferSize           = 1 << 12 // 4K
+	httpChunkStoreConcurrency = 6
+	readThreshold             = 1 << 12 // 4K
 )
 
 var customHTTPTransport = http.Transport{
-	// Since we limit ourselves to a maximum of httpChunkSinkConcurrency concurrent http requests, we think it's OK to up MaxIdleConnsPerHost so that one connection stays open for each concurrent request
-	MaxIdleConnsPerHost: httpChunkSinkConcurrency,
+	// Since we limit ourselves to a maximum of httpChunkStoreConcurrency concurrent http requests, we think it's OK to up MaxIdleConnsPerHost so that one connection stays open for each concurrent request
+	MaxIdleConnsPerHost: httpChunkStoreConcurrency,
 	// This sets, essentially, an idle-timeout. The timer starts counting AFTER the client has finished sending the entire request to the server. As soon as the client receives the server's response headers, the timeout is canceled.
 	ResponseHeaderTimeout: time.Duration(4) * time.Minute,
 }
@@ -75,7 +75,7 @@ func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChu
 		getQueue:      make(chan chunks.ReadRequest),
 		hasQueue:      make(chan chunks.ReadRequest),
 		finishedChan:  make(chan struct{}),
-		rateLimit:     make(chan struct{}, httpChunkSinkConcurrency),
+		rateLimit:     make(chan struct{}, httpChunkStoreConcurrency),
 		workerWg:      &sync.WaitGroup{},
 		cacheMu:       &sync.RWMutex{},
 		unwrittenPuts: nbs.NewCache(),
@@ -204,19 +204,19 @@ func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
 		return remaining
 	}
 
-	foundChunks := make(chan hash.Hash)
+	notFoundChunks := make(chan hash.Hash)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(remaining))
 	select {
 	case <-hcs.finishedChan:
 		d.Panic("Tried to HasMany on closed ChunkStore")
-	case hcs.hasQueue <- chunks.NewAbsentManyRequest(remaining, wg, foundChunks):
+	case hcs.hasQueue <- chunks.NewAbsentManyRequest(remaining, wg, notFoundChunks):
 	}
-	go func() { defer close(foundChunks); wg.Wait() }()
+	go func() { defer close(notFoundChunks); wg.Wait() }()
 
 	absent = hash.HashSet{}
-	for found := range foundChunks {
-		absent.Insert(found)
+	for notFound := range notFoundChunks {
+		absent.Insert(notFound)
 	}
 	return absent
 }
@@ -245,16 +245,14 @@ func (hcs *httpChunkStore) batchReadRequests(queue <-chan chunks.ReadRequest, ge
 func (hcs *httpChunkStore) sendReadRequests(req chunks.ReadRequest, queue <-chan chunks.ReadRequest, getter batchGetter) {
 	batch := chunks.ReadBatch{}
 
-	count := 0
 	addReq := func(req chunks.ReadRequest) {
 		for h := range req.Hashes() {
 			batch[h] = append(batch[h], req.Outstanding())
 		}
-		count++
 	}
 
 	addReq(req)
-	for drained := false; !drained && len(batch) < readBufferSize; {
+	for drained := false; !drained && len(batch) < readThreshold; {
 		select {
 		case req := <-queue:
 			addReq(req)
@@ -266,9 +264,9 @@ func (hcs *httpChunkStore) sendReadRequests(req chunks.ReadRequest, queue <-chan
 	hcs.rateLimit <- struct{}{}
 	go func() {
 		defer batch.Close()
+		defer func() { <-hcs.rateLimit }()
 
 		getter(batch)
-		<-hcs.rateLimit
 	}()
 }
 
@@ -286,7 +284,7 @@ func (hcs *httpChunkStore) getRefs(batch chunks.ReadBatch) {
 
 	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(batch), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
-		"Content-Type":    {"application/x-www-form-urlencoded"},
+		"Content-Type":    {"application/octet-stream"},
 	})
 
 	res, err := hcs.httpClient.Do(req)
@@ -296,7 +294,8 @@ func (hcs *httpChunkStore) getRefs(batch chunks.ReadBatch) {
 	defer closeResponse(reader)
 
 	if http.StatusOK != res.StatusCode {
-		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
+		data, _ := ioutil.ReadAll(reader)
+		d.Panic("Unexpected response: %s\n%s", http.StatusText(res.StatusCode), string(data))
 	}
 
 	chunkChan := make(chan *chunks.Chunk, 16)
@@ -318,7 +317,7 @@ func (hcs *httpChunkStore) hasRefs(batch chunks.ReadBatch) {
 
 	req := newRequest("POST", hcs.auth, u.String(), buildHashesRequest(batch), http.Header{
 		"Accept-Encoding": {"x-snappy-framed"},
-		"Content-Type":    {"application/x-www-form-urlencoded"},
+		"Content-Type":    {"application/octet-stream"},
 	})
 
 	res, err := hcs.httpClient.Do(req)
@@ -375,7 +374,6 @@ func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli h
 
 	body := buildWriteValueRequest(chunkChan)
 	req := newRequest("POST", auth, u.String(), body, http.Header{
-		"Accept-Encoding":  {"gzip"},
 		"Content-Encoding": {"x-snappy-framed"},
 		"Content-Type":     {"application/octet-stream"},
 	})

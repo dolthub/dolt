@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -251,6 +252,35 @@ func (suite *HTTPChunkStoreSuite) TestGetMany() {
 	}
 	suite.Len(hashes, 1)
 	suite.True(hashes.Has(notPresent))
+}
+
+func (suite *HTTPChunkStoreSuite) TestOverGetThreshold_Issue3589() {
+	if testing.Short() {
+		suite.T().Skip("Skipping test in short mode.")
+	}
+	// BUG 3589 happened because we requested enough hashes that the body was over 10MB. The new way of encoding getRefs request bodies means that 10MB will no longer be a limitation. This test will generate a request larger than 10MB.
+	count := ((10 * (1 << 20)) / hash.ByteLen) + 1
+	hashes := make(hash.HashSet, count)
+	for i := 0; i < count-1; i++ {
+		h := hash.Hash{}
+		binary.BigEndian.PutUint64(h[hash.ByteLen-8:], uint64(i))
+		hashes.Insert(h)
+	}
+
+	present := chunks.NewChunk([]byte("ghi"))
+	suite.serverCS.Put(present)
+	persistChunks(suite.serverCS)
+	hashes.Insert(present.Hash())
+
+	foundChunks := make(chan *chunks.Chunk)
+	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
+
+	found := hash.HashSet{}
+	for c := range foundChunks {
+		found.Insert(c.Hash())
+	}
+	suite.Len(found, 1)
+	suite.True(found.Has(present.Hash()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestGetManyAllCached() {

@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"runtime"
 	"strings"
 	"time"
@@ -194,20 +193,24 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	w.WriteHeader(http.StatusCreated)
 }
 
-// Contents of the returned io.Reader are snappy-compressed.
-func buildWriteValueRequest(chunkChan chan *chunks.Chunk) io.Reader {
+// Contents of the returned io.ReadCloser are snappy-compressed.
+func buildWriteValueRequest(chunkChan chan *chunks.Chunk) io.ReadCloser {
 	body, pw := io.Pipe()
 
 	go func() {
-		gw := snappy.NewBufferedWriter(pw)
+		sw := snappy.NewBufferedWriter(pw)
+		defer checkClose(pw)
+		defer checkClose(sw)
 		for c := range chunkChan {
-			chunks.Serialize(*c, gw)
+			chunks.Serialize(*c, sw)
 		}
-		d.Chk.NoError(gw.Close())
-		d.Chk.NoError(pw.Close())
 	}()
 
 	return body
+}
+
+func checkClose(c io.Closer) {
+	d.PanicIfError(c.Close())
 }
 
 func bodyReader(req *http.Request) (reader io.ReadCloser) {
@@ -309,26 +312,19 @@ func handleGetBlob(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 }
 
 func extractHashes(req *http.Request) hash.HashSlice {
-	err := req.ParseForm()
-	d.PanicIfError(err)
-	hashStrs := req.PostForm["ref"]
-	if len(hashStrs) <= 0 {
-		d.Panic("PostForm is empty")
-	}
-
-	hashes := make(hash.HashSlice, len(hashStrs))
-	for idx, refStr := range hashStrs {
-		hashes[idx] = hash.Parse(refStr)
-	}
-	return hashes
+	reader := bodyReader(req)
+	defer reader.Close()
+	defer io.Copy(ioutil.Discard, reader) // Ensure all data on reader is consumed
+	return deserializeHashes(reader)
 }
 
-func buildHashesRequest(batch chunks.ReadBatch) io.Reader {
-	values := &url.Values{}
-	for h := range batch {
-		values.Add("ref", h.String())
-	}
-	return strings.NewReader(values.Encode())
+func buildHashesRequest(batch chunks.ReadBatch) io.ReadCloser {
+	body, pw := io.Pipe()
+	go func() {
+		defer checkClose(pw)
+		serializeHashes(pw, batch)
+	}()
+	return body
 }
 
 func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
