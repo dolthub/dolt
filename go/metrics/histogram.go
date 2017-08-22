@@ -27,6 +27,7 @@ import (
 //
 // Only implemented: Log2-based histogram
 type Histogram struct {
+	sum      uint64
 	buckets  [bucketCount]uint64
 	ToString ToStringFunc
 }
@@ -42,8 +43,10 @@ const bucketCount = 63
 // Sample adds a uint64 data point to the histogram
 func (h *Histogram) Sample(v uint64) {
 	d.PanicIfTrue(v == 0)
-	pot := 0
 
+	h.sum += v
+
+	pot := 0
 	for v > 0 {
 		v = v >> 1
 		pot++
@@ -73,25 +76,17 @@ func (h Histogram) bucketVal(bucket int) uint64 {
 	return 1 << (uint64(bucket))
 }
 
-// The bucket sum is reported as the mid-point value of a bucket multiplied by
-// the number of samples in the bucket
-func (h Histogram) bucketSum(bucket int) uint64 {
-	return h.buckets[bucket] * (h.bucketVal(bucket) + h.bucketVal(bucket+1)) / 2
-}
-
 // Sum return the sum of sampled values, given that each sample is clamped to
 // the mid-point value of the bucket in which it is recorded.
 func (h Histogram) Sum() uint64 {
-	sum := uint64(0)
-	for i := 0; i < bucketCount; i++ {
-		sum += h.bucketSum(i)
-	}
-	return sum
+	return h.sum
 }
 
 // Add returns a new Histogram which is the result of adding this and other
 // bucket-wise.
 func (h *Histogram) Add(other Histogram) {
+	h.sum += other.sum
+
 	for i := 0; i < bucketCount; i++ {
 		h.buckets[i] += other.buckets[i]
 	}
@@ -103,6 +98,8 @@ func (h *Histogram) Add(other Histogram) {
 // bucket from other is larger than the corresponding bucket in this.
 func (h Histogram) Delta(other Histogram) Histogram {
 	nh := Histogram{}
+	nh.sum = h.sum - other.sum
+
 	for i := 0; i < bucketCount; i++ {
 		c := h.buckets[i]
 		l := other.buckets[i]
