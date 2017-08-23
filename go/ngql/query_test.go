@@ -29,9 +29,13 @@ func TestQueryGraphQL(t *testing.T) {
 	suite.Run(t, &QueryGraphQLSuite{})
 }
 
-func (suite *QueryGraphQLSuite) SetupTest() {
+func newTestValueStore() *types.ValueStore {
 	storage := &chunks.MemoryStorage{}
-	suite.vs = types.NewValueStore(storage.NewView())
+	return types.NewValueStore(storage.NewView())
+}
+
+func (suite *QueryGraphQLSuite) SetupTest() {
+	suite.vs = newTestValueStore()
 }
 
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {
@@ -1110,9 +1114,8 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 }
 
 func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
-	var vr types.ValueReader
 	test := func(expected types.Value, val interface{}) {
-		suite.True(expected.Equals(InputToNomsValue(vr, val, types.TypeOf(expected))))
+		suite.True(expected.Equals(InputToNomsValue(suite.vs, val, types.TypeOf(expected))))
 	}
 
 	test(types.Number(42), int(42))
@@ -1174,19 +1177,19 @@ func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	val := map[string]interface{}{
 		"x": float64(42),
 	}
-	suite.Equal(expected, InputToNomsValue(vr, val, expectedType))
+	suite.Equal(expected, InputToNomsValue(suite.vs, val, expectedType))
 
 	val = map[string]interface{}{
 		"x": float64(42),
 		"a": nil,
 	}
-	suite.Equal(expected, InputToNomsValue(vr, val, expectedType))
+	suite.Equal(expected, InputToNomsValue(suite.vs, val, expectedType))
 
 	val = map[string]interface{}{
 		"x": nil,
 	}
 	suite.Panics(func() {
-		InputToNomsValue(vr, val, expectedType)
+		InputToNomsValue(suite.vs, val, expectedType)
 	})
 }
 
@@ -1484,17 +1487,17 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 
 func TestGetListElementsWithSet(t *testing.T) {
 	assert := assert.New(t)
-	var vr types.ValueReader
+	vs := newTestValueStore()
 	v := types.NewSet(types.Number(0), types.Number(1), types.Number(2))
-	r := getListElements(vr, v, map[string]interface{}{})
+	r := getListElements(vs, v, map[string]interface{}{})
 	assert.Equal([]interface{}{float64(0), float64(1), float64(2)}, r)
 
-	r = getListElements(vr, v, map[string]interface{}{
+	r = getListElements(vs, v, map[string]interface{}{
 		atKey: 1,
 	})
 	assert.Equal([]interface{}{float64(1), float64(2)}, r)
 
-	r = getListElements(vr, v, map[string]interface{}{
+	r = getListElements(vs, v, map[string]interface{}{
 		countKey: 2,
 	})
 	assert.Equal([]interface{}{float64(0), float64(1)}, r)
