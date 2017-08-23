@@ -260,9 +260,8 @@ func getMetaChildren(v types.Value) (children []nodeChild) {
 		l = v.(types.Blob).Len()
 	}
 
-	vKind := types.TypeOf(v).Desc.Kind()
 	v.WalkRefs(func(r types.Ref) {
-		if r.TargetType().Desc.Kind() == vKind {
+		if r.TargetType().Desc.Kind() == v.Kind() {
 			children = append(children, nodeChild{
 				Value: info(r, "#"+r.TargetHash().String()),
 			})
@@ -276,7 +275,7 @@ func getMetaChildren(v types.Value) (children []nodeChild) {
 }
 
 func nodeHasChildren(v types.Value) bool {
-	switch k := types.TypeOf(v).Desc.Kind(); k {
+	switch k := v.Kind(); k {
 	case types.BlobKind, types.BoolKind, types.NumberKind, types.StringKind:
 		return false
 	case types.RefKind:
