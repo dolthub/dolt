@@ -1,0 +1,168 @@
+#!/bin/sh
+
+die() {
+	echo "$@" >&2
+	exit 1
+}
+
+have_binary() {
+	type "$1" > /dev/null 2> /dev/null
+}
+
+check_writeable() {
+	printf "" > "$1" && rm "$1"
+}
+
+try_download() {
+	url="$1"
+	output="$2"
+	command="$3"
+	util_name="$(set -- $command; echo "$1")"
+
+	if ! have_binary "$util_name"; then
+		return 1
+	fi
+
+	printf '==> Using %s to download "%s" to "%s"\n' "$util_name" "$url" "$output"
+	if eval "$command"; then
+		echo "==> Download complete!"
+		return
+	else
+		echo "error: couldn't download with $util_name ($?)"
+		return 1
+	fi
+}
+
+download() {
+	dl_url="$1"
+	dl_output="$2"
+
+	test "$#" -eq "2" || die "download requires exactly two arguments, was given $@"
+
+	if ! check_writeable "$dl_output"; then
+		die "download error: cannot write to $dl_output"
+	fi
+
+	try_download "$dl_url" "$dl_output" "wget '$dl_url' -O '$dl_output'" && return
+	try_download "$dl_url" "$dl_output" "curl --silent --fail --output '$dl_output' '$dl_url'" && return
+	try_download "$dl_url" "$dl_output" "fetch '$dl_url' -o '$dl_output'" && return
+	try_download "$dl_url" "$dl_output" "http '$dl_url' > '$dl_output'" && return
+	try_download "$dl_url" "$dl_output" "ftp -o '$dl_output' '$dl_url'" && return
+
+	die "Unable to download $dl_url. exiting."
+}
+
+unarchive() {
+	ua_archivetype="$1"
+	ua_infile="$2"
+	ua_outfile="$3"
+	ua_distname="$4"
+
+	if ! check_writeable "$ua_outfile"; then
+		die "unarchive error: cannot write to $ua_outfile"
+	fi
+
+	case "$ua_archivetype" in
+		tar.gz)
+			if have_binary tar; then
+				echo "==> using 'tar' to extract binary from archive"
+				< "$ua_infile" tar -Ozxf - "$ua_distname/$ua_distname" > "$ua_outfile" \
+					|| die "tar has failed"
+			else
+				die "no binary on system for extracting tar files"
+			fi
+			;;
+		zip)
+			if have_binary unzip; then
+				echo "==> using 'unzip' to extract binary from archive"
+				unzip -p "$ua_infile" "$ua_distname/$ua_distname" > "$ua_outfile" \
+					|| die "unzip has failed"
+			else
+				die "no installed method for extracting .zip archives"
+			fi
+			;;
+		*)
+			die "unrecognized archive type '$ua_archivetype'"
+	esac
+
+	chmod +x "$ua_outfile" || die "chmod has failed"
+}
+
+get_go_vars() {
+	if [ ! -z "$GOOS" ] && [ ! -z "$GOARCH" ]; then
+		printf "%s-%s" "$GOOS" "$GOARCH"
+	elif have_binary go; then
+		printf "%s-%s" "$(go env GOOS)" "$(go env GOARCH)"
+	else
+		die "no way of determining system GOOS and GOARCH\nPlease manually set GOOS and GOARCH then retry."
+	fi
+}
+
+mkurl() {
+	m_root="$1"
+	m_name="$2"
+	m_vers="$3"
+	m_archive="$4"
+	m_govars=$(get_go_vars) || die "could not get go env vars"
+
+	echo "https://ipfs.io$m_root/$m_name/$m_vers/${m_name}_${m_vers}_$m_govars.$m_archive"
+}
+
+distroot="$1"
+distname="$2"
+outpath="$3"
+version="$4"
+
+if [ -z "$distroot" ] || [ -z "$distname" ] || [ -z "$outpath" ] || [ -z "$version" ]; then
+	die "usage: dist_get <distroot> <distname> <outpath> <version>"
+fi
+
+case $version in
+	v*)
+		# correct input
+		;;
+	*)
+		echo "invalid version '$version'" >&2
+		die "versions must begin with 'v', for example: v0.4.0"
+		;;
+esac
+
+# TODO: don't depend on the go tool being installed to detect this
+goenv=$(get_go_vars) || die "could not get go env vars"
+
+case $goenv in
+	linux-*)
+		archive="tar.gz"
+		;;
+	darwin-*)
+		archive="tar.gz"
+		;;
+	windows-*)
+		archive="zip"
+		;;
+	freebsd-*)
+		archive="tar.gz"
+		;;
+	openbsd-*)
+		archive="tar.gz"
+		;;
+	*)
+		echo "unrecognized system environment: $goenv" >&2
+		die "currently only linux, darwin, windows and freebsd are supported by this script"
+esac
+
+
+mkdir -p bin/tmp
+
+url=$(mkurl "$distroot" "$distname" "$version" "$archive")
+tmpfi="bin/tmp/$distname.$archive"
+
+download "$url" "$tmpfi"
+if [ $? -ne 0 ]; then
+	die "failed to download $url to $tmpfi"
+fi
+
+unarchive "$archive" "$tmpfi" "$outpath" "$distname"
+if [ $? -ne 0 ]; then
+	die "failed to extract archive $tmpfi"
+fi

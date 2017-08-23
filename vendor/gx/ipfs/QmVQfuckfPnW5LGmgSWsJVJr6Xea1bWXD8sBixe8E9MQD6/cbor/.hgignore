@@ -1,0 +1,12 @@
+syntax: glob
+*.o
+*.d
+*.pyc
+*~
+build
+*.egg-info
+Attic
+*.so
+test-vectors
+*,cover
+py/dist

@@ -1,0 +1,9 @@
+language: go
+
+go:
+  - 1.3
+  - 1.4
+  - release
+
+script:
+  - go test -race -cpu=5 -v ./...

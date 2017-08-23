@@ -1,0 +1,10 @@
+{
+  "name": "gogo-protobuf",
+  "author": "whyrusleeping",
+  "version": "0.0.0",
+  "language": "go",
+  "issues_url": "",
+  "gx": {
+    "dvcsimport": "github.com/gogo/protobuf"
+  }
+}

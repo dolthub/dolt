@@ -1,0 +1,26 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/mdns"
+  },
+  "gxDependencies": [
+    {
+      "hash": "QmWchsfMt9Re1CQaiHqPQC1DrZ9bkpa6n229dRYkGyLXNh",
+      "name": "dns",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC",
+      "name": "go-net",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.8.0",
+  "issues_url": "",
+  "language": "go",
+  "license": "",
+  "name": "mdns",
+  "version": "0.1.1"
+}
+

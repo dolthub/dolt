@@ -1,0 +1,146 @@
+#!/bin/bash
+
+die() {
+	echo "$@" >&2
+	exit 1
+}
+
+have_binary() {
+	type "$1" > /dev/null 2> /dev/null
+}
+
+check_writeable() {
+	printf "" > "$1" && rm "$1"
+}
+
+download() {
+	local url="$1"
+	local output="$2"
+
+	if [ -z "$url" ] || [ -z "$output" ]; then
+		die "download takes exactly two arguments. was given '$@'"
+	fi
+
+	if ! check_writeable "$output"; then
+		die "download error: cannot write to $output"
+	fi
+
+	if have_binary wget; then
+		printf 'Using wget to download "%s" to "%s"\n' "$url" "$output"
+		wget "$url" -O "$output"
+	elif have_binary curl; then
+		printf 'Using curl to download "%s" to "%s"\n' "$url" "$output"
+		curl --silent "$url" > "$output"
+	elif have_binary fetch; then
+		printf 'Using fetch to download "%s" to "%s"\n' "$url" "$output"
+		fetch "$url" -o "$output"
+	else
+		die "no binary found to download $url. exiting."
+	fi
+}
+
+unarchive() {
+	local archivetype="$1"
+	local infile="$2"
+	local outfile="$3"
+	local distname="$4"
+
+	if ! check_writeable "$outfile"; then
+		die "unarchive error: cannot write to $outfile"
+	fi
+
+	case $archivetype in
+		tar.gz)
+			if have_binary tar; then
+				echo "==> using 'tar' to extract binary from archive"
+				cat "$infile" | tar -O -z -x "$distname/$distname" > "$outfile"
+			else
+				die "no binary on system for extracting tar files"
+			fi
+			;;
+		zip)
+			if have_binary unzip; then
+				echo "==> using 'unzip' to extract binary from archive"
+				unzip -p "$infile" "$distname/$distname" > "$outfile"
+			else
+				die "no installed method for extracting .zip archives"
+			fi
+			;;
+		*)
+			die "unrecognized archive type '$archivetype'"
+	esac
+
+	chmod +x "$outfile"
+}
+
+get_go_vars() {
+	if [ ! -z "$GOOS" ] && [ ! -z "$GOARCH" ]; then
+		printf "%s-%s" "$GOOS" "$GOARCH"
+	fi
+
+	if have_binary go; then
+		printf "%s-%s" "$(go env GOOS)" "$(go env GOARCH)"
+	else
+		die "no way of determining system GOOS and GOARCH\nPlease manually set GOOS and GOARCH then retry."
+	fi
+}
+
+mkurl() {
+	local name="$1"
+	local vers="$2"
+	local archive="$3"
+
+	local govars=$(get_go_vars)
+
+	echo "http://dist.ipfs.io/$name/$vers/${name}_${vers}_$govars.$archive"
+}
+
+distname="$1"
+outpath="$2"
+version="$3"
+
+if [ -z "$distname" ] || [ -z "$outpath" ] || [ -z "$version" ]; then
+	die "usage: dist_get <distname> <outpath> <version>"
+fi
+
+if [ ${version:0:1} != "v" ]; then
+	echo "invalid version '$version'" >&2
+	die "versions must begin with 'v', for example: v0.4.0"
+fi
+
+# TODO: don't depend on the go tool being installed to detect this
+goenv=$(get_go_vars)
+
+case $goenv in
+	linux-*)
+		archive="tar.gz"
+		;;
+	darwin-*)
+		archive="tar.gz"
+		;;
+	windows-*)
+		archive="zip"
+		;;
+	freebsd-*)
+		archive="tar.gz"
+		;;
+	*)
+		echo "unrecognized system environment: $goenv" >&2
+		die "currently only linux, darwin, windows and freebsd are supported by this script"
+esac
+
+
+mkdir -p bin/tmp
+
+url=$(mkurl "$distname" "$version" "$archive")
+tmpfi="bin/tmp/$distname.$archive"
+
+download "$url" "$tmpfi"
+if [ $? -ne 0 ]; then
+	die "failed to download $url to $tmpfi"
+fi
+
+unarchive "$archive" "$tmpfi" "$outpath" "$distname"
+if [ $? -ne 0 ]; then
+	die "failed to exract archive $tmpfi"
+fi

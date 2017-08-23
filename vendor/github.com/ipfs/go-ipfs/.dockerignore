@@ -1,0 +1,5 @@
+.git/
+!.git/HEAD
+!.git/refs/
+!.git/packed-refs
+test/sharness/lib/sharness/

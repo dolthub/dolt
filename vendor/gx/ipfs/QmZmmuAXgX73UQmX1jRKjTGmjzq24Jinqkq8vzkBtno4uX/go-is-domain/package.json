@@ -1,0 +1,15 @@
+{
+  "author": "jbenet",
+  "bugs": {
+    "URL": "https://github.com/jbenet/go-is-domain/issues",
+    "url": "https://github.com/jbenet/go-is-domain/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/jbenet/go-is-domain"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-is-domain",
+  "version": "1.0.1"
+}

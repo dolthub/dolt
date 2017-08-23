@@ -1,0 +1,40 @@
+machine:
+  environment:
+    TEST_NO_FUSE: 1
+    TEST_VERBOSE: 1
+    TEST_NO_DOCKER: 1
+    TRAVIS: 1
+    CIRCLE: 1
+    IMPORT_PATH: "github.com/ipfs/go-ipfs"
+    GOPATH: "$HOME/.go_workspace"
+    GOBIN: "$GOPATH/bin"
+    SERVICE: "circle-ci"
+
+  post:
+    - sudo rm -rf /usr/local/go
+    - if [ ! -e go1.8.3.linux-amd64.tar.gz ]; then curl -o go1.8.3.linux-amd64.tar.gz https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz; fi
+    - sudo tar -C /usr/local -xzf go1.8.3.linux-amd64.tar.gz
+
+  services:
+    - docker
+
+dependencies:
+  pre:
+    # setup ipv6
+    - sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0 net.ipv6.conf.all.disable_ipv6=0
+
+  override:
+    - rm -rf "$HOME/.go_workspace/src/$IMPORT_PATH"
+    - mkdir -p "$HOME/.go_workspace/src/$IMPORT_PATH"
+    - cp -aT . "$HOME/.go_workspace/src/$IMPORT_PATH"
+    - cd "$HOME/.go_workspace/src/$IMPORT_PATH" && make deps
+
+  cache_directories:
+    - ~/go1.8.3.linux-amd64.tar.gz
+    - "$HOME/.go_workspace/src/gx/ipfs"
+
+test:
+  override:
+    - bin/circle.sh:
+        pwd: "../.go_workspace/src/$IMPORT_PATH"
+        parallel: true

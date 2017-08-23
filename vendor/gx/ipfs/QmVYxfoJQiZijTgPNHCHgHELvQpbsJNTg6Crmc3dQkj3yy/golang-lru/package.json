@@ -1,0 +1,14 @@
+{
+  "author": "hashicorp",
+  "bugs": {
+    "URL": "https://github.com/hashicorp/golang-lru/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/hashicorp/golang-lru"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MPL-2",
+  "name": "golang-lru",
+  "version": "0.0.0"
+}

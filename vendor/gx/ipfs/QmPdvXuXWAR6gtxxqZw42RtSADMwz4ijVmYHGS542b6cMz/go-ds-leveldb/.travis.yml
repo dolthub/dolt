@@ -1,0 +1,20 @@
+os:
+    - linux
+    - osx
+
+language: go
+
+go:
+    - 1.7.3
+
+install: true
+
+script:
+    - make deps
+    - gx-go rewrite
+    - go get github.com/mattn/goveralls
+    - goveralls -service=travis-ci
+
+cache:
+    directories:
+        - $GOPATH/src/gx

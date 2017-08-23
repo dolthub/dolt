@@ -1,0 +1,15 @@
+{
+  "author": "gorilla",
+  "bugs": {
+    "url": "https://github.com/gorilla/websocket"
+  },
+  "gx": {
+    "dvcsimport": "github.com/gorilla/websocket"
+  },
+  "gxVersion": "0.11.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "websocket",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.0.1"
+}

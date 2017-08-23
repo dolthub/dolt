@@ -1,0 +1,26 @@
+This project:
+http://code.google.com/p/cbor/
+
+The standard:
+http://tools.ietf.org/html/rfc7049
+
+a Go implementation in progress
+https://github.com/cespare/cbor
+
+another python implementation, currently not as complete
+https://github.com/svartalf/python-cbor
+
+http://cbor.io/
+
+https://github.com/cbor/test-vectors/
+
+git clone https://github.com/cbor/test-vectors/
+
+go install code.google.com/p/cbor/go
+
+godoc code.google.com/p/cbor/go
+
+TODO: 
+compare go impl to
+https://github.com/ugorji/go
+go get github.com/ugorji/go/codec

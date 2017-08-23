@@ -1,0 +1,15 @@
+{
+	"other": {"/": "QmRgutAxd8t7oGkSm4wmeuByG6M51wcTso6cubDdQtuEfL"},
+	"cats": [
+		{"/": "QmRgutAxd8t7oGkSm4wmeuByG6M51wcTso6cubDdQtuEfL"},
+		{
+			"something": "interesting"
+		},
+		[
+			"fish",
+			{"/": "QmRgutAxd8t7oGkSm4wmeuByG6M51wcTso6cubDdQtuEfL"},
+			9
+		]
+	],
+	"foo": "bar"
+}

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: $0 <ipfs-or-ipns-path>"
+  echo "republishes an ipns name every 20 minutes"
+  echo "(this is an icky stop-gap until ipfs nodes do it for you)"
+  echo ""
+  echo "example:"
+  echo "  > $0 QmSYCpuKPbPQ2iFr2swJj2hvz7wQUXfPBXPiuVsQdL5FEs"
+  echo ""
+  exit 1
+fi
+
+# must be run online.
+ipfs swarm peers >/dev/null
+if [ $? -ne 0 ]; then
+  echo "error: ipfs daemon must be online and connected to peers "
+  exit 1
+fi
+
+# check the object is there
+ipfs object stat "$1" >/dev/null
+if [ $? -ne 0 ]; then
+  echo "error: ipfs cannot find $1"
+  exit 1
+fi
+
+echo "republishing $1 every 20 minutes"
+while :
+do
+  ipfs name publish $1
+  sleep 1200
+done

@@ -1,0 +1,15 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/multiformats/go-multicodec-packed"
+  },
+  "gx": {
+    "dvcsimport": "github.com/multiformats/go-multicodec-packed"
+  },
+  "gxVersion": "0.8.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-multicodec-packed",
+  "version": "0.1.0"
+}
+

@@ -1,0 +1,14 @@
+{
+  "author": "jbenet",
+  "bugs": {
+    "URL": "https://github.com/jbenet/go-os-rename/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/jbenet/go-os-rename"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "Apache-2",
+  "name": "go-os-rename",
+  "version": "0.0.0"
+}

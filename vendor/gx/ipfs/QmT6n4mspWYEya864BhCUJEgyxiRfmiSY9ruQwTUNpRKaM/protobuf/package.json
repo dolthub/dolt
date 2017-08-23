@@ -1,0 +1,12 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/golang/protobuf"
+  },
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "",
+  "name": "protobuf",
+  "version": "0.0.0"
+}

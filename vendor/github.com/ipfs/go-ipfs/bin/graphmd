@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: $0 <ipfs-path>..."
+  echo "output merkledag links in graphviz dot"
+  echo ""
+  echo "use it with dot:"
+  echo "	$0 QmZPAMWUfLD95GsdorXt9hH7aVrarb2SuLDMVVe6gABYmx | dot -Tsvg"
+  echo "	$0 QmZPAMWUfLD95GsdorXt9hH7aVrarb2SuLDMVVe6gABYmx | dot -Tpng"
+  echo "	$0 QmZPAMWUfLD95GsdorXt9hH7aVrarb2SuLDMVVe6gABYmx | dot -Tpdf"
+  echo ""
+  exit 1
+fi
+
+src='<src> [fontsize=8 shape=box];'
+dst='<dst> [fontsize=8 shape=box];'
+edge='<src> -> <dst> [label="<linkname>"];'
+fmt="$src
+$dst
+$edge"
+
+echo "digraph {"
+echo "	graph [rankdir=LR];"
+ipfs refs -r --format="$fmt" "$@" | awk '{ print "\t" $0 }'
+# ipfs refs -r --format="$fmt" "$@" | awk '{ print "\t" $0 }' | unflatten -l3
+echo "}"

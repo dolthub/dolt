@@ -1,0 +1,77 @@
+#!/bin/sh
+
+if test "x$UPGRADE_MSG" = "x"; then
+    printf >&2 "fatal: Please set '"'$UPGRADE_MSG'"' before sourcing this script\n"
+    exit 1
+fi
+
+die_upgrade() {
+    printf >&2 "fatal: %s\n" "$@"
+    printf >&2 "=> %s\n" "$UPGRADE_MSG"
+    exit 1
+}
+
+major_number() {
+    vers="$1"
+
+    # Hack around 'expr' exiting with code 1 when it outputs 0
+    case "$vers" in
+        0) echo "0" ;;
+        0.*) echo "0" ;;
+        *) expr "$vers" : "\([^.]*\).*" || return 1
+    esac
+}
+
+check_at_least_version() {
+    MIN_VERS="$1"
+    CUR_VERS="$2"
+    PROG_NAME="$3"
+
+    # Get major, minor and fix numbers for each version
+    MIN_MAJ=$(major_number "$MIN_VERS") || die "No major version number in '$MIN_VERS' for '$PROG_NAME'"
+    CUR_MAJ=$(major_number "$CUR_VERS") || die "No major version number in '$CUR_VERS' for '$PROG_NAME'"
+
+    # We expect a version to be of form X.X.X
+    # if the second dot doesn't match, we consider it a prerelease
+
+    if MIN_MIN=$(expr "$MIN_VERS" : "[^.]*\.\([0-9]\+\)"); then
+        # this captured digit is necessary, since expr returns code 1 if the output is empty
+        if expr "$MIN_VERS" : "[^.]*\.[0-9]*\([0-9]\.\|[0-9]\$\)" >/dev/null; then
+            MIN_PRERELEASE="0"
+        else
+            MIN_PRERELEASE="1"
+        fi
+        MIN_FIX=$(expr "$MIN_VERS" : "[^.]*\.[0-9]\+[^0-9]\+\([0-9]\+\)") || MIN_FIX="0"
+    else
+        MIN_MIN="0"
+        MIN_PRERELEASE="0"
+        MIN_FIX="0"
+    fi
+    if CUR_MIN=$(expr "$CUR_VERS" : "[^.]*\.\([0-9]\+\)"); then
+        # this captured digit is necessary, since expr returns code 1 if the output is empty
+        if expr "$CUR_VERS" : "[^.]*\.[0-9]*\([0-9]\.\|[0-9]\$\)" >/dev/null; then
+            CUR_PRERELEASE="0"
+        else
+            CUR_PRERELEASE="1"
+        fi
+        CUR_FIX=$(expr "$CUR_VERS" : "[^.]*\.[0-9]\+[^0-9]\+\([0-9]\+\)") || CUR_FIX="0"
+    else
+        CUR_MIN="0"
+        CUR_PRERELEASE="0"
+        CUR_FIX="0"
+    fi
+
+    # Compare versions
+    VERS_LEAST="$PROG_NAME version '$CUR_VERS' should be at least '$MIN_VERS'"
+    test "$CUR_MAJ" -lt "$MIN_MAJ" && die_upgrade "$VERS_LEAST"
+    test "$CUR_MAJ" -gt "$MIN_MAJ" || {
+        test "$CUR_MIN" -lt "$MIN_MIN" && die_upgrade "$VERS_LEAST"
+        test "$CUR_MIN" -gt "$MIN_MIN" || {
+            test "$CUR_PRERELEASE" -gt "$MIN_PRERELEASE" && die_upgrade "$VERS_LEAST"
+            test "$CUR_PRERELEASE" -lt "$MIN_PRERELEASE" || {
+                test "$CUR_FIX" -lt "$MIN_FIX" && die_upgrade "$VERS_LEAST"
+                true
+            }
+        }
+    }
+}

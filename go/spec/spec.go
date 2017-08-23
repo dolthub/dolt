@@ -17,6 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/ipfs"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -178,6 +179,11 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return storage.NewView()
+	case "ipfs":
+		return ipfs.NewChunkStore(sp.DatabaseName, false)
+	case "ipfs-local":
+		cs := ipfs.NewChunkStore(sp.DatabaseName, true)
+		return cs
 	}
 	panic("unreachable")
 }
@@ -272,6 +278,8 @@ func (sp Spec) createDatabase() datas.Database {
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
+	case "ipfs", "ipfs-local":
+		return datas.NewDatabase(sp.NewChunkStore())
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return datas.NewDatabase(storage.NewView())
@@ -300,7 +308,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	}
 
 	switch parts[0] {
-	case "nbs":
+	case "nbs", "ipfs", "ipfs-local":
 		protocol, name = parts[0], parts[1]
 
 	case "http", "https", "aws":

@@ -1,0 +1,27 @@
+// In order to re-generate the golang packages for `Record` you will need...
+// 1. Protobuf binary (tested with protoc 3.0.0). - https://github.com/gogo/protobuf/releases
+// 2. Gogo Protobuf (tested with gogo 0.3). - https://github.com/gogo/protobuf
+// Now from `libp2p/go-libp2p-record/pb` you can run...
+// `protoc --gogo_out=. record.proto`
+
+syntax = "proto2";
+package record.pb;
+
+// Record represents a dht record that contains a value
+// for a key value pair
+message Record {
+	// The key that references this record
+	optional string key = 1;
+
+	// The actual value this record is storing
+	optional bytes value = 2;
+
+	// hash of the authors public key
+	optional string author = 3;
+
+	// A PKI signature for the key+value+author
+	optional bytes signature = 4;
+
+	// Time the record was received, set by receiver
+	optional string timeReceived = 5;
+}

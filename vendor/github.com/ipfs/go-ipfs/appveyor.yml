@@ -1,0 +1,49 @@
+# Notes:
+#   - Minimal appveyor.yml file is an empty file. All sections are optional.
+#   - Indent each level of configuration with 2 spaces. Do not use tabs!
+#   - All section names are case-sensitive.
+#   - Section names should be unique on each level.
+
+version: "{build}"
+
+os: Windows Server 2012 R2
+
+clone_folder: c:\gopath\src\github.com\ipfs\go-ipfs
+
+environment:
+  GOPATH: c:\gopath
+  TEST_VERBOSE: 1
+  #TEST_NO_FUSE: 1
+  #TEST_SUITE: test_sharness_expensive
+  #GOFLAGS: -tags nofuse 
+  global:
+    BASH: C:\cygwin\bin\bash
+  matrix:
+  - GOARCH: amd64
+    GOVERSION: 1.5.1
+    GOROOT: c:\go
+    DOWNLOADPLATFORM: "x64"
+  
+install:
+  # Enable make
+  #- SET PATH=c:\MinGW\bin;%PATH%
+  #- copy c:\MinGW\bin\mingw32-make.exe c:\MinGW\bin\make.exe
+  - go version
+  - go env
+  
+# Cygwin build script
+#
+# NOTES:
+#
+# The stdin/stdout file descriptor appears not to be valid for the Appveyor
+# build which causes failures as certain functions attempt to redirect 
+# default file handles. Ensure a dummy file descriptor is opened with 'exec'.
+#  
+build_script:
+  - '%BASH% -lc "cd $APPVEYOR_BUILD_FOLDER; exec 0</dev/null; export PATH=$GOPATH/bin:$PATH; make nofuse"'
+  
+test_script:
+  - '%BASH% -lc "cd $APPVEYOR_BUILD_FOLDER; exec 0</dev/null; export PATH=$GOPATH/bin:$PATH; export GOFLAGS=''-tags nofuse''; export TEST_NO_FUSE=1; export TEST_VERBOSE=1; export TEST_SUITE=test_sharness_expensive; make $TEST_SUITE"'
+  
+#build:
+#  parallel: true

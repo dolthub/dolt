@@ -1,0 +1,14 @@
+{
+  "author": "Bren2010",
+  "bugs": {
+    "url": "https://github.com/Bren2010/proquint/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/bren2010/proquint"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "BSD-new",
+  "name": "proquint",
+  "version": "0.0.0"
+}

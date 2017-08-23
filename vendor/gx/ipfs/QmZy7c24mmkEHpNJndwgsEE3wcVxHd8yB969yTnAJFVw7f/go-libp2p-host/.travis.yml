@@ -1,0 +1,24 @@
+os:
+  - linux
+  - osx
+
+language: go
+
+go:
+    - 1.7
+
+install: true
+
+before_install:
+  - make deps
+
+script:
+  - go vet
+  - $GOPATH/bin/goveralls -service="travis-ci"
+
+cache:
+    directories:
+        - $GOPATH/src/gx
+
+notifications:
+  email: false

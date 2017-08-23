@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+# Check if a gx program is installed and if its version is at least
+# equal to a minimum version number.
+#
+# Call it for example like this:
+#
+#   $ check_gx_program "gx-go" "0.2.0" "Use 'make gx_upgrade' to install or upgrade gx-go."
+#
+# or:
+#
+#   $ check_gx_program "gx" "0.3" "Use 'make gx_upgrade' to install or upgrade gx."
+#
+
+USAGE="$0 GX_PROGRAM_NAME GX_MIN_VERSION UPGRADE_MSG"
+
+die() {
+    printf >&2 "fatal: %s\n" "$@"
+    exit 1
+}
+
+# Get arguments
+
+test "$#" -eq "3" || die "This program must be passed exactly 3 arguments" "Usage: $USAGE"
+
+GX_PROGRAM_NAME="$1"
+GX_MIN_VERSION="$2"
+UPGRADE_MSG="$3"
+
+# Get path to the directory containing this file
+# If $0 has no slashes, uses "./"
+PREFIX=$(expr "$0" : "\(.*\/\)") || PREFIX='./'
+# Include the 'check_at_least_version' function
+. ${PREFIX}check_version
+
+# Check that the gx program exists
+
+type "$GX_PROGRAM_NAME" >/dev/null 2>&1 || die_upgrade "Program $GX_PROGRAM_NAME is not installed!"
+
+# Check the gx program version
+
+VERS_STR=$($GX_PROGRAM_NAME -v 2>&1) || die "'$GX_PROGRAM_NAME -v' failed with output: $VERS_STR"
+
+GX_CUR_VERSION=$(expr "$VERS_STR" : ".*$GX_PROGRAM_NAME.* version \(.*\)") || die "Invalid '$GX_PROGRAM_NAME -v' output: $VERS_STR"
+
+check_at_least_version "$GX_MIN_VERSION" "$GX_CUR_VERSION" "$GX_PROGRAM_NAME"

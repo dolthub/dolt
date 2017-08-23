@@ -1,0 +1,69 @@
+{
+	"ImportPath": "github.com/ipfs/go-ipfs",
+	"GoVersion": "go1.5.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "bazil.org/fuse",
+			"Rev": "e4fcc9a2c7567d1c42861deebeb483315d222262"
+		},
+		{
+			"ImportPath": "github.com/briantigerchow/pubsub",
+			"Rev": "39ce5f556423a4c7223b370fa17a3bbd75b2d197"
+		},
+		{
+			"ImportPath": "github.com/camlistore/lock",
+			"Rev": "ae27720f340952636b826119b58130b9c1a847a0"
+		},
+		{
+			"ImportPath": "github.com/codahale/hdrhistogram",
+			"Rev": "5fd85ec0b4e2dd5d4158d257d943f2e586d86b62"
+		},
+		{
+			"ImportPath": "github.com/codahale/metrics",
+			"Rev": "7c37910bc765e705301b159683480bdd44555c91"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/golang-lru",
+			"Rev": "253b2dc1ca8bae42c3b5b6e53dd2eab1a7551116"
+		},
+		{
+			"ImportPath": "github.com/jbenet/go-detect-race",
+			"Rev": "3463798d9574bd0b7eca275dccc530804ff5216f"
+		},
+		{
+			"ImportPath": "github.com/jbenet/go-os-rename",
+			"Rev": "3ac97f61ef67a6b87b95c1282f6c317ed0e693c2"
+		},
+		{
+			"ImportPath": "github.com/jbenet/go-random",
+			"Rev": "cd535bd25356746b9b1e824871dda7da932460e2"
+		},
+		{
+			"ImportPath": "github.com/jbenet/go-random-files",
+			"Rev": "737479700b40b4b50e914e963ce8d9d44603e3c8"
+		},
+		{
+			"ImportPath": "github.com/mitchellh/go-homedir",
+			"Rev": "1f6da4a72e57d4e7edd4a7295a585e0a3999a2d4"
+		},
+		{
+			"ImportPath": "github.com/mtchavez/jenkins",
+			"Rev": "5a816af6ef21ef401bff5e4b7dd255d63400f497"
+		},
+		{
+			"ImportPath": "github.com/syndtr/gosnappy/snappy",
+			"Rev": "156a073208e131d7d2e212cb749feae7c339e846"
+		},
+		{
+			"ImportPath": "github.com/texttheater/golang-levenshtein/levenshtein",
+			"Rev": "dfd657628c58d3eeaa26391097853b2473c8b94e"
+		},
+		{
+			"ImportPath": "github.com/whyrusleeping/chunker",
+			"Rev": "537e901819164627ca4bb5ce4e3faa8ce7956564"
+		}
+	]
+}

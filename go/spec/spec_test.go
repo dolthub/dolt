@@ -506,3 +506,16 @@ func TestAcccessingInvalidSpec(t *testing.T) {
 	test("http:")
 	test("http:💩:")
 }
+
+func TestIPFSSpec(t *testing.T) {
+	assert := assert.New(t)
+	sp, err := ForDatabase("ipfs:foo")
+	assert.NoError(err)
+	assert.Equal("ipfs", sp.Protocol)
+	assert.Equal("foo", sp.DatabaseName)
+
+	sp, err = ForDatabase("ipfs-local:foo")
+	assert.NoError(err)
+	assert.Equal("ipfs-local", sp.Protocol)
+	assert.Equal("foo", sp.DatabaseName)
+}

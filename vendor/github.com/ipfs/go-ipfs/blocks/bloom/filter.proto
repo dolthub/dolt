@@ -1,0 +1,10 @@
+package bloom;
+
+message PackedFilter {
+	enum HashType {
+
+	}
+	optional bool compressed;
+	optional bytes data;
+	repeated HashType hashes;
+}

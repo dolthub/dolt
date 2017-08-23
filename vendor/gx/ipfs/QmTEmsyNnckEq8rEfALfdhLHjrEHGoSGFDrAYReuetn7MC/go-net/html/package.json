@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "golang.org/x/net/html"
+  },
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "",
+  "name": "html",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.0.0"
+}
+

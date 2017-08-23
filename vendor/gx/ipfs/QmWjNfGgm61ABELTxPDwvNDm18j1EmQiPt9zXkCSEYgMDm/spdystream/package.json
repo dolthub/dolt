@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/spdystream"
+  },
+  "gx": {
+    "dvcsimport": "github.com/docker/spdystream"
+  },
+  "gxVersion": "0.9.0",
+  "language": "go",
+  "license": "",
+  "name": "spdystream",
+  "version": "1.0.0"
+}

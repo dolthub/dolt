@@ -1,0 +1,11 @@
+language: go
+sudo: false
+
+go:
+  - 1.7
+  - tip
+
+script:
+  - make test
+
+env: TEST_NO_FUSE=1 TEST_VERBOSE=1

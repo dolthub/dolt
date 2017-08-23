@@ -1,0 +1,15 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/jbenet/go-stream-muxer"
+  },
+  "gx": {
+    "dvcsimport": "github.com/jbenet/go-stream-muxer"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "go-stream-muxer",
+  "version": "1.1.0"
+}
+

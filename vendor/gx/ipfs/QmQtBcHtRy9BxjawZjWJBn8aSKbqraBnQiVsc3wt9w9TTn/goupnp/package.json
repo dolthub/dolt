@@ -1,0 +1,24 @@
+{
+  "author": "huin",
+  "bugs": {
+    "URL": "https://github.com/huin/goupnp/issues",
+    "url": "https://github.com/huin/goupnp/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/huin/goupnp"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC",
+      "name": "go-net",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.9.0",
+  "language": "go",
+  "license": "BSD-new",
+  "name": "goupnp",
+  "version": "0.0.0"
+}
+

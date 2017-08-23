@@ -1,0 +1,12 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "golang.org/x/sys"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "sys",
+  "version": "0.0.0"
+}

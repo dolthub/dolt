@@ -1,0 +1,15 @@
+{
+  "author": "jackpal",
+  "bugs": {
+    "URL": "https://github.com/jackpal/gateway/issues",
+    "url": "https://github.com/jackpal/gateway/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/jackpal/gateway"
+  },
+  "gxVersion": "0.9.0",
+  "language": "go",
+  "license": "",
+  "name": "gateway",
+  "version": "1.0.4"
+}

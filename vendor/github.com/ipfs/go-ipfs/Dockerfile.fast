@@ -1,0 +1,55 @@
+FROM alpine:edge
+MAINTAINER Lars Gierth <lgierth@ipfs.io>
+
+# This is a copy of /Dockerfile,
+# except that we optimize for build time, instead of image size.
+#
+# Please keep these two Dockerfiles in sync.
+
+
+EXPOSE 4001
+EXPOSE 4002/udp
+EXPOSE 5001
+EXPOSE 8080
+
+ENV GX_IPFS   ""
+ENV IPFS_PATH /data/ipfs
+ENV IPFS_LOGGING ""
+ENV GOPATH     /go
+ENV PATH       /go/bin:$PATH
+ENV SRC_PATH   /go/src/github.com/ipfs/go-ipfs
+
+VOLUME $IPFS_PATH
+
+# This is an optimization which avoids rebuilding
+# of the gx dependencies every time anything changes.
+# gx will only be invoked if the dependencies have changed.
+#
+# Put differently: if package.json has changed,
+# the image-id after this COPY command will change,
+# and trigger a re-run of all following commands.
+COPY ./package.json $SRC_PATH/package.json
+
+RUN apk add --no-cache --virtual .build-deps-ipfs musl-dev gcc go git \
+	&& apk add --no-cache tini su-exec bash wget ca-certificates \
+	&& adduser -D -h $IPFS_PATH -u 1000 ipfs \
+	&& go get -u github.com/whyrusleeping/gx \
+	&& go get -u github.com/whyrusleeping/gx-go \
+	&& ([ -z "$GX_IPFS" ] || echo $GX_IPFS > $IPFS_PATH/api) \
+	&& cd $SRC_PATH \
+	&& gx --verbose install --global
+
+COPY . $SRC_PATH
+
+RUN cd $SRC_PATH \
+	&& mkdir .git/objects && commit=$(git rev-parse --short HEAD) \
+	&& echo "ldflags=-X github.com/ipfs/go-ipfs/repo/config.CurrentCommit=$commit" \
+	&& cd $SRC_PATH/cmd/ipfs \
+	&& go build -ldflags "-X github.com/ipfs/go-ipfs/repo/config.CurrentCommit=$commit" \
+	&& cp ipfs /usr/local/bin/ipfs \
+	&& cp $SRC_PATH/bin/container_daemon /usr/local/bin/start_ipfs \
+	&& chmod 755 /usr/local/bin/start_ipfs \
+	&& apk del --purge .build-deps-ipfs && rm -rf $GOPATH && rm -vf $IPFS_PATH/api
+
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/start_ipfs"]
+CMD ["daemon", "--migrate=true"]

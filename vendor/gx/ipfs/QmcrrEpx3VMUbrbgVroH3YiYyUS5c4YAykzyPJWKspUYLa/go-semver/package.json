@@ -1,0 +1,10 @@
+{
+  "name": "go-semver",
+  "author": "whyrusleeping",
+  "version": "0.0.0",
+  "language": "go",
+  "issues_url": "",
+  "gx": {
+    "dvcsimport": "github.com/coreos/go-semver"
+  }
+}
