@@ -5,10 +5,8 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -21,8 +19,8 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/math"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/lib"
 	"github.com/jroimartin/gocui"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -37,40 +35,57 @@ const (
 var (
 	viewNames   = []string{users, messages, input}
 	firstLayout = true
-	username    = flag.String("username", "", "username to tag messages with")
-	topic       = flag.String("pubsub-topic", "ipfs-chat", "topic to subscribe to for notifications of changes")
-	importDir   = flag.String("import", "", "path to directory containing script files for import")
 )
 
 func main() {
-	flag.Parse()
+	// allow short (-h) help
+	kingpin.CommandLine.HelpFlag.Short('h')
 
-	if *importDir != "" {
-		importScript(*importDir, flag.Arg(0))
-		return
+	clientCmd := kingpin.Command("client", "runs the ipfs-chat client UI")
+	clientTopic := clientCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
+	username := clientCmd.Flag("username", "username to sign in as").String()
+	clientDS := clientCmd.Arg("dataset", "the dataset spec to store chat data in").Required().String()
+
+	importCmd := kingpin.Command("import", "imports data into a chat")
+	importDir := importCmd.Flag("dir", "directory that contains data to import").Default("./data").ExistingDir()
+	importDS := importCmd.Arg("dataset", "the dataset spec to import chat data to").Required().String()
+
+	daemonCmd := kingpin.Command("daemon", "runs a daemon that simulates filecoin, eagerly storing all chunks for a chat")
+	daemonTopic := daemonCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
+	daemonInterval := daemonCmd.Flag("interval", "amount of time to wait before publishing state to network").Default("5s").Duration()
+	daemonNetworkDS := daemonCmd.Arg("network-dataset", "the dataset spec to use to read and write data to the IPFS network").Required().String()
+	daemonLocalDS := daemonCmd.Arg("local-dataset", "the dataset spec to use to read and write data locally").Required().String()
+
+	kingpin.CommandLine.Help = "A demonstration of using Noms to build a scalable multiuser collaborative application."
+
+	switch kingpin.Parse() {
+	case "client":
+		runClient(*username, *clientTopic, *clientDS)
+	case "import":
+		runImport(*importDir, *importDS)
+	case "daemon":
+		runDaemon(*daemonTopic, *daemonInterval, *daemonNetworkDS, *daemonLocalDS)
 	}
+}
+
+func runClient(username, topic, clientDS string) {
 	var displayingSearchResults = false
 
-	if *username == "" {
-		fmt.Fprintln(os.Stderr, "--username required")
-		return
-	}
-
-	dsSpec := flag.Arg(0)
+	dsSpec := clientDS
 	sp, err := spec.ForDataset(dsSpec)
 	d.CheckErrorNoUsage(err)
 	ds := sp.GetDataset()
 
-	ds, err = lib.InitDatabase(ds)
+	ds, err = InitDatabase(ds)
 	d.PanicIfError(err)
 
 	g, err := gocui.NewGui(gocui.Output256)
 	d.PanicIfError(err)
 	defer g.Close()
 
-	sub, err := ipfs.CurrentNode.Floodsub.Subscribe(*topic)
+	sub, err := ipfs.CurrentNode.Floodsub.Subscribe(topic)
 	d.PanicIfError(err)
-	go lib.Replicate(sub, ds, ds, func(nds datas.Dataset) {
+	go Replicate(sub, ds, ds, func(nds datas.Dataset) {
 		ds = nds
 		if displayingSearchResults || !textScrolledToEnd(g) {
 			g.Execute(func(g *gocui.Gui) (err error) {
@@ -110,7 +125,7 @@ func main() {
 			updateMessages(g, msgView, ds, nil, nil)
 			return nil
 		}
-		sIds, sTerms, nds, err := handleEnter(buf, *username, time.Now(), ds)
+		sIds, sTerms, nds, err := handleEnter(buf, username, time.Now(), ds)
 		if err != nil {
 			return
 		}
@@ -121,7 +136,7 @@ func main() {
 		if displayingSearchResults {
 			return
 		}
-		lib.Publish(sub, *topic, ds.HeadRef().TargetHash().String())
+		Publish(sub, topic, ds.HeadRef().TargetHash().String())
 		return
 	}))
 	d.PanicIfError(g.SetKeybinding("", gocui.KeyF1, gocui.ModNone, debugInfo))
@@ -193,7 +208,7 @@ func (dp *dataPager) Next() (string, bool) {
 	}
 	nm := dp.msgMap.Get(msgKey)
 
-	var m lib.Message
+	var m Message
 	err := marshal.Unmarshal(nm, &m)
 	if err != nil {
 		return fmt.Sprintf("ERROR: %s", err.Error()), true
@@ -215,7 +230,7 @@ func updateMessages(g *gocui.Gui, v *gocui.View, ds datas.Dataset, filterIds *ty
 	}
 
 	doneChan := make(chan struct{})
-	msgMap, msgKeyChan, err := lib.ListMessages(ds, filterIds, doneChan)
+	msgMap, msgKeyChan, err := ListMessages(ds, filterIds, doneChan)
 	d.PanicIfError(err)
 	dp = dataPager{
 		dataset:    ds,
@@ -244,7 +259,7 @@ func resetAuthors(g *gocui.Gui, ds datas.Dataset) {
 	v, err := g.View(users)
 	d.PanicIfError(err)
 	v.Clear()
-	for _, u := range lib.GetAuthors(ds) {
+	for _, u := range GetAuthors(ds) {
 		fmt.Fprintln(v, u)
 	}
 }
@@ -309,8 +324,8 @@ func scrollView(v *gocui.View, dy, lineCnt int) {
 
 func handleEnter(body string, author string, clientTime time.Time, ds datas.Dataset) (*types.Map, []string, datas.Dataset, error) {
 	if strings.HasPrefix(body, searchPrefix) {
-		st := lib.TermsFromString(body[len(searchPrefix):])
-		ids := lib.SearchIndex(ds, st)
+		st := TermsFromString(body[len(searchPrefix):])
+		ids := SearchIndex(ds, st)
 		return &ids, st, ds, nil
 	}
 
@@ -318,7 +333,7 @@ func handleEnter(body string, author string, clientTime time.Time, ds datas.Data
 		return nil, nil, ds, gocui.ErrQuit
 	}
 
-	ds, err := lib.AddMessage(body, author, clientTime, ds)
+	ds, err := AddMessage(body, author, clientTime, ds)
 	return nil, nil, ds, err
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/ipfs/go-ipfs/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"github.com/ipfs/go-ipfs/blocks/blockstore"
 	"github.com/ipfs/go-ipfs/blockservice"
 	"github.com/ipfs/go-ipfs/core"
@@ -43,14 +45,7 @@ var (
 // write. If local is false, then reads will fall through to the network and
 // blocks stored will be exposed to the entire IPFS network.
 func NewChunkStore(name string, local bool) *chunkStore {
-	env := "IPFS_PATH"
-	if local {
-		env = "IPFS_LOCAL_PATH"
-	}
-	p := os.Getenv(env)
-	if p == "" {
-		p = "~/.ipfs"
-	}
+	p := getIPFSDir(local)
 	r, err := fsrepo.Open(p)
 	d.CheckError(err)
 
@@ -195,7 +190,7 @@ func (cs *chunkStore) Put(c chunks.Chunk) {
 
 func (cs *chunkStore) Version() string {
 	// TODO: Store this someplace in the DB root
-	return "7.13"
+	return "7.14"
 }
 
 func (cs *chunkStore) Rebase() {
@@ -240,7 +235,7 @@ func (cs *chunkStore) Commit(current, last hash.Hash) bool {
 	// TODO: Optimistic concurrency?
 
 	cid := nomsHashToCID(current)
-	dir := cs.getLocalNamesDir()
+	dir := getIPFSDir(cs.local)
 	err := os.MkdirAll(dir, 0755)
 	d.PanicIfError(err)
 	err = ioutil.WriteFile(cs.getLocalNameFile(cs.name), []byte(cid.String()), 0644)
@@ -250,16 +245,22 @@ func (cs *chunkStore) Commit(current, last hash.Hash) bool {
 	return true
 }
 
-func (cs *chunkStore) getLocalNamesDir() string {
-	if cs.local {
-		return os.ExpandEnv("$HOME/.noms/ipfs-local")
-	} else {
-		return os.ExpandEnv("$HOME/.noms/ipfs")
+func getIPFSDir(local bool) string {
+	env := "IPFS_PATH"
+	if local {
+		env = "IPFS_LOCAL_PATH"
 	}
+	p := os.Getenv(env)
+	if p == "" {
+		p = "~/.ipfs"
+	}
+	p, err := homedir.Expand(p)
+	d.Chk.NoError(err)
+	return p
 }
 
 func (cs *chunkStore) getLocalNameFile(name string) string {
-	return cs.getLocalNamesDir() + "/" + name
+	return path.Join(getIPFSDir(cs.local), name)
 }
 
 func (cs *chunkStore) Stats() interface{} {
