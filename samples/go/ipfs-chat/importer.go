@@ -72,21 +72,17 @@ func runImport(dir, dsSpec string) error {
 
 	userpat := regexp.MustCompile(`^[a-zA-Z][a-zA-Z\s]*\d*$`)
 	fmt.Println("Creating users")
-	usermap := map[string]struct{}{}
+	usermap := map[string]int{}
 outer:
 	for _, msg := range msgs {
 		name := strings.TrimSpace(msg.Author)
 		if !userpat.MatchString(name) {
 			continue outer
 		}
-		usermap[name] = struct{}{}
+		usermap[name] += 1
 	}
 
-	users := []string{}
-	for k, _ := range usermap {
-		users = append(users, k)
-	}
-	sort.Strings(users)
+	users := topUsers(usermap)
 	fmt.Println("Committing data")
 	root := Root{Messages: m, Index: termDocs, Users: users}
 	_, err = ds.Database().CommitValue(ds, marshal.MustMarshal(root))
@@ -126,4 +122,31 @@ func characterName(n *html.Node) string {
 		return ""
 	}
 	return strings.TrimSpace(n.FirstChild.Data)
+}
+
+type cpair struct {
+	character string
+	cnt       int
+}
+
+func topUsers(usermap map[string]int) []string {
+	pairs := []cpair{}
+	for name, cnt := range usermap {
+		if len(name) > 1 && !strings.HasPrefix(name, "ANOTHER") {
+			pairs = append(pairs, cpair{character: strings.ToLower(name), cnt: cnt})
+		}
+	}
+	// sort descending by cnt
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[j].cnt < pairs[i].cnt
+	})
+	users := []string{}
+	for i, p := range pairs {
+		if i >= 30 {
+			break
+		}
+		users = append(users, p.character)
+	}
+	sort.Strings(users)
+	return users
 }
