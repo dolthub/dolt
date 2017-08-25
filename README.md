@@ -93,7 +93,7 @@ We plan to implement the following for Noms version 8. Beyond that unknown.
 - [x] Horizontal scalability (Done! See: [nbs](./go/nbs/README.md))
 - [x] Automatic merge (Done! See: [CommitOptions.Policy](https://godoc.org/github.com/attic-labs/noms/go/datas#CommitOptions) and the `noms merge` subcommand).
 - [ ] Query language (In progress: See [ngql](./go/ngql/README.md))
-- [ ] Garbage Collection (https://github.com/attic-labs/noms/issues/3192)
+- [ ] Garbage Collection (https://github.com/attic-labs/noms/issues/3374)
 - [x] Optional fields (https://github.com/attic-labs/noms/issues/2327)
 - [ ] Fix sync performance with long commit chains (https://github.com/attic-labs/noms/issues/2233)
 - [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues?q=is%3Aissue+is%3Aopen+label%3AFormat)
