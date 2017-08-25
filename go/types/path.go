@@ -202,12 +202,18 @@ func NewFieldPath(name string) FieldPath {
 }
 
 func (fp FieldPath) Resolve(v Value, vr ValueReader) Value {
-	if s, ok := v.(Struct); ok {
-		if fv, ok := s.MaybeGet(fp.Name); ok {
-			return fv
+	switch v := v.(type) {
+	case Struct:
+		if sv, ok := v.MaybeGet(fp.Name); ok {
+			return sv
+		}
+	case *Type:
+		if desc, ok := v.Desc.(StructDesc); ok {
+			if df, _ := desc.Field(fp.Name); df != nil {
+				return df
+			}
 		}
 	}
-
 	return nil
 }
 
@@ -248,28 +254,38 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 }
 
 func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
+	seqIndex := func(getter func(i uint64) Value) Value {
+		n, ok := ip.Index.(Number)
+		if !ok {
+			return nil
+		}
+		f := float64(n)
+		if f != math.Trunc(f) {
+			return nil
+		}
+		ai, ok := getAbsoluteIndex(v, int64(f))
+		if !ok {
+			return nil
+		}
+		if ip.IntoKey {
+			return Number(ai)
+		}
+		return getter(ai)
+	}
+
 	switch v := v.(type) {
 	case List:
-		if n, ok := ip.Index.(Number); ok {
-			f := float64(n)
-			if f == math.Trunc(f) {
-				absIndex, ok := getAbsoluteIndex(v, int64(f))
-				if !ok {
-					return nil
-				}
-				if ip.IntoKey {
-					return Number(absIndex)
-				}
-				return v.Get(absIndex)
-			}
+		return seqIndex(func(i uint64) Value { return v.Get(i) })
+	case *Type:
+		if cd, ok := v.Desc.(CompoundDesc); ok {
+			return seqIndex(func(i uint64) Value { return cd.ElemTypes[i] })
 		}
-
 	case Map:
-		if ip.IntoKey && v.Has(ip.Index) {
-			return ip.Index
-		}
 		if !ip.IntoKey {
 			return v.Get(ip.Index)
+		}
+		if v.Has(ip.Index) {
+			return ip.Index
 		}
 	}
 
@@ -476,30 +492,31 @@ func NewAtAnnotationIntoKeyPath(idx int64) AtAnnotation {
 }
 
 func (ann AtAnnotation) Resolve(v Value, vr ValueReader) Value {
-	var absIndex uint64
-	if col, ok := v.(Collection); !ok {
-		return nil
-	} else if absIndex, ok = getAbsoluteIndex(col, ann.Index); !ok {
+	ai, ok := getAbsoluteIndex(v, ann.Index)
+	if !ok {
 		return nil
 	}
 
 	switch v := v.(type) {
 	case List:
-		if ann.IntoKey {
-			return nil
+		if !ann.IntoKey {
+			return v.Get(ai)
 		}
-		return v.Get(absIndex)
 	case Set:
-		return v.At(absIndex)
+		return v.At(ai)
 	case Map:
-		k, mapv := v.At(absIndex)
+		k, mapv := v.At(ai)
 		if ann.IntoKey {
 			return k
 		}
 		return mapv
-	default:
-		return nil
+	case *Type:
+		if cd, ok := v.Desc.(CompoundDesc); ok {
+			return cd.ElemTypes[ai]
+		}
 	}
+
+	return nil
 }
 
 func (ann AtAnnotation) String() (str string) {
@@ -528,14 +545,28 @@ func getAnnotation(str string) (ann string, hasArg bool, arg, rem string) {
 	return
 }
 
-func getAbsoluteIndex(col Collection, relIdx int64) (absIdx uint64, ok bool) {
-	if relIdx < 0 {
-		if uint64(-relIdx) > col.Len() {
+func getAbsoluteIndex(v Value, relIdx int64) (absIdx uint64, ok bool) {
+	var l uint64
+	switch v := v.(type) {
+	case Collection:
+		l = v.Len()
+	case *Type:
+		if cd, cdOK := v.Desc.(CompoundDesc); cdOK {
+			l = uint64(len(cd.ElemTypes))
+		} else {
 			return
 		}
-		absIdx = col.Len() - uint64(-relIdx)
+	default:
+		return
+	}
+
+	if relIdx < 0 {
+		if uint64(-relIdx) > l {
+			return
+		}
+		absIdx = l - uint64(-relIdx)
 	} else {
-		if uint64(relIdx) >= col.Len() {
+		if uint64(relIdx) >= l {
 			return
 		}
 		absIdx = uint64(relIdx)

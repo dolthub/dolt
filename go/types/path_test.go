@@ -61,6 +61,32 @@ func TestPathStruct(t *testing.T) {
 	assertResolvesTo(assert, nil, v2, `.notHere.v1`)
 }
 
+func TestPathStructType(t *testing.T) {
+	assert := assert.New(t)
+
+	typ := MakeStructType("MyStruct",
+		StructField{Name: "foo", Type: StringType},
+		StructField{Name: "bar", Type: BoolType},
+		StructField{Name: "baz", Type: NumberType},
+	)
+
+	assertResolvesTo(assert, StringType, typ, `.foo`)
+	assertResolvesTo(assert, BoolType, typ, `.bar`)
+	assertResolvesTo(assert, NumberType, typ, `.baz`)
+	assertResolvesTo(assert, nil, typ, `.notHere`)
+
+	typ2 := MakeStructType("",
+		StructField{Name: "typ", Type: typ},
+	)
+
+	assertResolvesTo(assert, typ, typ2, `.typ`)
+	assertResolvesTo(assert, StringType, typ2, `.typ.foo`)
+	assertResolvesTo(assert, BoolType, typ2, `.typ.bar`)
+	assertResolvesTo(assert, NumberType, typ2, `.typ.baz`)
+	assertResolvesTo(assert, nil, typ2, `.typ.notHere`)
+	assertResolvesTo(assert, nil, typ2, `.notHere.typ`)
+}
+
 func TestPathIndex(t *testing.T) {
 	assert := assert.New(t)
 
@@ -95,6 +121,48 @@ func TestPathIndex(t *testing.T) {
 	resolvesTo(Number(23), Bool(false), "[false]")
 	resolvesTo(Number(4.5), Number(2.3), "[2.3]")
 	resolvesTo(nil, nil, "[4]")
+}
+
+func TestPathIndexType(t *testing.T) {
+	assert := assert.New(t)
+
+	st := MakeSetType(NumberType)
+	lt := MakeListType(st)
+	mt := MakeMapType(st, lt)
+	ut := MakeUnionType(lt, mt, st)
+
+	assertResolvesTo(assert, NumberType, st, "[0]")
+	assertResolvesTo(assert, NumberType, st, "[-1]")
+	assertResolvesTo(assert, NumberType, st, "@at(0)")
+	assertResolvesTo(assert, nil, st, "[1]")
+	assertResolvesTo(assert, nil, st, "[-2]")
+
+	assertResolvesTo(assert, st, lt, "[0]")
+	assertResolvesTo(assert, st, lt, "[-1]")
+	assertResolvesTo(assert, NumberType, lt, "[0][0]")
+	assertResolvesTo(assert, NumberType, lt, "@at(0)@at(0)")
+	assertResolvesTo(assert, nil, lt, "[1]")
+	assertResolvesTo(assert, nil, lt, "[-2]")
+
+	assertResolvesTo(assert, st, mt, "[0]")
+	assertResolvesTo(assert, st, mt, "[-2]")
+	assertResolvesTo(assert, lt, mt, "[1]")
+	assertResolvesTo(assert, lt, mt, "[-1]")
+	assertResolvesTo(assert, NumberType, mt, "[1][0][0]")
+	assertResolvesTo(assert, NumberType, mt, "@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, nil, mt, "[2]")
+	assertResolvesTo(assert, nil, mt, "[-3]")
+
+	assertResolvesTo(assert, lt, ut, "[0]")
+	assertResolvesTo(assert, lt, ut, "[-3]")
+	assertResolvesTo(assert, mt, ut, "[1]")
+	assertResolvesTo(assert, mt, ut, "[-2]")
+	assertResolvesTo(assert, st, ut, "[2]")
+	assertResolvesTo(assert, st, ut, "[-1]")
+	assertResolvesTo(assert, NumberType, ut, "[1][1][0][0]")
+	assertResolvesTo(assert, NumberType, ut, "@at(1)@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, nil, ut, "[3]")
+	assertResolvesTo(assert, nil, ut, "[-4]")
 }
 
 func TestPathHashIndex(t *testing.T) {
