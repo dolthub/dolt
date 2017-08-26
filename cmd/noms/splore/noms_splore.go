@@ -149,8 +149,8 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 }
 
 func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
-	atPath := func(i int, suffix string) string {
-		return fmt.Sprintf("%s@at(%d)%s", parentPath, i, suffix)
+	childPath := func(f string, args ...interface{}) string {
+		return parentPath + fmt.Sprintf(f, args...)
 	}
 
 	switch v := v.(type) {
@@ -167,7 +167,7 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 			children = make([]nodeChild, v.Len())
 			v.IterAll(func(vi types.Value, i uint64) {
 				children[i] = nodeChild{
-					Value: info(vi, fmt.Sprintf("%s[%d]", parentPath, i)),
+					Value: info(vi, childPath("[%d]", i)),
 				}
 			})
 		}
@@ -178,8 +178,8 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 			i := 0
 			v.IterAll(func(k, v types.Value) {
 				children[i] = nodeChild{
-					Key:   info(k, atPath(i, "@key")),
-					Value: info(v, atPath(i, "")),
+					Key:   info(k, childPath("@at(%d)@key", i)),
+					Value: info(v, childPath("@at(%d)", i)),
 				}
 				i++
 			})
@@ -191,14 +191,14 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 			i := 0
 			v.IterAll(func(v types.Value) {
 				children[i] = nodeChild{
-					Value: info(v, atPath(i, "")),
+					Value: info(v, childPath("@at(%d)", i)),
 				}
 				i++
 			})
 		}
 	case types.Ref:
 		children = []nodeChild{{
-			Value: info(v, parentPath+"@target"),
+			Value: info(v, childPath("@target")),
 		}}
 	case types.Struct:
 		children = make([]nodeChild, v.Len())
@@ -206,10 +206,32 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 		v.IterFields(func(name string, v types.Value) {
 			children[i] = nodeChild{
 				Label: name,
-				Value: info(v, fmt.Sprintf("%s.%s", parentPath, name)),
+				Value: info(v, childPath(".%s", name)),
 			}
 			i++
 		})
+	case *types.Type:
+		switch d := v.Desc.(type) {
+		case types.CompoundDesc:
+			children = make([]nodeChild, len(d.ElemTypes))
+			for i, t := range d.ElemTypes {
+				children[i] = nodeChild{
+					Value: info(t, childPath("[%d]", i)),
+				}
+			}
+		case types.StructDesc:
+			children = make([]nodeChild, d.Len())
+			i := 0
+			d.IterFields(func(name string, t *types.Type, optional bool) {
+				children[i] = nodeChild{
+					Label: name,
+					Value: info(t, childPath(".%s", name)),
+				}
+				i++
+			})
+		default:
+			children = []nodeChild{} // TODO: cycles?
+		}
 	default:
 		panic(fmt.Errorf("unsupported value type %T", v))
 	}
@@ -233,9 +255,19 @@ func nodeName(v types.Value) string {
 		return fmt.Sprintf("%s#%s", kind.String(), v.TargetHash().String())
 	case types.Struct:
 		if v.Name() == "" {
-			return "Struct{…}"
+			return "{}"
 		}
 		return v.Name()
+	case *types.Type:
+		switch d := v.Desc.(type) {
+		case types.StructDesc:
+			if d.Name == "" {
+				return "struct {}"
+			}
+			return "struct " + d.Name
+		default:
+			return v.Desc.Kind().String()
+		}
 	}
 	panic("unreachable")
 }
@@ -284,6 +316,15 @@ func nodeHasChildren(v types.Value) bool {
 		return v.(types.Collection).Len() > 0
 	case types.StructKind:
 		return v.(types.Struct).Len() > 0
+	case types.TypeKind:
+		switch d := v.(*types.Type).Desc.(type) {
+		case types.CompoundDesc:
+			return len(d.ElemTypes) > 0
+		case types.StructDesc:
+			return d.Len() > 0
+		default:
+			return false // TODO: cycles?
+		}
 	default:
 		panic(fmt.Errorf("unreachable kind %s", k.String()))
 	}
