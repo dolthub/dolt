@@ -19,13 +19,18 @@ import (
 )
 
 func Replicate(sub *floodsub.Subscription, source, dest datas.Dataset, didChange func(ds datas.Dataset)) {
+	lastHash := ""
 	for {
 		dbg.Debug("looking for msgs")
 		msg, err := sub.Next(context.Background())
 		d.PanicIfError(err)
 		h := hash.Parse(string(msg.Data))
-		dbg.Debug("got update: %s from %s", h.String(), base64.StdEncoding.EncodeToString(msg.From))
+		if lastHash == h.String() {
+			continue
+		}
+		lastHash = h.String()
 
+		dbg.Debug("got update: %s from %s", h.String(), base64.StdEncoding.EncodeToString(msg.From))
 		destDB := dest.Database()
 		destDB.Rebase()
 		dest = destDB.GetDataset(dest.ID())
