@@ -121,7 +121,7 @@ func runClient(username, topic, clientDS string) {
 		msgView, err := g.View(messages)
 		d.PanicIfError(err)
 		msgView.Title = "messages"
-        msgView.Autoscroll = true
+		msgView.Autoscroll = true
 		if buf == "" {
 			updateMessages(g, msgView, ds, nil, nil)
 			return nil
@@ -365,7 +365,7 @@ func debugInfo(g *gocui.Gui, _ *gocui.View) error {
 	ox, oy := msgView.Origin()
 	dbg.Debug("info, origin: (%d,%d), cursor: (%d,%d)", ox, oy, cx, cy)
 	// dbg.Debug("info, view buffer:\n%s", highlightTerms(viewBuffer(msgView), dp.terms))
-    return nil
+	return nil
 }
 
 func viewBuffer(v *gocui.View) string {

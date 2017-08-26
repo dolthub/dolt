@@ -15,6 +15,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/marshal"
+	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/datetime"
@@ -70,22 +71,22 @@ func runImport(dir, dsSpec string) error {
 	}
 	termDocs := ti.Value(nil).TermDocs
 
-	userpat := regexp.MustCompile(`^[a-zA-Z][a-zA-Z\s]*\d*$`)
 	fmt.Println("Creating users")
-	usermap := map[string]int{}
-outer:
-	for _, msg := range msgs {
-		name := strings.TrimSpace(msg.Author)
-		if !userpat.MatchString(name) {
-			continue outer
-		}
-		usermap[name] += 1
-	}
+	users := topUsers(msgs)
 
-	users := topUsers(usermap)
 	fmt.Println("Committing data")
 	root := Root{Messages: m, Index: termDocs, Users: users}
-	_, err = ds.Database().CommitValue(ds, marshal.MustMarshal(root))
+	nroot := marshal.MustMarshal(root)
+	if ds.HasHead() {
+		left := ds.HeadValue()
+		parent := Root{
+			Index:    types.NewMap(),
+			Messages: types.NewMap(),
+		}
+		nroot, err = merge.ThreeWay(left, nroot, marshal.MustMarshal(parent), sp.GetDatabase(), nil, nil)
+		d.Chk.NoError(err)
+	}
+	_, err = ds.Database().CommitValue(ds, nroot)
 	return err
 }
 
@@ -129,7 +130,15 @@ type cpair struct {
 	cnt       int
 }
 
-func topUsers(usermap map[string]int) []string {
+func topUsers(msgs []Message) []string {
+	userpat := regexp.MustCompile(`^[a-zA-Z][a-zA-Z\s]*\d*$`)
+	usermap := map[string]int{}
+	for _, msg := range msgs {
+		name := strings.TrimSpace(msg.Author)
+		if userpat.MatchString(name) {
+			usermap[name] += 1
+		}
+	}
 	pairs := []cpair{}
 	for name, cnt := range usermap {
 		if len(name) > 1 && !strings.HasPrefix(name, "ANOTHER") {
