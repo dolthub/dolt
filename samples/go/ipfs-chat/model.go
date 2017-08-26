@@ -38,7 +38,7 @@ type Message struct {
 }
 
 func (m Message) ID() string {
-	return fmt.Sprintf("%016x/%s", m.Ordinal, m.Author)
+	return fmt.Sprintf("%020x/%s", m.ClientTime.UnixNano(), m.Author)
 }
 
 func AddMessage(body string, author string, clientTime time.Time, ds datas.Dataset) (datas.Dataset, error) {
