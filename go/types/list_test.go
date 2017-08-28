@@ -159,11 +159,11 @@ func (suite *listTestSuite) TestMap() {
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, 6, 2, 2))
+	suite.Run(t, newListTestSuite(12, 9, 2, 2))
 }
 
 func TestListSuite8K(t *testing.T) {
-	suite.Run(t, newListTestSuite(14, 22, 2, 2))
+	suite.Run(t, newListTestSuite(14, 16, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {
@@ -982,9 +982,9 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	assert.Equal(diff1, diff2)
 
 	// should only read/write a "small & reasonably sized portion of the total"
-	assert.Equal(7, cs1.Writes)
-	assert.Equal(5, cs1.Reads)
-	assert.Equal(5, cs2.Writes)
+	assert.Equal(9, cs1.Writes)
+	assert.Equal(4, cs1.Reads)
+	assert.Equal(8, cs2.Writes)
 	assert.Equal(3, cs2.Reads)
 }
 

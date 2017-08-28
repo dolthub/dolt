@@ -5,10 +5,10 @@
 package types
 
 import (
-	"encoding/binary"
 	"sync"
 
-	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/sloppy"
+
 	"github.com/kch42/buzhash"
 )
 
@@ -47,11 +47,13 @@ func normalProductionChunks() {
 }
 
 type rollingValueHasher struct {
+	bw              *binaryNomsWriter
 	bz              *buzhash.BuzHash
 	enc             *valueEncoder
 	crossedBoundary bool
 	pattern, window uint32
 	salt            byte
+	sl              *sloppy.Sloppy
 }
 
 func hashValueBytes(item sequenceItem, rv *rollingValueHasher) {
@@ -64,86 +66,39 @@ func hashValueByte(item sequenceItem, rv *rollingValueHasher) {
 
 func newRollingValueHasher(salt byte) *rollingValueHasher {
 	pattern, window := chunkingConfig()
+	bw := newBinaryNomsWriter()
+	enc := newValueEncoder(bw)
+
 	rv := &rollingValueHasher{
+		bw:      bw,
+		enc:     enc,
 		bz:      buzhash.NewBuzHash(window),
 		pattern: pattern,
 		window:  window,
 		salt:    salt,
 	}
-	rv.enc = newValueEncoder(rv, true)
+
+	rv.sl = sloppy.New(rv.HashByte)
+
 	return rv
 }
 
-func (rv *rollingValueHasher) HashByte(b byte) {
-	if rv.crossedBoundary {
-		return
+func (rv *rollingValueHasher) HashByte(b byte) bool {
+	if !rv.crossedBoundary {
+		rv.bz.HashByte(b ^ rv.salt)
+		rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
 	}
-
-	rv.bz.HashByte(b ^ rv.salt)
-	rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+	return rv.crossedBoundary
 }
 
 func (rv *rollingValueHasher) Reset() {
 	rv.crossedBoundary = false
 	rv.bz = buzhash.NewBuzHash(rv.window)
+	rv.bw.reset()
+	rv.sl.Reset()
 }
 
 func (rv *rollingValueHasher) HashValue(v Value) {
 	rv.enc.writeValue(v)
-}
-
-// nomsWriter interface. Note: It's unfortunate to have another implementation of nomsWriter and this one must be kept in sync with binaryNomsWriter, but hashing values is a red-hot code path and it's worth a lot to avoid the allocations for literally encoding values.
-func (rv *rollingValueHasher) writeBytes(v []byte) {
-	for _, b := range v {
-		rv.HashByte(b)
-	}
-}
-
-func (rv *rollingValueHasher) writeUint8(v uint8) {
-	rv.HashByte(byte(v))
-}
-
-func (rv *rollingValueHasher) writeCount(v uint64) {
-	buff := [binary.MaxVarintLen64]byte{}
-	count := binary.PutUvarint(buff[:], v)
-	for i := 0; i < count; i++ {
-		rv.HashByte(buff[i])
-	}
-}
-
-func (rv *rollingValueHasher) hashVarint(n int64) {
-	buff := [binary.MaxVarintLen64]byte{}
-	count := binary.PutVarint(buff[:], n)
-	for i := 0; i < count; i++ {
-		rv.HashByte(buff[i])
-	}
-}
-
-func (rv *rollingValueHasher) writeNumber(v Number) {
-	i, exp := float64ToIntExp(float64(v))
-	rv.hashVarint(i)
-	rv.hashVarint(int64(exp))
-}
-
-func (rv *rollingValueHasher) writeBool(v bool) {
-	if v {
-		rv.writeUint8(uint8(1))
-	} else {
-		rv.writeUint8(uint8(0))
-	}
-}
-
-func (rv *rollingValueHasher) writeString(v string) {
-	size := uint32(len(v))
-	rv.writeCount(uint64(size))
-
-	for i := 0; i < len(v); i++ {
-		rv.HashByte(v[i])
-	}
-}
-
-func (rv *rollingValueHasher) writeHash(h hash.Hash) {
-	for _, b := range h[:] {
-		rv.HashByte(b)
-	}
+	rv.sl.Update(rv.bw.data())
 }

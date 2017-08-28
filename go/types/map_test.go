@@ -306,7 +306,7 @@ func TestMapSuite4K(t *testing.T) {
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 13, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 16, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -401,12 +401,12 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 			Bool(i%2 == 0),
 			Number(i),
 			String(fmt.Sprintf("I AM A REALLY REALY REALL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
-			String(fmt.Sprintf("I am a bit shorted and also more chill: %d", i)),
+			String(fmt.Sprintf("I am a bit shorter and also more chill: %d", i)),
 		})
 	}
 
-	m := newRandomTestMap(4000, newLargeStruct).toMap()
-	every := 100
+	m := newRandomTestMap(20000, newLargeStruct).toMap()
+	every := 500
 
 	ts := &chunks.TestStorage{}
 	cs := ts.NewView()
@@ -434,8 +434,8 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	vs.Commit(vs.Root(), vs.Root())
 
 	assert.Equal(t, uint64(3), NewRef(m).Height())
-	assert.Equal(t, 84, cs.Reads)
-	assert.Equal(t, 45, cs.Writes)
+	assert.Equal(t, 82, cs.Reads)
+	assert.Equal(t, 49, cs.Writes)
 }
 
 func TestMapInfiniteChunkBug(t *testing.T) {

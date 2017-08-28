@@ -102,7 +102,7 @@ func (w *nomsTestWriter) writeHash(h hash.Hash) {
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	vs := newTestValueStore()
 	tw := &nomsTestWriter{}
-	enc := valueEncoder{tw, false}
+	enc := valueEncoder{tw}
 	enc.writeValue(v)
 	assert.EqualValues(t, expect, tw.a)
 

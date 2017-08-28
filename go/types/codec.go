@@ -16,7 +16,7 @@ const initialBufferSize = 2048
 
 func EncodeValue(v Value) chunks.Chunk {
 	w := newBinaryNomsWriter()
-	enc := newValueEncoder(w, false)
+	enc := newValueEncoder(w)
 	enc.writeValue(v)
 
 	c := chunks.NewChunk(w.data())
