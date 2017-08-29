@@ -4,13 +4,16 @@
 
 package types
 
+import "github.com/attic-labs/noms/go/d"
+
 type blobLeafSequence struct {
 	leafSequence
 	data []byte
 }
 
-func newBlobLeafSequence(vr ValueReader, data []byte) sequence {
-	return blobLeafSequence{leafSequence{vr, len(data), BlobKind}, data}
+func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
+	d.PanicIfTrue(vrw == nil)
+	return blobLeafSequence{leafSequence{vrw, len(data), BlobKind}, data}
 }
 
 // sequence interface

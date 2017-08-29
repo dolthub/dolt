@@ -46,11 +46,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 			if col, ok := v.(Collection); ok && !col.sequence().isLeaf() {
 				ms := col.sequence().(metaSequence)
 				for _, mt := range ms.tuples {
-					if mt.child != nil {
-						values = append(values, valueRec{mt.child, false})
-					} else {
-						refs[mt.ref.TargetHash()] = false
-					}
+					refs[mt.ref.TargetHash()] = false
 				}
 				continue
 			}

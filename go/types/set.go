@@ -21,9 +21,9 @@ func newSet(seq orderedSequence) Set {
 	return Set{seq, &hash.Hash{}}
 }
 
-func NewSet(v ...Value) Set {
+func NewSet(vrw ValueReadWriter, v ...Value) Set {
 	data := buildSetData(v)
-	ch := newEmptySetSequenceChunker(nil, nil)
+	ch := newEmptySetSequenceChunker(vrw)
 
 	for _, v := range data {
 		ch.Append(v)
@@ -47,6 +47,7 @@ func NewStreamingSet(vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
 type streamingSetReadFunc func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set)
 
 func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streamingSetReadFunc) <-chan Set {
+	d.PanicIfTrue(vrw == nil)
 	outChan := make(chan Set, 1)
 	readFunc(vrw, vChan, outChan)
 	return outChan
@@ -54,7 +55,7 @@ func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streaming
 
 func readSetInput(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 	defer close(outChan)
-	ch := newEmptySetSequenceChunker(vrw, vrw)
+	ch := newEmptySetSequenceChunker(vrw)
 	var lastV Value
 	for v := range vChan {
 		d.PanicIfTrue(v == nil)
@@ -114,7 +115,7 @@ func (s Set) hashPointer() *hash.Hash {
 }
 
 // Value interface
-func (s Set) Value(vrw ValueReadWriter) Value {
+func (s Set) Value() Value {
 	return s
 }
 
@@ -240,7 +241,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 	return append(uniqueSorted, last)
 }
 
-func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
+func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
 		setData := make([]Value, len(items), len(items))
@@ -253,7 +254,7 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 			setData[i] = v
 		}
 
-		set := newSet(newSetLeafSequence(vr, setData...))
+		set := newSet(newSetLeafSequence(vrw, setData...))
 		var key orderedKey
 		if len(setData) > 0 {
 			key = newOrderedKey(setData[len(setData)-1])
@@ -263,6 +264,6 @@ func makeSetLeafChunkFn(vr ValueReader) makeChunkFn {
 	}
 }
 
-func newEmptySetSequenceChunker(vr ValueReader, vw ValueWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vr, vw, makeSetLeafChunkFn(vr), newOrderedMetaSequenceChunkFn(SetKind, vr), hashValueBytes)
+func newEmptySetSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 }

@@ -51,7 +51,7 @@ func (ts testSequence) getCompareFn(other sequence) compareFn {
 	}
 }
 
-func (ts testSequence) valueReader() ValueReader {
+func (ts testSequence) valueReadWriter() ValueReadWriter {
 	panic("not reached")
 }
 

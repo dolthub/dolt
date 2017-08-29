@@ -199,11 +199,11 @@ func (b *GraphBuilder) pushNewKeyOnStack(key Value, kind NomsKind) {
 	var ch *sequenceChunker
 	switch kind {
 	case MapKind:
-		ch = newEmptyMapSequenceChunker(b.vrw, b.vrw)
+		ch = newEmptyMapSequenceChunker(b.vrw)
 	case SetKind:
-		ch = newEmptySetSequenceChunker(b.vrw, b.vrw)
+		ch = newEmptySetSequenceChunker(b.vrw)
 	case ListKind:
-		ch = newEmptyListSequenceChunker(b.vrw, b.vrw)
+		ch = newEmptyListSequenceChunker(b.vrw)
 	default:
 		panic("bad 'kind' value in GraphBuilder, newElem()")
 	}

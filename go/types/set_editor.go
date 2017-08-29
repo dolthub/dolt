@@ -30,19 +30,16 @@ func (se *SetEditor) Kind() NomsKind {
 	return SetKind
 }
 
-func (se *SetEditor) Value(vrw ValueReadWriter) Value {
-	return se.Set(vrw)
+func (se *SetEditor) Value() Value {
+	return se.Set()
 }
 
-func (se *SetEditor) Set(vrw ValueReadWriter) Set {
+func (se *SetEditor) Set() Set {
 	if len(se.edits) == 0 {
 		return se.s // no edits
 	}
 
-	vr := se.s.sequence().valueReader()
-	if vrw != nil {
-		vr = vrw
-	}
+	vrw := se.s.sequence().valueReadWriter()
 
 	se.normalize()
 
@@ -93,7 +90,7 @@ func (se *SetEditor) Set(vrw ValueReadWriter) Set {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vr, vrw, makeSetLeafChunkFn(vr), newOrderedMetaSequenceChunkFn(SetKind, vr), hashValueBytes)
+			ch = newSequenceChunker(cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(cur)
 		}

@@ -22,7 +22,11 @@ func TestNewCommit(t *testing.T) {
 		assert.True(a.Equals(e), "Actual: %s\nExpected %s", a.Describe(), e.Describe())
 	}
 
-	commit := NewCommit(types.Number(1), types.NewSet(), types.EmptyStruct)
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewView())
+	defer db.Close()
+
+	commit := NewCommit(types.Number(1), types.NewSet(db), types.EmptyStruct)
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
@@ -32,7 +36,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et, at)
 
 	// Committing another Number
-	commit2 := NewCommit(types.Number(2), types.NewSet(types.NewRef(commit)), types.EmptyStruct)
+	commit2 := NewCommit(types.Number(2), types.NewSet(db, types.NewRef(commit)), types.EmptyStruct)
 	at2 := types.TypeOf(commit2)
 	et2 := nomdl.MustParseType(`struct Commit {
                 meta: struct {},
@@ -42,7 +46,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
-	commit3 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), types.EmptyStruct)
+	commit3 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2)), types.EmptyStruct)
 	at3 := types.TypeOf(commit3)
 	et3 := nomdl.MustParseType(`struct Commit {
                 meta: struct {},
@@ -58,7 +62,7 @@ func TestNewCommit(t *testing.T) {
                 number: Number,
 	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
-	commit4 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2)), meta)
+	commit4 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2)), meta)
 	at4 := types.TypeOf(commit4)
 	et4 := nomdl.MustParseType(`struct Commit {
                 meta: struct {} | struct Meta {
@@ -71,7 +75,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et4, at4)
 
 	// Merge-commit with different parent types
-	commit5 := NewCommit(types.String("Hi"), types.NewSet(types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
+	commit5 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
 	at5 := types.TypeOf(commit5)
 	et5 := nomdl.MustParseType(`struct Commit {
                 meta: struct {},
@@ -83,9 +87,14 @@ func TestNewCommit(t *testing.T) {
 
 func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
+
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewView())
+	defer db.Close()
+
 	metaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
-		"parents": types.NewSet(),
+		"parents": types.NewSet(db),
 		"meta":    types.EmptyStruct,
 	})
 	assert.True(IsCommit(metaCommit))
@@ -93,19 +102,19 @@ func TestCommitWithoutMetaField(t *testing.T) {
 
 	noMetaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Number(9),
-		"parents": types.NewSet(),
+		"parents": types.NewSet(db),
 	})
 	assert.False(IsCommit(noMetaCommit))
 	assert.False(IsCommitType(types.TypeOf(noMetaCommit)))
 }
 
 // Convert list of Struct's to Set<Ref>
-func toRefSet(commits ...types.Struct) types.Set {
-	set := types.NewSet().Edit()
+func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
+	set := types.NewSet(vrw).Edit()
 	for _, p := range commits {
 		set.Insert(types.NewRef(p))
 	}
-	return set.Set(nil)
+	return set.Set()
 }
 
 // Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s
@@ -127,7 +136,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	addCommit := func(datasetID string, val string, parents ...types.Struct) types.Struct {
 		ds := db.GetDataset(datasetID)
 		var err error
-		ds, err = db.Commit(ds, types.String(val), CommitOptions{Parents: toRefSet(parents...)})
+		ds, err = db.Commit(ds, types.String(val), CommitOptions{Parents: toRefSet(db, parents...)})
 		assert.NoError(err)
 		return ds.Head()
 	}
@@ -196,10 +205,14 @@ func TestFindCommonAncestor(t *testing.T) {
 }
 
 func TestNewCommitRegressionTest(t *testing.T) {
-	c1 := NewCommit(types.String("one"), types.NewSet(), types.EmptyStruct)
-	cx := NewCommit(types.Bool(true), types.NewSet(), types.EmptyStruct)
+	storage := &chunks.TestStorage{}
+	db := NewDatabase(storage.NewView())
+	defer db.Close()
+
+	c1 := NewCommit(types.String("one"), types.NewSet(db), types.EmptyStruct)
+	cx := NewCommit(types.Bool(true), types.NewSet(db), types.EmptyStruct)
 	value := types.String("two")
-	parents := types.NewSet(types.NewRef(c1))
+	parents := types.NewSet(db, types.NewRef(c1))
 	meta := types.NewStruct("", types.StructData{
 		"basis": cx,
 	})

@@ -8,12 +8,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
 )
 
 func TestRun(t *testing.T) {
 	a := assert.New(t)
+
+	storage := &chunks.MemoryStorage{}
+	vs := types.NewValueStore(storage.NewView())
+	defer vs.Close()
 
 	docs := []struct {
 		terms string
@@ -24,34 +29,29 @@ func TestRun(t *testing.T) {
 		{"baz bat boo", 3},
 	}
 
-	indexEditor := NewTermIndex(types.NewMap()).Edit()
+	indexEditor := NewTermIndex(vs, types.NewMap(vs)).Edit()
 	for _, doc := range docs {
 		indexEditor.InsertAll(strings.Split(doc.terms, " "), types.Number(doc.id))
 	}
 
-	index := indexEditor.Value(nil)
+	index := indexEditor.Value()
 
 	getMap := func(keys ...int) types.Map {
-		m := types.NewMap().Edit()
+		m := types.NewMap(vs).Edit()
 		for _, k := range keys {
 			m.Set(types.Number(k), types.Bool(true))
 		}
-		return m.Map(nil)
+		return m.Map()
 	}
 
-	tc := []struct {
-		search string
-		expect types.Map
-	}{
-		{"foo", getMap(1, 2)},
-		{"baz", getMap(1, 2, 3)},
-		{"bar baz", getMap(1)},
-		{"boo", getMap(3)},
-		{"blarg", getMap()},
+	test := func(search string, expect types.Map) {
+		actual := index.Search(strings.Split(search, " "))
+		a.True(expect.Equals(actual))
 	}
 
-	for _, c := range tc {
-		actual := index.Search(strings.Split(c.search, " "))
-		a.True(c.expect.Equals(actual))
-	}
+	test("foo", getMap(1, 2))
+	test("baz", getMap(1, 2, 3))
+	test("bar baz", getMap(1))
+	test("boo", getMap(3))
+	test("blarg", getMap())
 }

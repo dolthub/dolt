@@ -237,6 +237,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	}
 
 	defer func() {
+		db := sp.GetDatabase()
+
 		reps := make([]types.Value, *perfRepeatFlag)
 		for i, rep := range testReps {
 			timesSlice := types.ValueSlice{}
@@ -247,20 +249,18 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 					"total":   types.Number(info.total.Nanoseconds()),
 				}))
 			}
-			reps[i] = types.NewMap(timesSlice...)
+			reps[i] = types.NewMap(db, timesSlice...)
 		}
 
 		record := types.NewStruct("", map[string]types.Value{
-			"environment":      suite.getEnvironment(),
+			"environment":      suite.getEnvironment(db),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
-			"reps":             types.NewList(reps...),
+			"reps":             types.NewList(db, reps...),
 		})
 
-		db := sp.GetDatabase()
 		ds := db.GetDataset(*perfPrefixFlag + datasetID)
-		var err error
-		ds, err = db.CommitValue(ds, record)
+		_, err := db.CommitValue(ds, record)
 		assert.NoError(err)
 	}()
 
@@ -274,6 +274,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		serverHost, stopServerFn := suite.StartRemoteDatabase()
 		suite.DatabaseSpec = serverHost
 		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(serverHost, ""))
+		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {
 			t.SetupRep()
@@ -418,7 +419,7 @@ func callSafe(name string, fun reflect.Value, args ...interface{}) error {
 	})
 }
 
-func (suite *PerfSuite) getEnvironment() types.Value {
+func (suite *PerfSuite) getEnvironment(vrw types.ValueReadWriter) types.Value {
 	assert := suite.NewAssert()
 
 	env := environment{
@@ -450,7 +451,7 @@ func (suite *PerfSuite) getEnvironment() types.Value {
 	assert.NoError(err)
 	env.Host = *hostInfo
 
-	envStruct, err := marshal.Marshal(env)
+	envStruct, err := marshal.Marshal(vrw, env)
 	assert.NoError(err)
 	return envStruct
 }

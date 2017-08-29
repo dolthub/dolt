@@ -89,10 +89,10 @@ func main() {
 		additionalMetaInfo := map[string]string{"url": url}
 		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo, nil)
 		d.CheckErrorNoUsage(err)
-		_, err = db.Commit(ds, jsontonoms.NomsValueFromDecodedJSON(jsonObject, true), datas.CommitOptions{Meta: meta})
+		_, err = db.Commit(ds, jsontonoms.NomsValueFromDecodedJSON(db, jsonObject, true), datas.CommitOptions{Meta: meta})
 		d.PanicIfError(err)
 	} else {
-		ref := db.WriteValue(jsontonoms.NomsValueFromDecodedJSON(jsonObject, true))
+		ref := db.WriteValue(jsontonoms.NomsValueFromDecodedJSON(db, jsonObject, true))
 		fmt.Fprintf(os.Stdout, "#%s\n", ref.TargetHash().String())
 	}
 }

@@ -149,7 +149,7 @@ func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads
 
 	l := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(l, types.NewSet())
+	sourceRef := suite.commitToSource(l, types.NewSet(suite.source))
 	pt := startProgressTracker()
 
 	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
@@ -182,15 +182,15 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet())
+	suite.commitToSink(sinkL, types.NewSet(suite.sink))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet())
+	sourceRef := suite.commitToSource(srcL, types.NewSet(suite.source))
 	srcL = buildListOfHeight(4, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(suite.source, sourceRef))
 	srcL = buildListOfHeight(5, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(suite.source, sourceRef))
 
 	pt := startProgressTracker()
 
@@ -228,14 +228,14 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, types.NewSet())
+	sinkRef := suite.commitToSink(sinkL, types.NewSet(suite.sink))
 	srcL := buildListOfHeight(3, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet())
+	sourceRef := suite.commitToSource(srcL, types.NewSet(suite.source))
 
-	sinkL = sinkL.Edit().Append(types.String("oy!")).List(nil)
-	sinkRef = suite.commitToSink(sinkL, types.NewSet(sinkRef))
-	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(nil)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
+	sinkL = sinkL.Edit().Append(types.String("oy!")).List()
+	sinkRef = suite.commitToSink(sinkL, types.NewSet(suite.sink, sinkRef))
+	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List()
+	sourceRef = suite.commitToSource(srcL, types.NewSet(suite.source, sourceRef))
 	preReads := suite.sinkCS.Reads
 
 	pt := startProgressTracker()
@@ -268,17 +268,17 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                         \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet())
+	suite.commitToSink(sinkL, types.NewSet(suite.sink))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(4, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet())
+	sourceRef := suite.commitToSource(srcL, types.NewSet(suite.source))
 	L3 := srcL.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
 	L2 := L3.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
-	L2 = L2.Edit().Append(suite.source.WriteValue(types.String("oy!"))).List(nil)
-	L3 = L3.Edit().Set(1, suite.source.WriteValue(L2)).List(nil)
-	srcL = srcL.Edit().Set(1, suite.source.WriteValue(L3)).List(nil)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(sourceRef))
+	L2 = L2.Edit().Append(suite.source.WriteValue(types.String("oy!"))).List()
+	L3 = L3.Edit().Set(1, suite.source.WriteValue(L2)).List()
+	srcL = srcL.Edit().Set(1, suite.source.WriteValue(L3)).List()
+	sourceRef = suite.commitToSource(srcL, types.NewSet(suite.source, sourceRef))
 
 	pt := startProgressTracker()
 
@@ -306,15 +306,15 @@ func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
 	return ds.HeadRef()
 }
 
-func buildListOfHeight(height int, vw types.ValueWriter) types.List {
+func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	unique := 0
-	l := types.NewList(types.Number(unique), types.Number(unique+1))
+	l := types.NewList(vrw, types.Number(unique), types.Number(unique+1))
 	unique += 2
 
 	for i := 0; i < height; i++ {
-		r1, r2 := vw.WriteValue(types.Number(unique)), vw.WriteValue(l)
+		r1, r2 := vrw.WriteValue(types.Number(unique)), vrw.WriteValue(l)
 		unique++
-		l = types.NewList(r1, r2)
+		l = types.NewList(vrw, r1, r2)
 	}
 	return l
 }

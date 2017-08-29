@@ -29,7 +29,7 @@ func (s *ThreeWaySetMergeSuite) SetupSuite() {
 	s.create = func(i seq) (val types.Value) {
 		if i != nil {
 			keyValues := valsToTypesValues(s.create, i.items()...)
-			val = types.NewSet(keyValues...)
+			val = types.NewSet(s.vs, keyValues...)
 		}
 		return
 	}
@@ -80,6 +80,6 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_ImmediateConflict() {
-	s.tryThreeWayConflict(types.NewMap(), s.create(ss1b), s.create(ss1), "Cannot merge Map<> with "+s.typeStr)
-	s.tryThreeWayConflict(s.create(ss1b), types.NewMap(), s.create(ss1), "Cannot merge "+s.typeStr)
+	s.tryThreeWayConflict(types.NewMap(s.vs), s.create(ss1b), s.create(ss1), "Cannot merge Map<> with "+s.typeStr)
+	s.tryThreeWayConflict(s.create(ss1b), types.NewMap(s.vs), s.create(ss1), "Cannot merge "+s.typeStr)
 }

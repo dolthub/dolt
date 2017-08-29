@@ -4,6 +4,8 @@
 
 package types
 
+import "github.com/attic-labs/noms/go/d"
+
 type mapLeafSequence struct {
 	leafSequence
 	data []mapEntry // sorted by entry.key.Hash()
@@ -33,8 +35,9 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	return true
 }
 
-func newMapLeafSequence(vr ValueReader, data ...mapEntry) orderedSequence {
-	return mapLeafSequence{leafSequence{vr, len(data), MapKind}, data}
+func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
+	d.PanicIfTrue(vrw == nil)
+	return mapLeafSequence{leafSequence{vrw, len(data), MapKind}, data}
 }
 
 // sequence interface

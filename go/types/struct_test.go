@@ -54,6 +54,7 @@ func TestGenericStructNew(t *testing.T) {
 
 func TestGenericStructSet(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	s := NewStruct("S3", StructData{"b": Bool(true), "o": String("hi")})
 	s2 := s.Set("b", Bool(false))
@@ -77,8 +78,8 @@ func TestGenericStructSet(t *testing.T) {
 	).Equals(TypeOf(s5)))
 
 	// Subtype is not equal.
-	s6 := NewStruct("", StructData{"l": NewList(Number(0), Number(1), Bool(false), Bool(true))})
-	s7 := s6.Set("l", NewList(Number(2), Number(3)))
+	s6 := NewStruct("", StructData{"l": NewList(vs, Number(0), Number(1), Bool(false), Bool(true))})
+	s7 := s6.Set("l", NewList(vs, Number(2), Number(3)))
 	t7 := MakeStructTypeFromFields("", FieldMap{
 		"l": MakeListType(NumberType),
 	})
@@ -119,6 +120,7 @@ func assertValueChangeEqual(assert *assert.Assertions, c1, c2 ValueChanged) {
 
 func TestStructDiff(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	assertDiff := func(expect []ValueChanged, s1, s2 Struct) {
 		changes := make(chan ValueChanged)
@@ -165,46 +167,46 @@ func TestStructDiff(t *testing.T) {
 		s1, NewStruct("NewType", StructData{"a": Bool(true), "c": Number(4), "d": Number(5)}))
 
 	s2 := NewStruct("", StructData{
-		"a": NewList(Number(0), Number(1)),
-		"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
-		"c": NewSet(Number(0), Number(1), String("foo")),
+		"a": NewList(vs, Number(0), Number(1)),
+		"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+		"c": NewSet(vs, Number(0), Number(1), String("foo")),
 	})
 
 	assertDiff([]ValueChanged{},
 		s2, NewStruct("", StructData{
-			"a": NewList(Number(0), Number(1)),
-			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), String("foo")),
+			"a": NewList(vs, Number(0), Number(1)),
+			"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(vs, Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a", NewList(Number(1), Number(1)), NewList(Number(0), Number(1))),
-		vc(DiffChangeModified, "b", NewMap(String("foo"), Bool(true), String("bar"), Bool(true)), NewMap(String("foo"), Bool(false), String("bar"), Bool(true))),
+		vc(DiffChangeModified, "a", NewList(vs, Number(1), Number(1)), NewList(vs, Number(0), Number(1))),
+		vc(DiffChangeModified, "b", NewMap(vs, String("foo"), Bool(true), String("bar"), Bool(true)), NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(Number(1), Number(1)),
-			"b": NewMap(String("foo"), Bool(true), String("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), String("foo")),
+			"a": NewList(vs, Number(1), Number(1)),
+			"b": NewMap(vs, String("foo"), Bool(true), String("bar"), Bool(true)),
+			"c": NewSet(vs, Number(0), Number(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a", NewList(Number(0)), NewList(Number(0), Number(1))),
-		vc(DiffChangeModified, "c", NewSet(Number(0), Number(2), String("foo")), NewSet(Number(0), Number(1), String("foo"))),
+		vc(DiffChangeModified, "a", NewList(vs, Number(0)), NewList(vs, Number(0), Number(1))),
+		vc(DiffChangeModified, "c", NewSet(vs, Number(0), Number(2), String("foo")), NewSet(vs, Number(0), Number(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(Number(0)),
-			"b": NewMap(String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(2), String("foo")),
+			"a": NewList(vs, Number(0)),
+			"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(vs, Number(0), Number(2), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "b", NewMap(String("boo"), Bool(false), String("bar"), Bool(true)), NewMap(String("foo"), Bool(false), String("bar"), Bool(true))),
-		vc(DiffChangeModified, "c", NewSet(Number(0), Number(1), String("bar")), NewSet(Number(0), Number(1), String("foo"))),
+		vc(DiffChangeModified, "b", NewMap(vs, String("boo"), Bool(false), String("bar"), Bool(true)), NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true))),
+		vc(DiffChangeModified, "c", NewSet(vs, Number(0), Number(1), String("bar")), NewSet(vs, Number(0), Number(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(Number(0), Number(1)),
-			"b": NewMap(String("boo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(Number(0), Number(1), String("bar")),
+			"a": NewList(vs, Number(0), Number(1)),
+			"b": NewMap(vs, String("boo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(vs, Number(0), Number(1), String("bar")),
 		}))
 }
 

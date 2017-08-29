@@ -12,7 +12,7 @@ import (
 type Bool bool
 
 // Value interface
-func (v Bool) Value(vrw ValueReadWriter) Value {
+func (v Bool) Value() Value {
 	return v
 }
 

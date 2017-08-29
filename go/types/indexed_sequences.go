@@ -9,12 +9,12 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-func newListMetaSequence(level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
-	return newMetaSequence(ListKind, level, tuples, vr)
+func newListMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+	return newMetaSequence(ListKind, level, tuples, vrw)
 }
 
-func newBlobMetaSequence(level uint64, tuples []metaTuple, vr ValueReader) metaSequence {
-	return newMetaSequence(BlobKind, level, tuples, vr)
+func newBlobMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+	return newMetaSequence(BlobKind, level, tuples, vrw)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx
@@ -51,7 +51,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReader) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
@@ -84,7 +84,8 @@ func orderedKeyFromSum(msd []metaTuple) orderedKey {
 // loads the set of leaf nodes which contain the items [startIdx -> endIdx).
 // Returns the set of nodes and the offset within the first sequence which corresponds to |startIdx|.
 func loadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64) {
-	vr := cols[0].sequence().valueReader()
+	vrw := cols[0].sequence().valueReadWriter()
+	d.PanicIfTrue(vrw == nil)
 
 	if cols[0].sequence().isLeaf() {
 		for _, c := range cols {
@@ -121,9 +122,6 @@ func loadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 
 	hs := hash.HashSet{}
 	for _, mt := range childTuples {
-		if mt.child != nil {
-			continue
-		}
 		hs.Insert(mt.ref.TargetHash())
 	}
 
@@ -132,8 +130,7 @@ func loadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 	if len(hs) > 0 {
 		valueChan := make(chan Value, len(hs))
 		go func() {
-			d.PanicIfTrue(vr == nil)
-			vr.ReadManyValues(hs, valueChan)
+			vrw.ReadManyValues(hs, valueChan)
 			close(valueChan)
 		}()
 		for value := range valueChan {
@@ -143,11 +140,6 @@ func loadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 
 	childCols := make([]Collection, len(childTuples))
 	for i, mt := range childTuples {
-		if mt.child != nil {
-			childCols[i] = mt.child.(Collection)
-			continue
-		}
-
 		childCols[i] = fetched[mt.ref.TargetHash()]
 	}
 

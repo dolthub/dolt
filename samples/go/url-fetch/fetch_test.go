@@ -50,10 +50,11 @@ func (s *testSuite) TestImportFromStdin() {
 	assert.NoError(err)
 	defer sp.Close()
 
-	expected := types.NewBlob(bytes.NewBufferString("abcdef"))
+	ds := sp.GetDatabase().GetDataset("ds")
+
+	expected := types.NewBlob(ds.Database(), bytes.NewBufferString("abcdef"))
 	assert.True(expected.Equals(sp.GetValue()))
 
-	ds := sp.GetDatabase().GetDataset("ds")
 	meta := ds.Head().Get(datas.MetaField).(types.Struct)
 	// The meta should only have a "date" field.
 	metaDesc := types.TypeOf(meta).Desc.(types.StructDesc)
@@ -77,10 +78,11 @@ func (s *testSuite) TestImportFromFile() {
 	assert.NoError(err)
 	defer sp.Close()
 
-	expected := types.NewBlob(bytes.NewBufferString("abcdef"))
+	ds := sp.GetDatabase().GetDataset("ds")
+
+	expected := types.NewBlob(ds.Database(), bytes.NewBufferString("abcdef"))
 	assert.True(expected.Equals(sp.GetValue()))
 
-	ds := sp.GetDatabase().GetDataset("ds")
 	meta := ds.Head().Get(datas.MetaField).(types.Struct)
 	metaDesc := types.TypeOf(meta).Desc.(types.StructDesc)
 	assert.Equal(2, metaDesc.Len())

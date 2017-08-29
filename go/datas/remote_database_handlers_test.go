@@ -29,6 +29,7 @@ func TestHandleWriteValue(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 
 	l := types.NewList(
+		db,
 		db.WriteValue(types.Bool(true)),
 		db.WriteValue(types.Bool(false)),
 	)
@@ -36,9 +37,9 @@ func TestHandleWriteValue(t *testing.T) {
 	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
 	assert.NoError(err)
 
-	newItem := types.NewEmptyBlob()
+	newItem := types.NewEmptyBlob(db)
 	itemChunk := types.EncodeValue(newItem)
-	l2 := l.Edit().Insert(1, types.NewRef(newItem)).List(nil)
+	l2 := l.Edit().Insert(1, types.NewRef(newItem)).List()
 	listChunk := types.EncodeValue(l2)
 
 	body := &bytes.Buffer{}
@@ -73,8 +74,10 @@ func TestHandleWriteValuePanic(t *testing.T) {
 func TestHandleWriteValueDupChunks(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
+	db := NewDatabase(storage.NewView())
+	defer db.Close()
 
-	newItem := types.NewEmptyBlob()
+	newItem := types.NewEmptyBlob(db)
 	itemChunk := types.EncodeValue(newItem)
 
 	body := &bytes.Buffer{}
@@ -210,7 +213,7 @@ func TestHandleGetBlob(t *testing.T) {
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
-	b := types.NewStreamingBlob(db, bytes.NewBuffer([]byte(blobContents)))
+	b := types.NewBlob(db, bytes.NewBuffer([]byte(blobContents)))
 
 	// Test non-present hash
 	w = httptest.NewRecorder()
@@ -242,7 +245,7 @@ func TestHandleGetBlob(t *testing.T) {
 
 	// Test non-blob
 	r2 := db.WriteValue(types.Number(1))
-	ds, err = db.CommitValue(ds, r2)
+	_, err = db.CommitValue(ds, r2)
 	assert.NoError(err)
 
 	w = httptest.NewRecorder()
@@ -346,14 +349,14 @@ func TestHandlePostRoot(t *testing.T) {
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	validate(http.StatusOK, hash.Hash{}, w)
 
-	commit := buildTestCommit(types.String("head"))
+	commit := buildTestCommit(vs, types.String("head"))
 	commitRef := vs.WriteValue(commit)
-	firstHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(commitRef))
+	firstHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(commitRef))
 	firstHeadRef := vs.WriteValue(firstHead)
 	vs.Commit(vs.Root(), vs.Root())
 
-	commit = buildTestCommit(types.String("second"), commitRef)
-	newHead := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
+	commit = buildTestCommit(vs, types.String("second"), commitRef)
+	newHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	newHeadRef := vs.WriteValue(newHead)
 	vs.Commit(vs.Root(), vs.Root())
 
@@ -379,16 +382,18 @@ func buildPostRootURL(current, last hash.Hash) string {
 	return u.String()
 }
 
-func buildTestCommit(v types.Value, parents ...types.Value) types.Struct {
-	return NewCommit(v, types.NewSet(parents...), types.NewStruct("Meta", types.StructData{}))
+func buildTestCommit(vrw types.ValueReadWriter, v types.Value, parents ...types.Value) types.Struct {
+	return NewCommit(v, types.NewSet(vrw, parents...), types.NewStruct("Meta", types.StructData{}))
 }
 
 func TestRejectPostRoot(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewView()
+	vs := types.NewValueStore(cs)
+	defer vs.Close()
 
-	newHead := types.NewMap(types.String("dataset1"), types.String("Not a Head"))
+	newHead := types.NewMap(vs, types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead)
 	cs.Put(chunk)
 	persistChunks(cs)
@@ -400,9 +405,8 @@ func TestRejectPostRoot(t *testing.T) {
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	// Put in a legit commit
-	vs := types.NewValueStore(cs)
-	commit := buildTestCommit(types.String("commit"))
-	head := types.NewMap(types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
+	commit := buildTestCommit(vs, types.String("commit"))
+	head := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
 	headRef := vs.WriteValue(head)
 	assert.True(vs.Commit(headRef.TargetHash(), vs.Root()))
 

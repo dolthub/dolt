@@ -28,21 +28,17 @@ func (be *BlobEditor) Kind() NomsKind {
 	return BlobKind
 }
 
-func (be *BlobEditor) Value(vrw ValueReadWriter) Value {
-	return be.Blob(vrw)
+func (be *BlobEditor) Value() Value {
+	return be.Blob()
 }
 
-func (be *BlobEditor) Blob(vrw ValueReadWriter) Blob {
+func (be *BlobEditor) Blob() Blob {
 	if be.edits == nil {
 		return be.b // no edits
 	}
 
 	seq := be.b.sequence()
-	vr := seq.valueReader()
-
-	if vrw != nil {
-		vr = vrw
-	}
+	vrw := seq.valueReadWriter()
 
 	curs := make([]chan *sequenceCursor, 0)
 	for edit := be.edits; edit != nil; edit = edit.next {
@@ -63,7 +59,7 @@ func (be *BlobEditor) Blob(vrw ValueReadWriter) Blob {
 		idx++
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vr, vrw, makeBlobLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(BlobKind, vr), hashValueByte)
+			ch = newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 		} else {
 			ch.advanceTo(cur)
 		}

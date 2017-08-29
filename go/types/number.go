@@ -12,7 +12,7 @@ import (
 type Number float64
 
 // Value interface
-func (v Number) Value(vrw ValueReadWriter) Value {
+func (v Number) Value() Value {
 	return v
 }
 

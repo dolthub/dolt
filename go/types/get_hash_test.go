@@ -33,32 +33,32 @@ func TestEnsureHash(t *testing.T) {
 		getHashOverride = nil
 	}()
 
-	bl := newBlob(newBlobLeafSequence(nil, []byte("hi")))
-	cb := newBlob(newBlobMetaSequence(1, []metaTuple{{Ref{}, newOrderedKey(Number(2)), 2, bl}}, vs))
+	bl := newBlob(newBlobLeafSequence(vs, []byte("hi")))
+	cb := newBlob(newBlobMetaSequence(1, []metaTuple{{vs.WriteValue(bl), newOrderedKey(Number(2)), 2}}, vs))
 
-	ll := newList(newListLeafSequence(nil, String("foo")))
-	cl := newList(newMetaSequence(ListKind, 1, []metaTuple{{Ref{}, newOrderedKey(Number(1)), 1, ll}}, vs))
+	ll := newList(newListLeafSequence(vs, String("foo")))
+	cl := newList(newMetaSequence(ListKind, 1, []metaTuple{{vs.WriteValue(ll), newOrderedKey(Number(1)), 1}}, vs))
 
 	newStringOrderedKey := func(s string) orderedKey {
 		return newOrderedKey(String(s))
 	}
 
-	ml := newMap(newMapLeafSequence(nil, mapEntry{String("foo"), String("bar")}))
-	cm := newMap(newMetaSequence(MapKind, 1, []metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, ml}}, vs))
+	ml := newMap(newMapLeafSequence(vs, mapEntry{String("foo"), String("bar")}))
+	cm := newMap(newMetaSequence(MapKind, 1, []metaTuple{{vs.WriteValue(ml), newStringOrderedKey("foo"), 1}}, vs))
 
-	sl := newSet(newSetLeafSequence(nil, String("foo")))
-	cps := newSet(newMetaSequence(SetKind, 1, []metaTuple{{Ref{}, newStringOrderedKey("foo"), 1, sl}}, vs))
+	sl := newSet(newSetLeafSequence(vs, String("foo")))
+	cps := newSet(newMetaSequence(SetKind, 1, []metaTuple{{vs.WriteValue(sl), newStringOrderedKey("foo"), 1}}, vs))
 
 	count = byte(1)
 	values := []Value{
-		newBlob(newBlobLeafSequence(nil, []byte{})),
+		newBlob(newBlobLeafSequence(vs, []byte{})),
 		cb,
-		newList(newListLeafSequence(nil, String("bar"))),
+		newList(newListLeafSequence(vs, String("bar"))),
 		cl,
 		cm,
-		newMap(newMapLeafSequence(nil)),
+		newMap(newMapLeafSequence(vs)),
 		cps,
-		newSet(newSetLeafSequence(nil)),
+		newSet(newSetLeafSequence(vs)),
 	}
 	for i := 0; i < 2; i++ {
 		for j, v := range values {

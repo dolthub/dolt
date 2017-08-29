@@ -46,12 +46,7 @@ func (suite *collectionTestSuite) TestChunkCountAndType() {
 }
 
 func (suite *collectionTestSuite) TestRoundTripAndValidate() {
-	vs := newTestValueStore()
-	r := vs.WriteValue(suite.col)
-	v2 := vs.ReadValue(r.TargetHash()).(Collection)
-	suite.True(v2.Equals(suite.col))
-	suite.True(suite.col.Equals(v2))
-	suite.True(suite.validate(v2))
+	suite.True(suite.validate(suite.col))
 }
 
 func (suite *collectionTestSuite) TestPrependChunkDiff() {

@@ -86,7 +86,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	l1Len, l2Len := l1.Len(), l2.Len()
 	l1Last, l2Last := last(l1), last(l2)
 
-	l3 := types.NewList()
+	l3 := types.NewList(s.Database)
 	for i := uint64(0); i < 1e3; i++ { // 1k iterations * 2 concat ops = 2k times
 		// Include some basic sanity checks.
 		l3 = l3.Concat(l1)
@@ -151,7 +151,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 		}
 	})
 
-	b := types.NewBlob(readers...)
+	b := types.NewBlob(s.Database, readers...)
 	assert.Equal(uint64(size), b.Len())
 }
 

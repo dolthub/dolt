@@ -4,13 +4,16 @@
 
 package types
 
+import "github.com/attic-labs/noms/go/d"
+
 type setLeafSequence struct {
 	leafSequence
 	data []Value // sorted by Hash()
 }
 
-func newSetLeafSequence(vr ValueReader, v ...Value) orderedSequence {
-	return setLeafSequence{leafSequence{vr, len(v), SetKind}, v}
+func newSetLeafSequence(vrw ValueReadWriter, v ...Value) orderedSequence {
+	d.PanicIfTrue(vrw == nil)
+	return setLeafSequence{leafSequence{vrw, len(v), SetKind}, v}
 }
 
 // sequence interface

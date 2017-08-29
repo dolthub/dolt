@@ -89,6 +89,7 @@ func TestPathStructType(t *testing.T) {
 
 func TestPathIndex(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
 
 	var v Value
 	resolvesTo := func(expVal, expKey Value, str string) {
@@ -96,7 +97,7 @@ func TestPathIndex(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
+	v = NewList(vs, Number(1), Number(3), String("foo"), Bool(false))
 
 	resolvesTo(Number(1), Number(0), "[0]")
 	resolvesTo(Number(3), Number(1), "[1]")
@@ -109,7 +110,7 @@ func TestPathIndex(t *testing.T) {
 	resolvesTo(String("foo"), Number(2), "[-2]")
 	resolvesTo(Bool(false), Number(3), "[-1]")
 
-	v = NewMap(
+	v = NewMap(vs,
 		Bool(false), Number(23),
 		Number(1), String("foo"),
 		Number(2.3), Number(4.5),
@@ -168,20 +169,22 @@ func TestPathIndexType(t *testing.T) {
 func TestPathHashIndex(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+
 	b := Bool(true)
 	br := NewRef(b)
 	i := Number(0)
 	str := String("foo")
-	l := NewList(b, i, str)
+	l := NewList(vs, b, i, str)
 	lr := NewRef(l)
-	m := NewMap(
+	m := NewMap(vs,
 		b, br,
 		br, i,
 		i, str,
 		l, lr,
 		lr, b,
 	)
-	s := NewSet(b, br, i, str, l, lr)
+	s := NewSet(vs, b, br, i, str, l, lr)
 
 	resolvesTo := func(col, key, expVal, expKey Value) {
 		assertResolvesTo(assert, expVal, col, hashIdx(key))
@@ -212,31 +215,35 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	// This test is to make sure we don't accidentally return |b| if it's the only element.
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+
 	resolvesToNil := func(col, val Value) {
 		assertResolvesTo(assert, nil, col, hashIdx(val))
 	}
 
 	b := Bool(true)
-	resolvesToNil(NewMap(b, b), b)
-	resolvesToNil(NewSet(b), b)
+	resolvesToNil(NewMap(vs, b, b), b)
+	resolvesToNil(NewSet(vs, b), b)
 }
 
 func TestPathMulti(t *testing.T) {
 	assert := assert.New(t)
 
-	m1 := NewMap(
+	vs := newTestValueStore()
+
+	m1 := NewMap(vs,
 		String("a"), String("foo"),
 		String("b"), String("bar"),
 		String("c"), String("car"),
 	)
 
-	m2 := NewMap(
+	m2 := NewMap(vs,
 		Bool(false), String("earth"),
 		String("d"), String("dar"),
 		m1, String("fire"),
 	)
 
-	l := NewList(m1, m2)
+	l := NewList(vs, m1, m2)
 
 	s := NewStruct("", StructData{
 		"foo": l,
@@ -422,12 +429,14 @@ func TestPathEquals(t *testing.T) {
 func TestPathCanBePathIndex(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+
 	assert.True(ValueCanBePathIndex(Bool(true)))
 	assert.True(ValueCanBePathIndex(Number(5)))
 	assert.True(ValueCanBePathIndex(String("yes")))
 
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
-	assert.False(ValueCanBePathIndex(NewBlob(bytes.NewReader([]byte("yes")))))
+	assert.False(ValueCanBePathIndex(NewBlob(vs, bytes.NewReader([]byte("yes")))))
 }
 
 func TestCopyPath(t *testing.T) {
@@ -468,12 +477,14 @@ func TestMustParsePath(t *testing.T) {
 func TestPathType(t *testing.T) {
 	assert := assert.New(t)
 
-	m := NewMap(
+	vs := newTestValueStore()
+
+	m := NewMap(vs,
 		String("string"), String("foo"),
 		String("bool"), Bool(false),
 		String("number"), Number(42),
-		String("List<number|string>"), NewList(Number(42), String("foo")),
-		String("Map<Bool, Bool>"), NewMap(Bool(true), Bool(false)))
+		String("List<number|string>"), NewList(vs, Number(42), String("foo")),
+		String("Map<Bool, Bool>"), NewMap(vs, Bool(true), Bool(false)))
 
 	m.IterAll(func(k, cv Value) {
 		ks := k.(String)
@@ -511,13 +522,15 @@ func TestPathTarget(t *testing.T) {
 func TestPathAtAnnotation(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+
 	var v Value
 	resolvesTo := func(expVal, expKey Value, str string) {
 		assertResolvesTo(assert, expVal, v, str)
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(Number(1), Number(3), String("foo"), Bool(false))
+	v = NewList(vs, Number(1), Number(3), String("foo"), Bool(false))
 
 	resolvesTo(Number(1), nil, "@at(0)")
 	resolvesTo(Number(3), nil, "@at(1)")
@@ -530,7 +543,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(String("foo"), nil, "@at(-2)")
 	resolvesTo(Bool(false), nil, "@at(-1)")
 
-	v = NewSet(
+	v = NewSet(vs,
 		Bool(false),
 		Number(1),
 		Number(2.3),
@@ -548,7 +561,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(Number(2.3), Number(2.3), "@at(-2)")
 	resolvesTo(String("two"), String("two"), `@at(-1)`)
 
-	v = NewMap(
+	v = NewMap(vs,
 		Bool(false), Number(23),
 		Number(1), String("foo"),
 		Number(2.3), Number(4.5),

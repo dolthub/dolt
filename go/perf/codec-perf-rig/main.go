@@ -57,7 +57,7 @@ func main() {
 			db := datas.NewDatabase(storage.NewView())
 			ds := db.GetDataset("test")
 			t1 := time.Now()
-			col := buildFns[i](buildCount, valueFn)
+			col := buildFns[i](db, buildCount, valueFn)
 			ds, err := db.CommitValue(ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
@@ -73,7 +73,7 @@ func main() {
 			db = datas.NewDatabase(storage.NewView())
 			ds = db.GetDataset("test")
 			t1 = time.Now()
-			col = buildIncrFns[i](insertCount, valueFn)
+			col = buildIncrFns[i](db, insertCount, valueFn)
 			ds, err = db.CommitValue(ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
@@ -95,7 +95,7 @@ func main() {
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob := types.NewBlob(bytes.NewReader(blobBytes))
+	blob := types.NewBlob(db, bytes.NewReader(blobBytes))
 	db.CommitValue(ds, blob)
 	buildDuration := time.Since(t1)
 
@@ -116,7 +116,7 @@ func rate(d time.Duration, size uint64) string {
 }
 
 type createValueFn func(i uint64) types.Value
-type buildCollectionFn func(count uint64, createFn createValueFn) types.Collection
+type buildCollectionFn func(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection
 type readCollectionFn func(value types.Collection)
 
 func makeBlobBytes(byteLength uint64) []byte {
@@ -162,22 +162,22 @@ func createStruct(i uint64) types.Value {
 	})
 }
 
-func buildList(count uint64, createFn createValueFn) types.Collection {
+func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
 	values := make([]types.Value, count)
 	for i := uint64(0); i < count; i++ {
 		values[i] = createFn(i)
 	}
 
-	return types.NewList(values...)
+	return types.NewList(vrw, values...)
 }
 
-func buildListIncrementally(count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList().Edit()
+func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
+	l := types.NewList(vrw).Edit()
 	for i := uint64(0); i < count; i++ {
-		l.Insert(i, createFn(i))
+		l.Append(createFn(i))
 	}
 
-	return l.List(nil)
+	return l.List()
 }
 
 func readList(c types.Collection) {
@@ -185,22 +185,22 @@ func readList(c types.Collection) {
 	})
 }
 
-func buildSet(count uint64, createFn createValueFn) types.Collection {
+func buildSet(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
 	values := make([]types.Value, count)
 	for i := uint64(0); i < count; i++ {
 		values[i] = createFn(i)
 	}
 
-	return types.NewSet(values...)
+	return types.NewSet(vrw, values...)
 }
 
-func buildSetIncrementally(count uint64, createFn createValueFn) types.Collection {
-	s := types.NewSet().Edit()
+func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
+	s := types.NewSet(vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		s.Insert(createFn(i))
 	}
 
-	return s.Set(nil)
+	return s.Set()
 }
 
 func readSet(c types.Collection) {
@@ -208,23 +208,23 @@ func readSet(c types.Collection) {
 	})
 }
 
-func buildMap(count uint64, createFn createValueFn) types.Collection {
+func buildMap(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
 	values := make([]types.Value, count*2)
 	for i := uint64(0); i < count*2; i++ {
 		values[i] = createFn(i)
 	}
 
-	return types.NewMap(values...)
+	return types.NewMap(vrw, values...)
 }
 
-func buildMapIncrementally(count uint64, createFn createValueFn) types.Collection {
-	me := types.NewMap().Edit()
+func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
+	me := types.NewMap(vrw).Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
 		me.Set(createFn(i), createFn(i+1))
 	}
 
-	return me.Map(nil)
+	return me.Map()
 }
 
 func readMap(c types.Collection) {

@@ -16,7 +16,7 @@ type Valuable interface {
 	// Kind is the NomsKind describing the kind of value this is.
 	Kind() NomsKind
 
-	Value(vrw ValueReadWriter) Value
+	Value() Value
 }
 
 // Emptyable is an interface for Values which may or may not be empty

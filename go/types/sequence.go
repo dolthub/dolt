@@ -12,7 +12,7 @@ type sequence interface {
 	getItem(idx int) sequenceItem
 	seqLen() int
 	numLeaves() uint64
-	valueReader() ValueReader
+	valueReadWriter() ValueReadWriter
 	WalkRefs(cb RefCallback)
 	typeOf() *Type
 	Kind() NomsKind

@@ -35,7 +35,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 	cr := newCountingReader()
 
 	for i := 0; i < rounds; i++ {
-		b := NewBlob()
+		b := NewBlob(vs)
 
 		f, _ := ioutil.TempFile("", "buff")
 		be := b.Edit()
@@ -68,13 +68,13 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 			}
 			if j%flushEvery == 0 {
 				// Flush
-				b = be.Blob(vs)
+				b = be.Blob()
 				be = b.Edit()
 			}
 		}
 
 		f.Sync()
-		b = be.Blob(vs)
+		b = be.Blob()
 
 		f.Seek(0, 0)
 		info, err := f.Stat()

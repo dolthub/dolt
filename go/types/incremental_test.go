@@ -12,18 +12,18 @@ import (
 	"github.com/attic-labs/testify/assert"
 )
 
-var (
-	testVals = []Value{
+func getTestVals(vrw ValueReadWriter) []Value {
+	return []Value{
 		Bool(true),
 		Number(1),
 		String("hi"),
-		NewBlob(bytes.NewReader([]byte("hi"))),
+		NewBlob(vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
-		NewSet(String("hi")),
-		NewList(String("hi")),
-		NewMap(String("hi"), String("hi")),
+		NewSet(vrw, String("hi")),
+		NewList(vrw, String("hi")),
+		NewMap(vrw, String("hi"), String("hi")),
 	}
-)
+}
 
 func isEncodedOutOfLine(v Value) int {
 	switch v.(type) {
@@ -39,7 +39,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewList(testVals...)
+	expected := NewList(vs, getTestVals(vs)...)
 	hash := vs.WriteValue(expected).TargetHash()
 	vs.Commit(vs.Root(), vs.Root())
 
@@ -69,7 +69,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewSet(testVals...)
+	expected := NewSet(vs, getTestVals(vs)...)
 	ref := vs.WriteValue(expected).TargetHash()
 
 	actualVar := vs.ReadValue(ref)
@@ -90,7 +90,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewMap(testVals...)
+	expected := NewMap(vs, getTestVals(vs)...)
 	ref := vs.WriteValue(expected).TargetHash()
 
 	actualVar := vs.ReadValue(ref)
@@ -115,7 +115,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := Number(42)
 	ref := vs.WriteValue(expectedItem)
 
-	expected := NewList(ref)
+	expected := NewList(vs, ref)
 	ref = vs.WriteValue(expected)
 	actualVar := vs.ReadValue(ref.TargetHash())
 

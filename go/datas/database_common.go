@@ -54,7 +54,7 @@ func (db *database) Stats() interface{} {
 func (db *database) Datasets() types.Map {
 	rootHash := db.rt.Root()
 	if rootHash.IsEmpty() {
-		return types.NewMap()
+		return types.NewMap(db)
 	}
 
 	return db.ReadValue(rootHash).(types.Map)
@@ -93,7 +93,7 @@ func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
 	commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
-	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map(nil)
+	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map()
 	return db.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
@@ -161,11 +161,11 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(NewCommit(merged, types.NewSet(commitRef, currentHeadRef), types.EmptyStruct))
+					commitRef = db.WriteValue(NewCommit(merged, types.NewSet(db, commitRef, currentHeadRef), types.EmptyStruct))
 				}
 			}
 		}
-		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map(nil)
+		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map()
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
@@ -188,7 +188,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 
 	var err error
 	for {
-		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map(nil)
+		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map()
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
@@ -227,9 +227,9 @@ func (db *database) validateRefAsCommit(r types.Ref) types.Struct {
 func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct {
 	parents := opts.Parents
 	if (parents == types.Set{}) {
-		parents = types.NewSet()
+		parents = types.NewSet(ds.Database())
 		if headRef, ok := ds.MaybeHeadRef(); ok {
-			parents = parents.Edit().Insert(headRef).Set(nil)
+			parents = parents.Edit().Insert(headRef).Set()
 		}
 	}
 

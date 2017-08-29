@@ -33,12 +33,12 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 func TestAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(s0, s1)
-	emptySet := types.NewSet()
+	list := types.NewList(db, s0, s1)
+	emptySet := types.NewSet(db)
 
-	db := datas.NewDatabase(storage.NewView())
 	db.WriteValue(s0)
 	db.WriteValue(s1)
 	db.WriteValue(list)
@@ -84,13 +84,13 @@ func TestAbsolutePaths(t *testing.T) {
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
+	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(s0, s1)
+	list := types.NewList(db, s0, s1)
 
-	db := datas.NewDatabase(storage.NewView())
 	ds := db.GetDataset("ds")
-	ds, err := db.CommitValue(ds, list)
+	_, err := db.CommitValue(ds, list)
 	assert.NoError(err)
 
 	vals, err := ReadAbsolutePaths(db, "ds.value[0]", "ds.value[1]")

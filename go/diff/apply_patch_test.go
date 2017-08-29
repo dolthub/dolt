@@ -64,7 +64,7 @@ func vfk(keys ...string) []types.Value {
 	return values
 }
 
-func testValues() map[string]types.Value {
+func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 	if vm == nil {
 		vm = map[string]types.Value{
 			"k1":      types.String("k1"),
@@ -99,19 +99,24 @@ func testValues() map[string]types.Value {
 			"ms2":     mustMarshal(map[testKey]int{{1, 1}: 1, {4, 4}: 4, {5, 5}: 5}),
 		}
 
-		vm["mh1"] = types.NewMap(vfk("k1", "struct1", "k2", "l1")...)
-		vm["mh2"] = types.NewMap(vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
-		vm["set1"] = types.NewSet()
-		vm["set2"] = types.NewSet(vfk("s1", "s2")...)
-		vm["set3"] = types.NewSet(vfk("s1", "s2", "s3")...)
-		vm["set1"] = types.NewSet(vfk("s2")...)
-		vm["seth1"] = types.NewSet(vfk("struct1", "struct2", "struct3")...)
-		vm["seth2"] = types.NewSet(vfk("struct2", "struct3")...)
-		vm["setj3"] = types.NewSet(vfk("struct1")...)
-		vm["mk1"] = types.NewMap(vfk("struct1", "s1", "struct2", "s2")...)
-		vm["mk2"] = types.NewMap(vfk("struct1", "s3", "struct4", "s4")...)
+		vm["mh1"] = types.NewMap(vrw, vfk("k1", "struct1", "k2", "l1")...)
+		vm["mh2"] = types.NewMap(vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
+		vm["set1"] = types.NewSet(vrw)
+		vm["set2"] = types.NewSet(vrw, vfk("s1", "s2")...)
+		vm["set3"] = types.NewSet(vrw, vfk("s1", "s2", "s3")...)
+		vm["set1"] = types.NewSet(vrw, vfk("s2")...)
+		vm["seth1"] = types.NewSet(vrw, vfk("struct1", "struct2", "struct3")...)
+		vm["seth2"] = types.NewSet(vrw, vfk("struct2", "struct3")...)
+		vm["setj3"] = types.NewSet(vrw, vfk("struct1")...)
+		vm["mk1"] = types.NewMap(vrw, vfk("struct1", "s1", "struct2", "s2")...)
+		vm["mk2"] = types.NewMap(vrw, vfk("struct1", "s3", "struct4", "s4")...)
 	}
 	return vm
+}
+
+func newTestValueStore() *types.ValueStore {
+	st := &chunks.TestStorage{}
+	return types.NewValueStore(st.NewView())
 }
 
 func getPatch(g1, g2 types.Value) Patch {
@@ -138,9 +143,12 @@ func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, 
 func TestPatches(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	cnt := 0
-	for k1, g1 := range testValues() {
-		for k2, expectedG2 := range testValues() {
+	for k1, g1 := range testValues(vs) {
+		for k2, expectedG2 := range testValues(vs) {
 			if k1 != k2 {
 				cnt++
 				checkApplyPatch(assert, g1, expectedG2, k1, k2)
@@ -152,21 +160,23 @@ func TestPatches(t *testing.T) {
 func TestNestedLists(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	ol1 := mustMarshal([]string{"one", "two", "three", "four"})
 	nl1 := mustMarshal([]string{"two", "three"})
 	ol2 := mustMarshal([]int{2, 3})
 	nl2 := mustMarshal([]int{1, 2, 3, 4})
 	nl3 := mustMarshal([]bool{true, false, true})
-	g1 := types.NewList(ol1, ol2)
-	g2 := types.NewList(nl1, nl2, nl3)
+	g1 := types.NewList(vs, ol1, ol2)
+	g2 := types.NewList(vs, nl1, nl2, nl3)
 	checkApplyPatch(assert, g1, g2, "g1", "g2")
 }
 
 func TestUpdateNode(t *testing.T) {
 	assert := assert.New(t)
 
-	storage := &chunks.MemoryStorage{}
-	vs := types.NewValueStore(storage.NewView())
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	doTest := func(pp types.PathPart, parent, ov, nv, exp types.Value, f testFunc) {
@@ -187,13 +197,13 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.Struct).Get("f2")
 	})
 
-	l1 := types.NewList(types.String("one"), oldVal, types.String("three"))
+	l1 := types.NewList(vs, types.String("one"), oldVal, types.String("three"))
 	pp = types.IndexPath{Index: types.Number(1)}
 	doTest(pp, l1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.List).Get(1)
 	})
 
-	m1 := types.NewMap(types.String("k1"), types.Number(1), types.String("k2"), oldVal)
+	m1 := types.NewMap(vs, types.String("k1"), types.Number(1), types.String("k2"), oldVal)
 	pp = types.IndexPath{Index: types.String("k2")}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Map).Get(types.String("k2"))
@@ -201,23 +211,23 @@ func TestUpdateNode(t *testing.T) {
 
 	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Number(200), "width": types.Number(300)})
 	vs.WriteValue(k1)
-	m1 = types.NewMap(k1, oldVal)
+	m1 = types.NewMap(vs, k1, oldVal)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Map).Get(k1)
 	})
 
-	set1 := types.NewSet(oldVal, k1)
+	set1 := types.NewSet(vs, oldVal, k1)
 	pp = types.IndexPath{Index: oldVal}
-	exp := types.NewSet(newVal, k1)
+	exp := types.NewSet(vs, newVal, k1)
 	doTest(pp, set1, oldVal, newVal, exp, func(parent types.Value) types.Value {
 		return parent
 	})
 
 	k2 := types.NewStruct("Sizes", types.StructData{"height": types.Number(300), "width": types.Number(500)})
-	set1 = types.NewSet(oldVal, k1)
+	set1 = types.NewSet(vs, oldVal, k1)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
-	exp = types.NewSet(oldVal, k2)
+	exp = types.NewSet(vs, oldVal, k2)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
 	})
@@ -337,8 +347,11 @@ func TestUpdateStruct(t *testing.T) {
 func TestUpdateSet(t *testing.T) {
 	a := assert.New(t)
 
-	a1 := types.NewSet(types.Number(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
-	a2 := types.NewSet(types.Number(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
+	vs := newTestValueStore()
+	defer vs.Close()
+
+	a1 := types.NewSet(vs, types.Number(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
+	a2 := types.NewSet(vs, types.Number(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
 
 	checkApplyDiffs(a, a1, a2, true)
 	checkApplyDiffs(a, a1, a2, false)
@@ -347,7 +360,10 @@ func TestUpdateSet(t *testing.T) {
 }
 
 func mustMarshal(v interface{}) types.Value {
-	v1, err := marshal.Marshal(v)
+	vs := newTestValueStore()
+	defer vs.Close()
+
+	v1, err := marshal.Marshal(vs, v)
 	d.Chk.NoError(err)
 	return v1
 }

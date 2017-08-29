@@ -133,7 +133,7 @@ func (s *testSuite) TestCSVImporterFromBlob() {
 		rawDS := db.GetDataset("raw")
 		csv := &bytes.Buffer{}
 		writeCSV(csv)
-		db.CommitValue(rawDS, types.NewBlob(csv))
+		db.CommitValue(rawDS, types.NewBlob(db, csv))
 		db.Close()
 
 		stdout, stderr := s.MustRun(main, []string{

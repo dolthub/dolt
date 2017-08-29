@@ -23,21 +23,17 @@ func (le *ListEditor) Kind() NomsKind {
 	return ListKind
 }
 
-func (le *ListEditor) Value(vrw ValueReadWriter) Value {
-	return le.List(vrw)
+func (le *ListEditor) Value() Value {
+	return le.List()
 }
 
-func (le *ListEditor) List(vrw ValueReadWriter) List {
+func (le *ListEditor) List() List {
 	if le.edits == nil {
 		return le.l // no edits
 	}
 
 	seq := le.l.sequence()
-	vr := seq.valueReader()
-
-	if vrw != nil {
-		vr = vrw
-	}
+	vrw := seq.valueReadWriter()
 
 	cursChan := make(chan chan *sequenceCursor)
 	spliceChan := make(chan chan listEdit)
@@ -68,7 +64,7 @@ func (le *ListEditor) List(vrw ValueReadWriter) List {
 				idx := i
 				wg.Add(1)
 				go func() {
-					edit.inserted[idx] = v.Value(vrw)
+					edit.inserted[idx] = v.Value()
 					wg.Done()
 				}()
 			}
@@ -93,7 +89,7 @@ func (le *ListEditor) List(vrw ValueReadWriter) List {
 		sp := <-<-spliceChan
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vr, vrw, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
+			ch = newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(cur)
 		}

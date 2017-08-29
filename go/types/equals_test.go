@@ -13,6 +13,7 @@ import (
 
 func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
+	vrw := newTestValueStore()
 
 	values := []func() Value{
 		func() Value { return Bool(false) },
@@ -24,29 +25,29 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return String("hi") },
 		func() Value { return String("bye") },
 		func() Value {
-			return NewBlob(&bytes.Buffer{})
+			return NewBlob(vrw, &bytes.Buffer{})
 		},
 		func() Value {
-			return NewBlob(bytes.NewBufferString("hi"))
+			return NewBlob(vrw, bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			return NewBlob(bytes.NewBufferString("bye"))
+			return NewBlob(vrw, bytes.NewBufferString("bye"))
 		},
 		func() Value {
-			b1 := NewBlob(bytes.NewBufferString("hi"))
-			b2 := NewBlob(bytes.NewBufferString("bye"))
+			b1 := NewBlob(vrw, bytes.NewBufferString("hi"))
+			b2 := NewBlob(vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
-				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2, b1),
-				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5, b2),
+				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2),
+				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5),
 			}, nil))
 		},
-		func() Value { return NewList() },
-		func() Value { return NewList(String("foo")) },
-		func() Value { return NewList(String("bar")) },
-		func() Value { return NewMap() },
-		func() Value { return NewMap(String("a"), String("a")) },
-		func() Value { return NewSet() },
-		func() Value { return NewSet(String("hi")) },
+		func() Value { return NewList(vrw) },
+		func() Value { return NewList(vrw, String("foo")) },
+		func() Value { return NewList(vrw, String("bar")) },
+		func() Value { return NewMap(vrw) },
+		func() Value { return NewMap(vrw, String("a"), String("a")) },
+		func() Value { return NewSet(vrw) },
+		func() Value { return NewSet(vrw, String("hi")) },
 
 		func() Value { return BoolType },
 		func() Value { return StringType },

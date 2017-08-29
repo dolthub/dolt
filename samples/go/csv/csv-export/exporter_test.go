@@ -94,7 +94,7 @@ func (s *testSuite) TestCSVExportFromList() {
 
 	// Build data rows
 	structs := createTestData(s, false)
-	db.CommitValue(ds, types.NewList(structs...))
+	db.CommitValue(ds, types.NewList(db, structs...))
 	db.Close()
 
 	// Run exporter
@@ -114,7 +114,7 @@ func (s *testSuite) TestCSVExportFromMap() {
 
 	// Build data rows
 	structs := createTestData(s, true)
-	db.CommitValue(ds, types.NewMap(structs...))
+	db.CommitValue(ds, types.NewMap(db, structs...))
 	db.Close()
 
 	// Run exporter

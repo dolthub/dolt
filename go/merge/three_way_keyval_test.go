@@ -75,7 +75,7 @@ func (s *ThreeWayMapMergeSuite) SetupSuite() {
 	s.create = func(seq seq) (val types.Value) {
 		if seq != nil {
 			keyValues := valsToTypesValues(s.create, seq.items()...)
-			val = types.NewMap(keyValues...)
+			val = types.NewMap(s.vs, keyValues...)
 		}
 		return
 	}
@@ -209,8 +209,8 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NilConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
-	s.tryThreeWayConflict(types.NewSet(), s.create(mm2b), s.create(mm2), "Cannot merge Set<> with "+s.typeStr)
-	s.tryThreeWayConflict(s.create(mm2b), types.NewSet(), s.create(mm2), "Cannot merge "+s.typeStr)
+	s.tryThreeWayConflict(types.NewSet(s.vs), s.create(mm2b), s.create(mm2), "Cannot merge Set<> with "+s.typeStr)
+	s.tryThreeWayConflict(s.create(mm2b), types.NewSet(s.vs), s.create(mm2), "Cannot merge "+s.typeStr)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
@@ -226,8 +226,8 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflict() {
-	a := mm2a.set("k2", types.NewSet())
-	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(types.NewSet()))
+	a := mm2a.set("k2", types.NewSet(s.vs))
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(types.NewSet(s.vs)))
 	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(s.create(aa1b)))
 }
 

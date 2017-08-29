@@ -119,7 +119,7 @@ type ldbOpCache struct {
 
 type ldbOpCacheIterator struct {
 	iter ldbIterator.Iterator
-	vr   ValueReader
+	vrw  ValueReadWriter
 }
 
 func newLdbOpCacheStore(vrw ValueReadWriter) *ldbOpCacheStore {
@@ -158,13 +158,13 @@ func (opc *ldbOpCache) insertLdbOp(allKeys ValueSlice, opKind NomsKind, val Valu
 	ldbKeyBytes := [initialBufferSize]byte{}
 	ldbValBytes := [initialBufferSize]byte{}
 
-	ldbKey, valuesToEncode := encodeKeys(ldbKeyBytes[:0], opc.colId, opKind, allKeys, opc.vrw)
+	ldbKey, valuesToEncode := encodeKeys(ldbKeyBytes[:0], opc.colId, opKind, allKeys)
 
 	// val may be nil when dealing with sets, since the val is the key.
 	if val != nil {
 		valuesToEncode = append(valuesToEncode, val)
 	}
-	ldbVal := encodeValues(ldbValBytes[:0], valuesToEncode, opc.vrw)
+	ldbVal := encodeValues(ldbValBytes[:0], valuesToEncode)
 
 	err := opc.ldb.Put(ldbKey, ldbVal, nil)
 	d.Chk.NoError(err)
@@ -200,7 +200,7 @@ func (i *ldbOpCacheIterator) GraphOp() (ValueSlice, NomsKind, sequenceItem) {
 	graphKeys := ValueSlice{}
 	for pos := uint8(0); pos < numKeys; pos++ {
 		var gk Value
-		ldbKey, gk = decodeValue(ldbKey, false, i.vr)
+		ldbKey, gk = decodeValue(ldbKey, false, i.vrw)
 		graphKeys = append(graphKeys, gk)
 	}
 
@@ -213,7 +213,7 @@ func (i *ldbOpCacheIterator) GraphOp() (ValueSlice, NomsKind, sequenceItem) {
 	values := ValueSlice{}
 	for pos := uint8(0); pos < numEncodedValues; pos++ {
 		var gk Value
-		ldbVal, gk = decodeValue(ldbVal, true, i.vr)
+		ldbVal, gk = decodeValue(ldbVal, true, i.vrw)
 		values = append(values, gk)
 	}
 
@@ -248,7 +248,7 @@ func (i *ldbOpCacheIterator) GraphOp() (ValueSlice, NomsKind, sequenceItem) {
 func (opc *ldbOpCache) NewIterator() opCacheIterator {
 	prefix := [4]byte{}
 	binary.BigEndian.PutUint32(prefix[:], opc.colId)
-	return &ldbOpCacheIterator{iter: opc.ldb.NewIterator(util.BytesPrefix(prefix[:]), nil), vr: opc.vrw}
+	return &ldbOpCacheIterator{iter: opc.ldb.NewIterator(util.BytesPrefix(prefix[:]), nil), vrw: opc.vrw}
 }
 
 func (i *ldbOpCacheIterator) Next() bool {
@@ -260,7 +260,7 @@ func (i *ldbOpCacheIterator) Release() {
 }
 
 // encodeKeys() serializes a list of keys to the byte slice |bs|.
-func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value, vrw ValueReadWriter) ([]byte, []Value) {
+func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte, []Value) {
 	// All ldb keys start with a 4-byte collection id that serves as a namespace
 	// that keeps them separate from other collections.
 	idHolder := [4]byte{}
@@ -276,7 +276,7 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value, vrw Valu
 
 	valuesToEncode := ValueSlice{}
 	for _, gk := range keys {
-		bs = encodeGraphKey(bs, gk, vrw)
+		bs = encodeGraphKey(bs, gk)
 		if !isKindOrderedByValue(gk.Kind()) {
 			valuesToEncode = append(valuesToEncode, gk)
 		}
@@ -284,24 +284,24 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value, vrw Valu
 	return bs, valuesToEncode
 }
 
-func encodeValues(bs []byte, valuesToEncode []Value, vrw ValueReadWriter) []byte {
+func encodeValues(bs []byte, valuesToEncode []Value) []byte {
 	// Encode allValues into the ldbVal byte slice.
 	bs = append(bs, uint8(len(valuesToEncode)))
 	for _, k := range valuesToEncode {
-		bs = encodeGraphValue(bs, k, vrw)
+		bs = encodeGraphValue(bs, k)
 	}
 	return bs
 }
 
-func encodeGraphKey(bs []byte, v Value, vrw ValueReadWriter) []byte {
-	return encodeForGraph(bs, v, false, vrw)
+func encodeGraphKey(bs []byte, v Value) []byte {
+	return encodeForGraph(bs, v, false)
 }
 
-func encodeGraphValue(bs []byte, v Value, vrw ValueReadWriter) []byte {
-	return encodeForGraph(bs, v, true, vrw)
+func encodeGraphValue(bs []byte, v Value) []byte {
+	return encodeForGraph(bs, v, true)
 }
 
-func encodeForGraph(bs []byte, v Value, asValue bool, vrw ValueReadWriter) []byte {
+func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 	// Note: encToSlice() and append() will both grow the backing store of |bs|
 	// as necessary. Always call them when writing to |bs|.
 	if asValue || isKindOrderedByValue(v.Kind()) {
@@ -309,7 +309,7 @@ func encodeForGraph(bs []byte, v Value, asValue bool, vrw ValueReadWriter) []byt
 		// noms-kind(1-byte), serialization-len(4-bytes), serialization(n-bytes)
 		buf := [initialBufferSize]byte{}
 		uint32buf := [4]byte{}
-		encodedVal := encToSlice(v, buf[:], vrw)
+		encodedVal := encToSlice(v, buf[:])
 		binary.BigEndian.PutUint32(uint32buf[:], uint32(len(encodedVal)))
 		bs = append(bs, uint8(v.Kind()))
 		bs = append(bs, uint32buf[:]...)
@@ -323,29 +323,19 @@ func encodeForGraph(bs []byte, v Value, asValue bool, vrw ValueReadWriter) []byt
 	return bs
 }
 
-func decodeValue(bs []byte, asValue bool, vr ValueReader) ([]byte, Value) {
+func decodeValue(bs []byte, asValue bool, vrw ValueReadWriter) ([]byte, Value) {
 	kind := NomsKind(bs[0])
 	var v Value
 	if asValue || isKindOrderedByValue(kind) {
 		encodedLen := binary.BigEndian.Uint32(bs[1:5])
-		v = DecodeFromBytes(bs[5:5+encodedLen], vr)
+		v = DecodeFromBytes(bs[5:5+encodedLen], vrw)
 		return bs[5+encodedLen:], v
 	}
 	return bs[1+hash.ByteLen:], nil
 }
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
-func encToSlice(v Value, initBuf []byte, vw ValueWriter) []byte {
-	// TODO: This is really unfortunate because WriteValue, in the case of
-	// ValueStore will internally also iterateUncommittedChildren. The problem
-	// here is a lack of clarity in the contract of ValueWriter. It's not explicit
-	// that WriteValue is responsible for writing uncommitted child nodes of
-	// ptrees, nor is there sufficient public API for any implementor of it to do
-	// so.
-	iterateUncommittedChildren(v, func(sv Value) {
-		vw.WriteValue(v)
-	})
-
+func encToSlice(v Value, initBuf []byte) []byte {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter and valueEncoder?
 	w := &binaryNomsWriter{initBuf, 0}
 	enc := newValueEncoder(w)

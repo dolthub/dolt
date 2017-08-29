@@ -55,7 +55,7 @@ func (r Ref) TargetType() *Type {
 }
 
 // Value interface
-func (r Ref) Value(vrw ValueReadWriter) Value {
+func (r Ref) Value() Value {
 	return r
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/testify/assert"
@@ -16,10 +17,13 @@ import (
 func TestBasics(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	// Since we are using float64 in noms we cannot represent all possible times.
 	dt := DateTime{time.Unix(1234567, 1234567)}
 
-	nomsValue, err := marshal.Marshal(dt)
+	nomsValue, err := marshal.Marshal(vs, dt)
 	assert.NoError(err)
 
 	var dt2 DateTime
@@ -76,8 +80,11 @@ func TestUnmarshalInvalid(t *testing.T) {
 func TestMarshal(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	test := func(dt DateTime, expected float64) {
-		v, err := marshal.Marshal(dt)
+		v, err := marshal.Marshal(vs, dt)
 		assert.NoError(err)
 
 		assert.True(types.NewStruct("DateTime", types.StructData{
@@ -97,21 +104,32 @@ func TestMarshal(t *testing.T) {
 func TestMarshalType(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	dt := DateTime{time.Unix(0, 0)}
-	typ := marshal.MustMarshalType(dt)
+	typ := marshal.MustMarshalType(vs, dt)
 	assert.Equal(DateTimeType, typ)
 
-	v := marshal.MustMarshal(dt)
+	v := marshal.MustMarshal(vs, dt)
 	assert.Equal(typ, types.TypeOf(v))
+}
+
+func newTestValueStore() *types.ValueStore {
+	st := &chunks.TestStorage{}
+	return types.NewValueStore(st.NewView())
 }
 
 func TestZeroValues(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	dt1 := DateTime{}
 	assert.True(dt1.IsZero())
 
-	nomsDate, _ := dt1.MarshalNoms()
+	nomsDate, _ := dt1.MarshalNoms(vs)
 
 	dt2 := DateTime{}
 	marshal.Unmarshal(nomsDate, &dt2)

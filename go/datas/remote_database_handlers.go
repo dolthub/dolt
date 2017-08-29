@@ -398,7 +398,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	// round trip to the client and just retry inline.
 	for to, from := proposed, last; !vs.Commit(to, from); {
 		// If committing failed, we go read out the map of Datasets at the root of the store, which is a Map[string]Ref<Commit>
-		rootMap := types.NewMap()
+		rootMap := types.NewMap(vs)
 		root := vs.Root()
 		if v := vs.ReadValue(root); v != nil {
 			rootMap = v.(types.Map)
@@ -426,24 +426,24 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	fmt.Fprintf(w, "%v", vs.Root().String())
 }
 
-func validateLast(last hash.Hash, vr types.ValueReader) types.Map {
+func validateLast(last hash.Hash, vrw types.ValueReadWriter) types.Map {
 	if last.IsEmpty() {
-		return types.NewMap()
+		return types.NewMap(vrw)
 	}
-	lastVal := vr.ReadValue(last)
+	lastVal := vrw.ReadValue(last)
 	if lastVal == nil {
 		d.Panic("Can't Commit from a non-present Chunk")
 	}
 	return lastVal.(types.Map)
 }
 
-func validateProposed(proposed, last hash.Hash, vr types.ValueReader) types.Map {
+func validateProposed(proposed, last hash.Hash, vrw types.ValueReadWriter) types.Map {
 	// Only allowed to skip this check if both last and proposed are empty, because that represents the special case of someone flushing chunks into an empty store.
 	if last.IsEmpty() && proposed.IsEmpty() {
-		return types.NewMap()
+		return types.NewMap(vrw)
 	}
 	// Ensure that proposed new Root is present in vr, is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
-	proposedVal := vr.ReadValue(proposed)
+	proposedVal := vrw.ReadValue(proposed)
 	if proposedVal == nil {
 		d.Panic("Can't set Root to a non-present Chunk")
 	}
@@ -550,7 +550,7 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 		merged = apply(merged, aChange, aValue)
 		aChange, bChange = types.ValueChanged{}, types.ValueChanged{}
 	}
-	return merged.Map(vrw), nil
+	return merged.Map(), nil
 }
 
 func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {

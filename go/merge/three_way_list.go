@@ -120,7 +120,7 @@ func apply(source, target types.List, offset uint64, s types.Splice) types.List 
 		}
 		toAdd[i] = v
 	}
-	return target.Edit().Splice(s.SpAt+offset, s.SpRemoved, toAdd...).List(nil)
+	return target.Edit().Splice(s.SpAt+offset, s.SpRemoved, toAdd...).List()
 }
 
 func describeSplice(s types.Splice) string {

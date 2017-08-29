@@ -30,19 +30,16 @@ func (me *MapEditor) Kind() NomsKind {
 	return MapKind
 }
 
-func (me *MapEditor) Value(vrw ValueReadWriter) Value {
-	return me.Map(vrw)
+func (me *MapEditor) Value() Value {
+	return me.Map()
 }
 
-func (me *MapEditor) Map(vrw ValueReadWriter) Map {
+func (me *MapEditor) Map() Map {
 	if len(me.edits) == 0 {
 		return me.m // no edits
 	}
 
-	vr := me.m.sequence().valueReader()
-	if vrw != nil {
-		vr = vrw
-	}
+	vrw := me.m.sequence().valueReadWriter()
 
 	me.normalize()
 
@@ -79,7 +76,7 @@ func (me *MapEditor) Map(vrw ValueReadWriter) Map {
 			}
 
 			go func() {
-				sv := edit.value.Value(vrw)
+				sv := edit.value.Value()
 				if e, ok := sv.(Emptyable); ok {
 					if e.Empty() {
 						sv = nil
@@ -116,7 +113,7 @@ func (me *MapEditor) Map(vrw ValueReadWriter) Map {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vr, vrw, makeMapLeafChunkFn(vr), newOrderedMetaSequenceChunkFn(MapKind, vr), mapHashValueBytes)
+			ch = newSequenceChunker(cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 		} else {
 			ch.advanceTo(cur)
 		}

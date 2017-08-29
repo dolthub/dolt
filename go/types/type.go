@@ -38,7 +38,7 @@ func (t *Type) TargetKind() NomsKind {
 }
 
 // Value interface
-func (t *Type) Value(vrw ValueReadWriter) Value {
+func (t *Type) Value() Value {
 	return t
 }
 

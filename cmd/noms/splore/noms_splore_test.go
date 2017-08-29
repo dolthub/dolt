@@ -67,14 +67,15 @@ func TestNomsSplore(t *testing.T) {
 	sp, err := spec.ForDataset(fmt.Sprintf("nbs:%s::ds", dir))
 	d.PanicIfError(err)
 	defer sp.Close()
+	db := sp.GetDatabase()
 	strct := types.NewStruct("StructName", types.StructData{
-		"blob":          types.NewBlob(),
+		"blob":          types.NewBlob(db),
 		"bool":          types.Bool(true),
-		"list":          types.NewList(types.Number(1), types.Number(2)),
-		"map":           types.NewMap(types.String("a"), types.String("b"), types.String("c"), types.String("d")),
+		"list":          types.NewList(db, types.Number(1), types.Number(2)),
+		"map":           types.NewMap(db, types.String("a"), types.String("b"), types.String("c"), types.String("d")),
 		"number":        types.Number(42),
-		"ref":           sp.GetDatabase().WriteValue(types.Bool(true)),
-		"set":           types.NewSet(types.Number(3), types.Number(4)),
+		"ref":           db.WriteValue(types.Bool(true)),
+		"set":           types.NewSet(db, types.Number(3), types.Number(4)),
 		"string":        types.String("hello world"),
 		"typeCompound":  types.MakeMapType(types.StringType, types.MakeListType(types.BoolType)),
 		"typePrimitive": types.NumberType,
@@ -587,28 +588,28 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	// A bunch of lists with just numbers or ref<number>s in them. None of these
 	// should be detected as meta sequences:
 
-	l1 := types.NewList()
+	l1 := types.NewList(db)
 	assert.Nil(getMetaChildren(l1))
 
-	l2 := types.NewList(types.Number(1))
+	l2 := types.NewList(db, types.Number(1))
 	assert.Nil(getMetaChildren(l2))
 
-	l3 := types.NewList(types.Number(1), types.Number(2))
+	l3 := types.NewList(db, types.Number(1), types.Number(2))
 	assert.Nil(getMetaChildren(l3))
 
-	l4 := types.NewList(db.WriteValue(types.Number(1)))
+	l4 := types.NewList(db, db.WriteValue(types.Number(1)))
 	assert.Nil(getMetaChildren(l4))
 
-	l5 := types.NewList(db.WriteValue(types.Number(1)), types.Number(2))
+	l5 := types.NewList(db, db.WriteValue(types.Number(1)), types.Number(2))
 	assert.Nil(getMetaChildren(l5))
 
-	l6 := types.NewList(db.WriteValue(types.Number(1)), db.WriteValue(types.Number(2)))
+	l6 := types.NewList(db, db.WriteValue(types.Number(1)), db.WriteValue(types.Number(2)))
 	assert.Nil(getMetaChildren(l6))
 
-	l7 := types.NewList(l1)
+	l7 := types.NewList(db, l1)
 	assert.Nil(getMetaChildren(l7))
 
-	l8 := types.NewList(l4)
+	l8 := types.NewList(db, l4)
 	assert.Nil(getMetaChildren(l8))
 
 	// List with more or equal ref<list> than elements. This can't possibly be a meta
@@ -617,21 +618,21 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	l1Ref := db.WriteValue(l1)
 	l2Ref := db.WriteValue(l2)
 	l3Ref := db.WriteValue(l3)
-	listRefList := types.NewList(l1Ref, l2Ref, l3Ref)
+	listRefList := types.NewList(db, l1Ref, l2Ref, l3Ref)
 
-	l9 := types.NewList(listRefList)
+	l9 := types.NewList(db, listRefList)
 	assert.Nil(getMetaChildren(l9))
 
-	l10 := types.NewList(types.Number(1), listRefList)
+	l10 := types.NewList(db, types.Number(1), listRefList)
 	assert.Nil(getMetaChildren(l10))
 
 	l11 := listRefList
 	assert.Nil(getMetaChildren(l11))
 
-	l12 := types.NewList(types.Number(1), types.Number(2), listRefList)
+	l12 := types.NewList(db, types.Number(1), types.Number(2), listRefList)
 	assert.Nil(getMetaChildren(l12))
 
-	l13 := types.NewList(types.Number(1), db.WriteValue(types.Number(2)), listRefList)
+	l13 := types.NewList(db, types.Number(1), db.WriteValue(types.Number(2)), listRefList)
 	assert.Nil(getMetaChildren(l13))
 
 	// List with fewer ref<list> as children. For now this is the closet
@@ -646,15 +647,15 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 		nodeChild{Value: nodeInfo{HasChildren: true, ID: l3Hash, Name: "List" + l3Hash}},
 	}
 
-	l14 := types.NewList(types.Number(1), types.Number(2), types.Number(3), listRefList)
+	l14 := types.NewList(db, types.Number(1), types.Number(2), types.Number(3), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l14))
 
-	l15 := types.NewList(types.Number(1), types.Number(2), db.WriteValue(types.Number(3)), listRefList)
+	l15 := types.NewList(db, types.Number(1), types.Number(2), db.WriteValue(types.Number(3)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l15))
 
-	l16 := types.NewList(types.Number(1), types.Number(2), types.Number(3), types.Number(4), listRefList)
+	l16 := types.NewList(db, types.Number(1), types.Number(2), types.Number(3), types.Number(4), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l16))
 
-	l17 := types.NewList(types.Number(1), types.Number(2), db.WriteValue(types.Number(3)), db.WriteValue(types.Number(4)), listRefList)
+	l17 := types.NewList(db, types.Number(1), types.Number(2), db.WriteValue(types.Number(3)), db.WriteValue(types.Number(4)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l17))
 }

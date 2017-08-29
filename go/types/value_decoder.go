@@ -13,17 +13,17 @@ import (
 
 type valueDecoder struct {
 	nomsReader
-	vr         ValueReader
+	vrw        ValueReadWriter
 	validating bool
 }
 
 // |tc| must be locked as long as the valueDecoder is being used
-func newValueDecoder(nr nomsReader, vr ValueReader) *valueDecoder {
-	return &valueDecoder{nr, vr, false}
+func newValueDecoder(nr nomsReader, vrw ValueReadWriter) *valueDecoder {
+	return &valueDecoder{nr, vrw, false}
 }
 
-func newValueDecoderWithValidation(nr nomsReader, vr ValueReader) *valueDecoder {
-	return &valueDecoder{nr, vr, true}
+func newValueDecoderWithValidation(nr nomsReader, vrw ValueReadWriter) *valueDecoder {
+	return &valueDecoder{nr, vrw, true}
 }
 
 func (r *valueDecoder) readKind() NomsKind {
@@ -74,7 +74,7 @@ func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
 
 func (r *valueDecoder) readBlobLeafSequence() sequence {
 	b := r.readBytes()
-	return newBlobLeafSequence(r.vr, b)
+	return newBlobLeafSequence(r.vrw, b)
 }
 
 func (r *valueDecoder) readValueSequence() ValueSlice {
@@ -91,12 +91,12 @@ func (r *valueDecoder) readValueSequence() ValueSlice {
 
 func (r *valueDecoder) readListLeafSequence() sequence {
 	data := r.readValueSequence()
-	return listLeafSequence{leafSequence{r.vr, len(data), ListKind}, data}
+	return listLeafSequence{leafSequence{r.vrw, len(data), ListKind}, data}
 }
 
 func (r *valueDecoder) readSetLeafSequence() orderedSequence {
 	data := r.readValueSequence()
-	return setLeafSequence{leafSequence{r.vr, len(data), SetKind}, data}
+	return setLeafSequence{leafSequence{r.vrw, len(data), SetKind}, data}
 }
 
 func (r *valueDecoder) readMapLeafSequence() orderedSequence {
@@ -108,7 +108,7 @@ func (r *valueDecoder) readMapLeafSequence() orderedSequence {
 		data = append(data, mapEntry{k, v})
 	}
 
-	return mapLeafSequence{leafSequence{r.vr, len(data), MapKind}, data}
+	return mapLeafSequence{leafSequence{r.vrw, len(data), MapKind}, data}
 }
 
 func (r *valueDecoder) readMetaSequence(k NomsKind, level uint64) metaSequence {
@@ -126,10 +126,10 @@ func (r *valueDecoder) readMetaSequence(k NomsKind, level uint64) metaSequence {
 			key = newOrderedKey(v)
 		}
 		numLeaves := r.readCount()
-		data = append(data, newMetaTuple(ref, key, numLeaves, nil))
+		data = append(data, newMetaTuple(ref, key, numLeaves))
 	}
 
-	return newMetaSequence(k, level, data, r.vr)
+	return newMetaSequence(k, level, data, r.vrw)
 }
 
 func (r *valueDecoder) readValue() Value {

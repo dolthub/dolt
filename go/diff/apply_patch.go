@@ -124,36 +124,36 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				if realIdx > el.Len() {
-					nv = el.Edit().Append(top.newValue).List(nil)
+					nv = el.Edit().Append(top.newValue).List()
 				} else {
-					nv = el.Edit().Insert(realIdx, top.newValue).List(nil)
+					nv = el.Edit().Insert(realIdx, top.newValue).List()
 				}
 			case types.DiffChangeRemoved:
-				nv = el.Edit().RemoveAt(realIdx).List(nil)
+				nv = el.Edit().RemoveAt(realIdx).List()
 			case types.DiffChangeModified:
-				nv = el.Edit().Set(realIdx, top.newValue).List(nil)
+				nv = el.Edit().Set(realIdx, top.newValue).List()
 			}
 			return nv
 		case types.Map:
 			switch top.changeType {
 			case types.DiffChangeAdded:
-				return el.Edit().Set(part.Index, top.newValue).Map(nil)
+				return el.Edit().Set(part.Index, top.newValue).Map()
 			case types.DiffChangeRemoved:
-				return el.Edit().Remove(part.Index).Map(nil)
+				return el.Edit().Remove(part.Index).Map()
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					newPart := types.IndexPath{Index: part.Index}
 					ov := newPart.Resolve(parent, nil)
-					return el.Edit().Remove(part.Index).Set(top.newValue, ov).Map(nil)
+					return el.Edit().Remove(part.Index).Set(top.newValue, ov).Map()
 				}
-				return el.Edit().Set(part.Index, top.newValue).Map(nil)
+				return el.Edit().Set(part.Index, top.newValue).Map()
 			}
 		case types.Set:
 			if top.oldValue != nil {
-				el = el.Edit().Remove(top.oldValue).Set(nil)
+				el = el.Edit().Remove(top.oldValue).Set()
 			}
 			if top.newValue != nil {
-				el = el.Edit().Insert(top.newValue).Set(nil)
+				el = el.Edit().Insert(top.newValue).Set()
 			}
 			return el
 		}
@@ -162,11 +162,11 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 		case types.Set:
 			switch top.changeType {
 			case types.DiffChangeAdded:
-				return el.Edit().Insert(top.newValue).Set(nil)
+				return el.Edit().Insert(top.newValue).Set()
 			case types.DiffChangeRemoved:
-				return el.Edit().Remove(top.oldValue).Set(nil)
+				return el.Edit().Remove(top.oldValue).Set()
 			case types.DiffChangeModified:
-				return el.Edit().Remove(top.oldValue).Insert(top.newValue).Set(nil)
+				return el.Edit().Remove(top.oldValue).Insert(top.newValue).Set()
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}
@@ -174,15 +174,15 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				k := top.newKeyValue
-				return el.Edit().Set(k, top.newValue).Map(nil)
+				return el.Edit().Set(k, top.newValue).Map()
 			case types.DiffChangeRemoved:
-				return el.Edit().Remove(k).Map(nil)
+				return el.Edit().Remove(k).Map()
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					v := el.Get(k)
-					return el.Edit().Remove(k).Set(top.newValue, v).Map(nil)
+					return el.Edit().Remove(k).Set(top.newValue, v).Map()
 				}
-				return el.Edit().Set(k, top.newValue).Map(nil)
+				return el.Edit().Set(k, top.newValue).Map()
 			}
 		}
 	}

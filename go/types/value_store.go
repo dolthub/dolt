@@ -199,14 +199,6 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
 func (lvs *ValueStore) WriteValue(v Value) Ref {
-	iterateUncommittedChildren(v, func(sv Value) {
-		lvs.writeValueInternal(sv)
-	})
-
-	return lvs.writeValueInternal(v)
-}
-
-func (lvs *ValueStore) writeValueInternal(v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 

@@ -59,6 +59,8 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 }
 
 func (suite *diffTestSuite) TestDiff() {
+	vs := newTestValueStore()
+
 	type valFn func(int, int, int) ValueSlice
 	type colFn func([]Value) Collection
 
@@ -92,11 +94,10 @@ func (suite *diffTestSuite) TestDiff() {
 		runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
-	newSetAsCol := func(vs []Value) Collection { return NewSet(vs...) }
-	newMapAsCol := func(vs []Value) Collection { return NewMap(vs...) }
+	newSetAsCol := func(vals []Value) Collection { return NewSet(vs, vals...) }
+	newMapAsCol := func(vals []Value) Collection { return NewMap(vs, vals...) }
 
 	rw := func(col Collection) Collection {
-		vs := newTestValueStore()
 		h := vs.WriteValue(col).TargetHash()
 		vs.Commit(vs.Root(), vs.Root())
 		return vs.ReadValue(h).(Collection)
@@ -156,10 +157,12 @@ func TestOrderedSequencesDisjoint(t *testing.T) {
 }
 
 func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
+	vs := newTestValueStore()
+
 	runTest := func(df diffFn) {
-		s1 := NewSet().seq
+		s1 := NewSet(vs).seq
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(generateNumbersAsValuesFromToBy(0, 1000, 1)...).seq
+		s2 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).seq
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})
@@ -182,17 +185,19 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	assert := assert.New(t)
 
+	vrw := newTestValueStore()
+
 	newSetSequenceMt := func(v ...Value) metaTuple {
-		seq := newSetLeafSequence(nil, v...)
+		seq := newSetLeafSequence(vrw, v...)
 		set := newSet(seq)
-		return newMetaTuple(NewRef(set), newOrderedKey(v[len(v)-1]), uint64(len(v)), set)
+		return newMetaTuple(vrw.WriteValue(set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
 	}
 
 	m1 := newSetSequenceMt(Number(1), Number(2))
 	m2 := newSetSequenceMt(Number(3), Number(4))
 	m3 := newSetSequenceMt(Number(5), Number(6))
-	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, nil)
-	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, nil)
+	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, vrw)
+	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
 
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)

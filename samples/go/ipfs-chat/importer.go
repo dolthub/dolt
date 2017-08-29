@@ -46,47 +46,47 @@ func runImport(dir, dsSpec string) error {
 
 	if len(msgs) == 0 {
 		return errors.New("Failed to import any data")
-	} else {
-		fmt.Println("Imported", len(msgs), "messages")
 	}
+	fmt.Println("Imported", len(msgs), "messages")
 
 	sp, err := spec.ForDataset(dsSpec)
 	d.CheckErrorNoUsage(err)
 	ds := sp.GetDataset()
 	ds, err = InitDatabase(ds)
 	d.PanicIfError(err)
+	db := ds.Database()
 
 	fmt.Println("Creating msg map")
 	kvPairs := []types.Value{}
 	for _, msg := range msgs {
-		kvPairs = append(kvPairs, types.String(msg.ID()), marshal.MustMarshal(msg))
+		kvPairs = append(kvPairs, types.String(msg.ID()), marshal.MustMarshal(db, msg))
 	}
-	m := types.NewMap(kvPairs...)
+	m := types.NewMap(db, kvPairs...)
 
 	fmt.Println("Creating index")
-	ti := NewTermIndex(types.NewMap()).Edit()
+	ti := NewTermIndex(db, types.NewMap(db)).Edit()
 	for _, msg := range msgs {
 		terms := GetTerms(msg)
 		ti.InsertAll(terms, types.String(msg.ID()))
 	}
-	termDocs := ti.Value(nil).TermDocs
+	termDocs := ti.Value().TermDocs
 
 	fmt.Println("Creating users")
 	users := topUsers(msgs)
 
 	fmt.Println("Committing data")
 	root := Root{Messages: m, Index: termDocs, Users: users}
-	nroot := marshal.MustMarshal(root)
+	nroot := marshal.MustMarshal(db, root)
 	if ds.HasHead() {
 		left := ds.HeadValue()
 		parent := Root{
-			Index:    types.NewMap(),
-			Messages: types.NewMap(),
+			Index:    types.NewMap(db),
+			Messages: types.NewMap(db),
 		}
-		nroot, err = merge.ThreeWay(left, nroot, marshal.MustMarshal(parent), sp.GetDatabase(), nil, nil)
+		nroot, err = merge.ThreeWay(left, nroot, marshal.MustMarshal(db, parent), db, nil, nil)
 		d.Chk.NoError(err)
 	}
-	_, err = ds.Database().CommitValue(ds, nroot)
+	_, err = db.CommitValue(ds, nroot)
 	return err
 }
 

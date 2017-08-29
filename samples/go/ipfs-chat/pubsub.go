@@ -72,7 +72,7 @@ func Replicate(sub *floodsub.Subscription, source, dest datas.Dataset, didChange
 			continue
 		}
 
-		dest, err = destDB.SetHead(dest, destDB.WriteValue(datas.NewCommit(merged, types.NewSet(dest.HeadRef(), sourceRef), types.EmptyStruct)))
+		dest, err = destDB.SetHead(dest, destDB.WriteValue(datas.NewCommit(merged, types.NewSet(destDB, dest.HeadRef(), sourceRef), types.EmptyStruct)))
 		if err != nil {
 			dbg.Debug("call failed to SetHead on destDB, err: %s", err)
 		}

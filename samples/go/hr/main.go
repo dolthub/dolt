@@ -77,13 +77,13 @@ func addPerson(db datas.Database, ds datas.Dataset) {
 		return
 	}
 
-	np, err := marshal.Marshal(Person{flag.Arg(2), flag.Arg(3), id})
+	np, err := marshal.Marshal(db, Person{flag.Arg(2), flag.Arg(3), id})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	_, err = db.CommitValue(ds, getPersons(ds).Edit().Set(types.Number(id), np).Map(nil))
+	_, err = db.CommitValue(ds, getPersons(ds).Edit().Set(types.Number(id), np).Map())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return
@@ -113,5 +113,5 @@ func getPersons(ds datas.Dataset) types.Map {
 	if ok {
 		return hv.(types.Map)
 	}
-	return types.NewMap()
+	return types.NewMap(ds.Database())
 }

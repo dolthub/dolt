@@ -31,16 +31,17 @@ func (suite *OpCacheSuite) TearDownTest() {
 }
 
 func (suite *OpCacheSuite) TestMapSet() {
-	opCacheStore := newLdbOpCacheStore(suite.vs)
+	vs := suite.vs
+	opCacheStore := newLdbOpCacheStore(vs)
 	oc := opCacheStore.opCache()
 	defer opCacheStore.destroy()
 
 	entries := mapEntrySlice{
-		{NewList(Number(8), Number(0)), String("ahoy")},
-		{String("A key"), NewBlob(bytes.NewBufferString("A value"))},
+		{NewList(vs, Number(8), Number(0)), String("ahoy")},
+		{String("A key"), NewBlob(vs, bytes.NewBufferString("A value"))},
 		{Number(1), Bool(true)},
 		{Bool(false), Number(1)},
-		{NewBlob(bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap()},
+		{NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(vs)},
 		{Bool(true), Number(42)},
 		{NewStruct("thing1", StructData{"a": Number(7)}), Number(42)},
 		{String("struct"), NewStruct("thing2", nil)},
@@ -64,19 +65,20 @@ func (suite *OpCacheSuite) TestMapSet() {
 }
 
 func (suite *OpCacheSuite) TestSetInsert() {
-	opCacheStore := newLdbOpCacheStore(suite.vs)
+	vs := suite.vs
+	opCacheStore := newLdbOpCacheStore(vs)
 	oc := opCacheStore.opCache()
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(Number(8), Number(0)),
+		NewList(vs, Number(8), Number(0)),
 		String("ahoy"),
-		NewBlob(bytes.NewBufferString("A value")),
+		NewBlob(vs, bytes.NewBufferString("A value")),
 		Number(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(bytes.NewBuffer([]byte{0xff, 0, 0})),
-		NewMap(),
+		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewMap(vs),
 		Number(42),
 		NewStruct("thing1", StructData{"a": Number(7)}),
 		String("struct"),
@@ -101,19 +103,20 @@ func (suite *OpCacheSuite) TestSetInsert() {
 }
 
 func (suite *OpCacheSuite) TestListAppend() {
-	opCacheStore := newLdbOpCacheStore(suite.vs)
+	vs := suite.vs
+	opCacheStore := newLdbOpCacheStore(vs)
 	oc := opCacheStore.opCache()
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(Number(8), Number(0)),
+		NewList(vs, Number(8), Number(0)),
 		String("ahoy"),
-		NewBlob(bytes.NewBufferString("A value")),
+		NewBlob(vs, bytes.NewBufferString("A value")),
 		Number(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(bytes.NewBuffer([]byte{0xff, 0, 0})),
-		NewMap(),
+		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewMap(vs),
 		Number(42),
 		NewStruct("thing1", StructData{"a": Number(7)}),
 		String("struct"),

@@ -36,25 +36,25 @@ func (s *testSuite) TestWin() {
 	sp := spec.CreateValueSpecString("nbs", s.DBDir, "test")
 	dsSpec, err := spec.ForDataset(sp)
 	d.Chk.NoError(err)
+	db := dsSpec.GetDatabase()
 
 	orig := types.NewStruct("", map[string]types.Value{
 		"num": types.Number(42),
 		"str": types.String("foobar"),
-		"lst": types.NewList(types.Number(1), types.String("foo")),
-		"map": mustParse(map[interface{}]interface{}{
+		"lst": types.NewList(db, types.Number(1), types.String("foo")),
+		"map": mustParse(db, map[interface{}]interface{}{
 			1:        "foo",
 			"foo":    1,
 			"foofoo": 11,
 			testKey{testKeySub{"1", "2"}, 3}: "blahblah",
 		}),
 	})
-	db := dsSpec.GetDatabase()
 	_, err = db.CommitValue(dsSpec.GetDataset(), orig)
 	defer dsSpec.Close()
 
-	tKey1 := mustParse(testKey{testKeySub{"1", "2"}, 3})
+	tKey1 := mustParse(db, testKey{testKeySub{"1", "2"}, 3})
 	structKeyPath1 := fmt.Sprintf(`.map[#%s]@key.f1.sub1`, tKey1.Hash())
-	tKey2 := mustParse(testKey{testKeySub{"222", "2"}, 3})
+	tKey2 := mustParse(db, testKey{testKeySub{"222", "2"}, 3})
 	structKeyPath2 := fmt.Sprintf(`.map[#%s]@key.f1.sub1`, tKey2.Hash())
 
 	testCases := [][]string{
@@ -114,7 +114,7 @@ func (s *testSuite) TestLose() {
 
 	sp.GetDatabase().CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
 		"foo": types.String("foo"),
-		"bar": types.NewMap(types.String("baz"), types.Number(42)),
+		"bar": types.NewMap(sp.GetDatabase(), types.String("baz"), types.Number(42)),
 	}))
 
 	for _, c := range cases {
@@ -125,8 +125,8 @@ func (s *testSuite) TestLose() {
 	}
 }
 
-func mustParse(v interface{}) types.Value {
-	nv, err := marshal.Marshal(v)
+func mustParse(vrw types.ValueReadWriter, v interface{}) types.Value {
+	nv, err := marshal.Marshal(vrw, v)
 	d.Chk.NoError(err)
 	return nv
 }

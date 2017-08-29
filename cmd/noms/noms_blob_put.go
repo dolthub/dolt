@@ -52,7 +52,7 @@ func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 	}
 	defer db.Close()
 
-	blob := types.NewStreamingBlob(db, readers...)
+	blob := types.NewBlob(db, readers...)
 
 	_, err = db.CommitValue(ds, blob)
 	if err != nil {

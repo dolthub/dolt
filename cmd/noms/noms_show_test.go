@@ -32,14 +32,18 @@ const (
 	res5 = "Commit {\n  meta:  {},\n  parents: {\n    3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  value: 5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}\n"
 )
 
-func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.Ref {
+func (s *nomsShowTestSuite) spec(str string) spec.Spec {
 	sp, err := spec.ForDataset(str)
 	s.NoError(err)
+	return sp
+}
+func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.Ref {
+	sp := s.spec(str)
 	defer sp.Close()
 
 	db := sp.GetDatabase()
 	r1 := db.WriteValue(value)
-	_, err = db.CommitValue(sp.GetDataset(), r1)
+	_, err := db.CommitValue(sp.GetDataset(), r1)
 	s.NoError(err)
 
 	return r1
@@ -58,7 +62,9 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	res, _ = s.MustRun(main, []string{"show", str1})
 	s.Equal(res2, res)
 
-	list := types.NewList(types.String("elem1"), types.Number(2), types.String("elem3"))
+	sp := s.spec(str)
+	defer sp.Close()
+	list := types.NewList(sp.GetDatabase(), types.String("elem1"), types.Number(2), types.String("elem3"))
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -112,7 +118,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	for i := 0; i < len(items); i++ {
 		items[i] = types.Number(i)
 	}
-	l := types.NewList(items...)
+	l := types.NewList(db, items...)
 	numChildChunks := 0
 	l.WalkRefs(func(r types.Ref) {
 		numChildChunks++

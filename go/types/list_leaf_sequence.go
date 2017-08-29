@@ -4,13 +4,16 @@
 
 package types
 
+import "github.com/attic-labs/noms/go/d"
+
 type listLeafSequence struct {
 	leafSequence
 	values []Value
 }
 
-func newListLeafSequence(vr ValueReader, v ...Value) sequence {
-	return listLeafSequence{leafSequence{vr, len(v), ListKind}, v}
+func newListLeafSequence(vrw ValueReadWriter, v ...Value) sequence {
+	d.PanicIfTrue(vrw == nil)
+	return listLeafSequence{leafSequence{vrw, len(v), ListKind}, v}
 }
 
 // sequence interface

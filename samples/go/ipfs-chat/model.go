@@ -47,16 +47,18 @@ func AddMessage(body string, author string, clientTime time.Time, ds datas.Datas
 		return datas.Dataset{}, err
 	}
 
+	db := ds.Database()
+
 	nm := Message{
 		Author:     author,
 		Body:       body,
 		ClientTime: datetime.DateTime{clientTime},
 		Ordinal:    root.Messages.Len(),
 	}
-	root.Messages = root.Messages.Edit().Set(types.String(nm.ID()), marshal.MustMarshal(nm)).Map(ds.Database())
-	IndexNewMessage(&root, nm)
+	root.Messages = root.Messages.Edit().Set(types.String(nm.ID()), marshal.MustMarshal(db, nm)).Map()
+	IndexNewMessage(db, &root, nm)
 
-	ds, err = ds.Database().CommitValue(ds, marshal.MustMarshal(root))
+	ds, err = db.CommitValue(ds, marshal.MustMarshal(db, root))
 	return ds, err
 }
 
@@ -64,11 +66,12 @@ func InitDatabase(ds datas.Dataset) (datas.Dataset, error) {
 	if ds.HasHead() {
 		return ds, nil
 	}
+	db := ds.Database()
 	root := Root{
-		Index:    types.NewMap(),
-		Messages: types.NewMap(),
+		Index:    types.NewMap(db),
+		Messages: types.NewMap(db),
 	}
-	return ds.Database().CommitValue(ds, marshal.MustMarshal(root))
+	return db.CommitValue(ds, marshal.MustMarshal(db, root))
 }
 
 func GetAuthors(ds datas.Dataset) []string {
@@ -77,10 +80,10 @@ func GetAuthors(ds datas.Dataset) []string {
 	return r.Users
 }
 
-func IndexNewMessage(root *Root, m Message) {
-	ti := NewTermIndex(root.Index)
+func IndexNewMessage(vrw types.ValueReadWriter, root *Root, m Message) {
+	ti := NewTermIndex(vrw, root.Index)
 	id := types.String(m.ID())
-	root.Index = ti.Edit().InsertAll(GetTerms(m), id).Value(nil).TermDocs
+	root.Index = ti.Edit().InsertAll(GetTerms(m), id).Value().TermDocs
 	root.Users = append(root.Users, m.Author)
 }
 
@@ -88,7 +91,7 @@ func SearchIndex(ds datas.Dataset, search []string) types.Map {
 	root, err := getRoot(ds)
 	d.PanicIfError(err)
 	idx := root.Index
-	ti := NewTermIndex(idx)
+	ti := NewTermIndex(ds.Database(), idx)
 	ids := ti.Search(search)
 	dbg.Debug("search for: %s, returned: %d", strings.Join(search, " "), ids.Len())
 	return ids
@@ -122,8 +125,9 @@ func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}
 	dbg.Debug("##### listMessages: entered")
 
 	root, err := getRoot(ds)
+	db := ds.Database()
 	if err != nil {
-		return types.NewMap(), nil, err
+		return types.NewMap(db), nil, err
 	}
 	msgMap = root.Messages
 
@@ -153,9 +157,10 @@ func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}
 }
 
 func getRoot(ds datas.Dataset) (Root, error) {
+	db := ds.Database()
 	root := Root{
-		Messages: types.NewMap(),
-		Index:    types.NewMap(),
+		Messages: types.NewMap(db),
+		Index:    types.NewMap(db),
 	}
 	// TODO: It would be nice if Dataset.MaybeHeadValue() or HeadValue()
 	// would return just <value>, and it would be nil if not there, so you

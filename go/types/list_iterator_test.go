@@ -12,9 +12,10 @@ import (
 
 func TestListIterator(t *testing.T) {
 	assert := assert.New(t)
+	vrw := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(10), Number(20), Number(25))
-	l := NewList(numbers...)
+	l := NewList(vrw, numbers...)
 	i := l.Iterator()
 	vs := iterToSlice(i)
 	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)

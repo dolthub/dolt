@@ -110,7 +110,7 @@ func (s Struct) hashPointer() *hash.Hash {
 }
 
 // Value interface
-func (s Struct) Value(vrw ValueReadWriter) Value {
+func (s Struct) Value() Value {
 	return s
 }
 

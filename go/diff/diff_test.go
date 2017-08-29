@@ -50,18 +50,24 @@ func valsToTypesValues(kv ...interface{}) []types.Value {
 }
 
 func createMap(kv ...interface{}) types.Map {
+	vs := newTestValueStore()
+	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewMap(keyValues...)
+	return types.NewMap(vs, keyValues...)
 }
 
 func createSet(kv ...interface{}) types.Set {
+	vs := newTestValueStore()
+	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewSet(keyValues...)
+	return types.NewSet(vs, keyValues...)
 }
 
 func createList(kv ...interface{}) types.List {
+	vs := newTestValueStore()
+	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewList(keyValues...)
+	return types.NewList(vs, keyValues...)
 }
 
 func createStruct(name string, kv ...interface{}) types.Struct {
@@ -307,6 +313,10 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 
 func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 	a := assert.New(t)
+
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	k1 := createStruct("TestKey", "name", "n1", "label", "l1")
 
 	expected1 := `(root) {
@@ -321,8 +331,8 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
   }
 `
 
-	m1 := types.NewMap(k1, types.Bool(true))
-	m2 := types.NewMap(k1, types.Bool(false))
+	m1 := types.NewMap(vs, k1, types.Bool(true))
+	m2 := types.NewMap(vs, k1, types.Bool(false))
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		PrintDiff(buf, m1, m2, leftRight)
@@ -407,10 +417,13 @@ func TestNomsDiffPrintList(t *testing.T) {
 func TestNomsDiffPrintBlob(t *testing.T) {
 	assert := assert.New(t)
 
+	vs := newTestValueStore()
+	defer vs.Close()
+
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
 	expectedPaths1 := []string{``}
-	b1 := types.NewBlob(strings.NewReader(strings.Repeat("x", 2*1024)))
-	b2 := types.NewBlob(strings.NewReader("Hello World"))
+	b1 := types.NewBlob(vs, strings.NewReader(strings.Repeat("x", 2*1024)))
+	b2 := types.NewBlob(vs, strings.NewReader("Hello World"))
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}

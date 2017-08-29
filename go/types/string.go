@@ -10,7 +10,7 @@ import "github.com/attic-labs/noms/go/hash"
 type String string
 
 // Value interface
-func (s String) Value(vrw ValueReadWriter) Value {
+func (s String) Value() Value {
 	return s
 }
 

@@ -77,7 +77,7 @@ func TestGraphBuilderEncodeDecodeAsKey(t *testing.T) {
 		} else {
 			expectedRes = append(expectedRes, nil)
 		}
-		bs = encodeGraphKey(bs, k, vrw)
+		bs = encodeGraphKey(bs, k)
 	}
 	res := ValueSlice{}
 	for pos := 0; pos < numKeys; pos++ {
@@ -107,7 +107,7 @@ func TestGraphBuilderEncodeDecodeAsValue(t *testing.T) {
 	bs := byteBuf[:0]
 	numKeys := len(keys)
 	for _, k := range keys {
-		bs = encodeGraphValue(bs, k, vrw)
+		bs = encodeGraphValue(bs, k)
 	}
 	res := ValueSlice{}
 	for pos := 0; pos < numKeys; pos++ {
@@ -157,7 +157,7 @@ func TestGraphBuilderMapSetGraphOp(t *testing.T) {
 // |avgSize| parameters. The graph will contain nested maps with a
 // depth == |levels|, each map will contain |avgSize| elements of different
 // types.
-func createTestMap(levels, avgSize int, valGen func() Value) Map {
+func createTestMap(vrw ValueReadWriter, levels, avgSize int, valGen func() Value) Map {
 	sampleSize := func() int {
 		size := (int(rand.Int31()) % avgSize) + (avgSize / 2)
 		if size < 2 {
@@ -177,11 +177,11 @@ func createTestMap(levels, avgSize int, valGen func() Value) Map {
 			if numElems%2 != 0 {
 				numElems -= 1
 			}
-			return NewMap(elems[:numElems]...)
+			return NewMap(vrw, elems[:numElems]...)
 		case 1:
-			return NewSet(elems...)
+			return NewSet(vrw, elems...)
 		case 2:
-			return NewList(elems...)
+			return NewList(vrw, elems...)
 		}
 		panic("unreachable")
 	}
@@ -203,7 +203,7 @@ func createTestMap(levels, avgSize int, valGen func() Value) Map {
 				}
 			}
 		}
-		return NewMap(kvs...)
+		return NewMap(vrw, kvs...)
 	}
 
 	return genChildren(0)
@@ -247,7 +247,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	expected := createTestMap(3, 4, valGen)
+	expected := createTestMap(vs, 3, 4, valGen)
 	b := NewGraphBuilder(vs, MapKind)
 
 	ops := []testGraphOp{}

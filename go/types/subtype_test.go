@@ -52,37 +52,47 @@ func TestAssertTypePrimitives(t *testing.T) {
 }
 
 func TestAssertTypeValue(t *testing.T) {
+	vs := newTestValueStore()
+
 	assertSubtype(ValueType, Bool(true))
 	assertSubtype(ValueType, Number(1))
 	assertSubtype(ValueType, String("abc"))
-	l := NewList(Number(0), Number(1), Number(2), Number(3))
+	l := NewList(vs, Number(0), Number(1), Number(2), Number(3))
 	assertSubtype(ValueType, l)
 }
 
 func TestAssertTypeBlob(t *testing.T) {
-	blob := NewBlob(bytes.NewBuffer([]byte{0x00, 0x01}))
+	vs := newTestValueStore()
+
+	blob := NewBlob(vs, bytes.NewBuffer([]byte{0x00, 0x01}))
 	assertAll(t, BlobType, blob)
 }
 
 func TestAssertTypeList(tt *testing.T) {
+	vs := newTestValueStore()
+
 	listOfNumberType := MakeListType(NumberType)
-	l := NewList(Number(0), Number(1), Number(2), Number(3))
+	l := NewList(vs, Number(0), Number(1), Number(2), Number(3))
 	assertSubtype(listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
 	assertSubtype(MakeListType(ValueType), l)
 }
 
 func TestAssertTypeMap(tt *testing.T) {
+	vs := newTestValueStore()
+
 	mapOfNumberToStringType := MakeMapType(NumberType, StringType)
-	m := NewMap(Number(0), String("a"), Number(2), String("b"))
+	m := NewMap(vs, Number(0), String("a"), Number(2), String("b"))
 	assertSubtype(mapOfNumberToStringType, m)
 	assertAll(tt, mapOfNumberToStringType, m)
 	assertSubtype(MakeMapType(ValueType, ValueType), m)
 }
 
 func TestAssertTypeSet(tt *testing.T) {
+	vs := newTestValueStore()
+
 	setOfNumberType := MakeSetType(NumberType)
-	s := NewSet(Number(0), Number(1), Number(2), Number(3))
+	s := NewSet(vs, Number(0), Number(1), Number(2), Number(3))
 	assertSubtype(setOfNumberType, s)
 	assertAll(tt, setOfNumberType, s)
 	assertSubtype(MakeSetType(ValueType), s)
@@ -105,6 +115,8 @@ func TestAssertTypeStruct(tt *testing.T) {
 }
 
 func TestAssertTypeUnion(tt *testing.T) {
+	vs := newTestValueStore()
+
 	assertSubtype(MakeUnionType(NumberType), Number(42))
 	assertSubtype(MakeUnionType(NumberType, StringType), Number(42))
 	assertSubtype(MakeUnionType(NumberType, StringType), String("hi"))
@@ -113,17 +125,17 @@ func TestAssertTypeUnion(tt *testing.T) {
 	assertSubtype(MakeUnionType(NumberType, StringType, BoolType), Bool(true))
 
 	lt := MakeListType(MakeUnionType(NumberType, StringType))
-	assertSubtype(lt, NewList(Number(1), String("hi"), Number(2), String("bye")))
+	assertSubtype(lt, NewList(vs, Number(1), String("hi"), Number(2), String("bye")))
 
 	st := MakeSetType(StringType)
 	assertSubtype(MakeUnionType(st, NumberType), Number(42))
-	assertSubtype(MakeUnionType(st, NumberType), NewSet(String("a"), String("b")))
+	assertSubtype(MakeUnionType(st, NumberType), NewSet(vs, String("a"), String("b")))
 
 	assertInvalid(tt, MakeUnionType(), Number(42))
 	assertInvalid(tt, MakeUnionType(StringType), Number(42))
 	assertInvalid(tt, MakeUnionType(StringType, BoolType), Number(42))
 	assertInvalid(tt, MakeUnionType(st, StringType), Number(42))
-	assertInvalid(tt, MakeUnionType(st, NumberType), NewSet(Number(1), Number(2)))
+	assertInvalid(tt, MakeUnionType(st, NumberType), NewSet(vs, Number(1), Number(2)))
 }
 
 func TestAssertConcreteTypeIsUnion(tt *testing.T) {
@@ -156,32 +168,40 @@ func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 }
 
 func TestAssertTypeEmptyListUnion(tt *testing.T) {
+	vs := newTestValueStore()
+
 	lt := MakeListType(MakeUnionType())
-	assertSubtype(lt, NewList())
+	assertSubtype(lt, NewList(vs))
 }
 
 func TestAssertTypeEmptyList(tt *testing.T) {
+	vs := newTestValueStore()
+
 	lt := MakeListType(NumberType)
-	assertSubtype(lt, NewList())
+	assertSubtype(lt, NewList(vs))
 
 	// List<> not a subtype of List<Number>
-	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(Number(1)))
+	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(vs, Number(1)))
 }
 
 func TestAssertTypeEmptySet(tt *testing.T) {
+	vs := newTestValueStore()
+
 	st := MakeSetType(NumberType)
-	assertSubtype(st, NewSet())
+	assertSubtype(st, NewSet(vs))
 
 	// Set<> not a subtype of Set<Number>
-	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(Number(1)))
+	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(vs, Number(1)))
 }
 
 func TestAssertTypeEmptyMap(tt *testing.T) {
+	vs := newTestValueStore()
+
 	mt := MakeMapType(NumberType, StringType)
-	assertSubtype(mt, NewMap())
+	assertSubtype(mt, NewMap(vs))
 
 	// Map<> not a subtype of Map<Number, Number>
-	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(Number(1), Number(2)))
+	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(vs, Number(1), Number(2)))
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
@@ -222,9 +242,11 @@ func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtype(tt *testing.T) {
+	vs := newTestValueStore()
+
 	c1 := NewStruct("Commit", StructData{
 		"value":   Number(1),
-		"parents": NewSet(),
+		"parents": NewSet(vs),
 	})
 	t1 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeUnionType()), false},
@@ -240,7 +262,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c2 := NewStruct("Commit", StructData{
 		"value":   Number(2),
-		"parents": NewSet(NewRef(c1)),
+		"parents": NewSet(vs, NewRef(c1)),
 	})
 	assertSubtype(t11, c2)
 }
@@ -498,6 +520,8 @@ func TestIsSubtypeDisallowExtraStructFields(tt *testing.T) {
 func TestIsValueSubtypeOf(tt *testing.T) {
 	assert := assert.New(tt)
 
+	vs := newTestValueStore()
+
 	assertTrue := func(v Value, t *Type) {
 		assert.True(IsValueSubtypeOf(v, t))
 	}
@@ -513,12 +537,12 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{Bool(true), BoolType},
 		{Number(42), NumberType},
 		{String("s"), StringType},
-		{NewEmptyBlob(), BlobType},
+		{NewEmptyBlob(vs), BlobType},
 		{BoolType, TypeType},
-		{NewList(Number(42)), MakeListType(NumberType)},
-		{NewSet(Number(42)), MakeSetType(NumberType)},
+		{NewList(vs, Number(42)), MakeListType(NumberType)},
+		{NewSet(vs, Number(42)), MakeSetType(NumberType)},
 		{NewRef(Number(42)), MakeRefType(NumberType)},
-		{NewMap(Number(42), String("a")), MakeMapType(NumberType, StringType)},
+		{NewMap(vs, Number(42), String("a")), MakeMapType(NumberType, StringType)},
 		{NewStruct("A", StructData{}), MakeStructType("A")},
 		// Not including CycleType or Union here
 	}
@@ -542,27 +566,27 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse(String("abc"), MakeUnionType(BoolType, NumberType))
 	assertFalse(String("abc"), MakeUnionType())
 
-	assertTrue(NewList(), MakeListType(NumberType))
-	assertTrue(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
-	assertFalse(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(BoolType))
-	assertTrue(NewList(Number(0), Number(1), Number(2), Number(3)), MakeListType(MakeUnionType(NumberType, BoolType)))
-	assertTrue(NewList(Number(0), Bool(true)), MakeListType(MakeUnionType(NumberType, BoolType)))
-	assertFalse(NewList(Number(0)), MakeListType(MakeUnionType()))
-	assertTrue(NewList(), MakeListType(MakeUnionType()))
+	assertTrue(NewList(vs), MakeListType(NumberType))
+	assertTrue(NewList(vs, Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
+	assertFalse(NewList(vs, Number(0), Number(1), Number(2), Number(3)), MakeListType(BoolType))
+	assertTrue(NewList(vs, Number(0), Number(1), Number(2), Number(3)), MakeListType(MakeUnionType(NumberType, BoolType)))
+	assertTrue(NewList(vs, Number(0), Bool(true)), MakeListType(MakeUnionType(NumberType, BoolType)))
+	assertFalse(NewList(vs, Number(0)), MakeListType(MakeUnionType()))
+	assertTrue(NewList(vs), MakeListType(MakeUnionType()))
 
 	{
-		newChunkedList := func(vs ...Value) List {
+		newChunkedList := func(vals ...Value) List {
 			newSequenceMetaTuple := func(v Value) metaTuple {
-				seq := newListLeafSequence(nil, v)
+				seq := newListLeafSequence(vs, v)
 				list := newList(seq)
-				return newMetaTuple(NewRef(list), newOrderedKey(v), 1, list)
+				return newMetaTuple(vs.WriteValue(list), newOrderedKey(v), 1)
 			}
 
-			tuples := make([]metaTuple, len(vs))
-			for i, v := range vs {
+			tuples := make([]metaTuple, len(vals))
+			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newList(newListMetaSequence(1, tuples, nil))
+			return newList(newListMetaSequence(1, tuples, vs))
 		}
 
 		assertTrue(newChunkedList(Number(0), Number(1), Number(2), Number(3)), MakeListType(NumberType))
@@ -572,27 +596,27 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedList(Number(0)), MakeListType(MakeUnionType()))
 	}
 
-	assertTrue(NewSet(), MakeSetType(NumberType))
-	assertTrue(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
-	assertFalse(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
-	assertTrue(NewSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(MakeUnionType(NumberType, BoolType)))
-	assertTrue(NewSet(Number(0), Bool(true)), MakeSetType(MakeUnionType(NumberType, BoolType)))
-	assertFalse(NewSet(Number(0)), MakeSetType(MakeUnionType()))
-	assertTrue(NewSet(), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(vs), MakeSetType(NumberType))
+	assertTrue(NewSet(vs, Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
+	assertFalse(NewSet(vs, Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
+	assertTrue(NewSet(vs, Number(0), Number(1), Number(2), Number(3)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+	assertTrue(NewSet(vs, Number(0), Bool(true)), MakeSetType(MakeUnionType(NumberType, BoolType)))
+	assertFalse(NewSet(vs, Number(0)), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(vs), MakeSetType(MakeUnionType()))
 
 	{
-		newChunkedSet := func(vs ...Value) Set {
+		newChunkedSet := func(vals ...Value) Set {
 			newSequenceMetaTuple := func(v Value) metaTuple {
-				seq := newSetLeafSequence(nil, v)
+				seq := newSetLeafSequence(vs, v)
 				set := newSet(seq)
-				return newMetaTuple(NewRef(set), newOrderedKey(v), 1, set)
+				return newMetaTuple(vs.WriteValue(set), newOrderedKey(v), 1)
 			}
 
-			tuples := make([]metaTuple, len(vs))
-			for i, v := range vs {
+			tuples := make([]metaTuple, len(vals))
+			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newSet(newSetMetaSequence(1, tuples, nil))
+			return newSet(newSetMetaSequence(1, tuples, vs))
 		}
 		assertTrue(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(NumberType))
 		assertFalse(newChunkedSet(Number(0), Number(1), Number(2), Number(3)), MakeSetType(BoolType))
@@ -601,31 +625,31 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedSet(Number(0)), MakeSetType(MakeUnionType()))
 	}
 
-	assertTrue(NewMap(), MakeMapType(NumberType, StringType))
-	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))
-	assertFalse(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(BoolType, StringType))
-	assertFalse(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, BoolType))
-	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
-	assertTrue(NewMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
-	assertTrue(NewMap(Number(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
-	assertTrue(NewMap(Number(0), String("a"), Number(1), Bool(true)), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
-	assertFalse(NewMap(Number(0), String("a")), MakeMapType(MakeUnionType(), StringType))
-	assertFalse(NewMap(Number(0), String("a")), MakeMapType(NumberType, MakeUnionType()))
-	assertTrue(NewMap(), MakeMapType(MakeUnionType(), MakeUnionType()))
+	assertTrue(NewMap(vs), MakeMapType(NumberType, StringType))
+	assertTrue(NewMap(vs, Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))
+	assertFalse(NewMap(vs, Number(0), String("a"), Number(1), String("b")), MakeMapType(BoolType, StringType))
+	assertFalse(NewMap(vs, Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, BoolType))
+	assertTrue(NewMap(vs, Number(0), String("a"), Number(1), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+	assertTrue(NewMap(vs, Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+	assertTrue(NewMap(vs, Number(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(NumberType, BoolType), StringType))
+	assertTrue(NewMap(vs, Number(0), String("a"), Number(1), Bool(true)), MakeMapType(NumberType, MakeUnionType(BoolType, StringType)))
+	assertFalse(NewMap(vs, Number(0), String("a")), MakeMapType(MakeUnionType(), StringType))
+	assertFalse(NewMap(vs, Number(0), String("a")), MakeMapType(NumberType, MakeUnionType()))
+	assertTrue(NewMap(vs), MakeMapType(MakeUnionType(), MakeUnionType()))
 
 	{
-		newChunkedMap := func(vs ...Value) Map {
+		newChunkedMap := func(vals ...Value) Map {
 			newSequenceMetaTuple := func(e mapEntry) metaTuple {
-				seq := newMapLeafSequence(nil, e)
+				seq := newMapLeafSequence(vs, e)
 				m := newMap(seq)
-				return newMetaTuple(NewRef(m), newOrderedKey(e.key), 1, m)
+				return newMetaTuple(vs.WriteValue(m), newOrderedKey(e.key), 1)
 			}
 
-			tuples := make([]metaTuple, len(vs)/2)
-			for i := 0; i < len(vs); i += 2 {
-				tuples[i/2] = newSequenceMetaTuple(mapEntry{vs[i], vs[i+1]})
+			tuples := make([]metaTuple, len(vals)/2)
+			for i := 0; i < len(vals); i += 2 {
+				tuples[i/2] = newSequenceMetaTuple(mapEntry{vals[i], vals[i+1]})
 			}
-			return newMap(newMapMetaSequence(1, tuples, nil))
+			return newMap(newMapMetaSequence(1, tuples, vs))
 		}
 
 		assertTrue(newChunkedMap(Number(0), String("a"), Number(1), String("b")), MakeMapType(NumberType, StringType))
@@ -684,10 +708,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertTrue(
 		NewStruct("Node", StructData{
 			"value": Number(1),
-			"children": NewList(
+			"children": NewList(vs,
 				NewStruct("Node", StructData{
 					"value":    Number(2),
-					"children": NewList(),
+					"children": NewList(vs),
 				}),
 			),
 		}),
@@ -700,10 +724,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse( // inner Node has wrong type.
 		NewStruct("Node", StructData{
 			"value": Number(1),
-			"children": NewList(
+			"children": NewList(vs,
 				NewStruct("Node", StructData{
 					"value":    Bool(true),
-					"children": NewList(),
+					"children": NewList(vs),
 				}),
 			),
 		}),
@@ -721,7 +745,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			}
 			rv := NewStruct("Node", StructData{
 				"value":    value,
-				"children": NewList(childrenAsRefs...),
+				"children": NewList(vs, childrenAsRefs...),
 			})
 			return rv
 		}

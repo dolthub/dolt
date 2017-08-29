@@ -12,14 +12,15 @@ import (
 
 type TermIndex struct {
 	TermDocs types.Map
+	vrw      types.ValueReadWriter
 }
 
-func NewTermIndex(TermDocs types.Map) TermIndex {
-	return TermIndex{TermDocs}
+func NewTermIndex(vrw types.ValueReadWriter, TermDocs types.Map) TermIndex {
+	return TermIndex{TermDocs, vrw}
 }
 
 func (ti TermIndex) Edit() *TermIndexEditor {
-	return &TermIndexEditor{ti.TermDocs.Edit()}
+	return &TermIndexEditor{ti.TermDocs.Edit(), ti.vrw}
 }
 
 func (ti TermIndex) Search(terms []string) types.Map {
@@ -54,7 +55,7 @@ func (ti TermIndex) Search(terms []string) types.Map {
 	var si types.SetIterator
 	for _, iter := range iters {
 		if iter == nil {
-			return types.NewMap() // at least one term had no hits
+			return types.NewMap(ti.vrw) // at least one term had no hits
 		}
 
 		if si == nil {
@@ -66,7 +67,7 @@ func (ti TermIndex) Search(terms []string) types.Map {
 	}
 
 	ch := make(chan types.Value)
-	rch := types.NewStreamingMap(nil, ch)
+	rch := types.NewStreamingMap(ti.vrw, ch)
 	for next := si.Next(); next != nil; next = si.Next() {
 		ch <- next
 		ch <- types.Bool(true)
@@ -78,11 +79,12 @@ func (ti TermIndex) Search(terms []string) types.Map {
 
 type TermIndexEditor struct {
 	terms *types.MapEditor
+	vrw   types.ValueReadWriter
 }
 
 // Builds a new TermIndex
-func (te *TermIndexEditor) Value(vrw types.ValueReadWriter) TermIndex {
-	return TermIndex{te.terms.Map(vrw)}
+func (te *TermIndexEditor) Value() TermIndex {
+	return TermIndex{te.terms.Map(), te.vrw}
 }
 
 // Indexes |v| by |term|
@@ -90,7 +92,7 @@ func (te *TermIndexEditor) Insert(term string, v types.Value) *TermIndexEditor {
 	tv := types.String(term)
 	hitSet := te.terms.Get(tv)
 	if hitSet == nil {
-		hitSet = types.NewSet()
+		hitSet = types.NewSet(te.vrw)
 	}
 	hsEd, ok := hitSet.(*types.SetEditor)
 	if !ok {

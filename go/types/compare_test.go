@@ -16,6 +16,7 @@ var prefix = []byte{0x01, 0x02, 0x03, 0x04}
 
 func TestCompareTotalOrdering(t *testing.T) {
 	assert := assert.New(t)
+	vrw := newTestValueStore()
 
 	// values in increasing order. Some of these are compared by ref so changing the serialization might change the ordering.
 	values := []Value{
@@ -24,7 +25,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		NewSet(Number(0), Number(1), Number(2), Number(3)),
+		NewSet(vrw, Number(0), Number(1), Number(2), Number(3)),
 		BoolType,
 
 		// Value - values cannot be value
@@ -63,11 +64,11 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nums := ValueSlice{Number(1), Number(2), Number(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob := NewBlob(bytes.NewBuffer([]byte{1, 2, 3}))
-	nList := NewList(nums...)
-	nMap := NewMap(words...)
+	blob := NewBlob(vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	nList := NewList(vrw, nums...)
+	nMap := NewMap(vrw, words...)
 	nRef := NewRef(blob)
-	nSet := NewSet(nums...)
+	nSet := NewSet(vrw, nums...)
 	nStruct := NewStruct("teststruct", map[string]Value{"f1": Number(1)})
 
 	vals := ValueSlice{Bool(true), Number(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
@@ -77,7 +78,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 		for j, v2 := range vals {
 			iBytes := [1024]byte{}
 			jBytes := [1024]byte{}
-			res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1, vrw), encodeGraphKey(jBytes[:0], v2, vrw))
+			res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1), encodeGraphKey(jBytes[:0], v2))
 			assert.Equal(compareInts(i, j), res)
 		}
 	}
@@ -123,8 +124,8 @@ func TestCompareEncodedKeys(t *testing.T) {
 	bs1 := [initialBufferSize]byte{}
 	bs2 := [initialBufferSize]byte{}
 
-	e1, _ := encodeKeys(bs1[:0], 0x01020304, MapKind, k1, vrw)
-	e2, _ := encodeKeys(bs2[:0], 0x01020304, MapKind, k2, vrw)
+	e1, _ := encodeKeys(bs1[:0], 0x01020304, MapKind, k1)
+	e2, _ := encodeKeys(bs2[:0], 0x01020304, MapKind, k2)
 	assert.Equal(-1, comp.Compare(e1, e2))
 }
 

@@ -29,8 +29,8 @@ func newList(seq sequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
 // with values, chunking if and when needed.
-func NewList(values ...Value) List {
-	ch := newEmptyListSequenceChunker(nil, nil)
+func NewList(vrw ValueReadWriter, values ...Value) List {
+	ch := newEmptyListSequenceChunker(vrw)
 	for _, v := range values {
 		ch.Append(v)
 	}
@@ -44,7 +44,7 @@ func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
-		ch := newEmptyListSequenceChunker(vrw, vrw)
+		ch := newEmptyListSequenceChunker(vrw)
 		for v := range values {
 			ch.Append(v)
 		}
@@ -78,7 +78,7 @@ func (l List) hashPointer() *hash.Hash {
 }
 
 // Value interface
-func (l List) Value(vrw ValueReadWriter) Value {
+func (l List) Value() Value {
 	return l
 }
 
@@ -147,8 +147,8 @@ func (l List) Map(mf MapFunc) []interface{} {
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
 func (l List) Concat(other List) List {
-	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
-		return l.newChunker(cur, vr)
+	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+		return l.newChunker(cur, vrw)
 	})
 	return newList(seq)
 }
@@ -225,13 +225,13 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 	indexedSequenceDiff(last.seq, 0, l.seq, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
-func (l List) newChunker(cur *sequenceCursor, vr ValueReader) *sequenceChunker {
-	return newSequenceChunker(cur, 0, vr, nil, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
+func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	return newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
 // If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func makeListLeafChunkFn(vr ValueReader) makeChunkFn {
+func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
 		values := make([]Value, len(items))
@@ -240,11 +240,11 @@ func makeListLeafChunkFn(vr ValueReader) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		list := newList(newListLeafSequence(vr, values...))
+		list := newList(newListLeafSequence(vrw, values...))
 		return list, orderedKeyFromInt(len(values)), uint64(len(values))
 	}
 }
 
-func newEmptyListSequenceChunker(vr ValueReader, vw ValueWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vr, vw, makeListLeafChunkFn(vr), newIndexedMetaSequenceChunkFn(ListKind, vr), hashValueBytes)
+func newEmptyListSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }

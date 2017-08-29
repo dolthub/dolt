@@ -26,13 +26,14 @@ type nbeSuite struct {
 }
 
 func (s *nbeSuite) TestNomsBlobGet() {
-	blobBytes := []byte("hello")
-	blob := types.NewBlob(bytes.NewBuffer(blobBytes))
-
 	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
 	defer sp.Close()
 	db := sp.GetDatabase()
+
+	blobBytes := []byte("hello")
+	blob := types.NewBlob(db, bytes.NewBuffer(blobBytes))
+
 	ref := db.WriteValue(blob)
 	_, err = db.CommitValue(db.GetDataset("datasetID"), ref)
 	s.NoError(err)

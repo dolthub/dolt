@@ -81,17 +81,17 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	datasetID := "ds1"
 	ds1 := suite.db.GetDataset(datasetID)
 
-	se := types.NewSet().Edit()
+	se := types.NewSet(suite.db).Edit()
 	for i := 0; i < 100; i++ {
 		se.Insert(suite.db.WriteValue(types.Number(100)))
 	}
-	s := se.Set(nil)
+	s := se.Set()
 
 	ds1, err := suite.db.CommitValue(ds1, s)
 	suite.NoError(err)
 
 	s = ds1.HeadValue().(types.Set)
-	s = s.Edit().Insert(types.NewRef(types.Number(1000))).Set(nil) // danging ref
+	s = s.Edit().Insert(types.NewRef(types.Number(1000))).Set() // danging ref
 	suite.Panics(func() {
 		ds1, err = suite.db.CommitValue(ds1, s)
 	})
@@ -192,7 +192,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	//   \----|c|
 	// Should be disallowed.
 	c := types.String("c")
-	ds, err = suite.db.Commit(ds, c, newOpts(aCommitRef))
+	ds, err = suite.db.Commit(ds, c, newOpts(suite.db, aCommitRef))
 	suite.Error(err)
 	suite.True(ds.HeadValue().Equals(b))
 
@@ -205,7 +205,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
-	ds, err = suite.db.Commit(ds, b, newOpts(aCommitRef))
+	ds, err = suite.db.Commit(ds, b, newOpts(suite.db, aCommitRef))
 	suite.Error(err)
 	suite.True(ds.HeadValue().Equals(d))
 
@@ -239,8 +239,8 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NotPanics(func() { assertMapOfStringToRefOfCommit(suite.db.Datasets(), datasets, suite.db) })
 }
 
-func newOpts(parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(parents...)}
+func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
+	return CommitOptions{Parents: types.NewSet(vrw, parents...)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -262,41 +262,41 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds1, ds2 := suite.db.GetDataset(datasetID1), suite.db.GetDataset(datasetID2)
 
 	var err error
-	v := types.NewMap(types.String("Hello"), types.Number(42))
+	v := types.NewMap(suite.db, types.String("Hello"), types.Number(42))
 	ds1, err = suite.db.CommitValue(ds1, v)
 	ds1First := ds1
 	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Map(suite.db))
+	ds1, err = suite.db.CommitValue(ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Map())
 	suite.NoError(err)
 
 	ds2, err = suite.db.CommitValue(ds2, types.String("Goodbye"))
 	suite.NoError(err)
 
 	// No common ancestor
-	_, err = suite.db.Commit(ds1, types.Number(47), newOpts(ds2.HeadRef()))
+	_, err = suite.db.Commit(ds1, types.Number(47), newOpts(suite.db, ds2.HeadRef()))
 	suite.IsType(ErrMergeNeeded, err, "%s", err)
 
 	// Unmergeable
-	_, err = suite.db.Commit(ds1, types.Number(47), newOptsWithMerge(merge.None, ds1First.HeadRef()))
+	_, err = suite.db.Commit(ds1, types.Number(47), newOptsWithMerge(suite.db, merge.None, ds1First.HeadRef()))
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
 	// Merge policies
-	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map(suite.db)
-	_, err = suite.db.Commit(ds1, newV, newOptsWithMerge(merge.None, ds1First.HeadRef()))
+	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map()
+	_, err = suite.db.Commit(ds1, newV, newOptsWithMerge(suite.db, merge.None, ds1First.HeadRef()))
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
-	theirs, err := suite.db.Commit(ds1, newV, newOptsWithMerge(merge.Theirs, ds1First.HeadRef()))
+	theirs, err := suite.db.Commit(ds1, newV, newOptsWithMerge(suite.db, merge.Theirs, ds1First.HeadRef()))
 	suite.NoError(err)
 	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(types.String("Friends"))))
 
-	newV = v.Edit().Set(types.String("Friends"), types.Number(47)).Map(suite.db)
-	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(merge.Ours, ds1First.HeadRef()))
+	newV = v.Edit().Set(types.String("Friends"), types.Number(47)).Map()
+	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(suite.db, merge.Ours, ds1First.HeadRef()))
 	suite.NoError(err)
 	suite.True(types.Number(47).Equals(ours.HeadValue().(types.Map).Get(types.String("Friends"))))
 }
 
-func newOptsWithMerge(policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(parents...), Policy: merge.NewThreeWay(policy)}
+func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
+	return CommitOptions{Parents: types.NewSet(vrw, parents...), Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {
@@ -516,33 +516,33 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	// Set<String>
 	v1 := types.String("hello")
 	v2 := types.String("world")
-	s1 := types.NewSet(v1, v2)
+	s1 := types.NewSet(suite.db, v1, v2)
 	suite.Equal(uint64(1), suite.db.WriteValue(s1).Height())
 
 	// Set<Ref<String>>
-	s2 := types.NewSet(suite.db.WriteValue(v1), suite.db.WriteValue(v2))
+	s2 := types.NewSet(suite.db, suite.db.WriteValue(v1), suite.db.WriteValue(v2))
 	suite.Equal(uint64(2), suite.db.WriteValue(s2).Height())
 
 	// List<Set<String>>
 	v3 := types.String("foo")
 	v4 := types.String("bar")
-	s3 := types.NewSet(v3, v4)
-	l1 := types.NewList(s1, s3)
+	s3 := types.NewSet(suite.db, v3, v4)
+	l1 := types.NewList(suite.db, s1, s3)
 	suite.Equal(uint64(1), suite.db.WriteValue(l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(suite.db.WriteValue(s1), suite.db.WriteValue(s3))
+	l2 := types.NewList(suite.db, suite.db.WriteValue(s1), suite.db.WriteValue(s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
-	s4 := types.NewSet(suite.db.WriteValue(v3), suite.db.WriteValue(v4))
-	l3 := types.NewList(suite.db.WriteValue(s4))
+	s4 := types.NewSet(suite.db, suite.db.WriteValue(v3), suite.db.WriteValue(v4))
+	l3 := types.NewList(suite.db, suite.db.WriteValue(s4))
 	suite.Equal(uint64(3), suite.db.WriteValue(l3).Height())
 
 	// List<Set<String> | RefValue<Set<String>>>
-	l4 := types.NewList(s1, suite.db.WriteValue(s3))
+	l4 := types.NewList(suite.db, s1, suite.db.WriteValue(s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(l4).Height())
-	l5 := types.NewList(suite.db.WriteValue(s1), s3)
+	l5 := types.NewList(suite.db, suite.db.WriteValue(s1), s3)
 	suite.Equal(uint64(2), suite.db.WriteValue(l5).Height())
 
 	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
@@ -553,7 +553,7 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 
-	suite.db.WriteValue(types.NewList(andMore...))
+	suite.db.WriteValue(types.NewList(suite.db, andMore...))
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {

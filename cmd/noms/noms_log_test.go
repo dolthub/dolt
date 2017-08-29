@@ -81,13 +81,13 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 	return ds.Database().CommitValue(ds, v)
 }
 
-func addBranchedDataset(newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(parentDs.HeadRef())
+func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
+	p := types.NewSet(vrw, parentDs.HeadRef())
 	return newDs.Database().Commit(newDs, types.String(v), datas.CommitOptions{Parents: p})
 }
 
-func mergeDatasets(ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(ds1.HeadRef(), ds2.HeadRef())
+func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
+	p := types.NewSet(vrw, ds1.HeadRef(), ds2.HeadRef())
 	return ds1.Database().Commit(ds1, types.String(v), datas.CommitOptions{Parents: p})
 }
 
@@ -169,7 +169,7 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b2 := db.GetDataset("b2")
-	b2, err = addBranchedDataset(b2, b1, "3.1")
+	b2, err = addBranchedDataset(db, b2, b1, "3.1")
 	s.NoError(err)
 
 	b1, err = addCommit(b1, "3.2")
@@ -178,19 +178,19 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 
 	b3 := db.GetDataset("b3")
-	b3, err = addBranchedDataset(b3, b2, "3.1.3")
+	b3, err = addBranchedDataset(db, b3, b2, "3.1.3")
 	s.NoError(err)
 	b3, err = addCommit(b3, "3.1.5")
 	s.NoError(err)
 	b3, err = addCommit(b3, "3.1.7")
 	s.NoError(err)
 
-	b2, err = mergeDatasets(b2, b3, "3.5")
+	b2, err = mergeDatasets(db, b2, b3, "3.5")
 	s.NoError(err)
 	b2, err = addCommit(b2, "3.7")
 	s.NoError(err)
 
-	b1, err = mergeDatasets(b1, b2, "4")
+	b1, err = mergeDatasets(db, b1, b2, "4")
 	s.NoError(err)
 
 	b1, err = addCommit(b1, "5")
@@ -225,10 +225,10 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	bc, err = addCommit(bc, "100")
 	s.NoError(err)
 
-	ba, err = mergeDatasets(ba, bb, "11")
+	ba, err = mergeDatasets(db, ba, bb, "11")
 	s.NoError(err)
 
-	_, err = mergeDatasets(ba, bc, "101")
+	_, err = mergeDatasets(db, ba, bc, "101")
 	s.NoError(err)
 
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value", spec.CreateValueSpecString("nbs", s.DBDir, "ba")})
@@ -253,24 +253,24 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 
 	x := db.GetDataset("x")
-	x, err = addBranchedDataset(x, w, "20-x")
+	x, err = addBranchedDataset(db, x, w, "20-x")
 	s.NoError(err)
 
 	y := db.GetDataset("y")
-	y, err = addBranchedDataset(y, w, "200-y")
+	y, err = addBranchedDataset(db, y, w, "200-y")
 	s.NoError(err)
 
 	z := db.GetDataset("z")
-	z, err = addBranchedDataset(z, w, "2000-z")
+	z, err = addBranchedDataset(db, z, w, "2000-z")
 	s.NoError(err)
 
-	w, err = mergeDatasets(w, x, "22-wx")
+	w, err = mergeDatasets(db, w, x, "22-wx")
 	s.NoError(err)
 
-	w, err = mergeDatasets(w, y, "222-wy")
+	w, err = mergeDatasets(db, w, y, "222-wy")
 	s.NoError(err)
 
-	_, err = mergeDatasets(w, z, "2222-wz")
+	_, err = mergeDatasets(db, w, z, "2222-wz")
 	s.NoError(err)
 
 	res, _ := s.MustRun(main, []string{"log", "--graph", "--show-value", spec.CreateValueSpecString("nbs", s.DBDir, "w")})
@@ -280,19 +280,20 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 }
 
 func (s *nomsLogTestSuite) TestTruncation() {
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
+	s.NoError(err)
+	defer sp.Close()
+	db := sp.GetDatabase()
+
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}
 		for _, v := range l {
 			nv = append(nv, types.String(v))
 		}
-		return types.NewList(nv...)
+		return types.NewList(db, nv...)
 	}
 
-	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
-	s.NoError(err)
-	defer sp.Close()
-
-	t := sp.GetDatabase().GetDataset("truncate")
+	t := db.GetDataset("truncate")
 
 	t, err = addCommit(t, "the first line")
 	s.NoError(err)

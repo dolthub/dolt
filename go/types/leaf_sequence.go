@@ -5,7 +5,7 @@
 package types
 
 type leafSequence struct {
-	vr     ValueReader
+	vrw    ValueReadWriter
 	length int
 	kind   NomsKind
 }
@@ -18,8 +18,8 @@ func (seq leafSequence) numLeaves() uint64 {
 	return uint64(seq.length)
 }
 
-func (seq leafSequence) valueReader() ValueReader {
-	return seq.vr
+func (seq leafSequence) valueReadWriter() ValueReadWriter {
+	return seq.vrw
 }
 
 func (seq leafSequence) getChildSequence(idx int) sequence {

@@ -80,7 +80,7 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int, readAhead 
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	readAhead = readAhead && !seq.isLeaf() && seq.valueReader() != nil
+	readAhead = readAhead && !seq.isLeaf() && seq.valueReadWriter() != nil
 	return &sequenceCursor{parent, seq, idx, readAhead, nil}
 }
 

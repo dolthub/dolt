@@ -184,12 +184,12 @@ func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged typ
 
 	switch a.Kind() {
 	case types.ListKind:
-		if aList, bList, pList, ok := listAssert(a, b, parent); ok {
+		if aList, bList, pList, ok := listAssert(m.vrw, a, b, parent); ok {
 			return threeWayListMerge(aList, bList, pList)
 		}
 
 	case types.MapKind:
-		if aMap, bMap, pMap, ok := mapAssert(a, b, parent); ok {
+		if aMap, bMap, pMap, ok := mapAssert(m.vrw, a, b, parent); ok {
 			return m.threeWayMapMerge(aMap, bMap, pMap, path)
 		}
 
@@ -203,7 +203,7 @@ func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged typ
 		}
 
 	case types.SetKind:
-		if aSet, bSet, pSet, ok := setAssert(a, b, parent); ok {
+		if aSet, bSet, pSet, ok := setAssert(m.vrw, a, b, parent); ok {
 			return m.threeWaySetMerge(aSet, bSet, pSet, path)
 		}
 
@@ -225,9 +225,9 @@ func (m *merger) threeWayMapMerge(a, b, parent types.Map, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Map(nil)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Map()}
 		case types.DiffChangeRemoved:
-			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Map(nil)}
+			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Map()}
 		default:
 			panic("Not Reached")
 		}
@@ -240,9 +240,9 @@ func (m *merger) threeWaySetMerge(a, b, parent types.Set, path types.Path) (merg
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return setCandidate{target.getValue().(types.Set).Edit().Insert(newVal).Set(nil)}
+			return setCandidate{target.getValue().(types.Set).Edit().Insert(newVal).Set()}
 		case types.DiffChangeRemoved:
-			return setCandidate{target.getValue().(types.Set).Edit().Remove(newVal).Set(nil)}
+			return setCandidate{target.getValue().(types.Set).Edit().Remove(newVal).Set()}
 		default:
 			panic("Not Reached")
 		}
@@ -273,26 +273,26 @@ func (m *merger) threeWayStructMerge(a, b, parent types.Struct, path types.Path)
 	return m.threeWayOrderedSequenceMerge(structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }
 
-func listAssert(a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
+func listAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
 	var aOk, bOk, pOk bool
 	aList, aOk = a.(types.List)
 	bList, bOk = b.(types.List)
 	if parent != nil {
 		pList, pOk = parent.(types.List)
 	} else {
-		pList, pOk = types.NewList(), true
+		pList, pOk = types.NewList(vrw), true
 	}
 	return aList, bList, pList, aOk && bOk && pOk
 }
 
-func mapAssert(a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
+func mapAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
 	var aOk, bOk, pOk bool
 	aMap, aOk = a.(types.Map)
 	bMap, bOk = b.(types.Map)
 	if parent != nil {
 		pMap, pOk = parent.(types.Map)
 	} else {
-		pMap, pOk = types.NewMap(), true
+		pMap, pOk = types.NewMap(vrw), true
 	}
 	return aMap, bMap, pMap, aOk && bOk && pOk
 }
@@ -318,14 +318,14 @@ func refAssert(a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bVa
 	return aValue, bValue, pValue, aOk && bOk && pOk
 }
 
-func setAssert(a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
+func setAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
 	var aOk, bOk, pOk bool
 	aSet, aOk = a.(types.Set)
 	bSet, bOk = b.(types.Set)
 	if parent != nil {
 		pSet, pOk = parent.(types.Set)
 	} else {
-		pSet, pOk = types.NewSet(), true
+		pSet, pOk = types.NewSet(vrw), true
 	}
 	return aSet, bSet, pSet, aOk && bOk && pOk
 }

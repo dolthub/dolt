@@ -66,7 +66,7 @@ func makeTestDb(s *testSuite, dsId string) datas.Database {
 	}
 
 	m := map[string]interface{}{"actors": l1, "musicians": m1}
-	v, err := marshal.Marshal(m)
+	v, err := marshal.Marshal(db, m)
 	s.NoError(err)
 	_, err = db.CommitValue(db.GetDataset(dsId), v)
 	s.NoError(err)

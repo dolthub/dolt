@@ -27,26 +27,26 @@ func EncodeValue(v Value) chunks.Chunk {
 	return c
 }
 
-func DecodeFromBytes(data []byte, vr ValueReader) Value {
+func DecodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 	br := &binaryNomsReader{data, 0}
-	dec := newValueDecoder(br, vr)
+	dec := newValueDecoder(br, vrw)
 	v := dec.readValue()
 	d.PanicIfFalse(br.pos() == uint32(len(data)))
 	return v
 }
 
-func decodeFromBytesWithValidation(data []byte, vr ValueReader) Value {
+func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
 	br := &binaryNomsReader{data, 0}
-	dec := newValueDecoderWithValidation(br, vr)
+	dec := newValueDecoderWithValidation(br, vrw)
 	v := dec.readValue()
 	d.PanicIfFalse(br.pos() == uint32(len(data)))
 	return v
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
-func DecodeValue(c chunks.Chunk, vr ValueReader) Value {
+func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	v := DecodeFromBytes(c.Data(), vr)
+	v := DecodeFromBytes(c.Data(), vrw)
 	if cacher, ok := v.(hashCacher); ok {
 		assignHash(cacher, c.Hash())
 	}

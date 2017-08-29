@@ -31,7 +31,7 @@ const (
 	throughKey     = "through"
 	valueKey       = "value"
 	valuesKey      = "values"
-	vrKey          = "vr"
+	vrwKey         = "vrw"
 )
 
 // NewRootQueryObject creates a "root" query object that can be used to
@@ -61,22 +61,22 @@ func (tc *TypeConverter) NewRootQueryObject(rootValue types.Value) *graphql.Obje
 
 // NewContext creates a new context.Context with the extra data added to it
 // that is required by ngql.
-func NewContext(vr types.ValueReader) context.Context {
-	return context.WithValue(context.Background(), vrKey, vr)
+func NewContext(vrw types.ValueReader) context.Context {
+	return context.WithValue(context.Background(), vrwKey, vrw)
 }
 
 // Query takes |rootValue|, builds a GraphQL scheme from rootValue.Type() and
 // executes |query| against it, encoding the result to |w|.
-func Query(rootValue types.Value, query string, vr types.ValueReader, w io.Writer) {
+func Query(rootValue types.Value, query string, vrw types.ValueReadWriter, w io.Writer) {
 	schemaConfig := graphql.SchemaConfig{}
 	tc := NewTypeConverter()
-	queryWithSchemaConfig(rootValue, query, schemaConfig, vr, tc, w)
+	queryWithSchemaConfig(rootValue, query, schemaConfig, vrw, tc, w)
 }
 
-func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vr types.ValueReader, tc *TypeConverter, w io.Writer) {
+func queryWithSchemaConfig(rootValue types.Value, query string, schemaConfig graphql.SchemaConfig, vrw types.ValueReadWriter, tc *TypeConverter, w io.Writer) {
 	schemaConfig.Query = tc.NewRootQueryObject(rootValue)
 	schema, _ := graphql.NewSchema(schemaConfig)
-	ctx := NewContext(vr)
+	ctx := NewContext(vrw)
 
 	r := graphql.Do(graphql.Params{
 		Schema:        schema,

@@ -55,8 +55,8 @@ func (tl testList) Diff(last testList) []Splice {
 		func(i uint64, j uint64) bool { return last[i] == tl[j] })
 }
 
-func (tl testList) toList() List {
-	return NewList(tl...)
+func (tl testList) toList(vrw ValueReadWriter) List {
+	return NewList(vrw, tl...)
 }
 
 func newTestList(length int) testList {
@@ -71,8 +71,8 @@ func newTestListFromList(list List) testList {
 	return tl
 }
 
-func validateList(t *testing.T, l List, values ValueSlice) {
-	assert.True(t, l.Equals(NewList(values...)))
+func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
+	assert.True(t, l.Equals(NewList(vrw, values...)))
 	out := ValueSlice{}
 	l.IterAll(func(v Value, idx uint64) {
 		out = append(out, v)
@@ -86,10 +86,12 @@ type listTestSuite struct {
 }
 
 func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int, expectAppendChunkDiff int) *listTestSuite {
+	vrw := newTestValueStore()
+
 	length := 1 << size
 	elems := newTestList(length)
 	tr := MakeListType(NumberType)
-	list := NewList(elems...)
+	list := NewList(vrw, elems...)
 	return &listTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    list,
@@ -110,13 +112,13 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 				dup := make([]Value, length+1)
 				dup[0] = Number(0)
 				copy(dup[1:], elems)
-				return NewList(dup...)
+				return NewList(vrw, dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems)
 				dup[len(dup)-1] = Number(0)
-				return NewList(dup...)
+				return NewList(vrw, dup...)
 			},
 		},
 		elems: elems,
@@ -169,49 +171,53 @@ func TestListSuite8K(t *testing.T) {
 func TestListInsert(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
+	vrw := newTestValueStore()
 
 	assert := assert.New(t)
 
 	tl := newTestList(1024)
-	list := tl.toList()
+	list := tl.toList(vrw)
 
 	for i := 0; i < len(tl); i += 16 {
 		tl = tl.Insert(i, Number(i))
-		list = list.Edit().Insert(uint64(i), Number(i)).List(nil)
+		list = list.Edit().Insert(uint64(i), Number(i)).List()
 	}
 
-	assert.True(tl.toList().Equals(list))
+	assert.True(tl.toList(vrw).Equals(list))
 }
 
 func TestListRemove(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 
 	tl := newTestList(1024)
-	list := tl.toList()
+	list := tl.toList(vrw)
 
 	for i := len(tl) - 16; i >= 0; i -= 16 {
 		tl = tl.Remove(i, i+4)
-		list = list.Edit().Remove(uint64(i), uint64(i+4)).List(nil)
+		list = list.Edit().Remove(uint64(i), uint64(i+4)).List()
 	}
 
-	assert.True(tl.toList().Equals(list))
+	assert.True(tl.toList(vrw).Equals(list))
 }
 
 func TestListRemoveAt(t *testing.T) {
 	assert := assert.New(t)
+	vrw := newTestValueStore()
 
-	l0 := NewList()
-	l0 = l0.Edit().Append(Bool(false), Bool(true)).List(nil)
-	l1 := l0.Edit().RemoveAt(1).List(nil)
-	assert.True(NewList(Bool(false)).Equals(l1))
-	l1 = l1.Edit().RemoveAt(0).List(nil)
-	assert.True(NewList().Equals(l1))
+	l0 := NewList(vrw)
+	l0 = l0.Edit().Append(Bool(false), Bool(true)).List()
+	l1 := l0.Edit().RemoveAt(1).List()
+	assert.True(NewList(vrw, Bool(false)).Equals(l1))
+	l1 = l1.Edit().RemoveAt(0).List()
+	assert.True(NewList(vrw).Equals(l1))
 
 	assert.Panics(func() {
-		l1.Edit().RemoveAt(0).List(nil)
+		l1.Edit().RemoveAt(0).List()
 	})
 }
 
@@ -267,7 +273,7 @@ func TestStreamingListCreation(t *testing.T) {
 	vs := newTestValueStore()
 	simpleList := getTestList()
 
-	cl := NewList(simpleList...)
+	cl := NewList(vs, simpleList...)
 	valueChan := make(chan Value)
 	listChan := NewStreamingList(vs, valueChan)
 	for _, v := range simpleList {
@@ -286,13 +292,15 @@ func TestListAppend(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
 	assert := assert.New(t)
 
 	newList := func(items testList) List {
-		return NewList(items...)
+		return NewList(vrw, items...)
 	}
 
 	listToSimple := func(cl List) (simple testList) {
@@ -303,11 +311,11 @@ func TestListAppend(t *testing.T) {
 	}
 
 	cl := newList(getTestList())
-	cl2 := cl.Edit().Append(Number(42)).List(nil)
-	cl3 := cl2.Edit().Append(Number(43)).List(nil)
-	cl4 := cl3.Edit().Append(getTestList().AsValuables()...).List(nil)
-	cl5 := cl4.Edit().Append(Number(44), Number(45)).List(nil)
-	cl6 := cl5.Edit().Append(getTestList().AsValuables()...).List(nil)
+	cl2 := cl.Edit().Append(Number(42)).List()
+	cl3 := cl2.Edit().Append(Number(43)).List()
+	cl4 := cl3.Edit().Append(getTestList().AsValuables()...).List()
+	cl5 := cl4.Edit().Append(Number(44), Number(45)).List()
+	cl6 := cl5.Edit().Append(getTestList().AsValuables()...).List()
 
 	expected := getTestList()
 	assert.Equal(expected, listToSimple(cl))
@@ -348,12 +356,14 @@ func TestListValidateInsertAscending(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	values := generateNumbersAsValues(1000)
 
-	s := NewList()
+	s := NewList(vrw)
 	for i, v := range values {
-		s = s.Edit().Insert(uint64(i), v).List(nil)
-		validateList(t, s, values[0:i+1])
+		s = s.Edit().Insert(uint64(i), v).List()
+		validateList(t, vrw, s, values[0:i+1])
 	}
 }
 
@@ -365,14 +375,16 @@ func TestListValidateInsertAtZero(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	values := generateNumbersAsValues(1000)
-	s := NewList()
+	s := NewList(vrw)
 	count := len(values)
 	for count > 0 {
 		count--
 		v := values[count]
-		s = s.Edit().Insert(uint64(0), v).List(nil)
-		validateList(t, s, values[count:])
+		s = s.Edit().Insert(uint64(0), v).List()
+		validateList(t, vrw, s, values[count:])
 	}
 }
 
@@ -382,14 +394,16 @@ func TestListInsertNothing(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList()
+	vrw := newTestValueStore()
 
-	assert.True(cl.Equals(cl.Edit().Insert(0).List(nil)))
+	cl := getTestList().toList(vrw)
+
+	assert.True(cl.Equals(cl.Edit().Insert(0).List()))
 	for i := uint64(1); i < getTestListLen(); i *= 2 {
-		assert.True(cl.Equals(cl.Edit().Insert(i).List(nil)))
+		assert.True(cl.Equals(cl.Edit().Insert(i).List()))
 	}
-	assert.True(cl.Equals(cl.Edit().Insert(cl.Len() - 1).List(nil)))
-	assert.True(cl.Equals(cl.Edit().Insert(cl.Len()).List(nil)))
+	assert.True(cl.Equals(cl.Edit().Insert(cl.Len() - 1).List()))
+	assert.True(cl.Equals(cl.Edit().Insert(cl.Len()).List()))
 }
 
 func TestListInsertStart(t *testing.T) {
@@ -401,42 +415,44 @@ func TestListInsertStart(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList()
-	cl2 := cl.Edit().Insert(0, Number(42)).List(nil)
-	cl3 := cl2.Edit().Insert(0, Number(43)).List(nil)
-	cl4 := cl3.Edit().Insert(0, getTestList().AsValuables()...).List(nil)
-	cl5 := cl4.Edit().Insert(0, Number(44), Number(45)).List(nil)
-	cl6 := cl5.Edit().Insert(0, getTestList().AsValuables()...).List(nil)
+	vrw := newTestValueStore()
+
+	cl := getTestList().toList(vrw)
+	cl2 := cl.Edit().Insert(0, Number(42)).List()
+	cl3 := cl2.Edit().Insert(0, Number(43)).List()
+	cl4 := cl3.Edit().Insert(0, getTestList().AsValuables()...).List()
+	cl5 := cl4.Edit().Insert(0, Number(44), Number(45)).List()
+	cl6 := cl5.Edit().Insert(0, getTestList().AsValuables()...).List()
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
 	assert.Equal(getTestListLen(), cl.Len())
-	assert.True(expected.toList().Equals(cl))
+	assert.True(expected.toList(vrw).Equals(cl))
 
 	expected = expected.Insert(0, Number(42))
 	assert.Equal(expected, testListFromNomsList(cl2))
 	assert.Equal(getTestListLen()+1, cl2.Len())
-	assert.True(expected.toList().Equals(cl2))
+	assert.True(expected.toList(vrw).Equals(cl2))
 
 	expected = expected.Insert(0, Number(43))
 	assert.Equal(expected, testListFromNomsList(cl3))
 	assert.Equal(getTestListLen()+2, cl3.Len())
-	assert.True(expected.toList().Equals(cl3))
+	assert.True(expected.toList(vrw).Equals(cl3))
 
 	expected = expected.Insert(0, getTestList()...)
 	assert.Equal(expected, testListFromNomsList(cl4))
 	assert.Equal(2*getTestListLen()+2, cl4.Len())
-	assert.True(expected.toList().Equals(cl4))
+	assert.True(expected.toList(vrw).Equals(cl4))
 
 	expected = expected.Insert(0, Number(44), Number(45))
 	assert.Equal(expected, testListFromNomsList(cl5))
 	assert.Equal(2*getTestListLen()+4, cl5.Len())
-	assert.True(expected.toList().Equals(cl5))
+	assert.True(expected.toList(vrw).Equals(cl5))
 
 	expected = expected.Insert(0, getTestList()...)
 	assert.Equal(expected, testListFromNomsList(cl6))
 	assert.Equal(3*getTestListLen()+4, cl6.Len())
-	assert.True(expected.toList().Equals(cl6))
+	assert.True(expected.toList(vrw).Equals(cl6))
 }
 
 func TestListInsertMiddle(t *testing.T) {
@@ -448,48 +464,50 @@ func TestListInsertMiddle(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList()
-	cl2 := cl.Edit().Insert(100, Number(42)).List(nil)
-	cl3 := cl2.Edit().Insert(200, Number(43)).List(nil)
-	cl4 := cl3.Edit().Insert(300, getTestList().AsValuables()...).List(nil)
-	cl5 := cl4.Edit().Insert(400, Number(44), Number(45)).List(nil)
-	cl6 := cl5.Edit().Insert(500, getTestList().AsValuables()...).List(nil)
-	cl7 := cl6.Edit().Insert(600, Number(100)).List(nil)
+	vrw := newTestValueStore()
+
+	cl := getTestList().toList(vrw)
+	cl2 := cl.Edit().Insert(100, Number(42)).List()
+	cl3 := cl2.Edit().Insert(200, Number(43)).List()
+	cl4 := cl3.Edit().Insert(300, getTestList().AsValuables()...).List()
+	cl5 := cl4.Edit().Insert(400, Number(44), Number(45)).List()
+	cl6 := cl5.Edit().Insert(500, getTestList().AsValuables()...).List()
+	cl7 := cl6.Edit().Insert(600, Number(100)).List()
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
 	assert.Equal(getTestListLen(), cl.Len())
-	assert.True(expected.toList().Equals(cl))
+	assert.True(expected.toList(vrw).Equals(cl))
 
 	expected = expected.Insert(100, Number(42))
 	assert.Equal(expected, testListFromNomsList(cl2))
 	assert.Equal(getTestListLen()+1, cl2.Len())
-	assert.True(expected.toList().Equals(cl2))
+	assert.True(expected.toList(vrw).Equals(cl2))
 
 	expected = expected.Insert(200, Number(43))
 	assert.Equal(expected, testListFromNomsList(cl3))
 	assert.Equal(getTestListLen()+2, cl3.Len())
-	assert.True(expected.toList().Equals(cl3))
+	assert.True(expected.toList(vrw).Equals(cl3))
 
 	expected = expected.Insert(300, getTestList()...)
 	assert.Equal(expected, testListFromNomsList(cl4))
 	assert.Equal(2*getTestListLen()+2, cl4.Len())
-	assert.True(expected.toList().Equals(cl4))
+	assert.True(expected.toList(vrw).Equals(cl4))
 
 	expected = expected.Insert(400, Number(44), Number(45))
 	assert.Equal(expected, testListFromNomsList(cl5))
 	assert.Equal(2*getTestListLen()+4, cl5.Len())
-	assert.True(expected.toList().Equals(cl5))
+	assert.True(expected.toList(vrw).Equals(cl5))
 
 	expected = expected.Insert(500, getTestList()...)
 	assert.Equal(expected, testListFromNomsList(cl6))
 	assert.Equal(3*getTestListLen()+4, cl6.Len())
-	assert.True(expected.toList().Equals(cl6))
+	assert.True(expected.toList(vrw).Equals(cl6))
 
 	expected = expected.Insert(600, Number(100))
 	assert.Equal(expected, testListFromNomsList(cl7))
 	assert.Equal(3*getTestListLen()+5, cl7.Len())
-	assert.True(expected.toList().Equals(cl7))
+	assert.True(expected.toList(vrw).Equals(cl7))
 }
 
 func TestListInsertRanges(t *testing.T) {
@@ -501,14 +519,16 @@ func TestListInsertRanges(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	testList := getTestList()
-	whole := testList.toList()
+	whole := testList.toList(vrw)
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
-			actual := testListPart.toList().Edit().Insert(uint64(i), testList[i:i+window].AsValuables()...).List(nil)
+			actual := testListPart.toList(vrw).Edit().Insert(uint64(i), testList[i:i+window].AsValuables()...).List()
 			assert.Equal(whole.Len(), actual.Len())
 			assert.True(whole.Equals(actual))
 		}
@@ -516,7 +536,7 @@ func TestListInsertRanges(t *testing.T) {
 
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList); i += incr {
-		assert.Equal(len(testList)+incr, int(whole.Edit().Insert(uint64(i), testList[0:incr].AsValuables()...).List(nil).Len()))
+		assert.Equal(len(testList)+incr, int(whole.Edit().Insert(uint64(i), testList[0:incr].AsValuables()...).List().Len()))
 	}
 }
 
@@ -526,14 +546,16 @@ func TestListRemoveNothing(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList()
+	vrw := newTestValueStore()
 
-	assert.True(cl.Equals(cl.Edit().Remove(0, 0).List(nil)))
+	cl := getTestList().toList(vrw)
+
+	assert.True(cl.Equals(cl.Edit().Remove(0, 0).List()))
 	for i := uint64(1); i < getTestListLen(); i *= 2 {
-		assert.True(cl.Equals(cl.Edit().Remove(i, i).List(nil)))
+		assert.True(cl.Equals(cl.Edit().Remove(i, i).List()))
 	}
-	assert.True(cl.Equals(cl.Edit().Remove(cl.Len()-1, cl.Len()-1).List(nil)))
-	assert.True(cl.Equals(cl.Edit().Remove(cl.Len(), cl.Len()).List(nil)))
+	assert.True(cl.Equals(cl.Edit().Remove(cl.Len()-1, cl.Len()-1).List()))
+	assert.True(cl.Equals(cl.Edit().Remove(cl.Len(), cl.Len()).List()))
 }
 
 func TestListRemoveEverything(t *testing.T) {
@@ -542,9 +564,11 @@ func TestListRemoveEverything(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList().Edit().Remove(0, getTestListLen()).List(nil)
+	vrw := newTestValueStore()
 
-	assert.True(NewList().Equals(cl))
+	cl := getTestList().toList(vrw).Edit().Remove(0, getTestListLen()).List()
+
+	assert.True(NewList(vrw).Equals(cl))
 	assert.Equal(0, int(cl.Len()))
 }
 
@@ -557,24 +581,26 @@ func TestListRemoveAtMiddle(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	cl := getTestList().toList()
-	cl2 := cl.Edit().RemoveAt(100).List(nil)
-	cl3 := cl2.Edit().RemoveAt(200).List(nil)
+	vrw := newTestValueStore()
+
+	cl := getTestList().toList(vrw)
+	cl2 := cl.Edit().RemoveAt(100).List()
+	cl3 := cl2.Edit().RemoveAt(200).List()
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
 	assert.Equal(getTestListLen(), cl.Len())
-	assert.True(expected.toList().Equals(cl))
+	assert.True(expected.toList(vrw).Equals(cl))
 
 	expected = expected.RemoveAt(100)
 	assert.Equal(expected, testListFromNomsList(cl2))
 	assert.Equal(getTestListLen()-1, cl2.Len())
-	assert.True(expected.toList().Equals(cl2))
+	assert.True(expected.toList(vrw).Equals(cl2))
 
 	expected = expected.RemoveAt(200)
 	assert.Equal(expected, testListFromNomsList(cl3))
 	assert.Equal(getTestListLen()-2, cl3.Len())
-	assert.True(expected.toList().Equals(cl3))
+	assert.True(expected.toList(vrw).Equals(cl3))
 }
 
 func TestListRemoveRanges(t *testing.T) {
@@ -586,15 +612,17 @@ func TestListRemoveRanges(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	testList := getTestList()
-	whole := testList.toList()
+	whole := testList.toList(vrw)
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
-			expected := testListPart.toList()
-			actual := whole.Edit().Remove(uint64(i), uint64(i+window)).List(nil)
+			expected := testListPart.toList(vrw)
+			actual := whole.Edit().Remove(uint64(i), uint64(i+window)).List()
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
@@ -602,7 +630,7 @@ func TestListRemoveRanges(t *testing.T) {
 
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList)-incr; i += incr {
-		assert.Equal(len(testList)-incr, int(whole.Edit().Remove(uint64(i), uint64(i+incr)).List(nil).Len()))
+		assert.Equal(len(testList)-incr, int(whole.Edit().Remove(uint64(i), uint64(i+incr)).List().Len()))
 	}
 }
 
@@ -615,12 +643,14 @@ func TestListRemoveAtEnd(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	tl := getTestListWithLen(testListSize / 10)
-	cl := tl.toList()
+	cl := tl.toList(vrw)
 
 	for i := len(tl) - 1; i >= 0; i-- {
-		cl = cl.Edit().Remove(uint64(i), uint64(i+1)).List(nil)
-		expect := tl[0:i].toList()
+		cl = cl.Edit().Remove(uint64(i), uint64(i+1)).List()
+		expect := tl[0:i].toList(vrw)
 		assert.True(expect.Equals(cl))
 	}
 }
@@ -634,15 +664,17 @@ func TestListSet(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	testList := getTestList()
-	cl := testList.toList()
+	cl := testList.toList(vrw)
 
 	testIdx := func(idx int, testEquality bool) {
 		newVal := Number(-1) // Test values are never < 0
-		cl2 := cl.Edit().Set(uint64(idx), newVal).List(nil)
+		cl2 := cl.Edit().Set(uint64(idx), newVal).List()
 		assert.False(cl.Equals(cl2))
 		if testEquality {
-			assert.True(testList.Set(idx, newVal).toList().Equals(cl2))
+			assert.True(testList.Set(idx, newVal).toList(vrw).Equals(cl2))
 		}
 	}
 
@@ -659,17 +691,20 @@ func TestListSet(t *testing.T) {
 }
 
 func TestListFirstNNumbers(t *testing.T) {
+	vrw := newTestValueStore()
+
 	nums := generateNumbersAsValues(testListSize)
-	NewList(nums...)
+	NewList(vrw, nums...)
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
+	vrw := newTestValueStore()
 
 	nums := generateNumbersAsRefOfStructs(testListSize)
-	NewList(nums...)
+	NewList(vrw, nums...)
 }
 
 func TestListModifyAfterRead(t *testing.T) {
@@ -680,15 +715,15 @@ func TestListModifyAfterRead(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	list := getTestList().toList()
+	list := getTestList().toList(vs)
 	// Drop chunk values.
 	list = vs.ReadValue(vs.WriteValue(list).TargetHash()).(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)
-	list = list.Edit().RemoveAt(0).List(nil)
+	list = list.Edit().RemoveAt(0).List()
 	assert.Equal(llen-1, list.Len())
-	list = list.Edit().Append(z).List(nil)
+	list = list.Edit().Append(z).List()
 	assert.Equal(llen, list.Len())
 }
 
@@ -720,10 +755,12 @@ func TestListDiffIdentical(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
-	l1 := NewList(nums...)
-	l2 := NewList(nums...)
+	l1 := NewList(vrw, nums...)
+	l2 := NewList(vrw, nums...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -736,10 +773,12 @@ func TestListDiffVersusEmpty(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
-	l1 := NewList(nums1...)
-	l2 := NewList()
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -758,11 +797,13 @@ func TestListDiffReverse(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -782,11 +823,13 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 
 	diff1 := accumulateDiffSplicesWithLimit(l1, l2, 27e6)
 	diff2 := accumulateDiffSplicesWithLimit(l2, l1, 27e6)
@@ -808,14 +851,16 @@ func TestListDiffRemove5x100(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 100)
 	}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -839,14 +884,16 @@ func TestListDiffAdd5x5(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 0, Number(0), Number(1), Number(2), Number(3), Number(4))
 	}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -870,6 +917,8 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
@@ -877,8 +926,8 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 		out := reverseValues(nums2[(count-1)*1000 : (count-1)*1000+100])
 		nums2 = spliceValues(nums2, (count-1)*1000, 100, out...)
 	}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -900,11 +949,13 @@ func TestListDiffString1(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three")}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(0, len(diff))
@@ -914,11 +965,13 @@ func TestListDiffString2(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -931,11 +984,13 @@ func TestListDiffString3(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
+	vrw := newTestValueStore()
+
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("four")}
-	l1 := NewList(nums1...)
-	l2 := NewList(nums2...)
+	l1 := NewList(vrw, nums1...)
+	l2 := NewList(vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -956,7 +1011,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	cs1 := storage.NewView()
 	vs1 := NewValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
-	l1 := NewList(nums1...)
+	l1 := NewList(vs1, nums1...)
 	hash1 := vs1.WriteValue(l1).TargetHash()
 	vs1.Commit(vs1.Root(), vs1.Root())
 
@@ -965,7 +1020,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
-	l2 := NewList(nums2...)
+	l2 := NewList(vs2, nums2...)
 	hash2 := vs2.WriteValue(l2).TargetHash()
 	vs2.Commit(vs1.Root(), vs1.Root())
 	refList2 := vs2.ReadValue(hash2).(List)
@@ -991,18 +1046,20 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	assert := assert.New(t)
 
+	vrw := newTestValueStore()
+
 	newSequenceMetaTuple := func(vs ...Value) metaTuple {
-		seq := newListLeafSequence(nil, vs...)
+		seq := newListLeafSequence(vrw, vs...)
 		list := newList(seq)
-		return newMetaTuple(NewRef(list), orderedKeyFromInt(len(vs)), uint64(len(vs)), list)
+		return newMetaTuple(vrw.WriteValue(list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
 	}
 
 	m1 := newSequenceMetaTuple(Number(1), Number(2), Number(3))
 	m2 := newSequenceMetaTuple(Number(4), Number(5), Number(6), Number(7), Number(8))
 	m3 := newSequenceMetaTuple(Number(9), Number(10), Number(11), Number(12), Number(13), Number(14), Number(15))
 
-	l1 := newList(newListMetaSequence(1, []metaTuple{m1, m3}, nil))     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
-	l2 := newList(newListMetaSequence(1, []metaTuple{m1, m2, m3}, nil)) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
+	l1 := newList(newListMetaSequence(1, []metaTuple{m1, m3}, vrw))     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
+	l2 := newList(newListMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
 
 	diff := accumulateDiffSplices(l2, l1)
 
@@ -1018,21 +1075,22 @@ func TestListTypeAfterMutations(t *testing.T) {
 	defer normalProductionChunks()
 
 	assert := assert.New(t)
+	vrw := newTestValueStore()
 
 	test := func(n int, c interface{}) {
 		values := generateNumbersAsValues(n)
 
-		l := NewList(values...)
+		l := NewList(vrw, values...)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.sequence())
 		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
 
-		l = l.Edit().Append(String("a")).List(nil)
+		l = l.Edit().Append(String("a")).List()
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.sequence())
 		assert.True(TypeOf(l).Equals(MakeListType(MakeUnionType(NumberType, StringType))))
 
-		l = l.Edit().Splice(l.Len()-1, 1).List(nil)
+		l = l.Edit().Splice(l.Len()-1, 1).List()
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.sequence())
 		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
@@ -1054,12 +1112,12 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 	}
 
 	tl := newTestList(1024)
-	nl := tl.toList()
+	nl := tl.toList(vs)
 
 	for len(tl) > 0 {
 		tl = tl[:len(tl)-1]
-		nl = reload(nl.Edit().RemoveAt(uint64(len(tl))).List(nil))
-		assert.True(tl.toList().Equals(nl))
+		nl = reload(nl.Edit().RemoveAt(uint64(len(tl))).List())
+		assert.True(tl.toList(vs).Equals(nl))
 	}
 }
 
@@ -1086,11 +1144,11 @@ func TestListConcat(t *testing.T) {
 			listSlice[i] = Number(r.Intn(size))
 		}
 
-		list := listSlice.toList()
+		list := listSlice.toList(vs)
 
 		for i := from; i < to; i += by {
-			fst := reload(vs, listSlice[:i].toList())
-			snd := reload(vs, listSlice[i:].toList())
+			fst := reload(vs, listSlice[:i].toList(vs))
+			snd := reload(vs, listSlice[i:].toList(vs))
 			actual := fst.Concat(snd)
 			assert.True(list.Equals(actual),
 				"fail at %d/%d (with expected length %d, actual %d)", i, size, list.Len(), actual.Len())
@@ -1113,6 +1171,8 @@ func TestListConcat(t *testing.T) {
 func TestListConcatDifferentTypes(t *testing.T) {
 	assert := assert.New(t)
 
+	vrw := newTestValueStore()
+
 	fst := generateNumbersAsValuesFromToBy(0, testListSize/2, 1)
 	snd := generateNumbersAsStructsFromToBy(testListSize/2, testListSize, 1)
 
@@ -1120,13 +1180,15 @@ func TestListConcatDifferentTypes(t *testing.T) {
 	whole = append(whole, fst...)
 	whole = append(whole, snd...)
 
-	concat := NewList(fst...).Concat(NewList(snd...))
-	assert.True(NewList(whole...).Equals(concat))
+	concat := NewList(vrw, fst...).Concat(NewList(vrw, snd...))
+	assert.True(NewList(vrw, whole...).Equals(concat))
 }
 
 func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert := assert.New(t)
-	list := NewList(
+	vrw := newTestValueStore()
+
+	list := NewList(vrw,
 		NewStruct("Foo", StructData{
 			"a": Number(1),
 		}),
@@ -1144,10 +1206,12 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 }
 
 func TestListWithNil(t *testing.T) {
+	vrw := newTestValueStore()
+
 	assert.Panics(t, func() {
-		NewList(nil)
+		NewList(vrw, nil)
 	})
 	assert.Panics(t, func() {
-		NewList(Number(42), nil)
+		NewList(vrw, Number(42), nil)
 	})
 }
