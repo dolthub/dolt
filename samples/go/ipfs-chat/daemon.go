@@ -17,20 +17,24 @@ import (
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
 )
 
-func runDaemon(topic string, interval time.Duration, networkDS, localDS string) {
+func runDaemon(topic string, interval time.Duration, networkDS, localDS string, netNodeIdx, localNodeIdx int) {
 	dbg.SetLogger(log.New(os.Stdout, "", 0))
 
+	ipfs.NodeIndex = netNodeIdx
 	sourceSp, err := spec.ForDataset(networkDS)
 	d.CheckErrorNoUsage(err)
 	source := sourceSp.GetDataset()
 	source, err = InitDatabase(source)
 	d.PanicIfError(err)
 
+	ipfs.NodeIndex = localNodeIdx
 	destSp, err := spec.ForDataset(localDS)
 	d.CheckErrorNoUsage(err)
 	dest := destSp.GetDataset()
 	dest, err = InitDatabase(dest)
 	d.PanicIfError(err)
+
+	ipfs.NodeIndex = -1
 
 	fmt.Printf("Replicating %s to %s...\n", sourceSp.String(), destSp.String())
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"sync"
 
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
@@ -20,11 +21,18 @@ import (
 	"github.com/ipfs/go-ipfs/blocks/blockstore"
 	"github.com/ipfs/go-ipfs/blockservice"
 	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/repo"
+	"github.com/ipfs/go-ipfs/repo/config"
 	"github.com/ipfs/go-ipfs/repo/fsrepo"
 )
 
 var (
 	CurrentNode *core.IpfsNode
+
+	// Ugg, such a hack. Setting this to an integer >= 0 ** <= 9 will cause
+	// NewChunkStore to alter the api, http, and swarm ports for this IPFS node
+	// to get reset to a port ending in that digit.
+	NodeIndex int = -1
 )
 
 // Creates a new ChunkStore backed by IPFS.
@@ -37,9 +45,12 @@ var (
 // This should ideally be done with IPNS, but that is currently too slow to be
 // practical.
 //
-// This function requires an IPFS repo to already be configured on the local
-// machine. The default location is ~/.ipfs, but this can be configured with
-// the IPFS_PATH environment variable, or IPFS_LOCAL_PATH if "local" is true.
+// This function creates an IPFS repo at the appropriate path if one doesn't
+// already exist. The default location is ~/.ipfs, but this can be configured with
+// the IPFS_PATH environment variable, or IPFS_LOCAL_PATH if "local" is true. If
+// the global NodeIndex variable has been set to a number between 0 and 9
+// inclusive, the api, http, and swarm ports will be modified to end in with
+// that digit. (e.g. if NodeIndex == 3, API port will be set to 5003)
 //
 // If local is true, only the local IPFS blockstore is used for both reads and
 // write. If local is false, then reads will fall through to the network and
@@ -47,7 +58,17 @@ var (
 func NewChunkStore(name string, local bool) *chunkStore {
 	p := getIPFSDir(local)
 	r, err := fsrepo.Open(p)
+	if _, ok := err.(fsrepo.NoRepoError); ok {
+		var conf *config.Config
+		conf, err = config.Init(os.Stdout, 2048)
+		d.Chk.NoError(err)
+		err = fsrepo.Init(p, conf)
+		d.Chk.NoError(err)
+		r, err = fsrepo.Open(p)
+	}
 	d.CheckError(err)
+
+	resetRepoConfigPorts(r)
 
 	cfg := &core.BuildCfg{
 		Repo:   r,
@@ -269,4 +290,25 @@ func (cs *chunkStore) Stats() interface{} {
 
 func (cs *chunkStore) Close() error {
 	return cs.node.Close()
+}
+
+func resetRepoConfigPorts(r repo.Repo) {
+	if NodeIndex < 0 || NodeIndex > 9 {
+		return
+	}
+
+	apiPort := fmt.Sprintf("500%d", NodeIndex)
+	gatewayPort := fmt.Sprintf("808%d", NodeIndex)
+	swarmPort := fmt.Sprintf("400%d", NodeIndex)
+
+	rc, err := r.Config()
+	d.CheckError(err)
+
+	rc.Addresses.API = strings.Replace(rc.Addresses.API, "5001", apiPort, -1)
+	rc.Addresses.Gateway = strings.Replace(rc.Addresses.Gateway, "8080", gatewayPort, -1)
+	for i, addr := range rc.Addresses.Swarm {
+		rc.Addresses.Swarm[i] = strings.Replace(addr, "4001", swarmPort, -1)
+	}
+	err = r.SetConfig(rc)
+	d.CheckError(err)
 }

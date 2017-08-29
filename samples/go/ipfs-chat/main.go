@@ -9,6 +9,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
@@ -44,6 +45,7 @@ func main() {
 	clientCmd := kingpin.Command("client", "runs the ipfs-chat client UI")
 	clientTopic := clientCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
 	username := clientCmd.Flag("username", "username to sign in as").String()
+	nodeIdx := clientCmd.Flag("node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
 	clientDS := clientCmd.Arg("dataset", "the dataset spec to store chat data in").Required().String()
 
 	importCmd := kingpin.Command("import", "imports data into a chat")
@@ -53,28 +55,33 @@ func main() {
 	daemonCmd := kingpin.Command("daemon", "runs a daemon that simulates filecoin, eagerly storing all chunks for a chat")
 	daemonTopic := daemonCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
 	daemonInterval := daemonCmd.Flag("interval", "amount of time to wait before publishing state to network").Default("5s").Duration()
+	netNodeIdx := daemonCmd.Flag("net-node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
+	localNodeIdx := daemonCmd.Flag("local-node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
 	daemonNetworkDS := daemonCmd.Arg("network-dataset", "the dataset spec to use to read and write data to the IPFS network").Required().String()
 	daemonLocalDS := daemonCmd.Arg("local-dataset", "the dataset spec to use to read and write data locally").Required().String()
 
 	kingpin.CommandLine.Help = "A demonstration of using Noms to build a scalable multiuser collaborative application."
 
+	expandRLimit()
 	switch kingpin.Parse() {
 	case "client":
-		runClient(*username, *clientTopic, *clientDS)
+		runClient(*username, *clientTopic, *clientDS, *nodeIdx)
 	case "import":
 		runImport(*importDir, *importDS)
 	case "daemon":
-		runDaemon(*daemonTopic, *daemonInterval, *daemonNetworkDS, *daemonLocalDS)
+		runDaemon(*daemonTopic, *daemonInterval, *daemonNetworkDS, *daemonLocalDS, *netNodeIdx, *localNodeIdx)
 	}
 }
 
-func runClient(username, topic, clientDS string) {
+func runClient(username, topic, clientDS string, nodeIdx int) {
 	var displayingSearchResults = false
 
+	ipfs.NodeIndex = nodeIdx
 	dsSpec := clientDS
 	sp, err := spec.ForDataset(dsSpec)
 	d.CheckErrorNoUsage(err)
 	ds := sp.GetDataset()
+	ipfs.NodeIndex = -1
 
 	ds, err = InitDatabase(ds)
 	d.PanicIfError(err)
@@ -451,4 +458,19 @@ func highlightTerms(s string, terms []string) string {
 		})
 	}
 	return s
+}
+
+// IPFS can use a lot of file decriptors. There are several bugs in the IPFS
+// repo about this and plans to improve. For the time being, we bump the limits
+// for this process.
+func expandRLimit() {
+	var rLimit syscall.Rlimit
+	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	d.Chk.NoError(err, "Unable to query rlimit: %s", err)
+	if rLimit.Cur < rLimit.Max {
+		rLimit.Max = 64000
+		rLimit.Cur = 64000
+		err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+		d.Chk.NoError(err, "Unable to increase number of open files limit: %s", err)
+	}
 }
