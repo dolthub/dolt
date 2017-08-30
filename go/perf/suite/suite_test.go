@@ -141,6 +141,7 @@ func TestSuite(t *testing.T) {
 }
 
 func TestSuiteWithMem(t *testing.T) {
+	t.Skip("Flaky on Jenkins")
 	runTestSuite(t, true)
 }
 
@@ -249,7 +250,7 @@ func runTestSuite(t *testing.T, mem bool) {
 }
 
 func TestPrefixFlag(t *testing.T) {
-	t.Skip("Fails on Jenkins sometimes")
+	t.Skip("Flaky on Jenkins")
 	assert := assert.New(t)
 
 	// Write test results to a temporary database.
@@ -280,7 +281,7 @@ func TestPrefixFlag(t *testing.T) {
 }
 
 func TestRunFlag(t *testing.T) {
-	t.Skip("Fails on Jenkins most of the times")
+	t.Skip("Flaky on Jenkins")
 	assert := assert.New(t)
 
 	type expect struct {
