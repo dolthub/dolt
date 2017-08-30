@@ -67,12 +67,15 @@ type hexWriter struct {
 
 func (w *hexWriter) Write(p []byte) (n int, err error) {
 	for _, v := range p {
+		if !w.sizeWritten && len(p) > 16 {
+			w.hrs.write("  // ")
+			w.hrs.write(humanize.Bytes(w.size))
+			w.sizeWritten = true
+			w.hrs.indent()
+			w.hrs.newLine()
+		}
+
 		if w.count == 16 {
-			if !w.sizeWritten {
-				w.hrs.write("  // ")
-				w.hrs.write(humanize.Bytes(w.size))
-				w.sizeWritten = true
-			}
 			w.hrs.newLine()
 			w.count = 0
 		} else if w.count != 0 {
@@ -89,6 +92,12 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 		n++
 		w.count++
 	}
+
+	if w.sizeWritten {
+		w.hrs.outdent()
+		w.hrs.newLine()
+	}
+
 	return
 }
 
@@ -103,10 +112,11 @@ func (w *hrsWriter) Write(v Value) {
 		w.write(strconv.Quote(string(v.(String))))
 
 	case BlobKind:
-		w.maybeWriteIndentation()
+		w.write("blob {")
 		blob := v.(Blob)
 		encoder := &hexWriter{hrs: w, size: blob.Len()}
 		_, w.err = io.Copy(encoder, blob.Reader())
+		w.write("}")
 
 	case ListKind:
 		w.write("[")

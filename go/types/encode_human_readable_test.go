@@ -149,26 +149,26 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
 
 func TestWriteHumanReadableBlob(t *testing.T) {
 	vrw := newTestValueStore()
-	assertWriteHRSEqual(t, "", NewEmptyBlob(vrw))
+	assertWriteHRSEqual(t, "blob {}", NewEmptyBlob(vrw))
 
 	b1 := NewBlob(vrw, bytes.NewBuffer([]byte{0x01}))
-	assertWriteHRSEqual(t, "01", b1)
+	assertWriteHRSEqual(t, "blob {01}", b1)
 
 	b2 := NewBlob(vrw, bytes.NewBuffer([]byte{0x01, 0x02}))
-	assertWriteHRSEqual(t, "01 02", b2)
+	assertWriteHRSEqual(t, "blob {01 02}", b2)
 
 	b3 := NewBlob(vrw, bytes.NewBuffer([]byte{
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 	}))
-	assertWriteHRSEqual(t, "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f", b3)
+	assertWriteHRSEqual(t, "blob {00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f}", b3)
 
 	b4 := NewBlob(vrw, bytes.NewBuffer([]byte{
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 		0x10,
 	}))
-	assertWriteHRSEqual(t, "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  // 17 B\n10", b4)
+	assertWriteHRSEqual(t, "blob {  // 17 B\n  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  10\n}", b4)
 
 	bs := make([]byte, 256)
 	for i := range bs {
@@ -176,12 +176,12 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 	}
 
 	b5 := NewBlob(vrw, bytes.NewBuffer(bs))
-	assertWriteHRSEqual(t, "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  // 256 B\n10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f\n20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f\n30 31 32 33 34 35 36 37 38 39 3a 3b 3c 3d 3e 3f\n40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f\n50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f\n60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f\n70 71 72 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f\n80 81 82 83 84 85 86 87 88 89 8a 8b 8c 8d 8e 8f\n90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f\na0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af\nb0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc bd be bf\nc0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce cf\nd0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc dd de df\ne0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef\nf0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe ff", b5)
+	assertWriteHRSEqual(t, "blob {  // 256 B\n  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f\n  20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f\n  30 31 32 33 34 35 36 37 38 39 3a 3b 3c 3d 3e 3f\n  40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f\n  50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f\n  60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f\n  70 71 72 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f\n  80 81 82 83 84 85 86 87 88 89 8a 8b 8c 8d 8e 8f\n  90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f\n  a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af\n  b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc bd be bf\n  c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce cf\n  d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc dd de df\n  e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef\n  f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe ff\n}", b5)
 
 	b6 := NewBlob(vrw, bytes.NewBuffer(make([]byte, 16*100)))
-	row := strings.Repeat("00 ", 15) + "00"
-	s := strings.Repeat(row+"\n", 98) + row
-	assertWriteHRSEqual(t, row+"  // 1.6 kB\n"+s, b6)
+	row := "  " + strings.Repeat("00 ", 15) + "00\n"
+	s := strings.Repeat(row, 100)
+	assertWriteHRSEqual(t, "blob {  // 1.6 kB\n"+s+"}", b6)
 }
 
 func TestWriteHumanReadableListOfBlob(t *testing.T) {
@@ -195,7 +195,7 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 		0x10,
 	}))
 	l := NewList(vrw, b1, NewEmptyBlob(vrw), b2, b3)
-	assertWriteHRSEqual(t, "[  // 4 items\n  01,\n  ,\n  02,\n  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  // 17 B\n  10,\n]", l)
+	assertWriteHRSEqual(t, "[  // 4 items\n  blob {01},\n  blob {},\n  blob {02},\n  blob {  // 17 B\n    00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n    10\n  },\n]", l)
 }
 
 func TestWriteHumanReadableType(t *testing.T) {
