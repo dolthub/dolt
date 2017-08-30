@@ -327,7 +327,7 @@ func TestDecodeMissingField(t *testing.T) {
 	var s S
 	assertDecodeErrorMessage(t, types.NewStruct("S", types.StructData{
 		"a": types.Number(42),
-	}), &s, "Cannot unmarshal struct S {\n  a: Number,\n} into Go value of type marshal.S, missing field \"b\"")
+	}), &s, "Cannot unmarshal Struct S {\n  a: Number,\n} into Go value of type marshal.S, missing field \"b\"")
 }
 
 func TestDecodeEmbeddedStruct(tt *testing.T) {
@@ -873,7 +873,7 @@ func TestDecodeOntoNonSupportedInterface(t *testing.T) {
 func TestDecodeOntoInterfaceStruct(t *testing.T) {
 	// Not implemented because it requires Go 1.7.
 	var i interface{}
-	assertDecodeErrorMessage(t, types.NewStruct("", types.StructData{}), &i, "Cannot unmarshal struct {} into Go value of type interface {}")
+	assertDecodeErrorMessage(t, types.NewStruct("", types.StructData{}), &i, "Cannot unmarshal Struct {} into Go value of type interface {}")
 }
 
 func TestDecodeSet(t *testing.T) {
@@ -1043,7 +1043,7 @@ func TestDecodeSetWrongMapType(t *testing.T) {
 		"a": types.NewMap(vs, types.Number(0), types.EmptyStruct),
 	}), &T3{})
 	assert.Error(err)
-	assert.Equal(`Cannot unmarshal Map<Number, struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
+	assert.Equal(`Cannot unmarshal Map<Number, Struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
 }
 
 func TestDecodeOmitEmpty(t *testing.T) {
@@ -1106,7 +1106,7 @@ func TestDecodeOriginalReceiveTypeError(t *testing.T) {
 	var actual S
 	err := Unmarshal(input, &actual)
 	assert.Error(err)
-	assert.Equal(`Cannot unmarshal struct S {} into Go value of type marshal.S, field with tag "original" must have type Struct`, err.Error())
+	assert.Equal(`Cannot unmarshal Struct S {} into Go value of type marshal.S, field with tag "original" must have type Struct`, err.Error())
 }
 
 func TestDecodeCanSkipUnexportedField(t *testing.T) {

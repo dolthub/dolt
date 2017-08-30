@@ -275,7 +275,7 @@ func ExampleMarshalType() {
 	}
 
 	fmt.Println(personNomsType.Describe())
-	// Output: struct Person {
+	// Output: Struct Person {
 	//   female: Bool,
 	//   given: String,
 	// }

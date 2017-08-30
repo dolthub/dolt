@@ -320,11 +320,11 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 	k1 := createStruct("TestKey", "name", "n1", "label", "l1")
 
 	expected1 := `(root) {
--   TestKey {
+-   struct TestKey {
 -     label: "l1",
 -     name: "n1",
 -   }: true
-+   TestKey {
++   struct TestKey {
 +     label: "l1",
 +     name: "n1",
 +   }: false

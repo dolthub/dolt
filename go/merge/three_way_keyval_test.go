@@ -98,7 +98,7 @@ func (s *ThreeWayStructMergeSuite) SetupSuite() {
 		}
 		return
 	}
-	s.typeStr = "struct"
+	s.typeStr = "Struct"
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_DoNothing() {
@@ -221,8 +221,8 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
 	ma := kvs{"r1", strRef, "r2", strRef}
 	mb := kvs{"r1", numRef, "r2", strRef}
 
-	s.tryThreeWayConflict(s.create(ma), s.create(mb), s.create(m), "Cannot merge struct Foo")
-	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Number and struct")
+	s.tryThreeWayConflict(s.create(ma), s.create(mb), s.create(m), "Cannot merge Struct Foo")
+	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Number and Struct Foo")
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflict() {

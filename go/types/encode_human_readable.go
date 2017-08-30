@@ -174,7 +174,8 @@ func (w *hrsWriter) Write(v Value) {
 }
 
 func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
-	if printStructName {
+	w.write("struct ")
+	if printStructName && v.name != "" {
 		w.write(v.name)
 		w.write(" ")
 	}
@@ -266,7 +267,7 @@ func (w *hrsWriter) writeStructType(t *Type, seenStructs map[*Type]struct{}) {
 	seenStructs[t] = struct{}{}
 
 	desc := t.Desc.(StructDesc)
-	w.write("struct ")
+	w.write("Struct ")
 	if desc.Name != "" {
 		w.write(desc.Name + " ")
 	}
