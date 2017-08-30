@@ -195,27 +195,6 @@ func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
 	w.write("}")
 }
 
-func (w *hrsWriter) WriteTagged(v Value) {
-	t := TypeOf(v)
-	switch t.TargetKind() {
-	case BoolKind, NumberKind, StringKind:
-		w.Write(v)
-	case BlobKind, ListKind, MapKind, RefKind, SetKind, TypeKind, CycleKind:
-		w.writeType(t, map[*Type]struct{}{})
-		w.write("(")
-		w.Write(v)
-		w.write(")")
-	case StructKind:
-		w.writeType(t, map[*Type]struct{}{})
-		w.write("(")
-		w.writeStruct(v.(Struct), false)
-		w.write(")")
-	case ValueKind:
-	default:
-		panic("unreachable")
-	}
-}
-
 func (w *hrsWriter) writeSize(v Value) {
 	switch v.Kind() {
 	case ListKind, MapKind, SetKind:
@@ -356,20 +335,5 @@ func WriteEncodedValueMaxLines(w io.Writer, v Value, maxLines uint32) error {
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
 	hrs := &hrsWriter{w: mlw, floatFormat: 'g'}
 	hrs.Write(v)
-	return hrs.err
-}
-
-func EncodedValueWithTags(v Value) string {
-	var buf bytes.Buffer
-	w := &hrsWriter{w: &buf, floatFormat: 'g'}
-	w.WriteTagged(v)
-	d.Chk.NoError(w.err)
-	return buf.String()
-}
-
-// WriteEncodedValueWithTags writes the serialization of a value prefixed by its type.
-func WriteEncodedValueWithTags(w io.Writer, v Value) error {
-	hrs := &hrsWriter{w: w, floatFormat: 'g'}
-	hrs.WriteTagged(v)
 	return hrs.err
 }
