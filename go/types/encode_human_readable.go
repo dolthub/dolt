@@ -166,16 +166,16 @@ func (w *hrsWriter) Write(v Value) {
 		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
-		w.writeStruct(v.(Struct), true)
+		w.writeStruct(v.(Struct))
 
 	default:
 		panic("unreachable")
 	}
 }
 
-func (w *hrsWriter) writeStruct(v Struct, printStructName bool) {
+func (w *hrsWriter) writeStruct(v Struct) {
 	w.write("struct ")
-	if printStructName && v.name != "" {
+	if v.name != "" {
 		w.write(v.name)
 		w.write(" ")
 	}
