@@ -143,6 +143,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("}")
 
 	case RefKind:
+		w.write("#")
 		w.write(v.(Ref).TargetHash().String())
 
 	case SetKind:

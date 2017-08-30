@@ -474,7 +474,7 @@ func TestNomsDiffPrintType(t *testing.T) {
 func TestNomsDiffPrintRef(t *testing.T) {
 	assert := assert.New(t)
 
-	expected := "-   fckcbt7nk5jl4arco2dk7r9nj7abb6ci\n+   i7d3u5gekm48ot419t2cot6cnl7ltcah\n"
+	expected := "-   #fckcbt7nk5jl4arco2dk7r9nj7abb6ci\n+   #i7d3u5gekm48ot419t2cot6cnl7ltcah\n"
 	expectedPaths1 := []string{``}
 	l1 := createList(1)
 	l2 := createList(2)

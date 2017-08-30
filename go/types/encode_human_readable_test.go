@@ -56,7 +56,7 @@ func TestWriteHumanReadableRef(t *testing.T) {
 
 	x := Number(42)
 	rv := vs.WriteValue(x)
-	assertWriteHRSEqual(t, "0123456789abcdefghijklmnopqrstuv", rv)
+	assertWriteHRSEqual(t, "#0123456789abcdefghijklmnopqrstuv", rv)
 }
 
 func TestWriteHumanReadableCollections(t *testing.T) {
