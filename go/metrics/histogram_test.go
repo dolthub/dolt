@@ -49,6 +49,14 @@ func TestHistogramBasic(t *testing.T) {
 	assert.Equal(uint64(144), h.Mean())
 }
 
+func TestHistogramLarge(t *testing.T) {
+	assert := assert.New(t)
+	h := Histogram{}
+	h.Sample(0xfffffffffffffe30)
+	assert.Equal(uint64(1), h.Samples())
+	assert.Equal(uint64(0xfffffffffffffe30), h.Sum())
+}
+
 func TestHistogramAdd(t *testing.T) {
 	assert := assert.New(t)
 

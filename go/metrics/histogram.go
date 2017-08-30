@@ -38,7 +38,7 @@ func identToString(v uint64) string {
 	return fmt.Sprintf("%d", v)
 }
 
-const bucketCount = 63
+const bucketCount = 64
 
 // Sample adds a uint64 data point to the histogram
 func (h *Histogram) Sample(v uint64) {
@@ -76,8 +76,8 @@ func (h Histogram) bucketVal(bucket int) uint64 {
 	return 1 << (uint64(bucket))
 }
 
-// Sum return the sum of sampled values, given that each sample is clamped to
-// the mid-point value of the bucket in which it is recorded.
+// Sum return the sum of sampled values, note that Sum can be overflowed without
+// overflowing the histogram buckets.
 func (h Histogram) Sum() uint64 {
 	return h.sum
 }
