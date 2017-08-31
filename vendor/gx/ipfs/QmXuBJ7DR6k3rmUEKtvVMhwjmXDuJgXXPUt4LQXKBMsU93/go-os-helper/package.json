@@ -1,0 +1,15 @@
+{
+  "author": "Kubuxu",
+  "bugs": {
+    "URL": "https://github.com/Kubuxu/go-os-helper/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/Kubuxu/go-os-helper"
+  },
+  "gxVersion": "0.9.1",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-os-helper",
+  "version": "0.0.0"
+}
+

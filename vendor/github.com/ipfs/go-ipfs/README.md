@@ -44,6 +44,7 @@ Please put all issues regarding the Go IPFS _implementation_ in [this repo](http
 - [Todo](#todo)
 - [Contributing](#contributing)
   - [Want to hack on IPFS?](#want-to-hack-on-ipfs)
+  - [Want to read our code?](#want-to-read-our-code)
 - [License](#license)
 
 ## Security Issues
@@ -306,6 +307,18 @@ This repository falls under the IPFS [Code of Conduct](https://github.com/ipfs/c
 ### Want to hack on IPFS?
 
 [![](https://cdn.rawgit.com/jbenet/contribute-ipfs-gif/master/img/contribute.gif)](https://github.com/ipfs/community/blob/master/contributing.md)
+
+### Want to read our code?
+
+Some places to get you started. (WIP)
+
+Main file: [cmd/ipfs/main.go](https://github.com/ipfs/go-ipfs/blob/master/cmd/ipfs/main.go) <br>
+CLI Commands: [core/commands/](https://github.com/ipfs/go-ipfs/tree/master/core/commands) <br>
+Bitswap (the data trading engine): [exchange/bitswap/](https://github.com/ipfs/go-ipfs/tree/master/exchange/bitswap)
+
+DHT: https://github.com/libp2p/go-libp2p-kad-dht <br>
+PubSub: https://github.com/libp2p/go-floodsub <br>
+libp2p: https://github.com/libp2p/go-libp2p
 
 ## License
 

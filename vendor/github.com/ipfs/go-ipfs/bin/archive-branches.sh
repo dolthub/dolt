@@ -13,6 +13,7 @@ api_repo="repos/$org/$repo"
 exclusions=(
 	'master'
 	'release'
+	'feat/zcash'
 )
 
 gh_api_next() {
@@ -20,7 +21,7 @@ gh_api_next() {
 	echo "$links" | grep '; rel="next"' >/dev/null || return
 	link=$(echo "$links" | grep '; rel="next"' | sed -e 's/^<//' -e 's/>.*//')
 
-	curl $auth -f -sD >(gh_api_next) $link
+	curl $auth -f -sD >(gh_api_next) "$link"
 }
 
 gh_api() {
@@ -49,7 +50,7 @@ git remote add archived "git@github.com:$org/$arch_repo.git" || true
 
 cat <(active_branches) <(pr_branches) <((IFS=$'\n'; echo "${exclusions[*]}")) \
 	| sort -u | comm - <(origin_refs | sort) -13 |\
-	while read ref; do
+	while read -r ref; do
 		git push archived "origin/$ref:refs/heads/$ref/$(date --rfc-3339=date)"
 		git push origin --delete "$ref"
 	done

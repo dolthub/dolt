@@ -5,56 +5,86 @@ import (
 	"fmt"
 	"time"
 
-	blocks "github.com/ipfs/go-ipfs/blocks/blockstore"
 	backoff "gx/ipfs/QmPJUtEJsm5YLUWhF6imvyCH8KZXRJa9Wup7FDMwTy5Ufz/backoff"
 	routing "gx/ipfs/QmPjTrrSfE6TzLv6ya6VWhGcCgPrUAdcgrDcQyRDX2VyW1/go-libp2p-routing"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
+	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
 )
 
 var log = logging.Logger("reprovider")
 
+//KeyChanFunc is function streaming CIDs to pass to content routing
+type KeyChanFunc func(context.Context) (<-chan *cid.Cid, error)
+type doneFunc func(error)
+
 type Reprovider struct {
+	ctx     context.Context
+	trigger chan doneFunc
+
 	// The routing system to provide values through
 	rsys routing.ContentRouting
 
-	// The backing store for blocks to be provided
-	bstore blocks.Blockstore
+	keyProvider KeyChanFunc
 }
 
-func NewReprovider(rsys routing.ContentRouting, bstore blocks.Blockstore) *Reprovider {
+// NewReprovider creates new Reprovider instance.
+func NewReprovider(ctx context.Context, rsys routing.ContentRouting, keyProvider KeyChanFunc) *Reprovider {
 	return &Reprovider{
-		rsys:   rsys,
-		bstore: bstore,
+		ctx:     ctx,
+		trigger: make(chan doneFunc),
+
+		rsys:        rsys,
+		keyProvider: keyProvider,
 	}
 }
 
-func (rp *Reprovider) ProvideEvery(ctx context.Context, tick time.Duration) {
+// Run re-provides keys with 'tick' interval or when triggered
+func (rp *Reprovider) Run(tick time.Duration) {
 	// dont reprovide immediately.
 	// may have just started the daemon and shutting it down immediately.
 	// probability( up another minute | uptime ) increases with uptime.
 	after := time.After(time.Minute)
+	var done doneFunc
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-after:
-			err := rp.Reprovide(ctx)
-			if err != nil {
-				log.Debug(err)
-			}
-			after = time.After(tick)
+		if tick == 0 {
+			after = make(chan time.Time)
 		}
+
+		select {
+		case <-rp.ctx.Done():
+			return
+		case done = <-rp.trigger:
+		case <-after:
+		}
+
+		//'mute' the trigger channel so when `ipfs bitswap reprovide` is called
+		//a 'reprovider is already running' error is returned
+		unmute := rp.muteTrigger()
+
+		err := rp.Reprovide()
+		if err != nil {
+			log.Debug(err)
+		}
+
+		if done != nil {
+			done(err)
+		}
+
+		unmute()
+
+		after = time.After(tick)
 	}
 }
 
-func (rp *Reprovider) Reprovide(ctx context.Context) error {
-	keychan, err := rp.bstore.AllKeysChan(ctx)
+// Reprovide registers all keys given by rp.keyProvider to libp2p content routing
+func (rp *Reprovider) Reprovide() error {
+	keychan, err := rp.keyProvider(rp.ctx)
 	if err != nil {
-		return fmt.Errorf("Failed to get key chan from blockstore: %s", err)
+		return fmt.Errorf("Failed to get key chan: %s", err)
 	}
 	for c := range keychan {
 		op := func() error {
-			err := rp.rsys.Provide(ctx, c, true)
+			err := rp.rsys.Provide(rp.ctx, c, true)
 			if err != nil {
 				log.Debugf("Failed to provide key: %s", err)
 			}
@@ -70,4 +100,42 @@ func (rp *Reprovider) Reprovide(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// Trigger starts reprovision process in rp.Run and waits for it
+func (rp *Reprovider) Trigger(ctx context.Context) error {
+	progressCtx, done := context.WithCancel(ctx)
+
+	var err error
+	df := func(e error) {
+		err = e
+		done()
+	}
+
+	select {
+	case <-rp.ctx.Done():
+		return context.Canceled
+	case <-ctx.Done():
+		return context.Canceled
+	case rp.trigger <- df:
+		<-progressCtx.Done()
+		return err
+	}
+}
+
+func (rp *Reprovider) muteTrigger() context.CancelFunc {
+	ctx, cf := context.WithCancel(rp.ctx)
+	go func() {
+		defer cf()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case done := <-rp.trigger:
+				done(fmt.Errorf("reprovider is already running"))
+			}
+		}
+	}()
+
+	return cf
 }

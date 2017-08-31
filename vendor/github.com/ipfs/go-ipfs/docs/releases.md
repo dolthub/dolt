@@ -28,3 +28,4 @@ will be allowed up to release day.
     - [ ] IRC
     - [ ] Reddit
   - [ ] Blog post (at minimum, paste the changelog. optionally add context and thank contributors.)
+- [ ] Update HTTP-API Documentation on the Website using https://github.com/ipfs/http-api-docs

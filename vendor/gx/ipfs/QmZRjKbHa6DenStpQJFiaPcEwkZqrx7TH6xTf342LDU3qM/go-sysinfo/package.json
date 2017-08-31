@@ -1,0 +1,22 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/go-sysinfo/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/go-sysinfo"
+  },
+  "gxDependencies": [
+    {
+      "author": "dustin",
+      "hash": "QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K",
+      "name": "go-humanize",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-sysinfo",
+  "version": "0.0.0"
+}

@@ -21,10 +21,11 @@ var BitswapCmd = &cmds.Command{
 		ShortDescription: ``,
 	},
 	Subcommands: map[string]*cmds.Command{
-		"wantlist": showWantlistCmd,
-		"stat":     bitswapStatCmd,
-		"unwant":   unwantCmd,
-		"ledger":   ledgerCmd,
+		"wantlist":  showWantlistCmd,
+		"stat":      bitswapStatCmd,
+		"unwant":    unwantCmd,
+		"ledger":    ledgerCmd,
+		"reprovide": reprovideCmd,
 	},
 }
 
@@ -240,5 +241,32 @@ prints the ledger associated with a given peer.
 				out.Sent, out.Recv)
 			return buf, nil
 		},
+	},
+}
+
+var reprovideCmd = &cmds.Command{
+	Helptext: cmds.HelpText{
+		Tagline: "Trigger reprovider.",
+		ShortDescription: `
+Trigger reprovider to announce our data to network.
+`,
+	},
+	Run: func(req cmds.Request, res cmds.Response) {
+		nd, err := req.InvocContext().GetNode()
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		if !nd.OnlineMode() {
+			res.SetError(errNotOnline, cmds.ErrClient)
+			return
+		}
+
+		err = nd.Reprovider.Trigger(req.Context())
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
 	},
 }

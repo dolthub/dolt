@@ -24,8 +24,6 @@ import (
 	ds2 "github.com/ipfs/go-ipfs/thirdparty/datastore2"
 	"github.com/ipfs/go-ipfs/thirdparty/ipfsaddr"
 	unit "github.com/ipfs/go-ipfs/thirdparty/unit"
-	"gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
-	syncds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore/sync"
 
 	context "context"
 	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
@@ -180,7 +178,7 @@ func runFileCattingWorker(ctx context.Context, n *core.IpfsNode) error {
 	}
 
 	r := &repo.Mock{
-		D: ds2.CloserWrap(syncds.MutexWrap(datastore.NewMapDatastore())),
+		D: ds2.ThreadSafeCloserMapDatastore(),
 		C: *conf,
 	}
 	dummy, err := core.NewNode(ctx, &core.BuildCfg{

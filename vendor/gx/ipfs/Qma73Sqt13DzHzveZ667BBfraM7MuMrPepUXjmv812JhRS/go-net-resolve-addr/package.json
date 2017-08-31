@@ -1,0 +1,10 @@
+{
+  "name": "go-net-resolve-addr",
+  "author": "whyrusleeping",
+  "version": "0.0.0",
+  "language": "go",
+  "issues_url": "",
+  "gx": {
+    "dvcsimport": "github.com/jbenet/go-net-resolve-addr"
+  }
+}

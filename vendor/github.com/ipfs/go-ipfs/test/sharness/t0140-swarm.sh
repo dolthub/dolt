@@ -49,4 +49,52 @@ test_expect_success "cant trigger a dial backoff with swarm connect" '
 
 test_kill_ipfs_daemon
 
+announceCfg='["/ip4/127.0.0.1/tcp/4001", "/ip4/1.2.3.4/tcp/1234"]'
+test_expect_success "test_config_set succeeds" "
+  ipfs config --json Addresses.Announce '$announceCfg'
+"
+
+test_launch_ipfs_daemon
+
+test_expect_success 'Addresses.Announce affects addresses' '
+	ipfs swarm addrs local >actual &&
+	grep "/ip4/1.2.3.4/tcp/1234" actual &&
+	ipfs id -f"<addrs>" | xargs -n1 echo >actual &&
+	grep "/ip4/1.2.3.4/tcp/1234" actual
+'
+
+test_kill_ipfs_daemon
+
+noAnnounceCfg='["/ip4/1.2.3.4/tcp/1234"]'
+test_expect_success "test_config_set succeeds" "
+  ipfs config --json Addresses.NoAnnounce '$noAnnounceCfg'
+"
+
+test_launch_ipfs_daemon
+
+test_expect_success "Addresses.NoAnnounce affects addresses" '
+	ipfs swarm addrs local >actual &&
+  grep -v "/ip4/1.2.3.4/tcp/1234" actual &&
+	ipfs id -f"<addrs>" | xargs -n1 echo >actual &&
+  grep -v "/ip4/1.2.3.4/tcp/1234" actual
+'
+
+test_kill_ipfs_daemon
+
+noAnnounceCfg='["/ip4/1.2.3.4/ipcidr/16"]'
+test_expect_success "test_config_set succeeds" "
+  ipfs config --json Addresses.NoAnnounce '$noAnnounceCfg'
+"
+
+test_launch_ipfs_daemon
+
+test_expect_success "Addresses.NoAnnounce with /ipcidr affects addresses" '
+	ipfs swarm addrs local >actual &&
+  grep -v "/ip4/1.2.3.4/tcp/1234" actual &&
+	ipfs id -f"<addrs>" | xargs -n1 echo >actual &&
+  grep -v "/ip4/1.2.3.4/tcp/1234" actual
+'
+
+test_kill_ipfs_daemon
+
 test_done

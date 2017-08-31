@@ -1,0 +1,49 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/iptb"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/iptb"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji",
+      "name": "go-multiaddr",
+      "version": "1.2.4"
+    },
+    {
+      "author": "jbenet",
+      "hash": "QmX3U3YXCQ6UYBxq2LVWF8dARS1hPUTEYLrSx654Qyxyw6",
+      "name": "go-multiaddr-net",
+      "version": "1.5.5"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmVcLF2CgjQb5BWmYFWsDfxDjbzBfcChfdHRedxeL3dV4K",
+      "name": "cli",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZLUtHGe9HDQrreAYkXCzzK6mHVByV4MRd8heXAtV5wyS",
+      "name": "stump",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmRebo5SY2EajaMx2Fnom21KHPWSivJRJHYwe58nZ5N8yC",
+      "name": "go-ctrlnet",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.6.0",
+  "issues_url": "",
+  "language": "go",
+  "license": "",
+  "name": "iptb",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.2.2"
+}
+

@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/gorocheck"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/gorocheck"
+  },
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "",
+  "name": "gorocheck",
+  "version": "0.0.0"
+}

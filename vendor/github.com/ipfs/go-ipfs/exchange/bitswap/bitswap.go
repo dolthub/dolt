@@ -298,6 +298,14 @@ func (bs *Bitswap) CancelWants(cids []*cid.Cid, ses uint64) {
 // HasBlock announces the existance of a block to this bitswap service. The
 // service will potentially notify its peers.
 func (bs *Bitswap) HasBlock(blk blocks.Block) error {
+	return bs.receiveBlockFrom(blk, "")
+}
+
+// TODO: Some of this stuff really only needs to be done when adding a block
+// from the user, not when receiving it from the network.
+// In case you run `git blame` on this comment, I'll save you some time: ask
+// @whyrusleeping, I don't know the answers you seek.
+func (bs *Bitswap) receiveBlockFrom(blk blocks.Block, from peer.ID) error {
 	select {
 	case <-bs.process.Closing():
 		return errors.New("bitswap is closed")
@@ -317,8 +325,11 @@ func (bs *Bitswap) HasBlock(blk blocks.Block) error {
 	// it now as it requires more thought and isnt causing immediate problems.
 	bs.notifications.Publish(blk)
 
-	for _, s := range bs.SessionsForBlock(blk.Cid()) {
-		s.receiveBlockFrom("", blk)
+	k := blk.Cid()
+	ks := []*cid.Cid{k}
+	for _, s := range bs.SessionsForBlock(k) {
+		s.receiveBlockFrom(from, blk)
+		bs.CancelWants(ks, s.id)
 	}
 
 	bs.engine.AddBlock(blk)
@@ -379,21 +390,12 @@ func (bs *Bitswap) ReceiveMessage(ctx context.Context, p peer.ID, incoming bsmsg
 
 			bs.updateReceiveCounters(b)
 
-			k := b.Cid()
-			log.Event(ctx, "Bitswap.GetBlockRequest.End", k)
-
-			for _, ses := range bs.SessionsForBlock(k) {
-				ses.receiveBlockFrom(p, b)
-				bs.CancelWants([]*cid.Cid{k}, ses.id)
-			}
-
 			log.Debugf("got block %s from %s", b, p)
-			// TODO: rework this to not call 'HasBlock'. 'HasBlock' is really
-			// designed to be called when blocks are coming in from non-bitswap
-			// places (like the user manually adding data)
-			if err := bs.HasBlock(b); err != nil {
-				log.Warningf("ReceiveMessage HasBlock error: %s", err)
+
+			if err := bs.receiveBlockFrom(b, p); err != nil {
+				log.Warningf("ReceiveMessage recvBlockFrom error: %s", err)
 			}
+			log.Event(ctx, "Bitswap.GetBlockRequest.End", b.Cid())
 		}(block)
 	}
 	wg.Wait()

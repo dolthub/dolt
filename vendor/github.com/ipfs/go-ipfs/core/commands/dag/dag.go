@@ -1,8 +1,10 @@
 package dagcmd
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	cmds "github.com/ipfs/go-ipfs/commands"
@@ -11,6 +13,7 @@ import (
 	pin "github.com/ipfs/go-ipfs/pin"
 
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
+	mh "gx/ipfs/QmU9a9NV9RdPNwZQDYd5uKsm6N6LJLSvLbywDDYFbaaC6P/go-multihash"
 )
 
 var DagCmd = &cmds.Command{
@@ -24,13 +27,21 @@ to deprecate and replace the existing 'ipfs object' command moving forward.
 		`,
 	},
 	Subcommands: map[string]*cmds.Command{
-		"put": DagPutCmd,
-		"get": DagGetCmd,
+		"put":     DagPutCmd,
+		"get":     DagGetCmd,
+		"resolve": DagResolveCmd,
 	},
 }
 
+// OutputObject is the output type of 'dag put' command
 type OutputObject struct {
 	Cid *cid.Cid
+}
+
+// ResolveOutput is the output type of 'dag resolve' command
+type ResolveOutput struct {
+	Cid     *cid.Cid
+	RemPath string
 }
 
 var DagPutCmd = &cmds.Command{
@@ -48,6 +59,7 @@ into an object of the specified format.
 		cmds.StringOption("format", "f", "Format that the object will be added as.").Default("cbor"),
 		cmds.StringOption("input-enc", "Format that the input object will be.").Default("json"),
 		cmds.BoolOption("pin", "Pin this object when adding.").Default(false),
+		cmds.StringOption("hash", "Hash function to use").Default(""),
 	},
 	Run: func(req cmds.Request, res cmds.Response) {
 		n, err := req.InvocContext().GetNode()
@@ -64,17 +76,31 @@ into an object of the specified format.
 
 		ienc, _, _ := req.Option("input-enc").String()
 		format, _, _ := req.Option("format").String()
+		hash, _, err := req.Option("hash").String()
 		dopin, _, err := req.Option("pin").Bool()
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
 		}
 
+		// mhType tells inputParser which hash should be used. MaxUint64 means 'use
+		// default hash' (sha256 for cbor, sha1 for git..)
+		mhType := uint64(math.MaxUint64)
+
+		if hash != "" {
+			var ok bool
+			mhType, ok = mh.Names[hash]
+			if !ok {
+				res.SetError(fmt.Errorf("%s in not a valid multihash name", hash), cmds.ErrNormal)
+				return
+			}
+		}
+
 		if dopin {
 			defer n.Blockstore.PinLock().Unlock()
 		}
 
-		nds, err := coredag.ParseInputs(ienc, format, fi)
+		nds, err := coredag.ParseInputs(ienc, format, fi, mhType, -1)
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
@@ -165,4 +191,56 @@ var DagGetCmd = &cmds.Command{
 
 		res.SetOutput(out)
 	},
+}
+
+// DagResolveCmd returns address of highest block within a path and a path remainder
+var DagResolveCmd = &cmds.Command{
+	Helptext: cmds.HelpText{
+		Tagline: "Resolve ipld block",
+		ShortDescription: `
+'ipfs dag resolve' fetches a dag node from ipfs, prints it's address and remaining path.
+`,
+	},
+	Arguments: []cmds.Argument{
+		cmds.StringArg("ref", true, false, "The path to resolve").EnableStdin(),
+	},
+	Run: func(req cmds.Request, res cmds.Response) {
+		n, err := req.InvocContext().GetNode()
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		p, err := path.ParsePath(req.Arguments()[0])
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		obj, rem, err := n.Resolver.ResolveToLastNode(req.Context(), p)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		res.SetOutput(&ResolveOutput{
+			Cid:     obj.Cid(),
+			RemPath: path.Join(rem),
+		})
+	},
+	Marshalers: cmds.MarshalerMap{
+		cmds.Text: func(res cmds.Response) (io.Reader, error) {
+			output := res.Output().(*ResolveOutput)
+			buf := new(bytes.Buffer)
+			p := output.Cid.String()
+			if output.RemPath != "" {
+				p = path.Join([]string{p, output.RemPath})
+			}
+
+			buf.WriteString(p)
+
+			return buf, nil
+		},
+	},
+	Type: ResolveOutput{},
 }

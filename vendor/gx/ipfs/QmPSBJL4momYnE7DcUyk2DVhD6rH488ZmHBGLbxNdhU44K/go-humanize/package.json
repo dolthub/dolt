@@ -1,0 +1,14 @@
+{
+  "author": "dustin",
+  "bugs": {
+    "url": "https://github.com/dustin/go-humanize/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/dustin/go-humanize"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "go-humanize",
+  "version": "0.0.0"
+}

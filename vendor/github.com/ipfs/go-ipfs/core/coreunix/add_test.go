@@ -18,8 +18,8 @@ import (
 	"github.com/ipfs/go-ipfs/pin/gc"
 	"github.com/ipfs/go-ipfs/repo"
 	"github.com/ipfs/go-ipfs/repo/config"
+	ds2 "github.com/ipfs/go-ipfs/thirdparty/datastore2"
 	pi "github.com/ipfs/go-ipfs/thirdparty/posinfo"
-	"github.com/ipfs/go-ipfs/thirdparty/testutil"
 	"gx/ipfs/QmVA4mafxbfH5aEvNz8fyoxC6J1xhAtw88B4GerPznSZBg/go-block-format"
 
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
@@ -32,7 +32,7 @@ func TestAddRecursive(t *testing.T) {
 				PeerID: "Qmfoo", // required by offline node
 			},
 		},
-		D: testutil.ThreadSafeCloserMapDatastore(),
+		D: ds2.ThreadSafeCloserMapDatastore(),
 	}
 	node, err := core.NewNode(context.Background(), &core.BuildCfg{Repo: r})
 	if err != nil {
@@ -52,7 +52,7 @@ func TestAddGCLive(t *testing.T) {
 				PeerID: "Qmfoo", // required by offline node
 			},
 		},
-		D: testutil.ThreadSafeCloserMapDatastore(),
+		D: ds2.ThreadSafeCloserMapDatastore(),
 	}
 	node, err := core.NewNode(context.Background(), &core.BuildCfg{Repo: r})
 	if err != nil {
@@ -161,7 +161,7 @@ func testAddWPosInfo(t *testing.T, rawLeaves bool) {
 				PeerID: "Qmfoo", // required by offline node
 			},
 		},
-		D: testutil.ThreadSafeCloserMapDatastore(),
+		D: ds2.ThreadSafeCloserMapDatastore(),
 	}
 	node, err := core.NewNode(context.Background(), &core.BuildCfg{Repo: r})
 	if err != nil {

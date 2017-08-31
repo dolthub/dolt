@@ -140,7 +140,7 @@ test_expect_success "refs IPFS directory file through readonly API succeeds" '
 '
 
 test_expect_success "test gateway api is sanitized" '
-for cmd in "add" "block/put" "bootstrap" "config" "dht" "diag" "dns" "get" "id" "mount" "name/publish" "object/put" "object/new" "object/patch" "pin" "ping" "refs/local" "repo" "resolve" "stats" "swarm" "tour" "file" "update" "version" "bitswap"; do
+for cmd in "add" "block/put" "bootstrap" "config" "dht" "diag" "dns" "get" "id" "mount" "name/publish" "object/put" "object/new" "object/patch" "pin" "ping" "refs/local" "repo" "resolve" "stats" "swarm"  "file" "update" "version" "bitswap"; do
     test_curl_resp_http_code "http://127.0.0.1:$port/api/v0/$cmd" "HTTP/1.1 404 Not Found"
   done
 '

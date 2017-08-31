@@ -811,26 +811,6 @@ _ipfs_tar_cat()
     fi
 }
 
-_ipfs_tour()
-{
-    _ipfs_comp "list next restart --help"
-}
-
-_ipfs_tour_list()
-{
-    _ipfs_help_only
-}
-
-_ipfs_tour_next()
-{
-    _ipfs_help_only
-}
-
-_ipfs_tour_restart()
-{
-    _ipfs_help_only
-}
-
 _ipfs_update()
 {
     if [[ ${word} == -* ]] ; then
@@ -964,7 +944,7 @@ _ipfs()
         1)
             local opts="add bitswap block bootstrap cat commands config daemon dag dht \
                         diag dns file files get id init log ls mount name object pin ping pubsub \
-                        refs repo resolve stats swarm tar tour update version"
+                        refs repo resolve stats swarm tar update version"
             COMPREPLY=( $(compgen -W "${opts}" -- ${word}) );;
         2)
             local command="${COMP_WORDS[1]}"

@@ -8,11 +8,11 @@ import (
 
 	bserv "github.com/ipfs/go-ipfs/blockservice"
 	offline "github.com/ipfs/go-ipfs/exchange/offline"
-	blocks "gx/ipfs/QmVA4mafxbfH5aEvNz8fyoxC6J1xhAtw88B4GerPznSZBg/go-block-format"
 
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	ipldcbor "gx/ipfs/QmXgUVPAxjMLZSyxx818YstJJAoRg3nyPWENmBLVzLtoax/go-ipld-cbor"
+	blocks "gx/ipfs/QmVA4mafxbfH5aEvNz8fyoxC6J1xhAtw88B4GerPznSZBg/go-block-format"
 	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	ipldcbor "gx/ipfs/QmeebqVZeEXBqJ2B4urQWfdhwRRPm84ajnCo8x8pfwbsPM/go-ipld-cbor"
 )
 
 // TODO: We should move these registrations elsewhere. Really, most of the IPLD
@@ -32,8 +32,8 @@ type DAGService interface {
 	Get(context.Context, *cid.Cid) (node.Node, error)
 	Remove(node.Node) error
 
-	// GetDAG returns, in order, all the single leve child
-	// nodes of the passed in node.
+	// GetMany returns a channel of NodeOption given
+	// a set of CIDs.
 	GetMany(context.Context, []*cid.Cid) <-chan *NodeOption
 
 	Batch() *Batch

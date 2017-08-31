@@ -231,5 +231,11 @@ func setupNode(ctx context.Context, n *IpfsNode, cfg *BuildCfg) error {
 	}
 	n.Resolver = path.NewBasicResolver(n.DAG)
 
+	if cfg.Online {
+		if err := n.startLateOnlineServices(ctx); err != nil {
+			return err
+		}
+	}
+
 	return n.loadFilesRoot()
 }

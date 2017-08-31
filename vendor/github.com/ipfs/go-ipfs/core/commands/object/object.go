@@ -16,6 +16,7 @@ import (
 	core "github.com/ipfs/go-ipfs/core"
 	dag "github.com/ipfs/go-ipfs/merkledag"
 	path "github.com/ipfs/go-ipfs/path"
+	pin "github.com/ipfs/go-ipfs/pin"
 	ft "github.com/ipfs/go-ipfs/unixfs"
 
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
@@ -355,6 +356,7 @@ And then run:
 	Options: []cmds.Option{
 		cmds.StringOption("inputenc", "Encoding type of input data. One of: {\"protobuf\", \"json\"}.").Default("json"),
 		cmds.StringOption("datafieldenc", "Encoding type of the data field, either \"text\" or \"base64\".").Default("text"),
+		cmds.BoolOption("pin", "Pin this object when adding.").Default(false),
 	},
 	Run: func(req cmds.Request, res cmds.Response) {
 		n, err := req.InvocContext().GetNode()
@@ -381,7 +383,17 @@ And then run:
 			return
 		}
 
-		output, err := objectPut(n, input, inputenc, datafieldenc)
+		dopin, _, err := req.Option("pin").Bool()
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		if dopin {
+			defer n.Blockstore.PinLock().Unlock()
+		}
+
+		objectCid, err := objectPut(n, input, inputenc, datafieldenc)
 		if err != nil {
 			errType := cmds.ErrNormal
 			if err == ErrUnknownObjectEnc {
@@ -391,7 +403,16 @@ And then run:
 			return
 		}
 
-		res.SetOutput(output)
+		if dopin {
+			n.Pinning.PinWithMode(objectCid, pin.Recursive)
+			err = n.Pinning.Flush()
+			if err != nil {
+				res.SetError(err, cmds.ErrNormal)
+				return
+			}
+		}
+
+		res.SetOutput(&Object{Hash: objectCid.String()})
 	},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
@@ -468,7 +489,7 @@ func nodeFromTemplate(template string) (*dag.ProtoNode, error) {
 var ErrEmptyNode = errors.New("no data or links in this node")
 
 // objectPut takes a format option, serializes bytes from stdin and updates the dag with that data
-func objectPut(n *core.IpfsNode, input io.Reader, encoding string, dataFieldEncoding string) (*Object, error) {
+func objectPut(n *core.IpfsNode, input io.Reader, encoding string, dataFieldEncoding string) (*cid.Cid, error) {
 
 	data, err := ioutil.ReadAll(io.LimitReader(input, inputLimit+10))
 	if err != nil {
@@ -533,7 +554,7 @@ func objectPut(n *core.IpfsNode, input io.Reader, encoding string, dataFieldEnco
 		return nil, err
 	}
 
-	return getOutput(dagnode)
+	return dagnode.Cid(), nil
 }
 
 // ErrUnknownObjectEnc is returned if a invalid encoding is supplied

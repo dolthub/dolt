@@ -1,0 +1,16 @@
+{
+  "author": "ugorji",
+  "bugs": {
+    "url": "https://github.com/ugorji/go"
+  },
+  "gx": {
+    "dvcsimport": "github.com/ugorji/go"
+  },
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-codec",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "2017.1.3"
+}
+

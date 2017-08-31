@@ -60,7 +60,14 @@ func (f *serialFile) NextFile() (File, error) {
 	// if a file was opened previously, close it
 	err := f.Close()
 	if err != nil {
-		return nil, err
+		switch err2 := err.(type) {
+		case *os.PathError:
+			if err2.Err != os.ErrClosed {
+				return nil, err
+			}
+		default:
+			return nil, err
+		}
 	}
 
 	// if there aren't any files left in the root directory, we're done

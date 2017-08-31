@@ -118,6 +118,12 @@ test_dag_cmd() {
 		test_fsh echo $HASH
 	'
 
+	test_expect_success "non-canonical cbor input is normalized with input-enc cbor" '
+		HASH=$(cat ../t0053-dag-data/non-canon.cbor | ipfs dag put --format=cbor --input-enc=cbor) &&
+		test $HASH = "zdpuAmxF8q6iTUtkB3xtEYzmc5Sw762qwQJftt5iW8NTWLtjC" ||
+		test_fsh echo $HASH
+	'
+
 	test_expect_success "add an ipld with pin" '
 		PINHASH=$(printf {\"foo\":\"bar\"} | ipfs dag put --pin=true)
 	'
@@ -125,6 +131,61 @@ test_dag_cmd() {
 	test_expect_success "after gc, objects still acessible" '
 		ipfs repo gc > /dev/null &&
 		ipfs refs -r --timeout=2s $PINHASH > /dev/null
+	'
+
+	test_expect_success "can add an ipld object with sha3 hash" '
+		IPLDHASH=$(cat ipld_object | ipfs dag put --hash sha3)
+	'
+
+	test_expect_success "output looks correct" '
+		EXPHASH="zBwWX8u9LYZdCWqaryJW8QsBstghHSPy41nfhhFLY9qw1Vu2BWqnMFtk1jL3qCtEdGd7Kqw1HNPZv5z8LxP2eHGGDCdRE"
+		test $EXPHASH = $IPLDHASH
+	'
+
+	test_expect_success "prepare dag-pb object" '
+		echo foo > test_file &&
+		HASH=$(ipfs add -wq test_file | tail -n1)
+	'
+
+	test_expect_success "dag put with json dag-pb works" '
+		ipfs dag get $HASH > pbjson &&
+		cat pbjson | ipfs dag put --format=dag-pb --input-enc=json > dag_put_out
+	'
+
+	test_expect_success "dag put with dag-pb works output looks good" '
+		printf $HASH > dag_put_exp &&
+		test_cmp dag_put_exp dag_put_out
+	'
+
+	test_expect_success "dag put with raw dag-pb works" '
+		ipfs block get $HASH > pbraw &&
+		cat pbraw | ipfs dag put --format=dag-pb --input-enc=raw > dag_put_out
+	'
+
+	test_expect_success "dag put with dag-pb works output looks good" '
+		printf $HASH > dag_put_exp &&
+		test_cmp dag_put_exp dag_put_out
+	'
+
+	test_expect_success "prepare data for dag resolve" '
+		NESTED_HASH=$(echo "{\"data\":123}" | ipfs dag put) &&
+		HASH=$(echo "{\"obj\":{\"/\":\"${NESTED_HASH}\"}}" | ipfs dag put)
+	'
+
+	test_expect_success "dag resolve some things" '
+		ipfs dag resolve $HASH > resolve_hash &&
+		ipfs dag resolve ${HASH}/obj > resolve_obj &&
+		ipfs dag resolve ${HASH}/obj/data > resolve_data
+	'
+
+	test_expect_success "dag resolve output looks good" '
+		printf $HASH > resolve_hash_exp &&
+		printf $NESTED_HASH > resolve_obj_exp &&
+		printf $NESTED_HASH/data > resolve_data_exp &&
+
+		test_cmp resolve_hash_exp resolve_hash &&
+		test_cmp resolve_obj_exp resolve_obj &&
+		test_cmp resolve_data_exp resolve_data
 	'
 }
 

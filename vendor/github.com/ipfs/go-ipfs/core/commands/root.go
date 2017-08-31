@@ -122,7 +122,6 @@ var rootSubcommands = map[string]*cmds.Command{
 	"stats":     StatsCmd,
 	"swarm":     SwarmCmd,
 	"tar":       TarCmd,
-	"tour":      tourCmd,
 	"file":      unixfs.UnixFSCmd,
 	"update":    ExternalBinary(),
 	"version":   VersionCmd,
@@ -166,7 +165,8 @@ var rootROSubcommands = map[string]*cmds.Command{
 	},
 	"dag": &cmds.Command{
 		Subcommands: map[string]*cmds.Command{
-			"get": dag.DagGetCmd,
+			"get":     dag.DagGetCmd,
+			"resolve": dag.DagResolveCmd,
 		},
 	},
 	"refs":    RefsROCmd,

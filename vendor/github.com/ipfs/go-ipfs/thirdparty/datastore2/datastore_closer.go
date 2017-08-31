@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
+	syncds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore/sync"
 )
 
 type ThreadSafeDatastoreCloser interface {
@@ -15,6 +16,10 @@ type ThreadSafeDatastoreCloser interface {
 
 func CloserWrap(ds datastore.ThreadSafeDatastore) ThreadSafeDatastoreCloser {
 	return &datastoreCloserWrapper{ds}
+}
+
+func ThreadSafeCloserMapDatastore() ThreadSafeDatastoreCloser {
+	return CloserWrap(syncds.MutexWrap(datastore.NewMapDatastore()))
 }
 
 type datastoreCloserWrapper struct {

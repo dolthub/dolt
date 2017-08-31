@@ -1,0 +1,23 @@
+{
+  "author": "rs",
+  "bugs": {
+    "url": "https://github.com/rs/cors/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/rs/cors"
+  },
+  "gxDependencies": [
+    {
+      "author": "rs",
+      "hash": "QmXMPT8tVwqKHZKWxnrfbYqUEaDJ5SF3Yh3fnFthaSrU37",
+      "name": "xhandler",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "cors",
+  "version": "0.0.0"
+}
+

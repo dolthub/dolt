@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/stump"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/stump"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "stump",
+  "version": "0.0.0"
+}

@@ -12,7 +12,7 @@ import (
 
 	core "github.com/ipfs/go-ipfs/core"
 
-	"gx/ipfs/QmU1N5xVAUXgo3XRTt6GhJ2SuJEbxj2zRgMS7FpjSR2U83/semver"
+	"gx/ipfs/QmYRGECuvQnRX73fcvPnGbYijBcGN2HbKZQ7jh26qmLiHG/semver"
 )
 
 func init() {

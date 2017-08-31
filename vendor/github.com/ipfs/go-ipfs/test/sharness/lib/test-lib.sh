@@ -141,19 +141,13 @@ test_init_ipfs() {
 
 	test_expect_success "ipfs init succeeds" '
 		export IPFS_PATH="$(pwd)/.ipfs" &&
-		ipfs init -b=1024 > /dev/null
+		ipfs init --profile=test -b=1024 > /dev/null
 	'
 
-	test_expect_success "prepare config -- mounting and bootstrap rm" '
+	test_expect_success "prepare config -- mounting" '
 		mkdir mountdir ipfs ipns &&
 		test_config_set Mounts.IPFS "$(pwd)/ipfs" &&
-		test_config_set Mounts.IPNS "$(pwd)/ipns" &&
-		test_config_set Addresses.API "/ip4/127.0.0.1/tcp/0" &&
-		test_config_set Addresses.Gateway "/ip4/0.0.0.0/tcp/0" &&
-		test_config_set --json Addresses.Swarm "[
-  \"/ip4/0.0.0.0/tcp/0\"
-]" &&
-		ipfs bootstrap rm --all ||
+		test_config_set Mounts.IPNS "$(pwd)/ipns" ||
 		test_fsh cat "\"$IPFS_PATH/config\""
 	'
 
@@ -370,7 +364,7 @@ generic_stat() {
             _STAT="stat -f %Sp"
             ;;
     esac
-    $_STAT "$1"
+    $_STAT "$1" || echo "failed" # Avoid returning nothing.
 }
 
 test_check_peerid() {

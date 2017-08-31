@@ -168,7 +168,23 @@ test_object_cmd() {
 		test_cmp expected actual
 	'
 
-    test_expect_success "'ipfs object patch' should work (no unixfs-dir)" '
+	test_expect_success "'ipfs object put --pin' succeeds" '
+		HASH="QmXg9Pp2ytZ14xgmQjYEiHjVjMFXzCVVEcRTWJBmLgR39V" &&
+		echo "added $HASH" >expected &&
+		echo "{ \"Data\": \"abc\" }" | ipfs object put --pin >actual
+	'
+
+	test_expect_success "'ipfs object put --pin' output looks good" '
+		echo "added $HASH" >expected &&
+		test_cmp expected actual
+	'
+
+	test_expect_success "after gc, objects still acessible" '
+		ipfs repo gc > /dev/null &&
+		ipfs refs -r --timeout=2s $HASH > /dev/null
+	'
+
+	test_expect_success "'ipfs object patch' should work (no unixfs-dir)" '
 		EMPTY_DIR=$(ipfs object new) &&
 		OUTPUT=$(ipfs object patch $EMPTY_DIR add-link foo $EMPTY_DIR) &&
 		ipfs object stat $OUTPUT

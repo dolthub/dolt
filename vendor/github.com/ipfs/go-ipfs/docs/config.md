@@ -15,10 +15,9 @@ a running daemon do not read the config file at runtime.
 - [`Identity`](#identity)
 - [`Ipns`](#ipns)
 - [`Mounts`](#mounts)
-- [`ReproviderInterval`](#reproviderinterval)
+- [`Reprovider`](#reprovider)
 - [`SupernodeRouting`](#supernoderouting)
 - [`Swarm`](#swarm)
-- [`Tour`](#tour)
 
 ## `Addresses`
 Contains information about various listener addresses to be used by this node.
@@ -103,7 +102,7 @@ A boolean value. If set to true, all block reads from disk will be hashed and ve
 - `BloomFilterSize`
 A number representing the size in bytes of the blockstore's bloom filter. A value of zero represents the feature being disabled.
 
-Default: `0` 
+Default: `0`
 
 - `Params`
 Extra parameters for datastore construction, not currently used.
@@ -193,7 +192,9 @@ Mountpoint for `/ipns/`.
 - `FuseAllowOther`
 Sets the FUSE allow other option on the mountpoint.
 
-## `ReproviderInterval`
+## `Reprovider`
+
+- `Interval`
 Sets the time between rounds of reproviding local content to the routing
 system. If unset, it defaults to 12 hours. If set to the value `"0"` it will
 disable content reproviding.
@@ -202,6 +203,12 @@ Note: disabling content reproviding will result in other nodes on the network
 not being able to discover that you have the objects that you have. If you want
 to have this disabled and keep the network aware of what you have, you must
 manually announce your content periodically.
+
+- `Strategy`
+Tells reprovider what should be announced. Valid strategies are:
+  - "all" (default) - announce all stored data
+  - "pinned" - only announce pinned data
+  - "roots" - only announce directly pinned keys and root keys of recursive pins
 
 ## `SupernodeRouting`
 Deprecated.
@@ -221,5 +228,9 @@ improvement, as well as a reduction in memory usage.
 - `DisableNatPortMap`
 Disable NAT discovery.
 
-## `Tour`
-Unused.
+- `DisableRelay`
+Disables the p2p-circuit relay transport.
+
+- `EnableRelayHop`
+Enables HOP relay for the node. If this is enabled, the node will act as
+an intermediate (Hop Relay) node in relay circuits for connected peers.

@@ -17,6 +17,7 @@ you MUST please make a PR updating this document, and link the PR in the above i
 - [ipfs filestore](#ipfs-filestore)
 - [Private Networks](#private-networks)
 - [ipfs p2p](#ipfs-p2p)
+- [Circuit Relay](#circuit-relay)
 
 ---
 
@@ -212,3 +213,55 @@ Basic usage:
 - [ ] Needs more people to use and report on how well it works / fits use cases
 - [ ] More documentation
 - [ ] Support other protocols
+
+---
+
+## Circuit Relay
+
+Allows peers to connect through an intermediate relay node when there
+is no direct connectivity.
+
+### State
+Experimental
+
+### In Version
+master, 0.4.11
+
+### How to enable
+
+The relay transport is enabled by default, which allows peers to dial
+through relay and listens for incoming relay connections.
+The transport can be disabled by setting `Swarm.DisableRelay = true` in
+the configuration.
+
+By default, peers don't act as intermediate nodes (relays). This can
+be enabled by setting `Swarm.EnableRelayHop = true` in the configuration.
+Note that the option needs to be set before online services are started
+to have an effect; an already online node would have to be restarted.
+
+### Basic Usage:
+
+In order to connect peers QmA and QmB through a relay node QmRelay:
+
+- Both peers should connect to the relay:
+`ipfs swarm connect /transport/address/ipfs/QmRelay`
+- Peer QmA can then connect to peer QmB using the relay:
+`ipfs swarm connect /ipfs/QmRelay/p2p-cricuit/ipfs/QmB`
+
+Peers can also connect with an unspecific relay address, which will
+try to dial through known relays:
+`ipfs swarm connect /p2p-circuit/ipfs/QmB`
+
+Peers can see their (unspecific) relay address in the output of
+`ipfs swarm addrs listen`
+
+### Road to being a real feature
+
+- [ ] Needs more people to use it and report on how well it works.
+- [ ] Advertise relay addresses to the DHT for NATed or otherwise
+  unreachable peers.
+- [ ] Active relay discovery for specific relay address advertisement.
+  We would like advertised relay addresses to designate specific relays
+  for efficient dialing.
+- [ ] Dialing priorities for relay addresses; arguably, relay addresses
+  should have lower priority than direct dials.

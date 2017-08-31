@@ -6,7 +6,7 @@ import (
 	context "context"
 	"github.com/ipfs/go-ipfs/repo"
 	config "github.com/ipfs/go-ipfs/repo/config"
-	"github.com/ipfs/go-ipfs/thirdparty/testutil"
+	ds2 "github.com/ipfs/go-ipfs/thirdparty/datastore2"
 )
 
 func TestInitialization(t *testing.T) {
@@ -38,7 +38,7 @@ func TestInitialization(t *testing.T) {
 	for i, c := range good {
 		r := &repo.Mock{
 			C: *c,
-			D: testutil.ThreadSafeCloserMapDatastore(),
+			D: ds2.ThreadSafeCloserMapDatastore(),
 		}
 		n, err := NewNode(ctx, &BuildCfg{Repo: r})
 		if n == nil || err != nil {
@@ -49,7 +49,7 @@ func TestInitialization(t *testing.T) {
 	for i, c := range bad {
 		r := &repo.Mock{
 			C: *c,
-			D: testutil.ThreadSafeCloserMapDatastore(),
+			D: ds2.ThreadSafeCloserMapDatastore(),
 		}
 		n, err := NewNode(ctx, &BuildCfg{Repo: r})
 		if n != nil || err == nil {

@@ -1,0 +1,19 @@
+sudo: false
+
+
+language: go
+go:
+  - 1.8
+  
+install:
+  - go get github.com/whyrusleeping/gx
+  - go get github.com/whyrusleeping/gx-go
+  - gx install --global
+
+cache:
+  directories:
+    - $GOPATH/src/gx
+
+notifications:
+email: false
+  

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	gopath "path"
+	"strconv"
 
 	bs "github.com/ipfs/go-ipfs/blocks/blockstore"
 	bstore "github.com/ipfs/go-ipfs/blocks/blockstore"
@@ -46,6 +47,7 @@ type Link struct {
 type Object struct {
 	Hash  string
 	Links []Link
+	Size  string
 }
 
 type hiddenFileError struct {
@@ -68,6 +70,7 @@ type AddedObject struct {
 	Name  string
 	Hash  string `json:",omitempty"`
 	Bytes int64  `json:",omitempty"`
+	Size  string `json:",omitempty"`
 }
 
 func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds dag.DAGService) (*Adder, error) {
@@ -548,6 +551,7 @@ func outputDagnode(out chan interface{}, name string, dn node.Node) error {
 	out <- &AddedObject{
 		Hash: o.Hash,
 		Name: name,
+		Size: o.Size,
 	}
 
 	return nil
@@ -563,9 +567,14 @@ func NewMemoryDagService() dag.DAGService {
 // from core/commands/object.go
 func getOutput(dagnode node.Node) (*Object, error) {
 	c := dagnode.Cid()
+	s, err := dagnode.Size()
+	if err != nil {
+		return nil, err
+	}
 
 	output := &Object{
 		Hash:  c.String(),
+		Size:  strconv.FormatUint(s, 10),
 		Links: make([]Link, len(dagnode.Links())),
 	}
 

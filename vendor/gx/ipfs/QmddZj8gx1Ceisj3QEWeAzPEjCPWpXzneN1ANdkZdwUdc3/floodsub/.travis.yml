@@ -1,0 +1,21 @@
+os:
+  - linux
+
+language: go
+
+go:
+    - 1.8
+
+install: true
+
+script:
+  - make deps
+  - go vet
+  - go test ./...
+
+cache:
+    directories:
+        - $GOPATH/src/gx
+
+notifications:
+  email: false

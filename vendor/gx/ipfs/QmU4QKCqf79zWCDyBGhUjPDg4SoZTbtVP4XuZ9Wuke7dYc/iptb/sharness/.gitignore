@@ -1,0 +1,5 @@
+lib/sharness/
+test-results/
+trash directory.*.sh/
+bin/iptb
+BUILD-OPTIONS

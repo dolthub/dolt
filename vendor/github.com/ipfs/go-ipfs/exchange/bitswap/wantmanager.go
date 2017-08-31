@@ -17,10 +17,9 @@ import (
 
 type WantManager struct {
 	// sync channels for Run loop
-	incoming   chan *wantSet
-	connect    chan peer.ID        // notification channel for new peers connecting
-	disconnect chan peer.ID        // notification channel for peers disconnecting
-	peerReqs   chan chan []peer.ID // channel to request connected peers on
+	incoming     chan *wantSet
+	connectEvent chan peerStatus     // notification channel for peers connecting/disconnecting
+	peerReqs     chan chan []peer.ID // channel to request connected peers on
 
 	// synchronized by Run loop, only touch inside there
 	peers map[peer.ID]*msgQueue
@@ -35,6 +34,11 @@ type WantManager struct {
 	sentHistogram metrics.Histogram
 }
 
+type peerStatus struct {
+	connect bool
+	peer    peer.ID
+}
+
 func NewWantManager(ctx context.Context, network bsnet.BitSwapNetwork) *WantManager {
 	ctx, cancel := context.WithCancel(ctx)
 	wantlistGauge := metrics.NewCtx(ctx, "wantlist_total",
@@ -43,8 +47,7 @@ func NewWantManager(ctx context.Context, network bsnet.BitSwapNetwork) *WantMana
 		" this bitswap").Histogram(metricsBuckets)
 	return &WantManager{
 		incoming:      make(chan *wantSet, 10),
-		connect:       make(chan peer.ID, 10),
-		disconnect:    make(chan peer.ID, 10),
+		connectEvent:  make(chan peerStatus, 10),
 		peerReqs:      make(chan chan []peer.ID),
 		peers:         make(map[peer.ID]*msgQueue),
 		wl:            wantlist.NewThreadSafe(),
@@ -270,22 +273,22 @@ func (mq *msgQueue) openSender(ctx context.Context) error {
 
 func (pm *WantManager) Connected(p peer.ID) {
 	select {
-	case pm.connect <- p:
+	case pm.connectEvent <- peerStatus{peer: p, connect: true}:
 	case <-pm.ctx.Done():
 	}
 }
 
 func (pm *WantManager) Disconnected(p peer.ID) {
 	select {
-	case pm.disconnect <- p:
+	case pm.connectEvent <- peerStatus{peer: p, connect: false}:
 	case <-pm.ctx.Done():
 	}
 }
 
 // TODO: use goprocess here once i trust it
 func (pm *WantManager) Run() {
-	tock := time.NewTicker(rebroadcastDelay.Get())
-	defer tock.Stop()
+	// NOTE: Do not open any streams or connections from anywhere in this
+	// event loop. Really, just don't do anything likely to block.
 	for {
 		select {
 		case ws := <-pm.incoming:
@@ -329,10 +332,12 @@ func (pm *WantManager) Run() {
 				}
 			}
 
-		case p := <-pm.connect:
-			pm.startPeerHandler(p)
-		case p := <-pm.disconnect:
-			pm.stopPeerHandler(p)
+		case p := <-pm.connectEvent:
+			if p.connect {
+				pm.startPeerHandler(p.peer)
+			} else {
+				pm.stopPeerHandler(p.peer)
+			}
 		case req := <-pm.peerReqs:
 			var peers []peer.ID
 			for p := range pm.peers {

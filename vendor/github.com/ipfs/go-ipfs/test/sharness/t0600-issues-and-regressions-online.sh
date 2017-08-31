@@ -48,7 +48,7 @@ test_expect_success "pin add api looks right - #3753" '
 
 test_expect_success "no daemon crash on improper file argument - #4003" '
     FNC=$(echo $API_ADDR | awk -F: '\''{ printf "%s %s", $1, $2 }'\'') &&
-    echo -n "POST /api/v0/add?pin=true HTTP/1.1\r\nHost: $API_ADDR\r\nContent-Type: multipart/form-data; boundary=Pyw9xQLtiLPE6XcI\r\nContent-Length: 22\r\n\r\n\r\n--Pyw9xQLtiLPE6XcI\r\n" | nc -v $FNC | grep "200 OK"
+    printf "POST /api/v0/add?pin=true HTTP/1.1\r\nHost: $API_ADDR\r\nContent-Type: multipart/form-data; boundary=Pyw9xQLtiLPE6XcI\r\nContent-Length: 22\r\n\r\n\r\n--Pyw9xQLtiLPE6XcI\r\n" | nc -v $FNC | grep -m1 "200 OK"
 '
 
 test_kill_ipfs_daemon

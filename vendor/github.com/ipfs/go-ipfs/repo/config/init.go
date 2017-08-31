@@ -36,8 +36,10 @@ func Init(out io.Writer, nBitsForKeypair int) (*Config, error) {
 				// "/ip4/0.0.0.0/udp/4002/utp", // disabled for now.
 				"/ip6/::/tcp/4001",
 			},
-			API:     "/ip4/127.0.0.1/tcp/5001",
-			Gateway: "/ip4/127.0.0.1/tcp/8080",
+			Announce:   []string{},
+			NoAnnounce: []string{},
+			API:        "/ip4/127.0.0.1/tcp/5001",
+			Gateway:    "/ip4/127.0.0.1/tcp/8080",
 		},
 
 		Datastore: datastore,
@@ -70,6 +72,7 @@ func Init(out io.Writer, nBitsForKeypair int) (*Config, error) {
 		},
 		Reprovider: Reprovider{
 			Interval: "12h",
+			Strategy: "all",
 		},
 	}
 

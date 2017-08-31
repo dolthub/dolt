@@ -1,0 +1,14 @@
+{
+  "author": "mattn",
+  "bugs": {
+    "url": "https://github.com/mattn/go-colorable/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/mattn/go-colorable"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-colorable",
+  "version": "0.0.4"
+}

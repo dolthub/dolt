@@ -1,0 +1,45 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/gxed/client_golang"
+  },
+  "gxDependencies": [
+    {
+      "hash": "QmT6n4mspWYEya864BhCUJEgyxiRfmiSY9ruQwTUNpRKaM",
+      "name": "protobuf",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "QmYkNhwAviNzN974MB3koxuBRhtbvCotnuQcugrPF96BPp",
+      "name": "client_model",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "Qmc5do1bC3JH73MThEgKgKkgNKLmqrvh2uaE6919yDmUaa",
+      "name": "procfs",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "QmSERhEpow33rKAUMJq8yfJVQjLmdABGg899cXg7GcX1Bk",
+      "name": "common",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC",
+      "name": "go-net",
+      "version": "0.0.0"
+    },
+    {
+      "hash": "QmbNinL4ErzM73BxQSNf8q2vPmAM4v3MNQM2DmDqDjt47D",
+      "name": "perks",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "",
+  "name": "client_golang",
+  "version": "0.1.1"
+}
+

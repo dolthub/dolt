@@ -497,15 +497,29 @@ func printSwarmAddrs(node *core.IpfsNode) {
 		fmt.Println("Swarm not listening, running in offline mode.")
 		return
 	}
+
+	var lisAddrs []string
+	ifaceAddrs, err := node.PeerHost.Network().InterfaceListenAddresses()
+	if err != nil {
+		log.Errorf("failed to read listening addresses: %s", err)
+	}
+	for _, addr := range ifaceAddrs {
+		lisAddrs = append(lisAddrs, addr.String())
+	}
+	sort.Sort(sort.StringSlice(lisAddrs))
+	for _, addr := range lisAddrs {
+		fmt.Printf("Swarm listening on %s\n", addr)
+	}
+
 	var addrs []string
 	for _, addr := range node.PeerHost.Addrs() {
 		addrs = append(addrs, addr.String())
 	}
 	sort.Sort(sort.StringSlice(addrs))
-
 	for _, addr := range addrs {
-		fmt.Printf("Swarm listening on %s\n", addr)
+		fmt.Printf("Swarm announcing %s\n", addr)
 	}
+
 }
 
 // serveHTTPGateway collects options, creates listener, prints status message and starts serving requests

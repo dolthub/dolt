@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/go-ctrlnet"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/go-ctrlnet"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "go-ctrlnet",
+  "version": "0.0.0"
+}

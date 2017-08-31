@@ -2,6 +2,7 @@
 GO_MIN_VERSION = 1.8
 
 # pre-definitions
+GOCC ?= go
 GOTAGS ?=
 GOFLAGS ?=
 GOTFLAGS ?=
@@ -10,16 +11,16 @@ DEPS_GO :=
 TEST_GO :=
 CHECK_GO :=
 
-go-pkg-name=$(shell go list $(go-tags) github.com/ipfs/go-ipfs/$(1))
+go-pkg-name=$(shell $(GOCC) list $(go-tags) github.com/ipfs/go-ipfs/$(1))
 go-main-name=$(notdir $(call go-pkg-name,$(1)))$(?exe)
 go-curr-pkg-tgt=$(d)/$(call go-main-name,$(d))
-go-pkgs-novendor=$(shell go list github.com/ipfs/go-ipfs/... | grep -v /Godeps/)
+go-pkgs-novendor=$(shell $(GOCC) list github.com/ipfs/go-ipfs/... | grep -v /Godeps/)
 
 go-tags=$(if $(GOTAGS), -tags="$(call join-with,$(space),$(GOTAGS))")
 go-flags-with-tags=$(GOFLAGS)$(go-tags)
 
 define go-build
-go build -i $(go-flags-with-tags) -o "$@" "$(call go-pkg-name,$<)"
+$(GOCC) build -i $(go-flags-with-tags) -o "$@" "$(call go-pkg-name,$<)"
 endef
 
 test_go_short: GOTFLAGS += -test.short
@@ -31,7 +32,7 @@ test_go_race: test_go_expensive
 .PHONY: test_go_race
 
 test_go_expensive: $$(DEPS_GO)
-	go test $(go-flags-with-tags) $(GOTFLAGS) ./...
+	$(GOCC) test $(go-flags-with-tags) $(GOTFLAGS) ./...
 .PHONY: test_go_expensive
 TEST_GO += test_go_expensive
 
@@ -41,7 +42,7 @@ test_go_fmt:
 TEST_GO += test_go_fmt
 
 test_go_megacheck:
-	@go get honnef.co/go/tools/cmd/megacheck
+	@$(GOCC) get honnef.co/go/tools/cmd/megacheck
 	@for pkg in $(go-pkgs-novendor); do megacheck "$$pkg"; done
 .PHONY: megacheck
 

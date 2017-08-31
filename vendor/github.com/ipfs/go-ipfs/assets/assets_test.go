@@ -9,7 +9,7 @@ import (
 
 // TestEmbeddedDocs makes sure we don't forget to regenerate after documentation change
 func TestEmbeddedDocs(t *testing.T) {
-	testNFiles(initDocPaths, 6, t, "documents")
+	testNFiles(initDocPaths, 5, t, "documents")
 }
 
 func TestDirIndex(t *testing.T) {

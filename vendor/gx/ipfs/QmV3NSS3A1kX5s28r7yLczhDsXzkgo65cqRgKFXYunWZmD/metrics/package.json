@@ -1,0 +1,23 @@
+{
+  "author": "codahale",
+  "bugs": {
+    "URL": "https://github.com/codahale/metrics/issues",
+    "url": "https://github.com/codahale/metrics/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/codahale/metrics"
+  },
+  "gxDependencies": [
+    {
+      "author": "codahale",
+      "hash": "QmYPZJkvydXC1MkXaERL5ohNdghqwdQprKgjMTVHuf26vd",
+      "name": "hdrhistogram",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "metrics",
+  "version": "0.0.0"
+}

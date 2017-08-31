@@ -21,7 +21,6 @@ type Config struct {
 	Discovery        Discovery             // local node's discovery mechanisms
 	Ipns             Ipns                  // Ipns settings
 	Bootstrap        []string              // local nodes's bootstrap peer addresses
-	Tour             Tour                  // local node's tour position
 	Gateway          Gateway               // local node's gateway server options
 	SupernodeRouting SupernodeClientConfig // local node's routing servers (if SupernodeRouting enabled)
 	API              API                   // local node's API settings

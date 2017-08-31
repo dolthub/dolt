@@ -208,9 +208,17 @@ func (i *gatewayHandler) getOrHeadHandler(ctx context.Context, w http.ResponseWr
 	w.Header().Set("Etag", etag)
 
 	// set 'allowed' headers
-	w.Header().Set("Access-Control-Allow-Headers", "X-Stream-Output, X-Chunked-Output")
-	// expose those headers
-	w.Header().Set("Access-Control-Expose-Headers", "X-Stream-Output, X-Chunked-Output")
+	// & expose those headers
+	var allowedHeadersArr = []string{
+		"Content-Range",
+		"X-Chunked-Output",
+		"X-Stream-Output",
+	}
+
+	var allowedHeaders = strings.Join(allowedHeadersArr, ", ")
+
+	w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+	w.Header().Set("Access-Control-Expose-Headers", allowedHeaders)
 
 	// Suborigin header, sandboxes apps from each other in the browser (even
 	// though they are served from the same gateway domain).

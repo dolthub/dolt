@@ -1,0 +1,20 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/codegangsta/cli"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmNNARAR2ncSEDKGVAjsE77VYAtNE6qMMPEC7hfWMwMdF9",
+      "name": "yaml.v2",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "",
+  "name": "cli",
+  "version": "0.0.0"
+}

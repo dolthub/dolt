@@ -19,9 +19,6 @@
         "IPFS": "/ipfs",
         "IPNS": "/ipns"
     },
-    "Tour": {
-        "Last": ""
-    },
     "Version": {
         "AutoUpdate": "minor",
         "Check": "error",

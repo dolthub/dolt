@@ -192,8 +192,9 @@ test_add_named_pipe() {
     test_expect_success "useful error message when adding a named pipe" '
         mkfifo named-pipe &&
 	    test_expect_code 1 ipfs add named-pipe 2>actual &&
+        STAT=$(generic_stat named-pipe) &&
         rm named-pipe &&
-        grep "Error: Unrecognized file type for named-pipe: $(generic_stat named-pipe)" actual &&
+        grep "Error: Unrecognized file type for named-pipe: $STAT" actual &&
         grep USAGE actual &&
         grep "ipfs add" actual
     '
@@ -201,8 +202,9 @@ test_add_named_pipe() {
     test_expect_success "useful error message when recursively adding a named pipe" '
     	mkdir -p named-pipe-dir &&
     	mkfifo named-pipe-dir/named-pipe &&
+    	STAT=$(generic_stat named-pipe-dir/named-pipe) &&
     	test_expect_code 1 ipfs add -r named-pipe-dir 2>actual &&
-        printf "Error:$err_prefix Unrecognized file type for named-pipe-dir/named-pipe: $(generic_stat named-pipe-dir/named-pipe)\n" >expected &&
+        printf "Error:$err_prefix Unrecognized file type for named-pipe-dir/named-pipe: $STAT\n" >expected &&
         rm named-pipe-dir/named-pipe &&
         rmdir named-pipe-dir &&
     	test_cmp expected actual

@@ -42,34 +42,36 @@ import (
 	offroute "github.com/ipfs/go-ipfs/routing/offline"
 	ft "github.com/ipfs/go-ipfs/unixfs"
 
-	pnet "gx/ipfs/QmP4wThjSLaCanG1SstjuDXZ8yRyWT2APx5APCEa4YPPvB/go-libp2p-pnet"
+	pnet "gx/ipfs/QmNMCAuxnQFHLGWcvay3DmVFrKuY6Y2nsc9vzsf4gVouJV/go-libp2p-pnet"
 	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
 	routing "gx/ipfs/QmPjTrrSfE6TzLv6ya6VWhGcCgPrUAdcgrDcQyRDX2VyW1/go-libp2p-routing"
-	mplex "gx/ipfs/QmQ3UABWTgK78utKeiVXaH9BrjC7Ydn1pRuwqnWHT3p4zh/go-smux-multiplex"
+	mafilter "gx/ipfs/QmQBB2dQLmQHJgs2gqZ3iqL2XiuCtUCvXzWt5kMXDf5Zcr/go-maddr-filter"
 	ipnet "gx/ipfs/QmQq9YzmdFdWNTDdArueGyD7L5yyiRQigrRHJnTGkxcEjT/go-libp2p-interface-pnet"
-	addrutil "gx/ipfs/QmR1fAHJvEyYFdEGn5jVmU4NL5kNSVJ48cduXB2whWbJq2/go-addr-util"
 	mssmux "gx/ipfs/QmRVYfZ7tWNHPBzWiG6KWGzvT2hcGems8srihsQE29x1U5/go-smux-multistream"
 	goprocess "gx/ipfs/QmSF8fPo3jgVBAy8fpdjjYqgG87dkJgUprRBHRd2tmfgpP/goprocess"
 	mamask "gx/ipfs/QmSMZwvs3n4GBikZ7hKzT17c3bk65FmyZo2JqtJ16swqCv/multiaddr-filter"
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
-	dht "gx/ipfs/QmTHyAbD9KzGrseLNzmEoNkVxA8F2h7LQG2iV6uhBqs6kX/go-libp2p-kad-dht"
 	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
+	swarm "gx/ipfs/QmVJefKHXEx28RFpmj5GeRg43AqeBH3npPwvgJ875fBPm7/go-libp2p-swarm"
 	ds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
 	metrics "gx/ipfs/QmVjRAPfRtResCMCE4eBqr4Beoa6A89P1YweG9wUS6RqUL/go-libp2p-metrics"
+	p2phost "gx/ipfs/QmW8Rgju5JrSMHP7RDNdiwwXyenRqAbtSaPfdQKQC7ZdH6/go-libp2p-host"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
-	floodsub "gx/ipfs/QmZdsQf8BiCpAj61nz9NgqVeRUkw9vATvCs7UHFTxoUMDb/floodsub"
-	p2phost "gx/ipfs/QmZy7c24mmkEHpNJndwgsEE3wcVxHd8yB969yTnAJFVw7f/go-libp2p-host"
+	mplex "gx/ipfs/QmYBCDHS74pfbhMhtLeDpZyBa4Z9X76JLyACSKum1K39eP/go-smux-multiplex"
+	circuit "gx/ipfs/QmYBGpZ3hV89RZTd3CTjjgjgcX64QnbcBS9dCqU7mCgS1n/go-libp2p-circuit"
+	dht "gx/ipfs/QmZSEstKChFezMwTcAWH5UQxvRckmnvgVZjFeSnGLDHU3Y/go-libp2p-kad-dht"
+	discovery "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/discovery"
+	p2pbhost "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/host/basic"
+	rhost "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/host/routed"
+	identify "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/protocol/identify"
+	ping "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/protocol/ping"
 	ic "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-	swarm "gx/ipfs/QmaijwHnbD4SabGA8C2fN9gchptLvRe2RxqTU5XkjAGBw5/go-libp2p-swarm"
-	discovery "gx/ipfs/QmapADMpK4e5kFGBxC2aHreaDqKP9vmMng5f91MA14Ces9/go-libp2p/p2p/discovery"
-	p2pbhost "gx/ipfs/QmapADMpK4e5kFGBxC2aHreaDqKP9vmMng5f91MA14Ces9/go-libp2p/p2p/host/basic"
-	rhost "gx/ipfs/QmapADMpK4e5kFGBxC2aHreaDqKP9vmMng5f91MA14Ces9/go-libp2p/p2p/host/routed"
-	identify "gx/ipfs/QmapADMpK4e5kFGBxC2aHreaDqKP9vmMng5f91MA14Ces9/go-libp2p/p2p/protocol/identify"
-	ping "gx/ipfs/QmapADMpK4e5kFGBxC2aHreaDqKP9vmMng5f91MA14Ces9/go-libp2p/p2p/protocol/ping"
 	yamux "gx/ipfs/Qmbn7RYyWzBVXiUp9jZ1dA4VADHy9DtS7iZLwfhEUQvm3U/go-smux-yamux"
+	addrutil "gx/ipfs/Qmcx4KoZ91XS6izLjdkujAMAunAS1YuTgfgASgYaZF5GkR/go-addr-util"
+	floodsub "gx/ipfs/QmddZj8gx1Ceisj3QEWeAzPEjCPWpXzneN1ANdkZdwUdc3/floodsub"
 	smux "gx/ipfs/QmeZBgYBHvxMukGK5ojg28BCNLB9SeXqT7XXg6o7r2GbJy/go-stream-muxer"
 )
 
@@ -212,8 +214,20 @@ func (n *IpfsNode) startOnlineServices(ctx context.Context, routingOption Routin
 		}()
 	}
 
+	addrsFactory, err := makeAddrsFactory(cfg.Addresses)
+	if err != nil {
+		return err
+	}
+
+	hostopts := &ConstructPeerHostOpts{
+		AddrsFactory:      addrsFactory,
+		DisableNatPortMap: cfg.Swarm.DisableNatPortMap,
+		DisableRelay:      cfg.Swarm.DisableRelay,
+		EnableRelayHop:    cfg.Swarm.EnableRelayHop,
+	}
 	peerhost, err := hostOption(ctx, n.Identity, n.Peerstore, n.Reporter,
-		addrfilter, tpt, protec, &ConstructPeerHostOpts{DisableNatPortMap: cfg.Swarm.DisableNatPortMap})
+		addrfilter, tpt, protec, hostopts)
+
 	if err != nil {
 		return err
 	}
@@ -225,22 +239,6 @@ func (n *IpfsNode) startOnlineServices(ctx context.Context, routingOption Routin
 	// Ok, now we're ready to listen.
 	if err := startListening(ctx, n.PeerHost, cfg); err != nil {
 		return err
-	}
-
-	n.Reprovider = rp.NewReprovider(n.Routing, n.Blockstore)
-
-	if cfg.Reprovider.Interval != "0" {
-		interval := kReprovideFrequency
-		if cfg.Reprovider.Interval != "" {
-			dur, err := time.ParseDuration(cfg.Reprovider.Interval)
-			if err != nil {
-				return err
-			}
-
-			interval = dur
-		}
-
-		go n.Reprovider.ProvideEvery(ctx, interval)
 	}
 
 	if pubsub {
@@ -261,6 +259,89 @@ func (n *IpfsNode) startOnlineServices(ctx context.Context, routingOption Routin
 	}
 
 	return n.Bootstrap(DefaultBootstrapConfig)
+}
+
+func (n *IpfsNode) startLateOnlineServices(ctx context.Context) error {
+	cfg, err := n.Repo.Config()
+	if err != nil {
+		return err
+	}
+
+	var keyProvider rp.KeyChanFunc
+
+	switch cfg.Reprovider.Strategy {
+	case "all":
+		fallthrough
+	case "":
+		keyProvider = rp.NewBlockstoreProvider(n.Blockstore)
+	case "roots":
+		keyProvider = rp.NewPinnedProvider(n.Pinning, n.DAG, true)
+	case "pinned":
+		keyProvider = rp.NewPinnedProvider(n.Pinning, n.DAG, false)
+	default:
+		return fmt.Errorf("unknown reprovider strategy '%s'", cfg.Reprovider.Strategy)
+	}
+	n.Reprovider = rp.NewReprovider(ctx, n.Routing, keyProvider)
+
+	reproviderInterval := kReprovideFrequency
+	if cfg.Reprovider.Interval != "" {
+		dur, err := time.ParseDuration(cfg.Reprovider.Interval)
+		if err != nil {
+			return err
+		}
+
+		reproviderInterval = dur
+	}
+
+	go n.Reprovider.Run(reproviderInterval)
+
+	return nil
+}
+
+func makeAddrsFactory(cfg config.Addresses) (p2pbhost.AddrsFactory, error) {
+	var annAddrs []ma.Multiaddr
+	for _, addr := range cfg.Announce {
+		maddr, err := ma.NewMultiaddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		annAddrs = append(annAddrs, maddr)
+	}
+
+	filters := mafilter.NewFilters()
+	noAnnAddrs := map[string]bool{}
+	for _, addr := range cfg.NoAnnounce {
+		f, err := mamask.NewMask(addr)
+		if err == nil {
+			filters.AddDialFilter(f)
+			continue
+		}
+		maddr, err := ma.NewMultiaddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		noAnnAddrs[maddr.String()] = true
+	}
+
+	return func(allAddrs []ma.Multiaddr) []ma.Multiaddr {
+		var addrs []ma.Multiaddr
+		if len(annAddrs) > 0 {
+			addrs = annAddrs
+		} else {
+			addrs = allAddrs
+		}
+
+		var out []ma.Multiaddr
+		for _, maddr := range addrs {
+			// check for exact matches
+			ok, _ := noAnnAddrs[maddr.String()]
+			// check for /ipcidr matches
+			if !ok && !filters.AddrBlocked(maddr) {
+				out = append(out, maddr)
+			}
+		}
+		return out
+	}, nil
 }
 
 func makeSmuxTransport(mplexExp bool) smux.Transport {
@@ -704,7 +785,10 @@ func listenAddresses(cfg *config.Config) ([]ma.Multiaddr, error) {
 }
 
 type ConstructPeerHostOpts struct {
+	AddrsFactory      p2pbhost.AddrsFactory
 	DisableNatPortMap bool
+	DisableRelay      bool
+	EnableRelayHop    bool
 }
 
 type HostOption func(ctx context.Context, id peer.ID, ps pstore.Peerstore, bwr metrics.Reporter, fs []*net.IPNet, tpt smux.Transport, protc ipnet.Protector, opts *ConstructPeerHostOpts) (p2phost.Host, error)
@@ -731,9 +815,53 @@ func constructPeerHost(ctx context.Context, id peer.ID, ps pstore.Peerstore, bwr
 		hostOpts = append(hostOpts, p2pbhost.NATPortMap)
 	}
 
+	addrsFactory := opts.AddrsFactory
+	if !opts.DisableRelay {
+		if addrsFactory != nil {
+			addrsFactory = composeAddrsFactory(addrsFactory, filterRelayAddrs)
+		} else {
+			addrsFactory = filterRelayAddrs
+		}
+	}
+
+	if addrsFactory != nil {
+		hostOpts = append(hostOpts, addrsFactory)
+	}
+
 	host := p2pbhost.New(network, hostOpts...)
 
+	if !opts.DisableRelay {
+		var relayOpts []circuit.RelayOpt
+		if opts.EnableRelayHop {
+			relayOpts = append(relayOpts, circuit.OptHop)
+		}
+
+		err := circuit.AddRelayTransport(ctx, host, relayOpts...)
+		if err != nil {
+			host.Close()
+			return nil, err
+		}
+	}
+
 	return host, nil
+}
+
+func filterRelayAddrs(addrs []ma.Multiaddr) []ma.Multiaddr {
+	var raddrs []ma.Multiaddr
+	for _, addr := range addrs {
+		_, err := addr.ValueForProtocol(circuit.P_CIRCUIT)
+		if err == nil {
+			continue
+		}
+		raddrs = append(raddrs, addr)
+	}
+	return raddrs
+}
+
+func composeAddrsFactory(f, g p2pbhost.AddrsFactory) p2pbhost.AddrsFactory {
+	return func(addrs []ma.Multiaddr) []ma.Multiaddr {
+		return f(g(addrs))
+	}
 }
 
 // startListening on the network addresses

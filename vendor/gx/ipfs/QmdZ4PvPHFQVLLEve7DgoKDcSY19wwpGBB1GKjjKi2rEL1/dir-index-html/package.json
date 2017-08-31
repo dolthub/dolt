@@ -1,0 +1,15 @@
+{
+  "author": "lgierth",
+  "bugs": {
+    "url": "https://github.com/ipfs/dir-index-html"
+  },
+  "gx": {
+    "dvcsimport": "github.com/ipfs/dir-index-html",
+    "goversion": "1.5.2"
+  },
+  "gxDependencies": [],
+  "gxVersion": "1.0.2",
+  "language": "go",
+  "license": "MIT",
+  "name": "dir-index-html"
+}
