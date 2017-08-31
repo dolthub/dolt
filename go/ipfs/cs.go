@@ -82,22 +82,37 @@ func NewChunkStore(name string, local bool) *chunkStore {
 	d.CheckError(err)
 
 	return &chunkStore{
-		node:  CurrentNode,
-		name:  name,
-		local: local,
+		node:      CurrentNode,
+		name:      name,
+		local:     local,
+		rateLimit: make(chan struct{}, 64),
 	}
 }
 
 type chunkStore struct {
-	root  *hash.Hash
-	node  *core.IpfsNode
-	name  string
-	local bool
+	root      *hash.Hash
+	node      *core.IpfsNode
+	name      string
+	rateLimit chan struct{}
+	local     bool
+	test      bool
+}
+
+func (cs *chunkStore) RateLimitAdd() {
+	cs.rateLimit <- struct{}{}
+	cs.test = true
+}
+
+func (cs *chunkStore) RateLimitSub() {
+	cs.test = false
+	<-cs.rateLimit
 }
 
 func (cs *chunkStore) Get(h hash.Hash) chunks.Chunk {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cs.RateLimitAdd()
+	defer cs.RateLimitSub()
 
 	var b blocks.Block
 	var err error
@@ -121,6 +136,8 @@ func (cs *chunkStore) Get(h hash.Hash) chunks.Chunk {
 func (cs *chunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cs.RateLimitAdd()
+	defer cs.RateLimitSub()
 
 	cids := make([]*cid.Cid, 0, len(hashes))
 	for h := range hashes {
@@ -144,6 +161,9 @@ func (cs *chunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chun
 }
 
 func (cs *chunkStore) Has(h hash.Hash) bool {
+	cs.RateLimitAdd()
+	defer cs.RateLimitSub()
+
 	id := nomsHashToCID(h)
 	ok, err := cs.node.Blockstore.Has(id)
 	if ok {
@@ -176,6 +196,8 @@ func (cs *chunkStore) HasMany(hashes hash.HashSet) hash.HashSet {
 		wg.Add(len(hashes))
 		for h := range hashes {
 			go func() {
+				cs.RateLimitAdd()
+				defer cs.RateLimitSub()
 				defer wg.Done()
 				ok := cs.Has(h)
 				if !ok {
@@ -196,6 +218,9 @@ func nomsHashToCID(nh hash.Hash) *cid.Cid {
 }
 
 func (cs *chunkStore) Put(c chunks.Chunk) {
+	cs.RateLimitAdd()
+	defer cs.RateLimitSub()
+
 	cid := nomsHashToCID(c.Hash())
 	b, err := blocks.NewBlockWithCid(c.Data(), cid)
 	d.PanicIfError(err)
@@ -211,7 +236,7 @@ func (cs *chunkStore) Put(c chunks.Chunk) {
 
 func (cs *chunkStore) Version() string {
 	// TODO: Store this someplace in the DB root
-	return "7.14"
+	return "7.15"
 }
 
 func (cs *chunkStore) Rebase() {

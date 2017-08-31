@@ -466,11 +466,28 @@ func highlightTerms(s string, terms []string) string {
 func expandRLimit() {
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	d.Chk.NoError(err, "Unable to query rlimit: %s", err)
+	d.Chk.NoError(err, "Unable to query file rlimit: %s", err)
+	fmt.Println("orig file limit:", rLimit)
 	if rLimit.Cur < rLimit.Max {
 		rLimit.Max = 64000
 		rLimit.Cur = 64000
 		err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 		d.Chk.NoError(err, "Unable to increase number of open files limit: %s", err)
 	}
+	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	d.Chk.NoError(err)
+	fmt.Println("current file limit:", rLimit)
+
+	err = syscall.Getrlimit(8, &rLimit)
+	d.Chk.NoError(err, "Unable to query thread rlimit: %s", err)
+	fmt.Println("orig thread limit:", rLimit)
+	if rLimit.Cur < rLimit.Max {
+		rLimit.Max = 64000
+		rLimit.Cur = 64000
+		err = syscall.Setrlimit(8, &rLimit)
+		d.Chk.NoError(err, "Unable to increase number of threads limit: %s", err)
+	}
+	err = syscall.Getrlimit(8, &rLimit)
+	d.Chk.NoError(err)
+	fmt.Println("current thread limit:", rLimit)
 }

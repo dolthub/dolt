@@ -74,18 +74,21 @@ func runImport(dir, dsSpec string) error {
 	fmt.Println("Creating users")
 	users := topUsers(msgs)
 
-	fmt.Println("Committing data")
+	fmt.Println("Docs:", termDocs.Len(), "Users:", len(users))
 	root := Root{Messages: m, Index: termDocs, Users: users}
 	nroot := marshal.MustMarshal(db, root)
 	if ds.HasHead() {
 		left := ds.HeadValue()
-		parent := Root{
+		parent := marshal.MustMarshal(db, Root{
 			Index:    types.NewMap(db),
 			Messages: types.NewMap(db),
-		}
-		nroot, err = merge.ThreeWay(left, nroot, marshal.MustMarshal(db, parent), db, nil, nil)
+		})
+		fmt.Println("Merging data")
+		nroot, err = merge.ThreeWay(left, nroot, parent, db, nil, nil)
+		fmt.Println("Merging complete")
 		d.Chk.NoError(err)
 	}
+	fmt.Println("Committing data")
 	_, err = db.CommitValue(ds, nroot)
 	return err
 }
