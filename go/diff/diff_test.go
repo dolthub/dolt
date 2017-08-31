@@ -148,10 +148,10 @@ func TestNomsDiffPrintSet(t *testing.T) {
 	}
 
 	expected2 := `(root) {
--   {  // 4 items
+-   map {  // 4 items
 -     "m1": "m-one",
 -     "m3": "m-three",
--     "m4": {  // 4 items
+-     "m4": map {  // 4 items
 -       "a1": "a-one",
 -       "a2": "a-two",
 -       "a3": "a-three",
@@ -159,10 +159,10 @@ func TestNomsDiffPrintSet(t *testing.T) {
 -     },
 -     "v2": "m-two",
 -   }
-+   {  // 4 items
++   map {  // 4 items
 +     "m1": "m-one",
 +     "m3": "m-three-diff",
-+     "m4": {  // 4 items
++     "m4": map {  // 4 items
 +       "a1": "a-one-diff",
 +       "a2": "a-two",
 +       "a3": "a-three",
@@ -211,7 +211,7 @@ func TestNomsDiffPrintStop(t *testing.T) {
 `
 
 	expected2 := `(root) {
--   {  // 4 items
+-   map {  // 4 items
 `
 
 	s1 := createSet("one", "three", "five", "seven", "nine")

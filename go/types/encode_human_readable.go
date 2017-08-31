@@ -135,7 +135,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("]")
 
 	case MapKind:
-		w.write("{")
+		w.write("map {")
 		w.writeSize(v)
 		w.indent()
 		if !v.(Map).Empty() {
@@ -157,7 +157,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write(v.(Ref).TargetHash().String())
 
 	case SetKind:
-		w.write("{")
+		w.write("set {")
 		w.writeSize(v)
 		w.indent()
 		if !v.(Set).Empty() {

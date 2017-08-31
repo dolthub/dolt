@@ -66,10 +66,10 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
 	s := NewSet(vrw, Number(0), Number(1), Number(2), Number(3))
-	assertWriteHRSEqual(t, "{  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
+	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
 	m := NewMap(vrw, Number(0), Bool(false), Number(1), Bool(true))
-	assertWriteHRSEqual(t, "{\n  0: false,\n  1: true,\n}", m)
+	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
 	l2 := NewList(vrw)
 	assertWriteHRSEqual(t, "[]", l2)
@@ -95,15 +95,15 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	s2 := NewSet(vrw, String("c"), String("d"))
 
 	m := NewMap(vrw, s, l, s2, l2)
-	assertWriteHRSEqual(t, `{
-  {
+	assertWriteHRSEqual(t, `map {
+  set {
     "c",
     "d",
   }: [
     2,
     3,
   ],
-  {
+  set {
     "a",
     "b",
   }: [
@@ -296,11 +296,11 @@ func TestEmptyCollections(t *testing.T) {
 	c := MakeMapType(BlobType, NumberType)
 	assertWriteHRSEqual(t, "Map<Blob, Number>", c)
 	d := NewMap(vrw)
-	assertWriteHRSEqual(t, "{}", d)
+	assertWriteHRSEqual(t, "map {}", d)
 	e := MakeSetType(StringType)
 	assertWriteHRSEqual(t, "Set<String>", e)
 	f := NewSet(vrw)
-	assertWriteHRSEqual(t, "{}", f)
+	assertWriteHRSEqual(t, "set {}", f)
 }
 
 func TestEncodedValueMaxLines(t *testing.T) {
