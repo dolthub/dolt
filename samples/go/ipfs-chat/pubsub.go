@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
-	"gx/ipfs/QmZdsQf8BiCpAj61nz9NgqVeRUkw9vATvCs7UHFTxoUMDb/floodsub"
+	"gx/ipfs/QmddZj8gx1Ceisj3QEWeAzPEjCPWpXzneN1ANdkZdwUdc3/floodsub"
 )
 
 func Replicate(sub *floodsub.Subscription, source, dest datas.Dataset, didChange func(ds datas.Dataset)) {

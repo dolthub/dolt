@@ -85,7 +85,7 @@ func NewChunkStore(name string, local bool) *chunkStore {
 		node:      CurrentNode,
 		name:      name,
 		local:     local,
-		rateLimit: make(chan struct{}, 64),
+		rateLimit: make(chan struct{}, 1024),
 	}
 }
 
