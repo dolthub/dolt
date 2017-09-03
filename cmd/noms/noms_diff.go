@@ -16,11 +16,11 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
-var summarize bool
+var stat bool
 
 var nomsDiff = &util.Command{
 	Run:       runDiff,
-	UsageLine: "diff [--summarize] <object1> <object2>",
+	UsageLine: "diff [--stat] <object1> <object2>",
 	Short:     "Shows the difference between two objects",
 	Long:      "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object arguments.",
 	Flags:     setupDiffFlags,
@@ -29,7 +29,7 @@ var nomsDiff = &util.Command{
 
 func setupDiffFlags() *flag.FlagSet {
 	diffFlagSet := flag.NewFlagSet("diff", flag.ExitOnError)
-	diffFlagSet.BoolVar(&summarize, "summarize", false, "Writes a summary of the changes instead")
+	diffFlagSet.BoolVar(&stat, "stat", false, "Writes a summary of the changes instead")
 	outputpager.RegisterOutputpagerFlags(diffFlagSet)
 	verbose.RegisterVerboseFlags(diffFlagSet)
 
@@ -52,7 +52,7 @@ func runDiff(args []string) int {
 	}
 	defer db2.Close()
 
-	if summarize {
+	if stat {
 		diff.Summary(value1, value2)
 		return 0
 	}

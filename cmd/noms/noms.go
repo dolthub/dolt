@@ -147,7 +147,7 @@ If absolute-path is not provided, then it is read from stdin. See Spelling Objec
 	diff := noms.Command("diff", `Shows the difference between two objects
 See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the object arguments.
 `)
-	diff.Flag("summarize", "Writes a summary of the changes instead").Short('s').Bool()
+	diff.Flag("stat", "Writes a summary of the changes instead").Short('s').Bool()
 	diff.Arg("object1", "").Required().String()
 	diff.Arg("object2", "").Required().String()
 
