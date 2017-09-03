@@ -17,6 +17,7 @@ During the tour, you can refer to the complete [Go SDK Reference](https://godoc.
 Let's create a local database to play with:
 
 ```sh
+> mkdir /tmp/noms-go-tour
 > noms serve /tmp/noms-go-tour
 ```
 
@@ -124,16 +125,18 @@ func main() {
   }
   defer sp.Close()
 
-  data := types.NewList(
+  db := sp.GetDatabase()
+
+  data := types.NewList(db,
     newPerson("Rickon", true),
     newPerson("Bran", true),
     newPerson("Arya", false),
     newPerson("Sansa", false),
   )
 
-  fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
+  fmt.Fprintf(os.Stdout, "data type: %v\n", types.TypeOf(data).Describe())
 
-  _, err = sp.GetDatabase().CommitValue(sp.GetDataset(), data)
+  _, err = db.CommitValue(sp.GetDataset(), data)
   if err != nil {
     fmt.Fprint(os.Stderr, "Error commiting: %s\n", err)
   }
@@ -200,22 +203,26 @@ people
 > noms show http://localhost:8000::people
 struct Commit {
   meta: struct {},
-  parents: Set<Ref<Cycle<Commit>>>,
-  value: List<struct Person {
-    given: String,
-    male: Bool,
-  }>,
-}({
-  meta:  {},
-  parents: {
-    hshltip9kss28uu910qadq04mhk9kuko,
-  },
+  parents: set {},
   value: [  // 4 items
-    Person {
+    struct Person {
       given: "Rickon",
       male: true,
     },
-...
+    struct Person {
+      given: "Bran",
+      male: true,
+    },
+    struct Person {
+      given: "Arya",
+      male: false,
+    },
+    struct Person {
+      given: "Sansa",
+      male: false,
+    },
+  ],
+}
 ```
 
 Let's add some more data.
@@ -244,15 +251,16 @@ func main() {
   } else {
     // type assertion to convert Head to List
     personList := headValue.(types.List)
-    data := personList.Append(
+    personEditor := personList.Edit()
+    data := personEditor.Append(
       types.NewStruct("Person", types.StructData{
         "given":  types.String("Jon"),
         "family": types.String("Snow"),
         "male":   types.Bool(true),
       }),
-    )
+    ).List()
 
-    fmt.Fprintf(os.Stdout, "data type: %v\n", data.Type().Describe())
+    fmt.Fprintf(os.Stdout, "data type: %v\n", types.TypeOf(data).Describe())
 
     _, err = sp.GetDatabase().CommitValue(sp.GetDataset(), data)
     if err != nil {
@@ -266,11 +274,8 @@ Running this:
 
 ```sh
 > go run noms-tour.go
-data type: List<struct Person {
-  family: String,
-  given: String,
-  male: Bool,
-} | struct Person {
+data type: List<Struct Person {
+  family?: String,
   given: String,
   male: Bool,
 }>
@@ -283,7 +288,7 @@ Datasets are versioned. When you *commit* a new value, you aren't overwriting th
 commit ba3lvopbgcqqnofm3qk7sk4j2doroj1l
 Parent: f0b1befu9jp82r1vcd4gmuhdno27uobi
 (root) {
-+   Person {
++   struct Person {
 +     family: "Snow",
 +     given: "Jon",
 +     male: true,
