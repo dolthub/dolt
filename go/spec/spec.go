@@ -90,6 +90,9 @@ func ForDataset(spec string) (Spec, error) {
 // ForDatasetOpts parses a spec for a Dataset.
 func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 	dbSpec, pathStr, err := splitDatabaseSpec(spec)
+	if err != nil {
+		return Spec{}, err
+	}
 
 	sp, err := newSpec(dbSpec, opts)
 	if err != nil {

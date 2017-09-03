@@ -91,7 +91,7 @@ func TestMemDatasetPathSpec(t *testing.T) {
 
 	db := spec.GetDatabase()
 	ds := db.GetDataset("test")
-	ds, err = db.CommitValue(ds, types.NewList(db, types.Number(42)))
+	_, err = db.CommitValue(ds, types.NewList(db, types.Number(42)))
 	assert.NoError(err)
 
 	assert.Equal(types.Number(42), spec.GetValue())
