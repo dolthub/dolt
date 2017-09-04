@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/exit"
@@ -57,15 +58,45 @@ func main() {
 
 	var r io.Reader
 	var contentLength int64
-	var sourceType, sourceVal string
 
+	var root = struct {
+		Meta struct {
+			Etag string `noms:"etag,omitempty"`
+			File string `noms:"file,omitempty"`
+			URL  string `noms:"url,omitempty"`
+		}
+	}{}
+	if ds.HasHead() {
+		err = marshal.Unmarshal(ds.Head(), &root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not unmarshal head: %s\n", err)
+			return
+		}
+	}
+
+	additionalMetaInfo := map[string]string{}
 	if *stdin {
 		r = os.Stdin
 		contentLength = -1
 	} else if url := flag.Arg(0); strings.HasPrefix(url, "http") {
-		resp, err := http.Get(url)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not build http request for url %s, error: %s\n", url, err)
+			return
+		}
+
+		if root.Meta.URL == url && root.Meta.Etag != "" {
+			req.Header.Set("If-None-Match", root.Meta.Etag)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Could not fetch url %s, error: %s\n", url, err)
+			return
+		}
+
+		if resp.StatusCode == http.StatusNotModified {
+			fmt.Fprintf(os.Stdout, "Content unchanged since last fetch, no commit made")
 			return
 		}
 
@@ -77,7 +108,10 @@ func main() {
 
 		r = resp.Body
 		contentLength = resp.ContentLength
-		sourceType, sourceVal = "url", url
+		additionalMetaInfo["url"] = url
+		if etag := resp.Header.Get("Etag"); etag != "" {
+			additionalMetaInfo["etag"] = etag
+		}
 	} else {
 		// assume it's a file
 		f, err := os.Open(url)
@@ -94,7 +128,7 @@ func main() {
 
 		r = f
 		contentLength = s.Size()
-		sourceType, sourceVal = "file", url
+		additionalMetaInfo["file"] = url
 	}
 
 	if !*noProgress {
@@ -103,13 +137,9 @@ func main() {
 	b := types.NewBlob(db, r)
 
 	if *performCommit {
-		var additionalMetaInfo map[string]string
-		if sourceType != "" {
-			additionalMetaInfo = map[string]string{sourceType: sourceVal}
-		}
 		meta, err := spec.CreateCommitMetaStruct(db, "", "", additionalMetaInfo, nil)
 		d.CheckErrorNoUsage(err)
-		ds, err = db.Commit(ds, b, datas.CommitOptions{Meta: meta})
+		_, err = db.Commit(ds, b, datas.CommitOptions{Meta: meta})
 		if err != nil {
 			d.Chk.Equal(datas.ErrMergeNeeded, err)
 			fmt.Fprintf(os.Stderr, "Could not commit, optimistic concurrency failed.")
