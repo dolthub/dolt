@@ -62,7 +62,7 @@ func (c *SizeCache) entry(key interface{}) (sizeCacheEntry, bool) {
 	return entry, true
 }
 
-// Get() checks the searches the cache for an entry. If it exists, it moves it's
+// Get checks the searches the cache for an entry. If it exists, it moves it's
 // lru entry to the back of the queue and returns (value, true). Otherwise, it
 // returns (nil, false).
 func (c *SizeCache) Get(key interface{}) (interface{}, bool) {

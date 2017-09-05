@@ -33,7 +33,7 @@ func (b Blob) Edit() *BlobEditor {
 	return NewBlobEditor(b)
 }
 
-// ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
+// ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
 func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 	// TODO: Support negative off?
 	d.PanicIfTrue(off < 0)
@@ -145,7 +145,7 @@ func (b Blob) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChun
 	return newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
-// Collection interface
+// Len returns the number leaves in the blob
 func (b Blob) Len() uint64 {
 	return b.seq.numLeaves()
 }

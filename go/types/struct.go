@@ -56,7 +56,7 @@ func NewStruct(name string, data StructData) Struct {
 	values := make([]Value, len(data))
 
 	i := 0
-	for name, _ := range data {
+	for name := range data {
 		fieldNames[i] = name
 		i++
 	}

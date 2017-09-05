@@ -642,9 +642,9 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	l2Hash := "#" + l2Ref.TargetHash().String()
 	l3Hash := "#" + l3Ref.TargetHash().String()
 	expectNodeChildren := []nodeChild{
-		nodeChild{Value: nodeInfo{HasChildren: true, ID: l1Hash, Name: "List" + l1Hash}},
-		nodeChild{Value: nodeInfo{HasChildren: true, ID: l2Hash, Name: "List" + l2Hash}},
-		nodeChild{Value: nodeInfo{HasChildren: true, ID: l3Hash, Name: "List" + l3Hash}},
+		{Value: nodeInfo{HasChildren: true, ID: l1Hash, Name: "List" + l1Hash}},
+		{Value: nodeInfo{HasChildren: true, ID: l2Hash, Name: "List" + l2Hash}},
+		{Value: nodeInfo{HasChildren: true, ID: l3Hash, Name: "List" + l3Hash}},
 	}
 
 	l14 := types.NewList(db, types.Number(1), types.Number(2), types.Number(3), listRefList)

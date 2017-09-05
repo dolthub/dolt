@@ -66,7 +66,7 @@ func (h *Histogram) SampleTimeSince(t time.Time) {
 	h.Sample(uint64(d))
 }
 
-// SampleTime is a convenience wrapper around Sample which internally type
+// SampleLen is a convenience wrapper around Sample which internally type
 // asserts the int to a uint64
 func (h *Histogram) SampleLen(l int) {
 	h.Sample(uint64(l))
@@ -92,7 +92,7 @@ func (h *Histogram) Add(other Histogram) {
 	}
 }
 
-// Delta returns a new Histogram whcih is the result of subtracting other from
+// Delta returns a new Histogram which is the result of subtracting other from
 // this bucket-wise. The intent is to capture changes in the state of histogram
 // which is collecting samples over some time period. It will panic if any
 // bucket from other is larger than the corresponding bucket in this.
@@ -144,7 +144,7 @@ func timeToString(v uint64) string {
 	return time.Duration(v).String()
 }
 
-// ByteHistogram stringifies values using humanize over byte values
+// NewByteHistogram stringifies values using humanize over byte values
 func NewByteHistogram() Histogram {
 	return Histogram{ToString: humanize.Bytes}
 }

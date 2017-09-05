@@ -471,7 +471,7 @@ func makeTestStructFromFieldNames(s string) Struct {
 		fieldNames[i] = field.Name
 	}
 	vals := make([]Value, len(fields))
-	for i, _ := range fields {
+	for i := range fields {
 		vals[i] = Bool(true)
 	}
 

@@ -35,7 +35,7 @@ var (
 	NodeIndex int = -1
 )
 
-// Creates a new ChunkStore backed by IPFS.
+// NewChunkStore creates a new ChunkStore backed by IPFS.
 //
 // Noms chunks written to this ChunkStore are converted to IPFS blocks and
 // stored in an IPFS BlockStore.

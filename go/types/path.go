@@ -146,7 +146,7 @@ func constructPath(p Path, str string) (Path, error) {
 	}
 }
 
-// Resolves a path relative to some value.
+// Resolve resolves a path relative to some value.
 // A ValueReader is required to resolve paths that contain the @target annotation.
 func (p Path) Resolve(v Value, vr ValueReader) (resolved Value) {
 	resolved = v
@@ -191,7 +191,7 @@ func (p Path) IsEmpty() bool {
 	return len(p) == 0
 }
 
-// Gets Struct field values by name.
+// FieldPath references Struct field values by name.
 type FieldPath struct {
 	// The name of the field, e.g. `.Name`.
 	Name string
@@ -221,7 +221,7 @@ func (fp FieldPath) String() string {
 	return fmt.Sprintf(".%s", fp.Name)
 }
 
-// Indexes into Maps and Lists by key or index.
+// IndexPath ndexes into Maps and Lists by key or index.
 type IndexPath struct {
 	// The value of the index, e.g. `[42]` or `["value"]`. If Index is a negative
 	// number and the path is resolved in a List, it means index from the back.

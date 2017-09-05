@@ -41,7 +41,7 @@ func (fm fileManifest) Name() string {
 // them, it takes the lock, parses the manifest and returns its contents,
 // setting |exists| to true. If not, it sets |exists| to false and returns. In
 // that case, the other return values are undefined. If |readHook| is non-nil,
-// it will be executed while ParseIfExists() holds the manfiest file lock.
+// it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
 func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()

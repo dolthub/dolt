@@ -16,17 +16,17 @@ var def = func(code int) {
 
 var Exit = def
 
-// Sets the implementation of Exit() to the default.
+// Reset sets the implementation of Exit() to the default.
 func Reset() {
 	Exit = def
 }
 
-// Exits with a failure status.
+// Fail exits with a failure status.
 func Fail() {
 	Exit(1)
 }
 
-// Exits with a success status.
+// Success exits with a success status.
 func Success() {
 	Exit(0)
 }

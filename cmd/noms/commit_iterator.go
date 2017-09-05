@@ -16,13 +16,13 @@ type CommitIterator struct {
 	branches branchList
 }
 
-// Initialize a new CommitIterator with the first commit to be printed.
+// NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
 func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
 	cr := types.NewRef(commit)
 	return &CommitIterator{db: db, branches: branchList{branch{cr: cr, commit: commit}}}
 }
 
-// Returns information about the next commit to be printed. LogNode contains enough contextual
+// Next returns information about the next commit to be printed. LogNode contains enough contextual
 // info that the commit and associated graph can be correctly printed.
 // This works by traversing the "commit" di-graph in a breadth-first manner. Each time it is called,
 // the commit in the branchlist with the greatest height is returned. If that commit has multiple
@@ -92,17 +92,17 @@ func (n LogNode) String() string {
 	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash().String()[0:9], n.cr.Height(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
 }
 
-// True if this commit's graph will expand to show an additional branch
+// Expanding reports whether this commit's graph will expand to show an additional branch
 func (n LogNode) Expanding() bool {
 	return n.startingColCount < n.endingColCount
 }
 
-// True if this commit's graph will show a branch being folded into another branch
+// Shrinking reports whether this commit's graph will show a branch being folded into another branch
 func (n LogNode) Shrinking() bool {
 	return len(n.foldedCols) > 1
 }
 
-// True if the previous commit showed a branch being folded into another branch.
+// Shrunk reports whether the previous commit showed a branch being folded into another branch.
 func (n LogNode) Shrunk() bool {
 	return n.startingColCount > n.endingColCount
 }

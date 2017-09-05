@@ -11,7 +11,7 @@ var (
 	reader = rand.Reader
 )
 
-// Creates a unique ID which is a random 16 byte hex string
+// Id creates a unique ID which is a random 16 byte hex string
 func Id() string {
 	data := make([]byte, 16)
 	_, err := reader.Read(data)

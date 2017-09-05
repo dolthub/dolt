@@ -16,10 +16,10 @@ func TestSimplifyStructFields(t *testing.T) {
 	}
 
 	test([]structTypeFields{
-		structTypeFields{
+		{
 			StructField{"a", BoolType, false},
 		},
-		structTypeFields{
+		{
 			StructField{"a", BoolType, false},
 		},
 	},
@@ -29,10 +29,10 @@ func TestSimplifyStructFields(t *testing.T) {
 	)
 
 	test([]structTypeFields{
-		structTypeFields{
+		{
 			StructField{"a", BoolType, false},
 		},
-		structTypeFields{
+		{
 			StructField{"b", BoolType, false},
 		},
 	},
@@ -43,10 +43,10 @@ func TestSimplifyStructFields(t *testing.T) {
 	)
 
 	test([]structTypeFields{
-		structTypeFields{
+		{
 			StructField{"a", BoolType, false},
 		},
-		structTypeFields{
+		{
 			StructField{"a", BoolType, true},
 		},
 	},

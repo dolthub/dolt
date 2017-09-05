@@ -6,7 +6,7 @@ package functions
 
 import "sync"
 
-// Runs all functions in |fs| in parallel, and returns when all functions have returned.
+// All runs all functions in |fs| in parallel, and returns when all functions have returned.
 func All(fs ...func()) {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(fs))

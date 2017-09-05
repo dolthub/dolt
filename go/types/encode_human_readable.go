@@ -341,7 +341,7 @@ func WriteEncodedValue(w io.Writer, v Value) error {
 	return hrs.err
 }
 
-// WriteEncodedValue writes the serialization of a value. Writing will be
+// WriteEncodedValueMaxLines writes the serialization of a value. Writing will be
 // stopped and an error returned after |maxLines|.
 func WriteEncodedValueMaxLines(w io.Writer, v Value, maxLines uint32) error {
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
