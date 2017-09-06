@@ -9,11 +9,12 @@ import (
 	"log"
 	"os"
 	"regexp"
-    "runtime"
-    "strings"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/ipfs"
@@ -25,7 +26,6 @@ import (
 	"github.com/ipfs/go-ipfs/core"
 	"github.com/jroimartin/gocui"
 	"gopkg.in/alecthomas/kingpin.v2"
-    "github.com/attic-labs/noms/go/chunks"
 )
 
 const (
@@ -354,16 +354,16 @@ func handleEnter(body string, author string, clientTime time.Time, ds datas.Data
 }
 
 func quit(_ *gocui.Gui, _ *gocui.View) error {
-    dbg.Debug("QUITTING #####")
+	dbg.Debug("QUITTING #####")
 	return gocui.ErrQuit
 }
 
 func quitWithStack(_ *gocui.Gui, _ *gocui.View) error {
-    dbg.Debug("QUITTING WITH STACK")
-    stacktrace := make([]byte, 1024*1024)
-    length := runtime.Stack(stacktrace, true)
-    fmt.Println(string(stacktrace[:length]))
-    return gocui.ErrQuit
+	dbg.Debug("QUITTING WITH STACK")
+	stacktrace := make([]byte, 1024*1024)
+	length := runtime.Stack(stacktrace, true)
+	fmt.Println(string(stacktrace[:length]))
+	return gocui.ErrQuit
 }
 
 func arrowUp(_ *gocui.Gui, v *gocui.View) error {
