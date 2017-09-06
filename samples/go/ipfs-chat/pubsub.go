@@ -7,46 +7,55 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"strings"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/ipfs"
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
-	"gx/ipfs/QmddZj8gx1Ceisj3QEWeAzPEjCPWpXzneN1ANdkZdwUdc3/floodsub"
+	"github.com/ipfs/go-ipfs/core"
 )
 
-func Replicate(sub *floodsub.Subscription, source, dest datas.Dataset, didChange func(ds datas.Dataset)) {
-	lastHash := ""
+// MergeMessages continually listens for commit hashes published by ipfs-chat. It
+// merges new messages into it's existing dataset when necessary and if an actual
+// merge was necessary, it re-publishes the new commit.
+func mergeMessages(node *core.IpfsNode, topic string, ds datas.Dataset, didChange func(ds datas.Dataset)) {
+	sub, err := node.Floodsub.Subscribe(topic)
+	d.Chk.NoError(err)
+
+	var lastHash hash.Hash
 	for {
 		dbg.Debug("looking for msgs")
 		msg, err := sub.Next(context.Background())
 		d.PanicIfError(err)
-		h := hash.Parse(string(msg.Data))
-		if lastHash == h.String() {
+		hstring := strings.TrimSpace(string(msg.Data))
+		h, ok := hash.MaybeParse(hstring)
+		if !ok {
+			dbg.Debug("MergeMsgs: received unknown msg: %s", hstring)
 			continue
 		}
-		lastHash = h.String()
+		if lastHash == h {
+			continue
+		}
+		lastHash = h
 
-		dbg.Debug("got update: %s from %s", h.String(), base64.StdEncoding.EncodeToString(msg.From))
-		destDB := dest.Database()
-		destDB.Rebase()
-		dest = destDB.GetDataset(dest.ID())
-		d.PanicIfFalse(dest.HasHead())
+		dbg.Debug("got update: %s from %s", h, base64.StdEncoding.EncodeToString(msg.From))
+		db := ds.Database()
+		db.Rebase()
 
-		source.Database().Rebase()
-		r := types.NewRef(source.Database().ReadValue(h))
-		datas.Pull(source.Database(), destDB, r, nil)
+		ds = db.GetDataset(ds.ID())
+		d.PanicIfFalse(ds.HasHead())
 
-		if h == dest.HeadRef().TargetHash() {
+		if h == ds.HeadRef().TargetHash() {
 			dbg.Debug("received hash same as current head, nothing to do")
 			continue
 		}
-		sourceCommit := destDB.ReadValue(h)
+
+		sourceCommit := db.ReadValue(h)
 		sourceRef := types.NewRef(sourceCommit)
-		a, ok := datas.FindCommonAncestor(sourceRef, dest.HeadRef(), destDB)
+		a, ok := datas.FindCommonAncestor(sourceRef, ds.HeadRef(), db)
 		if !ok {
 			dbg.Debug("no common ancestor, cannot merge update!")
 			continue
@@ -55,31 +64,39 @@ func Replicate(sub *floodsub.Subscription, source, dest datas.Dataset, didChange
 			dbg.Debug("source commit was ancestor, nothing to do")
 			continue
 		}
-		if a.Equals(dest.HeadRef()) {
+		if a.Equals(ds.HeadRef()) {
 			dbg.Debug("fast-forward to source commit")
-			dest, err = destDB.SetHead(dest, sourceRef)
-			didChange(dest)
+			ds, err = db.SetHead(ds, sourceRef)
+			didChange(ds)
 			continue
 		}
 
-		left := dest.HeadValue()
+		dbg.Debug("Merging new messages into existing data")
+		// we have a mergeable difference
+		left := ds.HeadValue()
 		right := sourceCommit.(types.Struct).Get("value")
-		parent := a.TargetValue(destDB).(types.Struct).Get("value")
+		parent := a.TargetValue(db).(types.Struct).Get("value")
 
-		merged, err := merge.ThreeWay(left, right, parent, destDB, nil, nil)
+		merged, err := merge.ThreeWay(left, right, parent, db, nil, nil)
 		if err != nil {
 			dbg.Debug("could not merge received data: " + err.Error())
 			continue
 		}
 
-		dest, err = destDB.SetHead(dest, destDB.WriteValue(datas.NewCommit(merged, types.NewSet(destDB, dest.HeadRef(), sourceRef), types.EmptyStruct)))
+		newCommit := datas.NewCommit(merged, types.NewSet(db, ds.HeadRef(), sourceRef), types.EmptyStruct)
+		commitRef := db.WriteValue(newCommit)
+		dbg.Debug("wrote new commit: %s", commitRef.TargetHash())
+		ds, err = db.SetHead(ds, commitRef)
 		if err != nil {
 			dbg.Debug("call failed to SetHead on destDB, err: %s", err)
 		}
-		didChange(dest)
+		dbg.Debug("set new head ref: %s on ds.ID: %s", commitRef.TargetHash(), ds.ID())
+		Publish(node, topic, commitRef.TargetHash())
+		didChange(ds)
 	}
 }
 
-func Publish(sub *floodsub.Subscription, topic string, s string) {
-	ipfs.CurrentNode.Floodsub.Publish(topic, []byte(s))
+func Publish(node *core.IpfsNode, topic string, h hash.Hash) {
+	dbg.Debug("publishing to topic: %s, hash: %s", topic, h)
+	node.Floodsub.Publish(topic, []byte(h.String()+"\r\n"))
 }

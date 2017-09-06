@@ -122,7 +122,7 @@ func GetTerms(m Message) []string {
 }
 
 func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}) (msgMap types.Map, mc chan types.String, err error) {
-	dbg.Debug("##### listMessages: entered")
+	//dbg.Debug("##### listMessages: entered")
 
 	root, err := getRoot(ds)
 	db := ds.Database()
@@ -137,7 +137,7 @@ func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}
 		<-doneChan
 		done = true
 		<-mc
-		dbg.Debug("##### listMessages: exiting 'done' goroutine")
+		//dbg.Debug("##### listMessages: exiting 'done' goroutine")
 	}()
 
 	go func() {
@@ -150,7 +150,7 @@ func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}
 			key, _ := keyMap.At(keyMap.Len() - i - 1)
 			mc <- key.(types.String)
 		}
-		dbg.Debug("##### listMessages: exiting 'for loop' goroutine, examined: %d", i)
+		//dbg.Debug("##### listMessages: exiting 'for loop' goroutine, examined: %d", i)
 		close(mc)
 	}()
 	return
