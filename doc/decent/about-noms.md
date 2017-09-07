@@ -18,23 +18,23 @@ converging to a shared state.
 Noms stores data in the blockstore of your choice. For example you
 could back Noms with a decentralized blockstore like IPFS. In this
 configuration, read and write load is spread throughout the
-network. Noms could instead be backed by S3, so that you can sync to
-centralized servers if necessary.
+network. If for some reason you wanted to sync to a centralized 
+service you could do that to (for example, S3).
 
-Your application uses a Go client library to interact with Noms
+Your application uses a [Go client library](https://github.com/attic-labs/noms/blob/master/doc/go-tour.md) to interact with Noms
 data. There is also a command-line interface for working with data and
 initial support for a GraphQL-based query language.
 
 Some additional features include:
-* Versioning: noms is git-like, so it’s easy to use, compare, or revert to older database versions
-* Efficient diffs: diffing even huge datasets is efficient due to
+* **Versioning**: noms is git-like, so it’s easy to use, compare, or revert to older database versions
+* **Efficient diffs**: diffing even huge datasets is efficient due to
   noms’ use of a novel BTree-like data structure called a [Prolly
   Tree](../intro.md#prolly-trees-probabilistic-b-trees)
-* Efficient storage: data are chunked and content-addressable, so
+* **Efficient storage**: data are chunked and content-addressable, so
   there is exactly one copy of each chunk in the database, shared by
   other data that reference it. Small changes to massive data
   structures always result in small operations.
-* Verifiable: The entire database rolls up to a single 20-byte hash
+* **Verifiable**: The entire database rolls up to a single 20-byte hash
  that uniquely represents the database at that moment - anyone can
  verify that a particular database hashes to the same value
 
