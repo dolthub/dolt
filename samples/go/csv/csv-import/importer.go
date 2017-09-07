@@ -36,6 +36,7 @@ func main() {
 	// https://blog.golang.org/strings
 	delimiter := flag.String("delimiter", ",", "field delimiter for csv file, must be exactly one character long.")
 	header := flag.String("header", "", "header row. If empty, we'll use the first row of the file")
+	lowercase := flag.Bool("lowercase", false, "convert column names to lowercase (otherwise preserve the case in the resulting struct fields)")
 	name := flag.String("name", "Row", "struct name. The user-visible name to give to the struct type that will hold each row of data.")
 	columnTypes := flag.String("column-types", "", "a comma-separated list of types representing the desired type of each column. if absent all types default to be String")
 	pathDescription := "noms path to blob to import"
@@ -145,6 +146,11 @@ func main() {
 		d.PanicIfError(err)
 	} else {
 		headers = strings.Split(*header, ",")
+	}
+	if *lowercase {
+		for i, _ := range headers {
+			headers[i] = strings.ToLower(headers[i])
+		}
 	}
 
 	uniqueHeaders := make(map[string]bool)

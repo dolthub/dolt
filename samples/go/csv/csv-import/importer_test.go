@@ -49,7 +49,11 @@ func (s *testSuite) TearDownTest() {
 }
 
 func writeCSV(w io.Writer) {
-	_, err := io.WriteString(w, "year,a,b,c\n")
+	writeCSVWithHeader(w, "year,a,b,c\n")
+}
+
+func writeCSVWithHeader(w io.Writer, header string) {
+	_, err := io.WriteString(w, header)
 	d.Chk.NoError(err)
 	for i := 0; i < TEST_DATA_SIZE; i++ {
 		_, err = io.WriteString(w, fmt.Sprintf("%d,a%d,%d,%d\n", TEST_YEAR+i%3, i, i, i*2))
@@ -117,6 +121,40 @@ func (s *testSuite) TestCSVImporter() {
 	ds := db.GetDataset(setName)
 
 	validateList(s, ds.HeadValue().(types.List))
+}
+
+func (s *testSuite) TestCSVImporterLowercase() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	writeCSVWithHeader(input, "YeAr,a,B,c\n")
+	defer os.Remove(input.Name())
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--lowercase", "--column-types", TEST_FIELDS, input.Name(), dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
+	defer db.Close()
+	ds := db.GetDataset(setName)
+
+	validateList(s, ds.HeadValue().(types.List))
+}
+
+func (s *testSuite) TestCSVImporterLowercaseDuplicate() {
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	writeCSVWithHeader(input, "YeAr,a,B,year\n")
+	defer os.Remove(input.Name())
+
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
+	_, stderr, _ := s.Run(main, []string{"--no-progress", "--lowercase", "--column-types", TEST_FIELDS, input.Name(), dataspec})
+	s.Contains(stderr, "must be unique")
 }
 
 func (s *testSuite) TestCSVImporterFromBlob() {
