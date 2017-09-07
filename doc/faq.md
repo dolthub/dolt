@@ -38,9 +38,7 @@ Noms also allows you to provide your own custom policy. If your policy commutes,
 
 However, it would be nice if application developers could more easily opt-in to using only mergeable operations, thereby enforcing that their schema is a CRDT, and providing confidence that custom merge logic doesn't need to be implemented.
 
-Alternately, perhaps there could be a way for Noms to know which conflict cases have been handled by the developer. That way a developer could, e.g., implement the `Counter` CRDT using just normal Noms datatypes with a custom resolution policy.
-
-This is something we'd like to research in the future.
+More generally, perhaps there could be a way to test that all possible conflict cases have been handled by the developer. This would allow developers to implement their own custom CRDTs. This is something we'd like to research in the future.
 
 ### Why don't you support Windows?
 
