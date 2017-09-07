@@ -1,12 +1,10 @@
-# Mission and Vision
+# Vision
 
-*Noms mission is to enable the world's developers to build complex
-decentralized applications.*
+*Noms enables developers to build rich decentralized applications*
 
-We believe that the biggest challenge faced by today's developers is
-lack of a datastore appropriate for complex decentralized applications. Our vision
-is to provide a database native to the decentralized web that
-provides:
+Decentralization promises to be the next great evolution of the Web. But developers today struggle to create even simple decentralized applications because there are no databases that work well in a decentralized environment.
+
+Our vision is to provide a database native to the decentralized web that includes:
 
 1. Efficient and correct multiparty sync and conflict resolution
 1. Search across the entire network, including data that isn’t local
