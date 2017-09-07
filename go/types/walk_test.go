@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestWalkTestSuite(t *testing.T) {

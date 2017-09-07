@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func listOfInts(vrw ValueReadWriter, vals ...int) List {

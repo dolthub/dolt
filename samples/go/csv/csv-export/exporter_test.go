@@ -16,7 +16,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestCSVExporter(t *testing.T) {

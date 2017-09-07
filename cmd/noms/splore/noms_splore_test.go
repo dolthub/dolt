@@ -19,7 +19,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/verbose"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNomsSplore(t *testing.T) {

@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestS3TableReaderAt(t *testing.T) {

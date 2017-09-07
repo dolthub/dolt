@@ -10,7 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type storeOpenFn func() chunks.ChunkStore

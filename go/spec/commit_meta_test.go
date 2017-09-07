@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func isEmptyStruct(s types.Struct) bool {
@@ -20,6 +20,7 @@ func isEmptyStruct(s types.Struct) bool {
 
 func TestCreateCommitMetaStructBasic(t *testing.T) {
 	assert := assert.New(t)
+
 	meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.False(isEmptyStruct(meta))
@@ -28,9 +29,10 @@ func TestCreateCommitMetaStructBasic(t *testing.T) {
 
 func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 	assert := assert.New(t)
-	commitMetaDate = time.Now().UTC().Format(CommitMetaDateFormat)
-	commitMetaMessage = "this is a message"
-	commitMetaKeyValueStrings = "k1=v1,k2=v2,k3=v3"
+
+	setCommitMetaFlags(time.Now().UTC().Format(CommitMetaDateFormat), "this is a message", "k1=v1,k2=v2,k3=v3")
+	defer resetCommitMetaFlags()
+
 	meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
@@ -44,10 +46,6 @@ func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 
 func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 	assert := assert.New(t)
-	commitMetaDate = ""
-	commitMetaMessage = ""
-	commitMetaKeyValueStrings = ""
-	commitMetaKeyValuePaths = ""
 
 	dateArg := time.Now().UTC().Format(CommitMetaDateFormat)
 	messageArg := "this is a message"
@@ -65,9 +63,9 @@ func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 
 func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
 	assert := assert.New(t)
-	commitMetaDate = time.Now().UTC().Format(CommitMetaDateFormat)
-	commitMetaMessage = "this is a message"
-	commitMetaKeyValueStrings = "k1=v1p1,k2=v2p2,k4=v4p4"
+
+	setCommitMetaFlags(time.Now().UTC().Format(CommitMetaDateFormat), "this is a message", "k1=v1p1,k2=v2p2,k4=v4p4")
+	defer resetCommitMetaFlags()
 
 	dateArg := time.Now().UTC().Add(time.Hour * -24).Format(CommitMetaDateFormat)
 	messageArg := "this is a message"
@@ -90,7 +88,9 @@ func TestCreateCommitMetaStructBadDate(t *testing.T) {
 	assert := assert.New(t)
 
 	testBadDates := func(cliDateString, argDateString string) {
-		commitMetaDate = cliDateString
+		setCommitMetaFlags(cliDateString, "", "")
+		defer resetCommitMetaFlags()
+
 		meta, err := CreateCommitMetaStruct(nil, argDateString, "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "Unable to parse date: "))
@@ -111,7 +111,9 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 	assert := assert.New(t)
 
 	testBadMetaSeparator := func(k, v, sep string) {
-		commitMetaKeyValueStrings = fmt.Sprintf("%s%s%s", k, sep, v)
+		setCommitMetaFlags("", "", fmt.Sprintf("%s%s%s", k, sep, v))
+		defer resetCommitMetaFlags()
+
 		meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "Unable to parse meta value: "))
@@ -122,13 +124,15 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 		testBadMetaSeparator(k, v, ":")
 		testBadMetaSeparator(k, v, "-")
 
-		commitMetaKeyValueStrings = fmt.Sprintf("%s=%s", k, v)
+		setCommitMetaFlags("", "", fmt.Sprintf("%s=%s", k, v))
+
 		meta, err := CreateCommitMetaStruct(nil, "", "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "Invalid meta key: "))
 		assert.True(isEmptyStruct(meta))
 
-		commitMetaKeyValueStrings = ""
+		resetCommitMetaFlags()
+
 		metaValues := map[string]string{k: v}
 		meta, err = CreateCommitMetaStruct(nil, "", "", metaValues, nil)
 		assert.Error(err)
@@ -142,4 +146,14 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 	testBadMetaKeys("one-hundred-bottles", "take one down")
 	testBadMetaKeys("👀", "who watches the watchers?")
 	testBadMetaKeys("key:", "value")
+}
+
+func setCommitMetaFlags(date, message, kvStrings string) {
+	commitMetaDate = date
+	commitMetaMessage = message
+	commitMetaKeyValueStrings = kvStrings
+}
+
+func resetCommitMetaFlags() {
+	setCommitMetaFlags("", "", "")
 }

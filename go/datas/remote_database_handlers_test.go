@@ -19,8 +19,8 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
 	"github.com/golang/snappy"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHandleWriteValue(t *testing.T) {

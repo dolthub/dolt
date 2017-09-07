@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSetIterator(t *testing.T) {

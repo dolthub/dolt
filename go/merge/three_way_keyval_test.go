@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestThreeWayMapMerge(t *testing.T) {

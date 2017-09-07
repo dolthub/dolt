@@ -9,7 +9,7 @@ import (
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 const datasetID = "ds1"

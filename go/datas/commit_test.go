@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/nomdl"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewCommit(t *testing.T) {

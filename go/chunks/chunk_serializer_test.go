@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSerializeRoundTrip(t *testing.T) {

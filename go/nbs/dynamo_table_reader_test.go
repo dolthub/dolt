@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
-	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDynamoTableReaderAt(t *testing.T) {

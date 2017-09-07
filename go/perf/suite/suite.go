@@ -91,12 +91,12 @@ import (
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
-	testifySuite "github.com/attic-labs/testify/suite"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/stretchr/testify/assert"
+	testifySuite "github.com/stretchr/testify/suite"
 )
 
 var (

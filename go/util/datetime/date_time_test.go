@@ -11,7 +11,7 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBasics(t *testing.T) {

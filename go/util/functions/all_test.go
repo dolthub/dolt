@@ -7,7 +7,7 @@ package functions
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAll(t *testing.T) {

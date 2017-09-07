@@ -12,7 +12,7 @@ import (
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type tableSpecsByAscendingCount []tableSpec

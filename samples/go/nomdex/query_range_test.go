@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 const nilHolder = -1000000

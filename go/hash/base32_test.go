@@ -7,7 +7,7 @@ package hash
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBase32Encode(t *testing.T) {

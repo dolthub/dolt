@@ -16,9 +16,9 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
-	"github.com/attic-labs/testify/suite"
 	"github.com/julienschmidt/httprouter"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 const testAuthToken = "aToken123"

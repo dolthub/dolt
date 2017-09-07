@@ -7,7 +7,7 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMapIterator(t *testing.T) {

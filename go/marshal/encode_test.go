@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncode(tt *testing.T) {

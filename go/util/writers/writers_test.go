@@ -9,7 +9,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type maxLineTestCase struct {

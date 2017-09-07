@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCR(t *testing.T) {

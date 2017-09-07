@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/attic-labs/testify/assert"
 	"github.com/golang/snappy"
+	"github.com/stretchr/testify/assert"
 )
 
 type testSloppyEncoder struct {

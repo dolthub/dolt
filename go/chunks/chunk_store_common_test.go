@@ -5,7 +5,7 @@
 package chunks
 
 import (
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"

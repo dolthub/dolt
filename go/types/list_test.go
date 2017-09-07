@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/testify/assert"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 const testListSize = 5000

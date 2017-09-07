@@ -4,7 +4,7 @@
 
 package types
 
-import "github.com/attic-labs/testify/suite"
+import "github.com/stretchr/testify/suite"
 
 type collectionTestSuite struct {
 	suite.Suite

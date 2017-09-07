@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHashSliceSort(t *testing.T) {

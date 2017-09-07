@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 const (

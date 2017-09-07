@@ -16,13 +16,13 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
+	"github.com/stretchr/testify/assert"
 )
 
 var (

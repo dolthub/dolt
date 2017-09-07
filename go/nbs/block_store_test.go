@@ -17,8 +17,8 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/testify/assert"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 const testMemTableSize = 1 << 8

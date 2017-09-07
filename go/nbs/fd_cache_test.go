@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFDCache(t *testing.T) {

@@ -7,7 +7,7 @@ package nbs
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPlanCompaction(t *testing.T) {

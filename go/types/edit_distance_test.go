@@ -7,7 +7,7 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func assertDiff(assert *assert.Assertions, last []uint64, current []uint64, expect []Splice) {

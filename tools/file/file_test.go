@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 const (

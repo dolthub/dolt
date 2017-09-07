@@ -7,7 +7,7 @@ package nbs
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}

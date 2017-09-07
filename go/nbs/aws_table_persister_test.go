@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
-	"github.com/attic-labs/testify/assert"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAWSTablePersisterPersist(t *testing.T) {

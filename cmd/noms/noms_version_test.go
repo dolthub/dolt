@@ -10,7 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/util/clienttest"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestVersion(t *testing.T) {

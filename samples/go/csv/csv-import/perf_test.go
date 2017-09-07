@@ -15,8 +15,8 @@ import (
 	"github.com/attic-labs/noms/go/perf/suite"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/samples/go/csv"
-	"github.com/attic-labs/testify/assert"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/stretchr/testify/assert"
 )
 
 // CSV perf suites require the testdata directory to be checked out at $GOPATH/src/github.com/attic-labs/testdata (i.e. ../testdata relative to the noms directory).

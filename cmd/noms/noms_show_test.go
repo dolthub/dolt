@@ -13,7 +13,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/clienttest"
 	"github.com/attic-labs/noms/go/util/test"
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestNomsShow(t *testing.T) {

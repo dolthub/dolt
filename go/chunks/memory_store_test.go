@@ -7,7 +7,7 @@ package chunks
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/suite"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestMemoryStoreTestSuite(t *testing.T) {

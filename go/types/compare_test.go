@@ -9,7 +9,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 var prefix = []byte{0x01, 0x02, 0x03, 0x04}

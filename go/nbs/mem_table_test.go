@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/testify/assert"
 	"github.com/golang/snappy"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMemTableAddHasGetChunk(t *testing.T) {

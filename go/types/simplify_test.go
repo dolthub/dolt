@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSimplifyStructFields(t *testing.T) {

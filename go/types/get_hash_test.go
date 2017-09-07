@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEnsureHash(t *testing.T) {
