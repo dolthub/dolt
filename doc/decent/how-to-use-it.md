@@ -17,9 +17,9 @@ The steps you’ll need to take are:
   union. (Note: if you are interested in using CRDTs as an alternative
   to classic datatypes please let us know.)
 1. Consider...
-  * how peers will discover each other
-  * how and when they will pull changes, and 
-  * what potential there is for conflicting changes. Consider modeling
+    * how peers will discover each other
+    * how and when they will pull changes, and 
+    * what potential there is for conflicting changes. Consider modeling
     your problem so that changes commute[*] in order to make merging
     easier. For example peers could publish new `(root hash, database
     URL)` tuples in
