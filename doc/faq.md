@@ -1,15 +1,5 @@
 # Frequently Asked Questions
 
-### How is this a database? There's not even a query language!
-
-First, we do plan to have some sort query language one day. But such a thing is sort of like the last step of a long journey that we are just at the beginning of. Right now we are working on the underlying primitives that would allow a query system to be built and work well.
-
-Second, the term *database* isn't well-defined. There are a lot of different systems that call themselves databases.
-
-We like to think the word has a certain heft, and certain expectations that go along with it: A database should deal with lots of small, structured records well. A database should never lose or corrupt data. A database should support efficient queries on different attributes.
-
-Noms can and should be a database, not merely a datastore. We're not quite there yet, but we're off to a good start, and we do think we have the [necessary tools](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees).
-
 ### Decentralized like BitTorrent?
 
 No, decentralized like Git.
@@ -30,17 +20,27 @@ Theoretically, definitely. In Git, for example, the concept of "shallow clones" 
 
 ### How does Noms handle conflicts?
 
-Currently, Noms doesn't handle them at all. But in the near future, we plan to add [automatic merge policies](https://github.com/attic-labs/noms/issues/148) for several common cases of conflicts.
+Noms provides several built-in policies that can automatically merge common cases of conflicts. For example concurrent edits to sets are always mergeable and concurrent edits to different keys in a map or struct are also mergeable.
 
-Similar to how Git uses simple heuristics to successfully merge many classes of edits to same same file/directory, we believe that we can use some simple heuristics to merge Noms data. In fact, we think we can even do better than Git, because in general Noms data is more granular than data in Git. We have structs, sets, lists, and maps, where Git just has directories and files.
-
-Whether to use an auto-merge policy will be something that developers choose on a case-by-case basis and can always opt-out of, or combine with custom code, for more complex scenarios.
+The conflict resolution system is pluggable so new policies that are application-specific can be added. However, it's possible to build surprisingly complex applications with just the built-in policies.
 
 ### Why don't you just use CRDTs?
 
-We want Noms to provide traditional data structures that programmers are familiar with, even if that means conflict resolution must be done manually in some cases. We think we can provide a few options of conflict resolution policies for each core data structure kind that should meet most needs.
+[Convergent (or Commutative) Replicated Data Types (CRDTs)](http://hal.upmc.fr/inria-00555588/document) are a class of distributed data structures that provably converge to some agreed-upon state with no synchronization. Stated differently: CRDTs define a merge policy that is commutative over all their operations.
 
-[Convergent (or Commutative) Replicated Data Types (CRDTs)](http://hal.upmc.fr/inria-00555588/document) are a class of distributed data structures that provably converge to some agreed-upon state with no synchronization. State-Based CRDTs operate by having nodes send the entirety of their local state to one another, which is something that Noms is designed to be very good at, so the inclination to put the two together is understandable. That said, the semantics of CRDT are generally unfamiliar to most users; e.g. a Set in which elements can only be added, removed, and then never added again (barring some synchronization-requiring “garbage collection” step). That said, we're still interested in perhaps using some form of sequence CRDT for merging lists -- this is still under investigation.
+CRDTs are nice because they require no custom conflict/merge code from the developer.
+
+Noms defines a set of intutive built-in merge policies for its core datatypes. For example, the default policy makes all operations on Noms Sets commute (add wins in the case of concurrent remove/add). This means that with the default policy, Noms Sets are a CRDT.
+
+If your application uses only operations on Noms datatypes that can be merged with whatever merge policy you are using, then your schema is a CRDT. It's possible to build surprisingly complex applications this way with just the default policy.
+
+Noms also allows you to provide your own custom policy. If your policy commutes, then the resulting datatype will be a CRDT.
+
+However, it would be nice if application developers could more easily opt-in to using only mergeable operations, thereby enforcing that their schema is a CRDT, and providing confidence that custom merge logic doesn't need to be implemented.
+
+Alternately, perhaps there could be a way for Noms to know which conflict cases have been handled by the developer. That way a developer could, e.g., implement the `Counter` CRDT using just normal Noms datatypes with a custom resolution policy.
+
+This is something we'd like to research in the future.
 
 ### Why don't you support Windows?
 
@@ -62,7 +62,3 @@ You can use it in a virtual machine. We have also heard Noms works OK with gitba
 ### Are you sure Noms doesn't stand for something?
 
 Pretty sure. But if you like, you can pretend it stands for Non-Mutable Store.
-
-### You don't know what you're doing!
-
-Not a question. But, fair enough.
