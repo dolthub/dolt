@@ -1,6 +1,6 @@
 # Vision
 
-*Noms enables developers to build rich decentralized applications*
+*Noms enables developers to build rich decentralized applications.*
 
 Decentralization promises to be the next great evolution of the Web. But developers today struggle to create even simple decentralized applications because there are no databases that work well in a decentralized environment.
 
