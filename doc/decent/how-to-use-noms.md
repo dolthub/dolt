@@ -23,12 +23,19 @@ The steps you’ll need to take are:
     * how and when they will pull changes, and 
     * what potential there is for conflicting changes. Consider modeling
     your problem so that changes commute in order to make merging
-    easier.[*]
+    easier.  
     
-    For example peers could publish new `(root hash, database
-    URL)` tuples in
-    [IPNS](https://github.com/ipfs/examples/tree/master/examples/ipns)
-    and pull immediately. 
+   An example of answers to the above questions is that peers will publish new `(root hash, database URL)` tuples in
+    [IPNS](https://github.com/ipfs/examples/tree/master/examples/ipns), pull immediately, and avoid conflicts by ensuring changes are commutative.
+    
+   As an example of changes that commute consider modeling a stream
+    of chat messages. Appending messages from both parties to a list
+    is not commutative; the result depends on the order in which
+    messages are added to the list. An example of a commutative
+    strategy is adding the messages to a `Map` keyed by
+    `Struct{sender, ordinal}`: the resulting `Map` is the same no
+    matter what order messages are added.
+
 1. Vendor the code into your project. 
 1. Set `NOMS_VERSION_NEXT=1` in your environment.
 1. Decide which type of storage you'd like to use: memory (convenient for playing around), disk, IPFS, or S3. (If you'd to implement a store on top of another type of storage that's possible too; email us or reach out on slack and we can help.)
@@ -97,12 +104,3 @@ The steps you’ll need to take are:
    * Note that Memory tables won't be inspectable because they exist only in the memory of the process that created them. 
 1. Implement pull and merge. The [pull API](../../go/datas/pull.go) is used pull changes from a peer and the [merge API](../../go/merge/) is used to merge changes before commit. There's an [example of merging in the IPFS-based-chat sample
     app](https://github.com/attic-labs/noms/blob/master/samples/go/ipfs-chat/pubsub.go). 
-
-
-[*] *As an example of changes that commute consider modeling a stream
-    of chat messages. Appending messages from both parties to a list
-    is not commutative; the result depends on the order in which
-    messages are added to the list. An example of a commutative
-    strategy is adding the messages to a `Map` keyed by
-    `Struct{sender, ordinal}`: the resulting `Map` is the same no
-    matter what order messages are added.*
