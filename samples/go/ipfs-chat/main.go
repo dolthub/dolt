@@ -70,7 +70,7 @@ func main() {
 	case "client":
 		runClient(*username, *clientTopic, *clientDS, *nodeIdx)
 	case "import":
-		runImport(*importDir, *importDS)
+		lib.RunImport(*importDir, *importDS)
 	case "daemon":
 		runDaemon(*daemonTopic, *daemonInterval, *daemonDS, *daemonNodeIdx)
 	}
