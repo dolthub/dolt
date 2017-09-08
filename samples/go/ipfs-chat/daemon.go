@@ -26,6 +26,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/writers"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
+	"github.com/attic-labs/noms/samples/go/ipfs-chat/lib"
 	"github.com/ipfs/go-ipfs/core"
 )
 
@@ -48,7 +49,7 @@ func runDaemon(topic string, interval time.Duration, ipfsSpec string, nodeIdx in
 
 	// Initial the database, if necessary, to an empty commit. Committing to
 	// the local database will also reset the head for the network database.
-	localDS, err = InitDatabase(localDS)
+	localDS, err = lib.InitDatabase(localDS)
 	d.PanicIfError(err)
 
 	// Get the head of the network dataset.
@@ -61,7 +62,7 @@ func runDaemon(topic string, interval time.Duration, ipfsSpec string, nodeIdx in
 	})
 
 	for {
-		Publish(node, topic, nwDS.HeadRef().TargetHash())
+		lib.Publish(node, topic, sp, nwDS.HeadRef().TargetHash())
 		time.Sleep(interval)
 	}
 }

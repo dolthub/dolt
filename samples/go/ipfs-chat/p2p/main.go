@@ -7,25 +7,29 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/signal"
+	"path"
 	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/ipfs"
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/math"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
 	"github.com/attic-labs/noms/samples/go/ipfs-chat/lib"
-	"github.com/ipfs/go-ipfs/core"
 	"github.com/jroimartin/gocui"
+
+	"github.com/attic-labs/noms/go/config"
+	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/ipfs"
+	"github.com/attic-labs/noms/go/util/math"
+	"github.com/attic-labs/noms/go/util/profile"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -48,53 +52,33 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 
 	clientCmd := kingpin.Command("client", "runs the ipfs-chat client UI")
-	clientTopic := clientCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
-	username := clientCmd.Flag("username", "username to sign in as").String()
+	clientTopic := clientCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("noms-chat-p2p").String()
+	username := clientCmd.Flag("username", "username to sign in as").Required().String()
 	nodeIdx := clientCmd.Flag("node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
-	clientDS := clientCmd.Arg("dataset", "the dataset spec to store chat data in").Required().String()
-
-	importCmd := kingpin.Command("import", "imports data into a chat")
-	importDir := importCmd.Flag("dir", "directory that contains data to import").Default("./data").ExistingDir()
-	importDS := importCmd.Arg("dataset", "the dataset spec to import chat data to").Required().String()
-
-	daemonCmd := kingpin.Command("daemon", "runs a daemon that simulates filecoin, eagerly storing all chunks for a chat")
-	daemonTopic := daemonCmd.Flag("topic", "IPFS pubsub topic to publish and subscribe to").Default("ipfs-chat").String()
-	daemonInterval := daemonCmd.Flag("interval", "amount of time to wait before publishing state to network").Default("5s").Duration()
-	daemonNodeIdx := daemonCmd.Flag("node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
-	daemonDS := daemonCmd.Arg("dataset", "the dataset spec indicating ipfs repo to use").Required().String()
+	clientDir := clientCmd.Arg("path", "local directory to store data in").Required().ExistingDir()
 
 	kingpin.CommandLine.Help = "A demonstration of using Noms to build a scalable multiuser collaborative application."
 
-	expandRLimit()
 	switch kingpin.Parse() {
 	case "client":
-		runClient(*username, *clientTopic, *clientDS, *nodeIdx)
-	case "import":
-		runImport(*importDir, *importDS)
-	case "daemon":
-		runDaemon(*daemonTopic, *daemonInterval, *daemonDS, *daemonNodeIdx)
+		runClient(*username, *clientTopic, *clientDir, *nodeIdx)
 	}
 }
 
-func runClient(username, topic, clientDS string, nodeIdx int) {
+func runClient(username, topic, clientDir string, nodeIdx int) {
+	httpPort := 8000 + nodeIdx
+	sp, err := spec.ForDatabase(fmt.Sprintf("http://%s:%d", getIP(), httpPort))
+	d.PanicIfError(err)
+
+	<-runServer(path.Join(clientDir, "noms"), httpPort)
+
 	var displayingSearchResults = false
-
-	dsSpec := clientDS
-	sp, err := spec.ForDataset(dsSpec)
-	d.CheckErrorNoUsage(err)
-
-	if !isIPFS(sp.Protocol) {
-		fmt.Println("ipfs-chat requires an 'ipfs' dataset")
-		os.Exit(1)
-	}
-
-	ds := sp.GetDataset()
-	node, cs := initChunkStore(sp, nodeIdx)
-	db := datas.NewDatabase(cs)
-	ds = db.GetDataset(ds.ID())
-
+	db := sp.GetDatabase()
+	ds := db.GetDataset("chat")
 	ds, err = lib.InitDatabase(ds)
 	d.PanicIfError(err)
+
+	node := ipfs.OpenIPFSRepo(path.Join(clientDir, "ipfs"), nodeIdx)
 
 	g, err := gocui.NewGui(gocui.Output256)
 	d.PanicIfError(err)
@@ -478,41 +462,53 @@ func highlightTerms(s string, terms []string) string {
 	return s
 }
 
-// IPFS can use a lot of file decriptors. There are several bugs in the IPFS
-// repo about this and plans to improve. For the time being, we bump the limits
-// for this process.
-func expandRLimit() {
-	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	d.Chk.NoError(err, "Unable to query file rlimit: %s", err)
-	if rLimit.Cur < rLimit.Max {
-		rLimit.Max = 64000
-		rLimit.Cur = 64000
-		err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-		d.Chk.NoError(err, "Unable to increase number of open files limit: %s", err)
+func getIP() string {
+	ifaces, err := net.Interfaces()
+	d.PanicIfError(err)
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		d.PanicIfError(err)
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				if !v.IP.IsLoopback() {
+					ip := v.IP.To4()
+					if ip != nil {
+						return v.IP.String()
+					}
+				}
+			}
+		}
 	}
-	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	d.Chk.NoError(err)
-
-	err = syscall.Getrlimit(8, &rLimit)
-	d.Chk.NoError(err, "Unable to query thread rlimit: %s", err)
-	if rLimit.Cur < rLimit.Max {
-		rLimit.Max = 64000
-		rLimit.Cur = 64000
-		err = syscall.Setrlimit(8, &rLimit)
-		d.Chk.NoError(err, "Unable to increase number of threads limit: %s", err)
-	}
-	err = syscall.Getrlimit(8, &rLimit)
-	d.Chk.NoError(err)
+	d.Panic("notreached")
+	return ""
 }
 
-func initChunkStore(sp spec.Spec, nodeIdx int) (*core.IpfsNode, chunks.ChunkStore) {
-	// recreate database so that we can have control of chunkstore's ipfs node
-	node := ipfs.OpenIPFSRepo(sp.DatabaseName, nodeIdx)
-	cs := ipfs.ChunkStoreFromIPFSNode(sp.DatabaseName, sp.Protocol == "ipfs-local", node)
-	return node, cs
-}
+func runServer(atPath string, port int) (ready chan struct{}) {
+	ready = make(chan struct{})
+	_ = os.Mkdir(atPath, 0755)
+	cfg := config.NewResolver()
+	cs, err := cfg.GetChunkStore(atPath)
+	d.CheckError(err)
+	server := datas.NewRemoteDatabaseServer(cs, port)
+	server.Ready = func() {
+		ready <- struct{}{}
+	}
 
-func isIPFS(protocol string) bool {
-	return protocol == "ipfs" || protocol == "ipfs-local"
+	// Shutdown server gracefully so that profile may be written
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		server.Stop()
+	}()
+
+	go func() {
+		d.Try(func() {
+			defer profile.MaybeStartProfile().Stop()
+			server.Run()
+		})
+	}()
+	return
 }
