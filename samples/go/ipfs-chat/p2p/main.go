@@ -57,11 +57,18 @@ func main() {
 	nodeIdx := clientCmd.Flag("node-idx", "a single digit to be used as last digit in all port values: api, gateway and swarm (must be 0-9 inclusive)").Default("-1").Int()
 	clientDir := clientCmd.Arg("path", "local directory to store data in").Required().ExistingDir()
 
+	importCmd := kingpin.Command("import", "imports data into a chat")
+	importSrc := importCmd.Flag("dir", "directory that contains data to import").Default("../data").ExistingDir()
+	importDir := importCmd.Arg("path", "local directory to store data in").Required().ExistingDir()
+
 	kingpin.CommandLine.Help = "A demonstration of using Noms to build a scalable multiuser collaborative application."
 
 	switch kingpin.Parse() {
 	case "client":
 		runClient(*username, *clientTopic, *clientDir, *nodeIdx)
+	case "import":
+		err := lib.RunImport(*importSrc, fmt.Sprintf("%s/noms::chat", *importDir))
+		d.PanicIfError(err)
 	}
 }
 

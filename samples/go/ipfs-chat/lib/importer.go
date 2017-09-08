@@ -2,7 +2,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package main
+package lib
 
 import (
 	"errors"
@@ -19,16 +19,15 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/datetime"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/lib"
 	"golang.org/x/net/html"
 )
 
 var (
 	character = ""
-	msgs      = []lib.Message{}
+	msgs      = []Message{}
 )
 
-func runImport(dir, dsSpec string) error {
+func RunImport(dir, dsSpec string) error {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if path == dir {
 			return nil
@@ -53,7 +52,7 @@ func runImport(dir, dsSpec string) error {
 	sp, err := spec.ForDataset(dsSpec)
 	d.CheckErrorNoUsage(err)
 	ds := sp.GetDataset()
-	ds, err = lib.InitDatabase(ds)
+	ds, err = InitDatabase(ds)
 	d.PanicIfError(err)
 	db := ds.Database()
 
@@ -65,9 +64,9 @@ func runImport(dir, dsSpec string) error {
 	m := types.NewMap(db, kvPairs...)
 
 	fmt.Println("Creating index")
-	ti := lib.NewTermIndex(db, types.NewMap(db)).Edit()
+	ti := NewTermIndex(db, types.NewMap(db)).Edit()
 	for _, msg := range msgs {
-		terms := lib.GetTerms(msg)
+		terms := GetTerms(msg)
 		ti.InsertAll(terms, types.String(msg.ID()))
 	}
 	termDocs := ti.Value().TermDocs
@@ -76,11 +75,11 @@ func runImport(dir, dsSpec string) error {
 	users := topUsers(msgs)
 
 	fmt.Println("Docs:", termDocs.Len(), "Users:", len(users))
-	root := lib.Root{Messages: m, Index: termDocs, Users: users}
+	root := Root{Messages: m, Index: termDocs, Users: users}
 	nroot := marshal.MustMarshal(db, root)
 	if ds.HasHead() {
 		left := ds.HeadValue()
-		parent := marshal.MustMarshal(db, lib.Root{
+		parent := marshal.MustMarshal(db, Root{
 			Index:    types.NewMap(db),
 			Messages: types.NewMap(db),
 		})
@@ -102,7 +101,7 @@ func extractDialog(n *html.Node) {
 	}
 	if character != "" && n.Type == html.TextNode {
 		//fmt.Println("Dialog:", strings.TrimSpace(n.Data))
-		msg := lib.Message{
+		msg := Message{
 			Ordinal:    uint64(len(msgs)),
 			Author:     character,
 			Body:       strings.TrimSpace(n.Data),
@@ -134,7 +133,7 @@ type cpair struct {
 	cnt       int
 }
 
-func topUsers(msgs []lib.Message) []string {
+func topUsers(msgs []Message) []string {
 	userpat := regexp.MustCompile(`^[a-zA-Z][a-zA-Z\s]*\d*$`)
 	usermap := map[string]int{}
 	for _, msg := range msgs {
