@@ -56,7 +56,7 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 		return
 	}
 
-	leaves, localStart := loadLeafNodes([]Collection{b}, startIdx, endIdx)
+	leaves, localStart := LoadLeafNodes([]Collection{b}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 
