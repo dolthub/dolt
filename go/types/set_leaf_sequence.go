@@ -8,7 +8,7 @@ import "github.com/attic-labs/noms/go/d"
 
 type setLeafSequence struct {
 	leafSequence
-	data []Value // sorted by Hash()
+	data ValueSlice // sorted by Hash()
 }
 
 func newSetLeafSequence(vrw ValueReadWriter, v ...Value) orderedSequence {

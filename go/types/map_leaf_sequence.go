@@ -8,7 +8,7 @@ import "github.com/attic-labs/noms/go/d"
 
 type mapLeafSequence struct {
 	leafSequence
-	data []mapEntry // sorted by entry.key.Hash()
+	data mapEntrySlice // sorted by entry.key.Hash()
 }
 
 type mapEntry struct {

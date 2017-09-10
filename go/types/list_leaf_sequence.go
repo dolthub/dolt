@@ -8,7 +8,7 @@ import "github.com/attic-labs/noms/go/d"
 
 type listLeafSequence struct {
 	leafSequence
-	values []Value
+	values ValueSlice
 }
 
 func newListLeafSequence(vrw ValueReadWriter, v ...Value) sequence {
