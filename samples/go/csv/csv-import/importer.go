@@ -43,7 +43,7 @@ func main() {
 	path := flag.String("path", "", pathDescription)
 	flag.StringVar(path, "p", "", pathDescription)
 	noProgress := flag.Bool("no-progress", false, "prevents progress from being output if true")
-	destType := flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is a list of comma-delimmited column headers or indexes (0-based) used to uniquely identify a row")
+	destType := flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is a list of comma-delimited column headers or indexes (0-based) used to uniquely identify a row")
 	skipRecords := flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
 	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
