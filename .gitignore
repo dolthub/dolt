@@ -1,5 +1,6 @@
 noms.iml
 *.pyc
+*.swp
 .vscode
 .idea
 .noms
