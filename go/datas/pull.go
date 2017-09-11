@@ -40,18 +40,16 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 	}
 	var sampleSize, sampleCount uint64
 
-	absent := hash.NewHashSet(sourceRef.TargetHash())
+	absent := hash.HashSlice{sourceRef.TargetHash()}
 	for len(absent) != 0 {
 		updateProgress(0, uint64(len(absent)), 0)
 
 		// Concurrently pull all the chunks the sink is missing out of the source
-		// For each chunk, put it into the sink, then decode it into a value so we can later iterate all the refs in the chunk.
-		absentValues := types.ValueSlice{}
-		foundChunks := make(chan *chunks.Chunk)
-		go func() { defer close(foundChunks); srcDB.chunkStore().GetMany(absent, foundChunks) }()
-		for c := range foundChunks {
-			sinkDB.chunkStore().Put(*c)
-			absentValues = append(absentValues, types.DecodeValue(*c, srcDB))
+		neededChunks := map[hash.Hash]*chunks.Chunk{}
+		found := make(chan *chunks.Chunk)
+		go func() { defer close(found); srcDB.chunkStore().GetMany(absent.HashSet(), found) }()
+		for c := range found {
+			neededChunks[c.Hash()] = c
 
 			// Randomly sample amount of data written
 			if rand.Float64() < bytesWrittenSampleRate {
@@ -60,16 +58,30 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 			}
 			updateProgress(1, 0, sampleSize/uint64(math.Max(1, float64(sampleCount))))
 		}
-		// Descend to the next level of the tree by gathering up the pointers from every chunk we just pulled over to the sink in the loop above
+
+		// Now, put the absent chunks into the sink IN ORDER, meanwhile decoding each into a value so we can iterate all its refs.
+		// Descend to the next level of the tree by gathering up an ordered, uniquified list of all the children of the chunks in |absent|.
 		nextLevel := hash.HashSet{}
-		for _, v := range absentValues {
-			v.WalkRefs(func(r types.Ref) {
-				nextLevel.Insert(r.TargetHash())
+		uniqueOrdered := hash.HashSlice{}
+		for _, h := range absent {
+			c := neededChunks[h]
+			sinkDB.chunkStore().Put(*c)
+			types.DecodeValue(*c, srcDB).WalkRefs(func(r types.Ref) {
+				if !nextLevel.Has(r.TargetHash()) {
+					uniqueOrdered = append(uniqueOrdered, r.TargetHash())
+					nextLevel.Insert(r.TargetHash())
+				}
 			})
 		}
 
 		// Ask sinkDB which of the next level's hashes it doesn't have.
-		absent = sinkDB.chunkStore().HasMany(nextLevel)
+		absentSet := sinkDB.chunkStore().HasMany(nextLevel)
+		absent = absent[:0]
+		for _, h := range uniqueOrdered {
+			if absentSet.Has(h) {
+				absent = append(absent, h)
+			}
+		}
 	}
 
 	persistChunks(sinkDB.chunkStore())
