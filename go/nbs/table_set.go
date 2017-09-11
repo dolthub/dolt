@@ -86,16 +86,17 @@ func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg 
 }
 
 func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool) {
-	f := func(css chunkSources) (reads int, split, remaining bool) {
+	f := func(css chunkSources) (int, bool, bool) {
+		reads, split := 0, false
 		for _, haver := range css {
-			rds, remaining := haver.calcReads(reqs, blockSize)
+			rds, rmn := haver.calcReads(reqs, blockSize)
 			reads += rds
-			if !remaining {
-				return reads, split, remaining
+			if !rmn {
+				return reads, split, false
 			}
 			split = true
 		}
-		return reads, split, remaining
+		return reads, split, true
 	}
 	reads, split, remaining = f(ts.novel)
 	if remaining {

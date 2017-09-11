@@ -10,7 +10,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
@@ -63,72 +62,85 @@ func main() {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	type record struct {
-		count, calc int
-		split       bool
-	}
+	height := types.NewRef(db.Datasets()).Height()
+	fmt.Println("Store is of height", height)
+	fmt.Println("| Height |   Nodes | Children | Branching | Groups | Reads | Pruned |")
+	fmt.Println("+--------+---------+----------+-----------+--------+-------+--------+")
+	chartFmt := "| %6d | %7d | %8d | %9d | %6d | %5d | %6d |\n"
 
-	concurrency := 32
-	refs := make(chan types.Ref, concurrency)
-	numbers := make(chan record, concurrency)
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	visitedRefs := map[hash.Hash]bool{}
+	var optimal, sum int
+	visited := map[hash.Hash]bool{}
 
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			for ref := range refs {
-				mu.Lock()
-				visited := visitedRefs[ref.TargetHash()]
-				visitedRefs[ref.TargetHash()] = true
-				mu.Unlock()
-
-				if !visited {
-					v := ref.TargetValue(db)
-					d.Chk.NotNil(v)
-
-					children := types.RefSlice{}
-					hashes := hash.HashSlice{}
-					v.WalkRefs(func(r types.Ref) {
-						hashes = append(hashes, r.TargetHash())
-						if r.Height() > 1 { // leaves are uninteresting, so skip them.
-							children = append(children, r)
-						}
-					})
-
-					reads, split := store.CalcReads(hashes.HashSet(), 0)
-					numbers <- record{count: 1, calc: reads, split: split}
-
-					wg.Add(len(children))
-					go func() {
-						for _, r := range children {
-							refs <- r
-						}
-					}()
-				}
-				wg.Done()
-			}
-		}()
-	}
-
-	wg.Add(1)
-	refs <- types.NewRef(db.Datasets())
-	go func() {
-		wg.Wait()
-		close(refs)
-		close(numbers)
-	}()
-
-	count, calc, splits := 0, 0, 0
-	for rec := range numbers {
-		count += rec.count
-		calc += rec.calc
-		if rec.split {
-			splits++
+	current := hash.HashSlice{store.Root()}
+	for numNodes := 1; numNodes > 0; numNodes = len(current) {
+		// Start by reading the values of the current level of the graph
+		currentValues := make(map[hash.Hash]types.Value, len(current))
+		found := make(chan types.Value)
+		go func() { defer close(found); db.ReadManyValues(current.HashSet(), found) }()
+		for v := range found {
+			h := v.Hash()
+			currentValues[h] = v
+			visited[h] = true
 		}
+
+		// Iterate all the Values at the current level of the graph IN ORDER (as specified in |current|) and gather up their embedded refs. We'll build two different lists of hash.Hashes during this process:
+		// 1) An ordered list of ALL the children of the current level.
+		// 2) An ordered list of the child nodes that contain refs to chunks we haven't yet visited. This *excludes* already-visted nodes and nodes without children.
+		// We'll use 1) to get an estimate of how good the locality is among the children of the current level, and then 2) to descend to the next level of the graph.
+		orderedChildren := hash.HashSlice{}
+		nextLevel := hash.HashSlice{}
+		for _, h := range current {
+			currentValues[h].WalkRefs(func(r types.Ref) {
+				target := r.TargetHash()
+				orderedChildren = append(orderedChildren, target)
+				if !visited[target] && r.Height() > 1 {
+					nextLevel = append(nextLevel, target)
+				}
+			})
+		}
+
+		// Estimate locality among the members of |orderedChildren| by splitting into groups that are roughly |branchFactor| in size and calling CalcReads on each group. With perfect locality, we'd expect that each group could be read in a single physical read.
+		numChildren := len(orderedChildren)
+		branchFactor := numChildren / numNodes
+		numGroups := numNodes
+		if numChildren%numNodes != 0 {
+			numGroups++
+		}
+		wg := &sync.WaitGroup{}
+		reads := make([]int, numGroups)
+		for i := 0; i < numGroups; i++ {
+			wg.Add(1)
+			if i+1 == numGroups { // last group
+				go func(i int) {
+					defer wg.Done()
+					reads[i], _ = store.CalcReads(orderedChildren[i*branchFactor:].HashSet(), 0)
+				}(i)
+				continue
+			}
+			go func(i int) {
+				defer wg.Done()
+				reads[i], _ = store.CalcReads(orderedChildren[i*branchFactor:(i+1)*branchFactor].HashSet(), 0)
+			}(i)
+		}
+
+		wg.Wait()
+
+		sumOfReads := sumInts(reads)
+		fmt.Printf(chartFmt, height, numNodes, numChildren, branchFactor, numGroups, sumOfReads, numChildren-len(nextLevel))
+
+		sum += sumOfReads
+		optimal += numGroups
+		height--
+		current = nextLevel
 	}
 
-	fmt.Println("calculated optimal Reads", count)
-	fmt.Printf("calculated actual Reads %d, including %d splits across tables\n", calc, splits)
-	fmt.Printf("Reading DB %s requires %.01fx optimal number of reads\n", *dbName, float64(calc)/float64(count))
+	fmt.Printf("\nVisited %d chunk groups\n", optimal)
+	fmt.Printf("Reading DB %s requires %.01fx optimal number of reads\n", *dbName, float64(sum)/float64(optimal))
+}
+
+func sumInts(nums []int) (sum int) {
+	for _, n := range nums {
+		sum += n
+	}
+	return
 }
