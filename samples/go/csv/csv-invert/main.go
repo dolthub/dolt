@@ -69,7 +69,7 @@ func main() {
 		ch      chan types.Value
 		zeroVal types.Value
 	}
-	streams := map[string]stream{}
+	streams := map[string]*stream{}
 	lists := map[string]<-chan types.List{}
 	lowers := map[string]string{}
 
@@ -77,23 +77,28 @@ func main() {
 	sDesc.IterFields(func(name string, t *types.Type, optional bool) {
 		lowerName := strings.ToLower(name)
 		if _, present := streams[lowerName]; !present {
-			s := stream{make(chan types.Value, 1024), zeroVal(t)}
+			s := &stream{make(chan types.Value, 1024), zeroVal(t)}
 			streams[lowerName] = s
 			lists[lowerName] = types.NewStreamingList(outDB, s.ch)
 		}
 		lowers[name] = lowerName
 	})
 
-	columnVals := make(map[string]types.Value, len(streams))
+	filledCols := make(map[string]struct{}, len(streams))
 	l.IterAll(func(v types.Value, index uint64) {
-		for lowerName, stram := range streams {
-			columnVals[lowerName] = stram.zeroVal
-		}
+		// First, iterate the fields that are present in |v| and append values to the correct lists
 		v.(types.Struct).IterFields(func(name string, value types.Value) {
-			columnVals[lowers[name]] = value
+			ln := lowers[name]
+			filledCols[ln] = struct{}{}
+			streams[ln].ch <- value
 		})
+		// Second, iterate all the streams, skipping the ones we already sent a value for, and send an empty String for the remaining ones.
 		for lowerName, stream := range streams {
-			stream.ch <- columnVals[lowerName]
+			if _, present := filledCols[lowerName]; present {
+				delete(filledCols, lowerName)
+				continue
+			}
+			stream.ch <- stream.zeroVal
 		}
 	})
 
