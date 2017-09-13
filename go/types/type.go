@@ -6,7 +6,6 @@
 package types
 
 import (
-	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -59,21 +58,7 @@ func (t *Type) Hash() hash.Hash {
 }
 
 func (t *Type) WalkValues(cb ValueCallback) {
-	switch desc := t.Desc.(type) {
-	case CompoundDesc:
-		for _, t := range desc.ElemTypes {
-			cb(t)
-		}
-	case StructDesc:
-		desc.IterFields(func(name string, t *Type, opt bool) {
-			cb(t)
-		})
-	case PrimitiveDesc, CycleDesc:
-		// Nothing, these have no child values
-	default:
-		d.Chk.Fail("Unexpected type desc implementation: %#v", t)
-	}
-	return
+	t.Desc.walkValues(cb)
 }
 
 func (t *Type) WalkRefs(cb RefCallback) {

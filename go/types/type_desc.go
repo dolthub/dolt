@@ -11,6 +11,7 @@ import (
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
+	walkValues(cb ValueCallback)
 }
 
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
@@ -27,6 +28,9 @@ func (p PrimitiveDesc) Kind() NomsKind {
 	return NomsKind(p)
 }
 
+func (p PrimitiveDesc) walkValues(cb ValueCallback) {
+}
+
 // CompoundDesc describes a List, Map, Set, Ref, or Union type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
@@ -36,6 +40,12 @@ type CompoundDesc struct {
 
 func (c CompoundDesc) Kind() NomsKind {
 	return c.kind
+}
+
+func (c CompoundDesc) walkValues(cb ValueCallback) {
+	for _, t := range c.ElemTypes {
+		cb(t)
+	}
 }
 
 type TypeMap map[string]*Type
@@ -48,6 +58,12 @@ type StructDesc struct {
 
 func (s StructDesc) Kind() NomsKind {
 	return StructKind
+}
+
+func (s StructDesc) walkValues(cb ValueCallback) {
+	for _, field := range s.fields {
+		cb(field.Type)
+	}
 }
 
 func (s StructDesc) IterFields(cb func(name string, t *Type, optional bool)) {
@@ -81,6 +97,9 @@ type CycleDesc string
 
 func (c CycleDesc) Kind() NomsKind {
 	return CycleKind
+}
+
+func (c CycleDesc) walkValues(cb ValueCallback) {
 }
 
 type typeSlice []*Type
