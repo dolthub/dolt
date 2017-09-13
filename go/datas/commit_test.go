@@ -38,8 +38,8 @@ func TestNewCommit(t *testing.T) {
 	// Committing another Number
 	commit2 := NewCommit(types.Number(2), types.NewSet(db, types.NewRef(commit)), types.EmptyStruct)
 	at2 := types.TypeOf(commit2)
-	et2 := nomdl.MustParseType(`struct Commit {
-                meta: struct {},
+	et2 := nomdl.MustParseType(`Struct Commit {
+                meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
                 value: Number,
         }`)
@@ -48,8 +48,8 @@ func TestNewCommit(t *testing.T) {
 	// Now commit a String
 	commit3 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2)), types.EmptyStruct)
 	at3 := types.TypeOf(commit3)
-	et3 := nomdl.MustParseType(`struct Commit {
-                meta: struct {},
+	et3 := nomdl.MustParseType(`Struct Commit {
+                meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
                 value: Number | String,
         }`)
@@ -57,15 +57,15 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String with MetaInfo
 	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
-	metaType := nomdl.MustParseType(`struct Meta {
+	metaType := nomdl.MustParseType(`Struct Meta {
                 date: String,
                 number: Number,
 	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2)), meta)
 	at4 := types.TypeOf(commit4)
-	et4 := nomdl.MustParseType(`struct Commit {
-                meta: struct {} | struct Meta {
+	et4 := nomdl.MustParseType(`Struct Commit {
+                meta: Struct {} | Struct Meta {
                         date: String,
                         number: Number,
         	},
@@ -77,8 +77,8 @@ func TestNewCommit(t *testing.T) {
 	// Merge-commit with different parent types
 	commit5 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2), types.NewRef(commit3)), types.EmptyStruct)
 	at5 := types.TypeOf(commit5)
-	et5 := nomdl.MustParseType(`struct Commit {
-                meta: struct {},
+	et5 := nomdl.MustParseType(`Struct Commit {
+                meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
                 value: Number | String,
         }`)

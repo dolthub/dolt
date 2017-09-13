@@ -702,8 +702,8 @@ func TestMarshalTypeOutface(t *testing.T) {
 	defer vs.Close()
 
 	typ := MustMarshalType(vs, OutPhoto{})
-	expectedType := nomdl.MustParseType(`struct OutPhoto {
-          faces: Set<struct Face {
+	expectedType := nomdl.MustParseType(`Struct OutPhoto {
+          faces: Set<Struct Face {
             blob: Ref<Value>,
           }>,
           someOtherFacesSet: Set<Cycle<Face>>,
