@@ -251,7 +251,6 @@ func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, ui
 
 // NewBlob creates a Blob by reading from every Reader in rs and
 // concatenating the result. NewBlob uses one goroutine per Reader.
-// If vrw is not nil, chunks are written to vrw instead of kept in memory.
 func NewBlob(vrw ValueReadWriter, rs ...io.Reader) Blob {
 	return readBlobsP(vrw, rs...)
 }

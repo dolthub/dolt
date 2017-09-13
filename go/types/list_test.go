@@ -1215,3 +1215,20 @@ func TestListWithNil(t *testing.T) {
 		NewList(vrw, Number(42), nil)
 	})
 }
+
+func TestListOfListsDoesNotWriteRoots(t *testing.T) {
+	assert := assert.New(t)
+	vrw := newTestValueStore()
+
+	l1 := NewList(vrw, String("a"), String("b"))
+	l2 := NewList(vrw, String("c"), String("d"))
+	l3 := NewList(vrw, l1, l2)
+
+	assert.Nil(vrw.ReadValue(l1.Hash()))
+	assert.Nil(vrw.ReadValue(l2.Hash()))
+	assert.Nil(vrw.ReadValue(l3.Hash()))
+
+	vrw.WriteValue(l3)
+	assert.Nil(vrw.ReadValue(l1.Hash()))
+	assert.Nil(vrw.ReadValue(l2.Hash()))
+}

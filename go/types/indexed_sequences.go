@@ -49,9 +49,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	return uint64(cur.idx)
 }
 
-// If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
-// written when the root is written.
-func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReadWriter) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
@@ -64,10 +62,10 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, source ValueReadWriter) makeCh
 
 		var col Collection
 		if kind == ListKind {
-			col = newList(newListMetaSequence(level, tuples, source))
+			col = newList(newListMetaSequence(level, tuples, vrw))
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
-			col = newBlob(newBlobMetaSequence(level, tuples, source))
+			col = newBlob(newBlobMetaSequence(level, tuples, vrw))
 		}
 		return col, orderedKeyFromSum(tuples), numLeaves
 	}

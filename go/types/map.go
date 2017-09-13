@@ -316,8 +316,6 @@ func buildMapData(values []Value) mapEntrySlice {
 	return append(uniqueSorted, last)
 }
 
-// If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
-// written when the root is written.
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)

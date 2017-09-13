@@ -229,8 +229,6 @@ func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChun
 	return newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
-// If |sink| is not nil, chunks will be eagerly written as they're created. Otherwise they are
-// written when the root is written.
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
