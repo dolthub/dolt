@@ -5,7 +5,6 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,7 +59,6 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 }
 
 func (suite *diffTestSuite) TestDiff() {
-	fmt.Println("dbg: TestDiff")
 	vs := newTestValueStore()
 
 	type valFn func(int, int, int) ValueSlice
@@ -137,11 +135,8 @@ func TestOrderedSequencesSubset(t *testing.T) {
 		0, lengthOfNumbersTest/2, 1,
 		0, lengthOfNumbersTest, 1,
 		lengthOfNumbersTest/2, 0, 0)
-	fmt.Println("dbg: ts1")
 	suite.Run(t, ts1)
-	fmt.Println("dbg: ts2")
 	suite.Run(t, ts2)
-	fmt.Println("dbg: done")
 	ts1.Equal(ts1.added, ts2.removed, "added and removed in reverse order diff")
 	ts1.Equal(ts1.removed, ts2.added, "removed and added in reverse order diff")
 }
