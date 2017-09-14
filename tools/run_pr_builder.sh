@@ -14,7 +14,7 @@ NOMS_DIR=${WORKSPACE}/src/github.com/attic-labs/noms
 go version
 
 # go list is expensive, only do it once.
-GO_LIST="$(go list ./... | grep -v /vendor/ | grep -v /samples/js/)"
+GO_LIST="$(go list ./... | grep -v /vendor/)"
 go build ${GO_LIST}
 go test ${GO_LIST}
 
