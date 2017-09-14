@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/datetime"
 	"github.com/attic-labs/noms/go/util/outputpager"
 	"github.com/attic-labs/noms/go/util/verbose"
 	flag "github.com/juju/gnuflag"
@@ -28,8 +29,11 @@ var nomsShow = &util.Command{
 	Nargs:     1,
 }
 
-var showRaw = false
-var showStats = false
+var (
+	showRaw   = false
+	showStats = false
+	tzName    string
+)
 
 func setupShowFlags() *flag.FlagSet {
 	showFlagSet := flag.NewFlagSet("show", flag.ExitOnError)
@@ -37,6 +41,7 @@ func setupShowFlags() *flag.FlagSet {
 	verbose.RegisterVerboseFlags(showFlagSet)
 	showFlagSet.BoolVar(&showRaw, "raw", false, "If true, dumps the raw binary version of the data")
 	showFlagSet.BoolVar(&showStats, "stats", false, "If true, reports statistics related to the value")
+	showFlagSet.StringVar(&tzName, "tz", "local", "display formatted date comments in specified timezone, must be: local or utc")
 	return showFlagSet
 }
 
@@ -68,6 +73,9 @@ func runShow(args []string) int {
 		types.WriteValueStats(os.Stdout, value, database)
 		return 0
 	}
+
+	tz, _ := locationFromTimezoneArg(tzName, nil)
+	datetime.RegisterHRSCommenter(tz)
 
 	pgr := outputpager.Start()
 	defer pgr.Stop()

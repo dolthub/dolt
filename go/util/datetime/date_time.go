@@ -14,6 +14,11 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
+const (
+	datetypename    = "DateTime"
+	hrsEncodingName = "noms-datetime"
+)
+
 // DateTime implements marshaling of time.Time to and from Noms.
 type DateTime struct {
 	time.Time
@@ -22,15 +27,19 @@ type DateTime struct {
 // DateTimeType is the Noms type used to represent date time objects in Noms.
 // The field secSinceEpoch may contain fractions in cases where seconds are
 // not sufficient.
-var DateTimeType = types.MakeStructTypeFromFields("DateTime", types.FieldMap{
+var DateTimeType = types.MakeStructTypeFromFields(datetypename, types.FieldMap{
 	"secSinceEpoch": types.NumberType,
 })
 
-var dateTimeTemplate = types.MakeStructTemplate("DateTime", []string{"secSinceEpoch"})
+var dateTimeTemplate = types.MakeStructTemplate(datetypename, []string{"secSinceEpoch"})
 
 // Epoch is the unix Epoch. This time is very consistent,
 // which makes it useful for testing or checking for uninitialized values
 var Epoch = DateTime{time.Unix(0, 0)}
+
+func init() {
+	RegisterHRSCommenter(time.Local)
+}
 
 // Now is an alias for a DateTime initialized with time.Now()
 func Now() DateTime {
@@ -64,4 +73,22 @@ func (dt *DateTime) UnmarshalNoms(v types.Value) error {
 	s, frac := math.Modf(strct.SecSinceEpoch)
 	*dt = DateTime{time.Unix(int64(s), int64(frac*1e9))}
 	return nil
+}
+
+type DateTimeCommenter struct {
+	tz *time.Location
+}
+
+func (c DateTimeCommenter) Comment(v types.Value) string {
+	if !types.IsValueSubtypeOf(v, DateTimeType) {
+		return ""
+	}
+	var dt DateTime
+	marshal.MustUnmarshal(v, &dt)
+	return dt.In(c.tz).Format(time.RFC3339)
+}
+
+func RegisterHRSCommenter(tz *time.Location) {
+	hrsCommenter := DateTimeCommenter{tz: tz}
+	types.RegisterHRSCommenter(datetypename, hrsEncodingName, hrsCommenter)
 }

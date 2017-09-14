@@ -6,11 +6,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"
@@ -57,6 +59,7 @@ func setupLogFlags() *flag.FlagSet {
 	logFlagSet.BoolVar(&oneline, "oneline", false, "show a summary of each commit on a single line")
 	logFlagSet.BoolVar(&showGraph, "graph", false, "show ascii-based commit hierarchy on left side of output")
 	logFlagSet.BoolVar(&showValue, "show-value", false, "show commit value rather than diff information")
+	logFlagSet.StringVar(&tzName, "tz", "local", "display formatted date comments in specified timezone, must be: local or utc")
 	outputpager.RegisterOutputpagerFlags(logFlagSet)
 	verbose.RegisterVerboseFlags(logFlagSet)
 	return logFlagSet
@@ -65,6 +68,9 @@ func setupLogFlags() *flag.FlagSet {
 func runLog(args []string) int {
 	useColor = shouldUseColor()
 	cfg := config.NewResolver()
+
+	tz, _ := locationFromTimezoneArg(tzName, nil)
+	datetime.RegisterHRSCommenter(tz)
 
 	resolved := cfg.ResolvePathSpec(args[0])
 	sp, err := spec.ForPath(resolved)
@@ -107,7 +113,7 @@ func runLog(args []string) int {
 
 			go func(ch chan []byte, node LogNode) {
 				buff := &bytes.Buffer{}
-				printCommit(node, path, buff, database)
+				printCommit(node, path, buff, database, tz)
 				ch <- buff.Bytes()
 			}(ch, ln)
 
@@ -135,7 +141,7 @@ func runLog(args []string) int {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database) (err error) {
+func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
 		if m, ok := commit.MaybeGet(datas.MetaField); ok {
@@ -181,7 +187,7 @@ func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database) 
 	lineno := 1
 
 	if maxLines != 0 {
-		lineno, err = writeMetaLines(node, maxLines, lineno, maxFieldNameLen, w)
+		lineno, err = writeMetaLines(node, maxLines, lineno, maxFieldNameLen, w, tz)
 		if err != nil && err != writers.MaxLinesErr {
 			fmt.Fprintf(w, "error: %s\n", err)
 			return
@@ -249,7 +255,7 @@ func genGraph(node LogNode, lineno int) string {
 	return string(buf)
 }
 
-func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer) (int, error) {
+func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
 	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
 		genPrefix := func(w *writers.PrefixWriter) []byte {
 			return []byte(genGraph(node, int(w.NumLines)))
@@ -261,14 +267,16 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 			types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
 				v := meta.Get(fieldName)
 				fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
+				// Encode dates as formatted string if this is a top-level meta
+				// field of type datetime.DateTimeType
 				if types.TypeOf(v).Equals(datetime.DateTimeType) {
 					var dt datetime.DateTime
 					dt.UnmarshalNoms(v)
-					fmt.Fprintf(pw, dt.Format(spec.CommitMetaDateFormat))
+					fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
 				} else {
 					types.WriteEncodedValue(pw, v)
 				}
-				fmt.Fprintf(pw, "\n")
+				fmt.Fprintln(pw)
 			})
 		})
 		return int(pw.NumLines), err
@@ -373,4 +381,17 @@ func min(i, j int) int {
 		return i
 	}
 	return j
+}
+
+func locationFromTimezoneArg(tz string, defaultTZ *time.Location) (*time.Location, error) {
+	switch tz {
+	case "local":
+		return time.Local, nil
+	case "utc":
+		return time.UTC, nil
+	case "":
+		return defaultTZ, nil
+	default:
+		return nil, errors.New("value must be: local or utc")
+	}
 }

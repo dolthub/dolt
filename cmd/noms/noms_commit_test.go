@@ -164,7 +164,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaOld = metaNew
 
-	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat, dsName + ".value", sp.String()})
+	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat[:20], dsName + ".value", sp.String()})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 

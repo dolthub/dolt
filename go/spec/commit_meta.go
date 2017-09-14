@@ -15,7 +15,7 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
-const CommitMetaDateFormat = "2006-01-02T15:04:05-0700"
+const CommitMetaDateFormat = time.RFC3339
 
 var (
 	commitMetaDate            string
@@ -101,7 +101,7 @@ func CreateCommitMetaStruct(db datas.Database, date, message string, keyValueStr
 	} else {
 		_, err := time.Parse(CommitMetaDateFormat, date)
 		if err != nil {
-			return types.EmptyStruct, errors.New(fmt.Sprintf("Unable to parse date: %s", date))
+			return types.EmptyStruct, errors.New(fmt.Sprintf("Unable to parse date: %s, error: %s", date, err))
 		}
 	}
 	metaValues["date"] = types.String(date)

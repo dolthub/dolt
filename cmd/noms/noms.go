@@ -168,6 +168,7 @@ See Spelling Values at https://github.com/attic-labs/noms/blob/master/doc/spelli
 	log.Flag("oneline", "show a summary of each commit on a single line").Bool()
 	log.Flag("graph", "show ascii-based commit hierarchy on left side of output").Bool()
 	log.Flag("show-value", "show commit value rather than diff information").Bool()
+	log.Flag("tz", "display formatted date comments in specified timezone, must be: local or utc").Enum("local", "utc")
 	log.Arg("path-spec", "").Required().String()
 
 	// merge
@@ -201,6 +202,7 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 `)
 	show.Flag("raw", "If true, dumps the raw binary version of the data").Bool()
 	show.Flag("stats", "If true, reports statistics related to the value").Bool()
+	show.Flag("tz", "display formatted date comments in specified timezone, must be: local or utc").Enum("local", "utc")
 	show.Arg("object", "a noms object").Required().String()
 
 	// sync

@@ -322,3 +322,37 @@ func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
 		StructField{"b", BoolType, true})
 	assertWriteHRSEqual(t, "Struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
 }
+
+type TestCommenter struct {
+	prefix   string
+	testType *Type
+}
+
+func (c TestCommenter) Comment(v Value) string {
+	if !(v.typeOf().Equals(c.testType)) {
+		return ""
+	}
+	return c.prefix + string(v.(Struct).Get("Name").(String))
+}
+
+func TestRegisterCommenter(t *testing.T) {
+	a := assert.New(t)
+
+	tt := NewStruct("TestType1", StructData{"Name": String("abc-123")})
+	nt := NewStruct("TestType2", StructData{"Name": String("abc-123")})
+
+	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest: ", testType: tt.typeOf()})
+
+	s1 := EncodedValue(tt)
+	a.True(strings.Contains(s1, "// MyTest: abc-123"))
+	s1 = EncodedValue(nt)
+	a.False(strings.Contains(s1, "// MyTest: abc-123"))
+
+	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest2: ", testType: tt.typeOf()})
+	s1 = EncodedValue(tt)
+	a.True(strings.Contains(s1, "// MyTest2: abc-123"))
+
+	UnregisterHRSCommenter("TestType1", "mylib1")
+	s1 = EncodedValue(tt)
+	a.False(strings.Contains(s1, "// MyTest2: abc-123"))
+}
