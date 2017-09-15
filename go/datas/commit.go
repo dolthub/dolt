@@ -60,7 +60,7 @@ func FindCommonAncestor(c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
 		if c1Ht == c2Ht {
 			c1Parents, c2Parents := c1Q.PopRefsOfHeight(c1Ht), c2Q.PopRefsOfHeight(c2Ht)
-			if common := findCommonRef(c1Parents, c2Parents); (common != types.Ref{}) {
+			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
 				return common, true
 			}
 			parentsToQueue(c1Parents, c1Q, vr)
@@ -85,7 +85,7 @@ func parentsToQueue(refs types.RefSlice, q *types.RefByHeight, vr types.ValueRea
 	sort.Sort(q)
 }
 
-func findCommonRef(a, b types.RefSlice) types.Ref {
+func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 	toRefSet := func(s types.RefSlice) map[hash.Hash]types.Ref {
 		out := map[hash.Hash]types.Ref{}
 		for _, r := range s {
@@ -97,10 +97,10 @@ func findCommonRef(a, b types.RefSlice) types.Ref {
 	aSet, bSet := toRefSet(a), toRefSet(b)
 	for s, r := range aSet {
 		if _, present := bSet[s]; present {
-			return r
+			return r, true
 		}
 	}
-	return types.Ref{}
+	return types.Ref{}, false
 }
 
 func makeCommitStructType(metaType, parentsType, valueType *types.Type) *types.Type {

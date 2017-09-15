@@ -4,6 +4,8 @@
 
 package types
 
+import "github.com/attic-labs/noms/go/hash"
+
 type sequenceItem interface{}
 
 type compareFn func(x int, y int) bool
@@ -22,4 +24,13 @@ type sequence interface {
 	isLeaf() bool
 	getCompositeChildSequence(start uint64, length uint64) sequence
 	cumulativeNumberOfLeaves(idx int) uint64
+	hash() hash.Hash
+	writeTo(nomsWriter)
 }
+
+const (
+	sequencePartKind   = 0
+	sequencePartLevel  = 1
+	sequencePartCount  = 2
+	sequencePartValues = 3
+)

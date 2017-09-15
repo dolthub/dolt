@@ -33,18 +33,25 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 		cur.idx = 0
 		cum := uint64(0)
 
+		seqLen := ms.seqLen()
 		// Advance the cursor to the meta-sequence tuple containing idx
-		for cur.idx < ms.seqLen()-1 && uint64(idx) >= cum+ms.tuples[cur.idx].numLeaves {
-			cum += ms.tuples[cur.idx].numLeaves
-			cur.idx++
+		for cur.idx < seqLen-1 {
+			numLeaves := ms.getNumLeavesAt(cur.idx)
+			if uint64(idx) >= cum+numLeaves {
+				cum += numLeaves
+				cur.idx++
+			} else {
+				break
+			}
 		}
 
 		return cum // number of leaves sequences BEFORE cur.idx in meta sequence
 	}
 
+	seqLen := seq.seqLen()
 	cur.idx = int(idx)
-	if cur.idx > seq.seqLen() {
-		cur.idx = seq.seqLen()
+	if cur.idx > seqLen {
+		cur.idx = seqLen
 	}
 	return uint64(cur.idx)
 }
@@ -103,7 +110,7 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 		d.PanicIfFalse(s.treeLevel() == level)
 		ms := s.(metaSequence)
 
-		for _, mt := range ms.tuples {
+		for _, mt := range ms.tuples() {
 			if cum == 0 && mt.numLeaves <= startIdx {
 				// skip tuples whose items are < startIdx
 				startIdx -= mt.numLeaves

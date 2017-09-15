@@ -581,9 +581,6 @@ func TestEncodeNomsTypePtr(t *testing.T) {
 		},
 	)
 	testMarshal(S{complex}, types.NewStruct("S", types.StructData{"type": complex}))
-
-	var empty *types.Type
-	testMarshal(S{empty}, types.NewStruct("S", types.StructData{"type": empty}))
 }
 
 func TestEncodeRecursive(t *testing.T) {

@@ -175,7 +175,7 @@ func createTestMap(vrw ValueReadWriter, levels, avgSize int, valGen func() Value
 		switch rand.Int31() % 3 {
 		case 0:
 			if numElems%2 != 0 {
-				numElems -= 1
+				numElems--
 			}
 			return NewMap(vrw, elems[:numElems]...)
 		case 1:

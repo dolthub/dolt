@@ -80,6 +80,9 @@ func (h *RefByHeight) PopRefsOfHeight(height uint64) (refs RefSlice) {
 
 // MaxHeight returns the height of the 'tallest' Ref in h.
 func (h RefByHeight) MaxHeight() uint64 {
+	if h.Empty() {
+		return 0
+	}
 	return h.PeekEnd().Height()
 }
 

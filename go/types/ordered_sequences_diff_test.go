@@ -24,9 +24,9 @@ type diffTestSuite struct {
 	numAddsExpected     int
 	numRemovesExpected  int
 	numModifiedExpected int
-	added               []Value
-	removed             []Value
-	modified            []Value
+	added               ValueSlice
+	removed             ValueSlice
+	modified            ValueSlice
 }
 
 func newDiffTestSuite(from1, to1, by1, from2, to2, by2, numAddsExpected, numRemovesExpected, numModifiedExpected int) *diffTestSuite {
@@ -137,8 +137,8 @@ func TestOrderedSequencesSubset(t *testing.T) {
 		lengthOfNumbersTest/2, 0, 0)
 	suite.Run(t, ts1)
 	suite.Run(t, ts2)
-	ts1.Equal(ts1.added, ts2.removed, "added and removed in reverse order diff")
-	ts1.Equal(ts1.removed, ts2.added, "removed and added in reverse order diff")
+	ts1.True(ts1.added.Equals(ts2.removed), "added and removed in reverse order diff")
+	ts1.True(ts1.removed.Equals(ts2.added), "removed and added in reverse order diff")
 }
 
 func TestOrderedSequencesDisjoint(t *testing.T) {
@@ -152,8 +152,8 @@ func TestOrderedSequencesDisjoint(t *testing.T) {
 		lengthOfNumbersTest/2, lengthOfNumbersTest/2, 0)
 	suite.Run(t, ts1)
 	suite.Run(t, ts2)
-	ts1.Equal(ts1.added, ts2.removed, "added and removed in disjoint diff")
-	ts1.Equal(ts1.removed, ts2.added, "removed and added in disjoint diff")
+	ts1.True(ts1.added.Equals(ts2.removed), "added and removed in disjoint diff")
+	ts1.True(ts1.removed.Equals(ts2.added), "removed and added in disjoint diff")
 }
 
 func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {

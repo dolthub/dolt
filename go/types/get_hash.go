@@ -25,11 +25,3 @@ func EnsureHash(h *hash.Hash, v Value) hash.Hash {
 	}
 	return *h
 }
-
-type hashCacher interface {
-	hashPointer() *hash.Hash
-}
-
-func assignHash(hc hashCacher, h hash.Hash) {
-	*hc.hashPointer() = h
-}

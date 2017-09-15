@@ -328,7 +328,11 @@ func decodeValue(bs []byte, asValue bool, vrw ValueReadWriter) ([]byte, Value) {
 	var v Value
 	if asValue || isKindOrderedByValue(kind) {
 		encodedLen := binary.BigEndian.Uint32(bs[1:5])
-		v = DecodeFromBytes(bs[5:5+encodedLen], vrw)
+		// The bytes in bs gets reused by LDB. The data of a chunk must
+		// never change since we are backing the values by this data.
+		data := make([]byte, encodedLen)
+		copy(data, bs[5:5+encodedLen])
+		v = DecodeFromBytes(data, vrw)
 		return bs[5+encodedLen:], v
 	}
 	return bs[1+hash.ByteLen:], nil
@@ -336,9 +340,8 @@ func decodeValue(bs []byte, asValue bool, vrw ValueReadWriter) ([]byte, Value) {
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
 func encToSlice(v Value, initBuf []byte) []byte {
-	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter and valueEncoder?
+	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	enc := newValueEncoder(w)
-	enc.writeValue(v)
+	v.writeTo(w)
 	return w.data()
 }

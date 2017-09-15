@@ -8,33 +8,48 @@ import (
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type valueDecoder struct {
-	nomsReader
+	binaryNomsReader
 	vrw        ValueReadWriter
 	validating bool
 }
 
-// |tc| must be locked as long as the valueDecoder is being used
-func newValueDecoder(nr nomsReader, vrw ValueReadWriter) *valueDecoder {
+func newValueDecoder(buff []byte, vrw ValueReadWriter) *valueDecoder {
+	nr := binaryNomsReader{buff, 0}
 	return &valueDecoder{nr, vrw, false}
 }
 
-func newValueDecoderWithValidation(nr nomsReader, vrw ValueReadWriter) *valueDecoder {
+func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) *valueDecoder {
 	return &valueDecoder{nr, vrw, true}
+}
+
+func (r *valueDecoder) copyString(w nomsWriter) {
+	start := r.pos()
+	r.skipString()
+	end := r.pos()
+	w.writeRaw(r.byteSlice(start, end))
+}
+
+func (r *valueDecoder) peekKind() NomsKind {
+	return NomsKind(r.peekUint8())
 }
 
 func (r *valueDecoder) readKind() NomsKind {
 	return NomsKind(r.readUint8())
 }
 
+func (r *valueDecoder) skipKind() {
+	r.skipUint8()
+}
+
 func (r *valueDecoder) readRef() Ref {
-	h := r.readHash()
-	targetType := r.readType()
-	height := r.readCount()
-	return constructRef(h, targetType, height)
+	return readRef(r)
+}
+
+func (r *valueDecoder) skipRef() {
+	skipRef(r)
 }
 
 func (r *valueDecoder) readType() *Type {
@@ -43,6 +58,14 @@ func (r *valueDecoder) readType() *Type {
 		validateType(t)
 	}
 	return t
+}
+
+func (r *valueDecoder) skipType() {
+	if r.validating {
+		r.readType()
+		return
+	}
+	r.skipTypeInner()
 }
 
 func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
@@ -72,108 +95,216 @@ func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
 	return MakePrimitiveType(k)
 }
 
-func (r *valueDecoder) readBlobLeafSequence() sequence {
-	b := r.readBytes()
-	return newBlobLeafSequence(r.vrw, b)
+func (r *valueDecoder) skipTypeInner() {
+	k := r.readKind()
+	switch k {
+	case ListKind, RefKind, SetKind:
+		r.skipTypeInner()
+	case MapKind:
+		r.skipTypeInner()
+		r.skipTypeInner()
+	case StructKind:
+		r.skipStructType()
+	case UnionKind:
+		r.skipUnionType()
+	case CycleKind:
+		r.skipString()
+	default:
+		d.PanicIfFalse(IsPrimitiveKind(k))
+	}
 }
 
-func (r *valueDecoder) readValueSequence() ValueSlice {
-	count := uint32(r.readCount())
+func (r *valueDecoder) skipBlobLeafSequence() []uint32 {
+	size := r.readCount()
+	valuesPos := r.pos()
+	r.offset += uint32(size)
+	return []uint32{valuesPos, r.pos()}
+}
 
-	data := ValueSlice{}
-	for i := uint32(0); i < count; i++ {
-		v := r.readValue()
-		data = append(data, v)
+func (r *valueDecoder) skipValueSequence() []uint32 {
+	count := int(r.readCount())
+	offsets := make([]uint32, count+1)
+	offsets[0] = r.pos()
+	for i := 0; i < count; i++ {
+		r.skipValue()
+		offsets[i+1] = r.pos()
+	}
+	return offsets
+}
+
+func (r *valueDecoder) readListSequence() sequence {
+	start := r.pos()
+	offsets := []uint32{start}
+	r.skipKind()
+	offsets = append(offsets, r.pos())
+	level := r.readCount()
+	offsets = append(offsets, r.pos())
+	if level > 0 {
+		offsets = append(offsets, r.skipMetaSequence(ListKind, level)...)
+	} else {
+		offsets = append(offsets, r.skipValueSequence()...)
+	}
+	end := r.pos()
+
+	if level > 0 {
+		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
 	}
 
-	return data
+	return listLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
 }
 
-func (r *valueDecoder) readListLeafSequence() sequence {
-	data := r.readValueSequence()
-	return listLeafSequence{leafSequence{r.vrw, len(data), ListKind}, data}
+func (r *valueDecoder) readBlobSequence() sequence {
+	start := r.pos()
+	offsets := []uint32{start}
+	r.skipKind()
+	offsets = append(offsets, r.pos())
+	level := r.readCount()
+	offsets = append(offsets, r.pos())
+	if level > 0 {
+		offsets = append(offsets, r.skipMetaSequence(BlobKind, level)...)
+	} else {
+		offsets = append(offsets, r.skipBlobLeafSequence()...)
+	}
+	end := r.pos()
+
+	if level > 0 {
+		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+	}
+
+	return blobLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
 }
 
-func (r *valueDecoder) readSetLeafSequence() orderedSequence {
-	data := r.readValueSequence()
-	return setLeafSequence{leafSequence{r.vrw, len(data), SetKind}, data}
+func (r *valueDecoder) readSetSequence() orderedSequence {
+	start := r.pos()
+	offsets := []uint32{start}
+	r.skipKind()
+	offsets = append(offsets, r.pos())
+	level := r.readCount()
+	offsets = append(offsets, r.pos())
+	if level > 0 {
+		offsets = append(offsets, r.skipMetaSequence(SetKind, level)...)
+	} else {
+		offsets = append(offsets, r.skipValueSequence()...)
+	}
+	end := r.pos()
+
+	if level > 0 {
+		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+	}
+
+	return setLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
 }
 
-func (r *valueDecoder) readMapLeafSequence() orderedSequence {
+func (r *valueDecoder) readMapSequence() orderedSequence {
+	start := r.pos()
+	offsets := []uint32{start}
+	r.skipKind()
+	offsets = append(offsets, r.pos())
+	level := r.readCount()
+	offsets = append(offsets, r.pos())
+	if level > 0 {
+		offsets = append(offsets, r.skipMetaSequence(MapKind, level)...)
+	} else {
+		offsets = append(offsets, r.skipMapLeafSequence()...)
+	}
+	end := r.pos()
+
+	if level > 0 {
+		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+	}
+
+	return mapLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
+}
+
+func (r *valueDecoder) skipList() {
+	r.skipListOrSet(ListKind)
+}
+
+func (r *valueDecoder) skipSet() {
+	r.skipListOrSet(SetKind)
+}
+
+func (r *valueDecoder) skipListOrSet(kind NomsKind) {
+	r.skipKind()
+	level := r.readCount()
+	if level > 0 {
+		r.skipMetaSequence(kind, level)
+	} else {
+		r.skipValueSequence()
+	}
+}
+
+func (r *valueDecoder) skipMap() {
+	r.skipKind()
+	level := r.readCount()
+	if level > 0 {
+		r.skipMetaSequence(MapKind, level)
+	} else {
+		r.skipMapLeafSequence()
+	}
+}
+
+func (r *valueDecoder) skipBlob() {
+	r.skipKind()
+	level := r.readCount()
+	if level > 0 {
+		r.skipMetaSequence(BlobKind, level)
+	} else {
+		r.skipBlobLeafSequence()
+	}
+}
+
+func (r *valueDecoder) skipMapLeafSequence() []uint32 {
 	count := r.readCount()
-	data := []mapEntry{}
+	offsets := make([]uint32, count+1)
+	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
-		k := r.readValue()
-		v := r.readValue()
-		data = append(data, mapEntry{k, v})
+		r.skipValue() // k
+		r.skipValue() // v
+		offsets[i+1] = r.pos()
 	}
-
-	return mapLeafSequence{leafSequence{r.vrw, len(data), MapKind}, data}
+	return offsets
 }
 
-func (r *valueDecoder) readMetaSequence(k NomsKind, level uint64) metaSequence {
+func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) []uint32 {
 	count := r.readCount()
-
-	data := []metaTuple{}
+	offsets := make([]uint32, count+1)
+	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
-		ref := r.readValue().(Ref)
-		v := r.readValue()
-		var key orderedKey
-		if r, ok := v.(Ref); ok {
-			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-			key = orderedKeyFromHash(r.TargetHash())
-		} else {
-			key = newOrderedKey(v)
-		}
-		numLeaves := r.readCount()
-		data = append(data, newMetaTuple(ref, key, numLeaves))
+		r.skipValue() // ref
+		r.skipValue() // v
+		r.skipCount() // numLeaves
+		offsets[i+1] = r.pos()
 	}
-
-	return newMetaSequence(k, level, data, r.vrw)
+	return offsets
 }
 
 func (r *valueDecoder) readValue() Value {
-	k := r.readKind()
+	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		level := r.readCount()
-		if level > 0 {
-			return newBlob(r.readMetaSequence(k, level))
-		}
-
-		return newBlob(r.readBlobLeafSequence())
+		return newBlob(r.readBlobSequence())
 	case BoolKind:
+		r.skipKind()
 		return Bool(r.readBool())
 	case NumberKind:
+		r.skipKind()
 		return r.readNumber()
 	case StringKind:
+		r.skipKind()
 		return String(r.readString())
 	case ListKind:
-		level := r.readCount()
-		if level > 0 {
-			return newList(r.readMetaSequence(k, level))
-		}
-
-		return newList(r.readListLeafSequence())
+		return newList(r.readListSequence())
 	case MapKind:
-		level := r.readCount()
-		if level > 0 {
-			return newMap(r.readMetaSequence(k, level))
-		}
-
-		return newMap(r.readMapLeafSequence())
+		return newMap(r.readMapSequence())
 	case RefKind:
 		return r.readRef()
 	case SetKind:
-		level := r.readCount()
-		if level > 0 {
-			return newSet(r.readMetaSequence(k, level))
-		}
-
-		return newSet(r.readSetLeafSequence())
+		return newSet(r.readSetSequence())
 	case StructKind:
 		return r.readStruct()
 	case TypeKind:
+		r.skipKind()
 		return r.readType()
 	case CycleKind, UnionKind, ValueKind:
 		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
@@ -182,18 +313,54 @@ func (r *valueDecoder) readValue() Value {
 	panic("not reachable")
 }
 
-func (r *valueDecoder) readStruct() Value {
-	name := r.readString()
-	count := r.readCount()
-
-	fieldNames := make([]string, count)
-	values := make([]Value, count)
-	for i := uint64(0); i < count; i++ {
-		fieldNames[i] = r.readString()
-		values[i] = r.readValue()
+func (r *valueDecoder) skipValue() {
+	k := r.peekKind()
+	switch k {
+	case BlobKind:
+		r.skipBlob()
+	case BoolKind:
+		r.skipKind()
+		r.skipBool()
+	case NumberKind:
+		r.skipKind()
+		r.skipNumber()
+	case StringKind:
+		r.skipKind()
+		r.skipString()
+	case ListKind:
+		r.skipList()
+	case MapKind:
+		r.skipMap()
+	case RefKind:
+		r.skipRef()
+	case SetKind:
+		r.skipSet()
+	case StructKind:
+		r.skipStruct()
+	case TypeKind:
+		r.skipKind()
+		r.skipType()
+	case CycleKind, UnionKind, ValueKind:
+		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
+	default:
+		fmt.Println("K", k, k.String())
+		panic("not reachable")
 	}
+}
 
-	return Struct{name, fieldNames, values, &hash.Hash{}}
+func (r *valueDecoder) copyValue(w nomsWriter) {
+	start := r.pos()
+	r.skipValue()
+	end := r.pos()
+	w.writeRaw(r.byteSlice(start, end))
+}
+
+func (r *valueDecoder) readStruct() Value {
+	return readStruct(r)
+}
+
+func (r *valueDecoder) skipStruct() {
+	skipStruct(r)
 }
 
 func boolToUint32(b bool) uint32 {
@@ -226,6 +393,21 @@ func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 	return t
 }
 
+func (r *valueDecoder) skipStructType() {
+	r.skipString() // name
+	count := r.readCount()
+
+	for i := uint64(0); i < count; i++ {
+		r.skipString() // name
+	}
+	for i := uint64(0); i < count; i++ {
+		r.skipTypeInner()
+	}
+	for i := uint64(0); i < count; i++ {
+		r.skipBool() // optional
+	}
+}
+
 func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
 	l := r.readCount()
 	ts := make(typeSlice, l)
@@ -233,4 +415,20 @@ func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
 		ts[i] = r.readTypeInner(seenStructs)
 	}
 	return makeCompoundType(UnionKind, ts...)
+}
+
+func (r *valueDecoder) skipUnionType() {
+	l := r.readCount()
+	for i := uint64(0); i < l; i++ {
+		r.skipTypeInner()
+	}
+}
+
+func (r *valueDecoder) readOrderedKey() orderedKey {
+	v := r.readValue()
+	if r, ok := v.(Ref); ok {
+		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+		return orderedKeyFromHash(r.TargetHash())
+	}
+	return newOrderedKey(v)
 }

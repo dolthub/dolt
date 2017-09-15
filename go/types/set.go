@@ -14,11 +14,10 @@ import (
 
 type Set struct {
 	seq orderedSequence
-	h   *hash.Hash
 }
 
 func newSet(seq orderedSequence) Set {
-	return Set{seq, &hash.Hash{}}
+	return Set{seq}
 }
 
 func NewSet(vrw ValueReadWriter, v ...Value) Set {
@@ -110,10 +109,6 @@ func (s Set) sequence() sequence {
 	return s.seq
 }
 
-func (s Set) hashPointer() *hash.Hash {
-	return s.h
-}
-
 // Value interface
 func (s Set) Value() Value {
 	return s
@@ -128,11 +123,7 @@ func (s Set) Less(other Value) bool {
 }
 
 func (s Set) Hash() hash.Hash {
-	if s.h.IsEmpty() {
-		*s.h = getHash(s)
-	}
-
-	return *s.h
+	return s.sequence().hash()
 }
 
 func (s Set) WalkValues(cb ValueCallback) {
@@ -266,4 +257,12 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptySetSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
 	return newEmptySequenceChunker(vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+}
+
+func (s Set) valueReadWriter() ValueReadWriter {
+	return s.seq.valueReadWriter()
+}
+
+func (s Set) writeTo(w nomsWriter) {
+	s.seq.writeTo(w)
 }

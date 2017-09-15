@@ -5,6 +5,9 @@
 package types
 
 import (
+	"math"
+
+	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -43,4 +46,17 @@ func (v Number) typeOf() *Type {
 
 func (v Number) Kind() NomsKind {
 	return NumberKind
+}
+
+func (v Number) valueReadWriter() ValueReadWriter {
+	return nil
+}
+
+func (v Number) writeTo(w nomsWriter) {
+	NumberKind.writeTo(w)
+	f := float64(v)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		d.Panic("%f is not a supported number", f)
+	}
+	w.writeNumber(v)
 }

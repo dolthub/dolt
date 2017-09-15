@@ -5,6 +5,8 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -18,7 +20,7 @@ const (
 var emptyKey = orderedKey{}
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
-	d.PanicIfFalse(Ref{} != ref)
+	d.PanicIfTrue(ref.buff == nil)
 	return metaTuple{ref, key, numLeaves}
 }
 
@@ -31,6 +33,12 @@ type metaTuple struct {
 
 func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
 	return mt.ref.TargetValue(vr).(Collection).sequence()
+}
+
+func (mt metaTuple) writeTo(w nomsWriter) {
+	mt.ref.writeTo(w)
+	mt.key.writeTo(w)
+	w.writeCount(mt.numLeaves)
 }
 
 // orderedKey is a key in a Prolly Tree level, which is a metaTuple in a metaSequence, or a value in a leaf sequence.
@@ -74,97 +82,241 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	}
 }
 
+func (key orderedKey) writeTo(w nomsWriter) {
+	if !key.isOrderedByValue {
+		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+		d.PanicIfTrue(key.h.IsEmpty())
+		writeRefPartsTo(w, key.h, BoolType, 0)
+	} else {
+		key.v.writeTo(w)
+	}
+}
+
 type metaSequence struct {
-	kind   NomsKind
-	level  uint64
-	tuples []metaTuple
-	vrw    ValueReadWriter
+	vrw     ValueReadWriter
+	buff    []byte
+	offsets []uint32
+}
+
+// readLeafSequence reads the data provided by a decoder and moves the decoder forward.
+func readMetaSequence(dec *valueDecoder) metaSequence {
+	start := dec.pos()
+	offsets := skipMetaSequence(dec)
+	end := dec.pos()
+	return metaSequence{dec.vrw, dec.byteSlice(start, end), offsets}
+}
+
+func skipMetaSequence(dec *valueDecoder) []uint32 {
+	kindPos := dec.pos()
+	dec.skipKind()
+	levelPos := dec.pos()
+	dec.skipCount() // level
+	countPos := dec.pos()
+	count := dec.readCount()
+	valuesPos := dec.pos()
+	offsets := make([]uint32, count+sequencePartValues+1)
+	offsets[sequencePartKind] = kindPos
+	offsets[sequencePartLevel] = levelPos
+	offsets[sequencePartCount] = countPos
+	offsets[sequencePartValues] = valuesPos
+	for i := uint64(0); i < count; i++ {
+		dec.skipValue() // ref
+		dec.skipValue() // v
+		dec.skipCount() // numLeaves
+		offsets[i+sequencePartValues+1] = dec.pos()
+	}
+	return offsets
+}
+
+func (ms metaSequence) writeTo(w nomsWriter) {
+	w.writeRaw(ms.buff)
+}
+
+func (ms metaSequence) decoder() *valueDecoder {
+	return newValueDecoder(ms.buff, ms.vrw)
+}
+
+func (ms metaSequence) decoderAtOffset(offset int) *valueDecoder {
+	return newValueDecoder(ms.buff[offset:], ms.vrw)
+}
+
+func (ms metaSequence) decoderAtPart(part uint32) *valueDecoder {
+	offset := ms.offsets[part] - ms.offsets[sequencePartKind]
+	return newValueDecoder(ms.buff[offset:], ms.vrw)
+}
+
+func (ms metaSequence) decoderSkipToValues() (*valueDecoder, uint64) {
+	dec := ms.decoderAtPart(sequencePartCount)
+	count := dec.readCount()
+	return dec, count
+}
+
+func (ms metaSequence) decoderSkipToIndex(idx int) *valueDecoder {
+	offset := ms.getItemOffset(idx)
+	return ms.decoderAtOffset(offset)
+}
+
+func (ms metaSequence) getItemOffset(idx int) int {
+	// kind, level, count, elements...
+	// 0     1      2      3          n+1
+	d.PanicIfTrue(idx+sequencePartValues+1 > len(ms.offsets))
+	return int(ms.offsets[idx+sequencePartValues] - ms.offsets[sequencePartKind])
 }
 
 func newMetaSequence(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
 	d.PanicIfFalse(level > 0)
-	return metaSequence{kind, level, tuples, vrw}
+	w := newBinaryNomsWriter()
+	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
+	offsets[sequencePartKind] = w.offset
+	kind.writeTo(w)
+	offsets[sequencePartLevel] = w.offset
+	w.writeCount(level)
+	offsets[sequencePartCount] = w.offset
+	w.writeCount(uint64(len(tuples)))
+	offsets[sequencePartValues] = w.offset
+	for i, mt := range tuples {
+		mt.writeTo(w)
+		offsets[i+sequencePartValues+1] = w.offset
+	}
+	return metaSequence{vrw, w.data(), offsets}
 }
 
-func (ms metaSequence) data() []metaTuple {
-	return ms.tuples
+func (ms metaSequence) tuples() []metaTuple {
+	dec, count := ms.decoderSkipToValues()
+	tuples := make([]metaTuple, count)
+	for i := uint64(0); i < count; i++ {
+		tuples[i] = ms.readTuple(dec)
+	}
+	return tuples
 }
 
 func (ms metaSequence) getKey(idx int) orderedKey {
-	return ms.tuples[idx].key
+	dec := ms.decoderSkipToIndex(idx)
+	dec.skipValue() // ref
+	return dec.readOrderedKey()
+}
+
+func (ms metaSequence) search(key orderedKey) int {
+	return sort.Search(ms.seqLen(), func(i int) bool {
+		return !ms.getKey(i).Less(key)
+	})
 }
 
 func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	cum := uint64(0)
+	dec, _ := ms.decoderSkipToValues()
 	for i := 0; i <= idx; i++ {
-		cum += ms.tuples[i].numLeaves
+		dec.skipValue() // ref
+		dec.skipValue() // v
+		cum += dec.readCount()
 	}
 	return cum
 }
 
 func (ms metaSequence) getCompareFn(other sequence) compareFn {
+	dec := ms.decoder()
 	oms := other.(metaSequence)
+	otherDec := oms.decoder()
 	return func(idx, otherIdx int) bool {
-		return ms.tuples[idx].ref.TargetHash() == oms.tuples[otherIdx].ref.TargetHash()
+		return ms.getRefAt(dec, idx).TargetHash() == oms.getRefAt(otherDec, otherIdx).TargetHash()
 	}
+}
+
+func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
+	ref := dec.readRef()
+	key := dec.readOrderedKey()
+	numLeaves := dec.readCount()
+	return newMetaTuple(ref, key, numLeaves)
+}
+
+func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
+	dec.offset = uint32(ms.getItemOffset(idx))
+	return dec.readRef()
+}
+
+func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
+	dec := ms.decoderSkipToIndex(idx)
+	dec.skipValue()
+	dec.skipValue()
+	return dec.readCount()
 }
 
 // sequence interface
 func (ms metaSequence) getItem(idx int) sequenceItem {
-	return ms.tuples[idx]
+	dec := ms.decoderSkipToIndex(idx)
+	return ms.readTuple(dec)
 }
 
 func (ms metaSequence) seqLen() int {
-	return len(ms.tuples)
+	_, count := ms.decoderSkipToValues()
+	return int(count)
 }
 
 func (ms metaSequence) valueReadWriter() ValueReadWriter {
 	return ms.vrw
 }
 
+func (ms metaSequence) hash() hash.Hash {
+	return hash.Of(ms.buff)
+}
+
 func (ms metaSequence) WalkRefs(cb RefCallback) {
-	for _, tuple := range ms.tuples {
-		cb(tuple.ref)
+	dec, count := ms.decoderSkipToValues()
+	for i := uint64(0); i < count; i++ {
+		ref := dec.readRef()
+		cb(ref)
+		dec.skipValue() // v
+		dec.skipCount() // numLeaves
 	}
 }
 
 func (ms metaSequence) typeOf() *Type {
-	ts := make(typeSlice, len(ms.tuples))
-	for i, mt := range ms.tuples {
-		ts[i] = mt.ref.TargetType()
+	dec, count := ms.decoderSkipToValues()
+	ts := make(typeSlice, count)
+	for i := uint64(0); i < count; i++ {
+		ref := dec.readRef()
+		ts[i] = ref.TargetType()
+		dec.skipValue() // v
+		dec.skipCount() // numLeaves
 	}
 	return makeCompoundType(UnionKind, ts...)
 }
 
 func (ms metaSequence) Kind() NomsKind {
-	return ms.kind
+	return ms.decoderAtPart(sequencePartKind).readKind()
 }
 
 func (ms metaSequence) numLeaves() uint64 {
-	return ms.cumulativeNumberOfLeaves(len(ms.tuples) - 1)
+	_, count := ms.decoderSkipToValues()
+	return ms.cumulativeNumberOfLeaves(int(count - 1))
 }
 
 func (ms metaSequence) treeLevel() uint64 {
-	return ms.level
+	return ms.decoderAtPart(sequencePartLevel).readCount()
 }
 
 func (ms metaSequence) isLeaf() bool {
-	d.PanicIfTrue(ms.level == 0)
+	d.PanicIfTrue(ms.treeLevel() == 0)
 	return false
 }
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(idx int) sequence {
-	mt := ms.tuples[idx]
+	mt := ms.getItem(idx).(metaTuple)
+	// TODO: IsZeroValue?
+	if mt.ref.buff == nil {
+		return nil
+	}
 	return mt.getChildSequence(ms.vrw)
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
-	d.PanicIfFalse(ms.level > 0)
+	level := ms.treeLevel()
+	d.PanicIfFalse(level > 0)
 	if length == 0 {
-		return emptySequence{ms.level - 1}
+		return emptySequence{level - 1}
 	}
 
 	metaItems := []metaTuple{}
@@ -177,26 +329,30 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		isIndexedSequence = true
 	}
 
+	// TODO: This looks strange. The children can only be a meta sequence or one of map/set/list
+	// (why not blob?). We cannot mix map, set and list here and we know based on ms.Kind what
+	// we are expecting.
+	// https://github.com/attic-labs/noms/issues/3706
 	output := ms.getChildren(start, start+length)
 	for _, seq := range output {
-
 		switch t := seq.(type) {
 		case metaSequence:
 			childIsMeta = true
-			metaItems = append(metaItems, t.tuples...)
+			// TODO: Write directly to a valueEncoder
+			metaItems = append(metaItems, t.tuples()...)
 		case mapLeafSequence:
-			mapItems = append(mapItems, t.data...)
+			mapItems = append(mapItems, t.entries()...)
 		case setLeafSequence:
-			valueItems = append(valueItems, t.data...)
+			valueItems = append(valueItems, t.values()...)
 		case listLeafSequence:
-			valueItems = append(valueItems, t.values...)
+			valueItems = append(valueItems, t.values()...)
 		default:
 			panic("unreachable")
 		}
 	}
 
 	if childIsMeta {
-		return newMetaSequence(ms.kind, ms.level-1, metaItems, ms.vrw)
+		return newMetaSequence(ms.Kind(), ms.treeLevel()-1, metaItems, ms.vrw)
 	}
 
 	if isIndexedSequence {
@@ -210,18 +366,18 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 	return newSetLeafSequence(ms.vrw, valueItems...)
 }
 
-// fetches child sequences from start (inclusive) to end (exclusive) and respects uncommitted child
-// sequences.
+// fetches child sequences from start (inclusive) to end (exclusive).
 func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
-	d.Chk.True(end <= uint64(len(ms.tuples)))
+	d.Chk.True(end <= uint64(ms.seqLen()))
 	d.Chk.True(start <= end)
 
 	seqs = make([]sequence, end-start)
 	hs := make(hash.HashSet, len(seqs))
 
+	dec := ms.decoder()
+
 	for i := start; i < end; i++ {
-		mt := ms.tuples[i]
-		hs[mt.ref.TargetHash()] = struct{}{}
+		hs[ms.getRefAt(dec, int(i)).TargetHash()] = struct{}{}
 	}
 
 	if len(hs) == 0 {
@@ -240,8 +396,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	}
 
 	for i := start; i < end; i++ {
-		mt := ms.tuples[i]
-		childSeq := children[mt.ref.TargetHash()]
+		childSeq := children[ms.getRefAt(dec, int(i)).TargetHash()]
 		d.Chk.NotNil(childSeq)
 		seqs[i-start] = childSeq
 	}
@@ -293,6 +448,10 @@ func (es emptySequence) getKey(idx int) orderedKey {
 	panic("empty sequence")
 }
 
+func (es emptySequence) search(key orderedKey) int {
+	panic("empty sequence")
+}
+
 func (es emptySequence) getValue(idx int) Value {
 	panic("empty sequence")
 }
@@ -326,4 +485,12 @@ func (es emptySequence) treeLevel() uint64 {
 
 func (es emptySequence) isLeaf() bool {
 	return es.level == 0
+}
+
+func (es emptySequence) hash() hash.Hash {
+	panic("empty sequence")
+}
+
+func (es emptySequence) writeTo(nomsWriter) {
+	panic("empty sequence")
 }

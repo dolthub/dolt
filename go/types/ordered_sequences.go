@@ -5,14 +5,13 @@
 package types
 
 import (
-	"sort"
-
 	"github.com/attic-labs/noms/go/d"
 )
 
 type orderedSequence interface {
 	sequence
 	getKey(idx int) orderedKey
+	search(key orderedKey) int
 }
 
 func newSetMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
@@ -59,16 +58,14 @@ func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) bo
 	seq := cur.seq.(orderedSequence)
 
 	// Find smallest idx in seq where key(idx) >= key
-	cur.idx = sort.Search(seq.seqLen(), func(i int) bool {
-		return !seq.getKey(i).Less(key)
-	})
-
-	if cur.idx == seq.seqLen() && lastPositionIfNotFound {
+	cur.idx = seq.search(key)
+	seqLen := seq.seqLen()
+	if cur.idx == seqLen && lastPositionIfNotFound {
 		d.PanicIfFalse(cur.idx > 0)
 		cur.idx--
 	}
 
-	return cur.idx < seq.seqLen()
+	return cur.idx < seqLen
 }
 
 // Gets the key used for ordering the sequence at current index.

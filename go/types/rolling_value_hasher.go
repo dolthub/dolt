@@ -49,7 +49,6 @@ func normalProductionChunks() {
 type rollingValueHasher struct {
 	bw              *binaryNomsWriter
 	bz              *buzhash.BuzHash
-	enc             *valueEncoder
 	crossedBoundary bool
 	pattern, window uint32
 	salt            byte
@@ -66,12 +65,10 @@ func hashValueByte(item sequenceItem, rv *rollingValueHasher) {
 
 func newRollingValueHasher(salt byte) *rollingValueHasher {
 	pattern, window := chunkingConfig()
-	bw := newBinaryNomsWriter()
-	enc := newValueEncoder(bw)
+	w := newBinaryNomsWriter()
 
 	rv := &rollingValueHasher{
-		bw:      bw,
-		enc:     enc,
+		bw:      w,
 		bz:      buzhash.NewBuzHash(window),
 		pattern: pattern,
 		window:  window,
@@ -99,6 +96,6 @@ func (rv *rollingValueHasher) Reset() {
 }
 
 func (rv *rollingValueHasher) HashValue(v Value) {
-	rv.enc.writeValue(v)
+	v.writeTo(rv.bw)
 	rv.sl.Update(rv.bw.data())
 }

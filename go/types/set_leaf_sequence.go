@@ -4,52 +4,29 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import "sort"
 
 type setLeafSequence struct {
 	leafSequence
-	data ValueSlice // sorted by Hash()
 }
 
-func newSetLeafSequence(vrw ValueReadWriter, v ...Value) orderedSequence {
-	d.PanicIfTrue(vrw == nil)
-	return setLeafSequence{leafSequence{vrw, len(v), SetKind}, v}
-}
-
-// sequence interface
-
-func (sl setLeafSequence) getItem(idx int) sequenceItem {
-	return sl.data[idx]
-}
-
-func (sl setLeafSequence) WalkRefs(cb RefCallback) {
-	for _, v := range sl.data {
-		v.WalkRefs(cb)
-	}
+func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
+	ls := newLeafSequence(SetKind, uint64(len(vs)), vrw, vs...)
+	return setLeafSequence{ls}
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
-	osl := other.(setLeafSequence)
-	return func(idx, otherIdx int) bool {
-		entry := sl.data[idx]
-		return entry.Equals(osl.data[otherIdx])
-	}
-}
-
-func (sl setLeafSequence) typeOf() *Type {
-	ts := make([]*Type, len(sl.data))
-	for i, v := range sl.data {
-		ts[i] = v.typeOf()
-	}
-	return makeCompoundType(SetKind, makeCompoundType(UnionKind, ts...))
+	return sl.getCompareFnHelper(other.(setLeafSequence).leafSequence)
 }
 
 // orderedSequence interface
 
 func (sl setLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(sl.data[idx])
+	return newOrderedKey(sl.getItem(idx).(Value))
 }
 
-func (sl setLeafSequence) Kind() NomsKind {
-	return SetKind
+func (sl setLeafSequence) search(key orderedKey) int {
+	return sort.Search(int(sl.Len()), func(i int) bool {
+		return !sl.getKey(i).Less(key)
+	})
 }

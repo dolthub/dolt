@@ -65,11 +65,10 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 	return nums
 }
 
-func generateNumbersAsRefOfStructs(n int) []Value {
-	vs := newTestValueStore()
+func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vs.WriteValue(NewStruct("num", StructData{"n": Number(i)}))
+		r := vrw.WriteValue(NewStruct("num", StructData{"n": Number(i)}))
 		nums = append(nums, r)
 	}
 	return nums

@@ -4,29 +4,85 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/hash"
+import (
+	"github.com/attic-labs/noms/go/hash"
+)
 
 type Ref struct {
-	target     hash.Hash
-	targetType *Type
-	height     uint64
-	h          *hash.Hash
+	buff    []byte
+	offsets refOffsets
 }
+
+type refPart uint32
+
+const (
+	refPartKind refPart = iota
+	refPartTargetHash
+	refPartTargetType
+	refPartHeight
+	refPartEnd
+)
+
+type refOffsets [refPartEnd]uint32
 
 func NewRef(v Value) Ref {
 	// TODO: Taking the hash will duplicate the work of computing the type
-	return Ref{v.Hash(), TypeOf(v), maxChunkHeight(v) + 1, &hash.Hash{}}
+	return constructRef(v.Hash(), TypeOf(v), maxChunkHeight(v)+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
 // with the type 'Ref<Value>'.
 func ToRefOfValue(r Ref) Ref {
-	return Ref{r.TargetHash(), ValueType, r.Height(), &hash.Hash{}}
+	return constructRef(r.TargetHash(), ValueType, r.Height())
 }
 
-// Constructs a Ref directly from struct properties. This should not be used outside decoding and testing within the types package.
-func constructRef(target hash.Hash, targetType *Type, height uint64) Ref {
-	return Ref{target, targetType, height, &hash.Hash{}}
+func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
+	w := newBinaryNomsWriter()
+
+	var offsets refOffsets
+	offsets[refPartKind] = w.offset
+	RefKind.writeTo(w)
+	offsets[refPartTargetHash] = w.offset
+	w.writeHash(targetHash)
+	offsets[refPartTargetType] = w.offset
+	targetType.writeToAsType(w, map[string]*Type{})
+	offsets[refPartHeight] = w.offset
+	w.writeCount(height)
+
+	return Ref{w.data(), offsets}
+}
+
+func writeRefPartsTo(w nomsWriter, targetHash hash.Hash, targetType *Type, height uint64) {
+	RefKind.writeTo(w)
+	w.writeHash(targetHash)
+	targetType.writeToAsType(w, map[string]*Type{})
+	w.writeCount(height)
+}
+
+// readRef reads the data provided by a decoder and moves the decoder forward.
+func readRef(dec *valueDecoder) Ref {
+	start := dec.pos()
+	offsets := skipRef(dec)
+	end := dec.pos()
+	return Ref{dec.byteSlice(start, end), offsets}
+}
+
+// readRef reads the data provided by a decoder and moves the decoder forward.
+func skipRef(dec *valueDecoder) refOffsets {
+	var offsets refOffsets
+	offsets[refPartKind] = dec.pos()
+	dec.skipKind()
+	offsets[refPartTargetHash] = dec.pos()
+	dec.skipHash() // targetHash
+	offsets[refPartTargetType] = dec.pos()
+	dec.skipType() // targetType
+	offsets[refPartHeight] = dec.pos()
+	dec.skipCount() // height
+	return offsets
+}
+
+func (r Ref) writeTo(w nomsWriter) {
+	w.writeRaw(r.buff)
 }
 
 func maxChunkHeight(v Value) (max uint64) {
@@ -38,20 +94,30 @@ func maxChunkHeight(v Value) (max uint64) {
 	return
 }
 
+func (r Ref) decoder() *valueDecoder {
+	return newValueDecoder(r.buff, nil)
+}
+
+func (r Ref) decoderAtPart(part refPart) *valueDecoder {
+	offset := r.offsets[part] - r.offsets[refPartKind]
+	return newValueDecoder(r.buff[offset:], nil)
+}
+
 func (r Ref) TargetHash() hash.Hash {
-	return r.target
+	dec := r.decoderAtPart(refPartTargetHash)
+	return dec.readHash()
 }
 
 func (r Ref) Height() uint64 {
-	return r.height
+	return r.decoderAtPart(refPartHeight).readCount()
 }
 
 func (r Ref) TargetValue(vr ValueReader) Value {
-	return vr.ReadValue(r.target)
+	return vr.ReadValue(r.TargetHash())
 }
 
 func (r Ref) TargetType() *Type {
-	return r.targetType
+	return r.decoderAtPart(refPartTargetType).readType()
 }
 
 // Value interface
@@ -68,11 +134,7 @@ func (r Ref) Less(other Value) bool {
 }
 
 func (r Ref) Hash() hash.Hash {
-	if r.h.IsEmpty() {
-		*r.h = getHash(r)
-	}
-
-	return *r.h
+	return hash.Of(r.buff)
 }
 
 func (r Ref) WalkValues(cb ValueCallback) {
@@ -83,9 +145,13 @@ func (r Ref) WalkRefs(cb RefCallback) {
 }
 
 func (r Ref) typeOf() *Type {
-	return makeCompoundType(RefKind, r.targetType)
+	return makeCompoundType(RefKind, r.TargetType())
 }
 
 func (r Ref) Kind() NomsKind {
 	return RefKind
+}
+
+func (r Ref) valueReadWriter() ValueReadWriter {
+	return nil
 }

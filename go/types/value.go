@@ -54,6 +54,9 @@ type Value interface {
 	// and unions might have a single element, duplicates and be in the wrong
 	// order.
 	typeOf() *Type
+
+	// writeTo writes the encoded version of the value to a nomsWriter.
+	writeTo(nomsWriter)
 }
 
 type ValueSlice []Value
@@ -73,4 +76,17 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 	}
 
 	return true
+}
+
+func (vs ValueSlice) Contains(v Value) bool {
+	for _, v := range vs {
+		if v.Equals(v) {
+			return true
+		}
+	}
+	return false
+}
+
+type valueReadWriter interface {
+	valueReadWriter() ValueReadWriter
 }

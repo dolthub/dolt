@@ -20,11 +20,10 @@ import (
 // Lists, like all Noms values are immutable so the "mutation" methods return a new list.
 type List struct {
 	seq sequence
-	h   *hash.Hash
 }
 
 func newList(seq sequence) List {
-	return List{seq, &hash.Hash{}}
+	return List{seq}
 }
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
@@ -73,10 +72,6 @@ func (l List) sequence() sequence {
 	return l.seq
 }
 
-func (l List) hashPointer() *hash.Hash {
-	return l.h
-}
-
 // Value interface
 func (l List) Value() Value {
 	return l
@@ -91,11 +86,7 @@ func (l List) Less(other Value) bool {
 }
 
 func (l List) Hash() hash.Hash {
-	if l.h.IsEmpty() {
-		*l.h = getHash(l)
-	}
-
-	return *l.h
+	return l.sequence().hash()
 }
 
 func (l List) WalkValues(cb ValueCallback) {
@@ -245,4 +236,12 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptyListSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
 	return newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+}
+
+func (l List) valueReadWriter() ValueReadWriter {
+	return l.seq.valueReadWriter()
+}
+
+func (l List) writeTo(w nomsWriter) {
+	l.seq.writeTo(w)
 }

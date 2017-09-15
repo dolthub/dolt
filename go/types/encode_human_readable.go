@@ -251,36 +251,53 @@ func (w *hrsWriter) Write(v Value) {
 	}
 }
 
-func (w *hrsWriter) writeStruct(v Struct) {
+type hrsStructWriter struct {
+	*hrsWriter
+	v Struct
+}
+
+func (w hrsStructWriter) name(n string) {
 	w.write("struct ")
-	if v.name != "" {
-		w.write(v.name)
+	if n != "" {
+		w.write(n)
 		w.write(" ")
 	}
 	w.write("{")
-	commenters := GetHRSCommenters(v.name)
+	commenters := GetHRSCommenters(n)
 	for _, commenter := range commenters {
-		if comment := commenter.Comment(v); comment != "" {
+		if comment := commenter.Comment(w.v); comment != "" {
 			w.write(" // " + comment)
 			break
 		}
 
 	}
 	w.indent()
+}
 
-	if len(v.fieldNames) > 0 {
+func (w hrsStructWriter) count(c uint64) {
+	if c > 0 {
 		w.newLine()
 	}
-	for i := 0; i < len(v.fieldNames); i++ {
-		w.write(v.fieldNames[i])
-		w.write(": ")
-		w.Write(v.values[i])
-		w.write(",")
-		w.newLine()
-	}
+}
 
+func (w hrsStructWriter) fieldName(n string) {
+	w.write(n)
+	w.write(": ")
+}
+
+func (w hrsStructWriter) fieldValue(v Value) {
+	w.Write(v)
+	w.write(",")
+	w.newLine()
+}
+
+func (w hrsStructWriter) end() {
 	w.outdent()
 	w.write("}")
+}
+
+func (w *hrsWriter) writeStruct(v Struct) {
+	v.iterParts(hrsStructWriter{w, v})
 }
 
 func (w *hrsWriter) writeSize(v Value) {

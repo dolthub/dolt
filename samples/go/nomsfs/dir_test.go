@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/spec"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -66,10 +65,10 @@ func (s *fuseTestSuite) TestHierarchy() {
 	for _, path := range hierarchy {
 		if ll := len(path); path[ll-1] == '/' {
 			code := testfs.Mkdir(path[:ll-1], 0555, nil)
-			assert.Equal(s.T(), fuse.OK, code)
+			s.Equal(fuse.OK, code)
 		} else {
 			_, code := testfs.Create(path, uint32(os.O_CREATE)|uint32(os.O_WRONLY), 0444, nil)
-			assert.Equal(s.T(), fuse.OK, code)
+			s.Equal(fuse.OK, code)
 		}
 	}
 
@@ -78,7 +77,7 @@ func (s *fuseTestSuite) TestHierarchy() {
 	sort.Strings(hierarchy)
 	sort.Strings(h)
 
-	assert.Equal(s.T(), hierarchy, h)
+	s.Equal(hierarchy, h)
 }
 
 func (s *fuseTestSuite) TestDirError() {
@@ -90,14 +89,14 @@ func (s *fuseTestSuite) TestDirError() {
 	start(str, func(fs pathfs.FileSystem) { testfs = fs })
 
 	code := testfs.Mkdir("foo/bar", 0755, nil)
-	assert.Equal(s.T(), fuse.ENOENT, code)
+	s.Equal(fuse.ENOENT, code)
 	_, code = testfs.Create("foo", uint32(os.O_CREATE)|uint32(os.O_WRONLY), 0644, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Mkdir("foo/bar", 0755, nil)
-	assert.Equal(s.T(), fuse.ENOTDIR, code)
+	s.Equal(fuse.ENOTDIR, code)
 
 	_, code = testfs.OpenDir("foo", nil)
-	assert.Equal(s.T(), fuse.ENOTDIR, code)
+	s.Equal(fuse.ENOTDIR, code)
 }
 
 func (s *fuseTestSuite) TestRenaming() {
@@ -109,20 +108,20 @@ func (s *fuseTestSuite) TestRenaming() {
 	start(str, func(fs pathfs.FileSystem) { testfs = fs })
 
 	code := testfs.Mkdir("foo", 0755, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Mkdir("foo/bar", 0755, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Mkdir("foo/baz", 0755, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	_, code = testfs.Create("foo/bar/buzz", uint32(os.O_CREATE)|uint32(os.O_WRONLY), 0644, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 
 	code = testfs.Rename("foo/bar/buzz", "foo/baz/buzz", nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Rename("foo/baz/buzz", "buzz", nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Rename("buzz", "foo/buzz", nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 }
 
 func (s *fuseTestSuite) TestRenameWhileOpen() {
@@ -134,18 +133,18 @@ func (s *fuseTestSuite) TestRenameWhileOpen() {
 	start(str, func(fs pathfs.FileSystem) { testfs = fs })
 
 	code := testfs.Mkdir("foo", 0755, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	code = testfs.Mkdir("foo/bar", 0755, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 	file, code := testfs.Create("foo/bar/file.txt", uint32(os.O_CREATE)|uint32(os.O_WRONLY), 0644, nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 
 	// Validate renaming a file between opening it and writing to it.
 	code = testfs.Rename("foo/bar/file.txt", "file.txt", nil)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(fuse.OK, code)
 
 	n, code := file.Write([]byte("howdy!"), 0)
-	assert.Equal(s.T(), uint32(6), n)
-	assert.Equal(s.T(), fuse.OK, code)
+	s.Equal(uint32(6), n)
+	s.Equal(fuse.OK, code)
 	assertAttr(s, testfs, "file.txt", 0644|fuse.S_IFREG, 6)
 }

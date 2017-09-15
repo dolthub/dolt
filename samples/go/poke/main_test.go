@@ -112,9 +112,10 @@ func (s *testSuite) TestLose() {
 		{[]string{sp.String(), `.bar[#00000000000000000000000000000000]`, "42"}, "Invalid path '.bar[#00000000000000000000000000000000]': Invalid hash: 00000000000000000000000000000000\n"},
 	}
 
-	sp.GetDatabase().CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
+	db := sp.GetDatabase()
+	db.CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
 		"foo": types.String("foo"),
-		"bar": types.NewMap(sp.GetDatabase(), types.String("baz"), types.Number(42)),
+		"bar": types.NewMap(db, types.String("baz"), types.Number(42)),
 	}))
 
 	for _, c := range cases {

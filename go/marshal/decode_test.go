@@ -22,8 +22,7 @@ import (
 
 func TestDecode(tt *testing.T) {
 	assert := assert.New(tt)
-	st := &chunks.TestStorage{}
-	vs := types.NewValueStore(st.NewView())
+	vs := newTestValueStore()
 	defer vs.Close()
 
 	t := func(v types.Value, ptr interface{}, expected interface{}) {
@@ -31,7 +30,11 @@ func TestDecode(tt *testing.T) {
 		assert.Equal(reflect.Ptr, p.Type().Kind())
 		err := Unmarshal(v, p.Interface())
 		assert.NoError(err)
-		assert.Equal(expected, p.Elem().Interface())
+		if expectedValue, ok := expected.(types.Value); ok {
+			assert.True(expectedValue.Equals(p.Elem().Interface().(types.Value)))
+		} else {
+			assert.Equal(expected, p.Elem().Interface())
+		}
 
 		// Also test that types.Value is passed through
 		var v2 types.Value
@@ -162,23 +165,6 @@ func TestDecode(tt *testing.T) {
 		true,
 	})
 
-	type T2 struct {
-		Abc TestStruct
-		Def types.List
-	}
-	var t2 T2
-	t(types.NewStruct("T2", types.StructData{
-		"abc": types.NewStruct("TestStruct", types.StructData{
-			"a": types.Number(1),
-			"b": types.Bool(false),
-			"c": types.String("bye"),
-		}),
-		"def": types.NewList(vs, types.Number(42)),
-	}), &t2, T2{
-		TestStruct{false, 1, "bye"},
-		types.NewList(vs, types.Number(42)),
-	})
-
 	// extra fields
 	type T3 struct {
 		B string
@@ -221,6 +207,37 @@ func TestDecode(tt *testing.T) {
 	t(types.NewStruct("SomeOtherName", types.StructData{
 		"a": types.Number(42),
 	}), &t7, struct{ A int }{42})
+}
+
+func TestDecodeStructWithNomsValue(t *testing.T) {
+	// This is split out of TestDecode because we cannot use testify Equal
+	// on a go struct with a field that is a Noms value.
+	vs := newTestValueStore()
+	defer vs.Close()
+
+	type TestStruct struct {
+		B bool
+		A float64
+		C string
+	}
+	type T2 struct {
+		Abc TestStruct
+		Def types.List
+	}
+
+	v := types.NewStruct("T2", types.StructData{
+		"abc": types.NewStruct("TestStruct", types.StructData{
+			"a": types.Number(1),
+			"b": types.Bool(false),
+			"c": types.String("bye"),
+		}),
+		"def": types.NewList(vs, types.Number(42)),
+	})
+	var t2 T2
+	MustUnmarshal(v, &t2)
+	assert.IsType(t, T2{}, t2)
+	assert.Equal(t, TestStruct{false, 1, "bye"}, t2.Abc)
+	assert.True(t, t2.Def.Equals(types.NewList(vs, types.Number(42))))
 }
 
 func TestDecodeNilPointer(t *testing.T) {
@@ -524,9 +541,6 @@ func TestDecodeNomsTypePtr(t *testing.T) {
 		},
 	)
 	testUnmarshal(types.NewStruct("S", types.StructData{"type": complex}), &s, &S{complex})
-
-	var empty *types.Type
-	testUnmarshal(types.NewStruct("S", types.StructData{"type": empty}), &s, &S{empty})
 }
 
 func ExampleUnmarshal() {

@@ -703,7 +703,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	}
 	vrw := newTestValueStore()
 
-	nums := generateNumbersAsRefOfStructs(testListSize)
+	nums := generateNumbersAsRefOfStructs(vrw, testListSize)
 	NewList(vrw, nums...)
 }
 
@@ -828,6 +828,7 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
+
 	l1 := NewList(vrw, nums1...)
 	l2 := NewList(vrw, nums2...)
 
@@ -1075,9 +1076,9 @@ func TestListTypeAfterMutations(t *testing.T) {
 	defer normalProductionChunks()
 
 	assert := assert.New(t)
-	vrw := newTestValueStore()
 
 	test := func(n int, c interface{}) {
+		vrw := newTestValueStore()
 		values := generateNumbersAsValues(n)
 
 		l := NewList(vrw, values...)

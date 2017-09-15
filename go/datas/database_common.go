@@ -85,7 +85,7 @@ func (db *database) SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error) {
 }
 
 func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
-	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
+	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef.Equals(currentHeadRef) {
 		return nil
 	}
 	commit := db.validateRefAsCommit(newHeadRef)
@@ -102,9 +102,12 @@ func (db *database) FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, erro
 }
 
 func (db *database) doFastForward(ds Dataset, newHeadRef types.Ref) error {
-	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef == currentHeadRef {
+	currentHeadRef, ok := ds.MaybeHeadRef()
+	if ok && newHeadRef.Equals(currentHeadRef) {
 		return nil
-	} else if newHeadRef.Height() <= currentHeadRef.Height() {
+	}
+
+	if ok && newHeadRef.Height() <= currentHeadRef.Height() {
 		return ErrMergeNeeded
 	}
 

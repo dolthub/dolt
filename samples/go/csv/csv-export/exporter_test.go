@@ -29,7 +29,7 @@ type testSuite struct {
 	payload [][]string
 }
 
-func createTestData(s *testSuite, buildAsMap bool) []types.Value {
+func (s *testSuite) createTestData(buildAsMap bool) []types.Value {
 	s.header = []string{"a", "b", "c"}
 	structName := "SomeStruct"
 	s.payload = [][]string{
@@ -93,7 +93,7 @@ func (s *testSuite) TestCSVExportFromList() {
 	ds := db.GetDataset(setName)
 
 	// Build data rows
-	structs := createTestData(s, false)
+	structs := s.createTestData(false)
 	db.CommitValue(ds, types.NewList(db, structs...))
 	db.Close()
 
@@ -113,7 +113,7 @@ func (s *testSuite) TestCSVExportFromMap() {
 	ds := db.GetDataset(setName)
 
 	// Build data rows
-	structs := createTestData(s, true)
+	structs := s.createTestData(true)
 	db.CommitValue(ds, types.NewMap(db, structs...))
 	db.Close()
 

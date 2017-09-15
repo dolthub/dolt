@@ -144,7 +144,7 @@ func newRandomTestMap(length int, gen genValueFn) testMap {
 	s := rand.NewSource(4242)
 	used := map[int]bool{}
 
-	var mask int = 0xffffff
+	mask := int(0xffffff)
 	entries := make([]mapEntry, 0, length)
 	for len(entries) < length {
 		v := int(s.Int63()) & mask
@@ -319,17 +319,17 @@ func newNumberStruct(i int) Value {
 	return NewStruct("", StructData{"n": Number(i)})
 }
 
-func getTestNativeOrderMap(scale int) testMap {
+func getTestNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, newNumber)
 }
 
-func getTestRefValueOrderMap(scale int) testMap {
+func getTestRefValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, newNumber)
 }
 
-func getTestRefToNativeOrderMap(scale int, vw ValueWriter) testMap {
+func getTestRefToNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, func(i int) Value {
-		return vw.WriteValue(Number(i))
+		return vrw.WriteValue(Number(i))
 	})
 }
 
@@ -514,6 +514,8 @@ func TestMapUniqueKeysNumber(t *testing.T) {
 	assert.True(Number(5).Equals(m.Get(Number(1))))
 }
 
+type toTestMapFunc func(scale int, vrw ValueReadWriter) testMap
+
 func TestMapHas(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
@@ -524,10 +526,11 @@ func TestMapHas(t *testing.T) {
 
 	assert := assert.New(t)
 
-	vs := newTestValueStore()
-	doTest := func(tm testMap) {
-		m := tm.toMap(vs)
-		m2 := vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
+		m := tm.toMap(vrw)
+		m2 := vrw.ReadValue(vrw.WriteValue(m).TargetHash()).(Map)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -538,10 +541,10 @@ func TestMapHas(t *testing.T) {
 		diffMapTest(assert, m, m2, 0, 0, 0)
 	}
 
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, vs))
-	doTest(getTestRefToValueOrderMap(2, vs))
+	doTest(getTestNativeOrderMap, 16)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapHasRemove(t *testing.T) {
@@ -606,14 +609,14 @@ func TestMapRemove(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
 	assert := assert.New(t)
 
-	doTest := func(incr int, tm testMap) {
-		whole := tm.toMap(vrw)
+	doTest := func(incr int, toTestMap toTestMapFunc, scale int) {
+		vs := newTestValueStore()
+		tm := toTestMap(scale, vs)
+		whole := tm.toMap(vs)
 		run := func(i int) {
-			expected := tm.Remove(i, i+1).toMap(vrw)
+			expected := tm.Remove(i, i+1).toMap(vs)
 			actual := whole.Edit().Remove(tm.entries[i].key).Map()
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
@@ -625,10 +628,10 @@ func TestMapRemove(t *testing.T) {
 		run(len(tm.entries) - 1)
 	}
 
-	doTest(128, getTestNativeOrderMap(32))
-	doTest(64, getTestRefValueOrderMap(4))
-	doTest(64, getTestRefToNativeOrderMap(4, newTestValueStore()))
-	doTest(64, getTestRefToValueOrderMap(4, newTestValueStore()))
+	doTest(128, getTestNativeOrderMap, 32)
+	doTest(64, getTestRefValueOrderMap, 4)
+	doTest(64, getTestRefToNativeOrderMap, 4)
+	doTest(64, getTestRefToValueOrderMap, 4)
 }
 
 func TestMapRemoveNonexistentKey(t *testing.T) {
@@ -639,7 +642,7 @@ func TestMapRemoveNonexistentKey(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	tm := getTestNativeOrderMap(2)
+	tm := getTestNativeOrderMap(2, vrw)
 	original := tm.toMap(vrw)
 	actual := original.Edit().Remove(Number(-1)).Map() // rand.Int63 returns non-negative numbers.
 
@@ -682,9 +685,9 @@ func TestMapFirst2(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
-	doTest := func(tm testMap) {
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.First()
@@ -692,10 +695,10 @@ func TestMapFirst2(t *testing.T) {
 		assert.True(tm.entries[0].value.Equals(actualValue))
 	}
 
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
+	doTest(getTestNativeOrderMap, 16)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapLast(t *testing.T) {
@@ -733,9 +736,9 @@ func TestMapLast2(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
-	doTest := func(tm testMap) {
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.Last()
@@ -743,10 +746,10 @@ func TestMapLast2(t *testing.T) {
 		assert.True(tm.entries[len(tm.entries)-1].value.Equals(actualValue))
 	}
 
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
+	doTest(getTestNativeOrderMap, 16)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapSetGet(t *testing.T) {
@@ -847,11 +850,11 @@ func TestMapSet(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
 	assert := assert.New(t)
 
-	doTest := func(incr, offset int, tm testMap) {
+	doTest := func(incr, offset int, toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		expected := tm.toMap(vrw)
 		run := func(from, to int) {
 			actual := tm.Remove(from, to).toMap(vrw).Edit().SetM(toValuable(tm.Flatten(from, to))...).Map()
@@ -865,11 +868,11 @@ func TestMapSet(t *testing.T) {
 		run(len(tm.entries)-offset, len(tm.entries))
 	}
 
-	doTest(18, 3, getTestNativeOrderMap(9))
-	doTest(128, 1, getTestNativeOrderMap(32))
-	doTest(64, 1, getTestRefValueOrderMap(4))
-	doTest(64, 1, getTestRefToNativeOrderMap(4, newTestValueStore()))
-	doTest(64, 1, getTestRefToValueOrderMap(4, newTestValueStore()))
+	doTest(18, 3, getTestNativeOrderMap, 9)
+	doTest(128, 1, getTestNativeOrderMap, 32)
+	doTest(64, 1, getTestRefValueOrderMap, 4)
+	doTest(64, 1, getTestRefToNativeOrderMap, 4)
+	doTest(64, 1, getTestRefToValueOrderMap, 4)
 }
 
 func TestMapSetM(t *testing.T) {
@@ -900,7 +903,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tm := getTestNativeOrderMap(2)
+	tm := getTestNativeOrderMap(2, vrw)
 	original := tm.toMap(vrw)
 
 	expectedWorking := tm
@@ -935,11 +938,11 @@ func TestMapMaybeGet(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
 	assert := assert.New(t)
 
-	doTest := func(tm testMap) {
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		for _, entry := range tm.entries {
 			v, ok := m.MaybeGet(entry.key)
@@ -951,10 +954,10 @@ func TestMapMaybeGet(t *testing.T) {
 		assert.False(ok, "m should not contain %v", tm.knownBadKey)
 	}
 
-	doTest(getTestNativeOrderMap(2))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
+	doTest(getTestNativeOrderMap, 2)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapIter(t *testing.T) {
@@ -1008,9 +1011,9 @@ func TestMapIter2(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
-	doTest := func(tm testMap) {
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		sort.Sort(tm.entries)
 		idx := uint64(0)
@@ -1029,10 +1032,10 @@ func TestMapIter2(t *testing.T) {
 		assert.Equal(endAt, idx-1)
 	}
 
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
+	doTest(getTestNativeOrderMap, 16)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapAny(t *testing.T) {
@@ -1057,11 +1060,11 @@ func TestMapIterAll(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	vrw := newTestValueStore()
-
 	assert := assert.New(t)
 
-	doTest := func(tm testMap) {
+	doTest := func(toTestMap toTestMapFunc, scale int) {
+		vrw := newTestValueStore()
+		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		sort.Sort(tm.entries)
 		idx := uint64(0)
@@ -1073,10 +1076,10 @@ func TestMapIterAll(t *testing.T) {
 		})
 	}
 
-	doTest(getTestNativeOrderMap(16))
-	doTest(getTestRefValueOrderMap(2))
-	doTest(getTestRefToNativeOrderMap(2, newTestValueStore()))
-	doTest(getTestRefToValueOrderMap(2, newTestValueStore()))
+	doTest(getTestNativeOrderMap, 16)
+	doTest(getTestRefValueOrderMap, 2)
+	doTest(getTestRefToNativeOrderMap, 2)
+	doTest(getTestRefToValueOrderMap, 2)
 }
 
 func TestMapEquals(t *testing.T) {
@@ -1377,7 +1380,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 	defer normalProductionChunks()
 
 	vs := newTestValueStore()
-	m := getTestNativeOrderMap(2).toMap(vs)
+	m := getTestNativeOrderMap(2, vs).toMap(vs)
 	// Drop chunk values.
 	m = vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
 	// Modify/query. Once upon a time this would crash.
@@ -1463,12 +1466,12 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	assert.True(bool(fk.(Bool)))
 	assert.True(v.Equals(fv))
 
-	for i, kOrV := range kvs {
+	for i, keyOrValue := range kvs {
 		if i%2 == 0 {
-			assert.True(m.Has(kOrV))
-			assert.True(v.Equals(m.Get(kOrV)))
+			assert.True(m.Has(keyOrValue))
+			assert.True(v.Equals(m.Get(keyOrValue)))
 		} else {
-			assert.True(v.Equals(kOrV))
+			assert.True(v.Equals(keyOrValue))
 		}
 	}
 
@@ -1492,7 +1495,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 		return vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
 	}
 
-	tm := getTestNativeOrderMap(4)
+	tm := getTestNativeOrderMap(4, vs)
 	nm := tm.toMap(vs)
 
 	for len(tm.entries) > 0 {

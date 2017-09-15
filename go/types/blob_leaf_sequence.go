@@ -8,25 +8,46 @@ import "github.com/attic-labs/noms/go/d"
 
 type blobLeafSequence struct {
 	leafSequence
-	data []byte
 }
 
 func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	d.PanicIfTrue(vrw == nil)
-	return blobLeafSequence{leafSequence{vrw, len(data), BlobKind}, data}
+	offsets := make([]uint32, sequencePartValues+1)
+	w := newBinaryNomsWriter()
+	offsets[sequencePartKind] = w.offset
+	BlobKind.writeTo(w)
+	offsets[sequencePartLevel] = w.offset
+	w.writeCount(0) // level
+	offsets[sequencePartCount] = w.offset
+	w.writeCount(uint64(len(data)))
+	offsets[sequencePartValues] = w.offset
+	w.writeBytes(data)
+	return blobLeafSequence{leafSequence{vrw, w.data(), offsets}}
+}
+
+func (bl blobLeafSequence) writeTo(w nomsWriter) {
+	w.writeRaw(bl.buff)
 }
 
 // sequence interface
 
+func (bl blobLeafSequence) data() []byte {
+	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind]
+	return bl.buff[offset:]
+}
+
 func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {
-	otherbl := other.(blobLeafSequence)
+	offsetStart := int(bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind])
+	obl := other.(blobLeafSequence)
+	otherOffsetStart := int(obl.offsets[sequencePartValues] - obl.offsets[sequencePartKind])
 	return func(idx, otherIdx int) bool {
-		return bl.data[idx] == otherbl.data[otherIdx]
+		return bl.buff[offsetStart+idx] == obl.buff[otherOffsetStart+otherIdx]
 	}
 }
 
 func (bl blobLeafSequence) getItem(idx int) sequenceItem {
-	return bl.data[idx]
+	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind] + uint32(idx)
+	return bl.buff[offset]
 }
 
 func (bl blobLeafSequence) WalkRefs(cb RefCallback) {
