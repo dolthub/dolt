@@ -42,7 +42,7 @@ func newSequenceChunker(cur *sequenceCursor, level uint64, vrw ValueReadWriter, 
 		level,
 		vrw,
 		nil,
-		nil,
+		make([]sequenceItem, 0, 1<<10),
 		makeChunk, parentMakeChunk,
 		true,
 		hashValueBytes,
@@ -191,7 +191,9 @@ func (sc *sequenceChunker) createParent() {
 // tradeoff for simplicity of the chunking algorithm.
 func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
 	col, key, numLeaves := sc.makeChunk(sc.level, sc.current)
-	sc.current = nil
+
+	// |sc.makeChunk| copies |sc.current| so it's safe to re-use the memory.
+	sc.current = sc.current[:0]
 
 	var ref Ref
 	if write {
