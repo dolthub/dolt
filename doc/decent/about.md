@@ -1,4 +1,4 @@
-[About Noms](about-noms.md)&nbsp; | &nbsp;[How to Use Noms](how-to-use-noms.md)&nbsp; | &nbsp;[Demo App](demo-app.md)&nbsp; | &nbsp;[Vision](vision.md)&nbsp; | &nbsp;[What's Next](whats-next.md)
+**Decentralized Use Case:** [About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)&nbsp; | &nbsp;[Status](status.md)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
@@ -59,6 +59,6 @@ Some additional features include:
 
 Read the [Noms design overview](../intro.md).
 
-*If you’d like to use noms in your project we’d love to hear from you*:
+**_If you’d like to use noms in your project we’d love to hear from you_**:
 drop us an email ([noms@attic.io](mailto:noms@attic.io)) or send us a
 message in slack ([slack.noms.io](http://slack.noms.io)).

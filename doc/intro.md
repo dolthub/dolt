@@ -1,4 +1,4 @@
-# Introduction to Noms
+# Noms Technical Overview
 
 Most conventional database systems share two central properties:
 
