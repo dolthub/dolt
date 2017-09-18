@@ -5,7 +5,6 @@
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
-
 # What's next for Noms?
 
 Our primary goal (as of 9/2017) is to **find users to drive the future

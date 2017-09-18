@@ -5,7 +5,6 @@
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
-
 # How to Use Noms in a Decentralized App
 
 If you’d like to use noms in your project we’d love to hear from you:
