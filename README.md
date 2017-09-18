@@ -1,6 +1,6 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 
-[Technical Overview](docs/intro.md)&nbsp; | &nbsp;[Use Case: Decentralization](doc/decent/about.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)&nbsp; | &nbsp;[Command-Line Interface](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK](doc/go-tour.md)&nbsp; | &nbsp;[Path Syntax](doc/spelling.md)
+[Technical Overview](doc/intro.md)&nbsp; | &nbsp;[Use Case: Decentralization](doc/decent/about.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)&nbsp; | &nbsp;[Command-Line Interface](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK](doc/go-tour.md)&nbsp; | &nbsp;[Path Syntax](doc/spelling.md)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
