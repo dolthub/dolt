@@ -5,7 +5,13 @@
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
 
-# Demo App: IPFS-based Decentralized Chat
+# Demo App: P2P Decentralized Chat
+
+This sample demonstrates the simplest possible case of building a p2p app on top of Noms. Each node stores a complete copy of the data it is interested in, and peers find each other using [IPFS pubsub](https://ipfs.io/blog/25-pubsub/).
+
+Currently, nodes have to have a publicly routable IP, but it should be possible to use [libP2P](https://github.com/libp2p) or similar to connect to most nodes.
+
+# Build and Run
 
 Demo app code is in the
 [p2p](https://github.com/attic-labs/noms/tree/master/samples/go/ipfs-chat/p2p)
