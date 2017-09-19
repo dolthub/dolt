@@ -7,6 +7,10 @@
 
 # Demo App: IPFS-based Decentralized Chat
 
+This sample app demonstrates backing a P2P noms app by a decentralized blockstore (in this case, IPFS). Data is pulled off the network dynamically as needed - each client doesn't need a complete copy.
+
+# Build and Run
+
 Demo app code is in the
 [ipfs-chat](https://github.com/attic-labs/noms/tree/master/samples/go/ipfs-chat/)
 directory. To get it up and running take the following steps:
