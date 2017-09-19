@@ -15,7 +15,10 @@ transactions, support for large-scale data, and efficient searches,
 scans, reads, and updates.
 
 Unlike any other database, Noms has built-in multiparty sync and
-conflict resolution. Any number of dapp peers in a P2P network can
+conflict resolution. This feature makes Noms a very good fit for P2P
+decentralized applications.
+
+Any number of dapp peers in a P2P network can
 concurrently modify the same logical Noms database, and continuously
 and efficiently sync their changes with each other. All peers will
 converge to the same state.
