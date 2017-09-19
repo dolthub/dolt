@@ -125,7 +125,10 @@ func (s Struct) Value() Value {
 }
 
 func (s Struct) Equals(other Value) bool {
-	return s.Hash() == other.Hash()
+	if otherStruct, ok := other.(Struct); ok {
+		return bytes.Equal(s.buff, otherStruct.buff)
+	}
+	return false
 }
 
 func (s Struct) Less(other Value) bool {
@@ -166,11 +169,11 @@ func (s Struct) typeOf() *Type {
 	return makeStructTypeQuickly(name, typeFields)
 }
 
-func (s Struct) decoder() *valueDecoder {
+func (s Struct) decoder() valueDecoder {
 	return newValueDecoder(s.buff, s.vrw)
 }
 
-func (s Struct) decoderSkipToFields() (*valueDecoder, uint64) {
+func (s Struct) decoderSkipToFields() (valueDecoder, uint64) {
 	dec := s.decoder()
 	dec.skipKind()
 	dec.skipString()

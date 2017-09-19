@@ -164,7 +164,10 @@ func (b Blob) Value() Value {
 }
 
 func (b Blob) Equals(other Value) bool {
-	return b.Hash() == other.Hash()
+	if otherBlob, ok := other.(Blob); ok {
+		return b.sequence().equals(otherBlob.sequence())
+	}
+	return false
 }
 
 func (b Blob) Less(other Value) bool {

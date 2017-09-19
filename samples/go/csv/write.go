@@ -48,9 +48,11 @@ func writeValuesFromChan(structChan chan types.Struct, sd types.StructDesc, comm
 	}
 	record := make([]string, len(fieldNames))
 	for s := range structChan {
-		for i, f := range fieldNames {
-			record[i] = fmt.Sprintf("%v", s.Get(f))
-		}
+		i := 0
+		s.WalkValues(func(v types.Value) {
+			record[i] = fmt.Sprintf("%v", v)
+			i++
+		})
 		if csvWriter.Write(record) != nil {
 			d.Panic("Failed to write record %v", record)
 		}

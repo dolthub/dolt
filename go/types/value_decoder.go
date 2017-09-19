@@ -16,13 +16,13 @@ type valueDecoder struct {
 	validating bool
 }
 
-func newValueDecoder(buff []byte, vrw ValueReadWriter) *valueDecoder {
+func newValueDecoder(buff []byte, vrw ValueReadWriter) valueDecoder {
 	nr := binaryNomsReader{buff, 0}
-	return &valueDecoder{nr, vrw, false}
+	return valueDecoder{nr, vrw, false}
 }
 
-func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) *valueDecoder {
-	return &valueDecoder{nr, vrw, true}
+func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) valueDecoder {
+	return valueDecoder{nr, vrw, true}
 }
 
 func (r *valueDecoder) copyString(w nomsWriter) {

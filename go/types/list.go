@@ -78,7 +78,10 @@ func (l List) Value() Value {
 }
 
 func (l List) Equals(other Value) bool {
-	return l.Hash() == other.Hash()
+	if otherList, ok := other.(List); ok {
+		return l.sequence().equals(otherList.sequence())
+	}
+	return false
 }
 
 func (l List) Less(other Value) bool {

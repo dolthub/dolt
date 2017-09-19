@@ -5,6 +5,8 @@
 package types
 
 import (
+	"bytes"
+
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -94,11 +96,11 @@ func maxChunkHeight(v Value) (max uint64) {
 	return
 }
 
-func (r Ref) decoder() *valueDecoder {
+func (r Ref) decoder() valueDecoder {
 	return newValueDecoder(r.buff, nil)
 }
 
-func (r Ref) decoderAtPart(part refPart) *valueDecoder {
+func (r Ref) decoderAtPart(part refPart) valueDecoder {
 	offset := r.offsets[part] - r.offsets[refPartKind]
 	return newValueDecoder(r.buff[offset:], nil)
 }
@@ -109,7 +111,8 @@ func (r Ref) TargetHash() hash.Hash {
 }
 
 func (r Ref) Height() uint64 {
-	return r.decoderAtPart(refPartHeight).readCount()
+	dec := r.decoderAtPart(refPartHeight)
+	return dec.readCount()
 }
 
 func (r Ref) TargetValue(vr ValueReader) Value {
@@ -117,7 +120,8 @@ func (r Ref) TargetValue(vr ValueReader) Value {
 }
 
 func (r Ref) TargetType() *Type {
-	return r.decoderAtPart(refPartTargetType).readType()
+	dec := r.decoderAtPart(refPartTargetType)
+	return dec.readType()
 }
 
 // Value interface
@@ -126,7 +130,10 @@ func (r Ref) Value() Value {
 }
 
 func (r Ref) Equals(other Value) bool {
-	return r.Hash() == other.Hash()
+	if otherRef, ok := other.(Ref); ok {
+		return bytes.Equal(r.buff, otherRef.buff)
+	}
+	return false
 }
 
 func (r Ref) Less(other Value) bool {

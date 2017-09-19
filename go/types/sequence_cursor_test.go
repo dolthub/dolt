@@ -68,8 +68,11 @@ func (ts testSequence) isLeaf() bool {
 	panic("not reached")
 }
 
-// Value interface
-func (ts testSequence) Equals(other Value) bool {
+func (ts testSequence) equals(other sequence) bool {
+	panic("not reached")
+}
+
+func (ts testSequence) bytes() []byte {
 	panic("not reached")
 }
 

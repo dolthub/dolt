@@ -77,7 +77,7 @@ func (ml mapLeafSequence) writeTo(w nomsWriter) {
 
 func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 	dec := ml.decoderSkipToIndex(idx)
-	return readMapEntry(dec)
+	return readMapEntry(&dec)
 }
 
 func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
@@ -127,7 +127,7 @@ func (ml mapLeafSequence) typeOf() *Type {
 
 // orderedSequence interface
 
-func (ml mapLeafSequence) decoderSkipToIndex(idx int) *valueDecoder {
+func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 	offset := ml.getItemOffset(idx)
 	return ml.decoderAtOffset(offset)
 }

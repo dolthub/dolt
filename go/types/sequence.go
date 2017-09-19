@@ -26,6 +26,8 @@ type sequence interface {
 	cumulativeNumberOfLeaves(idx int) uint64
 	hash() hash.Hash
 	writeTo(nomsWriter)
+	equals(other sequence) bool
+	bytes() []byte
 }
 
 const (

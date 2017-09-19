@@ -5,6 +5,8 @@
 package types
 
 import (
+	"bytes"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -60,26 +62,26 @@ func skipLeafSequence(dec *valueDecoder) []uint32 {
 	return offsets
 }
 
-func (seq leafSequence) decoder() *valueDecoder {
+func (seq leafSequence) decoder() valueDecoder {
 	return newValueDecoder(seq.buff, seq.vrw)
 }
 
-func (seq leafSequence) decoderAtOffset(offset int) *valueDecoder {
+func (seq leafSequence) decoderAtOffset(offset int) valueDecoder {
 	return newValueDecoder(seq.buff[offset:], seq.vrw)
 }
 
-func (seq leafSequence) decoderAtPart(part uint32) *valueDecoder {
+func (seq leafSequence) decoderAtPart(part uint32) valueDecoder {
 	offset := seq.offsets[part] - seq.offsets[sequencePartKind]
 	return newValueDecoder(seq.buff[offset:], seq.vrw)
 }
 
-func (seq leafSequence) decoderSkipToValues() (*valueDecoder, uint64) {
+func (seq leafSequence) decoderSkipToValues() (valueDecoder, uint64) {
 	dec := seq.decoderAtPart(sequencePartCount)
 	count := dec.readCount()
 	return dec, count
 }
 
-func (seq leafSequence) decoderSkipToIndex(idx int) *valueDecoder {
+func (seq leafSequence) decoderSkipToIndex(idx int) valueDecoder {
 	offset := seq.getItemOffset(idx)
 	return seq.decoderAtOffset(offset)
 }
@@ -106,6 +108,10 @@ func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
 		return dec.readValue().Equals(otherDec.readValue())
 	}
+}
+
+func (seq leafSequence) getCompareFn(other sequence) compareFn {
+	panic("unreachable")
 }
 
 func (seq leafSequence) typeOf() *Type {
@@ -191,4 +197,12 @@ func (seq leafSequence) Empty() bool {
 
 func (seq leafSequence) hash() hash.Hash {
 	return hash.Of(seq.buff)
+}
+
+func (seq leafSequence) equals(other sequence) bool {
+	return bytes.Equal(seq.bytes(), other.bytes())
+}
+
+func (seq leafSequence) bytes() []byte {
+	return seq.buff
 }

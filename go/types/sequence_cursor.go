@@ -14,6 +14,7 @@ type sequenceCursor struct {
 	idx       int
 	readAhead bool
 	childSeqs []sequence
+	seqLen    int
 }
 
 // Advances |sc| forward and streams back a clone of |sc| for each distinct sequence its *parent*
@@ -75,17 +76,18 @@ func readAheadLeafCursors(sc *sequenceCursor, curChan chan chan *sequenceCursor,
 // If idx < 0, count backward from the end of seq.
 func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int, readAhead bool) *sequenceCursor {
 	d.PanicIfTrue(seq == nil)
+	seqLen := seq.seqLen()
 	if idx < 0 {
-		idx += seq.seqLen()
+		idx += seqLen
 		d.PanicIfFalse(idx >= 0)
 	}
 
 	readAhead = readAhead && !seq.isLeaf() && seq.valueReadWriter() != nil
-	return &sequenceCursor{parent, seq, idx, readAhead, nil}
+	return &sequenceCursor{parent, seq, idx, readAhead, nil, seqLen}
 }
 
 func (cur *sequenceCursor) length() int {
-	return cur.seq.seqLen()
+	return cur.seqLen
 }
 
 func (cur *sequenceCursor) getItem(idx int) sequenceItem {
@@ -98,6 +100,7 @@ func (cur *sequenceCursor) sync() {
 	d.PanicIfFalse(cur.parent != nil)
 	cur.childSeqs = nil
 	cur.seq = cur.parent.getChildSequence()
+	cur.seqLen = cur.seq.seqLen()
 }
 
 func (cur *sequenceCursor) preloadChildren() {

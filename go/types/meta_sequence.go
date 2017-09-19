@@ -5,6 +5,7 @@
 package types
 
 import (
+	"bytes"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -132,26 +133,26 @@ func (ms metaSequence) writeTo(w nomsWriter) {
 	w.writeRaw(ms.buff)
 }
 
-func (ms metaSequence) decoder() *valueDecoder {
+func (ms metaSequence) decoder() valueDecoder {
 	return newValueDecoder(ms.buff, ms.vrw)
 }
 
-func (ms metaSequence) decoderAtOffset(offset int) *valueDecoder {
+func (ms metaSequence) decoderAtOffset(offset int) valueDecoder {
 	return newValueDecoder(ms.buff[offset:], ms.vrw)
 }
 
-func (ms metaSequence) decoderAtPart(part uint32) *valueDecoder {
+func (ms metaSequence) decoderAtPart(part uint32) valueDecoder {
 	offset := ms.offsets[part] - ms.offsets[sequencePartKind]
 	return newValueDecoder(ms.buff[offset:], ms.vrw)
 }
 
-func (ms metaSequence) decoderSkipToValues() (*valueDecoder, uint64) {
+func (ms metaSequence) decoderSkipToValues() (valueDecoder, uint64) {
 	dec := ms.decoderAtPart(sequencePartCount)
 	count := dec.readCount()
 	return dec, count
 }
 
-func (ms metaSequence) decoderSkipToIndex(idx int) *valueDecoder {
+func (ms metaSequence) decoderSkipToIndex(idx int) valueDecoder {
 	offset := ms.getItemOffset(idx)
 	return ms.decoderAtOffset(offset)
 }
@@ -185,7 +186,7 @@ func (ms metaSequence) tuples() []metaTuple {
 	dec, count := ms.decoderSkipToValues()
 	tuples := make([]metaTuple, count)
 	for i := uint64(0); i < count; i++ {
-		tuples[i] = ms.readTuple(dec)
+		tuples[i] = ms.readTuple(&dec)
 	}
 	return tuples
 }
@@ -218,7 +219,7 @@ func (ms metaSequence) getCompareFn(other sequence) compareFn {
 	oms := other.(metaSequence)
 	otherDec := oms.decoder()
 	return func(idx, otherIdx int) bool {
-		return ms.getRefAt(dec, idx).TargetHash() == oms.getRefAt(otherDec, otherIdx).TargetHash()
+		return ms.getRefAt(&dec, idx).TargetHash() == oms.getRefAt(&otherDec, otherIdx).TargetHash()
 	}
 }
 
@@ -244,7 +245,7 @@ func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 // sequence interface
 func (ms metaSequence) getItem(idx int) sequenceItem {
 	dec := ms.decoderSkipToIndex(idx)
-	return ms.readTuple(dec)
+	return ms.readTuple(&dec)
 }
 
 func (ms metaSequence) seqLen() int {
@@ -258,6 +259,14 @@ func (ms metaSequence) valueReadWriter() ValueReadWriter {
 
 func (ms metaSequence) hash() hash.Hash {
 	return hash.Of(ms.buff)
+}
+
+func (ms metaSequence) equals(other sequence) bool {
+	return bytes.Equal(ms.bytes(), other.bytes())
+}
+
+func (ms metaSequence) bytes() []byte {
+	return ms.buff
 }
 
 func (ms metaSequence) WalkRefs(cb RefCallback) {
@@ -283,7 +292,8 @@ func (ms metaSequence) typeOf() *Type {
 }
 
 func (ms metaSequence) Kind() NomsKind {
-	return ms.decoderAtPart(sequencePartKind).readKind()
+	dec := ms.decoderAtPart(sequencePartKind)
+	return dec.readKind()
 }
 
 func (ms metaSequence) numLeaves() uint64 {
@@ -292,7 +302,8 @@ func (ms metaSequence) numLeaves() uint64 {
 }
 
 func (ms metaSequence) treeLevel() uint64 {
-	return ms.decoderAtPart(sequencePartLevel).readCount()
+	dec := ms.decoderAtPart(sequencePartLevel)
+	return dec.readCount()
 }
 
 func (ms metaSequence) isLeaf() bool {
@@ -377,7 +388,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	dec := ms.decoder()
 
 	for i := start; i < end; i++ {
-		hs[ms.getRefAt(dec, int(i)).TargetHash()] = struct{}{}
+		hs[ms.getRefAt(&dec, int(i)).TargetHash()] = struct{}{}
 	}
 
 	if len(hs) == 0 {
@@ -396,7 +407,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	}
 
 	for i := start; i < end; i++ {
-		childSeq := children[ms.getRefAt(dec, int(i)).TargetHash()]
+		childSeq := children[ms.getRefAt(&dec, int(i)).TargetHash()]
 		d.Chk.NotNil(childSeq)
 		seqs[i-start] = childSeq
 	}
@@ -488,6 +499,14 @@ func (es emptySequence) isLeaf() bool {
 }
 
 func (es emptySequence) hash() hash.Hash {
+	panic("empty sequence")
+}
+
+func (es emptySequence) equals(other sequence) bool {
+	panic("empty sequence")
+}
+
+func (es emptySequence) bytes() []byte {
 	panic("empty sequence")
 }
 
