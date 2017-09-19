@@ -19,13 +19,15 @@ The steps you’ll need to take are:
   to classic datatypes please let us know.)
 1. Consider...
     * How peers will discover each other
+    * How peers will notify each other of changes
     * How and when they will pull changes, and 
     * What potential there is for conflicting changes. Consider modeling
     your problem so that changes commute in order to make merging
     easier.  
-    
-   An example of answers to the above questions is that peers will publish new `(root hash, database URL)` tuples in
-    [IPNS](https://github.com/ipfs/examples/tree/master/examples/ipns), pull immediately, and avoid conflicts by ensuring changes are commutative.
+
+   In our [p2p sample](demo-p2p-chat.md) application, all peers periodically broadcast their HEAD on a known channel using [IPFS pubsub](https://ipfs.io/blog/25-pubsub/), pull each others' changes immediately, and avoid conflicts by using operations that can be resolved with Noms' built in merge policies.
+   
+   This is basically the simplest possible approach, but lots of options are possible. For example, an alternate approach for discoverability could be to keep a registry of all participating nodes in a blockchain (e.g., by storing them in an Ethereum smart contract). One could store either the current HEAD of each node (updated whenever the node changes state), or just an IPNS name that the node is writing to.
     
    As an example of changes that commute consider modeling a stream
     of chat messages. Appending messages from both parties to a list
