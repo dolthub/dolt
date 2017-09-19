@@ -40,30 +40,26 @@ The steps you’ll need to take are:
 1. Decide which type of storage you'd like to use: memory (convenient for playing around), disk, IPFS, or S3. (If you want to implement a store on top of another type of storage that's possible too; email us or reach out on slack and we can help.)
 1. Set up and instantiate a database for your storage. Generally, you use the spec package to parse a [dataset spec](https://github.com/attic-labs/noms/blob/master/doc/spelling.md) like `mem::mydataset` which you can then ask for  [`Database`](https://github.com/attic-labs/noms/blob/master/go/datas/database.go) and [`Dataset`](https://github.com/attic-labs/noms/blob/master/go/datas/dataset.go).
    * **Memory**: no setup required, just instantiate it:
-   ```
+   ```go
     sp := spec.ForDataset("mem::test") // Dataset name is "test"
    ```
    * **Disk**: identify a directory for storage, say `/path/to/chunks`, and then instantiate:
-   ```
+   ```go
     sp := spec.ForDataset("/path/to/chunks::test")  // Dataset name is "test"
    ```
    * **IPFS**: identify an IPFS node by directory. If an IPFS node doesn't exist at that directory, one will be created:
-   ```
+   ```go
     sp := spec.ForDataset("ipfs:/path/to/ipfs_repo::test")  // Dataset name is "test"
    ```
    * **S3**: Follow the [S3 setup instructions](https://github.com/attic-labs/noms/blob/master/go/nbs/NBS-on-AWS.md) then instantiate a database and dataset:
-    ```
+    ```go
     sess  := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
     store := nbs.NewAWSStore("dynamo-table", "store-name", "s3-bucket", s3.New(sess), dynamodb.New(sess), 1<<28))
     database := datas.NewDatabase(store)
     dataset := database.GetDataset("aws://dynamo-table:s3-bucket/store-name::test")  // Dataset name is "test"
     ```
-1. Implement using the [Go API](../go-tour.md). If you're just playing around you could try something like this (source code can be found in [quickstart.go](https://github.com/attic-labs/noms/blob/master/samples/go/quickstart/quickstart.go)).
-    ```
-    // Copyright 2017 Attic Labs, Inc. All rights reserved.
-    // Licensed under the Apache License, version 2.0:
-    // http://www.apache.org/licenses/LICENSE-2.0
-    
+1. Implement using the [Go API](../go-tour.md). If you're just playing around you could try something like this:
+    ```go
     package main
     
     import (
