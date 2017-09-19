@@ -46,10 +46,11 @@ The Public API will continue to evolve. Pull requests which represent breaking A
 
 <br>
 
-## Talk
+## Contact Us
 
-If you'd like to use Noms for something, we'd love to hear from
-you. Contact us at [noms@attic.io](mailto:noms@attic.io) or via:
+Interested in using Noms? Awesome! We would be happy to work with you to help understand whether Noms is a fit for your problem, or even to prioritize work that you need.
+
+Reach out at [noms@attic.io](mailto:noms@attic.io) or via:
 
 - [Slack](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
