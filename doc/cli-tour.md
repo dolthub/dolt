@@ -46,12 +46,12 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 
 ## noms ds
 
-There's a sample database running at http://demo.noms.io/cli-tour. Let's take a look inside...
+There's a sample database running at http://demo.noms.io. Let's take a look inside...
 
 The `noms ds` command lists the _datasets_ within a particular database:
 
 ```
-> noms ds http://demo.noms.io/cli-tour
+> noms ds http://demo.noms.io
 ...
 sf-film-locations/raw
 sf-film-locations
@@ -63,17 +63,17 @@ sf-film-locations
 Noms datasets are versioned. You can see the history with `log`:
 
 ```
-> noms log http://demo.noms.io/cli-tour::sf-film-locations
+> noms log http://demo.noms.io::sf-film-locations
 
 commit q4jcc2i7kntkjiipvjgpr5r02ldroj0g
 Parent:    pckdvpvr9br1fie6c3pjudrlthe7na18
 Date:      "2016-07-25T18:51:23+0000"
-InputPath: "http://demo.noms.io/cli-tour::sf-film-locations/raw.value"
+InputPath: "http://demo.noms.io::sf-film-locations/raw.value"
 
 commit pckdvpvr9br1fie6c3pjudrlthe7na18
 Parent:    c506ta03786j48a07he83ju669u78qa2
 Date:      "2016-07-25T18:34:00+0000"
-InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
+InputPath: "http://localhost:8000::sf-film-locations/raw.value"
 [213] {
 -   Locations: "Mission Delores Park (Mission District) via J-Church MUNI Train"
 +   Locations: "Mission Dolores Park (Mission District) via J-Church MUNI Train"
@@ -85,7 +85,7 @@ InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
 commit c506ta03786j48a07he83ju669u78qa2
 Parent:    dl0j63uouu3e64tqrcnqokmisgkdoarb
 Date:      "2016-07-25T18:34:00+0000"
-InputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value"
+InputPath: "http://localhost:8000::sf-film-locations/raw.value"
 [6] {
 -   Locations: "Randall Musuem"
 +   Locations: "Randall Museum"
@@ -103,7 +103,7 @@ Note that Noms is a typed system. What is being shown here for each entry is not
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
-> noms show 'http://demo.noms.io/cli-tour::#pckdvpvr9br1fie6c3pjudrlthe7na18'
+> noms show 'http://demo.noms.io::#pckdvpvr9br1fie6c3pjudrlthe7na18'
 
 struct Commit {
   meta: struct {},
@@ -124,7 +124,7 @@ struct Commit {
 }({
   meta: Meta {
     date: "2016-07-25T18:34:00+0000",
-    inputPath: "http://localhost:8000/cli-tour::sf-film-locations/raw.value",
+    inputPath: "http://localhost:8000::sf-film-locations/raw.value",
   },
   parents: {
     c506ta03786j48a07he83ju669u78qa2,
@@ -142,7 +142,7 @@ You can work with Noms databases that are remote exactly the same as you work wi
 Moving data in Noms is done with the `sync` command. Note that unlike Git, we do not make a distinction between _push_ and _pull_. It's the same operation in both directions:
 
 ```
-> noms sync http://demo.noms.io/cli-tour::sf-film-locations /tmp/noms::films
+> noms sync http://demo.noms.io::sf-film-locations /tmp/noms::films
 > noms ds /tmp/noms
 films
 ```
@@ -166,13 +166,13 @@ open /tmp/film-location.csv and edit it, then:
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
 ```
-> noms diff http://demo.noms.io/cli-tour::sf-film-locations /tmp/noms::films
+> noms diff http://demo.noms.io::sf-film-locations /tmp/noms::films
 
 ./.meta {
 -   "date": "2016-07-25T18:51:23+0000"
 +   "date": "2016-07-25T22:51:14+0000"
 +   "inputFile": "/tmp/film-locations.csv"
--   "inputPath": "http://demo.noms.io/cli-tour::sf-film-locations/raw.value"
+-   "inputPath": "http://demo.noms.io::sf-film-locations/raw.value"
 ./.parents {
 -   pckdvpvr9br1fie6c3pjudrlthe7na18
 +   q4jcc2i7kntkjiipvjgpr5r02ldroj0g
