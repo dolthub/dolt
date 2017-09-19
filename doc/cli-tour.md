@@ -161,7 +161,7 @@ open /tmp/film-location.csv and edit it, then:
     /tmp/film-locations.csv /tmp/noms::films
 ```
 
-#noms diff
+## noms diff
 
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
