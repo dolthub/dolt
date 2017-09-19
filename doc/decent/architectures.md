@@ -7,7 +7,7 @@
 
 ### Peer-to-Peer Architecture
 
-Noms can be used to implement apps in a peer-to-peer configuration. Each application maintains a database locally with the data that is relevant to it. When an app creates new data, it commits that data to it's database and broadcasts a message to it's peers that contains the hash of it's lastest commit.
+Noms can be used to implement apps in a peer-to-peer configuration. Each instance of the application (i.e., each "node") maintains a database locally with the data that is relevant to it. When a node creates new data, it commits that data to it's database and broadcasts a message to it's peers that contains the hash of it's lastest commit.
   
 ![P2P Architecture](./p2p-arch.png)
  
@@ -41,9 +41,9 @@ If this is not sufficient, then applications can create their own merge policies
 
 ### Decentralized Chunkstore Architecture
 
-Another potential architecture for decentralized apps uses a decentralized chunkstore (such as IPFS, Swarm, or Sia) rather than local databases. In this case, rather than each app maintaining a local datastore, Noms chunks are stored in a distributed chunkstore. The underlying chunkstore is reponsible for making chunks available when needed. 
+Another potential architecture for decentralized apps uses a decentralized chunkstore (such as IPFS, Swarm, or Sia) rather than local databases. In this case, rather than each node maintaining a local datastore, Noms chunks are stored in a decentralized chunkstore. The underlying chunkstore is reponsible for making chunks available when needed. 
 
-![Distributed Architecture](./dist-arch.png)
+![Decentralized Architecture](./dist-arch.png)
 
 The flow used by peers to sync with one another is similar to the peer-to-peer architecture. The main difference is data is not duplicated on local machines and doesn't have to be pulled during sync. Each app keeps track of it's latest commit in the chunk store.
 
