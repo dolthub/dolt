@@ -26,6 +26,7 @@ Finally, because Noms is content-addressed, it yields a very pleasant programmin
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
 
+<br>
 
 ## Setup
 
@@ -37,6 +38,7 @@ go get github.com/attic-labs/noms/cmd/noms
 go install github.com/attic-labs/noms/cmd/noms
 ```
 
+<br>
 
 ## Run
 
@@ -74,6 +76,8 @@ struct Commit {
 ...
 ```
 
+<br>
+
 ## Learn More About Noms
 
 For the decentralized web: [The Decentralized Database](doc/decent/about.md)
@@ -84,11 +88,7 @@ Tour the CLI: [Command-Line Interface Tour](doc/cli-tour.md)
 
 Tour the Go API: [Go SDK Tour](doc/go-tour.md)
 
-
-### API
-
-The Public API will continue to evolve. Pull requests which represent breaking API changes should be marked with `APIChange` and sent to the slack channel and mailing list below for advance warning and feedback.
-
+<br>
 
 ## Contact Us
 
