@@ -28,6 +28,53 @@ Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` ex
 
 <br>
 
+## Setup
+
+```
+# You probably want to add this to your environment
+export NOMS_VERSION_NEXT=1
+
+go get github.com/attic-labs/noms/cmd/noms
+go install github.com/attic-labs/noms/cmd/noms
+```
+
+## Run
+
+Import some data:
+
+```
+go install github.com/attic-labs/noms/samples/go/csv/import
+curl 'https://data.cityofnewyork.us/api/views/kku6-nxdu/rows.csv?accessType=DOWNLOAD' > /tmp/data.csv
+csv-import /tmp/data.csv /tmp/noms::nycdemo
+```
+
+Explore:
+
+```
+noms show /tmp/noms::nycdemo
+```
+
+Should show:
+
+```
+struct Commit {
+  meta: struct Meta {
+    date: "2017-09-19T19:33:01Z",
+    inputFile: "/tmp/data.csv",
+  },
+  parents: set {},
+  value: [  // 236 items
+    struct Row {
+      countAmericanIndian: "0",
+      countAsianNonHispanic: "3",
+      countBlackNonHispanic: "21",
+      countCitizenStatusTotal: "44",
+      countCitizenStatusUnknown: "0",
+      countEthnicityTotal: "44",
+...
+```
+<br>
+
 ## Learn More About Noms
 
 For the decentralized web: [The Decentralized Database](doc/decent/about.md)
