@@ -63,36 +63,12 @@ sf-film-locations
 Noms datasets are versioned. You can see the history with `log`:
 
 ```
-> noms log http://demo.noms.io::sf-film-locations
+> !? noms log http://demo.noms.io::sf-film-locations
+commit aprsmg0j2eegk8eehbgj7cd3tmmd1be8
+Parent:    None
+Date:      "2017-09-19T21:42:46Z"
+InputPath: "http://localhost:8000::#dksek6tuf8ens06bi4culq85tfp5q4cg.value"
 
-commit q4jcc2i7kntkjiipvjgpr5r02ldroj0g
-Parent:    pckdvpvr9br1fie6c3pjudrlthe7na18
-Date:      "2016-07-25T18:51:23+0000"
-InputPath: "http://demo.noms.io::sf-film-locations/raw.value"
-
-commit pckdvpvr9br1fie6c3pjudrlthe7na18
-Parent:    c506ta03786j48a07he83ju669u78qa2
-Date:      "2016-07-25T18:34:00+0000"
-InputPath: "http://localhost:8000::sf-film-locations/raw.value"
-[213] {
--   Locations: "Mission Delores Park (Mission District) via J-Church MUNI Train"
-+   Locations: "Mission Dolores Park (Mission District) via J-Church MUNI Train"
-  }
-[221] {
--   FunFacts: "Mission Delores' official name is Mission San Francisco de Assis. It is the oldest bu
-...
-
-commit c506ta03786j48a07he83ju669u78qa2
-Parent:    dl0j63uouu3e64tqrcnqokmisgkdoarb
-Date:      "2016-07-25T18:34:00+0000"
-InputPath: "http://localhost:8000::sf-film-locations/raw.value"
-[6] {
--   Locations: "Randall Musuem"
-+   Locations: "Randall Museum"
-  }
-(root) {
-+   Row {
-+     Actor1: "Charles Chaplin",
 ...
 ```
 
@@ -103,7 +79,7 @@ Note that Noms is a typed system. What is being shown here for each entry is not
 You can see the entire serialization of any object in the database with `noms show`:
 
 ```
-> noms show 'http://demo.noms.io::#pckdvpvr9br1fie6c3pjudrlthe7na18'
+> noms show 'http://demo.noms.io::#aprsmg0j2eegk8eehbgj7cd3tmmd1be8'
 
 struct Commit {
   meta: struct {},
