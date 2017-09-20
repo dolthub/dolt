@@ -41,7 +41,7 @@ If this is not sufficient, then applications can create their own merge policies
 
 ### Decentralized Chunkstore Architecture
 
-Another potential architecture for decentralized apps uses a decentralized chunkstore (such as IPFS, Swarm, or Sia) rather than local databases. In this case, rather than each node maintaining a local datastore, Noms chunks are stored in a decentralized chunkstore. The underlying chunkstore is reponsible for making chunks available when needed. 
+Another potential architecture for decentralized apps uses a decentralized chunkstore (such as IPFS, Swarm, or Sia) rather than local databases. In this case, rather than each node maintaining a local datastore, Noms chunks are stored in a decentralized chunkstore. The underlying chunkstore is responsible for making chunks available when needed. 
 
 ![Decentralized Architecture](./dist-arch.png)
 
