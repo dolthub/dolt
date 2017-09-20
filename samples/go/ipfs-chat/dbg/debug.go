@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	filepath = "/tmp/noms-dbg.log"
-	lg       = NewLogger(filepath)
+	Filepath = "/tmp/noms-dbg.log"
+	lg       = NewLogger(Filepath)
 )
 
 func NewLogger(fp string) *log.Logger {
@@ -35,4 +35,13 @@ func SetLogger(newLg *log.Logger) {
 func Debug(s string, args ...interface{}) {
 	s1 := fmt.Sprintf(s, args...)
 	lg.Println(s1)
+}
+
+func BoxF(s string, args ...interface{}) func() {
+	s1 := fmt.Sprintf(s, args...)
+	Debug("starting %s", s1)
+	f := func() {
+		Debug("finished %s", s1)
+	}
+	return f
 }

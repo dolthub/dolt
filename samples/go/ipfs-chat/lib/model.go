@@ -42,6 +42,7 @@ func (m Message) ID() string {
 }
 
 func AddMessage(body string, author string, clientTime time.Time, ds datas.Dataset) (datas.Dataset, error) {
+	defer dbg.BoxF("AddMessage, body: %s", body)()
 	root, err := getRoot(ds)
 	if err != nil {
 		return datas.Dataset{}, err
@@ -57,8 +58,8 @@ func AddMessage(body string, author string, clientTime time.Time, ds datas.Datas
 	}
 	root.Messages = root.Messages.Edit().Set(types.String(nm.ID()), marshal.MustMarshal(db, nm)).Map()
 	IndexNewMessage(db, &root, nm)
-
-	ds, err = db.CommitValue(ds, marshal.MustMarshal(db, root))
+	newRoot := marshal.MustMarshal(db, root)
+	ds, err = db.CommitValue(ds, newRoot)
 	return ds, err
 }
 
@@ -81,6 +82,8 @@ func GetAuthors(ds datas.Dataset) []string {
 }
 
 func IndexNewMessage(vrw types.ValueReadWriter, root *Root, m Message) {
+	defer dbg.BoxF("IndexNewMessage")()
+
 	ti := NewTermIndex(vrw, root.Index)
 	id := types.String(m.ID())
 	root.Index = ti.Edit().InsertAll(GetTerms(m), id).Value().TermDocs
@@ -157,6 +160,8 @@ func ListMessages(ds datas.Dataset, searchIds *types.Map, doneChan chan struct{}
 }
 
 func getRoot(ds datas.Dataset) (Root, error) {
+	defer dbg.BoxF("getRoot")()
+
 	db := ds.Database()
 	root := Root{
 		Messages: types.NewMap(db),
