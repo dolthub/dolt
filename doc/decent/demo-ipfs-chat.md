@@ -24,11 +24,11 @@ go build
 ```
 * Run the ipfs-chat client with the following command:
 ```
-./ipfs-chat client --username <aname1> --node-idx=2 ipfs:/tmp/ifps1::chat >& /tmp/err1
+./ipfs-chat client --username <aname1> --node-idx=2 ipfs:/tmp/ipfs1::chat >& /tmp/err1
 ```
 * Run a second ipfs-chat client with the following command:
 ```
-./ipfs-chat client --username <aname2> --node-idx=3 ipfs:/tmp/ifps2::chat >& /tmp/err2
+./ipfs-chat client --username <aname2> --node-idx=3 ipfs:/tmp/ipfs2::chat >& /tmp/err2
 ```
   
 If desired, ipfs-chat can be run as a daemon which will replicate all
@@ -36,7 +36,7 @@ chat content in a local store which will enable clients to go offline
 without causing data to become unavailable to other clients:
 
 ```
-./ipfs-chat daemon --node-idx=3 ipfs:/tmp/ifps3::chat
+./ipfs-chat daemon --node-idx=3 ipfs:/tmp/ipfs3::chat
 ```
 
 Note: the 'node-idx' argument ensures that each IPFS-based program
