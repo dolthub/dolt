@@ -147,19 +147,6 @@ func (suite *listTestSuite) TestIter() {
 	suite.Equal(endAt, expectIdx)
 }
 
-func (suite *listTestSuite) TestMap() {
-	list := suite.col.(List)
-	l := list.Map(func(v Value, i uint64) interface{} {
-		v1 := v.(Number)
-		return v1 + Number(i)
-	})
-
-	suite.Equal(uint64(len(l)), suite.expectLen)
-	for i := 0; i < len(l); i++ {
-		suite.Equal(l[i], list.Get(uint64(i)).(Number)+Number(i))
-	}
-}
-
 func TestListSuite4K(t *testing.T) {
 	suite.Run(t, newListTestSuite(12, 9, 2, 2))
 }

@@ -118,25 +118,6 @@ func (l List) Get(idx uint64) Value {
 	return cur.current().(Value)
 }
 
-type MapFunc func(v Value, index uint64) interface{}
-
-// Deprecated: This API may change in the future. Use IterAll or Iterator instead.
-func (l List) Map(mf MapFunc) []interface{} {
-	// TODO: This is bad API. It should have returned another List.
-	// https://github.com/attic-labs/noms/issues/2557
-	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx, true)
-
-	results := make([]interface{}, 0, l.Len())
-	cur.iter(func(v interface{}) bool {
-		res := mf(v.(Value), uint64(idx))
-		results = append(results, res)
-		idx++
-		return false
-	})
-	return results
-}
-
 // Concat returns a new List comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
