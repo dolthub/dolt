@@ -18,7 +18,7 @@ Demo app code is in the
 directory. To get it up and running take the following steps:
 * Use git to clone the noms repository onto your computer:
 ```
-git clone git@github.com:attic-labs/noms.git or git clone https://github.com/attic-labs/noms.git
+go get github.com/attic-labs/noms/samples/go/ipfs-chat/p2p
 ```
 * From the noms/samples/go/ipfs-chat/p2p directory, build the program with the following command:
 ```
