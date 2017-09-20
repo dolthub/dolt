@@ -159,6 +159,10 @@ func (s Struct) WalkRefs(cb RefCallback) {
 
 func (s Struct) typeOf() *Type {
 	dec := s.decoder()
+	return readStructTypeOfValue(&dec)
+}
+
+func readStructTypeOfValue(dec *valueDecoder) *Type {
 	dec.skipKind()
 	name := dec.readString()
 	count := dec.readCount()
@@ -167,7 +171,7 @@ func (s Struct) typeOf() *Type {
 		typeFields[i] = StructField{
 			Name:     dec.readString(),
 			Optional: false,
-			Type:     dec.readValue().typeOf(),
+			Type:     dec.readTypeOfValue(),
 		}
 	}
 	return makeStructTypeQuickly(name, typeFields)

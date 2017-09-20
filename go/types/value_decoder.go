@@ -348,6 +348,42 @@ func (r *valueDecoder) skipValue() {
 	}
 }
 
+// readTypeOfValue is basically readValue().typeOf() but it ensures that we do
+// not allocate values where we do not need to.
+func (r *valueDecoder) readTypeOfValue() *Type {
+	k := r.peekKind()
+	switch k {
+	case BlobKind:
+		r.skipBlob()
+		return BlobType
+	case BoolKind:
+		r.skipKind()
+		r.skipBool()
+		return BoolType
+	case NumberKind:
+		r.skipKind()
+		r.skipNumber()
+		return NumberType
+	case StringKind:
+		r.skipKind()
+		r.skipString()
+		return StringType
+	case ListKind, MapKind, RefKind, SetKind:
+		// These do not decode the actual values anyway.
+		return r.readValue().typeOf()
+	case StructKind:
+		return readStructTypeOfValue(r)
+	case TypeKind:
+		r.skipKind()
+		r.skipType()
+		return TypeType
+	case CycleKind, UnionKind, ValueKind:
+		d.Panic("A value instance can never have type %s", k)
+	}
+
+	panic("not reachable")
+}
+
 func (r *valueDecoder) copyValue(w nomsWriter) {
 	start := r.pos()
 	r.skipValue()

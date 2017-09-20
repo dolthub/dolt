@@ -121,8 +121,7 @@ func (seq leafSequence) typeOf() *Type {
 	count := dec.readCount()
 	ts := make([]*Type, count)
 	for i := uint64(0); i < count; i++ {
-		v := dec.readValue()
-		ts[i] = v.typeOf()
+		ts[i] = dec.readTypeOfValue()
 	}
 	return makeCompoundType(kind, makeCompoundType(UnionKind, ts...))
 }
