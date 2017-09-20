@@ -59,7 +59,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 			continue
 		}
 
-		hs := hash.HashSet{}
+		hs := make(hash.HashSlice, 0, len(refs))
 		oldRefs := refs
 		refs = map[hash.Hash]bool{}
 		for h := range oldRefs {
@@ -72,16 +72,14 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 				continue
 			}
 
-			hs.Insert(h)
+			hs = append(hs, h)
 			visited.Insert(h)
 		}
 
 		if len(hs) > 0 {
-			valueChan := make(chan Value, len(hs))
-			vr.ReadManyValues(hs, valueChan)
-			close(valueChan)
-			for sv := range valueChan {
-				values = append(values, valueRec{sv, oldRefs[sv.Hash()]})
+			readValues := vr.ReadManyValues(hs)
+			for i, sv := range readValues {
+				values = append(values, valueRec{sv, oldRefs[hs[i]]})
 			}
 		}
 	}

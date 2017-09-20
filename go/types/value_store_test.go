@@ -52,10 +52,10 @@ func TestValueReadMany(t *testing.T) {
 
 	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
 	vs := newTestValueStore()
-	hashes := hash.HashSet{}
+	hashes := hash.HashSlice{}
 	for _, v := range vals {
 		h := vs.WriteValue(v).TargetHash()
-		hashes.Insert(h)
+		hashes = append(hashes, h)
 		vs.Commit(vs.Root(), vs.Root())
 	}
 
@@ -66,16 +66,18 @@ func TestValueReadMany(t *testing.T) {
 	three := Number(3)
 	vals = append(vals, three)
 	vs.WriteValue(three)
-	hashes.Insert(three.Hash())
+	hashes = append(hashes, three.Hash())
 
 	// Add one Value to request that's not in vs
-	hashes.Insert(Bool(false).Hash())
+	hashes = append(hashes, Bool(false).Hash())
 
 	found := map[hash.Hash]Value{}
-	foundValues := make(chan Value, len(vals))
-	go func() { vs.ReadManyValues(hashes, foundValues); close(foundValues) }()
-	for v := range foundValues {
-		found[v.Hash()] = v
+	readValues := vs.ReadManyValues(hashes)
+
+	for i, v := range readValues {
+		if v != nil {
+			found[hashes[i]] = v
+		}
 	}
 
 	assert.Len(found, len(vals))

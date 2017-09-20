@@ -19,7 +19,7 @@ import (
 // package that implements Value reading.
 type ValueReader interface {
 	ReadValue(h hash.Hash) Value
-	ReadManyValues(hashes hash.HashSet, foundValues chan<- Value)
+	ReadManyValues(hashes hash.HashSlice) ValueSlice
 }
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g.
@@ -144,10 +144,10 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 	return v
 }
 
-// ReadManyValues reads and decodes Values indicated by |hashes| from lvs. On
-// return, |foundValues| will have been fully sent all Values which have been
-// found. Any non-present Values will silently be ignored.
-func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Value) {
+// ReadManyValues reads and decodes Values indicated by |hashes| from lvs and
+// returns the found Values in the same order. Any non-present Values will be
+// represented by nil.
+func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk, toPending bool) Value {
 		v := DecodeValue(*chunk, lvs)
@@ -156,12 +156,15 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 		return v
 	}
 
-	// First, see which hashes can be found in either the Value cache or bufferedChunks. Put the rest into a new HashSet to be requested en masse from the ChunkStore.
+	foundValues := make(map[hash.Hash]Value, len(hashes))
+
+	// First, see which hashes can be found in either the Value cache or bufferedChunks.
+	// Put the rest into a new HashSet to be requested en masse from the ChunkStore.
 	remaining := hash.HashSet{}
-	for h := range hashes {
+	for _, h := range hashes {
 		if v, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
-			foundValues <- v.(Value)
+			foundValues[h] = v.(Value)
 			continue
 		}
 
@@ -174,25 +177,29 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSet, foundValues chan<- Va
 			return chunks.EmptyChunk
 		}()
 		if !chunk.IsEmpty() {
-			foundValues <- decode(h, &chunk, true)
+			foundValues[h] = decode(h, &chunk, true)
 			continue
 		}
 
 		remaining.Insert(h)
 	}
 
-	if len(remaining) == 0 {
-		return
+	if len(remaining) != 0 {
+		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
+		foundChunks := make(chan *chunks.Chunk, 16)
+
+		go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
+		for c := range foundChunks {
+			h := c.Hash()
+			foundValues[h] = decode(h, c, false)
+		}
 	}
 
-	// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
-	foundChunks := make(chan *chunks.Chunk, 16)
-
-	go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
-	for c := range foundChunks {
-		h := c.Hash()
-		foundValues <- decode(h, c, false)
+	rv := make(ValueSlice, len(hashes))
+	for i, h := range hashes {
+		rv[i] = foundValues[h]
 	}
+	return rv
 }
 
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns

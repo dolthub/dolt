@@ -126,27 +126,17 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 		}
 	}
 
-	hs := hash.HashSet{}
-	for _, mt := range childTuples {
-		hs.Insert(mt.ref.TargetHash())
+	hs := make(hash.HashSlice, len(childTuples))
+	for i, mt := range childTuples {
+		hs[i] = mt.ref.TargetHash()
 	}
 
 	// Fetch committed child sequences in a single batch
-	fetched := make(map[hash.Hash]Collection, len(hs))
-	if len(hs) > 0 {
-		valueChan := make(chan Value, len(hs))
-		go func() {
-			vrw.ReadManyValues(hs, valueChan)
-			close(valueChan)
-		}()
-		for value := range valueChan {
-			fetched[value.Hash()] = value.(Collection)
-		}
-	}
+	readValues := vrw.ReadManyValues(hs)
 
-	childCols := make([]Collection, len(childTuples))
-	for i, mt := range childTuples {
-		childCols[i] = fetched[mt.ref.TargetHash()]
+	childCols := make([]Collection, len(readValues))
+	for i, v := range readValues {
+		childCols[i] = v.(Collection)
 	}
 
 	return LoadLeafNodes(childCols, startIdx, endIdx)

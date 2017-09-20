@@ -96,28 +96,11 @@ func compressedSize(v Value) uint64 {
 }
 
 func loadNextLevel(refs RefSlice, vr ValueReader) ValueSlice {
-	values := make(ValueSlice, len(refs))
-	hs := make(hash.HashSet, len(refs))
-	for _, r := range refs {
-		hs.Insert(r.TargetHash())
+	hs := make(hash.HashSlice, len(refs))
+	for i, r := range refs {
+		hs[i] = r.TargetHash()
 	}
 
 	// Fetch committed child sequences in a single batch
-	valueChan := make(chan Value, len(hs))
-	go func() {
-		vr.ReadManyValues(hs, valueChan)
-		close(valueChan)
-	}()
-
-	vm := make(map[hash.Hash]Value, len(hs))
-	for v := range valueChan {
-		vm[v.Hash()] = v
-	}
-
-	for i, r := range refs {
-		v := vm[r.TargetHash()]
-		values[i] = vm[v.Hash()]
-	}
-
-	return values
+	return vr.ReadManyValues(hs)
 }

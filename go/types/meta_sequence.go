@@ -383,12 +383,12 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	d.Chk.True(start <= end)
 
 	seqs = make([]sequence, end-start)
-	hs := make(hash.HashSet, len(seqs))
+	hs := make(hash.HashSlice, len(seqs))
 
 	dec := ms.decoder()
 
 	for i := start; i < end; i++ {
-		hs[ms.getRefAt(&dec, int(i)).TargetHash()] = struct{}{}
+		hs[i-start] = ms.getRefAt(&dec, int(i)).TargetHash()
 	}
 
 	if len(hs) == 0 {
@@ -396,20 +396,9 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	}
 
 	// Fetch committed child sequences in a single batch
-	valueChan := make(chan Value, len(hs))
-	go func() {
-		ms.vrw.ReadManyValues(hs, valueChan)
-		close(valueChan)
-	}()
-	children := make(map[hash.Hash]sequence, len(hs))
-	for value := range valueChan {
-		children[value.Hash()] = value.(Collection).sequence()
-	}
-
-	for i := start; i < end; i++ {
-		childSeq := children[ms.getRefAt(&dec, int(i)).TargetHash()]
-		d.Chk.NotNil(childSeq)
-		seqs[i-start] = childSeq
+	readValues := ms.vrw.ReadManyValues(hs)
+	for i, v := range readValues {
+		seqs[i] = v.(Collection).sequence()
 	}
 
 	return

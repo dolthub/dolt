@@ -115,7 +115,7 @@ func (h Hash) Greater(other Hash) bool {
 type HashSet map[Hash]struct{}
 
 func NewHashSet(hashes ...Hash) HashSet {
-	out := HashSet{}
+	out := make(HashSet, len(hashes))
 	for _, h := range hashes {
 		out.Insert(h)
 	}

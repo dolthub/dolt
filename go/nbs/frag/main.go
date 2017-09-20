@@ -75,10 +75,9 @@ func main() {
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		found := make(chan types.Value)
-		go func() { defer close(found); db.ReadManyValues(current.HashSet(), found) }()
-		for v := range found {
-			h := v.Hash()
+		readValues := db.ReadManyValues(current)
+		for i, v := range readValues {
+			h := current[i]
 			currentValues[h] = v
 			visited[h] = true
 		}
