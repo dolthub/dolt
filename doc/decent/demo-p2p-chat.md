@@ -31,6 +31,7 @@ mkdir /tmp/noms1
 ```
 * Run a second p2p client with the following command:
 ```
+mkdir /tmp/noms2
 ./p2p client --username=<aname2> --node-idx=3 /tmp/noms2 >& /tmp/err2
 ```
   
