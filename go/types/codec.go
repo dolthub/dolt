@@ -14,11 +14,23 @@ import (
 
 const initialBufferSize = 2048
 
+type valueBytes interface {
+	valueBytes() []byte
+}
+
 func EncodeValue(v Value) chunks.Chunk {
-	// TODO: Once all Values are backed by []byte we might not need EncodeValue
-	w := newBinaryNomsWriter()
-	v.writeTo(w)
-	return chunks.NewChunk(w.data())
+	switch v := v.(type) {
+	case Collection:
+		return chunks.NewChunk(v.sequence().bytes())
+	case valueBytes:
+		return chunks.NewChunk(v.valueBytes())
+	case *Type:
+		w := newBinaryNomsWriter()
+		v.writeTo(&w)
+		return chunks.NewChunk(w.data())
+	}
+
+	panic("unreachable")
 }
 
 func DecodeFromBytes(data []byte, vrw ValueReadWriter) Value {
@@ -145,8 +157,8 @@ type binaryNomsWriter struct {
 	offset uint32
 }
 
-func newBinaryNomsWriter() *binaryNomsWriter {
-	return &binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
+func newBinaryNomsWriter() binaryNomsWriter {
+	return binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
 }
 
 func (b *binaryNomsWriter) data() []byte {
@@ -187,7 +199,7 @@ func (b *binaryNomsWriter) writeUint8(v uint8) {
 }
 
 func (b *binaryNomsWriter) writeCount(v uint64) {
-	b.ensureCapacity(binary.MaxVarintLen64 * 2)
+	b.ensureCapacity(binary.MaxVarintLen64)
 	count := binary.PutUvarint(b.buff[b.offset:], v)
 	b.offset += uint32(count)
 }

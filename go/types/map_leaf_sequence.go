@@ -56,14 +56,14 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	offsets := make([]uint32, len(data)+sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	MapKind.writeTo(w)
+	MapKind.writeTo(&w)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
 	w.writeCount(uint64(len(data)))
 	offsets[sequencePartValues] = w.offset
 	for i, me := range data {
-		me.writeTo(w)
+		me.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return mapLeafSequence{leafSequence{vrw, w.data(), offsets}}

@@ -12,44 +12,51 @@ import (
 type Bool bool
 
 // Value interface
-func (v Bool) Value() Value {
-	return v
+func (b Bool) Value() Value {
+	return b
 }
 
-func (v Bool) Equals(other Value) bool {
-	return v == other
+func (b Bool) Equals(other Value) bool {
+	return b == other
 }
 
-func (v Bool) Less(other Value) bool {
-	if v2, ok := other.(Bool); ok {
-		return !bool(v) && bool(v2)
+func (b Bool) Less(other Value) bool {
+	if b2, ok := other.(Bool); ok {
+		return !bool(b) && bool(b2)
 	}
 	return true
 }
 
-func (v Bool) Hash() hash.Hash {
-	return getHash(v)
+func (b Bool) Hash() hash.Hash {
+	return getHash(b)
 }
 
-func (v Bool) WalkValues(cb ValueCallback) {
+func (b Bool) WalkValues(cb ValueCallback) {
 }
 
-func (v Bool) WalkRefs(cb RefCallback) {
+func (b Bool) WalkRefs(cb RefCallback) {
 }
 
-func (v Bool) typeOf() *Type {
+func (b Bool) typeOf() *Type {
 	return BoolType
 }
 
-func (v Bool) Kind() NomsKind {
+func (b Bool) Kind() NomsKind {
 	return BoolKind
 }
 
-func (v Bool) valueReadWriter() ValueReadWriter {
+func (b Bool) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
 func (b Bool) writeTo(w nomsWriter) {
 	BoolKind.writeTo(w)
 	w.writeBool(bool(b))
+}
+
+func (b Bool) valueBytes() []byte {
+	if bool(b) {
+		return []byte{byte(BoolKind), 1}
+	}
+	return []byte{byte(BoolKind), 0}
 }

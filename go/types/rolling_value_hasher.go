@@ -47,7 +47,7 @@ func normalProductionChunks() {
 }
 
 type rollingValueHasher struct {
-	bw              *binaryNomsWriter
+	bw              binaryNomsWriter
 	bz              *buzhash.BuzHash
 	crossedBoundary bool
 	pattern, window uint32
@@ -96,6 +96,6 @@ func (rv *rollingValueHasher) Reset() {
 }
 
 func (rv *rollingValueHasher) HashValue(v Value) {
-	v.writeTo(rv.bw)
+	v.writeTo(&rv.bw)
 	rv.sl.Update(rv.bw.data())
 }

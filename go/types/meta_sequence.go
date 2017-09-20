@@ -169,14 +169,14 @@ func newMetaSequence(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueR
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(w)
+	kind.writeTo(&w)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(level)
 	offsets[sequencePartCount] = w.offset
 	w.writeCount(uint64(len(tuples)))
 	offsets[sequencePartValues] = w.offset
 	for i, mt := range tuples {
-		mt.writeTo(w)
+		mt.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return metaSequence{vrw, w.data(), offsets}

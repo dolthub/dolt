@@ -4,7 +4,11 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/hash"
+import (
+	"encoding/binary"
+
+	"github.com/attic-labs/noms/go/hash"
+)
 
 // String is a Noms Value wrapper around the primitive string type.
 type String string
@@ -50,4 +54,13 @@ func (s String) valueReadWriter() ValueReadWriter {
 func (s String) writeTo(w nomsWriter) {
 	StringKind.writeTo(w)
 	w.writeString(string(s))
+}
+
+func (s String) valueBytes() []byte {
+	// We know the size of the buffer here so allocate it once.
+	// StringKind, Length (UVarint), UTF-8 encoded string
+	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
+	w := binaryNomsWriter{buff, 0}
+	s.writeTo(&w)
+	return buff[:w.offset]
 }

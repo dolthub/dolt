@@ -43,11 +43,11 @@ func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
 
 	var offsets refOffsets
 	offsets[refPartKind] = w.offset
-	RefKind.writeTo(w)
+	RefKind.writeTo(&w)
 	offsets[refPartTargetHash] = w.offset
 	w.writeHash(targetHash)
 	offsets[refPartTargetType] = w.offset
-	targetType.writeToAsType(w, map[string]*Type{})
+	targetType.writeToAsType(&w, map[string]*Type{})
 	offsets[refPartHeight] = w.offset
 	w.writeCount(height)
 
@@ -85,6 +85,10 @@ func skipRef(dec *valueDecoder) refOffsets {
 
 func (r Ref) writeTo(w nomsWriter) {
 	w.writeRaw(r.buff)
+}
+
+func (r Ref) valueBytes() []byte {
+	return r.buff
 }
 
 func maxChunkHeight(v Value) (max uint64) {

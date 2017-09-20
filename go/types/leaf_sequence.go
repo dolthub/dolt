@@ -22,14 +22,14 @@ func newLeafSequence(kind NomsKind, count uint64, vrw ValueReadWriter, vs ...Val
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(w)
+	kind.writeTo(&w)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
-		v.writeTo(w)
+		v.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return leafSequence{vrw, w.data(), offsets}

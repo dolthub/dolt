@@ -47,10 +47,14 @@ func (s Struct) writeTo(enc nomsWriter) {
 	enc.writeRaw(s.buff)
 }
 
+func (s Struct) valueBytes() []byte {
+	return s.buff
+}
+
 func newStruct(name string, fieldNames []string, values []Value) Struct {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	StructKind.writeTo(w)
+	StructKind.writeTo(&w)
 	w.writeString(name)
 	w.writeCount(uint64(len(fieldNames)))
 	for i := 0; i < len(fieldNames); i++ {
@@ -58,7 +62,7 @@ func newStruct(name string, fieldNames []string, values []Value) Struct {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(w)
+		values[i].writeTo(&w)
 	}
 	return Struct{vrw, w.data()}
 }
@@ -263,7 +267,8 @@ func (s Struct) Get(n string) Value {
 // struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	verifyFieldName(n)
-	return s.set(newBinaryNomsWriter(), n, v, 0)
+	w := newBinaryNomsWriter()
+	return s.set(&w, n, v, 0)
 }
 
 func (s Struct) set(w *binaryNomsWriter, n string, v Value, addedCount int) Struct {
@@ -324,9 +329,9 @@ func (s Struct) IsZeroValue() bool {
 func (s Struct) Delete(n string) Struct {
 	dec := s.decoder()
 	w := newBinaryNomsWriter()
-	StructKind.writeTo(w)
+	StructKind.writeTo(&w)
 	dec.skipKind()
-	dec.copyString(w)
+	dec.copyString(&w)
 	count := dec.readCount()
 	w.writeCount(count - 1) // If not found we just return s
 
@@ -339,7 +344,7 @@ func (s Struct) Delete(n string) Struct {
 			found = true
 		} else {
 			w.writeString(name)
-			dec.copyValue(w)
+			dec.copyValue(&w)
 		}
 	}
 

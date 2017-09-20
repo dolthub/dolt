@@ -5,6 +5,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"math"
 
 	"github.com/attic-labs/noms/go/d"
@@ -59,4 +60,13 @@ func (v Number) writeTo(w nomsWriter) {
 		d.Panic("%f is not a supported number", f)
 	}
 	w.writeNumber(v)
+}
+
+func (v Number) valueBytes() []byte {
+	// We know the size of the buffer here so allocate it once.
+	// NumberKind, int (Varint), exp (Varint)
+	buff := make([]byte, 1+2*binary.MaxVarintLen64)
+	w := binaryNomsWriter{buff, 0}
+	v.writeTo(&w)
+	return buff[:w.offset]
 }

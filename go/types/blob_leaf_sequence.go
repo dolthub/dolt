@@ -15,7 +15,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	BlobKind.writeTo(w)
+	BlobKind.writeTo(&w)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset

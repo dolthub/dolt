@@ -48,7 +48,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	expectedAsByteSlice := toBinaryNomsReaderData(expect)
 	vs := newTestValueStore()
 	w := newBinaryNomsWriter()
-	v.writeTo(w)
+	v.writeTo(&w)
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
