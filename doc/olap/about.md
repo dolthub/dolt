@@ -32,8 +32,7 @@ untouched data and try again if anything goes awry.
 
 These features all derive from way Noms stores data. All data in a Noms DB is
 chunked, content-addressable, and organized into a novel BTree-like data
-structure called a [Prolly   Tree](../intro.md#prolly-trees-
-probabilistic-b-trees).
+structure called a [Prolly Tree](../intro.md#prolly-trees-probabilistic-b-trees).
 
 This storage format implies that
 * there is exactly one copy of each chunk in the database, shared by all data
@@ -44,12 +43,9 @@ This storage format implies that
 * it's easy to use, diff against, or revert to older database versions by
  referencing the appropriate hash.
 
-Your ingestion pipeline uses a [Go client library](https://github.com/attic-
-labs/noms/blob/master/doc/go-tour.md) to interact with Noms data. There is
-also a [command-line interface](https://github.com/attic-
-labs/noms/blob/master/doc/cli-tour.md) for working with data and initial
-support for a [GraphQL-based query language](https://github.com/attic-
-labs/noms/blob/master/go/ngql/README.md) and querying with Presto.
+Your ingestion pipeline uses a [Go client library](https://github.com/attic-labs/noms/blob/master/doc/go-tour.md) to interact with Noms data. There is
+also a [command-line interface](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md) for working with data and initial
+support for a [GraphQL-based query language](https://github.com/attic-labs/noms/blob/master/go/ngql/README.md) and querying with Presto.
 
 Read the [Noms design overview](../intro.md).
 
