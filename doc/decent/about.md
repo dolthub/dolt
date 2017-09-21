@@ -70,6 +70,6 @@ For the decentralized use case in particular: we are fairly confident in this ap
 - [ ] Investigate backing IPFS with Noms rather than the reverse - this should improve stability and dramatically improve local performance
 - [ ] Demonstrate using IPFS with a schema that permits nodes to disappear
 
-**_If you’d like to use noms in your project we’d love to hear from you_**:
+**_If you would like to use noms in your project we’d love to hear from you_**:
 drop us an email ([noms@attic.io](mailto:noms@attic.io)) or send us a
 message in slack ([slack.noms.io](http://slack.noms.io)).
