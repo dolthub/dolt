@@ -1,7 +1,7 @@
 [Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **OLAP** » <br>
 **About**&nbsp;
 <br><br>
-# Noms—The OLAP Database in a Bucket
+# Noms — The OLAP Database in a Bucket
 
 Hosting [Noms](http://noms.io) in the cloud allows you to deploy a large,
 horizontally-scalable [OLAP](http://olap.com/olap-definition/) database on top
