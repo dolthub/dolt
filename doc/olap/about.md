@@ -1,5 +1,6 @@
-[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **OLAP** » <br>
-**About**&nbsp;
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **OLAP** »
+
+**About**
 <br><br>
 # Noms — The OLAP Database in a Bucket
 
