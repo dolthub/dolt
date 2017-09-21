@@ -1,5 +1,5 @@
 [Home](../README.md) » <br>
-[Technical Overview](about.md)&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;**Command-Line Interface**&nbsp; | &nbsp;[Go bindings Tour](go-tour.md) | &nbsp;[Path Syntax](spelling.md)&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
+[Technical Overview](intro.md)&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;**Command-Line Interface**&nbsp; | &nbsp;[Go bindings Tour](go-tour.md) | &nbsp;[Path Syntax](spelling.md)&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
 <br><br>
 # A Short Tour of the Noms CLI
 
