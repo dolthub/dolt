@@ -1,10 +1,3 @@
-**Decentralized Use Case:** [About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
-<br><br>
-[![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
-[![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
-[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-[![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
-
 # Noms -- The Decentralized Database
 
 [Noms](http://noms.io) makes it ~~easy~~ tractable to create rich,
@@ -51,7 +44,7 @@ Some additional features include:
 * **Versioning**: It’s easy to use, compare, or revert to older database versions
 * **Efficient diffs**: diffing even huge datasets is efficient due to
   noms’ use of a novel BTree-like data structure called a [Prolly
-  Tree](../intro.md#prolly-trees-probabilistic-b-trees)
+  Tree](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees)
 * **Efficient storage**: data are chunked and content-addressable, so
   there is exactly one copy of each chunk in the database, shared by
   other data that reference it. Small changes to massive data
@@ -60,7 +53,7 @@ Some additional features include:
  that uniquely represents the database at that moment - anyone can
  verify that a particular database hashes to the same value
 
-Read the [Noms design overview](../intro.md).
+Read the [Noms design overview](https://github.com/attic-labs/noms/blob/master/doc/decent/intro.md).
 
 **_If you’d like to use noms in your project we’d love to hear from you_**:
 drop us an email ([noms@attic.io](mailto:noms@attic.io)) or send us a

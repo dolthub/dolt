@@ -59,7 +59,7 @@ Now let's run it:
 
 If you did not leave the server running you would see output of ```Could not access database``` here, otherwise your program should exit cleanly.
 
-See [Spelling in Noms](spelling.md) for more information on database spec strings.
+See [Spelling in Noms](https://github.com/attic-labs/noms/blob/master/doc/spelling.md) for more information on database spec strings.
 
 
 ## [Dataset](https://github.com/attic-labs/noms/blob/master/go/dataset/dataset.go)
@@ -304,7 +304,7 @@ Parent: None
 
 ## Values
 
-Noms supports a [variety of datatypes](intro.md#types) beyond List, Struct, String, and Bool we used above.
+Noms supports a [variety of datatypes](https://github.com/attic-labs/noms/blob/master/doc/intro.md#types) beyond List, Struct, String, and Bool we used above.
 
 ## Samples
 

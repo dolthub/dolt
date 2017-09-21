@@ -1,10 +1,3 @@
-**Decentralized Use Case:** [About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
-<br><br>
-[![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
-[![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
-[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-[![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
-
 # How to Use Noms in a Decentralized App
 
 If you’d like to use noms in your project we’d love to hear from you:
@@ -25,7 +18,7 @@ The steps you’ll need to take are:
     your problem so that changes commute in order to make merging
     easier.  
 
-   In our [p2p sample](demo-p2p-chat.md) application, all peers periodically broadcast their HEAD on a known channel using [IPFS pubsub](https://ipfs.io/blog/25-pubsub/), pull each others' changes immediately, and avoid conflicts by using operations that can be resolved with Noms' built in merge policies.
+   In our [p2p sample](https://github.com/attic-labs/noms/blob/master/doc/decent/demo-p2p-chat.md) application, all peers periodically broadcast their HEAD on a known channel using [IPFS pubsub](https://ipfs.io/blog/25-pubsub/), pull each others' changes immediately, and avoid conflicts by using operations that can be resolved with Noms' built in merge policies.
    
    This is basically the simplest possible approach, but lots of options are possible. For example, an alternate approach for discoverability could be to keep a registry of all participating nodes in a blockchain (e.g., by storing them in an Ethereum smart contract). One could store either the current HEAD of each node (updated whenever the node changes state), or just an IPNS name that the node is writing to.
     
@@ -60,7 +53,7 @@ The steps you’ll need to take are:
     database := datas.NewDatabase(store)
     dataset := database.GetDataset("aws://dynamo-table:s3-bucket/store-name::test")  // Dataset name is "test"
     ```
-1. Implement using the [Go API](../go-tour.md). If you're just playing around you could try something like this:
+1. Implement using the [Go API](https://github.com/attic-labs/noms/blob/master/doc/go-tour.md). If you're just playing around you could try something like this:
     ```go
     package main
     

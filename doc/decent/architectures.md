@@ -1,11 +1,4 @@
-**Decentralized Use Case:** [About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
-<br><br>
-[![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
-[![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
-[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-[![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
-
-### Peer-to-Peer Architecture
+# Peer-to-Peer Architecture
 
 Noms can be used to implement apps in a peer-to-peer configuration. Each instance of the application (i.e., each "node") maintains a database locally with the data that is relevant to it. When a node creates new data, it commits that data to it's database and broadcasts a message to it's peers that contains the hash of it's lastest commit.
   
@@ -39,7 +32,7 @@ Noms has a default [merge policy](https://github.com/attic-labs/noms/blob/2d0e9e
 
 If this is not sufficient, then applications can create their own merge policies, implementing whatever merge is appropriate for their use case.
 
-### Decentralized Chunkstore Architecture
+# Decentralized Chunkstore Architecture
 
 Another potential architecture for decentralized apps uses a decentralized chunkstore (such as IPFS, Swarm, or Sia) rather than local databases. In this case, rather than each node maintaining a local datastore, Noms chunks are stored in a decentralized chunkstore. The underlying chunkstore is responsible for making chunks available when needed. 
 

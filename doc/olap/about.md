@@ -1,11 +1,3 @@
-**Hosted Use Case:** [About](about.md)
-
-<br><br>
-[![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
-[![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
-[![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
-[![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
-
 # Noms -- The OLAP Database in a Bucket
 
 Hosting [Noms](http://noms.io) in the cloud allows you to deploy a large,
@@ -32,7 +24,7 @@ untouched data and try again if anything goes awry.
 
 These features all derive from way Noms stores data. All data in a Noms DB is
 chunked, content-addressable, and organized into a novel BTree-like data
-structure called a [Prolly Tree](../intro.md#prolly-trees-probabilistic-b-trees).
+structure called a [Prolly Tree](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees).
 
 This storage format implies that
 * there is exactly one copy of each chunk in the database, shared by all data
@@ -47,7 +39,7 @@ Your ingestion pipeline uses a [Go client library](https://github.com/attic-labs
 also a [command-line interface](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md) for working with data and initial
 support for a [GraphQL-based query language](https://github.com/attic-labs/noms/blob/master/go/ngql/README.md) and querying with Presto.
 
-Read the [Noms design overview](../intro.md).
+Read the [Noms design overview](https://github.com/attic-labs/noms/blob/master/doc/intro.md).
 
 **_If you’d like to use noms in your project we’d love to hear from you_**:
 drop us an email ([noms@attic.io](mailto:noms@attic.io)) or send us a
