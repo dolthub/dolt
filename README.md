@@ -28,6 +28,8 @@ Finally, because Noms is content-addressed, it yields a very pleasant programmin
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
 
+**We'd love to talk to you about the possibility of using noms in your project** so please don't hestitate to contact us at [noms@attic.io](mailto:noms@attic.io). 
+
 <br>
 
 ## Use Cases
