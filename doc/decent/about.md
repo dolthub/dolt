@@ -60,7 +60,7 @@ Read the [Noms design overview](https://github.com/attic-labs/noms/blob/master/d
 
 ## Status
 
-For overall status of the database, see [../../README.md#status].
+For overall status of the database, see [Noms Status](../../README.md#status).
 
 For the decentralized use case in particular: we are fairly confident in this approach and are actively looking for partners to work with to build it out.
 
