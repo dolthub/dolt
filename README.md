@@ -78,6 +78,26 @@ struct Commit {
 
 <br>
 
+## Status
+
+### Data Format
+
+We are fairly confident in the core data format, and plan to support Noms database [version `7`](https://github.com/attic-labs/noms/blob/v7/go/constants/version.go#L9) and forward. If you create a database with Noms today, future versions will have migration tools to pull your databases forward.
+
+### Roadmap
+
+We plan to implement the following for Noms version 8:
+ - [x] Horizontal scalability (Done! See: [nbs](./go/nbs/README.md))
+ - [x] Automatic merge (Done! See: [CommitOptions.Policy](https://godoc.org/github.com/attic-labs/noms/go/datas#CommitOptions) and the `noms merge` subcommand).
+ - [x] Query language (Done! See [ngql](./go/ngql/README.md))
+ - [ ] Garbage Collection (https://github.com/attic-labs/noms/issues/3374)
+ - [x] Optional fields (https://github.com/attic-labs/noms/issues/2327)
+ - [ ] Implement migration (https://github.com/attic-labs/noms/issues/3363)
+ - [ ] Fix sync performance with long commit chains (https://github.com/attic-labs/noms/issues/2233)
+ - [ ] [Various other smaller bugs and improvements](https://github.com/attic-labs/noms/issues?q=is%3Aissue+is%3Aopen+label%3AP0)
+
+<br>
+
 ## Learn More About Noms
 
 For the decentralized web: [The Decentralized Database](doc/decent/about.md)
