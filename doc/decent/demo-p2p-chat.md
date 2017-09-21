@@ -1,4 +1,5 @@
-[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** »
+
 [About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;**P2P Chat Demo**&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
 <br><br>
 # Demo App: P2P Decentralized Chat
