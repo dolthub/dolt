@@ -1,11 +1,13 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 
-[Technical Overview](doc/intro.md)&nbsp; | &nbsp;[Use Cases](doc/uses.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)&nbsp; | &nbsp;[Command-Line Interface](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK](doc/go-tour.md)&nbsp; | &nbsp;[Path Syntax](doc/spelling.md)
+[Use Cases](doc/uses.md)&nbsp; | &nbsp;[Setup](#setup)&nbsp; | &nbsp;[Status](#status)&nbsp; | &nbsp;[Documentation](./docs)&nbsp; | &nbsp;[Contact](#contact)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
 [![GoDoc](https://godoc.org/github.com/attic-labs/noms?status.svg)](https://godoc.org/github.com/attic-labs/noms)
 [![Slack](http://slack.noms.io/badge.svg)](http://slack.noms.io)
+
+# Welcome
 
 *Noms* is a decentralized database philosophically descendant from the Git version control system.
 
@@ -17,7 +19,7 @@ Like Git, Noms is:
 Unlike Git, Noms is a database, so it also:
 
 * Primarily **stores structured data**, not files and directories (see: [the Noms type system](https://github.com/attic-labs/noms/blob/master/doc/intro.md#types))
-* **Scales well** to large amounts of data and concurrent clients (TODO: benchmarks)
+* **Scales well** to large amounts of data and concurrent clients
 * Supports **atomic transactions** (a single instance of Noms is CP, but Noms is typically run in production backed by S3, in which case it is "[effectively CA](https://cloud.google.com/spanner/docs/whitepapers/SpannerAndCap.pdf)")
 * Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
 * Features a **flexible query model** (see: [GraphQL](./go/ngql/README.md))
