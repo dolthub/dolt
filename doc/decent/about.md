@@ -1,5 +1,5 @@
-[Home](../) » [Use Cases](../uses.md) » [Decentralized](about.md) » <br>
-[Quickstart](quickstart.md)&nbsp; | &nbsp;**Architectures**&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
+[Home](../) » [Use Cases](../uses.md) » **Decentralized** » <br>
+**About**&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architecture](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
 <br><br>
 # Noms -- The Decentralized Database
 
