@@ -28,6 +28,8 @@ completely decentralized way, without replicating it on every
 node. Noms also has a blockstore for S3, which is ideal for
 applications that have some centralized components.
 
+**We'd love to talk to you about the possibility of using noms in your project** so please don't hestitate to contact us at [noms@attic.io](mailto:noms@attic.io). 
+
 ## How it Works
 
 Think of Noms like a programmable Git: changes are bundled as commits
