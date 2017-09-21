@@ -1,4 +1,5 @@
-[Home](../README.md) » <br>
+[Home](../README.md) »
+
 [Technical Overview](intro.md)&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;[Command-Line Interface](cli-tour.md)&nbsp; | &nbsp;**Go bindings Tour** | &nbsp;[Path Syntax](spelling.md)&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
 <br><br>
 # A Short Tour of Noms for Go
