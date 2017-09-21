@@ -1,7 +1,7 @@
 [Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
 **About**&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
 <br><br>
-# Noms -- The Decentralized Database
+# Noms — The Decentralized Database
 
 [Noms](http://noms.io) makes it ~~easy~~ tractable to create rich,
 multiuser, collaborative, fully-decentralized applications.
