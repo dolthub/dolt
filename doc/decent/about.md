@@ -1,3 +1,7 @@
+[Home](../) » [Use Cases](../uses.md) » [Decentralized](about.md) »
+
+[Quickstart](quickstart.md)&nbsp; | &nbsp;**Architectures**&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
+ 
 # Noms -- The Decentralized Database
 
 [Noms](http://noms.io) makes it ~~easy~~ tractable to create rich,
