@@ -1,3 +1,6 @@
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
+[About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;**P2P Chat Demo**&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
+<br><br>
 # Demo App: P2P Decentralized Chat
 
 This sample demonstrates the simplest possible case of building a p2p app on top of Noms. Each node stores a complete copy of the data it is interested in, and peers find each other using [IPFS pubsub](https://ipfs.io/blog/25-pubsub/).
