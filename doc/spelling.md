@@ -1,3 +1,6 @@
+[Home](../README.md) » <br>
+[Technical Overview](about.md)&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;[Command-Line Interface](cli-tour.md)&nbsp; | &nbsp;[Go bindings Tour](go-tour.md) | &nbsp;**Path Syntax**&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
+<br><br>
 # Spelling in Noms
 
 Many commands and APIs in Noms accept database, dataset, or value specifications as arguments. This document describes how to construct these specifications.
