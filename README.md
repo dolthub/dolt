@@ -1,6 +1,6 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 
-[Technical Overview](doc/intro.md)&nbsp; | &nbsp;[Use Case: Decentralization](doc/decent/about.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)&nbsp; | &nbsp;[Command-Line Interface](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK](doc/go-tour.md)&nbsp; | &nbsp;[Path Syntax](doc/spelling.md)
+[Technical Overview](doc/intro.md)&nbsp; | &nbsp;[Use Cases](doc/uses.md)&nbsp; | &nbsp;[FAQ](doc/faq.md)&nbsp; | &nbsp;[Command-Line Interface](doc/cli-tour.md)&nbsp; | &nbsp;[Go SDK](doc/go-tour.md)&nbsp; | &nbsp;[Path Syntax](doc/spelling.md)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
@@ -25,6 +25,22 @@ Unlike Git, Noms is a database, so it also:
 Finally, because Noms is content-addressed, it yields a very pleasant programming model.
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
+
+<br>
+
+## Use Cases
+
+### [DecentDB](./doc/decent/about.md) - A pretty good database for the decentralized web ###
+
+Because Noms is very good at sync, it makes a great basis for rich, collaborative, fully-decentralized applications.
+
+### [BucketDB](./doc/olap/about.md) - Horizontally scalable OLAP database in an S3 bucket ###
+
+The immutable and content-addressable design of Noms makes it possible to build a full, horizontally scalable OLAP database atop cheap block storage. This separates storage costs from compute costs, so that you only pay for the compute that you use.
+
+### ClientDB (doc coming soon) - offline-first mobile applications ###
+
+Embed Noms into mobile applications, making it easier to build offline-first, fully synchronizing mobile applications.
 
 <br>
 
