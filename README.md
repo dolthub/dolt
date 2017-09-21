@@ -1,6 +1,6 @@
 <img src='doc/nommy_cropped_smaller.png' width='350' title='Nommy, the snacky otter'>
 
-[Use Cases](doc/uses.md)&nbsp; | &nbsp;[Setup](#setup)&nbsp; | &nbsp;[Status](#status)&nbsp; | &nbsp;[Documentation](./docs)&nbsp; | &nbsp;[Contact](#contact)
+[Use Cases](#use-cases)&nbsp; | &nbsp;[Setup](#setup)&nbsp; | &nbsp;[Status](#status)&nbsp; | &nbsp;[Documentation](./doc/intro.md)&nbsp; | &nbsp;[Contact](#contact-us)
 <br><br>
 [![Build Status](http://jenkins3.noms.io/buildStatus/icon?job=NomsMasterBuilder)](http://jenkins3.noms.io/job/NomsMasterBuilder/)
 [![codecov](https://codecov.io/gh/attic-labs/noms/branch/master/graph/badge.svg)](https://codecov.io/gh/attic-labs/noms)
