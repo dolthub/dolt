@@ -1,3 +1,6 @@
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
+[About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;**IPFS Chat Demo**
+<br><br>
 # Demo App: IPFS-based Decentralized Chat
 
 This sample app demonstrates backing a P2P noms app by a decentralized blockstore (in this case, IPFS). Data is pulled off the network dynamically as needed - each client doesn't need a complete copy.
