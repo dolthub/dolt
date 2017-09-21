@@ -1,3 +1,6 @@
+[Home](../README.md) » <br>
+**Technical Overview**&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;[Command-Line Interface](cli-tour.md)&nbsp; | &nbsp;[Go bindings Tour](go-tour.md) | &nbsp;[Path Syntax](spelling.md)&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
+<br><br>
 # Noms Technical Overview
 
 Most conventional database systems share two central properties:
