@@ -1,3 +1,6 @@
+[Home](../README.md) » <br>
+[Technical Overview](about.md)&nbsp; | &nbsp;[Use Cases](../README.md#use-cases)&nbsp; | &nbsp;[Command-Line Interface](cli-tour.md)&nbsp; | &nbsp;**Go bindings Tour** | &nbsp;[Path Syntax](spelling.md)&nbsp; | &nbsp;[FAQ](faq.md)&nbsp;
+<br><br>
 # A Short Tour of Noms for Go
 
 This is a short introduction to using Noms from Go. It should only take a few minutes if you have some familiarity with Go.
