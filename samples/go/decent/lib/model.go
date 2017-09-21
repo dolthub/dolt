@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/marshal"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/datetime"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
+	"github.com/attic-labs/noms/samples/go/decent/dbg"
 )
 
 type Root struct {

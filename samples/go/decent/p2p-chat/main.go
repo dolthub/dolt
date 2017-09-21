@@ -13,16 +13,15 @@ import (
 	"path"
 	"syscall"
 
-	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/lib"
-	"github.com/jroimartin/gocui"
-
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/ipfs"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/util/profile"
+	"github.com/attic-labs/noms/samples/go/decent/dbg"
+	"github.com/attic-labs/noms/samples/go/decent/lib"
+	"github.com/jroimartin/gocui"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

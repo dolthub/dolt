@@ -17,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/attic-labs/noms/go/util/math"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
+	"github.com/attic-labs/noms/samples/go/decent/dbg"
 	"github.com/ipfs/go-ipfs/core"
 )
 
@@ -83,7 +83,7 @@ func ProcessChatEvents(node *core.IpfsNode, ds datas.Dataset, events chan ChatEv
 		case SearchEvent:
 			processSearch(t, node, ds, event.Event, cInfo)
 		case QuitEvent:
-            dbg.Debug("QuitEvent received, stopping program")
+			dbg.Debug("QuitEvent received, stopping program")
 			stopChan <- struct{}{}
 			return
 		}

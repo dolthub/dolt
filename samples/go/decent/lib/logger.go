@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
+	"github.com/attic-labs/noms/samples/go/decent/dbg"
 )
 
 func NewLogger(username string) *log.Logger {

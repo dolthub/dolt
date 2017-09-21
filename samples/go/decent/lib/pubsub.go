@@ -11,7 +11,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/samples/go/ipfs-chat/dbg"
+	"github.com/attic-labs/noms/samples/go/decent/dbg"
 	"github.com/ipfs/go-ipfs/core"
 	"github.com/jbenet/go-base58"
 )
@@ -71,11 +71,11 @@ func ReceiveMessages(node *core.IpfsNode, events chan ChatEvent, cInfo ClientInf
 // Publish asks the delegate to format a hash/ClientInfo into a suitable msg
 // and publishes that using IPFS pubsub.
 func Publish(node *core.IpfsNode, cInfo ClientInfo, h hash.Hash) {
-    defer func() {
-        if r := recover(); r != nil {
-            dbg.Debug("Publish failed, error: %s", r)
-        }
-    }()
+	defer func() {
+		if r := recover(); r != nil {
+			dbg.Debug("Publish failed, error: %s", r)
+		}
+	}()
 	msgData := cInfo.Delegate.GenMessageData(cInfo, h)
 	m, err := json.Marshal(map[string]string{"user": cInfo.Username, "data": msgData})
 	if err != nil {
