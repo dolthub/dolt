@@ -1,3 +1,6 @@
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
+[About](about.md)&nbsp; | &nbsp;**Quickstart**&nbsp; | &nbsp;[Architectures](architectures.md)&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
+<br><br>
 # How to Use Noms in a Decentralized App
 
 If you’d like to use noms in your project we’d love to hear from you:
