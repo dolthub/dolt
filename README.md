@@ -28,13 +28,11 @@ Finally, because Noms is content-addressed, it yields a very pleasant programmin
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
 
-<br>
-
 ## Use Cases
 
 ### [DecentDB](./doc/decent/about.md) - A pretty good database for the decentralized web ###
 
-Because Noms is very good at sync, it makes a great basis for rich, collaborative, fully-decentralized applications.
+Because Noms is very good at sync, it makes a decent basis for rich, collaborative, fully-decentralized applications.
 
 ### [BucketDB](./doc/olap/about.md) - Horizontally scalable OLAP database in an S3 bucket ###
 
@@ -43,8 +41,6 @@ The immutable and content-addressable design of Noms makes it possible to build 
 ### ClientDB (doc coming soon) - offline-first mobile applications ###
 
 Embed Noms into mobile applications, making it easier to build offline-first, fully synchronizing mobile applications.
-
-<br>
 
 ## Setup
 
@@ -55,8 +51,6 @@ export NOMS_VERSION_NEXT=1
 go get github.com/attic-labs/noms/cmd/noms
 go install github.com/attic-labs/noms/cmd/noms
 ```
-
-<br>
 
 ## Run
 
