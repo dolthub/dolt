@@ -187,7 +187,7 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) *Type {
 		if len(elemTypes) == 0 {
 			break
 		}
-		ts := typeset{}
+		ts := make(typeset, len(elemTypes))
 		for _, t := range elemTypes {
 			ts.add(t)
 		}
@@ -327,7 +327,7 @@ func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectS
 			fti, ok := allFields[f.Name]
 			if !ok {
 				fti = fieldTypeInfo{
-					ts: typeSlice{},
+					ts: make(typeSlice, 0, len(in)),
 				}
 			}
 			fti.ts = append(fti.ts, f.Type)
@@ -340,14 +340,16 @@ func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectS
 	}
 
 	count := len(in)
-	fields := make(structTypeFields, 0, count)
+	fields := make(structTypeFields, len(allFields))
+	i := 0
 	for name, fti := range allFields {
 		nt := makeCompoundType(UnionKind, fti.ts...)
-		fields = append(fields, StructField{
+		fields[i] = StructField{
 			Name:     name,
 			Type:     foldUnions(nt, seenStructs, intersectStructs),
 			Optional: !(intersectStructs && fti.anyNonOptional) && fti.count < count,
-		})
+		}
+		i++
 	}
 
 	sort.Sort(fields)
