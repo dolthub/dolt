@@ -1,4 +1,12 @@
-# Peer-to-Peer Architecture
+[Home](../../README.md) » [Use Cases](../../README.md#use-cases) » **Decentralized** » <br>
+[About](about.md)&nbsp; | &nbsp;[Quickstart](quickstart.md)&nbsp; | **Architectures**&nbsp; | &nbsp;[P2P Chat Demo](demo-p2p-chat.md)&nbsp; | &nbsp;[IPFS Chat Demo](demo-ipfs-chat.md)
+<br><br>
+
+# Architectures
+
+There are many possible ways to use Noms as part of a decentralized application. Noms can naturally be mixed and matched with other decentralized tools like blockchains, IPFS, etc. This page lists a few approaches we find promising.
+
+## Classic P2P Architecture
 
 Noms can be used to implement apps in a peer-to-peer configuration. Each instance of the application (i.e., each "node") maintains a database locally with the data that is relevant to it. When a node creates new data, it commits that data to it's database and broadcasts a message to it's peers that contains the hash of it's lastest commit.
   
