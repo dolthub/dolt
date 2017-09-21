@@ -58,6 +58,17 @@ Some additional features include:
 
 Read the [Noms design overview](https://github.com/attic-labs/noms/blob/master/doc/decent/intro.md).
 
+## Status
+
+For overall status of the database, see [../../README.md#status].
+
+For the decentralized use case in particular: we are fairly confident in this approach and are actively looking for partners to work with to build it out.
+
+- [x] Demonstrate core concept of using Noms to continuously sync across many users (Done! See noms-chat demos)
+- [ ] Demonstrate using libp2p or similar to traverse NATs
+- [ ] Investigate backing IPFS with Noms rather than the reverse - this should improve stability and dramatically improve local performance
+- [ ] Demonstrate using IPFS with a schema that permits nodes to disappear
+
 **_If you’d like to use noms in your project we’d love to hear from you_**:
 drop us an email ([noms@attic.io](mailto:noms@attic.io)) or send us a
 message in slack ([slack.noms.io](http://slack.noms.io)).
