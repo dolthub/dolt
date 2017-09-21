@@ -30,15 +30,15 @@ Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` ex
 
 ## Use Cases
 
-### [DecentDB](./doc/decent/about.md) - A pretty good database for the decentralized web ###
+#### [DecentDB](./doc/decent/about.md) - A pretty good database for the decentralized web ###
 
 Because Noms is very good at sync, it makes a decent basis for rich, collaborative, fully-decentralized applications.
 
-### [BucketDB](./doc/olap/about.md) - Horizontally scalable OLAP database in an S3 bucket ###
+#### [BucketDB](./doc/olap/about.md) - Horizontally scalable OLAP database in an S3 bucket ###
 
 The immutable and content-addressable design of Noms makes it possible to build a full, horizontally scalable OLAP database atop cheap block storage. This separates storage costs from compute costs, so that you only pay for the compute that you use.
 
-### ClientDB (doc coming soon) - offline-first mobile applications ###
+#### ClientDB (doc coming soon) - offline-first mobile applications ###
 
 Embed Noms into mobile applications, making it easier to build offline-first, fully synchronizing mobile applications.
 
