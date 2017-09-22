@@ -510,7 +510,24 @@ func EscapeStructField(input string) string {
 // IsValidStructFieldName returns whether the name is valid as a field name in a struct.
 // Valid names must start with `a-zA-Z` and after that `a-zA-Z0-9_`.
 func IsValidStructFieldName(name string) bool {
-	return fieldNameRe.MatchString(name)
+	for i, c := range name {
+		if i == 0 {
+			if !isAlpha(c) {
+				return false
+			}
+		} else if !isAlphaNumOrUnderscore(c) {
+			return false
+		}
+	}
+	return len(name) != 0
+}
+
+func isAlpha(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isAlphaNumOrUnderscore(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
 }
 
 func verifyFields(fs structTypeFields) {
