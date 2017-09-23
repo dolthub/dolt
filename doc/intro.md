@@ -100,13 +100,13 @@ Noms is a typed system, meaning that every Noms value is classified into one of 
 * `Number` (arbitrary precision decimal)
 * `String` (utf8-encoded)
 * `Blob` (raw binary data)
-* User-defined structs
 * `Set<T>`
 * `List<T>`
 * `Map<K,V>`
 * Unions: `T|U|V|...`
-* `Cycle<int>` (allows the creation of cyclic types)
 * `Ref<T>` (explicit out-of-line references)
+* `Struct` (user-defined record types, e.g., `struct Person { name: String, age?: Number })`
+* `Type` (A value that stores a Noms type)
 
 Blobs, sets, lists, and maps can be gigantic - Noms will _chunk_ these types into reasonable sized parts internally for efficient storage, searching, and updating (see [Prolly Trees](#prolly-trees-probabilistic-b-trees) below for more on this).
 
