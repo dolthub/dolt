@@ -21,7 +21,8 @@ The DynamoDB table you create, on the other hand, does need to have a particular
 The NBS code honors AWS credentials files, so when running on your development machine the easiest thing to do is drop the creds of the user that created the bucket and table above into `~/.aws/credentials` and run that way. This isn't a great approach for running in on an EC2 instance in production, however. The right way to do that is to create an IAM Role, and run your instance as that role.
 
 Create such a role using the IAM Management Console (or command line tool of your choice) and make sure it has a policy with at least the following permissions:
-```
+
+```json
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -58,19 +59,22 @@ Create such a role using the IAM Management Console (or command line tool of you
     ]
 }
 ```
+
 This is where the ARN for your bucket and table come in.
 
 ## Instantiating an NBS-on-AWS ChunkStore
 
 ### On the command line
-```
+
+```shell
 noms ds aws://dynamo-table:s3-bucket/store-name
 ```
 
 ### NewAWSStore
 
 If your code only needs to create a store pointing to a single named stores, you can write code similar to the following:
-```
+
+```go
 sess  := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 store := nbs.NewAWSStore("dynamo-table", "store-name", "s3-bucket", s3.New(sess), dynamodb.New(sess), 1<<28))
 ```
@@ -78,7 +82,8 @@ store := nbs.NewAWSStore("dynamo-table", "store-name", "s3-bucket", s3.New(sess)
 ### NewAWSStoreFactory
 
 If you find yourself wanting to create NBS instances pointing to multiple, different named stores, you can use `nbs.NewAWSStoreFactory()`, which also supports caching Noms data on disk in some cases:
-```
+
+```go
 sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 fact := nbs.NewAWSStoreFactory(
     sess, "dynamo-table", "s3-bucket",

@@ -16,7 +16,7 @@ This is a quick introduction to the Noms command-line interface. It should only 
 
 Now you should be able to run `noms`:
 
-```
+```shell
 > noms
 Noms is a tool for goofing with Noms data.
 
@@ -39,7 +39,7 @@ Use "noms help [command]" for more information about a command.
 
 Without any arguments, `noms` lists out all available commands. To get information on a specific command, we can use `noms help [command]`:
 
-```
+```shell
 > noms help sync
 usage: noms sync [options] <source-object> <dest-dataset>
 
@@ -54,7 +54,7 @@ There's a sample database running at http://demo.noms.io. Let's take a look insi
 
 The `noms ds` command lists the _datasets_ within a particular database:
 
-```
+```shell
 > noms ds http://demo.noms.io
 ...
 sf-film-locations/raw
@@ -66,7 +66,7 @@ sf-film-locations
 
 Noms datasets are versioned. You can see the history with `log`:
 
-```
+```shell
 > !? noms log http://demo.noms.io::sf-film-locations
 commit aprsmg0j2eegk8eehbgj7cd3tmmd1be8
 Parent:    None
@@ -82,7 +82,7 @@ Note that Noms is a typed system. What is being shown here for each entry is not
 
 You can see the entire serialization of any object in the database with `noms show`:
 
-```
+```shell
 > noms show 'http://demo.noms.io::#aprsmg0j2eegk8eehbgj7cd3tmmd1be8'
 
 struct Commit {
@@ -121,7 +121,7 @@ You can work with Noms databases that are remote exactly the same as you work wi
 
 Moving data in Noms is done with the `sync` command. Note that unlike Git, we do not make a distinction between _push_ and _pull_. It's the same operation in both directions:
 
-```
+```shell
 > noms sync http://demo.noms.io::sf-film-locations /tmp/noms::films
 > noms ds /tmp/noms
 films
@@ -129,14 +129,14 @@ films
 
 We can now make an edit locally:
 
-```
+```shell
 > go install github.com/attic-labs/noms/samples/go/csv/...
 > csv-export /tmp/noms::films > /tmp/film-locations.csv
 ```
 
 open /tmp/film-location.csv and edit it, then:
 
-```
+```shell
 > csv-import --column-types=String,String,String,String,String,String,String,String,Number,String,String \
     /tmp/film-locations.csv /tmp/noms::films
 ```
@@ -145,7 +145,7 @@ open /tmp/film-location.csv and edit it, then:
 
 The `noms diff` command can show you the differences between any two values. Let's see our change:
 
-```
+```shell
 > noms diff http://demo.noms.io::sf-film-locations /tmp/noms::films
 
 ./.meta {
@@ -161,4 +161,3 @@ The `noms diff` command can show you the differences between any two values. Let
 -   "Locations": "Epic Roasthouse (399 Embarcadero)"
 +   "Locations": "Epic Roadhouse (399 Embarcadero)"
 ```
-

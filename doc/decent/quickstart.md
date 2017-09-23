@@ -14,7 +14,7 @@ The steps you’ll need to take are:
   number, string, blob, map, list, set, structs, ref, and
   union. (Note: if you are interested in using CRDTs as an alternative
   to classic datatypes please let us know.)
-1. Consider...
+2. Consider...
     * How peers will discover each other
     * How peers will notify each other of changes
     * How and when they will pull changes, and 
@@ -34,31 +34,40 @@ The steps you’ll need to take are:
     `Struct{sender, ordinal}`: the resulting `Map` is the same no
     matter what order messages are added.
 
-1. Vendor the code into your project. 
-1. Set `NOMS_VERSION_NEXT=1` in your environment.
-1. Decide which type of storage you'd like to use: memory (convenient for playing around), disk, IPFS, or S3. (If you want to implement a store on top of another type of storage that's possible too; email us or reach out on slack and we can help.)
-1. Set up and instantiate a database for your storage. Generally, you use the spec package to parse a [dataset spec](https://github.com/attic-labs/noms/blob/master/doc/spelling.md) like `mem::mydataset` which you can then ask for  [`Database`](https://github.com/attic-labs/noms/blob/master/go/datas/database.go) and [`Dataset`](https://github.com/attic-labs/noms/blob/master/go/datas/dataset.go).
+3. Vendor the code into your project. 
+4. Set `NOMS_VERSION_NEXT=1` in your environment.
+5. Decide which type of storage you'd like to use: memory (convenient for playing around), disk, IPFS, or S3. (If you want to implement a store on top of another type of storage that's possible too; email us or reach out on slack and we can help.)
+6. Set up and instantiate a database for your storage. Generally, you use the spec package to parse a [dataset spec](https://github.com/attic-labs/noms/blob/master/doc/spelling.md) like `mem::mydataset` which you can then ask for  [`Database`](https://github.com/attic-labs/noms/blob/master/go/datas/database.go) and [`Dataset`](https://github.com/attic-labs/noms/blob/master/go/datas/dataset.go).
    * **Memory**: no setup required, just instantiate it:
-   ```go
-    sp := spec.ForDataset("mem::test") // Dataset name is "test"
-   ```
+
+```go
+sp := spec.ForDataset("mem::test") // Dataset name is "test"
+```
+   
    * **Disk**: identify a directory for storage, say `/path/to/chunks`, and then instantiate:
-   ```go
-    sp := spec.ForDataset("/path/to/chunks::test")  // Dataset name is "test"
-   ```
+   
+```go
+sp := spec.ForDataset("/path/to/chunks::test")  // Dataset name is "test"
+```
+   
    * **IPFS**: identify an IPFS node by directory. If an IPFS node doesn't exist at that directory, one will be created:
-   ```go
-    sp := spec.ForDataset("ipfs:/path/to/ipfs_repo::test")  // Dataset name is "test"
-   ```
+
+```go
+sp := spec.ForDataset("ipfs:/path/to/ipfs_repo::test")  // Dataset name is "test"
+```
+
    * **S3**: Follow the [S3 setup instructions](https://github.com/attic-labs/noms/blob/master/go/nbs/NBS-on-AWS.md) then instantiate a database and dataset:
-    ```go
-    sess  := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-    store := nbs.NewAWSStore("dynamo-table", "store-name", "s3-bucket", s3.New(sess), dynamodb.New(sess), 1<<28))
-    database := datas.NewDatabase(store)
-    dataset := database.GetDataset("aws://dynamo-table:s3-bucket/store-name::test")  // Dataset name is "test"
-    ```
-1. Implement using the [Go API](https://github.com/attic-labs/noms/blob/master/doc/go-tour.md). If you're just playing around you could try something like this:
-    ```go
+
+```go
+sess  := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+store := nbs.NewAWSStore("dynamo-table", "store-name", "s3-bucket", s3.New(sess), dynamodb.New(sess), 1<<28))
+database := datas.NewDatabase(store)
+dataset := database.GetDataset("aws://dynamo-table:s3-bucket/store-name::test")  // Dataset name is "test"
+```
+
+7. Implement using the [Go API](https://github.com/attic-labs/noms/blob/master/doc/go-tour.md). If you're just playing around you could try something like this:
+
+```go
     package main
     
     import (
@@ -109,12 +118,16 @@ The steps you’ll need to take are:
             "male":  types.Bool(male),
         })
     }
-    ```
-1. You can inspect data that you've committed via the [noms command-line interface](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md). For example:
-    ```
-    noms log /path/to/store::ds
-    noms show /path/to/store::ds
-    ```
-    * Note that Memory tables won't be inspectable because they exist only in the memory of the process that created them. 
-1. Implement pull and merge. The [pull API](../../go/datas/pull.go) is used pull changes from a peer and the [merge API](../../go/merge/) is used to merge changes before commit. There's an [example of merging in the IPFS-based-chat sample
+```
+
+8. You can inspect data that you've committed via the [noms command-line interface](https://github.com/attic-labs/noms/blob/master/doc/cli-tour.md). For example:
+
+```shell
+noms log /path/to/store::ds
+noms show /path/to/store::ds
+```
+
+> Note that Memory tables won't be inspectable because they exist only in the memory of the process that created them. 
+
+9. Implement pull and merge. The [pull API](../../go/datas/pull.go) is used pull changes from a peer and the [merge API](../../go/merge/) is used to merge changes before commit. There's an [example of merging in the IPFS-based-chat sample
     app](https://github.com/attic-labs/noms/blob/master/samples/go/ipfs-chat/pubsub.go). 

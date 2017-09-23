@@ -17,7 +17,7 @@ Peers that are listening for these message can decide if that data is relevent t
 
 Peers can use a flow similar to the following in order to sync changes with one another:
 
-```
+```nohighlight
 for {
    listen for new message
    if new msg is relevant {
@@ -49,7 +49,7 @@ Another potential architecture for decentralized apps uses a decentralized chunk
 
 The flow used by peers to sync with one another is similar to the peer-to-peer architecture. The main difference is data is not duplicated on local machines and doesn't have to be pulled during sync. Each app keeps track of it's latest commit in the chunk store.
 
-```
+```nohighlight
 for {
    listen for new message
    if new msg is relevant {

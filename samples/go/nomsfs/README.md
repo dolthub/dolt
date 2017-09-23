@@ -17,7 +17,7 @@ Build with `go build` (or just run with `go run nomsfs.go`); test with `go test`
 
 Mount an existing or new dataset by executing `nomsfs`:
 
-```
+```shell
 $ mkdir /var/tmp/mnt
 $ go run nomsfs.go /var/tmp/nomsfs::fs /var/tmp/mnt
 running...
@@ -30,7 +30,7 @@ Use ^C to stop `nomsfs`
 1. Once you have a mount point and `nomsfs` is running you can add/delete/rename files and directories using the Finder or the command line as you would with any other file system.
 2. Stop `nomsfs` with ^C
 3. Let's look around the dataset:
-```
+```shell
 > noms ds /var/tmp/nomsfs
 fs
 > noms show /var/tmp/nomsfs::fs

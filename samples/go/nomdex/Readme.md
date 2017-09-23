@@ -7,7 +7,7 @@ This program experiments with using ordinary Noms Maps as indexes. It leverages 
 
 ###Building Indexes
 Nomdex constructs indexes as Maps that are keyed by either Strings or Numbers. The values in the index are sets of objects. The following command can be used to build an index:
-```
+```shell
 nomdex up --in-path <absolute noms path> --by <relative noms path> --out-ds <dataset name>
 ```
 The ***'in-path'*** argument must be a ValueSpec(see [Spelling In Noms](../../../doc/spelling.md#spelling-values)) that designates the root of an object hierarchy to be scanned for "indexable" objects.
@@ -20,7 +20,7 @@ In addition, there are arguments that allow values to be transformed before usin
 
 ### Queries in Nomdex
 Once an index is built, it can be queried against using the nomdex find command. For example, given a database that contains structs of the following type representing cities:
-```
+```go
 struct Row {
   City: String,
   State: String,
@@ -31,14 +31,14 @@ struct Row {
 }
 ```
 The following commands could be used to build indexes on the City, State, Latitude and Longitude attibutes.
-```
+```shell
 nomdex up --in-path http://localhost:8000::cities --by .City --out-ds by-name
 nomdex up --in-path http://localhost:8000::cities --by .State --out-ds by-state
 nomdex up --in-path http://localhost:8000::cities --by .GeoPos.Latitude --out-ds by-lat
 nomdex up --in-path http://localhost:8000::cities --by .GeoPos.Longitude --out-ds by-lon
 ```
 Once these indexes are created, the following queries could be made using the find command:
-```
+```shell
 // find all cities in California
 nomdex find --db http://localhost:8000 'by-state = "California"'
 

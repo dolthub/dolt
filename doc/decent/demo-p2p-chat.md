@@ -13,21 +13,29 @@ Currently, nodes have to have a publicly routable IP, but it should be possible 
 Demo app code is in the
 [p2p](https://github.com/attic-labs/noms/tree/master/samples/go/decent/p2p-chat)
 directory. To get it up and running take the following steps:
+
 * Use git to clone the noms repository onto your computer:
-```
+
+```shell
 go get github.com/attic-labs/noms/samples/go/decent/p2p-chat
 ```
+
 * From the noms/samples/go/decent/p2p-chat directory, build the program with the following command:
-```
+
+```shell
 go build
 ```
+
 * Run the p2p client with the following command:
-```
+
+```shell
 mkdir /tmp/noms1
 ./p2p-chat client --username=<aname1> --node-idx=1 /tmp/noms1 >& /tmp/err1
 ```
+
 * Run a second p2p client with the following command:
-```
+
+```shell
 mkdir /tmp/noms2
 ./p2p-chat client --username=<aname2> --node-idx=2 /tmp/noms2 >& /tmp/err2
 ```

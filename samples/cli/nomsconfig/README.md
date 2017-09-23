@@ -14,7 +14,7 @@ You can enable this support by placing a *.nomsconfig* config file (like the [on
 
 This example defines a simple [.nomsconfig](.nomsconfig) to try:
 
-```
+```shell
 # Default database URL to be used whenever a database is not explictly provided
 [db.default]
 url = "ldb:.noms/tour"
@@ -48,7 +48,7 @@ Dot (`.`) shorthand:
 
 You can kick the tires by running noms commands from this directory. Here are some examples and what to expect:
 
-```
+```shell
 noms ds          # -> noms ds ldb:.noms/tour
 noms ds default  # -> noms ds ldb:.noms/tour
 noms ds origin   # -> noms ds http://demo.noms.io/cli-tour

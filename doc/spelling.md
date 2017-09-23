@@ -10,7 +10,7 @@ Many commands and APIs in Noms accept database, dataset, or value specifications
 
 database specifications take the form:
 
-```
+```nohighlight
 <protocol>[:<path>]
 ```
 
@@ -26,7 +26,7 @@ The `path` part of the name is interpreted differently depending on the protocol
 
 Dataset specifications take the form:
 
-```
+```nohighlight
 <database>::<dataset>
 ```
 
@@ -34,7 +34,7 @@ See [spelling databases](#spelling-databases) for how to build the `database` pa
 
 Example datasets:
 
-```
+```nohighlight
 /tmp/test-db::my-dataset
 nbs:/tmp/test-db::my-dataset
 http://localhost:8000::registered-businesses
@@ -45,7 +45,7 @@ https://demo.noms.io/aa::music
 
 Value specifications take the form:
 
-```
+```nohighlight
 <database>::<root><path>
 ```
 

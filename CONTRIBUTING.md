@@ -9,7 +9,7 @@ Don't forget to [setup your `$GOPATH` and `$BIN` environment variables](https://
 
 You can test your setup like so:
 
-```
+```shell
 # This should print something
 echo $GOPATH
 
@@ -23,7 +23,7 @@ Add `NOMS_VERSION_NEXT=1` to your environment. The current trunk codebase is a d
 
 ## Get and build Noms
 
-```
+```shell
 go get github.com/attic-labs/noms/cmd/noms
 cd $GOPATH/src/github.com/attic-labs/noms/cmd/noms
 go build

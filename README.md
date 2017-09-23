@@ -50,7 +50,7 @@ Embed Noms into mobile applications, making it easier to build offline-first, fu
 
 ## Setup
 
-```
+```shell
 # You probably want to add this to your environment
 export NOMS_VERSION_NEXT=1
 
@@ -64,7 +64,7 @@ go install github.com/attic-labs/noms/cmd/noms
 
 Import some data:
 
-```
+```shell
 go install github.com/attic-labs/noms/samples/go/csv/import
 curl 'https://data.cityofnewyork.us/api/views/kku6-nxdu/rows.csv?accessType=DOWNLOAD' > /tmp/data.csv
 csv-import /tmp/data.csv /tmp/noms::nycdemo
@@ -72,13 +72,13 @@ csv-import /tmp/data.csv /tmp/noms::nycdemo
 
 Explore:
 
-```
+```shell
 noms show /tmp/noms::nycdemo
 ```
 
 Should show:
 
-```
+```go
 struct Commit {
   meta: struct Meta {
     date: "2017-09-19T19:33:01Z",

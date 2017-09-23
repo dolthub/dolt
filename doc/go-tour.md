@@ -149,7 +149,7 @@ func main() {
 
 Now you will get output of the data type of our Dataset value:
 
-```
+```shell
 > go run noms-tour.go
 data type: List<struct  {
   given: String

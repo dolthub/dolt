@@ -37,13 +37,13 @@ For the file back-end, perf is substantially better than LevelDB mainly because 
 
 NBS is more-or-less "beta". There's still [work we want to do](https://github.com/attic-labs/noms/issues?q=is%3Aopen+is%3Aissue+label%3ANBS), but it now works better than LevelDB for our purposes and so we have made it the default local backend for Noms:
 
-```
+```shell
 # This uses nbs locally:
 ./csv-import foo.csv /Users/bob/csv-store::data
 ```
 
 The AWS backend is available via the `aws:` scheme:
 
-```
+```shell
 ./csv-import foo.csv aws://table:bucket::data
 ```

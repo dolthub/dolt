@@ -68,7 +68,7 @@ func main() {
 
 A dataset is nothing more than a named pointer into the DAG. Consider the following command to copy the dataset named `foo` to the dataset named `bar` within a database:
 
-```
+```shell
 noms sync http://localhost:8000::foo http://localhost:8000::bar
 ```
 
@@ -144,7 +144,7 @@ This is usually completely implicit, done based on the data you store (you can s
 
 We do the same thing for datasets. If you commit a `Set<Number>`, the type of the commit we create for you is:
 
-```
+```go
 struct Commit {
 	Value: Set<Number>
 	Parents: Set<Ref<Cycle<Commit>>>
@@ -155,7 +155,7 @@ This tells you that the current and all previous commits have values of type `Se
 
 But if you then commit a `Set<String>` to this same dataset, then the type of that commit will be:
 
-```
+```go
 struct Commit {
 	Value: Set<String>
 	Parents: Set<Ref<Cycle<Commit>> |
