@@ -158,7 +158,7 @@ type binaryNomsWriter struct {
 }
 
 func newBinaryNomsWriter() binaryNomsWriter {
-	return binaryNomsWriter{make([]byte, initialBufferSize, initialBufferSize), 0}
+	return binaryNomsWriter{make([]byte, initialBufferSize), 0}
 }
 
 func (b *binaryNomsWriter) data() []byte {

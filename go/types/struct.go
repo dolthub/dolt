@@ -271,56 +271,58 @@ func (s Struct) Get(n string) Value {
 // struct field a new struct type is created.
 func (s Struct) Set(n string, v Value) Struct {
 	verifyFieldName(n)
-	w := newBinaryNomsWriter()
-	return s.set(&w, n, v, 0)
-}
 
-func (s Struct) set(w *binaryNomsWriter, n string, v Value, addedCount int) Struct {
-	// TODO: Reuse bytes if we end up adding a field
-	dec := s.decoder()
-	StructKind.writeTo(w)
-	dec.skipKind()
-	dec.copyString(w)
-	count := dec.readCount()
-	w.writeCount(count + uint64(addedCount))
+	prolog, head, tail, count, found := s.splitFieldsAt(n)
 
-	newFieldHandled := false
+	w := binaryNomsWriter{make([]byte, len(s.buff)), 0}
+	w.writeRaw(prolog)
 
-	for i := uint64(0); i < count; i++ {
-		name := dec.readString()
-
-		if n == name {
-			w.writeString(name)
-			v.writeTo(w)
-			dec.skipValue()
-			newFieldHandled = true
-			continue
-		}
-		if !newFieldHandled && n < name {
-			if addedCount == 0 {
-				w.reset()
-				return s.set(w, n, v, 1)
-			}
-			w.writeString(n)
-			v.writeTo(w)
-			newFieldHandled = true
-		}
-		w.writeString(name)
-		dec.copyValue(w)
+	if !found {
+		count++
 	}
-
-	if !newFieldHandled {
-		if addedCount == 1 {
-			// Already adjusted the count
-			w.writeString(n)
-			v.writeTo(w)
-		} else {
-			w.reset()
-			return s.set(w, n, v, 1)
-		}
-	}
+	w.writeCount(count)
+	w.writeRaw(head)
+	w.writeString(n)
+	v.writeTo(&w)
+	w.writeRaw(tail)
 
 	return Struct{s.vrw, w.data()}
+}
+
+// splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
+// and the fields coming after it.
+func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uint64, found bool) {
+	dec := s.decoder()
+	dec.skipKind()
+	dec.skipString()
+	prolog = dec.buff[:dec.offset]
+	count = dec.readCount()
+	fieldsOffset := dec.offset
+
+	for i := uint64(0); i < count; i++ {
+		beforeCurrent := dec.offset
+		fn := dec.readString()
+		dec.skipValue()
+
+		if fn == name {
+			found = true
+			head = dec.buff[fieldsOffset:beforeCurrent]
+			tail = dec.buff[dec.offset:len(dec.buff)]
+			break
+		}
+
+		if name < fn {
+			head = dec.buff[fieldsOffset:beforeCurrent]
+			tail = dec.buff[beforeCurrent:len(dec.buff)]
+			break
+		}
+	}
+
+	if head == nil && tail == nil {
+		head = dec.buff[fieldsOffset:dec.offset]
+	}
+
+	return
 }
 
 // IsZeroValue can be used to test if a struct is the same as Struct{}.
@@ -331,32 +333,18 @@ func (s Struct) IsZeroValue() bool {
 // Delete returns a new struct where the field name has been removed.
 // If name is not an existing field in the struct then the current struct is returned.
 func (s Struct) Delete(n string) Struct {
-	dec := s.decoder()
-	w := newBinaryNomsWriter()
-	StructKind.writeTo(&w)
-	dec.skipKind()
-	dec.copyString(&w)
-	count := dec.readCount()
-	w.writeCount(count - 1) // If not found we just return s
-
-	found := false
-	for i := uint64(0); i < count; i++ {
-		name := dec.readString()
-
-		if n == name {
-			dec.skipValue()
-			found = true
-		} else {
-			w.writeString(name)
-			dec.copyValue(&w)
-		}
+	prolog, head, tail, count, found := s.splitFieldsAt(n)
+	if !found {
+		return s
 	}
 
-	if found {
-		return Struct{s.vrw, w.data()}
-	}
+	w := binaryNomsWriter{make([]byte, len(s.buff)), 0}
+	w.writeRaw(prolog)
+	w.writeCount(count - 1)
+	w.writeRaw(head)
+	w.writeRaw(tail)
 
-	return s
+	return Struct{s.vrw, w.data()}
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {

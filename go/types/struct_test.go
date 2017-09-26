@@ -84,6 +84,10 @@ func TestGenericStructSet(t *testing.T) {
 		"l": MakeListType(NumberType),
 	})
 	assert.True(t7.Equals(TypeOf(s7)))
+
+	s8 := NewStruct("S", StructData{"a": Bool(true), "c": Bool(true)})
+	s9 := s8.Set("b", Bool(true))
+	assert.True(s9.Equals(NewStruct("S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})))
 }
 
 func TestGenericStructDelete(t *testing.T) {
