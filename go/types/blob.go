@@ -59,8 +59,8 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 
-	for _, b := range leaves {
-		bl := b.sequence().(blobLeafSequence)
+	for _, leaf := range leaves {
+		bl := leaf.sequence().(blobLeafSequence)
 
 		localEnd := endIdx
 		data := bl.data()
@@ -94,8 +94,7 @@ func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n i
 	bChan := make(chan chan []byte, concurrency)
 
 	go func() {
-		idx := uint64(0)
-		for idx < b.Len() {
+		for idx, len := uint64(0), b.Len(); idx < len; {
 			bc := make(chan []byte)
 			bChan <- bc
 
