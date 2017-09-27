@@ -9,11 +9,10 @@ import (
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type Map struct {
-	seq orderedSequence
+	orderedSequence
 }
 
 func newMap(seq orderedSequence) Map {
@@ -87,7 +86,7 @@ func (m Map) Diff(last Map, changes chan<- ValueChanged, closeChan <-chan struct
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(last.seq, m.seq, changes, closeChan)
+	orderedSequenceDiffTopDown(last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
@@ -96,7 +95,7 @@ func (m Map) DiffHybrid(last Map, changes chan<- ValueChanged, closeChan <-chan 
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(last.seq, m.seq, changes, closeChan)
+	orderedSequenceDiffBest(last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
@@ -106,37 +105,18 @@ func (m Map) DiffLeftRight(last Map, changes chan<- ValueChanged, closeChan <-ch
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(last.seq, m.seq, changes, closeChan)
+	orderedSequenceDiffLeftRight(last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // Collection interface
-func (m Map) Len() uint64 {
-	return m.seq.numLeaves()
-}
 
-func (m Map) Empty() bool {
-	return m.Len() == 0
-}
-
-func (m Map) sequence() sequence {
-	return m.seq
+func (m Map) asSequence() sequence {
+	return m.orderedSequence
 }
 
 // Value interface
 func (m Map) Value() Value {
 	return m
-}
-
-func (m Map) Equals(other Value) bool {
-	return m.Hash() == other.Hash()
-}
-
-func (m Map) Less(other Value) bool {
-	return valueLess(m, other)
-}
-
-func (m Map) Hash() hash.Hash {
-	return m.sequence().hash()
 }
 
 func (m Map) WalkValues(cb ValueCallback) {
@@ -147,20 +127,8 @@ func (m Map) WalkValues(cb ValueCallback) {
 	return
 }
 
-func (m Map) WalkRefs(cb RefCallback) {
-	m.seq.WalkRefs(cb)
-}
-
-func (m Map) typeOf() *Type {
-	return m.seq.typeOf()
-}
-
-func (m Map) Kind() NomsKind {
-	return MapKind
-}
-
 func (m Map) firstOrLast(last bool) (Value, Value) {
-	cur := newCursorAt(m.seq, emptyKey, false, last, false)
+	cur := newCursorAt(m.orderedSequence, emptyKey, false, last, false)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -181,13 +149,13 @@ func (m Map) At(idx uint64) (key, value Value) {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(m.seq, idx, false)
+	cur := newCursorAtIndex(m.orderedSequence, idx, false)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(m.seq, key, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, key, false, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -200,7 +168,7 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 }
 
 func (m Map) Has(key Value) bool {
-	cur := newCursorAtValue(m.seq, key, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, key, false, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -216,7 +184,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(m.seq, emptyKey, false, false, false)
+	cur := newCursorAt(m.orderedSequence, emptyKey, false, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -241,20 +209,20 @@ func (m Map) Iterator() MapIterator {
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(m.seq, pos, false),
+		cursor: newCursorAtIndex(m.orderedSequence, pos, false),
 	}
 }
 
 func (m Map) IteratorFrom(key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(m.seq, key, false, false, false),
+		cursor: newCursorAtValue(m.orderedSequence, key, false, false, false),
 	}
 }
 
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {
-	cur := newCursorAt(m.seq, emptyKey, false, false, true)
+	cur := newCursorAt(m.orderedSequence, emptyKey, false, false, true)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		cb(entry.key, entry.value)
@@ -263,7 +231,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(m.seq, start, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, start, false, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -331,12 +299,4 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptyMapSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
 	return newEmptySequenceChunker(vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
-}
-
-func (m Map) valueReadWriter() ValueReadWriter {
-	return m.seq.valueReadWriter()
-}
-
-func (m Map) writeTo(w nomsWriter) {
-	m.seq.writeTo(w)
 }

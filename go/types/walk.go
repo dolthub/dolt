@@ -43,7 +43,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 				continue
 			}
 
-			if col, ok := v.(Collection); ok && !col.sequence().isLeaf() {
+			if col, ok := v.(Collection); ok && !col.asSequence().isLeaf() {
 				col.WalkRefs(func(r Ref) {
 					refs[r.TargetHash()] = false
 				})

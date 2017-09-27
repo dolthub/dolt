@@ -39,7 +39,8 @@ func (se *SetEditor) Set() Set {
 		return se.s // no edits
 	}
 
-	vrw := se.s.sequence().valueReadWriter()
+	seq := se.s.orderedSequence
+	vrw := seq.valueReadWriter()
 
 	se.normalize()
 
@@ -59,7 +60,7 @@ func (se *SetEditor) Set() Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(se.s.seq, edit.value, true, false, false)
+				cc <- newCursorAtValue(seq, edit.value, true, false, false)
 			}()
 
 			editChan <- edit

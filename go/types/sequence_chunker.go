@@ -204,7 +204,7 @@ func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
 	}
 
 	mt := newMetaTuple(ref, key, numLeaves)
-	return col.sequence(), mt
+	return col.asSequence(), mt
 }
 
 func (sc *sequenceChunker) handleChunkBoundary() {

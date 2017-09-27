@@ -12,12 +12,11 @@ import (
 	"runtime"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 // Blob represents a list of Blobs.
 type Blob struct {
-	seq sequence
+	sequence
 }
 
 func newBlob(seq sequence) Blob {
@@ -60,7 +59,7 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 	startIdx = localStart
 
 	for _, leaf := range leaves {
-		bl := leaf.sequence().(blobLeafSequence)
+		bl := leaf.asSequence().(blobLeafSequence)
 
 		localEnd := endIdx
 		data := bl.data()
@@ -134,7 +133,7 @@ func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n i
 // to visit the rightmost prolly tree chunks of this Blob, and the leftmost
 // prolly tree chunks of other, so it's efficient.
 func (b Blob) Concat(other Blob) Blob {
-	seq := concat(b.seq, other.seq, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	seq := concat(b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return b.newChunker(cur, vrw)
 	})
 	return newBlob(seq)
@@ -144,17 +143,8 @@ func (b Blob) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChun
 	return newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
-// Len returns the number leaves in the blob
-func (b Blob) Len() uint64 {
-	return b.seq.numLeaves()
-}
-
-func (b Blob) Empty() bool {
-	return b.Len() == 0
-}
-
-func (b Blob) sequence() sequence {
-	return b.seq
+func (b Blob) asSequence() sequence {
+	return b.sequence
 }
 
 // Value interface
@@ -162,42 +152,7 @@ func (b Blob) Value() Value {
 	return b
 }
 
-func (b Blob) Equals(other Value) bool {
-	if otherBlob, ok := other.(Blob); ok {
-		return b.sequence().equals(otherBlob.sequence())
-	}
-	return false
-}
-
-func (b Blob) Less(other Value) bool {
-	return valueLess(b, other)
-}
-
-func (b Blob) Hash() hash.Hash {
-	return b.sequence().hash()
-}
-
 func (b Blob) WalkValues(cb ValueCallback) {
-}
-
-func (b Blob) WalkRefs(cb RefCallback) {
-	b.seq.WalkRefs(cb)
-}
-
-func (b Blob) typeOf() *Type {
-	return b.seq.typeOf()
-}
-
-func (b Blob) Kind() NomsKind {
-	return BlobKind
-}
-
-func (b Blob) valueReadWriter() ValueReadWriter {
-	return b.seq.valueReadWriter()
-}
-
-func (b Blob) writeTo(w nomsWriter) {
-	b.seq.writeTo(w)
 }
 
 type BlobReader struct {

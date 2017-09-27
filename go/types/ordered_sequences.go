@@ -15,11 +15,11 @@ type orderedSequence interface {
 }
 
 func newSetMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequence(SetKind, level, tuples, vrw)
+	return newMetaSequenceFromTuples(SetKind, level, tuples, vrw)
 }
 
 func newMapMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequence(MapKind, level, tuples, vrw)
+	return newMetaSequenceFromTuples(MapKind, level, tuples, vrw)
 }
 
 func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool, readAhead bool) *sequenceCursor {

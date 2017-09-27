@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 // List represents a list or an array of Noms values. A list can contain zero or more values of zero
@@ -21,7 +20,7 @@ import (
 //
 // Lists, like all Noms values are immutable so the "mutation" methods return a new list.
 type List struct {
-	seq sequence
+	sequence
 }
 
 func newList(seq sequence) List {
@@ -60,39 +59,13 @@ func (l List) Edit() *ListEditor {
 
 // Collection interface
 
-// Len returns the number of elements in the list.
-func (l List) Len() uint64 {
-	return l.seq.numLeaves()
-}
-
-// Empty returns true if the list is empty (length is zero).
-func (l List) Empty() bool {
-	// TODO: l.Len() is not free, use l.seq.seqLen()?
-	return l.Len() == 0
-}
-
-func (l List) sequence() sequence {
-	return l.seq
+func (l List) asSequence() sequence {
+	return l.sequence
 }
 
 // Value interface
 func (l List) Value() Value {
 	return l
-}
-
-func (l List) Equals(other Value) bool {
-	if otherList, ok := other.(List); ok {
-		return l.sequence().equals(otherList.sequence())
-	}
-	return false
-}
-
-func (l List) Less(other Value) bool {
-	return valueLess(l, other)
-}
-
-func (l List) Hash() hash.Hash {
-	return l.sequence().hash()
 }
 
 func (l List) WalkValues(cb ValueCallback) {
@@ -101,23 +74,11 @@ func (l List) WalkValues(cb ValueCallback) {
 	})
 }
 
-func (l List) WalkRefs(cb RefCallback) {
-	l.seq.WalkRefs(cb)
-}
-
-func (l List) typeOf() *Type {
-	return l.seq.typeOf()
-}
-
-func (l List) Kind() NomsKind {
-	return ListKind
-}
-
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(l.seq, idx, false)
+	cur := newCursorAtIndex(l.sequence, idx, false)
 	return cur.current().(Value)
 }
 
@@ -125,7 +86,7 @@ func (l List) Get(idx uint64) Value {
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
 func (l List) Concat(other List) List {
-	seq := concat(l.seq, other.seq, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	seq := concat(l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return l.newChunker(cur, vrw)
 	})
 	return newList(seq)
@@ -137,7 +98,7 @@ type listIterFunc func(v Value, index uint64) (stop bool)
 // iteration stops.
 func (l List) Iter(f listIterFunc) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.seq, idx, false)
+	cur := newCursorAtIndex(l.sequence, idx, false)
 	cur.iter(func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
@@ -227,7 +188,7 @@ func (l List) copyReadAhead(out []Value, startIdx uint64) (numBytes uint64) {
 	startIdx = localStart
 
 	for _, leaf := range leaves {
-		ls := leaf.sequence().(listLeafSequence)
+		ls := leaf.asSequence().(listLeafSequence)
 
 		values := ls.valuesSlice(startIdx, endIdx)
 		copy(out, values)
@@ -249,7 +210,7 @@ func (l List) Iterator() ListIterator {
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(l.seq, index, false),
+		newCursorAtIndex(l.sequence, index, false),
 	}
 }
 
@@ -277,7 +238,7 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 		return
 	}
 
-	indexedSequenceDiff(last.seq, 0, l.seq, 0, changes, closeChan, maxSpliceMatrixSize)
+	indexedSequenceDiff(last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
@@ -300,12 +261,4 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptyListSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
 	return newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
-}
-
-func (l List) valueReadWriter() ValueReadWriter {
-	return l.seq.valueReadWriter()
-}
-
-func (l List) writeTo(w nomsWriter) {
-	l.seq.writeTo(w)
 }

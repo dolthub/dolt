@@ -68,11 +68,11 @@ func (ts testSequence) isLeaf() bool {
 	panic("not reached")
 }
 
-func (ts testSequence) equals(other sequence) bool {
+func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) bytes() []byte {
+func (ts testSequence) valueBytes() []byte {
 	panic("not reached")
 }
 
@@ -80,7 +80,7 @@ func (ts testSequence) Less(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) hash() hash.Hash {
+func (ts testSequence) Hash() hash.Hash {
 	panic("not reached")
 }
 
@@ -93,6 +93,18 @@ func (ts testSequence) WalkRefs(cb RefCallback) {
 }
 
 func (ts testSequence) typeOf() *Type {
+	panic("not reached")
+}
+
+func (ts testSequence) Len() uint64 {
+	panic("not reached")
+}
+
+func (ts testSequence) Empty() bool {
+	panic("not reached")
+}
+
+func (ts testSequence) asValueImpl() valueImpl {
 	panic("not reached")
 }
 

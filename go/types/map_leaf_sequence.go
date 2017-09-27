@@ -66,7 +66,7 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 		me.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{leafSequence{vrw, w.data(), offsets}}
+	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets)}
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter) {

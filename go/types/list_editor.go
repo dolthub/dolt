@@ -32,7 +32,7 @@ func (le *ListEditor) List() List {
 		return le.l // no edits
 	}
 
-	seq := le.l.sequence()
+	seq := le.l.sequence
 	vrw := seq.valueReadWriter()
 
 	cursChan := make(chan chan *sequenceCursor)

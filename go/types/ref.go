@@ -5,14 +5,11 @@
 package types
 
 import (
-	"bytes"
-
 	"github.com/attic-labs/noms/go/hash"
 )
 
 type Ref struct {
-	buff    []byte
-	offsets refOffsets
+	valueImpl
 }
 
 type refPart uint32
@@ -25,10 +22,7 @@ const (
 	refPartEnd
 )
 
-type refOffsets [refPartEnd]uint32
-
 func NewRef(v Value) Ref {
-	// TODO: Taking the hash will duplicate the work of computing the type
 	return constructRef(v.Hash(), TypeOf(v), maxChunkHeight(v)+1)
 }
 
@@ -41,7 +35,7 @@ func ToRefOfValue(r Ref) Ref {
 func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
 	w := newBinaryNomsWriter()
 
-	var offsets refOffsets
+	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = w.offset
 	RefKind.writeTo(&w)
 	offsets[refPartTargetHash] = w.offset
@@ -51,7 +45,7 @@ func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
 	offsets[refPartHeight] = w.offset
 	w.writeCount(height)
 
-	return Ref{w.data(), offsets}
+	return Ref{valueImpl{nil, w.data(), offsets}}
 }
 
 func writeRefPartsTo(w nomsWriter, targetHash hash.Hash, targetType *Type, height uint64) {
@@ -66,12 +60,12 @@ func readRef(dec *valueDecoder) Ref {
 	start := dec.pos()
 	offsets := skipRef(dec)
 	end := dec.pos()
-	return Ref{dec.byteSlice(start, end), offsets}
+	return Ref{valueImpl{nil, dec.byteSlice(start, end), offsets}}
 }
 
 // readRef reads the data provided by a decoder and moves the decoder forward.
-func skipRef(dec *valueDecoder) refOffsets {
-	var offsets refOffsets
+func skipRef(dec *valueDecoder) []uint32 {
+	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = dec.pos()
 	dec.skipKind()
 	offsets[refPartTargetHash] = dec.pos()
@@ -83,14 +77,6 @@ func skipRef(dec *valueDecoder) refOffsets {
 	return offsets
 }
 
-func (r Ref) writeTo(w nomsWriter) {
-	w.writeRaw(r.buff)
-}
-
-func (r Ref) valueBytes() []byte {
-	return r.buff
-}
-
 func maxChunkHeight(v Value) (max uint64) {
 	v.WalkRefs(func(r Ref) {
 		if height := r.Height(); height > max {
@@ -98,10 +84,6 @@ func maxChunkHeight(v Value) (max uint64) {
 		}
 	})
 	return
-}
-
-func (r Ref) decoder() valueDecoder {
-	return newValueDecoder(r.buff, nil)
 }
 
 func (r Ref) decoderAtPart(part refPart) valueDecoder {
@@ -133,21 +115,6 @@ func (r Ref) Value() Value {
 	return r
 }
 
-func (r Ref) Equals(other Value) bool {
-	if otherRef, ok := other.(Ref); ok {
-		return bytes.Equal(r.buff, otherRef.buff)
-	}
-	return false
-}
-
-func (r Ref) Less(other Value) bool {
-	return valueLess(r, other)
-}
-
-func (r Ref) Hash() hash.Hash {
-	return hash.Of(r.buff)
-}
-
 func (r Ref) WalkValues(cb ValueCallback) {
 }
 
@@ -157,12 +124,4 @@ func (r Ref) WalkRefs(cb RefCallback) {
 
 func (r Ref) typeOf() *Type {
 	return makeCompoundType(RefKind, r.TargetType())
-}
-
-func (r Ref) Kind() NomsKind {
-	return RefKind
-}
-
-func (r Ref) valueReadWriter() ValueReadWriter {
-	return nil
 }

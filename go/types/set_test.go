@@ -979,17 +979,17 @@ func TestSetTypeAfterMutations(t *testing.T) {
 
 		s := NewSet(vs, values...)
 		assert.Equal(s.Len(), uint64(n))
-		assert.IsType(c, s.sequence())
+		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
 
 		s = s.Edit().Insert(String("a")).Set()
 		assert.Equal(s.Len(), uint64(n+1))
-		assert.IsType(c, s.sequence())
+		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType(NumberType, StringType))))
 
 		s = s.Edit().Remove(String("a")).Set()
 		assert.Equal(s.Len(), uint64(n))
-		assert.IsType(c, s.sequence())
+		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
 	}
 
@@ -1026,7 +1026,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	}
 
 	s := NewSet(vs, vals...)
-	for i := 1; s.sequence().isLeaf(); i++ {
+	for i := 1; s.asSequence().isLeaf(); i++ {
 		v := Number(i)
 		vals = append(vals, v)
 		s = s.Edit().Insert(v).Set()

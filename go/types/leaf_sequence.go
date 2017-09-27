@@ -5,20 +5,20 @@
 package types
 
 import (
-	"bytes"
 	"math"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 type leafSequence struct {
-	vrw     ValueReadWriter
-	buff    []byte
-	offsets []uint32
+	sequenceImpl
 }
 
-func newLeafSequence(kind NomsKind, count uint64, vrw ValueReadWriter, vs ...Value) leafSequence {
+func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32) leafSequence {
+	return leafSequence{newSequenceImpl(vrw, buff, offsets)}
+}
+
+func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) leafSequence {
 	d.PanicIfTrue(vrw == nil)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
@@ -27,13 +27,14 @@ func newLeafSequence(kind NomsKind, count uint64, vrw ValueReadWriter, vs ...Val
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
+	count := uint64(len(vs))
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
 		v.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return leafSequence{vrw, w.data(), offsets}
+	return newLeafSequence(vrw, w.data(), offsets)
 }
 
 // readLeafSequence reads the data provided by a decoder and moves the decoder forward.
@@ -41,7 +42,7 @@ func readLeafSequence(dec *valueDecoder) leafSequence {
 	start := dec.pos()
 	offsets := skipLeafSequence(dec)
 	end := dec.pos()
-	return leafSequence{dec.vrw, dec.byteSlice(start, end), offsets}
+	return newLeafSequence(dec.vrw, dec.byteSlice(start, end), offsets)
 }
 
 func skipLeafSequence(dec *valueDecoder) []uint32 {
@@ -61,34 +62,6 @@ func skipLeafSequence(dec *valueDecoder) []uint32 {
 		offsets[i+sequencePartValues+1] = dec.pos()
 	}
 	return offsets
-}
-
-func (seq leafSequence) decoder() valueDecoder {
-	return newValueDecoder(seq.buff, seq.vrw)
-}
-
-func (seq leafSequence) decoderAtOffset(offset int) valueDecoder {
-	return newValueDecoder(seq.buff[offset:], seq.vrw)
-}
-
-func (seq leafSequence) decoderAtPart(part uint32) valueDecoder {
-	offset := seq.offsets[part] - seq.offsets[sequencePartKind]
-	return newValueDecoder(seq.buff[offset:], seq.vrw)
-}
-
-func (seq leafSequence) decoderSkipToValues() (valueDecoder, uint64) {
-	dec := seq.decoderAtPart(sequencePartCount)
-	count := dec.readCount()
-	return dec, count
-}
-
-func (seq leafSequence) decoderSkipToIndex(idx int) valueDecoder {
-	offset := seq.getItemOffset(idx)
-	return seq.decoderAtOffset(offset)
-}
-
-func (seq leafSequence) writeTo(w nomsWriter) {
-	w.writeRaw(seq.buff)
 }
 
 func (seq leafSequence) values() []Value {
@@ -134,26 +107,13 @@ func (seq leafSequence) typeOf() *Type {
 	return makeCompoundType(kind, makeCompoundType(UnionKind, ts...))
 }
 
-func (seq leafSequence) seqLen() int {
-	return int(seq.numLeaves())
-}
-
 func (seq leafSequence) numLeaves() uint64 {
 	_, count := seq.decoderSkipToValues()
 	return count
 }
 
-func (seq leafSequence) valueReadWriter() ValueReadWriter {
-	return seq.vrw
-}
-
 func (seq leafSequence) getChildSequence(idx int) sequence {
 	return nil
-}
-
-func (seq leafSequence) Kind() NomsKind {
-	dec := seq.decoder()
-	return dec.readKind()
 }
 
 func (seq leafSequence) treeLevel() uint64 {
@@ -172,13 +132,6 @@ func (seq leafSequence) getCompositeChildSequence(start uint64, length uint64) s
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 
-func (seq leafSequence) getItemOffset(idx int) int {
-	// kind, level, count, elements...
-	// 0     1      2      3          n+1
-	d.PanicIfTrue(idx+sequencePartValues+1 > len(seq.offsets))
-	return int(seq.offsets[idx+sequencePartValues] - seq.offsets[sequencePartKind])
-}
-
 func (seq leafSequence) getItem(idx int) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
 	return dec.readValue()
@@ -191,25 +144,6 @@ func (seq leafSequence) WalkRefs(cb RefCallback) {
 	}
 }
 
-// Collection interface
-
 func (seq leafSequence) Len() uint64 {
-	_, count := seq.decoderSkipToValues()
-	return count
-}
-
-func (seq leafSequence) Empty() bool {
-	return seq.Len() == uint64(0)
-}
-
-func (seq leafSequence) hash() hash.Hash {
-	return hash.Of(seq.buff)
-}
-
-func (seq leafSequence) equals(other sequence) bool {
-	return bytes.Equal(seq.bytes(), other.bytes())
-}
-
-func (seq leafSequence) bytes() []byte {
-	return seq.buff
+	return seq.numLeaves()
 }

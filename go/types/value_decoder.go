@@ -147,10 +147,10 @@ func (r *valueDecoder) readListSequence() sequence {
 	end := r.pos()
 
 	if level > 0 {
-		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
 	}
 
-	return listLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
+	return listLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
 }
 
 func (r *valueDecoder) readBlobSequence() sequence {
@@ -168,10 +168,10 @@ func (r *valueDecoder) readBlobSequence() sequence {
 	end := r.pos()
 
 	if level > 0 {
-		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
 	}
 
-	return blobLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
+	return blobLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
 }
 
 func (r *valueDecoder) readSetSequence() orderedSequence {
@@ -189,10 +189,10 @@ func (r *valueDecoder) readSetSequence() orderedSequence {
 	end := r.pos()
 
 	if level > 0 {
-		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
 	}
 
-	return setLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
+	return setLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
 }
 
 func (r *valueDecoder) readMapSequence() orderedSequence {
@@ -210,10 +210,10 @@ func (r *valueDecoder) readMapSequence() orderedSequence {
 	end := r.pos()
 
 	if level > 0 {
-		return metaSequence{r.vrw, r.byteSlice(start, end), offsets}
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
 	}
 
-	return mapLeafSequence{leafSequence{r.vrw, r.byteSlice(start, end), offsets}}
+	return mapLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
 }
 
 func (r *valueDecoder) skipList() {

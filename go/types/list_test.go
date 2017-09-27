@@ -1070,17 +1070,17 @@ func TestListTypeAfterMutations(t *testing.T) {
 
 		l := NewList(vrw, values...)
 		assert.Equal(l.Len(), uint64(n))
-		assert.IsType(c, l.sequence())
+		assert.IsType(c, l.asSequence())
 		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
 
 		l = l.Edit().Append(String("a")).List()
 		assert.Equal(l.Len(), uint64(n+1))
-		assert.IsType(c, l.sequence())
+		assert.IsType(c, l.asSequence())
 		assert.True(TypeOf(l).Equals(MakeListType(MakeUnionType(NumberType, StringType))))
 
 		l = l.Edit().Splice(l.Len()-1, 1).List()
 		assert.Equal(l.Len(), uint64(n))
-		assert.IsType(c, l.sequence())
+		assert.IsType(c, l.asSequence())
 		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
 	}
 

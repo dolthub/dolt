@@ -339,10 +339,10 @@ func (hip HashIndexPath) Resolve(v Value, vr ValueReader) (res Value) {
 	switch v := v.(type) {
 	case Set:
 		// Unclear what the behavior should be if |hip.IntoKey| is true, but ignoring it for sets is arguably correct.
-		seq = v.seq
+		seq = v.orderedSequence
 		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(Value) }
 	case Map:
-		seq = v.seq
+		seq = v.orderedSequence
 		if hip.IntoKey {
 			getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).key }
 		} else {

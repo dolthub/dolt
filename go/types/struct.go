@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/hash"
 )
 
 var EmptyStructType = MakeStructType("")
@@ -21,8 +20,7 @@ var EmptyStruct = newStruct("", nil, nil)
 type StructData map[string]Value
 
 type Struct struct {
-	vrw  ValueReadWriter
-	buff []byte
+	valueImpl
 }
 
 // readStruct reads the data provided by a decoder and moves the decoder forward.
@@ -30,7 +28,7 @@ func readStruct(dec *valueDecoder) Struct {
 	start := dec.pos()
 	skipStruct(dec)
 	end := dec.pos()
-	return Struct{dec.vrw, dec.byteSlice(start, end)}
+	return Struct{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}}
 }
 
 func skipStruct(dec *valueDecoder) {
@@ -41,14 +39,6 @@ func skipStruct(dec *valueDecoder) {
 		dec.skipString()
 		dec.skipValue()
 	}
-}
-
-func (s Struct) writeTo(enc nomsWriter) {
-	enc.writeRaw(s.buff)
-}
-
-func (s Struct) valueBytes() []byte {
-	return s.buff
 }
 
 func newStruct(name string, fieldNames []string, values []Value) Struct {
@@ -64,7 +54,7 @@ func newStruct(name string, fieldNames []string, values []Value) Struct {
 		}
 		values[i].writeTo(&w)
 	}
-	return Struct{vrw, w.data()}
+	return Struct{valueImpl{vrw, w.data(), nil}}
 }
 
 func NewStruct(name string, data StructData) Struct {
@@ -128,21 +118,6 @@ func (s Struct) Value() Value {
 	return s
 }
 
-func (s Struct) Equals(other Value) bool {
-	if otherStruct, ok := other.(Struct); ok {
-		return bytes.Equal(s.buff, otherStruct.buff)
-	}
-	return false
-}
-
-func (s Struct) Less(other Value) bool {
-	return valueLess(s, other)
-}
-
-func (s Struct) Hash() hash.Hash {
-	return hash.Of(s.buff)
-}
-
 func (s Struct) WalkValues(cb ValueCallback) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
@@ -175,10 +150,6 @@ func readStructTypeOfValue(dec *valueDecoder) *Type {
 		}
 	}
 	return makeStructTypeQuickly(name, typeFields)
-}
-
-func (s Struct) decoder() valueDecoder {
-	return newValueDecoder(s.buff, s.vrw)
 }
 
 func (s Struct) decoderSkipToFields() (valueDecoder, uint64) {
@@ -232,10 +203,6 @@ func (s Struct) iterParts(cbs structPartCallbacks) {
 	cbs.end()
 }
 
-func (s Struct) Kind() NomsKind {
-	return StructKind
-}
-
 // MaybeGet returns the value of a field in the struct. If the struct does not a have a field with
 // the name name then this returns (nil, false).
 func (s Struct) MaybeGet(n string) (v Value, found bool) {
@@ -286,7 +253,7 @@ func (s Struct) Set(n string, v Value) Struct {
 	v.writeTo(&w)
 	w.writeRaw(tail)
 
-	return Struct{s.vrw, w.data()}
+	return Struct{valueImpl{s.vrw, w.data(), nil}}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -325,11 +292,6 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	return
 }
 
-// IsZeroValue can be used to test if a struct is the same as Struct{}.
-func (s Struct) IsZeroValue() bool {
-	return s.buff == nil
-}
-
 // Delete returns a new struct where the field name has been removed.
 // If name is not an existing field in the struct then the current struct is returned.
 func (s Struct) Delete(n string) Struct {
@@ -344,7 +306,7 @@ func (s Struct) Delete(n string) Struct {
 	w.writeRaw(head)
 	w.writeRaw(tail)
 
-	return Struct{s.vrw, w.data()}
+	return Struct{valueImpl{s.vrw, w.data(), nil}}
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
@@ -412,10 +374,6 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			return
 		}
 	}
-}
-
-func (s Struct) valueReadWriter() ValueReadWriter {
-	return s.vrw
 }
 
 var escapeChar = "Q"

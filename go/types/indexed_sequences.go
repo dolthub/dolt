@@ -10,11 +10,11 @@ import (
 )
 
 func newListMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequence(ListKind, level, tuples, vrw)
+	return newMetaSequenceFromTuples(ListKind, level, tuples, vrw)
 }
 
 func newBlobMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequence(BlobKind, level, tuples, vrw)
+	return newMetaSequenceFromTuples(BlobKind, level, tuples, vrw)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx
@@ -90,23 +90,23 @@ func orderedKeyFromSum(msd []metaTuple) orderedKey {
 // [startIdx -> endIdx).  Returns the set of nodes and the offset within
 // the first sequence which corresponds to |startIdx|.
 func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64) {
-	vrw := cols[0].sequence().valueReadWriter()
+	vrw := cols[0].asSequence().valueReadWriter()
 	d.PanicIfTrue(vrw == nil)
 
-	if cols[0].sequence().isLeaf() {
+	if cols[0].asSequence().isLeaf() {
 		for _, c := range cols {
-			d.PanicIfFalse(c.sequence().isLeaf())
+			d.PanicIfFalse(c.asSequence().isLeaf())
 		}
 
 		return cols, startIdx
 	}
 
-	level := cols[0].sequence().treeLevel()
+	level := cols[0].asSequence().treeLevel()
 	childTuples := []metaTuple{}
 
 	cum := uint64(0)
 	for _, c := range cols {
-		s := c.sequence()
+		s := c.asSequence()
 		d.PanicIfFalse(s.treeLevel() == level)
 		ms := s.(metaSequence)
 

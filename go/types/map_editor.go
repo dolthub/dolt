@@ -39,7 +39,8 @@ func (me *MapEditor) Map() Map {
 		return me.m // no edits
 	}
 
-	vrw := me.m.sequence().valueReadWriter()
+	seq := me.m.orderedSequence
+	vrw := seq.valueReadWriter()
 
 	me.normalize()
 
@@ -59,7 +60,7 @@ func (me *MapEditor) Map() Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(me.m.seq, edit.key, true, false, false)
+				cc <- newCursorAtValue(seq, edit.key, true, false, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)

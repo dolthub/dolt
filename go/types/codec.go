@@ -20,8 +20,6 @@ type valueBytes interface {
 
 func EncodeValue(v Value) chunks.Chunk {
 	switch v := v.(type) {
-	case Collection:
-		return chunks.NewChunk(v.sequence().bytes())
 	case valueBytes:
 		return chunks.NewChunk(v.valueBytes())
 	case *Type:

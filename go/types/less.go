@@ -4,7 +4,16 @@
 
 package types
 
-func valueLess(v1, v2 Value) bool {
+import (
+	"github.com/attic-labs/noms/go/hash"
+)
+
+type kindAndHash interface {
+	Kind() NomsKind
+	Hash() hash.Hash
+}
+
+func valueLess(v1, v2 kindAndHash) bool {
 	switch v2.Kind() {
 	case BoolKind, NumberKind, StringKind:
 		return false

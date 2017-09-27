@@ -77,8 +77,8 @@ func (suite *diffTestSuite) TestDiff() {
 		col1 := cf(vf(suite.from1, suite.to1, suite.by1))
 		col2 := cf(vf(suite.from2, suite.to2, suite.by2))
 		suite.added, suite.removed, suite.modified = accumulateOrderedSequenceDiffChanges(
-			col1.sequence().(orderedSequence),
-			col2.sequence().(orderedSequence),
+			col1.asSequence().(orderedSequence),
+			col2.asSequence().(orderedSequence),
 			df)
 		suite.Equal(suite.numAddsExpected, len(suite.added), "test %s: num added is not as expected", name)
 		suite.Equal(suite.numRemovesExpected, len(suite.removed), "test %s: num removed is not as expected", name)
@@ -160,9 +160,9 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
 	runTest := func(df diffFn) {
-		s1 := NewSet(vs).seq
+		s1 := NewSet(vs).orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).seq
+		s2 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})

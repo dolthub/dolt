@@ -41,7 +41,7 @@ func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
 	fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
 	fmt.Fprintf(w, treeLevelHeader)
 
-	level := int64(v.(Collection).sequence().treeLevel())
+	level := int64(v.(Collection).asSequence().treeLevel())
 	nodes := ValueSlice{v}
 
 	// TODO: For level 0, use NBS to fetch leaf sizes without actually reading leaf data.
@@ -58,7 +58,7 @@ func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
 				})
 			}
 
-			s := n.(Collection).sequence()
+			s := n.(Collection).asSequence()
 			valueCount += uint64(s.seqLen())
 
 			h := n.Hash()

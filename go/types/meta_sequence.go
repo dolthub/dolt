@@ -5,7 +5,6 @@
 package types
 
 import (
-	"bytes"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -33,7 +32,7 @@ type metaTuple struct {
 }
 
 func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
-	return mt.ref.TargetValue(vr).(Collection).sequence()
+	return mt.ref.TargetValue(vr).(Collection).asSequence()
 }
 
 func (mt metaTuple) writeTo(w nomsWriter) {
@@ -94,9 +93,11 @@ func (key orderedKey) writeTo(w nomsWriter) {
 }
 
 type metaSequence struct {
-	vrw     ValueReadWriter
-	buff    []byte
-	offsets []uint32
+	sequenceImpl
+}
+
+func newMetaSequence(vrw ValueReadWriter, buff []byte, offsets []uint32) metaSequence {
+	return metaSequence{newSequenceImpl(vrw, buff, offsets)}
 }
 
 // readLeafSequence reads the data provided by a decoder and moves the decoder forward.
@@ -104,7 +105,7 @@ func readMetaSequence(dec *valueDecoder) metaSequence {
 	start := dec.pos()
 	offsets := skipMetaSequence(dec)
 	end := dec.pos()
-	return metaSequence{dec.vrw, dec.byteSlice(start, end), offsets}
+	return newMetaSequence(dec.vrw, dec.byteSlice(start, end), offsets)
 }
 
 func skipMetaSequence(dec *valueDecoder) []uint32 {
@@ -129,42 +130,7 @@ func skipMetaSequence(dec *valueDecoder) []uint32 {
 	return offsets
 }
 
-func (ms metaSequence) writeTo(w nomsWriter) {
-	w.writeRaw(ms.buff)
-}
-
-func (ms metaSequence) decoder() valueDecoder {
-	return newValueDecoder(ms.buff, ms.vrw)
-}
-
-func (ms metaSequence) decoderAtOffset(offset int) valueDecoder {
-	return newValueDecoder(ms.buff[offset:], ms.vrw)
-}
-
-func (ms metaSequence) decoderAtPart(part uint32) valueDecoder {
-	offset := ms.offsets[part] - ms.offsets[sequencePartKind]
-	return newValueDecoder(ms.buff[offset:], ms.vrw)
-}
-
-func (ms metaSequence) decoderSkipToValues() (valueDecoder, uint64) {
-	dec := ms.decoderAtPart(sequencePartCount)
-	count := dec.readCount()
-	return dec, count
-}
-
-func (ms metaSequence) decoderSkipToIndex(idx int) valueDecoder {
-	offset := ms.getItemOffset(idx)
-	return ms.decoderAtOffset(offset)
-}
-
-func (ms metaSequence) getItemOffset(idx int) int {
-	// kind, level, count, elements...
-	// 0     1      2      3          n+1
-	d.PanicIfTrue(idx+sequencePartValues+1 > len(ms.offsets))
-	return int(ms.offsets[idx+sequencePartValues] - ms.offsets[sequencePartKind])
-}
-
-func newMetaSequence(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
 	d.PanicIfFalse(level > 0)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
@@ -179,7 +145,7 @@ func newMetaSequence(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueR
 		mt.writeTo(&w)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return metaSequence{vrw, w.data(), offsets}
+	return newMetaSequence(vrw, w.data(), offsets)
 }
 
 func (ms metaSequence) tuples() []metaTuple {
@@ -248,27 +214,6 @@ func (ms metaSequence) getItem(idx int) sequenceItem {
 	return ms.readTuple(&dec)
 }
 
-func (ms metaSequence) seqLen() int {
-	_, count := ms.decoderSkipToValues()
-	return int(count)
-}
-
-func (ms metaSequence) valueReadWriter() ValueReadWriter {
-	return ms.vrw
-}
-
-func (ms metaSequence) hash() hash.Hash {
-	return hash.Of(ms.buff)
-}
-
-func (ms metaSequence) equals(other sequence) bool {
-	return bytes.Equal(ms.bytes(), other.bytes())
-}
-
-func (ms metaSequence) bytes() []byte {
-	return ms.buff
-}
-
 func (ms metaSequence) WalkRefs(cb RefCallback) {
 	dec, count := ms.decoderSkipToValues()
 	for i := uint64(0); i < count; i++ {
@@ -291,11 +236,6 @@ func (ms metaSequence) typeOf() *Type {
 	return makeCompoundType(UnionKind, ts...)
 }
 
-func (ms metaSequence) Kind() NomsKind {
-	dec := ms.decoderAtPart(sequencePartKind)
-	return dec.readKind()
-}
-
 func (ms metaSequence) numLeaves() uint64 {
 	_, count := ms.decoderSkipToValues()
 	return ms.cumulativeNumberOfLeaves(int(count - 1))
@@ -309,6 +249,10 @@ func (ms metaSequence) treeLevel() uint64 {
 func (ms metaSequence) isLeaf() bool {
 	d.PanicIfTrue(ms.treeLevel() == 0)
 	return false
+}
+
+func (ms metaSequence) Len() uint64 {
+	return ms.numLeaves()
 }
 
 // metaSequence interface
@@ -363,7 +307,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 	}
 
 	if childIsMeta {
-		return newMetaSequence(ms.Kind(), ms.treeLevel()-1, metaItems, ms.vrw)
+		return newMetaSequenceFromTuples(ms.Kind(), ms.treeLevel()-1, metaItems, ms.vrw)
 	}
 
 	if isIndexedSequence {
@@ -398,7 +342,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	// Fetch committed child sequences in a single batch
 	readValues := ms.vrw.ReadManyValues(hs)
 	for i, v := range readValues {
-		seqs[i] = v.(Collection).sequence()
+		seqs[i] = v.(Collection).asSequence()
 	}
 
 	return
@@ -487,18 +431,34 @@ func (es emptySequence) isLeaf() bool {
 	return es.level == 0
 }
 
-func (es emptySequence) hash() hash.Hash {
+func (es emptySequence) Hash() hash.Hash {
 	panic("empty sequence")
 }
 
-func (es emptySequence) equals(other sequence) bool {
+func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) bytes() []byte {
+func (es emptySequence) Less(other Value) bool {
+	panic("empty sequence")
+}
+
+func (es emptySequence) valueBytes() []byte {
 	panic("empty sequence")
 }
 
 func (es emptySequence) writeTo(nomsWriter) {
+	panic("empty sequence")
+}
+
+func (es emptySequence) Empty() bool {
+	panic("empty sequence")
+}
+
+func (es emptySequence) Len() uint64 {
+	panic("empty sequence")
+}
+
+func (es emptySequence) asValueImpl() valueImpl {
 	panic("empty sequence")
 }

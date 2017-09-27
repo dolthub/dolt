@@ -8,5 +8,5 @@ type Collection interface {
 	Value
 	Emptyable
 	Len() uint64
-	sequence() sequence
+	asSequence() sequence
 }

@@ -37,7 +37,7 @@ func (be *BlobEditor) Blob() Blob {
 		return be.b // no edits
 	}
 
-	seq := be.b.sequence()
+	seq := be.b.sequence
 	vrw := seq.valueReadWriter()
 
 	curs := make([]chan *sequenceCursor, 0)

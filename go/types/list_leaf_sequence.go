@@ -9,8 +9,7 @@ type listLeafSequence struct {
 }
 
 func newListLeafSequence(vrw ValueReadWriter, vs ...Value) sequence {
-	ls := newLeafSequence(ListKind, uint64(len(vs)), vrw, vs...)
-	return listLeafSequence{ls}
+	return listLeafSequence{newLeafSequenceFromValues(ListKind, vrw, vs...)}
 }
 
 // sequence interface

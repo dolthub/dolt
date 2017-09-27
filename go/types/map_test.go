@@ -1409,17 +1409,17 @@ func TestMapTypeAfterMutations(t *testing.T) {
 
 		m := NewMap(vrw, values...)
 		assert.Equal(m.Len(), uint64(n))
-		assert.IsType(c, m.sequence())
+		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(NumberType, NumberType)))
 
 		m = m.Edit().Set(String("a"), String("a")).Map()
 		assert.Equal(m.Len(), uint64(n+1))
-		assert.IsType(c, m.sequence())
+		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(MakeUnionType(NumberType, StringType), MakeUnionType(NumberType, StringType))))
 
 		m = m.Edit().Remove(String("a")).Map()
 		assert.Equal(m.Len(), uint64(n))
-		assert.IsType(c, m.sequence())
+		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(NumberType, NumberType)))
 	}
 
@@ -1455,7 +1455,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	}
 
 	m := NewMap(vrw, kvs...)
-	for i := 1; m.sequence().isLeaf(); i++ {
+	for i := 1; m.asSequence().isLeaf(); i++ {
 		k := Number(i)
 		kvs = append(kvs, k, v)
 		m = m.Edit().Set(k, v).Map()
