@@ -21,24 +21,55 @@ var emptyKey = orderedKey{}
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
 	d.PanicIfTrue(ref.buff == nil)
-	return metaTuple{ref, key, numLeaves}
+	w := newBinaryNomsWriter()
+	var offsets [metaTuplePartNumLeaves + 1]uint32
+	offsets[metaTuplePartRef] = w.offset
+	ref.writeTo(&w)
+	offsets[metaTuplePartKey] = w.offset
+	key.writeTo(&w)
+	offsets[metaTuplePartNumLeaves] = w.offset
+	w.writeCount(numLeaves)
+	return metaTuple{w.data(), offsets}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
-	ref       Ref
-	key       orderedKey
-	numLeaves uint64
+	buff    []byte
+	offsets [metaTuplePartNumLeaves + 1]uint32
+}
+
+const (
+	metaTuplePartRef       = 0
+	metaTuplePartKey       = 1
+	metaTuplePartNumLeaves = 2
+)
+
+func (mt metaTuple) decoderAtPart(part uint32) valueDecoder {
+	offset := mt.offsets[part] - mt.offsets[metaTuplePartRef]
+	return newValueDecoder(mt.buff[offset:], nil)
+}
+
+func (mt metaTuple) ref() Ref {
+	dec := mt.decoderAtPart(metaTuplePartRef)
+	return dec.readRef()
+}
+
+func (mt metaTuple) key() orderedKey {
+	dec := mt.decoderAtPart(metaTuplePartKey)
+	return dec.readOrderedKey()
+}
+
+func (mt metaTuple) numLeaves() uint64 {
+	dec := mt.decoderAtPart(metaTuplePartNumLeaves)
+	return dec.readCount()
 }
 
 func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
-	return mt.ref.TargetValue(vr).(Collection).asSequence()
+	return mt.ref().TargetValue(vr).(Collection).asSequence()
 }
 
 func (mt metaTuple) writeTo(w nomsWriter) {
-	mt.ref.writeTo(w)
-	mt.key.writeTo(w)
-	w.writeCount(mt.numLeaves)
+	w.writeRaw(mt.buff)
 }
 
 // orderedKey is a key in a Prolly Tree level, which is a metaTuple in a metaSequence, or a value in a leaf sequence.
@@ -85,7 +116,7 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 func (key orderedKey) writeTo(w nomsWriter) {
 	if !key.isOrderedByValue {
 		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-		d.PanicIfTrue(key.h.IsEmpty())
+		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
 		writeRefPartsTo(w, key.h, BoolType, 0)
 	} else {
 		key.v.writeTo(w)
@@ -190,10 +221,16 @@ func (ms metaSequence) getCompareFn(other sequence) compareFn {
 }
 
 func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
-	ref := dec.readRef()
-	key := dec.readOrderedKey()
-	numLeaves := dec.readCount()
-	return newMetaTuple(ref, key, numLeaves)
+	var offsets [metaTuplePartNumLeaves + 1]uint32
+	start := dec.offset
+	offsets[metaTuplePartRef] = start
+	dec.skipRef()
+	offsets[metaTuplePartKey] = dec.offset
+	dec.skipValue()
+	offsets[metaTuplePartNumLeaves] = dec.offset
+	dec.skipCount()
+	end := dec.offset
+	return metaTuple{dec.byteSlice(start, end), offsets}
 }
 
 func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
@@ -259,7 +296,7 @@ func (ms metaSequence) Len() uint64 {
 func (ms metaSequence) getChildSequence(idx int) sequence {
 	mt := ms.getItem(idx).(metaTuple)
 	// TODO: IsZeroValue?
-	if mt.ref.buff == nil {
+	if mt.buff == nil {
 		return nil
 	}
 	return mt.getChildSequence(ms.vrw)
@@ -336,16 +373,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 }
 
 func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
-	mt := item.(metaTuple)
-	v := mt.key.v
-	if !mt.key.isOrderedByValue {
-		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-		d.PanicIfTrue(mt.key.h.IsEmpty())
-		v = constructRef(mt.key.h, BoolType, 0)
-	}
-
-	hashValueBytes(mt.ref, rv)
-	hashValueBytes(v, rv)
+	rv.hashBytes(item.(metaTuple).buff)
 }
 
 type emptySequence struct {

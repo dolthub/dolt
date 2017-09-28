@@ -64,7 +64,7 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 		for i, v := range items {
 			mt := v.(metaTuple)
 			tuples[i] = mt
-			numLeaves += mt.numLeaves
+			numLeaves += mt.numLeaves()
 		}
 
 		var col Collection
@@ -81,7 +81,7 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 func orderedKeyFromSum(msd []metaTuple) orderedKey {
 	sum := uint64(0)
 	for _, mt := range msd {
-		sum += mt.numLeaves
+		sum += mt.numLeaves()
 	}
 	return orderedKeyFromUint64(sum)
 }
@@ -111,15 +111,16 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 		ms := s.(metaSequence)
 
 		for _, mt := range ms.tuples() {
-			if cum == 0 && mt.numLeaves <= startIdx {
+			numLeaves := mt.numLeaves()
+			if cum == 0 && numLeaves <= startIdx {
 				// skip tuples whose items are < startIdx
-				startIdx -= mt.numLeaves
-				endIdx -= mt.numLeaves
+				startIdx -= numLeaves
+				endIdx -= numLeaves
 				continue
 			}
 
 			childTuples = append(childTuples, mt)
-			cum += mt.numLeaves
+			cum += numLeaves
 			if cum >= endIdx {
 				break
 			}
@@ -128,7 +129,7 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 
 	hs := make(hash.HashSlice, len(childTuples))
 	for i, mt := range childTuples {
-		hs[i] = mt.ref.TargetHash()
+		hs[i] = mt.ref().TargetHash()
 	}
 
 	// Fetch committed child sequences in a single batch

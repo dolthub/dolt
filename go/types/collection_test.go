@@ -64,5 +64,5 @@ func deriveCollectionHeight(c Collection) uint64 {
 }
 
 func getRefHeightOfCollection(c Collection) uint64 {
-	return c.asSequence().getItem(0).(metaTuple).ref.Height()
+	return c.asSequence().getItem(0).(metaTuple).ref().Height()
 }

@@ -334,7 +334,7 @@ func isMetaSequenceSubtypeOf(ms metaSequence, t *Type, hasExtra bool) (bool, boo
 	// TODO: iterRefs
 	for _, mt := range ms.tuples() {
 		// Each prolly tree is also a List<T> where T needs to be a subtype.
-		isSub, hasMore := isSubtypeTopLevel(t, mt.ref.TargetType())
+		isSub, hasMore := isSubtypeTopLevel(t, mt.ref().TargetType())
 		if !isSub {
 			return false, hasExtra
 		}

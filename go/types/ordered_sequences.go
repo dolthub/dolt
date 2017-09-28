@@ -95,10 +95,11 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 		var lastKey orderedKey
 		for i, v := range items {
 			mt := v.(metaTuple)
-			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(mt.key))
-			lastKey = mt.key
+			key := mt.key()
+			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(key))
+			lastKey = key
 			tuples[i] = mt // chunk is written when the root sequence is written
-			numLeaves += mt.numLeaves
+			numLeaves += mt.numLeaves()
 		}
 
 		var col Collection
@@ -109,6 +110,6 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			col = newMap(newMapMetaSequence(level, tuples, vrw))
 		}
 
-		return col, tuples[len(tuples)-1].key, numLeaves
+		return col, tuples[len(tuples)-1].key(), numLeaves
 	}
 }

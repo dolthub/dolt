@@ -99,3 +99,8 @@ func (rv *rollingValueHasher) HashValue(v Value) {
 	v.writeTo(&rv.bw)
 	rv.sl.Update(rv.bw.data())
 }
+
+func (rv *rollingValueHasher) hashBytes(buff []byte) {
+	rv.bw.writeRaw(buff)
+	rv.sl.Update(rv.bw.data())
+}
