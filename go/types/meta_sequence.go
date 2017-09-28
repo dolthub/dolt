@@ -274,15 +274,11 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		return emptySequence{level - 1}
 	}
 
-	metaItems := []metaTuple{}
-	mapItems := []mapEntry{}
-	valueItems := []Value{}
+	var metaItems []metaTuple
+	var mapItems []mapEntry
+	var valueItems []Value
 
 	childIsMeta := false
-	isIndexedSequence := false
-	if ListKind == ms.Kind() {
-		isIndexedSequence = true
-	}
 
 	// TODO: This looks strange. The children can only be a meta sequence or one of map/set/list
 	// (why not blob?). We cannot mix map, set and list here and we know based on ms.Kind what
@@ -296,10 +292,13 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 			// TODO: Write directly to a valueEncoder
 			metaItems = append(metaItems, t.tuples()...)
 		case mapLeafSequence:
+			d.PanicIfTrue(childIsMeta)
 			mapItems = append(mapItems, t.entries()...)
 		case setLeafSequence:
+			d.PanicIfTrue(childIsMeta)
 			valueItems = append(valueItems, t.values()...)
 		case listLeafSequence:
+			d.PanicIfTrue(childIsMeta)
 			valueItems = append(valueItems, t.values()...)
 		default:
 			panic("unreachable")
@@ -310,15 +309,15 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		return newMetaSequenceFromTuples(ms.Kind(), ms.treeLevel()-1, metaItems, ms.vrw)
 	}
 
-	if isIndexedSequence {
+	switch ms.Kind() {
+	case ListKind:
 		return newListLeafSequence(ms.vrw, valueItems...)
-	}
-
-	if MapKind == ms.Kind() {
+	case MapKind:
 		return newMapLeafSequence(ms.vrw, mapItems...)
+	case SetKind:
+		return newSetLeafSequence(ms.vrw, valueItems...)
 	}
-
-	return newSetLeafSequence(ms.vrw, valueItems...)
+	panic("unreachable")
 }
 
 // fetches child sequences from start (inclusive) to end (exclusive).
