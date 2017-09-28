@@ -274,49 +274,37 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 		return emptySequence{level - 1}
 	}
 
-	var metaItems []metaTuple
-	var mapItems []mapEntry
-	var valueItems []Value
-
-	childIsMeta := false
-
-	// TODO: This looks strange. The children can only be a meta sequence or one of map/set/list
-	// (why not blob?). We cannot mix map, set and list here and we know based on ms.Kind what
-	// we are expecting.
-	// https://github.com/attic-labs/noms/issues/3706
 	output := ms.getChildren(start, start+length)
-	for _, seq := range output {
-		switch t := seq.(type) {
-		case metaSequence:
-			childIsMeta = true
-			// TODO: Write directly to a valueEncoder
-			metaItems = append(metaItems, t.tuples()...)
-		case mapLeafSequence:
-			d.PanicIfTrue(childIsMeta)
-			mapItems = append(mapItems, t.entries()...)
-		case setLeafSequence:
-			d.PanicIfTrue(childIsMeta)
-			valueItems = append(valueItems, t.values()...)
-		case listLeafSequence:
-			d.PanicIfTrue(childIsMeta)
-			valueItems = append(valueItems, t.values()...)
-		default:
-			panic("unreachable")
-		}
-	}
 
-	if childIsMeta {
-		return newMetaSequenceFromTuples(ms.Kind(), ms.treeLevel()-1, metaItems, ms.vrw)
+	if level > 1 {
+		var metaItems []metaTuple
+		for _, seq := range output {
+			metaItems = append(metaItems, seq.(metaSequence).tuples()...)
+		}
+		return newMetaSequenceFromTuples(ms.Kind(), level-1, metaItems, ms.vrw)
 	}
 
 	switch ms.Kind() {
 	case ListKind:
+		var valueItems []Value
+		for _, seq := range output {
+			valueItems = append(valueItems, seq.(listLeafSequence).values()...)
+		}
 		return newListLeafSequence(ms.vrw, valueItems...)
 	case MapKind:
-		return newMapLeafSequence(ms.vrw, mapItems...)
+		var valueItems []mapEntry
+		for _, seq := range output {
+			valueItems = append(valueItems, seq.(mapLeafSequence).entries()...)
+		}
+		return newMapLeafSequence(ms.vrw, valueItems...)
 	case SetKind:
+		var valueItems []Value
+		for _, seq := range output {
+			valueItems = append(valueItems, seq.(setLeafSequence).values()...)
+		}
 		return newSetLeafSequence(ms.vrw, valueItems...)
 	}
+
 	panic("unreachable")
 }
 
