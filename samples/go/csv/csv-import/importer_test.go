@@ -49,14 +49,15 @@ func (s *testSuite) TearDownTest() {
 }
 
 func writeCSV(w io.Writer) {
-	writeCSVWithHeader(w, "year,a,b,c\n")
+	writeCSVWithHeader(w, "year,a,b,c\n", 0)
 }
 
-func writeCSVWithHeader(w io.Writer, header string) {
+func writeCSVWithHeader(w io.Writer, header string, startingValue int) {
 	_, err := io.WriteString(w, header)
 	d.Chk.NoError(err)
 	for i := 0; i < TEST_DATA_SIZE; i++ {
-		_, err = io.WriteString(w, fmt.Sprintf("%d,a%d,%d,%d\n", TEST_YEAR+i%3, i, i, i*2))
+		j := i + startingValue
+		_, err = io.WriteString(w, fmt.Sprintf("%d,a%d,%d,%d\n", TEST_YEAR+j%3, j, j, j*2))
 		d.Chk.NoError(err)
 	}
 }
@@ -108,6 +109,24 @@ func (s *testSuite) validateNestedMap(vrw types.ValueReadWriter, m types.Map) {
 	}
 }
 
+func (s *testSuite) validateColumnar(vrw types.ValueReadWriter, str types.Struct, reps int) {
+	s.Equal("Columnar", str.Name())
+
+	lists := map[string]types.List{}
+	for _, nm := range []string{"year", "a", "b", "c"} {
+		l := str.Get(nm).(types.Ref).TargetValue(vrw).(types.List)
+		s.Equal(uint64(reps*TEST_DATA_SIZE), l.Len())
+		lists[nm] = l
+	}
+
+	for i := 0; i < reps*TEST_DATA_SIZE; i++ {
+		s.Equal(types.Number(TEST_YEAR+i%3), lists["year"].Get(uint64(i)))
+		s.Equal(types.String(fmt.Sprintf("a%d", i)), lists["a"].Get(uint64(i)))
+		s.Equal(types.Number(i), lists["b"].Get(uint64(i)))
+		s.Equal(types.Number(i*2), lists["c"].Get(uint64(i)))
+	}
+}
+
 func (s *testSuite) TestCSVImporter() {
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
@@ -127,7 +146,7 @@ func (s *testSuite) TestCSVImporterLowercase() {
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
 	defer input.Close()
-	writeCSVWithHeader(input, "YeAr,a,B,c\n")
+	writeCSVWithHeader(input, "YeAr,a,B,c\n", 0)
 	defer os.Remove(input.Name())
 
 	setName := "csv"
@@ -148,7 +167,7 @@ func (s *testSuite) TestCSVImporterLowercaseDuplicate() {
 	input, err := ioutil.TempFile(s.TempDir, "")
 	d.Chk.NoError(err)
 	defer input.Close()
-	writeCSVWithHeader(input, "YeAr,a,B,year\n")
+	writeCSVWithHeader(input, "YeAr,a,B,year\n", 0)
 	defer os.Remove(input.Name())
 
 	setName := "csv"
@@ -237,6 +256,48 @@ func (s *testSuite) TestCSVImporterToNestedMapByName() {
 
 	m := ds.HeadValue().(types.Map)
 	s.validateNestedMap(db, m)
+}
+
+func (s *testSuite) TestCSVImporterToColumnar() {
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--invert", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
+	defer db.Close()
+	ds := db.GetDataset(setName)
+
+	str := ds.HeadValue().(types.Struct)
+	s.validateColumnar(db, str, 1)
+}
+
+func (s *testSuite) TestCSVImporterToColumnarAppend() {
+	setName := "csv"
+	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--invert", "--column-types", TEST_FIELDS, s.tmpFileName, dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	input, err := ioutil.TempFile(s.TempDir, "")
+	d.Chk.NoError(err)
+	defer input.Close()
+	writeCSVWithHeader(input, "year,a,b,c\n", 100)
+	defer os.Remove(input.Name())
+
+	stdout, stderr = s.MustRun(main, []string{"--no-progress", "--invert", "--append", "--column-types", TEST_FIELDS, input.Name(), dataspec})
+	s.Equal("", stdout)
+	s.Equal("", stderr)
+
+	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
+	defer os.RemoveAll(s.DBDir)
+	defer db.Close()
+	ds := db.GetDataset(setName)
+
+	str := ds.HeadValue().(types.Struct)
+	s.validateColumnar(db, str, 2)
 }
 
 func (s *testSuite) TestCSVImporterWithPipe() {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -45,7 +46,10 @@ func main() {
 	noProgress := flag.Bool("no-progress", false, "prevents progress from being output if true")
 	destType := flag.String("dest-type", "list", "the destination type to import to. can be 'list' or 'map:<pk>', where <pk> is a list of comma-delimited column headers or indexes (0-based) used to uniquely identify a row")
 	skipRecords := flag.Uint("skip-records", 0, "number of records to skip at beginning of file")
+	limit := flag.Uint64("limit-records", math.MaxUint64, "maximum number of records to process")
 	performCommit := flag.Bool("commit", true, "commit the data to head of the dataset (otherwise only write the data to the dataset)")
+	append := flag.Bool("append", false, "append new data to list at head of specified dataset.")
+	invert := flag.Bool("invert", false, "import rows in column major format rather than row major")
 	spec.RegisterCommitMetaFlags(flag.CommandLine)
 	verbose.RegisterVerboseFlags(flag.CommandLine)
 	profile.RegisterProfileFlags(flag.CommandLine)
@@ -67,6 +71,10 @@ func main() {
 		err = errors.New("Cannot specify both <csvfile> and a noms path with -p")
 	case flag.NArg() > 2:
 		err = errors.New("Too many arguments")
+	case strings.HasPrefix(*destType, "map") && *append:
+		err = errors.New("--append is only compatible with list imports")
+	case strings.HasPrefix(*destType, "map") && *invert:
+		err = errors.New("--invert is only compatible with list imports")
 	}
 	d.CheckError(err)
 
@@ -174,15 +182,43 @@ func main() {
 	defer db.Close()
 
 	var value types.Value
-	if dest == destList {
-		value = csv.ReadToList(cr, *name, headers, kinds, db)
+	if dest == destMap {
+		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, db, *limit)
+	} else if *invert {
+		value = csv.ReadToColumnar(cr, *name, headers, kinds, db, *limit)
 	} else {
-		value = csv.ReadToMap(cr, *name, headers, strPks, kinds, db)
+		value = csv.ReadToList(cr, *name, headers, kinds, db, *limit)
 	}
 
 	if *performCommit {
 		meta, err := spec.CreateCommitMetaStruct(ds.Database(), "", "", additionalMetaInfo(filePath, *path), nil)
 		d.CheckErrorNoUsage(err)
+		if *append {
+			if headVal, present := ds.MaybeHeadValue(); present {
+				switch headVal.Kind() {
+				case types.ListKind:
+					l, isList := headVal.(types.List)
+					d.PanicIfFalse(isList)
+					ref := db.WriteValue(value)
+					value = l.Concat(ref.TargetValue(db).(types.List))
+				case types.StructKind:
+					hstr, isStruct := headVal.(types.Struct)
+					d.PanicIfFalse(isStruct)
+					d.PanicIfFalse(hstr.Name() == "Columnar")
+					str := value.(types.Struct)
+					hstr.IterFields(func(fieldname string, v types.Value) {
+						hl := v.(types.Ref).TargetValue(db).(types.List)
+						nl := str.Get(fieldname).(types.Ref).TargetValue(db).(types.List)
+						l := hl.Concat(nl)
+						r := db.WriteValue(l)
+						str = str.Set(fieldname, r)
+					})
+					value = str
+				default:
+					d.Panic("append can only be used with list or columnar")
+				}
+			}
+		}
 		_, err = db.Commit(ds, value, datas.CommitOptions{Meta: meta})
 		if !*noProgress {
 			status.Clear()

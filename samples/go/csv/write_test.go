@@ -98,7 +98,7 @@ func createTestList(s *csvWriteTestSuite) types.List {
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
 	cr, headers := startReadingCsvTestExpectationFile(s)
-	l := ReadToList(cr, TEST_ROW_STRUCT_NAME, headers, typesToKinds(s.fieldTypes), db)
+	l := ReadToList(cr, TEST_ROW_STRUCT_NAME, headers, typesToKinds(s.fieldTypes), db, LIMIT)
 	return l
 }
 
@@ -106,14 +106,14 @@ func createTestMap(s *csvWriteTestSuite) types.Map {
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
 	cr, headers := startReadingCsvTestExpectationFile(s)
-	return ReadToMap(cr, TEST_ROW_STRUCT_NAME, headers, []string{"anid"}, typesToKinds(s.fieldTypes), db)
+	return ReadToMap(cr, TEST_ROW_STRUCT_NAME, headers, []string{"anid"}, typesToKinds(s.fieldTypes), db, LIMIT)
 }
 
 func createTestNestedMap(s *csvWriteTestSuite) types.Map {
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
 	cr, headers := startReadingCsvTestExpectationFile(s)
-	return ReadToMap(cr, TEST_ROW_STRUCT_NAME, headers, []string{"anid", "year"}, typesToKinds(s.fieldTypes), db)
+	return ReadToMap(cr, TEST_ROW_STRUCT_NAME, headers, []string{"anid", "year"}, typesToKinds(s.fieldTypes), db, LIMIT)
 }
 
 func verifyOutput(s *csvWriteTestSuite, r io.Reader) {
