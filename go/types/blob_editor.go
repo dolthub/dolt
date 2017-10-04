@@ -48,7 +48,7 @@ func (be *BlobEditor) Blob() Blob {
 		cc := make(chan *sequenceCursor, 1)
 		curs = append(curs, cc)
 		go func() {
-			cc <- newCursorAtIndex(seq, edit.idx, false)
+			cc <- newCursorAtIndex(seq, edit.idx)
 		}()
 	}
 

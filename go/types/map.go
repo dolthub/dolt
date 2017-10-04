@@ -149,13 +149,13 @@ func (m Map) At(idx uint64) (key, value Value) {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(m.orderedSequence, idx, false)
+	cur := newCursorAtIndex(m.orderedSequence, idx)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(m.orderedSequence, key, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -168,7 +168,7 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 }
 
 func (m Map) Has(key Value) bool {
-	cur := newCursorAtValue(m.orderedSequence, key, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -209,13 +209,13 @@ func (m Map) Iterator() MapIterator {
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(m.orderedSequence, pos, false),
+		cursor: newCursorAtIndex(m.orderedSequence, pos),
 	}
 }
 
 func (m Map) IteratorFrom(key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(m.orderedSequence, key, false, false, false),
+		cursor: newCursorAtValue(m.orderedSequence, key, false, false),
 	}
 }
 
@@ -231,7 +231,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(m.orderedSequence, start, false, false, false)
+	cur := newCursorAtValue(m.orderedSequence, start, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)

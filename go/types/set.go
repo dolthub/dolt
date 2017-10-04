@@ -123,18 +123,12 @@ func (s Set) At(idx uint64) Value {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(s.orderedSequence, idx, false)
+	cur := newCursorAtIndex(s.orderedSequence, idx)
 	return cur.current().(Value)
 }
 
-func (s Set) getCursorAtValue(v Value, readAhead bool) (cur *sequenceCursor, found bool) {
-	cur = newCursorAtValue(s.orderedSequence, v, true, false, readAhead)
-	found = cur.idx < cur.seq.seqLen() && cur.current().(Value).Equals(v)
-	return
-}
-
 func (s Set) Has(v Value) bool {
-	cur := newCursorAtValue(s.orderedSequence, v, false, false, false)
+	cur := newCursorAtValue(s.orderedSequence, v, false, false)
 	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
@@ -163,14 +157,14 @@ func (s Set) Iterator() SetIterator {
 
 func (s Set) IteratorAt(idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(s.orderedSequence, idx, false),
+		cursor: newCursorAtIndex(s.orderedSequence, idx),
 		s:      s,
 	}
 }
 
 func (s Set) IteratorFrom(val Value) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtValue(s.orderedSequence, val, false, false, false),
+		cursor: newCursorAtValue(s.orderedSequence, val, false, false),
 		s:      s,
 	}
 }

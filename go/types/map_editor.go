@@ -60,7 +60,7 @@ func (me *MapEditor) Map() Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.key, true, false, false)
+				cc <- newCursorAtValue(seq, edit.key, true, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)

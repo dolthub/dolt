@@ -78,7 +78,7 @@ func (l List) WalkValues(cb ValueCallback) {
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(l.sequence, idx, false)
+	cur := newCursorAtIndex(l.sequence, idx)
 	return cur.current().(Value)
 }
 
@@ -98,7 +98,7 @@ type listIterFunc func(v Value, index uint64) (stop bool)
 // iteration stops.
 func (l List) Iter(f listIterFunc) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.sequence, idx, false)
+	cur := newCursorAtIndex(l.sequence, idx)
 	cur.iter(func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
@@ -210,7 +210,7 @@ func (l List) Iterator() ListIterator {
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(l.sequence, index, false),
+		newCursorAtIndex(l.sequence, index),
 	}
 }
 

@@ -60,7 +60,7 @@ func (se *SetEditor) Set() Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.value, true, false, false)
+				cc <- newCursorAtValue(seq, edit.value, true, false)
 			}()
 
 			editChan <- edit

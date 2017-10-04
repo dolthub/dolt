@@ -22,12 +22,12 @@ func newMapMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) m
 	return newMetaSequenceFromTuples(MapKind, level, tuples, vrw)
 }
 
-func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool, readAhead bool) *sequenceCursor {
+func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
 		key = newOrderedKey(val)
 	}
-	return newCursorAt(seq, key, forInsertion, last, readAhead)
+	return newCursorAt(seq, key, forInsertion, last, false)
 }
 
 func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool, readAhead bool) *sequenceCursor {
