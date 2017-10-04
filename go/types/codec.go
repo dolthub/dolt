@@ -87,6 +87,18 @@ func (b *binaryNomsReader) skipUint8() {
 	b.offset++
 }
 
+func (b *binaryNomsReader) peekKind() NomsKind {
+	return NomsKind(b.peekUint8())
+}
+
+func (b *binaryNomsReader) readKind() NomsKind {
+	return NomsKind(b.readUint8())
+}
+
+func (b *binaryNomsReader) skipKind() {
+	b.skipUint8()
+}
+
 func (b *binaryNomsReader) readCount() uint64 {
 	v, count := binary.Uvarint(b.buff[b.offset:])
 	b.offset += uint32(count)

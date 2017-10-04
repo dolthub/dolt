@@ -18,7 +18,7 @@ type valueRec struct {
 
 const maxRefCount = 1 << 12 // ~16MB of data
 
-// WalkValues recursively walks over all types. Values reachable from r and calls cb on them.
+// WalkValues recursively walks over all types.Values reachable from r and calls cb on them.
 func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 	visited := hash.HashSet{}
 	refs := map[hash.Hash]bool{}

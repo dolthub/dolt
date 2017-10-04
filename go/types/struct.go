@@ -41,6 +41,16 @@ func skipStruct(dec *valueDecoder) {
 	}
 }
 
+func walkStruct(r *refWalker, cb RefCallback) {
+	r.skipKind()
+	r.skipString() // name
+	count := r.readCount()
+	for i := uint64(0); i < count; i++ {
+		r.skipString()
+		r.walkValue(cb)
+	}
+}
+
 func newStruct(name string, fieldNames []string, values []Value) Struct {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()

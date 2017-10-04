@@ -4,25 +4,26 @@
 
 package types
 
-import (
-	"fmt"
-
-	"github.com/attic-labs/noms/go/d"
-)
+import "github.com/attic-labs/noms/go/d"
 
 type valueDecoder struct {
+	typedBinaryNomsReader
+	vrw ValueReadWriter
+}
+
+// typedBinaryNomsReader provides some functionality for reading and skipping types that is shared by both valueDecoder and refWalker.
+type typedBinaryNomsReader struct {
 	binaryNomsReader
-	vrw        ValueReadWriter
 	validating bool
 }
 
 func newValueDecoder(buff []byte, vrw ValueReadWriter) valueDecoder {
 	nr := binaryNomsReader{buff, 0}
-	return valueDecoder{nr, vrw, false}
+	return valueDecoder{typedBinaryNomsReader{nr, false}, vrw}
 }
 
 func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) valueDecoder {
-	return valueDecoder{nr, vrw, true}
+	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
 }
 
 func (r *valueDecoder) copyString(w nomsWriter) {
@@ -32,86 +33,12 @@ func (r *valueDecoder) copyString(w nomsWriter) {
 	w.writeRaw(r.byteSlice(start, end))
 }
 
-func (r *valueDecoder) peekKind() NomsKind {
-	return NomsKind(r.peekUint8())
-}
-
-func (r *valueDecoder) readKind() NomsKind {
-	return NomsKind(r.readUint8())
-}
-
-func (r *valueDecoder) skipKind() {
-	r.skipUint8()
-}
-
 func (r *valueDecoder) readRef() Ref {
-	return readRef(r)
+	return readRef(&(r.typedBinaryNomsReader))
 }
 
 func (r *valueDecoder) skipRef() {
-	skipRef(r)
-}
-
-func (r *valueDecoder) readType() *Type {
-	t := r.readTypeInner(map[string]*Type{})
-	if r.validating {
-		validateType(t)
-	}
-	return t
-}
-
-func (r *valueDecoder) skipType() {
-	if r.validating {
-		r.readType()
-		return
-	}
-	r.skipTypeInner()
-}
-
-func (r *valueDecoder) readTypeInner(seenStructs map[string]*Type) *Type {
-	k := r.readKind()
-	switch k {
-	case ListKind:
-		return makeCompoundType(ListKind, r.readTypeInner(seenStructs))
-	case MapKind:
-		return makeCompoundType(MapKind, r.readTypeInner(seenStructs), r.readTypeInner(seenStructs))
-	case RefKind:
-		return makeCompoundType(RefKind, r.readTypeInner(seenStructs))
-	case SetKind:
-		return makeCompoundType(SetKind, r.readTypeInner(seenStructs))
-	case StructKind:
-		return r.readStructType(seenStructs)
-	case UnionKind:
-		return r.readUnionType(seenStructs)
-	case CycleKind:
-		name := r.readString()
-		d.PanicIfTrue(name == "") // cycles to anonymous structs are disallowed
-		t, ok := seenStructs[name]
-		d.PanicIfFalse(ok)
-		return t
-	}
-
-	d.PanicIfFalse(IsPrimitiveKind(k))
-	return MakePrimitiveType(k)
-}
-
-func (r *valueDecoder) skipTypeInner() {
-	k := r.readKind()
-	switch k {
-	case ListKind, RefKind, SetKind:
-		r.skipTypeInner()
-	case MapKind:
-		r.skipTypeInner()
-		r.skipTypeInner()
-	case StructKind:
-		r.skipStructType()
-	case UnionKind:
-		r.skipUnionType()
-	case CycleKind:
-		r.skipString()
-	default:
-		d.PanicIfFalse(IsPrimitiveKind(k))
-	}
+	skipRef(&(r.typedBinaryNomsReader))
 }
 
 func (r *valueDecoder) skipBlobLeafSequence() []uint32 {
@@ -271,8 +198,8 @@ func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) []uint32 {
 	offsets := make([]uint32, count+1)
 	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
-		r.skipValue() // ref
-		r.skipValue() // v
+		r.skipRef()
+		r.skipValue()
 		r.skipCount() // numLeaves
 		offsets[i+1] = r.pos()
 	}
@@ -307,7 +234,7 @@ func (r *valueDecoder) readValue() Value {
 		r.skipKind()
 		return r.readType()
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
+		d.Panic("A value instance can never have type %s", k)
 	}
 
 	panic("not reachable")
@@ -341,9 +268,8 @@ func (r *valueDecoder) skipValue() {
 		r.skipKind()
 		r.skipType()
 	case CycleKind, UnionKind, ValueKind:
-		d.Chk.Fail(fmt.Sprintf("A value instance can never have type %s", k))
+		d.Panic("A value instance can never have type %s", k)
 	default:
-		fmt.Println("K", k, k.String())
 		panic("not reachable")
 	}
 }
@@ -406,7 +332,78 @@ func boolToUint32(b bool) uint32 {
 	return 0
 }
 
-func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
+func (r *valueDecoder) readOrderedKey() orderedKey {
+	v := r.readValue()
+	if r, ok := v.(Ref); ok {
+		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
+		return orderedKeyFromHash(r.TargetHash())
+	}
+	return newOrderedKey(v)
+}
+
+func (r *typedBinaryNomsReader) readType() *Type {
+	t := r.readTypeInner(map[string]*Type{})
+	if r.validating {
+		validateType(t)
+	}
+	return t
+}
+
+func (r *typedBinaryNomsReader) skipType() {
+	if r.validating {
+		r.readType()
+		return
+	}
+	r.skipTypeInner()
+}
+
+func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) *Type {
+	k := r.readKind()
+	switch k {
+	case ListKind:
+		return makeCompoundType(ListKind, r.readTypeInner(seenStructs))
+	case MapKind:
+		return makeCompoundType(MapKind, r.readTypeInner(seenStructs), r.readTypeInner(seenStructs))
+	case RefKind:
+		return makeCompoundType(RefKind, r.readTypeInner(seenStructs))
+	case SetKind:
+		return makeCompoundType(SetKind, r.readTypeInner(seenStructs))
+	case StructKind:
+		return r.readStructType(seenStructs)
+	case UnionKind:
+		return r.readUnionType(seenStructs)
+	case CycleKind:
+		name := r.readString()
+		d.PanicIfTrue(name == "") // cycles to anonymous structs are disallowed
+		t, ok := seenStructs[name]
+		d.PanicIfFalse(ok)
+		return t
+	}
+
+	d.PanicIfFalse(IsPrimitiveKind(k))
+	return MakePrimitiveType(k)
+}
+
+func (r *typedBinaryNomsReader) skipTypeInner() {
+	k := r.readKind()
+	switch k {
+	case ListKind, RefKind, SetKind:
+		r.skipTypeInner()
+	case MapKind:
+		r.skipTypeInner()
+		r.skipTypeInner()
+	case StructKind:
+		r.skipStructType()
+	case UnionKind:
+		r.skipUnionType()
+	case CycleKind:
+		r.skipString()
+	default:
+		d.PanicIfFalse(IsPrimitiveKind(k))
+	}
+}
+
+func (r *typedBinaryNomsReader) readStructType(seenStructs map[string]*Type) *Type {
 	name := r.readString()
 	count := r.readCount()
 	fields := make(structTypeFields, count)
@@ -429,7 +426,7 @@ func (r *valueDecoder) readStructType(seenStructs map[string]*Type) *Type {
 	return t
 }
 
-func (r *valueDecoder) skipStructType() {
+func (r *typedBinaryNomsReader) skipStructType() {
 	r.skipString() // name
 	count := r.readCount()
 
@@ -444,7 +441,7 @@ func (r *valueDecoder) skipStructType() {
 	}
 }
 
-func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
+func (r *typedBinaryNomsReader) readUnionType(seenStructs map[string]*Type) *Type {
 	l := r.readCount()
 	ts := make(typeSlice, l)
 	for i := uint64(0); i < l; i++ {
@@ -453,18 +450,9 @@ func (r *valueDecoder) readUnionType(seenStructs map[string]*Type) *Type {
 	return makeCompoundType(UnionKind, ts...)
 }
 
-func (r *valueDecoder) skipUnionType() {
+func (r *typedBinaryNomsReader) skipUnionType() {
 	l := r.readCount()
 	for i := uint64(0); i < l; i++ {
 		r.skipTypeInner()
 	}
-}
-
-func (r *valueDecoder) readOrderedKey() orderedKey {
-	v := r.readValue()
-	if r, ok := v.(Ref); ok {
-		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-		return orderedKeyFromHash(r.TargetHash())
-	}
-	return newOrderedKey(v)
 }

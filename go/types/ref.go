@@ -55,16 +55,16 @@ func writeRefPartsTo(w nomsWriter, targetHash hash.Hash, targetType *Type, heigh
 	w.writeCount(height)
 }
 
-// readRef reads the data provided by a decoder and moves the decoder forward.
-func readRef(dec *valueDecoder) Ref {
+// readRef reads the data provided by a reader and moves the reader forward.
+func readRef(dec *typedBinaryNomsReader) Ref {
 	start := dec.pos()
 	offsets := skipRef(dec)
 	end := dec.pos()
 	return Ref{valueImpl{nil, dec.byteSlice(start, end), offsets}}
 }
 
-// readRef reads the data provided by a decoder and moves the decoder forward.
-func skipRef(dec *valueDecoder) []uint32 {
+// skipRef moves the reader forward, past the data representing the Ref, and returns the offsets of the component parts.
+func skipRef(dec *typedBinaryNomsReader) []uint32 {
 	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = dec.pos()
 	dec.skipKind()

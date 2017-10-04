@@ -66,7 +66,7 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 		for _, h := range absent {
 			c := neededChunks[h]
 			sinkDB.chunkStore().Put(*c)
-			types.DecodeValue(*c, srcDB).WalkRefs(func(r types.Ref) {
+			types.WalkRefs(*c, func(r types.Ref) {
 				if !nextLevel.Has(r.TargetHash()) {
 					uniqueOrdered = append(uniqueOrdered, r.TargetHash())
 					nextLevel.Insert(r.TargetHash())

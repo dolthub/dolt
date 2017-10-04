@@ -61,10 +61,10 @@ func (le *ListEditor) List() List {
 				}
 
 				subEditors = true
-				idx := i
+				idx, val := i, v
 				wg.Add(1)
 				go func() {
-					edit.inserted[idx] = v.Value()
+					edit.inserted[idx] = val.Value()
 					wg.Done()
 				}()
 			}
