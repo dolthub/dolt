@@ -42,7 +42,7 @@ Because Noms is very good at sync, it makes a decent basis for rich, collaborati
 
 The immutable design of Noms enables a full, horizontally scalable OLAP database atop cheap block storage. This separates storage costs from compute costs, so that you only pay for the compute that you use.
 
-#### ClientDB (doc coming soon)
+#### ClientDB (coming someday)
 
 Embed Noms into mobile applications, making it easier to build offline-first, fully synchronizing mobile applications.
 
