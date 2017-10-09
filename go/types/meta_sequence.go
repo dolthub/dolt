@@ -252,13 +252,7 @@ func (ms metaSequence) getItem(idx int) sequenceItem {
 }
 
 func (ms metaSequence) WalkRefs(cb RefCallback) {
-	dec, count := ms.decoderSkipToValues()
-	for i := uint64(0); i < count; i++ {
-		ref := dec.readRef()
-		cb(ref)
-		dec.skipValue() // v
-		dec.skipCount() // numLeaves
-	}
+	walkRefs(ms.valueBytes(), cb)
 }
 
 func (ms metaSequence) typeOf() *Type {

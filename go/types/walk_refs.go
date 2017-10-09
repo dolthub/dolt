@@ -13,7 +13,11 @@ import (
 // are precisely equal to DecodeValue(c).WalkRefs(cb), but this should be much
 // faster.
 func WalkRefs(c chunks.Chunk, cb RefCallback) {
-	rw := newRefWalker(c.Data())
+	walkRefs(c.Data(), cb)
+}
+
+func walkRefs(data []byte, cb RefCallback) {
+	rw := newRefWalker(data)
 	rw.walkValue(cb)
 }
 
@@ -91,9 +95,10 @@ func (r *refWalker) walkMapLeafSequence(cb RefCallback) {
 func (r *refWalker) walkMetaSequence(k NomsKind, level uint64, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkRef(cb)   // ref
-		r.walkValue(cb) // v
-		r.skipCount()   // numLeaves
+		r.walkRef(cb) // ref to child sequence
+		// TODO: The maxValue encoded here can be a scalar or a Hash that's hacked into the encoding as a Ref<Bool>. Calling r.walkValue() here with a no-op callback is a slightly wasteful hack, but until we figure out a better way to share code between refWalker and valueDecoder, it will have to do. BUG 3757
+		r.walkValue(func(r Ref) {}) // max Value in subtree reachable from here
+		r.skipCount()               // numLeaves
 	}
 }
 

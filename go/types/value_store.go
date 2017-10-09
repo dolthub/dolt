@@ -250,8 +250,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 		if !isBuffered {
 			return
 		}
-		pv := DecodeValue(pending, lvs)
-		pv.WalkRefs(func(grandchildRef Ref) {
+		WalkRefs(pending, func(grandchildRef Ref) {
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
 				put(gch, pending)
@@ -329,8 +328,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
-				v := DecodeValue(pending, lvs)
-				v.WalkRefs(func(reachable Ref) {
+				WalkRefs(pending, func(reachable Ref) {
 					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
 						put(reachable.TargetHash(), pending)
 					}

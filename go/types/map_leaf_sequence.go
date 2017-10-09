@@ -81,10 +81,7 @@ func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 }
 
 func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
-	dec, count := ml.decoderSkipToValues()
-	for i := uint64(0); i < count*2; i++ { // * 2 because we have keys and values.
-		dec.readValue().WalkRefs(cb)
-	}
+	walkRefs(ml.valueBytes(), cb)
 }
 
 func (ml mapLeafSequence) entries() mapEntrySlice {

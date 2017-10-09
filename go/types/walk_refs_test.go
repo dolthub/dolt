@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"io"
 	"math/rand"
-	"strconv"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -34,7 +33,9 @@ func TestWalkRefs(t *testing.T) {
 	t.Run("SingleRef", func(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
-			runTest(NewRef(Bool(false)), t)
+			vrw := newTestValueStore()
+			s := NewStruct("", StructData{"n": Number(1)})
+			runTest(NewRef(NewMap(vrw, s, Number(2))), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
 			runTest(ToRefOfValue(NewRef(Bool(false))), t)
@@ -54,7 +55,7 @@ func TestWalkRefs(t *testing.T) {
 	newValueSlice := func(r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
-			vs[i] = String(strconv.FormatUint(r.Uint64(), 10))
+			vs[i] = NewStruct("", StructData{"n": Number(r.Uint64())})
 		}
 		return vs
 	}

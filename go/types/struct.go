@@ -137,9 +137,7 @@ func (s Struct) WalkValues(cb ValueCallback) {
 }
 
 func (s Struct) WalkRefs(cb RefCallback) {
-	s.WalkValues(func(v Value) {
-		v.WalkRefs(cb)
-	})
+	walkRefs(s.valueBytes(), cb)
 }
 
 func (s Struct) typeOf() *Type {
