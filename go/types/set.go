@@ -111,7 +111,7 @@ func (s Set) WalkValues(cb ValueCallback) {
 }
 
 func (s Set) First() Value {
-	cur := newCursorAt(s.orderedSequence, emptyKey, false, false, false)
+	cur := newCursorAt(s.orderedSequence, emptyKey, false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -135,7 +135,7 @@ func (s Set) Has(v Value) bool {
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAt(s.orderedSequence, emptyKey, false, false, false)
+	cur := newCursorAt(s.orderedSequence, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		return cb(v.(Value))
 	})

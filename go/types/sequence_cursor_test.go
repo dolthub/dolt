@@ -113,18 +113,18 @@ func (ts testSequence) asValueImpl() valueImpl {
 }
 
 func newTestSequenceCursor(items []interface{}) *sequenceCursor {
-	parent := newSequenceCursor(nil, testSequence{items}, 0, false)
+	parent := newSequenceCursor(nil, testSequence{items}, 0)
 	items = items[0].([]interface{})
-	return newSequenceCursor(parent, testSequence{items}, 0, false)
+	return newSequenceCursor(parent, testSequence{items}, 0)
 }
 
 // TODO: Convert all tests to use newTestSequenceCursor3.
 func newTestSequenceCursor3(items []interface{}) *sequenceCursor {
-	top := newSequenceCursor(nil, testSequence{items}, 0, false)
+	top := newSequenceCursor(nil, testSequence{items}, 0)
 	items = items[0].([]interface{})
-	middle := newSequenceCursor(top, testSequence{items}, 0, false)
+	middle := newSequenceCursor(top, testSequence{items}, 0)
 	items = items[0].([]interface{})
-	return newSequenceCursor(middle, testSequence{items}, 0, false)
+	return newSequenceCursor(middle, testSequence{items}, 0)
 }
 
 func TestTestCursor(t *testing.T) {

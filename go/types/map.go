@@ -127,7 +127,7 @@ func (m Map) WalkValues(cb ValueCallback) {
 }
 
 func (m Map) firstOrLast(last bool) (Value, Value) {
-	cur := newCursorAt(m.orderedSequence, emptyKey, false, last, false)
+	cur := newCursorAt(m.orderedSequence, emptyKey, false, last)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -183,7 +183,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(m.orderedSequence, emptyKey, false, false, false)
+	cur := newCursorAt(m.orderedSequence, emptyKey, false, false)
 	cur.iter(func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)

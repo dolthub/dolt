@@ -27,17 +27,17 @@ func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bo
 	if val != nil {
 		key = newOrderedKey(val)
 	}
-	return newCursorAt(seq, key, forInsertion, last, false)
+	return newCursorAt(seq, key, forInsertion, last)
 }
 
-func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool, readAhead bool) *sequenceCursor {
+func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		idx := 0
 		if last {
 			idx = -1
 		}
-		cur = newSequenceCursor(cur, seq, idx, readAhead)
+		cur = newSequenceCursor(cur, seq, idx)
 		if key != emptyKey {
 			if !seekTo(cur, key, forInsertion && !seq.isLeaf()) {
 				return cur
