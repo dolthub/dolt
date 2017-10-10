@@ -120,8 +120,7 @@ func (m Map) Value() Value {
 }
 
 func (m Map) WalkValues(cb ValueCallback) {
-	m.IterAll(func(k, v Value) {
-		cb(k)
+	iterAll(m, func(v Value, idx uint64) {
 		cb(v)
 	})
 	return
@@ -222,12 +221,16 @@ func (m Map) IteratorFrom(key Value) MapIterator {
 type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(cb mapIterAllCallback) {
-	cur := newCursorAt(m.orderedSequence, emptyKey, false, false, true)
-	cur.iter(func(v interface{}) bool {
-		entry := v.(mapEntry)
-		cb(entry.key, entry.value)
-		return false
+	var k Value
+	iterAll(m, func(v Value, idx uint64) {
+		if k != nil {
+			cb(k, v)
+			k = nil
+		} else {
+			k = v
+		}
 	})
+	d.PanicIfFalse(k == nil)
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
@@ -247,8 +250,7 @@ func buildMapData(values []Value) mapEntrySlice {
 		return mapEntrySlice{}
 	}
 
-	// Sadly, d.Chk.Equals() costs too much. BUG #83
-	if 0 != len(values)%2 {
+	if len(values)%2 != 0 {
 		d.Panic("Must specify even number of key/value pairs")
 	}
 	kvs := make(mapEntrySlice, len(values)/2)

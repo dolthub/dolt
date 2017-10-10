@@ -33,6 +33,7 @@ type sequence interface {
 	typeOf() *Type
 	valueBytes() []byte
 	valueReadWriter() ValueReadWriter
+	valuesSlice(from, to uint64) []Value
 	WalkRefs(cb RefCallback)
 	writeTo(nomsWriter)
 }

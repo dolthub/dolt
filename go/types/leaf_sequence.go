@@ -72,10 +72,11 @@ func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	if len := seq.Len(); to > len {
 		to = len
 	}
+
 	dec := seq.decoderSkipToIndex(int(from))
-	vs := make([]Value, to-from)
-	for i := from; i < to; i++ {
-		vs[i-from] = dec.readValue()
+	vs := make([]Value, (to-from)*getValuesPerIdx(seq))
+	for i := range vs {
+		vs[i] = dec.readValue()
 	}
 	return vs
 }
@@ -143,4 +144,11 @@ func (seq leafSequence) WalkRefs(cb RefCallback) {
 
 func (seq leafSequence) Len() uint64 {
 	return seq.numLeaves()
+}
+
+func getValuesPerIdx(seq sequence) uint64 {
+	if seq.Kind() == MapKind {
+		return 2
+	}
+	return 1
 }

@@ -69,7 +69,7 @@ func (l List) Value() Value {
 }
 
 func (l List) WalkValues(cb ValueCallback) {
-	l.IterAll(func(v Value, idx uint64) {
+	iterAll(l, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
@@ -113,8 +113,12 @@ type listIterAllFunc func(v Value, index uint64)
 // IterAll iterates over the list and calls f for every element in the list. Unlike Iter there is no
 // way to stop the iteration and all elements are visited.
 func (l List) IterAll(f listIterAllFunc) {
+	iterAll(l, f)
+}
+
+func iterAll(col Collection, f listIterAllFunc) {
 	concurrency := 6
-	vcChan := make(chan chan []Value, concurrency)
+	vcChan := make(chan chan Value, concurrency)
 
 	// Target reading data in |targetBatchBytes| per thread. We don't know how
 	// many bytes each value is, so update |estimatedNumValues| as data is read.
@@ -122,22 +126,24 @@ func (l List) IterAll(f listIterAllFunc) {
 	estimatedNumValues := uint64(1000)
 
 	go func() {
-		for idx, llen := uint64(0), l.Len(); idx < llen; {
+		for idx, l := uint64(0), col.Len(); idx < l; {
 			numValues := atomic.LoadUint64(&estimatedNumValues)
 
 			start := idx
-			blockLength := llen - start
+			blockLength := l - start
 			if blockLength > numValues {
 				blockLength = numValues
 			}
 			idx += blockLength
 
-			vc := make(chan []Value)
+			vc := make(chan Value)
 			vcChan <- vc
 
 			go func() {
-				values := make([]Value, blockLength)
-				numBytes := l.copyReadAhead(values, start)
+				numBytes := iterRange(col, blockLength, start, func(v Value) {
+					vc <- v
+				})
+				close(vc)
 
 				// Adjust the estimated number of values to try to read
 				// |targetBatchBytes| next time.
@@ -145,10 +151,6 @@ func (l List) IterAll(f listIterAllFunc) {
 					scale := float64(targetBatchBytes) / float64(numBytes)
 					atomic.StoreUint64(&estimatedNumValues, uint64(float64(numValues)*scale))
 				}
-
-				// Send |values| to |vc| last so that adjusting |estimatedNumValues|
-				// doesn't block.
-				vc <- values
 			}()
 		}
 		close(vcChan)
@@ -157,46 +159,47 @@ func (l List) IterAll(f listIterAllFunc) {
 	// Ensure read-ahead goroutines can exit, because the `range` below might not
 	// finish if an |f| callback panics.
 	defer func() {
-		for range vcChan {
+		for vc := range vcChan {
+			close(vc)
 		}
 	}()
 
 	i := uint64(0)
 	for vc := range vcChan {
-		for _, v := range <-vc {
+		for v := range vc {
 			f(v, i)
 			i++
 		}
 	}
 }
 
-func (l List) copyReadAhead(out []Value, startIdx uint64) (numBytes uint64) {
-	llen := l.Len()
-	d.PanicIfFalse(startIdx < llen)
+func iterRange(col Collection, blockLength uint64, startIdx uint64, cb func(v Value)) (numBytes uint64) {
+	d.PanicIfTrue(blockLength == 0)
 
-	endIdx := startIdx + uint64(len(out))
-	if endIdx > llen {
-		endIdx = llen
-	}
+	l := col.Len()
+	d.PanicIfFalse(startIdx < l)
 
-	if startIdx == endIdx {
-		return
-	}
+	endIdx := startIdx + blockLength
+	d.PanicIfFalse(endIdx <= l)
 
-	leaves, localStart := LoadLeafNodes([]Collection{l}, startIdx, endIdx)
+	leaves, localStart := LoadLeafNodes([]Collection{col}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
+	numValues := 0
+	valuesPerIdx := getValuesPerIdx(col.asSequence())
 
 	for _, leaf := range leaves {
-		ls := leaf.asSequence().(listLeafSequence)
+		seq := leaf.asSequence()
+		values := seq.valuesSlice(startIdx, endIdx)
+		numValues += len(values)
 
-		values := ls.valuesSlice(startIdx, endIdx)
-		copy(out, values)
-		out = out[len(values):]
+		for _, v := range values {
+			cb(v)
+		}
 
-		endIdx = endIdx - uint64(len(values)) - startIdx
+		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
-		numBytes += uint64(len(ls.buff))
+		numBytes += uint64(len(seq.valueBytes())) // note: should really only include |values|
 	}
 	return
 }
