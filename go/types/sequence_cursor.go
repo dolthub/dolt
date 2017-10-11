@@ -46,16 +46,6 @@ func (cur *sequenceCursor) sync() {
 	cur.seqLen = cur.seq.seqLen()
 }
 
-func (cur *sequenceCursor) preloadChildren() {
-	if cur.childSeqs != nil {
-		return
-	}
-
-	cur.childSeqs = make([]sequence, cur.seq.seqLen())
-	ms := cur.seq.(metaSequence)
-	copy(cur.childSeqs[cur.idx:], ms.getChildren(uint64(cur.idx), uint64(cur.seq.seqLen())))
-}
-
 // getChildSequence retrieves the child at the current cursor position.
 func (cur *sequenceCursor) getChildSequence() sequence {
 	return cur.seq.getChildSequence(cur.idx)

@@ -147,6 +147,22 @@ func (suite *listTestSuite) TestIter() {
 	suite.Equal(endAt, expectIdx)
 }
 
+func (suite *listTestSuite) TestIterRange() {
+	list := suite.col.(List)
+
+	for s := uint64(0); s < 6; s++ {
+		batchSize := list.Len() / (2 << s)
+		expectIdx := uint64(0)
+		for i := uint64(0); i < list.Len(); i += batchSize {
+			list.IterRange(i, i+batchSize, func(v Value, idx uint64) {
+				suite.Equal(expectIdx, idx)
+				expectIdx++
+				suite.Equal(suite.elems[idx], v)
+			})
+		}
+	}
+}
+
 func TestListSuite4K(t *testing.T) {
 	suite.Run(t, newListTestSuite(12, 9, 2, 2))
 }
