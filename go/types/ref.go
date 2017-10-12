@@ -118,10 +118,6 @@ func (r Ref) Value() Value {
 func (r Ref) WalkValues(cb ValueCallback) {
 }
 
-func (r Ref) WalkRefs(cb RefCallback) {
-	cb(r)
-}
-
 func (r Ref) typeOf() *Type {
 	return makeCompoundType(RefKind, r.TargetType())
 }

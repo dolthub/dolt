@@ -138,10 +138,6 @@ func (seq leafSequence) getItem(idx int) sequenceItem {
 	return dec.readValue()
 }
 
-func (seq leafSequence) WalkRefs(cb RefCallback) {
-	walkRefs(seq.valueBytes(), cb)
-}
-
 func (seq leafSequence) Len() uint64 {
 	return seq.numLeaves()
 }

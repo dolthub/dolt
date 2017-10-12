@@ -143,6 +143,10 @@ func (v valueImpl) Less(other Value) bool {
 	return valueLess(v, other)
 }
 
+func (v valueImpl) WalkRefs(cb RefCallback) {
+	walkRefs(v.valueBytes(), cb)
+}
+
 type asValueImpl interface {
 	asValueImpl() valueImpl
 }

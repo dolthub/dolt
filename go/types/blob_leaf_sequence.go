@@ -50,9 +50,6 @@ func (bl blobLeafSequence) getItem(idx int) sequenceItem {
 	return bl.buff[offset]
 }
 
-func (bl blobLeafSequence) WalkRefs(cb RefCallback) {
-}
-
 func (bl blobLeafSequence) typeOf() *Type {
 	return BlobType
 }

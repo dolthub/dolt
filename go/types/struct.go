@@ -136,10 +136,6 @@ func (s Struct) WalkValues(cb ValueCallback) {
 	}
 }
 
-func (s Struct) WalkRefs(cb RefCallback) {
-	walkRefs(s.valueBytes(), cb)
-}
-
 func (s Struct) typeOf() *Type {
 	dec := s.decoder()
 	return readStructTypeOfValue(&dec)

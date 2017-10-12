@@ -255,10 +255,6 @@ func (ms metaSequence) valuesSlice(from, to uint64) []Value {
 	panic("meta sequence")
 }
 
-func (ms metaSequence) WalkRefs(cb RefCallback) {
-	walkRefs(ms.valueBytes(), cb)
-}
-
 func (ms metaSequence) typeOf() *Type {
 	dec, count := ms.decoderSkipToValues()
 	ts := make(typeSlice, count)
