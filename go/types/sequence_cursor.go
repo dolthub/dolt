@@ -9,11 +9,10 @@ import "fmt"
 
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
-	parent    *sequenceCursor
-	seq       sequence
-	idx       int
-	childSeqs []sequence
-	seqLen    int
+	parent *sequenceCursor
+	seq    sequence
+	idx    int
+	seqLen int
 }
 
 // newSequenceCursor creates a cursor on seq positioned at idx.
@@ -26,7 +25,7 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceC
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	return &sequenceCursor{parent, seq, idx, nil, seqLen}
+	return &sequenceCursor{parent, seq, idx, seqLen}
 }
 
 func (cur *sequenceCursor) length() int {
@@ -41,7 +40,6 @@ func (cur *sequenceCursor) getItem(idx int) sequenceItem {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *sequenceCursor) sync() {
 	d.PanicIfFalse(cur.parent != nil)
-	cur.childSeqs = nil
 	cur.seq = cur.parent.getChildSequence()
 	cur.seqLen = cur.seq.seqLen()
 }
@@ -124,7 +122,6 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 		parent = cur.parent.clone()
 	}
 	cl := newSequenceCursor(parent, cur.seq, cur.idx)
-	cl.childSeqs = cur.childSeqs
 	return cl
 }
 
