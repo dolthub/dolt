@@ -67,19 +67,19 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 }
 
 func TestBlobSuite4K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(12, 1, 2, 2))
+	suite.Run(t, newBlobTestSuite(12, 2, 2, 2))
 }
 
 func TestBlobSuite64K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(16, 14, 2, 2))
+	suite.Run(t, newBlobTestSuite(16, 15, 2, 2))
 }
 
 func TestBlobSuite256K(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(18, 59, 2, 2))
+	suite.Run(t, newBlobTestSuite(18, 64, 2, 2))
 }
 
 func TestBlobSuite1M(t *testing.T) {
-	suite.Run(t, newBlobTestSuite(20, 247, 2, 2))
+	suite.Run(t, newBlobTestSuite(20, 245, 2, 2))
 }
 
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...

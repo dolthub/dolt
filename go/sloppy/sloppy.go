@@ -4,7 +4,9 @@
 
 package sloppy
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"github.com/attic-labs/noms/go/d"
+)
 
 const (
 	maxOffsetPOT = uint16(12)
@@ -63,7 +65,7 @@ type Sloppy struct {
 	idx                      int
 	matching                 bool
 	matchOffset, matchLength int
-	table                    [maxTableSize]uint16
+	table                    [maxTableSize]uint32
 }
 
 // New returns a new sloppy encoder which will encode to |f|. If |f| ever
@@ -76,7 +78,7 @@ func New(f func(b byte) bool) *Sloppy {
 		0,
 		false,
 		0, 0,
-		[maxTableSize]uint16{},
+		[maxTableSize]uint32{},
 	}
 }
 
@@ -126,7 +128,7 @@ func (sl *Sloppy) Update(src []byte) {
 		}
 
 		// Store new hashed offset
-		sl.table[nextHash&tableMask] = uint16(sl.idx)
+		sl.table[nextHash&tableMask] = uint32(sl.idx)
 
 		if sl.matching {
 			sl.matchLength++
@@ -143,7 +145,7 @@ func (sl *Sloppy) Reset() {
 	sl.matching = false
 	sl.matchOffset = 0
 	sl.matchLength = 0
-	sl.table = [maxTableSize]uint16{}
+	sl.table = [maxTableSize]uint32{}
 }
 
 // len >= 2^(2 + log2(maxOffset) - log2(maxOffset-off)). IOW, for the first 1/2

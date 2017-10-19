@@ -304,11 +304,11 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 9, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, 4, 2, 2, newNumber))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 16, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
 }
 
 func newNumber(i int) Value {
@@ -414,7 +414,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
 
 	me := NewMap(vs).Edit()
-	for i := 0; i < 4000; i++ {
+	for i := 0; i < 10000; i++ {
 		me.Set(Number(i), newLargeStruct(i))
 	}
 	m := me.Map()
@@ -425,7 +425,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	every := 100
 
 	me = m.Edit()
-	for i := 0; i < 4000; i++ {
+	for i := 0; i < 10000; i++ {
 		if i%every == 0 {
 			k := Number(i)
 			s := me.Get(Number(i)).(Struct)
@@ -442,9 +442,9 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 
 	vs.Commit(vs.Root(), vs.Root())
 
-	assert.Equal(t, uint64(2), NewRef(m).Height())
-	assert.Equal(t, 40, cs.Reads)
-	assert.Equal(t, 16, cs.Writes)
+	assert.Equal(t, uint64(3), NewRef(m).Height())
+	assert.Equal(t, 105, cs.Reads)
+	assert.Equal(t, 62, cs.Writes)
 }
 
 func TestMapInfiniteChunkBug(t *testing.T) {
