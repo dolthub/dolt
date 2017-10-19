@@ -32,7 +32,6 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 	nextRandInt := func(from, to uint64) uint64 {
 		return from + uint64(float64(to-from)*r.Float64())
 	}
-	cr := newCountingReader()
 
 	for i := 0; i < rounds; i++ {
 		b := NewBlob(vs)
@@ -61,7 +60,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 				be.Seek(int64(idx), 0)
 
 				l := nextRandInt(0, maxInsertCount)
-				data, err := ioutil.ReadAll(&io.LimitedReader{cr, int64(l)})
+				data, err := ioutil.ReadAll(&io.LimitedReader{r, int64(l)})
 				assert.NoError(t, err)
 				f.Write(data)
 				be.Write(data)
