@@ -104,6 +104,11 @@ type Database interface {
 	// implementation-dependent, and impls may return nil
 	Stats() interface{}
 
+	// StatsSummary may return a string containing summarized statistics for
+	// the ChunkStore that backs this Database. It must return "Unsupported"
+	// if this operation is not supported.
+	StatsSummary() string
+
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by

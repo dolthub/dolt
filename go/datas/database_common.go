@@ -51,6 +51,10 @@ func (db *database) Stats() interface{} {
 	return db.ChunkStore().Stats()
 }
 
+func (db *database) StatsSummary() string {
+	return db.ChunkStore().StatsSummary()
+}
+
 func (db *database) Datasets() types.Map {
 	rootHash := db.rt.Root()
 	if rootHash.IsEmpty() {

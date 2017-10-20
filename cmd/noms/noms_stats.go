@@ -20,7 +20,7 @@ func nomsStats(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandl
 
 	return stats, func(input string) int {
 		cfg := config.NewResolver()
-		store, err := cfg.GetChunkStore(*database)
+		store, err := cfg.GetDatabase(*database)
 		d.CheckError(err)
 		defer store.Close()
 
