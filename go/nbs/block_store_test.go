@@ -105,6 +105,19 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	}
 }
 
+func (suite *BlockStoreSuite) TestChunkStoreStatsSummary() {
+	input1, input2 := []byte("abc"), []byte("def")
+	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
+	suite.store.Put(c1)
+	suite.store.Put(c2)
+
+	suite.store.Commit(c1.Hash(), suite.store.Root()) // Commit writes
+
+	summary := suite.store.StatsSummary()
+	suite.Contains(summary, c1.Hash().String())
+	suite.NotEqual("Unsupported", summary)
+}
+
 func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
 	rand.Read(input1)

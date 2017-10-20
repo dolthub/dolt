@@ -49,6 +49,10 @@ func (nb nullBlockStore) Stats() interface{} {
 	return nil
 }
 
+func (nb nullBlockStore) StatsSummary() string {
+	return "Unsupported"
+}
+
 func (nb nullBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }

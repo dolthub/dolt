@@ -183,6 +183,10 @@ func (ms *MemoryStoreView) Stats() interface{} {
 	return nil
 }
 
+func (ms *MemoryStoreView) StatsSummary() string {
+	return "Unsupported"
+}
+
 func (ms *MemoryStoreView) Close() error {
 	return nil
 }

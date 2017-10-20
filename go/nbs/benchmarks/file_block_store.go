@@ -58,6 +58,10 @@ func (fb fileBlockStore) Stats() interface{} {
 	return nil
 }
 
+func (fb fileBlockStore) StatsSummary() string {
+	return "Unsupported"
+}
+
 func (fb fileBlockStore) Root() hash.Hash {
 	return hash.Hash{}
 }

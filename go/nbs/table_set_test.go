@@ -132,3 +132,19 @@ func TestTableSetRebase(t *testing.T) {
 	ts = ts.Rebase(fullTS.ToSpecs(), nil)
 	assert.Equal(4, ts.Size())
 }
+
+func TestTableSetPhysicalLen(t *testing.T) {
+	assert := assert.New(t)
+	ts := newFakeTableSet()
+	assert.Empty(ts.ToSpecs())
+	mt := newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
+	ts = ts.Prepend(mt, &Stats{})
+
+	mt = newMemTable(testMemTableSize)
+	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
+	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
+	ts = ts.Prepend(mt, &Stats{})
+
+	assert.True(ts.physicalLen() > indexSize(ts.count()))
+}

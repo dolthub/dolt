@@ -93,6 +93,13 @@ func newHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
+	serv.GET(
+		constants.StatsPath,
+		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+			cs.Rebase()
+			HandleStats(w, req, ps, cs)
+		},
+	)
 	return newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
 }
 
@@ -170,6 +177,15 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
 
 	suite.Equal(3, suite.serverCS.Writes)
+}
+
+func (suite *HTTPChunkStoreSuite) TestStats() {
+	suite.http.Put(types.EncodeValue(types.String("abc")))
+	suite.http.Put(types.EncodeValue(types.String("def")))
+
+	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+
+	suite.NotEmpty(suite.http.StatsSummary())
 }
 
 func (suite *HTTPChunkStoreSuite) TestRebase() {

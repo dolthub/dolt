@@ -308,6 +308,10 @@ func (cs *chunkStore) Stats() interface{} {
 	return nil
 }
 
+func (cs *chunkStore) StatsSummary() string {
+	return "Unsupported"
+}
+
 func (cs *chunkStore) Close() error {
 	return cs.node.Close()
 }

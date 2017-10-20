@@ -116,6 +116,23 @@ func (hcs *httpChunkStore) Stats() interface{} {
 	return nil
 }
 
+func (hcs *httpChunkStore) StatsSummary() string {
+	// GET http://<host>/stats. Response will be string containing a summary of database stats.
+	u := *hcs.host
+	u.Path = httprouter.CleanPath(hcs.host.Path + constants.StatsPath)
+	res, err := hcs.httpClient.Do(newRequest("GET", hcs.auth, u.String(), nil, nil))
+	d.PanicIfError(err)
+	defer closeResponse(res.Body)
+
+	if http.StatusOK != res.StatusCode {
+		d.Panic("Unexpected response: %s", http.StatusText(res.StatusCode))
+	}
+	data, err := ioutil.ReadAll(res.Body)
+	d.PanicIfError(err)
+
+	return string(data)
+}
+
 func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
 		hcs.cacheMu.RLock()

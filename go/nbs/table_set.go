@@ -127,6 +127,18 @@ func (ts tableSet) uncompressedLen() uint64 {
 	return f(ts.novel) + f(ts.upstream)
 }
 
+func (ts tableSet) physicalLen() uint64 {
+	f := func(css chunkSources) (data uint64) {
+		for _, haver := range css {
+			index := haver.index()
+			data += indexSize(index.chunkCount)
+			data += index.offsets[index.chunkCount-1] + (uint64(index.lengths[index.chunkCount-1]))
+		}
+		return
+	}
+	return f(ts.novel) + f(ts.upstream)
+}
+
 // Size returns the number of tables in this tableSet.
 func (ts tableSet) Size() int {
 	return len(ts.novel) + len(ts.upstream)

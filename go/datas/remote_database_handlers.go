@@ -89,6 +89,8 @@ var (
 
 	HandleGraphQL = createHandler(handleGraphQL, false)
 
+	HandleStats = createHandler(handleStats, false)
+
 	writeValueConcurrency = runtime.NumCPU()
 )
 
@@ -357,6 +359,14 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 		d.Panic("Expected get method.")
 	}
 	fmt.Fprintf(w, "%v", rt.Root().String())
+	w.Header().Add("content-type", "text/plain")
+}
+
+func handleStats(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
+	if req.Method != "GET" {
+		d.Panic("Expected get method.")
+	}
+	fmt.Fprint(w, cs.StatsSummary())
 	w.Header().Add("content-type", "text/plain")
 }
 

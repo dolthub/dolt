@@ -13,4 +13,5 @@ const (
 	BasePath       = "/"
 
 	GraphQLPath = "/graphql/"
+	StatsPath   = "/stats/"
 )

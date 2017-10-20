@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
+	humanize "github.com/dustin/go-humanize"
 )
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
@@ -469,4 +470,11 @@ func (nbs *NomsBlockStore) Close() (err error) {
 
 func (nbs *NomsBlockStore) Stats() interface{} {
 	return *nbs.stats
+}
+
+func (nbs *NomsBlockStore) StatsSummary() string {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, nbs.tables.count(), humanize.Bytes(nbs.tables.physicalLen()))
 }
