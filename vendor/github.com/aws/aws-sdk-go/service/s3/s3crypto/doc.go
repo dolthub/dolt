@@ -58,9 +58,9 @@ the wrap as `AESWrap` then it'll use that wrap algorithm. This is also true for 
 For encryption adding a custom content cipher builder and key handler will allow for encryption of custom
 defined ciphers.
 
-	// Our customer wrap algorith, AESWrap
+	// Our wrap algorithm, AESWrap
 	handler := NewAESWrap(key, iv)
-	// Our customer content cipher builder, AESCTRContentCipherBuilder
+	// Our content cipher builder, AESCTRContentCipherBuilder
 	svc := s3crypto.NewEncryptionClient(sess, NewAESCTRContentCipherBuilder(handler))
 */
 package s3crypto

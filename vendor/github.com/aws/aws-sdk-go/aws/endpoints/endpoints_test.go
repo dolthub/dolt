@@ -84,6 +84,22 @@ func TestEnumRegionServices(t *testing.T) {
 	}
 }
 
+func TestEnumServiceRegions(t *testing.T) {
+	p := testPartitions[0].Partition()
+
+	rs := p.Services()["service1"].Regions()
+	if e, a := 2, len(rs); e != a {
+		t.Errorf("expect %d regions, got %d", e, a)
+	}
+
+	if _, ok := rs["us-east-1"]; !ok {
+		t.Errorf("expect region to be found")
+	}
+	if _, ok := rs["us-west-2"]; !ok {
+		t.Errorf("expect region to be found")
+	}
+}
+
 func TestEnumServicesEndpoints(t *testing.T) {
 	p := testPartitions[0].Partition()
 
@@ -240,5 +256,80 @@ func TestOptionsSet(t *testing.T) {
 
 	if actual != expect {
 		t.Errorf("expect %v options got %v", expect, actual)
+	}
+}
+
+func TestRegionsForService(t *testing.T) {
+	ps := DefaultPartitions()
+
+	var expect map[string]Region
+	var serviceID string
+	for _, s := range ps[0].Services() {
+		expect = s.Regions()
+		serviceID = s.ID()
+		if len(expect) > 0 {
+			break
+		}
+	}
+
+	actual, ok := RegionsForService(ps, ps[0].ID(), serviceID)
+	if !ok {
+		t.Fatalf("expect regions to be found, was not")
+	}
+
+	if len(actual) == 0 {
+		t.Fatalf("expect service %s to have regions", serviceID)
+	}
+	if e, a := len(expect), len(actual); e != a {
+		t.Fatalf("expect %d regions, got %d", e, a)
+	}
+
+	for id, r := range actual {
+		if e, a := id, r.ID(); e != a {
+			t.Errorf("expect %s region id, got %s", e, a)
+		}
+		if _, ok := expect[id]; !ok {
+			t.Errorf("expect %s region to be found", id)
+		}
+	}
+}
+
+func TestRegionsForService_NotFound(t *testing.T) {
+	ps := testPartitions.Partitions()
+
+	actual, ok := RegionsForService(ps, ps[0].ID(), "service-not-exists")
+	if ok {
+		t.Fatalf("expect no regions to be found, but were")
+	}
+	if len(actual) != 0 {
+		t.Errorf("expect no regions, got %v", actual)
+	}
+}
+
+func TestPartitionForRegion(t *testing.T) {
+	ps := DefaultPartitions()
+	expect := ps[len(ps)%2]
+
+	var regionID string
+	for id := range expect.Regions() {
+		regionID = id
+		break
+	}
+
+	actual, ok := PartitionForRegion(ps, regionID)
+	if !ok {
+		t.Fatalf("expect partition to be found")
+	}
+	if e, a := expect.ID(), actual.ID(); e != a {
+		t.Errorf("expect %s partition, got %s", e, a)
+	}
+}
+
+func TestPartitionForRegion_NotFound(t *testing.T) {
+	ps := DefaultPartitions()
+
+	actual, ok := PartitionForRegion(ps, "regionNotExists")
+	if ok {
+		t.Errorf("expect no partition to be found, got %v", actual)
 	}
 }

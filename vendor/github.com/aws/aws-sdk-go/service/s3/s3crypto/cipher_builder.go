@@ -15,7 +15,7 @@ type ContentCipher interface {
 	GetCipherData() CipherData
 }
 
-// CipherData is used for content encryption. It used for storing the
+// CipherData is used for content encryption. It is used for storing the
 // metadata of the encrypted content.
 type CipherData struct {
 	Key                 []byte
@@ -26,4 +26,6 @@ type CipherData struct {
 	MaterialDescription MaterialDescription
 	// EncryptedKey should be populated when calling GenerateCipherData
 	EncryptedKey []byte
+
+	Padder Padder
 }

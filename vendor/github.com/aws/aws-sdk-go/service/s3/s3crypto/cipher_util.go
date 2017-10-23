@@ -3,6 +3,7 @@ package s3crypto
 import (
 	"encoding/base64"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 )
@@ -32,6 +33,9 @@ func (client *DecryptionClient) wrapFromEnvelope(env Envelope) (CipherDataDecryp
 // the CEK algorithm consiting of AES GCM with no padding.
 const AESGCMNoPadding = "AES/GCM/NoPadding"
 
+// AESCBC is the string constant that signifies the AES CBC algorithm cipher.
+const AESCBC = "AES/CBC"
+
 func (client *DecryptionClient) cekFromEnvelope(env Envelope, decrypter CipherDataDecrypter) (ContentCipher, error) {
 	f, ok := client.CEKRegistry[env.CEKAlg]
 	if !ok || f == nil {
@@ -57,10 +61,28 @@ func (client *DecryptionClient) cekFromEnvelope(env Envelope, decrypter CipherDa
 	}
 
 	cd := CipherData{
-		Key: key,
-		IV:  iv,
+		Key:          key,
+		IV:           iv,
+		CEKAlgorithm: env.CEKAlg,
+		Padder:       client.getPadder(env.CEKAlg),
 	}
 	return f(cd)
+}
+
+// getPadder will return an unpadder with checking the cek algorithm specific padder.
+// If there wasn't a cek algorithm specific padder, we check the padder itself.
+// We return a no unpadder, if no unpadder was found. This means any customization
+// either contained padding within the cipher implementation, and to maintain
+// backwards compatility we will simply not unpad anything.
+func (client *DecryptionClient) getPadder(cekAlg string) Padder {
+	padder, ok := client.PadderRegistry[cekAlg]
+	if !ok {
+		padder, ok = client.PadderRegistry[cekAlg[strings.LastIndex(cekAlg, "/")+1:]]
+		if !ok {
+			return NoPadder
+		}
+	}
+	return padder
 }
 
 func encodeMeta(reader hashReader, cd CipherData) (Envelope, error) {

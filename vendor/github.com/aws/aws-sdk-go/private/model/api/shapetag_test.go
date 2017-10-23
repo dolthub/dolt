@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/private/model/api"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestShapeTagJoin(t *testing.T) {
@@ -20,6 +19,10 @@ func TestShapeTagJoin(t *testing.T) {
 
 	o := s.Join(" ")
 	o2 := s.String()
-	assert.Equal(t, expected, o)
-	assert.Equal(t, expected, o2)
+	if expected != o {
+		t.Errorf("Expected %s, but received %s", expected, o)
+	}
+	if expected != o2 {
+		t.Errorf("Expected %s, but received %s", expected, o2)
+	}
 }

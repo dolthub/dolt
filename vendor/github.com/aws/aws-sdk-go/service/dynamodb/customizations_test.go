@@ -7,10 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/awstesting/unit"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -46,46 +45,88 @@ func mockCRCResponse(svc *dynamodb.DynamoDB, status int, body, crc string) (req 
 
 func TestDefaultRetryRules(t *testing.T) {
 	d := dynamodb.New(unit.Session, &aws.Config{MaxRetries: aws.Int(-1)})
-	assert.Equal(t, d.MaxRetries(), 10)
+	if e, a := 10, d.MaxRetries(); e != a {
+		t.Errorf("expect %d max retries, got %d", e, a)
+	}
 }
 
 func TestCustomRetryRules(t *testing.T) {
 	d := dynamodb.New(unit.Session, &aws.Config{MaxRetries: aws.Int(2)})
-	assert.Equal(t, d.MaxRetries(), 2)
+	if e, a := 2, d.MaxRetries(); e != a {
+		t.Errorf("expect %d max retries, got %d", e, a)
+	}
+}
+
+type testCustomRetryer struct {
+	client.DefaultRetryer
+}
+
+func TestCustomRetry_FromConfig(t *testing.T) {
+	d := dynamodb.New(unit.Session, &aws.Config{
+		Retryer: testCustomRetryer{client.DefaultRetryer{NumMaxRetries: 9}},
+	})
+
+	if _, ok := d.Retryer.(testCustomRetryer); !ok {
+		t.Errorf("expect retryer to be testCustomRetryer, but got %T", d.Retryer)
+	}
+
+	if e, a := 9, d.MaxRetries(); e != a {
+		t.Errorf("expect %d max retries from custom retryer, got %d", e, a)
+	}
 }
 
 func TestValidateCRC32NoHeaderSkip(t *testing.T) {
 	req := mockCRCResponse(db, 200, "{}", "")
-	assert.NoError(t, req.Error)
+	if req.Error != nil {
+		t.Errorf("expect no error, got %v", req.Error)
+	}
 }
 
 func TestValidateCRC32InvalidHeaderSkip(t *testing.T) {
 	req := mockCRCResponse(db, 200, "{}", "ABC")
-	assert.NoError(t, req.Error)
+	if req.Error != nil {
+		t.Errorf("expect no error, got %v", req.Error)
+	}
 }
 
 func TestValidateCRC32AlreadyErrorSkip(t *testing.T) {
 	req := mockCRCResponse(db, 400, "{}", "1234")
-	assert.Error(t, req.Error)
+	if req.Error == nil {
+		t.Fatalf("expect error, but got none")
+	}
 
-	assert.NotEqual(t, "CRC32CheckFailed", req.Error.(awserr.Error).Code())
+	aerr := req.Error.(awserr.Error)
+	if aerr.Code() == "CRC32CheckFailed" {
+		t.Errorf("expect error code not to be CRC32CheckFailed")
+	}
 }
 
 func TestValidateCRC32IsValid(t *testing.T) {
 	req := mockCRCResponse(db, 200, `{"TableNames":["A"]}`, "3090163698")
-	assert.NoError(t, req.Error)
+	if req.Error != nil {
+		t.Fatalf("expect no error, got %v", req.Error)
+	}
 
 	// CRC check does not affect output parsing
 	out := req.Data.(*dynamodb.ListTablesOutput)
-	assert.Equal(t, "A", *out.TableNames[0])
+	if e, a := "A", *out.TableNames[0]; e != a {
+		t.Errorf("expect %q table name, got %q", e, a)
+	}
 }
 
 func TestValidateCRC32DoesNotMatch(t *testing.T) {
 	req := mockCRCResponse(db, 200, "{}", "1234")
-	assert.Error(t, req.Error)
+	if req.Error == nil {
+		t.Fatalf("expect error, but got none")
+	}
 
-	assert.Equal(t, "CRC32CheckFailed", req.Error.(awserr.Error).Code())
-	assert.Equal(t, 2, req.RetryCount)
+	aerr := req.Error.(awserr.Error)
+	if e, a := "CRC32CheckFailed", aerr.Code(); e != a {
+		t.Errorf("expect %s error code, got %s", e, a)
+	}
+	if e, a := 2, req.RetryCount; e != a {
+		t.Errorf("expect %d retry count, got %d", e, a)
+	}
 }
 
 func TestValidateCRC32DoesNotMatchNoComputeChecksum(t *testing.T) {
@@ -96,11 +137,17 @@ func TestValidateCRC32DoesNotMatchNoComputeChecksum(t *testing.T) {
 	svc.Handlers.Send.Clear() // mock sending
 
 	req := mockCRCResponse(svc, 200, `{"TableNames":["A"]}`, "1234")
-	assert.NoError(t, req.Error)
+	if req.Error != nil {
+		t.Fatalf("expect no error, got %v", req.Error)
+	}
 
-	assert.Equal(t, 0, int(req.RetryCount))
+	if e, a := 0, req.RetryCount; e != a {
+		t.Errorf("expect %d retry count, got %d", e, a)
+	}
 
 	// CRC check disabled. Does not affect output parsing
 	out := req.Data.(*dynamodb.ListTablesOutput)
-	assert.Equal(t, "A", *out.TableNames[0])
+	if e, a := "A", *out.TableNames[0]; e != a {
+		t.Errorf("expect %q table name, got %q", e, a)
+	}
 }

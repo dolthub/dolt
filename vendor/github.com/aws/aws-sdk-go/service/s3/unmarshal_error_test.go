@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -19,7 +17,7 @@ import (
 
 type testErrorCase struct {
 	RespFn           func() *http.Response
-	ReqID            string
+	ReqID, HostID    string
 	Code, Msg        string
 	WithoutStatusMsg bool
 }
@@ -28,92 +26,122 @@ var testUnmarshalCases = []testErrorCase{
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    301,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 301,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: -1,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "BucketRegionError", Msg: "incorrect region, the bucket is not in 'mock-region' region",
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "BucketRegionError", Msg: "incorrect region, the bucket is not in 'mock-region' region",
 	},
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    403,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 403,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: 0,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "Forbidden", Msg: "Forbidden",
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "Forbidden", Msg: "Forbidden",
 	},
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    400,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 400,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: 0,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "BadRequest", Msg: "Bad Request",
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "BadRequest", Msg: "Bad Request",
 	},
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    404,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 404,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: 0,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "NotFound", Msg: "Not Found",
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "NotFound", Msg: "Not Found",
 	},
 	{
+		// SDK only reads request ID and host ID from the header. The values
+		// in message body are ignored.
 		RespFn: func() *http.Response {
-			body := `<Error><Code>SomeException</Code><Message>Exception message</Message></Error>`
+			body := `<Error><Code>SomeException</Code><Message>Exception message</Message><RequestId>ignored-request-id</RequestId><HostId>ignored-host-id</HostId></Error>`
 			return &http.Response{
-				StatusCode:    500,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 500,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"taken-request-id"},
+					"X-Amz-Id-2":       []string{"taken-host-id"},
+				},
 				Body:          ioutil.NopCloser(strings.NewReader(body)),
 				ContentLength: int64(len(body)),
 			}
 		},
-		ReqID: "abc123",
-		Code:  "SomeException", Msg: "Exception message",
+		ReqID:  "taken-request-id",
+		HostID: "taken-host-id",
+		Code:   "SomeException", Msg: "Exception message",
 	},
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    404,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 404,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: -1,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "NotFound", Msg: "Not Found", WithoutStatusMsg: true,
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "NotFound", Msg: "Not Found", WithoutStatusMsg: true,
 	},
 	{
 		RespFn: func() *http.Response {
 			return &http.Response{
-				StatusCode:    404,
-				Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+				StatusCode: 404,
+				Header: http.Header{
+					"X-Amz-Request-Id": []string{"abc123"},
+					"X-Amz-Id-2":       []string{"321cba"},
+				},
 				Body:          ioutil.NopCloser(bytes.NewReader(nil)),
 				ContentLength: -1,
 			}
 		},
-		ReqID: "abc123",
-		Code:  "NotFound", Msg: "Not Found",
+		ReqID:  "abc123",
+		HostID: "321cba",
+		Code:   "NotFound", Msg: "Not Found",
 	},
 }
 
 func TestUnmarshalError(t *testing.T) {
-	for _, c := range testUnmarshalCases {
+	for i, c := range testUnmarshalCases {
 		s := s3.New(unit.Session)
 		s.Handlers.Send.Clear()
 		s.Handlers.Send.PushBack(func(r *request.Request) {
@@ -128,10 +156,21 @@ func TestUnmarshalError(t *testing.T) {
 			Bucket: aws.String("bucket"), ACL: aws.String("public-read"),
 		})
 
-		assert.Error(t, err)
-		assert.Equal(t, c.Code, err.(awserr.Error).Code())
-		assert.Equal(t, c.Msg, err.(awserr.Error).Message())
-		assert.Equal(t, c.ReqID, err.(awserr.RequestFailure).RequestID())
+		if err == nil {
+			t.Fatalf("%d, expected error, got nil", i)
+		}
+		if e, a := c.Code, err.(awserr.Error).Code(); e != a {
+			t.Errorf("%d, Code: expect %s, got %s", i, e, a)
+		}
+		if e, a := c.Msg, err.(awserr.Error).Message(); e != a {
+			t.Errorf("%d, Message: expect %s, got %s", i, e, a)
+		}
+		if e, a := c.ReqID, err.(awserr.RequestFailure).RequestID(); e != a {
+			t.Errorf("%d, RequestID: expect %s, got %s", i, e, a)
+		}
+		if e, a := c.HostID, err.(s3.RequestFailure).HostID(); e != a {
+			t.Errorf("%d, HostID: expect %s, got %s", i, e, a)
+		}
 	}
 }
 
@@ -148,8 +187,11 @@ func Test200NoErrorUnmarshalError(t *testing.T) {
 	s.Handlers.Send.Clear()
 	s.Handlers.Send.PushBack(func(r *request.Request) {
 		r.HTTPResponse = &http.Response{
-			StatusCode:    200,
-			Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+			StatusCode: 200,
+			Header: http.Header{
+				"X-Amz-Request-Id": []string{"abc123"},
+				"X-Amz-Id-2":       []string{"321cba"},
+			},
 			Body:          ioutil.NopCloser(strings.NewReader(completeMultiResp)),
 			ContentLength: -1,
 		}
@@ -163,7 +205,9 @@ func Test200NoErrorUnmarshalError(t *testing.T) {
 		}},
 	})
 
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatalf("expect no error, got %v", err)
+	}
 }
 
 const completeMultiErrResp = `<Error><Code>SomeException</Code><Message>Exception message</Message></Error>`
@@ -173,8 +217,11 @@ func Test200WithErrorUnmarshalError(t *testing.T) {
 	s.Handlers.Send.Clear()
 	s.Handlers.Send.PushBack(func(r *request.Request) {
 		r.HTTPResponse = &http.Response{
-			StatusCode:    200,
-			Header:        http.Header{"X-Amz-Request-Id": []string{"abc123"}},
+			StatusCode: 200,
+			Header: http.Header{
+				"X-Amz-Request-Id": []string{"abc123"},
+				"X-Amz-Id-2":       []string{"321cba"},
+			},
 			Body:          ioutil.NopCloser(strings.NewReader(completeMultiErrResp)),
 			ContentLength: -1,
 		}
@@ -188,9 +235,19 @@ func Test200WithErrorUnmarshalError(t *testing.T) {
 		}},
 	})
 
-	assert.Error(t, err)
-
-	assert.Equal(t, "SomeException", err.(awserr.Error).Code())
-	assert.Equal(t, "Exception message", err.(awserr.Error).Message())
-	assert.Equal(t, "abc123", err.(awserr.RequestFailure).RequestID())
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if e, a := "SomeException", err.(awserr.Error).Code(); e != a {
+		t.Errorf("Code: expect %s, got %s", e, a)
+	}
+	if e, a := "Exception message", err.(awserr.Error).Message(); e != a {
+		t.Errorf("Message: expect %s, got %s", e, a)
+	}
+	if e, a := "abc123", err.(s3.RequestFailure).RequestID(); e != a {
+		t.Errorf("RequestID: expect %s, got %s", e, a)
+	}
+	if e, a := "321cba", err.(s3.RequestFailure).HostID(); e != a {
+		t.Errorf("HostID: expect %s, got %s", e, a)
+	}
 }

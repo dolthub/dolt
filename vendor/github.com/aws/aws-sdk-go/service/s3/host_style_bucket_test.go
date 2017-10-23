@@ -2,10 +2,8 @@ package s3_test
 
 import (
 	"net/url"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -62,10 +60,16 @@ func runTests(t *testing.T, svc *s3.S3, tests []s3BucketTest) {
 	for i, test := range tests {
 		req, _ := svc.ListObjectsRequest(&s3.ListObjectsInput{Bucket: &test.bucket})
 		req.Build()
-		assert.Equal(t, test.url, req.HTTPRequest.URL.String(), "test case %d", i)
+		if e, a := test.url, req.HTTPRequest.URL.String(); e != a {
+			t.Errorf("%d, expect url %s, got %s", i, e, a)
+		}
 		if test.errCode != "" {
-			require.Error(t, req.Error, "test case %d", i)
-			assert.Contains(t, req.Error.(awserr.Error).Code(), test.errCode, "test case %d", i)
+			if err := req.Error; err == nil {
+				t.Fatalf("%d, expect no error", i)
+			}
+			if a, e := req.Error.(awserr.Error).Code(), test.errCode; !strings.Contains(a, e) {
+				t.Errorf("%d, expect error code to contain %q, got %q", i, e, a)
+			}
 		}
 	}
 }
@@ -110,8 +114,14 @@ func TestHostStyleBucketGetBucketLocation(t *testing.T) {
 	})
 
 	req.Build()
-	require.NoError(t, req.Error)
+	if req.Error != nil {
+		t.Fatalf("expect no error, got %v", req.Error)
+	}
 	u, _ := url.Parse(req.HTTPRequest.URL.String())
-	assert.NotContains(t, u.Host, "bucket")
-	assert.Contains(t, u.Path, "bucket")
+	if e, a := "bucket", u.Host; strings.Contains(a, e) {
+		t.Errorf("expect %s to not be in %s", e, a)
+	}
+	if e, a := "bucket", u.Path; !strings.Contains(a, e) {
+		t.Errorf("expect %s to be in %s", e, a)
+	}
 }

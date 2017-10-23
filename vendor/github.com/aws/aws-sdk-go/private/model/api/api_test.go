@@ -4,8 +4,6 @@ package api
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestStructNameWithFullName(t *testing.T) {
@@ -14,7 +12,9 @@ func TestStructNameWithFullName(t *testing.T) {
 			ServiceFullName: "Amazon Service Name-100",
 		},
 	}
-	assert.Equal(t, a.StructName(), "ServiceName100")
+	if a.StructName() != "ServiceName100" {
+		t.Errorf("API struct name should have been %s, but received %s", "ServiceName100", a.StructName())
+	}
 }
 
 func TestStructNameWithAbbreviation(t *testing.T) {
@@ -24,21 +24,31 @@ func TestStructNameWithAbbreviation(t *testing.T) {
 			ServiceAbbreviation: "AWS SN100",
 		},
 	}
-	assert.Equal(t, a.StructName(), "SN100")
+	if a.StructName() != "SN100" {
+		t.Errorf("API struct name should have been %s, but received %s", "SN100", a.StructName())
+	}
 }
 
 func TestStructNameForExceptions(t *testing.T) {
+	serviceAliases = map[string]string{}
+	serviceAliases["elasticloadbalancing"] = "ELB"
+	serviceAliases["config"] = "ConfigService"
+
 	a := API{
 		Metadata: Metadata{
 			ServiceFullName: "Elastic Load Balancing",
 		},
 	}
-	assert.Equal(t, a.StructName(), "ELB")
+	if a.StructName() != "ELB" {
+		t.Errorf("API struct name should have been %s, but received %s", "ELB", a.StructName())
+	}
 
 	a = API{
 		Metadata: Metadata{
 			ServiceFullName: "AWS Config",
 		},
 	}
-	assert.Equal(t, a.StructName(), "ConfigService")
+	if a.StructName() != "ConfigService" {
+		t.Errorf("API struct name should have been %s, but received %s", "ConfigService", a.StructName())
+	}
 }

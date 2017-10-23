@@ -4,8 +4,6 @@ package api
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestResolvedReferences(t *testing.T) {
@@ -28,5 +26,7 @@ func TestResolvedReferences(t *testing.T) {
 	}`
 	a := API{}
 	a.AttachString(json)
-	assert.Equal(t, len(a.Shapes["OtherTest"].refs), 2)
+	if len(a.Shapes["OtherTest"].refs) != 2 {
+		t.Errorf("Expected %d, but received %d", 2, len(a.Shapes["OtherTest"].refs))
+	}
 }
