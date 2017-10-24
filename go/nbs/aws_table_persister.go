@@ -32,7 +32,7 @@ const (
 type awsTablePersister struct {
 	s3         s3svc
 	bucket     string
-	readRl     chan struct{}
+	rl         chan struct{}
 	tc         tableCache
 	ddb        *ddbTableStore
 	limits     awsLimits
@@ -59,7 +59,7 @@ func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
 func (s3p awsTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
 	return newAWSChunkSource(
 		s3p.ddb,
-		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc},
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc},
 		s3p.limits,
 		name,
 		chunkCount,
@@ -87,7 +87,7 @@ func (s3p awsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Sta
 		go s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
 	}
 	s3p.multipartUpload(data, name.String())
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
 	return s3p.newReaderFromIndexData(data, name, tra)
 }
 
@@ -146,6 +146,10 @@ func (s3p awsTablePersister) uploadParts(data []byte, key, uploadID string) (*s3
 	d.PanicIfTrue(numParts > maxS3Parts) // TODO: BUG 3433: handle > 10k parts
 	var wg sync.WaitGroup
 	sendPart := func(partNum, start, end uint64) {
+		if s3p.rl != nil {
+			s3p.rl <- struct{}{}
+			defer func() { <-s3p.rl }()
+		}
 		defer wg.Done()
 
 		// Check if upload has been terminated
@@ -245,7 +249,7 @@ func (s3p awsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chun
 	if s3p.tc != nil {
 		go s3p.loadIntoCache(name) // load conjoined table to the cache
 	}
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.readRl, tc: s3p.tc}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
 	return s3p.newReaderFromIndexData(plan.mergedIndex, name, tra)
 }
 
@@ -293,6 +297,10 @@ func (s3p awsTablePersister) assembleTable(plan compactionPlan, key, uploadID st
 	var uploadWg sync.WaitGroup
 	type uploadFn func() (etag string, err error)
 	sendPart := func(partNum int64, doUpload uploadFn) {
+		if s3p.rl != nil {
+			s3p.rl <- struct{}{}
+			defer func() { <-s3p.rl }()
+		}
 		defer uploadWg.Done()
 
 		// Check if upload has been terminated
