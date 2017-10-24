@@ -257,14 +257,21 @@ func (ms metaSequence) valuesSlice(from, to uint64) []Value {
 
 func (ms metaSequence) typeOf() *Type {
 	dec, count := ms.decoderSkipToValues()
-	ts := make(typeSlice, count)
+	ts := make(typeSlice, 0, count)
+	var lastRef Ref
 	for i := uint64(0); i < count; i++ {
 		ref := dec.readRef()
-		ts[i] = ref.TargetType()
+		if lastRef.IsZeroValue() || !lastRef.isSameTargetType(ref) {
+			lastRef = ref
+			t := ref.TargetType()
+			ts = append(ts, t)
+		}
+
 		dec.skipValue() // v
 		dec.skipCount() // numLeaves
 	}
-	return makeCompoundType(UnionKind, ts...)
+
+	return makeUnionType(ts...)
 }
 
 func (ms metaSequence) numLeaves() uint64 {

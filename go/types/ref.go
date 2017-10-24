@@ -5,6 +5,8 @@
 package types
 
 import (
+	"bytes"
+
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -86,8 +88,12 @@ func maxChunkHeight(v Value) (max uint64) {
 	return
 }
 
+func (r Ref) offsetAtPart(part refPart) uint32 {
+	return r.offsets[part] - r.offsets[refPartKind]
+}
+
 func (r Ref) decoderAtPart(part refPart) valueDecoder {
-	offset := r.offsets[part] - r.offsets[refPartKind]
+	offset := r.offsetAtPart(part)
 	return newValueDecoder(r.buff[offset:], nil)
 }
 
@@ -120,4 +126,10 @@ func (r Ref) WalkValues(cb ValueCallback) {
 
 func (r Ref) typeOf() *Type {
 	return makeCompoundType(RefKind, r.TargetType())
+}
+
+func (r Ref) isSameTargetType(other Ref) bool {
+	targetTypeBytes := r.buff[r.offsetAtPart(refPartTargetType):r.offsetAtPart(refPartHeight)]
+	otherTargetTypeBytes := other.buff[other.offsetAtPart(refPartTargetType):other.offsetAtPart(refPartHeight)]
+	return bytes.Equal(targetTypeBytes, otherTargetTypeBytes)
 }

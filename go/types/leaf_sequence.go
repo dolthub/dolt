@@ -101,11 +101,22 @@ func (seq leafSequence) typeOf() *Type {
 	kind := dec.readKind()
 	dec.skipCount() // level
 	count := dec.readCount()
-	ts := make([]*Type, count)
+	ts := make(typeSlice, 0, count)
+	var lastType *Type
 	for i := uint64(0); i < count; i++ {
-		ts[i] = dec.readTypeOfValue()
+		if lastType != nil {
+			offset := dec.offset
+			if dec.isValueSameTypeForSure(lastType) {
+				continue
+			}
+			dec.offset = offset
+		}
+
+		lastType = dec.readTypeOfValue()
+		ts = append(ts, lastType)
 	}
-	return makeCompoundType(kind, makeCompoundType(UnionKind, ts...))
+
+	return makeCompoundType(kind, makeUnionType(ts...))
 }
 
 func (seq leafSequence) numLeaves() uint64 {

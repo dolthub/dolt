@@ -86,15 +86,15 @@ func TestSimplifyType(t *testing.T) {
 			assert.Equal(in, act)
 		}
 
-		test(makeCompoundType(UnionKind, BoolType), BoolType)
-		test(makeCompoundType(UnionKind, BoolType, BoolType), BoolType)
-		testSame(makeCompoundType(UnionKind, BoolType, NumberType))
-		test(makeCompoundType(UnionKind, NumberType, BoolType), makeCompoundType(UnionKind, BoolType, NumberType))
-		test(makeCompoundType(UnionKind, NumberType, BoolType), makeCompoundType(UnionKind, BoolType, NumberType))
+		test(makeUnionType(BoolType), BoolType)
+		test(makeUnionType(BoolType, BoolType), BoolType)
+		testSame(makeUnionType(BoolType, NumberType))
+		test(makeUnionType(NumberType, BoolType), makeUnionType(BoolType, NumberType))
+		test(makeUnionType(NumberType, BoolType), makeUnionType(BoolType, NumberType))
 
-		testSame(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType, NumberType)))
-		test(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType)), makeCompoundType(ListKind, BoolType))
-		test(makeCompoundType(ListKind, makeCompoundType(UnionKind, BoolType, BoolType)), makeCompoundType(ListKind, BoolType))
+		testSame(makeCompoundType(ListKind, makeUnionType(BoolType, NumberType)))
+		test(makeCompoundType(ListKind, makeUnionType(BoolType)), makeCompoundType(ListKind, BoolType))
+		test(makeCompoundType(ListKind, makeUnionType(BoolType, BoolType)), makeCompoundType(ListKind, BoolType))
 
 		testSame(makeStructType("", nil))
 		testSame(makeStructType("", structTypeFields{}))
@@ -105,7 +105,7 @@ func TestSimplifyType(t *testing.T) {
 		test(
 			makeStructType("", structTypeFields{
 				StructField{"a", BoolType, false},
-				StructField{"b", makeCompoundType(UnionKind, NumberType, NumberType), false},
+				StructField{"b", makeUnionType(NumberType, NumberType), false},
 			}),
 			makeStructType("", structTypeFields{
 				StructField{"a", BoolType, false},
@@ -150,7 +150,7 @@ func TestSimplifyType(t *testing.T) {
 					makeCompoundType(k, BoolType),
 				),
 				makeCompoundType(k,
-					makeCompoundType(UnionKind, BoolType, NumberType),
+					makeUnionType(BoolType, NumberType),
 				),
 			)
 		}
@@ -163,7 +163,7 @@ func TestSimplifyType(t *testing.T) {
 				makeCompoundType(MapKind, BoolType, NumberType),
 			),
 			makeCompoundType(MapKind,
-				makeCompoundType(UnionKind, BoolType, NumberType),
+				makeUnionType(BoolType, NumberType),
 				NumberType,
 			),
 		)
@@ -177,19 +177,19 @@ func TestSimplifyType(t *testing.T) {
 			),
 			makeCompoundType(MapKind,
 				NumberType,
-				makeCompoundType(UnionKind, BoolType, NumberType),
+				makeUnionType(BoolType, NumberType),
 			),
 		)
 
 		// union flattening
 		test(
-			makeCompoundType(UnionKind, NumberType, makeCompoundType(UnionKind, NumberType, BoolType)),
-			makeCompoundType(UnionKind, BoolType, NumberType),
+			makeUnionType(NumberType, makeUnionType(NumberType, BoolType)),
+			makeUnionType(BoolType, NumberType),
 		)
 
 		{
 			// Cannot do equals on cycle types
-			in := makeCompoundType(UnionKind, MakeCycleType("A"), MakeCycleType("A"))
+			in := makeUnionType(MakeCycleType("A"), MakeCycleType("A"))
 			exp := MakeCycleType("A")
 			act := simplifyType(in, intersectStructs)
 			assert.Equal(exp, act)
@@ -212,10 +212,10 @@ func TestSimplifyType(t *testing.T) {
 		}))
 		test(
 			makeStructType("A", structTypeFields{
-				StructField{"a", makeCompoundType(UnionKind, BoolType, BoolType, NumberType), false},
+				StructField{"a", makeUnionType(BoolType, BoolType, NumberType), false},
 			}),
 			makeStructType("A", structTypeFields{
-				StructField{"a", makeCompoundType(UnionKind, BoolType, NumberType), false},
+				StructField{"a", makeUnionType(BoolType, NumberType), false},
 			}),
 		)
 
@@ -268,7 +268,7 @@ func TestSimplifyType(t *testing.T) {
 		{
 			a := makeStructType("S", structTypeFields{
 				StructField{"a", BoolType, !intersectStructs},
-				StructField{"b", makeCompoundType(UnionKind, BoolType, StringType), false},
+				StructField{"b", makeUnionType(BoolType, StringType), false},
 			})
 			exp := makeCompoundType(MapKind, a, a)
 			test(
@@ -308,7 +308,7 @@ func TestSimplifyType(t *testing.T) {
 				},
 			})
 			a.Desc.(StructDesc).fields[0].Type = a
-			exp := makeCompoundType(UnionKind, NumberType, a, TypeType)
+			exp := makeUnionType(NumberType, a, TypeType)
 			test(
 				makeCompoundType(UnionKind,
 					makeStructType("A", structTypeFields{
@@ -332,7 +332,7 @@ func TestSimplifyType(t *testing.T) {
 						BoolType,
 					),
 					makeCompoundType(SetKind,
-						makeCompoundType(UnionKind, StringType, NumberType),
+						makeUnionType(StringType, NumberType),
 					),
 				),
 			),
@@ -342,7 +342,7 @@ func TestSimplifyType(t *testing.T) {
 						BoolType,
 					),
 					makeCompoundType(SetKind,
-						makeCompoundType(UnionKind, NumberType, StringType),
+						makeUnionType(NumberType, StringType),
 					),
 				),
 			),

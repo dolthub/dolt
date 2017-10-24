@@ -41,7 +41,16 @@ func (t *Type) Value() Value {
 }
 
 func (t *Type) Equals(other Value) (res bool) {
-	return t == other || t.Hash() == other.Hash()
+	// This is highly optimized to not having to encode a *Type unless we have too.
+	if t == other {
+		return true
+	}
+
+	if otherType, ok := other.(*Type); ok {
+		return t.TargetKind() == otherType.TargetKind() && t.Hash() == other.Hash()
+	}
+
+	return false
 }
 
 func (t *Type) Less(other Value) (res bool) {

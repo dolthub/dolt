@@ -13,6 +13,11 @@ type TypeDesc interface {
 	Kind() NomsKind
 	walkValues(cb ValueCallback)
 	writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type)
+
+	// isSimplifiedForSure is used to determine if the type should be
+	// simplified. It may contain false negatives.
+	isSimplifiedForSure() bool
+	isSimplifiedInner() bool
 }
 
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
@@ -33,6 +38,14 @@ func (p PrimitiveDesc) walkValues(cb ValueCallback) {
 
 func (p PrimitiveDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
 	NomsKind(p).writeTo(w)
+}
+
+func (p PrimitiveDesc) isSimplifiedForSure() bool {
+	return true
+}
+
+func (p PrimitiveDesc) isSimplifiedInner() bool {
+	return true
 }
 
 // CompoundDesc describes a List, Map, Set, Ref, or Union type.
@@ -60,6 +73,23 @@ func (c CompoundDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Typ
 	for _, t := range c.ElemTypes {
 		t.writeToAsType(w, seenStructs)
 	}
+}
+
+func (c CompoundDesc) isSimplifiedForSure() bool {
+	if c.kind == UnionKind {
+		return len(c.ElemTypes) == 0
+	}
+
+	for _, t := range c.ElemTypes {
+		if !t.Desc.isSimplifiedInner() {
+			return false
+		}
+	}
+	return true
+}
+
+func (c CompoundDesc) isSimplifiedInner() bool {
+	return c.isSimplifiedForSure()
 }
 
 // StructDesc describes a custom Noms Struct.
@@ -106,6 +136,20 @@ func (s StructDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type)
 	}
 }
 
+func (s StructDesc) isSimplifiedForSure() bool {
+	for _, f := range s.fields {
+		if !f.Type.Desc.isSimplifiedInner() {
+			return false
+		}
+	}
+	return true
+}
+
+func (s StructDesc) isSimplifiedInner() bool {
+	// We do not try to to determine if a type is simplified if it contains a struct.
+	return false
+}
+
 func (s StructDesc) IterFields(cb func(name string, t *Type, optional bool)) {
 	for _, field := range s.fields {
 		cb(field.Name, field.Type, field.Optional)
@@ -144,6 +188,14 @@ func (c CycleDesc) walkValues(cb ValueCallback) {
 
 func (c CycleDesc) writeTo(w nomsWriter, t *Type, seenStruct map[string]*Type) {
 	panic("Should not write cycle types")
+}
+
+func (c CycleDesc) isSimplifiedForSure() bool {
+	return false
+}
+
+func (c CycleDesc) isSimplifiedInner() bool {
+	return false
 }
 
 type typeSlice []*Type

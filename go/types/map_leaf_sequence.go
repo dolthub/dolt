@@ -113,13 +113,26 @@ func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 
 func (ml mapLeafSequence) typeOf() *Type {
 	dec, count := ml.decoderSkipToValues()
-	kts := make([]*Type, count)
-	vts := make([]*Type, count)
+	kts := make(typeSlice, 0, count)
+	vts := make(typeSlice, 0, count)
+	var lastKeyType, lastValueType *Type
 	for i := uint64(0); i < count; i++ {
-		kts[i] = dec.readValue().typeOf()
-		vts[i] = dec.readValue().typeOf()
+		if lastKeyType != nil && lastValueType != nil {
+			offset := dec.offset
+			if dec.isValueSameTypeForSure(lastKeyType) && dec.isValueSameTypeForSure(lastValueType) {
+				continue
+			}
+			dec.offset = offset
+
+		}
+
+		lastKeyType = dec.readTypeOfValue()
+		kts = append(kts, lastKeyType)
+		lastValueType = dec.readTypeOfValue()
+		vts = append(vts, lastValueType)
 	}
-	return makeCompoundType(MapKind, makeCompoundType(UnionKind, kts...), makeCompoundType(UnionKind, vts...))
+
+	return makeCompoundType(MapKind, makeUnionType(kts...), makeUnionType(vts...))
 }
 
 // orderedSequence interface

@@ -31,7 +31,7 @@ func MakePrimitiveType(k NomsKind) *Type {
 
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
 func MakeUnionType(elemTypes ...*Type) *Type {
-	return simplifyType(makeCompoundType(UnionKind, elemTypes...), false)
+	return simplifyType(makeUnionType(elemTypes...), false)
 }
 
 func MakeListType(elemType *Type) *Type {
@@ -61,7 +61,7 @@ func MakeStructType(name string, fields ...StructField) *Type {
 // types.
 // This function will go away so do not use it!
 func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
-	return simplifyType(makeCompoundType(UnionKind, elemTypes...), true)
+	return simplifyType(makeUnionType(elemTypes...), true)
 }
 
 func MakeCycleType(name string) *Type {
@@ -82,6 +82,13 @@ var ValueType = makePrimitiveType(ValueKind)
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return newType(CompoundDesc{kind, elemTypes})
+}
+
+func makeUnionType(elemTypes ...*Type) *Type {
+	if len(elemTypes) == 1 {
+		return elemTypes[0]
+	}
+	return makeCompoundType(UnionKind, elemTypes...)
 }
 
 func makeStructTypeQuickly(name string, fields structTypeFields) *Type {

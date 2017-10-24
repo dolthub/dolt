@@ -310,6 +310,55 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 	panic("not reachable")
 }
 
+// isValueSameTypeForSure may return false even though the type of the value is
+// equal. We do that in cases wherer it would be too expensive to compute the
+// type.
+// If this returns false the decoder might not have visited the whole value and
+// its offset is no longer valid.
+func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
+	k := r.peekKind()
+	if k != t.TargetKind() {
+		return false
+	}
+
+	switch k {
+	case BlobKind, BoolKind, NumberKind, StringKind:
+		r.skipValue()
+		return true
+	case ListKind, MapKind, RefKind, SetKind:
+		// TODO: Maybe do some simple cases here too. Performance metrics should determine
+		// what is going to be worth doing.
+		// https://github.com/attic-labs/noms/issues/3776
+		return false
+	case StructKind:
+		return isStructSameTypeForSure(r, t)
+	case TypeKind:
+		return false
+	case CycleKind, UnionKind, ValueKind:
+		d.Panic("A value instance can never have type %s", k)
+	}
+
+	panic("not reachable")
+}
+
+// isStringSame checks if the next string in the decoder matches string. It
+// moves the decoder to after the string in all cases.
+func (r *valueDecoder) isStringSame(s string) bool {
+	count := r.readCount()
+	start := uint64(r.offset)
+	r.offset += uint32(count)
+	if uint64(len(s)) != count {
+		return false
+	}
+
+	for i := uint64(0); i < count; i++ {
+		if s[i] != r.buff[start+i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *valueDecoder) copyValue(w nomsWriter) {
 	start := r.pos()
 	r.skipValue()
@@ -447,7 +496,7 @@ func (r *typedBinaryNomsReader) readUnionType(seenStructs map[string]*Type) *Typ
 	for i := uint64(0); i < l; i++ {
 		ts[i] = r.readTypeInner(seenStructs)
 	}
-	return makeCompoundType(UnionKind, ts...)
+	return makeUnionType(ts...)
 }
 
 func (r *typedBinaryNomsReader) skipUnionType() {
