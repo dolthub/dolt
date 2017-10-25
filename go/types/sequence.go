@@ -47,10 +47,11 @@ const (
 
 type sequenceImpl struct {
 	valueImpl
+	len uint64
 }
 
-func newSequenceImpl(vrw ValueReadWriter, buff []byte, offsets []uint32) sequenceImpl {
-	return sequenceImpl{valueImpl{vrw, buff, offsets}}
+func newSequenceImpl(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) sequenceImpl {
+	return sequenceImpl{valueImpl{vrw, buff, offsets}, len}
 }
 
 func (seq sequenceImpl) decoderSkipToValues() (valueDecoder, uint64) {
@@ -65,7 +66,11 @@ func (seq sequenceImpl) decoderAtPart(part uint32) valueDecoder {
 }
 
 func (seq sequenceImpl) Empty() bool {
-	return seq.seqLen() == 0
+	return seq.Len() == 0
+}
+
+func (seq sequenceImpl) Len() uint64 {
+	return seq.len
 }
 
 func (seq sequenceImpl) seqLen() int {

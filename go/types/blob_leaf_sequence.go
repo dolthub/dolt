@@ -19,10 +19,11 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
-	w.writeCount(uint64(len(data)))
+	count := uint64(len(data))
+	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	w.writeBytes(data)
-	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets)}
+	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
 func (bl blobLeafSequence) writeTo(w nomsWriter) {

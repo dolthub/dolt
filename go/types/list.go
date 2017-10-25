@@ -189,7 +189,7 @@ func iterRange(col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBy
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 	numValues := 0
-	valuesPerIdx := getValuesPerIdx(col.asSequence())
+	valuesPerIdx := uint64(getValuesPerIdx(col.Kind()))
 
 	for _, leaf := range leaves {
 		seq := leaf.asSequence()

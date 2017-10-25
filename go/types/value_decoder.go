@@ -41,169 +41,132 @@ func (r *valueDecoder) skipRef() {
 	skipRef(&(r.typedBinaryNomsReader))
 }
 
-func (r *valueDecoder) skipBlobLeafSequence() []uint32 {
+func (r *valueDecoder) skipBlobLeafSequence() ([]uint32, uint64) {
 	size := r.readCount()
 	valuesPos := r.pos()
 	r.offset += uint32(size)
-	return []uint32{valuesPos, r.pos()}
+	return []uint32{valuesPos, r.pos()}, size
 }
 
-func (r *valueDecoder) skipValueSequence() []uint32 {
-	count := int(r.readCount())
+func (r *valueDecoder) skipValueSequence(elementsPerIndex int) ([]uint32, uint64) {
+	count := r.readCount()
 	offsets := make([]uint32, count+1)
 	offsets[0] = r.pos()
-	for i := 0; i < count; i++ {
-		r.skipValue()
+	for i := uint64(0); i < count; i++ {
+		for j := 0; j < elementsPerIndex; j++ {
+			r.skipValue()
+		}
 		offsets[i+1] = r.pos()
 	}
-	return offsets
+	return offsets, count
 }
 
-func (r *valueDecoder) readListSequence() sequence {
+func (r *valueDecoder) skipListLeafSequence() ([]uint32, uint64) {
+	return r.skipValueSequence(getValuesPerIdx(ListKind))
+}
+
+func (r *valueDecoder) skipSetLeafSequence() ([]uint32, uint64) {
+	return r.skipValueSequence(getValuesPerIdx(SetKind))
+}
+
+func (r *valueDecoder) skipMapLeafSequence() ([]uint32, uint64) {
+	return r.skipValueSequence(getValuesPerIdx(MapKind))
+}
+
+func (r *valueDecoder) readSequence(kind NomsKind, leafSkipper func() ([]uint32, uint64)) sequence {
 	start := r.pos()
 	offsets := []uint32{start}
 	r.skipKind()
 	offsets = append(offsets, r.pos())
 	level := r.readCount()
 	offsets = append(offsets, r.pos())
+	var seqOffsets []uint32
+	var length uint64
 	if level > 0 {
-		offsets = append(offsets, r.skipMetaSequence(ListKind, level)...)
+		seqOffsets, length = r.skipMetaSequence(kind, level)
 	} else {
-		offsets = append(offsets, r.skipValueSequence()...)
+		seqOffsets, length = leafSkipper()
 	}
+	offsets = append(offsets, seqOffsets...)
 	end := r.pos()
 
 	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets, length)
 	}
 
-	return listLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
+	return newLeafSequence(r.vrw, r.byteSlice(start, end), offsets, length)
 }
 
 func (r *valueDecoder) readBlobSequence() sequence {
-	start := r.pos()
-	offsets := []uint32{start}
-	r.skipKind()
-	offsets = append(offsets, r.pos())
-	level := r.readCount()
-	offsets = append(offsets, r.pos())
-	if level > 0 {
-		offsets = append(offsets, r.skipMetaSequence(BlobKind, level)...)
-	} else {
-		offsets = append(offsets, r.skipBlobLeafSequence()...)
+	seq := r.readSequence(BlobKind, r.skipBlobLeafSequence)
+	if seq.isLeaf() {
+		return blobLeafSequence{seq.(leafSequence)}
 	}
-	end := r.pos()
+	return seq
+}
 
-	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
+func (r *valueDecoder) readListSequence() sequence {
+	seq := r.readSequence(ListKind, r.skipListLeafSequence)
+	if seq.isLeaf() {
+		return listLeafSequence{seq.(leafSequence)}
 	}
-
-	return blobLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
+	return seq
 }
 
 func (r *valueDecoder) readSetSequence() orderedSequence {
-	start := r.pos()
-	offsets := []uint32{start}
-	r.skipKind()
-	offsets = append(offsets, r.pos())
-	level := r.readCount()
-	offsets = append(offsets, r.pos())
-	if level > 0 {
-		offsets = append(offsets, r.skipMetaSequence(SetKind, level)...)
-	} else {
-		offsets = append(offsets, r.skipValueSequence()...)
+	seq := r.readSequence(SetKind, r.skipSetLeafSequence)
+	if seq.isLeaf() {
+		return setLeafSequence{seq.(leafSequence)}
 	}
-	end := r.pos()
-
-	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
-	}
-
-	return setLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
+	return seq.(orderedSequence)
 }
 
 func (r *valueDecoder) readMapSequence() orderedSequence {
-	start := r.pos()
-	offsets := []uint32{start}
-	r.skipKind()
-	offsets = append(offsets, r.pos())
-	level := r.readCount()
-	offsets = append(offsets, r.pos())
-	if level > 0 {
-		offsets = append(offsets, r.skipMetaSequence(MapKind, level)...)
-	} else {
-		offsets = append(offsets, r.skipMapLeafSequence()...)
+	seq := r.readSequence(MapKind, r.skipMapLeafSequence)
+	if seq.isLeaf() {
+		return mapLeafSequence{seq.(leafSequence)}
 	}
-	end := r.pos()
-
-	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets)
-	}
-
-	return mapLeafSequence{newLeafSequence(r.vrw, r.byteSlice(start, end), offsets)}
+	return seq.(orderedSequence)
 }
 
 func (r *valueDecoder) skipList() {
-	r.skipListOrSet(ListKind)
+	r.skipSequence(ListKind, r.skipListLeafSequence)
 }
 
 func (r *valueDecoder) skipSet() {
-	r.skipListOrSet(SetKind)
+	r.skipSequence(SetKind, r.skipSetLeafSequence)
 }
 
-func (r *valueDecoder) skipListOrSet(kind NomsKind) {
+func (r *valueDecoder) skipMap() {
+	r.skipSequence(MapKind, r.skipMapLeafSequence)
+}
+
+func (r *valueDecoder) skipBlob() {
+	r.skipSequence(BlobKind, r.skipBlobLeafSequence)
+}
+
+func (r *valueDecoder) skipSequence(kind NomsKind, leafSkipper func() ([]uint32, uint64)) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
 		r.skipMetaSequence(kind, level)
 	} else {
-		r.skipValueSequence()
+		leafSkipper()
 	}
 }
 
-func (r *valueDecoder) skipMap() {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		r.skipMetaSequence(MapKind, level)
-	} else {
-		r.skipMapLeafSequence()
-	}
-}
-
-func (r *valueDecoder) skipBlob() {
-	r.skipKind()
-	level := r.readCount()
-	if level > 0 {
-		r.skipMetaSequence(BlobKind, level)
-	} else {
-		r.skipBlobLeafSequence()
-	}
-}
-
-func (r *valueDecoder) skipMapLeafSequence() []uint32 {
+func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uint64) {
 	count := r.readCount()
 	offsets := make([]uint32, count+1)
 	offsets[0] = r.pos()
-	for i := uint64(0); i < count; i++ {
-		r.skipValue() // k
-		r.skipValue() // v
-		offsets[i+1] = r.pos()
-	}
-	return offsets
-}
-
-func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) []uint32 {
-	count := r.readCount()
-	offsets := make([]uint32, count+1)
-	offsets[0] = r.pos()
+	length := uint64(0)
 	for i := uint64(0); i < count; i++ {
 		r.skipRef()
 		r.skipValue()
-		r.skipCount() // numLeaves
+		length += r.readCount()
 		offsets[i+1] = r.pos()
 	}
-	return offsets
+	return offsets, length
 }
 
 func (r *valueDecoder) readValue() Value {
