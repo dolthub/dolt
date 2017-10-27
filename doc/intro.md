@@ -97,7 +97,7 @@ Every chunk encodes a single logical value (which may be a component of another 
 Noms is a typed system, meaning that every Noms value is classified into one of the following _types_:
 
 * `Boolean`
-* `Number` (arbitrary precision decimal)
+* `Number` (arbitrary precision binary)
 * `String` (utf8-encoded)
 * `Blob` (raw binary data)
 * `Set<T>`
