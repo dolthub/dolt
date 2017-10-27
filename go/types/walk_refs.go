@@ -96,9 +96,18 @@ func (r *refWalker) walkMetaSequence(k NomsKind, level uint64, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.walkRef(cb) // ref to child sequence
-		// TODO: The maxValue encoded here can be a scalar or a Hash that's hacked into the encoding as a Ref<Bool>. Calling r.walkValue() here with a no-op callback is a slightly wasteful hack, but until we figure out a better way to share code between refWalker and valueDecoder, it will have to do. BUG 3757
+		r.skipOrderedKey()
+		r.skipCount() // numLeaves
+	}
+}
+
+func (r *refWalker) skipOrderedKey() {
+	switch r.peekKind() {
+	case hashKind:
+		r.skipKind()
+		r.skipHash()
+	default:
 		r.walkValue(func(r Ref) {}) // max Value in subtree reachable from here
-		r.skipCount()               // numLeaves
 	}
 }
 

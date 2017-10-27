@@ -155,6 +155,16 @@ func (r *valueDecoder) skipSequence(kind NomsKind, leafSkipper func() ([]uint32,
 	}
 }
 
+func (r *valueDecoder) skipOrderedKey() {
+	switch r.peekKind() {
+	case hashKind:
+		r.skipKind()
+		r.skipHash()
+	default:
+		r.skipValue()
+	}
+}
+
 func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uint64) {
 	count := r.readCount()
 	offsets := make([]uint32, count+1)
@@ -162,7 +172,7 @@ func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uin
 	length := uint64(0)
 	for i := uint64(0); i < count; i++ {
 		r.skipRef()
-		r.skipValue()
+		r.skipOrderedKey()
 		length += r.readCount()
 		offsets[i+1] = r.pos()
 	}
@@ -345,12 +355,15 @@ func boolToUint32(b bool) uint32 {
 }
 
 func (r *valueDecoder) readOrderedKey() orderedKey {
-	v := r.readValue()
-	if r, ok := v.(Ref); ok {
-		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-		return orderedKeyFromHash(r.TargetHash())
+	switch r.peekKind() {
+	case hashKind:
+		r.skipKind()
+		h := r.readHash()
+		return orderedKeyFromHash(h)
+	default:
+		v := r.readValue()
+		return newOrderedKey(v)
 	}
-	return newOrderedKey(v)
 }
 
 func (r *typedBinaryNomsReader) readType() *Type {

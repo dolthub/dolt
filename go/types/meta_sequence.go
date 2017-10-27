@@ -115,9 +115,9 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 
 func (key orderedKey) writeTo(w nomsWriter) {
 	if !key.isOrderedByValue {
-		// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
 		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
-		writeRefPartsTo(w, key.h, BoolType, 0)
+		hashKind.writeTo(w)
+		w.writeHash(key.h)
 	} else {
 		key.v.writeTo(w)
 	}
@@ -229,7 +229,7 @@ func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
 	offsets[metaTuplePartRef] = start
 	dec.skipRef()
 	offsets[metaTuplePartKey] = dec.offset
-	dec.skipValue()
+	dec.skipOrderedKey()
 	offsets[metaTuplePartNumLeaves] = dec.offset
 	dec.skipCount()
 	end := dec.offset
@@ -244,7 +244,7 @@ func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 	dec := ms.decoderSkipToIndex(idx)
 	dec.skipValue()
-	dec.skipValue()
+	dec.skipOrderedKey()
 	return dec.readCount()
 }
 
@@ -270,8 +270,8 @@ func (ms metaSequence) typeOf() *Type {
 			ts = append(ts, t)
 		}
 
-		dec.skipValue() // v
-		dec.skipCount() // numLeaves
+		dec.skipOrderedKey() // key
+		dec.skipCount()      // numLeaves
 	}
 
 	return makeUnionType(ts...)

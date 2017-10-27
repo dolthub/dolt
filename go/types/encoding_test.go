@@ -421,9 +421,8 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			// See https://github.com/attic-labs/noms/issues/1688#issuecomment-227528987
-			RefKind, set1.Hash(), SetKind, BlobKind, uint64(1), RefKind, blob1.Hash(), BoolKind, uint64(0), uint64(2),
-			RefKind, set2.Hash(), SetKind, BlobKind, uint64(1), RefKind, blob4.Hash(), BoolKind, uint64(0), uint64(3),
+			RefKind, set1.Hash(), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(), uint64(2),
+			RefKind, set2.Hash(), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(), uint64(3),
 		},
 		newSet(newSetMetaSequence(1, []metaTuple{
 			newMetaTuple(NewRef(set1), newOrderedKey(blob1), 2),

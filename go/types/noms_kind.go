@@ -26,6 +26,9 @@ const (
 
 	TypeKind
 	UnionKind
+
+	// Internal to decoder
+	hashKind
 )
 
 var KindToString = map[NomsKind]string{
