@@ -105,7 +105,7 @@ Noms is a typed system, meaning that every Noms value is classified into one of 
 * `Map<K,V>`
 * Unions: `T|U|V|...`
 * `Ref<T>` (explicit out-of-line references)
-* `Struct` (user-defined record types, e.g., `struct Person { name: String, age?: Number })`
+* `Struct` (user-defined record types, e.g., `Struct Person { name: String, age?: Number })`
 * `Type` (A value that stores a Noms type)
 
 Blobs, sets, lists, and maps can be gigantic - Noms will _chunk_ these types into reasonable sized parts internally for efficient storage, searching, and updating (see [Prolly Trees](#prolly-trees-probabilistic-b-trees) below for more on this).
@@ -145,7 +145,7 @@ This is usually completely implicit, done based on the data you store (you can s
 We do the same thing for datasets. If you commit a `Set<Number>`, the type of the commit we create for you is:
 
 ```go
-struct Commit {
+Struct Commit {
 	Value: Set<Number>
 	Parents: Set<Ref<Cycle<Commit>>>
 }
@@ -156,10 +156,10 @@ This tells you that the current and all previous commits have values of type `Se
 But if you then commit a `Set<String>` to this same dataset, then the type of that commit will be:
 
 ```go
-struct Commit {
+Struct Commit {
 	Value: Set<String>
 	Parents: Set<Ref<Cycle<Commit>> |
-		Ref<struct Commit {
+		Ref<Struct Commit {
 			Value: Set<Number>
 			Parents: Cycle<Commit>
 		}>>
@@ -171,7 +171,7 @@ This tells you that the dataset's current commit has a value of type `Set<String
 
 Type accretion has a number of benefits related to schema changes:
 
-1. You can widen the type of any container (list, set, map) without rewriting any existing data. `Set<struct { name: String }>` becomes `Set<struct { name: String }> | struct { name: String, age: Number }>>` and all existing data is reused.
+1. You can widen the type of any container (list, set, map) without rewriting any existing data. `Set<Struct { name: String }>` becomes `Set<Struct { name: String }> | Struct { name: String, age: Number }>>` and all existing data is reused.
 2. You can widen containers in ways that other databases wouldn't allow. For example, you can go from `Set<Number>` to `Set<Number|String>`. Existing data is still reused.
 3. You can change the type of a dataset in either direction - either widening or narrowing it, and the dataset remains self-documenting as to its current and previous types.
 
