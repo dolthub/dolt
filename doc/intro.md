@@ -114,7 +114,7 @@ Strings, numbers, unions, and structs are not chunked, and should be used for "r
 
 Types serve several purposes in Noms:
 
-1. Most importantly, types describe the values present in a chunk. Since Noms data is immutable one can look at the values in a chunk and compute the type of the whole chunk. For example a Noms list containing `"hi"` and `42` is a `List<Number | String>`. In languages that support generics, one can work with Noms data in a completely statically typed way.
+1. Most importantly, types make Noms data self-describing. Every physical chunk of Noms data carries with it the type of the value it contains and information about the types of all values reachable from this chunk. This allows software to interoperate without prior agreement or planning.
 
 2. Users of Noms can define their own structures and publish data that uses them. This allows for ad-hoc standardization of types within communities working on similar data.
 
