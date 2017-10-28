@@ -1,0 +1,42 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/ipfs/go-ipld-git"
+  },
+  "gx": {
+    "dvcsimport": "github.com/ipfs/go-ipld-git"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c",
+      "name": "go-ipld-format",
+      "version": "0.5.1"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ",
+      "name": "go-cid",
+      "version": "0.7.18"
+    },
+    {
+      "author": "stebalien",
+      "hash": "QmSn9Td7xgxm9EV7iEjTckpUWmWApggzPxu7eFGWkkpwin",
+      "name": "go-block-format",
+      "version": "0.1.4"
+    },
+    {
+      "author": "multiformats",
+      "hash": "QmU9a9NV9RdPNwZQDYd5uKsm6N6LJLSvLbywDDYFbaaC6P",
+      "name": "go-multihash",
+      "version": "1.0.5"
+    }
+  ],
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "",
+  "name": "go-ipld-git",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.1.4"
+}
+

@@ -1,0 +1,25 @@
+os:
+    - linux
+
+language: go
+
+go:
+    - 1.8.3
+
+install:
+    - go get -u github.com/whyrusleeping/gx
+    - go get -u github.com/whyrusleeping/gx-go
+    - gx install
+
+
+script:
+    - gx-go rewrite
+    - go test -race -coverprofile=unittest.coverprofile -covermode=atomic .
+
+
+after_success:
+    - bash <(curl -s https://codecov.io/bash) -f unittest.coverprofile -F unittest
+
+cache:
+    directories:
+        - $GOPATH/src/gx

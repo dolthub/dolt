@@ -1,0 +1,16 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/gxed/errors"
+  },
+  "gx": {
+    "dvcsimport": "github.com/pkg/errors"
+  },
+  "gxVersion": "0.11.0",
+  "language": "go",
+  "license": "",
+  "name": "errors",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.0.1"
+}
+
