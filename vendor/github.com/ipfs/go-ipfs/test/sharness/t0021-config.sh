@@ -74,82 +74,82 @@ test_config_cmd() {
 
   test_expect_success "setup for config replace test" '
     cp "$IPFS_PATH/config" newconfig.json &&
-	sed -i"~" -e /PrivKey/d -e s/10GB/11GB/ newconfig.json &&
-	sed -i"~" -e '"'"'/PeerID/ {'"'"' -e '"'"' s/,$// '"'"' -e '"'"' } '"'"' newconfig.json
+    sed -i"~" -e /PrivKey/d -e s/10GB/11GB/ newconfig.json &&
+    sed -i"~" -e '"'"'/PeerID/ {'"'"' -e '"'"' s/,$// '"'"' -e '"'"' } '"'"' newconfig.json
   '
 
   test_expect_success "run 'ipfs config replace'" '
-	ipfs config replace - < newconfig.json
+  ipfs config replace - < newconfig.json
   '
 
   test_expect_success "check resulting config after 'ipfs config replace'" '
-	sed -e /PrivKey/d "$IPFS_PATH/config" > replconfig.json &&
-	sed -i"~" -e '"'"'/PeerID/ {'"'"' -e '"'"' s/,$// '"'"' -e '"'"' } '"'"' replconfig.json &&
-	test_cmp replconfig.json newconfig.json
+    sed -e /PrivKey/d "$IPFS_PATH/config" > replconfig.json &&
+    sed -i"~" -e '"'"'/PeerID/ {'"'"' -e '"'"' s/,$// '"'"' -e '"'"' } '"'"' replconfig.json &&
+    test_cmp replconfig.json newconfig.json
   '
 
   # SECURITY
   # Those tests are here to prevent exposing the PrivKey on the network
 
   test_expect_success "'ipfs config Identity' fails" '
-       test_expect_code 1 ipfs config Identity 2> ident_out
+    test_expect_code 1 ipfs config Identity 2> ident_out
   '
 
   test_expect_success "output looks good" '
-       echo "Error: cannot show or change private key through API" > ident_exp &&
-       test_cmp ident_exp ident_out
+    echo "Error: cannot show or change private key through API" > ident_exp &&
+    test_cmp ident_exp ident_out
   '
 
   test_expect_success "'ipfs config Identity.PrivKey' fails" '
-       test_expect_code 1 ipfs config Identity.PrivKey 2> ident_out
+    test_expect_code 1 ipfs config Identity.PrivKey 2> ident_out
   '
 
   test_expect_success "output looks good" '
-       test_cmp ident_exp ident_out
+    test_cmp ident_exp ident_out
   '
 
   test_expect_success "lower cased PrivKey" '
-       sed -i"~" -e '\''s/PrivKey/privkey/'\'' "$IPFS_PATH/config" &&
-       test_expect_code 1 ipfs config Identity.privkey 2> ident_out
+    sed -i"~" -e '\''s/PrivKey/privkey/'\'' "$IPFS_PATH/config" &&
+    test_expect_code 1 ipfs config Identity.privkey 2> ident_out
   '
 
   test_expect_success "output looks good" '
-       test_cmp ident_exp ident_out
+    test_cmp ident_exp ident_out
   '
 
   test_expect_success "fix it back" '
-       sed -i"~" -e '\''s/privkey/PrivKey/'\'' "$IPFS_PATH/config"
+    sed -i"~" -e '\''s/privkey/PrivKey/'\'' "$IPFS_PATH/config"
   '
 
   test_expect_success "'ipfs config show' doesn't include privkey" '
-       ipfs config show > show_config &&
-       test_expect_code 1 grep PrivKey show_config
+    ipfs config show > show_config &&
+    test_expect_code 1 grep PrivKey show_config
   '
 
   test_expect_success "'ipfs config replace' injects privkey back" '
-       ipfs config replace show_config &&
-       grep "\"PrivKey\":" "$IPFS_PATH/config" | grep -e ": \".\+\"" >/dev/null
+    ipfs config replace show_config &&
+    grep "\"PrivKey\":" "$IPFS_PATH/config" | grep -e ": \".\+\"" >/dev/null
   '
 
   test_expect_success "'ipfs config replace' with privkey errors out" '
-       cp "$IPFS_PATH/config" real_config &&
-       test_expect_code 1 ipfs config replace - < real_config 2> replace_out
+    cp "$IPFS_PATH/config" real_config &&
+    test_expect_code 1 ipfs config replace - < real_config 2> replace_out
   '
 
   test_expect_success "output looks good" '
-       echo "Error: setting private key with API is not supported" > replace_expected
-       test_cmp replace_out replace_expected
+    echo "Error: setting private key with API is not supported" > replace_expected
+    test_cmp replace_out replace_expected
   '
 
   test_expect_success "'ipfs config replace' with lower case privkey errors out" '
-       cp "$IPFS_PATH/config" real_config &&
-       sed -i -e '\''s/PrivKey/privkey/'\'' real_config &&
-       test_expect_code 1 ipfs config replace - < real_config 2> replace_out
+    cp "$IPFS_PATH/config" real_config &&
+    sed -i -e '\''s/PrivKey/privkey/'\'' real_config &&
+    test_expect_code 1 ipfs config replace - < real_config 2> replace_out
   '
 
   test_expect_success "output looks good" '
-       echo "Error: setting private key with API is not supported" > replace_expected
-       test_cmp replace_out replace_expected
+    echo "Error: setting private key with API is not supported" > replace_expected
+    test_cmp replace_out replace_expected
   '
 }
 

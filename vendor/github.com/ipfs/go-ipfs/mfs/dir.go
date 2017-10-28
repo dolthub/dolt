@@ -15,8 +15,8 @@ import (
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 	ufspb "github.com/ipfs/go-ipfs/unixfs/pb"
 
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 var ErrNotYetImplemented = errors.New("not yet implemented")
@@ -56,6 +56,11 @@ func NewDirectory(ctx context.Context, name string, node node.Node, parent child
 		files:      make(map[string]*File),
 		modTime:    time.Now(),
 	}, nil
+}
+
+// GetPrefix gets the CID prefix of the root node
+func (d *Directory) GetPrefix() *cid.Prefix {
+	return d.dirbuilder.GetPrefix()
 }
 
 // SetPrefix sets the CID prefix
@@ -299,6 +304,7 @@ func (d *Directory) Mkdir(name string) (*Directory, error) {
 	}
 
 	ndir := ft.EmptyDirNode()
+	ndir.SetPrefix(d.GetPrefix())
 
 	_, err = d.dserv.Add(ndir)
 	if err != nil {

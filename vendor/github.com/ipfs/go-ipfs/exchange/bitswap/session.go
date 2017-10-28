@@ -2,14 +2,15 @@ package bitswap
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	notifications "github.com/ipfs/go-ipfs/exchange/bitswap/notifications"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	blocks "gx/ipfs/QmSn9Td7xgxm9EV7iEjTckpUWmWApggzPxu7eFGWkkpwin/go-block-format"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
 	loggables "gx/ipfs/QmT4PgCNdv73hnFAqzHqwW44q7M9PWpykSswHDxndquZbc/go-libp2p-loggables"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	blocks "gx/ipfs/QmVA4mafxbfH5aEvNz8fyoxC6J1xhAtw88B4GerPznSZBg/go-block-format"
 	lru "gx/ipfs/QmVYxfoJQiZijTgPNHCHgHELvQpbsJNTg6Crmc3dQkj3yy/golang-lru"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 )
@@ -44,7 +45,8 @@ type Session struct {
 
 	uuid logging.Loggable
 
-	id uint64
+	id  uint64
+	tag string
 }
 
 // NewSession creates a new bitswap session whose lifetime is bounded by the
@@ -65,6 +67,8 @@ func (bs *Bitswap) NewSession(ctx context.Context) *Session {
 		baseTickDelay: time.Millisecond * 500,
 		id:            bs.getNextSessionID(),
 	}
+
+	s.tag = fmt.Sprint("bs-ses-", s.id)
 
 	cache, _ := lru.New(2048)
 	s.interest = cache
@@ -139,6 +143,9 @@ func (s *Session) addActivePeer(p peer.ID) {
 	if _, ok := s.activePeers[p]; !ok {
 		s.activePeers[p] = struct{}{}
 		s.activePeersArr = append(s.activePeersArr, p)
+
+		cmgr := s.bs.network.ConnectionManager()
+		cmgr.TagPeer(p, s.tag, 10)
 	}
 }
 
@@ -159,7 +166,9 @@ func (s *Session) run(ctx context.Context) {
 		case blk := <-s.incoming:
 			s.tick.Stop()
 
-			s.addActivePeer(blk.from)
+			if blk.from != "" {
+				s.addActivePeer(blk.from)
+			}
 
 			s.receiveBlock(ctx, blk.blk)
 
@@ -216,6 +225,11 @@ func (s *Session) run(ctx context.Context) {
 		case <-ctx.Done():
 			s.tick.Stop()
 			s.bs.removeSession(s)
+
+			cmgr := s.bs.network.ConnectionManager()
+			for _, p := range s.activePeersArr {
+				cmgr.UntagPeer(p, s.tag)
+			}
 			return
 		}
 	}

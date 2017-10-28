@@ -12,8 +12,8 @@ import (
 	mdtest "github.com/ipfs/go-ipfs/merkledag/test"
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
 )
 
 func getBalancedDag(t testing.TB, size int64, blksize int64) (node.Node, dag.DAGService) {

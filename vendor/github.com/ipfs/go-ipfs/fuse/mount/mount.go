@@ -90,7 +90,7 @@ type closer struct {
 }
 
 func (c *closer) Close() error {
-	log.Error(" (c *closer) Close(),", c.M.MountPoint())
+	log.Warning(" (c *closer) Close(),", c.M.MountPoint())
 	return c.M.Unmount()
 }
 

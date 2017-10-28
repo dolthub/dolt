@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 // DagParser is function used for parsing stream into Node
@@ -37,6 +37,8 @@ var defaultRawParsers = FormatParsers{
 
 	"protobuf": dagpbRawParser,
 	"dag-pb":   dagpbRawParser,
+
+	"raw": rawRawParser,
 }
 
 var defaultCborParsers = FormatParsers{

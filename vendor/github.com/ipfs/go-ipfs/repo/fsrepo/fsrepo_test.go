@@ -25,7 +25,7 @@ func TestInitIdempotence(t *testing.T) {
 	t.Parallel()
 	path := testRepoPath("", t)
 	for i := 0; i < 10; i++ {
-		assert.Nil(Init(path, &config.Config{}), t, "multiple calls to init should succeed")
+		assert.Nil(Init(path, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t, "multiple calls to init should succeed")
 	}
 }
 
@@ -40,8 +40,8 @@ func TestCanManageReposIndependently(t *testing.T) {
 	pathB := testRepoPath("b", t)
 
 	t.Log("initialize two repos")
-	assert.Nil(Init(pathA, &config.Config{}), t, "a", "should initialize successfully")
-	assert.Nil(Init(pathB, &config.Config{}), t, "b", "should initialize successfully")
+	assert.Nil(Init(pathA, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t, "a", "should initialize successfully")
+	assert.Nil(Init(pathB, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t, "b", "should initialize successfully")
 
 	t.Log("ensure repos initialized")
 	assert.True(IsInitialized(pathA), t, "a should be initialized")
@@ -67,7 +67,7 @@ func TestDatastoreGetNotAllowedAfterClose(t *testing.T) {
 	path := testRepoPath("test", t)
 
 	assert.True(!IsInitialized(path), t, "should NOT be initialized")
-	assert.Nil(Init(path, &config.Config{}), t, "should initialize successfully")
+	assert.Nil(Init(path, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t, "should initialize successfully")
 	r, err := Open(path)
 	assert.Nil(err, t, "should open successfully")
 
@@ -84,7 +84,7 @@ func TestDatastorePersistsFromRepoToRepo(t *testing.T) {
 	t.Parallel()
 	path := testRepoPath("test", t)
 
-	assert.Nil(Init(path, &config.Config{}), t)
+	assert.Nil(Init(path, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t)
 	r1, err := Open(path)
 	assert.Nil(err, t)
 
@@ -106,7 +106,7 @@ func TestDatastorePersistsFromRepoToRepo(t *testing.T) {
 func TestOpenMoreThanOnceInSameProcess(t *testing.T) {
 	t.Parallel()
 	path := testRepoPath("", t)
-	assert.Nil(Init(path, &config.Config{}), t)
+	assert.Nil(Init(path, &config.Config{Datastore: config.DefaultDatastoreConfig()}), t)
 
 	r1, err := Open(path)
 	assert.Nil(err, t, "first repo should open successfully")

@@ -2,6 +2,7 @@ package corerepo
 
 import (
 	"fmt"
+	"math"
 
 	context "context"
 	"github.com/ipfs/go-ipfs/core"
@@ -17,6 +18,9 @@ type Stat struct {
 	Version    string
 	StorageMax uint64 // size in bytes
 }
+
+// NoLimit represents the value for unlimited storage
+const NoLimit uint64 = math.MaxUint64
 
 func RepoStat(n *core.IpfsNode, ctx context.Context) (*Stat, error) {
 	r := n.Repo
@@ -46,9 +50,12 @@ func RepoStat(n *core.IpfsNode, ctx context.Context) (*Stat, error) {
 		return nil, err
 	}
 
-	storageMax, err := humanize.ParseBytes(cfg.Datastore.StorageMax)
-	if err != nil {
-		return nil, err
+	storageMax := NoLimit
+	if cfg.Datastore.StorageMax != "" {
+		storageMax, err = humanize.ParseBytes(cfg.Datastore.StorageMax)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Stat{

@@ -9,10 +9,9 @@ import (
 	bserv "github.com/ipfs/go-ipfs/blockservice"
 	offline "github.com/ipfs/go-ipfs/exchange/offline"
 
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	blocks "gx/ipfs/QmVA4mafxbfH5aEvNz8fyoxC6J1xhAtw88B4GerPznSZBg/go-block-format"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
-	ipldcbor "gx/ipfs/QmeebqVZeEXBqJ2B4urQWfdhwRRPm84ajnCo8x8pfwbsPM/go-ipld-cbor"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
+	ipldcbor "gx/ipfs/QmWCs8kMecJwCPK8JThue8TjgM2ieJ2HjTLDu7Cv2NEmZi/go-ipld-cbor"
 )
 
 // TODO: We should move these registrations elsewhere. Really, most of the IPLD
@@ -75,8 +74,9 @@ func (n *dagService) Add(nd node.Node) (*cid.Cid, error) {
 
 func (n *dagService) Batch() *Batch {
 	return &Batch{
-		ds:      n,
-		MaxSize: 8 << 20,
+		ds:            n,
+		commitResults: make(chan error, ParallelBatchCommits),
+		MaxSize:       8 << 20,
 
 		// By default, only batch up to 128 nodes at a time.
 		// The current implementation of flatfs opens this many file
@@ -153,8 +153,13 @@ type sesGetter struct {
 
 func (sg *sesGetter) Get(ctx context.Context, c *cid.Cid) (node.Node, error) {
 	blk, err := sg.bs.GetBlock(ctx, c)
-	if err != nil {
+	switch err {
+	case bserv.ErrNotFound:
+		return nil, ErrNotFound
+	default:
 		return nil, err
+	case nil:
+		// noop
 	}
 
 	return node.Decode(blk)
@@ -302,11 +307,14 @@ func GetNodes(ctx context.Context, ds DAGService, keys []*cid.Cid) []NodeGetter 
 
 // Remove duplicates from a list of keys
 func dedupeKeys(cids []*cid.Cid) []*cid.Cid {
+	out := make([]*cid.Cid, 0, len(cids))
 	set := cid.NewSet()
 	for _, c := range cids {
-		set.Add(c)
+		if set.Visit(c) {
+			out = append(out, c)
+		}
 	}
-	return set.Keys()
+	return out
 }
 
 func newNodePromise(ctx context.Context) NodeGetter {
@@ -382,31 +390,6 @@ func (np *nodePromise) Get(ctx context.Context) (node.Node, error) {
 	case err := <-np.err:
 		return nil, err
 	}
-}
-
-type Batch struct {
-	ds *dagService
-
-	blocks    []blocks.Block
-	size      int
-	MaxSize   int
-	MaxBlocks int
-}
-
-func (t *Batch) Add(nd node.Node) (*cid.Cid, error) {
-	t.blocks = append(t.blocks, nd)
-	t.size += len(nd.RawData())
-	if t.size > t.MaxSize || len(t.blocks) > t.MaxBlocks {
-		return nd.Cid(), t.Commit()
-	}
-	return nd.Cid(), nil
-}
-
-func (t *Batch) Commit() error {
-	_, err := t.ds.Blocks.AddBlocks(t.blocks)
-	t.blocks = nil
-	t.size = 0
-	return err
 }
 
 type GetLinks func(context.Context, *cid.Cid) ([]*node.Link, error)

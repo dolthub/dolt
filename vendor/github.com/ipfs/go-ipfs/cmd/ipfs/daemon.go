@@ -16,12 +16,10 @@ import (
 	commands "github.com/ipfs/go-ipfs/core/commands"
 	corehttp "github.com/ipfs/go-ipfs/core/corehttp"
 	corerepo "github.com/ipfs/go-ipfs/core/corerepo"
-	"github.com/ipfs/go-ipfs/core/corerouting"
 	nodeMount "github.com/ipfs/go-ipfs/fuse/node"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	migrate "github.com/ipfs/go-ipfs/repo/fsrepo/migrations"
 
-	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
 	mprome "gx/ipfs/QmSk46nSD78YiuNojYMS8NW6hSCjH95JajqqzzoychZgef/go-metrics-prometheus"
 	"gx/ipfs/QmX3QZ5jHEPidwUrymXV1iSCSUhdGxj15sm2gP4jKMef7B/client_golang/prometheus"
 	"gx/ipfs/QmX3U3YXCQ6UYBxq2LVWF8dARS1hPUTEYLrSx654Qyxyw6/go-multiaddr-net"
@@ -304,21 +302,8 @@ func daemonFunc(req cmds.Request, res cmds.Response) {
 	}
 	switch routingOption {
 	case routingOptionSupernodeKwd:
-		servers, err := cfg.SupernodeRouting.ServerIPFSAddrs()
-		if err != nil {
-			res.SetError(err, cmds.ErrNormal)
-			repo.Close() // because ownership hasn't been transferred to the node
-			return
-		}
-		var infos []pstore.PeerInfo
-		for _, addr := range servers {
-			infos = append(infos, pstore.PeerInfo{
-				ID:    addr.ID(),
-				Addrs: []ma.Multiaddr{addr.Transport()},
-			})
-		}
-
-		ncfg.Routing = corerouting.SupernodeClient(infos...)
+		res.SetError(errors.New("supernode routing was never fully implemented and has been removed"), cmds.ErrNormal)
+		return
 	case routingOptionDHTClientKwd:
 		ncfg.Routing = core.DHTClientOption
 	case routingOptionDHTKwd:

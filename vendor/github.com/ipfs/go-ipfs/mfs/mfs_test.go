@@ -24,11 +24,11 @@ import (
 	ft "github.com/ipfs/go-ipfs/unixfs"
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
 	ds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
 	dssync "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore/sync"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
 )
 
 func emptyDirNode() *dag.ProtoNode {
@@ -735,7 +735,7 @@ func TestMfsHugeDir(t *testing.T) {
 	_, rt := setupRoot(ctx, t)
 
 	for i := 0; i < 10000; i++ {
-		err := Mkdir(rt, fmt.Sprintf("/dir%d", i), false, false)
+		err := Mkdir(rt, fmt.Sprintf("/dir%d", i), MkdirOpts{Mkparents: false, Flush: false})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -747,7 +747,7 @@ func TestMkdirP(t *testing.T) {
 	defer cancel()
 	_, rt := setupRoot(ctx, t)
 
-	err := Mkdir(rt, "/a/b/c/d/e/f", true, true)
+	err := Mkdir(rt, "/a/b/c/d/e/f", MkdirOpts{Mkparents: true, Flush: true})
 	if err != nil {
 		t.Fatal(err)
 	}

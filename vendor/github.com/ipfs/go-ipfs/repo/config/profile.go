@@ -41,4 +41,16 @@ var ConfigProfiles = map[string]func(*Config) error{
 		c.Discovery.MDNS.Enabled = false
 		return nil
 	},
+	"badgerds": func(c *Config) error {
+		c.Datastore.Spec = map[string]interface{}{
+			"type":   "measure",
+			"prefix": "badger.datastore",
+			"child": map[string]interface{}{
+				"type":       "badgerds",
+				"path":       "badgerds",
+				"syncWrites": true,
+			},
+		}
+		return nil
+	},
 }

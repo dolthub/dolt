@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 	mh "gx/ipfs/QmU9a9NV9RdPNwZQDYd5uKsm6N6LJLSvLbywDDYFbaaC6P/go-multihash"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
 )
 
 var ErrNotProtobuf = fmt.Errorf("expected protobuf dag node")
@@ -41,6 +41,12 @@ var v1CidPrefix = cid.Prefix{
 	MhType:   mh.SHA2_256,
 	Version:  1,
 }
+
+// V0CidPrefix returns a prefix for CIDv0
+func V0CidPrefix() cid.Prefix { return v0CidPrefix }
+
+// V1CidPrefix returns a prefix for CIDv1 with the default settings
+func V1CidPrefix() cid.Prefix { return v1CidPrefix }
 
 // PrefixForCidVersion returns the Protobuf prefix for a given CID version
 func PrefixForCidVersion(version int) (cid.Prefix, error) {

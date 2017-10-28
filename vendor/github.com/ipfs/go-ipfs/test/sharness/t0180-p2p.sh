@@ -42,7 +42,7 @@ test_expect_success 'start p2p listener' '
 test_expect_success 'Test server to client communications' '
   ma-pipe-unidir --listen --pidFile=listener.pid send /ip4/127.0.0.1/tcp/10101 < test0.bin &
 
-  go-sleep 500ms &&
+  test_wait_for_file 30 100ms listener.pid &&
   kill -0 $(cat listener.pid) &&
 
   ipfsi 1 p2p stream dial $PEERID_0 p2p-test /ip4/127.0.0.1/tcp/10102 2>&1 > dialer-stdouterr.log &&
@@ -53,7 +53,7 @@ test_expect_success 'Test server to client communications' '
 test_expect_success 'Test client to server communications' '
   ma-pipe-unidir --listen --pidFile=listener.pid recv /ip4/127.0.0.1/tcp/10101 > server.out &
 
-  go-sleep 500ms &&
+  test_wait_for_file 30 100ms listener.pid &&
   kill -0 $(cat listener.pid) &&
 
   ipfsi 1 p2p stream dial $PEERID_0 p2p-test /ip4/127.0.0.1/tcp/10102 2>&1 > dialer-stdouterr.log &&
@@ -94,7 +94,8 @@ test_expect_success "Setup: Idle stream" '
   ipfsi 1 p2p stream dial $PEERID_0 p2p-test /ip4/127.0.0.1/tcp/10102 2>&1 > dialer-stdouterr.log &&
   ma-pipe-unidir --pidFile=client.pid recv /ip4/127.0.0.1/tcp/10102 &
 
-  go-sleep 500ms &&
+  test_wait_for_file 30 100ms listener.pid &&
+  test_wait_for_file 30 100ms client.pid &&
   kill -0 $(cat listener.pid) && kill -0 $(cat client.pid)
 '
 
@@ -127,7 +128,8 @@ test_expect_success "Setup: Idle stream(2)" '
   ipfsi 1 p2p stream dial $PEERID_0 p2p-test2 /ip4/127.0.0.1/tcp/10102 2>&1 > dialer-stdouterr.log &&
   ma-pipe-unidir --pidFile=client.pid recv /ip4/127.0.0.1/tcp/10102 &
 
-  go-sleep 500ms &&
+  test_wait_for_file 30 100ms listener.pid &&
+  test_wait_for_file 30 100ms client.pid &&
   kill -0 $(cat listener.pid) && kill -0 $(cat client.pid)
 '
 

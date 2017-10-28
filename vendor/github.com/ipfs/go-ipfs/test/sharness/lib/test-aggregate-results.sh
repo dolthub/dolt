@@ -9,9 +9,9 @@
 SHARNESS_AGGREGATE="lib/sharness/aggregate-results.sh"
 
 test -f "$SHARNESS_AGGREGATE" || {
-	echo >&2 "Cannot find: $SHARNESS_AGGREGATE"
-	echo >&2 "Please check Sharness installation."
-	exit 1
+  echo >&2 "Cannot find: $SHARNESS_AGGREGATE"
+  echo >&2 "Please check Sharness installation."
+  exit 1
 }
 
 ls test-results/t*-*.sh.*.counts | "$SHARNESS_AGGREGATE"

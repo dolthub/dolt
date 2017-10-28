@@ -16,7 +16,7 @@ import (
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 	unixfspb "github.com/ipfs/go-ipfs/unixfs/pb"
 
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 type LsLink struct {
@@ -106,15 +106,20 @@ The JSON output contains type information.
 		output := make([]LsObject, len(req.Arguments()))
 		for i, dagnode := range dagnodes {
 			dir, err := uio.NewDirectoryFromNode(nd.DAG, dagnode)
-			if err != nil {
+			if err != nil && err != uio.ErrNotADir {
 				res.SetError(err, cmds.ErrNormal)
 				return
 			}
 
-			links, err := dir.Links(req.Context())
-			if err != nil {
-				res.SetError(err, cmds.ErrNormal)
-				return
+			var links []*node.Link
+			if dir == nil {
+				links = dagnode.Links()
+			} else {
+				links, err = dir.Links(req.Context())
+				if err != nil {
+					res.SetError(err, cmds.ErrNormal)
+					return
+				}
 			}
 
 			output[i] = LsObject{

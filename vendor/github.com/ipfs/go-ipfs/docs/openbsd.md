@@ -20,7 +20,8 @@ $ export PATH="$PATH:$GOPATH/bin"
 
 ## Build
 
-The `install_unsupported` target works nicely for openbsd. This will install `gx`, `gx-go` and run `go install -tags nofuse ./cmd/ipfs`.
+The `install_unsupported` target works nicely for openbsd. This will install
+`gx`, `gx-go` and run `go install -tags nofuse ./cmd/ipfs`.
 
 ```
 $ go get -v -u -d github.com/ipfs/go-ipfs

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"time"
 
+	net "gx/ipfs/QmNa31VPzC561NWwRsJLE7nGYZYuuD2QfpK2b1q9BK54J1/go-libp2p-net"
 	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
-	p2phost "gx/ipfs/QmW8Rgju5JrSMHP7RDNdiwwXyenRqAbtSaPfdQKQC7ZdH6/go-libp2p-host"
 	manet "gx/ipfs/QmX3U3YXCQ6UYBxq2LVWF8dARS1hPUTEYLrSx654Qyxyw6/go-multiaddr-net"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	pro "gx/ipfs/QmZNkThpqfVXs9GNbexPrfBbXSLNYeKrE7jwFM2oqHbyqN/go-libp2p-protocol"
-	net "gx/ipfs/QmahYsGWry85Y7WUe2SX5G4JkH2zifEQAUtJVLZ24aC9DF/go-libp2p-net"
+	p2phost "gx/ipfs/Qmc1XhrFEiSeBNn3mpfg6gEuYCt5im2gYmNVmncsvmpeAk/go-libp2p-host"
 )
 
 // P2P structure holds information on currently running streams/listeners
@@ -64,7 +64,7 @@ func (p2p *P2P) Dial(ctx context.Context, addr ma.Multiaddr, peer peer.ID, proto
 	case "tcp", "tcp4", "tcp6":
 		listener, err := manet.Listen(bindAddr)
 		if err != nil {
-			if err2 := remote.Close(); err2 != nil {
+			if err2 := remote.Reset(); err2 != nil {
 				return nil, err2
 			}
 			return nil, err
@@ -158,7 +158,7 @@ func (p2p *P2P) registerStreamHandler(ctx2 context.Context, protocol string) (*P
 		select {
 		case list.conCh <- s:
 		case <-ctx.Done():
-			s.Close()
+			s.Reset()
 		}
 	})
 
@@ -198,7 +198,7 @@ func (p2p *P2P) acceptStreams(listenerInfo *ListenerInfo, listener Listener) {
 
 		local, err := manet.Dial(listenerInfo.Address)
 		if err != nil {
-			remote.Close()
+			remote.Reset()
 			continue
 		}
 

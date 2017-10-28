@@ -25,11 +25,11 @@ import (
 	posinfo "github.com/ipfs/go-ipfs/thirdparty/posinfo"
 	unixfs "github.com/ipfs/go-ipfs/unixfs"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
 	ds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
 	syncds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore/sync"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
 )
 
 var log = logging.Logger("coreunix")
@@ -119,7 +119,6 @@ func (adder *Adder) mfsRoot() (*mfs.Root, error) {
 	rnode := unixfs.EmptyDirNode()
 	rnode.SetPrefix(adder.Prefix)
 	mr, err := mfs.NewRoot(adder.ctx, adder.dagService, rnode, nil)
-	mr.Prefix = adder.Prefix
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +397,12 @@ func (adder *Adder) addNode(node node.Node, path string) error {
 	}
 	dir := gopath.Dir(path)
 	if dir != "." {
-		if err := mfs.Mkdir(mr, dir, true, false); err != nil {
+		opts := mfs.MkdirOpts{
+			Mkparents: true,
+			Flush:     false,
+			Prefix:    adder.Prefix,
+		}
+		if err := mfs.Mkdir(mr, dir, opts); err != nil {
 			return err
 		}
 	}
@@ -496,7 +500,11 @@ func (adder *Adder) addDir(dir files.File) error {
 	if err != nil {
 		return err
 	}
-	err = mfs.Mkdir(mr, dir.FileName(), true, false)
+	err = mfs.Mkdir(mr, dir.FileName(), mfs.MkdirOpts{
+		Mkparents: true,
+		Flush:     false,
+		Prefix:    adder.Prefix,
+	})
 	if err != nil {
 		return err
 	}

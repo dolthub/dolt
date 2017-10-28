@@ -131,25 +131,25 @@ test_bootstrap_cmd() {
   test_bootstrap_list_cmd
 
   test_expect_success "'ipfs bootstrap add' accepts args from stdin" '
-	echo $BP1 > bpeers &&
-	echo $BP2 >> bpeers &&
-	echo $BP3 >> bpeers &&
-	echo $BP4 >> bpeers &&
-	cat bpeers | ipfs bootstrap add > add_stdin_actual
+  echo $BP1 > bpeers &&
+  echo $BP2 >> bpeers &&
+  echo $BP3 >> bpeers &&
+  echo $BP4 >> bpeers &&
+  cat bpeers | ipfs bootstrap add > add_stdin_actual
   '
 
   test_expect_success "output looks good" '
-	test_cmp add_stdin_actual bpeers
+  test_cmp add_stdin_actual bpeers
   '
 
   test_bootstrap_list_cmd $BP1 $BP2 $BP3 $BP4
 
   test_expect_success "'ipfs bootstrap rm' accepts args from stdin" '
-	cat bpeers | ipfs bootstrap rm > rm_stdin_actual
+  cat bpeers | ipfs bootstrap rm > rm_stdin_actual
   '
 
   test_expect_success "output looks good" '
-	test_cmp rm_stdin_actual bpeers
+  test_cmp rm_stdin_actual bpeers
   '
 
   test_bootstrap_list_cmd

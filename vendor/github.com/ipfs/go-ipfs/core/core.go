@@ -42,37 +42,39 @@ import (
 	offroute "github.com/ipfs/go-ipfs/routing/offline"
 	ft "github.com/ipfs/go-ipfs/unixfs"
 
-	pnet "gx/ipfs/QmNMCAuxnQFHLGWcvay3DmVFrKuY6Y2nsc9vzsf4gVouJV/go-libp2p-pnet"
+	yamux "gx/ipfs/QmNWCEvi7bPRcvqAV8AKLGVNoQdArWi7NJayka2SM4XtRe/go-smux-yamux"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	mplex "gx/ipfs/QmP81tTizXSjKTLWhjty1rabPQHe1YPMj6Bq5gR5fWZakn/go-smux-multiplex"
+	connmgr "gx/ipfs/QmPErLx83hgF5XKqjeYaLWXJSFon4mH7YPzoftUvfrPgQG/go-libp2p-connmgr"
+	routing "gx/ipfs/QmPR2JzfKd9poHx9XBhzoFeBBC31ZM3W5iUPKJZWyaoZZm/go-libp2p-routing"
 	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
-	routing "gx/ipfs/QmPjTrrSfE6TzLv6ya6VWhGcCgPrUAdcgrDcQyRDX2VyW1/go-libp2p-routing"
 	mafilter "gx/ipfs/QmQBB2dQLmQHJgs2gqZ3iqL2XiuCtUCvXzWt5kMXDf5Zcr/go-maddr-filter"
+	metrics "gx/ipfs/QmQbh3Rb7KM37As3vkHYnEFnzkVXNCP8EYGtHz6g2fXk14/go-libp2p-metrics"
 	ipnet "gx/ipfs/QmQq9YzmdFdWNTDdArueGyD7L5yyiRQigrRHJnTGkxcEjT/go-libp2p-interface-pnet"
-	mssmux "gx/ipfs/QmRVYfZ7tWNHPBzWiG6KWGzvT2hcGems8srihsQE29x1U5/go-smux-multistream"
 	goprocess "gx/ipfs/QmSF8fPo3jgVBAy8fpdjjYqgG87dkJgUprRBHRd2tmfgpP/goprocess"
 	mamask "gx/ipfs/QmSMZwvs3n4GBikZ7hKzT17c3bk65FmyZo2JqtJ16swqCv/multiaddr-filter"
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	swarm "gx/ipfs/QmVJefKHXEx28RFpmj5GeRg43AqeBH3npPwvgJ875fBPm7/go-libp2p-swarm"
+	floodsub "gx/ipfs/QmUUSLfvihARhCxxgnjW4hmycJpPvzNu12Aaz6JWVdfnLg/go-libp2p-floodsub"
+	addrutil "gx/ipfs/QmVJGsPeK3vwtEyyTxpCs47yjBYMmYsAhEouPDF3Gb2eK3/go-addr-util"
 	ds "gx/ipfs/QmVSase1JP7cq9QkPT46oNwdp9pT6kBkG3oqS14y3QcZjG/go-datastore"
-	metrics "gx/ipfs/QmVjRAPfRtResCMCE4eBqr4Beoa6A89P1YweG9wUS6RqUL/go-libp2p-metrics"
-	p2phost "gx/ipfs/QmW8Rgju5JrSMHP7RDNdiwwXyenRqAbtSaPfdQKQC7ZdH6/go-libp2p-host"
+	mssmux "gx/ipfs/QmVniQJkdzLZaZwzwMdd3dJTvWiJ1DQEkreVy6hs6h7Vk5/go-smux-multistream"
+	dht "gx/ipfs/QmWPfedZaRVGQv5uRuBQxa1wDf4kmDKQgcfEg9ewWwtbC7/go-libp2p-kad-dht"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
-	mplex "gx/ipfs/QmYBCDHS74pfbhMhtLeDpZyBa4Z9X76JLyACSKum1K39eP/go-smux-multiplex"
-	circuit "gx/ipfs/QmYBGpZ3hV89RZTd3CTjjgjgcX64QnbcBS9dCqU7mCgS1n/go-libp2p-circuit"
-	dht "gx/ipfs/QmZSEstKChFezMwTcAWH5UQxvRckmnvgVZjFeSnGLDHU3Y/go-libp2p-kad-dht"
-	discovery "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/discovery"
-	p2pbhost "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/host/basic"
-	rhost "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/host/routed"
-	identify "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/protocol/identify"
-	ping "gx/ipfs/QmZyngpQxUGyx1T2bzEcst6YzERkvVwDzBMbsSQF4f1smE/go-libp2p/p2p/protocol/ping"
+	smux "gx/ipfs/QmY9JXR3FupnYAYJWK9aMr9bCpqWKcToQ1tz8DVGTrHpHw/go-stream-muxer"
+	ifconnmgr "gx/ipfs/QmYkCrTwivapqdB3JbwvwvxymseahVkcm46ThRMAA24zCr/go-libp2p-interface-connmgr"
 	ic "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-	yamux "gx/ipfs/Qmbn7RYyWzBVXiUp9jZ1dA4VADHy9DtS7iZLwfhEUQvm3U/go-smux-yamux"
-	addrutil "gx/ipfs/Qmcx4KoZ91XS6izLjdkujAMAunAS1YuTgfgASgYaZF5GkR/go-addr-util"
-	floodsub "gx/ipfs/QmddZj8gx1Ceisj3QEWeAzPEjCPWpXzneN1ANdkZdwUdc3/floodsub"
-	smux "gx/ipfs/QmeZBgYBHvxMukGK5ojg28BCNLB9SeXqT7XXg6o7r2GbJy/go-stream-muxer"
+	p2phost "gx/ipfs/Qmc1XhrFEiSeBNn3mpfg6gEuYCt5im2gYmNVmncsvmpeAk/go-libp2p-host"
+	pnet "gx/ipfs/QmcWmYQEQCrezztaQ81nXzMx2jaAEow17wdesDAjjR769r/go-libp2p-pnet"
+	swarm "gx/ipfs/QmdQFrFnPrKRQtpeHKjZ3cVNwxmGKKS2TvhJTuN9C9yduh/go-libp2p-swarm"
+	discovery "gx/ipfs/QmefgzMbKZYsmHFkLqxgaTBG9ypeEjrdWRD5WXH4j1cWDL/go-libp2p/p2p/discovery"
+	p2pbhost "gx/ipfs/QmefgzMbKZYsmHFkLqxgaTBG9ypeEjrdWRD5WXH4j1cWDL/go-libp2p/p2p/host/basic"
+	rhost "gx/ipfs/QmefgzMbKZYsmHFkLqxgaTBG9ypeEjrdWRD5WXH4j1cWDL/go-libp2p/p2p/host/routed"
+	identify "gx/ipfs/QmefgzMbKZYsmHFkLqxgaTBG9ypeEjrdWRD5WXH4j1cWDL/go-libp2p/p2p/protocol/identify"
+	ping "gx/ipfs/QmefgzMbKZYsmHFkLqxgaTBG9ypeEjrdWRD5WXH4j1cWDL/go-libp2p/p2p/protocol/ping"
+	circuit "gx/ipfs/Qmf7GSJ4omRJsvA9uzTqzbnVhq4RWLPzjzW4xJzUta4dKE/go-libp2p-circuit"
 )
 
 const IpnsValidatorTag = "ipns"
@@ -219,11 +221,17 @@ func (n *IpfsNode) startOnlineServices(ctx context.Context, routingOption Routin
 		return err
 	}
 
+	connmgr, err := constructConnMgr(cfg.Swarm.ConnMgr)
+	if err != nil {
+		return err
+	}
+
 	hostopts := &ConstructPeerHostOpts{
 		AddrsFactory:      addrsFactory,
 		DisableNatPortMap: cfg.Swarm.DisableNatPortMap,
 		DisableRelay:      cfg.Swarm.DisableRelay,
 		EnableRelayHop:    cfg.Swarm.EnableRelayHop,
+		ConnectionManager: connmgr,
 	}
 	peerhost, err := hostOption(ctx, n.Identity, n.Peerstore, n.Reporter,
 		addrfilter, tpt, protec, hostopts)
@@ -259,6 +267,22 @@ func (n *IpfsNode) startOnlineServices(ctx context.Context, routingOption Routin
 	}
 
 	return n.Bootstrap(DefaultBootstrapConfig)
+}
+
+func constructConnMgr(cfg config.ConnMgr) (ifconnmgr.ConnManager, error) {
+	switch cfg.Type {
+	case "", "none":
+		return nil, nil
+	case "basic":
+		grace, err := time.ParseDuration(cfg.GracePeriod)
+		if err != nil {
+			return nil, fmt.Errorf("parsing Swarm.ConnMgr.GracePeriod: %s", err)
+		}
+
+		return connmgr.NewConnManager(cfg.LowWater, cfg.HighWater, grace), nil
+	default:
+		return nil, fmt.Errorf("unrecognized ConnMgr.Type: %q", cfg.Type)
+	}
 }
 
 func (n *IpfsNode) startLateOnlineServices(ctx context.Context) error {
@@ -348,7 +372,7 @@ func makeSmuxTransport(mplexExp bool) smux.Transport {
 	mstpt := mssmux.NewBlankTransport()
 
 	ymxtpt := &yamux.Transport{
-		AcceptBacklog:          8192,
+		AcceptBacklog:          512,
 		ConnectionWriteTimeout: time.Second * 10,
 		KeepAliveInterval:      time.Second * 30,
 		EnableKeepAlive:        true,
@@ -380,7 +404,7 @@ func setupDiscoveryOption(d config.Discovery) DiscoveryOption {
 			if d.MDNS.Interval == 0 {
 				d.MDNS.Interval = 5
 			}
-			return discovery.NewMdnsService(ctx, h, time.Duration(d.MDNS.Interval)*time.Second)
+			return discovery.NewMdnsService(ctx, h, time.Duration(d.MDNS.Interval)*time.Second, discovery.ServiceTag)
 		}
 	}
 	return nil
@@ -789,6 +813,7 @@ type ConstructPeerHostOpts struct {
 	DisableNatPortMap bool
 	DisableRelay      bool
 	EnableRelayHop    bool
+	ConnectionManager ifconnmgr.ConnManager
 }
 
 type HostOption func(ctx context.Context, id peer.ID, ps pstore.Peerstore, bwr metrics.Reporter, fs []*net.IPNet, tpt smux.Transport, protc ipnet.Protector, opts *ConstructPeerHostOpts) (p2phost.Host, error)
@@ -813,6 +838,9 @@ func constructPeerHost(ctx context.Context, id peer.ID, ps pstore.Peerstore, bwr
 	hostOpts := []interface{}{bwr}
 	if !opts.DisableNatPortMap {
 		hostOpts = append(hostOpts, p2pbhost.NATPortMap)
+	}
+	if opts.ConnectionManager != nil {
+		hostOpts = append(hostOpts, opts.ConnectionManager)
 	}
 
 	addrsFactory := opts.AddrsFactory

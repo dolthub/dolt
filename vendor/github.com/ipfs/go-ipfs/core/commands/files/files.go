@@ -18,8 +18,10 @@ import (
 	ft "github.com/ipfs/go-ipfs/unixfs"
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	mh "gx/ipfs/QmU9a9NV9RdPNwZQDYd5uKsm6N6LJLSvLbywDDYFbaaC6P/go-multihash"
 )
 
 var log = logging.Logger("cmds/files")
@@ -54,8 +56,12 @@ operations.
 		"stat":  FilesStatCmd,
 		"rm":    FilesRmCmd,
 		"flush": FilesFlushCmd,
+		"chcid": FilesChcidCmd,
 	},
 }
+
+var cidVersionOption = cmds.IntOption("cid-version", "cid-ver", "Cid version to use. (experimental)")
+var hashOption = cmds.StringOption("hash", "Hash function to use. Will set Cid version to 1 if used. (experimental)")
 
 var formatError = errors.New("Format was set by multiple options. Only one format option is allowed")
 
@@ -162,38 +168,46 @@ func statNode(ds dag.DAGService, fsn mfs.FSNode) (*Object, error) {
 
 	c := nd.Cid()
 
-	pbnd, ok := nd.(*dag.ProtoNode)
-	if !ok {
-		return nil, dag.ErrNotProtobuf
-	}
-
-	d, err := ft.FromBytes(pbnd.Data())
-	if err != nil {
-		return nil, err
-	}
-
 	cumulsize, err := nd.Size()
 	if err != nil {
 		return nil, err
 	}
 
-	var ndtype string
-	switch fsn.Type() {
-	case mfs.TDir:
-		ndtype = "directory"
-	case mfs.TFile:
-		ndtype = "file"
-	default:
-		return nil, fmt.Errorf("Unrecognized node type: %s", fsn.Type())
-	}
+	switch n := nd.(type) {
+	case *dag.ProtoNode:
+		d, err := ft.FromBytes(n.Data())
+		if err != nil {
+			return nil, err
+		}
 
-	return &Object{
-		Hash:           c.String(),
-		Blocks:         len(nd.Links()),
-		Size:           d.GetFilesize(),
-		CumulativeSize: cumulsize,
-		Type:           ndtype,
-	}, nil
+		var ndtype string
+		switch fsn.Type() {
+		case mfs.TDir:
+			ndtype = "directory"
+		case mfs.TFile:
+			ndtype = "file"
+		default:
+			return nil, fmt.Errorf("unrecognized node type: %s", fsn.Type())
+		}
+
+		return &Object{
+			Hash:           c.String(),
+			Blocks:         len(nd.Links()),
+			Size:           d.GetFilesize(),
+			CumulativeSize: cumulsize,
+			Type:           ndtype,
+		}, nil
+	case *dag.RawNode:
+		return &Object{
+			Hash:           c.String(),
+			Blocks:         0,
+			Size:           cumulsize,
+			CumulativeSize: cumulsize,
+			Type:           "file",
+		}, nil
+	default:
+		return nil, fmt.Errorf("not unixfs node (proto or raw)")
+	}
 }
 
 var FilesCpCmd = &cmds.Command{
@@ -562,6 +576,13 @@ a beginning offset to write to. The entire length of the input will be written.
 If the '--create' option is specified, the file will be created if it does not
 exist. Nonexistant intermediate directories will not be created.
 
+Newly created files will have the same CID version and hash function of the
+parent directory unless the --cid-version and --hash options are used.
+
+Newly created leaves will be in the legacy format (Protobuf) if the
+CID version is 0, or raw is the CID version is non-zero.  Use of the
+--raw-leaves option will override this behavior.
+
 If the '--flush' option is set to false, changes will not be propogated to the
 merkledag root. This can make operations much faster when doing a large number
 of writes to a deeper directory structure.
@@ -587,6 +608,9 @@ stat' on the file or any of its ancestors.
 		cmds.BoolOption("create", "e", "Create the file if it does not exist."),
 		cmds.BoolOption("truncate", "t", "Truncate the file to size zero before writing."),
 		cmds.IntOption("count", "n", "Maximum number of bytes to read."),
+		cmds.BoolOption("raw-leaves", "Use raw blocks for newly created leaf nodes. (experimental)"),
+		cidVersionOption,
+		hashOption,
 	},
 	Run: func(req cmds.Request, res cmds.Response) {
 		path, err := checkPath(req.Arguments()[0])
@@ -598,6 +622,13 @@ stat' on the file or any of its ancestors.
 		create, _, _ := req.Option("create").Bool()
 		trunc, _, _ := req.Option("truncate").Bool()
 		flush, _, _ := req.Option("flush").Bool()
+		rawLeaves, rawLeavesDef, _ := req.Option("raw-leaves").Bool()
+
+		prefix, err := getPrefix(req)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
 
 		nd, err := req.InvocContext().GetNode()
 		if err != nil {
@@ -615,10 +646,13 @@ stat' on the file or any of its ancestors.
 			return
 		}
 
-		fi, err := getFileHandle(nd.FilesRoot, path, create)
+		fi, err := getFileHandle(nd.FilesRoot, path, create, prefix)
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
+		}
+		if rawLeavesDef {
+			fi.RawLeaves = rawLeaves
 		}
 
 		wfd, err := fi.Open(mfs.OpenWriteOnly, flush)
@@ -685,6 +719,9 @@ var FilesMkdirCmd = &cmds.Command{
 		ShortDescription: `
 Create the directory if it does not already exist.
 
+The directory will have the same CID version and hash function of the
+parent directory unless the --cid-version and --hash options are used.
+
 NOTE: All paths must be absolute.
 
 Examples:
@@ -699,6 +736,8 @@ Examples:
 	},
 	Options: []cmds.Option{
 		cmds.BoolOption("parents", "p", "No error if existing, make parent directories as needed."),
+		cidVersionOption,
+		hashOption,
 	},
 	Run: func(req cmds.Request, res cmds.Response) {
 		n, err := req.InvocContext().GetNode()
@@ -716,7 +755,18 @@ Examples:
 
 		flush, _, _ := req.Option("flush").Bool()
 
-		err = mfs.Mkdir(n.FilesRoot, dirtomake, dashp, flush)
+		prefix, err := getPrefix(req)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+		root := n.FilesRoot
+
+		err = mfs.Mkdir(root, dirtomake, mfs.MkdirOpts{
+			Mkparents: dashp,
+			Flush:     flush,
+			Prefix:    prefix,
+		})
 		if err != nil {
 			res.SetError(err, cmds.ErrNormal)
 			return
@@ -754,6 +804,72 @@ are run with the '--flush=false'.
 			return
 		}
 	},
+}
+
+var FilesChcidCmd = &cmds.Command{
+	Helptext: cmds.HelpText{
+		Tagline: "Change the cid version or hash function of the root node of a given path.",
+		ShortDescription: `
+Change the cid version or hash function of the root node of a given path.
+`,
+	},
+	Arguments: []cmds.Argument{
+		cmds.StringArg("path", false, false, "Path to change. Default: '/'."),
+	},
+	Options: []cmds.Option{
+		cidVersionOption,
+		hashOption,
+	},
+	Run: func(req cmds.Request, res cmds.Response) {
+		nd, err := req.InvocContext().GetNode()
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		path := "/"
+		if len(req.Arguments()) > 0 {
+			path = req.Arguments()[0]
+		}
+
+		flush, _, _ := req.Option("flush").Bool()
+
+		prefix, err := getPrefix(req)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+
+		err = updatePath(nd.FilesRoot, path, prefix, flush)
+		if err != nil {
+			res.SetError(err, cmds.ErrNormal)
+			return
+		}
+	},
+}
+
+func updatePath(rt *mfs.Root, pth string, prefix *cid.Prefix, flush bool) error {
+	if prefix == nil {
+		return nil
+	}
+
+	nd, err := mfs.Lookup(rt, pth)
+	if err != nil {
+		return err
+	}
+
+	switch n := nd.(type) {
+	case *mfs.Directory:
+		n.SetPrefix(prefix)
+	default:
+		return fmt.Errorf("can only update directories")
+	}
+
+	if flush {
+		nd.Flush()
+	}
+
+	return nil
 }
 
 var FilesRmCmd = &cmds.Command{
@@ -860,8 +976,36 @@ Remove files or directories.
 	},
 }
 
-func getFileHandle(r *mfs.Root, path string, create bool) (*mfs.File, error) {
+func getPrefix(req cmds.Request) (*cid.Prefix, error) {
+	cidVer, cidVerSet, _ := req.Option("cid-version").Int()
+	hashFunStr, hashFunSet, _ := req.Option("hash").String()
 
+	if !cidVerSet && !hashFunSet {
+		return nil, nil
+	}
+
+	if hashFunSet && cidVer == 0 {
+		cidVer = 1
+	}
+
+	prefix, err := dag.PrefixForCidVersion(cidVer)
+	if err != nil {
+		return nil, err
+	}
+
+	if hashFunSet {
+		hashFunCode, ok := mh.Names[strings.ToLower(hashFunStr)]
+		if !ok {
+			return nil, fmt.Errorf("unrecognized hash function: %s", strings.ToLower(hashFunStr))
+		}
+		prefix.MhType = hashFunCode
+		prefix.MhLength = -1
+	}
+
+	return &prefix, nil
+}
+
+func getFileHandle(r *mfs.Root, path string, create bool, prefix *cid.Prefix) (*mfs.File, error) {
 	target, err := mfs.Lookup(r, path)
 	switch err {
 	case nil:
@@ -887,8 +1031,12 @@ func getFileHandle(r *mfs.Root, path string, create bool) (*mfs.File, error) {
 		if !ok {
 			return nil, fmt.Errorf("%s was not a directory", dirname)
 		}
+		if prefix == nil {
+			prefix = pdir.GetPrefix()
+		}
 
 		nd := dag.NodeWithData(ft.FilePBData(nil, 0))
+		nd.SetPrefix(prefix)
 		err = pdir.AddChild(fname, nd)
 		if err != nil {
 			return nil, err

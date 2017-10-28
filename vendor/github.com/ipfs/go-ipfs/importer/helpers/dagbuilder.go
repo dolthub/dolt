@@ -9,8 +9,8 @@ import (
 	dag "github.com/ipfs/go-ipfs/merkledag"
 	ft "github.com/ipfs/go-ipfs/unixfs"
 
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 // DagBuilderHelper wraps together a bunch of objects needed to
@@ -120,8 +120,8 @@ func (db *DagBuilderHelper) NewUnixfsNode() *UnixfsNode {
 	return n
 }
 
-// NewUnixfsBlock creates a new Unixfs node to represent a raw data block
-func (db *DagBuilderHelper) NewUnixfsBlock() *UnixfsNode {
+// newUnixfsBlock creates a new Unixfs node to represent a raw data block
+func (db *DagBuilderHelper) newUnixfsBlock() *UnixfsNode {
 	n := &UnixfsNode{
 		node: new(dag.ProtoNode),
 		ufmt: &ft.FSNode{Type: ft.TRaw},
@@ -181,7 +181,7 @@ func (db *DagBuilderHelper) GetNextDataNode() (*UnixfsNode, error) {
 			}, nil
 		}
 	} else {
-		blk := db.NewUnixfsBlock()
+		blk := db.newUnixfsBlock()
 		blk.SetData(data)
 		return blk, nil
 	}

@@ -23,11 +23,11 @@ import (
 	ft "github.com/ipfs/go-ipfs/unixfs"
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
+	routing "gx/ipfs/QmPR2JzfKd9poHx9XBhzoFeBBC31ZM3W5iUPKJZWyaoZZm/go-libp2p-routing"
 	humanize "gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
-	routing "gx/ipfs/QmPjTrrSfE6TzLv6ya6VWhGcCgPrUAdcgrDcQyRDX2VyW1/go-libp2p-routing"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
-	multibase "gx/ipfs/Qme4T6BE4sQxg7ZouamF5M7Tx1ZFTqzcns7BkyQPXpoT99/go-multibase"
+	multibase "gx/ipfs/QmafgXF3u3QSWErQoZ2URmQp5PFG384htoE7J338nS2H7T/go-multibase"
 )
 
 const (
@@ -268,7 +268,7 @@ func (i *gatewayHandler) getOrHeadHandler(ctx context.Context, w http.ResponseWr
 
 	if !dir {
 		name := gopath.Base(urlPath)
-		http.ServeContent(w, r, name, modtime, dr)
+		i.serveFile(w, r, name, modtime, dr)
 		return
 	}
 
@@ -370,6 +370,34 @@ func (i *gatewayHandler) getOrHeadHandler(ctx context.Context, w http.ResponseWr
 		internalWebError(w, err)
 		return
 	}
+}
+
+type sizeReadSeeker interface {
+	Size() uint64
+
+	io.ReadSeeker
+}
+
+type sizeSeeker struct {
+	sizeReadSeeker
+}
+
+func (s *sizeSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekEnd && offset == 0 {
+		return int64(s.Size()), nil
+	}
+
+	return s.sizeReadSeeker.Seek(offset, whence)
+}
+
+func (i *gatewayHandler) serveFile(w http.ResponseWriter, req *http.Request, name string, modtime time.Time, content io.ReadSeeker) {
+	if sp, ok := content.(sizeReadSeeker); ok {
+		content = &sizeSeeker{
+			sizeReadSeeker: sp,
+		}
+	}
+
+	http.ServeContent(w, req, name, modtime, content)
 }
 
 func (i *gatewayHandler) postHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) {

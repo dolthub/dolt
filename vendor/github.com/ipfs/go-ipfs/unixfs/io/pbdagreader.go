@@ -188,6 +188,9 @@ func (dr *pbDagReader) Seek(offset int64, whence int) (int64, error) {
 		if offset < 0 {
 			return -1, errors.New("Invalid offset")
 		}
+		if offset == dr.offset {
+			return offset, nil
+		}
 
 		// Grab cached protobuf object (solely to make code look cleaner)
 		pb := dr.pbdata
@@ -239,11 +242,24 @@ func (dr *pbDagReader) Seek(offset int64, whence int) (int64, error) {
 		return offset, nil
 	case io.SeekCurrent:
 		// TODO: be smarter here
+		if offset == 0 {
+			return dr.offset, nil
+		}
+
 		noffset := dr.offset + offset
 		return dr.Seek(noffset, io.SeekStart)
 	case io.SeekEnd:
 		noffset := int64(dr.pbdata.GetFilesize()) - offset
-		return dr.Seek(noffset, io.SeekStart)
+		n, err := dr.Seek(noffset, io.SeekStart)
+
+		// Return negative number if we can't figure out the file size. Using io.EOF
+		// for this seems to be good(-enough) solution as it's only returned by
+		// precalcNextBuf when we step out of file range.
+		// This is needed for gateway to function properly
+		if err == io.EOF && *dr.pbdata.Type == ftpb.Data_File {
+			return -1, nil
+		}
+		return n, err
 	default:
 		return 0, errors.New("invalid whence")
 	}

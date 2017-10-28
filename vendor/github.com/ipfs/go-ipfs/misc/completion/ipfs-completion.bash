@@ -159,7 +159,7 @@ _ipfs_config_show()
 _ipfs_daemon()
 {
     if [[ ${prev} == "--routing" ]] ; then
-        _ipfs_comp "dht supernode" # TODO: Solve autocomplete bug for "="
+        _ipfs_comp "dht dhtclient none" # TODO: Solve autocomplete bug for "="
     elif [[ ${prev} == "--mount-ipfs" ]] || [[ ${prev} == "--mount-ipns" ]] || [[ ${prev} == "=" ]]; then
         _ipfs_filesystem_complete
     elif [[ ${word} == -* ]] ; then

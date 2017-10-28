@@ -16,8 +16,8 @@ import (
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	lockfile "github.com/ipfs/go-ipfs/repo/fsrepo/lock"
 
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
 )
 
 type RepoVersion struct {
@@ -191,11 +191,13 @@ Version         string The repo version.
 			} else {
 				fmt.Fprintf(wtr, "RepoSize:\t%d\n", stat.RepoSize)
 			}
-			maxSizeInMiB := stat.StorageMax / (1024 * 1024)
-			if human && maxSizeInMiB > 0 {
-				fmt.Fprintf(wtr, "StorageMax (MiB):\t%d\n", maxSizeInMiB)
-			} else {
-				fmt.Fprintf(wtr, "StorageMax:\t%d\n", stat.StorageMax)
+			if stat.StorageMax != corerepo.NoLimit {
+				maxSizeInMiB := stat.StorageMax / (1024 * 1024)
+				if human && maxSizeInMiB > 0 {
+					fmt.Fprintf(wtr, "StorageMax (MiB):\t%d\n", maxSizeInMiB)
+				} else {
+					fmt.Fprintf(wtr, "StorageMax:\t%d\n", stat.StorageMax)
+				}
 			}
 			fmt.Fprintf(wtr, "RepoPath:\t%s\n", stat.RepoPath)
 			fmt.Fprintf(wtr, "Version:\t%s\n", stat.Version)

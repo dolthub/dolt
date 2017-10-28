@@ -32,7 +32,7 @@ import (
 var log = logging.Logger("fsrepo")
 
 // version number that we are currently expecting to see
-var RepoVersion = 5
+var RepoVersion = 6
 
 var migrationInstructions = `See https://github.com/ipfs/fs-repo-migrations/blob/master/run.md
 Sorry for the inconvenience. In the future, these will run automatically.`
@@ -61,6 +61,8 @@ func (err NoRepoError) Error() string {
 
 const apiFile = "api"
 const swarmKeyFile = "swarm.key"
+
+const specFn = "datastore_spec"
 
 var (
 
@@ -240,7 +242,27 @@ func initConfig(path string, conf *config.Config) error {
 	if err := serialize.WriteConfigFile(configFilename, conf); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+func initSpec(path string, conf map[string]interface{}) error {
+	fn, err := config.Path(path, specFn)
+	if err != nil {
+		return err
+	}
+
+	if util.FileExists(fn) {
+		return nil
+	}
+
+	dsc, err := AnyDatastoreConfig(conf)
+	if err != nil {
+		return err
+	}
+	bytes := dsc.DiskSpec().Bytes()
+
+	return ioutil.WriteFile(fn, bytes, 0600)
 }
 
 // Init initializes a new FSRepo at the given path with the provided config.
@@ -260,7 +282,7 @@ func Init(repoPath string, conf *config.Config) error {
 		return err
 	}
 
-	if err := initDefaultDatastore(repoPath, conf); err != nil {
+	if err := initSpec(repoPath, conf.Datastore.Spec); err != nil {
 		return err
 	}
 
@@ -361,22 +383,50 @@ func (r *FSRepo) openKeystore() error {
 
 // openDatastore returns an error if the config file is not present.
 func (r *FSRepo) openDatastore() error {
-	switch r.config.Datastore.Type {
-	case "default", "leveldb", "":
-		d, err := openDefaultDatastore(r)
-		if err != nil {
-			return err
-		}
-		r.ds = d
-	default:
-		return fmt.Errorf("unknown datastore type: %s", r.config.Datastore.Type)
+	if r.config.Datastore.Type != "" || r.config.Datastore.Path != "" {
+		return fmt.Errorf("old style datatstore config detected")
+	} else if r.config.Datastore.Spec == nil {
+		return fmt.Errorf("required Datastore.Spec entry missing form config file")
 	}
+
+	dsc, err := AnyDatastoreConfig(r.config.Datastore.Spec)
+	if err != nil {
+		return err
+	}
+	spec := dsc.DiskSpec()
+
+	oldSpec, err := r.readSpec()
+	if err != nil {
+		return err
+	}
+	if oldSpec != spec.String() {
+		return fmt.Errorf("Datastore configuration of '%s' does not match what is on disk '%s'",
+			oldSpec, spec.String())
+	}
+
+	d, err := dsc.Create(r.path)
+	if err != nil {
+		return err
+	}
+	r.ds = d
 
 	// Wrap it with metrics gathering
 	prefix := "ipfs.fsrepo.datastore"
 	r.ds = measure.New(prefix, r.ds)
 
 	return nil
+}
+
+func (r *FSRepo) readSpec() (string, error) {
+	fn, err := config.Path(r.path, specFn)
+	if err != nil {
+		return "", err
+	}
+	b, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 // Close closes the FSRepo, releasing held resources.

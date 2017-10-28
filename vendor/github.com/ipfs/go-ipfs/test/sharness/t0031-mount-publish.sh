@@ -7,9 +7,9 @@ test_description="Test mount command in conjunction with publishing"
 
 # if in travis CI, dont test mount (no fuse)
 if ! test_have_prereq FUSE; then
-	skip_all='skipping mount tests, fuse not available'
+  skip_all='skipping mount tests, fuse not available'
 
-	test_done
+  test_done
 fi
 
 test_init_ipfs

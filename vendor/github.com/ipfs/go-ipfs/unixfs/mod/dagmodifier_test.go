@@ -9,15 +9,14 @@ import (
 
 	h "github.com/ipfs/go-ipfs/importer/helpers"
 	trickle "github.com/ipfs/go-ipfs/importer/trickle"
-	mdag "github.com/ipfs/go-ipfs/merkledag"
-	ft "github.com/ipfs/go-ipfs/unixfs"
+
 	uio "github.com/ipfs/go-ipfs/unixfs/io"
 	testu "github.com/ipfs/go-ipfs/unixfs/test"
 
 	u "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util"
 )
 
-func testModWrite(t *testing.T, beg, size uint64, orig []byte, dm *DagModifier) []byte {
+func testModWrite(t *testing.T, beg, size uint64, orig []byte, dm *DagModifier, opts testu.NodeOpts) []byte {
 	newdata := make([]byte, size)
 	r := u.NewTimeSeededRand()
 	r.Read(newdata)
@@ -36,12 +35,24 @@ func testModWrite(t *testing.T, beg, size uint64, orig []byte, dm *DagModifier) 
 		t.Fatalf("Mod length not correct! %d != %d", nmod, size)
 	}
 
+	verifyNode(t, orig, dm, opts)
+
+	return orig
+}
+
+func verifyNode(t *testing.T, orig []byte, dm *DagModifier, opts testu.NodeOpts) {
 	nd, err := dm.GetNode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = trickle.VerifyTrickleDagStructure(nd, dm.dagserv, h.DefaultLinksPerBlock, 4)
+	err = trickle.VerifyTrickleDagStructure(nd, trickle.VerifyParams{
+		Getter:      dm.dagserv,
+		Direct:      h.DefaultLinksPerBlock,
+		LayerRepeat: 4,
+		Prefix:      &opts.Prefix,
+		RawLeaves:   opts.RawLeavesUsed,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,12 +71,21 @@ func testModWrite(t *testing.T, beg, size uint64, orig []byte, dm *DagModifier) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return orig
+}
+
+func runAllSubtests(t *testing.T, tfunc func(*testing.T, testu.NodeOpts)) {
+	t.Run("opts=ProtoBufLeaves", func(t *testing.T) { tfunc(t, testu.UseProtoBufLeaves) })
+	t.Run("opts=RawLeaves", func(t *testing.T) { tfunc(t, testu.UseRawLeaves) })
+	t.Run("opts=CidV1", func(t *testing.T) { tfunc(t, testu.UseCidV1) })
+	t.Run("opts=Blake2b256", func(t *testing.T) { tfunc(t, testu.UseBlake2b256) })
 }
 
 func TestDagModifierBasic(t *testing.T) {
+	runAllSubtests(t, testDagModifierBasic)
+}
+func testDagModifierBasic(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	b, n := testu.GetRandomNode(t, dserv, 50000)
+	b, n := testu.GetRandomNode(t, dserv, 50000, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -73,32 +93,35 @@ func TestDagModifierBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
+	}
 
 	// Within zero block
 	beg := uint64(15)
 	length := uint64(60)
 
 	t.Log("Testing mod within zero block")
-	b = testModWrite(t, beg, length, b, dagmod)
+	b = testModWrite(t, beg, length, b, dagmod, opts)
 
 	// Within bounds of existing file
 	beg = 1000
 	length = 4000
 	t.Log("Testing mod within bounds of existing multiblock file.")
-	b = testModWrite(t, beg, length, b, dagmod)
+	b = testModWrite(t, beg, length, b, dagmod, opts)
 
 	// Extend bounds
 	beg = 49500
 	length = 4000
 
 	t.Log("Testing mod that extends file.")
-	b = testModWrite(t, beg, length, b, dagmod)
+	b = testModWrite(t, beg, length, b, dagmod, opts)
 
 	// "Append"
 	beg = uint64(len(b))
 	length = 3000
 	t.Log("Testing pure append")
-	_ = testModWrite(t, beg, length, b, dagmod)
+	_ = testModWrite(t, beg, length, b, dagmod, opts)
 
 	// Verify reported length
 	node, err := dagmod.GetNode()
@@ -106,7 +129,7 @@ func TestDagModifierBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	size, err := ft.DataSize(node.(*mdag.ProtoNode).Data())
+	size, err := fileSize(node)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +141,11 @@ func TestDagModifierBasic(t *testing.T) {
 }
 
 func TestMultiWrite(t *testing.T) {
+	runAllSubtests(t, testMultiWrite)
+}
+func testMultiWrite(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -127,6 +153,9 @@ func TestMultiWrite(t *testing.T) {
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	data := make([]byte, 4000)
@@ -150,29 +179,16 @@ func TestMultiWrite(t *testing.T) {
 			t.Fatal("Size was reported incorrectly")
 		}
 	}
-	nd, err := dagmod.GetNode()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	read, err := uio.NewDagReader(context.Background(), nd, dserv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rbuf, err := ioutil.ReadAll(read)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = testu.ArrComp(rbuf, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	verifyNode(t, data, dagmod, opts)
 }
 
 func TestMultiWriteAndFlush(t *testing.T) {
+	runAllSubtests(t, testMultiWriteAndFlush)
+}
+func testMultiWriteAndFlush(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -180,6 +196,9 @@ func TestMultiWriteAndFlush(t *testing.T) {
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	data := make([]byte, 20)
@@ -198,29 +217,16 @@ func TestMultiWriteAndFlush(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	nd, err := dagmod.GetNode()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	read, err := uio.NewDagReader(context.Background(), nd, dserv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rbuf, err := ioutil.ReadAll(read)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = testu.ArrComp(rbuf, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	verifyNode(t, data, dagmod, opts)
 }
 
 func TestWriteNewFile(t *testing.T) {
+	runAllSubtests(t, testWriteNewFile)
+}
+func testWriteNewFile(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -228,6 +234,9 @@ func TestWriteNewFile(t *testing.T) {
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	towrite := make([]byte, 2000)
@@ -241,29 +250,15 @@ func TestWriteNewFile(t *testing.T) {
 		t.Fatal("Wrote wrong amount")
 	}
 
-	nd, err := dagmod.GetNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	read, err := uio.NewDagReader(ctx, nd, dserv)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := ioutil.ReadAll(read)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := testu.ArrComp(data, towrite); err != nil {
-		t.Fatal(err)
-	}
+	verifyNode(t, towrite, dagmod, opts)
 }
 
 func TestMultiWriteCoal(t *testing.T) {
+	runAllSubtests(t, testMultiWriteCoal)
+}
+func testMultiWriteCoal(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -271,6 +266,9 @@ func TestMultiWriteCoal(t *testing.T) {
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	data := make([]byte, 1000)
@@ -287,29 +285,16 @@ func TestMultiWriteCoal(t *testing.T) {
 		}
 
 	}
-	nd, err := dagmod.GetNode()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	read, err := uio.NewDagReader(context.Background(), nd, dserv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rbuf, err := ioutil.ReadAll(read)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = testu.ArrComp(rbuf, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	verifyNode(t, data, dagmod, opts)
 }
 
 func TestLargeWriteChunks(t *testing.T) {
+	runAllSubtests(t, testLargeWriteChunks)
+}
+func testLargeWriteChunks(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -317,6 +302,9 @@ func TestLargeWriteChunks(t *testing.T) {
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	wrsize := 1000
@@ -343,18 +331,23 @@ func TestLargeWriteChunks(t *testing.T) {
 	if err = testu.ArrComp(out, data); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func TestDagTruncate(t *testing.T) {
+	runAllSubtests(t, testDagTruncate)
+}
+func testDagTruncate(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	b, n := testu.GetRandomNode(t, dserv, 50000)
+	b, n := testu.GetRandomNode(t, dserv, 50000, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	err = dagmod.Truncate(12345)
@@ -414,14 +407,20 @@ func TestDagTruncate(t *testing.T) {
 }
 
 func TestSparseWrite(t *testing.T) {
+	runAllSubtests(t, testSparseWrite)
+}
+func testSparseWrite(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	buf := make([]byte, 5000)
@@ -452,14 +451,20 @@ func TestSparseWrite(t *testing.T) {
 }
 
 func TestSeekPastEndWrite(t *testing.T) {
+	runAllSubtests(t, testSeekPastEndWrite)
+}
+func testSeekPastEndWrite(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	buf := make([]byte, 5000)
@@ -499,14 +504,20 @@ func TestSeekPastEndWrite(t *testing.T) {
 }
 
 func TestRelativeSeek(t *testing.T) {
+	runAllSubtests(t, testRelativeSeek)
+}
+func testRelativeSeek(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	for i := 0; i < 64; i++ {
@@ -529,8 +540,11 @@ func TestRelativeSeek(t *testing.T) {
 }
 
 func TestInvalidSeek(t *testing.T) {
+	runAllSubtests(t, testInvalidSeek)
+}
+func testInvalidSeek(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -538,6 +552,10 @@ func TestInvalidSeek(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
+	}
+
 	_, err = dagmod.Seek(10, -10)
 
 	if err != ErrUnrecognizedWhence {
@@ -546,15 +564,21 @@ func TestInvalidSeek(t *testing.T) {
 }
 
 func TestEndSeek(t *testing.T) {
+	runAllSubtests(t, testEndSeek)
+}
+func testEndSeek(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
 
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	_, err = dagmod.Write(make([]byte, 100))
@@ -588,15 +612,21 @@ func TestEndSeek(t *testing.T) {
 }
 
 func TestReadAndSeek(t *testing.T) {
+	runAllSubtests(t, testReadAndSeek)
+}
+func testReadAndSeek(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
 
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	writeBuf := []byte{0, 1, 2, 3, 4, 5, 6, 7}
@@ -656,15 +686,21 @@ func TestReadAndSeek(t *testing.T) {
 }
 
 func TestCtxRead(t *testing.T) {
+	runAllSubtests(t, testCtxRead)
+}
+func testCtxRead(t *testing.T, opts testu.NodeOpts) {
 	dserv := testu.GetDAGServ()
 
-	n := testu.GetEmptyNode(t, dserv)
+	n := testu.GetEmptyNode(t, dserv, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	dagmod, err := NewDagModifier(ctx, n, dserv, testu.SizeSplitterGen(512))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if opts.ForceRawLeaves {
+		dagmod.RawLeaves = true
 	}
 
 	_, err = dagmod.Write([]byte{0, 1, 2, 3, 4, 5, 6, 7})
@@ -689,7 +725,7 @@ func TestCtxRead(t *testing.T) {
 func BenchmarkDagmodWrite(b *testing.B) {
 	b.StopTimer()
 	dserv := testu.GetDAGServ()
-	n := testu.GetEmptyNode(b, dserv)
+	n := testu.GetEmptyNode(b, dserv, testu.UseProtoBufLeaves)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

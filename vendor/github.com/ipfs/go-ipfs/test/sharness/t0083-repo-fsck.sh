@@ -19,12 +19,12 @@ test_init_ipfs
 # repo.lock and datastore/LOCK being empty
 test_expect_success "'ipfs repo fsck' succeeds with no daemon running empty
 repo.lock" '
-    mkdir -p $IPFS_PATH &&
-    mkdir -p $IPFS_PATH/datastore &&
-    touch $IPFS_PATH/datastore/LOCK &&
-    touch $IPFS_PATH/repo.lock &&
-    printf "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
-    ipfs repo fsck > fsck_out_actual1
+  mkdir -p $IPFS_PATH &&
+  mkdir -p $IPFS_PATH/datastore &&
+  touch $IPFS_PATH/datastore/LOCK &&
+  touch $IPFS_PATH/repo.lock &&
+  printf "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
+  ipfs repo fsck > fsck_out_actual1
 '
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
   grep "Lockfiles have been removed." fsck_out_actual1
@@ -42,10 +42,10 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 # non-zero repo.lock issue
 test_expect_success "'ipfs repo fsck' succeeds with no daemon running non-zero
 repo.lock" '
-    mkdir -p $IPFS_PATH &&
-    printf ":D" > $IPFS_PATH/repo.lock &&
-    touch $IPFS_PATH/datastore/LOCK &&
-    ipfs repo fsck > fsck_out_actual1b
+  mkdir -p $IPFS_PATH &&
+  printf ":D" > $IPFS_PATH/repo.lock &&
+  touch $IPFS_PATH/datastore/LOCK &&
+  ipfs repo fsck > fsck_out_actual1b
 '
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
   grep "Lockfiles have been removed." fsck_out_actual1b
@@ -64,9 +64,9 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 
 # Try with locks api and datastore/LOCK
 test_expect_success "'ipfs repo fsck' succeeds partial lock" '
-    printf  "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
-    touch $IPFS_PATH/datastore/LOCK &&
-    ipfs repo fsck > fsck_out_actual2
+  printf  "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
+  touch $IPFS_PATH/datastore/LOCK &&
+  ipfs repo fsck > fsck_out_actual2
 '
 
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
@@ -82,9 +82,9 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 
 # Try with locks api and repo.lock
 test_expect_success "'ipfs repo fsck' succeeds partial lock" '
-    printf  "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
-    touch $IPFS_PATH/repo.lock &&
-    ipfs repo fsck > fsck_out_actual3
+  printf  "/ip4/127.0.0.1/tcp/5001" > $IPFS_PATH/api &&
+  touch $IPFS_PATH/repo.lock &&
+  ipfs repo fsck > fsck_out_actual3
 '
 
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
@@ -100,9 +100,9 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 
 # Try with locks repo.lock and datastore
 test_expect_success "'ipfs repo fsck' succeeds partial lock" '
-    touch $IPFS_PATH/repo.lock &&
-    touch $IPFS_PATH/datastore/LOCK &&
-    ipfs repo fsck > fsck_out_actual4
+  touch $IPFS_PATH/repo.lock &&
+  touch $IPFS_PATH/datastore/LOCK &&
+  ipfs repo fsck > fsck_out_actual4
 '
 
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
@@ -122,8 +122,8 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 
 # Try with single locks repo.lock
 test_expect_success "'ipfs repo fsck' succeeds partial lock" '
-    touch $IPFS_PATH/repo.lock &&
-    ipfs repo fsck > fsck_out_actual5
+  touch $IPFS_PATH/repo.lock &&
+  ipfs repo fsck > fsck_out_actual5
 '
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
   grep "Lockfiles have been removed." fsck_out_actual5
@@ -138,8 +138,8 @@ test_expect_success "'ipfs repo fsck' confirm file deletion" '
 
 # Try with single locks datastore/LOCK
 test_expect_success "'ipfs repo fsck' succeeds partial lock" '
-    touch $IPFS_PATH/datastore/LOCK &&
-    ipfs repo fsck > fsck_out_actual6
+  touch $IPFS_PATH/datastore/LOCK &&
+  ipfs repo fsck > fsck_out_actual6
 '
 test_expect_success "'ipfs repo fsck' output looks good with no daemon" '
   grep "Lockfiles have been removed." fsck_out_actual6
