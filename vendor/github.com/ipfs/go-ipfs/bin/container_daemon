@@ -4,6 +4,7 @@ user=ipfs
 repo="$IPFS_PATH"
 
 if [ `id -u` -eq 0 ]; then
+  echo "Changing user to $user"
   # ensure folder is writable
   su-exec "$user" test -w "$repo" || chown -R -- "$user" "$repo"
   # restart script with new privileges

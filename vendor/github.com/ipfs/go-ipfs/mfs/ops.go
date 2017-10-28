@@ -9,7 +9,8 @@ import (
 
 	path "github.com/ipfs/go-ipfs/path"
 
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 // Mv moves the file or directory at 'src' to 'dst'
@@ -97,9 +98,16 @@ func PutNode(r *Root, path string, nd node.Node) error {
 	return pdir.AddChild(filename, nd)
 }
 
+// MkdirOpts is used by Mkdir
+type MkdirOpts struct {
+	Mkparents bool
+	Flush     bool
+	Prefix    *cid.Prefix
+}
+
 // Mkdir creates a directory at 'path' under the directory 'd', creating
 // intermediary directories as needed if 'mkparents' is set to true
-func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
+func Mkdir(r *Root, pth string, opts MkdirOpts) error {
 	if pth == "" {
 		return fmt.Errorf("no path given to Mkdir")
 	}
@@ -115,7 +123,7 @@ func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
 
 	if len(parts) == 0 {
 		// this will only happen on 'mkdir /'
-		if mkparents {
+		if opts.Mkparents {
 			return nil
 		}
 		return fmt.Errorf("cannot create directory '/': Already exists")
@@ -124,12 +132,14 @@ func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
 	cur := r.GetValue().(*Directory)
 	for i, d := range parts[:len(parts)-1] {
 		fsn, err := cur.Child(d)
-		if err == os.ErrNotExist && mkparents {
+		if err == os.ErrNotExist && opts.Mkparents {
 			mkd, err := cur.Mkdir(d)
 			if err != nil {
 				return err
 			}
-			mkd.SetPrefix(r.Prefix)
+			if opts.Prefix != nil {
+				mkd.SetPrefix(opts.Prefix)
+			}
 			fsn = mkd
 		} else if err != nil {
 			return err
@@ -144,13 +154,15 @@ func Mkdir(r *Root, pth string, mkparents bool, flush bool) error {
 
 	final, err := cur.Mkdir(parts[len(parts)-1])
 	if err != nil {
-		if !mkparents || err != os.ErrExist || final == nil {
+		if !opts.Mkparents || err != os.ErrExist || final == nil {
 			return err
 		}
 	}
-	final.SetPrefix(r.Prefix)
+	if opts.Prefix != nil {
+		final.SetPrefix(opts.Prefix)
+	}
 
-	if flush {
+	if opts.Flush {
 		err := final.Flush()
 		if err != nil {
 			return err

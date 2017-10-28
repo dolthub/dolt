@@ -88,7 +88,7 @@ baz
 		}
 
 		// error if we aren't running node in online mode
-		if !node.OnlineMode() {
+		if node.LocalMode() {
 			res.SetError(errNotOnline, cmds.ErrClient)
 			return
 		}

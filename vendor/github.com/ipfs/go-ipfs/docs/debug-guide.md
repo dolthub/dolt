@@ -60,13 +60,14 @@ Given that information, look for another goroutine that might be
 holding the semaphore in question in the rest of the stack dump.
 (If you need help doing this, ping and we'll stub this out.)
 
-There are a few different reasons that goroutines can be hung:  
-- `semacquire` means we're waiting to take a lock or semaphore.  
-- `select` means that the goroutine is hanging in a select statement and none of the cases are yielding
-anything. 
-- `chan receive` and `chan send` are waiting for a channel to be received from or sent on, respectively. 
-- `IO wait` generally means that we are waiting on a socket to read or write data, although it *can* mean we are
-waiting on a very slow filesystem. 
+There are a few different reasons that goroutines can be hung:
+- `semacquire` means we're waiting to take a lock or semaphore.
+- `select` means that the goroutine is hanging in a select statement and none of
+  the cases are yielding anything.
+- `chan receive` and `chan send` are waiting for a channel to be received from
+  or sent on, respectively.
+- `IO wait` generally means that we are waiting on a socket to read or write
+  data, although it *can* mean we are waiting on a very slow filesystem.
 
 If you see any of those tags _without_ a `,
 X minutes` suffix, that generally means there isn't a problem -- you just caught

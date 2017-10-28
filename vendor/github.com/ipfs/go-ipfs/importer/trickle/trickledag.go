@@ -9,7 +9,8 @@ import (
 	dag "github.com/ipfs/go-ipfs/merkledag"
 	ft "github.com/ipfs/go-ipfs/unixfs"
 
-	node "gx/ipfs/QmYNyRZJBUYPNrLszFmrBrPJbsBh2vMsefz5gnDpB5M1P6/go-ipld-format"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	node "gx/ipfs/QmPN7cwmpcc4DWXb4KTB9dNAJgjuPY69h3npsMfhRrQL9c/go-ipld-format"
 )
 
 // layerRepeat specifies how many times to append a child tree of a
@@ -234,34 +235,76 @@ func trickleDepthInfo(node *h.UnixfsNode, maxlinks int) (int, int) {
 	return ((n - maxlinks) / layerRepeat) + 1, (n - maxlinks) % layerRepeat
 }
 
+// VerifyParams is used by VerifyTrickleDagStructure
+type VerifyParams struct {
+	Getter      node.NodeGetter
+	Direct      int
+	LayerRepeat int
+	Prefix      *cid.Prefix
+	RawLeaves   bool
+}
+
 // VerifyTrickleDagStructure checks that the given dag matches exactly the trickle dag datastructure
 // layout
-func VerifyTrickleDagStructure(nd node.Node, ds dag.DAGService, direct int, layerRepeat int) error {
-	pbnd, ok := nd.(*dag.ProtoNode)
-	if !ok {
-		return dag.ErrNotProtobuf
-	}
-
-	return verifyTDagRec(pbnd, -1, direct, layerRepeat, ds)
+func VerifyTrickleDagStructure(nd node.Node, p VerifyParams) error {
+	return verifyTDagRec(nd, -1, p)
 }
 
 // Recursive call for verifying the structure of a trickledag
-func verifyTDagRec(nd *dag.ProtoNode, depth, direct, layerRepeat int, ds dag.DAGService) error {
+func verifyTDagRec(n node.Node, depth int, p VerifyParams) error {
+	codec := cid.DagProtobuf
 	if depth == 0 {
-		// zero depth dag is raw data block
-		if len(nd.Links()) > 0 {
+		if len(n.Links()) > 0 {
 			return errors.New("expected direct block")
 		}
+		// zero depth dag is raw data block
+		switch nd := n.(type) {
+		case *dag.ProtoNode:
+			pbn, err := ft.FromBytes(nd.Data())
+			if err != nil {
+				return err
+			}
 
-		pbn, err := ft.FromBytes(nd.Data())
-		if err != nil {
-			return err
-		}
+			if pbn.GetType() != ft.TRaw {
+				return errors.New("Expected raw block")
+			}
 
-		if pbn.GetType() != ft.TRaw {
-			return errors.New("Expected raw block")
+			if p.RawLeaves {
+				return errors.New("expected raw leaf, got a protobuf node")
+			}
+		case *dag.RawNode:
+			if !p.RawLeaves {
+				return errors.New("expected protobuf node as leaf")
+			}
+			codec = cid.Raw
+		default:
+			return errors.New("expected ProtoNode or RawNode")
 		}
+	}
+
+	// verify prefix
+	if p.Prefix != nil {
+		prefix := n.Cid().Prefix()
+		expect := *p.Prefix // make a copy
+		expect.Codec = uint64(codec)
+		if codec == cid.Raw && expect.Version == 0 {
+			expect.Version = 1
+		}
+		if expect.MhLength == -1 {
+			expect.MhLength = prefix.MhLength
+		}
+		if prefix != expect {
+			return fmt.Errorf("unexpected cid prefix: expected: %v; got %v", expect, prefix)
+		}
+	}
+
+	if depth == 0 {
 		return nil
+	}
+
+	nd, ok := n.(*dag.ProtoNode)
+	if !ok {
+		return errors.New("expected ProtoNode")
 	}
 
 	// Verify this is a branch node
@@ -279,29 +322,24 @@ func verifyTDagRec(nd *dag.ProtoNode, depth, direct, layerRepeat int, ds dag.DAG
 	}
 
 	for i := 0; i < len(nd.Links()); i++ {
-		childi, err := nd.Links()[i].GetNode(context.TODO(), ds)
+		child, err := nd.Links()[i].GetNode(context.TODO(), p.Getter)
 		if err != nil {
 			return err
 		}
 
-		childpb, ok := childi.(*dag.ProtoNode)
-		if !ok {
-			return fmt.Errorf("cannot operate on non-protobuf nodes")
-		}
-
-		if i < direct {
+		if i < p.Direct {
 			// Direct blocks
-			err := verifyTDagRec(childpb, 0, direct, layerRepeat, ds)
+			err := verifyTDagRec(child, 0, p)
 			if err != nil {
 				return err
 			}
 		} else {
 			// Recursive trickle dags
-			rdepth := ((i - direct) / layerRepeat) + 1
+			rdepth := ((i - p.Direct) / p.LayerRepeat) + 1
 			if rdepth >= depth && depth > 0 {
 				return errors.New("Child dag was too deep!")
 			}
-			err := verifyTDagRec(childpb, rdepth, direct, layerRepeat, ds)
+			err := verifyTDagRec(child, rdepth, p)
 			if err != nil {
 				return err
 			}

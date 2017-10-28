@@ -1,3 +1,5 @@
+Dockerfile
+Dockerfile.fast
 .git/
 !.git/HEAD
 !.git/refs/

@@ -61,27 +61,27 @@ test_expect_success ".ipfs/ has been created" '
 # begin same as in t0010
 
 test_expect_success "ipfs version succeeds" '
-	ipfs version >version.txt
+  ipfs version >version.txt
 '
 
 test_expect_success "ipfs version output looks good" '
-	egrep "^ipfs version [0-9]+\.[0-9]+\.[0-9]" version.txt >/dev/null ||
-	test_fsh cat version.txt
+  egrep "^ipfs version [0-9]+\.[0-9]+\.[0-9]" version.txt >/dev/null ||
+  test_fsh cat version.txt
 '
 
 test_expect_success "ipfs help succeeds" '
-	ipfs help >help.txt
+  ipfs help >help.txt
 '
 
 test_expect_success "ipfs help output looks good" '
-	egrep -i "^Usage" help.txt >/dev/null &&
-	egrep "ipfs .* <command>" help.txt >/dev/null ||
-	test_fsh cat help.txt
+  egrep -i "^Usage" help.txt >/dev/null &&
+  egrep "ipfs .* <command>" help.txt >/dev/null ||
+  test_fsh cat help.txt
 '
 
 # netcat (nc) is needed for the following test
 test_expect_success "nc is available" '
-	type nc >/dev/null
+  type nc >/dev/null
 '
 
 # check transport is encrypted
@@ -89,18 +89,18 @@ test_expect_success "transport should be encrypted" '
   nc -w 1 localhost $SWARM_PORT > swarmnc < ../t0060-data/mss-ls &&
   grep -q "/secio" swarmnc &&
   test_must_fail grep -q "/plaintext/1.0.0" swarmnc ||
-	test_fsh cat swarmnc
+  test_fsh cat swarmnc
 '
 
 test_expect_success "output from streaming commands works" '
-	test_expect_code 28 curl -m 5 http://localhost:$API_PORT/api/v0/stats/bw\?poll=true > statsout
+  test_expect_code 28 curl -m 5 http://localhost:$API_PORT/api/v0/stats/bw\?poll=true > statsout
 '
 
 test_expect_success "output looks good" '
-	grep TotalIn statsout > /dev/null &&
-	grep TotalOut statsout > /dev/null &&
-	grep RateIn statsout > /dev/null &&
-	grep RateOut statsout >/dev/null
+  grep TotalIn statsout > /dev/null &&
+  grep TotalOut statsout > /dev/null &&
+  grep RateIn statsout > /dev/null &&
+  grep RateOut statsout >/dev/null
 '
 
 # end same as in t0010
@@ -114,10 +114,10 @@ test_expect_success "'ipfs daemon' can be killed" '
 '
 
 test_expect_success "'ipfs daemon' should be able to run with a pipe attached to stdin (issue #861)" '
-	yes | ipfs daemon >stdin_daemon_out 2>stdin_daemon_err &
-	DAEMON_PID=$!
-	test_wait_for_file 20 100ms "$IPFS_PATH/api" &&
-	test_set_address_vars stdin_daemon_out
+  yes | ipfs daemon >stdin_daemon_out 2>stdin_daemon_err &
+  DAEMON_PID=$!
+  test_wait_for_file 20 100ms "$IPFS_PATH/api" &&
+  test_set_address_vars stdin_daemon_out
 '
 
 test_expect_success "daemon with pipe eventually becomes live" '
@@ -131,15 +131,15 @@ TEST_ULIMIT_PRESET=1
 test_launch_ipfs_daemon
 
 test_expect_success "daemon raised its fd limit" '
-	grep "raised file descriptor limit to 2048." actual_daemon > /dev/null
+  grep "raised file descriptor limit to 2048." actual_daemon > /dev/null
 '
 
 test_expect_success "daemon actually can handle 2048 file descriptors" '
-	hang-fds -hold=2s 2000 '$API_MADDR' > /dev/null
+  hang-fds -hold=2s 2000 '$API_MADDR' > /dev/null
 '
 
 test_expect_success "daemon didnt throw any errors" '
-	test_expect_code 1 grep "too many open files" daemon_err
+  test_expect_code 1 grep "too many open files" daemon_err
 '
 
 test_kill_ipfs_daemon

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	core "github.com/ipfs/go-ipfs/core"
 	ipns "github.com/ipfs/go-ipfs/fuse/ipns"
@@ -63,25 +64,26 @@ func doMount(node *core.IpfsNode, fsdir, nsdir string) error {
 	}
 
 	// this sync stuff is so that both can be mounted simultaneously.
-	var fsmount mount.Mount
-	var nsmount mount.Mount
-	var err1 error
-	var err2 error
+	var fsmount, nsmount mount.Mount
+	var err1, err2 error
 
-	done := make(chan struct{})
+	var wg sync.WaitGroup
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		fsmount, err1 = rofs.Mount(node, fsdir)
-		done <- struct{}{}
 	}()
 
-	go func() {
-		nsmount, err2 = ipns.Mount(node, nsdir, fsdir)
-		done <- struct{}{}
-	}()
+	if node.OnlineMode() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			nsmount, err2 = ipns.Mount(node, nsdir, fsdir)
+		}()
+	}
 
-	<-done
-	<-done
+	wg.Wait()
 
 	if err1 != nil {
 		log.Errorf("error mounting: %s", err1)

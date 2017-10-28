@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 dir=${1:?first paramater with dir to work in is required}
 pkg=${2:?second parameter with full name of the package is required}

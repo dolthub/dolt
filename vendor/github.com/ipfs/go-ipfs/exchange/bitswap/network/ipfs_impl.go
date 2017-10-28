@@ -8,15 +8,16 @@ import (
 
 	bsmsg "github.com/ipfs/go-ipfs/exchange/bitswap/message"
 
+	inet "gx/ipfs/QmNa31VPzC561NWwRsJLE7nGYZYuuD2QfpK2b1q9BK54J1/go-libp2p-net"
+	cid "gx/ipfs/QmNp85zy9RLrQ5oQD4hPyS39ezrrXpcaa7R4Y9kxdWQLLQ/go-cid"
+	routing "gx/ipfs/QmPR2JzfKd9poHx9XBhzoFeBBC31ZM3W5iUPKJZWyaoZZm/go-libp2p-routing"
 	pstore "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
-	routing "gx/ipfs/QmPjTrrSfE6TzLv6ya6VWhGcCgPrUAdcgrDcQyRDX2VyW1/go-libp2p-routing"
 	logging "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log"
-	cid "gx/ipfs/QmTprEaAA2A9bst5XH7exuyi5KzNMK3SEDNN8rBDnKWcUS/go-cid"
-	host "gx/ipfs/QmW8Rgju5JrSMHP7RDNdiwwXyenRqAbtSaPfdQKQC7ZdH6/go-libp2p-host"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
+	ifconnmgr "gx/ipfs/QmYkCrTwivapqdB3JbwvwvxymseahVkcm46ThRMAA24zCr/go-libp2p-interface-connmgr"
 	ggio "gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/io"
-	inet "gx/ipfs/QmahYsGWry85Y7WUe2SX5G4JkH2zifEQAUtJVLZ24aC9DF/go-libp2p-net"
+	host "gx/ipfs/Qmc1XhrFEiSeBNn3mpfg6gEuYCt5im2gYmNVmncsvmpeAk/go-libp2p-host"
 )
 
 var log = logging.Logger("bitswap_network")
@@ -54,6 +55,10 @@ type streamMessageSender struct {
 
 func (s *streamMessageSender) Close() error {
 	return s.s.Close()
+}
+
+func (s *streamMessageSender) Reset() error {
+	return s.s.Reset()
 }
 
 func (s *streamMessageSender) SendMsg(ctx context.Context, msg bsmsg.BitSwapMessage) error {
@@ -101,14 +106,6 @@ func (bsnet *impl) NewMessageSender(ctx context.Context, p peer.ID) (MessageSend
 }
 
 func (bsnet *impl) newStreamToPeer(ctx context.Context, p peer.ID) (inet.Stream, error) {
-
-	// first, make sure we're connected.
-	// if this fails, we cannot connect to given peer.
-	//TODO(jbenet) move this into host.NewStream?
-	if err := bsnet.host.Connect(ctx, pstore.PeerInfo{ID: p}); err != nil {
-		return nil, err
-	}
-
 	return bsnet.host.NewStream(ctx, p, ProtocolBitswap, ProtocolBitswapOne, ProtocolBitswapNoVers)
 }
 
@@ -121,9 +118,14 @@ func (bsnet *impl) SendMessage(
 	if err != nil {
 		return err
 	}
-	defer s.Close()
 
-	return msgToStream(ctx, s, outgoing)
+	err = msgToStream(ctx, s, outgoing)
+	if err != nil {
+		s.Reset()
+	} else {
+		s.Close()
+	}
+	return err
 }
 
 func (bsnet *impl) SetDelegate(r Receiver) {
@@ -180,6 +182,7 @@ func (bsnet *impl) handleNewStream(s inet.Stream) {
 	defer s.Close()
 
 	if bsnet.receiver == nil {
+		s.Reset()
 		return
 	}
 
@@ -188,6 +191,7 @@ func (bsnet *impl) handleNewStream(s inet.Stream) {
 		received, err := bsmsg.FromPBReader(reader)
 		if err != nil {
 			if err != io.EOF {
+				s.Reset()
 				go bsnet.receiver.ReceiveError(err)
 				log.Debugf("bitswap net handleNewStream from %s error: %s", s.Conn().RemotePeer(), err)
 			}
@@ -199,6 +203,10 @@ func (bsnet *impl) handleNewStream(s inet.Stream) {
 		log.Debugf("bitswap net handleNewStream from %s", s.Conn().RemotePeer())
 		bsnet.receiver.ReceiveMessage(ctx, p, received)
 	}
+}
+
+func (bsnet *impl) ConnectionManager() ifconnmgr.ConnManager {
+	return bsnet.host.ConnManager()
 }
 
 type netNotifiee impl

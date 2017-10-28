@@ -49,4 +49,13 @@ test_expect_success 'output contains info about dht option' '
   test_fsh cat daemon_output
 '
 
+test_expect_success 'daemon should not start with supernode dht opt' '
+  test_must_fail ipfs daemon --routing=supernode > daemon_output2 2>&1
+'
+
+test_expect_success 'output contains info about supernode dht option' '
+  grep "supernode routing was never fully implemented" daemon_output2 ||
+  test_fsh cat daemon_output2
+'
+
 test_done
