@@ -1,0 +1,66 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-libp2p-host"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-libp2p-host"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmcrrEpx3VMUbrbgVroH3YiYyUS5c4YAykzyPJWKspUYLa",
+      "name": "go-semver",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji",
+      "name": "go-multiaddr",
+      "version": "1.2.4"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZNkThpqfVXs9GNbexPrfBbXSLNYeKrE7jwFM2oqHbyqN",
+      "name": "go-libp2p-protocol",
+      "version": "1.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmTnsezaB1wWNRHeHnYrm8K4d5i9wtyj3GsqjC3Rt5b5v5",
+      "name": "go-multistream",
+      "version": "0.3.6"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmNa31VPzC561NWwRsJLE7nGYZYuuD2QfpK2b1q9BK54J1",
+      "name": "go-libp2p-net",
+      "version": "2.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr",
+      "name": "go-libp2p-peerstore",
+      "version": "1.4.9"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB",
+      "name": "go-libp2p-peer",
+      "version": "2.2.0"
+    },
+    {
+      "author": "why",
+      "hash": "QmYkCrTwivapqdB3JbwvwvxymseahVkcm46ThRMAA24zCr",
+      "name": "go-libp2p-interface-connmgr",
+      "version": "0.0.2"
+    }
+  ],
+  "gxVersion": "0.9.1",
+  "language": "go",
+  "license": "",
+  "name": "go-libp2p-host",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "2.1.1"
+}
+

@@ -1,0 +1,54 @@
+{
+  "author": "dgraph-io",
+  "bugs": {
+    "url": "https://github.com/dgraph-io/badger"
+  },
+  "gx": {
+    "dvcsimport": "github.com/dgraph-io/badger"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmVmDhyTTUcQXFD1rRQ64fGLMSAoaQvNH3hwuaCFAPq2hy",
+      "name": "errors",
+      "version": "0.0.1"
+    },
+    {
+      "author": "magik6k",
+      "hash": "Qmbvv2urkn5Wtwws4yzjE85qRjB293EodchZofJsrTRuvN",
+      "name": "go-lz4",
+      "version": "1.0.0"
+    },
+    {
+      "author": "kubuxu",
+      "hash": "QmXqKGu7QzfRzFC4yd5aL9sThYx22vY163VGwmxfp5qGHk",
+      "name": "bbloom",
+      "version": "0.1.1"
+    },
+    {
+      "author": "kubuxu",
+      "hash": "QmXKH924GKouYmLDrLM4HfgVqShWdaqp7ooKxcrRJXroA6",
+      "name": "sys",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC",
+      "name": "go-net",
+      "version": "0.0.0"
+    },
+    {
+      "author": "why",
+      "hash": "QmXSs8cccbT4zDR95c1iRpYKDqVMzqeF1J6iZcavgE6eNw",
+      "name": "protobuf",
+      "version": "0.0.0"
+    }
+  ],
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "Apache 2.0",
+  "name": "badger",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.4.0"
+}
+

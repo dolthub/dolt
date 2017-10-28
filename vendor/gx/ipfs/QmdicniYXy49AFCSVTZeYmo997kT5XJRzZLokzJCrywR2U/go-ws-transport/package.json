@@ -1,0 +1,48 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-ws-transport/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-ws-transport"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmX3U3YXCQ6UYBxq2LVWF8dARS1hPUTEYLrSx654Qyxyw6",
+      "name": "go-multiaddr-net",
+      "version": "1.5.5"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZQa5J7j7kd44GGC4aKX8J9JGGzCMqwGzcEFqGV1YD57A",
+      "name": "mafmt",
+      "version": "1.2.3"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmQVm7pWYKPStMeMrXNRpvAJE5rSm9ThtQoNmjNHC7sh3k",
+      "name": "go-libp2p-transport",
+      "version": "2.2.8"
+    },
+    {
+      "author": "gorilla",
+      "hash": "QmZH5VXfAJouGMyCCHTRPGCT3e5MG9Lu78Ln3YAYW1XTts",
+      "name": "websocket",
+      "version": "0.0.1"
+    },
+    {
+      "author": "multiformats",
+      "hash": "QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji",
+      "name": "go-multiaddr",
+      "version": "1.2.4"
+    }
+  ],
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-ws-transport",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.6.1"
+}
+

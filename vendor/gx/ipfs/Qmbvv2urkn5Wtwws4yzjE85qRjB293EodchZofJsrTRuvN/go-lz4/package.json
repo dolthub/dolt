@@ -1,0 +1,16 @@
+{
+  "author": "magik6k",
+  "bugs": {
+    "url": "https://github.com/bkaradzic/go-lz4"
+  },
+  "gx": {
+    "dvcsimport": "github.com/bkaradzic/go-lz4"
+  },
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "BSD-2-Clause",
+  "name": "go-lz4",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.0.0"
+}
+
