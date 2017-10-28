@@ -99,7 +99,7 @@ func runClient(ipfsSpec string, cInfo lib.ClientInfo) {
 	t.ResetAuthors(ds)
 	t.UpdateMessages(ds, nil, nil)
 
-	go lib.ProcessChatEvents(node, ds, events, &t, cInfo)
+	go lib.ProcessChatEvents(node, ds, events, t, cInfo)
 	go lib.ReceiveMessages(node, events, cInfo)
 
 	if err := t.Gui.MainLoop(); err != nil && err != gocui.ErrQuit {
