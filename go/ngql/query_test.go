@@ -1506,9 +1506,6 @@ func TestGetListElementsWithSet(t *testing.T) {
 func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := newTestValueStore()
-	defer vs.Close()
-
 	type User struct {
 		ID string `noms:"id"`
 	}
@@ -1518,7 +1515,7 @@ func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
 	}
 
 	var a Account
-	typ := marshal.MustMarshalType(vs, a)
+	typ := marshal.MustMarshalType(a)
 	tc := NewTypeConverter()
 	_, err := tc.NomsTypeToGraphQLInputType(typ)
 	assert.NoError(err)
@@ -1527,15 +1524,12 @@ func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
 func TestErrorOnCyclicTypeRefsInputType(t *testing.T) {
 	assert := assert.New(t)
 
-	vs := newTestValueStore()
-	defer vs.Close()
-
 	type Node struct {
 		Children map[string]Node
 	}
 
 	var n Node
-	typ := marshal.MustMarshalType(vs, n)
+	typ := marshal.MustMarshalType(n)
 	tc := NewTypeConverter()
 	_, err := tc.NomsTypeToGraphQLInputType(typ)
 	assert.Error(err)
