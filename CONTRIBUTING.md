@@ -36,7 +36,7 @@ Noms is open source software, licensed under the [Apache License, Version 2.0](L
 
 ## Contributing code
 
-Due to legal reasons, all contributors must sign a contributor agreement, either for an [individual](https://docs.google.com/forms/d/183uPHkDViax523T2eX_fC4lCa6sH1O6pJ0jFfn65IN4/edit) or [corporation](https://docs.google.com/forms/d/1ypsIIUm-jw0E_-2ZnWBgWschffmyGW4Ux3La_czyecU/edit), before a pull request can be accepted.
+Due to legal reasons, all contributors must sign a contributor agreement, either for an [individual](http://noms.io/ca_individual.html) or [corporation](http://noms.io/ca_corporation.html), before a pull request can be accepted.
 
 ## Languages
 
