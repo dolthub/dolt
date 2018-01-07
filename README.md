@@ -65,7 +65,7 @@ go install github.com/attic-labs/noms/cmd/noms
 Import some data:
 
 ```shell
-go install github.com/attic-labs/noms/samples/go/csv/import
+go install github.com/attic-labs/noms/samples/go/csv/csv-import
 curl 'https://data.cityofnewyork.us/api/views/kku6-nxdu/rows.csv?accessType=DOWNLOAD' > /tmp/data.csv
 csv-import /tmp/data.csv /tmp/noms::nycdemo
 ```
