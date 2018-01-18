@@ -24,6 +24,10 @@ Unlike Git, Noms is a database, so it also:
 * Supports **efficient indexes** (see: [Noms prolly-trees](https://github.com/attic-labs/noms/blob/master/doc/intro.md#prolly-trees-probabilistic-b-trees))
 * Features a **flexible query model** (see: [GraphQL](./go/ngql/README.md))
 
+A Noms database can reside within a file system or in the cloud:
+
+* The (built-in) [NBS](./go/nbs) `ChunkStore` implementation provides two back-ends which provide persistence for Noms databases: one for storage in a file system and one for storage in an S3 bucket.
+
 Finally, because Noms is content-addressed, it yields a very pleasant programming model.
 
 Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` existing data, or `DELETE` old data. You simply *declare* what the data ought to be right now. If you commit the same data twice, it will be deduplicated because of content-addressing. If you commit _almost_ the same data, only the part that is different will be written.
@@ -37,10 +41,6 @@ Working with Noms is ***declarative***. You don't `INSERT` new data, `UPDATE` ex
 #### [Decentralization](./doc/decent/about.md)
 
 Because Noms is very good at sync, it makes a decent basis for rich, collaborative, fully-decentralized applications.
-
-#### [BucketDB](./doc/olap/about.md)
-
-The immutable design of Noms enables a full, horizontally scalable OLAP database atop cheap block storage. This separates storage costs from compute costs, so that you only pay for the compute that you use.
 
 #### ClientDB (coming someday)
 
