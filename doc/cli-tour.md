@@ -50,8 +50,6 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 
 ## noms ds
 
-There's a sample database running at http://demo.noms.io. Let's take a look inside...
-
 The `noms ds` command lists the _datasets_ within a particular database:
 
 ```shell
