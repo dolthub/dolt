@@ -136,6 +136,5 @@ Interested in using Noms? Awesome! We would be happy to work with you to help un
 
 Reach out at [noms@attic.io](mailto:noms@attic.io) or via:
 
-- [Slack](http://slack.noms.io)
 - [Mailing List](https://groups.google.com/forum/#!forum/nomsdb)
 - [Twitter](https://twitter.com/nomsdb)
