@@ -114,7 +114,7 @@ Strings, numbers, unions, and structs are not chunked, and should be used for "r
 
 Types serve several purposes in Noms:
 
-1. Most importantly, types make Noms data self-describing. Every physical chunk of Noms data carries with it the type of the value it contains and information about the types of all values reachable from this chunk. This allows software to interoperate without prior agreement or planning.
+1. Most importantly, types make Noms data self-describing. You can use the `types.TypeOf` function on any Noms `Value`, no matter how large, and get a very precise description of the entire value and all values reachable from it. This allows software to interoperate without prior agreement or planning.
 
 2. Users of Noms can define their own structures and publish data that uses them. This allows for ad-hoc standardization of types within communities working on similar data.
 
