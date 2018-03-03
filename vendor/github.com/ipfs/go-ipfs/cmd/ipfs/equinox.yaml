@@ -1,6 +1,0 @@
----
-equinox-account: CHANGEME
-equinox-secret: CHANGEME
-equinox-app: CHANGEME
-channel: stable
-private-key: equinox-priv

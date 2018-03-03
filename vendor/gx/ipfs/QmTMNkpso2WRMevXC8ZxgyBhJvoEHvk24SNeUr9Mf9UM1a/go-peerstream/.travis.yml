@@ -1,9 +1,0 @@
-language: go
-
-go:
-  - 1.8
-  - tip
-
-script:
-  - make test
-  # - go test -race -cpu=5 ./...
