@@ -1,8 +1,0 @@
-go:
-  - 1.1
-  - tip
-install:
-  - go get github.com/onsi/ginkgo
-  - go get github.com/onsi/gomega
-before_script: go test -i ./...
-script: go test ./...

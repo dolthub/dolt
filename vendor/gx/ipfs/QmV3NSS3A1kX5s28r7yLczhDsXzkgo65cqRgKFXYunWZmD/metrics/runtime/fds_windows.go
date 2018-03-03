@@ -1,4 +1,0 @@
-package runtime
-
-func init() {
-}

@@ -1,7 +1,0 @@
-language: go
-
-go:
-  - 1.7
-
-script:
-  - go test -race -cpu=5 -v ./...
