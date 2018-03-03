@@ -109,6 +109,8 @@ type Database interface {
 	// if this operation is not supported.
 	StatsSummary() string
 
+	Flush()
+
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by
