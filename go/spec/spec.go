@@ -17,7 +17,6 @@ import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/ipfs"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -29,6 +28,13 @@ import (
 const Separator = "::"
 
 var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
+
+type ProtocolImpl interface {
+	NewChunkStore(sp Spec) (chunks.ChunkStore, error)
+	NewDatabase(sp Spec) (datas.Database, error)
+}
+
+var ExternalProtocols = map[string]ProtocolImpl{}
 
 // SpecOptions customize Spec behavior.
 type SpecOptions struct {
@@ -182,13 +188,15 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return storage.NewView()
-	case "ipfs":
-		return ipfs.NewChunkStore(sp.DatabaseName, false)
-	case "ipfs-local":
-		cs := ipfs.NewChunkStore(sp.DatabaseName, true)
-		return cs
+	default:
+		impl, ok := ExternalProtocols[sp.Protocol]
+		if !ok {
+			d.PanicIfError(fmt.Errorf("Unknown protocol: %s", sp.Protocol))
+		}
+		r, err := impl.NewChunkStore(sp)
+		d.PanicIfError(err)
+		return r
 	}
-	panic("unreachable")
 }
 
 func parseAWSSpec(awsURL string) chunks.ChunkStore {
@@ -281,13 +289,18 @@ func (sp Spec) createDatabase() datas.Database {
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
-	case "ipfs", "ipfs-local":
-		return datas.NewDatabase(sp.NewChunkStore())
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return datas.NewDatabase(storage.NewView())
+	default:
+		impl, ok := ExternalProtocols[sp.Protocol]
+		if !ok {
+			d.PanicIfError(fmt.Errorf("Unknown protocol: %s", sp.Protocol))
+		}
+		r, err := impl.NewDatabase(sp)
+		d.PanicIfError(err)
+		return r
 	}
-	panic("unreachable")
 }
 
 func parseDatabaseSpec(spec string) (protocol, name string, err error) {
@@ -310,8 +323,14 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 		return
 	}
 
+	if _, ok := ExternalProtocols[parts[0]]; ok {
+		fmt.Println("found external spec", parts[0])
+		protocol, name = parts[0], parts[1]
+		return
+	}
+
 	switch parts[0] {
-	case "nbs", "ipfs", "ipfs-local":
+	case "nbs":
 		protocol, name = parts[0], parts[1]
 
 	case "http", "https", "aws":
