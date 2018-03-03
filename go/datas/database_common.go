@@ -6,12 +6,14 @@ package datas
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/merge"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/attic-labs/noms/go/util/random"
 )
 
 type database struct {
@@ -53,6 +55,17 @@ func (db *database) Stats() interface{} {
 
 func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
+}
+
+func (db *database) Flush() {
+	// TODO: This is a pretty ghetto hack - do better.
+	// See: https://github.com/attic-labs/noms/issues/3530
+	ds := db.GetDataset(fmt.Sprintf("-/flush/%s", random.Id()))
+	r := db.WriteValue(types.Bool(true))
+	ds, err := db.CommitValue(ds, r)
+	d.PanicIfError(err)
+	_, err = db.Delete(ds)
+	d.PanicIfError(err)
 }
 
 func (db *database) Datasets() types.Map {
