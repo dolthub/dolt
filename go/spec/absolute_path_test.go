@@ -35,7 +35,7 @@ func TestAbsolutePaths(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
 
-	s0, s1 := types.String("foo"), types.String("bar")
+	s0, s1, s2 := types.String("foo"), types.String("bar"), types.String("")
 	list := types.NewList(db, s0, s1)
 	emptySet := types.NewSet(db)
 
@@ -72,6 +72,12 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(s1, "#"+s1.Hash().String())
 	resolvesTo(s0, "#"+list.Hash().String()+"[0]")
 	resolvesTo(s1, "#"+list.Hash().String()+"[1]")
+	resolvesTo(s0, "\"foo\"")
+	resolvesTo(s2, "\"\"")
+	resolvesTo(types.Bool(true), "true")
+	resolvesTo(types.Bool(false), "false")
+	resolvesTo(types.Number(42), "42")
+	resolvesTo(types.Number(88.8), "88.8")
 
 	resolvesTo(nil, "foo")
 	resolvesTo(nil, "foo.parents")

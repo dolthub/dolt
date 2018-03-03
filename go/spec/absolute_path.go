@@ -24,6 +24,10 @@ var datasetCapturePrefixRe = regexp.MustCompile("^(" + datas.DatasetRe.String() 
 // For more on paths, absolute paths, and specs, see:
 // https://github.com/attic-labs/noms/blob/master/doc/spelling.md.
 type AbsolutePath struct {
+	// A literal value, like `true` or `42`, or `"foo"`. Only kinds Bool,
+	// Number, and String are supported. This allows absolute paths to be used
+	// to specify primitive new data in addition to referencing existing data.
+	Value types.Value
 	// Dataset is the dataset this AbsolutePath is rooted at. Only one of
 	// Dataset and Hash should be set.
 	Dataset string
@@ -61,6 +65,12 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 
 		pathStr = tail[hash.StringLen:]
 	} else {
+		idx, h, rem, err := types.ParsePathIndex(str)
+		if idx != nil && h.IsEmpty() && rem == "" && err == nil {
+			return AbsolutePath{
+				Value: idx,
+			}, nil
+		}
 		datasetParts := datasetCapturePrefixRe.FindStringSubmatch(str)
 		if datasetParts == nil {
 			return AbsolutePath{}, fmt.Errorf("Invalid dataset name: %s", str)
@@ -84,6 +94,10 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 
 // Resolve returns the Value reachable by 'p' in 'db'.
 func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
+	if p.Value != nil {
+		return p.Value
+	}
+
 	if len(p.Dataset) > 0 {
 		var ok bool
 		ds := db.GetDataset(p.Dataset)
@@ -103,12 +117,16 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 }
 
 func (p AbsolutePath) IsEmpty() bool {
-	return p.Dataset == "" && p.Hash.IsEmpty()
+	return p.Value == nil && p.Dataset == "" && p.Hash.IsEmpty()
 }
 
 func (p AbsolutePath) String() (str string) {
 	if p.IsEmpty() {
 		return ""
+	}
+
+	if p.Value != nil {
+		return types.EncodedIndexValue(p.Value)
 	}
 
 	if len(p.Dataset) > 0 {
