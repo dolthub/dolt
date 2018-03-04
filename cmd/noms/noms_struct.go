@@ -10,6 +10,7 @@ import (
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
+	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 
@@ -76,14 +77,46 @@ func nomsStructSet(specStr string, args []string) int {
 	}
 
 	db := sp.GetDatabase()
-	val := sp.GetValue()
-	if st, ok := val.(types.Struct); ok {
-		applyStructEdits(db, st, args)
-		return 0
-	} else {
-		d.CheckError(fmt.Errorf("Path does not resolve to a struct: %s", specStr))
+	rootPath := sp.Path
+	rootPath.Path = types.Path{}
+	rootVal := rootPath.Resolve(db)
+	if rootVal == nil {
+		d.CheckError(fmt.Errorf("Invalid path: %s", specStr))
 		return 1
 	}
+
+	basePath := sp.Path.Path
+	patch := diff.Patch{}
+	for i := 0; i < len(args); i += 2 {
+		if !types.IsValidStructFieldName(args[i]) {
+			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
+		}
+		p, err := spec.NewAbsolutePath(args[i+1])
+		if err != nil {
+			d.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
+		}
+		nv := p.Resolve(db)
+		if nv == nil {
+			d.CheckError(fmt.Errorf("Invalid field value: %s at position: %d", args[i+1], i+1))
+		}
+		patch = append(patch, diff.Difference{
+			Path:       append(basePath, types.FieldPath{Name: args[i]}),
+			ChangeType: types.DiffChangeModified,
+			NewValue:   nv,
+		})
+	}
+	newRootVal := diff.Apply(rootVal, patch)
+	d.Chk.NotNil(newRootVal)
+	r := db.WriteValue(newRootVal)
+	db.Flush()
+	newAbsPath := spec.AbsolutePath{
+		Hash: r.TargetHash(),
+		Path: basePath,
+	}
+	newSpec := sp
+	newSpec.Path = newAbsPath
+	fmt.Println(newSpec.String())
+	return 0
 }
 
 func nomsStructDel(specStr string, args []string) int {
