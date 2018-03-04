@@ -32,10 +32,6 @@ func nomsStruct(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHand
 	delSpec := struktDel.Arg("spec", "value spec for the struct to edit").Required().String()
 	delFields := struktDel.Arg("fields", "fields to be removed").Strings()
 
-	struktName := strukt.Command("name", "updates the name of a struct")
-	nameSpec := struktName.Arg("spec", "value spec for the struct to edit").Required().String()
-	nameName := struktName.Arg("name", "new name for the struct").String()
-
 	return strukt, func(input string) int {
 		switch input {
 		case struktNew.FullCommand():
@@ -44,8 +40,6 @@ func nomsStruct(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHand
 			return nomsStructSet(*setSpec, *setFields)
 		case struktDel.FullCommand():
 			return nomsStructDel(*delSpec, *delFields)
-		case struktName.FullCommand():
-			return nomsStructName(*nameSpec, *nameName)
 		}
 		d.Panic("notreached")
 		return 1
@@ -105,27 +99,11 @@ func splitPath(sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	return
 }
 
-func nomsStructName(specStr string, name string) int {
-	sp, err := spec.ForPath(specStr)
-	d.PanicIfError(err)
-	db := sp.GetDatabase()
-	val := sp.GetValue()
-	if st, ok := val.(types.Struct); ok {
-		sd := types.StructData{}
-		st.IterFields(func(name string, val types.Value) {
-			sd[name] = val
-		})
-		r := db.WriteValue(types.NewStruct(name, sd))
-		db.Flush()
-		fmt.Println(r.TargetHash().String())
-		return 0
-	} else {
-		d.CheckError(fmt.Errorf("Path does not resolve to a struct: %s", specStr))
-		return 1
-	}
-}
-
 func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+	if rootVal == nil {
+		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		return
+	}
 	db := sp.GetDatabase()
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
@@ -151,6 +129,11 @@ func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ar
 
 func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
 	db := sp.GetDatabase()
+	baseVal := basePath.Resolve(rootVal, db)
+	if baseVal == nil {
+		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+	}
+
 	newRootVal := diff.Apply(rootVal, patch)
 	d.Chk.NotNil(newRootVal)
 	r := db.WriteValue(newRootVal)
