@@ -9,7 +9,6 @@ import (
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
@@ -56,15 +55,7 @@ func nomsStruct(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHand
 func nomsStructNew(dbStr string, name string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-
-	if len(args)%2 != 0 {
-		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
-	}
-
-	db := sp.GetDatabase()
-	st := types.NewStruct(name, nil)
-
-	applyStructEdits(db, st, args)
+	applyStructEdits(sp, types.NewStruct(name, nil), nil, args)
 	return 0
 }
 
@@ -76,46 +67,8 @@ func nomsStructSet(specStr string, args []string) int {
 		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 
-	db := sp.GetDatabase()
-	rootPath := sp.Path
-	rootPath.Path = types.Path{}
-	rootVal := rootPath.Resolve(db)
-	if rootVal == nil {
-		d.CheckError(fmt.Errorf("Invalid path: %s", specStr))
-		return 1
-	}
-
-	basePath := sp.Path.Path
-	patch := diff.Patch{}
-	for i := 0; i < len(args); i += 2 {
-		if !types.IsValidStructFieldName(args[i]) {
-			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
-		}
-		p, err := spec.NewAbsolutePath(args[i+1])
-		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
-		}
-		nv := p.Resolve(db)
-		if nv == nil {
-			d.CheckError(fmt.Errorf("Invalid field value: %s at position: %d", args[i+1], i+1))
-		}
-		patch = append(patch, diff.Difference{
-			Path:       append(basePath, types.FieldPath{Name: args[i]}),
-			ChangeType: types.DiffChangeModified,
-			NewValue:   nv,
-		})
-	}
-	newRootVal := diff.Apply(rootVal, patch)
-	d.Chk.NotNil(newRootVal)
-	r := db.WriteValue(newRootVal)
-	db.Flush()
-	newAbsPath := spec.AbsolutePath{
-		Hash: r.TargetHash(),
-		Path: basePath,
-	}
-	newSpec := sp
-	newSpec.Path = newAbsPath
-	fmt.Println(newSpec.String())
+	rootVal, basePath := splitPath(sp)
+	applyStructEdits(sp, rootVal, basePath, args)
 	return 0
 }
 
@@ -123,27 +76,33 @@ func nomsStructDel(specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
-	if len(args)%2 != 0 {
-		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
+	rootVal, basePath := splitPath(sp)
+	patch := diff.Patch{}
+	for i := 0; i < len(args); i++ {
+		if !types.IsValidStructFieldName(args[i]) {
+			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
+		}
+		patch = append(patch, diff.Difference{
+			Path:       append(basePath, types.FieldPath{Name: args[i]}),
+			ChangeType: types.DiffChangeRemoved,
+		})
 	}
 
+	appplyPatch(sp, rootVal, basePath, patch)
+	return 0
+}
+
+func splitPath(sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	db := sp.GetDatabase()
-	val := sp.GetValue()
-	if st, ok := val.(types.Struct); ok {
-		for i := 0; i < len(args); i++ {
-			if !types.IsValidStructFieldName(args[i]) {
-				d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
-			}
-			st = st.Delete(args[i])
-		}
-		r := db.WriteValue(st)
-		db.Flush()
-		fmt.Println(r.TargetHash().String())
-		return 0
-	} else {
-		d.CheckError(fmt.Errorf("Path does not resolve to a struct: %s", specStr))
-		return 1
+	rootPath := sp.Path
+	rootPath.Path = types.Path{}
+	rootVal = rootPath.Resolve(db)
+	if rootVal == nil {
+		d.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
+		return
 	}
+	basePath = sp.Path.Path
+	return
 }
 
 func nomsStructName(specStr string, name string) int {
@@ -166,23 +125,41 @@ func nomsStructName(specStr string, name string) int {
 	}
 }
 
-func applyStructEdits(db datas.Database, st types.Struct, args []string) {
+func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+	db := sp.GetDatabase()
+	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		if !types.IsValidStructFieldName(args[i]) {
 			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
 		}
-		ap, err := spec.NewAbsolutePath(args[i+1])
+		p, err := spec.NewAbsolutePath(args[i+1])
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
 		}
-		v := ap.Resolve(db)
-		if v == nil {
+		nv := p.Resolve(db)
+		if nv == nil {
 			d.CheckError(fmt.Errorf("Invalid field value: %s at position: %d", args[i+1], i+1))
 		}
-		st = st.Set(args[i], v)
+		patch = append(patch, diff.Difference{
+			Path:       append(basePath, types.FieldPath{Name: args[i]}),
+			ChangeType: types.DiffChangeModified,
+			NewValue:   nv,
+		})
 	}
+	appplyPatch(sp, rootVal, basePath, patch)
+}
 
-	r := db.WriteValue(st)
+func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
+	db := sp.GetDatabase()
+	newRootVal := diff.Apply(rootVal, patch)
+	d.Chk.NotNil(newRootVal)
+	r := db.WriteValue(newRootVal)
 	db.Flush()
-	fmt.Println(r.TargetHash().String())
+	newAbsPath := spec.AbsolutePath{
+		Hash: r.TargetHash(),
+		Path: basePath,
+	}
+	newSpec := sp
+	newSpec.Path = newAbsPath
+	fmt.Println(newSpec.String())
 }
