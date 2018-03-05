@@ -23,10 +23,22 @@ func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 	newDb := mapNew.Arg("database", "spec to db to create map within").Required().String()
 	newEntries := mapNew.Arg("entries", "key/value pairs for entries").Strings()
 
+	mapSet := maap.Command("set", "sets one or more keys in a map")
+	setSpec := mapSet.Arg("spec", "value spec for the map to edit").Required().String()
+	setEntries := mapSet.Arg("entries", "key/value pairs for entries").Strings()
+
+	mapDel := maap.Command("del", "removes one or more entries from a map")
+	delSpec := mapDel.Arg("spec", "value spec for the map to edit").Required().String()
+	delKeys := mapDel.Arg("keys", "keys for the entries to be removed").Strings()
+
 	return maap, func(input string) int {
 		switch input {
 		case mapNew.FullCommand():
 			return nomsMapNew(*newDb, *newEntries)
+		case mapSet.FullCommand():
+			return nomsMapSet(*setSpec, *setEntries)
+		case mapDel.FullCommand():
+			return nomsMapDel(*delSpec, *delKeys)
 		}
 		d.Panic("notreached")
 		return 1
@@ -37,6 +49,32 @@ func nomsMapNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	applyMapEdits(sp, types.NewMap(sp.GetDatabase()), nil, args)
+	return 0
+}
+
+func nomsMapSet(specStr string, args []string) int {
+	sp, err := spec.ForPath(specStr)
+	d.PanicIfError(err)
+	rootVal, basePath := splitPath(sp)
+	applyMapEdits(sp, rootVal, basePath, args)
+	return 0
+}
+
+func nomsMapDel(specStr string, args []string) int {
+	sp, err := spec.ForPath(specStr)
+	d.PanicIfError(err)
+
+	rootVal, basePath := splitPath(sp)
+	patch := diff.Patch{}
+	for i := 0; i < len(args); i++ {
+		kp := parseKeyPart(args, i)
+		patch = append(patch, diff.Difference{
+			Path:       append(basePath, kp),
+			ChangeType: types.DiffChangeRemoved,
+		})
+	}
+
+	appplyPatch(sp, rootVal, basePath, patch)
 	return 0
 }
 
@@ -51,20 +89,7 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 	db := sp.GetDatabase()
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
-		idx, h, rem, err := types.ParsePathIndex(args[i])
-		if rem != "" {
-			d.CheckError(fmt.Errorf("Invalid key: %s at position %d", args[i], i))
-		}
-		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid key: %s at position %d: %s", args[i], i, err))
-		}
-		var kp types.PathPart
-		if idx != nil {
-			kp = types.NewIndexPath(idx)
-		} else {
-			kp = types.NewHashIndexPath(h)
-		}
-
+		kp := parseKeyPart(args, i)
 		vp, err := spec.NewAbsolutePath(args[i+1])
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
@@ -80,4 +105,20 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 		})
 	}
 	appplyPatch(sp, rootVal, basePath, patch)
+}
+
+func parseKeyPart(args []string, i int) (res types.PathPart) {
+	idx, h, rem, err := types.ParsePathIndex(args[i])
+	if rem != "" {
+		d.CheckError(fmt.Errorf("Invalid key: %s at position %d", args[i], i))
+	}
+	if err != nil {
+		d.CheckError(fmt.Errorf("Invalid key: %s at position %d: %s", args[i], i, err))
+	}
+	if idx != nil {
+		res = types.NewIndexPath(idx)
+	} else {
+		res = types.NewHashIndexPath(h)
+	}
+	return
 }
