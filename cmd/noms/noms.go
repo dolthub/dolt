@@ -37,6 +37,7 @@ var commands = []*util.Command{
 
 var kingpinCommands = []util.KingpinCommand{
 	nomsBlob,
+	nomsList,
 	nomsMap,
 	nomsStats,
 	nomsStruct,
