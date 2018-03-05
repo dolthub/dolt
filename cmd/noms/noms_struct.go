@@ -57,10 +57,6 @@ func nomsStructSet(specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
-	if len(args)%2 != 0 {
-		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
-	}
-
 	rootVal, basePath := splitPath(sp)
 	applyStructEdits(sp, rootVal, basePath, args)
 	return 0
@@ -100,6 +96,9 @@ func splitPath(sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 }
 
 func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+	if len(args)%2 != 0 {
+		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
+	}
 	if rootVal == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
