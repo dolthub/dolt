@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alecthomas/kingpin"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func listHosts() []string {

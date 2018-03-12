@@ -7,7 +7,7 @@ package main
 import (
 	"fmt"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"

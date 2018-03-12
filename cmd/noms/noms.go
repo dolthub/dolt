@@ -12,13 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attic-labs/kingpin"
+
 	"github.com/attic-labs/noms/cmd/noms/splore"
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/profile"
 	"github.com/attic-labs/noms/go/util/verbose"
+
 	flag "github.com/juju/gnuflag"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var commands = []*util.Command{
@@ -65,6 +67,7 @@ func usageString() string {
 
 func main() {
 	// allow short (-h) help
+	kingpin.EnableFileExpansion = false
 	kingpin.CommandLine.HelpFlag.Short('h')
 	noms := kingpin.New("noms", usageString())
 

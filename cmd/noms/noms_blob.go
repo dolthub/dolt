@@ -8,9 +8,10 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/attic-labs/kingpin"
+
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func nomsBlob(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
