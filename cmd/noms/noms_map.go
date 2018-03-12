@@ -7,13 +7,13 @@ package main
 import (
 	"fmt"
 
+	"github.com/attic-labs/kingpin"
+
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
@@ -90,13 +90,9 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		kp := parseKeyPart(args, i)
-		vp, err := spec.NewAbsolutePath(args[i+1])
+		vv, err := argumentToValue(args[i+1], db)
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
-		}
-		vv := vp.Resolve(db)
-		if vv == nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d", args[i+1], i+1))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, kp),

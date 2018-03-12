@@ -7,13 +7,13 @@ package main
 import (
 	"fmt"
 
+	"github.com/attic-labs/kingpin"
+
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func nomsList(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
@@ -106,13 +106,9 @@ func applyListInserts(sp spec.Spec, rootVal types.Value, basePath types.Path, po
 	db := sp.GetDatabase()
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vp, err := spec.NewAbsolutePath(args[i])
+		vv, err := argumentToValue(args[i], db)
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
-		}
-		vv := vp.Resolve(db)
-		if vv == nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d", args[i], i))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, types.NewIndexPath(types.Number(pos+uint64(i)))),

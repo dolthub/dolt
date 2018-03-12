@@ -7,13 +7,13 @@ package main
 import (
 	"fmt"
 
+	"github.com/attic-labs/kingpin"
+
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func nomsStruct(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
@@ -109,13 +109,9 @@ func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ar
 		if !types.IsValidStructFieldName(args[i]) {
 			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
 		}
-		p, err := spec.NewAbsolutePath(args[i+1])
+		nv, err := argumentToValue(args[i+1], db)
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
-		}
-		nv := p.Resolve(db)
-		if nv == nil {
-			d.CheckError(fmt.Errorf("Invalid field value: %s at position: %d", args[i+1], i+1))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, types.FieldPath{Name: args[i]}),

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/attic-labs/kingpin"
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/config"
 	"github.com/attic-labs/noms/go/d"
@@ -19,7 +20,6 @@ import (
 	"github.com/attic-labs/noms/go/util/verbose"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/skratchdot/open-golang/open"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 var httpServe = http.Serve // override for tests

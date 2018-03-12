@@ -5,15 +5,18 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
+
+	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/d"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func nomsSet(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
@@ -76,13 +79,9 @@ func applySetEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ct ty
 	db := sp.GetDatabase()
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vp, err := spec.NewAbsolutePath(args[i])
+		vv, err := argumentToValue(args[i], db)
 		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
-		}
-		vv := vp.Resolve(db)
-		if vv == nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d", args[i], i))
+			d.CheckErrorNoUsage(err)
 		}
 		var pp types.PathPart
 		if types.ValueCanBePathIndex(vv) {
@@ -101,4 +100,46 @@ func applySetEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ct ty
 		patch = append(patch, d)
 	}
 	appplyPatch(sp, rootVal, basePath, patch)
+}
+
+func argumentToValue(arg string, db datas.Database) (types.Value, error) {
+	d.PanicIfTrue(arg == "")
+
+	if arg == "true" {
+		return types.Bool(true), nil
+	}
+	if arg == "false" {
+		return types.Bool(false), nil
+	}
+	if arg[0] == '"' {
+		buf := bytes.Buffer{}
+		for i := 1; i < len(arg); i++ {
+			c := arg[i]
+			if c == '"' {
+				if i != len(arg)-1 {
+					break
+				}
+				return types.String(buf.String()), nil
+			}
+			if c == '\\' {
+				i++
+				c = arg[i]
+				if c != '\\' && c != '"' {
+					return nil, fmt.Errorf("Invalid string argument: %s: Only '\\' and '\"' can be escaped")
+				}
+			}
+			buf.WriteByte(c)
+		}
+		return nil, fmt.Errorf("Invalid string argument: %s", arg)
+	}
+	if arg[0] == '@' {
+		p, err := spec.NewAbsolutePath(arg[1:])
+		d.PanicIfError(err)
+		return p.Resolve(db), nil
+	}
+	if n, err := strconv.ParseFloat(arg, 64); err == nil {
+		return types.Number(n), nil
+	}
+
+	return types.String(arg), nil
 }
