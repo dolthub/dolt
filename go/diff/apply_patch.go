@@ -26,6 +26,10 @@ import (
 // all Differences that change a particular node to be applied to that node
 // before it gets assigned back to it's parent.
 func Apply(root types.Value, patch Patch) types.Value {
+	if len(patch) == 0 {
+		return root
+	}
+
 	var lastPath types.Path
 	stack := patchStack{}
 	sort.Sort(patch)
