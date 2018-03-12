@@ -228,9 +228,9 @@ func StringToValue(s string, k types.NomsKind) (types.Value, error) {
 	case types.BoolKind:
 		// TODO: This should probably be configurable.
 		switch s {
-		case "true", "1", "y", "Y":
+		case "true", "1", "y", "yes", "Y", "YES":
 			return types.Bool(true), nil
-		case "false", "0", "n", "N", "":
+		case "false", "0", "n", "no", "N", "NO", "":
 			return types.Bool(false), nil
 		default:
 			return nil, fmt.Errorf("Could not parse '%s' into bool", s)
