@@ -32,9 +32,18 @@ var (
 	rtestConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {localSpec},
-			remoteAlias:    {remoteSpec},
+			DefaultDbAlias: {Url: localSpec},
+			remoteAlias:    {Url: remoteSpec},
 		},
+		AWSConfig{},
+	}
+
+	testConfigWithOptions = &Config{
+		"",
+		map[string]DbConfig{
+			remoteAlias: {Url: remoteSpec, Options: map[string]string{"param": "value"}},
+		},
+		AWSConfig{},
 	}
 
 	dbTestsNoAliases = []testData{
@@ -58,17 +67,25 @@ var (
 		{testObject, localSpec + "::" + testObject},
 		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
 	}
+
+	pathTestForConfigs = []testData{
+		{remoteAlias + "::" + testDs, remoteSpec + "::" + testDs},
+		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
+	}
 )
 
 func withConfig(t *testing.T) *Resolver {
+	return withGivenConfig(rtestConfig, t)
+}
+
+func withGivenConfig(config *Config, t *testing.T) *Resolver {
 	assert := assert.New(t)
 	dir := filepath.Join(rtestRoot, "with-config")
-	_, err := rtestConfig.WriteTo(dir)
+	_, err := config.WriteTo(dir)
 	assert.NoError(err, dir)
 	assert.NoError(os.Chdir(dir))
 	r := NewResolver() // resolver must be created after changing directory
 	return r
-
 }
 
 func withoutConfig(t *testing.T) *Resolver {
@@ -129,6 +146,30 @@ func TestResolvePathWithoutConfig(t *testing.T) {
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
 
+}
+
+func TestDbConfigOptions(t *testing.T) {
+	r := withGivenConfig(rtestConfig, t)
+	assert := assert.New(t)
+
+	dbConfig := r.DbConfigForDbSpec(remoteAlias)
+	assert.Zero(dbConfig.Options)
+	for _, d := range pathTestForConfigs {
+		db, dbConfig := r.ResolvePathSpecAndGetDbConfig(d.input)
+		assertPathSpecsEquiv(assert, d.expected, db)
+		assert.Zero(dbConfig.Options)
+	}
+
+	r = withGivenConfig(testConfigWithOptions, t)
+	dbConfig = r.DbConfigForDbSpec(remoteAlias)
+	assert.Equal(1, len(dbConfig.Options))
+	assert.Equal("value", dbConfig.Options["param"])
+	for _, d := range pathTestForConfigs {
+		db, dbConfig := r.ResolvePathSpecAndGetDbConfig(d.input)
+		assertPathSpecsEquiv(assert, d.expected, db)
+		assert.Equal(1, len(dbConfig.Options))
+		assert.Equal("value", dbConfig.Options["param"])
+	}
 }
 
 func TestResolveDestPathWithDot(t *testing.T) {
