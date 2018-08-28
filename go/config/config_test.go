@@ -21,41 +21,73 @@ const (
 	httpSpec    = "http://test.com:8080/foo"
 	nbsAbsSpec  = "nbs:/tmp/noms"
 	remoteAlias = "origin"
+	awsAlias    = "awsdb"
+	awsSpec     = "aws://dynamo_table:bucket/db"
 )
 
 var (
 	ctestRoot = os.TempDir()
 
+	x = DbConfig{nbsSpec, nil}
+
 	ldbConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {nbsSpec},
-			remoteAlias:    {httpSpec},
+			DefaultDbAlias: {Url: nbsSpec},
+			remoteAlias:    {Url: httpSpec},
 		},
+		AWSConfig{},
 	}
 
 	httpConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {httpSpec},
-			remoteAlias:    {nbsSpec},
+			DefaultDbAlias: {Url: httpSpec},
+			remoteAlias:    {Url: nbsSpec},
 		},
+		AWSConfig{},
 	}
 
 	memConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {memSpec},
-			remoteAlias:    {httpSpec},
+			DefaultDbAlias: {Url: memSpec},
+			remoteAlias:    {Url: httpSpec},
 		},
+		AWSConfig{},
 	}
 
 	ldbAbsConfig = &Config{
 		"",
 		map[string]DbConfig{
-			DefaultDbAlias: {nbsAbsSpec},
-			remoteAlias:    {httpSpec},
+			DefaultDbAlias: {Url: nbsAbsSpec},
+			remoteAlias:    {Url: httpSpec},
 		},
+		AWSConfig{},
+	}
+
+	awsConfigNoRegion = &Config{
+		"",
+		map[string]DbConfig{
+			awsAlias: {Url: awsSpec},
+		},
+		AWSConfig{},
+	}
+
+	awsConfigDefaultRegion = &Config{
+		"",
+		map[string]DbConfig{
+			awsAlias: {Url: awsSpec},
+		},
+		AWSConfig{Region: "us-east-2"},
+	}
+
+	awsConfigDbRegionOverride = &Config{
+		"",
+		map[string]DbConfig{
+			awsAlias: {Url: awsSpec, Options: map[string]string{awsRegionParam: "eu-west-1"}},
+		},
+		AWSConfig{Region: "us-east-2"},
 	}
 )
 
@@ -198,4 +230,18 @@ func TestCwd(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(cwd, abs)
+}
+
+func assertSpecOptsEqual(assert *assert.Assertions, config *Config, expected *spec.SpecOptions) {
+	dbc := config.Db[awsAlias]
+	specOpts := config.GetSpecOpts(&dbc)
+	assert.Equal(expected, &specOpts)
+}
+
+func TestGetSpecOpts(t *testing.T) {
+	assert := assert.New(t)
+
+	assertSpecOptsEqual(assert, awsConfigNoRegion, &spec.SpecOptions{AWSRegion: ""})
+	assertSpecOptsEqual(assert, awsConfigDefaultRegion, &spec.SpecOptions{AWSRegion: "us-east-2"})
+	assertSpecOptsEqual(assert, awsConfigDbRegionOverride, &spec.SpecOptions{AWSRegion: "eu-west-1"})
 }

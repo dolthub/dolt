@@ -25,7 +25,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-const Separator = "::"
+const (
+	Separator        = "::"
+	DefaultAWSRegion = "us-west-2"
+)
 
 var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
 
@@ -41,6 +44,17 @@ type SpecOptions struct {
 	// Authorization token for requests. For example, if the database is HTTP
 	// this will used for an `Authorization: Bearer ${authorization}` header.
 	Authorization string
+
+	AWSRegion string
+	//
+}
+
+func (so *SpecOptions) AwsRegionOrDefault() string {
+	if so.AWSRegion == "" {
+		return DefaultAWSRegion
+	}
+
+	return so.AWSRegion
 }
 
 // Spec locates a Noms database, dataset, or value globally. Spec caches
@@ -182,7 +196,7 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	case "http", "https":
 		return nil
 	case "aws":
-		return parseAWSSpec(sp.Href())
+		return parseAWSSpec(sp.Href(), sp.Options)
 	case "nbs":
 		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
 	case "mem":
@@ -199,11 +213,11 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	}
 }
 
-func parseAWSSpec(awsURL string) chunks.ChunkStore {
+func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
-	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion(options.AwsRegionOrDefault())))
 	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
@@ -285,7 +299,7 @@ func (sp Spec) createDatabase() datas.Database {
 	case "http", "https":
 		return datas.NewDatabase(datas.NewHTTPChunkStore(sp.Href(), sp.Options.Authorization))
 	case "aws":
-		return datas.NewDatabase(parseAWSSpec(sp.Href()))
+		return datas.NewDatabase(parseAWSSpec(sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))

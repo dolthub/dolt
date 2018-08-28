@@ -46,28 +46,38 @@ func (r *Resolver) verbose(orig string, replacement string) string {
 	return replacement
 }
 
-// Resolve string to database name. If config is defined:
+// Resolve string to database name. And get the DbConfig if one exists.
+// If config is defined:
 //   - replace the empty string with the default db url
 //   - replace any db alias with it's url
-func (r *Resolver) ResolveDbSpec(str string) string {
+func (r *Resolver) DbConfigForDbSpec(str string) *DbConfig {
 	if r.config != nil {
 		if str == "" {
-			return r.config.Db[DefaultDbAlias].Url
+			dbc := r.config.Db[DefaultDbAlias]
+			return &dbc
 		}
 		if val, ok := r.config.Db[str]; ok {
-			return val.Url
+			return &val
 		}
 	}
-	return str
+	return &DbConfig{Url: str}
 }
 
-// Resolve string to dataset or path name.
+// See config.DbConfigForDbSpec which will retrieve the entire DbConfig
+// object associated with the db (if one exists).  This method retrieves
+// the Url from that DbConfig.
+func (r *Resolver) ResolveDbSpec(str string) string {
+	return r.DbConfigForDbSpec(str).Url
+}
+
+// Resolve string to dataset or path name and get the appropriate
+// DbConfig if one exists.
 //   - replace database name as described in ResolveDatabase
 //   - if this is the first call to ResolvePath, remember the
 //     datapath part for subsequent calls.
 //   - if this is not the first call and a "." is used, replace
 //     it with the first datapath.
-func (r *Resolver) ResolvePathSpec(str string) string {
+func (r *Resolver) ResolvePathSpecAndGetDbConfig(str string) (string, *DbConfig) {
 	if r.config != nil {
 		split := strings.SplitN(str, spec.Separator, 2)
 		db, rest := "", split[0]
@@ -79,8 +89,20 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 		} else if rest == "." {
 			rest = r.dotDatapath
 		}
-		return r.ResolveDbSpec(db) + spec.Separator + rest
+
+		dbc := r.DbConfigForDbSpec(db)
+		str = dbc.Url + spec.Separator + rest
+		return str, dbc
 	}
+
+	return str, &DbConfig{Url: str}
+}
+
+// See ResolvePathSpecAndGetDbConfig which does both path spec resolutioon
+// and config retrieval
+func (r *Resolver) ResolvePathSpec(str string) string {
+	str, _ = r.ResolvePathSpecAndGetDbConfig(str)
+
 	return str
 }
 
@@ -88,7 +110,8 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
 func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
-	sp, err := spec.ForDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	dbc := r.DbConfigForDbSpec(str)
+	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), r.config.GetSpecOpts(dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +120,8 @@ func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
 func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
-	sp, err := spec.ForDatabase(r.verbose(str, r.ResolveDbSpec(str)))
+	dbc := r.DbConfigForDbSpec(str)
+	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), r.config.GetSpecOpts(dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +132,8 @@ func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
-	sp, err := spec.ForDataset(r.verbose(str, r.ResolvePathSpec(str)))
+	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
+	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), r.config.GetSpecOpts(dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
@@ -119,7 +144,8 @@ func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error)
 //  - if no db spec is present, assume the default db
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
-	sp, err := spec.ForPath(r.verbose(str, r.ResolvePathSpec(str)))
+	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
+	sp, err := spec.ForPathOpts(r.verbose(str, specStr), r.config.GetSpecOpts(dbc))
 	if err != nil {
 		return nil, nil, err
 	}

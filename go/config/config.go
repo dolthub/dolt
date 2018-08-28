@@ -16,18 +16,30 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 )
 
+// All configuration
 type Config struct {
 	File string
 	Db   map[string]DbConfig
+	AWS  AWSConfig
 }
 
+// Configuration for a specific database
 type DbConfig struct {
-	Url string
+	Url     string
+	Options map[string]string
+}
+
+// Global AWS Config
+type AWSConfig struct {
+	Region string
 }
 
 const (
 	NomsConfigFile = ".nomsconfig"
 	DefaultDbAlias = "default"
+
+	awsRegionParam = "aws_region"
+	authParam      = "authorization"
 )
 
 var NoConfig = errors.New(fmt.Sprintf("no %s found", NomsConfigFile))
@@ -117,7 +129,7 @@ func qualifyPaths(configPath string, c *Config) (*Config, error) {
 	qc := *c
 	qc.File = file
 	for k, r := range c.Db {
-		qc.Db[k] = DbConfig{absDbSpec(dir, r.Url)}
+		qc.Db[k] = DbConfig{absDbSpec(dir, r.Url), r.Options}
 	}
 	return &qc, nil
 }
@@ -136,6 +148,52 @@ func (c *Config) writeableString() string {
 	for k, r := range c.Db {
 		buffer.WriteString(fmt.Sprintf("[db.%s]\n", k))
 		buffer.WriteString(fmt.Sprintf("\t"+`url = "%s"`+"\n", r.Url))
+
+		for optKey, optVal := range r.Options {
+			buffer.WriteString(fmt.Sprintf("\t[db.%s.options]\n", k))
+			buffer.WriteString(fmt.Sprintf("\t\t%s = \"%s\"\n", optKey, optVal))
+		}
 	}
+
+	buffer.WriteString("[aws]\n")
+
+	if c.AWS.Region != "" {
+		buffer.WriteString(fmt.Sprintf("\tregion = \"%s\"\n", c.AWS.Region))
+	}
+
 	return buffer.String()
+}
+
+func (c *Config) getAWSRegion(dbParams map[string]string) string {
+	if dbParams != nil {
+		if val, ok := dbParams[awsRegionParam]; ok {
+			return val
+		}
+	}
+
+	if c.AWS.Region != "" {
+		return c.AWS.Region
+	}
+
+	return ""
+}
+
+func (c *Config) getAuthorization(dbParams map[string]string) string {
+	if dbParams != nil {
+		if val, ok := dbParams[authParam]; ok {
+			return val
+		}
+	}
+
+	return ""
+}
+
+// GetSpecOpts Uses config data from the global config and db configuration to
+// generate the spec.SpecOptions which should be used in calls to spec.For*Opts()
+func (c *Config) GetSpecOpts(dbc *DbConfig) spec.SpecOptions {
+	dbParams := dbc.Options
+	return spec.SpecOptions{
+		Authorization: c.getAuthorization(dbParams),
+		AWSRegion:     c.getAWSRegion(dbParams),
+	}
 }
