@@ -125,7 +125,7 @@ func argumentToValue(arg string, db datas.Database) (types.Value, error) {
 				i++
 				c = arg[i]
 				if c != '\\' && c != '"' {
-					return nil, fmt.Errorf("Invalid string argument: %s: Only '\\' and '\"' can be escaped")
+					return nil, fmt.Errorf("Invalid string argument: %s: Only '\\' and '\"' can be escaped", arg)
 				}
 			}
 			buf.WriteByte(c)

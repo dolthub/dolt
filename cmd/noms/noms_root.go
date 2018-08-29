@@ -77,8 +77,8 @@ hash. The old database becomes eligible for GC.
 
 ANYTHING NOT SAVED WILL BE LOST
 
-Continue?
-`)
+Continue?`)
+
 	var input string
 	n, err := fmt.Scanln(&input)
 	d.CheckErrorNoUsage(err)
