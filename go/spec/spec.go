@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
+
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
@@ -39,14 +41,59 @@ type ProtocolImpl interface {
 
 var ExternalProtocols = map[string]ProtocolImpl{}
 
+type AWSCredentialSource int
+
+const (
+	InvalidCS AWSCredentialSource = iota - 1
+
+	// Auto will try env first and fall back to role (This is the default)
+	AutoCS
+
+	// Role Uses the AWS IAM role of the instance for auth
+	RoleCS
+
+	// Env uses the credentials.New
+	EnvCS
+)
+
+func (ct AWSCredentialSource) String() string {
+	switch ct {
+	case RoleCS:
+		return "role"
+	case EnvCS:
+		return "env"
+	case AutoCS:
+		return "auto"
+	default:
+		return "invalid"
+	}
+}
+
+func AWSCredentialSourceFromStr(str string) AWSCredentialSource {
+	strlwr := strings.TrimSpace(strings.ToLower(str))
+	switch strlwr {
+	case "", "auto":
+		return AutoCS
+	case "role":
+		return RoleCS
+	case "env":
+		return EnvCS
+	default:
+		return InvalidCS
+	}
+}
+
 // SpecOptions customize Spec behavior.
 type SpecOptions struct {
 	// Authorization token for requests. For example, if the database is HTTP
 	// this will used for an `Authorization: Bearer ${authorization}` header.
 	Authorization string
 
+	// Region that should be used when creating the aws session
 	AWSRegion string
-	//
+
+	// The type of credentials that should be used when creating the aws session
+	AWSCredSource AWSCredentialSource
 }
 
 func (so *SpecOptions) AwsRegionOrDefault() string {
@@ -217,7 +264,23 @@ func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
-	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion(options.AwsRegionOrDefault())))
+
+	awsConfig := aws.NewConfig().WithRegion(options.AwsRegionOrDefault())
+
+	switch options.AWSCredSource {
+	case RoleCS:
+	case EnvCS:
+		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
+	case AutoCS:
+		envCreds := credentials.NewEnvCredentials()
+		if _, err := envCreds.Get(); err == nil {
+			awsConfig = awsConfig.WithCredentials(envCreds)
+		}
+	default:
+		panic("unsupported credential type")
+	}
+
+	sess := session.Must(session.NewSession(awsConfig))
 	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 

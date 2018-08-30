@@ -31,15 +31,17 @@ type DbConfig struct {
 
 // Global AWS Config
 type AWSConfig struct {
-	Region string
+	Region     string
+	CredSource string `toml:"cred_source"`
 }
 
 const (
 	NomsConfigFile = ".nomsconfig"
 	DefaultDbAlias = "default"
 
-	awsRegionParam = "aws_region"
-	authParam      = "authorization"
+	awsRegionParam     = "aws_region"
+	awsCredSourceParam = "aws_cred_source"
+	authParam          = "authorization"
 )
 
 var NoConfig = errors.New(fmt.Sprintf("no %s found", NomsConfigFile))
@@ -161,6 +163,10 @@ func (c *Config) writeableString() string {
 		buffer.WriteString(fmt.Sprintf("\tregion = \"%s\"\n", c.AWS.Region))
 	}
 
+	if c.AWS.CredSource != "" {
+		buffer.WriteString(fmt.Sprintf("\tcred_source = \"%s\"\n", c.AWS.CredSource))
+	}
+
 	return buffer.String()
 }
 
@@ -188,6 +194,29 @@ func (c *Config) getAuthorization(dbParams map[string]string) string {
 	return ""
 }
 
+func (c *Config) getAWSCredentialSource(dbParams map[string]string) spec.AWSCredentialSource {
+	set := false
+	credSourceStr := ""
+	if dbParams != nil {
+		if val, ok := dbParams[awsCredSourceParam]; ok {
+			set = true
+			credSourceStr = val
+		}
+	}
+
+	if !set {
+		credSourceStr = c.AWS.CredSource
+	}
+
+	ct := spec.AWSCredentialSourceFromStr(credSourceStr)
+
+	if ct == spec.InvalidCS {
+		panic(credSourceStr + " is not a valid aws credential source")
+	}
+
+	return ct
+}
+
 // GetSpecOpts Uses config data from the global config and db configuration to
 // generate the spec.SpecOptions which should be used in calls to spec.For*Opts()
 func (c *Config) GetSpecOpts(dbc *DbConfig) spec.SpecOptions {
@@ -195,5 +224,6 @@ func (c *Config) GetSpecOpts(dbc *DbConfig) spec.SpecOptions {
 	return spec.SpecOptions{
 		Authorization: c.getAuthorization(dbParams),
 		AWSRegion:     c.getAWSRegion(dbParams),
+		AWSCredSource: c.getAWSCredentialSource(dbParams),
 	}
 }
