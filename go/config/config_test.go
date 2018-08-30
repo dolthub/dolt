@@ -74,20 +74,37 @@ var (
 		AWSConfig{},
 	}
 
-	awsConfigDefaultRegion = &Config{
+	awsConfigDefault = &Config{
 		"",
 		map[string]DbConfig{
 			awsAlias: {Url: awsSpec},
 		},
-		AWSConfig{Region: "us-east-2"},
+		AWSConfig{
+			Region:     "us-east-2",
+			CredSource: "env",
+		},
 	}
 
-	awsConfigDbRegionOverride = &Config{
+	awsConfigDefaultWithInvalidCredSource = &Config{
 		"",
 		map[string]DbConfig{
-			awsAlias: {Url: awsSpec, Options: map[string]string{awsRegionParam: "eu-west-1"}},
+			awsAlias: {Url: awsSpec},
 		},
-		AWSConfig{Region: "us-east-2"},
+		AWSConfig{
+			Region:     "us-east-2",
+			CredSource: "this_should_panic",
+		},
+	}
+
+	awsConfigDbOverride = &Config{
+		"",
+		map[string]DbConfig{
+			awsAlias: {Url: awsSpec, Options: map[string]string{awsRegionParam: "eu-west-1", awsCredSourceParam: "role"}},
+		},
+		AWSConfig{
+			Region:     "us-east-2",
+			CredSource: "this_should_be_ignored",
+		},
 	}
 )
 
@@ -241,7 +258,12 @@ func assertSpecOptsEqual(assert *assert.Assertions, config *Config, expected *sp
 func TestGetSpecOpts(t *testing.T) {
 	assert := assert.New(t)
 
-	assertSpecOptsEqual(assert, awsConfigNoRegion, &spec.SpecOptions{AWSRegion: ""})
-	assertSpecOptsEqual(assert, awsConfigDefaultRegion, &spec.SpecOptions{AWSRegion: "us-east-2"})
-	assertSpecOptsEqual(assert, awsConfigDbRegionOverride, &spec.SpecOptions{AWSRegion: "eu-west-1"})
+	assertSpecOptsEqual(assert, awsConfigNoRegion, &spec.SpecOptions{})
+	assertSpecOptsEqual(assert, awsConfigDefault, &spec.SpecOptions{AWSRegion: "us-east-2", AWSCredSource: spec.EnvCS})
+	assertSpecOptsEqual(assert, awsConfigDbOverride, &spec.SpecOptions{AWSRegion: "eu-west-1", AWSCredSource: spec.RoleCS})
+
+	assert.Panics(func() {
+		dbc := awsConfigDefaultWithInvalidCredSource.Db[awsAlias]
+		awsConfigDefaultWithInvalidCredSource.GetSpecOpts(&dbc)
+	}, "Should panic with invalid cred source")
 }
