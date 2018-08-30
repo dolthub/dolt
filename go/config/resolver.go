@@ -78,21 +78,24 @@ func (r *Resolver) ResolveDbSpec(str string) string {
 //   - if this is not the first call and a "." is used, replace
 //     it with the first datapath.
 func (r *Resolver) ResolvePathSpecAndGetDbConfig(str string) (string, *DbConfig) {
-	if r.config != nil {
+	iOfSep := strings.Index(str, spec.Separator)
+	if r.config != nil && iOfSep > -1 {
 		split := strings.SplitN(str, spec.Separator, 2)
 		db, rest := "", split[0]
 		if len(split) > 1 {
 			db, rest = split[0], split[1]
 		}
-		if r.dotDatapath == "" {
-			r.dotDatapath = rest
-		} else if rest == "." {
-			rest = r.dotDatapath
-		}
 
 		dbc := r.DbConfigForDbSpec(db)
-		str = dbc.Url + spec.Separator + rest
-		return str, dbc
+		if dbc.Url != "" {
+			if r.dotDatapath == "" {
+				r.dotDatapath = rest
+			} else if rest == "." {
+				rest = r.dotDatapath
+			}
+
+			return dbc.Url + spec.Separator + rest, dbc
+		}
 	}
 
 	return str, &DbConfig{Url: str}
