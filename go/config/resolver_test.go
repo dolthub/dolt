@@ -62,9 +62,9 @@ var (
 	}
 
 	pathTestsWithAliases = []testData{
-		{testDs, localSpec + "::" + testDs},
+		{spec.Separator + testDs, localSpec + "::" + testDs},
 		{remoteAlias + "::" + testDs, remoteSpec + "::" + testDs},
-		{testObject, localSpec + "::" + testObject},
+		{spec.Separator + testObject, localSpec + "::" + testObject},
 		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
 	}
 
@@ -145,7 +145,6 @@ func TestResolvePathWithoutConfig(t *testing.T) {
 		path := r.ResolvePathSpec(d.input)
 		assertPathSpecsEquiv(assert, d.expected, path)
 	}
-
 }
 
 func TestDbConfigOptions(t *testing.T) {
@@ -172,6 +171,16 @@ func TestDbConfigOptions(t *testing.T) {
 	}
 }
 
+func TestPathResolutionWhenSeparatorMissing(t *testing.T) {
+	rConfig := withGivenConfig(rtestConfig, t)
+	rNoConfig := withoutConfig(t)
+	assert := assert.New(t)
+
+	assert.Equal(rConfig.ResolvePathSpec("db"), rNoConfig.ResolvePathSpec("db"))
+	assert.Equal(spec.Separator+"branch", rNoConfig.ResolvePathSpec(spec.Separator+"branch"))
+	assertPathSpecsEquiv(assert, localSpec+spec.Separator+"branch", rConfig.ResolvePathSpec(spec.Separator+"branch"))
+}
+
 func TestResolveDestPathWithDot(t *testing.T) {
 	r := withConfig(t)
 	assert := assert.New(t)
@@ -182,8 +191,8 @@ func TestResolveDestPathWithDot(t *testing.T) {
 		expSrc  string
 		expDest string
 	}{
-		{testDs, remoteSpec + "::.", localSpec + "::" + testDs, remoteSpec + "::" + testDs},
-		{remoteSpec + "::" + testDs, ".", remoteSpec + "::" + testDs, localSpec + "::" + testDs},
+		{"::" + testDs, remoteSpec + "::.", localSpec + "::" + testDs, remoteSpec + "::" + testDs},
+		{remoteSpec + "::" + testDs, "::.", remoteSpec + "::" + testDs, localSpec + "::" + testDs},
 	}
 	for _, d := range data {
 		src := r.ResolvePathSpec(d.src)
