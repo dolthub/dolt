@@ -80,7 +80,7 @@ func (s3p awsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Sta
 	}
 	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
 		s3p.ddb.Write(name, data)
-		return s3p.newReaderFromIndexData(data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name})
+		return newReaderFromIndexData(s3p.indexCache, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
 	if s3p.tc != nil {
@@ -88,17 +88,7 @@ func (s3p awsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Sta
 	}
 	s3p.multipartUpload(data, name.String())
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
-	return s3p.newReaderFromIndexData(data, name, tra)
-}
-
-func (s3p awsTablePersister) newReaderFromIndexData(idxData []byte, name addr, tra tableReaderAt) chunkSource {
-	index := parseTableIndex(idxData)
-	if s3p.indexCache != nil {
-		s3p.indexCache.lockEntry(name)
-		defer s3p.indexCache.unlockEntry(name)
-		s3p.indexCache.put(name, index)
-	}
-	return &awsChunkSource{newTableReader(index, tra, s3BlockSize), name}
+	return newReaderFromIndexData(s3p.indexCache, data, name, tra, s3BlockSize)
 }
 
 func (s3p awsTablePersister) multipartUpload(data []byte, key string) {
@@ -250,7 +240,7 @@ func (s3p awsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chun
 		go s3p.loadIntoCache(name) // load conjoined table to the cache
 	}
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
-	return s3p.newReaderFromIndexData(plan.mergedIndex, name, tra)
+	return newReaderFromIndexData(s3p.indexCache, plan.mergedIndex, name, tra, s3BlockSize)
 }
 
 func (s3p awsTablePersister) loadIntoCache(name addr) {

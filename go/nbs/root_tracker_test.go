@@ -394,16 +394,3 @@ func (ftp fakeTablePersister) Open(name addr, chunkCount uint32, stats *Stats) c
 	defer ftp.mu.RUnlock()
 	return chunkSourceAdapter{ftp.sources[name], name}
 }
-
-type chunkSourceAdapter struct {
-	tableReader
-	h addr
-}
-
-func (csa chunkSourceAdapter) hash() addr {
-	return csa.h
-}
-
-func (csa chunkSourceAdapter) index() tableIndex {
-	return csa.tableIndex
-}
