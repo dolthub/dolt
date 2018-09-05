@@ -30,14 +30,19 @@ type tableReaderAt interface {
 }
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
-// |blockSize| refers to the block-size of the underlying storage. We assume that, each time we read data, we actually have to read in blocks of this size. So, we're willing to tolerate up to |blockSize| overhead each time we read a chunk, if it helps us group more chunks together into a single read request to backing storage.
+// |blockSize| refers to the block-size of the underlying storage. We assume that, each
+// time we read data, we actually have to read in blocks of this size. So, we're willing
+// to tolerate up to |blockSize| overhead each time we read a chunk, if it helps us group
+// more chunks together into a single read request to backing storage.
 type tableReader struct {
 	tableIndex
 	r         tableReaderAt
 	blockSize uint64
 }
 
-// parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. |tableIndex| doesn't keep alive any references to |buff|.
+// parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
+// and footer, though it may contain an unspecified number of bytes before that data.
+// |tableIndex| doesn't keep alive any references to |buff|.
 func parseTableIndex(buff []byte) tableIndex {
 	pos := uint64(len(buff))
 
@@ -142,7 +147,9 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 	return ti.chunkCount
 }
 
-// newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index and footer, though it may contain an unspecified number of bytes before that data. r should allow retrieving any desired range of bytes from the table.
+// newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
+// and footer, though it may contain an unspecified number of bytes before that data. r should allow
+// retrieving any desired range of bytes from the table.
 func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableReader {
 	return tableReader{index, r, blockSize}
 }

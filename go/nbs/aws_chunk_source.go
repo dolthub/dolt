@@ -17,7 +17,7 @@ func newAWSChunkSource(ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, nam
 		defer indexCache.unlockEntry(name)
 		if index, found := indexCache.get(name); found {
 			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			return &awsChunkSource{newTableReader(index, tra, s3BlockSize), name}
+			return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}
 		}
 	}
 
@@ -47,16 +47,7 @@ func newAWSChunkSource(ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, nam
 	if indexCache != nil {
 		indexCache.put(name, index)
 	}
-	return &awsChunkSource{newTableReader(index, tra, s3BlockSize), name}
-}
-
-type awsChunkSource struct {
-	tableReader
-	name addr
-}
-
-func (acs *awsChunkSource) hash() addr {
-	return acs.name
+	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}
 }
 
 type awsTableReaderAt struct {
