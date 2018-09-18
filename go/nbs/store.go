@@ -5,11 +5,15 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/attic-labs/noms/go/blobstore"
+
+	"cloud.google.com/go/storage"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
@@ -78,6 +82,17 @@ func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize ui
 		globalIndexCache,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
+	return newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+}
+
+// NewGCSStore returns an nbs implementation backed by a GCSBlobstore
+func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Client, memTableSize uint64) *NomsBlockStore {
+	cacheOnce.Do(makeGlobalCaches)
+
+	bucket := gcs.Bucket(bucketName)
+	bs := blobstore.NewGCSBlobstore(ctx, bucket, path)
+	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
+	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
 	return newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
