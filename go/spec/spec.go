@@ -7,6 +7,7 @@
 package spec
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -14,14 +15,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
-
+	"cloud.google.com/go/storage"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -244,6 +245,8 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 		return nil
 	case "aws":
 		return parseAWSSpec(sp.Href(), sp.Options)
+	case "gs":
+		return parseGCSSpec(sp.Href(), sp.Options)
 	case "nbs":
 		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
 	case "mem":
@@ -284,6 +287,25 @@ func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
+func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
+	u, err := url.Parse(gcsURL)
+	d.PanicIfError(err)
+
+	fmt.Println(u)
+
+	bucket := u.Host
+	path := u.Path
+
+	ctx := context.Background()
+	gcs, err := storage.NewClient(ctx)
+
+	if err != nil {
+		panic("Could not create GCSBlobstore")
+	}
+
+	return nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+}
+
 // GetDataset returns the current Dataset instance for this Spec's Database.
 // GetDataset is live, so if Commit is called on this Spec's Database later, a
 // new up-to-date Dataset will returned on the next call to GetDataset.  If
@@ -310,7 +332,7 @@ func (sp Spec) GetValue() (val types.Value) {
 // an empty string.
 func (sp Spec) Href() string {
 	switch proto := sp.Protocol; proto {
-	case "http", "https", "aws":
+	case "http", "https", "aws", "gs":
 		return proto + ":" + sp.DatabaseName
 	default:
 		return ""
@@ -363,6 +385,8 @@ func (sp Spec) createDatabase() datas.Database {
 		return datas.NewDatabase(datas.NewHTTPChunkStore(sp.Href(), sp.Options.Authorization))
 	case "aws":
 		return datas.NewDatabase(parseAWSSpec(sp.Href(), sp.Options))
+	case "gs":
+		return datas.NewDatabase(parseGCSSpec(sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
 		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
@@ -410,7 +434,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	case "nbs":
 		protocol, name = parts[0], parts[1]
 
-	case "http", "https", "aws":
+	case "http", "https", "aws", "gs":
 		u, perr := url.Parse(spec)
 		if perr != nil {
 			err = perr
