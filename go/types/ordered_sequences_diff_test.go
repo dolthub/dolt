@@ -193,9 +193,9 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		return newMetaTuple(vrw.WriteValue(set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
 	}
 
-	m1 := newSetSequenceMt(Number(1), Number(2))
-	m2 := newSetSequenceMt(Number(3), Number(4))
-	m3 := newSetSequenceMt(Number(5), Number(6))
+	m1 := newSetSequenceMt(Float(1), Float(2))
+	m2 := newSetSequenceMt(Float(3), Float(4))
+	m3 := newSetSequenceMt(Float(5), Float(6))
 	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, vrw)
 	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
 
@@ -209,11 +209,11 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		}()
 
 		expected := []ValueChanged{
-			{DiffChangeAdded, Number(3), nil, nil},
-			{DiffChangeAdded, Number(4), nil, nil},
+			{DiffChangeAdded, Float(3), nil, nil},
+			{DiffChangeAdded, Float(4), nil, nil},
 			{},
-			{DiffChangeRemoved, Number(3), nil, nil},
-			{DiffChangeRemoved, Number(4), nil, nil},
+			{DiffChangeRemoved, Float(3), nil, nil},
+			{DiffChangeRemoved, Float(4), nil, nil},
 		}
 
 		i := 0

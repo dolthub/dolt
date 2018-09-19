@@ -59,7 +59,7 @@ func (tc *typeCanFit) MostSpecificKind() types.NomsKind {
 	if tc.boolType {
 		return types.BoolKind
 	} else if tc.numberType {
-		return types.NumberKind
+		return types.FloatKind
 	} else {
 		return types.StringKind
 	}
@@ -67,7 +67,7 @@ func (tc *typeCanFit) MostSpecificKind() types.NomsKind {
 
 func (tc *typeCanFit) ValidKinds() (kinds KindSlice) {
 	if tc.numberType {
-		kinds = append(kinds, types.NumberKind)
+		kinds = append(kinds, types.FloatKind)
 	}
 	if tc.boolType {
 		kinds = append(kinds, types.BoolKind)
@@ -216,15 +216,15 @@ func FindPrimaryKeys(r *csv.Reader, numSamples, maxLenPrimaryKeyList, numFields 
 // StringToValue takes a piece of data as a string and attempts to convert it to a types.Value of the appropriate types.NomsKind.
 func StringToValue(s string, k types.NomsKind) (types.Value, error) {
 	switch k {
-	case types.NumberKind:
+	case types.FloatKind:
 		if s == "" {
-			return types.Number(float64(0)), nil
+			return types.Float(float64(0)), nil
 		}
 		fval, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return nil, fmt.Errorf("Could not parse '%s' into number (%s)", s, err)
 		}
-		return types.Number(fval), nil
+		return types.Float(fval), nil
 	case types.BoolKind:
 		// TODO: This should probably be configurable.
 		switch s {

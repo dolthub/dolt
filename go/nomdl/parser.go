@@ -85,7 +85,7 @@ func (p *Parser) ensureAtEnd() {
 // TypeWithoutUnion :
 //   `Blob`
 //   `Bool`
-//   `Number`
+//   `Float`
 //   `String`
 //   `Type`
 //   `Value`
@@ -163,8 +163,8 @@ func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) *types.Typ
 		return types.BoolType
 	case "Blob":
 		return types.BlobType
-	case "Number":
-		return types.NumberType
+	case "Float":
+		return types.FloaTType
 	case "String":
 		return types.StringType
 	case "Type":
@@ -263,7 +263,7 @@ func (p *Parser) parseMapType() *types.Type {
 // Value :
 //   Type
 //   Bool
-//   Number
+//   Float
 //   String
 //   List
 //   Set
@@ -274,7 +274,7 @@ func (p *Parser) parseMapType() *types.Type {
 //   `true`
 //   `false`
 //
-// Number :
+// Float :
 //   ...
 //
 // String :
@@ -331,13 +331,13 @@ func (p *Parser) parseValue() types.Value {
 		}
 	case scanner.Float, scanner.Int:
 		f := p.parseFloat()
-		return types.Number(f)
+		return types.Float(f)
 	case '-':
 		if !p.lex.eatIf(scanner.Float) {
 			p.lex.eat(scanner.Int)
 		}
 		n := p.parseFloat()
-		return types.Number(-float64(n))
+		return types.Float(-float64(n))
 	case '+':
 		if !p.lex.eatIf(scanner.Float) {
 			p.lex.eat(scanner.Int)
@@ -359,10 +359,10 @@ func (p *Parser) parseValue() types.Value {
 	panic("unreachable")
 }
 
-func (p *Parser) parseFloat() types.Number {
+func (p *Parser) parseFloat() types.Float {
 	s := p.lex.tokenText()
 	f, _ := strconv.ParseFloat(s, 64)
-	return types.Number(f)
+	return types.Float(f)
 }
 
 func (p *Parser) parseList() types.List {

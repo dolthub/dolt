@@ -14,6 +14,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/util/writers"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 )
 
 // Clients can register a 'commenter' to return a comment that will get appended
@@ -173,8 +174,8 @@ func (w *hrsWriter) Write(v Value) {
 	switch v.Kind() {
 	case BoolKind:
 		w.write(strconv.FormatBool(bool(v.(Bool))))
-	case NumberKind:
-		w.write(strconv.FormatFloat(float64(v.(Number)), w.floatFormat, -1, 64))
+	case FloatKind:
+		w.write(strconv.FormatFloat(float64(v.(Float)), w.floatFormat, -1, 64))
 
 	case StringKind:
 		w.write(strconv.Quote(string(v.(String))))
@@ -246,6 +247,17 @@ func (w *hrsWriter) Write(v Value) {
 	case StructKind:
 		w.writeStruct(v.(Struct))
 
+	case UUIDKind:
+		id, _ := v.(UUID)
+		idStr := uuid.UUID(id).String()
+		w.write(idStr)
+
+	case IntKind:
+		w.write(strconv.FormatInt(int64(v.(Int)), 10))
+
+	case UintKind:
+		w.write(strconv.FormatUint(uint64(v.(Uint)), 10))
+
 	default:
 		panic("unreachable")
 	}
@@ -315,7 +327,7 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case BlobKind, BoolKind, NumberKind, StringKind, TypeKind, ValueKind:
+	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind:
 		w.write(t.TargetKind().String())
 	case ListKind, RefKind, SetKind, MapKind:
 		w.write(t.TargetKind().String())

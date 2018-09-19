@@ -244,9 +244,9 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			timesSlice := types.ValueSlice{}
 			for name, info := range rep {
 				timesSlice = append(timesSlice, types.String(name), types.NewStruct("", types.StructData{
-					"elapsed": types.Number(info.elapsed.Nanoseconds()),
-					"paused":  types.Number(info.paused.Nanoseconds()),
-					"total":   types.Number(info.total.Nanoseconds()),
+					"elapsed": types.Float(info.elapsed.Nanoseconds()),
+					"paused":  types.Float(info.paused.Nanoseconds()),
+					"total":   types.Float(info.total.Nanoseconds()),
 				}))
 			}
 			reps[i] = types.NewMap(db, timesSlice...)

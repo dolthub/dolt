@@ -18,9 +18,9 @@ func TestValueEquals(t *testing.T) {
 	values := []func() Value{
 		func() Value { return Bool(false) },
 		func() Value { return Bool(true) },
-		func() Value { return Number(0) },
-		func() Value { return Number(-1) },
-		func() Value { return Number(1) },
+		func() Value { return Float(0) },
+		func() Value { return Float(-1) },
+		func() Value { return Float(1) },
 		func() Value { return String("") },
 		func() Value { return String("hi") },
 		func() Value { return String("bye") },
@@ -54,16 +54,16 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return MakeStructType("a") },
 		func() Value { return MakeStructType("b") },
 		func() Value { return MakeListType(BoolType) },
-		func() Value { return MakeListType(NumberType) },
+		func() Value { return MakeListType(FloaTType) },
 		func() Value { return MakeSetType(BoolType) },
-		func() Value { return MakeSetType(NumberType) },
+		func() Value { return MakeSetType(FloaTType) },
 		func() Value { return MakeRefType(BoolType) },
-		func() Value { return MakeRefType(NumberType) },
+		func() Value { return MakeRefType(FloaTType) },
 		func() Value {
 			return MakeMapType(BoolType, ValueType)
 		},
 		func() Value {
-			return MakeMapType(NumberType, ValueType)
+			return MakeMapType(FloaTType, ValueType)
 		},
 	}
 

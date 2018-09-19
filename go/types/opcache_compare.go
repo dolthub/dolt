@@ -128,13 +128,39 @@ func compareEncodedNomsValues(a, b []byte) int {
 	}
 
 	switch aKind {
+	case UUIDKind:
+		return bytes.Compare(a, b)
 	case BoolKind:
 		return bytes.Compare(a, b)
-	case NumberKind:
+	case IntKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readNumber()
+		aNum := reader.readInt()
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readNumber()
+		bNum := reader.readInt()
+		if aNum == bNum {
+			return 0
+		}
+		if aNum < bNum {
+			return -1
+		}
+		return 1
+	case UintKind:
+		reader := binaryNomsReader{a[1:], 0}
+		aNum := reader.readUint()
+		reader.buff, reader.offset = b[1:], 0
+		bNum := reader.readUint()
+		if aNum == bNum {
+			return 0
+		}
+		if aNum < bNum {
+			return -1
+		}
+		return 1
+	case FloatKind:
+		reader := binaryNomsReader{a[1:], 0}
+		aNum := reader.readFloat()
+		reader.buff, reader.offset = b[1:], 0
+		bNum := reader.readFloat()
 		if aNum == bNum {
 			return 0
 		}

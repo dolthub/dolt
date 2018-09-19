@@ -14,7 +14,7 @@ func assertSubtype(t *Type, v Value) {
 	}
 }
 
-// IsSubtype determines whether concreteType is a subtype of requiredType. For example, `Number` is a subtype of `Number | String`.
+// IsSubtype determines whether concreteType is a subtype of requiredType. For example, `Float` is a subtype of `Float | String`.
 func IsSubtype(requiredType, concreteType *Type) bool {
 	isSub, _ := isSubtypeTopLevel(requiredType, concreteType)
 	return isSub
@@ -178,14 +178,14 @@ func IsValueSubtypeOf(v Value, t *Type) bool {
 //
 // For example, given the following data:
 //   type1 := struct S {               v := Struct S1 {
-//       a Number | string                 a: "hello"
+//       a Float | string                 a: "hello"
 //       b ?int                            b: 2
 //   }                                 }
 // IsValueSubtypeOfDetails(v, type1) would return isSub == true, and hasExtra == false
 //
 // And given these types:
 //   type2 := struct S {               v := Struct S1 {
-//       a Number | string                 a: "hello"
+//       a Float | string                 a: "hello"
 //       b ?int                            b: 2
 //   }                                     c: "hello again"
 //                                     }
@@ -196,7 +196,7 @@ func IsValueSubtypeOfDetails(v Value, t *Type) (bool, bool) {
 
 func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 	switch t.TargetKind() {
-	case BoolKind, NumberKind, StringKind, BlobKind, TypeKind:
+	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind:
 		return v.Kind() == t.TargetKind(), hasExtra
 	case ValueKind:
 		return true, hasExtra

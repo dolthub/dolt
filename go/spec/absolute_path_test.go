@@ -25,7 +25,7 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 		assert.Equal(str, p.String())
 	}
 
-	h := types.Number(42).Hash() // arbitrary hash
+	h := types.Float(42).Hash() // arbitrary hash
 	test(fmt.Sprintf("foo.bar[#%s]", h.String()))
 	test(fmt.Sprintf("#%s.bar[42]", h.String()))
 }

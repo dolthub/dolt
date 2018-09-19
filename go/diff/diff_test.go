@@ -33,7 +33,7 @@ func valToTypesValue(v interface{}) types.Value {
 	case string:
 		v1 = types.String(t)
 	case int:
-		v1 = types.Number(t)
+		v1 = types.Float(t)
 	case types.Value:
 		v1 = t
 	}
@@ -441,14 +441,14 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 func TestNomsDiffPrintType(t *testing.T) {
 	assert := assert.New(t)
 
-	expected1 := "-   List<Number>\n+   List<String>\n"
+	expected1 := "-   List<Float>\n+   List<String>\n"
 	expectedPaths1 := []string{""}
-	t1 := types.MakeListType(types.NumberType)
+	t1 := types.MakeListType(types.FloaTType)
 	t2 := types.MakeListType(types.StringType)
 
-	expected2 := "-   List<Number>\n+   Set<String>\n"
+	expected2 := "-   List<Float>\n+   Set<String>\n"
 	expectedPaths2 := []string{``}
-	t3 := types.MakeListType(types.NumberType)
+	t3 := types.MakeListType(types.FloaTType)
 	t4 := types.MakeSetType(types.StringType)
 
 	tf := func(leftRight bool) {

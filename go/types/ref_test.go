@@ -41,12 +41,12 @@ func TestRefInMap(t *testing.T) {
 
 	m := NewMap(vs)
 	r := NewRef(m)
-	m = m.Edit().Set(Number(0), r).Set(r, Number(1)).Map()
-	r2 := m.Get(Number(0))
+	m = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map()
+	r2 := m.Get(Float(0))
 	assert.True(r.Equals(r2))
 
 	i := m.Get(r)
-	assert.Equal(int32(1), int32(i.(Number)))
+	assert.Equal(int32(1), int32(i.(Float)))
 }
 
 func TestRefChunks(t *testing.T) {

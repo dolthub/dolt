@@ -29,8 +29,8 @@ language. For example, consider objects with the following type:
 struct Person {
   name String,
   geopos struct GeoPos {
-     latitude Number,
-     longitude Number,
+     latitude Float,
+     longitude Float,
   }
 }
 
@@ -166,10 +166,10 @@ func openIndex(idxName string, im *indexManager) error {
 		return fmt.Errorf("Value of commit at '%s' is not a valid index", idxName)
 	}
 
-	// Todo: make this type be Map<String | Number>, Set<Value>> once Issue #2326 gets resolved and
+	// Todo: make this type be Map<String | Float>, Set<Value>> once Issue #2326 gets resolved and
 	// IsSubtype() returns the correct value.
 	typ := types.MakeMapType(
-		types.MakeUnionType(types.StringType, types.NumberType),
+		types.MakeUnionType(types.StringType, types.FloaTType),
 		types.ValueType)
 
 	if !types.IsValueSubtypeOf(index, typ) {

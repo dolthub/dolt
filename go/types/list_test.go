@@ -90,7 +90,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 
 	length := 1 << size
 	elems := newTestList(length)
-	tr := MakeListType(NumberType)
+	tr := MakeListType(FloaTType)
 	list := NewList(vrw, elems...)
 	return &listTestSuite{
 		collectionTestSuite: collectionTestSuite{
@@ -110,14 +110,14 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)
-				dup[0] = Number(0)
+				dup[0] = Float(0)
 				copy(dup[1:], elems)
 				return NewList(vrw, dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems)
-				dup[len(dup)-1] = Number(0)
+				dup[len(dup)-1] = Float(0)
 				return NewList(vrw, dup...)
 			},
 		},
@@ -182,8 +182,8 @@ func TestListInsert(t *testing.T) {
 	list := tl.toList(vrw)
 
 	for i := 0; i < len(tl); i += 16 {
-		tl = tl.Insert(i, Number(i))
-		list = list.Edit().Insert(uint64(i), Number(i)).List()
+		tl = tl.Insert(i, Float(i))
+		list = list.Edit().Insert(uint64(i), Float(i)).List()
 	}
 
 	assert.True(tl.toList(vrw).Equals(list))
@@ -236,7 +236,7 @@ func getTestListWithLen(length int) testList {
 	s := rand.NewSource(42)
 	values := make([]Value, length)
 	for i := 0; i < length; i++ {
-		values[i] = Number(s.Int63() & 0xff)
+		values[i] = Float(s.Int63() & 0xff)
 	}
 
 	return values
@@ -251,7 +251,7 @@ func getTestListUnique() testList {
 	}
 	values := make([]Value, 0, length)
 	for k := range uniques {
-		values = append(values, Number(k))
+		values = append(values, Float(k))
 	}
 	return values
 }
@@ -314,10 +314,10 @@ func TestListAppend(t *testing.T) {
 	}
 
 	cl := newList(getTestList())
-	cl2 := cl.Edit().Append(Number(42)).List()
-	cl3 := cl2.Edit().Append(Number(43)).List()
+	cl2 := cl.Edit().Append(Float(42)).List()
+	cl3 := cl2.Edit().Append(Float(43)).List()
 	cl4 := cl3.Edit().Append(getTestList().AsValuables()...).List()
-	cl5 := cl4.Edit().Append(Number(44), Number(45)).List()
+	cl5 := cl4.Edit().Append(Float(44), Float(45)).List()
 	cl6 := cl5.Edit().Append(getTestList().AsValuables()...).List()
 
 	expected := getTestList()
@@ -325,12 +325,12 @@ func TestListAppend(t *testing.T) {
 	assert.Equal(getTestListLen(), cl.Len())
 	assert.True(newList(expected).Equals(cl))
 
-	expected = append(expected, Number(42))
+	expected = append(expected, Float(42))
 	assert.Equal(expected, listToSimple(cl2))
 	assert.Equal(getTestListLen()+1, cl2.Len())
 	assert.True(newList(expected).Equals(cl2))
 
-	expected = append(expected, Number(43))
+	expected = append(expected, Float(43))
 	assert.Equal(expected, listToSimple(cl3))
 	assert.Equal(getTestListLen()+2, cl3.Len())
 	assert.True(newList(expected).Equals(cl3))
@@ -340,7 +340,7 @@ func TestListAppend(t *testing.T) {
 	assert.Equal(2*getTestListLen()+2, cl4.Len())
 	assert.True(newList(expected).Equals(cl4))
 
-	expected = append(expected, Number(44), Number(45))
+	expected = append(expected, Float(44), Float(45))
 	assert.Equal(expected, listToSimple(cl5))
 	assert.Equal(2*getTestListLen()+4, cl5.Len())
 	assert.True(newList(expected).Equals(cl5))
@@ -421,10 +421,10 @@ func TestListInsertStart(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl := getTestList().toList(vrw)
-	cl2 := cl.Edit().Insert(0, Number(42)).List()
-	cl3 := cl2.Edit().Insert(0, Number(43)).List()
+	cl2 := cl.Edit().Insert(0, Float(42)).List()
+	cl3 := cl2.Edit().Insert(0, Float(43)).List()
 	cl4 := cl3.Edit().Insert(0, getTestList().AsValuables()...).List()
-	cl5 := cl4.Edit().Insert(0, Number(44), Number(45)).List()
+	cl5 := cl4.Edit().Insert(0, Float(44), Float(45)).List()
 	cl6 := cl5.Edit().Insert(0, getTestList().AsValuables()...).List()
 
 	expected := getTestList()
@@ -432,12 +432,12 @@ func TestListInsertStart(t *testing.T) {
 	assert.Equal(getTestListLen(), cl.Len())
 	assert.True(expected.toList(vrw).Equals(cl))
 
-	expected = expected.Insert(0, Number(42))
+	expected = expected.Insert(0, Float(42))
 	assert.Equal(expected, testListFromNomsList(cl2))
 	assert.Equal(getTestListLen()+1, cl2.Len())
 	assert.True(expected.toList(vrw).Equals(cl2))
 
-	expected = expected.Insert(0, Number(43))
+	expected = expected.Insert(0, Float(43))
 	assert.Equal(expected, testListFromNomsList(cl3))
 	assert.Equal(getTestListLen()+2, cl3.Len())
 	assert.True(expected.toList(vrw).Equals(cl3))
@@ -447,7 +447,7 @@ func TestListInsertStart(t *testing.T) {
 	assert.Equal(2*getTestListLen()+2, cl4.Len())
 	assert.True(expected.toList(vrw).Equals(cl4))
 
-	expected = expected.Insert(0, Number(44), Number(45))
+	expected = expected.Insert(0, Float(44), Float(45))
 	assert.Equal(expected, testListFromNomsList(cl5))
 	assert.Equal(2*getTestListLen()+4, cl5.Len())
 	assert.True(expected.toList(vrw).Equals(cl5))
@@ -470,24 +470,24 @@ func TestListInsertMiddle(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl := getTestList().toList(vrw)
-	cl2 := cl.Edit().Insert(100, Number(42)).List()
-	cl3 := cl2.Edit().Insert(200, Number(43)).List()
+	cl2 := cl.Edit().Insert(100, Float(42)).List()
+	cl3 := cl2.Edit().Insert(200, Float(43)).List()
 	cl4 := cl3.Edit().Insert(300, getTestList().AsValuables()...).List()
-	cl5 := cl4.Edit().Insert(400, Number(44), Number(45)).List()
+	cl5 := cl4.Edit().Insert(400, Float(44), Float(45)).List()
 	cl6 := cl5.Edit().Insert(500, getTestList().AsValuables()...).List()
-	cl7 := cl6.Edit().Insert(600, Number(100)).List()
+	cl7 := cl6.Edit().Insert(600, Float(100)).List()
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
 	assert.Equal(getTestListLen(), cl.Len())
 	assert.True(expected.toList(vrw).Equals(cl))
 
-	expected = expected.Insert(100, Number(42))
+	expected = expected.Insert(100, Float(42))
 	assert.Equal(expected, testListFromNomsList(cl2))
 	assert.Equal(getTestListLen()+1, cl2.Len())
 	assert.True(expected.toList(vrw).Equals(cl2))
 
-	expected = expected.Insert(200, Number(43))
+	expected = expected.Insert(200, Float(43))
 	assert.Equal(expected, testListFromNomsList(cl3))
 	assert.Equal(getTestListLen()+2, cl3.Len())
 	assert.True(expected.toList(vrw).Equals(cl3))
@@ -497,7 +497,7 @@ func TestListInsertMiddle(t *testing.T) {
 	assert.Equal(2*getTestListLen()+2, cl4.Len())
 	assert.True(expected.toList(vrw).Equals(cl4))
 
-	expected = expected.Insert(400, Number(44), Number(45))
+	expected = expected.Insert(400, Float(44), Float(45))
 	assert.Equal(expected, testListFromNomsList(cl5))
 	assert.Equal(2*getTestListLen()+4, cl5.Len())
 	assert.True(expected.toList(vrw).Equals(cl5))
@@ -507,7 +507,7 @@ func TestListInsertMiddle(t *testing.T) {
 	assert.Equal(3*getTestListLen()+4, cl6.Len())
 	assert.True(expected.toList(vrw).Equals(cl6))
 
-	expected = expected.Insert(600, Number(100))
+	expected = expected.Insert(600, Float(100))
 	assert.Equal(expected, testListFromNomsList(cl7))
 	assert.Equal(3*getTestListLen()+5, cl7.Len())
 	assert.True(expected.toList(vrw).Equals(cl7))
@@ -673,7 +673,7 @@ func TestListSet(t *testing.T) {
 	cl := testList.toList(vrw)
 
 	testIdx := func(idx int, testEquality bool) {
-		newVal := Number(-1) // Test values are never < 0
+		newVal := Float(-1) // Test values are never < 0
 		cl2 := cl.Edit().Set(uint64(idx), newVal).List()
 		assert.False(cl.Equals(cl2))
 		if testEquality {
@@ -894,7 +894,7 @@ func TestListDiffAdd5x5(t *testing.T) {
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := generateNumbersAsValues(5000)
 	for count := 5; count > 0; count-- {
-		nums2 = spliceValues(nums2, (count-1)*1000, 0, Number(0), Number(1), Number(2), Number(3), Number(4))
+		nums2 = spliceValues(nums2, (count-1)*1000, 0, Float(0), Float(1), Float(2), Float(3), Float(4))
 	}
 	l1 := NewList(vrw, nums1...)
 	l2 := NewList(vrw, nums2...)
@@ -1058,9 +1058,9 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 		return newMetaTuple(vrw.WriteValue(list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
 	}
 
-	m1 := newSequenceMetaTuple(Number(1), Number(2), Number(3))
-	m2 := newSequenceMetaTuple(Number(4), Number(5), Number(6), Number(7), Number(8))
-	m3 := newSequenceMetaTuple(Number(9), Number(10), Number(11), Number(12), Number(13), Number(14), Number(15))
+	m1 := newSequenceMetaTuple(Float(1), Float(2), Float(3))
+	m2 := newSequenceMetaTuple(Float(4), Float(5), Float(6), Float(7), Float(8))
+	m3 := newSequenceMetaTuple(Float(9), Float(10), Float(11), Float(12), Float(13), Float(14), Float(15))
 
 	l1 := newList(newListMetaSequence(1, []metaTuple{m1, m3}, vrw))     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
 	l2 := newList(newListMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
@@ -1087,17 +1087,17 @@ func TestListTypeAfterMutations(t *testing.T) {
 		l := NewList(vrw, values...)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
-		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
+		assert.True(TypeOf(l).Equals(MakeListType(FloaTType)))
 
 		l = l.Edit().Append(String("a")).List()
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.asSequence())
-		assert.True(TypeOf(l).Equals(MakeListType(MakeUnionType(NumberType, StringType))))
+		assert.True(TypeOf(l).Equals(MakeListType(MakeUnionType(FloaTType, StringType))))
 
 		l = l.Edit().Splice(l.Len()-1, 1).List()
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
-		assert.True(TypeOf(l).Equals(MakeListType(NumberType)))
+		assert.True(TypeOf(l).Equals(MakeListType(FloaTType)))
 	}
 
 	test(15, listLeafSequence{})
@@ -1145,7 +1145,7 @@ func TestListConcat(t *testing.T) {
 
 		listSlice := make(testList, size)
 		for i := range listSlice {
-			listSlice[i] = Number(r.Intn(size))
+			listSlice[i] = Float(r.Intn(size))
 		}
 
 		list := listSlice.toList(vs)
@@ -1194,16 +1194,16 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	list := NewList(vrw,
 		NewStruct("Foo", StructData{
-			"a": Number(1),
+			"a": Float(1),
 		}),
 		NewStruct("Foo", StructData{
-			"a": Number(2),
+			"a": Float(2),
 			"b": String("bar"),
 		}),
 	)
 	assert.True(
 		MakeListType(MakeStructType("Foo",
-			StructField{"a", NumberType, false},
+			StructField{"a", FloaTType, false},
 			StructField{"b", StringType, true},
 		),
 		).Equals(TypeOf(list)))
@@ -1216,7 +1216,7 @@ func TestListWithNil(t *testing.T) {
 		NewList(vrw, nil)
 	})
 	assert.Panics(t, func() {
-		NewList(vrw, Number(42), nil)
+		NewList(vrw, Float(42), nil)
 	})
 }
 

@@ -154,7 +154,7 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 	}
 
 	switch v := v.(type) {
-	case types.Bool, types.Number, types.String:
+	case types.Bool, types.Float, types.String:
 		children = []nodeChild{}
 	case types.Blob:
 		children = getMetaChildren(v)
@@ -244,7 +244,7 @@ func nodeName(v types.Value) string {
 	}
 
 	switch v := v.(type) {
-	case types.Bool, types.Number, types.String:
+	case types.Bool, types.Float, types.String:
 		return fmt.Sprintf("%#v", v)
 	case types.Blob:
 		return fmt.Sprintf("%s(%s)", typeName(v), humanize.Bytes(v.Len()))
@@ -308,7 +308,7 @@ func getMetaChildren(v types.Value) (children []nodeChild) {
 
 func nodeHasChildren(v types.Value) bool {
 	switch k := v.Kind(); k {
-	case types.BlobKind, types.BoolKind, types.NumberKind, types.StringKind:
+	case types.BlobKind, types.BoolKind, types.FloatKind, types.StringKind:
 		return false
 	case types.RefKind:
 		return true

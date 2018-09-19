@@ -24,8 +24,8 @@ import (
 //
 // Boolean values are encoded as Noms types.Bool.
 //
-// Floating point and integer values are encoded as Noms types.Number. At the
-// moment this might lead to some loss in precision because types.Number
+// Floating point and integer values are encoded as Noms types.Float. At the
+// moment this might lead to some loss in precision because types.Float
 // currently takes a float64.
 //
 // String values are encoded as Noms types.String.
@@ -204,15 +204,15 @@ func boolEncoder(v reflect.Value, vrw types.ValueReadWriter) types.Value {
 }
 
 func float64Encoder(v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Number(v.Float())
+	return types.Float(v.Float())
 }
 
 func intEncoder(v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Number(float64(v.Int()))
+	return types.Float(float64(v.Int()))
 }
 
 func uintEncoder(v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Number(float64(v.Uint()))
+	return types.Float(float64(v.Uint()))
 }
 
 func stringEncoder(v reflect.Value, vrw types.ValueReadWriter) types.Value {

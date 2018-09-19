@@ -187,9 +187,18 @@ func (r *valueDecoder) readValue() Value {
 	case BoolKind:
 		r.skipKind()
 		return Bool(r.readBool())
-	case NumberKind:
+	case FloatKind:
 		r.skipKind()
-		return r.readNumber()
+		return r.readFloat()
+	case UUIDKind:
+		r.skipKind()
+		return r.readUUID()
+	case IntKind:
+		r.skipKind()
+		return r.readInt()
+	case UintKind:
+		r.skipKind()
+		return r.readUint()
 	case StringKind:
 		r.skipKind()
 		return String(r.readString())
@@ -221,9 +230,18 @@ func (r *valueDecoder) skipValue() {
 	case BoolKind:
 		r.skipKind()
 		r.skipBool()
-	case NumberKind:
+	case FloatKind:
 		r.skipKind()
-		r.skipNumber()
+		r.skipFloat()
+	case UUIDKind:
+		r.skipKind()
+		r.skipUUID()
+	case IntKind:
+		r.skipKind()
+		r.skipInt()
+	case UintKind:
+		r.skipKind()
+		r.skipUint()
 	case StringKind:
 		r.skipKind()
 		r.skipString()
@@ -259,10 +277,22 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		r.skipKind()
 		r.skipBool()
 		return BoolType
-	case NumberKind:
+	case FloatKind:
 		r.skipKind()
-		r.skipNumber()
-		return NumberType
+		r.skipFloat()
+		return FloaTType
+	case UUIDKind:
+		r.skipKind()
+		r.skipUUID()
+		return UUIDType
+	case IntKind:
+		r.skipKind()
+		r.skipInt()
+		return IntType
+	case UintKind:
+		r.skipKind()
+		r.skipUint()
+		return UintType
 	case StringKind:
 		r.skipKind()
 		r.skipString()
@@ -295,7 +325,7 @@ func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
 	}
 
 	switch k {
-	case BlobKind, BoolKind, NumberKind, StringKind:
+	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind:
 		r.skipValue()
 		return true
 	case ListKind, MapKind, RefKind, SetKind:

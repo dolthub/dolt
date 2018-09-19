@@ -12,7 +12,7 @@ import (
 )
 
 func TestValidatingBatchingSinkDecode(t *testing.T) {
-	v := Number(42)
+	v := Float(42)
 	c := EncodeValue(v)
 	storage := &chunks.TestStorage{}
 	vdc := NewValidatingDecoder(storage.NewView())
@@ -39,7 +39,7 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {
 	data := []interface{}{
 		uint8(TypeKind),
-		uint8(UnionKind), uint64(2) /* len */, uint8(NumberKind), uint8(BoolKind),
+		uint8(UnionKind), uint64(2) /* len */, uint8(FloatKind), uint8(BoolKind),
 	}
 	assertPanicsOnInvalidChunk(t, data)
 }
@@ -49,7 +49,7 @@ func TestValidatingBatchingSinkDecodeInvalidStructFieldOrder(t *testing.T) {
 		uint8(TypeKind),
 		uint8(StructKind), "S", uint64(2), /* len */
 		"b", "a",
-		uint8(NumberKind), uint8(NumberKind),
+		uint8(FloatKind), uint8(FloatKind),
 		false, false,
 	}
 	assertPanicsOnInvalidChunk(t, data)
@@ -67,7 +67,7 @@ func TestValidatingBatchingSinkDecodeInvalidStructFieldName(t *testing.T) {
 	data := []interface{}{
 		uint8(TypeKind),
 		uint8(StructKind), "S", uint64(1), /* len */
-		"b ", uint8(NumberKind), false,
+		"b ", uint8(FloatKind), false,
 	}
 	assertPanicsOnInvalidChunk(t, data)
 }

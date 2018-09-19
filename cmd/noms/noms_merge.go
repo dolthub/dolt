@@ -150,7 +150,7 @@ func decidePolicy(policy string) merge.Policy {
 func cliResolve(in io.Reader, out io.Writer, aType, bType types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
 	stringer := func(v types.Value) (s string, success bool) {
 		switch v := v.(type) {
-		case types.Bool, types.Number, types.String:
+		case types.Bool, types.Float, types.String:
 			return fmt.Sprintf("%v", v), true
 		}
 		return "", false

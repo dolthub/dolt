@@ -121,7 +121,7 @@ func (stack *patchStack) updateNode(top *stackElem, parent types.Value) types.Va
 	case types.IndexPath:
 		switch el := parent.(type) {
 		case types.List:
-			idx := uint64(part.Index.(types.Number))
+			idx := uint64(part.Index.(types.Float))
 			offset := stack.adjustIndexOffset(top.path, top.changeType)
 			realIdx := idx + uint64(offset)
 			var nv types.Value

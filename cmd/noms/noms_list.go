@@ -89,7 +89,7 @@ func nomsListDel(specStr string, pos uint64, len uint64) int {
 	// TODO: if len-pos is large this will start to become problematic
 	for i := pos; i < pos+len; i++ {
 		patch = append(patch, diff.Difference{
-			Path:       append(basePath, types.NewIndexPath(types.Number(i))),
+			Path:       append(basePath, types.NewIndexPath(types.Float(i))),
 			ChangeType: types.DiffChangeRemoved,
 		})
 	}
@@ -111,7 +111,7 @@ func applyListInserts(sp spec.Spec, rootVal types.Value, basePath types.Path, po
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
 		}
 		patch = append(patch, diff.Difference{
-			Path:       append(basePath, types.NewIndexPath(types.Number(pos+uint64(i)))),
+			Path:       append(basePath, types.NewIndexPath(types.Float(pos+uint64(i)))),
 			ChangeType: types.DiffChangeAdded,
 			NewValue:   vv,
 		})

@@ -53,8 +53,8 @@ func (suite *WalkAllTestSuite) assertVisitedOnce(root, v Value) {
 }
 
 func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
-	dup := suite.NewList(Number(9), Number(10), Number(11), Number(12), Number(13))
-	l := suite.NewList(Number(8), dup, dup)
+	dup := suite.NewList(Float(9), Float(10), Float(11), Float(12), Float(13))
+	l := suite.NewList(Float(8), dup, dup)
 
 	suite.assertCallbackCount(l, 11)
 }
@@ -71,24 +71,24 @@ func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.assertCallbackCount(suite.vs.WriteValue(Number(0.0)), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(Float(0.0)), 2)
 	suite.assertCallbackCount(suite.vs.WriteValue(String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
 	suite.assertCallbackCount(suite.NewList(), 2)
-	suite.assertCallbackCount(suite.NewList(Bool(false), Number(8)), 4)
+	suite.assertCallbackCount(suite.NewList(Bool(false), Float(8)), 4)
 	suite.assertCallbackCount(suite.NewSet(), 2)
-	suite.assertCallbackCount(suite.NewSet(Bool(false), Number(8)), 4)
+	suite.assertCallbackCount(suite.NewSet(Bool(false), Float(8)), 4)
 	suite.assertCallbackCount(suite.NewMap(), 2)
-	suite.assertCallbackCount(suite.NewMap(Number(8), Bool(true), Number(0), Bool(false)), 6)
+	suite.assertCallbackCount(suite.NewMap(Float(8), Bool(true), Float(0), Bool(false)), 6)
 }
 
 func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	count := 1 << 12
 	nums := make([]Value, count)
 	for i := 0; i < count; i++ {
-		nums[i] = Number(i)
+		nums[i] = Float(i)
 	}
 	l := NewList(suite.vs, nums...)
 	suite.True(NewRef(l).Height() > 1)
@@ -103,14 +103,20 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 	t := MakeStructTypeFromFields("TestStruct", FieldMap{
 		"s":  StringType,
 		"b":  BoolType,
-		"n":  NumberType,
+		"n":  FloaTType,
+		"id": UUIDType,
 		"bl": BlobType,
 		"t":  TypeType,
 		"v":  ValueType,
+		"i":  IntType,
+		"u":  UintType,
 	})
 	suite.assertVisitedOnce(t, t)
 	suite.assertVisitedOnce(t, BoolType)
-	suite.assertVisitedOnce(t, NumberType)
+	suite.assertVisitedOnce(t, FloaTType)
+	suite.assertVisitedOnce(t, UUIDType)
+	suite.assertVisitedOnce(t, IntType)
+	suite.assertVisitedOnce(t, UintType)
 	suite.assertVisitedOnce(t, StringType)
 	suite.assertVisitedOnce(t, BlobType)
 	suite.assertVisitedOnce(t, TypeType)
@@ -134,16 +140,19 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 		suite.assertVisitedOnce(t2, BoolType)
 	}
 
-	t2 := MakeMapType(NumberType, StringType)
+	t2 := MakeMapType(FloaTType, StringType)
 	suite.assertVisitedOnce(t2, t2)
-	suite.assertVisitedOnce(t2, NumberType)
+	suite.assertVisitedOnce(t2, FloaTType)
 	suite.assertVisitedOnce(t2, StringType)
 
-	t3 := MakeUnionType(NumberType, StringType, BoolType)
+	t3 := MakeUnionType(FloaTType, StringType, BoolType, UUIDType)
 	suite.assertVisitedOnce(t3, t3)
 	suite.assertVisitedOnce(t3, BoolType)
-	suite.assertVisitedOnce(t3, NumberType)
+	suite.assertVisitedOnce(t3, FloaTType)
 	suite.assertVisitedOnce(t3, StringType)
+	suite.assertVisitedOnce(t3, UUIDType)
+	suite.assertVisitedOnce(t3, IntType)
+	suite.assertVisitedOnce(t3, UintType)
 
 	t4 := MakeCycleType("ABC")
 	suite.assertVisitedOnce(t4, t4)
@@ -213,7 +222,7 @@ func (suite *WalkAllTestSuite) NewSet(vs ...Value) Ref {
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
-	suite.assertCallbackCount(suite.NewList(suite.NewSet(), Number(8)), 5)
+	suite.assertCallbackCount(suite.NewList(suite.NewSet(), Float(8)), 5)
 	suite.assertCallbackCount(suite.NewSet(suite.NewList(), suite.NewSet()), 6)
 	// {"string": "string",
 	//  "list": [false true],
@@ -227,7 +236,7 @@ func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
 		String("list"), suite.NewList(Bool(false), Bool(true)),
 		String("map"), suite.NewMap(String("nested"), String("string")),
 		String("mtlist"), suite.NewList(),
-		String("set"), suite.NewSet(Number(5), Number(7), Number(8)),
+		String("set"), suite.NewSet(Float(5), Float(7), Float(8)),
 		suite.NewList(), String("wow"), // note that the dupe list chunk is skipped
 	)
 	suite.assertCallbackCount(nested, 25)
@@ -247,6 +256,6 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
 	suite.shouldSee = NewList(suite.vs, suite.shouldSeeItem)
-	suite.deadValue = Number(0xDEADBEEF)
+	suite.deadValue = Float(0xDEADBEEF)
 	suite.mustSkip = NewList(suite.vs, suite.deadValue)
 }

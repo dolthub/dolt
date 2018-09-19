@@ -34,7 +34,7 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 		return LogNode{}, false
 	}
 
-	// Number of branches present when printing this commit
+	// Float of branches present when printing this commit
 	startingColCount := len(iter.branches)
 
 	branchIndexes := iter.branches.HighestBranchIndexes()

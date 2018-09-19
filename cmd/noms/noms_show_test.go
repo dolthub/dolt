@@ -64,7 +64,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list := types.NewList(sp.GetDatabase(), types.String("elem1"), types.Number(2), types.String("elem3"))
+	list := types.NewList(sp.GetDatabase(), types.String("elem1"), types.Float(2), types.String("elem3"))
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -111,12 +111,12 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test(types.String("hello"))
 
 	// Ref (one child chunk)
-	test(db.WriteValue(types.Number(42)))
+	test(db.WriteValue(types.Float(42)))
 
 	// Prolly tree with multiple child chunks
 	items := make([]types.Value, 10000)
 	for i := 0; i < len(items); i++ {
-		items[i] = types.Number(i)
+		items[i] = types.Float(i)
 	}
 	l := types.NewList(db, items...)
 	numChildChunks := 0

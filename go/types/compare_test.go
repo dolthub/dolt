@@ -21,11 +21,11 @@ func TestCompareTotalOrdering(t *testing.T) {
 	// values in increasing order. Some of these are compared by ref so changing the serialization might change the ordering.
 	values := []Value{
 		Bool(false), Bool(true),
-		Number(-10), Number(0), Number(10),
+		Float(-10), Float(0), Float(10),
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		NewSet(vrw, Number(0), Number(1), Number(2), Number(3)),
+		NewSet(vrw, Float(0), Float(1), Float(2), Float(3)),
 		BoolType,
 
 		// Value - values cannot be value
@@ -61,7 +61,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	vrw := newTestValueStore()
 	defer vrw.Close()
 
-	nums := ValueSlice{Number(1), Number(2), Number(3)}
+	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
 	blob := NewBlob(vrw, bytes.NewBuffer([]byte{1, 2, 3}))
@@ -69,9 +69,9 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nMap := NewMap(vrw, words...)
 	nRef := NewRef(blob)
 	nSet := NewSet(vrw, nums...)
-	nStruct := NewStruct("teststruct", map[string]Value{"f1": Number(1)})
+	nStruct := NewStruct("teststruct", map[string]Value{"f1": Float(1)})
 
-	vals := ValueSlice{Bool(true), Number(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
+	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
 	sort.Sort(vals)
 
 	for i, v1 := range vals {
@@ -95,7 +95,7 @@ func TestComparePrimitives(t *testing.T) {
 		}
 	}
 
-	nums := []Number{-1111.29, -23, 0, 4.2345, 298}
+	nums := []Float{-1111.29, -23, 0, 4.2345, 298}
 	for i, v1 := range nums {
 		for j, v2 := range nums {
 			res := compareEncodedNomsValues(encode(v1), encode(v2))
@@ -118,8 +118,8 @@ func TestCompareEncodedKeys(t *testing.T) {
 	vrw := newTestValueStore()
 	defer vrw.Close()
 
-	k1 := ValueSlice{String("one"), Number(3)}
-	k2 := ValueSlice{String("one"), Number(5)}
+	k1 := ValueSlice{String("one"), Float(3)}
+	k2 := ValueSlice{String("one"), Float(5)}
 
 	bs1 := [initialBufferSize]byte{}
 	bs2 := [initialBufferSize]byte{}

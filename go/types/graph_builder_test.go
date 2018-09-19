@@ -66,7 +66,7 @@ func TestGraphBuilderEncodeDecodeAsKey(t *testing.T) {
 		"f2": String("v2"),
 	})
 
-	keys := ValueSlice{Bool(true), Number(19), String("think!"), struct1}
+	keys := ValueSlice{Bool(true), Float(19), String("think!"), struct1}
 	byteBuf := [initialBufferSize]byte{}
 	bs := byteBuf[:0]
 	numKeys := len(keys)
@@ -102,7 +102,7 @@ func TestGraphBuilderEncodeDecodeAsValue(t *testing.T) {
 		"f2": String("v2"),
 	})
 
-	keys := ValueSlice{Bool(true), Number(19), String("think!"), struct1}
+	keys := ValueSlice{Bool(true), Float(19), String("think!"), struct1}
 	byteBuf := [initialBufferSize]byte{}
 	bs := byteBuf[:0]
 	numKeys := len(keys)
@@ -136,8 +136,8 @@ func TestGraphBuilderMapSetGraphOp(t *testing.T) {
 		"f1": String("v1"),
 		"f2": String("v2"),
 	})
-	keys := ValueSlice{Bool(true), Number(19), String("think!"), struct1}
-	opc.GraphMapSet(keys, String("yo"), Number(199))
+	keys := ValueSlice{Bool(true), Float(19), String("think!"), struct1}
+	opc.GraphMapSet(keys, String("yo"), Float(199))
 	iter := opc.NewIterator()
 	assert.True(iter.Next())
 
@@ -148,7 +148,7 @@ func TestGraphBuilderMapSetGraphOp(t *testing.T) {
 	assert.IsType(mapEntry{}, item)
 	me := item.(mapEntry)
 	assert.True(String("yo").Equals(me.key))
-	assert.True(Number(199).Equals(me.value))
+	assert.True(Float(199).Equals(me.value))
 
 	assert.False(iter.Next())
 }
@@ -209,16 +209,16 @@ func createTestMap(vrw ValueReadWriter, levels, avgSize int, valGen func() Value
 	return genChildren(0)
 }
 
-// valGen() creates a random String, Number, or Struct Value
+// valGen() creates a random String, Float, or Struct Value
 func valGen() Value {
 	num := rand.Int31() % 1000000
 	switch rand.Int31() % 4 {
 	case 0:
 		return String(fmt.Sprintf("%d", num))
 	case 1:
-		return Number(num)
+		return Float(num)
 	case 2:
-		return NewStruct("teststruct", map[string]Value{"f1": Number(num)})
+		return NewStruct("teststruct", map[string]Value{"f1": Float(num)})
 	case 3:
 		return NewStruct("teststruct", map[string]Value{"f1": String(fmt.Sprintf("%d", num))})
 	}
@@ -310,13 +310,13 @@ func ExampleGraphBuilder_Build() {
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("John"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Mary"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Frieda"))
-	gb.MapSet([]Value{String("parent"), String("ages")}, String("Father"), Number(42))
-	gb.MapSet([]Value{String("parent"), String("ages")}, String("Mother"), Number(44))
+	gb.MapSet([]Value{String("parent"), String("ages")}, String("Father"), Float(42))
+	gb.MapSet([]Value{String("parent"), String("ages")}, String("Mother"), Float(44))
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Make dinner"))
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Wash dishes"))
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Make breakfast"))
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Wash dishes"))
-	gb.MapSet([]Value{String("parent")}, String("combinedAge"), Number(86))
+	gb.MapSet([]Value{String("parent")}, String("combinedAge"), Float(86))
 	m := gb.Build()
 	fmt.Println("map:", EncodedValue(m))
 }

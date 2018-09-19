@@ -217,13 +217,13 @@ func (qs *qScanner) parseValExpr() types.Value {
 		if isNeg {
 			f = -f
 		}
-		return types.Number(f)
+		return types.Float(f)
 	case scanner.Int:
 		i, _ := strconv.ParseInt(text, 10, 64)
 		if isNeg {
 			i = -i
 		}
-		return types.Number(i)
+		return types.Float(i)
 	}
 	d.PanicIfError(fmt.Errorf("expected value token, found: '%s'", text))
 	return nil // for compiler

@@ -8,7 +8,7 @@ import (
 	"sort"
 )
 
-// TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Number, or a custom type.
+// TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Float, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
 	walkValues(cb ValueCallback)
@@ -23,10 +23,13 @@ type TypeDesc interface {
 // PrimitiveDesc implements TypeDesc for all primitive Noms types:
 // Blob
 // Bool
-// Number
+// Float
 // String
 // Type
 // Value
+// UUID
+// Int
+// Uint
 type PrimitiveDesc NomsKind
 
 func (p PrimitiveDesc) Kind() NomsKind {

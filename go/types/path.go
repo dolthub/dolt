@@ -245,7 +245,7 @@ func NewIndexIntoKeyPath(idx Value) IndexPath {
 
 func ValueCanBePathIndex(v Value) bool {
 	k := v.Kind()
-	return k == StringKind || k == BoolKind || k == NumberKind
+	return k == StringKind || k == BoolKind || k == FloatKind
 }
 
 func newIndexPath(idx Value, intoKey bool) IndexPath {
@@ -255,7 +255,7 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 
 func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
 	seqIndex := func(getter func(i uint64) Value) Value {
-		n, ok := ip.Index.(Number)
+		n, ok := ip.Index.(Float)
 		if !ok {
 			return nil
 		}
@@ -268,7 +268,7 @@ func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
 			return nil
 		}
 		if ip.IntoKey {
-			return Number(ai)
+			return Float(ai)
 		}
 		return getter(ai)
 	}
@@ -378,7 +378,7 @@ func (hip HashIndexPath) setIntoKey(v bool) keyIndexable {
 }
 
 // Parse a Noms value from the path index syntax.
-// 4 ->          types.Number
+// 4 ->          types.Float
 // "4" ->        types.String
 // true|false -> types.Boolean
 // #<chars> ->   hash.Hash
@@ -431,7 +431,7 @@ Switch:
 			idx = Bool(false)
 		} else if i, err2 := strconv.ParseFloat(idxStr, 64); err2 == nil {
 			// Should we be more strict here? ParseFloat allows leading and trailing dots, and exponents.
-			idx = Number(i)
+			idx = Float(i)
 		} else {
 			err = errors.New("Invalid index: " + idxStr)
 		}

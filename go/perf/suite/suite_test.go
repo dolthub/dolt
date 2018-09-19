@@ -232,10 +232,10 @@ func runTestSuite(t *testing.T, mem bool) {
 			}
 
 			times := timesVal.(types.Struct)
-			assert.True(getOrFail(times, "elapsed").(types.Number) > 0)
-			assert.True(getOrFail(times, "total").(types.Number) > 0)
+			assert.True(getOrFail(times, "elapsed").(types.Float) > 0)
+			assert.True(getOrFail(times, "total").(types.Float) > 0)
 
-			paused := getOrFail(times, "paused").(types.Number)
+			paused := getOrFail(times, "paused").(types.Float)
 			if k == types.String("Pause") {
 				assert.True(paused > 0)
 			} else {

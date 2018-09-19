@@ -29,7 +29,7 @@ b,2,false
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B", "C"}
-	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
+	kinds := KindSlice{types.StringKind, types.FloatKind, types.BoolKind}
 	l := ReadToList(r, "test", headers, kinds, db, LIMIT)
 
 	assert.Equal(uint64(2), l.Len())
@@ -37,8 +37,8 @@ b,2,false
 	assert.True(l.Get(0).(types.Struct).Get("A").Equals(types.String("a")))
 	assert.True(l.Get(1).(types.Struct).Get("A").Equals(types.String("b")))
 
-	assert.True(l.Get(0).(types.Struct).Get("B").Equals(types.Number(1)))
-	assert.True(l.Get(1).(types.Struct).Get("B").Equals(types.Number(2)))
+	assert.True(l.Get(0).(types.Struct).Get("B").Equals(types.Float(1)))
+	assert.True(l.Get(1).(types.Struct).Get("B").Equals(types.Float(2)))
 
 	assert.True(l.Get(0).(types.Struct).Get("C").Equals(types.Bool(true)))
 	assert.True(l.Get(1).(types.Struct).Get("C").Equals(types.Bool(false)))
@@ -55,25 +55,25 @@ b,2,false
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 
 	headers := []string{"A", "B", "C"}
-	kinds := KindSlice{types.StringKind, types.NumberKind, types.BoolKind}
+	kinds := KindSlice{types.StringKind, types.FloatKind, types.BoolKind}
 	m := ReadToMap(r, "test", headers, []string{"0"}, kinds, db, LIMIT)
 
 	assert.Equal(uint64(2), m.Len())
 	assert.True(types.TypeOf(m).Equals(
 		types.MakeMapType(types.StringType, types.MakeStructType("test",
 			types.StructField{"A", types.StringType, false},
-			types.StructField{"B", types.NumberType, false},
+			types.StructField{"B", types.FloaTType, false},
 			types.StructField{"C", types.BoolType, false},
 		))))
 
 	assert.True(m.Get(types.String("a")).Equals(types.NewStruct("test", types.StructData{
 		"A": types.String("a"),
-		"B": types.Number(1),
+		"B": types.Float(1),
 		"C": types.Bool(true),
 	})))
 	assert.True(m.Get(types.String("b")).Equals(types.NewStruct("test", types.StructData{
 		"A": types.String("b"),
-		"B": types.Number(2),
+		"B": types.Float(2),
 		"C": types.Bool(false),
 	})))
 }
@@ -187,16 +187,16 @@ func TestEscapeFieldNames(t *testing.T) {
 	dataString := "1,2\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A A", "B"}
-	kinds := KindSlice{types.NumberKind, types.NumberKind}
+	kinds := KindSlice{types.FloatKind, types.FloatKind}
 
 	l := ReadToList(r, "test", headers, kinds, db, LIMIT)
 	assert.Equal(uint64(1), l.Len())
-	assert.Equal(types.Number(1), l.Get(0).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
+	assert.Equal(types.Float(1), l.Get(0).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 
 	r = NewCSVReader(bytes.NewBufferString(dataString), ',')
 	m := ReadToMap(r, "test", headers, []string{"1"}, kinds, db, LIMIT)
 	assert.Equal(uint64(1), l.Len())
-	assert.Equal(types.Number(1), m.Get(types.Number(2)).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
+	assert.Equal(types.Float(1), m.Get(types.Float(2)).(types.Struct).Get(EscapeStructFieldFromCSV("A A")))
 }
 
 func TestDefaults(t *testing.T) {
@@ -206,13 +206,13 @@ func TestDefaults(t *testing.T) {
 	dataString := "42,,,\n"
 	r := NewCSVReader(bytes.NewBufferString(dataString), ',')
 	headers := []string{"A", "B", "C", "D"}
-	kinds := KindSlice{types.NumberKind, types.NumberKind, types.BoolKind, types.StringKind}
+	kinds := KindSlice{types.FloatKind, types.FloatKind, types.BoolKind, types.StringKind}
 
 	l := ReadToList(r, "test", headers, kinds, db, LIMIT)
 	assert.Equal(uint64(1), l.Len())
 	row := l.Get(0).(types.Struct)
-	assert.Equal(types.Number(42), row.Get("A"))
-	assert.Equal(types.Number(0), row.Get("B"))
+	assert.Equal(types.Float(42), row.Get("A"))
+	assert.Equal(types.Float(0), row.Get("B"))
 	assert.Equal(types.Bool(false), row.Get("C"))
 	assert.Equal(types.String(""), row.Get("D"))
 }

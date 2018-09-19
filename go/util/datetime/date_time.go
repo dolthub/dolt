@@ -28,7 +28,7 @@ type DateTime struct {
 // The field secSinceEpoch may contain fractions in cases where seconds are
 // not sufficient.
 var DateTimeType = types.MakeStructTypeFromFields(datetypename, types.FieldMap{
-	"secSinceEpoch": types.NumberType,
+	"secSinceEpoch": types.FloaTType,
 })
 
 var dateTimeTemplate = types.MakeStructTemplate(datetypename, []string{"secSinceEpoch"})
@@ -49,7 +49,7 @@ func Now() DateTime {
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms(vrw types.ValueReadWriter) (types.Value, error) {
-	return dateTimeTemplate.NewStruct([]types.Value{types.Number(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
+	return dateTimeTemplate.NewStruct([]types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
 }
 
 // MarshalNomsType makes DateTime implement marshal.TypeMarshaler and it

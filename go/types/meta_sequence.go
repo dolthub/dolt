@@ -92,11 +92,11 @@ func orderedKeyFromHash(h hash.Hash) orderedKey {
 }
 
 func orderedKeyFromInt(n int) orderedKey {
-	return newOrderedKey(Number(n))
+	return newOrderedKey(Float(n))
 }
 
 func orderedKeyFromUint64(n uint64) orderedKey {
-	return newOrderedKey(Number(n))
+	return newOrderedKey(Float(n))
 }
 
 func (key orderedKey) Less(mk2 orderedKey) bool {

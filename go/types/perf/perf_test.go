@@ -32,7 +32,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	out := types.NewStreamingList(s.Database, in)
 
 	for i := 0; i < 1e7; i++ {
-		in <- types.Number(s.r.Int63())
+		in <- types.Float(s.r.Int63())
 	}
 	close(in)
 
@@ -52,7 +52,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.NewStruct("", types.StructData{
-			"number": types.Number(s.r.Int63()),
+			"number": types.Float(s.r.Int63()),
 		})
 	}
 	close(in)

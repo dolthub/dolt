@@ -46,12 +46,12 @@ func TestUnmarshal(t *testing.T) {
 
 	for _, name := range []string{"DateTime", "Date", "xxx", ""} {
 		test(types.NewStruct(name, types.StructData{
-			"secSinceEpoch": types.Number(42),
+			"secSinceEpoch": types.Float(42),
 		}), time.Unix(42, 0))
 	}
 
 	test(types.NewStruct("", types.StructData{
-		"secSinceEpoch": types.Number(42),
+		"secSinceEpoch": types.Float(42),
 		"extra":         types.String("field"),
 	}), time.Unix(42, 0))
 }
@@ -65,16 +65,16 @@ func TestUnmarshalInvalid(t *testing.T) {
 		assert.Error(err)
 	}
 
-	test(types.Number(42))
+	test(types.Float(42))
 	test(types.NewStruct("DateTime", types.StructData{}))
 	test(types.NewStruct("DateTime", types.StructData{
 		"secSinceEpoch": types.String(42),
 	}))
 	test(types.NewStruct("DateTime", types.StructData{
-		"SecSinceEpoch": types.Number(42),
+		"SecSinceEpoch": types.Float(42),
 	}))
 	test(types.NewStruct("DateTime", types.StructData{
-		"msSinceEpoch": types.Number(42),
+		"msSinceEpoch": types.Float(42),
 	}))
 }
 
@@ -89,7 +89,7 @@ func TestMarshal(t *testing.T) {
 		assert.NoError(err)
 
 		assert.True(types.NewStruct("DateTime", types.StructData{
-			"secSinceEpoch": types.Number(expected),
+			"secSinceEpoch": types.Float(expected),
 		}).Equals(v))
 	}
 
