@@ -39,10 +39,10 @@ func main() {
 
 	newVal := uint64(1)
 	if lastVal, ok := ds.MaybeHeadValue(); ok {
-		newVal = uint64(lastVal.(types.Number)) + 1
+		newVal = uint64(lastVal.(types.Float)) + 1
 	}
 
-	_, err = db.CommitValue(ds, types.Number(newVal))
+	_, err = db.CommitValue(ds, types.Float(newVal))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return

@@ -134,7 +134,7 @@ func createString(i uint64) types.Value {
 }
 
 func createNumber(i uint64) types.Value {
-	return types.Number(i)
+	return types.Float(i)
 }
 
 var structType = types.MakeStructType("S1",
@@ -144,7 +144,7 @@ var structType = types.MakeStructType("S1",
 	},
 	types.StructField{
 		Name: "num",
-		Type: types.NumberType,
+		Type: types.FloaTType,
 	},
 	types.StructField{
 		Name: "str",
@@ -157,7 +157,7 @@ var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str
 func createStruct(i uint64) types.Value {
 	return structTemplate.NewStruct([]types.Value{
 		types.Bool(i%2 == 0), // "bool"
-		types.Number(i),      // "num"
+		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"
 	})
 }

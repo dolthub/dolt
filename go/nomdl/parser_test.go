@@ -55,7 +55,7 @@ func assertParseError(t *testing.T, code, msg string) {
 func TestSimpleTypes(t *testing.T) {
 	assertParseType(t, "Blob", types.BlobType)
 	assertParseType(t, "Bool", types.BoolType)
-	assertParseType(t, "Number", types.NumberType)
+	assertParseType(t, "Float", types.FloaTType)
 	assertParseType(t, "String", types.StringType)
 	assertParseType(t, "Value", types.ValueType)
 	assertParseType(t, "Type", types.TypeType)
@@ -78,22 +78,22 @@ func TestComments(t *testing.T) {
 func TestCompoundTypes(t *testing.T) {
 	assertParseType(t, "List<>", types.MakeListType(types.MakeUnionType()))
 	assertParseType(t, "List<Bool>", types.MakeListType(types.BoolType))
-	assertParseError(t, "List<Bool, Number>", `Unexpected token ",", expected ">", example:1:11`)
+	assertParseError(t, "List<Bool, Float>", `Unexpected token ",", expected ">", example:1:11`)
 	assertParseError(t, "List<Bool", `Unexpected token EOF, expected ">", example:1:10`)
 	assertParseError(t, "List<", `Unexpected token EOF, expected Ident, example:1:6`)
 	assertParseError(t, "List", `Unexpected token EOF, expected "<", example:1:5`)
 
 	assertParseType(t, "Set<>", types.MakeSetType(types.MakeUnionType()))
 	assertParseType(t, "Set<Bool>", types.MakeSetType(types.BoolType))
-	assertParseError(t, "Set<Bool, Number>", `Unexpected token ",", expected ">", example:1:10`)
+	assertParseError(t, "Set<Bool, Float>", `Unexpected token ",", expected ">", example:1:10`)
 	assertParseError(t, "Set<Bool", `Unexpected token EOF, expected ">", example:1:9`)
 	assertParseError(t, "Set<", `Unexpected token EOF, expected Ident, example:1:5`)
 	assertParseError(t, "Set", `Unexpected token EOF, expected "<", example:1:4`)
 
 	assertParseError(t, "Ref<>", `Unexpected token ">", expected Ident, example:1:6`)
 	assertParseType(t, "Ref<Bool>", types.MakeRefType(types.BoolType))
-	assertParseError(t, "Ref<Number, Bool>", `Unexpected token ",", expected ">", example:1:12`)
-	assertParseError(t, "Ref<Number", `Unexpected token EOF, expected ">", example:1:11`)
+	assertParseError(t, "Ref<Float, Bool>", `Unexpected token ",", expected ">", example:1:11`)
+	assertParseError(t, "Ref<Float", `Unexpected token EOF, expected ">", example:1:10`)
 	assertParseError(t, "Ref<", `Unexpected token EOF, expected Ident, example:1:5`)
 	assertParseError(t, "Ref", `Unexpected token EOF, expected "<", example:1:4`)
 
@@ -124,55 +124,55 @@ func TestStructTypes(t *testing.T) {
 	assertParseType(t, "Struct S {}", types.MakeStructTypeFromFields("S", types.FieldMap{}))
 
 	assertParseType(t, `Struct S {
-                x: Number
+                x: Float
         }`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.NumberType,
+		"x": types.FloaTType,
 	}))
 
 	assertParseType(t, `Struct S {
-	        x: Number,
+	        x: Float,
 	}`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.NumberType,
+		"x": types.FloaTType,
 	}))
 
 	assertParseType(t, `Struct S {
-	        x: Number,
+	        x: Float,
 	        y: String
 	}`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.NumberType,
+		"x": types.FloaTType,
 		"y": types.StringType,
 	}))
 
 	assertParseType(t, `Struct S {
-	        x: Number,
+	        x: Float,
 	        y: String,
 	}`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.NumberType,
+		"x": types.FloaTType,
 		"y": types.StringType,
 	}))
 
 	assertParseType(t, `Struct S {
-	        x: Number,
+	        x: Float,
 	        y: Struct {
 	                z: String,
 	        },
 	}`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.NumberType,
+		"x": types.FloaTType,
 		"y": types.MakeStructTypeFromFields("", types.FieldMap{
 			"z": types.StringType,
 		}),
 	}))
 
 	assertParseType(t, `Struct S {
-                x?: Number,
+                x?: Float,
                 y: String,
         }`, types.MakeStructType("S",
-		types.StructField{Name: "x", Type: types.NumberType, Optional: true},
+		types.StructField{Name: "x", Type: types.FloaTType, Optional: true},
 		types.StructField{Name: "y", Type: types.StringType, Optional: false},
 	))
 
 	assertParseError(t, `Struct S {
-	        x: Number
+	        x: Float
 	        y: String
 	}`, `Unexpected token Ident, expected "}", example:3:11`)
 
@@ -197,64 +197,64 @@ func TestStructTypes(t *testing.T) {
 
 func TestUnionTypes(t *testing.T) {
 	assertParseType(t, "Blob | Bool", types.MakeUnionType(types.BlobType, types.BoolType))
-	assertParseType(t, "Bool | Number | String", types.MakeUnionType(types.BoolType, types.NumberType, types.StringType))
-	assertParseType(t, "List<Bool | Number>", types.MakeListType(types.MakeUnionType(types.BoolType, types.NumberType)))
-	assertParseType(t, "Map<Bool | Number, Bool | Number>",
+	assertParseType(t, "Bool | Float | String", types.MakeUnionType(types.BoolType, types.FloaTType, types.StringType))
+	assertParseType(t, "List<Bool | Float>", types.MakeListType(types.MakeUnionType(types.BoolType, types.FloaTType)))
+	assertParseType(t, "Map<Bool | Float, Bool | Float>",
 		types.MakeMapType(
-			types.MakeUnionType(types.BoolType, types.NumberType),
-			types.MakeUnionType(types.BoolType, types.NumberType),
+			types.MakeUnionType(types.BoolType, types.FloaTType),
+			types.MakeUnionType(types.BoolType, types.FloaTType),
 		),
 	)
 	assertParseType(t, `Struct S {
-                x: Number | Bool
+                x: Float | Bool
                 }`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.MakeUnionType(types.BoolType, types.NumberType),
+		"x": types.MakeUnionType(types.BoolType, types.FloaTType),
 	}))
 	assertParseType(t, `Struct S {
-                x: Number | Bool,
+                x: Float | Bool,
                 y: String
         }`, types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.MakeUnionType(types.BoolType, types.NumberType),
+		"x": types.MakeUnionType(types.BoolType, types.FloaTType),
 		"y": types.StringType,
 	}))
 
 	assertParseError(t, "Bool |", "Unexpected token EOF, expected Ident, example:1:7")
-	assertParseError(t, "Bool | Number |", "Unexpected token EOF, expected Ident, example:1:16")
+	assertParseError(t, "Bool | Float |", "Unexpected token EOF, expected Ident, example:1:15")
 	assertParseError(t, "Bool | | ", `Unexpected token "|", expected Ident, example:1:9`)
 	assertParseError(t, "", `Unexpected token EOF, example:1:1`)
 }
 
 func TestValuePrimitives(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "Number", types.NumberType)
-	assertParse(t, vs, "Number | String", types.MakeUnionType(types.NumberType, types.StringType))
+	assertParse(t, vs, "Float", types.FloaTType)
+	assertParse(t, vs, "Float | String", types.MakeUnionType(types.FloaTType, types.StringType))
 
 	assertParse(t, vs, "true", types.Bool(true))
 	assertParse(t, vs, "false", types.Bool(false))
 
-	assertParse(t, vs, "0", types.Number(0))
-	assertParse(t, vs, "1", types.Number(1))
-	assertParse(t, vs, "1.1", types.Number(1.1))
-	assertParse(t, vs, "1.1e1", types.Number(1.1e1))
-	assertParse(t, vs, "1e1", types.Number(1e1))
-	assertParse(t, vs, "1e-1", types.Number(1e-1))
-	assertParse(t, vs, "1e+1", types.Number(1e+1))
+	assertParse(t, vs, "0", types.Float(0))
+	assertParse(t, vs, "1", types.Float(1))
+	assertParse(t, vs, "1.1", types.Float(1.1))
+	assertParse(t, vs, "1.1e1", types.Float(1.1e1))
+	assertParse(t, vs, "1e1", types.Float(1e1))
+	assertParse(t, vs, "1e-1", types.Float(1e-1))
+	assertParse(t, vs, "1e+1", types.Float(1e+1))
 
-	assertParse(t, vs, "+0", types.Number(0))
-	assertParse(t, vs, "+1", types.Number(1))
-	assertParse(t, vs, "+1.1", types.Number(1.1))
-	assertParse(t, vs, "+1.1e1", types.Number(1.1e1))
-	assertParse(t, vs, "+1e1", types.Number(1e1))
-	assertParse(t, vs, "+1e-1", types.Number(1e-1))
-	assertParse(t, vs, "+1e+1", types.Number(1e+1))
+	assertParse(t, vs, "+0", types.Float(0))
+	assertParse(t, vs, "+1", types.Float(1))
+	assertParse(t, vs, "+1.1", types.Float(1.1))
+	assertParse(t, vs, "+1.1e1", types.Float(1.1e1))
+	assertParse(t, vs, "+1e1", types.Float(1e1))
+	assertParse(t, vs, "+1e-1", types.Float(1e-1))
+	assertParse(t, vs, "+1e+1", types.Float(1e+1))
 
-	assertParse(t, vs, "-0", types.Number(-0))
-	assertParse(t, vs, "-1", types.Number(-1))
-	assertParse(t, vs, "-1.1", types.Number(-1.1))
-	assertParse(t, vs, "-1.1e1", types.Number(-1.1e1))
-	assertParse(t, vs, "-1e1", types.Number(-1e1))
-	assertParse(t, vs, "-1e-1", types.Number(-1e-1))
-	assertParse(t, vs, "-1e+1", types.Number(-1e+1))
+	assertParse(t, vs, "-0", types.Float(-0))
+	assertParse(t, vs, "-1", types.Float(-1))
+	assertParse(t, vs, "-1.1", types.Float(-1.1))
+	assertParse(t, vs, "-1.1e1", types.Float(-1.1e1))
+	assertParse(t, vs, "-1e1", types.Float(-1e1))
+	assertParse(t, vs, "-1e-1", types.Float(-1e-1))
+	assertParse(t, vs, "-1e+1", types.Float(-1e+1))
 
 	assertParse(t, vs, `"a"`, types.String("a"))
 	assertParse(t, vs, `""`, types.String(""))
@@ -272,8 +272,8 @@ func TestValueList(t *testing.T) {
 	vs := newTestValueStore()
 	assertParse(t, vs, "[]", types.NewList(vs))
 
-	assertParse(t, vs, "[42]", types.NewList(vs, types.Number(42)))
-	assertParse(t, vs, "[42,]", types.NewList(vs, types.Number(42)))
+	assertParse(t, vs, "[42]", types.NewList(vs, types.Float(42)))
+	assertParse(t, vs, "[42,]", types.NewList(vs, types.Float(42)))
 
 	assertParseError(t, "[", "Unexpected token EOF, example:1:2")
 	assertParseError(t, "[,", "Unexpected token \",\", example:1:3")
@@ -283,18 +283,18 @@ func TestValueList(t *testing.T) {
 
 	assertParse(t, vs, `[42,
                 Bool,
-        ]`, types.NewList(vs, types.Number(42), types.BoolType))
+        ]`, types.NewList(vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `[42,
                 Bool
-        ]`, types.NewList(vs, types.Number(42), types.BoolType))
+        ]`, types.NewList(vs, types.Float(42), types.BoolType))
 }
 
 func TestValueSet(t *testing.T) {
 	vs := newTestValueStore()
 	assertParse(t, vs, "set {}", types.NewSet(vs))
 
-	assertParse(t, vs, "set {42}", types.NewSet(vs, types.Number(42)))
-	assertParse(t, vs, "set {42,}", types.NewSet(vs, types.Number(42)))
+	assertParse(t, vs, "set {42}", types.NewSet(vs, types.Float(42)))
+	assertParse(t, vs, "set {42,}", types.NewSet(vs, types.Float(42)))
 
 	assertParseError(t, "set", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "set {", "Unexpected token EOF, example:1:6")
@@ -305,18 +305,18 @@ func TestValueSet(t *testing.T) {
 
 	assertParse(t, vs, `set {42,
                 Bool,
-        }`, types.NewSet(vs, types.Number(42), types.BoolType))
+        }`, types.NewSet(vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `set {42,
                 Bool
-        }`, types.NewSet(vs, types.Number(42), types.BoolType))
+        }`, types.NewSet(vs, types.Float(42), types.BoolType))
 }
 
 func TestValueMap(t *testing.T) {
 	vs := newTestValueStore()
 	assertParse(t, vs, "map {}", types.NewMap(vs))
 
-	assertParse(t, vs, "map {42: true}", types.NewMap(vs, types.Number(42), types.Bool(true)))
-	assertParse(t, vs, "map {42: true,}", types.NewMap(vs, types.Number(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true}", types.NewMap(vs, types.Float(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true,}", types.NewMap(vs, types.Float(42), types.Bool(true)))
 
 	assertParseError(t, "map", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "map {", "Unexpected token EOF, example:1:6")
@@ -329,16 +329,16 @@ func TestValueMap(t *testing.T) {
 
 	assertParse(t, vs, `map {42:
                 Bool,
-        }`, types.NewMap(vs, types.Number(42), types.BoolType))
+        }`, types.NewMap(vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `map {42:
                 Bool
-        }`, types.NewMap(vs, types.Number(42), types.BoolType))
+        }`, types.NewMap(vs, types.Float(42), types.BoolType))
 }
 
 func TestValueType(t *testing.T) {
 	vs := newTestValueStore()
 	assertParse(t, vs, "Bool", types.BoolType)
-	assertParse(t, vs, "Number", types.NumberType)
+	assertParse(t, vs, "Float", types.FloaTType)
 	assertParse(t, vs, "String", types.StringType)
 }
 
@@ -352,8 +352,8 @@ func TestValueStruct(t *testing.T) {
 	assertParseError(t, "struct name", "Unexpected token EOF, expected \"{\", example:1:12")
 	assertParseError(t, "struct name {", "Unexpected token EOF, expected Ident, example:1:14")
 
-	assertParse(t, vs, "struct name {a: 42}", types.NewStruct("name", types.StructData{"a": types.Number(42)}))
-	assertParse(t, vs, "struct name {a: 42,}", types.NewStruct("name", types.StructData{"a": types.Number(42)}))
+	assertParse(t, vs, "struct name {a: 42}", types.NewStruct("name", types.StructData{"a": types.Float(42)}))
+	assertParse(t, vs, "struct name {a: 42,}", types.NewStruct("name", types.StructData{"a": types.Float(42)}))
 	assertParseError(t, "struct name {a", "Unexpected token EOF, expected \":\", example:1:15")
 	assertParseError(t, "struct name {a: ", "Unexpected token EOF, example:1:17")
 	assertParseError(t, "struct name {a,", "Unexpected token \",\", expected \":\", example:1:16")
@@ -362,11 +362,11 @@ func TestValueStruct(t *testing.T) {
 	assertParseError(t, "struct name {a: 42,", "Unexpected token EOF, expected Ident, example:1:20")
 	assertParseError(t, "struct name {a:}", "Unexpected token \"}\", example:1:17")
 
-	assertParse(t, vs, "struct name {b: 42, a: true}", types.NewStruct("name", types.StructData{"b": types.Number(42), "a": types.Bool(true)}))
+	assertParse(t, vs, "struct name {b: 42, a: true}", types.NewStruct("name", types.StructData{"b": types.Float(42), "a": types.Bool(true)}))
 	assertParse(t, vs, `struct name {
                 b: 42,
                 a: true,
-        }`, types.NewStruct("name", types.StructData{"b": types.Number(42), "a": types.Bool(true)}))
+        }`, types.NewStruct("name", types.StructData{"b": types.Float(42), "a": types.Bool(true)}))
 
 	assertParse(t, vs, "struct name {a: Struct {}}", types.NewStruct("name", types.StructData{"a": types.MakeStructType("")}))
 }
@@ -414,14 +414,14 @@ func TestRoundTrips(t *testing.T) {
 		assertParse(t, vs, code, v)
 	}
 
-	test(types.Number(0))
-	test(types.Number(42))
-	test(types.Number(-0))
-	test(types.Number(-42))
-	test(types.Number(0.05))
-	test(types.Number(-0.05))
-	test(types.Number(1e50))
-	test(types.Number(-1e50))
+	test(types.Float(0))
+	test(types.Float(42))
+	test(types.Float(-0))
+	test(types.Float(-42))
+	test(types.Float(0.05))
+	test(types.Float(-0.05))
+	test(types.Float(1e50))
+	test(types.Float(-1e50))
 
 	test(types.Bool(true))
 	test(types.Bool(false))
@@ -436,18 +436,18 @@ func TestRoundTrips(t *testing.T) {
 	test(types.NewBlob(vs, bytes.NewBufferString("abc")))
 
 	test(types.NewList(vs))
-	test(types.NewList(vs, types.Number(42), types.Bool(true), types.String("abc")))
+	test(types.NewList(vs, types.Float(42), types.Bool(true), types.String("abc")))
 
 	test(types.NewSet(vs))
-	test(types.NewSet(vs, types.Number(42), types.Bool(true), types.String("abc")))
+	test(types.NewSet(vs, types.Float(42), types.Bool(true), types.String("abc")))
 
 	test(types.NewMap(vs))
-	test(types.NewMap(vs, types.Number(42), types.Bool(true), types.String("abc"), types.NewMap(vs)))
+	test(types.NewMap(vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(vs)))
 
 	test(types.NewStruct("", nil))
-	test(types.NewStruct("Number", nil))
-	test(types.NewStruct("Number", types.StructData{
-		"Number": types.NumberType,
+	test(types.NewStruct("Float", nil))
+	test(types.NewStruct("Float", types.StructData{
+		"Float": types.FloaTType,
 	}))
 
 	test(types.MakeStructType("S", types.StructField{

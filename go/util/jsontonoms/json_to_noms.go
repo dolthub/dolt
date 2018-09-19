@@ -18,7 +18,7 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 	case bool:
 		return types.Bool(o)
 	case float64:
-		return types.Number(o)
+		return types.Float(o)
 	case nil:
 		return nil
 	case []interface{}:

@@ -119,9 +119,18 @@ func (r *refWalker) walkValue(cb RefCallback) {
 	case BoolKind:
 		r.skipKind()
 		r.skipBool()
-	case NumberKind:
+	case FloatKind:
 		r.skipKind()
-		r.skipNumber()
+		r.skipFloat()
+	case IntKind:
+		r.skipKind()
+		r.skipInt()
+	case UintKind:
+		r.skipKind()
+		r.skipUint()
+	case UUIDKind:
+		r.skipKind()
+		r.skipUUID()
 	case StringKind:
 		r.skipKind()
 		r.skipString()

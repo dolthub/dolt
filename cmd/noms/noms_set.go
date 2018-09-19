@@ -138,7 +138,7 @@ func argumentToValue(arg string, db datas.Database) (types.Value, error) {
 		return p.Resolve(db), nil
 	}
 	if n, err := strconv.ParseFloat(arg, 64); err == nil {
-		return types.Number(n), nil
+		return types.Float(n), nil
 	}
 
 	return types.String(arg), nil

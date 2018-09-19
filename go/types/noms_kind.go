@@ -8,10 +8,10 @@ package types
 type NomsKind uint8
 
 // All supported kinds of Noms types are enumerated here.
-// The ordering of these (especially Bool, Number and String) is important for ordering of values.
+// The ordering of these (especially Bool, Float and String) is important for ordering of values.
 const (
 	BoolKind NomsKind = iota
-	NumberKind
+	FloatKind
 	StringKind
 	BlobKind
 	ValueKind
@@ -29,6 +29,10 @@ const (
 
 	// Internal to decoder
 	hashKind
+
+	UUIDKind
+	IntKind
+	UintKind
 )
 
 var KindToString = map[NomsKind]string{
@@ -37,7 +41,7 @@ var KindToString = map[NomsKind]string{
 	CycleKind:  "Cycle",
 	ListKind:   "List",
 	MapKind:    "Map",
-	NumberKind: "Number",
+	FloatKind:  "Float",
 	RefKind:    "Ref",
 	SetKind:    "Set",
 	StructKind: "Struct",
@@ -45,6 +49,9 @@ var KindToString = map[NomsKind]string{
 	TypeKind:   "Type",
 	UnionKind:  "Union",
 	ValueKind:  "Value",
+	UUIDKind:   "UUID",
+	IntKind:    "Int",
+	UintKind:   "Uint",
 }
 
 // String returns the name of the kind.
@@ -55,7 +62,7 @@ func (k NomsKind) String() string {
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
 	switch k {
-	case BoolKind, NumberKind, StringKind, BlobKind, ValueKind, TypeKind:
+	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind:
 		return true
 	default:
 		return false
@@ -64,7 +71,7 @@ func IsPrimitiveKind(k NomsKind) bool {
 
 // isKindOrderedByValue determines if a value is ordered by its value instead of its hash.
 func isKindOrderedByValue(k NomsKind) bool {
-	return k <= StringKind
+	return k <= StringKind || k >= UUIDKind
 }
 
 func (k NomsKind) writeTo(w nomsWriter) {

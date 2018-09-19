@@ -26,22 +26,22 @@ func TestNewCommit(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	commit := NewCommit(types.Number(1), types.NewSet(db), types.EmptyStruct)
+	commit := NewCommit(types.Float(1), types.NewSet(db), types.EmptyStruct)
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
 		types.MakeSetType(types.MakeUnionType()),
-		types.NumberType,
+		types.FloaTType,
 	)
 	assertTypeEquals(et, at)
 
-	// Committing another Number
-	commit2 := NewCommit(types.Number(2), types.NewSet(db, types.NewRef(commit)), types.EmptyStruct)
+	// Committing another Float
+	commit2 := NewCommit(types.Float(2), types.NewSet(db, types.NewRef(commit)), types.EmptyStruct)
 	at2 := types.TypeOf(commit2)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                value: Number,
+                value: Float,
         }`)
 	assertTypeEquals(et2, at2)
 
@@ -51,15 +51,15 @@ func TestNewCommit(t *testing.T) {
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                value: Number | String,
+                value: Float | String,
         }`)
 	assertTypeEquals(et3, at3)
 
 	// Now commit a String with MetaInfo
-	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Number(9)})
+	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
 	metaType := nomdl.MustParseType(`Struct Meta {
                 date: String,
-                number: Number,
+                number: Float,
 	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
 	commit4 := NewCommit(types.String("Hi"), types.NewSet(db, types.NewRef(commit2)), meta)
@@ -67,10 +67,10 @@ func TestNewCommit(t *testing.T) {
 	et4 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {} | Struct Meta {
                         date: String,
-                        number: Number,
+                        number: Float,
         	},
                 parents: Set<Ref<Cycle<Commit>>>,
-                value: Number | String,
+                value: Float | String,
         }`)
 	assertTypeEquals(et4, at4)
 
@@ -80,7 +80,7 @@ func TestNewCommit(t *testing.T) {
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                value: Number | String,
+                value: Float | String,
         }`)
 	assertTypeEquals(et5, at5)
 }
@@ -93,7 +93,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	defer db.Close()
 
 	metaCommit := types.NewStruct("Commit", types.StructData{
-		"value":   types.Number(9),
+		"value":   types.Float(9),
 		"parents": types.NewSet(db),
 		"meta":    types.EmptyStruct,
 	})
@@ -101,7 +101,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert.True(IsCommitType(types.TypeOf(metaCommit)))
 
 	noMetaCommit := types.NewStruct("Commit", types.StructData{
-		"value":   types.Number(9),
+		"value":   types.Float(9),
 		"parents": types.NewSet(db),
 	})
 	assert.False(IsCommit(noMetaCommit))

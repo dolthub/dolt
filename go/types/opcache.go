@@ -23,7 +23,7 @@
 //     1-byte  -- a NomsKind value that represents the type of value that is
 //                being encoded.
 //     The 1-byte NomsKind value determines what follows, if this value is
-//     BoolKind, NumberKind, or StringKind, the rest of the bytes are:
+//     BoolKind, FloatKind, or StringKind, the rest of the bytes are:
 //         4-bytes -- uint32 length of the Value serialization
 //         n-bytes -- the serialized value
 //     If the NomsKind byte has any other value, it is followed by:
@@ -36,7 +36,7 @@
 // Each one stores slightly different things in the ldbKey.
 // MapSet() -- stores each graphKey and the key to the final Map
 // ValueSet() -- stores each graphKey and the Value being inserted into the set
-// ListAppend() -- stores each graphKey and a Number() containing an uint64 value
+// ListAppend() -- stores each graphKey and a Float() containing an uint64 value
 //    that is shared across all collections and lists which is incremented each time
 //    ListAppend() is called.
 //
@@ -148,12 +148,12 @@ func (store *ldbOpCacheStore) opCache() opCache {
 	return &ldbOpCache{vrw: store.vrw, colId: colId, ldb: store.ldb}
 }
 
-// insertLdbOp encodes allKeys into the ldb key. Bool, Number, and String values
+// insertLdbOp encodes allKeys into the ldb key. Bool, Float, and String values
 // are encoded directly into the ldb key bytes. All other types are encoded as
 // their Hash() digest. Their actual value is then stored in ldb value.
 func (opc *ldbOpCache) insertLdbOp(allKeys ValueSlice, opKind NomsKind, val Value) {
 	if len(allKeys) > 0x00FF {
-		d.Panic("Number of keys in GraphMapSet exceeds max of 256")
+		d.Panic("Float of keys in GraphMapSet exceeds max of 256")
 	}
 	ldbKeyBytes := [initialBufferSize]byte{}
 	ldbValBytes := [initialBufferSize]byte{}
@@ -182,7 +182,7 @@ func (opc *ldbOpCache) GraphSetInsert(graphKeys ValueSlice, val Value) {
 
 func (opc *ldbOpCache) GraphListAppend(graphKeys ValueSlice, val Value) {
 	idx := atomic.AddInt64(&opc.listIdx, 1)
-	allKeys := append(graphKeys, Number(idx))
+	allKeys := append(graphKeys, Float(idx))
 	opc.insertLdbOp(allKeys, ListKind, val)
 }
 

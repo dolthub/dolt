@@ -16,7 +16,7 @@ func TestContainCommonSupertype(t *testing.T) {
 		// ref<bool> & ref<bool> -> true
 		{MakeRefType(BoolType), MakeRefType(BoolType), true},
 		// ref<number> & ref<string> -> false
-		{MakeRefType(NumberType), MakeRefType(StringType), false},
+		{MakeRefType(FloaTType), MakeRefType(StringType), false},
 		// set<bool> & set<bool> -> true
 		{MakeSetType(BoolType), MakeSetType(BoolType), true},
 		// set<bool> & set<string> -> false
@@ -26,9 +26,9 @@ func TestContainCommonSupertype(t *testing.T) {
 		// list<blob> & list<string> -> false
 		{MakeListType(BlobType), MakeListType(StringType), false},
 		// list<blob|string|number> & list<string|bool> -> true
-		{MakeListType(MakeUnionType(BlobType, StringType, NumberType)), MakeListType(MakeUnionType(StringType, BoolType)), true},
+		{MakeListType(MakeUnionType(BlobType, StringType, FloaTType)), MakeListType(MakeUnionType(StringType, BoolType)), true},
 		// list<blob|string> & list<number|bool> -> false
-		{MakeListType(MakeUnionType(BlobType, StringType)), MakeListType(MakeUnionType(NumberType, BoolType)), false},
+		{MakeListType(MakeUnionType(BlobType, StringType)), MakeListType(MakeUnionType(FloaTType, BoolType)), false},
 
 		// map<bool,bool> & map<bool,bool> -> true
 		{MakeMapType(BoolType, BoolType), MakeMapType(BoolType, BoolType), true},
@@ -43,17 +43,17 @@ func TestContainCommonSupertype(t *testing.T) {
 			MakeMapType(MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}), BoolType), false},
 		// map<string|blob,string> & map<number|string,string> -> true
 		{MakeMapType(MakeUnionType(StringType, BlobType), StringType),
-			MakeMapType(MakeUnionType(NumberType, StringType), StringType), true},
+			MakeMapType(MakeUnionType(FloaTType, StringType), StringType), true},
 		// map<blob|bool,string> & map<number|string,string> -> false
 		{MakeMapType(MakeUnionType(BlobType, BoolType), StringType),
-			MakeMapType(MakeUnionType(NumberType, StringType), StringType), false},
+			MakeMapType(MakeUnionType(FloaTType, StringType), StringType), false},
 
 		// bool & string|bool|blob -> true
 		{BoolType, MakeUnionType(StringType, BoolType, BlobType), true},
 		// string|bool|blob & blob -> true
 		{MakeUnionType(StringType, BoolType, BlobType), BlobType, true},
 		// string|bool|blob & number|blob|string -> true
-		{MakeUnionType(StringType, BoolType, BlobType), MakeUnionType(NumberType, BlobType, StringType), true},
+		{MakeUnionType(StringType, BoolType, BlobType), MakeUnionType(FloaTType, BlobType, StringType), true},
 
 		// struct{foo:bool} & struct{foo:bool} -> true
 		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
@@ -63,13 +63,13 @@ func TestContainCommonSupertype(t *testing.T) {
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}), false},
 		// struct{foo:bool} & struct{foo:bool,bar:number} -> true
 		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BoolType, "bar": NumberType}), true},
+			MakeStructTypeFromFields("", FieldMap{"foo": BoolType, "bar": FloaTType}), true},
 		// struct{foo:ref<bool>} & struct{foo:ref<number>} -> false
 		{MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(BoolType)}),
-			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(NumberType)}), false},
+			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(FloaTType)}), false},
 		// struct{foo:ref<bool>} & struct{foo:ref<number|bool>} -> true
 		{MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(BoolType)}),
-			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(MakeUnionType(NumberType, BoolType))}), true},
+			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(MakeUnionType(FloaTType, BoolType))}), true},
 		// struct A{foo:bool} & struct A{foo:bool, baz:string} -> true
 		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}),
 			MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "baz": StringType}), true},
@@ -77,9 +77,9 @@ func TestContainCommonSupertype(t *testing.T) {
 		// struct A{foo:bool, stuff:set<String|Blob>} & struct A{foo:bool, stuff:set<String>} -> true
 		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(MakeUnionType(StringType, BlobType))}),
 			MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(StringType)}), true},
-		// struct A{stuff:set<String|Blob>} & struct A{foo:bool, stuff:set<Number>} -> false
+		// struct A{stuff:set<String|Blob>} & struct A{foo:bool, stuff:set<Float>} -> false
 		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(MakeUnionType(StringType, BlobType))}),
-			MakeStructTypeFromFields("A", FieldMap{"stuff": MakeSetType(NumberType)}), false},
+			MakeStructTypeFromFields("A", FieldMap{"stuff": MakeSetType(FloaTType)}), false},
 
 		// struct A{foo:bool} & struct {foo:bool} -> true
 		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}),
@@ -107,15 +107,15 @@ func TestContainCommonSupertype(t *testing.T) {
 		{MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"foo": BlobType}),
-		), MakeStructTypeFromFields("", FieldMap{"foo": MakeUnionType(NumberType, BoolType)}), false},
+		), MakeStructTypeFromFields("", FieldMap{"foo": MakeUnionType(FloaTType, BoolType)}), false},
 
 		// map<struct{x:number, y:number}, struct A{foo:string}> & map<struct{x:number, y:number}, struct A{foo:string, bar:bool}> -> true
 		{
 			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": NumberType, "y": NumberType}),
+				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
 				MakeStructTypeFromFields("A", FieldMap{"foo": StringType})),
 			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": NumberType, "y": NumberType}),
+				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
 				MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})),
 			true,
 		},
@@ -123,17 +123,17 @@ func TestContainCommonSupertype(t *testing.T) {
 		// map<struct{x:number, y:number}, struct A{foo:string}> & map<struct{x:number, y:number}, struct A{foo:string, bar:bool}> -> true
 		{
 			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": NumberType, "y": NumberType}),
+				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
 				MakeStructTypeFromFields("A", FieldMap{"foo": StringType})),
 			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": NumberType, "y": NumberType}),
+				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
 				MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})),
 			true,
 		},
 
-		// struct A{self:A} & struct A{self:A, foo:Number} -> true
+		// struct A{self:A} & struct A{self:A, foo:Float} -> true
 		{MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A")}),
-			MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A"), "foo": NumberType}), true},
+			MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A"), "foo": FloaTType}), true},
 
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{

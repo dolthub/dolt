@@ -126,7 +126,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMerge() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefMerge() {
-	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
+	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
 
 	m := kvs{"r2", s.vs.WriteValue(s.create(aa1))}
 	ma := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1a))}
@@ -214,15 +214,15 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
-	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Number(42)}))
-	numRef := s.vs.WriteValue(types.Number(7))
+	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
+	numRef := s.vs.WriteValue(types.Float(7))
 
 	m := kvs{"r2", strRef}
 	ma := kvs{"r1", strRef, "r2", strRef}
 	mb := kvs{"r1", numRef, "r2", strRef}
 
 	s.tryThreeWayConflict(s.create(ma), s.create(mb), s.create(m), "Cannot merge Struct Foo")
-	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Number and Struct Foo")
+	s.tryThreeWayConflict(s.create(mb), s.create(ma), s.create(m), "Cannot merge Float and Struct Foo")
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflict() {

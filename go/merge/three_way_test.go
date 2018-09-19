@@ -65,7 +65,7 @@ func valToTypesValue(f func(seq) types.Value, v interface{}) types.Value {
 	case string:
 		v1 = types.String(t)
 	case int:
-		v1 = types.Number(t)
+		v1 = types.Float(t)
 	case seq:
 		v1 = f(t)
 	case types.Value:
@@ -85,8 +85,8 @@ func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
 		assert.Fail(t, "Expected error!", "Got successful merge: %s", types.EncodedValue(m))
 	}
 
-	a, b, p := types.Number(7), types.String("nope"), types.String("parent")
+	a, b, p := types.Float(7), types.String("nope"), types.String("parent")
 
-	threeWayConflict(a, b, p, "Number and String on top of")
-	threeWayConflict(b, a, p, "String and Number on top of")
+	threeWayConflict(a, b, p, "Float and String on top of")
+	threeWayConflict(b, a, p, "String and Float on top of")
 }

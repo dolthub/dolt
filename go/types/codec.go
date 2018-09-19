@@ -57,7 +57,9 @@ type nomsWriter interface {
 	writeBytes(v []byte)
 	writeCount(count uint64)
 	writeHash(h hash.Hash)
-	writeNumber(v Number)
+	writeFloat(v Float)
+	writeInt(v Int)
+	writeUint(v Uint)
 	writeString(v string)
 	writeUint8(v uint8)
 
@@ -110,20 +112,54 @@ func (b *binaryNomsReader) skipCount() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readNumber() Number {
+func (b *binaryNomsReader) readFloat() Float {
 	// b.assertCanRead(binary.MaxVarintLen64 * 2)
 	i, count := binary.Varint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	exp, count2 := binary.Varint(b.buff[b.offset:])
 	b.offset += uint32(count2)
-	return Number(fracExpToFloat(i, int(exp)))
+	return Float(fracExpToFloat(i, int(exp)))
 }
 
-func (b *binaryNomsReader) skipNumber() {
+func (b *binaryNomsReader) skipFloat() {
 	_, count := binary.Varint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	_, count2 := binary.Varint(b.buff[b.offset:])
 	b.offset += uint32(count2)
+}
+
+func (b *binaryNomsReader) skipInt() {
+	_, count := binary.Varint(b.buff[b.offset:])
+	b.offset += uint32(count)
+}
+
+func (b *binaryNomsReader) skipUint() {
+	_, count := binary.Uvarint(b.buff[b.offset:])
+	b.offset += uint32(count)
+}
+
+func (b *binaryNomsReader) readInt() Int {
+	v, count := binary.Varint(b.buff[b.offset:])
+	b.offset += uint32(count)
+	return Int(v)
+}
+
+func (b *binaryNomsReader) readUint() Uint {
+	v, count := binary.Uvarint(b.buff[b.offset:])
+	b.offset += uint32(count)
+	return Uint(v)
+}
+
+func (b *binaryNomsReader) readUUID() UUID {
+	id := UUID{}
+	copy(id[:uuidNumBytes], b.buff[b.offset:])
+	b.offset += uuidNumBytes
+
+	return id
+}
+
+func (b *binaryNomsReader) skipUUID() {
+	b.offset += uuidNumBytes
 }
 
 func (b *binaryNomsReader) readBool() bool {
@@ -214,7 +250,19 @@ func (b *binaryNomsWriter) writeCount(v uint64) {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsWriter) writeNumber(v Number) {
+func (b *binaryNomsWriter) writeInt(v Int) {
+	b.ensureCapacity(binary.MaxVarintLen64)
+	count := binary.PutVarint(b.buff[b.offset:], int64(v))
+	b.offset += uint32(count)
+}
+
+func (b *binaryNomsWriter) writeUint(v Uint) {
+	b.ensureCapacity(binary.MaxVarintLen64)
+	count := binary.PutUvarint(b.buff[b.offset:], uint64(v))
+	b.offset += uint32(count)
+}
+
+func (b *binaryNomsWriter) writeFloat(v Float) {
 	b.ensureCapacity(binary.MaxVarintLen64 * 2)
 	i, exp := float64ToIntExp(float64(v))
 	count := binary.PutVarint(b.buff[b.offset:], i)

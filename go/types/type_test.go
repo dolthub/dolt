@@ -14,7 +14,7 @@ func TestTypes(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	mapType := MakeMapType(StringType, NumberType)
+	mapType := MakeMapType(StringType, FloaTType)
 	setType := MakeSetType(StringType)
 	mahType := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
@@ -39,13 +39,16 @@ func TestTypeType(t *testing.T) {
 
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
-	mapType := MakeMapType(StringType, NumberType)
+	mapType := MakeMapType(StringType, FloaTType)
 	setType := MakeSetType(StringType)
 
 	assert.Equal("Bool", BoolType.Describe())
-	assert.Equal("Number", NumberType.Describe())
+	assert.Equal("Float", FloaTType.Describe())
 	assert.Equal("String", StringType.Describe())
-	assert.Equal("Map<String, Number>", mapType.Describe())
+	assert.Equal("UUID", UUIDType.Describe())
+	assert.Equal("Int", IntType.Describe())
+	assert.Equal("Uint", UintType.Describe())
+	assert.Equal("Map<String, Float>", mapType.Describe())
 	assert.Equal("Set<String>", setType.Describe())
 
 	mahType := MakeStructType("MahStruct",
@@ -58,7 +61,8 @@ func TestTypeRefDescribe(t *testing.T) {
 func TestTypeOrdered(t *testing.T) {
 	assert := assert.New(t)
 	assert.True(isKindOrderedByValue(BoolType.TargetKind()))
-	assert.True(isKindOrderedByValue(NumberType.TargetKind()))
+	assert.True(isKindOrderedByValue(FloaTType.TargetKind()))
+	assert.True(isKindOrderedByValue(UUIDType.TargetKind()))
 	assert.True(isKindOrderedByValue(StringType.TargetKind()))
 	assert.False(isKindOrderedByValue(BlobType.TargetKind()))
 	assert.False(isKindOrderedByValue(ValueType.TargetKind()))
@@ -73,15 +77,15 @@ func TestFlattenUnionTypes(t *testing.T) {
 	assert.Equal(BoolType, MakeUnionType(BoolType))
 	assert.Equal(MakeUnionType(), MakeUnionType())
 	assert.Equal(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, MakeUnionType(StringType)))
-	assert.Equal(MakeUnionType(BoolType, StringType, NumberType), MakeUnionType(BoolType, MakeUnionType(StringType, NumberType)))
+	assert.Equal(MakeUnionType(BoolType, StringType, FloaTType), MakeUnionType(BoolType, MakeUnionType(StringType, FloaTType)))
 	assert.Equal(BoolType, MakeUnionType(BoolType, BoolType))
 	assert.Equal(BoolType, MakeUnionType(BoolType, MakeUnionType()))
 	assert.Equal(BoolType, MakeUnionType(MakeUnionType(), BoolType))
 	assert.True(MakeUnionType(MakeUnionType(), MakeUnionType()).Equals(MakeUnionType()))
-	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(BoolType, NumberType))
-	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(NumberType, BoolType))
-	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(BoolType, NumberType, BoolType))
-	assert.Equal(MakeUnionType(BoolType, NumberType), MakeUnionType(MakeUnionType(BoolType, NumberType), NumberType, BoolType))
+	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType))
+	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(FloaTType, BoolType))
+	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType, BoolType))
+	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(MakeUnionType(BoolType, FloaTType), FloaTType, BoolType))
 }
 
 func TestVerifyStructFieldName(t *testing.T) {
@@ -144,9 +148,9 @@ func TestVerifyStructName(t *testing.T) {
 func TestStructUnionWithCycles(tt *testing.T) {
 	inodeType := MakeStructTypeFromFields("Inode", FieldMap{
 		"attr": MakeStructTypeFromFields("Attr", FieldMap{
-			"ctime": NumberType,
-			"mode":  NumberType,
-			"mtime": NumberType,
+			"ctime": FloaTType,
+			"mode":  FloaTType,
+			"mtime": FloaTType,
 		}),
 		"contents": MakeUnionType(
 			MakeStructTypeFromFields("Directory", FieldMap{
@@ -177,7 +181,7 @@ func TestHasStructCycles(tt *testing.T) {
 
 	assert.False(HasStructCycles(BoolType))
 	assert.False(HasStructCycles(BlobType))
-	assert.False(HasStructCycles(NumberType))
+	assert.False(HasStructCycles(FloaTType))
 	assert.False(HasStructCycles(StringType))
 	assert.False(HasStructCycles(TypeType))
 	assert.False(HasStructCycles(ValueType))

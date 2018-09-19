@@ -13,8 +13,8 @@ import (
 func TestPrimitives(t *testing.T) {
 	data := []Value{
 		Bool(true), Bool(false),
-		Number(0), Number(-1),
-		Number(-0.1), Number(0.1),
+		Float(0), Float(-1),
+		Float(-0.1), Float(0.1),
 	}
 
 	for i := range data {
@@ -34,7 +34,7 @@ func TestPrimitivesType(t *testing.T) {
 		k NomsKind
 	}{
 		{Bool(false), BoolKind},
-		{Number(0), NumberKind},
+		{Float(0), FloatKind},
 	}
 
 	for _, d := range data {

@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-// StringToKind maps names of valid NomsKinds (e.g. Bool, Number, etc) to their associated types.NomsKind
+// StringToKind maps names of valid NomsKinds (e.g. Bool, Float, etc) to their associated types.NomsKind
 var StringToKind = func(kindMap map[types.NomsKind]string) map[string]types.NomsKind {
 	m := map[string]types.NomsKind{}
 	for k, v := range kindMap {

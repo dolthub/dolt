@@ -42,12 +42,12 @@ func TestPathStruct(t *testing.T) {
 	v := NewStruct("", StructData{
 		"foo": String("foo"),
 		"bar": Bool(false),
-		"baz": Number(203),
+		"baz": Float(203),
 	})
 
 	assertResolvesTo(assert, String("foo"), v, `.foo`)
 	assertResolvesTo(assert, Bool(false), v, `.bar`)
-	assertResolvesTo(assert, Number(203), v, `.baz`)
+	assertResolvesTo(assert, Float(203), v, `.baz`)
 	assertResolvesTo(assert, nil, v, `.notHere`)
 
 	v2 := NewStruct("", StructData{
@@ -56,7 +56,7 @@ func TestPathStruct(t *testing.T) {
 
 	assertResolvesTo(assert, String("foo"), v2, `.v1.foo`)
 	assertResolvesTo(assert, Bool(false), v2, `.v1.bar`)
-	assertResolvesTo(assert, Number(203), v2, `.v1.baz`)
+	assertResolvesTo(assert, Float(203), v2, `.v1.baz`)
 	assertResolvesTo(assert, nil, v2, `.v1.notHere`)
 	assertResolvesTo(assert, nil, v2, `.notHere.v1`)
 }
@@ -67,12 +67,12 @@ func TestPathStructType(t *testing.T) {
 	typ := MakeStructType("MyStruct",
 		StructField{Name: "foo", Type: StringType},
 		StructField{Name: "bar", Type: BoolType},
-		StructField{Name: "baz", Type: NumberType},
+		StructField{Name: "baz", Type: FloaTType},
 	)
 
 	assertResolvesTo(assert, StringType, typ, `.foo`)
 	assertResolvesTo(assert, BoolType, typ, `.bar`)
-	assertResolvesTo(assert, NumberType, typ, `.baz`)
+	assertResolvesTo(assert, FloaTType, typ, `.baz`)
 	assertResolvesTo(assert, nil, typ, `.notHere`)
 
 	typ2 := MakeStructType("",
@@ -82,7 +82,7 @@ func TestPathStructType(t *testing.T) {
 	assertResolvesTo(assert, typ, typ2, `.typ`)
 	assertResolvesTo(assert, StringType, typ2, `.typ.foo`)
 	assertResolvesTo(assert, BoolType, typ2, `.typ.bar`)
-	assertResolvesTo(assert, NumberType, typ2, `.typ.baz`)
+	assertResolvesTo(assert, FloaTType, typ2, `.typ.baz`)
 	assertResolvesTo(assert, nil, typ2, `.typ.notHere`)
 	assertResolvesTo(assert, nil, typ2, `.notHere.typ`)
 }
@@ -97,51 +97,51 @@ func TestPathIndex(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(vs, Number(1), Number(3), String("foo"), Bool(false))
+	v = NewList(vs, Float(1), Float(3), String("foo"), Bool(false))
 
-	resolvesTo(Number(1), Number(0), "[0]")
-	resolvesTo(Number(3), Number(1), "[1]")
-	resolvesTo(String("foo"), Number(2), "[2]")
-	resolvesTo(Bool(false), Number(3), "[3]")
+	resolvesTo(Float(1), Float(0), "[0]")
+	resolvesTo(Float(3), Float(1), "[1]")
+	resolvesTo(String("foo"), Float(2), "[2]")
+	resolvesTo(Bool(false), Float(3), "[3]")
 	resolvesTo(nil, nil, "[4]")
 	resolvesTo(nil, nil, "[-5]")
-	resolvesTo(Number(1), Number(0), "[-4]")
-	resolvesTo(Number(3), Number(1), "[-3]")
-	resolvesTo(String("foo"), Number(2), "[-2]")
-	resolvesTo(Bool(false), Number(3), "[-1]")
+	resolvesTo(Float(1), Float(0), "[-4]")
+	resolvesTo(Float(3), Float(1), "[-3]")
+	resolvesTo(String("foo"), Float(2), "[-2]")
+	resolvesTo(Bool(false), Float(3), "[-1]")
 
 	v = NewMap(vs,
-		Bool(false), Number(23),
-		Number(1), String("foo"),
-		Number(2.3), Number(4.5),
+		Bool(false), Float(23),
+		Float(1), String("foo"),
+		Float(2.3), Float(4.5),
 		String("two"), String("bar"),
 	)
 
-	resolvesTo(String("foo"), Number(1), "[1]")
+	resolvesTo(String("foo"), Float(1), "[1]")
 	resolvesTo(String("bar"), String("two"), `["two"]`)
-	resolvesTo(Number(23), Bool(false), "[false]")
-	resolvesTo(Number(4.5), Number(2.3), "[2.3]")
+	resolvesTo(Float(23), Bool(false), "[false]")
+	resolvesTo(Float(4.5), Float(2.3), "[2.3]")
 	resolvesTo(nil, nil, "[4]")
 }
 
 func TestPathIndexType(t *testing.T) {
 	assert := assert.New(t)
 
-	st := MakeSetType(NumberType)
+	st := MakeSetType(FloaTType)
 	lt := MakeListType(st)
 	mt := MakeMapType(st, lt)
 	ut := MakeUnionType(lt, mt, st)
 
-	assertResolvesTo(assert, NumberType, st, "[0]")
-	assertResolvesTo(assert, NumberType, st, "[-1]")
-	assertResolvesTo(assert, NumberType, st, "@at(0)")
+	assertResolvesTo(assert, FloaTType, st, "[0]")
+	assertResolvesTo(assert, FloaTType, st, "[-1]")
+	assertResolvesTo(assert, FloaTType, st, "@at(0)")
 	assertResolvesTo(assert, nil, st, "[1]")
 	assertResolvesTo(assert, nil, st, "[-2]")
 
 	assertResolvesTo(assert, st, lt, "[0]")
 	assertResolvesTo(assert, st, lt, "[-1]")
-	assertResolvesTo(assert, NumberType, lt, "[0][0]")
-	assertResolvesTo(assert, NumberType, lt, "@at(0)@at(0)")
+	assertResolvesTo(assert, FloaTType, lt, "[0][0]")
+	assertResolvesTo(assert, FloaTType, lt, "@at(0)@at(0)")
 	assertResolvesTo(assert, nil, lt, "[1]")
 	assertResolvesTo(assert, nil, lt, "[-2]")
 
@@ -149,8 +149,8 @@ func TestPathIndexType(t *testing.T) {
 	assertResolvesTo(assert, st, mt, "[-2]")
 	assertResolvesTo(assert, lt, mt, "[1]")
 	assertResolvesTo(assert, lt, mt, "[-1]")
-	assertResolvesTo(assert, NumberType, mt, "[1][0][0]")
-	assertResolvesTo(assert, NumberType, mt, "@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, FloaTType, mt, "[1][0][0]")
+	assertResolvesTo(assert, FloaTType, mt, "@at(1)@at(0)@at(0)")
 	assertResolvesTo(assert, nil, mt, "[2]")
 	assertResolvesTo(assert, nil, mt, "[-3]")
 
@@ -160,8 +160,8 @@ func TestPathIndexType(t *testing.T) {
 	assertResolvesTo(assert, mt, ut, "[-2]")
 	assertResolvesTo(assert, st, ut, "[2]")
 	assertResolvesTo(assert, st, ut, "[-1]")
-	assertResolvesTo(assert, NumberType, ut, "[1][1][0][0]")
-	assertResolvesTo(assert, NumberType, ut, "@at(1)@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, FloaTType, ut, "[1][1][0][0]")
+	assertResolvesTo(assert, FloaTType, ut, "@at(1)@at(1)@at(0)@at(0)")
 	assertResolvesTo(assert, nil, ut, "[3]")
 	assertResolvesTo(assert, nil, ut, "[-4]")
 }
@@ -173,7 +173,7 @@ func TestPathHashIndex(t *testing.T) {
 
 	b := Bool(true)
 	br := NewRef(b)
-	i := Number(0)
+	i := Float(0)
 	str := String("foo")
 	l := NewList(vs, b, i, str)
 	lr := NewRef(l)
@@ -293,7 +293,7 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String())
 	}
 
-	h := Number(42).Hash() // arbitrary hash
+	h := Float(42).Hash() // arbitrary hash
 
 	test(".foo")
 	test(".foo@type")
@@ -432,7 +432,7 @@ func TestPathCanBePathIndex(t *testing.T) {
 	vs := newTestValueStore()
 
 	assert.True(ValueCanBePathIndex(Bool(true)))
-	assert.True(ValueCanBePathIndex(Number(5)))
+	assert.True(ValueCanBePathIndex(Float(5)))
 	assert.True(ValueCanBePathIndex(String("yes")))
 
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
@@ -482,8 +482,8 @@ func TestPathType(t *testing.T) {
 	m := NewMap(vs,
 		String("string"), String("foo"),
 		String("bool"), Bool(false),
-		String("number"), Number(42),
-		String("List<number|string>"), NewList(vs, Number(42), String("foo")),
+		String("number"), Float(42),
+		String("List<number|string>"), NewList(vs, Float(42), String("foo")),
 		String("Map<Bool, Bool>"), NewMap(vs, Bool(true), Bool(false)))
 
 	m.IterAll(func(k, cv Value) {
@@ -495,7 +495,7 @@ func TestPathType(t *testing.T) {
 	assertResolvesTo(assert, TypeOf(m), m, `@type`)
 	s := NewStruct("", StructData{
 		"str": String("foo"),
-		"num": Number(42),
+		"num": Float(42),
 	})
 	assertResolvesTo(assert, TypeOf(s.Get("str")), s, ".str@type")
 	assertResolvesTo(assert, TypeOf(s.Get("num")), s, ".num@type")
@@ -530,52 +530,52 @@ func TestPathAtAnnotation(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(vs, Number(1), Number(3), String("foo"), Bool(false))
+	v = NewList(vs, Float(1), Float(3), String("foo"), Bool(false))
 
-	resolvesTo(Number(1), nil, "@at(0)")
-	resolvesTo(Number(3), nil, "@at(1)")
+	resolvesTo(Float(1), nil, "@at(0)")
+	resolvesTo(Float(3), nil, "@at(1)")
 	resolvesTo(String("foo"), nil, "@at(2)")
 	resolvesTo(Bool(false), nil, "@at(3)")
 	resolvesTo(nil, nil, "@at(4)")
 	resolvesTo(nil, nil, "@at(-5)")
-	resolvesTo(Number(1), nil, "@at(-4)")
-	resolvesTo(Number(3), nil, "@at(-3)")
+	resolvesTo(Float(1), nil, "@at(-4)")
+	resolvesTo(Float(3), nil, "@at(-3)")
 	resolvesTo(String("foo"), nil, "@at(-2)")
 	resolvesTo(Bool(false), nil, "@at(-1)")
 
 	v = NewSet(vs,
 		Bool(false),
-		Number(1),
-		Number(2.3),
+		Float(1),
+		Float(2.3),
 		String("two"),
 	)
 
 	resolvesTo(Bool(false), Bool(false), "@at(0)")
-	resolvesTo(Number(1), Number(1), "@at(1)")
-	resolvesTo(Number(2.3), Number(2.3), "@at(2)")
+	resolvesTo(Float(1), Float(1), "@at(1)")
+	resolvesTo(Float(2.3), Float(2.3), "@at(2)")
 	resolvesTo(String("two"), String("two"), `@at(3)`)
 	resolvesTo(nil, nil, "@at(4)")
 	resolvesTo(nil, nil, "@at(-5)")
 	resolvesTo(Bool(false), Bool(false), "@at(-4)")
-	resolvesTo(Number(1), Number(1), "@at(-3)")
-	resolvesTo(Number(2.3), Number(2.3), "@at(-2)")
+	resolvesTo(Float(1), Float(1), "@at(-3)")
+	resolvesTo(Float(2.3), Float(2.3), "@at(-2)")
 	resolvesTo(String("two"), String("two"), `@at(-1)`)
 
 	v = NewMap(vs,
-		Bool(false), Number(23),
-		Number(1), String("foo"),
-		Number(2.3), Number(4.5),
+		Bool(false), Float(23),
+		Float(1), String("foo"),
+		Float(2.3), Float(4.5),
 		String("two"), String("bar"),
 	)
 
-	resolvesTo(Number(23), Bool(false), "@at(0)")
-	resolvesTo(String("foo"), Number(1), "@at(1)")
-	resolvesTo(Number(4.5), Number(2.3), "@at(2)")
+	resolvesTo(Float(23), Bool(false), "@at(0)")
+	resolvesTo(String("foo"), Float(1), "@at(1)")
+	resolvesTo(Float(4.5), Float(2.3), "@at(2)")
 	resolvesTo(String("bar"), String("two"), `@at(3)`)
 	resolvesTo(nil, nil, "@at(4)")
 	resolvesTo(nil, nil, "@at(-5)")
-	resolvesTo(Number(23), Bool(false), "@at(-4)")
-	resolvesTo(String("foo"), Number(1), "@at(-3)")
-	resolvesTo(Number(4.5), Number(2.3), "@at(-2)")
+	resolvesTo(Float(23), Bool(false), "@at(-4)")
+	resolvesTo(String("foo"), Float(1), "@at(-3)")
+	resolvesTo(Float(4.5), Float(2.3), "@at(-2)")
 	resolvesTo(String("bar"), String("two"), `@at(-1)`)
 }

@@ -15,7 +15,7 @@ type kindAndHash interface {
 
 func valueLess(v1, v2 kindAndHash) bool {
 	switch v2.Kind() {
-	case BoolKind, NumberKind, StringKind:
+	case BoolKind, FloatKind, StringKind:
 		return false
 	default:
 		return v1.Hash().Less(v2.Hash())

@@ -50,7 +50,7 @@ func TestReadWriteCache(t *testing.T) {
 func TestValueReadMany(t *testing.T) {
 	assert := assert.New(t)
 
-	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
+	vals := ValueSlice{String("hello"), Bool(true), Float(42)}
 	vs := newTestValueStore()
 	hashes := hash.HashSlice{}
 	for _, v := range vals {
@@ -63,7 +63,7 @@ func TestValueReadMany(t *testing.T) {
 	vs.ReadValue(vals[0].Hash())
 
 	// Get one Value into vs's pendingPuts
-	three := Number(3)
+	three := Float(3)
 	vals = append(vals, three)
 	vs.WriteValue(three)
 	hashes = append(hashes, three.Hash())
@@ -89,7 +89,7 @@ func TestValueReadMany(t *testing.T) {
 func TestValueWriteFlush(t *testing.T) {
 	assert := assert.New(t)
 
-	vals := ValueSlice{String("hello"), Bool(true), Number(42)}
+	vals := ValueSlice{String("hello"), Bool(true), Float(42)}
 	vs := newTestValueStore()
 	hashes := hash.HashSet{}
 	for _, v := range vals {
@@ -141,7 +141,7 @@ func TestFlushOrder(t *testing.T) {
 	//
 	// Expected order: s, n, b, ml, f, ml1, ml2, l
 	s := String("oy")
-	n := Number(42)
+	n := Float(42)
 	sr, nr := vs.WriteValue(s), vs.WriteValue(n)
 	ccs.expect(sr, nr)
 	ml := NewList(vs, sr, nr)

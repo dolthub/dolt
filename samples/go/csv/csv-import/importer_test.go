@@ -24,7 +24,7 @@ import (
 const (
 	TEST_DATA_SIZE = 100
 	TEST_YEAR      = 2012
-	TEST_FIELDS    = "Number,String,Number,Number"
+	TEST_FIELDS    = "Float,String,Float,Float"
 )
 
 func TestCSVImporter(t *testing.T) {
@@ -69,10 +69,10 @@ func (s *testSuite) validateList(l types.List) {
 	l.IterAll(func(v types.Value, j uint64) {
 		s.Equal(i, j)
 		st := v.(types.Struct)
-		s.Equal(types.Number(TEST_YEAR+i%3), st.Get("year"))
+		s.Equal(types.Float(TEST_YEAR+i%3), st.Get("year"))
 		s.Equal(types.String(fmt.Sprintf("a%d", i)), st.Get("a"))
-		s.Equal(types.Number(i), st.Get("b"))
-		s.Equal(types.Number(i*2), st.Get("c"))
+		s.Equal(types.Float(i), st.Get("b"))
+		s.Equal(types.Float(i*2), st.Get("c"))
 		i++
 	})
 }
@@ -85,10 +85,10 @@ func (s *testSuite) validateMap(vrw types.ValueReadWriter, m types.Map) {
 		v := m.Get(types.String(fmt.Sprintf("a%d", i))).(types.Struct)
 		s.True(v.Equals(
 			types.NewStruct("Row", types.StructData{
-				"year": types.Number(TEST_YEAR + i%3),
+				"year": types.Float(TEST_YEAR + i%3),
 				"a":    types.String(fmt.Sprintf("a%d", i)),
-				"b":    types.Number(i),
-				"c":    types.Number(i * 2),
+				"b":    types.Float(i),
+				"c":    types.Float(i * 2),
 			})))
 	}
 }
@@ -98,13 +98,13 @@ func (s *testSuite) validateNestedMap(vrw types.ValueReadWriter, m types.Map) {
 	s.Equal(uint64(3), m.Len())
 
 	for i := 0; i < TEST_DATA_SIZE; i++ {
-		n := m.Get(types.Number(TEST_YEAR + i%3)).(types.Map)
+		n := m.Get(types.Float(TEST_YEAR + i%3)).(types.Map)
 		o := n.Get(types.String(fmt.Sprintf("a%d", i))).(types.Struct)
 		s.True(o.Equals(types.NewStruct("Row", types.StructData{
-			"year": types.Number(TEST_YEAR + i%3),
+			"year": types.Float(TEST_YEAR + i%3),
 			"a":    types.String(fmt.Sprintf("a%d", i)),
-			"b":    types.Number(i),
-			"c":    types.Number(i * 2),
+			"b":    types.Float(i),
+			"c":    types.Float(i * 2),
 		})))
 	}
 }
@@ -120,10 +120,10 @@ func (s *testSuite) validateColumnar(vrw types.ValueReadWriter, str types.Struct
 	}
 
 	for i := 0; i < reps*TEST_DATA_SIZE; i++ {
-		s.Equal(types.Number(TEST_YEAR+i%3), lists["year"].Get(uint64(i)))
+		s.Equal(types.Float(TEST_YEAR+i%3), lists["year"].Get(uint64(i)))
 		s.Equal(types.String(fmt.Sprintf("a%d", i)), lists["a"].Get(uint64(i)))
-		s.Equal(types.Number(i), lists["b"].Get(uint64(i)))
-		s.Equal(types.Number(i*2), lists["c"].Get(uint64(i)))
+		s.Equal(types.Float(i), lists["b"].Get(uint64(i)))
+		s.Equal(types.Float(i*2), lists["c"].Get(uint64(i)))
 	}
 }
 
@@ -311,7 +311,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
-	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--delimiter", "|", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Float", "--delimiter", "|", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -325,7 +325,7 @@ func (s *testSuite) TestCSVImporterWithPipe() {
 	v := l.Get(0)
 	st := v.(types.Struct)
 	s.Equal(types.String("1"), st.Get("a"))
-	s.Equal(types.Number(2), st.Get("b"))
+	s.Equal(types.Float(2), st.Get("b"))
 }
 
 func (s *testSuite) TestCSVImporterWithExternalHeader() {
@@ -339,7 +339,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
-	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,y", input.Name(), dataspec})
+	stdout, stderr := s.MustRun(main, []string{"--no-progress", "--column-types", "String,Float", "--header", "x,y", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("", stderr)
 
@@ -353,7 +353,7 @@ func (s *testSuite) TestCSVImporterWithExternalHeader() {
 	v := l.Get(0)
 	st := v.(types.Struct)
 	s.Equal(types.String("7"), st.Get("x"))
-	s.Equal(types.Number(8), st.Get("y"))
+	s.Equal(types.Float(8), st.Get("y"))
 }
 
 func (s *testSuite) TestCSVImporterWithInvalidExternalHeader() {
@@ -367,7 +367,7 @@ func (s *testSuite) TestCSVImporterWithInvalidExternalHeader() {
 
 	setName := "csv"
 	dataspec := spec.CreateValueSpecString("nbs", s.DBDir, setName)
-	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String,Number", "--header", "x,x", input.Name(), dataspec})
+	stdout, stderr, exitErr := s.Run(main, []string{"--no-progress", "--column-types", "String,Float", "--header", "x,x", input.Name(), dataspec})
 	s.Equal("", stdout)
 	s.Equal("error: Invalid headers specified, headers must be unique\n", stderr)
 	s.Equal(clienttest.ExitError{1}, exitErr)

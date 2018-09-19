@@ -113,8 +113,8 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 			return types.MakeListType(types.ValueType)
 		case "Map":
 			return types.MakeMapType(types.ValueType, types.ValueType)
-		case "Number":
-			return types.NumberType
+		case "Float":
+			return types.FloaTType
 		case "Ref":
 			return types.MakeRefType(types.ValueType)
 		case "Set":
@@ -133,7 +133,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 	case reflect.Bool:
 		return types.BoolType
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
-		return types.NumberType
+		return types.FloaTType
 	case reflect.String:
 		return types.StringType
 	case reflect.Struct:

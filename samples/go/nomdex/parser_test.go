@@ -81,12 +81,12 @@ func TestPeek(t *testing.T) {
 func TestParsing(t *testing.T) {
 	assert := assert.New(t)
 
-	re1 := compExpr{"index1", equals, types.Number(2015)}
-	re2 := compExpr{"index1", gte, types.Number(2020)}
-	re3 := compExpr{"index1", lte, types.Number(2022)}
-	re4 := compExpr{"index1", lt, types.Number(-2030)}
-	re5 := compExpr{"index1", ne, types.Number(3.5)}
-	re6 := compExpr{"index1", ne, types.Number(-3500.4536632)}
+	re1 := compExpr{"index1", equals, types.Float(2015)}
+	re2 := compExpr{"index1", gte, types.Float(2020)}
+	re3 := compExpr{"index1", lte, types.Float(2022)}
+	re4 := compExpr{"index1", lt, types.Float(-2030)}
+	re5 := compExpr{"index1", ne, types.Float(3.5)}
+	re6 := compExpr{"index1", ne, types.Float(-3500.4536632)}
 	re7 := compExpr{"index1", ne, types.String("whassup")}
 
 	queries := []parseResult{

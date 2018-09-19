@@ -387,6 +387,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 	for ; i1 < count1; i1++ {
 		if fn1 == "" {
 			fn1 = dec1.readString()
+			fmt.Println(fn1)
 		}
 		v1 := dec1.readValue()
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {

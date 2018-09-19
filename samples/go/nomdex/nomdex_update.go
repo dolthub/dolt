@@ -210,7 +210,7 @@ func (idx *Index) addToGraphBuilder(gb *types.GraphBuilder, k, v types.Value, tx
 				fmt.Println("error converting to number: ", err)
 				return
 			}
-			k = types.Number(n)
+			k = types.Float(n)
 		} else {
 			k = types.String(k2)
 		}

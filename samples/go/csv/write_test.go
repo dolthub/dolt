@@ -56,7 +56,7 @@ func (s *csvWriteTestSuite) SetupTest() {
 	defer input.Close()
 
 	fieldNames := strings.Split(TEST_ROW_FIELDS, ",")
-	s.fieldTypes = []*types.Type{types.StringType, types.NumberType, types.NumberType, types.NumberType}
+	s.fieldTypes = []*types.Type{types.StringType, types.FloaTType, types.FloaTType, types.FloaTType}
 	fields := make([]types.StructField, len(fieldNames))
 	for i, name := range fieldNames {
 		fields[i] = types.StructField{

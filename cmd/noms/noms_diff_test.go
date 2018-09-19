@@ -62,11 +62,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	out, _ = s.MustRun(main, []string{"diff", "--stat", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
-	ds, err = db.CommitValue(ds, types.NewList(db, types.Number(1), types.Number(2), types.Number(3), types.Number(4)))
+	ds, err = db.CommitValue(ds, types.NewList(db, types.Float(1), types.Float(2), types.Float(3), types.Float(4)))
 	s.NoError(err)
 	r3 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 
-	ds, err = db.CommitValue(ds, types.NewList(db, types.Number(1), types.Number(222), types.Number(4)))
+	ds, err = db.CommitValue(ds, types.NewList(db, types.Float(1), types.Float(222), types.Float(4)))
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 

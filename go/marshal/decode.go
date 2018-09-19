@@ -50,7 +50,7 @@ import (
 //    - with the annotation, same as types.Map for map[T]struct{} fields and same as types.List for slice fields
 //  - types.Map -> map[T]V, where T and V is determined recursively using the
 //    same rules.
-//  - types.Number -> float64
+//  - types.Float -> float64
 //  - types.String -> string
 //  - *types.Type -> *types.Type
 //  - types.Union -> interface
@@ -153,7 +153,7 @@ func (e *UnmarshalTypeMismatchError) Error() string {
 	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", types.TypeOf(e.Value).Describe(), ts, e.details)
 }
 
-func overflowError(v types.Number, t reflect.Type) *UnmarshalTypeMismatchError {
+func overflowError(v types.Float, t reflect.Type) *UnmarshalTypeMismatchError {
 	return &UnmarshalTypeMismatchError{v, t, fmt.Sprintf(" (%g does not fit in %s)", v, t)}
 }
 
@@ -226,7 +226,7 @@ func stringDecoder(v types.Value, rv reflect.Value) {
 }
 
 func floatDecoder(v types.Value, rv reflect.Value) {
-	if n, ok := v.(types.Number); ok {
+	if n, ok := v.(types.Float); ok {
 		rv.SetFloat(float64(n))
 	} else {
 		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
@@ -234,7 +234,7 @@ func floatDecoder(v types.Value, rv reflect.Value) {
 }
 
 func intDecoder(v types.Value, rv reflect.Value) {
-	if n, ok := v.(types.Number); ok {
+	if n, ok := v.(types.Float); ok {
 		i := int64(n)
 		if rv.OverflowInt(i) {
 			panic(overflowError(n, rv.Type()))
@@ -246,7 +246,7 @@ func intDecoder(v types.Value, rv reflect.Value) {
 }
 
 func uintDecoder(v types.Value, rv reflect.Value) {
-	if n, ok := v.(types.Number); ok {
+	if n, ok := v.(types.Float); ok {
 		u := uint64(n)
 		if rv.OverflowUint(u) {
 			panic(overflowError(n, rv.Type()))
@@ -566,7 +566,7 @@ func getGoTypeForNomsType(nt *types.Type, rt reflect.Type, v types.Value) reflec
 	switch nt.TargetKind() {
 	case types.BoolKind:
 		return reflect.TypeOf(false)
-	case types.NumberKind:
+	case types.FloatKind:
 		return reflect.TypeOf(float64(0))
 	case types.StringKind:
 		return reflect.TypeOf("")

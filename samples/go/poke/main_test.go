@@ -39,9 +39,9 @@ func (s *testSuite) TestWin() {
 	db := dsSpec.GetDatabase()
 
 	orig := types.NewStruct("", map[string]types.Value{
-		"num": types.Number(42),
+		"num": types.Float(42),
 		"str": types.String("foobar"),
-		"lst": types.NewList(db, types.Number(1), types.String("foo")),
+		"lst": types.NewList(db, types.Float(1), types.String("foo")),
 		"map": mustParse(db, map[interface{}]interface{}{
 			1:        "foo",
 			"foo":    1,
@@ -115,7 +115,7 @@ func (s *testSuite) TestLose() {
 	db := sp.GetDatabase()
 	db.CommitValue(sp.GetDataset(), types.NewStruct("", map[string]types.Value{
 		"foo": types.String("foo"),
-		"bar": types.NewMap(db, types.String("baz"), types.Number(42)),
+		"bar": types.NewMap(db, types.String("baz"), types.Float(42)),
 	}))
 
 	for _, c := range cases {

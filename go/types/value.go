@@ -34,10 +34,10 @@ type Value interface {
 	Equals(other Value) bool
 
 	// Less determines if this Noms value is less than another Noms value.
-	// When comparing two Noms values and both are comparable and the same type (Bool, Number or
+	// When comparing two Noms values and both are comparable and the same type (Bool, Float or
 	// String) then the natural ordering is used. For other Noms values the Hash of the value is
 	// used. When comparing Noms values of different type the following ordering is used:
-	// Bool < Number < String < everything else.
+	// Bool < Float < String < everything else.
 	Less(other Value) bool
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the

@@ -19,7 +19,7 @@ type ValueStats interface {
 
 func WriteValueStats(w io.Writer, v Value, vr ValueReader) {
 	switch v.Kind() {
-	case BoolKind, NumberKind, StringKind, RefKind, StructKind, TypeKind:
+	case BoolKind, FloatKind, StringKind, RefKind, StructKind, TypeKind:
 		writeUnchunkedValueStats(w, v, vr)
 	case BlobKind, ListKind, MapKind, SetKind:
 		writePtreeStats(w, v, vr)

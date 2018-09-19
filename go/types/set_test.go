@@ -151,14 +151,14 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)
-				dup[0] = Number(-1)
+				dup[0] = Float(-1)
 				copy(dup[1:], elems)
 				return NewSet(vs, dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems)
-				dup[len(dup)-1] = Number(length + 1)
+				dup[len(dup)-1] = Float(length + 1)
 				return NewSet(vs, dup...)
 			},
 		},
@@ -253,13 +253,13 @@ func getTestRefValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 
 func getTestRefToNativeOrderSet(scale int, vrw ValueReadWriter) testSet {
 	return newRandomTestSet(64*scale, func(v int) Value {
-		return vrw.WriteValue(Number(v))
+		return vrw.WriteValue(Float(v))
 	})
 }
 
 func getTestRefToValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 	return newRandomTestSet(64*scale, func(v int) Value {
-		return vrw.WriteValue(NewSet(vrw, Number(v)))
+		return vrw.WriteValue(NewSet(vrw, Float(v)))
 	})
 }
 
@@ -304,13 +304,13 @@ func TestNewSet(t *testing.T) {
 	assert.True(MakeSetType(MakeUnionType()).Equals(TypeOf(s)))
 	assert.Equal(uint64(0), s.Len())
 
-	s = NewSet(vs, Number(0))
-	assert.True(MakeSetType(NumberType).Equals(TypeOf(s)))
+	s = NewSet(vs, Float(0))
+	assert.True(MakeSetType(FloaTType).Equals(TypeOf(s)))
 
 	s = NewSet(vs)
-	assert.IsType(MakeSetType(NumberType), TypeOf(s))
+	assert.IsType(MakeSetType(FloaTType), TypeOf(s))
 
-	s2 := s.Edit().Remove(Number(1)).Set()
+	s2 := s.Edit().Remove(Float(1)).Set()
 	assert.IsType(TypeOf(s), TypeOf(s2))
 }
 
@@ -321,7 +321,7 @@ func TestSetLen(t *testing.T) {
 
 	s0 := NewSet(vs)
 	assert.Equal(uint64(0), s0.Len())
-	s1 := NewSet(vs, Bool(true), Number(1), String("hi"))
+	s1 := NewSet(vs, Bool(true), Float(1), String("hi"))
 	assert.Equal(uint64(3), s1.Len())
 	diffSetTest(assert, s0, s1, 0, 3)
 	diffSetTest(assert, s1, s0, 3, 0)
@@ -378,7 +378,7 @@ func TestSetDuplicateInsert(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s1 := NewSet(vs, Bool(true), Number(42), Number(42))
+	s1 := NewSet(vs, Bool(true), Float(42), Float(42))
 	assert.Equal(uint64(2), s1.Len())
 }
 
@@ -397,24 +397,24 @@ func TestSetUniqueKeysNumber(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s1 := NewSet(vs, Number(4), Number(1), Number(0), Number(0), Number(1), Number(3))
+	s1 := NewSet(vs, Float(4), Float(1), Float(0), Float(0), Float(1), Float(3))
 	assert.Equal(uint64(4), s1.Len())
-	assert.True(s1.Has(Number(4)))
-	assert.True(s1.Has(Number(1)))
-	assert.True(s1.Has(Number(0)))
-	assert.True(s1.Has(Number(3)))
-	assert.False(s1.Has(Number(2)))
+	assert.True(s1.Has(Float(4)))
+	assert.True(s1.Has(Float(1)))
+	assert.True(s1.Has(Float(0)))
+	assert.True(s1.Has(Float(3)))
+	assert.False(s1.Has(Float(2)))
 }
 
 func TestSetHas(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s1 := NewSet(vs, Bool(true), Number(1), String("hi"))
+	s1 := NewSet(vs, Bool(true), Float(1), String("hi"))
 	assert.True(s1.Has(Bool(true)))
 	assert.False(s1.Has(Bool(false)))
-	assert.True(s1.Has(Number(1)))
-	assert.False(s1.Has(Number(0)))
+	assert.True(s1.Has(Float(1)))
+	assert.False(s1.Has(Float(0)))
 	assert.True(s1.Has(String("hi")))
 	assert.False(s1.Has(String("ho")))
 
@@ -482,7 +482,7 @@ func TestSetInsert(t *testing.T) {
 	s := NewSet(vs)
 	v1 := Bool(false)
 	v2 := Bool(true)
-	v3 := Number(0)
+	v3 := Float(0)
 
 	assert.False(s.Has(v1))
 	s = s.Edit().Insert(v1).Set()
@@ -554,7 +554,7 @@ func TestSetRemove(t *testing.T) {
 
 	v1 := Bool(false)
 	v2 := Bool(true)
-	v3 := Number(0)
+	v3 := Float(0)
 	s := NewSet(vs, v1, v2, v3)
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
@@ -612,7 +612,7 @@ func TestSetRemoveNonexistentValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2, vs)
 	original := ts.toSet(vs)
-	actual := original.Edit().Remove(Number(-1)).Set() // rand.Int63 returns non-negative values.
+	actual := original.Edit().Remove(Float(-1)).Set() // rand.Int63 returns non-negative values.
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -624,13 +624,13 @@ func TestSetFirst(t *testing.T) {
 
 	s := NewSet(vs)
 	assert.Nil(s.First())
-	s = s.Edit().Insert(Number(1)).Set()
+	s = s.Edit().Insert(Float(1)).Set()
 	assert.NotNil(s.First())
-	s = s.Edit().Insert(Number(2)).Set()
+	s = s.Edit().Insert(Float(2)).Set()
 	assert.NotNil(s.First())
-	s2 := s.Edit().Remove(Number(1)).Set()
+	s2 := s.Edit().Remove(Float(1)).Set()
 	assert.NotNil(s2.First())
-	s2 = s2.Edit().Remove(Number(2)).Set()
+	s2 = s2.Edit().Remove(Float(2)).Set()
 	assert.Nil(s2.First())
 }
 
@@ -640,7 +640,7 @@ func TestSetOfStruct(t *testing.T) {
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
-		elems = append(elems, NewStruct("S1", StructData{"o": Number(i)}))
+		elems = append(elems, NewStruct("S1", StructData{"o": Float(i)}))
 	}
 
 	s := NewSet(vs, elems...)
@@ -653,10 +653,10 @@ func TestSetIter(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s := NewSet(vs, Number(0), Number(1), Number(2), Number(3), Number(4))
+	s := NewSet(vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	acc := NewSet(vs)
 	s.Iter(func(v Value) bool {
-		_, ok := v.(Number)
+		_, ok := v.(Float)
 		assert.True(ok)
 		acc = acc.Edit().Insert(v).Set()
 		return false
@@ -706,10 +706,10 @@ func TestSetIterAll(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	s := NewSet(vs, Number(0), Number(1), Number(2), Number(3), Number(4))
+	s := NewSet(vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	acc := NewSet(vs)
 	s.IterAll(func(v Value) {
-		_, ok := v.(Number)
+		_, ok := v.(Float)
 		assert.True(ok)
 		acc = acc.Edit().Insert(v).Set()
 	})
@@ -775,62 +775,62 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		NumberType,
+		FloaTType,
 		[]Value{
-			Number(0),
-			Number(1000),
-			Number(1),
-			Number(100),
-			Number(2),
-			Number(10),
+			Float(0),
+			Float(1000),
+			Float(1),
+			Float(100),
+			Float(2),
+			Float(10),
 		},
 		[]Value{
-			Number(0),
-			Number(1),
-			Number(2),
-			Number(10),
-			Number(100),
-			Number(1000),
-		},
-	)
-
-	testSetOrder(assert, vs,
-		NumberType,
-		[]Value{
-			Number(0),
-			Number(-30),
-			Number(25),
-			Number(1002),
-			Number(-5050),
-			Number(23),
-		},
-		[]Value{
-			Number(-5050),
-			Number(-30),
-			Number(0),
-			Number(23),
-			Number(25),
-			Number(1002),
+			Float(0),
+			Float(1),
+			Float(2),
+			Float(10),
+			Float(100),
+			Float(1000),
 		},
 	)
 
 	testSetOrder(assert, vs,
-		NumberType,
+		FloaTType,
 		[]Value{
-			Number(0.0001),
-			Number(0.000001),
-			Number(1),
-			Number(25.01e3),
-			Number(-32.231123e5),
-			Number(23),
+			Float(0),
+			Float(-30),
+			Float(25),
+			Float(1002),
+			Float(-5050),
+			Float(23),
 		},
 		[]Value{
-			Number(-32.231123e5),
-			Number(0.000001),
-			Number(0.0001),
-			Number(1),
-			Number(23),
-			Number(25.01e3),
+			Float(-5050),
+			Float(-30),
+			Float(0),
+			Float(23),
+			Float(25),
+			Float(1002),
+		},
+	)
+
+	testSetOrder(assert, vs,
+		FloaTType,
+		[]Value{
+			Float(0.0001),
+			Float(0.000001),
+			Float(1),
+			Float(25.01e3),
+			Float(-32.231123e5),
+			Float(23),
+		},
+		[]Value{
+			Float(-32.231123e5),
+			Float(0.000001),
+			Float(0.0001),
+			Float(1),
+			Float(23),
+			Float(25.01e3),
 		},
 	)
 
@@ -877,30 +877,30 @@ func TestSetType(t *testing.T) {
 	s := NewSet(vs)
 	assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType())))
 
-	s = NewSet(vs, Number(0))
-	assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
+	s = NewSet(vs, Float(0))
+	assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
 
-	s2 := s.Edit().Remove(Number(1)).Set()
-	assert.True(TypeOf(s2).Equals(MakeSetType(NumberType)))
+	s2 := s.Edit().Remove(Float(1)).Set()
+	assert.True(TypeOf(s2).Equals(MakeSetType(FloaTType)))
 
-	s2 = s.Edit().Insert(Number(0), Number(1)).Set()
+	s2 = s.Edit().Insert(Float(0), Float(1)).Set()
 	assert.True(TypeOf(s).Equals(TypeOf(s2)))
 
 	s3 := s.Edit().Insert(Bool(true)).Set()
-	assert.True(TypeOf(s3).Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
-	s4 := s.Edit().Insert(Number(3), Bool(true)).Set()
-	assert.True(TypeOf(s4).Equals(MakeSetType(MakeUnionType(BoolType, NumberType))))
+	assert.True(TypeOf(s3).Equals(MakeSetType(MakeUnionType(BoolType, FloaTType))))
+	s4 := s.Edit().Insert(Float(3), Bool(true)).Set()
+	assert.True(TypeOf(s4).Equals(MakeSetType(MakeUnionType(BoolType, FloaTType))))
 }
 
 func TestSetChunks(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	l1 := NewSet(vs, Number(0))
+	l1 := NewSet(vs, Float(0))
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
-	l2 := NewSet(vs, NewRef(Number(0)))
+	l2 := NewSet(vs, NewRef(Float(0)))
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 }
@@ -980,17 +980,17 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		s := NewSet(vs, values...)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
-		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
+		assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
 
 		s = s.Edit().Insert(String("a")).Set()
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.asSequence())
-		assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType(NumberType, StringType))))
+		assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType(FloaTType, StringType))))
 
 		s = s.Edit().Remove(String("a")).Set()
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
-		assert.True(TypeOf(s).Equals(MakeSetType(NumberType)))
+		assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
 	}
 
 	test(10, setLeafSequence{})
@@ -1007,27 +1007,27 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	vals := []Value{
 		// Values
 		Bool(true),
-		Number(0),
+		Float(0),
 		String("hello"),
 		NewBlob(vs, bytes.NewBufferString("buf")),
 		NewSet(vs, Bool(true)),
 		NewList(vs, Bool(true)),
-		NewMap(vs, Bool(true), Number(0)),
+		NewMap(vs, Bool(true), Float(0)),
 		NewStruct("", StructData{"field": Bool(true)}),
 		// Refs of values
 		NewRef(Bool(true)),
-		NewRef(Number(0)),
+		NewRef(Float(0)),
 		NewRef(String("hello")),
 		NewRef(NewBlob(vs, bytes.NewBufferString("buf"))),
 		NewRef(NewSet(vs, Bool(true))),
 		NewRef(NewList(vs, Bool(true))),
-		NewRef(NewMap(vs, Bool(true), Number(0))),
+		NewRef(NewMap(vs, Bool(true), Float(0))),
 		NewRef(NewStruct("", StructData{"field": Bool(true)})),
 	}
 
 	s := NewSet(vs, vals...)
 	for i := 1; s.asSequence().isLeaf(); i++ {
-		v := Number(i)
+		v := Float(i)
 		vals = append(vals, v)
 		s = s.Edit().Insert(v).Set()
 	}
@@ -1074,7 +1074,7 @@ func TestSetAt(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	values := []Value{Bool(false), Number(42), String("a"), String("b"), String("c")}
+	values := []Value{Bool(false), Float(42), String("a"), String("b"), String("c")}
 	s := NewSet(vs, values...)
 
 	for i, v := range values {
@@ -1092,16 +1092,16 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	list := NewSet(vs,
 		NewStruct("Foo", StructData{
-			"a": Number(1),
+			"a": Float(1),
 		}),
 		NewStruct("Foo", StructData{
-			"a": Number(2),
+			"a": Float(2),
 			"b": String("bar"),
 		}),
 	)
 	assert.True(
 		MakeSetType(MakeStructType("Foo",
-			StructField{"a", NumberType, false},
+			StructField{"a", FloaTType, false},
 			StructField{"b", StringType, true},
 		),
 		).Equals(TypeOf(list)))
@@ -1114,6 +1114,6 @@ func TestSetWithNil(t *testing.T) {
 		NewSet(vs, nil)
 	})
 	assert.Panics(t, func() {
-		NewSet(vs, Number(42), nil)
+		NewSet(vs, Float(42), nil)
 	})
 }

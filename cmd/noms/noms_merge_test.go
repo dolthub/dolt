@@ -42,42 +42,42 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 	p := s.setupMergeDataset(
 		parentSpec,
 		types.StructData{
-			"num": types.Number(42),
+			"num": types.Float(42),
 			"str": types.String("foobar"),
-			"lst": types.NewList(parentSpec.GetDatabase(), types.Number(1), types.String("foo")),
-			"map": types.NewMap(parentSpec.GetDatabase(), types.Number(1), types.String("foo"),
-				types.String("foo"), types.Number(1)),
+			"lst": types.NewList(parentSpec.GetDatabase(), types.Float(1), types.String("foo")),
+			"map": types.NewMap(parentSpec.GetDatabase(), types.Float(1), types.String("foo"),
+				types.String("foo"), types.Float(1)),
 		},
 		types.NewSet(parentSpec.GetDatabase()))
 
 	l := s.setupMergeDataset(
 		leftSpec,
 		types.StructData{
-			"num": types.Number(42),
+			"num": types.Float(42),
 			"str": types.String("foobaz"),
-			"lst": types.NewList(leftSpec.GetDatabase(), types.Number(1), types.String("foo")),
-			"map": types.NewMap(leftSpec.GetDatabase(), types.Number(1), types.String("foo"),
-				types.String("foo"), types.Number(1)),
+			"lst": types.NewList(leftSpec.GetDatabase(), types.Float(1), types.String("foo")),
+			"map": types.NewMap(leftSpec.GetDatabase(), types.Float(1), types.String("foo"),
+				types.String("foo"), types.Float(1)),
 		},
 		types.NewSet(leftSpec.GetDatabase(), p))
 
 	r := s.setupMergeDataset(
 		rightSpec,
 		types.StructData{
-			"num": types.Number(42),
+			"num": types.Float(42),
 			"str": types.String("foobar"),
-			"lst": types.NewList(rightSpec.GetDatabase(), types.Number(1), types.String("foo")),
-			"map": types.NewMap(rightSpec.GetDatabase(), types.Number(1), types.String("foo"),
-				types.String("foo"), types.Number(1), types.Number(2), types.String("bar")),
+			"lst": types.NewList(rightSpec.GetDatabase(), types.Float(1), types.String("foo")),
+			"map": types.NewMap(rightSpec.GetDatabase(), types.Float(1), types.String("foo"),
+				types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 		},
 		types.NewSet(rightSpec.GetDatabase(), p))
 
 	expected := types.NewStruct("", types.StructData{
-		"num": types.Number(42),
+		"num": types.Float(42),
 		"str": types.String("foobaz"),
-		"lst": types.NewList(parentSpec.GetDatabase(), types.Number(1), types.String("foo")),
-		"map": types.NewMap(parentSpec.GetDatabase(), types.Number(1), types.String("foo"),
-			types.String("foo"), types.Number(1), types.Number(2), types.String("bar")),
+		"lst": types.NewList(parentSpec.GetDatabase(), types.Float(1), types.String("foo")),
+		"map": types.NewMap(parentSpec.GetDatabase(), types.Float(1), types.String("foo"),
+			types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 	})
 
 	output := "output"
@@ -124,11 +124,11 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
 
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Number(42)}, types.NewSet(parentSpec.GetDatabase()))
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Number(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Number(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Number(43)})
+	expected := types.NewStruct("", types.StructData{"num": types.Float(43)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=l", s.DBDir, left, right, output})
@@ -149,11 +149,11 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
 
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Number(42)}, types.NewSet(parentSpec.GetDatabase()))
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Number(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Number(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Number(44)})
+	expected := types.NewStruct("", types.StructData{"num": types.Float(44)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=r", s.DBDir, left, right, output})
@@ -173,9 +173,9 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	defer leftSpec.Close()
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Number(42)}, types.NewSet(parentSpec.GetDatabase()))
-	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Number(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Number(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
+	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
+	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
 
 	s.Panics(func() { s.MustRun(main, []string{"merge", s.DBDir, left, right, "output"}) })
 }
@@ -234,8 +234,8 @@ func TestNomsMergeCliResolve(t *testing.T) {
 	cases := []c{
 		{"l\n", types.DiffChangeAdded, types.DiffChangeAdded, types.String("foo"), types.String("bar"), types.DiffChangeAdded, types.String("foo"), true},
 		{"r\n", types.DiffChangeAdded, types.DiffChangeAdded, types.String("foo"), types.String("bar"), types.DiffChangeAdded, types.String("bar"), true},
-		{"l\n", types.DiffChangeAdded, types.DiffChangeAdded, types.Number(7), types.String("bar"), types.DiffChangeAdded, types.Number(7), true},
-		{"r\n", types.DiffChangeModified, types.DiffChangeModified, types.Number(7), types.String("bar"), types.DiffChangeModified, types.String("bar"), true},
+		{"l\n", types.DiffChangeAdded, types.DiffChangeAdded, types.Float(7), types.String("bar"), types.DiffChangeAdded, types.Float(7), true},
+		{"r\n", types.DiffChangeModified, types.DiffChangeModified, types.Float(7), types.String("bar"), types.DiffChangeModified, types.String("bar"), true},
 	}
 
 	for _, c := range cases {

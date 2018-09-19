@@ -34,8 +34,8 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
-			s := NewStruct("", StructData{"n": Number(1)})
-			runTest(NewRef(NewMap(vrw, s, Number(2))), t)
+			s := NewStruct("", StructData{"n": Float(1)})
+			runTest(NewRef(NewMap(vrw, s, Float(2))), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
 			runTest(ToRefOfValue(NewRef(Bool(false))), t)
@@ -46,7 +46,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		data := StructData{
 			"ref": NewRef(Bool(false)),
-			"num": Number(42),
+			"num": Float(42),
 		}
 		runTest(NewStruct("nom", data), t)
 	})
@@ -55,7 +55,7 @@ func TestWalkRefs(t *testing.T) {
 	newValueSlice := func(r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
-			vs[i] = NewStruct("", StructData{"n": Number(r.Uint64())})
+			vs[i] = NewStruct("", StructData{"n": Float(r.Uint64())})
 		}
 		return vs
 	}
@@ -66,7 +66,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			l := NewList(vrw, vrw.WriteValue(Number(42)), vrw.WriteValue(Number(0)))
+			l := NewList(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
 			runTest(l, t)
 		})
 
@@ -85,7 +85,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			s := NewSet(vrw, vrw.WriteValue(Number(42)), vrw.WriteValue(Number(0)))
+			s := NewSet(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
 			runTest(s, t)
 		})
 
@@ -106,7 +106,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			m := NewMap(vrw, vrw.WriteValue(Number(42)), vrw.WriteValue(Number(0)))
+			m := NewMap(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
 			runTest(m, t)
 		})
 

@@ -14,8 +14,14 @@ func MakePrimitiveType(k NomsKind) *Type {
 	switch k {
 	case BoolKind:
 		return BoolType
-	case NumberKind:
-		return NumberType
+	case FloatKind:
+		return FloaTType
+	case UUIDKind:
+		return UUIDType
+	case IntKind:
+		return IntType
+	case UintKind:
+		return UintType
 	case StringKind:
 		return StringType
 	case BlobKind:
@@ -74,11 +80,14 @@ func makePrimitiveType(k NomsKind) *Type {
 }
 
 var BoolType = makePrimitiveType(BoolKind)
-var NumberType = makePrimitiveType(NumberKind)
+var FloaTType = makePrimitiveType(FloatKind)
 var StringType = makePrimitiveType(StringKind)
 var BlobType = makePrimitiveType(BlobKind)
 var TypeType = makePrimitiveType(TypeKind)
 var ValueType = makePrimitiveType(ValueKind)
+var UUIDType = makePrimitiveType(UUIDKind)
+var IntType = makePrimitiveType(IntKind)
+var UintType = makePrimitiveType(UintKind)
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return newType(CompoundDesc{kind, elemTypes})

@@ -34,7 +34,7 @@ func (suite *LibTestSuite) TestPrimitiveTypes() {
 	vs := suite.vs
 	suite.EqualValues(types.String("expected"), NomsValueFromDecodedJSON(vs, "expected", false))
 	suite.EqualValues(types.Bool(false), NomsValueFromDecodedJSON(vs, false, false))
-	suite.EqualValues(types.Number(1.7), NomsValueFromDecodedJSON(vs, 1.7, false))
+	suite.EqualValues(types.Float(1.7), NomsValueFromDecodedJSON(vs, 1.7, false))
 	suite.False(NomsValueFromDecodedJSON(vs, 1.7, false).Equals(types.Bool(true)))
 }
 

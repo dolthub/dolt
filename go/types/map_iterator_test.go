@@ -17,7 +17,7 @@ func TestMapIterator(t *testing.T) {
 
 	me := NewMap(vrw).Edit()
 	for i := 0; i < 5; i++ {
-		me.Set(String(string(byte(65+i))), Number(i))
+		me.Set(String(string(byte(65+i))), Float(i))
 	}
 
 	m := me.Map()
@@ -27,7 +27,7 @@ func TestMapIterator(t *testing.T) {
 			assert.True(k.Equals(k), msg)
 			assert.True(v.Equals(v), msg)
 			assert.True(String(string(byte(65+i))).Equals(k), msg)
-			assert.True(Number(i).Equals(v), msg)
+			assert.True(Float(i).Equals(v), msg)
 		}
 		k, v := it.Next()
 		assert.Nil(k, msg)

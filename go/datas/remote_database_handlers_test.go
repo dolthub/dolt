@@ -244,7 +244,7 @@ func TestHandleGetBlob(t *testing.T) {
 	}
 
 	// Test non-blob
-	r2 := db.WriteValue(types.Number(1))
+	r2 := db.WriteValue(types.Float(1))
 	_, err = db.CommitValue(ds, r2)
 	assert.NoError(err)
 

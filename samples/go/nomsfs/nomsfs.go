@@ -44,11 +44,11 @@ import (
 //
 // Inode {
 //	attr Attr {
-//		ctime Number
-//		gid Number
-//		mtime Number
-//		mode Number
-//		uid Number
+//		ctime Float
+//		gid Float
+//		mtime Float
+//		mode Float
+//		uid Float
 //		xattr Map<String, Blob>
 //	}
 //	contents File | Symlink | Directory
@@ -107,11 +107,11 @@ var fsType, inodeType, attrType, directoryType, fileType, symlinkType *types.Typ
 func init() {
 	inodeType = nomdl.MustParseType(`Struct Inode {
           attr: Struct Attr {
-            ctime: Number,
-            gid: Number,
-            mode: Number,
-            mtime: Number,
-            uid: Number,
+            ctime: Float,
+            gid: Float,
+            mode: Float,
+            mtime: Float,
+            uid: Float,
             xattr: Map<String, Blob>,
           },
           contents: Struct Symlink {
@@ -510,17 +510,17 @@ func (nfile nomsFile) Flush() fuse.Status {
 
 func makeAttr(vrw types.ValueReadWriter, mode uint32) types.Struct {
 	now := time.Now()
-	ctime := types.Number(float64(now.Unix()) + float64(now.Nanosecond())/1000000000)
+	ctime := types.Float(float64(now.Unix()) + float64(now.Nanosecond())/1000000000)
 	mtime := ctime
 
 	user := fuse.CurrentOwner()
-	gid := types.Number(float64(user.Gid))
-	uid := types.Number(float64(user.Uid))
+	gid := types.Float(float64(user.Gid))
+	uid := types.Float(float64(user.Uid))
 
 	return types.NewStruct("Attr", types.StructData{
 		"ctime": ctime,
 		"gid":   gid,
-		"mode":  types.Number(mode),
+		"mode":  types.Float(mode),
 		"mtime": mtime,
 		"uid":   uid,
 		"xattr": types.NewMap(vrw),
@@ -529,7 +529,7 @@ func makeAttr(vrw types.ValueReadWriter, mode uint32) types.Struct {
 
 func updateMtime(attr types.Struct) types.Struct {
 	now := time.Now()
-	mtime := types.Number(float64(now.Unix()) + float64(now.Nanosecond())/1000000000)
+	mtime := types.Float(float64(now.Unix()) + float64(now.Nanosecond())/1000000000)
 
 	return attr.Set("mtime", mtime)
 }
@@ -770,11 +770,11 @@ func (fs *nomsFS) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.
 	attr := inode.Get("attr").(types.Struct)
 	contents := inode.Get("contents").(types.Struct)
 
-	mode := uint32(float64(attr.Get("mode").(types.Number)))
-	ctime := float64(attr.Get("ctime").(types.Number))
-	gid := float64(attr.Get("gid").(types.Number))
-	mtime := float64(attr.Get("mtime").(types.Number))
-	uid := float64(attr.Get("uid").(types.Number))
+	mode := uint32(float64(attr.Get("mode").(types.Float)))
+	ctime := float64(attr.Get("ctime").(types.Float))
+	gid := float64(attr.Get("gid").(types.Float))
+	mtime := float64(attr.Get("mtime").(types.Float))
+	uid := float64(attr.Get("uid").(types.Float))
 
 	at := &fuse.Attr{
 		Mode:      mode,
@@ -804,7 +804,7 @@ func (fs *nomsFS) GetAttr(path string, context *fuse.Context) (*fuse.Attr, fuse.
 
 func (fs *nomsFS) Chown(path string, uid uint32, gid uint32, context *fuse.Context) fuse.Status {
 	return fs.setAttr(path, func(attr types.Struct) types.Struct {
-		return attr.Set("uid", types.Number(uid)).Set("gid", types.Number(gid))
+		return attr.Set("uid", types.Float(uid)).Set("gid", types.Float(gid))
 	})
 }
 
@@ -813,13 +813,13 @@ func (fs *nomsFS) Utimens(path string, atime *time.Time, mtime *time.Time, conte
 		return fuse.OK
 	}
 	return fs.setAttr(path, func(attr types.Struct) types.Struct {
-		return attr.Set("mtime", types.Number(float64(mtime.Unix())+float64(mtime.Nanosecond())/1000000000))
+		return attr.Set("mtime", types.Float(float64(mtime.Unix())+float64(mtime.Nanosecond())/1000000000))
 	})
 }
 
 func (fs *nomsFS) Chmod(path string, mode uint32, context *fuse.Context) fuse.Status {
 	return fs.setAttr(path, func(attr types.Struct) types.Struct {
-		return attr.Set("mode", types.Number(mode))
+		return attr.Set("mode", types.Float(mode))
 	})
 }
 

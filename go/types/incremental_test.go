@@ -15,7 +15,7 @@ import (
 func getTestVals(vrw ValueReadWriter) []Value {
 	return []Value{
 		Bool(true),
-		Number(1),
+		Float(1),
 		String("hi"),
 		NewBlob(vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
@@ -112,7 +112,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expectedItem := Number(42)
+	expectedItem := Float(42)
 	ref := vs.WriteValue(expectedItem)
 
 	expected := NewList(vs, ref)

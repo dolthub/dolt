@@ -34,7 +34,7 @@ func TestSchemaDetection(t *testing.T) {
 			{types.StringKind},
 			{types.BoolKind, types.StringKind},
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind,
 			},
 		},
@@ -83,7 +83,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -96,7 +96,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -110,7 +110,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -133,7 +133,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.BoolKind,
 				types.StringKind},
 		},
@@ -146,7 +146,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -157,7 +157,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -170,7 +170,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -183,7 +183,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -196,7 +196,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -209,7 +209,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -222,7 +222,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -235,7 +235,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -246,7 +246,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)
@@ -257,7 +257,7 @@ func TestSchemaDetection(t *testing.T) {
 		},
 		[]KindSlice{
 			{
-				types.NumberKind,
+				types.FloatKind,
 				types.StringKind},
 		},
 	)

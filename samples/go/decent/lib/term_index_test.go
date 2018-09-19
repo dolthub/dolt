@@ -31,7 +31,7 @@ func TestRun(t *testing.T) {
 
 	indexEditor := NewTermIndex(vs, types.NewMap(vs)).Edit()
 	for _, doc := range docs {
-		indexEditor.InsertAll(strings.Split(doc.terms, " "), types.Number(doc.id))
+		indexEditor.InsertAll(strings.Split(doc.terms, " "), types.Float(doc.id))
 	}
 
 	index := indexEditor.Value()
@@ -39,7 +39,7 @@ func TestRun(t *testing.T) {
 	getMap := func(keys ...int) types.Map {
 		m := types.NewMap(vs).Edit()
 		for _, k := range keys {
-			m.Set(types.Number(k), types.Bool(true))
+			m.Set(types.Float(k), types.Bool(true))
 		}
 		return m.Map()
 	}

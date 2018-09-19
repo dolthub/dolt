@@ -25,27 +25,27 @@ func TestMarshalTypeType(tt *testing.T) {
 		assert.True(tt, exp.Equals(actual))
 	}
 
-	t(types.NumberType, float32(0))
-	t(types.NumberType, float64(0))
-	t(types.NumberType, int(0))
-	t(types.NumberType, int16(0))
-	t(types.NumberType, int32(0))
-	t(types.NumberType, int64(0))
-	t(types.NumberType, int8(0))
-	t(types.NumberType, uint(0))
-	t(types.NumberType, uint16(0))
-	t(types.NumberType, uint32(0))
-	t(types.NumberType, uint64(0))
-	t(types.NumberType, uint8(0))
+	t(types.FloaTType, float32(0))
+	t(types.FloaTType, float64(0))
+	t(types.FloaTType, int(0))
+	t(types.FloaTType, int16(0))
+	t(types.FloaTType, int32(0))
+	t(types.FloaTType, int64(0))
+	t(types.FloaTType, int8(0))
+	t(types.FloaTType, uint(0))
+	t(types.FloaTType, uint16(0))
+	t(types.FloaTType, uint32(0))
+	t(types.FloaTType, uint64(0))
+	t(types.FloaTType, uint8(0))
 
 	t(types.BoolType, true)
 	t(types.StringType, "hi")
 
 	var l []int
-	t(types.MakeListType(types.NumberType), l)
+	t(types.MakeListType(types.FloaTType), l)
 
 	var m map[uint32]string
-	t(types.MakeMapType(types.NumberType, types.StringType), m)
+	t(types.MakeMapType(types.FloaTType, types.StringType), m)
 
 	t(types.MakeListType(types.ValueType), types.List{})
 	t(types.MakeSetType(types.ValueType), types.Set{})
@@ -59,13 +59,13 @@ func TestMarshalTypeType(tt *testing.T) {
 	var str TestStruct
 	t(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
 		"str": types.StringType,
-		"num": types.NumberType,
+		"num": types.FloaTType,
 	}), str)
 
 	// Same again to test caching
 	t(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
 		"str": types.StringType,
-		"num": types.NumberType,
+		"num": types.FloaTType,
 	}), str)
 
 	anonStruct := struct {
@@ -84,12 +84,12 @@ func TestMarshalTypeType(tt *testing.T) {
 	}
 	var nestedStruct TestNestedStruct
 	t(types.MakeStructTypeFromFields("TestNestedStruct", types.FieldMap{
-		"a": types.MakeListType(types.NumberType),
+		"a": types.MakeListType(types.FloaTType),
 		"b": types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
 			"str": types.StringType,
-			"num": types.NumberType,
+			"num": types.FloaTType,
 		}),
-		"c": types.NumberType,
+		"c": types.FloaTType,
 	}), nestedStruct)
 
 	type testStruct struct {
@@ -99,7 +99,7 @@ func TestMarshalTypeType(tt *testing.T) {
 	var ts testStruct
 	t(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
 		"str": types.StringType,
-		"num": types.NumberType,
+		"num": types.FloaTType,
 	}), ts)
 }
 
@@ -129,7 +129,7 @@ func TestMarshalTypeEmbeddedStruct(t *testing.T) {
 	typ := MustMarshalType(s)
 
 	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
-		"a": types.NumberType,
+		"a": types.FloaTType,
 		"b": types.BoolType,
 	}).Equals(typ))
 }
@@ -149,7 +149,7 @@ func TestMarshalTypeEmbeddedStructSkip(t *testing.T) {
 	typ := MustMarshalType(s)
 
 	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
-		"a": types.NumberType,
+		"a": types.FloaTType,
 	}).Equals(typ))
 }
 
@@ -168,7 +168,7 @@ func TestMarshalTypeEmbeddedStructNamed(t *testing.T) {
 	typ := MustMarshalType(s)
 
 	assert.True(types.MakeStructTypeFromFields("TestStruct", types.FieldMap{
-		"a": types.NumberType,
+		"a": types.FloaTType,
 		"em": types.MakeStructTypeFromFields("EmbeddedStruct", types.FieldMap{
 			"b": types.BoolType,
 		}),
@@ -209,7 +209,7 @@ func TestMarshalTypeNamedFields(t *testing.T) {
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"a":   types.NumberType,
+		"a":   types.FloaTType,
 		"B":   types.BoolType,
 		"ccc": types.StringType,
 	}).Equals(typ))
@@ -270,7 +270,7 @@ func TestMarshalTypeArray(t *testing.T) {
 	a := [3]int{1, 2, 3}
 	typ, err := MarshalType(a)
 	assert.NoError(err)
-	assert.True(types.MakeListType(types.NumberType).Equals(typ))
+	assert.True(types.MakeListType(types.FloaTType).Equals(typ))
 }
 
 func TestMarshalTypeStructWithSlice(t *testing.T) {
@@ -283,7 +283,7 @@ func TestMarshalTypeStructWithSlice(t *testing.T) {
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"list": types.MakeListType(types.NumberType),
+		"list": types.MakeListType(types.FloaTType),
 	}).Equals(typ))
 }
 
@@ -305,7 +305,7 @@ func TestMarshalTypeRecursive(t *testing.T) {
 		},
 		types.StructField{
 			Name: "value",
-			Type: types.NumberType,
+			Type: types.FloaTType,
 		},
 	)
 	assert.True(typ2.Equals(typ))
@@ -317,7 +317,7 @@ func TestMarshalTypeMap(t *testing.T) {
 	var m map[string]int
 	typ, err := MarshalType(m)
 	assert.NoError(err)
-	assert.True(types.MakeMapType(types.StringType, types.NumberType).Equals(typ))
+	assert.True(types.MakeMapType(types.StringType, types.FloaTType).Equals(typ))
 
 	type S struct {
 		N string
@@ -353,13 +353,13 @@ func TestMarshalTypeSet(t *testing.T) {
 	emptyStructType := types.MakeStructTypeFromFields("", types.FieldMap{})
 
 	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"a": types.MakeSetType(types.NumberType),
-		"b": types.MakeMapType(types.NumberType, emptyStructType),
-		"c": types.MakeMapType(types.NumberType, types.StringType),
+		"a": types.MakeSetType(types.FloaTType),
+		"b": types.MakeMapType(types.FloaTType, emptyStructType),
+		"c": types.MakeMapType(types.FloaTType, types.StringType),
 		"d": types.MakeSetType(types.StringType),
 		"e": types.MakeMapType(types.StringType, emptyStructType),
-		"f": types.MakeMapType(types.StringType, types.NumberType),
-		"g": types.MakeSetType(types.NumberType),
+		"f": types.MakeMapType(types.StringType, types.FloaTType),
+		"g": types.MakeSetType(types.FloaTType),
 		"h": types.StringType,
 	}).Equals(typ))
 }
@@ -414,9 +414,9 @@ func TestMarshalTypeSetWithTags(t *testing.T) {
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructType("S",
-		types.StructField{"foo", types.MakeSetType(types.NumberType), false},
-		types.StructField{"b", types.MakeSetType(types.NumberType), true},
-		types.StructField{"bar", types.MakeSetType(types.NumberType), true},
+		types.StructField{"foo", types.MakeSetType(types.FloaTType), false},
+		types.StructField{"b", types.MakeSetType(types.FloaTType), true},
+		types.StructField{"bar", types.MakeSetType(types.FloaTType), true},
 	).Equals(typ))
 }
 
@@ -442,7 +442,7 @@ func TestMarshalTypeCanSkipUnexportedField(t *testing.T) {
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"abc": types.NumberType,
+		"abc": types.FloaTType,
 	}).Equals(typ))
 }
 
@@ -458,7 +458,7 @@ func TestMarshalTypeOriginal(t *testing.T) {
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructType("S",
-		types.StructField{"foo", types.NumberType, true},
+		types.StructField{"foo", types.FloaTType, true},
 	).Equals(typ))
 }
 
@@ -468,7 +468,7 @@ func TestMarshalTypeNomsTypes(t *testing.T) {
 	type S struct {
 		Blob   types.Blob
 		Bool   types.Bool
-		Number types.Number
+		Number types.Float
 		String types.String
 		Type   *types.Type
 	}
@@ -477,7 +477,7 @@ func TestMarshalTypeNomsTypes(t *testing.T) {
 		types.MakeStructTypeFromFields("S", types.FieldMap{
 			"blob":   types.BlobType,
 			"bool":   types.BoolType,
-			"number": types.NumberType,
+			"number": types.FloaTType,
 			"string": types.StringType,
 			"type":   types.TypeType,
 		}),
@@ -485,7 +485,7 @@ func TestMarshalTypeNomsTypes(t *testing.T) {
 }
 
 func (t primitiveType) MarshalNomsType() (*types.Type, error) {
-	return types.NumberType, nil
+	return types.FloaTType, nil
 }
 
 func TestTypeMarshalerPrimitiveType(t *testing.T) {
@@ -493,7 +493,7 @@ func TestTypeMarshalerPrimitiveType(t *testing.T) {
 
 	var u primitiveType
 	typ := MustMarshalType(u)
-	assert.Equal(types.NumberType, typ)
+	assert.Equal(types.FloaTType, typ)
 }
 
 func (u primitiveSliceType) MarshalNomsType() (*types.Type, error) {
@@ -542,7 +542,7 @@ func TestTypeMarshalerBuiltinType(t *testing.T) {
 }
 
 func (u wrappedMarshalerType) MarshalNomsType() (*types.Type, error) {
-	return types.NumberType, nil
+	return types.FloaTType, nil
 }
 
 func TestTypeMarshalerWrapperMarshalerType(t *testing.T) {
@@ -550,7 +550,7 @@ func TestTypeMarshalerWrapperMarshalerType(t *testing.T) {
 
 	var u wrappedMarshalerType
 	typ := MustMarshalType(u)
-	assert.Equal(types.NumberType, typ)
+	assert.Equal(types.FloaTType, typ)
 }
 
 func (u returnsMarshalerError) MarshalNomsType() (*types.Type, error) {
@@ -585,7 +585,7 @@ func TestMarshalTypeStructName(t *testing.T) {
 
 	var ts TestStructWithNameImpl
 	typ := MustMarshalType(ts)
-	assert.True(types.MakeStructType("A", types.StructField{"x", types.NumberType, false}).Equals(typ), typ.Describe())
+	assert.True(types.MakeStructType("A", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe())
 }
 
 func TestMarshalTypeStructName2(t *testing.T) {
@@ -593,7 +593,7 @@ func TestMarshalTypeStructName2(t *testing.T) {
 
 	var ts TestStructWithNameImpl2
 	typ := MustMarshalType(ts)
-	assert.True(types.MakeStructType("", types.StructField{"x", types.NumberType, false}).Equals(typ), typ.Describe())
+	assert.True(types.MakeStructType("", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe())
 }
 
 type OutPhoto struct {

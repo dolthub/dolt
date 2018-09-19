@@ -14,7 +14,7 @@ import (
 func listOfInts(vrw ValueReadWriter, vals ...int) List {
 	vs := ValueSlice{}
 	for _, v := range vals {
-		vs = append(vs, Number(v))
+		vs = append(vs, Float(v))
 	}
 	return NewList(vrw, vs...)
 }
@@ -26,7 +26,7 @@ func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {
 func edit(le *ListEditor, idx, remove int, insert ...int) {
 	vals := []Valuable{}
 	for _, v := range insert {
-		vals = append(vals, Number(v))
+		vals = append(vals, Float(v))
 	}
 	le.Splice(uint64(idx), uint64(remove), vals...)
 }
@@ -35,7 +35,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 	assert.Equal(t, uint64(len(expectItems)), le.Len())
 
 	for i, v := range expectItems {
-		assert.Equal(t, Number(v), le.Get(uint64(i)))
+		assert.Equal(t, Float(v), le.Get(uint64(i)))
 	}
 
 	actualEditCount := 0
@@ -201,7 +201,7 @@ func TestListSpliceFuzzer(t *testing.T) {
 		remove = nextRandInt(0, uint64(len)-idx)
 		insCount := nextRandInt(0, maxInsertCount)
 		for i := uint64(0); i < insCount; i++ {
-			insert = append(insert, Number(nextRandInt(0, maxInt)))
+			insert = append(insert, Float(nextRandInt(0, maxInt)))
 		}
 
 		return

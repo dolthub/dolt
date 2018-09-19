@@ -29,7 +29,7 @@ var (
 func newBound(i int, include bool, infinity int) bound {
 	var v types.Value
 	if i != nilHolder {
-		v = types.Number(i)
+		v = types.Float(i)
 	}
 	return bound{value: v, include: include, infinity: int8(infinity)}
 }

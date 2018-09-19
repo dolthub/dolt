@@ -26,14 +26,14 @@ func TestWriteHumanReadablePrimitiveValues(t *testing.T) {
 	assertWriteHRSEqual(t, "true", Bool(true))
 	assertWriteHRSEqual(t, "false", Bool(false))
 
-	assertWriteHRSEqual(t, "0", Number(0))
-	assertWriteHRSEqual(t, "42", Number(42))
+	assertWriteHRSEqual(t, "0", Float(0))
+	assertWriteHRSEqual(t, "42", Float(42))
 
-	assertWriteHRSEqual(t, "-42", Number(-42))
+	assertWriteHRSEqual(t, "-42", Float(-42))
 
-	assertWriteHRSEqual(t, "3.1415926535", Number(3.1415926535))
-	assertWriteHRSEqual(t, "314159.26535", Number(3.1415926535e5))
-	assertWriteHRSEqual(t, "3.1415926535e+20", Number(3.1415926535e20))
+	assertWriteHRSEqual(t, "3.1415926535", Float(3.1415926535))
+	assertWriteHRSEqual(t, "314159.26535", Float(3.1415926535e5))
+	assertWriteHRSEqual(t, "3.1415926535e+20", Float(3.1415926535e20))
 
 	assertWriteHRSEqual(t, `"abc"`, String("abc"))
 	assertWriteHRSEqual(t, `" "`, String(" "))
@@ -54,7 +54,7 @@ func TestWriteHumanReadablePrimitiveValues(t *testing.T) {
 func TestWriteHumanReadableRef(t *testing.T) {
 	vs := newTestValueStore()
 
-	x := Number(42)
+	x := Float(42)
 	rv := vs.WriteValue(x)
 	assertWriteHRSEqual(t, "#0123456789abcdefghijklmnopqrstuv", rv)
 }
@@ -62,24 +62,24 @@ func TestWriteHumanReadableRef(t *testing.T) {
 func TestWriteHumanReadableCollections(t *testing.T) {
 	vrw := newTestValueStore()
 
-	l := NewList(vrw, Number(0), Number(1), Number(2), Number(3))
+	l := NewList(vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
-	s := NewSet(vrw, Number(0), Number(1), Number(2), Number(3))
+	s := NewSet(vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
-	m := NewMap(vrw, Number(0), Bool(false), Number(1), Bool(true))
+	m := NewMap(vrw, Float(0), Bool(false), Float(1), Bool(true))
 	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
 	l2 := NewList(vrw)
 	assertWriteHRSEqual(t, "[]", l2)
 
-	l3 := NewList(vrw, Number(0))
+	l3 := NewList(vrw, Float(0))
 	assertWriteHRSEqual(t, "[\n  0,\n]", l3)
 
 	nums := make([]Value, 2000)
 	for i := range nums {
-		nums[i] = Number(0)
+		nums[i] = Float(0)
 	}
 	l4 := NewList(vrw, nums...)
 	assertWriteHRSEqual(t, "[  // 2,000 items\n"+strings.Repeat("  0,\n", 2000)+"]", l4)
@@ -88,8 +88,8 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 func TestWriteHumanReadableNested(t *testing.T) {
 	vrw := newTestValueStore()
 
-	l := NewList(vrw, Number(0), Number(1))
-	l2 := NewList(vrw, Number(2), Number(3))
+	l := NewList(vrw, Float(0), Float(1))
+	l2 := NewList(vrw, Float(2), Float(3))
 
 	s := NewSet(vrw, String("a"), String("b"))
 	s2 := NewSet(vrw, String("c"), String("d"))
@@ -115,8 +115,8 @@ func TestWriteHumanReadableNested(t *testing.T) {
 
 func TestWriteHumanReadableStruct(t *testing.T) {
 	str := NewStruct("S1", StructData{
-		"x": Number(1),
-		"y": Number(2),
+		"x": Float(1),
+		"y": Float(2),
 	})
 	assertWriteHRSEqual(t, "struct S1 {\n  x: 1,\n  y: 2,\n}", str)
 }
@@ -125,13 +125,13 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	vrw := newTestValueStore()
 
 	str1 := NewStruct("S3", StructData{
-		"x": Number(1),
+		"x": Float(1),
 	})
 	str2 := NewStruct("S3", StructData{
-		"x": Number(2),
+		"x": Float(2),
 	})
 	str3 := NewStruct("S3", StructData{
-		"x": Number(3),
+		"x": Float(3),
 	})
 	l := NewList(vrw, str1, str2, str3)
 	assertWriteHRSEqual(t, `[
@@ -202,16 +202,20 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Bool", BoolType)
 	assertWriteHRSEqual(t, "Blob", BlobType)
 	assertWriteHRSEqual(t, "String", StringType)
-	assertWriteHRSEqual(t, "Number", NumberType)
+	assertWriteHRSEqual(t, "Float", FloaTType)
+	assertWriteHRSEqual(t, "UUID", UUIDType)
+	assertWriteHRSEqual(t, "Int", IntType)
+	assertWriteHRSEqual(t, "Uint", UintType)
 
-	assertWriteHRSEqual(t, "List<Number>", MakeListType(NumberType))
-	assertWriteHRSEqual(t, "Set<Number>", MakeSetType(NumberType))
-	assertWriteHRSEqual(t, "Ref<Number>", MakeRefType(NumberType))
-	assertWriteHRSEqual(t, "Map<Number, String>", MakeMapType(NumberType, StringType))
-	assertWriteHRSEqual(t, "Number | String", MakeUnionType(NumberType, StringType))
+	assertWriteHRSEqual(t, "List<Float>", MakeListType(FloaTType))
+	assertWriteHRSEqual(t, "Set<Float>", MakeSetType(FloaTType))
+	assertWriteHRSEqual(t, "Ref<Float>", MakeRefType(FloaTType))
+	assertWriteHRSEqual(t, "Map<Float, String>", MakeMapType(FloaTType, StringType))
+	assertWriteHRSEqual(t, "Float | String", MakeUnionType(FloaTType, StringType))
 	assertWriteHRSEqual(t, "Bool", MakeUnionType(BoolType))
 	assertWriteHRSEqual(t, "", MakeUnionType())
-	assertWriteHRSEqual(t, "List<Number | String>", MakeListType(MakeUnionType(NumberType, StringType)))
+	assertWriteHRSEqual(t, "List<Float | String>", MakeListType(MakeUnionType(FloaTType, StringType)))
+	assertWriteHRSEqual(t, "List<Int | Uint>", MakeListType(MakeUnionType(IntType, UintType)))
 	assertWriteHRSEqual(t, "List<>", MakeListType(MakeUnionType()))
 }
 
@@ -283,7 +287,7 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 	assert := assert.New(t)
 	err := errors.New("test")
 	w := &errorWriter{err}
-	assert.Equal(err, WriteEncodedValue(w, Number(42)))
+	assert.Equal(err, WriteEncodedValue(w, Float(42)))
 }
 
 func TestEmptyCollections(t *testing.T) {
@@ -293,8 +297,8 @@ func TestEmptyCollections(t *testing.T) {
 	assertWriteHRSEqual(t, "Struct Nothing {}", a)
 	b := NewStruct("Rien", StructData{})
 	assertWriteHRSEqual(t, "struct Rien {}", b)
-	c := MakeMapType(BlobType, NumberType)
-	assertWriteHRSEqual(t, "Map<Blob, Number>", c)
+	c := MakeMapType(BlobType, FloaTType)
+	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
 	d := NewMap(vrw)
 	assertWriteHRSEqual(t, "map {}", d)
 	e := MakeSetType(StringType)

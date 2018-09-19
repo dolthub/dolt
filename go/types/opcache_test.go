@@ -37,15 +37,15 @@ func (suite *OpCacheSuite) TestMapSet() {
 	defer opCacheStore.destroy()
 
 	entries := mapEntrySlice{
-		{NewList(vs, Number(8), Number(0)), String("ahoy")},
+		{NewList(vs, Float(8), Float(0)), String("ahoy")},
 		{String("A key"), NewBlob(vs, bytes.NewBufferString("A value"))},
-		{Number(1), Bool(true)},
-		{Bool(false), Number(1)},
+		{Float(1), Bool(true)},
+		{Bool(false), Float(1)},
 		{NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(vs)},
-		{Bool(true), Number(42)},
-		{NewStruct("thing1", StructData{"a": Number(7)}), Number(42)},
+		{Bool(true), Float(42)},
+		{NewStruct("thing1", StructData{"a": Float(7)}), Float(42)},
 		{String("struct"), NewStruct("thing2", nil)},
-		{Number(42), String("other")},
+		{Float(42), String("other")},
 	}
 	for _, entry := range entries {
 		oc.GraphMapSet(nil, entry.key, entry.value)
@@ -71,16 +71,16 @@ func (suite *OpCacheSuite) TestSetInsert() {
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(vs, Number(8), Number(0)),
+		NewList(vs, Float(8), Float(0)),
 		String("ahoy"),
 		NewBlob(vs, bytes.NewBufferString("A value")),
-		Number(1),
+		Float(1),
 		Bool(true),
 		Bool(false),
 		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
 		NewMap(vs),
-		Number(42),
-		NewStruct("thing1", StructData{"a": Number(7)}),
+		Float(42),
+		NewStruct("thing1", StructData{"a": Float(7)}),
 		String("struct"),
 		NewStruct("thing2", nil),
 		String("other"),
@@ -109,16 +109,16 @@ func (suite *OpCacheSuite) TestListAppend() {
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(vs, Number(8), Number(0)),
+		NewList(vs, Float(8), Float(0)),
 		String("ahoy"),
 		NewBlob(vs, bytes.NewBufferString("A value")),
-		Number(1),
+		Float(1),
 		Bool(true),
 		Bool(false),
 		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
 		NewMap(vs),
-		Number(42),
-		NewStruct("thing1", StructData{"a": Number(7)}),
+		Float(42),
+		NewStruct("thing1", StructData{"a": Float(7)}),
 		String("struct"),
 		NewStruct("thing2", nil),
 		String("other"),

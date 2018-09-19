@@ -29,7 +29,7 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase().CommitValue(sp.GetDataset(), types.Number(i))
+	sp.GetDatabase().CommitValue(sp.GetDataset(), types.Float(i))
 	s.NoError(err)
 
 	commit := sp.GetDataset().Head()
@@ -58,7 +58,7 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	ds := sp.GetDataset()
 	for i := 0; i < 3; i++ {
 		data := types.NewStruct("", types.StructData{
-			"bar": types.Number(i),
+			"bar": types.Float(i),
 		})
 		ds, err = db.CommitValue(ds, data)
 		s.NoError(err)

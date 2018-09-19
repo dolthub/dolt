@@ -120,7 +120,7 @@ func (tc *TypeConverter) scalarToValue(nomsType *types.Type, scalarType graphql.
 
 func isScalar(nomsType *types.Type) bool {
 	switch nomsType {
-	case types.BoolType, types.NumberType, types.StringType:
+	case types.BoolType, types.FloaTType, types.StringType:
 		return true
 	default:
 		return false
@@ -146,7 +146,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLType(nomsType *types.Type, boxedIfScal
 	// FieldsThunk which allows the inner type to refer to an outer type by
 	// lazily initializing the fields.
 	switch nomsType.TargetKind() {
-	case types.NumberKind:
+	case types.FloatKind:
 		gqlType = graphql.Float
 		if boxedIfScalar {
 			gqlType = tc.scalarToValue(nomsType, gqlType)
@@ -217,7 +217,7 @@ func (tc *TypeConverter) nomsTypeToGraphQLInputType(nomsType *types.Type) (graph
 
 	var err error
 	switch nomsType.TargetKind() {
-	case types.NumberKind:
+	case types.FloatKind:
 		gqlType = graphql.Float
 
 	case types.StringKind:
@@ -292,7 +292,7 @@ func (tc *TypeConverter) unionToGQLUnion(nomsType *types.Type) *graphql.Union {
 			var nomsType *types.Type
 			switch p.Value.(type) {
 			case float64:
-				nomsType = types.NumberType
+				nomsType = types.FloaTType
 			case string:
 				nomsType = types.StringType
 			case bool:
@@ -705,8 +705,8 @@ func getTypeName(nomsType *types.Type, suffix string) string {
 	case types.BoolKind:
 		return "Boolean"
 
-	case types.NumberKind:
-		return "Number"
+	case types.FloatKind:
+		return "Float"
 
 	case types.StringKind:
 		return "String"
@@ -777,7 +777,7 @@ func argsWithSize() graphql.Fields {
 			Type: graphql.Float,
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				c := p.Source.(types.Collection)
-				return MaybeGetScalar(types.Number(c.Len())), nil
+				return MaybeGetScalar(types.Float(c.Len())), nil
 			},
 		},
 	}
@@ -950,8 +950,8 @@ func MaybeGetScalar(v types.Value) interface{} {
 	switch v.(type) {
 	case types.Bool:
 		return bool(v.(types.Bool))
-	case types.Number:
-		return float64(v.(types.Number))
+	case types.Float:
+		return float64(v.(types.Float))
 	case types.String:
 		return string(v.(types.String))
 	case *types.Type, types.Blob:
@@ -968,11 +968,11 @@ func InputToNomsValue(vrw types.ValueReadWriter, arg interface{}, nomsType *type
 	switch nomsType.TargetKind() {
 	case types.BoolKind:
 		return types.Bool(arg.(bool))
-	case types.NumberKind:
+	case types.FloatKind:
 		if i, ok := arg.(int); ok {
-			return types.Number(i)
+			return types.Float(i)
 		}
-		return types.Number(arg.(float64))
+		return types.Float(arg.(float64))
 	case types.StringKind:
 		return types.String(arg.(string))
 	case types.ListKind, types.SetKind:

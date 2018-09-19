@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCodecWriteNumber(t *testing.T) {
+func TestCodecWriteFloat(t *testing.T) {
 	test := func(f float64, exp []byte) {
 		w := newBinaryNomsWriter()
-		w.writeNumber(Number(f))
+		w.writeFloat(Float(f))
 		assert.Equal(t, exp, w.data())
 	}
 
@@ -33,10 +33,10 @@ func TestCodecWriteNumber(t *testing.T) {
 	test(-15, []byte{15*2 - 1, 0})  // -15 * 2*0
 }
 
-func TestCodecReadNumber(t *testing.T) {
+func TestCodecReadFloat(t *testing.T) {
 	test := func(data []byte, exp float64) {
 		r := binaryNomsReader{buff: data}
-		n := r.readNumber()
+		n := r.readFloat()
 		assert.Equal(t, exp, float64(n))
 		assert.Equal(t, len(data), int(r.offset))
 	}

@@ -93,10 +93,10 @@ func TestMemDatasetPathSpec(t *testing.T) {
 
 	db := spec.GetDatabase()
 	ds := db.GetDataset("test")
-	_, err = db.CommitValue(ds, types.NewList(db, types.Number(42)))
+	_, err = db.CommitValue(ds, types.NewList(db, types.Float(42)))
 	assert.NoError(err)
 
-	assert.Equal(types.Number(42), spec.GetValue())
+	assert.Equal(types.Float(42), spec.GetValue())
 }
 
 func TestNBSDatabaseSpec(t *testing.T) {
@@ -402,7 +402,7 @@ func TestPinPathSpec(t *testing.T) {
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase()
-	db.CommitValue(db.GetDataset("foo"), types.Number(42))
+	db.CommitValue(db.GetDataset("foo"), types.Float(42))
 
 	pinned, ok := unpinned.Pin()
 	assert.True(ok)
@@ -412,12 +412,12 @@ func TestPinPathSpec(t *testing.T) {
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash().String()), pinned.String())
-	assert.Equal(types.Number(42), pinned.GetValue())
-	assert.Equal(types.Number(42), unpinned.GetValue())
+	assert.Equal(types.Float(42), pinned.GetValue())
+	assert.Equal(types.Float(42), unpinned.GetValue())
 
-	db.CommitValue(db.GetDataset("foo"), types.Number(43))
-	assert.Equal(types.Number(42), pinned.GetValue())
-	assert.Equal(types.Number(43), unpinned.GetValue())
+	db.CommitValue(db.GetDataset("foo"), types.Float(43))
+	assert.Equal(types.Float(42), pinned.GetValue())
+	assert.Equal(types.Float(43), unpinned.GetValue())
 }
 
 func TestPinDatasetSpec(t *testing.T) {
@@ -428,7 +428,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase()
-	db.CommitValue(db.GetDataset("foo"), types.Number(42))
+	db.CommitValue(db.GetDataset("foo"), types.Float(42))
 
 	pinned, ok := unpinned.Pin()
 	assert.True(ok)
@@ -442,12 +442,12 @@ func TestPinDatasetSpec(t *testing.T) {
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash().String()), pinned.String())
-	assert.Equal(types.Number(42), commitValue(pinned.GetValue()))
-	assert.Equal(types.Number(42), unpinned.GetDataset().HeadValue())
+	assert.Equal(types.Float(42), commitValue(pinned.GetValue()))
+	assert.Equal(types.Float(42), unpinned.GetDataset().HeadValue())
 
-	db.CommitValue(db.GetDataset("foo"), types.Number(43))
-	assert.Equal(types.Number(42), commitValue(pinned.GetValue()))
-	assert.Equal(types.Number(43), unpinned.GetDataset().HeadValue())
+	db.CommitValue(db.GetDataset("foo"), types.Float(43))
+	assert.Equal(types.Float(42), commitValue(pinned.GetValue()))
+	assert.Equal(types.Float(43), unpinned.GetDataset().HeadValue())
 }
 
 func TestAlreadyPinnedPathSpec(t *testing.T) {
