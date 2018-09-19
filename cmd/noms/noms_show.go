@@ -32,6 +32,7 @@ var nomsShow = &util.Command{
 var (
 	showRaw   = false
 	showStats = false
+	showPages = false
 	tzName    string
 )
 
@@ -39,6 +40,7 @@ func setupShowFlags() *flag.FlagSet {
 	showFlagSet := flag.NewFlagSet("show", flag.ExitOnError)
 	outputpager.RegisterOutputpagerFlags(showFlagSet)
 	verbose.RegisterVerboseFlags(showFlagSet)
+	showFlagSet.BoolVar(&showPages, "page", false, "If true output is shown in an output pager")
 	showFlagSet.BoolVar(&showRaw, "raw", false, "If true, dumps the raw binary version of the data")
 	showFlagSet.BoolVar(&showStats, "stats", false, "If true, reports statistics related to the value")
 	showFlagSet.StringVar(&tzName, "tz", "local", "display formatted date comments in specified timezone, must be: local or utc")
@@ -77,10 +79,15 @@ func runShow(args []string) int {
 	tz, _ := locationFromTimezoneArg(tzName, nil)
 	datetime.RegisterHRSCommenter(tz)
 
-	pgr := outputpager.Start()
-	defer pgr.Stop()
+	if showPages {
+		pgr := outputpager.Start()
+		defer pgr.Stop()
 
-	types.WriteEncodedValue(pgr.Writer, value)
-	fmt.Fprintln(pgr.Writer)
+		types.WriteEncodedValue(pgr.Writer, value)
+		fmt.Fprintln(pgr.Writer)
+	} else {
+		types.WriteEncodedValue(os.Stdout, value)
+	}
+
 	return 0
 }
