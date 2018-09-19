@@ -55,11 +55,40 @@ type manifestUpdater interface {
 	Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents
 }
 
+// ManifestInfo is an interface for retrieving data from a manifest outside of this package
+type ManifestInfo interface {
+	GetVersion() string
+	GetLock() string
+	GetRoot() hash.Hash
+	NumTableSpecs() int
+	GetTableSpecInfo(i int) TableSpecInfo
+}
+
 type manifestContents struct {
 	vers  string
 	lock  addr
 	root  hash.Hash
 	specs []tableSpec
+}
+
+func (mc manifestContents) GetVersion() string {
+	return mc.vers
+}
+
+func (mc manifestContents) GetLock() string {
+	return mc.lock.String()
+}
+
+func (mc manifestContents) GetRoot() hash.Hash {
+	return mc.root
+}
+
+func (mc manifestContents) NumTableSpecs() int {
+	return len(mc.specs)
+}
+
+func (mc manifestContents) GetTableSpecInfo(i int) TableSpecInfo {
+	return mc.specs[i]
 }
 
 func (mc manifestContents) size() (size uint64) {
@@ -193,9 +222,23 @@ func (mm manifestManager) Name() string {
 	return mm.m.Name()
 }
 
+// TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package
+type TableSpecInfo interface {
+	GetName() string
+	GetChunkCount() uint32
+}
+
 type tableSpec struct {
 	name       addr
 	chunkCount uint32
+}
+
+func (ts tableSpec) GetName() string {
+	return ts.name.String()
+}
+
+func (ts tableSpec) GetChunkCount() uint32 {
+	return ts.chunkCount
 }
 
 func parseSpecs(tableInfo []string) []tableSpec {

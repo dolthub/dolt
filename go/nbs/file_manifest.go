@@ -79,6 +79,11 @@ func openIfExists(path string) *os.File {
 	return f
 }
 
+// ParseManifest parses s a manifest file from the supplied reader
+func ParseManifest(r io.Reader) ManifestInfo {
+	return parseManifest(r)
+}
+
 func parseManifest(r io.Reader) manifestContents {
 	manifest, err := ioutil.ReadAll(r)
 	d.PanicIfError(err)

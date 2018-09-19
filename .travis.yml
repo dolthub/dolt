@@ -1,0 +1,4 @@
+sudo: required
+services:
+- docker
+script: docker build .

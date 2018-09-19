@@ -64,6 +64,12 @@ func Deserialize(reader io.Reader, chunkChan chan<- *Chunk) (err error) {
 	return
 }
 
+// DeserializeData deserializes a chunk from a byte array
+func DeserializeData(data []byte) (Chunk, error) {
+	reader := bytes.NewReader(data)
+	return deserializeChunk(reader)
+}
+
 func deserializeChunk(reader io.Reader) (Chunk, error) {
 	h := hash.Hash{}
 	n, err := io.ReadFull(reader, h[:])
