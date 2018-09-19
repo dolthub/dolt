@@ -35,6 +35,8 @@ var commands = []*util.Command{
 	nomsShow,
 	nomsSync,
 	nomsVersion,
+	nomsManifest,
+	nomsCat,
 }
 
 var kingpinCommands = []util.KingpinCommand{
@@ -58,6 +60,7 @@ var actions = []string{
 	"jiggerypokery of",
 	"singing to",
 	"nomming on",
+	"fighting with",
 }
 
 func usageString() string {
@@ -223,4 +226,14 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 
 	// version
 	noms.Command("version", "Print the noms version")
+
+	//manifest
+	manifest := noms.Command("manifest", `Prints a database's manifest in a more readable format`)
+	addDatabaseArg(manifest)
+
+	//cat
+	cat := noms.Command("cat", `Prints the contents of an nbs file`)
+	cat.Arg("nbs-file", "nbs file").Required().String()
+	cat.Flag("raw", "If true, includes the raw binary version of each chunk in the nbs file").Bool()
+	cat.Flag("decompressed", "If true, includes the decompressed binary version of each chunk in the nbs file").Bool()
 }
