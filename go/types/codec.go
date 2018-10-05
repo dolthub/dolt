@@ -5,7 +5,10 @@
 package types
 
 import (
+	"bufio"
 	"encoding/binary"
+	"errors"
+	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
@@ -29,6 +32,134 @@ func EncodeValue(v Value) chunks.Chunk {
 	}
 
 	panic("unreachable")
+}
+
+func WriteValue(v Value, w io.Writer) (int, error) {
+	var buf [128]byte
+	bnw := binaryNomsWriter{buf[:], 0}
+
+	switch v.Kind() {
+	case BoolKind:
+		bnw.writeBool(bool(v.(Bool)))
+	case StringKind:
+		s := string(v.(String))
+		if len(s) > len(bnw.buff) {
+			bigBuf := make([]byte, len(s)+32)
+			bnw = binaryNomsWriter{bigBuf, 0}
+		}
+		bnw.writeString(s)
+	case FloatKind:
+		bnw.writeFloat(v.(Float))
+	case IntKind:
+		bnw.writeInt(v.(Int))
+	case UintKind:
+		bnw.writeUint(v.(Uint))
+	case UUIDKind:
+		id := v.(UUID)
+		bnw.writeBytes(id[:])
+	default:
+		return 0, errors.New("Unsupported type")
+	}
+
+	bytes := bnw.data()
+
+	totalWritten := 0
+	for totalWritten < len(bytes) {
+		n, err := w.Write(bytes)
+
+		if err != nil {
+			return 0, err
+		}
+
+		totalWritten += n
+	}
+
+	return totalWritten, nil
+}
+
+func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
+	switch k {
+	case BoolKind:
+		var buf [1]byte
+		n, err := br.Read(buf[:])
+		if n != 1 {
+			if err == nil {
+				err = errors.New("Unable to read desired bytes")
+			}
+
+			return nil, err
+		}
+		bnr := binaryNomsReader{buf[:], 0}
+		return Bool(bnr.readBool()), nil
+	case StringKind:
+		size, err := binary.ReadUvarint(br)
+
+		if err != nil {
+			return nil, err
+		}
+
+		data := make([]byte, size)
+
+		tRead := uint64(0)
+		for tRead < size {
+			read, err := br.Read(data[tRead:])
+
+			if err != nil {
+				return nil, err
+			}
+
+			tRead += uint64(read)
+		}
+		return String(data), nil
+	case FloatKind:
+		// b.assertCanRead(binary.MaxVarintLen64 * 2)
+		i, err := binary.ReadVarint(br)
+
+		if err != nil {
+			return nil, err
+		}
+
+		exp, err := binary.ReadVarint(br)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return Float(fracExpToFloat(i, int(exp))), nil
+
+	case IntKind:
+		val, err := binary.ReadVarint(br)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return Int(val), nil
+	case UintKind:
+		val, err := binary.ReadUvarint(br)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return Uint(val), nil
+	case UUIDKind:
+		var buf [uuidNumBytes]byte
+		n, err := br.Read(buf[:])
+
+		if n != uuidNumBytes {
+			if err == nil {
+				err = errors.New("Unable to read desired bytes")
+			}
+
+			return nil, err
+		}
+
+		bnr := binaryNomsReader{buf[:], 0}
+		return UUID(bnr.readUUID()), nil
+	default:
+		return nil, errors.New("Unsupported type")
+	}
 }
 
 func DecodeFromBytes(data []byte, vrw ValueReadWriter) Value {
