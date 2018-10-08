@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -29,8 +31,9 @@ import (
 )
 
 const (
-	Separator        = "::"
-	DefaultAWSRegion = "us-west-2"
+	Separator              = "::"
+	DefaultAWSRegion       = "us-west-2"
+	DefaultAWSCredsProfile = "default"
 )
 
 var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
@@ -53,8 +56,11 @@ const (
 	// Role Uses the AWS IAM role of the instance for auth
 	RoleCS
 
-	// Env uses the credentials.New
+	// Env uses the credentials stored in the environment variables AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY
 	EnvCS
+
+	// Uses credentials stored in a file
+	FileCS
 )
 
 func (ct AWSCredentialSource) String() string {
@@ -65,6 +71,8 @@ func (ct AWSCredentialSource) String() string {
 		return "env"
 	case AutoCS:
 		return "auto"
+	case FileCS:
+		return "file"
 	default:
 		return "invalid"
 	}
@@ -79,6 +87,8 @@ func AWSCredentialSourceFromStr(str string) AWSCredentialSource {
 		return RoleCS
 	case "env":
 		return EnvCS
+	case "file":
+		return FileCS
 	default:
 		return InvalidCS
 	}
@@ -95,6 +105,9 @@ type SpecOptions struct {
 
 	// The type of credentials that should be used when creating the aws session
 	AWSCredSource AWSCredentialSource
+
+	// Credential file to use when using auto or file credentials
+	AWSCredFile string
 }
 
 func (so *SpecOptions) AwsRegionOrDefault() string {
@@ -103,6 +116,19 @@ func (so *SpecOptions) AwsRegionOrDefault() string {
 	}
 
 	return so.AWSRegion
+}
+
+func (so *SpecOptions) AwsCredFileOrDefault() string {
+	if so.AWSCredFile == "" {
+		usr, err := user.Current()
+		if err != nil {
+			return ""
+		}
+
+		return filepath.Join(usr.HomeDir, ".aws", "credentials")
+	}
+
+	return so.AWSCredFile
 }
 
 // Spec locates a Noms database, dataset, or value globally. Spec caches
@@ -264,6 +290,8 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 }
 
 func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
+	fmt.Println(awsURL, options)
+
 	u, _ := url.Parse(awsURL)
 	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
@@ -274,10 +302,20 @@ func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	case RoleCS:
 	case EnvCS:
 		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
+	case FileCS:
+		filePath := options.AwsCredFileOrDefault()
+		creds := credentials.NewSharedCredentials(filePath, DefaultAWSCredsProfile)
+		awsConfig = awsConfig.WithCredentials(creds)
 	case AutoCS:
 		envCreds := credentials.NewEnvCredentials()
 		if _, err := envCreds.Get(); err == nil {
 			awsConfig = awsConfig.WithCredentials(envCreds)
+		}
+
+		filePath := options.AwsCredFileOrDefault()
+		if _, err := os.Stat(filePath); err == nil {
+			creds := credentials.NewSharedCredentials(filePath, DefaultAWSCredsProfile)
+			awsConfig = awsConfig.WithCredentials(creds)
 		}
 	default:
 		panic("unsupported credential type")

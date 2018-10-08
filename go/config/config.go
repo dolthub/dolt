@@ -33,6 +33,7 @@ type DbConfig struct {
 type AWSConfig struct {
 	Region     string
 	CredSource string `toml:"cred_source"`
+	CredFile   string `toml:"cred_file"`
 }
 
 const (
@@ -41,6 +42,7 @@ const (
 
 	awsRegionParam     = "aws_region"
 	awsCredSourceParam = "aws_cred_source"
+	awsCredFileParam   = "aws_cred_file"
 	authParam          = "authorization"
 )
 
@@ -167,6 +169,10 @@ func (c *Config) writeableString() string {
 		buffer.WriteString(fmt.Sprintf("\tcred_source = \"%s\"\n", c.AWS.CredSource))
 	}
 
+	if c.AWS.CredFile != "" {
+		buffer.WriteString(fmt.Sprintf("\tcred_file = \"%s\"\n", c.AWS.CredFile))
+	}
+
 	return buffer.String()
 }
 
@@ -217,13 +223,25 @@ func (c *Config) getAWSCredentialSource(dbParams map[string]string) spec.AWSCred
 	return ct
 }
 
+func (c *Config) getAWSCredFile(dbParams map[string]string) string {
+	if dbParams != nil {
+		if val, ok := dbParams[awsCredFileParam]; ok {
+			return val
+		}
+	}
+
+	return ""
+}
+
 // GetSpecOpts Uses config data from the global config and db configuration to
 // generate the spec.SpecOptions which should be used in calls to spec.For*Opts()
 func (c *Config) GetSpecOpts(dbc *DbConfig) spec.SpecOptions {
 	dbParams := dbc.Options
+
 	return spec.SpecOptions{
 		Authorization: c.getAuthorization(dbParams),
 		AWSRegion:     c.getAWSRegion(dbParams),
 		AWSCredSource: c.getAWSCredentialSource(dbParams),
+		AWSCredFile:   c.getAWSCredFile(dbParams),
 	}
 }
