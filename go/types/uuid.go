@@ -25,8 +25,8 @@ func (v UUID) Less(other Value) bool {
 			b1 := v[i]
 			b2 := v2[i]
 
-			if b1 < b2 {
-				return true
+			if b1 != b2 {
+				return b1 < b2
 			}
 		}
 
@@ -66,4 +66,8 @@ func (v UUID) writeTo(w nomsWriter) {
 
 func (v UUID) valueBytes() []byte {
 	return v[:]
+}
+
+func (v UUID) String() string {
+	return uuid.UUID(v).String()
 }
