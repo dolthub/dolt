@@ -77,6 +77,24 @@ func WriteValue(v Value, w io.Writer) (int, error) {
 	return totalWritten, nil
 }
 
+func readNBytes(r io.Reader, n int) ([]byte, error) {
+	bytes := make([]byte, n)
+
+	var err error
+	for totalRead := 0; totalRead < n; {
+		if err != nil {
+			return nil, err
+		}
+
+		read := 0
+		read, err = r.Read(bytes[totalRead:])
+
+		totalRead += read
+	}
+
+	return bytes, nil
+}
+
 func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
 	switch k {
 	case BoolKind:
@@ -98,18 +116,12 @@ func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
 			return nil, err
 		}
 
-		data := make([]byte, size)
+		data, err := readNBytes(br, int(size))
 
-		tRead := uint64(0)
-		for tRead < size {
-			read, err := br.Read(data[tRead:])
-
-			if err != nil {
-				return nil, err
-			}
-
-			tRead += uint64(read)
+		if err != nil {
+			return nil, err
 		}
+
 		return String(data), nil
 	case FloatKind:
 		// b.assertCanRead(binary.MaxVarintLen64 * 2)
@@ -144,14 +156,9 @@ func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
 
 		return Uint(val), nil
 	case UUIDKind:
-		var buf [uuidNumBytes]byte
-		n, err := br.Read(buf[:])
+		buf, err := readNBytes(br, uuidNumBytes)
 
-		if n != uuidNumBytes {
-			if err == nil {
-				err = errors.New("Unable to read desired bytes")
-			}
-
+		if err != nil {
 			return nil, err
 		}
 
