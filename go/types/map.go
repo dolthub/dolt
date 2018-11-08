@@ -11,6 +11,8 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+var EmptyMap Map
+
 type Map struct {
 	orderedSequence
 }
