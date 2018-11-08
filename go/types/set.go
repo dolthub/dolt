@@ -11,6 +11,8 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+var EmptySet Set
+
 type Set struct {
 	orderedSequence
 }

@@ -10,6 +10,8 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
+var EmptyList List
+
 // List represents a list or an array of Noms values. A list can contain zero or more values of zero
 // or more types. The type of the list will reflect the type of the elements in the list. For
 // example:
