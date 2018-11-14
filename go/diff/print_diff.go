@@ -30,7 +30,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 	// In the case where the diff involves two simple values, just print out the
 	// diff and return. This is needed because the code below assumes that the
 	// values being compared have a parent.
-	if !shouldDescend(v1, v2) {
+	if !ShouldDescend(v1, v2) {
 		line(w, DEL, nil, v1)
 		return line(w, ADD, nil, v2)
 	}
@@ -46,7 +46,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 	// From here on, we can assume that every Difference will have at least one
 	// element in the Path
 	go func() {
-		Diff(v1, v2, dChan, stopChan, leftRight)
+		Diff(v1, v2, dChan, stopChan, leftRight, nil)
 		close(dChan)
 	}()
 
