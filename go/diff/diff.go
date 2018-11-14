@@ -33,6 +33,8 @@ func (dif Difference) IsEmpty() bool {
 	return dif.Path == nil && dif.OldValue == nil && dif.NewValue == nil
 }
 
+type ShouldDescFunc func(v1, v2 types.Value) bool
+
 // differ is used internally to hold information necessary for diffing two graphs.
 type differ struct {
 	// Channel used to send Difference objects back to caller
@@ -41,6 +43,8 @@ type differ struct {
 	stopChan chan struct{}
 	// Use LeftRight diff as opposed to TopDown
 	leftRight bool
+
+	shouldDescend ShouldDescFunc
 }
 
 // Diff traverses two graphs simultaneously looking for differences. It returns
@@ -74,10 +78,14 @@ type differ struct {
 //    for dif := range dChan {
 //        <some code>
 //    }
-func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, leftRight bool) {
-	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight}
+func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, leftRight bool, descFunc ShouldDescFunc) {
+	if descFunc == nil {
+		descFunc = ShouldDescend
+	}
+
+	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight, shouldDescend:descFunc}
 	if !v1.Equals(v2) {
-		if !shouldDescend(v1, v2) {
+		if !d.shouldDescend(v1, v2) {
 			d.sendDiff(Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {
 			d.diff(nil, v1, v2)
@@ -118,7 +126,7 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 			for i := uint64(0); i < splice.SpRemoved; i++ {
 				lastEl := v1.Get(splice.SpAt + i)
 				newEl := v2.Get(splice.SpFrom + i)
-				if shouldDescend(lastEl, newEl) {
+				if d.shouldDescend(lastEl, newEl) {
 					idx := types.Float(splice.SpAt + i)
 					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
@@ -236,7 +244,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeModified:
 			c1, c2 := v1(change.Key), v2(change.Key)
-			if shouldDescend(c1, c2) {
+			if d.shouldDescend(c1, c2) {
 				stop = d.diff(p1, c1, c2)
 			} else {
 				dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: c1, NewValue: c2}
@@ -257,7 +265,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 }
 
 // shouldDescend returns true, if Value is not primitive or is a Ref.
-func shouldDescend(v1, v2 types.Value) bool {
+func ShouldDescend(v1, v2 types.Value) bool {
 	kind := v1.Kind()
 	return !types.IsPrimitiveKind(kind) && kind == v2.Kind() && kind != types.RefKind
 }
