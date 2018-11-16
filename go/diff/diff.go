@@ -27,6 +27,8 @@ type Difference struct {
 	// NewKeyValue is used for when elements are added to diffs with a
 	// non-primitive key. The new key must available when the map gets updated.
 	NewKeyValue types.Value
+	// KeyValue holds the key associated with a changed map value
+	KeyValue types.Value
 }
 
 func (dif Difference) IsEmpty() bool {
@@ -55,7 +57,7 @@ type differ struct {
 // as one of the following conditions:
 //  * a Value is Added or Removed from a node in the graph
 //  * the type of a Value has changed in the graph
-//  * a primitive (i.e. Bool, Float, String, Ref or Blob) Value has changed
+//  * a primitive (i.e. Bool, Float, String, Ref or Blob) Value has changed.
 //
 // A Difference is not returned when a non-primitive value has been modified. For
 // example, a struct field has been changed from one Value of type Employee to
@@ -83,7 +85,7 @@ func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, l
 		descFunc = ShouldDescend
 	}
 
-	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight, shouldDescend:descFunc}
+	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight, shouldDescend: descFunc}
 	if !v1.Equals(v2) {
 		if !d.shouldDescend(v1, v2) {
 			d.sendDiff(Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
@@ -131,7 +133,7 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
 					p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
-					dif := Difference{p1, types.DiffChangeModified, v1.Get(splice.SpAt + i), v2.Get(splice.SpFrom + i), nil}
+					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: v1.Get(splice.SpAt + i), NewValue: v2.Get(splice.SpFrom + i)}
 					stop = !d.sendDiff(dif)
 				}
 			}
@@ -237,17 +239,17 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.Key), NewKeyValue: k}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2(change.Key), NewKeyValue: k, KeyValue: change.Key}
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeRemoved:
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1(change.Key), NewValue: nil}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1(change.Key), NewValue: nil, KeyValue: change.Key}
 			stop = !d.sendDiff(dif)
 		case types.DiffChangeModified:
 			c1, c2 := v1(change.Key), v2(change.Key)
 			if d.shouldDescend(c1, c2) {
 				stop = d.diff(p1, c1, c2)
 			} else {
-				dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: c1, NewValue: c2}
+				dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: c1, NewValue: c2, KeyValue: change.Key}
 				stop = !d.sendDiff(dif)
 			}
 		default:

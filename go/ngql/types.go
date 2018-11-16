@@ -1028,6 +1028,16 @@ func (it *mapIteratorForKeys) Next() (k, v types.Value) {
 	return
 }
 
+func (it *mapIteratorForKeys) Prev() (k, v types.Value) {
+	if it.idx < 0 {
+		return
+	}
+	k = it.keys[it.idx]
+	v = it.m.Get(k)
+	it.idx--
+	return
+}
+
 type setFirstIterator struct {
 	s types.Set
 }
@@ -1046,4 +1056,8 @@ type mapFirstIterator struct {
 
 func (it *mapFirstIterator) Next() (types.Value, types.Value) {
 	return it.m.First()
+}
+
+func (it *mapFirstIterator) Prev() (types.Value, types.Value) {
+	panic("Not Implemented")
 }

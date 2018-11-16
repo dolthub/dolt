@@ -123,7 +123,7 @@ func getPatch(g1, g2 types.Value) Patch {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(g1, g2, dChan, sChan, true)
+		Diff(g1, g2, dChan, sChan, true, nil)
 		close(dChan)
 	}()
 
@@ -237,7 +237,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(n1, n2, dChan, sChan, leftRight)
+		Diff(n1, n2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 
