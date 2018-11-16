@@ -83,7 +83,7 @@ func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {
 	sChan := make(chan struct{})
 
 	go func() {
-		Diff(v1, v2, dChan, sChan, leftRight)
+		Diff(v1, v2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 
