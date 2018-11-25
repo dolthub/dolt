@@ -84,6 +84,16 @@ func TestListEditorBasic(t *testing.T) {
 		edit(le, 1, 2)
 		assertState(t, vrw, le, []int{0, 3, 4, 7}, 2)
 	})
+
+	t.Run("null elements", func(t *testing.T) {
+		le := testEditor(vrw, 0, 1, 2)
+		le.Append(NullValue)
+		le.Append(Float(4))
+		l := le.List()
+
+		assert.True(t, IsNull(l.Get(3)))
+		assert.True(t, l.Get(4).Equals(Float(4)))
+	})
 }
 
 func TestCollapseSplices(t *testing.T) {

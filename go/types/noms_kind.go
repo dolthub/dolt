@@ -33,6 +33,7 @@ const (
 	UUIDKind
 	IntKind
 	UintKind
+	NullKind
 )
 
 var KindToString = map[NomsKind]string{
@@ -52,6 +53,7 @@ var KindToString = map[NomsKind]string{
 	UUIDKind:   "UUID",
 	IntKind:    "Int",
 	UintKind:   "Uint",
+	NullKind:   "Null",
 }
 
 // String returns the name of the kind.
@@ -62,7 +64,7 @@ func (k NomsKind) String() string {
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
 	switch k {
-	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind:
+	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind, NullKind:
 		return true
 	default:
 		return false

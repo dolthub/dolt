@@ -57,6 +57,8 @@ func WriteValue(v Value, w io.Writer) (int, error) {
 	case UUIDKind:
 		id := v.(UUID)
 		bnw.writeBytes(id[:])
+	case NullKind:
+		bnw.writeNull()
 	default:
 		return 0, errors.New("Unsupported type")
 	}
@@ -164,6 +166,8 @@ func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
 
 		bnr := binaryNomsReader{buf[:], 0}
 		return UUID(bnr.readUUID()), nil
+	case NullKind:
+		return NullValue, nil
 	default:
 		return nil, errors.New("Unsupported type")
 	}
@@ -288,6 +292,11 @@ func (b *binaryNomsReader) readUint() Uint {
 	return Uint(v)
 }
 
+func (b *binaryNomsReader) readNull() Null {
+	b.offset++
+	return NullValue
+}
+
 func (b *binaryNomsReader) readUUID() UUID {
 	id := UUID{}
 	copy(id[:uuidNumBytes], b.buff[b.offset:])
@@ -398,6 +407,12 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.ensureCapacity(binary.MaxVarintLen64)
 	count := binary.PutUvarint(b.buff[b.offset:], uint64(v))
 	b.offset += uint32(count)
+}
+
+func (b *binaryNomsWriter) writeNull() {
+	b.ensureCapacity(1)
+	b.buff[b.offset] = byte(NullKind)
+	b.offset += 1
 }
 
 func (b *binaryNomsWriter) writeFloat(v Float) {

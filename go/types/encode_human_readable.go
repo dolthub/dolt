@@ -258,6 +258,9 @@ func (w *hrsWriter) Write(v Value) {
 	case UintKind:
 		w.write(strconv.FormatUint(uint64(v.(Uint)), 10))
 
+	case NullKind:
+		w.write("null")
+
 	default:
 		panic("unreachable")
 	}
@@ -327,7 +330,7 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind:
+	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind, NullKind:
 		w.write(t.TargetKind().String())
 	case ListKind, RefKind, SetKind, MapKind:
 		w.write(t.TargetKind().String())
