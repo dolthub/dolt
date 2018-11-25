@@ -196,7 +196,7 @@ func IsValueSubtypeOfDetails(v Value, t *Type) (bool, bool) {
 
 func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 	switch t.TargetKind() {
-	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind:
+	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind, NullKind:
 		return v.Kind() == t.TargetKind(), hasExtra
 	case ValueKind:
 		return true, hasExtra

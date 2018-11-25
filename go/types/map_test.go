@@ -1224,6 +1224,38 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
+		UintType, NullType,
+		[]Value{
+			Uint(0), NullValue,
+			Uint(1000), NullValue,
+			Uint(1), NullValue,
+			Uint(100), NullValue,
+			Uint(2), NullValue,
+			Uint(10), NullValue,
+		},
+		[]Value{
+			Uint(0),
+			Uint(1),
+			Uint(2),
+			Uint(10),
+			Uint(100),
+			Uint(1000),
+		},
+	)
+
+	testMapOrder(assert, vrw,
+		NullType, StringType,
+		[]Value{
+			NullValue, String("val 1"),
+			NullValue, String("val 2"),
+			NullValue, String("val 3"),
+		},
+		[]Value{
+			NullValue,
+		},
+	)
+
+	testMapOrder(assert, vrw,
 		IntType, StringType,
 		[]Value{
 			Int(0), String("unused"),
@@ -1249,7 +1281,7 @@ func TestMapOrdering(t *testing.T) {
 			Float(0), String("unused"),
 			Float(-30), String("unused"),
 			Float(25), String("unused"),
-			Float(1002), String("unused"),
+			Float(1002), NullValue,
 			Float(-5050), String("unused"),
 			Float(23), String("unused"),
 		},

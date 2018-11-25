@@ -131,6 +131,8 @@ func (r *refWalker) walkValue(cb RefCallback) {
 	case UUIDKind:
 		r.skipKind()
 		r.skipUUID()
+	case NullKind:
+		r.skipKind()
 	case StringKind:
 		r.skipKind()
 		r.skipString()

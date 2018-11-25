@@ -124,10 +124,13 @@ func compareEncodedNomsValues(a, b []byte) int {
 	}
 	aKind, bKind := NomsKind(a[0]), NomsKind(b[0])
 	if aKind != bKind {
-		d.Panic("compareEncodedNomsValues, aKind:", aKind, "!= bKind:", bKind)
+		d.Panic("compareEncodedNomsValues, aKind: %v != bKind: %v", aKind, bKind)
 	}
 
 	switch aKind {
+	case NullKind:
+		// If both are of type null, then they are equal
+		return 0
 	case UUIDKind:
 		return bytes.Compare(a, b)
 	case BoolKind:

@@ -22,6 +22,8 @@ func MakePrimitiveType(k NomsKind) *Type {
 		return IntType
 	case UintKind:
 		return UintType
+	case NullKind:
+		return NullType
 	case StringKind:
 		return StringType
 	case BlobKind:
@@ -88,6 +90,7 @@ var ValueType = makePrimitiveType(ValueKind)
 var UUIDType = makePrimitiveType(UUIDKind)
 var IntType = makePrimitiveType(IntKind)
 var UintType = makePrimitiveType(UintKind)
+var NullType = makePrimitiveType(NullKind)
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
 	return newType(CompoundDesc{kind, elemTypes})

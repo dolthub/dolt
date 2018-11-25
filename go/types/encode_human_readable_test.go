@@ -206,6 +206,7 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "UUID", UUIDType)
 	assertWriteHRSEqual(t, "Int", IntType)
 	assertWriteHRSEqual(t, "Uint", UintType)
+	assertWriteHRSEqual(t, "Null", NullType)
 
 	assertWriteHRSEqual(t, "List<Float>", MakeListType(FloaTType))
 	assertWriteHRSEqual(t, "Set<Float>", MakeSetType(FloaTType))
@@ -216,6 +217,7 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "", MakeUnionType())
 	assertWriteHRSEqual(t, "List<Float | String>", MakeListType(MakeUnionType(FloaTType, StringType)))
 	assertWriteHRSEqual(t, "List<Int | Uint>", MakeListType(MakeUnionType(IntType, UintType)))
+	assertWriteHRSEqual(t, "List<Int | Null>", MakeListType(MakeUnionType(IntType, NullType)))
 	assertWriteHRSEqual(t, "List<>", MakeListType(MakeUnionType()))
 }
 
