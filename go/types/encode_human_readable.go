@@ -171,6 +171,11 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 }
 
 func (w *hrsWriter) Write(v Value) {
+	if v == nil {
+		w.write("nil")
+		return
+	}
+
 	switch v.Kind() {
 	case BoolKind:
 		w.write(strconv.FormatBool(bool(v.(Bool))))
@@ -259,7 +264,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write(strconv.FormatUint(uint64(v.(Uint)), 10))
 
 	case NullKind:
-		w.write("null")
+		w.write("null_value")
 
 	default:
 		panic("unreachable")
