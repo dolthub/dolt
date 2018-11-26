@@ -11,8 +11,9 @@ import (
 var NullValue Null
 var NullHash = getHash(NullValue)
 
+// IsNull returns true if the value is nil, or if the value is of kind NULLKind
 func IsNull(val Value) bool {
-	return val.Kind() == NullKind
+	return val == nil || val.Kind() == NullKind
 }
 
 // Int is a Noms Value wrapper around the primitive int32 type.
