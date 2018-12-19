@@ -1,0 +1,45 @@
+# Filename: schema-kitchen-sink.graphql
+
+schema {
+  query: QueryType
+  mutation: MutationType
+}
+
+type Foo implements Bar {
+  one: Type
+  two(argument: InputType!): Type
+  three(argument: InputType, other: String): Int
+  four(argument: String = "string"): String
+  five(argument: [String] = ["string", "string"]): String
+  six(argument: InputType = {key: "value"}): Type
+}
+
+interface Bar {
+  one: Type
+  four(argument: String = "string"): String
+}
+
+union Feed = Story | Article | Advert
+
+scalar CustomScalar
+
+enum Site {
+  DESKTOP
+  MOBILE
+}
+
+input InputType {
+  key: String!
+  answer: Int = 42
+}
+
+extend type Foo {
+  seven(argument: [String]): Type
+}
+
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+
+directive @include(if: Boolean!)
+  on FIELD
+  | FRAGMENT_SPREAD
+  | INLINE_FRAGMENT
