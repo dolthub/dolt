@@ -1,0 +1,89 @@
+package set
+
+import (
+	"sort"
+	"strings"
+)
+
+var emptyInstance = struct{}{}
+
+// StrSet is a simple set implementation providing standard set operations for strings.
+type StrSet struct {
+	items map[string]interface{}
+}
+
+// NewStrSet creates a set from a list of strings
+func NewStrSet(items []string) *StrSet {
+	s := &StrSet{make(map[string]interface{}, len(items))}
+
+	if items != nil {
+		for _, item := range items {
+			s.items[item] = emptyInstance
+		}
+	}
+
+	return s
+}
+
+// Add adds a new item to the set
+func (s *StrSet) Add(item string) {
+	s.items[item] = emptyInstance
+}
+
+// Contains returns true if the item being checked is already in the set.
+func (s *StrSet) Contains(item string) bool {
+	_, present := s.items[item]
+	return present
+}
+
+// ContainsAll returns true if all the items being checked are already in the set.
+func (s *StrSet) ContainsAll(items []string) bool {
+	for _, item := range items {
+		if _, present := s.items[item]; !present {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Size returns the number of unique elements in the set
+func (s *StrSet) Size() int {
+	return len(s.items)
+}
+
+// AsSlice converts the set to a slice of strings
+func (s *StrSet) AsSlice() []string {
+	size := len(s.items)
+	sl := make([]string, size)
+
+	i := 0
+	for k := range s.items {
+		sl[i] = k
+		i++
+	}
+
+	return sl
+}
+
+// Iterate accepts a callback which will be called once for each element in the set until all items have been
+// exhausted or callback returns false.
+func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
+	for k := range s.items {
+		if !callBack(k) {
+			break
+		}
+	}
+}
+
+// JoinStrings returns the sorted values from the set concatenated with a given sep
+func (s *StrSet) JoinStrings(sep string) string {
+	strSl := s.AsSlice()
+	sort.Strings(strSl)
+	return strings.Join(strSl, sep)
+}
+
+// Unique will return a slice of unique strings given an input slice
+func Unique(strs []string) []string {
+	return NewStrSet(strs).AsSlice()
+}
