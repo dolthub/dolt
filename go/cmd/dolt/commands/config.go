@@ -1,14 +1,14 @@
 package commands
 
 import (
-	"errors"
-	"flag"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/config"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/funcitr"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/set"
 	"os"
 	"strings"
 )
@@ -23,68 +23,63 @@ const (
 	unsetOperationStr = "unset"
 )
 
-func configUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
-	}
+var cfgShortDesc = `Get and set repository or global options`
+var cfgLongDesc = `You can query/set/replace/unset options with this command.
+
+When reading, the values are read from the global and repository local configuration files, and options --global, and --local can be used to tell the command to read from only that location.
+
+When writing, the new value is written to the repository local configuration file by default, and options --global, can be used to tell the command to write to that location (you can say --local but that is the default).`
+var cfgSynopsis = []string{
+	"[--global|--local] --list",
+	"[--global|--local] --add <name> <value>",
+	"[--global|--local] --get <name>",
+	"[--global|--local] --unset <name>...",
 }
 
 // Config is used by the config command to allow users to view / edit their global and repository local configurations.
-func Config(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = configUsage(fs)
+func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(globalParamName, "", "Use global config.")
+	ap.SupportsFlag(localParamName, "", "Use repository local config.")
+	ap.SupportsFlag(setOperationStr, "", "Set the value of one or more config parameters")
+	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
+	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
+	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config paramaters.")
+	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, help)
 
-	cfgTypeFlagMap := cli.NewBoolFlagMap(fs, map[string]string{
-		globalParamName: "Use global config file.",
-		localParamName:  "Use repository config file.",
-	})
+	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)
+	ops := apr.FlagsEqualTo([]string{setOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
 
-	opFlagMap := cli.NewBoolFlagMap(fs, map[string]string{
-		setOperationStr:   "Set the value of one or more config parameters",
-		listOperationStr:  "List the values of all config parameters.",
-		getOperationStr:   "Get the value of one or more config parameters.",
-		unsetOperationStr: "Unset the value of one or more config paramaters.",
-	})
-
-	fs.Parse(args)
-
-	cfgTypes := cfgTypeFlagMap.GetEqualTo(true)
-	ops := opFlagMap.GetEqualTo(true)
-
-	switch cfgTypes.Size() {
-	case 2:
+	if cfgTypes.Size() == 2 {
 		fmt.Fprintln(os.Stderr, color.RedString("Specifying both -local and -global is not valid. Exactly one may be set"))
-	case 0:
-		fmt.Fprintln(os.Stderr, color.RedString("One of the -local or -global flags must be set"))
-	case 1:
+		usage()
+	} else {
 		switch ops.Size() {
 		case 1:
-			lwrArgs := funcitr.MapStrings(fs.Args(), strings.ToLower)
-			return processConfigCommand(cliEnv, cfgTypes.AsSlice()[0] == globalParamName, ops.AsSlice()[0], lwrArgs)
+			lwrArgs := funcitr.MapStrings(apr.Args(), strings.ToLower)
+			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], lwrArgs, usage)
 		default:
 			fmt.Fprintln(os.Stderr, color.RedString("Exactly one of the -set, -get, -unset, -list flags must be set."))
+			usage()
 		}
 	}
 
 	return 1
 }
 
-func processConfigCommand(cliEnv *env.DoltCLIEnv, isGlobal bool, opName string, args []string) int {
+func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName string, args []string, usage cli.UsagePrinter) int {
 	switch opName {
 	case getOperationStr:
-		return getOperation(cliEnv, isGlobal, args, func(k string, v *string) {
-			if v == nil {
-				fmt.Println(k, color.YellowString(" <NOT SET>"))
-			} else {
-				fmt.Println(k, "=", *v)
-			}
+		return getOperation(dEnv, setCfgTypes, args, func(k string, v *string) {
+			fmt.Println(*v)
 		})
 	case setOperationStr:
-		return setOperation(cliEnv, isGlobal, args)
+		return setOperation(dEnv, setCfgTypes, args, usage)
 	case unsetOperationStr:
-		return unsetOperation(cliEnv, isGlobal, args)
+		return unsetOperation(dEnv, setCfgTypes, args, usage)
 	case listOperationStr:
-		return listOperation(cliEnv, isGlobal, func(k string, v string) {
+		return listOperation(dEnv, setCfgTypes, args, usage, func(k string, v string) {
 			fmt.Println(k, "=", v)
 		})
 	}
@@ -92,37 +87,55 @@ func processConfigCommand(cliEnv *env.DoltCLIEnv, isGlobal bool, opName string, 
 	panic("New operation added but not implemented.")
 }
 
-func getOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string, printFn func(string, *string)) int {
-	if cfg, ok := cliEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
-		fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, printFn func(string, *string)) int {
+	if len(args) != 1 {
+		// matches git behavior... kinda dumb
 		return 1
-	} else {
-		for _, param := range args {
-			if val, err := cfg.GetString(param); err == nil {
-				printFn(param, &val)
-			} else if err == config.ErrConfigParamNotFound {
-				printFn(param, nil)
-			} else {
+	}
+
+	cfgTypesSl := setCfgTypes.AsSlice()
+	for _, cfgType := range cfgTypesSl {
+		isGlobal := cfgType == globalParamName
+		if _, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+			fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+			return 1
+		}
+	}
+
+	if setCfgTypes.Size() == 0 {
+		cfgTypesSl = []string{localParamName, globalParamName}
+	}
+
+	for _, cfgType := range cfgTypesSl {
+		isGlobal := cfgType == globalParamName
+		cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal))
+		if ok {
+			if val, err := cfg.GetString(args[0]); err == nil {
+				printFn(args[0], &val)
+				return 0
+			} else if err != config.ErrConfigParamNotFound {
 				fmt.Fprintln(os.Stderr, color.RedString("Unexpected error: %s", err.Error()))
 				return 1
 			}
-
 		}
-		return 0
 	}
+
+	return 1
 }
 
-func setOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string) int {
-	updates, err := splitKeyValPairs(args)
-
-	if err != nil {
-		fmt.Fprintln(os.Stderr, color.RedString("Invalid argument format.  Usage: dolt config [-local|config] -set key1:value1 ... keyN:valueN"))
+func setOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
+	if len(args) != 2 {
+		fmt.Println("error: wrong number of arguments")
+		usage()
 		return 1
 	}
 
-	if cfg, ok := cliEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+	isGlobal := setCfgTypes.Contains(globalParamName)
+	updates := map[string]string{args[0]: args[1]}
+
+	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
 		if !isGlobal {
-			err = cliEnv.Config.CreateLocalConfig(updates)
+			err := dEnv.Config.CreateLocalConfig(updates)
 
 			if err != nil {
 				fmt.Fprintln(os.Stderr, color.RedString("Unable to create repo local config file"))
@@ -133,7 +146,7 @@ func setOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string) int {
 			panic("Should not have been able to get this far without a global config.")
 		}
 	} else {
-		err = cfg.SetStrings(updates)
+		err := cfg.SetStrings(updates)
 
 		if err != nil {
 			fmt.Fprintln(os.Stderr, color.RedString("Failed to update config."))
@@ -145,38 +158,23 @@ func setOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string) int {
 	return 0
 }
 
-func splitKeyValPairs(args []string) (map[string]string, error) {
-	kvps := make(map[string]string)
-
-	if kvps != nil {
-		for _, arg := range args {
-			colon := strings.IndexByte(arg, ':')
-
-			if colon == -1 {
-				return nil, errors.New(arg + "is not in the format key:value")
-			}
-
-			key := arg[:colon]
-			value := arg[colon+1:]
-			kvps[key] = value
-		}
+func unsetOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
+	if len(args) == 0 {
+		fmt.Println("error: wrong number of arguments")
+		usage()
+		return 1
 	}
 
-	return kvps, nil
-}
-
-func unsetOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string) int {
-	if cfg, ok := cliEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+	isGlobal := setCfgTypes.Contains(globalParamName)
+	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
 		fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
 		return 1
 	} else {
-		if len(args) > 0 {
-			err := cfg.Unset(args)
+		err := cfg.Unset(args)
 
-			if err != nil {
-				fmt.Fprintln(os.Stderr, color.RedString("Error unsetting the keys %v. Error: %s", args, err.Error()))
-				return 1
-			}
+		if err != nil && err != config.ErrConfigParamNotFound {
+			fmt.Fprintln(os.Stderr, color.RedString("Error unsetting the keys %v. Error: %s", args, err.Error()))
+			return 1
 		}
 
 		fmt.Println(color.CyanString("Config successfully updated."))
@@ -184,19 +182,39 @@ func unsetOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, args []string) int {
 	}
 }
 
-func listOperation(cliEnv *env.DoltCLIEnv, isGlobal bool, printFn func(string, string)) int {
-	if cfg, ok := cliEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
-		fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter, printFn func(string, string)) int {
+	if len(args) != 0 {
+		fmt.Println("error: wrong number of arguments")
+		usage()
 		return 1
-	} else {
-		cfg.Iter(func(name string, val string) (stop bool) {
-			printFn(name, val)
-
-			return false
-		})
-
-		return 0
 	}
+
+	cfgTypesSl := setCfgTypes.AsSlice()
+	for _, cfgType := range cfgTypesSl {
+		isGlobal := cfgType == globalParamName
+		if _, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+			fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+			return 1
+		}
+	}
+
+	if setCfgTypes.Size() == 0 {
+		cfgTypesSl = []string{localParamName, globalParamName}
+	}
+
+	for _, cfgType := range cfgTypesSl {
+		isGlobal := cfgType == globalParamName
+		cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal))
+		if ok {
+			cfg.Iter(func(name string, val string) (stop bool) {
+				printFn(name, val)
+
+				return false
+			})
+		}
+	}
+
+	return 0
 }
 
 func newCfgElement(isGlobal bool) env.DoltConfigElement {

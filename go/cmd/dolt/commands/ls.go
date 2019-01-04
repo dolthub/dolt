@@ -1,47 +1,65 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"os"
 	"sort"
 )
 
-func lsUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
-	}
+var lsShortDesc = "List tables"
+var lsLongDesc = "Lists the tables within a commit.  By default will list the tables in the current working set" +
+	"but if a commit is specified it will list the tables in that commit."
+var lsSynopsis = []string{
+	"[<commit>]",
 }
 
-func Ls(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = lsUsage(fs)
-	fs.Parse(args)
+func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
+	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, help)
 
-	working, verr := getWorking(cliEnv)
-
-	if verr == nil {
-		verr = printTables(working)
-	}
-
-	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+	if apr.NArg() > 1 {
+		usage()
 		return 1
 	}
 
-	return 0
+	var root *doltdb.RootValue
+	var verr errhand.VerboseError
+	var str string
+	if apr.NArg() == 0 {
+		str = "working set"
+		root, verr = GetWorkingWithVErr(dEnv)
+	} else {
+		str, root, verr = getRootForCommitSpecStr(apr.Arg(0), dEnv)
+	}
+
+	if verr == nil {
+		verr = printTables(root, str, apr.Contains(verboseFlag))
+		return 0
+	}
+
+	fmt.Fprintln(os.Stderr, verr.Verbose())
+	return 1
 }
 
-func printTables(root *doltdb.RootValue) errhand.VerboseError {
+func printTables(root *doltdb.RootValue, str string, verbose bool) errhand.VerboseError {
 	tblNames := root.GetTableNames()
 	sort.Strings(tblNames)
 
-	fmt.Println("Tables in the working set:")
+	fmt.Printf("Tables in %s:\n", str)
 	for _, tbl := range tblNames {
-		fmt.Println("\t", tbl)
+		if verbose {
+			h, _ := root.GetTableHash(tbl)
+			fmt.Printf("\t%-32s %s\n", tbl, h.String())
+		} else {
+			fmt.Println("\t", tbl)
+		}
 	}
 
 	return nil

@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"reflect"
 	"strings"
 	"testing"
@@ -21,7 +21,7 @@ func (tf *trackedCommandFunc) wasCalled() bool {
 	return tf.called
 }
 
-func (tf *trackedCommandFunc) commandFunc(cmdStr string, args []string, cliEnv *env.DoltCLIEnv) int {
+func (tf *trackedCommandFunc) commandFunc(cmdStr string, args []string, dEnv *env.DoltEnv) int {
 	tf.called = true
 	tf.cmdStr = cmdStr
 	tf.args = args

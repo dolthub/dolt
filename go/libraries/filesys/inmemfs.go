@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -132,9 +133,9 @@ func (fs *InMemFS) iter(path string, recursive bool, cb FSIterCB) (bool, error) 
 	obj, ok := fs.objs[path]
 
 	if !ok {
-		return true, errors.New("No file or directory found at that path: " + path)
+		return true, os.ErrNotExist
 	} else if !obj.isDir() {
-		return true, errors.New(path + " is not a file, not a directory.")
+		return true, ErrIsDir
 	}
 
 	dir := obj.(*memDir)
@@ -168,9 +169,9 @@ func (fs *InMemFS) OpenForRead(fp string) (io.ReadCloser, error) {
 	fp = fs.getAbsPath(fp)
 
 	if exists, isDir := fs.Exists(fp); !exists {
-		return nil, errors.New("File does not exist.")
+		return nil, os.ErrNotExist
 	} else if isDir {
-		return nil, errors.New(fp + " is a directory and can't be opened for reading.")
+		return nil, ErrIsDir
 	}
 
 	fileObj := fs.objs[fp].(*memFile)
@@ -217,7 +218,7 @@ func (fs *InMemFS) OpenForWrite(fp string) (io.WriteCloser, error) {
 	fp = fs.getAbsPath(fp)
 
 	if exists, isDir := fs.Exists(fp); exists && isDir {
-		return nil, errors.New("A directory exists at the path " + fp + ".")
+		return nil, ErrIsDir
 	}
 
 	dir := filepath.Dir(fp)
@@ -293,7 +294,7 @@ func (fs *InMemFS) DeleteFile(path string) error {
 
 	if obj, ok := fs.objs[path]; ok {
 		if obj.isDir() {
-			return errors.New(path + " is a directory not a file.")
+			return ErrIsDir
 		}
 
 		delete(fs.objs, path)
@@ -303,7 +304,7 @@ func (fs *InMemFS) DeleteFile(path string) error {
 			delete(parentDir.objs, path)
 		}
 	} else {
-		return errors.New(path + " not found in filesystem.")
+		return os.ErrNotExist
 	}
 
 	return nil
@@ -315,7 +316,7 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 	path = fs.getAbsPath(path)
 
 	if exists, isDir := fs.Exists(path); !exists {
-		return errors.New(path + " not found in filesystem.")
+		return os.ErrNotExist
 	} else if !isDir {
 		return fs.DeleteFile(path)
 	}

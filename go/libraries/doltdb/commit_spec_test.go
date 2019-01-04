@@ -36,7 +36,7 @@ func TestCommitRegex(t *testing.T) {
 
 		hashStr := hashVal.String()
 
-		if !commitHashRegex.MatchString(hashStr) {
+		if !hashRegex.MatchString(hashStr) {
 			t.Error(hashStr, ": random hash failed to match hash regex.")
 		}
 	}

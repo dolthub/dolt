@@ -71,9 +71,9 @@ func (fs *localFS) iter(dir string, cb FSIterCB) error {
 // OpenForRead opens a file for reading
 func (fs *localFS) OpenForRead(fp string) (io.ReadCloser, error) {
 	if exists, isDir := fs.Exists(fp); !exists {
-		return nil, errors.New("File does not exist.")
+		return nil, os.ErrNotExist
 	} else if isDir {
-		return nil, errors.New(fp + " is a directory and can't be opened for reading.")
+		return nil, ErrIsDir
 	}
 
 	return os.Open(fp)
@@ -111,13 +111,13 @@ func (fs *localFS) MkDirs(path string) error {
 func (fs *localFS) DeleteFile(path string) error {
 	if exists, isDir := fs.Exists(path); exists && !isDir {
 		if isDir {
-			return errors.New(path + " is a directory not a file.")
+			return ErrIsDir
 		}
 
 		return os.Remove(path)
 	}
 
-	return errors.New(path + " not found in filesystem.")
+	return os.ErrNotExist
 }
 
 // Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to

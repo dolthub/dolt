@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/filesys"
 	"path/filepath"
 	"testing"
@@ -18,20 +18,20 @@ func testHomeDirFunc() (string, error) {
 	return testHomeDir, nil
 }
 
-func createTestEnv() *env.DoltCLIEnv {
+func createTestEnv() *env.DoltEnv {
 	initialDirs := []string{testHomeDir, filepath.Join(workingDir, env.DoltDir)}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	cliEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
-	return cliEnv
+	return dEnv
 }
 
-func createUninitializedEnv() *env.DoltCLIEnv {
+func createUninitializedEnv() *env.DoltEnv {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	cliEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
-	return cliEnv
+	return dEnv
 }
 
 func TestCommandsRequireInitializedDir(t *testing.T) {
@@ -43,8 +43,8 @@ func TestCommandsRequireInitializedDir(t *testing.T) {
 		{"dolt config", []string{"-local", "-list"}, Config},
 	}
 
-	cliEnv := createUninitializedEnv()
+	dEnv := createUninitializedEnv()
 	for _, test := range tests {
-		test.commFunc(test.cmdStr, test.args, cliEnv)
+		test.commFunc(test.cmdStr, test.args, dEnv)
 	}
 }

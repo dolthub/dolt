@@ -1,6 +1,11 @@
 package filesys
 
-import "io"
+import (
+	"github.com/pkg/errors"
+	"io"
+)
+
+var ErrIsDir = errors.New("operation not valid on a directory")
 
 // ReadableFS is an interface providing read access to objs in a filesystem
 type ReadableFS interface {

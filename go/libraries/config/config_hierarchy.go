@@ -53,7 +53,7 @@ func (ch *ConfigHierarchy) GetString(k string) (string, error) {
 		if cfg, ok := ch.nameToConfig[ns]; ok {
 			return cfg.GetString(paramName)
 		} else {
-			return "", errors.New("Hierarchy does not have a parameter named " + ns)
+			return "", errors.New("Hierarchy does not have a config named " + ns)
 		}
 	}
 

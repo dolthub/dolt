@@ -1,101 +1,64 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/set"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
 	"os"
-	"strings"
 )
 
-func addUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
+var addShortDesc = `Add table contents to the list of staged tables`
+var addLongDesc = `This command updates the list of tables using the current content found in the working root, to prepare the content staged for the next commit. It adds the current content of existing tables as a whole or remove tables that do not exist in the working root anymore.
+
+This command can be performed multiple times before a commit. It only adds the content of the specified table(s) at the time the add command is run; if you want subsequent changes included in the next commit, then you must run git add again to add the new content to the index.
+
+The dolt status command can be used to obtain a summary of which tables have changes that are staged for the next commit.`
+var addSynopsis = []string{
+	`[<table>...]`,
+}
+
+func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed."
+	helpPr, _ := cli.HelpAndUsagePrinters(commandStr, addShortDesc, addLongDesc, addSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, helpPr)
+
+	var err error
+	if apr.NArg() == 0 {
+		fmt.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
+	} else if apr.NArg() == 1 && apr.Arg(0) == "." {
+		err = actions.StageAllTables(dEnv)
+	} else {
+		err = actions.StageTables(dEnv, apr.Args())
 	}
-}
-
-func Add(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = addUsage(fs)
-	fs.Parse(args)
-
-	stagedRoot, workingRoot, verr := getStagedAndWorking(cliEnv)
-
-	if verr == nil {
-		tbls := fs.Args()
-		if fs.NArg() == 0 {
-			fmt.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
-		} else if fs.NArg() == 1 && fs.Arg(0) == "." {
-			tbls = allTables(stagedRoot, workingRoot)
-		}
-
-		verr = validateTables(tbls, stagedRoot, workingRoot)
-
-		if verr == nil {
-			verr = updateStaged(cliEnv, tbls, stagedRoot, workingRoot)
-
-			if verr == nil {
-				return 0
-			}
-		}
-	}
-
-	fmt.Fprintln(os.Stderr, verr.Verbose())
-	return 1
-}
-
-func updateStaged(cliEnv *env.DoltCLIEnv, tbls []string, staged, working *doltdb.RootValue) errhand.VerboseError {
-	updatedRoot := staged.UpdateTablesFromOther(tbls, working)
-
-	return cliEnv.UpdateStagedRoot(updatedRoot)
-}
-
-func getStagedAndWorking(cliEnv *env.DoltCLIEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	stagedRoot, err := cliEnv.StagedRoot()
 
 	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
+		fmt.Fprintln(os.Stderr, toAddVErr(err).Verbose())
+		return 1
 	}
 
-	workingRoot, err := cliEnv.WorkingRoot()
-
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to get working.").AddCause(err).Build()
-	}
-
-	return stagedRoot, workingRoot, nil
+	return 0
 }
 
-func validateTables(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
-	var missing []string
-	for _, tbl := range tbls {
-		found := false
-		for _, root := range roots {
-			if root.HasTable(tbl) {
-				found = true
-				break
-			}
-		}
+func toAddVErr(err error) errhand.VerboseError {
+	switch {
+	case actions.IsRootValUnreachable(err):
+		rt := actions.GetUnreachableRootType(err)
+		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
+		bdr.AddCause(actions.GetUnreachableRootCause(err))
+		return bdr.Build()
 
-		if !found {
-			missing = append(missing, tbl)
-		}
+	case actions.IsTblNotExist(err):
+		tbls := actions.GetTblNotExistTables(err)
+		bdr := errhand.BuildDError("Some of the specified tables were not found")
+		bdr.AddDetails("Unknown tables: %v", tbls)
+
+		return bdr.Build()
+
+	default:
+		return errhand.BuildDError("Unknown error").Build()
 	}
-
-	if len(missing) == 0 {
-		return nil
-	}
-
-	return errhand.BuildDError("Unknown table(s): %s", strings.Join(missing, " ")).Build()
-}
-
-func allTables(stagedRoot, workingRoot *doltdb.RootValue) []string {
-	allTblNames := make([]string, 0, 16)
-	allTblNames = append(allTblNames, stagedRoot.GetTableNames()...)
-	allTblNames = append(allTblNames, workingRoot.GetTableNames()...)
-
-	return set.Unique(allTblNames)
 }

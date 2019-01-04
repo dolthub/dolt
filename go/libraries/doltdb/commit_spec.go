@@ -1,18 +1,18 @@
 package doltdb
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 )
 
-var commitHashRegex, _ = regexp.Compile(`^[0-9a-v]{32}$`)
-var userBranchRegex, _ = regexp.Compile(`^[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`)
+var UserBranchRegexStr = `^[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
+var hashRegex, _ = regexp.Compile(`^[0-9a-v]{32}$`)
+var userBranchRegex, _ = regexp.Compile(UserBranchRegexStr)
 
 // IsValidUserBranch returns true if name isn't a valid commit hash, it is not named "head" and it matches the
 // regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
 func IsValidUserBranchName(name string) bool {
-	return !commitHashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != "head"
+	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != "head"
 }
 
 type commitSpecType string
@@ -48,12 +48,12 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 		name = cwbLwr
 	}
 
-	if commitHashRegex.MatchString(name) {
+	if hashRegex.MatchString(name) {
 		return &CommitSpec{name, commitHashSpec, as}, nil
 	} else if userBranchRegex.MatchString(name) {
 		return &CommitSpec{name, branchCommitSpec, as}, nil
 	} else {
-		return nil, errors.New("Invalid commit or branch name.")
+		return nil, ErrInvalidBranchOrHash
 	}
 }
 

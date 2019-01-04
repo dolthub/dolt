@@ -1,82 +1,62 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/config"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
 	"os"
 )
 
-func commitUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
-	}
+var commitShortDesc = `Record changes to the repository`
+var commitLongDesc = `Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
+
+The content to be added can be specified by using dolt add to incrementally "add" changes to the staged tables before using the commit command (Note: even modified files must be "added");`
+var commitSynopsis = []string{
+	"-m <msg>",
 }
 
-func Commit(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = commitUsage(fs)
+func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	const commitMessageArg = "message"
+	ap := argparser.NewArgParser()
+	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
+	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, help)
 
-	msg := fs.String("m", "", "The commit message")
-
-	fs.Parse(args)
-
-	if *msg == "" {
+	msg, msgOk := apr.GetValue(commitMessageArg)
+	if !msgOk {
 		fmt.Fprintln(os.Stderr, color.RedString("Missing required parameter -m"))
-		fs.Usage()
+		usage()
 		return 1
 	}
 
-	return processCommit(*msg, cliEnv)
+	err := actions.CommitStaged(dEnv, msg)
+	return handleCommitErr(err, usage)
 }
 
-func processCommit(msg string, cliEnv *env.DoltCLIEnv) int {
-	name, email, verr := getNameAndEmail(cliEnv.Config)
-
-	if verr == nil {
-		verr = commitStaged(cliEnv, doltdb.NewCommitMeta(name, email, msg))
-	}
-
-	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
-		return 1
-	}
-
-	fmt.Println(color.CyanString("Commit completed successfully."))
-	return 0
-}
-
-func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, errhand.VerboseError) {
-	name, nmErr := cfg.GetString(env.UserNameKey)
-	email, emErr := cfg.GetString(env.UserEmailKey)
-
-	if nmErr == config.ErrConfigParamNotFound {
+func handleCommitErr(err error, usage cli.UsagePrinter) int {
+	if err == actions.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
 		bdr.AddDetails("dolt config [-global|local] -set %[1]s:\"FIRST LAST\"", env.UserNameKey)
-		return "", "", bdr.Build()
-	} else if emErr == config.ErrConfigParamNotFound {
+
+		return HandleVErrAndExitCode(bdr.Build(), usage)
+	} else if err == actions.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
 		bdr.AddDetails("dolt config [-global|local] -set %[1]s:\"EMAIL_ADDRESS\"", env.UserEmailKey)
-		return "", "", bdr.Build()
+
+		return HandleVErrAndExitCode(bdr.Build(), usage)
+	} else if actions.IsNothingStaged(err) {
+		notStaged := actions.NothingStagedDiffs(err)
+		printDiffsNotStaged(notStaged, false, 0)
+
+		return 1
+	} else if err != nil {
+		verr := errhand.BuildDError("error: Failed to commit changes.").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	return name, email, nil
-}
-
-func commitStaged(cliEnv *env.DoltCLIEnv, meta *doltdb.CommitMeta) errhand.VerboseError {
-	h := hash.Parse(cliEnv.RepoState.Staged)
-	_, err := cliEnv.DoltDB.Commit(h, cliEnv.RepoState.Branch, meta)
-
-	if err != nil {
-		bdr := errhand.BuildDError("Unable to write commit.")
-		bdr.AddCause(err)
-		return bdr.Build()
-	}
-
-	return nil
+	return 0
 }

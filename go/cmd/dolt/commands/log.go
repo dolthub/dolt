@@ -1,15 +1,27 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"os"
 	"strings"
 )
+
+const (
+	numLinesParam = "number"
+)
+
+var logShortDesc = `Show commit logs`
+var logLongDesc = ``
+
+var logSynopsis = []string{
+	"[-n <num_lines>] [<commit>]",
+}
 
 type commitLoggerFunc func(*doltdb.CommitMeta, hash.Hash)
 
@@ -35,33 +47,43 @@ func printDesc(cm *doltdb.CommitMeta) {
 	fmt.Println(formattedDesc)
 }
 
-func Log(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	return logWithLoggerFunc(commandStr, args, cliEnv, logToStdOutFunc)
+func Log(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	return logWithLoggerFunc(commandStr, args, dEnv, logToStdOutFunc)
 }
 
-func logUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
+func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
+	ap := argparser.NewArgParser()
+	ap.SupportsInt(numLinesParam, "n", "num_lines", "Limit the number of commits to output")
+	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, help)
+
+	var cs *doltdb.CommitSpec
+	if apr.NArg() == 0 {
+		cs = dEnv.RepoState.CWBHeadSpec()
+	} else if apr.NArg() == 1 {
+		var err error
+		comSpecStr := apr.Arg(0)
+		cs, err = doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Branch)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid commit %s\n", comSpecStr)
+			return 1
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "Invalid usage")
+		usage()
+		return 1
 	}
-}
 
-func logWithLoggerFunc(commandStr string, args []string, cliEnv *env.DoltCLIEnv, loggerFunc commitLoggerFunc) int {
-	cwb := cliEnv.RepoState.CWBHeadSpec()
-	commit, err := cliEnv.DoltDB.Resolve(cwb)
+	commit, err := dEnv.DoltDB.Resolve(cs)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
 		return 1
 	}
 
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = initUsage(fs)
-
-	n := fs.Int("n", 30, "Number of commits to print. -1 To print all commits")
-
-	fs.Parse(args)
-
-	err = logCommit(cliEnv.DoltDB, commit, n, loggerFunc)
+	n := apr.GetIntOrDefault(numLinesParam, -1)
+	err = logCommit(dEnv.DoltDB, commit, n, loggerFunc)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error printing commit.")
@@ -71,17 +93,17 @@ func logWithLoggerFunc(commandStr string, args []string, cliEnv *env.DoltCLIEnv,
 	return 0
 }
 
-func logCommit(ddb *doltdb.DoltDB, commit *doltdb.Commit, n *int, loggerFunc commitLoggerFunc) error {
+func logCommit(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int, loggerFunc commitLoggerFunc) error {
 	hash := commit.HashOf()
 	cm := commit.GetCommitMeta()
 	loggerFunc(cm, hash)
 
-	if *n != -1 {
-		*n = *n - 1
+	if n != -1 {
+		n = n - 1
 	}
 
 	numParents := commit.NumParents()
-	for i := 0; i < numParents && (*n == -1 || *n > 0); i++ {
+	for i := 0; i < numParents && (n == -1 || n > 0); i++ {
 		parentCommit, err := ddb.ResolveParent(commit, i)
 
 		if err != nil {
