@@ -3,13 +3,13 @@ package cli
 import (
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"os"
 	"strings"
 )
 
 // CommandFunc specifies the signature of the functions that will be called based on the command line being executed.
-type CommandFunc func(string, []string, *env.DoltCLIEnv) int
+type CommandFunc func(string, []string, *env.DoltEnv) int
 
 // Command represents either a command to be run, or a command that is a parent of a subcommand.
 type Command struct {
@@ -39,7 +39,7 @@ func MapCommands(commands []*Command) map[string]*Command {
 func GenSubCommandHandler(commands []*Command) CommandFunc {
 	commandMap := MapCommands(commands)
 
-	return func(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
+	return func(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if len(args) < 1 {
 			printUsage(commandStr, commands)
 			return 1
@@ -48,14 +48,14 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 		subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 		if command, ok := commandMap[subCommandStr]; ok {
 			if command.ReqRepo {
-				if !cliEnv.HasLDDir() {
+				if !dEnv.HasLDDir() {
 					fmt.Fprintln(os.Stderr, color.RedString("The current directory is not a valid dolt repository."))
 					fmt.Fprintln(os.Stderr, "run: dolt init before trying to run this command")
 					return 2
 				}
 			}
 
-			return command.Func(commandStr+" "+subCommandStr, args[1:], cliEnv)
+			return command.Func(commandStr+" "+subCommandStr, args[1:], dEnv)
 		}
 
 		fmt.Fprintln(os.Stderr, color.RedString("Unknown Command "+subCommandStr))

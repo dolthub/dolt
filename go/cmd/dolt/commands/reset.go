@@ -1,42 +1,52 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
 	"os"
 	"strings"
 )
 
-func resetUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
-	}
+var resetShortDesc = "Resets staged tables to their HEAD state"
+var resetLongDesc = `Sets the state of a table in the staging area to be that tables value from HEAD
+
+dolt reset <tables>...
+   This form resets the values for all staged <tables> to their values at HEAD. (It does not affect the working tree or the current branch.)
+
+   This means that dolt <b>reset <tables></b> is the opposite of <b>dolt add <tables></b>.
+
+   After running <b>dolt reset <tables></b> to update the staged tables, you can use <b>dolt checkout</b> to check the contents out of the staged tables to the working tables.`
+
+var resetSynopsis = []string{
+	"<tables>...",
 }
 
-func Reset(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = resetUsage(fs)
-	fs.Parse(args)
+func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := argparser.NewArgParser()
+	help, _ := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	apr := cli.ParseArgs(ap, args, help)
 
-	stagedRoot, headRoot, verr := getStagedAndHead(cliEnv)
+	stagedRoot, headRoot, verr := getStagedAndHead(dEnv)
 
 	if verr == nil {
-		tbls := fs.Args()
+		tbls := apr.Args()
 
 		if len(tbls) == 0 {
-			tbls = allTables(stagedRoot, headRoot)
+			tbls = actions.AllTables(stagedRoot, headRoot)
 		}
 
-		verr = validateTables(tbls, stagedRoot, headRoot)
+		verr = ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
 
 		if verr == nil {
-			stagedRoot, verr = resetStaged(cliEnv, tbls, stagedRoot, headRoot)
+			stagedRoot, verr = resetStaged(dEnv, tbls, stagedRoot, headRoot)
 
 			if verr == nil {
-				printNotStaged(cliEnv, stagedRoot)
+				printNotStaged(dEnv, stagedRoot)
 				return 0
 			}
 		}
@@ -46,25 +56,25 @@ func Reset(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
 	return 1
 }
 
-func printNotStaged(cliEnv *env.DoltCLIEnv, staged *doltdb.RootValue) {
+func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
-	working, err := cliEnv.WorkingRoot()
+	working, err := dEnv.WorkingRoot()
 
 	if err != nil {
 		return
 	}
 
-	notStaged := NewTableDiffs(working, staged)
+	notStaged := actions.NewTableDiffs(working, staged)
 
-	if notStaged.numRemoved+notStaged.numModified > 0 {
+	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		fmt.Println("Unstaged changes after reset:")
 
 		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.sortedTables {
-			tdt := notStaged.tableToType[tblName]
+		for _, tblName := range notStaged.Tables {
+			tdt := notStaged.TableToType[tblName]
 
-			if tdt != addedTable {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tdt.ShortLabel(), tblName))
+			if tdt != actions.AddedTable {
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
 			}
 		}
 
@@ -72,20 +82,20 @@ func printNotStaged(cliEnv *env.DoltCLIEnv, staged *doltdb.RootValue) {
 	}
 }
 
-func resetStaged(cliEnv *env.DoltCLIEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
+func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
 	updatedRoot := staged.UpdateTablesFromOther(tbls, head)
 
-	return updatedRoot, cliEnv.UpdateStagedRoot(updatedRoot)
+	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }
 
-func getStagedAndHead(cliEnv *env.DoltCLIEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	stagedRoot, err := cliEnv.StagedRoot()
+func getStagedAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
+	stagedRoot, err := dEnv.StagedRoot()
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
-	headRoot, err := cliEnv.HeadRoot()
+	headRoot, err := dEnv.HeadRoot()
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()

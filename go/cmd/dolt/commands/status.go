@@ -1,206 +1,150 @@
 package commands
 
 import (
-	"flag"
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
-	"os"
-	"sort"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
 	"strings"
 )
 
-func statusUsage(fs *flag.FlagSet) func() {
-	return func() {
-		fs.PrintDefaults()
-	}
-}
+var statusShortDesc = "Show the working status"
+var statusLongDesc = "Displays working tables that differ from the current HEAD commit, tables that have differ from the " +
+	"staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would " +
+	"commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>git add</b> " +
+	"before running <b>git commit</b>."
+var statusSynopsis = []string{""}
 
-func Status(commandStr string, args []string, cliEnv *env.DoltCLIEnv) int {
-	fs := flag.NewFlagSet(commandStr, flag.ExitOnError)
-	fs.Usage = statusUsage(fs)
-	fs.Parse(args)
+func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := argparser.NewArgParser()
+	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+	cli.ParseArgs(ap, args, help)
 
-	stagedDiffs, notStagedDiffs, verr := getTableDiffs(cliEnv)
+	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(dEnv)
 
-	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+	if err != nil {
+		if actions.IsRootValUnreachable(err) {
+
+		} else {
+
+		}
+
 		return 1
 	}
 
-	printStatus(cliEnv, stagedDiffs, notStagedDiffs)
+	printStatus(dEnv, stagedDiffs, notStagedDiffs)
 	return 0
 }
 
-type tableDiffType int
-
-const (
-	addedTable tableDiffType = iota
-	modifiedTable
-	removedTable
-)
-
-func (tdt tableDiffType) Label() string {
-	switch tdt {
-	case modifiedTable:
-		return "modified:"
-	case removedTable:
-		return "deleted:"
-	case addedTable:
-		return "new table:"
-	}
-
-	return "?"
+var tblDiffTypeToLabel = map[actions.TableDiffType]string{
+	actions.ModifiedTable: "modified:",
+	actions.RemovedTable:  "deleted:",
+	actions.AddedTable:    "new table:",
 }
 
-func (tdt tableDiffType) ShortLabel() string {
-	switch tdt {
-	case modifiedTable:
-		return "M"
-	case removedTable:
-		return "D"
-	case addedTable:
-		return "N"
-	}
-
-	return "?"
-}
-
-type tableDiffs struct {
-	numAdded     int
-	numModified  int
-	numRemoved   int
-	tableToType  map[string]tableDiffType
-	sortedTables []string
-}
-
-func NewTableDiffs(newer, older *doltdb.RootValue) *tableDiffs {
-	added, modified, removed := newer.TableDiff(older)
-
-	var tbls []string
-	tbls = append(tbls, added...)
-	tbls = append(tbls, modified...)
-	tbls = append(tbls, removed...)
-	sort.Strings(tbls)
-
-	tblToType := make(map[string]tableDiffType)
-	for _, tbl := range added {
-		tblToType[tbl] = addedTable
-	}
-	for _, tbl := range modified {
-		tblToType[tbl] = modifiedTable
-	}
-	for _, tbl := range removed {
-		tblToType[tbl] = removedTable
-	}
-
-	return &tableDiffs{len(added), len(modified), len(removed), tblToType, tbls}
-}
-
-func (td *tableDiffs) Len() int {
-	return len(td.sortedTables)
-}
-
-func getTableDiffs(cliEnv *env.DoltCLIEnv) (*tableDiffs, *tableDiffs, errhand.VerboseError) {
-	headRoot, err := cliEnv.HeadRoot()
-
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to the get at HEAD.").AddCause(err).Build()
-	}
-
-	stagedRoot, err := cliEnv.StagedRoot()
-
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to the get staged.").AddCause(err).Build()
-	}
-
-	workingRoot, err := cliEnv.WorkingRoot()
-
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to the get working.").AddCause(err).Build()
-	}
-
-	stagedDiffs := NewTableDiffs(stagedRoot, headRoot)
-	notStagedDiffs := NewTableDiffs(workingRoot, stagedRoot)
-
-	return stagedDiffs, notStagedDiffs, nil
+var tblDiffTypeToShortLabel = map[actions.TableDiffType]string{
+	actions.ModifiedTable: "M",
+	actions.RemovedTable:  "D",
+	actions.AddedTable:    "N",
 }
 
 const (
-	branchHeader = "On branch %s\n"
-	stagedHeader = `Changes to be committed:
-  (use "dolt reset <table>..." to unstage)`
+	branchHeader     = "On branch %s\n"
+	stagedHeader     = `Changes to be committed:`
+	stagedHeaderHelp = `  (use "dolt reset <table>..." to unstage)`
 
-	workingHeader = `Changes not staged for commit:
-  (use "dolt add <table>" to update what will be committed)
+	workingHeader     = `Changes not staged for commit:`
+	workingHeaderHelp = `  (use "dolt add <table>" to update what will be committed)
   (use "dolt checkout <table>" to discard changes in working directory)`
 
-	untrackedHeader = `Untracked files:
-  (use "dolt add <table>" to include in what will be committed)`
+	untrackedHeader     = `Untracked files:`
+	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
 	statusFmt = "\t%-12s%s"
 )
 
-func printStatus(cliEnv *env.DoltCLIEnv, staged, notStaged *tableDiffs) {
-	needGap := false
-	fmt.Printf(branchHeader, cliEnv.RepoState.Branch)
-
+func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 	if staged.Len() > 0 {
 		fmt.Println(stagedHeader)
 
+		if printHelp {
+			fmt.Println(stagedHeaderHelp)
+		}
+
 		lines := make([]string, 0, staged.Len())
-		for _, tblName := range staged.sortedTables {
-			tdt := staged.tableToType[tblName]
-			lines = append(lines, fmt.Sprintf(statusFmt, tdt.Label(), tblName))
+		for _, tblName := range staged.Tables {
+			tdt := staged.TableToType[tblName]
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
 
 		fmt.Println(color.GreenString(strings.Join(lines, "\n")))
-		needGap = true
+		return len(lines)
 	}
 
-	if notStaged.numRemoved+notStaged.numModified > 0 {
-		if needGap {
+	return 0
+}
+
+func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPrinted int) int {
+	if notStaged.NumRemoved+notStaged.NumModified > 0 {
+		if linesPrinted > 0 {
 			fmt.Println()
 		}
 
 		fmt.Println(workingHeader)
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.sortedTables {
-			tdt := notStaged.tableToType[tblName]
+		if printHelp {
+			fmt.Println(workingHeaderHelp)
+		}
 
-			if tdt != addedTable {
-				lines = append(lines, fmt.Sprintf(statusFmt, tdt.Label(), tblName))
+		lines := make([]string, 0, notStaged.Len())
+		for _, tblName := range notStaged.Tables {
+			tdt := notStaged.TableToType[tblName]
+
+			if tdt != actions.AddedTable {
+				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
 		}
 
 		fmt.Println(color.RedString(strings.Join(lines, "\n")))
-		needGap = true
+		linesPrinted += len(lines)
 	}
 
-	if notStaged.numAdded > 0 {
-		if needGap {
+	if notStaged.NumAdded > 0 {
+		if linesPrinted > 0 {
 			fmt.Println()
 		}
 
 		fmt.Println(untrackedHeader)
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.sortedTables {
-			tdt := notStaged.tableToType[tblName]
+		if printHelp {
+			fmt.Println(untrackedHeaderHelp)
+		}
 
-			if tdt == addedTable {
-				lines = append(lines, fmt.Sprintf(statusFmt, tdt.Label(), tblName))
+		lines := make([]string, 0, notStaged.Len())
+		for _, tblName := range notStaged.Tables {
+			tdt := notStaged.TableToType[tblName]
+
+			if tdt == actions.AddedTable {
+				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
 		}
 
 		fmt.Println(color.RedString(strings.Join(lines, "\n")))
-		needGap = true
+		linesPrinted += len(lines)
 	}
 
-	if !needGap {
+	return linesPrinted
+}
+
+func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs) {
+	fmt.Printf(branchHeader, dEnv.RepoState.Branch)
+
+	n := printStagedDiffs(staged, true)
+	n = printDiffsNotStaged(notStaged, true, n)
+
+	if n == 0 {
 		fmt.Println("nothing to commit, working tree clean")
 	}
 }

@@ -1,14 +1,14 @@
 package dtestutils
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
 	"testing"
 )
 
-func CheckResultTable(t *testing.T, tableName string, cliEnv *env.DoltCLIEnv, expectedTable *table.InMemTable, pkInExpectedTable string) {
-	root, err := cliEnv.WorkingRoot()
+func CheckResultTable(t *testing.T, tableName string, dEnv *env.DoltEnv, expectedTable *table.InMemTable, pkInExpectedTable string) {
+	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
 		t.Error("Could not get dolt working root value", err)
@@ -21,7 +21,7 @@ func CheckResultTable(t *testing.T, tableName string, cliEnv *env.DoltCLIEnv, ex
 		return
 	}
 
-	tblRdr := noms.NewNomsMapReader(tbl.GetRowData(), tbl.GetSchema(cliEnv.DoltDB.ValueReadWriter()))
+	tblRdr := noms.NewNomsMapReader(tbl.GetRowData(), tbl.GetSchema(dEnv.DoltDB.ValueReadWriter()))
 	defer tblRdr.Close()
 
 	CheckResultsAgainstReader(t, tblRdr, tblRdr.GetSchema().GetPKIndex(), expectedTable, pkInExpectedTable)

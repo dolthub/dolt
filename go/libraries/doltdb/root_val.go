@@ -3,7 +3,7 @@ package doltdb
 import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/pkg/errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/pantoerr"
 )
 
 const (
@@ -18,13 +18,45 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
+func NewRootValue(vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
+	values := make([]types.Value, 2*len(tables))
+
+	err := pantoerr.PanicToError("unable to read values from noms", func() error {
+		index := 0
+		for k, v := range tables {
+			values[index] = types.String(k)
+			valForHash := vrw.ReadValue(v)
+
+			if valForHash == nil {
+				return ErrHashNotFound
+			}
+
+			values[index+1] = types.NewRef(valForHash)
+			index += 2
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	tblMap := types.NewMap(vrw, values...)
+	return newRootFromTblMap(vrw, tblMap), nil
+}
+
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 	return &RootValue{vrw, st}
 }
 
 func emptyRootValue(vrw types.ValueReadWriter) *RootValue {
+	return newRootFromTblMap(vrw, types.NewMap(vrw))
+}
+
+func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
 	sd := types.StructData{
-		tablesKey: types.NewMap(vrw),
+		tablesKey: tblMap,
 	}
 
 	st := types.NewStruct(ddbRootStructName, sd)
@@ -52,6 +84,18 @@ func (root *RootValue) getTableSt(tName string) (*types.Struct, bool) {
 	tValRef := tVal.(types.Ref)
 	tableStruct := tValRef.TargetValue(root.vrw).(types.Struct)
 	return &tableStruct, true
+}
+
+func (root *RootValue) GetTableHash(tName string) (hash.Hash, bool) {
+	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+	tVal := tableMap.Get(types.String(tName))
+
+	if tVal == nil {
+		return hash.Hash{}, false
+	}
+
+	tValRef := tVal.(types.Ref)
+	return tValRef.TargetHash(), true
 }
 
 // GetTable will retrieve a table by name
@@ -156,7 +200,7 @@ func (root *RootValue) UpdateTablesFromOther(tblNames []string, other *RootValue
 	return newRootValue(root.vrw, rootValSt)
 }
 
-func (root *RootValue) RemoveTabels(tables []string) (*RootValue, error) {
+func (root *RootValue) RemoveTables(tables []string) (*RootValue, error) {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
 	me := tableMap.Edit()
 	for _, tbl := range tables {
@@ -165,7 +209,7 @@ func (root *RootValue) RemoveTabels(tables []string) (*RootValue, error) {
 		if me.Has(key) {
 			me = me.Remove(key)
 		} else {
-			return nil, errors.New("Unknown table " + tbl)
+			return nil, ErrTableNotFound
 		}
 	}
 

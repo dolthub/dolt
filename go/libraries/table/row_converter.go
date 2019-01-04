@@ -3,7 +3,7 @@ package table
 import (
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
 )
 
@@ -49,7 +49,7 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 	destFieldCount := rc.DestSch.NumFields()
 	fieldVals := make([]types.Value, destFieldCount)
 
-	err := errhand.PanicToErrorInstance(ErrBadRow, func() error {
+	err := pantoerr.PanicToErrorInstance(ErrBadRow, func() error {
 		rowData := inRow.CurrData()
 		for i := 0; i < destFieldCount; i++ {
 			srcIdx := rc.DestToSrc[i]

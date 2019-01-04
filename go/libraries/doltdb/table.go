@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
@@ -65,6 +66,11 @@ func (t *Table) HasTheSameSchema(t2 *Table) bool {
 	schema2Ref := schema2Val.(types.Ref)
 
 	return schemaRef.TargetHash() == schema2Ref.TargetHash()
+}
+
+// HashOf returns the hash of the underlying table struct
+func (t *Table) HashOf() hash.Hash {
+	return t.tableStruct.Hash()
 }
 
 // GetRow uses the noms Map containing the row data to lookup a row by primary key.  If a valid row exists with this pk

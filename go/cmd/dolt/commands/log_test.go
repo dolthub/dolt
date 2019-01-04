@@ -7,15 +7,15 @@ import (
 )
 
 func TestLog(t *testing.T) {
-	cliEnv := createUninitializedEnv()
-	err := cliEnv.InitRepo("Bill Billerson", "bigbillieb@fake.horse")
+	dEnv := createUninitializedEnv()
+	err := dEnv.InitRepo("Bill Billerson", "bigbillieb@fake.horse")
 
 	if err != nil {
 		t.Error("Failed to init repo")
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := cliEnv.DoltDB.Resolve(cs)
+	commit, _ := dEnv.DoltDB.Resolve(cs)
 
 	fmt.Println(commit)
 }

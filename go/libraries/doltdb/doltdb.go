@@ -7,13 +7,14 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/pantoerr"
 	"strings"
 )
 
 const (
-	creationBranch = "__create__"
-	MasterBranch   = "master"
+	creationBranch   = "__create__"
+	MasterBranch     = "master"
+	CommitStructName = "Commit"
 )
 
 // DoltDBLocation represents a locations where a DoltDB database lives.
@@ -61,7 +62,7 @@ func (ddb *DoltDB) WriteEmptyRepo(name, email string) error {
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	err := errhand.PanicToError("Failed to write empty repo", func() error {
+	err := pantoerr.PanicToError("Failed to write empty repo", func() error {
 		rv := emptyRootValue(ddb.db)
 		_, err := ddb.WriteRootValue(rv)
 
@@ -89,7 +90,7 @@ func getCommitStForBranch(db datas.Database, b string) (types.Struct, error) {
 		return ds.Head(), nil
 	}
 
-	return types.EmptyStruct, errors.New("Could find branch " + b)
+	return types.EmptyStruct, ErrBranchNotFound
 }
 
 func getCommitStForHash(db datas.Database, c string) (types.Struct, error) {
@@ -105,10 +106,20 @@ func getCommitStForHash(db datas.Database, c string) (types.Struct, error) {
 		return types.EmptyStruct, err
 	}
 
-	return ap.Resolve(db).(types.Struct), nil
-}
+	val := ap.Resolve(db)
 
-var ErrInvalidAnscestorSpec = errors.New("invalid anscestor spec")
+	if val == nil {
+		return types.EmptyStruct, ErrHashNotFound
+	}
+
+	valSt, ok := val.(types.Struct)
+
+	if !ok || valSt.Name() != CommitStructName {
+		return types.EmptyStruct, ErrFoundHashNotACommit
+	}
+
+	return valSt, nil
+}
 
 func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
 	if aSpec == nil || len(aSpec.Instructions) == 0 {
@@ -138,14 +149,13 @@ func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorS
 // Resolve takes a CommitSpec and, if it exists, returns a Commit instance.
 func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	var commitSt types.Struct
-	err := errhand.PanicToError("Unable to resolve commit "+cs.Name(), func() error {
-		getCFunc := getCommitStForBranch
-		if cs.csType == commitHashSpec {
-			getCFunc = getCommitStForHash
-		}
-
+	err := pantoerr.PanicToError("Unable to resolve commit "+cs.Name(), func() error {
 		var err error
-		commitSt, err = getCFunc(ddb.db, cs.Name())
+		if cs.csType == commitHashSpec {
+			commitSt, err = getCommitStForHash(ddb.db, cs.Name())
+		} else {
+			commitSt, err = getCommitStForBranch(ddb.db, cs.Name())
+		}
 
 		if err != nil {
 			return err
@@ -167,7 +177,7 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 // and can be committed by hash at a later time.
 func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 	var valHash hash.Hash
-	err := errhand.PanicToError("Failed to write value.", func() error {
+	err := pantoerr.PanicToError("Failed to write value.", func() error {
 		ref := ddb.db.WriteValue(rv.valueSt)
 		ddb.db.Flush()
 
@@ -180,7 +190,7 @@ func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 
 func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 	var val types.Value
-	err := errhand.PanicToError("Unable to read root value.", func() error {
+	err := pantoerr.PanicToError("Unable to read root value.", func() error {
 		val = ddb.db.ReadValue(h)
 		return nil
 	})
@@ -201,7 +211,7 @@ func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
-	err := errhand.PanicToError("Error committing value "+valHash.String(), func() error {
+	err := pantoerr.PanicToError("Error committing value "+valHash.String(), func() error {
 		val := ddb.db.ReadValue(valHash)
 
 		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
@@ -252,7 +262,7 @@ func writeValAndGetRef(vrw types.ValueReadWriter, val types.Value) types.Ref {
 func (ddb *DoltDB) ResolveParent(commit *Commit, parentIdx int) (*Commit, error) {
 	var parentCommitSt types.Struct
 	errMsg := fmt.Sprintf("Failed to resolve parent of %s", commit.HashOf().String())
-	err := errhand.PanicToError(errMsg, func() error {
+	err := pantoerr.PanicToError(errMsg, func() error {
 		parentSet := commit.getParents()
 		itr := parentSet.IteratorAt(uint64(parentIdx))
 		parentCommRef := itr.Next()
@@ -268,4 +278,46 @@ func (ddb *DoltDB) ResolveParent(commit *Commit, parentIdx int) (*Commit, error)
 	}
 
 	return &Commit{ddb.ValueReadWriter(), parentCommitSt}, nil
+}
+
+func (ddb *DoltDB) HasBranch(name string) bool {
+	return ddb.db.Datasets().Has(types.String(name))
+}
+
+func (ddb *DoltDB) GetBranches() []string {
+	var branches []string
+	ddb.db.Datasets().IterAll(func(key, _ types.Value) {
+		keyStr := string(key.(types.String))
+		if !strings.HasPrefix(keyStr, "__") {
+			branches = append(branches, keyStr)
+		}
+	})
+
+	return branches
+}
+
+func (ddb *DoltDB) NewBranchAtCommit(newBranchName string, commit *Commit) error {
+	if !IsValidUserBranchName(newBranchName) {
+		panic("Do not attempt to create branches that fail the IsValidUserBranchName check")
+	}
+
+	ds := ddb.db.GetDataset(newBranchName)
+	_, err := ddb.db.SetHead(ds, types.NewRef(commit.commitSt))
+	return err
+}
+
+func (ddb *DoltDB) DeleteBranch(branchName string) error {
+	if !IsValidUserBranchName(branchName) {
+		panic("Do not attempt to delete branches that fail the IsValidUserBranchName check")
+	}
+
+	ds := ddb.db.GetDataset(branchName)
+
+	if !ds.HasHead() {
+		return ErrBranchNotFound
+	}
+
+	_, err := ddb.db.Delete(ds)
+
+	return err
 }
