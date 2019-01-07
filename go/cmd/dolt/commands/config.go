@@ -7,7 +7,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/funcitr"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/set"
 	"os"
 	"strings"
@@ -17,7 +16,7 @@ const (
 	globalParamName = "global"
 	localParamName  = "local"
 
-	setOperationStr   = "set"
+	addOperationStr   = "add"
 	listOperationStr  = "list"
 	getOperationStr   = "get"
 	unsetOperationStr = "unset"
@@ -41,7 +40,7 @@ func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
-	ap.SupportsFlag(setOperationStr, "", "Set the value of one or more config parameters")
+	ap.SupportsFlag(addOperationStr, "", "Set the value of one or more config parameters")
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
 	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config paramaters.")
@@ -49,7 +48,7 @@ func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)
-	ops := apr.FlagsEqualTo([]string{setOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
+	ops := apr.FlagsEqualTo([]string{addOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
 
 	if cfgTypes.Size() == 2 {
 		fmt.Fprintln(os.Stderr, color.RedString("Specifying both -local and -global is not valid. Exactly one may be set"))
@@ -57,10 +56,9 @@ func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	} else {
 		switch ops.Size() {
 		case 1:
-			lwrArgs := funcitr.MapStrings(apr.Args(), strings.ToLower)
-			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], lwrArgs, usage)
+			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args(), usage)
 		default:
-			fmt.Fprintln(os.Stderr, color.RedString("Exactly one of the -set, -get, -unset, -list flags must be set."))
+			fmt.Fprintln(os.Stderr, color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
 			usage()
 		}
 	}
@@ -74,8 +72,8 @@ func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName str
 		return getOperation(dEnv, setCfgTypes, args, func(k string, v *string) {
 			fmt.Println(*v)
 		})
-	case setOperationStr:
-		return setOperation(dEnv, setCfgTypes, args, usage)
+	case addOperationStr:
+		return addOperation(dEnv, setCfgTypes, args, usage)
 	case unsetOperationStr:
 		return unsetOperation(dEnv, setCfgTypes, args, usage)
 	case listOperationStr:
@@ -123,7 +121,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 	return 1
 }
 
-func setOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
+func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
 	if len(args) != 2 {
 		fmt.Println("error: wrong number of arguments")
 		usage()
@@ -131,7 +129,7 @@ func setOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 	}
 
 	isGlobal := setCfgTypes.Contains(globalParamName)
-	updates := map[string]string{args[0]: args[1]}
+	updates := map[string]string{strings.ToLower(args[0]): args[1]}
 
 	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
 		if !isGlobal {

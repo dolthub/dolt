@@ -199,7 +199,9 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 
 	fwtTr := fwt.NewAutoSizingFWTTransformer(unionedSch, fwt.HashFillWhenTooLong, 1000)
 	colorTr := table.NewRowTransformer("coloring transform", doltdb.ColoringTransform)
-	transforms := []table.TransformFunc{fwtTr.TransformToFWT, colorTr}
+	transforms := table.NewTransformCollection(
+		table.NamedTransform{"fwt", fwtTr.TransformToFWT},
+		table.NamedTransform{"color", colorTr})
 
 	wr := doltdb.NewColorDiffWriter(os.Stdout, unionedSch, " | ")
 	defer wr.Close()
@@ -210,7 +212,11 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 		return true
 	}
 
-	pipeline := table.StartAsyncPipeline(rd, transforms, wr, badRowCB)
+	pipeline, start := table.NewAsyncPipeline(rd, transforms, wr, badRowCB)
+
+	ch, _ := pipeline.GetInChForTransf("fwt")
+	ch <- untyped.NewRowFromStrings(unionedSch, unionedSch.GetFieldNames())
+	start()
 	pipeline.Wait()
 
 	return verr

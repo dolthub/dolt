@@ -11,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/mvdata"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
 	"os"
+	"strings"
 )
 
 const (
@@ -134,7 +135,7 @@ func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
 func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "The new or existing table being imported to."
-	ap.ArgListHelp["file"] = "The file being imported."
+	ap.ArgListHelp["file"] = "The file being imported. Supported file types are csv, psv, and nbf."
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
@@ -161,7 +162,7 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 		apr.Contains(contOnErrParam),
 		schemaFile,
 		mappingFile,
-		primaryKey,
+		strings.ToLower(primaryKey),
 		fileLoc,
 		tableLoc,
 	}
@@ -238,6 +239,9 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 	case mvdata.CreateWriterErr:
 		if err.Cause == mvdata.ErrNoPK {
 			builder := errhand.BuildDError("Attempting to write to a %s with a schema that does not contain a primary key.", mvOpts.Dest.Format.ReadableStr())
+			builder.AddDetails("A primary key is required and can be specified by:\n" +
+				"\tusing -pk option to designate a field as the primary key by name.\n" +
+				"\tusing -schema to provide a schema descriptor file.")
 			return builder.Build()
 		} else {
 			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.Dest.Path)

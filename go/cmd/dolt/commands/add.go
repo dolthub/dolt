@@ -10,6 +10,8 @@ import (
 	"os"
 )
 
+const allParam = "all"
+
 var addShortDesc = `Add table contents to the list of staged tables`
 var addLongDesc = `This command updates the list of tables using the current content found in the working root, to prepare the content staged for the next commit. It adds the current content of existing tables as a whole or remove tables that do not exist in the working root anymore.
 
@@ -22,14 +24,17 @@ var addSynopsis = []string{
 
 func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed."
+	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."
+	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")
 	helpPr, _ := cli.HelpAndUsagePrinters(commandStr, addShortDesc, addLongDesc, addSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, helpPr)
 
+	allFlag := apr.Contains(allParam)
+
 	var err error
-	if apr.NArg() == 0 {
+	if apr.NArg() == 0 && !allFlag {
 		fmt.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
-	} else if apr.NArg() == 1 && apr.Arg(0) == "." {
+	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		err = actions.StageAllTables(dEnv)
 	} else {
 		err = actions.StageTables(dEnv, apr.Args())

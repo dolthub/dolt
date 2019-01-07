@@ -43,7 +43,7 @@ func (fwtTr *FWTTransformer) Transform(row *table.Row) ([]*table.TransformedRowR
 		if colWidth != 0 {
 			var str string
 			val, fld := rowData.GetField(i)
-			if val != nil {
+			if !types.IsNull(val) {
 				str = string(val.(types.String))
 			}
 
@@ -123,7 +123,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(row *table.Row, outChan chan<- *
 		for i := 0; i < sch.NumFields(); i++ {
 			val, _ := rowData.GetField(i)
 
-			if val != nil {
+			if !types.IsNull(val) {
 				strVal := val.(types.String)
 				strLen := len(string(strVal))
 

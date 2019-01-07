@@ -84,12 +84,14 @@ func TestMappingReader(t *testing.T) {
 		imttWr := NewInMemTableWriter(resultTable)
 		defer imttWr.Close()
 
-		transforms := []TransformFunc{tr, tr2}
+		transforms := NewTransformCollection(NamedTransform{"t1", tr}, NamedTransform{"t2", tr2})
 
-		p := StartAsyncPipeline(rd, transforms, imttWr, func(transfName string, row *Row, errDetails string) (quit bool) {
+		p, start := NewAsyncPipeline(rd, transforms, imttWr, func(transfName string, row *Row, errDetails string) (quit bool) {
 			t.Fatal("Bad Transform")
 			return true
 		})
+
+		start()
 
 		err := p.Wait()
 

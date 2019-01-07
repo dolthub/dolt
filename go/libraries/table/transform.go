@@ -14,6 +14,7 @@ type TransformedRowResult struct {
 	RowData    *RowData
 	Properties map[string]interface{}
 }
+
 type TransformRowFunc func(inRow *Row) (rowData []*TransformedRowResult, badRowDetails string)
 
 func NewBulkTransformer(bulkTransFunc BulkTransformFunc) TransformFunc {
@@ -88,10 +89,41 @@ type TransformRowFailure struct {
 	BadRowDetails string
 }
 
+type NamedTransform struct {
+	Name string
+	Func TransformFunc
+}
+
+type TransformCollection struct {
+	Transforms []NamedTransform
+}
+
+func NewTransformCollection(namedTransforms ...NamedTransform) *TransformCollection {
+	return &TransformCollection{namedTransforms}
+}
+
+func (tc *TransformCollection) AppendTransforms(nt NamedTransform) {
+	tc.Transforms = append(tc.Transforms, nt)
+}
+
+func (tc *TransformCollection) NumTransforms() int {
+	return len(tc.Transforms)
+}
+
+func (tc *TransformCollection) TransformAt(idx int) NamedTransform {
+	return tc.Transforms[idx]
+}
+
 type Pipeline struct {
 	wg        *sync.WaitGroup
 	stopChan  chan bool
 	atomicErr atomic.Value
+	transInCh map[string]chan *Row
+}
+
+func (p *Pipeline) GetInChForTransf(name string) (chan *Row, bool) {
+	ch, ok := p.transInCh[name]
+	return ch, ok
 }
 
 func (p *Pipeline) Abort() {
@@ -114,29 +146,33 @@ func (p *Pipeline) Wait() error {
 	return nil
 }
 
-func StartAsyncPipeline(rd TableReader, transforms []TransformFunc, wr TableWriter, badRowCB BadRowCallback) *Pipeline {
+func NewAsyncPipeline(rd TableReader, transforms *TransformCollection, wr TableWriter, badRowCB BadRowCallback) (pipeline *Pipeline, start func()) {
 	var wg sync.WaitGroup
 
 	in := make(chan *Row, 1024)
 	badRowChan := make(chan *TransformRowFailure, 1024)
 	stopChan := make(chan bool)
+	transInCh := make(map[string]chan *Row)
 
-	var curr <-chan *Row = in
-	for _, transformer := range transforms {
-		curr = transformAsync(transformer, &wg, curr, badRowChan, stopChan)
+	curr := in
+	for i := 0; i < transforms.NumTransforms(); i++ {
+		nt := transforms.TransformAt(i)
+		transInCh[nt.Name] = curr
+		curr = transformAsync(nt.Func, &wg, curr, badRowChan, stopChan)
 	}
 
-	p := &Pipeline{&wg, stopChan, atomic.Value{}}
+	p := &Pipeline{&wg, stopChan, atomic.Value{}, transInCh}
 
 	wg.Add(3)
 	go p.processBadRows(badRowCB, badRowChan)
 	go p.processOutputs(wr, curr, badRowChan)
-	go p.processInputs(rd, in, badRowChan)
 
-	return p
+	return p, func() {
+		go p.processInputs(rd, in, badRowChan)
+	}
 }
 
-func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan <-chan *Row, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) <-chan *Row {
+func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan *Row, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) chan *Row {
 	wg.Add(1)
 	outChan := make(chan *Row, 256)
 

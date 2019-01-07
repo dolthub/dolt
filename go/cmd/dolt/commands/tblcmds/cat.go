@@ -19,7 +19,7 @@ import (
 var catShortDesc = "print tables"
 var catLongDesc = `The dolt cat command reads tables and writes them to the standard output.`
 var catSynopsis = []string{
-	"<table>...",
+	"[<commit>] <table>...",
 }
 
 func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -27,16 +27,33 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.ArgListHelp["table"] = "List of tables to be printed."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+	args = apr.Args()
 
-	if apr.NArg() == 0 {
+	if len(args) == 0 {
 		usage()
 		return 1
 	}
 
-	working, verr := commands.GetWorkingWithVErr(dEnv)
+	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {
-		verr = printTable(working, apr.Args())
+		var cm *doltdb.Commit
+		cm, verr = commands.MaybeGetCommitWithVErr(dEnv, args[0])
+
+		if verr == nil {
+			if cm != nil {
+				args = args[1:]
+				root = cm.GetRootValue()
+			}
+
+			if len(args) == 0 {
+				fmt.Println("No tables specified")
+				usage()
+				return 1
+			}
+
+			verr = printTable(root, args)
+		}
 	}
 
 	if verr != nil {
@@ -73,7 +90,16 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 				fmt.Fprintln(os.Stderr, color.RedString("Failed to transform row %s.", table.RowFmt(row)))
 				return true
 			}
-			pipeline := table.StartAsyncPipeline(rd, []table.TransformFunc{transform, autoSizeTransform.TransformToFWT}, wr, badRowCB)
+
+			transforms := table.NewTransformCollection(
+				table.NamedTransform{"map", transform},
+				table.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
+			pipeline, start := table.NewAsyncPipeline(rd, transforms, wr, badRowCB)
+
+			ch, _ := pipeline.GetInChForTransf("fwt")
+			ch <- untyped.NewRowFromStrings(outSch, outSch.GetFieldNames())
+
+			start()
 			pipeline.Wait()
 		}()
 	}

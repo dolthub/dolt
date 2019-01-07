@@ -78,7 +78,12 @@ func TestAutoSizing(t *testing.T) {
 			return true
 		}
 
-		pipeline := table.StartAsyncPipeline(rd, []table.TransformFunc{convTr, test.fwtTransform}, tWr, badRowCB)
+		transforms := table.NewTransformCollection(
+			table.NamedTransform{Name: "convert", Func: convTr},
+			table.NamedTransform{Name: "fwt", Func: test.fwtTransform})
+		pipeline, start := table.NewAsyncPipeline(rd, transforms, tWr, badRowCB)
+		start()
+
 		pipeline.Wait()
 		tWr.Close()
 

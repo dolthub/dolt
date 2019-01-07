@@ -97,3 +97,14 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 
 	return cm, nil
 }
+
+func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Commit, errhand.VerboseError) {
+	cm, err := actions.MaybeGetCommit(dEnv, maybeCommit)
+
+	if err != nil {
+		bdr := errhand.BuildDError("fatal: Unable to read from data repository.")
+		return nil, bdr.AddCause(err).Build()
+	}
+
+	return cm, nil
+}

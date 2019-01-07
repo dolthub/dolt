@@ -226,19 +226,50 @@ func intersect(sl1, sl2 []string) []string {
 	return intersection
 }
 
-func BranchOrTable(dEnv *env.DoltEnv, str string) (isBranch bool, rootsWithTbl RootTypeSet, err error) {
+func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
 	roots, err := getRoots(dEnv, ActiveRoots...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rootsWithTable := make([]RootType, 0, len(roots))
+	for rt, root := range roots {
+		if root.HasTable(table) {
+			rootsWithTable = append(rootsWithTable, rt)
+		}
+	}
+
+	return NewRootTypeSet(rootsWithTable...), nil
+}
+
+func BranchOrTable(dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
+	rootsWithTbl, err := RootsWithTable(dEnv, str)
 
 	if err != nil {
 		return false, nil, err
 	}
 
-	rootsWithBranch := make([]RootType, 0, len(roots))
-	for rt, root := range roots {
-		if root.HasTable(str) {
-			rootsWithBranch = append(rootsWithBranch, rt)
+	return dEnv.DoltDB.HasBranch(str), rootsWithTbl, nil
+}
+
+func MaybeGetCommit(dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
+	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Branch)
+
+	if err == nil {
+		cm, err := dEnv.DoltDB.Resolve(cs)
+
+		switch err {
+		case nil:
+			return cm, nil
+
+		case doltdb.ErrHashNotFound, doltdb.ErrBranchNotFound:
+			return nil, nil
+
+		default:
+			return nil, err
 		}
 	}
 
-	return dEnv.DoltDB.HasBranch(str), NewRootTypeSet(rootsWithBranch...), nil
+	return nil, nil
 }
