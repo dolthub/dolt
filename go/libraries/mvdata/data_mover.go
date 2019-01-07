@@ -30,7 +30,7 @@ type MoveOptions struct {
 
 type DataMover struct {
 	Rd         table.TableReadCloser
-	Transforms []table.TransformFunc
+	Transforms *table.TransformCollection
 	Wr         table.TableWriteCloser
 	ContOnErr  bool
 }
@@ -58,7 +58,7 @@ func (dmce *DataMoverCreationError) String() string {
 func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
-	var transforms []table.TransformFunc
+	transforms := table.NewTransformCollection()
 
 	defer func() {
 		if rd != nil {
@@ -89,7 +89,7 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 		return nil, &DataMoverCreationError{MappingErr, err}
 	}
 
-	transforms, err = maybeMapFields(transforms, mapping)
+	err = maybeMapFields(transforms, mapping)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateMapperErr, err}
@@ -132,7 +132,9 @@ func (imp *DataMover) Move() error {
 		return true
 	}
 
-	pipeline := table.StartAsyncPipeline(imp.Rd, imp.Transforms, imp.Wr, badRowCB)
+	pipeline, start := table.NewAsyncPipeline(imp.Rd, imp.Transforms, imp.Wr, badRowCB)
+	start()
+
 	err := pipeline.Wait()
 
 	if err != nil {
@@ -142,19 +144,19 @@ func (imp *DataMover) Move() error {
 	return rowErr
 }
 
-func maybeMapFields(transforms []table.TransformFunc, mapping *schema.FieldMapping) ([]table.TransformFunc, error) {
+func maybeMapFields(transforms *table.TransformCollection, mapping *schema.FieldMapping) error {
 	rconv, err := table.NewRowConverter(mapping)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if !rconv.IdentityConverter {
 		transformer := table.NewRowTransformer("Mapping transform", rconv.TransformRow)
-		transforms = append(transforms, transformer)
+		transforms.AppendTransforms(table.NamedTransform{Name: "map", Func: transformer})
 	}
 
-	return transforms, nil
+	return nil
 }
 
 func maybeSort(wr table.TableWriteCloser, outSch *schema.Schema, srcIsSorted bool, mvOpts *MoveOptions) (table.TableWriteCloser, error) {

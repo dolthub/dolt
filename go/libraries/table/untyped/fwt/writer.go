@@ -35,12 +35,13 @@ func OpenTextWriter(path string, fs filesys.WritableFS, sch *schema.Schema, colS
 		return nil, err
 	}
 
-	return NewTextWriter(wr, sch, colSep), nil
+	bwr := bufio.NewWriterSize(wr, WriteBufSize)
+	return &TextWriter{wr, bwr, sch, colSep}, nil
 }
 
 func NewTextWriter(wr io.WriteCloser, sch *schema.Schema, colSep string) table.TableWriteCloser {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-	return &TextWriter{wr, bwr, sch, colSep}
+	return &TextWriter{nil, bwr, sch, colSep}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -73,13 +74,17 @@ func (tWr *TextWriter) WriteRow(row *table.Row) error {
 
 // Close should release resources being held
 func (tWr *TextWriter) Close() error {
-	if tWr.closer != nil {
+	if tWr.bWr != nil {
 		errFl := tWr.bWr.Flush()
-		errCl := tWr.closer.Close()
-		tWr.closer = nil
+		tWr.bWr = nil
 
-		if errCl != nil {
-			return errCl
+		if tWr.closer != nil {
+			errCl := tWr.closer.Close()
+			tWr.closer = nil
+
+			if errCl != nil {
+				return errCl
+			}
 		}
 
 		return errFl

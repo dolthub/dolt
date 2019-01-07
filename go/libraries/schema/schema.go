@@ -23,6 +23,16 @@ func NewSchema(fields []*Field) *Schema {
 	return &Schema{fields, make(map[ConstraintType][]*Constraint), []*Constraint{}, nameToIndex}
 }
 
+// GetFieldNames returns a slice containing all the field names
+func (sch *Schema) GetFieldNames() []string {
+	fldNames := make([]string, len(sch.fields))
+	for i, fld := range sch.fields {
+		fldNames[i] = fld.NameStr()
+	}
+
+	return fldNames
+}
+
 // NumFields returns the total number of fields in the table.
 func (sch *Schema) NumFields() int {
 	return len(sch.fields)
