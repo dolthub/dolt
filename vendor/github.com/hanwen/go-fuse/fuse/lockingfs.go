@@ -159,6 +159,11 @@ func (fs *lockingRawFileSystem) Read(input *ReadIn, buf []byte) (ReadResult, Sta
 	return fs.RawFS.Read(input, buf)
 }
 
+func (fs *lockingRawFileSystem) Flock(input *FlockIn, flags int) Status {
+	defer fs.locked()()
+	return fs.RawFS.Flock(input, flags)
+}
+
 func (fs *lockingRawFileSystem) Write(input *WriteIn, data []byte) (written uint32, code Status) {
 	defer fs.locked()()
 	return fs.RawFS.Write(input, data)

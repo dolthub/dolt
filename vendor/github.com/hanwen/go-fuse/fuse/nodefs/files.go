@@ -167,6 +167,14 @@ func (f *loopbackFile) Fsync(flags int) (code fuse.Status) {
 	return r
 }
 
+func (f *loopbackFile) Flock(flags int) fuse.Status {
+	f.lock.Lock()
+	r := fuse.ToStatus(syscall.Flock(int(f.File.Fd()), flags))
+	f.lock.Unlock()
+
+	return r
+}
+
 func (f *loopbackFile) Truncate(size uint64) fuse.Status {
 	f.lock.Lock()
 	r := fuse.ToStatus(syscall.Ftruncate(int(f.File.Fd()), int64(size)))

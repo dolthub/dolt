@@ -210,7 +210,7 @@ func (c *FileSystemConnector) Node(parent *Inode, fullPath string) (*Inode, []st
 }
 
 // Follows the path from the given parent, doing lookups as
-// necesary. The path should be '/' separated without leading slash.
+// necessary. The path should be '/' separated without leading slash.
 func (c *FileSystemConnector) LookupNode(parent *Inode, path string) *Inode {
 	if path == "" {
 		return parent

@@ -1,0 +1,75 @@
+FROM golang:1.11-stretch
+MAINTAINER Lars Gierth <lgierth@ipfs.io>
+
+# This is a copy of /Dockerfile,
+# except that we optimize for build time, instead of image size.
+#
+# Please keep these two Dockerfiles in sync.
+
+ENV GX_IPFS ""
+ENV SRC_DIR /go/src/github.com/ipfs/go-ipfs
+
+COPY ./package.json $SRC_DIR/package.json
+
+# Fetch dependencies.
+# Also: allow using a custom IPFS API endpoint.
+RUN set -x \
+  && go get github.com/whyrusleeping/gx \
+  && go get github.com/whyrusleeping/gx-go \
+  && ([ -z "$GX_IPFS" ] || echo $GX_IPFS > /root/.ipfs/api) \
+  && cd $SRC_DIR \
+  && gx install
+
+COPY . $SRC_DIR
+
+# Build the thing.
+# Also: fix getting HEAD commit hash via git rev-parse.
+RUN set -x \
+  && cd $SRC_DIR \
+  && mkdir .git/objects \
+  && make build \
+  && mv cmd/ipfs/ipfs /usr/local/bin/ipfs \
+  && mv bin/container_daemon /usr/local/bin/start_ipfs
+
+# Get su-exec, a very minimal tool for dropping privileges,
+# and tini, a very minimal init daemon for containers
+ENV SUEXEC_VERSION v0.2
+ENV TINI_VERSION v0.16.1
+RUN set -x \
+  && cd /tmp \
+  && git clone https://github.com/ncopa/su-exec.git \
+  && cd su-exec \
+  && git checkout -q $SUEXEC_VERSION \
+  && make \
+  && cd /tmp \
+  && wget -q -O tini https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini \
+  && chmod +x tini \
+  && mv su-exec/su-exec tini /sbin/ # Install them
+
+# Ports for Swarm TCP, Swarm uTP, API, Gateway, Swarm Websockets
+EXPOSE 4001
+EXPOSE 4002/udp
+EXPOSE 5001
+EXPOSE 8080
+EXPOSE 8081
+
+# Create the fs-repo directory and switch to a non-privileged user.
+ENV IPFS_PATH /data/ipfs
+RUN mkdir -p $IPFS_PATH \
+  && useradd -s /usr/sbin/nologin -d $IPFS_PATH -u 1000 -G users ipfs \
+  && chown ipfs:users $IPFS_PATH
+
+# Expose the fs-repo as a volume.
+# start_ipfs initializes an fs-repo if none is mounted.
+VOLUME $IPFS_PATH
+
+# The default logging level
+ENV IPFS_LOGGING ""
+
+# This just makes sure that:
+# 1. There's an fs-repo, and initializes one if there isn't.
+# 2. The API and Gateway are accessible from outside the container.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/start_ipfs"]
+
+# Execute the daemon subcommand by default
+CMD ["daemon", "--migrate=true"]

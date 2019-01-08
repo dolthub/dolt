@@ -9,9 +9,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
@@ -137,5 +136,5 @@ func isConnReset(err error) bool {
 		return false
 	}
 	scErr, ok := nErr.Err.(*os.SyscallError)
-	return ok && scErr.Err == unix.ECONNRESET
+	return ok && scErr.Err == syscall.ECONNRESET
 }

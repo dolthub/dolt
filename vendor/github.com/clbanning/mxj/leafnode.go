@@ -5,6 +5,7 @@ package mxj
 
 import (
 	"strconv"
+	"strings"
 )
 
 const (
@@ -23,6 +24,13 @@ type LeafNode struct {
 // LeafNodes - returns an array of all LeafNode values for the Map.
 // The option no_attr argument suppresses attribute values (keys with prepended hyphen, '-')
 // as well as the "#text" key for the associated simple element value.
+//
+// PrependAttrWithHypen(false) will result in attributes having .attr-name as 
+// terminal node in 'path' while the path for the element value, itself, will be 
+// the base path w/o "#text". 
+//
+// LeafUseDotNotation(true) causes list members to be identified using ".N" syntax
+// rather than "[N]" syntax.
 func (mv Map) LeafNodes(no_attr ...bool) []LeafNode {
 	var a bool
 	if len(no_attr) == 1 {
@@ -45,14 +53,19 @@ func getLeafNodes(path, node string, mv interface{}, l *[]LeafNode, noattr bool)
 	switch mv.(type) {
 	case map[string]interface{}:
 		for k, v := range mv.(map[string]interface{}) {
-			if noattr && k[:1] == "-" {
+			// if noattr && k[:1] == "-" {
+			if noattr && len(attrPrefix) > 0 && strings.Index(k, attrPrefix) == 0 {
 				continue
 			}
 			getLeafNodes(path, k, v, l, noattr)
 		}
 	case []interface{}:
 		for i, v := range mv.([]interface{}) {
-			getLeafNodes(path, "["+strconv.Itoa(i)+"]", v, l, noattr)
+			if useDotNotation {
+				getLeafNodes(path, strconv.Itoa(i), v, l, noattr)
+			} else {
+				getLeafNodes(path, "["+strconv.Itoa(i)+"]", v, l, noattr)
+			}
 		}
 	default:
 		// can't walk any further, so create leaf
@@ -79,4 +92,21 @@ func (mv Map) LeafValues(no_attr ...bool) []interface{} {
 		vv[i] = ln[i].Value
 	}
 	return vv
+}
+
+// ====================== utilities ======================
+
+// https://groups.google.com/forum/#!topic/golang-nuts/pj0C5IrZk4I
+var useDotNotation bool
+
+// LeafUseDotNotation sets a flag that list members in LeafNode paths
+// should be identified using ".N" syntax rather than the default "[N]"
+// syntax.  Calling LeafUseDotNotation with no arguments toggles the 
+// flag on/off; otherwise, the argument sets the flag value 'true'/'false'.
+func LeafUseDotNotation(b ...bool) {
+	if len(b) == 0 {
+		useDotNotation = !useDotNotation
+		return
+	}
+	useDotNotation = b[0]
 }

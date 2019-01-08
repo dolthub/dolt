@@ -57,7 +57,7 @@ func perCPUTimes() ([]TimesStat, error) {
 	// copy the cpuload array to a []byte buffer
 	// where we can binary.Read the data
 	size := int(ncpu) * binary.Size(cpu_ticks)
-	buf := C.GoBytes(unsafe.Pointer(cpuload), C.int(size))
+	buf := (*[1 << 30]byte)(unsafe.Pointer(cpuload))[:size:size]
 
 	bbuf := bytes.NewBuffer(buf)
 
@@ -84,8 +84,10 @@ func perCPUTimes() ([]TimesStat, error) {
 }
 
 func allCPUTimes() ([]TimesStat, error) {
-	var count C.mach_msg_type_number_t = C.HOST_CPU_LOAD_INFO_COUNT
+	var count C.mach_msg_type_number_t
 	var cpuload C.host_cpu_load_info_data_t
+
+	count = C.HOST_CPU_LOAD_INFO_COUNT
 
 	status := C.host_statistics(C.host_t(C.mach_host_self()),
 		C.HOST_CPU_LOAD_INFO,

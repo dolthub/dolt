@@ -130,6 +130,8 @@ type File interface {
 	Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status)
 	Write(data []byte, off int64) (written uint32, code fuse.Status)
 
+	Flock(flags int) fuse.Status
+
 	// Flush is called for close() call on a file descriptor. In
 	// case of duplicated descriptor, it may be called more than
 	// once for a file.

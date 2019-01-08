@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -80,9 +81,20 @@ func CurrentOwner() *Owner {
 	}
 }
 
-func init() {
-	p := syscall.Getpagesize()
-	if p != PAGESIZE {
-		log.Panicf("page size incorrect: %d", p)
+const _UTIME_OMIT = ((1 << 30) - 2)
+
+// UtimeToTimespec converts a "Time" pointer as passed to Utimens to a
+// "Timespec" that can be passed to the utimensat syscall.
+// A nil pointer is converted to the special UTIME_OMIT value.
+func UtimeToTimespec(t *time.Time) (ts syscall.Timespec) {
+	if t == nil {
+		ts.Nsec = _UTIME_OMIT
+	} else {
+		ts = syscall.NsecToTimespec(t.UnixNano())
+		// Go bug https://github.com/golang/go/issues/12777
+		if ts.Nsec < 0 {
+			ts.Nsec = 0
+		}
 	}
+	return ts
 }

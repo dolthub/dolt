@@ -455,6 +455,17 @@ func (c *rawBridge) Read(input *fuse.ReadIn, buf []byte) (fuse.ReadResult, fuse.
 	return node.Node().Read(f, buf, int64(input.Offset), &input.Context)
 }
 
+func (c *rawBridge) Flock(input *fuse.FlockIn, flags int) fuse.Status {
+	node := c.toInode(input.NodeId)
+	opened := node.mount.getOpenedFile(input.Fh)
+
+	if opened != nil {
+		return opened.WithFlags.File.Flock(flags)
+	}
+
+	return fuse.EBADF
+}
+
 func (c *rawBridge) StatFs(header *fuse.InHeader, out *fuse.StatfsOut) fuse.Status {
 	node := c.toInode(header.NodeId)
 	s := node.Node().StatFs()

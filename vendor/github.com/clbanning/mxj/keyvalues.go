@@ -42,6 +42,7 @@ func SetArraySize(size int) int {
 //             - The subkey can be wildcarded - "key:*" - to require that it's there with some value.
 //             - If a subkey is preceeded with the '!' character, the key:value[:type] entry is treated as an
 //               exclusion critera - e.g., "!author:William T. Gaddis".
+//             - If val contains ":" symbol, use SetFieldSeparator to a unused symbol, perhaps "|".
 func (mv Map) ValuesForKey(key string, subkeys ...string) ([]interface{}, error) {
 	m := map[string]interface{}(mv)
 	var subKeyMap map[string]interface{}
@@ -57,9 +58,21 @@ func (mv Map) ValuesForKey(key string, subkeys ...string) ([]interface{}, error)
 	var cnt int
 	hasKey(m, key, &ret, &cnt, subKeyMap)
 	return ret[:cnt], nil
-	// ret := make([]interface{}, 0)
-	// hasKey(m, key, &ret, subKeyMap)
-	// return ret, nil
+}
+
+var KeyNotExistError = errors.New("Key does not exist")
+
+// ValueForKey is a wrapper on ValuesForKey.  It returns the first member of []interface{}, if any.
+// If there is no value, "nil, nil" is returned.
+func (mv Map) ValueForKey(key string, subkeys ...string) (interface{}, error) {
+	vals, err := mv.ValuesForKey(key, subkeys...)
+	if err != nil {
+		return nil, err
+	}
+	if len(vals) == 0 {
+		return nil, KeyNotExistError
+	}
+	return vals[0], nil
 }
 
 // hasKey - if the map 'key' exists append it to array
@@ -120,12 +133,10 @@ func hasKey(iv interface{}, key string, ret *[]interface{}, cnt *int, subkeys ma
 		// scan the rest
 		for _, v := range vv {
 			hasKey(v, key, ret, cnt, subkeys)
-			// hasKey(v, key, ret, subkeys)
 		}
 	case []interface{}:
 		for _, v := range iv.([]interface{}) {
 			hasKey(v, key, ret, cnt, subkeys)
-			// hasKey(v, key, ret, subkeys)
 		}
 	}
 }
@@ -151,6 +162,7 @@ func hasKey(iv interface{}, key string, ret *[]interface{}, cnt *int, subkeys ma
 //             - The subkey can be wildcarded - "key:*" - to require that it's there with some value.
 //             - If a subkey is preceeded with the '!' character, the key:value[:type] entry is treated as an
 //               exclusion critera - e.g., "!author:William T. Gaddis".
+//             - If val contains ":" symbol, use SetFieldSeparator to a unused symbol, perhaps "|".
 func (mv Map) ValuesForPath(path string, subkeys ...string) ([]interface{}, error) {
 	// If there are no array indexes in path, use legacy ValuesForPath() logic.
 	if strings.Index(path, "[") < 0 {
@@ -329,9 +341,6 @@ func (mv Map) oldValuesForPath(path string, subkeys ...string) ([]interface{}, e
 	if keys[len(keys)-1] == "" {
 		keys = keys[:len(keys)-1]
 	}
-	// ivals := make([]interface{}, 0)
-	// valuesForKeyPath(&ivals, m, keys, subKeyMap)
-	// return ivals, nil
 	ivals := make([]interface{}, 0, defaultArraySize)
 	var cnt int
 	valuesForKeyPath(&ivals, &cnt, m, keys, subKeyMap)
@@ -499,12 +508,12 @@ func getSubKeyMap(kv ...string) (map[string]interface{}, error) {
 	}
 	m := make(map[string]interface{}, 0)
 	for _, v := range kv {
-		vv := strings.Split(v, ":")
+		vv := strings.Split(v, fieldSep)
 		switch len(vv) {
 		case 2:
 			m[vv[0]] = interface{}(vv[1])
 		case 3:
-			switch vv[3] {
+			switch vv[2] {
 			case "string", "char", "text":
 				m[vv[0]] = interface{}(vv[1])
 			case "bool", "boolean":
@@ -593,13 +602,14 @@ func hasKeyPath(crumbs string, iv interface{}, key string, basket map[string]boo
 	case map[string]interface{}:
 		vv := iv.(map[string]interface{})
 		if _, ok := vv[key]; ok {
+			// create a new breadcrumb, intialized with the one we have
+			var nbc string
 			if crumbs == "" {
-				crumbs = key
+				nbc = key
 			} else {
-				crumbs += "." + key
+				nbc = crumbs + "." + key
 			}
-			// *basket = append(*basket, crumb)
-			basket[crumbs] = true
+			basket[nbc] = true
 		}
 		// walk on down the path, key could occur again at deeper node
 		for k, v := range vv {
@@ -620,14 +630,17 @@ func hasKeyPath(crumbs string, iv interface{}, key string, basket map[string]boo
 	}
 }
 
-// Returns the first found value for the path.
+var PathNotExistError = errors.New("Path does not exist")
+
+// ValueForPath wrap ValuesFor Path and returns the first value returned.
+// If no value is found it returns 'nil' and PathNotExistError.
 func (mv Map) ValueForPath(path string) (interface{}, error) {
 	vals, err := mv.ValuesForPath(path)
 	if err != nil {
 		return nil, err
 	}
 	if len(vals) == 0 {
-		return nil, errors.New("ValueForPath: path not found")
+		return nil, PathNotExistError
 	}
 	return vals[0], nil
 }

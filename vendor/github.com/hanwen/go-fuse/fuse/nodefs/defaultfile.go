@@ -37,6 +37,7 @@ func (f *defaultFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	return 0, fuse.ENOSYS
 }
 
+func (f *defaultFile) Flock(flags int) fuse.Status { return fuse.ENOSYS }
 func (f *defaultFile) Flush() fuse.Status {
 	return fuse.OK
 }

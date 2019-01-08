@@ -3,13 +3,13 @@ package blobstore
 import (
 	"bytes"
 	"errors"
+	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -163,18 +163,15 @@ func (bs *LocalBlobstore) Put(key string, reader io.Reader) (string, error) {
 	return ver.String(), nil
 }
 
-func fLock(lockFilePath string) (io.Closer, error) {
-	lock, err := os.Create(lockFilePath)
+func fLock(lockFilePath string) (*fslock.Lock, error) {
+	lck := fslock.New(lockFilePath)
+	err := lck.Lock()
 
-	if err == nil {
-		err = unix.Flock(int(lock.Fd()), unix.LOCK_EX)
-
-		if err == nil {
-			return lock, nil
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, err
+	return lck, nil
 }
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
@@ -182,13 +179,13 @@ func fLock(lockFilePath string) (io.Closer, error) {
 func (bs *LocalBlobstore) CheckAndPut(expectedVersion, key string, reader io.Reader) (string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	lockFilePath := path + lockExt
-	lock, err := fLock(lockFilePath)
+	lck, err := fLock(lockFilePath)
 
 	if err != nil {
 		return "", errors.New("Could not acquire lock of " + lockFilePath)
 	}
 
-	defer lock.Close()
+	defer lck.Unlock()
 
 	rc, ver, err := bs.Get(key, BlobRange{})
 

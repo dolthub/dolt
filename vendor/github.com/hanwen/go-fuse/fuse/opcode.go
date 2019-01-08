@@ -99,6 +99,9 @@ func doInit(server *Server, req *request) {
 		CongestionThreshold: uint16(server.opts.MaxBackground * 3 / 4),
 		MaxBackground:       uint16(server.opts.MaxBackground),
 	}
+	if server.opts.MaxReadAhead != 0 && uint32(server.opts.MaxReadAhead) < out.MaxReadAhead {
+		out.MaxReadAhead = uint32(server.opts.MaxReadAhead)
+	}
 	if out.Minor > input.Minor {
 		out.Minor = input.Minor
 	}

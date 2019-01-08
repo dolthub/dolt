@@ -15,9 +15,10 @@
 package storage
 
 import (
+	"context"
+
 	"cloud.google.com/go/internal"
 	gax "github.com/googleapis/gax-go"
-	"golang.org/x/net/context"
 )
 
 // runWithRetry calls the function until it returns nil or a non-retryable error, or

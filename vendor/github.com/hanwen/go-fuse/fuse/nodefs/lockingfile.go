@@ -54,6 +54,12 @@ func (f *lockingFile) Flush() fuse.Status {
 	return f.file.Flush()
 }
 
+func (f *lockingFile) Flock(flags int) fuse.Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.file.Flock(flags)
+}
+
 func (f *lockingFile) Release() {
 	f.mu.Lock()
 	defer f.mu.Unlock()

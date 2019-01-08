@@ -108,16 +108,9 @@ func (v *View) EditDelete(back bool) {
 // EditNewLine inserts a new line under the cursor.
 func (v *View) EditNewLine() {
 	v.breakLine(v.cx, v.cy)
-
-	y := v.oy + v.cy
-	if y >= len(v.viewLines) || (y >= 0 && y < len(v.viewLines) &&
-		!(v.Wrap && v.cx == 0 && v.viewLines[y].linesX > 0)) {
-		// new line at the end of the buffer or
-		// cursor is not at the beginning of a wrapped line
-		v.ox = 0
-		v.cx = 0
-		v.MoveCursor(0, 1, true)
-	}
+	v.ox = 0
+	v.cx = 0
+	v.MoveCursor(0, 1, true)
 }
 
 // MoveCursor moves the cursor taking into account the width of the line/view,
@@ -155,11 +148,13 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 	// adjust cursor's x position and view's x origin
 	if x > curLineWidth { // move to next line
 		if dx > 0 { // horizontal movement
-			if !v.Wrap {
-				v.ox = 0
-			}
-			v.cx = 0
 			cy++
+			if writeMode || v.oy+cy < len(v.viewLines) {
+				if !v.Wrap {
+					v.ox = 0
+				}
+				v.cx = 0
+			}
 		} else { // vertical movement
 			if curLineWidth > 0 { // move cursor to the EOL
 				if v.Wrap {
@@ -177,16 +172,20 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 					}
 				}
 			} else {
-				if !v.Wrap {
-					v.ox = 0
+				if writeMode || v.oy+cy < len(v.viewLines) {
+					if !v.Wrap {
+						v.ox = 0
+					}
+					v.cx = 0
 				}
-				v.cx = 0
 			}
 		}
 	} else if cx < 0 {
 		if !v.Wrap && v.ox > 0 { // move origin to the left
-			v.ox--
+			v.ox += cx
+			v.cx = 0
 		} else { // move to previous line
+			cy--
 			if prevLineWidth > 0 {
 				if !v.Wrap { // set origin so the EOL is visible
 					nox := prevLineWidth - maxX + 1
@@ -203,14 +202,14 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 				}
 				v.cx = 0
 			}
-			cy--
 		}
 	} else { // stay on the same line
 		if v.Wrap {
 			v.cx = cx
 		} else {
 			if cx >= maxX {
-				v.ox++
+				v.ox += cx - maxX + 1
+				v.cx = maxX
 			} else {
 				v.cx = cx
 			}
@@ -218,14 +217,16 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 	}
 
 	// adjust cursor's y position and view's y origin
-	if cy >= maxY {
-		v.oy++
-	} else if cy < 0 {
+	if cy < 0 {
 		if v.oy > 0 {
 			v.oy--
 		}
-	} else {
-		v.cy = cy
+	} else if writeMode || v.oy+cy < len(v.viewLines) {
+		if cy >= maxY {
+			v.oy++
+		} else {
+			v.cy = cy
+		}
 	}
 }
 
@@ -251,22 +252,24 @@ func (v *View) writeRune(x, y int, ch rune) error {
 	}
 
 	olen := len(v.lines[y])
-	if x >= len(v.lines[y]) {
-		s := make([]cell, x-len(v.lines[y])+1)
-		v.lines[y] = append(v.lines[y], s...)
-	}
 
-	c := cell{
-		fgColor: v.FgColor,
-		bgColor: v.BgColor,
+	var s []cell
+	if x >= len(v.lines[y]) {
+		s = make([]cell, x-len(v.lines[y])+1)
+	} else if !v.Overwrite {
+		s = make([]cell, 1)
 	}
+	v.lines[y] = append(v.lines[y], s...)
+
 	if !v.Overwrite || (v.Overwrite && x >= olen-1) {
-		c.chr = '\x00'
-		v.lines[y] = append(v.lines[y], c)
 		copy(v.lines[y][x+1:], v.lines[y][x:])
 	}
-	c.chr = ch
-	v.lines[y][x] = c
+	v.lines[y][x] = cell{
+		fgColor: v.FgColor,
+		bgColor: v.BgColor,
+		chr:     ch,
+	}
+
 	return nil
 }
 

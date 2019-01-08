@@ -27,7 +27,7 @@ var SpecifiedRules = []ValidationRuleFn{
 	NoUnusedFragmentsRule,
 	NoUnusedVariablesRule,
 	OverlappingFieldsCanBeMergedRule,
-	PossibleFragmentSpreadsRule,
+	// PossibleFragmentSpreadsRule, <-- commented out for Attic
 	ProvidedNonNullArgumentsRule,
 	ScalarLeafsRule,
 	UniqueArgumentNamesRule,

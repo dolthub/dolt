@@ -27,7 +27,7 @@ import (
 //	should be the value for 'newKey' in the returned Map.
 //		- 'oldKey' supports dot-notation as described for (Map)ValuesForPath()
 //		- 'newKey' supports dot-notation but with no wildcards, '*', or indexed arrays
-//		- "oldKey" is shorthand for for the keypair value "oldKey:oldKey"
+//		- "oldKey" is shorthand for the keypair value "oldKey:oldKey"
 //		- "oldKey:" and ":newKey" are invalid keypair values
 //		- if 'oldKey' does not exist in the current Map, it is not written to the new Map.
 //		  "null" is not supported unless it is the current Map.

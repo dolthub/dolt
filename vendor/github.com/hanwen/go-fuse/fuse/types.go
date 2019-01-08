@@ -8,8 +8,6 @@ import (
 	"syscall"
 )
 
-const PAGESIZE = 4096
-
 const (
 	_DEFAULT_BACKGROUND_TASKS = 12
 )
@@ -18,21 +16,52 @@ const (
 type Status int32
 
 const (
-	OK      = Status(0)
-	EACCES  = Status(syscall.EACCES)
-	EBUSY   = Status(syscall.EBUSY)
-	EINVAL  = Status(syscall.EINVAL)
-	EIO     = Status(syscall.EIO)
-	ENOENT  = Status(syscall.ENOENT)
-	ENOSYS  = Status(syscall.ENOSYS)
+	OK = Status(0)
+
+	// EACCESS Permission denied
+	EACCES = Status(syscall.EACCES)
+
+	// EBUSY Device or resource busy
+	EBUSY = Status(syscall.EBUSY)
+
+	// EAGAIN Resource temporarily unavailable
+	EAGAIN = Status(syscall.EAGAIN)
+
+	// EINVAL Invalid argument
+	EINVAL = Status(syscall.EINVAL)
+
+	// EIO I/O error
+	EIO = Status(syscall.EIO)
+
+	// ENOENT No such file or directory
+	ENOENT = Status(syscall.ENOENT)
+
+	// ENOSYS Function not implemented
+	ENOSYS = Status(syscall.ENOSYS)
+
+	// ENODATA No data available
 	ENODATA = Status(syscall.ENODATA)
+
+	// ENOTDIR Not a directory
 	ENOTDIR = Status(syscall.ENOTDIR)
-	EPERM   = Status(syscall.EPERM)
-	ERANGE  = Status(syscall.ERANGE)
-	EXDEV   = Status(syscall.EXDEV)
-	EBADF   = Status(syscall.EBADF)
-	ENODEV  = Status(syscall.ENODEV)
-	EROFS   = Status(syscall.EROFS)
+
+	// EPERM Operation not permitted
+	EPERM = Status(syscall.EPERM)
+
+	// ERANGE Math result not representable
+	ERANGE = Status(syscall.ERANGE)
+
+	// EXDEV Cross-device link
+	EXDEV = Status(syscall.EXDEV)
+
+	// EBADF Bad file number
+	EBADF = Status(syscall.EBADF)
+
+	// ENODEV No such device
+	ENODEV = Status(syscall.ENODEV)
+
+	// EROFS Read-only file system
+	EROFS = Status(syscall.EROFS)
 )
 
 type ForgetIn struct {
@@ -433,4 +462,9 @@ type FallocateIn struct {
 	Length  uint64
 	Mode    uint32
 	Padding uint32
+}
+
+type FlockIn struct {
+	InHeader
+	Fh uint64
 }

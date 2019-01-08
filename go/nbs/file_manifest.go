@@ -5,14 +5,13 @@
 package nbs
 
 import (
+	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
@@ -33,6 +32,29 @@ type fileManifest struct {
 	dir string
 }
 
+func newLock(dir string) *fslock.Lock {
+	lockPath := filepath.Join(dir, lockFileName)
+	return fslock.New(lockPath)
+}
+
+func lockFileExists(dir string) bool {
+	lockPath := filepath.Join(dir, lockFileName)
+	info, err := os.Stat(lockPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+
+		// When in rome
+		d.Panic("Failed to determine if lock file exists")
+	} else if info.IsDir() {
+		d.Panic("Lock file is a directory")
+	}
+
+	return true
+}
+
 func (fm fileManifest) Name() string {
 	return fm.dir
 }
@@ -48,11 +70,12 @@ func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
 	// !exists(lockFileName) => unitialized store
-	if l := openIfExists(filepath.Join(fm.dir, lockFileName)); l != nil {
+	if lockFileExists(fm.dir) {
 		var f io.ReadCloser
 		func() {
-			d.PanicIfError(unix.Flock(int(l.Fd()), unix.LOCK_EX))
-			defer checkClose(l) // releases the flock()
+			lck := newLock(fm.dir)
+			d.PanicIfError(lck.Lock())
+			defer lck.Unlock()
 
 			if readHook != nil {
 				readHook()
@@ -118,7 +141,9 @@ func (fm fileManifest) Update(lastLock addr, newContents manifestContents, stats
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
 
 	// Take manifest file lock
-	defer checkClose(flock(filepath.Join(fm.dir, lockFileName))) // closing releases the lock
+	lck := newLock(fm.dir)
+	d.PanicIfError(lck.Lock())
+	defer lck.Unlock()
 
 	// writeHook is for testing, allowing other code to slip in and try to do stuff while we hold the lock.
 	if writeHook != nil {
@@ -158,11 +183,4 @@ func writeManifest(temp io.Writer, contents manifestContents) {
 
 func checkClose(c io.Closer) {
 	d.PanicIfError(c.Close())
-}
-
-func flock(lockFilePath string) io.Closer {
-	l, err := os.Create(lockFilePath)
-	d.PanicIfError(err)
-	d.PanicIfError(unix.Flock(int(l.Fd()), unix.LOCK_EX))
-	return l
 }

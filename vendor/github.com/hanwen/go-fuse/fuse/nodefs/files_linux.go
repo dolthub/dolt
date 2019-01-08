@@ -21,27 +21,11 @@ func (f *loopbackFile) Allocate(off uint64, sz uint64, mode uint32) fuse.Status 
 	return fuse.OK
 }
 
-const _UTIME_NOW = ((1 << 30) - 1)
-const _UTIME_OMIT = ((1 << 30) - 2)
-
 // Utimens - file handle based version of loopbackFileSystem.Utimens()
 func (f *loopbackFile) Utimens(a *time.Time, m *time.Time) fuse.Status {
 	var ts [2]syscall.Timespec
-
-	if a == nil {
-		ts[0].Nsec = _UTIME_OMIT
-	} else {
-		ts[0] = syscall.NsecToTimespec(a.UnixNano())
-		ts[0].Nsec = 0
-	}
-
-	if m == nil {
-		ts[1].Nsec = _UTIME_OMIT
-	} else {
-		ts[1] = syscall.NsecToTimespec(a.UnixNano())
-		ts[1].Nsec = 0
-	}
-
+	ts[0] = fuse.UtimeToTimespec(a)
+	ts[1] = fuse.UtimeToTimespec(m)
 	f.lock.Lock()
 	err := futimens(int(f.File.Fd()), &ts)
 	f.lock.Unlock()

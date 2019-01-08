@@ -5,6 +5,7 @@
 package fuse
 
 import (
+	"os"
 	"sync"
 )
 
@@ -46,7 +47,7 @@ type bufferPoolImpl struct {
 }
 
 // NewBufferPool returns a BufferPool implementation that that returns
-// slices with capacity of a multiple of PAGESIZE, which have possibly
+// slices with capacity of a multiple of page size, which have possibly
 // been used, and may contain random contents. When using
 // NewBufferPool, file system handlers may not hang on to passed-in
 // buffers beyond the handler's return.
@@ -55,6 +56,8 @@ func NewBufferPool() BufferPool {
 	return bp
 }
 
+var pageSize = os.Getpagesize()
+
 func (p *bufferPoolImpl) getPool(pageCount int) *sync.Pool {
 	p.lock.Lock()
 	for len(p.buffersBySize) < pageCount+1 {
@@ -62,7 +65,7 @@ func (p *bufferPoolImpl) getPool(pageCount int) *sync.Pool {
 	}
 	if p.buffersBySize[pageCount] == nil {
 		p.buffersBySize[pageCount] = &sync.Pool{
-			New: func() interface{} { return make([]byte, PAGESIZE*pageCount) },
+			New: func() interface{} { return make([]byte, pageSize*pageCount) },
 		}
 	}
 	pool := p.buffersBySize[pageCount]
@@ -72,14 +75,14 @@ func (p *bufferPoolImpl) getPool(pageCount int) *sync.Pool {
 
 func (p *bufferPoolImpl) AllocBuffer(size uint32) []byte {
 	sz := int(size)
-	if sz < PAGESIZE {
-		sz = PAGESIZE
+	if sz < pageSize {
+		sz = pageSize
 	}
 
-	if sz%PAGESIZE != 0 {
-		sz += PAGESIZE
+	if sz%pageSize != 0 {
+		sz += pageSize
 	}
-	pages := sz / PAGESIZE
+	pages := sz / pageSize
 
 	b := p.getPool(pages).Get().([]byte)
 	return b[:size]
@@ -89,10 +92,10 @@ func (p *bufferPoolImpl) FreeBuffer(slice []byte) {
 	if slice == nil {
 		return
 	}
-	if cap(slice)%PAGESIZE != 0 || cap(slice) == 0 {
+	if cap(slice)%pageSize != 0 || cap(slice) == 0 {
 		return
 	}
-	pages := cap(slice) / PAGESIZE
+	pages := cap(slice) / pageSize
 	slice = slice[:cap(slice)]
 
 	p.getPool(pages).Put(slice)

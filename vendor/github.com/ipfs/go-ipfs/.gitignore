@@ -1,0 +1,24 @@
+# ipfs can generate profiling dump files
+*.cpuprof
+*.memprof
+
+*.swp
+.ipfsconfig
+*.out
+*.coverprofile
+*.test
+*.orig
+*~
+
+coverage.txt
+gx-workspace-update.json
+
+.ipfs
+bin/gx
+bin/gx*
+bin/tmp
+
+
+vendor
+.tarball
+go-ipfs-source.tar.gz

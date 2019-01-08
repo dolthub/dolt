@@ -42,7 +42,7 @@ import (
 
 // ErrHelp is the error returned if the -help or -h flag is invoked
 // but no such flag is defined.
-var ErrHelp = errors.New("flag: help requested")
+var ErrHelp = errors.New("help requested")
 
 // -- bool Value
 type boolValue bool
@@ -239,6 +239,14 @@ type FlagSet struct {
 	exitOnError      bool     // does the program exit if there's an error?
 	errorHandling    ErrorHandling
 	output           io.Writer // nil means stderr; use out() accessor
+
+	// FlagKnownAs allows different projects to customise what their flags are
+	// known as, e.g. 'flag', 'option', 'item'. All error/log messages
+	// will use that name when referring to an individual items/flags in this set.
+	// For example, if this value is 'option', the default message 'value for flag'
+	// will become 'value for option'.
+	// Default value is 'flag'.
+	FlagKnownAs string
 }
 
 // A Flag represents the state of a flag.
@@ -321,7 +329,7 @@ func Lookup(name string) *Flag {
 func (f *FlagSet) Set(name, value string) error {
 	flag, ok := f.formal[name]
 	if !ok {
-		return fmt.Errorf("no such flag -%v", name)
+		return fmt.Errorf("no such %v -%v", f.FlagKnownAs, name)
 	}
 	err := flag.Value.Set(value)
 	if err != nil {
@@ -688,8 +696,8 @@ func (f *FlagSet) Var(value Value, name string, usage string) {
 	flag := &Flag{name, usage, value, value.String()}
 	_, alreadythere := f.formal[name]
 	if alreadythere {
-		fmt.Fprintf(f.out(), "%s flag redefined: %s\n", f.name, name)
-		panic("flag redefinition") // Happens only if flags are declared with identical names
+		fmt.Fprintf(f.out(), "%s %v redefined: %s\n", f.name, f.FlagKnownAs, name)
+		panic(fmt.Sprintf("%v redefinition", f.FlagKnownAs)) // Happens only if flags are declared with identical names
 	}
 	if f.formal == nil {
 		f.formal = make(map[string]*Flag)
@@ -778,7 +786,7 @@ func (f *FlagSet) parseOne() (flagName string, long, finished bool, err error) {
 		}
 		flagName = a[2:i]
 		if flagName == "" {
-			err = fmt.Errorf("empty flag in argument %q", a)
+			err = fmt.Errorf("empty %v in argument %q", f.FlagKnownAs, a)
 			return
 		}
 		f.procArgs = f.procArgs[1:]
@@ -808,16 +816,17 @@ func (f *FlagSet) parseFlagArg(name string, long bool) (finished bool, err error
 	if !alreadythere {
 		if name == "help" || name == "h" { // special case for nice help message.
 			f.usage()
+			ErrHelp = errors.New(fmt.Sprintf("%v: %v", f.FlagKnownAs, ErrHelp.Error()))
 			return false, ErrHelp
 		}
 		// TODO print --xxx when flag is more than one rune.
-		return false, f.failf("flag provided but not defined: %s", flagWithMinus(name))
+		return false, f.failf("%v provided but not defined: %s", f.FlagKnownAs, flagWithMinus(name))
 	}
 	if fv, ok := flag.Value.(boolFlag); ok && fv.IsBoolFlag() && !strings.HasPrefix(f.procFlag, "=") {
 		// special case: doesn't need an arg, and an arg hasn't
 		// been provided explicitly.
 		if err := fv.Set("true"); err != nil {
-			return false, f.failf("invalid boolean flag %s: %v", name, err)
+			return false, f.failf("invalid boolean %v %s: %v", f.FlagKnownAs, name, err)
 		}
 	} else {
 		// It must have a value, which might be the next argument.
@@ -828,7 +837,7 @@ func (f *FlagSet) parseFlagArg(name string, long bool) (finished bool, err error
 			value = f.procFlag
 			if long {
 				if value[0] != '=' {
-					panic("no leading '=' in long flag")
+					panic(fmt.Sprintf("no leading '=' in long %v", f.FlagKnownAs))
 				}
 				value = value[1:]
 			}
@@ -841,10 +850,10 @@ func (f *FlagSet) parseFlagArg(name string, long bool) (finished bool, err error
 			value, f.procArgs = f.procArgs[0], f.procArgs[1:]
 		}
 		if !hasValue {
-			return false, f.failf("flag needs an argument: %s", flagWithMinus(name))
+			return false, f.failf("%v needs an argument: %s", f.FlagKnownAs, flagWithMinus(name))
 		}
 		if err := flag.Value.Set(value); err != nil {
-			return false, f.failf("invalid value %q for flag %s: %v", value, flagWithMinus(name), err)
+			return false, f.failf("invalid value %q for %v %s: %v", value, f.FlagKnownAs, flagWithMinus(name), err)
 		}
 	}
 	if f.actual == nil {
@@ -920,9 +929,18 @@ var CommandLine = NewFlagSet(os.Args[0], ExitOnError)
 // NewFlagSet returns a new, empty flag set with the specified name and
 // error handling property.
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
+	return NewFlagSetWithFlagKnownAs(name, errorHandling, "flag")
+}
+
+// NewFlagSetWithFlagKnownAs returns a new, empty flag set with the specified name and
+// error handling property. All error messages and other references to the
+// individual flags will use aka, for e.g. if aka = 'option', the message will be
+// 'value for option' not 'value for flag'.
+func NewFlagSetWithFlagKnownAs(name string, errorHandling ErrorHandling, aka string) *FlagSet {
 	f := &FlagSet{
 		name:          name,
 		errorHandling: errorHandling,
+		FlagKnownAs:   aka,
 	}
 	return f
 }
