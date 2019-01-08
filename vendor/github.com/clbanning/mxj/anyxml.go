@@ -52,16 +52,8 @@ const (
 		</mydoc>
 */
 // Alternative values for DefaultRootTag and DefaultElementTag can be set as:
-// AnyXmlIndent( v, myRootTag, myElementTag).
+// AnyXml( v, myRootTag, myElementTag).
 func AnyXml(v interface{}, tags ...string) ([]byte, error) {
-	if reflect.TypeOf(v).Kind() == reflect.Struct {
-		return xml.Marshal(v)
-	}
-
-	var err error
-	s := new(string)
-	p := new(pretty)
-
 	var rt, et string
 	if len(tags) == 1 || len(tags) == 2 {
 		rt = tags[0]
@@ -73,6 +65,20 @@ func AnyXml(v interface{}, tags ...string) ([]byte, error) {
 	} else {
 		et = DefaultElementTag
 	}
+
+	if v == nil {
+		if useGoXmlEmptyElemSyntax {
+			return []byte("<" + rt + "></" + rt + ">"), nil
+		}
+		return []byte("<" + rt + "/>"), nil
+	}
+	if reflect.TypeOf(v).Kind() == reflect.Struct {
+		return xml.Marshal(v)
+	}
+
+	var err error
+	s := new(string)
+	p := new(pretty)
 
 	var ss string
 	var b []byte
@@ -114,16 +120,6 @@ func AnyXml(v interface{}, tags ...string) ([]byte, error) {
 // Alternative values for DefaultRootTag and DefaultElementTag can be set as:
 // AnyXmlIndent( v, "", "  ", myRootTag, myElementTag).
 func AnyXmlIndent(v interface{}, prefix, indent string, tags ...string) ([]byte, error) {
-	if reflect.TypeOf(v).Kind() == reflect.Struct {
-		return xml.MarshalIndent(v, prefix, indent)
-	}
-
-	var err error
-	s := new(string)
-	p := new(pretty)
-	p.indent = indent
-	p.padding = prefix
-
 	var rt, et string
 	if len(tags) == 1 || len(tags) == 2 {
 		rt = tags[0]
@@ -135,6 +131,22 @@ func AnyXmlIndent(v interface{}, prefix, indent string, tags ...string) ([]byte,
 	} else {
 		et = DefaultElementTag
 	}
+
+	if v == nil {
+		if useGoXmlEmptyElemSyntax {
+			return []byte(prefix + "<" + rt + "></" + rt + ">"), nil
+		}
+		return []byte(prefix + "<" + rt + "/>"), nil
+	}
+	if reflect.TypeOf(v).Kind() == reflect.Struct {
+		return xml.MarshalIndent(v, prefix, indent)
+	}
+
+	var err error
+	s := new(string)
+	p := new(pretty)
+	p.indent = indent
+	p.padding = prefix
 
 	var ss string
 	var b []byte

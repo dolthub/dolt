@@ -5,14 +5,13 @@
 package nbs
 
 import (
+	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/attic-labs/noms/go/d"
 )
@@ -61,14 +60,16 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
 		aligned := indexOffset / pageSize * pageSize // Thanks, integer arithmetic!
 		d.PanicIfTrue(fi.Size()-aligned > maxInt)
-		buff, err := unix.Mmap(int(f.Fd()), aligned, int(fi.Size()-aligned), unix.PROT_READ, unix.MAP_SHARED)
+
+		mm, err := mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
 		d.PanicIfError(err)
+		buff := []byte(mm)
 		index = parseTableIndex(buff[indexOffset-aligned:])
 
 		if indexCache != nil {
 			indexCache.put(h, index)
 		}
-		err = unix.Munmap(buff)
+		err = mm.Unmap()
 		d.PanicIfError(err)
 	}
 

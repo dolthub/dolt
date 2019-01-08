@@ -1,0 +1,13 @@
+Dockerfile
+Dockerfile.fast
+.git/
+!.git/HEAD
+!.git/refs/
+!.git/packed-refs
+test/sharness/lib/sharness/
+
+# The Docker client might not be running on Linux
+# so delete any compiled binaries
+bin/gx
+bin/gx*
+bin/tmp

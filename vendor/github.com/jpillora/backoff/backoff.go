@@ -30,6 +30,8 @@ func (b *Backoff) Duration() time.Duration {
 	return d
 }
 
+const maxInt64 = float64(math.MaxInt64 - 512)
+
 // ForAttempt returns the duration for a specific attempt. This is useful if
 // you have a large number of independent Backoffs, but don't want use
 // unnecessary memory storing the Backoff parameters per Backoff. The first
@@ -51,7 +53,6 @@ func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 		// short-circuit
 		return max
 	}
-
 	factor := b.Factor
 	if factor <= 0 {
 		factor = 2
@@ -62,9 +63,15 @@ func (b *Backoff) ForAttempt(attempt float64) time.Duration {
 	if b.Jitter {
 		durf = rand.Float64()*(durf-minf) + minf
 	}
+	//ensure float64 wont overflow int64
+	if durf > maxInt64 {
+		return max
+	}
 	dur := time.Duration(durf)
-	if dur > max {
-		//cap!
+	//keep within bounds
+	if dur < min {
+		return min
+	} else if dur > max {
 		return max
 	}
 	return dur

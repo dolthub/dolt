@@ -1,5 +1,6 @@
 package termbox
 
+import "math"
 import "syscall"
 import "unsafe"
 import "unicode/utf16"
@@ -57,24 +58,36 @@ type (
 		control_key_state dword
 		event_flags       dword
 	}
+	console_font_info struct {
+		font      uint32
+		font_size coord
+	}
 )
 
 const (
 	mouse_lmb = 0x1
 	mouse_rmb = 0x2
 	mouse_mmb = 0x4 | 0x8 | 0x10
+	SM_CXMIN  = 28
+	SM_CYMIN  = 29
 )
 
 func (this coord) uintptr() uintptr {
 	return uintptr(*(*int32)(unsafe.Pointer(&this)))
 }
 
+func (this *small_rect) uintptr() uintptr {
+	return uintptr(unsafe.Pointer(this))
+}
+
 var kernel32 = syscall.NewLazyDLL("kernel32.dll")
+var moduser32 = syscall.NewLazyDLL("user32.dll")
 var is_cjk = runewidth.IsEastAsian()
 
 var (
 	proc_set_console_active_screen_buffer = kernel32.NewProc("SetConsoleActiveScreenBuffer")
 	proc_set_console_screen_buffer_size   = kernel32.NewProc("SetConsoleScreenBufferSize")
+	proc_set_console_window_info          = kernel32.NewProc("SetConsoleWindowInfo")
 	proc_create_console_screen_buffer     = kernel32.NewProc("CreateConsoleScreenBuffer")
 	proc_get_console_screen_buffer_info   = kernel32.NewProc("GetConsoleScreenBufferInfo")
 	proc_write_console_output             = kernel32.NewProc("WriteConsoleOutputW")
@@ -91,6 +104,8 @@ var (
 	proc_create_event                     = kernel32.NewProc("CreateEventW")
 	proc_wait_for_multiple_objects        = kernel32.NewProc("WaitForMultipleObjects")
 	proc_set_event                        = kernel32.NewProc("SetEvent")
+	proc_get_current_console_font         = kernel32.NewProc("GetCurrentConsoleFont")
+	get_system_metrics                    = moduser32.NewProc("GetSystemMetrics")
 )
 
 func set_console_active_screen_buffer(h syscall.Handle) (err error) {
@@ -109,6 +124,21 @@ func set_console_active_screen_buffer(h syscall.Handle) (err error) {
 func set_console_screen_buffer_size(h syscall.Handle, size coord) (err error) {
 	r0, _, e1 := syscall.Syscall(proc_set_console_screen_buffer_size.Addr(),
 		2, uintptr(h), size.uintptr(), 0)
+	if int(r0) == 0 {
+		if e1 != 0 {
+			err = error(e1)
+		} else {
+			err = syscall.EINVAL
+		}
+	}
+	return
+}
+
+func set_console_window_info(h syscall.Handle, window *small_rect) (err error) {
+	var absolute uint32
+	absolute = 1
+	r0, _, e1 := syscall.Syscall(proc_set_console_window_info.Addr(),
+		3, uintptr(h), uintptr(absolute), window.uintptr())
 	if int(r0) == 0 {
 		if e1 != 0 {
 			err = error(e1)
@@ -268,6 +298,7 @@ func set_console_mode(h syscall.Handle, mode dword) (err error) {
 }
 
 func fill_console_output_character(h syscall.Handle, char wchar, n int) (err error) {
+	tmp_coord = coord{0, 0}
 	r0, _, e1 := syscall.Syscall6(proc_fill_console_output_character.Addr(),
 		5, uintptr(h), uintptr(char), uintptr(n), tmp_coord.uintptr(),
 		uintptr(unsafe.Pointer(&tmp_arg)), 0)
@@ -282,6 +313,7 @@ func fill_console_output_character(h syscall.Handle, char wchar, n int) (err err
 }
 
 func fill_console_output_attribute(h syscall.Handle, attr word, n int) (err error) {
+	tmp_coord = coord{0, 0}
 	r0, _, e1 := syscall.Syscall6(proc_fill_console_output_attribute.Addr(),
 		5, uintptr(h), uintptr(attr), uintptr(n), tmp_coord.uintptr(),
 		uintptr(unsafe.Pointer(&tmp_arg)), 0)
@@ -335,6 +367,19 @@ func set_event(ev syscall.Handle) (err error) {
 	return
 }
 
+func get_current_console_font(h syscall.Handle, info *console_font_info) (err error) {
+	r0, _, e1 := syscall.Syscall(proc_get_current_console_font.Addr(),
+		3, uintptr(h), 0, uintptr(unsafe.Pointer(info)))
+	if int(r0) == 0 {
+		if e1 != 0 {
+			err = error(e1)
+		} else {
+			err = syscall.EINVAL
+		}
+	}
+	return
+}
+
 type diff_msg struct {
 	pos   short
 	lines short
@@ -349,6 +394,7 @@ type input_event struct {
 var (
 	orig_cursor_info console_cursor_info
 	orig_size        coord
+	orig_window      small_rect
 	orig_mode        dword
 	orig_screen      syscall.Handle
 	back_buffer      cellbuf
@@ -379,6 +425,7 @@ var (
 	tmp_coord0 = coord{0, 0}
 	tmp_coord  = coord{0, 0}
 	tmp_rect   = small_rect{0, 0, 0, 0}
+	tmp_finfo  console_font_info
 )
 
 func get_cursor_position(out syscall.Handle) coord {
@@ -389,12 +436,33 @@ func get_cursor_position(out syscall.Handle) coord {
 	return tmp_info.cursor_position
 }
 
-func get_term_size(out syscall.Handle) coord {
+func get_term_size(out syscall.Handle) (coord, small_rect) {
 	err := get_console_screen_buffer_info(out, &tmp_info)
 	if err != nil {
 		panic(err)
 	}
-	return tmp_info.size
+	return tmp_info.size, tmp_info.window
+}
+
+func get_win_min_size(out syscall.Handle) coord {
+	x, _, err := get_system_metrics.Call(SM_CXMIN)
+	y, _, err := get_system_metrics.Call(SM_CYMIN)
+
+	if x == 0 || y == 0 {
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	err1 := get_current_console_font(out, &tmp_finfo)
+	if err1 != nil {
+		panic(err1)
+	}
+
+	return coord{
+		x: short(math.Ceil(float64(x) / float64(tmp_finfo.font_size.x))),
+		y: short(math.Ceil(float64(y) / float64(tmp_finfo.font_size.y))),
+	}
 }
 
 func get_win_size(out syscall.Handle) coord {
@@ -402,15 +470,39 @@ func get_win_size(out syscall.Handle) coord {
 	if err != nil {
 		panic(err)
 	}
-	return coord{
+
+	min_size := get_win_min_size(out)
+
+	size := coord{
 		x: tmp_info.window.right - tmp_info.window.left + 1,
 		y: tmp_info.window.bottom - tmp_info.window.top + 1,
 	}
+
+	if size.x < min_size.x {
+		size.x = min_size.x
+	}
+
+	if size.y < min_size.y {
+		size.y = min_size.y
+	}
+
+	return size
+}
+
+func fix_win_size(out syscall.Handle, size coord) (err error) {
+	window := small_rect{}
+	window.top = 0
+	window.bottom = size.y - 1
+	window.left = 0
+	window.right = size.x - 1
+	return set_console_window_info(out, &window)
 }
 
 func update_size_maybe() {
-	size := get_term_size(out)
+	size := get_win_size(out)
 	if size.x != term_size.x || size.y != term_size.y {
+		set_console_screen_buffer_size(out, size)
+		fix_win_size(out, size)
 		term_size = size
 		back_buffer.resize(int(size.x), int(size.y))
 		front_buffer.resize(int(size.x), int(size.y))
@@ -431,8 +523,8 @@ var color_table_bg = []word{
 	background_green,
 	background_red | background_green, // yellow
 	background_blue,
-	background_red | background_blue,                    // magenta
-	background_green | background_blue,                  // cyan
+	background_red | background_blue,   // magenta
+	background_green | background_blue, // cyan
 	background_red | background_blue | background_green, // white
 }
 
@@ -443,8 +535,8 @@ var color_table_fg = []word{
 	foreground_green,
 	foreground_red | foreground_green, // yellow
 	foreground_blue,
-	foreground_red | foreground_blue,                    // magenta
-	foreground_green | foreground_blue,                  // cyan
+	foreground_red | foreground_blue,   // magenta
+	foreground_green | foreground_blue, // cyan
 	foreground_red | foreground_blue | foreground_green, // white
 }
 

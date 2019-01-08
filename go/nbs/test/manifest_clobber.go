@@ -6,10 +6,9 @@ package main
 
 import (
 	"flag"
+	"github.com/juju/fslock"
 	"log"
 	"os"
-
-	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -19,27 +18,30 @@ func main() {
 		log.Fatalln("Not enough arguments")
 	}
 
-	l, err := os.Create(flag.Arg(0))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer l.Close()
+	// Clobber manifest file at flag.Arg(1) with contents at flag.Arg(2) after taking lock of file flag.Arg(0)
+	lockFile := flag.Arg(0)
+	manifestFile := flag.Arg(1)
+	manifestContents := flag.Arg(2)
+
 	// lock released by closing l.
-	err = unix.Flock(int(l.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-	if err == unix.EWOULDBLOCK {
+	lck := fslock.New(lockFile)
+	err := lck.TryLock()
+	if err == fslock.ErrLocked {
 		return
 	}
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// Clobber manifest file at flag.Arg(1) with contents at flag.Arg(2)
-	m, err := os.Create(flag.Arg(1))
+	defer lck.Unlock()
+
+	m, err := os.Create(manifestFile)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer m.Close()
-	if _, err = m.WriteString(flag.Arg(2)); err != nil {
+
+	if _, err = m.WriteString(manifestContents); err != nil {
 		log.Fatalln(err)
 	}
 }

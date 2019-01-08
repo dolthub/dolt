@@ -65,7 +65,6 @@ func (f *loopbackFile) Allocate(off uint64, sz uint64, mode uint32) fuse.Status 
 	return fuse.OK
 }
 
-const _UTIME_NOW = ((1 << 30) - 1)
 const _UTIME_OMIT = ((1 << 30) - 2)
 
 // timeToTimeval - Convert time.Time to syscall.Timeval

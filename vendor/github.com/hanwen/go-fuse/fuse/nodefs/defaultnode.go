@@ -126,6 +126,9 @@ func (n *defaultNode) ListXAttr(context *fuse.Context) (attrs []string, code fus
 }
 
 func (n *defaultNode) GetAttr(out *fuse.Attr, file File, context *fuse.Context) (code fuse.Status) {
+	if file != nil {
+		return file.GetAttr(out)
+	}
 	if n.Inode().IsDir() {
 		out.Mode = fuse.S_IFDIR | 0755
 	} else {

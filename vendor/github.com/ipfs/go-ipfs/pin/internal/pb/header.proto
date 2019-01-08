@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package ipfs.pin;
+
+option go_package = "pb";
+
+message Set {
+  // 1 for now, library will refuse to handle entries with an unrecognized version.
+  optional uint32 version = 1;
+  // how many of the links are subtrees
+  optional uint32 fanout = 2;
+  // hash seed for subtree selection, a random number
+  optional fixed32 seed = 3;
+}

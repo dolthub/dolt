@@ -9,10 +9,10 @@ import (
 // It works only for nested maps. It doesn't work for cases when it buried in a list.
 func (mv Map) RenameKey(path string, newName string) error {
 	if !mv.Exists(path) {
-		return errors.New("RenameKey: the path not found: " + path)
+		return errors.New("RenameKey: path not found: " + path)
 	}
 	if mv.Exists(parentPath(path) + "." + newName) {
-		return errors.New("RenameKey: the key already exists: " + newName)
+		return errors.New("RenameKey: key already exists: " + newName)
 	}
 
 	m := map[string]interface{}(mv)
@@ -50,5 +50,5 @@ func prevValueByPath(m interface{}, path string) (map[string]interface{}, error)
 			}
 		}
 	}
-	return nil, errors.New("prevValueByPath: didn't find the path – " + path)
+	return nil, errors.New("prevValueByPath: didn't find path – " + path)
 }

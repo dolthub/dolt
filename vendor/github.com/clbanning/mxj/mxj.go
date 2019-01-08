@@ -8,7 +8,6 @@ package mxj
 import (
 	"fmt"
 	"sort"
-	"strconv"
 )
 
 const (
@@ -52,17 +51,18 @@ func (mv Map) Copy() (Map, error) {
 
 // Pretty print a Map.
 func (mv Map) StringIndent(offset ...int) string {
-	return writeMap(map[string]interface{}(mv), true, offset...)
+	return writeMap(map[string]interface{}(mv), true, true, offset...)
 }
 
 // Pretty print a Map without the value type information - just key:value entries.
 func (mv Map) StringIndentNoTypeInfo(offset ...int) string {
-	return writeMapNoTypes(map[string]interface{}(mv), true, offset...)
+	return writeMap(map[string]interface{}(mv), false, true, offset...)
 }
 
 // writeMap - dumps the map[string]interface{} for examination.
+// 'typeInfo' causes value type to be printed.
 //	'offset' is initial indentation count; typically: Write(m).
-func writeMap(m interface{}, root bool, offset ...int) string {
+func writeMap(m interface{}, typeInfo, root bool, offset ...int) string {
 	var indent int
 	if len(offset) == 1 {
 		indent = offset[0]
@@ -70,118 +70,43 @@ func writeMap(m interface{}, root bool, offset ...int) string {
 
 	var s string
 	switch m.(type) {
-	case nil:
-		return "[nil] nil"
-	case string:
-		return "[string] " + m.(string)
-	case int, int32, int64:
-		return "[int] " + strconv.Itoa(m.(int))
-	case float64, float32:
-		return "[float64] " + strconv.FormatFloat(m.(float64), 'e', 2, 64)
-	case bool:
-		return "[bool] " + strconv.FormatBool(m.(bool))
 	case []interface{}:
-		s += "[[]interface{}]"
-		for i, v := range m.([]interface{}) {
+		if typeInfo {
+			s += "[[]interface{}]"
+		}
+		for _, v := range m.([]interface{}) {
 			s += "\n"
 			for i := 0; i < indent; i++ {
 				s += "  "
 			}
-			s += "[item: " + strconv.FormatInt(int64(i), 10) + "]"
-			switch v.(type) {
-			case string, float64, bool:
-				s += "\n"
-			default:
-				// noop
-			}
-			for i := 0; i < indent; i++ {
-				s += "  "
-			}
-			s += writeMap(v, false, indent+1)
+			s += writeMap(v, typeInfo, false, indent+1)
 		}
 	case map[string]interface{}:
 		list := make([][2]string, len(m.(map[string]interface{})))
 		var n int
 		for k, v := range m.(map[string]interface{}) {
 			list[n][0] = k
-			list[n][1] = writeMap(v, false, indent+1)
+			list[n][1] = writeMap(v, typeInfo, false, indent+1)
 			n++
 		}
 		sort.Sort(mapList(list))
 		for _, v := range list {
-			if !root {
+			if root {
+				root = false
+			} else {
 				s += "\n"
 			}
 			for i := 0; i < indent; i++ {
 				s += "  "
 			}
-			s += v[0] + " :" + v[1]
+			s += v[0] + " : " + v[1]
 		}
 	default:
-		// shouldn't ever be here ...
-		s += fmt.Sprintf("[unknown] %#v", m)
-	}
-	return s
-}
-
-// writeMapNoTypes - dumps the map[string]interface{} for examination.
-//	'offset' is initial indentation count; typically: Write(m).
-func writeMapNoTypes(m interface{}, root bool, offset ...int) string {
-	var indent int
-	if len(offset) == 1 {
-		indent = offset[0]
-	}
-
-	var s string
-	switch m.(type) {
-	case nil:
-		return "nil"
-	case string:
-		return m.(string)
-	case float64:
-		return strconv.FormatFloat(m.(float64), 'e', 2, 64)
-	case bool:
-		return strconv.FormatBool(m.(bool))
-	case []interface{}:
-		s += ""
-		for i, v := range m.([]interface{}) {
-			s += "\n"
-			for i := 0; i < indent; i++ {
-				s += "  "
-			}
-			s += "[" + strconv.FormatInt(int64(i), 10) + "]"
-			switch v.(type) {
-			case string, float64, bool:
-				s += "\n"
-			default:
-				// noop
-			}
-			for i := 0; i < indent; i++ {
-				s += "  "
-			}
-			s += writeMapNoTypes(v, false, indent+1)
+		if typeInfo {
+			s += fmt.Sprintf("[%T] %+v", m, m)
+		} else {
+			s += fmt.Sprintf("%+v", m)
 		}
-	case map[string]interface{}:
-		list := make([][2]string, len(m.(map[string]interface{})))
-		var n int
-		for k, v := range m.(map[string]interface{}) {
-			list[n][0] = k
-			list[n][1] = writeMapNoTypes(v, false, indent+1)
-			n++
-		}
-		sort.Sort(mapList(list))
-		for _, v := range list {
-			if !root {
-				s += "\n"
-			}
-			for i := 0; i < indent; i++ {
-				s += "  "
-			}
-			s += v[0] + " :" + v[1]
-		}
-	default:
-		// shouldn't ever be here ...
-		s += fmt.Sprintf("[?] %#v", m)
 	}
 	return s
 }
@@ -199,8 +124,5 @@ func (ml mapList) Swap(i, j int) {
 }
 
 func (ml mapList) Less(i, j int) bool {
-	if ml[i][0] > ml[j][0] {
-		return false
-	}
-	return true
+	return ml[i][0] <= ml[j][0]
 }

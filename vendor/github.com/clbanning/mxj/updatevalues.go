@@ -1,8 +1,9 @@
-// Copyright 2012-2014 Charles Banning. All rights reserved.
+// Copyright 2012-2014, 2017 Charles Banning. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file
 
 // updatevalues.go - modify a value based on path and possibly sub-keys
+// TODO(clb): handle simple elements with attributes and NewMapXmlSeq Map values.
 
 package mxj
 
@@ -23,6 +24,12 @@ import (
 //	            The subkey can be wildcarded - "key:*" - to require that it's there with some value.
 //	            If a subkey is preceeded with the '!' character, the key:value[:type] entry is treated as an
 //	            exclusion critera - e.g., "!author:William T. Gaddis".
+//
+//	NOTES:
+//		1. Simple elements with attributes need a path terminated as ".#text" to modify the actual value.
+//		2. Values in Maps created using NewMapXmlSeq are map[string]interface{} values with a "#text" key.
+//		3. If values in 'newVal' or 'subkeys' args contain ":", use SetFieldSeparator to an unused symbol,
+//	      perhaps "|".
 func (mv Map) UpdateValuesForPath(newVal interface{}, path string, subkeys ...string) (int, error) {
 	m := map[string]interface{}(mv)
 
@@ -51,7 +58,7 @@ func (mv Map) UpdateValuesForPath(newVal interface{}, path string, subkeys ...st
 		for key, val = range newVal.(map[string]interface{}) {
 		}
 	case string: // split it as a key:value pair
-		ss := strings.Split(newVal.(string), ":")
+		ss := strings.Split(newVal.(string), fieldSep)
 		n := len(ss)
 		if n < 2 || n > 3 {
 			return 0, fmt.Errorf("unknown newVal spec - %+v", newVal)
@@ -160,14 +167,14 @@ func updateValue(key string, value interface{}, m interface{}, keys0 string, sub
 		if key == keys0 {
 			switch endVal.(type) {
 			case map[string]interface{}:
-				if ok := hasSubKeys(m, subkeys); ok {
+				if hasSubKeys(m, subkeys) {
 					(m.(map[string]interface{}))[keys0] = value
 					(*cnt)++
 				}
 			case []interface{}:
 				// without subkeys can't select list member to modify
 				// so key:value spec is it ...
-				if len(subkeys) == 0 {
+				if hasSubKeys(m, subkeys) {
 					(m.(map[string]interface{}))[keys0] = value
 					(*cnt)++
 					break
@@ -176,7 +183,7 @@ func updateValue(key string, value interface{}, m interface{}, keys0 string, sub
 				var valmodified bool
 				for _, v := range endVal.([]interface{}) {
 					// check entry subkeys
-					if ok := hasSubKeys(v, subkeys); ok {
+					if hasSubKeys(v, subkeys) {
 						// replace v with value
 						nv = append(nv, value)
 						valmodified = true
@@ -189,7 +196,7 @@ func updateValue(key string, value interface{}, m interface{}, keys0 string, sub
 					(m.(map[string]interface{}))[keys0] = interface{}(nv)
 				}
 			default: // anything else is a strict replacement
-				if len(subkeys) == 0 {
+				if hasSubKeys(m, subkeys) {
 					(m.(map[string]interface{}))[keys0] = value
 					(*cnt)++
 				}
@@ -202,7 +209,7 @@ func updateValue(key string, value interface{}, m interface{}, keys0 string, sub
 		// if endVal is a list then 'key' must be in a list member w/ subkeys
 		switch endVal.(type) {
 		case map[string]interface{}:
-			if ok := hasSubKeys(endVal, subkeys); !ok {
+			if !hasSubKeys(endVal, subkeys) {
 				return
 			}
 			if _, ok := (endVal.(map[string]interface{}))[key]; ok {

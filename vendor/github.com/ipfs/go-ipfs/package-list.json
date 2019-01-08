@@ -1,0 +1,59 @@
+{
+  "columns": [
+    "Name",
+    "CI/Travis",
+    "CI/Jenkins",
+    "Coverage",
+    "Description"
+  ],
+  "rows": [
+    "Files",
+    ["ipfs/go-unixfs", "go-unixfs", "the core 'filesystem' logic"],
+    ["ipfs/go-mfs", "go-mfs", "a mutable filesystem editor for unixfs"],
+    ["ipfs/go-ipfs-posinfo", "go-ipfs-posinfo", "helper datatypes for the filestore"],
+    ["ipfs/go-ipfs-chunker", "go-ipfs-chunker", "file chunkers"],
+
+    "Exchange",
+    ["ipfs/go-ipfs-exchange-interface", "go-ipfs-exchange-interface", "exchange service interface"],
+    ["ipfs/go-ipfs-exchange-offline", "go-ipfs-exchange-offline", "(dummy) offline implementation of the exchange service"],
+    ["ipfs/go-bitswap", "go-bitswap", "bitswap protocol implementation"],
+    ["ipfs/go-blockservice", "go-blockservice", "service that plugs a blockstore and an exchange together"],
+
+    "Datastores",
+    ["ipfs/go-datastore", "go-datastore", "datastore interfaces, adapters, and basic implementations"],
+    ["ipfs/go-ipfs-ds-help", "go-ipfs-ds-help", "datastore utility functions"],
+    ["ipfs/go-ds-flatfs", "go-ds-flatfs", "a filesystem-based datastore"],
+    ["ipfs/go-ds-measure", "go-ds-measure", "a metric-collecting database adapter"],
+    ["ipfs/go-ds-leveldb", "go-ds-leveldb", "a leveldb based datastore"],
+    ["ipfs/go-ds-badger", "go-ds-badger", "a badgerdb based datastore"],
+
+    "Namesys",
+    ["ipfs/go-ipns", "go-ipns", "IPNS datastructures and validation logic"],
+
+    "Repo",
+    ["ipfs/go-ipfs-config", "go-ipfs-config", "go-ipfs config file definitions"],
+    ["ipfs/go-fs-lock", "go-fs-lock", "lockfile management functions"],
+    ["ipfs/fs-repo-migrations", "fs-repo-migrations", "repo migrations"],
+
+    "Blocks",
+    ["ipfs/go-block-format", "go-block-format", "block interfaces and implementations"],
+    ["ipfs/go-ipfs-blockstore", "go-ipfs-blockstore", "blockstore interfaces and implementations"],
+    ["ipfs/go-ipfs-blockstore", "go-ipfs-blockstore", "blockstore interfaces and implementations"],
+
+    "Commands",
+    ["ipfs/go-ipfs-cmds", "go-ipfs-cmds", "CLI & HTTP commands library"],
+    ["ipfs/go-ipfs-cmdkit", "go-ipfs-cmdkit", "helper types for the commands library"],
+    ["ipfs/go-ipfs-blockstore", "go-ipfs-blockstore", "blockstore interfaces and implementations"],
+    ["ipfs/go-ipfs-api", "go-ipfs-api", "a shell for the IPFS HTTP API"],
+
+    "Metrics & Logging",
+    ["ipfs/go-metrics-interface", "go-metrics-interface", "metrics collection interfaces"],
+    ["ipfs/go-metrics-prometheus", "go-metrics-prometheus", "prometheus-backed metrics collector"],
+    ["ipfs/go-log", "go-log", "logging framework"],
+
+    "Generics/Utils",
+    ["ipfs/go-ipfs-routing", "go-ipfs-routing", "routing (content, peer, value) helpers"],
+    ["ipfs/go-ipfs-util", "go-ipfs-util", "the kitchen sink"],
+    ["ipfs/go-ipfs-addr", "go-ipfs-addr", "utility functions for parsing IPFS multiaddrs"]
+  ]
+}

@@ -1,4 +1,4 @@
-// Copyright 2012-2014 Charles Banning. All rights reserved.
+// Copyright 2012-2017 Charles Banning. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file
 
@@ -7,19 +7,32 @@ package mxj
 import (
 	"encoding/json"
 	"errors"
-	"github.com/fatih/structs"
 	"reflect"
+
+	// "github.com/fatih/structs"
 )
 
-// Create a new Map value from a structure.  Error returned if argument is not a structure
-// or if there is a json.Marshal or json.Unmarshal error.
-//	Only public structure fields are decoded in the Map value. Also, json.Marshal structure encoding rules
-//	are followed for decoding the structure fields.
+// Create a new Map value from a structure.  Error returned if argument is not a structure.
+// Only public structure fields are decoded in the Map value. See github.com/fatih/structs#Map
+// for handling of "structs" tags.
+
+// DEPRECATED - import github.com/fatih/structs and cast result of structs.Map to mxj.Map.
+//	import "github.com/fatih/structs"
+//	...
+//	   sm, err := structs.Map(<some struct>)
+//	   if err != nil {
+//	      // handle error
+//	   }
+//	   m := mxj.Map(sm)
+// Alernatively uncomment the old source and import in struct.go.
 func NewMapStruct(structVal interface{}) (Map, error) {
-	if !structs.IsStruct(structVal) {
-		return nil, errors.New("NewMapStruct() error: argument is not type Struct")
-	}
-	return structs.Map(structVal), nil
+	return nil, errors.New("deprecated - see package documentation")
+	/*
+		if !structs.IsStruct(structVal) {
+			return nil, errors.New("NewMapStruct() error: argument is not type Struct")
+		}
+		return structs.Map(structVal), nil
+	*/
 }
 
 // Marshal a map[string]interface{} into a structure referenced by 'structPtr'. Error returned

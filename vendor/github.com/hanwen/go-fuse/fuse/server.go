@@ -163,7 +163,7 @@ func NewServer(fs RawFileSystem, mountPoint string, opts *MountOptions) (*Server
 		singleReader: runtime.GOOS == "darwin",
 	}
 	ms.reqPool.New = func() interface{} { return new(request) }
-	ms.readPool.New = func() interface{} { return make([]byte, o.MaxWrite+PAGESIZE) }
+	ms.readPool.New = func() interface{} { return make([]byte, o.MaxWrite+pageSize) }
 
 	mountPoint = filepath.Clean(mountPoint)
 	if !filepath.IsAbs(mountPoint) {

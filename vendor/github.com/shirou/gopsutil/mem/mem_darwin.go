@@ -3,21 +3,22 @@
 package mem
 
 import (
+	"context"
 	"encoding/binary"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/shirou/gopsutil/internal/common"
+	"golang.org/x/sys/unix"
 )
 
 func getHwMemsize() (uint64, error) {
-	totalString, err := syscall.Sysctl("hw.memsize")
+	totalString, err := unix.Sysctl("hw.memsize")
 	if err != nil {
 		return 0, err
 	}
 
-	// syscall.sysctl() helpfully assumes the result is a null-terminated string and
+	// unix.sysctl() helpfully assumes the result is a null-terminated string and
 	// removes the last byte of the result if it's 0 :/
 	totalString += "\x00"
 
@@ -28,9 +29,13 @@ func getHwMemsize() (uint64, error) {
 
 // SwapMemory returns swapinfo.
 func SwapMemory() (*SwapMemoryStat, error) {
+	return SwapMemoryWithContext(context.Background())
+}
+
+func SwapMemoryWithContext(ctx context.Context) (*SwapMemoryStat, error) {
 	var ret *SwapMemoryStat
 
-	swapUsage, err := common.DoSysctrl("vm.swapusage")
+	swapUsage, err := common.DoSysctrlWithContext(ctx, "vm.swapusage")
 	if err != nil {
 		return ret, err
 	}
@@ -57,11 +62,11 @@ func SwapMemory() (*SwapMemoryStat, error) {
 		u = ((total_v - free_v) / total_v) * 100.0
 	}
 
-	// vm.swapusage shows "M", multiply 1000
+	// vm.swapusage shows "M", multiply 1024 * 1024 to convert bytes.
 	ret = &SwapMemoryStat{
-		Total:       uint64(total_v * 1000),
-		Used:        uint64(used_v * 1000),
-		Free:        uint64(free_v * 1000),
+		Total:       uint64(total_v * 1024 * 1024),
+		Used:        uint64(used_v * 1024 * 1024),
+		Free:        uint64(free_v * 1024 * 1024),
 		UsedPercent: u,
 	}
 

@@ -17,8 +17,8 @@ This can be useful, when searching for a data fragment in large files, without k
 
 ## Installation
 
-`go get github.com/kch42/buzhash`
+`go get github.com/silvasur/buzhash`
 
 ## Documentation
 
-Either install the package and use a local godoc server or use [godoc.org](http://godoc.org/github.com/kch42/buzhash)
+Either install the package and use a local godoc server or use [godoc.org](http://godoc.org/github.com/silvasur/buzhash)

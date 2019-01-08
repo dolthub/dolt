@@ -244,6 +244,15 @@ func (fs *wrappingFS) Read(input *ReadIn, buf []byte) (ReadResult, Status) {
 	return nil, ENOSYS
 }
 
+func (fs *wrappingFS) Flock(input *FlockIn, flags int) Status {
+	if s, ok := fs.fs.(interface {
+		Flock(input *FlockIn, flags int) Status
+	}); ok {
+		return s.Flock(input, flags)
+	}
+	return ENOSYS
+}
+
 func (fs *wrappingFS) Release(input *ReleaseIn) {
 	if s, ok := fs.fs.(interface {
 		Release(input *ReleaseIn)

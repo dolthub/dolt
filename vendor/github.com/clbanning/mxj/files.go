@@ -84,12 +84,6 @@ func NewMapsFromJsonFileRaw(name string) ([]MapRaw, error) {
 
 // NewMapsFromXmlFile - creates an array from a file of XML values.
 func NewMapsFromXmlFile(name string) (Maps, error) {
-	x := XmlWriterBufSize
-	XmlWriterBufSize = 0
-	defer func() {
-		XmlWriterBufSize = x
-	}()
-
 	fi, err := os.Stat(name)
 	if err != nil {
 		return nil, err
@@ -124,12 +118,6 @@ func NewMapsFromXmlFile(name string) (Maps, error) {
 // NOTE: the slice with the raw XML is clean with no extra capacity - unlike NewMapXmlReaderRaw().
 // It is slow at parsing a file from disk and is intended for relatively small utility files.
 func NewMapsFromXmlFileRaw(name string) ([]MapRaw, error) {
-	x := XmlWriterBufSize
-	XmlWriterBufSize = 0
-	defer func() {
-		XmlWriterBufSize = x
-	}()
-
 	fi, err := os.Stat(name)
 	if err != nil {
 		return nil, err
