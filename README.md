@@ -17,8 +17,8 @@
  
 ## First commands
 
- * dolt config --global add user.email YOU@liquidata.co
- * dolt config --global add user.name = YOUR NAME
+ * dolt config --global --add user.email YOU@liquidata.co
+ * dolt config --global --add user.name <YOUR NAME>
  
 ## Setting up a repo
 
