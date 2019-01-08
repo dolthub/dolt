@@ -2,6 +2,8 @@
 
 ## Prerequisites
 
+ * Make sure git is installed
+ * Setup ssh keys for github authentication: https://help.github.com/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent/
  * Clone this repo and pull the latest
  * Install go: https://golang.org/doc/install
  * Set the environment variable NOMS_VERSION_NEXT=1
