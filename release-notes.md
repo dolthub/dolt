@@ -1,3 +1,12 @@
+# 1/8/19 Version 0.2.2
+  * Windows support.
+  * Move data to .dolt/noms directory
+    * To convert existing data repositories you will need to run:
+      * mkdir .dolt/noms
+      * cp * ./dolt/noms
+  * Bug fixes.
+  * Error messaging improvements.
+
 # 1/6/19 Version 0.2.1
   * dolt table schema command
   * --all option for dolt add
