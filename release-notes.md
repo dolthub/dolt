@@ -4,6 +4,7 @@
     * To convert existing data repositories you will need to run:
       * mkdir .dolt/noms
       * mv * .dolt/noms/
+      * rm * (If you have been using this directory to store other files you may need to be more deliberate about what you delete.
   * Bug fixes.
   * Error messaging improvements.
 
