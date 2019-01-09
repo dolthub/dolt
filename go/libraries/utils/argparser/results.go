@@ -120,9 +120,10 @@ func (res *ArgParseResults) Arg(idx int) string {
 }
 
 func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {
-	results := make([]string, 0, len(res.parser.NameOrAbbrevToOpt))
-	for name, opt := range res.parser.NameOrAbbrevToOpt {
+	results := make([]string, 0, len(res.parser.Supported))
+	for _, opt := range res.parser.Supported {
 		if opt.OptType == OptionalFlag {
+			name := opt.Name
 			_, ok := res.options[name]
 
 			if ok == val {
@@ -135,7 +136,7 @@ func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {
 }
 
 func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
-	results := make([]string, 0, len(res.parser.NameOrAbbrevToOpt))
+	results := make([]string, 0, len(res.parser.Supported))
 	for _, name := range names {
 		opt, ok := res.parser.NameOrAbbrevToOpt[name]
 		if ok && opt.OptType == OptionalFlag {

@@ -4,12 +4,13 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
 var greenTextProp = map[string]interface{}{ColorRowProp: color.GreenString}
 var redTextProp = map[string]interface{}{ColorRowProp: color.RedString}
 
-func ColoringTransform(row *table.Row) ([]*table.TransformedRowResult, string) {
+func ColoringTransform(row *table.Row) ([]*pipeline.TransformedRowResult, string) {
 	var props map[string]interface{} = nil
 	rowData := row.CurrData()
 
@@ -30,5 +31,5 @@ func ColoringTransform(row *table.Row) ([]*table.TransformedRowResult, string) {
 		}
 	}
 
-	return []*table.TransformedRowResult{{RowData: rowData, Properties: props}}, ""
+	return []*pipeline.TransformedRowResult{{RowData: rowData, Properties: props}}, ""
 }

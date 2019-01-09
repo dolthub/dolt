@@ -1,4 +1,4 @@
-package table
+package doltcore
 
 import (
 	"github.com/attic-labs/noms/go/types"

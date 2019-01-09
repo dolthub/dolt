@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
@@ -29,7 +30,7 @@ type MoveOptions struct {
 
 type DataMover struct {
 	Rd         table.TableReadCloser
-	Transforms *table.TransformCollection
+	Transforms *pipeline.TransformCollection
 	Wr         table.TableWriteCloser
 	ContOnErr  bool
 }
@@ -57,7 +58,7 @@ func (dmce *DataMoverCreationError) String() string {
 func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
-	transforms := table.NewTransformCollection()
+	transforms := pipeline.NewTransformCollection()
 
 	defer func() {
 		if rd != nil {
@@ -122,7 +123,7 @@ func (imp *DataMover) Move() error {
 	defer imp.Wr.Close()
 
 	var rowErr error
-	badRowCB := func(trf *table.TransformRowFailure) (quit bool) {
+	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
 			return false
@@ -131,10 +132,10 @@ func (imp *DataMover) Move() error {
 		return true
 	}
 
-	pipeline, start := table.NewAsyncPipeline(imp.Rd, imp.Transforms, imp.Wr, badRowCB)
+	p, start := pipeline.NewAsyncPipeline(imp.Rd, imp.Transforms, imp.Wr, badRowCB)
 	start()
 
-	err := pipeline.Wait()
+	err := p.Wait()
 
 	if err != nil {
 		return err
@@ -143,16 +144,16 @@ func (imp *DataMover) Move() error {
 	return rowErr
 }
 
-func maybeMapFields(transforms *table.TransformCollection, mapping *schema.FieldMapping) error {
-	rconv, err := table.NewRowConverter(mapping)
+func maybeMapFields(transforms *pipeline.TransformCollection, mapping *schema.FieldMapping) error {
+	rconv, err := pipeline.NewRowConverter(mapping)
 
 	if err != nil {
 		return err
 	}
 
 	if !rconv.IdentityConverter {
-		transformer := table.NewRowTransformer("Mapping transform", rconv.TransformRow)
-		transforms.AppendTransforms(table.NamedTransform{Name: "map", Func: transformer})
+		transformer := pipeline.NewRowTransformer("Mapping transform", rconv.TransformRow)
+		transforms.AppendTransforms(pipeline.NamedTransform{Name: "map", Func: transformer})
 	}
 
 	return nil

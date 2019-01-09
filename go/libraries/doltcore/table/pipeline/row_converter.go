@@ -1,9 +1,11 @@
-package table
+package pipeline
 
 import (
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
 
@@ -12,7 +14,7 @@ var IdentityConverter = &RowConverter{nil, true, nil}
 type RowConverter struct {
 	*schema.FieldMapping
 	IdentityConverter bool
-	convFuncs         []ConvFunc
+	convFuncs         []doltcore.ConvFunc
 }
 
 func NewRowConverter(mapping *schema.FieldMapping) (*RowConverter, error) {
@@ -24,13 +26,13 @@ func NewRowConverter(mapping *schema.FieldMapping) (*RowConverter, error) {
 		return &RowConverter{nil, true, nil}, nil
 	}
 
-	convFuncs := make([]ConvFunc, mapping.DestSch.NumFields())
+	convFuncs := make([]doltcore.ConvFunc, mapping.DestSch.NumFields())
 	for dstIdx, srcIdx := range mapping.DestToSrc {
 		if srcIdx != -1 {
 			destFld := mapping.DestSch.GetField(dstIdx)
 			srcFld := mapping.SrcSch.GetField(srcIdx)
 
-			convFuncs[dstIdx] = GetConvFunc(srcFld.NomsKind(), destFld.NomsKind())
+			convFuncs[dstIdx] = doltcore.GetConvFunc(srcFld.NomsKind(), destFld.NomsKind())
 
 			if convFuncs[dstIdx] == nil {
 				return nil, fmt.Errorf("Unsupported conversion from type %s to %s", srcFld.KindString(), destFld.KindString())
@@ -41,7 +43,7 @@ func NewRowConverter(mapping *schema.FieldMapping) (*RowConverter, error) {
 	return &RowConverter{mapping, false, convFuncs}, nil
 }
 
-func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
+func (rc *RowConverter) Convert(inRow *table.Row) (*table.RowData, error) {
 	if rc.IdentityConverter {
 		return inRow.CurrData(), nil
 	}
@@ -49,7 +51,7 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 	destFieldCount := rc.DestSch.NumFields()
 	fieldVals := make([]types.Value, destFieldCount)
 
-	unexpectedErr := NewBadRow(inRow, "Unexpected Error")
+	unexpectedErr := table.NewBadRow(inRow, "Unexpected Error")
 	err := pantoerr.PanicToErrorInstance(unexpectedErr, func() error {
 		rowData := inRow.CurrData()
 		for i := 0; i < destFieldCount; i++ {
@@ -62,7 +64,7 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 			mappedVal, err := rc.convFuncs[i](val)
 
 			if err != nil {
-				return NewBadRow(inRow, err.Error())
+				return table.NewBadRow(inRow, err.Error())
 			}
 
 			fieldVals[i] = mappedVal
@@ -75,10 +77,10 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 		return nil, err
 	}
 
-	return RowDataFromValues(rc.DestSch, fieldVals), nil
+	return table.RowDataFromValues(rc.DestSch, fieldVals), nil
 }
 
-func (rc *RowConverter) TransformRow(inRow *Row) (outRows []*TransformedRowResult, badRowDetails string) {
+func (rc *RowConverter) TransformRow(inRow *table.Row) (outRows []*TransformedRowResult, badRowDetails string) {
 	outData, err := rc.Convert(inRow)
 
 	if err != nil {

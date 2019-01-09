@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -81,24 +82,24 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 			wr := fwt.NewTextWriter(cli.CliOut, outSch, " | ")
 			defer wr.Close()
 
-			rConv, _ := table.NewRowConverter(mapping)
-			transform := table.NewRowTransformer("schema mapping transform", rConv.TransformRow)
+			rConv, _ := pipeline.NewRowConverter(mapping)
+			transform := pipeline.NewRowTransformer("schema mapping transform", rConv.TransformRow)
 			autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.HashFillWhenTooLong, 0)
-			badRowCB := func(tff *table.TransformRowFailure) (quit bool) {
+			badRowCB := func(tff *pipeline.TransformRowFailure) (quit bool) {
 				cli.PrintErrln(color.RedString("Failed to transform row %s.", table.RowFmt(tff.Row)))
 				return true
 			}
 
-			transforms := table.NewTransformCollection(
-				table.NamedTransform{"map", transform},
-				table.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
-			pipeline, start := table.NewAsyncPipeline(rd, transforms, wr, badRowCB)
+			transforms := pipeline.NewTransformCollection(
+				pipeline.NamedTransform{"map", transform},
+				pipeline.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
+			p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-			ch, _ := pipeline.GetInChForTransf("fwt")
+			ch, _ := p.GetInChForTransf("fwt")
 			ch <- untyped.NewRowFromStrings(outSch, outSch.GetFieldNames())
 
 			start()
-			pipeline.Wait()
+			p.Wait()
 		}()
 	}
 

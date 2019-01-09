@@ -5,6 +5,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"io"
 	"time"
 )
@@ -31,14 +32,14 @@ func (dr *DiffRow) DiffType() types.DiffChangeType {
 }
 
 type RowDiffReader struct {
-	oldConv      *table.RowConverter
-	newConv      *table.RowConverter
+	oldConv      *pipeline.RowConverter
+	newConv      *pipeline.RowConverter
 	ad           *AsyncDiffer
 	outSch       *schema.Schema
 	bufferedRows []*table.Row
 }
 
-func NewRowDiffReader(ad *AsyncDiffer, oldConv, newConv *table.RowConverter, outSch *schema.Schema) *RowDiffReader {
+func NewRowDiffReader(ad *AsyncDiffer, oldConv, newConv *pipeline.RowConverter, outSch *schema.Schema) *RowDiffReader {
 	return &RowDiffReader{
 		oldConv,
 		newConv,

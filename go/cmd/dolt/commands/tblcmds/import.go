@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strings"
@@ -190,15 +191,15 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	err = mover.Move()
 
 	if err != nil {
-		if table.IsTransformFailure(err) {
+		if pipeline.IsTransformFailure(err) {
 			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
 
-			row := table.GetTransFailureRow(err)
+			row := pipeline.GetTransFailureRow(err)
 			if row != nil {
 				bdr.AddDetails("Bad Row:" + table.RowFmt(row))
 			}
 
-			details := table.GetTransFailureDetails(err)
+			details := pipeline.GetTransFailureDetails(err)
 
 			bdr.AddDetails(details)
 			bdr.AddDetails("These can be ignored using the '--continue'")

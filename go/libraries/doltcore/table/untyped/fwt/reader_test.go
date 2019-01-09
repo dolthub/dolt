@@ -104,7 +104,7 @@ func readTestRows(t *testing.T, inputStr string, fwtSch *FWTSchema, sep string) 
 	for {
 		row, err := fwtRd.ReadRow()
 
-		if err != io.EOF && err != nil && table.IsBadRow(err) {
+		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err
 		} else if table.IsBadRow(err) {
 			badRows++

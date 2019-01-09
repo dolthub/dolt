@@ -1,4 +1,4 @@
-package table
+package doltcore
 
 import (
 	"testing"
@@ -37,7 +37,7 @@ var tests = []strToNomsTypeTests{
 	{"0xdeadbeef", types.IntKind, nil, true},
 	{"test failure", types.UintKind, nil, true},
 	{"-1", types.UintKind, nil, true},
-	{"0123456789abcdeffedcba9876543210", types.UUIDKind, nil, true},
+	{"0123456789abcdeffedcba9876543210abc", types.UUIDKind, nil, true},
 	{"0", types.UUIDKind, nil, true},
 }
 

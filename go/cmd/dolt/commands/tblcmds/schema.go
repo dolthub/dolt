@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
@@ -64,7 +65,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func badRowCB(_ *table.TransformRowFailure) (quit bool) {
+func badRowCB(_ *pipeline.TransformRowFailure) (quit bool) {
 	panic("Should only get here is there is a bug.")
 }
 
@@ -101,9 +102,9 @@ func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltd
 	wr := fwt.NewTextWriter(cli.CliOut, schOutSchema, " | ")
 	defer wr.Close()
 	autoSize := fwt.NewAutoSizingFWTTransformer(schOutSchema, fwt.HashFillWhenTooLong, -1)
-	transforms := table.NewTransformCollection(
-		table.NamedTransform{fwtChName, autoSize.TransformToFWT})
-	p, start := table.NewAsyncPipeline(rd, transforms, wr, badRowCB)
+	transforms := pipeline.NewTransformCollection(
+		pipeline.NamedTransform{fwtChName, autoSize.TransformToFWT})
+	p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
 	in, _ := p.GetInChForTransf(fwtChName)
 	in <- headerRow

@@ -1,4 +1,4 @@
-package table
+package pipeline
 
 import "testing"
 

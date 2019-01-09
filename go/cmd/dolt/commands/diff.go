@@ -10,7 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
@@ -166,7 +166,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand.VerboseError {
 	unionedSch := untyped.UntypedSchemaUnion(newSch, oldSch)
 
-	newToUnionConv := table.IdentityConverter
+	newToUnionConv := pipeline.IdentityConverter
 	if newSch != nil {
 		newToUnionMapping, err := schema.NewInferredMapping(newSch, unionedSch)
 
@@ -174,10 +174,10 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
 		}
 
-		newToUnionConv, _ = table.NewRowConverter(newToUnionMapping)
+		newToUnionConv, _ = pipeline.NewRowConverter(newToUnionMapping)
 	}
 
-	oldToUnionConv := table.IdentityConverter
+	oldToUnionConv := pipeline.IdentityConverter
 	if oldSch != nil {
 		oldToUnionMapping, err := schema.NewInferredMapping(oldSch, unionedSch)
 
@@ -185,7 +185,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
 		}
 
-		oldToUnionConv, _ = table.NewRowConverter(oldToUnionMapping)
+		oldToUnionConv, _ = pipeline.NewRowConverter(oldToUnionMapping)
 	}
 
 	ad := doltdb.NewAsyncDiffer(1024)
@@ -196,26 +196,26 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 	defer rd.Close()
 
 	fwtTr := fwt.NewAutoSizingFWTTransformer(unionedSch, fwt.HashFillWhenTooLong, 1000)
-	colorTr := table.NewRowTransformer("coloring transform", doltdb.ColoringTransform)
-	transforms := table.NewTransformCollection(
-		table.NamedTransform{"fwt", fwtTr.TransformToFWT},
-		table.NamedTransform{"color", colorTr})
+	colorTr := pipeline.NewRowTransformer("coloring transform", doltdb.ColoringTransform)
+	transforms := pipeline.NewTransformCollection(
+		pipeline.NamedTransform{"fwt", fwtTr.TransformToFWT},
+		pipeline.NamedTransform{"color", colorTr})
 
 	wr := doltdb.NewColorDiffWriter(cli.CliOut, unionedSch, " | ")
 	defer wr.Close()
 
 	var verr errhand.VerboseError
-	badRowCB := func(trf *table.TransformRowFailure) (quit bool) {
+	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		verr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
 		return true
 	}
 
-	pipeline, start := table.NewAsyncPipeline(rd, transforms, wr, badRowCB)
+	p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-	ch, _ := pipeline.GetInChForTransf("fwt")
+	ch, _ := p.GetInChForTransf("fwt")
 	ch <- untyped.NewRowFromStrings(unionedSch, unionedSch.GetFieldNames())
 	start()
-	pipeline.Wait()
+	p.Wait()
 
 	return verr
 }

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/test"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 )
 
 func TestErrPreservingReader(t *testing.T) {
