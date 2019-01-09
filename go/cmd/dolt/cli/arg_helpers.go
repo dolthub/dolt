@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"os"
 )
 

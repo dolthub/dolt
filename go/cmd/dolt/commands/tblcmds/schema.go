@@ -5,12 +5,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strconv"
 )
 

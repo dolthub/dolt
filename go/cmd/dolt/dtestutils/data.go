@@ -3,9 +3,9 @@ package dtestutils
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"strconv"
 )
 

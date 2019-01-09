@@ -1,9 +1,9 @@
 package dtestutils
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"testing"
 )
 

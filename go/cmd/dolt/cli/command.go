@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"strings"
 )
 

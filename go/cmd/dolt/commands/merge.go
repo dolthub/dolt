@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
 
 var mergeShortDest = "Join two or more development histories together"

@@ -2,7 +2,7 @@ package tblcmds
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/mvdata"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/mvdata"
 	"testing"
 )
 

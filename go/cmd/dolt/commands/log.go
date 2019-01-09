@@ -4,9 +4,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strings"
 )
 
