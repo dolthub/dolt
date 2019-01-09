@@ -1,7 +1,6 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -33,7 +32,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {
-		fmt.Println("invalid usage")
+		cli.Println("invalid usage")
 		usage()
 		return 1
 	}

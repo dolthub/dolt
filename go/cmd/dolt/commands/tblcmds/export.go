@@ -1,14 +1,12 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/mvdata"
-	"os"
 )
 
 var exportShortDesc = `Export the contents of a table to a file.`
@@ -21,15 +19,14 @@ var exportSynopsis = []string{
 
 func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (*mvdata.DataLocation, *mvdata.DataLocation) {
 	if apr.NArg() != 2 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return nil, nil
 	}
 
 	tableName := apr.Arg(0)
 	if !doltdb.IsValidTableName(tableName) {
-		fmt.Fprintln(
-			os.Stderr,
+		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
 		return nil, nil
@@ -40,8 +37,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	fileLoc := mvdata.NewDataLocation(path, fType)
 
 	if fileLoc.Format == mvdata.InvalidDataFormat {
-		fmt.Fprintln(
-			os.Stderr,
+		cli.PrintErrln(
 			color.RedString("Could not infer type file '%s'\n", path),
 			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
 		return nil, nil
@@ -96,7 +92,7 @@ func Export(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	result := executeMove(dEnv, force, mvOpts)
 
 	if result == 0 {
-		fmt.Println(color.CyanString("Successfully exported data."))
+		cli.Println(color.CyanString("Successfully exported data."))
 	}
 
 	return result

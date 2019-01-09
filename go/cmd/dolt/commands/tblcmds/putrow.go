@@ -1,7 +1,6 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -10,7 +9,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"os"
 	"strings"
 )
 
@@ -47,7 +45,7 @@ func parsePutRowArgs(commandStr string, args []string) *putRowArgs {
 	fieldNames, kvps, verr := parseKVPs(parsedArgs[1:])
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Error())
+		cli.PrintErrln(verr.Error())
 		return nil
 	}
 
@@ -93,14 +91,14 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, color.RedString("Unable to get working value."))
+		cli.PrintErrln(color.RedString("Unable to get working value."))
 		return 1
 	}
 
 	tbl, ok := root.GetTable(prArgs.TableName)
 
 	if !ok {
-		fmt.Fprintln(os.Stderr, color.RedString("Unknown table %s", prArgs.TableName))
+		cli.PrintErrln(color.RedString("Unknown table %s", prArgs.TableName))
 		return 1
 	}
 
@@ -118,11 +116,11 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 
-	fmt.Println(color.CyanString("Successfully put row."))
+	cli.Println(color.CyanString("Successfully put row."))
 	return 0
 }
 

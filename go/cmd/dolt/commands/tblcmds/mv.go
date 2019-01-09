@@ -1,13 +1,11 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 )
 
 var tblMvShortDesc = "Renames a table"
@@ -29,7 +27,7 @@ func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "invalid usage")
+		cli.PrintErrln("invalid usage")
 		usage()
 		return 1
 	}

@@ -1,13 +1,11 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
-	"os"
 )
 
 const allParam = "all"
@@ -33,7 +31,7 @@ func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var err error
 	if apr.NArg() == 0 && !allFlag {
-		fmt.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
+		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		err = actions.StageAllTables(dEnv)
 	} else {
@@ -41,7 +39,7 @@ func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, toAddVErr(err).Verbose())
+		cli.PrintErrln(toAddVErr(err).Verbose())
 		return 1
 	}
 

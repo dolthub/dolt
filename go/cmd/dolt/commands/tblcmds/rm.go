@@ -1,14 +1,12 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 )
 
 var tblRmShortDesc = "Removes table(s) from the working set of tables."
@@ -40,7 +38,7 @@ func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 

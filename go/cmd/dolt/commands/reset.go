@@ -8,7 +8,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
-	"os"
 	"strings"
 )
 
@@ -52,7 +51,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, verr.Verbose())
+	cli.PrintErrln(verr.Verbose())
 	return 1
 }
 
@@ -67,7 +66,7 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	notStaged := actions.NewTableDiffs(working, staged)
 
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
-		fmt.Println("Unstaged changes after reset:")
+		cli.Println("Unstaged changes after reset:")
 
 		lines := make([]string, 0, notStaged.Len())
 		for _, tblName := range notStaged.Tables {
@@ -78,7 +77,7 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 			}
 		}
 
-		fmt.Println(strings.Join(lines, "\n"))
+		cli.Println(strings.Join(lines, "\n"))
 	}
 }
 

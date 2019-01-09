@@ -1,13 +1,11 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 	"sort"
 )
 
@@ -44,7 +42,7 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 0
 	}
 
-	fmt.Fprintln(os.Stderr, verr.Verbose())
+	cli.PrintErrln(verr.Verbose())
 	return 1
 }
 
@@ -52,13 +50,13 @@ func printTables(root *doltdb.RootValue, str string, verbose bool) errhand.Verbo
 	tblNames := root.GetTableNames()
 	sort.Strings(tblNames)
 
-	fmt.Printf("Tables in %s:\n", str)
+	cli.Printf("Tables in %s:\n", str)
 	for _, tbl := range tblNames {
 		if verbose {
 			h, _ := root.GetTableHash(tbl)
-			fmt.Printf("\t%-32s %s\n", tbl, h.String())
+			cli.Printf("\t%-32s %s\n", tbl, h.String())
 		} else {
-			fmt.Println("\t", tbl)
+			cli.Println("\t", tbl)
 		}
 	}
 

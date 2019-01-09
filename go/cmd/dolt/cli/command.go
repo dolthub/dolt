@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 	"strings"
 )
 
@@ -49,8 +47,8 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 		if command, ok := commandMap[subCommandStr]; ok {
 			if command.ReqRepo {
 				if !dEnv.HasLDDir() {
-					fmt.Fprintln(os.Stderr, color.RedString("The current directory is not a valid dolt repository."))
-					fmt.Fprintln(os.Stderr, "run: dolt init before trying to run this command")
+					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
+					PrintErrln("run: dolt init before trying to run this command")
 					return 2
 				}
 			}
@@ -58,16 +56,29 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 			return command.Func(commandStr+" "+subCommandStr, args[1:], dEnv)
 		}
 
-		fmt.Fprintln(os.Stderr, color.RedString("Unknown Command "+subCommandStr))
+		if !isHelp(subCommandStr) {
+			PrintErrln(color.RedString("Unknown Command " + subCommandStr))
+		}
 		printUsage(commandStr, commands)
 		return 1
 	}
 }
 
+func isHelp(str string) bool {
+	switch {
+	case str == "-h":
+		return true
+	case strings.TrimLeft(str, "- ") == "help":
+		return true
+	}
+
+	return false
+}
+
 func printUsage(commandStr string, commands []*Command) {
-	fmt.Println("Valid commands for", commandStr, "are")
+	Println("Valid commands for", commandStr, "are")
 
 	for _, command := range commands {
-		fmt.Printf("    %16s - %s\n", command.Name, command.Desc)
+		Printf("    %16s - %s\n", command.Name, command.Desc)
 	}
 }

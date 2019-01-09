@@ -1,8 +1,6 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -34,16 +32,18 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
+	os.Chdir("/Users/brian/dolt_test2/")
+	resetIO := cli.InitIO()
+	defer resetIO()
+
 	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
 	if dEnv.CfgLoadErr != nil {
-		fmt.Fprintln(os.Stderr, color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
+		cli.PrintErrln(color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
 		os.Exit(1)
 	}
 
-	flag.Parse()
-	res := doltCommand("dolt", flag.Args(), dEnv)
+	res := doltCommand("dolt", os.Args[1:], dEnv)
 
-	fmt.Println()
 	os.Exit(res)
 }

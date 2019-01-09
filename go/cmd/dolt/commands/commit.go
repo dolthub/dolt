@@ -1,14 +1,12 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
-	"os"
 )
 
 var commitShortDesc = `Record changes to the repository`
@@ -28,7 +26,7 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
-		fmt.Fprintln(os.Stderr, color.RedString("Missing required parameter -m"))
+		cli.PrintErrln(color.RedString("Missing required parameter -m"))
 		usage()
 		return 1
 	}
