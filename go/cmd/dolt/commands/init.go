@@ -1,13 +1,11 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 )
 
 const (
@@ -26,10 +24,10 @@ var initSynopsis = []string{
 // Init is used by the init command
 func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if dEnv.HasLDDir() {
-		fmt.Fprintln(os.Stderr, color.RedString("This directory has already been initialized."))
+		cli.PrintErrln(color.RedString("This directory has already been initialized."))
 		return 1
 	} else if !dEnv.IsCWDEmpty() {
-		fmt.Fprintln(os.Stderr, color.RedString("init must be run on an empty directory"))
+		cli.PrintErrln(color.RedString("init must be run on an empty directory"))
 		return 1
 	}
 
@@ -45,14 +43,14 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	email = dEnv.Config.IfEmptyUseConfig(email, env.UserEmailKey)
 
 	if name == "" {
-		fmt.Fprintln(os.Stderr,
+		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
 				"Use the init parameter -name \"FIRST LAST\" to set it for this repo, "+
 				"or dolt config -global -set %[1]s \"FIRST LAST\"", env.UserNameKey))
 		usage()
 		return 1
 	} else if email == "" {
-		fmt.Fprintln(os.Stderr,
+		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
 				"Use the init parameter -email \"EMAIL_ADDRESS\" to set it for this repo, "+
 				"or dolt config -global -set %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey))
@@ -63,11 +61,11 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	err := dEnv.InitRepo(name, email)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
+		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))
 		return 1
 	}
 
-	fmt.Println(color.CyanString("Successfully initialized dolt data repository."))
+	cli.Println(color.CyanString("Successfully initialized dolt data repository."))
 	return 0
 }
 

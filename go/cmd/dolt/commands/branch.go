@@ -9,7 +9,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
-	"os"
 	"sort"
 )
 
@@ -99,7 +98,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 			}
 		}
 
-		fmt.Println(line)
+		cli.Println(line)
 	}
 
 	return 0
@@ -107,7 +106,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 
 func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -138,7 +137,7 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 
 func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -167,7 +166,7 @@ func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 
 func deleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 1 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -193,7 +192,7 @@ func deleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli
 
 func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() == 0 || apr.NArg() > 2 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -234,7 +233,7 @@ func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string) errha
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 
 		if verr.ShouldPrintUsage() {
 			usage()

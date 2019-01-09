@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
@@ -15,7 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped/fwt"
-	"os"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -48,7 +46,7 @@ func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 
@@ -129,7 +127,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 		if !ok1 && !ok2 {
 			bdr := errhand.BuildDError("Table could not be found.")
 			bdr.AddDetails("The table %s does not exist.", tblName)
-			fmt.Fprintln(os.Stderr, bdr.Build())
+			cli.PrintErrln(bdr.Build())
 		} else if tbl1 != nil && tbl2 != nil && tbl1.HashOf() == tbl2.HashOf() {
 			continue
 		}
@@ -203,7 +201,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 		table.NamedTransform{"fwt", fwtTr.TransformToFWT},
 		table.NamedTransform{"color", colorTr})
 
-	wr := doltdb.NewColorDiffWriter(os.Stdout, unionedSch, " | ")
+	wr := doltdb.NewColorDiffWriter(cli.CliOut, unionedSch, " | ")
 	defer wr.Close()
 
 	var verr errhand.VerboseError

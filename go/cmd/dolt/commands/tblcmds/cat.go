@@ -1,7 +1,6 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -13,7 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped/fwt"
-	"os"
 )
 
 var catShortDesc = "print tables"
@@ -47,7 +45,7 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			}
 
 			if len(args) == 0 {
-				fmt.Println("No tables specified")
+				cli.Println("No tables specified")
 				usage()
 				return 1
 			}
@@ -57,7 +55,7 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 
@@ -80,14 +78,14 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 
 			mapping := untyped.TypedToUntypedMapping(tblSch)
 			outSch := mapping.DestSch
-			wr := fwt.NewTextWriter(os.Stdout, outSch, " | ")
+			wr := fwt.NewTextWriter(cli.CliOut, outSch, " | ")
 			defer wr.Close()
 
 			rConv, _ := table.NewRowConverter(mapping)
 			transform := table.NewRowTransformer("schema mapping transform", rConv.TransformRow)
 			autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.HashFillWhenTooLong, 0)
 			badRowCB := func(transfName string, row *table.Row, errDetails string) (quit bool) {
-				fmt.Fprintln(os.Stderr, color.RedString("Failed to transform row %s.", table.RowFmt(row)))
+				cli.PrintErrln(color.RedString("Failed to transform row %s.", table.RowFmt(row)))
 				return true
 			}
 

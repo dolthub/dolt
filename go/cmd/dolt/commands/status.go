@@ -67,10 +67,10 @@ const (
 
 func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 	if staged.Len() > 0 {
-		fmt.Println(stagedHeader)
+		cli.Println(stagedHeader)
 
 		if printHelp {
-			fmt.Println(stagedHeaderHelp)
+			cli.Println(stagedHeaderHelp)
 		}
 
 		lines := make([]string, 0, staged.Len())
@@ -79,7 +79,7 @@ func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
 
-		fmt.Println(color.GreenString(strings.Join(lines, "\n")))
+		cli.Println(color.GreenString(strings.Join(lines, "\n")))
 		return len(lines)
 	}
 
@@ -89,13 +89,13 @@ func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPrinted int) int {
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		if linesPrinted > 0 {
-			fmt.Println()
+			cli.Println()
 		}
 
-		fmt.Println(workingHeader)
+		cli.Println(workingHeader)
 
 		if printHelp {
-			fmt.Println(workingHeaderHelp)
+			cli.Println(workingHeaderHelp)
 		}
 
 		lines := make([]string, 0, notStaged.Len())
@@ -107,19 +107,19 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			}
 		}
 
-		fmt.Println(color.RedString(strings.Join(lines, "\n")))
+		cli.Println(color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
 	}
 
 	if notStaged.NumAdded > 0 {
 		if linesPrinted > 0 {
-			fmt.Println()
+			cli.Println()
 		}
 
-		fmt.Println(untrackedHeader)
+		cli.Println(untrackedHeader)
 
 		if printHelp {
-			fmt.Println(untrackedHeaderHelp)
+			cli.Println(untrackedHeaderHelp)
 		}
 
 		lines := make([]string, 0, notStaged.Len())
@@ -131,7 +131,7 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			}
 		}
 
-		fmt.Println(color.RedString(strings.Join(lines, "\n")))
+		cli.Println(color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
 	}
 
@@ -139,12 +139,12 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 }
 
 func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs) {
-	fmt.Printf(branchHeader, dEnv.RepoState.Branch)
+	cli.Printf(branchHeader, dEnv.RepoState.Branch)
 
 	n := printStagedDiffs(staged, true)
 	n = printDiffsNotStaged(notStaged, true, n)
 
 	if n == 0 {
-		fmt.Println("nothing to commit, working tree clean")
+		cli.Println("nothing to commit, working tree clean")
 	}
 }

@@ -39,7 +39,7 @@ func OpenTextWriter(path string, fs filesys.WritableFS, sch *schema.Schema, colS
 	return &TextWriter{wr, bwr, sch, colSep}, nil
 }
 
-func NewTextWriter(wr io.WriteCloser, sch *schema.Schema, colSep string) table.TableWriteCloser {
+func NewTextWriter(wr io.Writer, sch *schema.Schema, colSep string) table.TableWriteCloser {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	return &TextWriter{nil, bwr, sch, colSep}
 }

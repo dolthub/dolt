@@ -1,14 +1,12 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/set"
-	"os"
 	"strings"
 )
 
@@ -51,14 +49,14 @@ func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ops := apr.FlagsEqualTo([]string{addOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
 
 	if cfgTypes.Size() == 2 {
-		fmt.Fprintln(os.Stderr, color.RedString("Specifying both -local and -global is not valid. Exactly one may be set"))
+		cli.PrintErrln(color.RedString("Specifying both -local and -global is not valid. Exactly one may be set"))
 		usage()
 	} else {
 		switch ops.Size() {
 		case 1:
 			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args(), usage)
 		default:
-			fmt.Fprintln(os.Stderr, color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
+			cli.PrintErrln(color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
 			usage()
 		}
 	}
@@ -70,7 +68,7 @@ func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName str
 	switch opName {
 	case getOperationStr:
 		return getOperation(dEnv, setCfgTypes, args, func(k string, v *string) {
-			fmt.Println(*v)
+			cli.Println(*v)
 		})
 	case addOperationStr:
 		return addOperation(dEnv, setCfgTypes, args, usage)
@@ -78,7 +76,7 @@ func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName str
 		return unsetOperation(dEnv, setCfgTypes, args, usage)
 	case listOperationStr:
 		return listOperation(dEnv, setCfgTypes, args, usage, func(k string, v string) {
-			fmt.Println(k, "=", v)
+			cli.Println(k, "=", v)
 		})
 	}
 
@@ -95,7 +93,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 	for _, cfgType := range cfgTypesSl {
 		isGlobal := cfgType == globalParamName
 		if _, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
-			fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+			cli.PrintErrln(color.RedString("Unable to read config."))
 			return 1
 		}
 	}
@@ -112,7 +110,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 				printFn(args[0], &val)
 				return 0
 			} else if err != config.ErrConfigParamNotFound {
-				fmt.Fprintln(os.Stderr, color.RedString("Unexpected error: %s", err.Error()))
+				cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
 				return 1
 			}
 		}
@@ -123,7 +121,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 
 func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
 	if len(args) != 2 {
-		fmt.Println("error: wrong number of arguments")
+		cli.Println("error: wrong number of arguments")
 		usage()
 		return 1
 	}
@@ -136,7 +134,7 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 			err := dEnv.Config.CreateLocalConfig(updates)
 
 			if err != nil {
-				fmt.Fprintln(os.Stderr, color.RedString("Unable to create repo local config file"))
+				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
 				return 1
 			}
 
@@ -147,42 +145,42 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 		err := cfg.SetStrings(updates)
 
 		if err != nil {
-			fmt.Fprintln(os.Stderr, color.RedString("Failed to update config."))
+			cli.PrintErrln(color.RedString("Failed to update config."))
 			return 1
 		}
 	}
 
-	fmt.Println(color.CyanString("Config successfully updated."))
+	cli.Println(color.CyanString("Config successfully updated."))
 	return 0
 }
 
 func unsetOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
 	if len(args) == 0 {
-		fmt.Println("error: wrong number of arguments")
+		cli.Println("error: wrong number of arguments")
 		usage()
 		return 1
 	}
 
 	isGlobal := setCfgTypes.Contains(globalParamName)
 	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
-		fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+		cli.PrintErrln(color.RedString("Unable to read config."))
 		return 1
 	} else {
 		err := cfg.Unset(args)
 
 		if err != nil && err != config.ErrConfigParamNotFound {
-			fmt.Fprintln(os.Stderr, color.RedString("Error unsetting the keys %v. Error: %s", args, err.Error()))
+			cli.PrintErrln(color.RedString("Error unsetting the keys %v. Error: %s", args, err.Error()))
 			return 1
 		}
 
-		fmt.Println(color.CyanString("Config successfully updated."))
+		cli.Println(color.CyanString("Config successfully updated."))
 		return 0
 	}
 }
 
 func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter, printFn func(string, string)) int {
 	if len(args) != 0 {
-		fmt.Println("error: wrong number of arguments")
+		cli.Println("error: wrong number of arguments")
 		usage()
 		return 1
 	}
@@ -191,7 +189,7 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 	for _, cfgType := range cfgTypesSl {
 		isGlobal := cfgType == globalParamName
 		if _, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
-			fmt.Fprintln(os.Stderr, color.RedString("Unable to read config."))
+			cli.PrintErrln(color.RedString("Unable to read config."))
 			return 1
 		}
 	}

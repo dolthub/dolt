@@ -26,27 +26,27 @@ func PrintHelpText(commandStr, shortDesc, longDesc string, synopsis []string, pa
 		helpWidth = 120
 	}
 
-	fmt.Println(embolden("<b>NAME</b>"))
-	fmt.Printf("%s%s - %s\n", indent, commandStr, shortDesc)
+	Println(embolden("<b>NAME</b>"))
+	Printf("%s%s - %s\n", indent, commandStr, shortDesc)
 
 	if len(synopsis) > 0 {
-		fmt.Println()
-		fmt.Println(embolden("<b>SYNOPSIS</b>"))
+		Println()
+		Println(embolden("<b>SYNOPSIS</b>"))
 
 		for _, curr := range synopsis {
-			fmt.Printf(indent+"%s %s\n", underline.Sprint(commandStr), curr)
+			Printf(indent+"%s %s\n", underline.Sprint(commandStr), curr)
 		}
 	}
 
-	fmt.Println()
-	fmt.Println(embolden("<b>DESCRIPTION</b>"))
-	fmt.Println(ToIndentedParagraph(longDesc, indent, helpWidth))
+	Println()
+	Println(embolden("<b>DESCRIPTION</b>"))
+	Println(ToIndentedParagraph(longDesc, indent, helpWidth))
 
 	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
-		fmt.Println()
-		fmt.Println(embolden("<b>OPTIONS</b>"))
+		Println()
+		Println(embolden("<b>OPTIONS</b>"))
 		optionHelp := OptionsUsage(parser, indent, helpWidth)
-		fmt.Println(optionHelp)
+		Println(optionHelp)
 	}
 }
 
@@ -61,18 +61,18 @@ func PrintUsage(commandStr string, synopsis []string, parser *argparser.ArgParse
 	if len(synopsis) > 0 {
 		for i, curr := range synopsis {
 			if i == 0 {
-				fmt.Println("usage:", commandStr, curr)
+				Println("usage:", commandStr, curr)
 			} else {
-				fmt.Println("   or:", commandStr, curr)
+				Println("   or:", commandStr, curr)
 			}
 		}
 	}
 
 	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
-		fmt.Println()
-		fmt.Println("Specific", commandStr, "options")
+		Println()
+		Println("Specific", commandStr, "options")
 		optionHelp := OptionsUsage(parser, "    ", helpWidth)
-		fmt.Println(optionHelp)
+		Println(optionHelp)
 	}
 }
 

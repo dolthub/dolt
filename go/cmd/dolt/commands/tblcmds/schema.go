@@ -1,7 +1,6 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -12,7 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/untyped/fwt"
-	"os"
 	"strconv"
 )
 
@@ -85,22 +83,22 @@ func printSchemas(cmStr string, root *doltdb.RootValue, tables []string) {
 			notFound = append(notFound, tblName)
 		} else {
 			printTblSchema(cmStr, tblName, tbl, root)
-			fmt.Println()
+			cli.Println()
 		}
 	}
 
 	for _, tblName := range notFound {
-		fmt.Fprintln(os.Stderr, color.YellowString("%s not found", tblName))
+		cli.PrintErrln(color.YellowString("%s not found", tblName))
 	}
 }
 
 func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) {
-	fmt.Println(bold.Sprint(tblName), "@", cmStr)
+	cli.Println(bold.Sprint(tblName), "@", cmStr)
 
 	imt := schemaAsInMemTable(tbl, root)
 	rd := table.NewInMemTableReader(imt)
 	defer rd.Close()
-	wr := fwt.NewTextWriter(os.Stdout, schOutSchema, " | ")
+	wr := fwt.NewTextWriter(cli.CliOut, schOutSchema, " | ")
 	defer wr.Close()
 	autoSize := fwt.NewAutoSizingFWTTransformer(schOutSchema, fwt.HashFillWhenTooLong, -1)
 	transforms := table.NewTransformCollection(

@@ -1,7 +1,6 @@
 package tblcmds
 
 import (
-	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -11,7 +10,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"os"
 )
 
 var rmRowShortDesc = "Removes row(s) from a table"
@@ -33,7 +31,7 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "invalid usage")
+		cli.PrintErrln("invalid usage")
 		usage()
 		return nil
 	}
@@ -70,7 +68,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr != nil {
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 
@@ -127,7 +125,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 		_, ok := m.MaybeGet(pk)
 
 		if !ok {
-			fmt.Fprintln(os.Stderr, color.YellowString(`No row with %s equal to %s was found.`, pkFldName, types.EncodedValue(pk)))
+			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, pkFldName, types.EncodedValue(pk)))
 			continue
 		}
 
@@ -158,7 +156,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 	verr = commands.UpdateWorkingWithVErr(dEnv, root)
 
 	if verr == nil {
-		fmt.Printf("Removed %d rows", updates)
+		cli.Printf("Removed %d rows", updates)
 	}
 
 	return verr

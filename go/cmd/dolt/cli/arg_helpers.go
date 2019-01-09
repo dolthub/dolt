@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"os"
 )
@@ -13,7 +12,7 @@ func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter
 
 	if err != nil {
 		if err != argparser.ErrHelp {
-			fmt.Fprintln(os.Stderr, err.Error())
+			PrintErrln(err.Error())
 		}
 
 		usagePrinter()

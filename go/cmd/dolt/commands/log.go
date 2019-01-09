@@ -1,14 +1,12 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"os"
 	"strings"
 )
 
@@ -26,7 +24,7 @@ var logSynopsis = []string{
 type commitLoggerFunc func(*doltdb.CommitMeta, hash.Hash)
 
 func logToStdOutFunc(cm *doltdb.CommitMeta, ch hash.Hash) {
-	fmt.Println(color.YellowString("commit %s", ch.String()))
+	cli.Println(color.YellowString("commit %s", ch.String()))
 
 	printAuthor(cm)
 	printDate(cm)
@@ -34,17 +32,17 @@ func logToStdOutFunc(cm *doltdb.CommitMeta, ch hash.Hash) {
 }
 
 func printAuthor(cm *doltdb.CommitMeta) {
-	fmt.Printf("Author: %s <%s>\n", cm.Name, cm.Email)
+	cli.Printf("Author: %s <%s>\n", cm.Name, cm.Email)
 }
 
 func printDate(cm *doltdb.CommitMeta) {
 	timeStr := cm.FormatTS()
-	fmt.Println("Date:  ", timeStr)
+	cli.Println("Date:  ", timeStr)
 }
 
 func printDesc(cm *doltdb.CommitMeta) {
 	formattedDesc := "\n\t" + strings.Replace(cm.Description, "\n", "\n\t", -1) + "\n"
-	fmt.Println(formattedDesc)
+	cli.Println(formattedDesc)
 }
 
 func Log(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -66,11 +64,11 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 		cs, err = doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Branch)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid commit %s\n", comSpecStr)
+			cli.PrintErrf("Invalid commit %s\n", comSpecStr)
 			return 1
 		}
 	} else {
-		fmt.Fprintln(os.Stderr, "Invalid usage")
+		cli.PrintErrln("Invalid usage")
 		usage()
 		return 1
 	}
@@ -78,7 +76,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	commit, err := dEnv.DoltDB.Resolve(cs)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
 		return 1
 	}
 
@@ -86,7 +84,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	err = logCommit(dEnv.DoltDB, commit, n, loggerFunc)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error printing commit.")
+		cli.PrintErrln("Error printing commit.")
 		return 1
 	}
 

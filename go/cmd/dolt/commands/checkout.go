@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -9,7 +8,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
-	"os"
 )
 
 var coShortDesc = `Switch branches or restore working tree tables`
@@ -39,7 +37,7 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
-		fmt.Fprint(os.Stderr, color.RedString("Invalid command line arguments."))
+		cli.PrintErr(color.RedString("Invalid command line arguments."))
 		usagePrt()
 		return 1
 	} else {
@@ -67,7 +65,7 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		if verr != nil {
-			fmt.Fprintln(os.Stderr, verr.Verbose())
+			cli.PrintErrln(verr.Verbose())
 			return 1
 		}
 	}
@@ -134,7 +132,7 @@ func checkoutBranch(dEnv *env.DoltEnv, name string) errhand.VerboseError {
 		}
 	}
 
-	fmt.Printf("Switched to branch '%s'", name)
+	cli.Printf("Switched to branch '%s'", name)
 	return nil
 }
 

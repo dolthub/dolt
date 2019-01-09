@@ -10,7 +10,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/mvdata"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
-	"os"
 	"strings"
 )
 
@@ -80,7 +79,7 @@ var importSynopsis = []string{
 
 func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, *mvdata.DataLocation, *mvdata.DataLocation) {
 	if apr.NArg() != 2 {
-		fmt.Println("Invalid usage.")
+		cli.Println("Invalid usage.")
 		usage()
 		return mvdata.InvalidOp, nil, nil
 	}
@@ -90,7 +89,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		mvOp = mvdata.OverwriteOp
 	} else {
 		if apr.Contains(outSchemaParam) {
-			fmt.Fprintln(os.Stderr, "fatal:", outSchemaParam+"is not supported for update operations")
+			cli.PrintErrln("fatal:", outSchemaParam+"is not supported for update operations")
 			usage()
 			return mvdata.InvalidOp, nil, nil
 		}
@@ -98,8 +97,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 	tableName := apr.Arg(0)
 	if !doltdb.IsValidTableName(tableName) {
-		fmt.Fprintln(
-			os.Stderr,
+		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
 		return mvdata.InvalidOp, nil, nil
@@ -110,8 +108,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	fileLoc := mvdata.NewDataLocation(path, fType)
 
 	if fileLoc.Format == mvdata.InvalidDataFormat {
-		fmt.Fprintln(
-			os.Stderr,
+		cli.PrintErrln(
 			color.RedString("Could not infer type file '%s'\n", path),
 			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
 		return mvdata.InvalidOp, nil, nil
@@ -172,12 +169,12 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, color.RedString("Unable to get the working root value for this data repository."))
+		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))
 		return 1
 	}
 
 	if mvOpts.Operation == mvdata.OverwriteOp && !force && mvOpts.Dest.Exists(root, dEnv.FS) {
-		fmt.Fprintln(os.Stderr, color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
+		cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
 		return 1
 	}
 
@@ -185,14 +182,14 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 	if nDMErr != nil {
 		verr := newDataMoverErrToVerr(mvOpts, nDMErr)
-		fmt.Fprintln(os.Stderr, verr.Verbose())
+		cli.PrintErrln(verr.Verbose())
 		return 1
 	}
 
 	err = mover.Move()
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "An error occurred moving data.", err.Error())
+		cli.PrintErrln("An error occurred moving data.", err.Error())
 		return 1
 	}
 
@@ -200,7 +197,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		err = dEnv.PutTableToWorking(*nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
 
 		if err != nil {
-			fmt.Fprintln(os.Stderr, color.RedString("Failed to update the working value."))
+			cli.PrintErrln(color.RedString("Failed to update the working value."))
 			return 1
 		}
 	}
