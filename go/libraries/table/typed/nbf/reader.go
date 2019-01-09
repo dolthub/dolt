@@ -3,6 +3,7 @@ package nbf
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
@@ -41,8 +42,8 @@ func NewNBFReader(r io.ReadCloser) (*NBFReader, error) {
 	return &NBFReader{r, br, sch}, nil
 }
 
-// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (nbfr *NBFReader) ReadRow() (*table.Row, error) {
 	sch := nbfr.sch
 	numFields := sch.NumFields()
@@ -71,7 +72,7 @@ func (nbfr *NBFReader) ReadRow() (*table.Row, error) {
 		return nil, err
 	} else if numFieldVals != numFields {
 		if err == nil {
-			err = table.ErrBadRow
+			err = table.NewBadRow(nil, fmt.Sprintf("Schema specifies %d fields but row has %d values.", numFields, numFieldVals))
 		}
 		return nil, err
 	}

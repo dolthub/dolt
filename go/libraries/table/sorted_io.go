@@ -94,8 +94,8 @@ func (str *SortingTableReader) GetSchema() *schema.Schema {
 	return str.sch
 }
 
-// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (str *SortingTableReader) ReadRow() (*Row, error) {
 	if str.currentIdx == -1 {
 		panic("Attempted to read row after close.")
@@ -163,7 +163,7 @@ func (stWr *SortingTableWriter) Close() error {
 			row := stWr.rs.sortKeyToRow[key]
 			err := stWr.wr.WriteRow(row)
 
-			if err != nil && (err != ErrBadRow || !stWr.contOnErr) {
+			if err != nil && (!IsBadRow(err) || !stWr.contOnErr) {
 				return err
 			}
 		}

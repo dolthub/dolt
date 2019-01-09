@@ -1,7 +1,6 @@
 package mvdata
 
 import (
-	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/filesys"
@@ -123,9 +122,9 @@ func (imp *DataMover) Move() error {
 	defer imp.Wr.Close()
 
 	var rowErr error
-	badRowCB := func(transfName string, row *table.Row, errDetails string) (quit bool) {
+	badRowCB := func(trf *table.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
-			rowErr = errors.New(transfName + "failed. " + errDetails)
+			rowErr = trf
 			return false
 		}
 

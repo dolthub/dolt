@@ -36,7 +36,11 @@ func StringToValue(s string, kind types.NomsKind) (types.Value, error) {
 	panic("Unsupported type " + kind.String())
 }
 
-func stringToFloat(s string) (types.Float, error) {
+func stringToFloat(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
 	f, err := strconv.ParseFloat(s, 64)
 
 	if err != nil {
@@ -46,22 +50,38 @@ func stringToFloat(s string) (types.Float, error) {
 	return types.Float(f), err
 }
 
-func stringToBool(s string) (types.Bool, error) {
+func stringToBool(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
 	b, err := strconv.ParseBool(strings.ToLower(s))
 	return types.Bool(b), err
 }
 
-func stringToInt(s string) (types.Int, error) {
+func stringToInt(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
 	n, err := strconv.ParseInt(s, 10, 64)
 	return types.Int(n), err
 }
 
-func stringToUint(s string) (types.Uint, error) {
+func stringToUint(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
 	n, err := strconv.ParseUint(s, 10, 64)
 	return types.Uint(n), err
 }
 
-func stringToUUID(s string) (types.UUID, error) {
+func stringToUUID(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
 	u, err := uuid.Parse(s)
 	return types.UUID(u), err
 }

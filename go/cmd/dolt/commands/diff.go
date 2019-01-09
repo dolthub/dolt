@@ -205,8 +205,8 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 	defer wr.Close()
 
 	var verr errhand.VerboseError
-	badRowCB := func(transfName string, row *table.Row, errDetails string) (quit bool) {
-		verr = errhand.BuildDError("Failed transforming row").AddDetails(transfName).AddDetails(errDetails).Build()
+	badRowCB := func(trf *table.TransformRowFailure) (quit bool) {
+		verr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
 		return true
 	}
 

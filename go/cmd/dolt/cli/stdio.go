@@ -11,7 +11,7 @@ import (
 var CliOut = color.Output
 var CliErr = color.Error
 
-func InitIO() func() {
+func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
 
 	outFile := filepath.Join(os.TempDir(), uuid.New().String())
@@ -22,7 +22,7 @@ func InitIO() func() {
 		os.Stderr = f
 	}
 
-	return func() {
+	restoreIO = func() {
 		if f != nil {
 			f.Close()
 		}
@@ -30,6 +30,8 @@ func InitIO() func() {
 		os.Stdout = stdOut
 		os.Stderr = stdErr
 	}
+
+	return restoreIO
 }
 
 func Println(a ...interface{}) {

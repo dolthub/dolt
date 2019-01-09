@@ -165,9 +165,9 @@ func (asTr *AutoSizingFWTTransformer) processRow(row *table.Row, outChan chan<- 
 
 	if errMsg != "" {
 		badRowChan <- &table.TransformRowFailure{
-			BadRow:        row,
+			Row:           row,
 			TransformName: "Auto Sizing Fixed Width Transform",
-			BadRowDetails: errMsg,
+			Details:       errMsg,
 		}
 	} else if len(rds) == 1 {
 		props := row.ClonedMergedProperties(rds[0].Properties)

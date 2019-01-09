@@ -32,9 +32,9 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
-	os.Chdir("/Users/brian/dolt_test2/")
-	resetIO := cli.InitIO()
-	defer resetIO()
+	os.Chdir("/Users/brian/dolt_test2")
+	restoreIO := cli.InitIO()
+	defer restoreIO()
 
 	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 

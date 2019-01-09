@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
 	"io"
 	"path/filepath"
+	"strings"
 )
 
 var WriteBufSize = 256 * 1024
@@ -69,9 +70,11 @@ func (nbfw *NBFWriter) GetSchema() *schema.Schema {
 func (nbfw *NBFWriter) WriteRow(row *table.Row) error {
 	sch := row.GetSchema()
 	if sch.NumFields() != nbfw.sch.NumFields() {
-		return errors.New("Invalid row does not have the correct number of fields.")
+		return table.NewBadRow(row, "Output schema does not match row schema")
 	} else if !table.RowIsValid(row) {
-		return table.ErrBadRow
+		badFlds := table.InvalidFieldsForRow(row)
+		fldsStr := strings.Join(badFlds, ",")
+		return table.NewBadRow(row, "Row missing some required fields: "+fldsStr)
 	}
 
 	pk := table.GetPKFromRow(row)

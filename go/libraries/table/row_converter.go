@@ -49,7 +49,8 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 	destFieldCount := rc.DestSch.NumFields()
 	fieldVals := make([]types.Value, destFieldCount)
 
-	err := pantoerr.PanicToErrorInstance(ErrBadRow, func() error {
+	unexpectedErr := NewBadRow(inRow, "Unexpected Error")
+	err := pantoerr.PanicToErrorInstance(unexpectedErr, func() error {
 		rowData := inRow.CurrData()
 		for i := 0; i < destFieldCount; i++ {
 			srcIdx := rc.DestToSrc[i]
@@ -61,7 +62,7 @@ func (rc *RowConverter) Convert(inRow *Row) (*RowData, error) {
 			mappedVal, err := rc.convFuncs[i](val)
 
 			if err != nil {
-				return ErrBadRow
+				return NewBadRow(inRow, err.Error())
 			}
 
 			fieldVals[i] = mappedVal
