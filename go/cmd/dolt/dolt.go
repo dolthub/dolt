@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	Version = "0.2.1"
+	Version = "0.2.2"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
@@ -32,7 +32,6 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
-	os.Chdir("/Users/brian/dolt_test2")
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
