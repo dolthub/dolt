@@ -15,21 +15,21 @@ func TestExport(t *testing.T) {
 		outputIsTyped bool
 	}{
 		{
-			[]string{"-table", tableName, "-pk", "id", csvPath},
+			[]string{"-pk", "id", tableName, csvPath},
 			csvPath,
 			nil,
 			"",
 			false,
 		},
 		{
-			[]string{"-table", tableName, psvPath},
+			[]string{tableName, psvPath},
 			psvPath,
 			nil,
 			"",
 			false,
 		},
 		{
-			[]string{"-table", tableName, nbfPath},
+			[]string{tableName, nbfPath},
 			nbfPath,
 			nil,
 			"",

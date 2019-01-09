@@ -2,7 +2,7 @@ package errhand
 
 import (
 	"errors"
-	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"testing"
 )
 

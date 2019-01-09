@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"testing"
 )
