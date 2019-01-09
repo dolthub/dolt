@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/nbf"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/nbf"
 	"testing"
 )
 

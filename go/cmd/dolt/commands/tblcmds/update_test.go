@@ -4,9 +4,9 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"strings"
 	"testing"
 )

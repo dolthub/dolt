@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/env/actions"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 )
 
 func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
