@@ -11,11 +11,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	// The directory where configuration and state information will be written within a data repo directory
-	DoltDir = ".dolt"
-)
-
 var ErrDirNotEmpty = errors.New("directory is not empty")
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 var ErrStateUpdate = errors.New("error updating local data repo state")
@@ -31,7 +26,8 @@ type DoltEnv struct {
 
 	DoltDB *doltdb.DoltDB
 
-	FS filesys.Filesys
+	FS  filesys.Filesys
+	loc doltdb.DoltDBLocation
 }
 
 // Load loads the DoltEnv for the current directory of the cli
@@ -47,6 +43,7 @@ func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *D
 		rsErr,
 		ddb,
 		fs,
+		loc,
 	}
 }
 
@@ -97,10 +94,10 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error {
 		return ErrDirNotEmpty
 	}
 
-	err := dEnv.FS.MkDirs(DoltDir)
+	err := dEnv.FS.MkDirs(doltdb.DoltDataDir)
 
 	if err != nil {
-		return fmt.Errorf("unable to make directory %s within the working directory", DoltDir)
+		return fmt.Errorf("unable to make directory %s within the working directory", doltdb.DoltDataDir)
 	}
 
 	err = dEnv.Config.CreateLocalConfig(map[string]string{})
@@ -110,6 +107,7 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error {
 		return fmt.Errorf("failed creating file %s", getLocalConfigPath())
 	}
 
+	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
 	err = dEnv.DoltDB.WriteEmptyRepo(name, email)
 
 	if err != nil {
@@ -206,5 +204,10 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, table
 
 	tbl := doltdb.NewTable(vrw, schVal, rows)
 	newRoot := root.PutTable(dEnv.DoltDB, tableName, tbl)
+
+	if root.HashOf() == newRoot.HashOf() {
+		return nil
+	}
+
 	return dEnv.UpdateWorkingRoot(newRoot)
 }

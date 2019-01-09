@@ -23,7 +23,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 	initialFiles := map[string][]byte{}
 
 	if isInitialized {
-		doltDir := filepath.Join(workingDir, DoltDir)
+		doltDir := filepath.Join(workingDir, doltdb.DoltDir)
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()

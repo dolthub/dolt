@@ -1,6 +1,7 @@
 package env
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"os/user"
 	"path/filepath"
 )
@@ -28,15 +29,15 @@ func getGlobalCfgPath(hdp HomeDirProvider) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(homeDir, DoltDir, globalConfig), nil
+	return filepath.Join(homeDir, doltdb.DoltDir, globalConfig), nil
 }
 
 func getLocalConfigPath() string {
-	return filepath.Join(".", DoltDir, configFile)
+	return filepath.Join(".", doltdb.DoltDir, configFile)
 }
 
 func getDoltDir() string {
-	return filepath.Join(".", DoltDir)
+	return filepath.Join(".", doltdb.DoltDir)
 }
 
 func getRepoStateFile() string {

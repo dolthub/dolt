@@ -19,7 +19,7 @@ func testHomeDirFunc() (string, error) {
 }
 
 func createTestEnv() *env.DoltEnv {
-	initialDirs := []string{testHomeDir, filepath.Join(workingDir, env.DoltDir)}
+	initialDirs := []string{testHomeDir, filepath.Join(workingDir, doltdb.DoltDir)}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	dEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
 

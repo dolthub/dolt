@@ -7,7 +7,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/pantoerr"
+	"path/filepath"
 	"strings"
 )
 
@@ -24,9 +26,13 @@ const (
 	// InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 	InMemDoltDB = DoltDBLocation("mem")
 
-	// LocalDirDoltDB stores the db in the current directory
-	LocalDirDoltDB = DoltDBLocation("nbs:./")
+	DoltDir = ".dolt"
 )
+
+var DoltDataDir = filepath.Join(DoltDir, "noms")
+
+// LocalDirDoltDB stores the db in the current directory
+var LocalDirDoltDB = DoltDBLocation("nbs:" + DoltDataDir)
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and I've opted to recover and return
@@ -36,9 +42,19 @@ type DoltDB struct {
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the DoltDBLocation is InMemDoltDB then a reference
-// to a newly created in memory database will be used, if the location is LocalDirDoltDB the current working directory
-// will be used for the db.
+// to a newly created in memory database will be used, if the location is LocalDirDoltDB a directory will be created if it
+// does not exist.
 func LoadDoltDB(loc DoltDBLocation) *DoltDB {
+	if loc == LocalDirDoltDB {
+		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
+
+		if !exists {
+			return nil
+		} else if !isDir {
+			panic("A file exists where the dolt data directory should be.")
+		}
+	}
+
 	dbSpec, _ := spec.ForDatabase(string(loc))
 
 	// There is the possibility of this panicking, but have decided specifically not to recover (as is normally done in
