@@ -6,7 +6,7 @@ import (
 
 func TestToIndentedParagraph(t *testing.T) {
 	tests := map[string]string{
-		"":                      "",
+		"":                      "  ",
 		"Short test":            "  Short test",
 		"Shows the commit logs": "  Shows the commit\n  logs",
 		"Sample long line which should get split": `  Sample long line
@@ -18,7 +18,7 @@ func TestToIndentedParagraph(t *testing.T) {
 		out := ToIndentedParagraph(testInput, "  ", 20)
 
 		if out != expectedOut {
-			t.Errorf("\nFor %s\nexpect:\n%s\nreceived:\n%s", testInput, expectedOut, out)
+			t.Errorf("\nFor %s\nexpect:\n'%s'\nreceived:\n'%s'", testInput, expectedOut, out)
 		}
 	}
 }

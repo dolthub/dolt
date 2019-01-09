@@ -13,7 +13,8 @@ var localCfg = set.NewStrSet([]string{localParamName})
 
 func TestConfig(t *testing.T) {
 	dEnv := createTestEnv()
-	ret := Config("dolt config", []string{"-global", "-set", "name:bheni", "title:dufus"}, dEnv)
+	ret := Config("dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
+	ret += Config("dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
 
 	expectedGlobal := map[string]string{
 		"name":  "bheni",
@@ -26,7 +27,7 @@ func TestConfig(t *testing.T) {
 		t.Error("config -set did not yield expected global results")
 	}
 
-	ret = Config("dolt config", []string{"-local", "-set", "title:senior dufus"}, dEnv)
+	ret = Config("dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
 
 	expectedLocal := map[string]string{
 		"title": "senior dufus",
@@ -40,7 +41,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Unexpected value of \"title\" retrieved from the config hierarchy")
 	}
 
-	ret = Config("dolt config", []string{"-global", "-unset", "name"}, dEnv)
+	ret = Config("dolt config", []string{"-global", "--unset", "name"}, dEnv)
 
 	expectedGlobal = map[string]string{
 		"title": "dufus",
@@ -101,21 +102,14 @@ func TestInvalidConfigArgs(t *testing.T) {
 	dEnv := createTestEnv()
 
 	// local and global flags passed together is invalid
-	ret := Config("dolt config", []string{"-global", "-local", "-set", "name:bheni", "title:dufus"}, dEnv)
+	ret := Config("dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command has both local and global")
 	}
 
-	// missing local and global flags is invalid
-	ret = Config("dolt config", []string{"-set", "name:bheni", "title:dufus"}, dEnv)
-
-	if ret == 0 {
-		t.Error("Invalid commands should fail. Command is missing local/global")
-	}
-
 	// both -set and -get are used
-	ret = Config("dolt config", []string{"-global", "-set", "-get", "title"}, dEnv)
+	ret = Config("dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command is missing local/global")
