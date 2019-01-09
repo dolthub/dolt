@@ -5,19 +5,45 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
 	"io"
+	"strings"
 )
 
-// ErrBadRow is the error that should be returned when ReadRow results in a row that isn't valid for the schema.  The
-// caller can then decide if the program should continue on a bad row, or fail.
-var ErrBadRow = errors.New("Bad Row")
+type BadRow struct {
+	Row     *Row
+	Details []string
+}
+
+func NewBadRow(row *Row, details ...string) *BadRow {
+	return &BadRow{row, details}
+}
+
+func IsBadRow(err error) bool {
+	_, ok := err.(*BadRow)
+
+	return ok
+}
+
+func GetBadRowRow(err error) *Row {
+	br, ok := err.(*BadRow)
+
+	if !ok {
+		panic("Call IsBadRow prior to trying to get the BadRowRow")
+	}
+
+	return br.Row
+}
+
+func (br *BadRow) Error() string {
+	return strings.Join(br.Details, "\n")
+}
 
 // TableReader is an interface for reading rows from a table
 type TableReader interface {
 	// GetSchema gets the schema of the rows that this reader will return
 	GetSchema() *schema.Schema
 
-	// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-	// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+	// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 	ReadRow() (*Row, error)
 }
 
@@ -57,7 +83,7 @@ func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, erro
 		row, err := rd.ReadRow()
 
 		if err != nil && err != io.EOF {
-			if err == ErrBadRow && contOnBadRow {
+			if IsBadRow(err) && contOnBadRow {
 				numBad++
 				continue
 			}
@@ -94,7 +120,7 @@ func ReadAllRows(rd TableReader, contOnBadRow bool) ([]*Row, int, error) {
 		row, err = rd.ReadRow()
 
 		if err != nil && err != io.EOF || row == nil {
-			if err == ErrBadRow {
+			if IsBadRow(err) {
 				badRowCount++
 
 				if contOnBadRow {
@@ -131,7 +157,7 @@ func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[type
 		row, err = rd.ReadRow()
 
 		if err != nil && err != io.EOF || row == nil {
-			if err == ErrBadRow {
+			if IsBadRow(err) {
 				badRowCount++
 
 				if contOnBadRow {

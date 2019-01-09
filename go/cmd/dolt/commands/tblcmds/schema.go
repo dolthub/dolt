@@ -64,7 +64,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func badRowCB(transfName string, row *table.Row, errDetails string) (quit bool) {
+func badRowCB(_ *table.TransformRowFailure) (quit bool) {
 	panic("Should only get here is there is a bug.")
 }
 

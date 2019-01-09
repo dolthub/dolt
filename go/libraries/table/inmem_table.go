@@ -76,8 +76,8 @@ func NewInMemTableReader(imt *InMemTable) *InMemTableReader {
 	return &InMemTableReader{imt, 0}
 }
 
-// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (r *InMemTableReader) ReadRow() (*Row, error) {
 	numRows := r.tt.NumRows()
 

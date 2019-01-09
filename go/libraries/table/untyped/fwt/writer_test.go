@@ -74,7 +74,7 @@ func TestAutoSizing(t *testing.T) {
 			t.Fatal("Could not open FWTWriter", err)
 		}
 
-		badRowCB := func(transfName string, row *table.Row, errDetails string) (quit bool) {
+		badRowCB := func(_ *table.TransformRowFailure) (quit bool) {
 			return true
 		}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/mvdata"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/table/typed/noms"
 	"strings"
 )
@@ -26,7 +27,7 @@ const (
 
 var schemaFileHelp = "Schema definition files are json files in the format:" + `
 {
-	"<b>fields</b>:" [
+	"<b>fields</b>": [
 		{"name":"<b>FIELD_NAME</b>", "kind":"<b>KIND</b>", "Required":[true|false]},
 		...
 	],
@@ -189,7 +190,24 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	err = mover.Move()
 
 	if err != nil {
-		cli.PrintErrln("An error occurred moving data.", err.Error())
+		if table.IsTransformFailure(err) {
+			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
+
+			row := table.GetTransFailureRow(err)
+			if row != nil {
+				bdr.AddDetails("Bad Row:" + table.RowFmt(row))
+			}
+
+			details := table.GetTransFailureDetails(err)
+
+			bdr.AddDetails(details)
+			bdr.AddDetails("These can be ignored using the '--continue'")
+
+			cli.PrintErrln(bdr.Build().Verbose())
+		} else {
+			cli.PrintErrln("An error occurred moving data:\n", err.Error())
+		}
+
 		return 1
 	}
 

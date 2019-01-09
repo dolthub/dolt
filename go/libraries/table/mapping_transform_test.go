@@ -86,7 +86,7 @@ func TestMappingReader(t *testing.T) {
 
 		transforms := NewTransformCollection(NamedTransform{"t1", tr}, NamedTransform{"t2", tr2})
 
-		p, start := NewAsyncPipeline(rd, transforms, imttWr, func(transfName string, row *Row, errDetails string) (quit bool) {
+		p, start := NewAsyncPipeline(rd, transforms, imttWr, func(_ *TransformRowFailure) (quit bool) {
 			t.Fatal("Bad Transform")
 			return true
 		})

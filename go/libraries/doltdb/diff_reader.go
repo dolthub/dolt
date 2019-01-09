@@ -53,8 +53,8 @@ func (rdRd *RowDiffReader) GetSchema() *schema.Schema {
 	return rdRd.outSch
 }
 
-// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (rdRd *RowDiffReader) ReadRow() (*table.Row, error) {
 	if len(rdRd.bufferedRows) != 0 {
 		return rdRd.nextFromBuffer(), nil

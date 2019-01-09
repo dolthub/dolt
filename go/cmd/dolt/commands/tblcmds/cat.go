@@ -84,8 +84,8 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 			rConv, _ := table.NewRowConverter(mapping)
 			transform := table.NewRowTransformer("schema mapping transform", rConv.TransformRow)
 			autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.HashFillWhenTooLong, 0)
-			badRowCB := func(transfName string, row *table.Row, errDetails string) (quit bool) {
-				cli.PrintErrln(color.RedString("Failed to transform row %s.", table.RowFmt(row)))
+			badRowCB := func(tff *table.TransformRowFailure) (quit bool) {
+				cli.PrintErrln(color.RedString("Failed to transform row %s.", table.RowFmt(tff.Row)))
 				return true
 			}
 

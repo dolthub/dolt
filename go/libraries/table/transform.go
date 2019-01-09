@@ -64,6 +64,7 @@ func NewRowTransformer(name string, transRowFunc TransformRowFunc) TransformFunc
 					for i := 0; i < outSize; i++ {
 						props := row.ClonedMergedProperties(outRowData[i].Properties)
 						outRow := NewRowWithProperties(outRowData[i].RowData, props)
+
 						outChan <- outRow
 					}
 
@@ -81,12 +82,51 @@ func NewRowTransformer(name string, transRowFunc TransformRowFunc) TransformFunc
 	}
 }
 
-type BadRowCallback func(transfName string, row *Row, errDetails string) (quit bool)
+type BadRowCallback func(*TransformRowFailure) (quit bool)
 
 type TransformRowFailure struct {
-	BadRow        *Row
+	Row           *Row
 	TransformName string
-	BadRowDetails string
+	Details       string
+}
+
+func (trf *TransformRowFailure) Error() string {
+	return trf.TransformName + " failed processing"
+}
+
+func IsTransformFailure(err error) bool {
+	_, ok := err.(*TransformRowFailure)
+	return ok
+}
+
+func GetTransFailureTransName(err error) string {
+	trf, ok := err.(*TransformRowFailure)
+
+	if !ok {
+		panic("Verify error using IsTransformFailure before calling this.")
+	}
+
+	return trf.TransformName
+}
+
+func GetTransFailureRow(err error) *Row {
+	trf, ok := err.(*TransformRowFailure)
+
+	if !ok {
+		panic("Verify error using IsTransformFailure before calling this.")
+	}
+
+	return trf.Row
+
+}
+func GetTransFailureDetails(err error) string {
+	trf, ok := err.(*TransformRowFailure)
+
+	if !ok {
+		panic("Verify error using IsTransformFailure before calling this.")
+	}
+
+	return trf.Details
 }
 
 type NamedTransform struct {
@@ -200,13 +240,15 @@ func (p *Pipeline) processInputs(rd TableReader, in chan<- *Row, badRowChan chan
 				if row == nil {
 					return
 				}
-			} else if err == ErrBadRow {
-				badRowChan <- &TransformRowFailure{row, "reader", err.Error()}
+			} else if IsBadRow(err) {
+				badRowChan <- &TransformRowFailure{GetBadRowRow(err), "reader", err.Error()}
 			} else {
 				p.atomicErr.Store(err)
 				close(p.stopChan)
 				return
 			}
+		} else if row == nil {
+			panic("Readers should not be returning nil without error.  io.EOF should be used when done.")
 		}
 
 		// exit if stop
@@ -217,7 +259,9 @@ func (p *Pipeline) processInputs(rd TableReader, in chan<- *Row, badRowChan chan
 		default:
 		}
 
-		in <- row
+		if row != nil {
+			in <- row
+		}
 	}
 }
 
@@ -232,7 +276,7 @@ func (p *Pipeline) processOutputs(wr TableWriter, out <-chan *Row, badRowChan ch
 				err := wr.WriteRow(row)
 
 				if err != nil {
-					if err == ErrBadRow {
+					if IsBadRow(err) {
 						badRowChan <- &TransformRowFailure{row, "writer", err.Error()}
 					} else {
 						p.atomicErr.Store(err)
@@ -258,7 +302,7 @@ func (p *Pipeline) processBadRows(badRowCB BadRowCallback, badRowChan <-chan *Tr
 			select {
 			case bRow, ok := <-badRowChan:
 				if ok {
-					quit := badRowCB(bRow.TransformName, bRow.BadRow, bRow.BadRowDetails)
+					quit := badRowCB(bRow)
 
 					if quit {
 						close(p.stopChan)

@@ -3,6 +3,7 @@ package csv
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/schema"
@@ -67,8 +68,8 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 	return colStrs, nil
 }
 
-// ReadRow reads a row from a table.  If there is a bad row ErrBadRow will be returned. This is a potentially
-// non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (csvr *CSVReader) ReadRow() (*table.Row, error) {
 	if csvr.isDone {
 		return nil, io.EOF
@@ -119,7 +120,10 @@ func (csvr *CSVReader) parseRow(line string) (*table.Row, error) {
 
 	sch := csvr.sch
 	if len(colVals) != sch.NumFields() {
-		return nil, table.ErrBadRow
+		return nil, table.NewBadRow(nil,
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", sch.NumFields(), len(colVals)),
+			fmt.Sprintf("line: %s", line),
+		)
 	}
 
 	return untyped.NewRowFromStrings(sch, colVals), nil

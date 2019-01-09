@@ -189,12 +189,20 @@ type RowDataFormatFunc func(row *RowData) string
 
 var RowDataFmt = FieldSeparatedFmt(':')
 var RowFmt RowFormatFunc = func(row *Row) string {
+	if row == nil {
+		return "null"
+	}
+
 	return RowDataFmt(row.CurrData())
 }
 
-// String returns the string representation of the row with fields separated by pipes
+// FieldSeparatedFmt returns the string representation of the row with fields separated by pipes
 func FieldSeparatedFmt(delim rune) RowDataFormatFunc {
 	return func(row *RowData) string {
+		if row == nil {
+			return "null"
+		}
+
 		sch := row.GetSchema()
 		numFields := sch.NumFields()
 		kvps := make([]string, numFields)

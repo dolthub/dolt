@@ -116,9 +116,9 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]*table.Ro
 	for {
 		row, err := csvR.ReadRow()
 
-		if err != io.EOF && err != nil && err != table.ErrBadRow {
+		if err != io.EOF && err != nil && table.IsBadRow(err) {
 			return nil, -1, err
-		} else if err == table.ErrBadRow {
+		} else if table.IsBadRow(err) {
 			badRows++
 			continue
 		} else if err == io.EOF && row == nil {
