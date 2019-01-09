@@ -6,9 +6,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
@@ -96,7 +96,7 @@ func getPKsOfRowsToRm(root *doltdb.RootValue, tbl *doltdb.Table, pks []string) (
 	sch := tbl.GetSchema(vrw)
 
 	fld := sch.GetField(sch.GetPKIndex())
-	convFunc := table.GetConvFunc(types.StringKind, fld.NomsKind())
+	convFunc := doltcore.GetConvFunc(types.StringKind, fld.NomsKind())
 
 	if convFunc == nil {
 		bdr := errhand.BuildDError(`Conversion from string to %s is not defined.`, fld.KindString())

@@ -76,7 +76,7 @@ func TestReader(t *testing.T) {
 		rows, numBad, err := readTestRows(t, test.inputStr, test.info)
 
 		if err != nil {
-			t.Error("Unexpected Error:", err)
+			t.Fatal("Unexpected Error:", err)
 		}
 
 		expectedBad := len(goodExpectedRows) - len(test.expectedRows)
@@ -116,7 +116,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]*table.Ro
 	for {
 		row, err := csvR.ReadRow()
 
-		if err != io.EOF && err != nil && table.IsBadRow(err) {
+		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err
 		} else if table.IsBadRow(err) {
 			badRows++

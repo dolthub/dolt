@@ -1,4 +1,4 @@
-package table
+package doltcore
 
 import (
 	"errors"

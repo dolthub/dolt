@@ -4,7 +4,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/test"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
+	"path/filepath"
 	"testing"
 )
 
@@ -47,7 +49,7 @@ func TestEmptyRepoCreation(t *testing.T) {
 }
 
 func TestLDNoms(t *testing.T) {
-	_, err := test.ChangeToTestDir("TestLoadRepo")
+	testDir, err := test.ChangeToTestDir("TestLoadRepo")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -58,8 +60,14 @@ func TestLDNoms(t *testing.T) {
 
 	// Create an empty repo in a temp dir on the filesys
 	{
+		err := filesys.LocalFS.MkDirs(filepath.Join(testDir, DoltDataDir))
+
+		if err != nil {
+			t.Fatal("Failed to create noms directory")
+		}
+
 		ddb := LoadDoltDB(LocalDirDoltDB)
-		err := ddb.WriteEmptyRepo(committerName, committerEmail)
+		err = ddb.WriteEmptyRepo(committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)

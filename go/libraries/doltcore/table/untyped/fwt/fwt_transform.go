@@ -4,6 +4,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
 type TooLongBehavior int
@@ -32,7 +33,7 @@ func NewFWTTransformer(fwtSch *FWTSchema, tooLngBhv TooLongBehavior) *FWTTransfo
 	return &FWTTransformer{fwtSch, colBuffs, tooLngBhv}
 }
 
-func (fwtTr *FWTTransformer) Transform(row *table.Row) ([]*table.TransformedRowResult, string) {
+func (fwtTr *FWTTransformer) Transform(row *table.Row) ([]*pipeline.TransformedRowResult, string) {
 	sch := row.GetSchema()
 	rowData := row.CurrData()
 	destFields := make([]types.Value, sch.NumFields())
@@ -70,7 +71,7 @@ func (fwtTr *FWTTransformer) Transform(row *table.Row) ([]*table.TransformedRowR
 	}
 
 	rd := table.RowDataFromValues(fwtTr.fwtSch.Sch, destFields)
-	return []*table.TransformedRowResult{{RowData: rd}}, ""
+	return []*pipeline.TransformedRowResult{{RowData: rd}}, ""
 }
 
 type AutoSizingFWTTransformer struct {
@@ -90,7 +91,7 @@ func NewAutoSizingFWTTransformer(sch *schema.Schema, tooLngBhv TooLongBehavior, 
 	return &AutoSizingFWTTransformer{numSamples, widths, rowBuffer, sch, tooLngBhv, nil}
 }
 
-func (asTr *AutoSizingFWTTransformer) TransformToFWT(inChan <-chan *table.Row, outChan chan<- *table.Row, badRowChan chan<- *table.TransformRowFailure, stopChan <-chan bool) {
+func (asTr *AutoSizingFWTTransformer) TransformToFWT(inChan <-chan *table.Row, outChan chan<- *table.Row, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
 RowLoop:
 	for {
 		select {
@@ -114,7 +115,7 @@ RowLoop:
 	asTr.flush(outChan, badRowChan, stopChan)
 }
 
-func (asTr *AutoSizingFWTTransformer) handleRow(row *table.Row, outChan chan<- *table.Row, badRowChan chan<- *table.TransformRowFailure, stopChan <-chan bool) {
+func (asTr *AutoSizingFWTTransformer) handleRow(row *table.Row, outChan chan<- *table.Row, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
 	if asTr.rowBuffer == nil {
 		asTr.processRow(row, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
@@ -139,7 +140,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(row *table.Row, outChan chan<- *
 	}
 }
 
-func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- *table.Row, badRowChan chan<- *table.TransformRowFailure, stopChan <-chan bool) {
+func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- *table.Row, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
 	if asWr.fwtTr == nil {
 		fwtSch := NewFWTSchemaWithWidths(asWr.sch, asWr.widths)
 		asWr.fwtTr = NewFWTTransformer(fwtSch, asWr.tooLngBhv)
@@ -160,11 +161,11 @@ func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- *table.Row, badRowCha
 	asWr.rowBuffer = nil
 }
 
-func (asTr *AutoSizingFWTTransformer) processRow(row *table.Row, outChan chan<- *table.Row, badRowChan chan<- *table.TransformRowFailure) {
+func (asTr *AutoSizingFWTTransformer) processRow(row *table.Row, outChan chan<- *table.Row, badRowChan chan<- *pipeline.TransformRowFailure) {
 	rds, errMsg := asTr.fwtTr.Transform(row)
 
 	if errMsg != "" {
-		badRowChan <- &table.TransformRowFailure{
+		badRowChan <- &pipeline.TransformRowFailure{
 			Row:           row,
 			TransformName: "Auto Sizing Fixed Width Transform",
 			Details:       errMsg,

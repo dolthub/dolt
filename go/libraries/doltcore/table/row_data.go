@@ -2,6 +2,7 @@ package table
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
@@ -73,7 +74,7 @@ func RowDataFromUntypedMap(sch *schema.Schema, vals map[string]string) (rowData 
 		val, ok := vals[fldName]
 
 		if ok {
-			convFunc := GetConvFunc(types.StringKind, f.NomsKind())
+			convFunc := doltcore.GetConvFunc(types.StringKind, f.NomsKind())
 			converted, err := convFunc(types.String(val))
 
 			if err != nil {

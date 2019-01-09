@@ -1,9 +1,10 @@
-package table
+package pipeline
 
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"strconv"
 	"testing"
 )
@@ -44,8 +45,8 @@ var ages = []uint64{32, 25, 21}
 var titles = []string{"Senior Dufus", "Dufus", ""}
 var maritalStatus = []bool{true, false, false}
 
-func tableWithInitialState() *InMemTable {
-	imt := NewInMemTable(initialSchema)
+func tableWithInitialState() *table.InMemTable {
+	imt := table.NewInMemTable(initialSchema)
 
 	for i := 0; i < len(uuids); i++ {
 		marriedStr := "true"
@@ -60,7 +61,7 @@ func tableWithInitialState() *InMemTable {
 			"title":      types.String(titles[i]),
 			"is_married": types.String(marriedStr),
 		}
-		imt.AppendRow(NewRow(RowDataFromValMap(initialSchema, valsMap)))
+		imt.AppendRow(table.NewRow(table.RowDataFromValMap(initialSchema, valsMap)))
 	}
 
 	return imt
@@ -68,11 +69,11 @@ func tableWithInitialState() *InMemTable {
 
 func TestMappingReader(t *testing.T) {
 	initialTable := tableWithInitialState()
-	resultTable := NewInMemTable(mappedSchema2)
+	resultTable := table.NewInMemTable(mappedSchema2)
 
-	rd := NewInMemTableReader(initialTable)
+	rd := table.NewInMemTableReader(initialTable)
 
-	mapping, _ := schema.NewInferredMapping(initialTable.sch, mappedSchema1)
+	mapping, _ := schema.NewInferredMapping(initialTable.GetSchema(), mappedSchema1)
 	rconv, _ := NewRowConverter(mapping)
 	tr := NewRowTransformer("mapping transform", rconv.TransformRow)
 
@@ -81,7 +82,7 @@ func TestMappingReader(t *testing.T) {
 	tr2 := NewRowTransformer("mapping transform 2", rconv2.TransformRow)
 
 	func() {
-		imttWr := NewInMemTableWriter(resultTable)
+		imttWr := table.NewInMemTableWriter(resultTable)
 		defer imttWr.Close()
 
 		transforms := NewTransformCollection(NamedTransform{"t1", tr}, NamedTransform{"t2", tr2})
@@ -100,14 +101,14 @@ func TestMappingReader(t *testing.T) {
 		}
 	}()
 
-	resultRd := NewInMemTableReader(resultTable)
-	rows, _, _ := ReadAllRows(resultRd, true)
+	resultRd := table.NewInMemTableReader(resultTable)
+	rows, _, _ := table.ReadAllRows(resultRd, true)
 
 	testMappingRead(mappedSchema2, rows, t)
 }
 
-func testMappingRead(typedSchema *schema.Schema, rows []*Row, t *testing.T) {
-	expectedRows := make([]*Row, len(names))
+func testMappingRead(typedSchema *schema.Schema, rows []*table.Row, t *testing.T) {
+	expectedRows := make([]*table.Row, len(names))
 	for i := 0; i < len(names); i++ {
 		rowValMap := map[string]types.Value{
 			"id":    types.UUID(uuids[i]),
@@ -115,7 +116,7 @@ func testMappingRead(typedSchema *schema.Schema, rows []*Row, t *testing.T) {
 			"age":   types.Uint(ages[i]),
 			"title": types.String(titles[i]),
 		}
-		expectedRows[i] = NewRow(RowDataFromValMap(typedSchema, rowValMap))
+		expectedRows[i] = table.NewRow(table.RowDataFromValMap(typedSchema, rowValMap))
 	}
 
 	if len(expectedRows) != len(rows) {
@@ -123,8 +124,8 @@ func testMappingRead(typedSchema *schema.Schema, rows []*Row, t *testing.T) {
 	}
 
 	for i, row := range rows {
-		if !RowsEqualIgnoringSchema(row, expectedRows[i]) {
-			t.Error("\n", RowFmt(row), "!=\n", RowFmt(expectedRows[i]))
+		if !table.RowsEqualIgnoringSchema(row, expectedRows[i]) {
+			t.Error("\n", table.RowFmt(row), "!=\n", table.RowFmt(expectedRows[i]))
 		}
 	}
 }

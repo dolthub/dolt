@@ -16,8 +16,8 @@ func TestPanicToError(t *testing.T) {
 		t.Fatal("Should have an error from the panic")
 	} else if actualErrMsg := err.Error(); actualErrMsg != errMsg {
 		t.Error("Unexpected error message:", actualErrMsg, "does not match expected", errMsg)
-	} else if rp, ok := err.(*RecoveredPanic); ok {
-		if rp.PanicCause.(string) != panicMsg {
+	} else if IsRecoveredPanic(err) {
+		if GetRecoveredPanicCause(err) != panicMsg {
 			t.Error("Unexpected Panic Cause")
 		}
 	} else {
@@ -33,5 +33,16 @@ func TestPanicToError(t *testing.T) {
 		t.Fatal("Should have the error that was returned.")
 	} else if err.Error() != errMsg2 {
 		t.Error("Unexpected error message")
+	}
+}
+
+func TestPanicToErrorInstance(t *testing.T) {
+	expected := errors.New("err instance")
+	actual := PanicToErrorInstance(expected, func() error {
+		panic("panic to err instance")
+	})
+
+	if actual != expected {
+		t.Fatal("Did not receive expected instance")
 	}
 }

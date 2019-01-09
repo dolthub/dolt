@@ -4,6 +4,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
@@ -45,9 +46,9 @@ func TypedToUntypedMapping(typedSch *schema.Schema) *schema.FieldMapping {
 	return &schema.FieldMapping{DestToSrc: destToSrc, SrcSch: typedSch, DestSch: untypedSch}
 }
 
-func TypedToUntypedRowConverter(typedSch *schema.Schema) (*table.RowConverter, error) {
+func TypedToUntypedRowConverter(typedSch *schema.Schema) (*pipeline.RowConverter, error) {
 	mapping := TypedToUntypedMapping(typedSch)
-	return table.NewRowConverter(mapping)
+	return pipeline.NewRowConverter(mapping)
 }
 
 func UntypedSchemaUnion(schemas ...*schema.Schema) *schema.Schema {

@@ -13,8 +13,19 @@ func (rp *RecoveredPanic) Error() string {
 	return rp.ErrMsg
 }
 
-// GetCause returns the non nil result of a recover call
-func (rp *RecoveredPanic) GetCause() interface{} {
+func IsRecoveredPanic(err error) bool {
+	_, ok := err.(*RecoveredPanic)
+
+	return ok
+}
+
+func GetRecoveredPanicCause(err error) interface{} {
+	rp, ok := err.(*RecoveredPanic)
+
+	if !ok {
+		panic("Check with IsRecoveredPanic before calling GetRecoveredPanicCause")
+	}
+
 	return rp.PanicCause
 }
 

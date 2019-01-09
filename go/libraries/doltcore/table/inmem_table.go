@@ -60,6 +60,11 @@ func (imt *InMemTable) GetRow(index int) (*Row, error) {
 	return imt.rows[index], nil
 }
 
+// GetSchema gets the table's schema
+func (imt *InMemTable) GetSchema() *schema.Schema {
+	return imt.sch
+}
+
 // NumRows returns the number of rows in the table
 func (imt *InMemTable) NumRows() int {
 	return len(imt.rows)

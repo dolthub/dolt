@@ -4,6 +4,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"testing"
@@ -52,10 +53,10 @@ func TestAutoSizing(t *testing.T) {
 	fwtTr := NewFWTTransformer(fwtSch, HashFillWhenTooLong)
 
 	tests := []struct {
-		fwtTransform table.TransformFunc
+		fwtTransform pipeline.TransformFunc
 		expectedOut  string
 	}{
-		{table.NewRowTransformer("hash when too long fwt transform", fwtTr.Transform), expected},
+		{pipeline.NewRowTransformer("hash when too long fwt transform", fwtTr.Transform), expected},
 		{asTr.TransformToFWT, autoSizingExpected},
 	}
 
@@ -64,8 +65,8 @@ func TestAutoSizing(t *testing.T) {
 		rd := table.NewInMemTableReader(imt)
 
 		mapping, _ := schema.NewInferredMapping(testRowSch, sch)
-		rconv, _ := table.NewRowConverter(mapping)
-		convTr := table.NewRowTransformer("Field Mapping Transform", rconv.TransformRow)
+		rconv, _ := pipeline.NewRowConverter(mapping)
+		convTr := pipeline.NewRowTransformer("Field Mapping Transform", rconv.TransformRow)
 
 		fs := filesys.NewInMemFS(nil, nil, root)
 		tWr, err := OpenTextWriter(path, fs, sch, "")
@@ -74,17 +75,17 @@ func TestAutoSizing(t *testing.T) {
 			t.Fatal("Could not open FWTWriter", err)
 		}
 
-		badRowCB := func(_ *table.TransformRowFailure) (quit bool) {
+		badRowCB := func(_ *pipeline.TransformRowFailure) (quit bool) {
 			return true
 		}
 
-		transforms := table.NewTransformCollection(
-			table.NamedTransform{Name: "convert", Func: convTr},
-			table.NamedTransform{Name: "fwt", Func: test.fwtTransform})
-		pipeline, start := table.NewAsyncPipeline(rd, transforms, tWr, badRowCB)
+		transforms := pipeline.NewTransformCollection(
+			pipeline.NamedTransform{Name: "convert", Func: convTr},
+			pipeline.NamedTransform{Name: "fwt", Func: test.fwtTransform})
+		p, start := pipeline.NewAsyncPipeline(rd, transforms, tWr, badRowCB)
 		start()
 
-		pipeline.Wait()
+		p.Wait()
 		tWr.Close()
 
 		results, err := fs.ReadFile(path)

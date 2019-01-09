@@ -2,7 +2,7 @@ package doltdb
 
 import (
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/test"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 	"testing"
 )
 
