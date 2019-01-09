@@ -3,7 +3,7 @@
   * Move data to .dolt/noms directory
     * To convert existing data repositories you will need to run:
       * mkdir .dolt/noms
-      * cp * ./dolt/noms
+      * mv * .dolt/noms/
   * Bug fixes.
   * Error messaging improvements.
 
