@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"os"
+	"strings"
 )
 
 const (
@@ -32,6 +33,22 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
+	args := os.Args[1:]
+
+	// Currently goland doesn't support running with a different working directory when using go modules.
+	// This is a hack that allows a different working directory to be set after the application starts using
+	// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
+	if len(args) > 0 && strings.HasPrefix(strings.ToLower(args[0]), "chdir=") {
+		dir := args[0][6:]
+		err := os.Chdir(dir)
+
+		if err != nil {
+			panic(err)
+		}
+
+		args = args[1:]
+	}
+
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
@@ -42,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	res := doltCommand("dolt", os.Args[1:], dEnv)
+	res := doltCommand("dolt", args, dEnv)
 
 	os.Exit(res)
 }
