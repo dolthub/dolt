@@ -15,19 +15,24 @@ const (
 	CollChangesProp = "collchanges"
 )
 
-var newRowProps = map[string]interface{}{DiffTypeProp: types.DiffChangeAdded}
-var removedRowProps = map[string]interface{}{DiffTypeProp: types.DiffChangeRemoved}
+type DiffChType int 
+const (
+	DiffAdded DiffChType = iota
+	DiffRemoved
+	DiffModifiedOld
+	DiffModifiedNew
+)
 
 type DiffTyped interface {
-	DiffType() types.DiffChangeType
+	DiffType() DiffChType
 }
 
 type DiffRow struct {
 	*table.Row
-	diffType types.DiffChangeType
+	diffType DiffChType
 }
 
-func (dr *DiffRow) DiffType() types.DiffChangeType {
+func (dr *DiffRow) DiffType() DiffChType {
 	return dr.diffType
 }
 
@@ -89,11 +94,11 @@ func (rdRd *RowDiffReader) ReadRow() (*table.Row, error) {
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 
-		oldProps := removedRowProps
-		newProps := newRowProps
+		var oldProps = map[string]interface{}{DiffTypeProp: DiffRemoved}
+		var newProps = map[string]interface{}{DiffTypeProp: DiffAdded}
 		if d.OldValue != nil && d.NewValue != nil {
-			oldColDiffs := make(map[string]types.DiffChangeType)
-			newColDiffs := make(map[string]types.DiffChangeType)
+			oldColDiffs := make(map[string]DiffChType)
+			newColDiffs := make(map[string]DiffChType)
 			for i := 0; i < rdRd.outSch.NumFields(); i++ {
 				oldVal, fld := mappedOld.GetField(i)
 				newVal, _ := mappedNew.GetField(i)
@@ -103,18 +108,18 @@ func (rdRd *RowDiffReader) ReadRow() (*table.Row, error) {
 				inNew := rdRd.newConv.SrcSch.GetFieldIndex(fldName) != -1
 				if inOld && inNew {
 					if !oldVal.Equals(newVal) {
-						newColDiffs[fldName] = types.DiffChangeModified
-						oldColDiffs[fldName] = types.DiffChangeModified
+						newColDiffs[fldName] = DiffModifiedNew
+						oldColDiffs[fldName] = DiffModifiedOld
 					}
 				} else if inOld {
-					oldColDiffs[fldName] = types.DiffChangeRemoved
+					oldColDiffs[fldName] = DiffRemoved
 				} else {
-					newColDiffs[fldName] = types.DiffChangeAdded
+					newColDiffs[fldName] = DiffAdded
 				}
 			}
 
-			oldProps = map[string]interface{}{DiffTypeProp: types.DiffChangeModified, CollChangesProp: oldColDiffs}
-			newProps = map[string]interface{}{DiffTypeProp: types.DiffChangeModified, CollChangesProp: newColDiffs}
+			oldProps = map[string]interface{}{DiffTypeProp: DiffModifiedOld, CollChangesProp: oldColDiffs}
+			newProps = map[string]interface{}{DiffTypeProp: DiffModifiedNew, CollChangesProp: newColDiffs}
 		}
 
 		if d.OldValue != nil {
