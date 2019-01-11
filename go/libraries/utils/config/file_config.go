@@ -111,10 +111,10 @@ func (fc *FileConfig) Unset(params []string) error {
 			return errors.New("key does not exist on this configuration")
 		}
 		delete(fc.properties, param)
-		fc.write()
+
 	}
 
-	return nil
+	return fc.write()
 }
 
 // Size returns the number of properties contained within the config
