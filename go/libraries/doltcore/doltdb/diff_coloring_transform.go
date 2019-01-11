@@ -1,7 +1,6 @@
 package doltdb
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
@@ -9,6 +8,7 @@ import (
 
 var greenTextProp = map[string]interface{}{ColorRowProp: color.GreenString}
 var redTextProp = map[string]interface{}{ColorRowProp: color.RedString}
+var yellowTextProp = map[string]interface{}{ColorRowProp: color.YellowString}
 
 func ColoringTransform(row *table.Row) ([]*pipeline.TransformedRowResult, string) {
 	var props map[string]interface{} = nil
@@ -17,16 +17,19 @@ func ColoringTransform(row *table.Row) ([]*pipeline.TransformedRowResult, string
 	diffType, ok := row.GetProperty(DiffTypeProp)
 
 	if ok {
-		ct, ok := diffType.(types.DiffChangeType)
+		ct, ok := diffType.(DiffChType)
 
 		if ok {
 
 			switch ct {
-			case types.DiffChangeAdded:
+			case DiffAdded:
 				props = greenTextProp
-			case types.DiffChangeRemoved:
+			case DiffRemoved:
 				props = redTextProp
-			case types.DiffChangeModified:
+			case DiffModifiedOld:
+				props = yellowTextProp
+			case DiffModifiedNew:
+				props = yellowTextProp
 			}
 		}
 	}

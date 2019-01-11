@@ -55,10 +55,11 @@ func (tWr *ColorDiffWriter) GetSchema() *schema.Schema {
 	return tWr.sch
 }
 
-var colDiffColors = map[types.DiffChangeType]ColorFunc{
-	types.DiffChangeAdded:    color.GreenString,
-	types.DiffChangeModified: color.YellowString,
-	types.DiffChangeRemoved:  color.RedString,
+var colDiffColors = map[DiffChType]ColorFunc{
+	DiffAdded:    color.GreenString,
+	DiffModifiedOld: color.YellowString,
+	DiffModifiedNew: color.YellowString,
+	DiffRemoved:  color.RedString,
 }
 
 // WriteRow will write a row to a table
@@ -66,9 +67,9 @@ func (tWr *ColorDiffWriter) WriteRow(row *table.Row) error {
 	sch := row.GetSchema()
 	rowData := row.CurrData()
 	colStrs := make([]string, sch.NumFields())
-	colDiffs := make(map[string]types.DiffChangeType)
+	colDiffs := make(map[string]DiffChType)
 	if prop, ok := row.GetProperty(CollChangesProp); ok {
-		if convertedVal, convertedOK := prop.(map[string]types.DiffChangeType); convertedOK {
+		if convertedVal, convertedOK := prop.(map[string]DiffChType); convertedOK {
 			colDiffs = convertedVal
 		}
 	}
@@ -82,14 +83,16 @@ func (tWr *ColorDiffWriter) WriteRow(row *table.Row) error {
 	prefix := "   "
 	colorColumns := false
 	if prop, ok := row.GetProperty(DiffTypeProp); ok {
-		if dt, convertedOK := prop.(types.DiffChangeType); convertedOK {
+		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
-			case types.DiffChangeAdded:
+			case DiffAdded:
 				prefix = " + "
-			case types.DiffChangeRemoved:
+			case DiffRemoved:
 				prefix = " - "
-			case types.DiffChangeModified:
-				prefix = " * "
+			case DiffModifiedOld:
+				prefix = " < "
+			case DiffModifiedNew:
+				prefix = " > "
 				colorColumns = true
 			}
 		}
