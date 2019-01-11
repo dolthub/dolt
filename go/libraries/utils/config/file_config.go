@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"path/filepath"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -106,10 +107,14 @@ func (fc *FileConfig) write() error {
 // Unset removes a configuration parameter from the config
 func (fc *FileConfig) Unset(params []string) error {
 	for _, param := range params {
+		if _, ok := fc.properties[param]; !ok {
+			return errors.New("key does not exist on this configuration")
+		}
 		delete(fc.properties, param)
+		fc.write()
 	}
 
-	return fc.write()
+	return nil
 }
 
 // Size returns the number of properties contained within the config
