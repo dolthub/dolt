@@ -1,3 +1,13 @@
+# 1/17/19 Version 0.3.0
+  * Merge
+    *	dolt merge <branch>
+    * dolt merge --abort
+  * Display Conflicts
+    * dolt conflicts cat [<commit>] <table>...
+  * Resolve Conflicts
+    * dolt conflicts resolve <table> <key>...
+    *	dolt conflicts resolve --ours|--theirs <table>...
+
 # 1/8/19 Version 0.2.2
   * Windows support.
   * Move data to .dolt/noms directory
