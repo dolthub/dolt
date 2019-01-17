@@ -50,10 +50,12 @@ func NewAsyncPipeline(rd table.TableReader, transforms *TransformCollection, wr 
 	transInCh := make(map[string]chan *table.Row)
 
 	curr := in
-	for i := 0; i < transforms.NumTransforms(); i++ {
-		nt := transforms.TransformAt(i)
-		transInCh[nt.Name] = curr
-		curr = transformAsync(nt.Func, &wg, curr, badRowChan, stopChan)
+	if transforms != nil {
+		for i := 0; i < transforms.NumTransforms(); i++ {
+			nt := transforms.TransformAt(i)
+			transInCh[nt.Name] = curr
+			curr = transformAsync(nt.Func, &wg, curr, badRowChan, stopChan)
+		}
 	}
 
 	p := &Pipeline{&wg, stopChan, atomic.Value{}, transInCh}

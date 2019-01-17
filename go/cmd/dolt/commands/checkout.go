@@ -74,7 +74,7 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func checkoutNewBranch(dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	verr := createBranchWithStartPt(dEnv, newBranch, startPt)
+	verr := createBranchWithStartPt(dEnv, newBranch, startPt, false)
 
 	if verr != nil {
 		return verr
@@ -132,7 +132,7 @@ func checkoutBranch(dEnv *env.DoltEnv, name string) errhand.VerboseError {
 		}
 	}
 
-	cli.Printf("Switched to branch '%s'", name)
+	cli.Printf("Switched to branch '%s'\n", name)
 	return nil
 }
 

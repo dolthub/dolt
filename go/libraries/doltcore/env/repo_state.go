@@ -7,10 +7,17 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
+type MergeState struct {
+	Branch          string `json:"branch"`
+	Commit          string `json:"commit"`
+	PreMergeWorking string `json:"working_pre_merge"`
+}
+
 type RepoState struct {
-	Branch  string `json:"branch"`
-	Staged  string `json:"staged"`
-	Working string `json:"working"`
+	Branch  string      `json:"branch"`
+	Staged  string      `json:"staged"`
+	Working string      `json:"working"`
+	Merge   *MergeState `json:"merge_state"`
 
 	fs filesys.ReadWriteFS `json:"-"`
 }
@@ -37,7 +44,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 
 func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
 	hashStr := rootHash.String()
-	rs := &RepoState{br, hashStr, hashStr, fs}
+	rs := &RepoState{br, hashStr, hashStr, nil, fs}
 
 	err := rs.Save()
 
@@ -64,4 +71,19 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Branch)
 
 	return spec
+}
+
+func (rs *RepoState) StartMerge(branch, commit string) error {
+	rs.Merge = &MergeState{branch, commit, rs.Working}
+	return rs.Save()
+}
+
+func (rs *RepoState) AbortMerge() error {
+	rs.Working = rs.Merge.PreMergeWorking
+	return rs.ClearMerge()
+}
+
+func (rs *RepoState) ClearMerge() error {
+	rs.Merge = nil
+	return rs.Save()
 }

@@ -113,7 +113,7 @@ func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltd
 }
 
 func schemaAsInMemTable(tbl *doltdb.Table, root *doltdb.RootValue) *table.InMemTable {
-	sch := tbl.GetSchema(root.VRW())
+	sch := tbl.GetSchema()
 	imt := table.NewInMemTable(schOutSchema)
 	for i := 0; i < sch.NumFields(); i++ {
 		fld := sch.GetField(i)

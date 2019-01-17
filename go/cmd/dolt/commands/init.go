@@ -4,6 +4,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
@@ -79,7 +80,7 @@ func initRepoErrToVerr(err error) errhand.VerboseError {
 		bdr.AddDetails("dolt will only allow empty directoriese to be initialized.")
 		return bdr.Build()
 
-	case env.ErrNomsIO:
+	case doltdb.ErrNomsIO:
 		return errhand.BuildDError("fatal: failed to write empty structure").Build()
 
 	case env.ErrStateUpdate:

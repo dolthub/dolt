@@ -92,8 +92,7 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 }
 
 func getPKsOfRowsToRm(root *doltdb.RootValue, tbl *doltdb.Table, pks []string) (string, []types.Value, errhand.VerboseError) {
-	vrw := root.VRW()
-	sch := tbl.GetSchema(vrw)
+	sch := tbl.GetSchema()
 
 	fld := sch.GetField(sch.GetPKIndex())
 	convFunc := doltcore.GetConvFunc(types.StringKind, fld.NomsKind())
@@ -156,7 +155,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 	verr = commands.UpdateWorkingWithVErr(dEnv, root)
 
 	if verr == nil {
-		cli.Printf("Removed %d rows", updates)
+		cli.Printf("Removed %d rows\n", updates)
 	}
 
 	return verr

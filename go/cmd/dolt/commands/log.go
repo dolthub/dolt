@@ -7,6 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"sort"
 	"strings"
 )
 
@@ -21,14 +22,26 @@ var logSynopsis = []string{
 	"[-n <num_lines>] [<commit>]",
 }
 
-type commitLoggerFunc func(*doltdb.CommitMeta, hash.Hash)
+type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
 
-func logToStdOutFunc(cm *doltdb.CommitMeta, ch hash.Hash) {
+func logToStdOutFunc(cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
 	cli.Println(color.YellowString("commit %s", ch.String()))
+
+	if len(parentHashes) > 1 {
+		printMerge(parentHashes)
+	}
 
 	printAuthor(cm)
 	printDate(cm)
 	printDesc(cm)
+}
+
+func printMerge(hashes []hash.Hash) {
+	cli.Print("Merge:")
+	for _, h := range hashes {
+		cli.Print(" " + h.String())
+	}
+	cli.Println()
 }
 
 func printAuthor(cm *doltdb.CommitMeta) {
@@ -81,40 +94,59 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	n := apr.GetIntOrDefault(numLinesParam, -1)
-	err = logCommit(dEnv.DoltDB, commit, n, loggerFunc)
+	commits, err := timeSortedCommits(dEnv.DoltDB, commit, n)
 
 	if err != nil {
-		cli.PrintErrln("Error printing commit.")
+		cli.PrintErrln("Error retrieving commit.")
 		return 1
+	}
+
+	for _, comm := range commits {
+		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(), comm.HashOf())
 	}
 
 	return 0
 }
 
-func logCommit(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int, loggerFunc commitLoggerFunc) error {
-	hash := commit.HashOf()
-	cm := commit.GetCommitMeta()
-	loggerFunc(cm, hash)
+func timeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
+	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
+	err := addCommits(ddb, commit, hashToCommit, n)
 
-	if n != -1 {
-		n = n - 1
+	if err != nil {
+		return nil, err
 	}
 
+	idx := 0
+	uniqueCommits := make([]*doltdb.Commit, len(hashToCommit))
+	for _, v := range hashToCommit {
+		uniqueCommits[idx] = v
+		idx++
+	}
+
+	sort.Slice(uniqueCommits, func(i, j int) bool {
+		return uniqueCommits[i].GetCommitMeta().Timestamp > uniqueCommits[j].GetCommitMeta().Timestamp
+	})
+
+	return uniqueCommits, nil
+}
+
+func addCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
+	hash := commit.HashOf()
+	hashToCommit[hash] = commit
+
 	numParents := commit.NumParents()
-	for i := 0; i < numParents && (n == -1 || n > 0); i++ {
+	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
 		parentCommit, err := ddb.ResolveParent(commit, i)
 
 		if err != nil {
 			return err
 		}
 
-		err = logCommit(ddb, parentCommit, n, loggerFunc)
+		err = addCommits(ddb, parentCommit, hashToCommit, n)
 
 		if err != nil {
 			return err
 		}
-
-		return err
 	}
 
 	return nil

@@ -35,9 +35,11 @@ func NewTableDiffs(newer, older *doltdb.RootValue) *TableDiffs {
 	for _, tbl := range added {
 		tblToType[tbl] = AddedTable
 	}
+
 	for _, tbl := range modified {
 		tblToType[tbl] = ModifiedTable
 	}
+
 	for _, tbl := range removed {
 		tblToType[tbl] = RemovedTable
 	}

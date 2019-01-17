@@ -48,7 +48,7 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if actions.IsNothingStaged(err) {
 		notStaged := actions.NothingStagedDiffs(err)
-		printDiffsNotStaged(notStaged, false, 0)
+		printDiffsNotStaged(notStaged, false, 0, []string{})
 
 		return 1
 	} else if err != nil {

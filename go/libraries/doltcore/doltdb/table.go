@@ -3,17 +3,21 @@ package doltdb
 import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"regexp"
 )
 
 const (
 	tableStructName = "table"
 
-	schemaRefKey = "schema_ref"
-	tableRowsKey = "rows"
+	schemaRefKey       = "schema_ref"
+	tableRowsKey       = "rows"
+	conflictsKey       = "conflicts"
+	conflictSchemasKey = "conflict_schemas"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
@@ -46,15 +50,73 @@ func NewTable(vrw types.ValueReadWriter, schema types.Value, rowData types.Map) 
 	return &Table{vrw, tableStruct}
 }
 
+func (t *Table) SetConflicts(schemas Conflict, conflictData types.Map) *Table {
+	conflictsRef := writeValAndGetRef(t.vrw, conflictData)
+
+	updatedSt := t.tableStruct.Set(conflictSchemasKey, schemas.ToNomsList(t.vrw))
+	updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
+
+	return &Table{t.vrw, updatedSt}
+}
+
+func (t *Table) HasConflicts() bool {
+	_, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+
+	return ok
+}
+
+func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err error) {
+	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+
+	if ok {
+		schemas := ConflictFromNomsList(schemasVal.(types.List))
+		baseRef := schemas.Base.(types.Ref)
+		valRef := schemas.Value.(types.Ref)
+		mergeRef := schemas.MergeValue.(types.Ref)
+
+		var err error
+		var baseSch, sch, mergeSch *schema.Schema
+		if baseSch, err = refToSchema(t.vrw, baseRef); err == nil {
+			if sch, err = refToSchema(t.vrw, valRef); err == nil {
+				mergeSch, err = refToSchema(t.vrw, mergeRef)
+			}
+		}
+
+		return baseSch, sch, mergeSch, err
+	} else {
+		return nil, nil, nil, ErrNoConflicts
+	}
+}
+
+func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (*schema.Schema, error) {
+	var schema *schema.Schema
+	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
+		schemaVal := ref.TargetValue(vrw)
+
+		var err error
+		schema, err = noms.UnmarshalNomsValue(schemaVal)
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return schema, err
+}
+
 // GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
-func (t *Table) GetSchema(vrw types.ValueReadWriter) *schema.Schema {
+func (t *Table) GetSchema() *schema.Schema {
 	schemaRefVal := t.tableStruct.Get(schemaRefKey)
 	schemaRef := schemaRefVal.(types.Ref)
-	schemaVal := schemaRef.TargetValue(vrw)
-
-	schema, _ := noms.UnmarshalNomsValue(schemaVal)
+	schema, _ := refToSchema(t.vrw, schemaRef)
 
 	return schema
+}
+
+func (t *Table) GetSchemaRef() types.Ref {
+	return t.tableStruct.Get(schemaRefKey).(types.Ref)
 }
 
 // HasTheSameSchema tests the schema within 2 tables for equality
@@ -158,4 +220,56 @@ func (t *Table) GetRowData() types.Map {
 	rowMapRef := t.tableStruct.Get(tableRowsKey).(types.Ref)
 	rowMap := rowMapRef.TargetValue(t.vrw).(types.Map)
 	return rowMap
+}
+
+func (t *Table) GetConflicts() types.Map {
+	conflictsVal := t.tableStruct.Get(conflictsKey)
+
+	if conflictsVal == nil {
+		return types.EmptyMap
+	}
+
+	confMapRef := conflictsVal.(types.Ref)
+	confMap := confMapRef.TargetValue(t.vrw).(types.Map)
+	return confMap
+}
+
+func (t *Table) ResolveConflicts(keys []string) (invalid, notFound []string, tbl *Table, err error) {
+	sch := t.GetSchema()
+	pk := sch.GetField(sch.GetPKIndex())
+	convFunc := doltcore.GetConvFunc(types.StringKind, pk.NomsKind())
+
+	removed := 0
+	confEdit := t.GetConflicts().Edit()
+	for _, keyStr := range keys {
+		key, err := convFunc(types.String(keyStr))
+
+		if err != nil {
+			invalid = append(invalid, keyStr)
+		}
+
+		if confEdit.Has(key) {
+			removed++
+			confEdit.Remove(key)
+		} else {
+			notFound = append(notFound, keyStr)
+		}
+	}
+
+	if removed == 0 {
+		return invalid, notFound, tbl, nil
+	}
+
+	conflicts := confEdit.Map()
+
+	var updatedSt types.Struct
+	if conflicts.Len() == 0 {
+		updatedSt = t.tableStruct.Delete(conflictsKey)
+		updatedSt = updatedSt.Delete(conflictSchemasKey)
+	} else {
+		conflictsRef := writeValAndGetRef(t.vrw, conflicts)
+		updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
+	}
+
+	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
 }

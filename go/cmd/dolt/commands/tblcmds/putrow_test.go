@@ -45,7 +45,7 @@ func TestPutRow(t *testing.T) {
 		if result == 0 {
 			root, _ := dEnv.WorkingRoot()
 			tbl, _ := root.GetTable(tableName)
-			sch := tbl.GetSchema(dEnv.DoltDB.ValueReadWriter())
+			sch := tbl.GetSchema()
 			row, exists := tbl.GetRow(expectedId, sch)
 
 			if !exists {

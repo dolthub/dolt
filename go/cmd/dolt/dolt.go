@@ -4,6 +4,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	Version = "0.2.2"
+	Version = "0.3.0"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
@@ -27,9 +28,11 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "log", Desc: "Show commit logs", Func: commands.Log, ReqRepo: true},
 	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true},
 	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true},
+	{Name: "merge", Desc: "Merge a branch", Func: commands.Merge, ReqRepo: true},
 	{Name: "branch", Desc: "Create, list, edit, delete Branches.", Func: commands.Branch, ReqRepo: true},
 	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
+	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts", Func: cnfcmds.Commands, ReqRepo: false},
 })
 
 func main() {

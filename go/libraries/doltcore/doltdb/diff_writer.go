@@ -56,10 +56,10 @@ func (tWr *ColorDiffWriter) GetSchema() *schema.Schema {
 }
 
 var colDiffColors = map[DiffChType]ColorFunc{
-	DiffAdded:    color.GreenString,
+	DiffAdded:       color.GreenString,
 	DiffModifiedOld: color.YellowString,
 	DiffModifiedNew: color.YellowString,
-	DiffRemoved:  color.RedString,
+	DiffRemoved:     color.RedString,
 }
 
 // WriteRow will write a row to a table
@@ -110,7 +110,7 @@ func (tWr *ColorDiffWriter) WriteRow(row *table.Row) error {
 		}
 	}
 
-	lineStr := prefix + strings.Join(colStrs, tWr.colSep)
+	lineStr := prefix + strings.Join(colStrs, tWr.colSep) + "\n"
 
 	if !colorColumns {
 		if prop, ok := row.GetProperty(ColorRowProp); ok {
@@ -122,12 +122,6 @@ func (tWr *ColorDiffWriter) WriteRow(row *table.Row) error {
 	}
 
 	err := iohelp.WriteAll(tWr.bWr, []byte(lineStr))
-
-	if err != nil {
-		return err
-	}
-
-	_, err = tWr.bWr.WriteRune('\n')
 
 	return err
 }
