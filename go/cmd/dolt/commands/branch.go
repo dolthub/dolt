@@ -204,12 +204,12 @@ func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.U
 		startPt = apr.Arg(1)
 	}
 
-	verr := createBranchWithStartPt(dEnv, newBranch, startPt)
+	verr := createBranchWithStartPt(dEnv, newBranch, startPt, apr.Contains(forceFlag))
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	err := actions.CreateBranch(dEnv, newBranch, startPt)
+func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string, force bool) errhand.VerboseError {
+	err := actions.CreateBranch(dEnv, newBranch, startPt, force)
 
 	if err != nil {
 		if err == actions.ErrAlreadyExists {

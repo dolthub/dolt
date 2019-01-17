@@ -14,6 +14,10 @@ var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTableNotFound = errors.New("table not found")
 
+var ErrNomsIO = errors.New("error reading from or writing to noms")
+
+var ErrNoConflicts = errors.New("no conflicts")
+
 func IsInvalidFormatErr(err error) bool {
 	switch err {
 	case ErrInvBranchName, ErrInvTableName, ErrInvHash, ErrInvalidAnscestorSpec, ErrInvalidBranchOrHash:

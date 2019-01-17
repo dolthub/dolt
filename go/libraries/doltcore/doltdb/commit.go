@@ -1,8 +1,11 @@
 package doltdb
 
 import (
+	"errors"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
 
 const (
@@ -37,6 +40,19 @@ func (c *Commit) GetCommitMeta() *CommitMeta {
 	}
 
 	panic(c.HashOf().String() + " is a commit without the required metadata.")
+}
+
+func (c *Commit) ParentHashes() []hash.Hash {
+	parentSet := c.getParents()
+
+	hashes := make([]hash.Hash, 0, parentSet.Len())
+	parentSet.IterAll(func(parentVal types.Value) {
+		parentRef := parentVal.(types.Ref)
+		parentHash := parentRef.TargetHash()
+		hashes = append(hashes, parentHash)
+	})
+
+	return hashes
 }
 
 func (c *Commit) getParents() types.Set {
@@ -79,4 +95,44 @@ func (c *Commit) GetRootValue() *RootValue {
 	}
 
 	panic(c.HashOf().String() + " is a commit without a value.")
+}
+
+var ErrNoCommonAnscestor = errors.New("no common anscestor")
+
+func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
+	ref1, ref2 := types.NewRef(cm1.commitSt), types.NewRef(cm2.commitSt)
+
+	var ancestorSt types.Struct
+	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
+		ref, err := getCommitAncestorRef(ref1, ref2, cm1.vrw)
+
+		if err != nil {
+			return err
+		}
+
+		ancestorSt, _ = ref.TargetValue(cm1.vrw).(types.Struct)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{cm1.vrw, ancestorSt}, nil
+}
+
+func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
+	var ancestorRef types.Ref
+	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
+		ok := false
+		ancestorRef, ok = datas.FindCommonAncestor(ref1, ref2, vrw)
+
+		if !ok {
+			return ErrNoCommonAnscestor
+		}
+
+		return nil
+	})
+
+	return ancestorRef, err
 }

@@ -145,14 +145,14 @@ func (imp *DataMover) Move() error {
 }
 
 func maybeMapFields(transforms *pipeline.TransformCollection, mapping *schema.FieldMapping) error {
-	rconv, err := pipeline.NewRowConverter(mapping)
+	rconv, err := table.NewRowConverter(mapping)
 
 	if err != nil {
 		return err
 	}
 
 	if !rconv.IdentityConverter {
-		transformer := pipeline.NewRowTransformer("Mapping transform", rconv.TransformRow)
+		transformer := pipeline.NewRowTransformer("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
 		transforms.AppendTransforms(pipeline.NamedTransform{Name: "map", Func: transformer})
 	}
 

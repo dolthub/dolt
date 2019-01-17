@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -20,7 +21,7 @@ var diffShortDesc = "Show changes between commits, commit and working tree, etc"
 var diffLongDesc = `Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
 
 dolt diff [--options] [--] [<tables>...]
-   This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Git to further add but you still haven't. You can stage these changes by using dolt add.
+   This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
 dolt diff [--options] <commit> [--] [<tables>...]
    This form is to view the changes you have in your working tables relative to the named <commit>. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
@@ -144,12 +145,12 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 		rowData2 := types.NewMap(dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
-			sch1 = tbl1.GetSchema(dEnv.DoltDB.ValueReadWriter())
+			sch1 = tbl1.GetSchema()
 			rowData1 = tbl1.GetRowData()
 		}
 
 		if ok2 {
-			sch2 = tbl2.GetSchema(dEnv.DoltDB.ValueReadWriter())
+			sch2 = tbl2.GetSchema()
 			rowData2 = tbl2.GetRowData()
 		}
 
@@ -166,7 +167,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand.VerboseError {
 	unionedSch := untyped.UntypedSchemaUnion(newSch, oldSch)
 
-	newToUnionConv := pipeline.IdentityConverter
+	newToUnionConv := table.IdentityConverter
 	if newSch != nil {
 		newToUnionMapping, err := schema.NewInferredMapping(newSch, unionedSch)
 
@@ -174,10 +175,10 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
 		}
 
-		newToUnionConv, _ = pipeline.NewRowConverter(newToUnionMapping)
+		newToUnionConv, _ = table.NewRowConverter(newToUnionMapping)
 	}
 
-	oldToUnionConv := pipeline.IdentityConverter
+	oldToUnionConv := table.IdentityConverter
 	if oldSch != nil {
 		oldToUnionMapping, err := schema.NewInferredMapping(oldSch, unionedSch)
 
@@ -185,7 +186,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
 		}
 
-		oldToUnionConv, _ = pipeline.NewRowConverter(oldToUnionMapping)
+		oldToUnionConv, _ = table.NewRowConverter(oldToUnionMapping)
 	}
 
 	ad := doltdb.NewAsyncDiffer(1024)

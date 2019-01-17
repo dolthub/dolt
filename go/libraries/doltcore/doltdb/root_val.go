@@ -121,6 +121,31 @@ func (root *RootValue) GetTableNames() []string {
 	return names
 }
 
+func (root *RootValue) TablesInConflict() []string {
+	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+	numTables := int(tableMap.Len())
+	names := make([]string, 0, numTables)
+
+	tableMap.Iter(func(key, tblRefVal types.Value) (stop bool) {
+		tblVal := tblRefVal.(types.Ref).TargetValue(root.vrw)
+		tblSt := tblVal.(types.Struct)
+		tbl := &Table{root.vrw, tblSt}
+		if tbl.HasConflicts() {
+			names = append(names, string(key.(types.String)))
+		}
+
+		return false
+	})
+
+	return names
+}
+
+func (root *RootValue) HasConflicts() bool {
+	cnfTbls := root.TablesInConflict()
+
+	return len(cnfTbls) > 0
+}
+
 // PutTableToWorking inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ddb *DoltDB, tName string, table *Table) *RootValue {
 	if !IsValidTableName(tName) {

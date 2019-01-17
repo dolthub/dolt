@@ -31,7 +31,7 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 	err := dEnv.UpdateWorkingRoot(updatedRoot)
 
 	switch err {
-	case env.ErrNomsIO:
+	case doltdb.ErrNomsIO:
 		return errhand.BuildDError("fatal: failed to write value").Build()
 	case env.ErrStateUpdate:
 		return errhand.BuildDError("fatal: failed to update the working root state").Build()
@@ -44,7 +44,7 @@ func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errh
 	err := dEnv.UpdateStagedRoot(updatedRoot)
 
 	switch err {
-	case env.ErrNomsIO:
+	case doltdb.ErrNomsIO:
 		return errhand.BuildDError("fatal: failed to write value").Build()
 	case env.ErrStateUpdate:
 		return errhand.BuildDError("fatal: failed to update the staged root state").Build()

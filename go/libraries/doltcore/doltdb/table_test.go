@@ -58,7 +58,7 @@ func TestTables(t *testing.T) {
 		t.Fatal("Failed to create table.")
 	}
 
-	unmarshalledSchema := tbl.GetSchema(db)
+	unmarshalledSchema := tbl.GetSchema()
 
 	if !tSchema.Equals(unmarshalledSchema) {
 		t.Error("Schema has changed between writing and reading it back")

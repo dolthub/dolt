@@ -65,8 +65,8 @@ func TestAutoSizing(t *testing.T) {
 		rd := table.NewInMemTableReader(imt)
 
 		mapping, _ := schema.NewInferredMapping(testRowSch, sch)
-		rconv, _ := pipeline.NewRowConverter(mapping)
-		convTr := pipeline.NewRowTransformer("Field Mapping Transform", rconv.TransformRow)
+		rconv, _ := table.NewRowConverter(mapping)
+		convTr := pipeline.NewRowTransformer("Field Mapping Transform", pipeline.GetRowConvTransformFunc(rconv))
 
 		fs := filesys.NewInMemFS(nil, nil, root)
 		tWr, err := OpenTextWriter(path, fs, sch, "")

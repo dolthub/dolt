@@ -4,7 +4,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
@@ -46,31 +45,14 @@ func TypedToUntypedMapping(typedSch *schema.Schema) *schema.FieldMapping {
 	return &schema.FieldMapping{DestToSrc: destToSrc, SrcSch: typedSch, DestSch: untypedSch}
 }
 
-func TypedToUntypedRowConverter(typedSch *schema.Schema) (*pipeline.RowConverter, error) {
+func TypedToUntypedRowConverter(typedSch *schema.Schema) (*table.RowConverter, error) {
 	mapping := TypedToUntypedMapping(typedSch)
-	return pipeline.NewRowConverter(mapping)
+	return table.NewRowConverter(mapping)
 }
 
 func UntypedSchemaUnion(schemas ...*schema.Schema) *schema.Schema {
 	allCols := set.NewStrSet([]string{})
 	var ordered []string
-
-	for _, sch := range schemas {
-		if sch == nil {
-			continue
-		}
-
-		pkIndex := sch.GetPKIndex()
-		if pkIndex != -1 {
-			pk := sch.GetField(pkIndex)
-			nameStr := pk.NameStr()
-
-			if !allCols.Contains(nameStr) {
-				allCols.Add(nameStr)
-				ordered = append(ordered, nameStr)
-			}
-		}
-	}
 
 	for _, sch := range schemas {
 		if sch == nil {

@@ -12,7 +12,6 @@ import (
 )
 
 var ErrDirNotEmpty = errors.New("directory is not empty")
-var ErrNomsIO = errors.New("error reading from or writing to noms")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 
@@ -112,7 +111,7 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error {
 
 	if err != nil {
 		dEnv.bestEffortDeleteAllFromCWD()
-		return ErrNomsIO
+		return doltdb.ErrNomsIO
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
@@ -140,7 +139,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(newRoot *doltdb.RootValue) error {
 	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
 
 	if err != nil {
-		return ErrNomsIO
+		return doltdb.ErrNomsIO
 	}
 
 	dEnv.RepoState.Working = h.String()
@@ -175,7 +174,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) error {
 	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
 
 	if err != nil {
-		return ErrNomsIO
+		return doltdb.ErrNomsIO
 	}
 
 	dEnv.RepoState.Staged = h.String()
@@ -192,7 +191,7 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, table
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
-		return ErrNomsIO
+		return doltdb.ErrNomsIO
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -210,4 +209,18 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, table
 	}
 
 	return dEnv.UpdateWorkingRoot(newRoot)
+}
+
+func (dEnv *DoltEnv) IsMergeActive() bool {
+	return dEnv.RepoState.Merge != nil
+}
+
+func (dEnv *DoltEnv) GetTablesWithConflicts() ([]string, error) {
+	root, err := dEnv.WorkingRoot()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return root.TablesInConflict(), nil
 }

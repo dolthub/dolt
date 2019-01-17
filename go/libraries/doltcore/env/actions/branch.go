@@ -60,8 +60,8 @@ func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
 	return dEnv.DoltDB.DeleteBranch(brName)
 }
 
-func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string) error {
-	if dEnv.DoltDB.HasBranch(newBranch) {
+func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+	if !force && dEnv.DoltDB.HasBranch(newBranch) {
 		return ErrAlreadyExists
 	}
 
@@ -185,7 +185,7 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")
 		} else {
-			return emptyHash, env.ErrNomsIO
+			return emptyHash, doltdb.ErrNomsIO
 		}
 	}
 

@@ -1,10 +1,13 @@
 package table
 
 import (
+	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
+
+var ErrInvalidRow = errors.New("invalid row")
 
 // RowData is a tuple of data following a given schema
 type RowData struct {
@@ -107,9 +110,54 @@ func (rd *RowData) GetField(index int) (val types.Value, field *schema.Field) {
 	return val, f
 }
 
+func (rd *RowData) CopyValues(dest []types.Value, offset, count int) {
+	for i := 0; i < count; i++ {
+		dest[i] = rd.fieldVals[offset+i]
+	}
+}
+
+func (rd *RowData) IsValid() bool {
+	sch := rd.GetSchema()
+	pkIndex := sch.GetPKIndex()
+	for i := 0; i < sch.NumFields(); i++ {
+		val, fld := rd.GetField(i)
+
+		if types.IsNull(val) {
+			if fld.IsRequired() || i == pkIndex {
+				return false
+			}
+		} else if val.Kind() != fld.NomsKind() {
+			return false
+		}
+	}
+
+	return true
+}
+
 // GetFieldByName will return a field's value along with the Field definition and whether it is the primary key by
 // field name.
 func (rd *RowData) GetFieldByName(name string) (types.Value, *schema.Field) {
 	index := rd.sch.GetFieldIndex(name)
 	return rd.GetField(index)
+}
+
+func (rd *RowData) UpdatedCopy(updates []types.Value) *RowData {
+	updatedVals := make([]types.Value, len(rd.fieldVals))
+
+	i := 0
+	for ; i < len(updates); i++ {
+		newVal := updates[i]
+
+		if newVal == nil {
+			updatedVals[i] = rd.fieldVals[i]
+		} else {
+			updatedVals[i] = newVal
+		}
+	}
+
+	for ; i < len(rd.fieldVals); i++ {
+		updatedVals[i] = rd.fieldVals[i]
+	}
+
+	return &RowData{rd.sch, updatedVals}
 }

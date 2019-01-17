@@ -226,6 +226,10 @@ func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Commit, error) {
+	return ddb.CommitWithParents(valHash, branch, nil, cm)
+}
+
+func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("Error committing value "+valHash.String(), func() error {
 		val := ddb.db.ReadValue(valHash)
@@ -235,11 +239,22 @@ func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Co
 		}
 
 		ds := ddb.db.GetDataset(branch)
-		parents := types.Set{}
+		parentEditor := types.NewSet(ddb.db).Edit()
 		if ds.HasHead() {
-			parents = types.NewSet(ddb.db, ds.HeadRef())
+			parentEditor.Insert(ds.HeadRef())
 		}
 
+		for _, parentCmSpec := range parentCmSpecs {
+			cs, err := ddb.Resolve(parentCmSpec)
+
+			if err != nil {
+				return err
+			}
+
+			parentEditor.Insert(types.NewRef(cs.commitSt))
+		}
+
+		parents := parentEditor.Set()
 		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(), Policy: nil}
 		ds, err := ddb.db.Commit(ddb.db.GetDataset(branch), val, commitOpts)
 

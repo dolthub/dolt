@@ -21,7 +21,7 @@ func CheckResultTable(t *testing.T, tableName string, dEnv *env.DoltEnv, expecte
 		return
 	}
 
-	tblRdr := noms.NewNomsMapReader(tbl.GetRowData(), tbl.GetSchema(dEnv.DoltDB.ValueReadWriter()))
+	tblRdr := noms.NewNomsMapReader(tbl.GetRowData(), tbl.GetSchema())
 	defer tblRdr.Close()
 
 	CheckResultsAgainstReader(t, tblRdr, tblRdr.GetSchema().GetPKIndex(), expectedTable, pkInExpectedTable)

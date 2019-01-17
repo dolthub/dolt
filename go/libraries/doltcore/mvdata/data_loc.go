@@ -106,7 +106,7 @@ func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.Readable
 			return nil, false, doltdb.ErrTableNotFound
 		}
 
-		sch := tbl.GetSchema(root.VRW())
+		sch := tbl.GetSchema()
 		rd := noms.NewNomsMapReader(tbl.GetRowData(), sch)
 		return rd, true, nil
 	} else {

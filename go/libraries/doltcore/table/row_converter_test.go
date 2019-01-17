@@ -1,10 +1,9 @@
-package pipeline
+package table
 
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"testing"
 )
 
@@ -42,7 +41,7 @@ func TestRowConverter(t *testing.T) {
 	}
 
 	id, _ := uuid.NewRandom()
-	inRow := table.NewRow(table.RowDataFromValMap(srcSch, map[string]types.Value{
+	inRow := NewRow(RowDataFromValMap(srcSch, map[string]types.Value{
 		"uuidtostr":   types.UUID(id),
 		"floattostr":  types.Float(1.25),
 		"uinttostr":   types.Uint(12345678),
@@ -54,7 +53,7 @@ func TestRowConverter(t *testing.T) {
 
 	outData, _ := rConv.Convert(inRow)
 
-	expected := table.RowDataFromValMap(destSch, map[string]types.Value{
+	expected := RowDataFromValMap(destSch, map[string]types.Value{
 		"uuidtostr":   types.String(id.String()),
 		"floattostr":  types.String("1.25"),
 		"uinttostr":   types.String("12345678"),
@@ -64,7 +63,7 @@ func TestRowConverter(t *testing.T) {
 		"nulltostr":   types.NullValue,
 	})
 
-	if !table.RowDataEqualIgnoringSchema(expected, outData) {
-		t.Error("\n", table.RowDataFmt(expected), "!=\n", table.RowDataFmt(outData))
+	if !RowDataEqualIgnoringSchema(expected, outData) {
+		t.Error("\n", RowDataFmt(expected), "!=\n", RowDataFmt(outData))
 	}
 }

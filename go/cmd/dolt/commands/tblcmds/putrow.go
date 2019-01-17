@@ -103,7 +103,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	vrw := root.VRW()
-	sch := tbl.GetSchema(vrw)
+	sch := tbl.GetSchema()
 	row, verr := createRow(sch, prArgs)
 
 	if verr == nil {

@@ -107,21 +107,7 @@ func GetNonPKFieldListFromRow(row *Row, vrw types.ValueReadWriter) types.List {
 
 // RowIsValid will return true if every column defined as required in the table's schema is non null
 func RowIsValid(row *Row) bool {
-	sch := row.data.GetSchema()
-	pkIndex := sch.GetPKIndex()
-	for i := 0; i < sch.NumFields(); i++ {
-		val, fld := row.data.GetField(i)
-
-		if types.IsNull(val) {
-			if fld.IsRequired() || i == pkIndex {
-				return false
-			}
-		} else if val.Kind() != fld.NomsKind() {
-			return false
-		}
-	}
-
-	return true
+	return row.data.IsValid()
 }
 
 func InvalidFieldsForRow(row *Row) []string {

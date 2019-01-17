@@ -98,6 +98,7 @@ github.com/liquidata-inc/ld v0.0.0-20190102233328-267fb8a020bc h1:pTj+svM8BkiC36
 github.com/liquidata-inc/ld v0.0.0-20190108014525-e75aa62dd376 h1:gqSXTMjkhF1FArd4LW0IDfNqolP5WmsguKJzm03DxGc=
 github.com/liquidata-inc/ld v0.0.0-20190109170858-ebfa15e5c8a8 h1:3CCtGXKqIjVBYkjxqYuNyjTaQdw8jKIKzj//IGcdQ/o=
 github.com/liquidata-inc/ld v0.0.0-20190109182506-2db5490ec944 h1:g4+FMfn/2ouzoLJN9uQ/btOHJbBIf3YgI03O62r6ioU=
+github.com/liquidata-inc/ld v0.0.0-20190110232232-eabe8373a696 h1:GZ4zWVrSB6hIt+eru+mEUXGezZ7MrEiIIFCJb52n8z4=
 github.com/liquidata-inc/noms v0.0.0-20181126053437-599ff4e45090 h1:foYQtP7+pMHEuKyaQGUPWTKbFtRj8j61VcEpVkeTFZ8=
 github.com/liquidata-inc/noms v0.0.0-20181126053437-599ff4e45090/go.mod h1:sv8WH/KMWjMUS3JKxySmQoyMamu9cPd+p5y3lFsXnxo=
 github.com/liquidata-inc/noms v0.0.0-20190108001356-7f3a15c8532e h1:e0+vQm66qm4xZSJsax5yxn2VONttqhRHHVIYFygJrl4=

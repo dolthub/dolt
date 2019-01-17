@@ -7,14 +7,15 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 	"strings"
 )
 
 var statusShortDesc = "Show the working status"
 var statusLongDesc = "Displays working tables that differ from the current HEAD commit, tables that have differ from the " +
 	"staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would " +
-	"commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>git add</b> " +
-	"before running <b>git commit</b>."
+	"commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>dolt add</b> " +
+	"before running <b>dolt commit</b>."
 var statusSynopsis = []string{""}
 
 func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -25,16 +26,18 @@ func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(dEnv)
 
 	if err != nil {
-		if actions.IsRootValUnreachable(err) {
-
-		} else {
-
-		}
-
+		panic(err) // fix
 		return 1
 	}
 
-	printStatus(dEnv, stagedDiffs, notStagedDiffs)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(dEnv)
+
+	if err != nil {
+		panic(err) // fix
+		return 1
+	}
+
+	printStatus(dEnv, stagedDiffs, notStagedDiffs, workingInConflict)
 	return 0
 }
 
@@ -62,7 +65,8 @@ const (
 	untrackedHeader     = `Untracked files:`
 	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
 
-	statusFmt = "\t%-12s%s"
+	statusFmt         = "\t%-16s%s"
+	bothModifiedLabel = "both modified:"
 )
 
 func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
@@ -86,7 +90,7 @@ func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 	return 0
 }
 
-func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPrinted int) int {
+func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingNotStaged []string) int {
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
@@ -98,12 +102,18 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			cli.Println(workingHeaderHelp)
 		}
 
+		inCnfSet := set.NewStrSet(workingNotStaged)
+
 		lines := make([]string, 0, notStaged.Len())
 		for _, tblName := range notStaged.Tables {
 			tdt := notStaged.TableToType[tblName]
 
 			if tdt != actions.AddedTable {
-				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+				if tdt == actions.ModifiedTable && inCnfSet.Contains(tblName) {
+					lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
+				} else {
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+				}
 			}
 		}
 
@@ -138,11 +148,11 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 	return linesPrinted
 }
 
-func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs) {
+func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs, workingInConflict []string) {
 	cli.Printf(branchHeader, dEnv.RepoState.Branch)
 
 	n := printStagedDiffs(staged, true)
-	n = printDiffsNotStaged(notStaged, true, n)
+	n = printDiffsNotStaged(notStaged, true, n, workingInConflict)
 
 	if n == 0 {
 		cli.Println("nothing to commit, working tree clean")
