@@ -68,6 +68,15 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			return 1
 		}
 
+		isUnchanged, _ := dEnv.IsUnchangedFromHead()
+
+		if !isUnchanged {
+			cli.Println("error: Your local changes would be overwritten.")
+			cli.Println("Please commit your changes before you merge.")
+			cli.PrintErrln("Aborting")
+			return 1
+		}
+
 		root, verr := GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
