@@ -224,3 +224,18 @@ func (dEnv *DoltEnv) GetTablesWithConflicts() ([]string, error) {
 
 	return root.TablesInConflict(), nil
 }
+
+func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {
+	root, err := dEnv.HeadRoot()
+
+	if err != nil {
+		return false, err
+	}
+
+	headHash := root.HashOf().String()
+	if dEnv.RepoState.Working == headHash && dEnv.RepoState.Staged == headHash {
+		return true, nil
+	}
+
+	return false, nil
+}
