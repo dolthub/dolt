@@ -1,12 +1,16 @@
 package commands
 
 import (
+	"bytes"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/editor"
 )
 
 var commitShortDesc = `Record changes to the repository`
@@ -26,9 +30,7 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
-		cli.PrintErrln(color.RedString("Missing required parameter -m"))
-		usage()
-		return 1
+		msg = getCommitMessageFromEditor(dEnv)
 	}
 
 	err := actions.CommitStaged(dEnv, msg)
@@ -48,7 +50,7 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if actions.IsNothingStaged(err) {
 		notStaged := actions.NothingStagedDiffs(err)
-		printDiffsNotStaged(notStaged, false, 0, []string{})
+		printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
 
 		return 1
 	} else if err != nil {
@@ -57,4 +59,58 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	}
 
 	return 0
+}
+
+func getCommitMessageFromEditor(dEnv *env.DoltEnv) string {
+	var finalMsg string
+	initialMsg := buildInitalCommitMsg(dEnv)
+	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, "vim")
+
+	cli.ExecuteWithStdioRestored(func() {
+		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)
+		finalMsg = parseCommitMessage(commitMsg)
+	})
+	return finalMsg
+}
+
+func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
+	initialNoColor := color.NoColor
+	color.NoColor = true
+
+	currBranch := dEnv.RepoState.Branch
+	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(dEnv)
+	buf := bytes.NewBuffer([]byte{})
+
+	workingInConflict, _, _, err := actions.GetTablesInConflict(dEnv)
+
+	if err != nil {
+		workingInConflict = []string{}
+	}
+
+	n := printStagedDiffs(buf, stagedDiffs, true)
+	n = printDiffsNotStaged(buf, notStagedDiffs, true, n, workingInConflict)
+
+	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
+		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch + "\n#" + "\n"
+
+	msgLines := strings.Split(buf.String(), "\n")
+	for i, msg := range msgLines {
+		msgLines[i] = "# " + msg
+	}
+	statusMsg := strings.Join(msgLines, "\n")
+
+	color.NoColor = initialNoColor
+	return initialCommitMessage + statusMsg
+}
+
+func parseCommitMessage(cm string) string {
+	lines := strings.Split(cm, "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if len(line) >= 1 && line[0] == '#' {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.Join(filtered, "\n")
 }

@@ -2,11 +2,12 @@ package env
 
 import (
 	"errors"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"strings"
 )
 
 const (
@@ -15,6 +16,8 @@ const (
 
 	UserEmailKey = "user.email"
 	UserNameKey  = "user.name"
+
+	DoltEditor = "core.editor"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
