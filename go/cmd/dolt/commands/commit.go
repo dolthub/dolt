@@ -14,11 +14,16 @@ import (
 )
 
 var commitShortDesc = `Record changes to the repository`
-var commitLongDesc = `Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
-
-The content to be added can be specified by using dolt add to incrementally "add" changes to the staged tables before using the commit command (Note: even modified files must be "added");`
+var commitLongDesc = "Stores the current contents of the staged tables in a new commit along with a log message from the " +
+	"user describing the changes.\n" +
+	"\n" +
+	"The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables " +
+	"before using the commit command (Note: even modified files must be \"added\");" +
+	"\n" +
+	"The log message can be added with the parameter -m <msg>.  If the -m parameter is not provided an editor will be " +
+	"opened where you can review the commit and provide a log message.\n"
 var commitSynopsis = []string{
-	"-m <msg>",
+	"[-m <msg>]",
 }
 
 func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
