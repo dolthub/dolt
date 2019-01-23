@@ -8,7 +8,6 @@ import (
 	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -27,8 +26,7 @@ const (
 )
 
 var (
-	pageSize = int64(os.Getpagesize())
-	maxInt   = int64(math.MaxInt64)
+	maxInt = int64(math.MaxInt64)
 )
 
 func init() {
@@ -58,7 +56,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		d.PanicIfTrue(fi.Size() < 0)
 		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
 		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
-		aligned := indexOffset / pageSize * pageSize // Thanks, integer arithmetic!
+		aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
 		d.PanicIfTrue(fi.Size()-aligned > maxInt)
 
 		mm, err := mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
