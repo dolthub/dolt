@@ -105,6 +105,8 @@ github.com/liquidata-inc/noms v0.0.0-20190108001356-7f3a15c8532e h1:e0+vQm66qm4x
 github.com/liquidata-inc/noms v0.0.0-20190108001356-7f3a15c8532e/go.mod h1:sv8WH/KMWjMUS3JKxySmQoyMamu9cPd+p5y3lFsXnxo=
 github.com/liquidata-inc/noms v0.0.0-20190123070639-2385b6631d1c h1:rngQwX4FxhJX2AC+oiPrCBiIuGdHAvZIKR6naH1d6UU=
 github.com/liquidata-inc/noms v0.0.0-20190123070639-2385b6631d1c/go.mod h1:sv8WH/KMWjMUS3JKxySmQoyMamu9cPd+p5y3lFsXnxo=
+github.com/liquidata-inc/noms v0.0.0-20190123234159-5cb7ceaa94f8 h1:RwyCYmO84/5ABDb09ANgu68usba11xYVTnCrvtSPS/I=
+github.com/liquidata-inc/noms v0.0.0-20190123234159-5cb7ceaa94f8/go.mod h1:sv8WH/KMWjMUS3JKxySmQoyMamu9cPd+p5y3lFsXnxo=
 github.com/mattn/go-colorable v0.0.9 h1:UVL0vNpWh04HeJXV0KLcaT7r06gOH2l4OW6ddYRUIY4=
 github.com/mattn/go-colorable v0.0.9/go.mod h1:9vuHe8Xs5qXnSaW/c/ABM9alt+Vo+STaOChaDxuIBZU=
 github.com/mattn/go-isatty v0.0.4 h1:bnP0vzxcAdeI1zdubAl5PjU6zsERjGZb7raWodagDYs=
