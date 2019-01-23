@@ -2,14 +2,17 @@ package cli
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
+
+	"github.com/fatih/color"
+	"github.com/google/uuid"
 )
 
 var CliOut = color.Output
 var CliErr = color.Error
+
+var ExecuteWithStdioRestored func(userFunc func())
 
 func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
@@ -29,6 +32,19 @@ func InitIO() (restoreIO func()) {
 
 		os.Stdout = stdOut
 		os.Stderr = stdErr
+	}
+
+	ExecuteWithStdioRestored = func(userFunc func()) {
+		initialNoColor := color.NoColor
+		color.NoColor = true
+		os.Stdout = stdOut
+		os.Stderr = stdErr
+
+		userFunc()
+
+		os.Stdout = f
+		os.Stderr = f
+		color.NoColor = initialNoColor
 	}
 
 	return restoreIO

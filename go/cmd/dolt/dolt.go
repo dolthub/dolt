@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -9,8 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"os"
-	"strings"
 )
 
 const (
@@ -36,8 +37,8 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
-	args := os.Args[1:]
 
+	args := os.Args[1:]
 	// Currently goland doesn't support running with a different working directory when using go modules.
 	// This is a hack that allows a different working directory to be set after the application starts using
 	// chdir=<DIR>.  The syntax is not flexible and must match exactly this.

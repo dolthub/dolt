@@ -2,13 +2,16 @@ package commands
 
 import (
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"strings"
 )
 
 var statusShortDesc = "Show the working status"
@@ -69,12 +72,12 @@ const (
 	bothModifiedLabel = "both modified:"
 )
 
-func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
+func printStagedDiffs(wr io.Writer, staged *actions.TableDiffs, printHelp bool) int {
 	if staged.Len() > 0 {
-		cli.Println(stagedHeader)
+		iohelp.WriteLine(wr, stagedHeader)
 
 		if printHelp {
-			cli.Println(stagedHeaderHelp)
+			iohelp.WriteLine(wr, stagedHeaderHelp)
 		}
 
 		lines := make([]string, 0, staged.Len())
@@ -83,23 +86,23 @@ func printStagedDiffs(staged *actions.TableDiffs, printHelp bool) int {
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
 
-		cli.Println(color.GreenString(strings.Join(lines, "\n")))
+		iohelp.WriteLine(wr, color.GreenString(strings.Join(lines, "\n")))
 		return len(lines)
 	}
 
 	return 0
 }
 
-func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingNotStaged []string) int {
+func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingNotStaged []string) int {
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
 
-		cli.Println(workingHeader)
+		iohelp.WriteLine(wr, workingHeader)
 
 		if printHelp {
-			cli.Println(workingHeaderHelp)
+			iohelp.WriteLine(wr, workingHeaderHelp)
 		}
 
 		inCnfSet := set.NewStrSet(workingNotStaged)
@@ -117,7 +120,7 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			}
 		}
 
-		cli.Println(color.RedString(strings.Join(lines, "\n")))
+		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
 	}
 
@@ -126,10 +129,10 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			cli.Println()
 		}
 
-		cli.Println(untrackedHeader)
+		iohelp.WriteLine(wr, untrackedHeader)
 
 		if printHelp {
-			cli.Println(untrackedHeaderHelp)
+			iohelp.WriteLine(wr, untrackedHeaderHelp)
 		}
 
 		lines := make([]string, 0, notStaged.Len())
@@ -141,7 +144,7 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 			}
 		}
 
-		cli.Println(color.RedString(strings.Join(lines, "\n")))
+		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
 	}
 
@@ -151,8 +154,8 @@ func printDiffsNotStaged(notStaged *actions.TableDiffs, printHelp bool, linesPri
 func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs, workingInConflict []string) {
 	cli.Printf(branchHeader, dEnv.RepoState.Branch)
 
-	n := printStagedDiffs(staged, true)
-	n = printDiffsNotStaged(notStaged, true, n, workingInConflict)
+	n := printStagedDiffs(cli.CliOut, staged, true)
+	n = printDiffsNotStaged(cli.CliOut, notStaged, true, n, workingInConflict)
 
 	if n == 0 {
 		cli.Println("nothing to commit, working tree clean")
