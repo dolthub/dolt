@@ -56,4 +56,4 @@ require (
 	honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a // indirect
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190123070639-2385b6631d1c
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190123234159-5cb7ceaa94f8
