@@ -27,7 +27,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()
-		repoState := &RepoState{"master", hashStr, hashStr, nil}
+		repoState := &RepoState{"master", hashStr, hashStr, nil, nil}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {
@@ -52,11 +52,11 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 func TestNonRepoDir(t *testing.T) {
 	dEnv := createTestEnv(false, false)
 
-	if !dEnv.IsCWDEmpty() {
+	if !isCWDEmpty(dEnv) {
 		t.Error("Should start with a clean wd")
 	}
 
-	if dEnv.HasLDDir() || dEnv.HasLocalConfig() {
+	if dEnv.HasDoltDir() || dEnv.HasLocalConfig() {
 		t.Fatal("These should not exist in the environment for a non repo dir.")
 	}
 
@@ -72,7 +72,7 @@ func TestNonRepoDir(t *testing.T) {
 func TestRepoDir(t *testing.T) {
 	dEnv := createTestEnv(true, true)
 
-	if !dEnv.HasLDDir() || !dEnv.HasLocalConfig() {
+	if !dEnv.HasDoltDir() || !dEnv.HasLocalConfig() {
 		t.Fatal("local config and .dolt dir should have been created")
 	}
 
@@ -92,7 +92,7 @@ func TestRepoDir(t *testing.T) {
 func TestRepoDirNoLocal(t *testing.T) {
 	dEnv := createTestEnv(true, false)
 
-	if !dEnv.HasLDDir() {
+	if !dEnv.HasDoltDir() {
 		t.Fatal(".dolt dir should exist.")
 	} else if dEnv.HasLocalConfig() {
 		t.Fatal("This should not be here before creation")
@@ -138,16 +138,26 @@ func TestInitRepo(t *testing.T) {
 	}
 }
 
+func isCWDEmpty(dEnv *DoltEnv) bool {
+	isEmpty := true
+	dEnv.FS.Iter("./", true, func(_ string, _ int64, _ bool) bool {
+		isEmpty = false
+		return true
+	})
+
+	return isEmpty
+}
+
 func TestBestEffortDelete(t *testing.T) {
 	dEnv := createTestEnv(true, true)
 
-	if dEnv.IsCWDEmpty() {
+	if isCWDEmpty(dEnv) {
 		t.Error("Dir should not be empty before delete.")
 	}
 
 	dEnv.bestEffortDeleteAllFromCWD()
 
-	if !dEnv.IsCWDEmpty() {
+	if !isCWDEmpty(dEnv) {
 		t.Error("Dir should be empty after delete.")
 	}
 }

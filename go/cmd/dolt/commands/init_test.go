@@ -52,7 +52,7 @@ func TestInit(t *testing.T) {
 			t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
 		} else if test.ExpectSuccess {
 			// succceeded as expected
-			if !dEnv.HasLDDir() {
+			if !dEnv.HasDoltDir() {
 				t.Error(test.Name, "- .dolt dir should exist after initialization")
 			}
 		} else {
