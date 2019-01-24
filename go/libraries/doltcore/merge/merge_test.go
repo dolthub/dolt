@@ -12,7 +12,6 @@ import (
 func TestRowMerge(t *testing.T) {
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
-	key := types.String("key")
 
 	tests := []struct {
 		name                  string
@@ -87,7 +86,7 @@ func TestRowMerge(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actualResult, isConflict := rowMerge(vrw, key, test.row, test.mergeRow, test.ancRow)
+		actualResult, isConflict := rowMerge(vrw, test.row, test.mergeRow, test.ancRow)
 
 		if test.expectedResult == nil {
 			if actualResult != nil {

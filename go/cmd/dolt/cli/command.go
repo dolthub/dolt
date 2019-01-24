@@ -46,7 +46,7 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 		subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 		if command, ok := commandMap[subCommandStr]; ok {
 			if command.ReqRepo {
-				if !dEnv.HasLDDir() {
+				if !dEnv.HasDoltDir() {
 					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
 					PrintErrln("run: dolt init before trying to run this command")
 					return 2

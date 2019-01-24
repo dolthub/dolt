@@ -24,11 +24,8 @@ var initSynopsis = []string{
 
 // Init is used by the init command
 func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	if dEnv.HasLDDir() {
+	if dEnv.HasDoltDir() {
 		cli.PrintErrln(color.RedString("This directory has already been initialized."))
-		return 1
-	} else if !dEnv.IsCWDEmpty() {
-		cli.PrintErrln(color.RedString("init must be run on an empty directory"))
 		return 1
 	}
 
@@ -75,9 +72,9 @@ func initRepoErrToVerr(err error) errhand.VerboseError {
 	case nil:
 		return nil
 
-	case env.ErrDirNotEmpty:
+	case env.ErrPreexistingDoltDir:
 		bdr := errhand.BuildDError("Unable to initialize the current directory.")
-		bdr.AddDetails("dolt will only allow empty directoriese to be initialized.")
+		bdr.AddDetails("Directory already initialized.")
 		return bdr.Build()
 
 	case doltdb.ErrNomsIO:

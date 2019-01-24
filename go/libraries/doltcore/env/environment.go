@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrDirNotEmpty = errors.New("directory is not empty")
+var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 
@@ -46,21 +46,10 @@ func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *D
 	}
 }
 
-// HasLDDir returns true of the DoltDir directory exists and is a valid directory
-func (dEnv *DoltEnv) HasLDDir() bool {
+// HasDoltDir returns true if the .dolt directory exists and is a valid directory
+func (dEnv *DoltEnv) HasDoltDir() bool {
 	exists, isDir := dEnv.FS.Exists(getDoltDir())
 	return exists && isDir
-}
-
-// IsCWDEmpty returns wheather the current working directory is empty or not.
-func (dEnv *DoltEnv) IsCWDEmpty() bool {
-	isEmpty := true
-	dEnv.FS.Iter("./", true, func(_ string, _ int64, _ bool) bool {
-		isEmpty = false
-		return true
-	})
-
-	return isEmpty
 }
 
 // HasLocalConfig returns true if a repository local config file
@@ -89,8 +78,8 @@ func (dEnv *DoltEnv) bestEffortDeleteAllFromCWD() {
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(name, email string) error {
-	if !dEnv.IsCWDEmpty() {
-		return ErrDirNotEmpty
+	if dEnv.HasDoltDir() {
+		return ErrPreexistingDoltDir
 	}
 
 	err := dEnv.FS.MkDirs(doltdb.DoltDataDir)

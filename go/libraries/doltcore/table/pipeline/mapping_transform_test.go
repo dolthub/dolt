@@ -74,12 +74,12 @@ func TestMappingReader(t *testing.T) {
 	rd := table.NewInMemTableReader(initialTable)
 
 	mapping, _ := schema.NewInferredMapping(initialTable.GetSchema(), mappedSchema1)
-	rconv, _ := NewRowConverter(mapping)
-	tr := NewRowTransformer("mapping transform", rconv.TransformRow)
+	rconv, _ := table.NewRowConverter(mapping)
+	tr := NewRowTransformer("mapping transform", GetRowConvTransformFunc(rconv))
 
 	mapping2, _ := schema.NewFieldMappingFromNameMap(mappedSchema1, mappedSchema2, oldNameToSchema2Name)
-	rconv2, _ := NewRowConverter(mapping2)
-	tr2 := NewRowTransformer("mapping transform 2", rconv2.TransformRow)
+	rconv2, _ := table.NewRowConverter(mapping2)
+	tr2 := NewRowTransformer("mapping transform 2", GetRowConvTransformFunc(rconv2))
 
 	func() {
 		imttWr := table.NewInMemTableWriter(resultTable)
