@@ -37,7 +37,6 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 })
 
 func main() {
-
 	args := os.Args[1:]
 	// Currently goland doesn't support running with a different working directory when using go modules.
 	// This is a hack that allows a different working directory to be set after the application starts using
