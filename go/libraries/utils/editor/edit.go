@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -20,7 +20,7 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 		return "", err
 	}
 
-	cmdName, cmdArgs := getEditorString(ed)
+	cmdName, cmdArgs := getCmdNameAndArgsForEditor(ed)
 
 	if cmdName == "" {
 		cmdName = os.Getenv("EDITOR")
@@ -35,11 +35,10 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	cmd.Stderr = os.Stderr
 	err = cmd.Start()
 	if err != nil {
-		fmt.Printf("Start failed: %s", err)
+		return "", err
 	}
 	fmt.Printf("Waiting for command to finish.\n")
 	err = cmd.Wait()
-	fmt.Printf("Command finished with error: %v\n", err)
 
 	data, err := ioutil.ReadFile(filename)
 
@@ -50,7 +49,59 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	return string(data), nil
 }
 
-func getEditorString(edStr string) (string, []string) {
-	splitStr := strings.Split(edStr, " ")
-	return splitStr[0], splitStr[1:]
+func getCmdNameAndArgsForEditor(es string) (string, []string) {
+	type span struct {
+		start int
+		end   int
+	}
+	spans := make([]span, 0, 32)
+
+	lastQuote := rune(0)
+	f := func(c rune) bool {
+		switch {
+		case c == lastQuote:
+			lastQuote = rune(0)
+			return true
+		case lastQuote != rune(0):
+			return false
+		case unicode.In(c, unicode.Quotation_Mark):
+			lastQuote = c
+			return false
+		default:
+			return unicode.IsSpace(c)
+
+		}
+	}
+
+	hasStarted := false
+	start := 0
+	for i, rune := range es {
+		if f(rune) {
+			if hasStarted {
+				if unicode.In(rune, unicode.Quotation_Mark) {
+					spans = append(spans, span{start: start + 1, end: i})
+				} else {
+					spans = append(spans, span{start: start, end: i})
+				}
+
+				hasStarted = false
+			}
+		} else {
+			if !hasStarted {
+				start = i
+				hasStarted = true
+			}
+		}
+	}
+
+	if hasStarted {
+		spans = append(spans, span{start, len(es)})
+	}
+
+	results := make([]string, len(spans))
+	for i, span := range spans {
+		results[i] = es[span.start:span.end]
+	}
+
+	return results[0], results[1:]
 }
