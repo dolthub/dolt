@@ -208,6 +208,18 @@ func (w *hrsWriter) Write(v Value) {
 		w.outdent()
 		w.write("]")
 
+	case TupleKind:
+		w.write("(")
+		v.(Tuple).IterFields(func(i uint64, v Value) bool {
+			if i != 0 {
+				w.write(",")
+			}
+			w.Write(v)
+			return w.err != nil
+		})
+		w.outdent()
+		w.write(")")
+
 	case MapKind:
 		w.write("map {")
 		w.writeSize(v)
@@ -337,7 +349,7 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
 	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind, NullKind:
 		w.write(t.TargetKind().String())
-	case ListKind, RefKind, SetKind, MapKind:
+	case ListKind, RefKind, SetKind, MapKind, TupleKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {

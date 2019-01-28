@@ -269,7 +269,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 // shouldDescend returns true, if Value is not primitive or is a Ref.
 func ShouldDescend(v1, v2 types.Value) bool {
 	kind := v1.Kind()
-	return !types.IsPrimitiveKind(kind) && kind == v2.Kind() && kind != types.RefKind
+	return !types.IsPrimitiveKind(kind) && kind == v2.Kind() && kind != types.RefKind && kind != types.TupleKind
 }
 
 // stopSent returns true if a message has been sent to this StopChannel

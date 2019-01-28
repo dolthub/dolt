@@ -117,7 +117,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 		switch kind {
 		case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, UUIDKind, IntKind, UintKind, NullKind:
 			return t
-		case ListKind, MapKind, RefKind, SetKind, UnionKind:
+		case ListKind, MapKind, RefKind, SetKind, UnionKind, TupleKind:
 			elemTypes := make(typeSlice, len(t.Desc.(CompoundDesc).ElemTypes))
 			for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 				elemTypes[i] = rec(et)
@@ -170,7 +170,7 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) *Type {
 	case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, CycleKind, UUIDKind, IntKind, UintKind, NullKind:
 		break
 
-	case ListKind, MapKind, RefKind, SetKind:
+	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
 		for i, et := range elemTypes {
 			elemTypes[i] = foldUnions(et, seenStructs, intersectStructs)
@@ -217,7 +217,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) *Type
 	for t := range ts {
 		var h how
 		switch t.TargetKind() {
-		case RefKind, SetKind, ListKind, MapKind:
+		case RefKind, SetKind, ListKind, MapKind, TupleKind:
 			h = how{k: t.TargetKind()}
 		case StructKind:
 			h = how{k: t.TargetKind(), n: t.Desc.(StructDesc).Name}
@@ -243,7 +243,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) *Type
 
 		var r *Type
 		switch h.k {
-		case ListKind, RefKind, SetKind:
+		case ListKind, RefKind, SetKind, TupleKind:
 			r = foldCompoundTypesForUnion(h.k, ts, seenStructs, intersectStructs)
 		case MapKind:
 			r = foldMapTypesForUnion(ts, seenStructs, intersectStructs)

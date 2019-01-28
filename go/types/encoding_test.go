@@ -18,7 +18,7 @@ import (
 
 func toBinaryNomsReaderData(data []interface{}) []byte {
 	w := newBinaryNomsWriter()
-	for _, v := range data {
+	for i, v := range data {
 		switch v := v.(type) {
 		case uint8:
 			w.writeUint8(v)
@@ -38,7 +38,7 @@ func toBinaryNomsReaderData(data []interface{}) []byte {
 		case NomsKind:
 			w.writeUint8(uint8(v))
 		default:
-			panic("unreachable")
+			panic("unreachable at index " + strconv.FormatInt(int64(i), 10))
 		}
 	}
 	return w.data()
@@ -195,6 +195,15 @@ func TestWriteList(t *testing.T) {
 		NewList(vrw, Float(0), Float(1), Float(2), Float(3)),
 	)
 }
+func TestWriteTuple(t *testing.T) {
+
+	assertEncoding(t,
+		[]interface{}{
+			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
+		},
+		NewTuple(Float(0), Float(1), Float(2), Float(3)),
+	)
+}
 
 func TestWriteListOfList(t *testing.T) {
 	vrw := newTestValueStore()
@@ -240,10 +249,12 @@ func TestWriteMap(t *testing.T) {
 
 	assertEncoding(t,
 		[]interface{}{
-			MapKind, uint64(0), uint64(2), /* len */
-			StringKind, "a", BoolKind, false, StringKind, "b", BoolKind, true,
+			MapKind, uint64(0), uint64(3), /* len */
+			StringKind, "a", BoolKind, false,
+			StringKind, "b", BoolKind, true,
+			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		NewMap(vrw, String("a"), Bool(false), String("b"), Bool(true)),
+		NewMap(vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
 	)
 }
 
@@ -290,6 +301,15 @@ func TestWriteEmptyStruct(t *testing.T) {
 	)
 }
 
+func TestWriteEmptyTuple(t *testing.T) {
+	assertEncoding(t,
+		[]interface{}{
+			TupleKind, uint64(0), /* len */
+		},
+		NewTuple(),
+	)
+}
+
 func TestWriteStruct(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
@@ -331,6 +351,26 @@ func TestWriteStructWithList(t *testing.T) {
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
 		NewStruct("S", StructData{"l": NewList(vrw)}),
+	)
+}
+
+func TestWriteStructWithTuple(t *testing.T) {
+	// struct S {l: List<String>}({l: ["a", "b"]})
+	assertEncoding(t,
+		[]interface{}{
+			StructKind, "S", uint64(1), /* len */
+			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
+		},
+		NewStruct("S", StructData{"t": NewTuple(String("a"), String("b"))}),
+	)
+
+	// struct S {l: List<>}({l: []})
+	assertEncoding(t,
+		[]interface{}{
+			StructKind, "S", uint64(1), /* len */
+			"t", TupleKind, uint64(0), /* len */
+		},
+		NewStruct("S", StructData{"t": NewTuple()}),
 	)
 }
 

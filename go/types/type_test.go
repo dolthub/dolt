@@ -64,6 +64,10 @@ func TestTypeOrdered(t *testing.T) {
 	assert.True(isKindOrderedByValue(FloaTType.TargetKind()))
 	assert.True(isKindOrderedByValue(UUIDType.TargetKind()))
 	assert.True(isKindOrderedByValue(StringType.TargetKind()))
+	assert.True(isKindOrderedByValue(IntType.TargetKind()))
+	assert.True(isKindOrderedByValue(UintType.TargetKind()))
+	assert.True(isKindOrderedByValue(TupleKind))
+
 	assert.False(isKindOrderedByValue(BlobType.TargetKind()))
 	assert.False(isKindOrderedByValue(ValueType.TargetKind()))
 	assert.False(isKindOrderedByValue(MakeListType(StringType).TargetKind()))
