@@ -61,6 +61,8 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				verr = checkoutTable(dEnv, apr.Args())
 			} else if isBranch {
 				verr = checkoutBranch(dEnv, name)
+			} else {
+				verr = errhand.BuildDError("error: could not find %s", name).Build()
 			}
 		}
 

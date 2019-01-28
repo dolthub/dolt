@@ -35,7 +35,7 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 
 	var itrErr error
 	conflicts.Iter(func(key, value types.Value) (stop bool) {
-		cnf := doltdb.ConflictFromNomsList(value.(types.List))
+		cnf := doltdb.ConflictFromTuple(value.(types.Tuple))
 
 		var updated types.Value
 		updated, itrErr = autoResFunc(key, cnf)
@@ -47,7 +47,7 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		if types.IsNull(updated) {
 			rowEditor.Remove(key)
 		} else {
-			rd := table.RowDataFromPKAndValueList(tblSch, key, updated.(types.List))
+			rd := table.RowDataFromPKAndValueList(tblSch, key, updated.(types.Tuple))
 
 			if !rd.IsValid() {
 				itrErr = table.ErrInvalidRow

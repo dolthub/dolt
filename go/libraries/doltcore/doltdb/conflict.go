@@ -21,10 +21,10 @@ func NewConflict(base, value, mergeValue types.Value) Conflict {
 	return Conflict{base, value, mergeValue}
 }
 
-func ConflictFromNomsList(lst types.List) Conflict {
-	return Conflict{lst.Get(0), lst.Get(1), lst.Get(2)}
+func ConflictFromTuple(tpl types.Tuple) Conflict {
+	return Conflict{tpl.Get(0), tpl.Get(1), tpl.Get(2)}
 }
 
-func (c Conflict) ToNomsList(vrw types.ValueReadWriter) types.List {
-	return types.NewList(vrw, c.Base, c.Value, c.MergeValue)
+func (c Conflict) ToNomsList(vrw types.ValueReadWriter) types.Tuple {
+	return types.NewTuple(c.Base, c.Value, c.MergeValue)
 }

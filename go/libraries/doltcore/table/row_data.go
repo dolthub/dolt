@@ -41,7 +41,7 @@ func RowDataFromValues(sch *schema.Schema, fieldVals []types.Value) *RowData {
 	return &RowData{sch, rowFields}
 }
 
-func RowDataFromPKAndValueList(sch *schema.Schema, pk types.Value, fieldValueList types.List) *RowData {
+func RowDataFromPKAndValueList(sch *schema.Schema, pk types.Value, fieldValueList types.Tuple) *RowData {
 	pkIndex := sch.GetPKIndex()
 	fieldValues := make([]types.Value, 0, fieldValueList.Len()+1)
 	for i := 0; uint64(i) < fieldValueList.Len(); i++ {

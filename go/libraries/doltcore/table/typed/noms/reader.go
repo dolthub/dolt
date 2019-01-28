@@ -9,7 +9,7 @@ import (
 )
 
 // NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is
-// a types.Value and the value is a types.List.  This list is a tuple of field values.
+// a types.Value and the value is a types.Tuple of field values.
 type NomsMapReader struct {
 	sch *schema.Schema
 	itr types.MapIterator
@@ -48,8 +48,8 @@ func (nmr *NomsMapReader) ReadRow() (*table.Row, error) {
 		return nil, io.EOF
 	}
 
-	if valList, ok := val.(types.List); !ok {
-		return nil, errors.New("Map value is not a list. This map is not a valid Dolt table.")
+	if valList, ok := val.(types.Tuple); !ok {
+		return nil, errors.New("Map value is not a tuple. This map is not a valid Dolt table.")
 	} else {
 		return table.NewRow(table.RowDataFromPKAndValueList(nmr.sch, key, valList)), nil
 	}

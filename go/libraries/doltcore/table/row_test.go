@@ -45,11 +45,9 @@ func newRowTest(sch *schema.Schema) *Row {
 }
 
 func newRowFromPKAndValueListTest(sch *schema.Schema) *Row {
-	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase()
 	pk := types.UUID(testID)
-	valList := types.NewList(db, types.String("bill"), types.String("billerson"), types.NullValue, types.Uint(53))
-	return NewRow(RowDataFromPKAndValueList(sch, pk, valList))
+	valTuple := types.NewTuple(types.String("bill"), types.String("billerson"), types.NullValue, types.Uint(53))
+	return NewRow(RowDataFromPKAndValueList(sch, pk, valTuple))
 }
 
 func newRowFromValMapTest(sch *schema.Schema) *Row {

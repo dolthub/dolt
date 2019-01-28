@@ -14,7 +14,8 @@ const (
 	CollChangesProp = "collchanges"
 )
 
-type DiffChType int 
+type DiffChType int
+
 const (
 	DiffAdded DiffChType = iota
 	DiffRemoved
@@ -84,12 +85,12 @@ func (rdRd *RowDiffReader) ReadRow() (*table.Row, error) {
 		var mappedNew *table.RowData
 
 		if d.OldValue != nil {
-			oldRow := table.NewRow(table.RowDataFromPKAndValueList(rdRd.oldConv.SrcSch, d.KeyValue, d.OldValue.(types.List)))
+			oldRow := table.NewRow(table.RowDataFromPKAndValueList(rdRd.oldConv.SrcSch, d.KeyValue, d.OldValue.(types.Tuple)))
 			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
 		}
 
 		if d.NewValue != nil {
-			newRow := table.NewRow(table.RowDataFromPKAndValueList(rdRd.newConv.SrcSch, d.KeyValue, d.NewValue.(types.List)))
+			newRow := table.NewRow(table.RowDataFromPKAndValueList(rdRd.newConv.SrcSch, d.KeyValue, d.NewValue.(types.Tuple)))
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 
