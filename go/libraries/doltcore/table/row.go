@@ -77,7 +77,7 @@ func GetPKFromRow(row *Row) types.Value {
 }
 
 // GetNonPKFieldListFromRow gets the values for non primary key row fields as a noms list
-func GetNonPKFieldListFromRow(row *Row, vrw types.ValueReadWriter) types.List {
+func GetNonPKFieldListFromRow(row *Row, vrw types.ValueReadWriter) types.Tuple {
 	sch := row.data.GetSchema()
 	pkIdx := sch.GetPKIndex()
 
@@ -102,7 +102,7 @@ func GetNonPKFieldListFromRow(row *Row, vrw types.ValueReadWriter) types.List {
 		}
 	}
 
-	return types.NewList(vrw, nonPKValues...)
+	return types.NewTuple(nonPKValues...)
 }
 
 // RowIsValid will return true if every column defined as required in the table's schema is non null

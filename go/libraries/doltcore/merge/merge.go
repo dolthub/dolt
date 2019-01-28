@@ -136,7 +136,7 @@ func mergeTableData(rows, mergeRows, ancRows types.Map, vrw types.ValueReadWrite
 			mergeChange = types.ValueChanged{}
 		} else {
 			row, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(vrw, row, mergeRow, ancRow)
+			mergedRow, isConflict := rowMerge(row, mergeRow, ancRow)
 
 			if isConflict {
 				stats.Conflicts++
@@ -158,7 +158,7 @@ func mergeTableData(rows, mergeRows, ancRows types.Map, vrw types.ValueReadWrite
 	return mergedData, conflicts, stats, nil
 }
 
-func addConflict(conflictChan chan types.Value, key types.Value, value types.List) {
+func addConflict(conflictChan chan types.Value, key types.Value, value types.Tuple) {
 	conflictChan <- key
 	conflictChan <- value
 }
@@ -177,7 +177,7 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(vrw types.ValueReadWriter, row, mergeRow, baseRow types.Value) (resultRow types.Value, isConflict bool) {
+func rowMerge(row, mergeRow, baseRow types.Value) (resultRow types.Value, isConflict bool) {
 	if baseRow == nil {
 		if row.Equals(mergeRow) {
 			// same row added to both
@@ -193,9 +193,9 @@ func rowMerge(vrw types.ValueReadWriter, row, mergeRow, baseRow types.Value) (re
 		// removed from one and modified in another
 		return nil, true
 	} else {
-		tuple := row.(types.List)
-		mergeTuple := mergeRow.(types.List)
-		baseTuple := baseRow.(types.List)
+		tuple := row.(types.Tuple)
+		mergeTuple := mergeRow.(types.Tuple)
+		baseTuple := baseRow.(types.Tuple)
 
 		numVals := tuple.Len()
 		numMergeVals := mergeTuple.Len()
@@ -237,6 +237,6 @@ func rowMerge(vrw types.ValueReadWriter, row, mergeRow, baseRow types.Value) (re
 			}
 		}
 
-		return types.NewList(vrw, resultVals...), false
+		return types.NewTuple(resultVals...), false
 	}
 }

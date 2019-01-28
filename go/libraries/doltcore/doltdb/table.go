@@ -69,7 +69,7 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err er
 	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	if ok {
-		schemas := ConflictFromNomsList(schemasVal.(types.List))
+		schemas := ConflictFromTuple(schemasVal.(types.Tuple))
 		baseRef := schemas.Base.(types.Ref)
 		valRef := schemas.Value.(types.Ref)
 		mergeRef := schemas.MergeValue.(types.Ref)
@@ -145,7 +145,7 @@ func (t *Table) GetRow(pk types.Value, sch *schema.Schema) (row *table.Row, exis
 		return nil, false
 	}
 
-	return table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.List))), true
+	return table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.Tuple))), true
 }
 
 // ValueItr defines a function that iterates over a collection of noms values.  The ValueItr will return a valid value
@@ -198,7 +198,7 @@ func (t *Table) GetRows(pkItr ValueItr, numPKs int, sch *schema.Schema) (rows []
 		if fieldsVal == nil {
 			missing = append(missing, pk)
 		} else {
-			row := table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.List)))
+			row := table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.Tuple)))
 			rows = append(rows, row)
 		}
 	}

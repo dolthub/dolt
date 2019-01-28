@@ -10,9 +10,6 @@ import (
 )
 
 func TestRowMerge(t *testing.T) {
-	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
-	vrw := ddb.ValueReadWriter()
-
 	tests := []struct {
 		name                  string
 		row, mergeRow, ancRow types.Value
@@ -21,16 +18,16 @@ func TestRowMerge(t *testing.T) {
 	}{
 		{
 			"add same row",
-			types.NewList(vrw, types.String("one"), types.Int(2)),
-			types.NewList(vrw, types.String("one"), types.Int(2)),
+			types.NewTuple(types.String("one"), types.Int(2)),
+			types.NewTuple(types.String("one"), types.Int(2)),
 			nil,
-			types.NewList(vrw, types.String("one"), types.Int(2)),
+			types.NewTuple(types.String("one"), types.Int(2)),
 			false,
 		},
 		{
 			"add diff row",
-			types.NewList(vrw, types.String("one"), types.String("two")),
-			types.NewList(vrw, types.String("one"), types.String("three")),
+			types.NewTuple(types.String("one"), types.String("two")),
+			types.NewTuple(types.String("one"), types.String("three")),
 			nil,
 			nil,
 			true,
@@ -39,54 +36,54 @@ func TestRowMerge(t *testing.T) {
 			"both delete row",
 			nil,
 			nil,
-			types.NewList(vrw, types.String("one"), types.Uint(2)),
+			types.NewTuple(types.String("one"), types.Uint(2)),
 			nil,
 			false,
 		},
 		{
 			"one delete one modify",
 			nil,
-			types.NewList(vrw, types.String("two"), types.Uint(2)),
-			types.NewList(vrw, types.String("one"), types.Uint(2)),
+			types.NewTuple(types.String("two"), types.Uint(2)),
+			types.NewTuple(types.String("one"), types.Uint(2)),
 			nil,
 			true,
 		},
 		{
 			"modify rows without overlap",
-			types.NewList(vrw, types.String("two"), types.Uint(2)),
-			types.NewList(vrw, types.String("one"), types.Uint(3)),
-			types.NewList(vrw, types.String("one"), types.Uint(2)),
-			types.NewList(vrw, types.String("two"), types.Uint(3)),
+			types.NewTuple(types.String("two"), types.Uint(2)),
+			types.NewTuple(types.String("one"), types.Uint(3)),
+			types.NewTuple(types.String("one"), types.Uint(2)),
+			types.NewTuple(types.String("two"), types.Uint(3)),
 			false,
 		},
 		{
 			"modify rows with equal overlapping changes",
-			types.NewList(vrw, types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
-			types.NewList(vrw, types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
-			types.NewList(vrw, types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))),
-			types.NewList(vrw, types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))),
+			types.NewTuple(types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
 			false,
 		},
 		{
 			"modify rows with differing overlapping changes",
-			types.NewList(vrw, types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("99999999-9999-9999-9999-999999999999"))),
-			types.NewList(vrw, types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
-			types.NewList(vrw, types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))),
+			types.NewTuple(types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("99999999-9999-9999-9999-999999999999"))),
+			types.NewTuple(types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))),
 			nil,
 			true,
 		},
 		{
 			"modify rows where one adds a column",
-			types.NewList(vrw, types.String("two"), types.Uint(2)),
-			types.NewList(vrw, types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
-			types.NewList(vrw, types.String("one"), types.Uint(2)),
-			types.NewList(vrw, types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("two"), types.Uint(2)),
+			types.NewTuple(types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("one"), types.Uint(2)),
+			types.NewTuple(types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
 			false,
 		},
 	}
 
 	for _, test := range tests {
-		actualResult, isConflict := rowMerge(vrw, test.row, test.mergeRow, test.ancRow)
+		actualResult, isConflict := rowMerge(test.row, test.mergeRow, test.ancRow)
 
 		if test.expectedResult == nil {
 			if actualResult != nil {
@@ -156,40 +153,40 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	}
 
 	initialRows := types.NewMap(vrw,
-		uuids[0], types.NewList(vrw, types.String("person 1"), types.String("dufus")),
-		uuids[1], types.NewList(vrw, types.String("person 2"), types.NullValue),
-		uuids[2], types.NewList(vrw, types.String("person 3"), types.NullValue),
-		uuids[3], types.NewList(vrw, types.String("person 4"), types.String("senior dufus")),
-		uuids[4], types.NewList(vrw, types.String("person 5"), types.NullValue),
-		uuids[5], types.NewList(vrw, types.String("person 6"), types.NullValue),
-		uuids[6], types.NewList(vrw, types.String("person 7"), types.String("madam")),
-		uuids[7], types.NewList(vrw, types.String("person 8"), types.String("miss")),
-		uuids[8], types.NewList(vrw, types.String("person 9"), types.NullValue),
+		uuids[0], types.NewTuple(types.String("person 1"), types.String("dufus")),
+		uuids[1], types.NewTuple(types.String("person 2"), types.NullValue),
+		uuids[2], types.NewTuple(types.String("person 3"), types.NullValue),
+		uuids[3], types.NewTuple(types.String("person 4"), types.String("senior dufus")),
+		uuids[4], types.NewTuple(types.String("person 5"), types.NullValue),
+		uuids[5], types.NewTuple(types.String("person 6"), types.NullValue),
+		uuids[6], types.NewTuple(types.String("person 7"), types.String("madam")),
+		uuids[7], types.NewTuple(types.String("person 8"), types.String("miss")),
+		uuids[8], types.NewTuple(types.String("person 9"), types.NullValue),
 	)
 
-	updateRowEditor := initialRows.Edit()                                                                // leave 0 as is
-	updateRowEditor.Remove(uuids[1])                                                                     // remove 1 from both
-	updateRowEditor.Remove(uuids[2])                                                                     // remove 2 from update
-	updateRowEditor.Set(uuids[4], types.NewList(vrw, types.String("person five"), types.NullValue))      // modify 4 only in update
-	updateRowEditor.Set(uuids[6], types.NewList(vrw, types.String("person 7"), types.String("dr")))      // modify 6 in both without overlap
-	updateRowEditor.Set(uuids[7], types.NewList(vrw, types.String("person eight"), types.NullValue))     // modify 7 in both with equal overlap
-	updateRowEditor.Set(uuids[8], types.NewList(vrw, types.String("person nine"), types.NullValue))      // modify 8 in both with conflicting overlap
-	updateRowEditor.Set(uuids[9], types.NewList(vrw, types.String("person ten"), types.NullValue))       // add 9 in update
-	updateRowEditor.Set(uuids[11], types.NewList(vrw, types.String("person twelve"), types.NullValue))   // add 11 in both without difference
-	updateRowEditor.Set(uuids[12], types.NewList(vrw, types.String("person thirteen"), types.NullValue)) // add 12 in both with differences
+	updateRowEditor := initialRows.Edit()                                                            // leave 0 as is
+	updateRowEditor.Remove(uuids[1])                                                                 // remove 1 from both
+	updateRowEditor.Remove(uuids[2])                                                                 // remove 2 from update
+	updateRowEditor.Set(uuids[4], types.NewTuple(types.String("person five"), types.NullValue))      // modify 4 only in update
+	updateRowEditor.Set(uuids[6], types.NewTuple(types.String("person 7"), types.String("dr")))      // modify 6 in both without overlap
+	updateRowEditor.Set(uuids[7], types.NewTuple(types.String("person eight"), types.NullValue))     // modify 7 in both with equal overlap
+	updateRowEditor.Set(uuids[8], types.NewTuple(types.String("person nine"), types.NullValue))      // modify 8 in both with conflicting overlap
+	updateRowEditor.Set(uuids[9], types.NewTuple(types.String("person ten"), types.NullValue))       // add 9 in update
+	updateRowEditor.Set(uuids[11], types.NewTuple(types.String("person twelve"), types.NullValue))   // add 11 in both without difference
+	updateRowEditor.Set(uuids[12], types.NewTuple(types.String("person thirteen"), types.NullValue)) // add 12 in both with differences
 
 	updatedRows := updateRowEditor.Map()
 
-	mergeRowEditor := initialRows.Edit()                                                                       // leave 0 as is
-	mergeRowEditor.Remove(uuids[1])                                                                            // remove 1 from both
-	mergeRowEditor.Remove(uuids[3])                                                                            // remove 3 from merge
-	mergeRowEditor.Set(uuids[5], types.NewList(vrw, types.String("person six"), types.NullValue))              // modify 5 only in merge
-	mergeRowEditor.Set(uuids[6], types.NewList(vrw, types.String("person seven"), types.String("madam")))      // modify 6 in both without overlap
-	mergeRowEditor.Set(uuids[7], types.NewList(vrw, types.String("person eight"), types.NullValue))            // modify 7 in both with equal overlap
-	mergeRowEditor.Set(uuids[8], types.NewList(vrw, types.String("person number nine"), types.NullValue))      // modify 8 in both with conflicting overlap
-	mergeRowEditor.Set(uuids[10], types.NewList(vrw, types.String("person eleven"), types.NullValue))          // add 10 in merge
-	mergeRowEditor.Set(uuids[11], types.NewList(vrw, types.String("person twelve"), types.NullValue))          // add 11 in both without difference
-	mergeRowEditor.Set(uuids[12], types.NewList(vrw, types.String("person number thirteen"), types.NullValue)) // add 12 in both with differences
+	mergeRowEditor := initialRows.Edit()                                                                   // leave 0 as is
+	mergeRowEditor.Remove(uuids[1])                                                                        // remove 1 from both
+	mergeRowEditor.Remove(uuids[3])                                                                        // remove 3 from merge
+	mergeRowEditor.Set(uuids[5], types.NewTuple(types.String("person six"), types.NullValue))              // modify 5 only in merge
+	mergeRowEditor.Set(uuids[6], types.NewTuple(types.String("person seven"), types.String("madam")))      // modify 6 in both without overlap
+	mergeRowEditor.Set(uuids[7], types.NewTuple(types.String("person eight"), types.NullValue))            // modify 7 in both with equal overlap
+	mergeRowEditor.Set(uuids[8], types.NewTuple(types.String("person number nine"), types.NullValue))      // modify 8 in both with conflicting overlap
+	mergeRowEditor.Set(uuids[10], types.NewTuple(types.String("person eleven"), types.NullValue))          // add 10 in merge
+	mergeRowEditor.Set(uuids[11], types.NewTuple(types.String("person twelve"), types.NullValue))          // add 11 in both without difference
+	mergeRowEditor.Set(uuids[12], types.NewTuple(types.String("person number thirteen"), types.NullValue)) // add 12 in both with differences
 
 	mergeRows := mergeRowEditor.Map()
 
@@ -197,7 +194,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		uuids[0], initialRows.Get(uuids[0]), // unaltered
 		uuids[4], updatedRows.Get(uuids[4]), // modified in updated
 		uuids[5], mergeRows.Get(uuids[5]), // modified in merged
-		uuids[6], types.NewList(vrw, types.String("person seven"), types.String("dr")), // modified in both with no overlap
+		uuids[6], types.NewTuple(types.String("person seven"), types.String("dr")), // modified in both with no overlap
 		uuids[7], updatedRows.Get(uuids[7]), // modify both with the same value
 		uuids[8], updatedRows.Get(uuids[8]), // conflict
 		uuids[9], updatedRows.Get(uuids[9]), // added in update
@@ -209,8 +206,8 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	updateConflict := doltdb.NewConflict(initialRows.Get(uuids[8]), updatedRows.Get(uuids[8]), mergeRows.Get(uuids[8]))
 	addConflict := doltdb.NewConflict(
 		nil,
-		types.NewList(vrw, types.String("person thirteen"), types.NullValue),
-		types.NewList(vrw, types.String("person number thirteen"), types.NullValue),
+		types.NewTuple(types.String("person thirteen"), types.NullValue),
+		types.NewTuple(types.String("person number thirteen"), types.NullValue),
 	)
 	expectedConflicts := types.NewMap(vrw,
 		uuids[8], updateConflict.ToNomsList(vrw),

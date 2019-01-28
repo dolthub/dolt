@@ -92,7 +92,7 @@ func (cr *ConflictReader) ReadRow() (*table.Row, error) {
 				return nil, io.EOF
 			}
 
-			conflict := doltdb.ConflictFromNomsList(value.(types.List))
+			conflict := doltdb.ConflictFromTuple(value.(types.Tuple))
 			baseRow := f(key, conflict.Base, cr.baseConv)
 			row := f(key, conflict.Value, cr.conv)
 			mergeRow := f(key, conflict.MergeValue, cr.mergeConv)
@@ -141,7 +141,7 @@ func f(key, fields types.Value, rowConv *table.RowConverter) *table.RowData {
 		return nil
 	}
 
-	srcData := table.RowDataFromPKAndValueList(rowConv.SrcSch, key, fields.(types.List))
+	srcData := table.RowDataFromPKAndValueList(rowConv.SrcSch, key, fields.(types.Tuple))
 	row, err := rowConv.ConvertRowData(srcData)
 
 	if err != nil {
