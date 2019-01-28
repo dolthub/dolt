@@ -34,6 +34,7 @@ const (
 	IntKind
 	UintKind
 	NullKind
+	TupleKind
 )
 
 var KindToString = map[NomsKind]string{
@@ -54,6 +55,7 @@ var KindToString = map[NomsKind]string{
 	IntKind:    "Int",
 	UintKind:   "Uint",
 	NullKind:   "Null",
+	TupleKind:  "Tuple",
 }
 
 // String returns the name of the kind.

@@ -138,3 +138,9 @@ type structTypeFields []StructField
 func (s structTypeFields) Len() int           { return len(s) }
 func (s structTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s structTypeFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
+
+type tupleTypeFields []*Type
+
+func (s tupleTypeFields) Len() int           { return len(s) }
+func (s tupleTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s tupleTypeFields) Less(i, j int) bool { return i < j }

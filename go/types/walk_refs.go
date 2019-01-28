@@ -146,6 +146,8 @@ func (r *refWalker) walkValue(cb RefCallback) {
 		r.walkSet(cb)
 	case StructKind:
 		r.walkStruct(cb)
+	case TupleKind:
+		r.walkTuple(cb)
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -158,4 +160,8 @@ func (r *refWalker) walkValue(cb RefCallback) {
 
 func (r *refWalker) walkStruct(cb RefCallback) {
 	walkStruct(r, cb)
+}
+
+func (r *refWalker) walkTuple(cb RefCallback) {
+	walkTuple(r, cb)
 }

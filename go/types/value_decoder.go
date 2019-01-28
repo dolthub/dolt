@@ -215,6 +215,8 @@ func (r *valueDecoder) readValue() Value {
 		return newSet(r.readSetSequence())
 	case StructKind:
 		return r.readStruct()
+	case TupleKind:
+		return r.readTuple()
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -260,6 +262,8 @@ func (r *valueDecoder) skipValue() {
 		r.skipSet()
 	case StructKind:
 		r.skipStruct()
+	case TupleKind:
+		r.skipTuple()
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -310,6 +314,8 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		return r.readValue().typeOf()
 	case StructKind:
 		return readStructTypeOfValue(r)
+	case TupleKind:
+		return r.readValue().typeOf()
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -336,7 +342,7 @@ func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
 	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, NullKind:
 		r.skipValue()
 		return true
-	case ListKind, MapKind, RefKind, SetKind:
+	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		// TODO: Maybe do some simple cases here too. Performance metrics should determine
 		// what is going to be worth doing.
 		// https://github.com/attic-labs/noms/issues/3776
@@ -381,8 +387,16 @@ func (r *valueDecoder) readStruct() Value {
 	return readStruct(r)
 }
 
+func (r *valueDecoder) readTuple() Value {
+	return readTuple(r)
+}
+
 func (r *valueDecoder) skipStruct() {
 	skipStruct(r)
+}
+
+func (r *valueDecoder) skipTuple() {
+	skipTuple(r)
 }
 
 func boolToUint32(b bool) uint32 {
@@ -433,6 +447,8 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) *Typ
 		return makeCompoundType(SetKind, r.readTypeInner(seenStructs))
 	case StructKind:
 		return r.readStructType(seenStructs)
+	case TupleKind:
+		return makeCompoundType(TupleKind, r.readTypeInner(seenStructs))
 	case UnionKind:
 		return r.readUnionType(seenStructs)
 	case CycleKind:
@@ -450,7 +466,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) *Typ
 func (r *typedBinaryNomsReader) skipTypeInner() {
 	k := r.readKind()
 	switch k {
-	case ListKind, RefKind, SetKind:
+	case ListKind, RefKind, SetKind, TupleKind:
 		r.skipTypeInner()
 	case MapKind:
 		r.skipTypeInner()
