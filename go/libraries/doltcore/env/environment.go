@@ -27,6 +27,7 @@ type DoltEnv struct {
 
 	FS  filesys.Filesys
 	loc doltdb.DoltDBLocation
+	hdp HomeDirProvider
 }
 
 // Load loads the DoltEnv for the current directory of the cli
@@ -43,6 +44,7 @@ func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *D
 		ddb,
 		fs,
 		loc,
+		hdp,
 	}
 }
 
@@ -227,4 +229,8 @@ func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (dEnv *DoltEnv) CredsDir() (string, error) {
+	return getCredsDir(dEnv.hdp)
 }

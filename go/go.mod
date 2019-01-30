@@ -23,6 +23,7 @@ require (
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 // indirect
 	go.opencensus.io v0.19.0 // indirect
+	golang.org/x/crypto v0.0.0-20190128193316-c7b33c32a30b
 	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3 // indirect
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
 	golang.org/x/sys v0.0.0-20190124100055-b90733256f2e // indirect
