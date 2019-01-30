@@ -1,8 +1,10 @@
 package schema
 
 import (
-	"github.com/attic-labs/noms/go/types"
+	"reflect"
 	"testing"
+
+	"github.com/attic-labs/noms/go/types"
 )
 
 func TestSchema(t *testing.T) {
@@ -72,4 +74,52 @@ func TestSchema(t *testing.T) {
 		t.Log(constraint.ConType().String(), constraint.FieldIndices())
 		return false
 	})
+
+	sch.IterFields(func(f *Field) (stop bool) {
+		return false
+	})
+
+	if !reflect.DeepEqual(sch.GetFieldNames(), []string{"id", "name", "age"}) {
+		t.Error("incorrect fields")
+	}
+
+	if sch.TotalNumConstraints() != 1 {
+		t.Error("incorrect number of constraints")
+	}
+}
+
+func TestIntersectFields(t *testing.T) {
+	fields := []*Field{
+		NewField("id", types.UUIDKind, true),
+		NewField("name", types.StringKind, true),
+		NewField("age", types.UintKind, false),
+	}
+	sch := NewSchema(fields)
+
+	tests := []struct {
+		inFields       []string
+		expectedSchema []string
+		expectedBoth   []string
+		expectedFields []string
+	}{
+		{[]string{"id", "gender", "state"}, []string{"name", "age"}, []string{"id"}, []string{"gender", "state"}},
+		{[]string{"id", "name"}, []string{"age"}, []string{"id", "name"}, nil},
+		{[]string{"city", "state"}, []string{"id", "name", "age"}, nil, []string{"city", "state"}},
+	}
+
+	for _, test := range tests {
+		actualSchemaOnly, actualBoth, actualFieldsOnly := sch.IntersectFields(test.inFields)
+
+		if !reflect.DeepEqual(actualBoth, test.expectedBoth) {
+			t.Error(actualBoth, "!=", test.expectedBoth)
+		}
+
+		if !reflect.DeepEqual(actualSchemaOnly, test.expectedSchema) {
+			t.Error(actualSchemaOnly, "!=", test.expectedSchema)
+		}
+
+		if !reflect.DeepEqual(actualFieldsOnly, test.expectedFields) {
+			t.Error(actualFieldsOnly, "!=", test.expectedFields)
+		}
+	}
 }
