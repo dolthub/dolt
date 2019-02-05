@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.16.26 // indirect
 	github.com/edsrzf/mmap-go v1.0.0-20181222142022-904c4ced31cd // indirect
 	github.com/fatih/color v1.7.0
+	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/google/uuid v1.1.0
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7 // indirect
@@ -20,15 +21,17 @@ require (
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.2.1
+	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 // indirect
 	go.opencensus.io v0.19.0 // indirect
 	golang.org/x/crypto v0.0.0-20190128193316-c7b33c32a30b
-	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3 // indirect
+	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
 	golang.org/x/sys v0.0.0-20190124100055-b90733256f2e // indirect
-	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
-	google.golang.org/grpc v1.18.0 // indirect
+	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca
+	google.golang.org/grpc v1.18.0
+	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190128170251-00beb75270a9
