@@ -7,6 +7,8 @@ import (
 )
 
 const (
+	credsDir = "creds"
+
 	configFile   = "config.json"
 	globalConfig = "config_global.json"
 
@@ -21,6 +23,15 @@ func GetCurrentUserHomeDir() (string, error) {
 	} else {
 		return usr.HomeDir, nil
 	}
+}
+
+func getCredsDir(hdp HomeDirProvider) (string, error) {
+	homeDir, err := hdp()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(homeDir, doltdb.DoltDir, credsDir), nil
 }
 
 func getGlobalCfgPath(hdp HomeDirProvider) (string, error) {

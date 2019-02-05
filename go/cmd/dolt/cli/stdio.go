@@ -73,3 +73,18 @@ func PrintErr(a ...interface{}) {
 func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
+
+func DeleteAndPrint(prevMsgLen int, msg string) int {
+	msgLen := len(msg)
+	backspacesAndMsg := make([]byte, prevMsgLen+msgLen)
+	for i := 0; i < prevMsgLen; i++ {
+		backspacesAndMsg[i] = '\b'
+	}
+
+	for i, c := range []byte(msg) {
+		backspacesAndMsg[i+prevMsgLen] = c
+	}
+
+	Print(string(backspacesAndMsg))
+	return msgLen
+}
