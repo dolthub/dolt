@@ -3,6 +3,8 @@ package creds
 import (
 	"crypto/sha512"
 	"encoding/base32"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -11,27 +13,47 @@ const (
 	privKeySize = 64
 )
 
-var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv").WithPadding(base32.NoPadding)
+const (
+	B32CharEncoding = "0123456789abcdefghijklmnopqrstuv"
+
+	B32EncodedPubKeyLen = 52
+	B32EncodedKeyIdLen  = 45
+
+	JWTKIDHeader = "kid"
+	JWTAlgHeader = "alg"
+)
+
+var B32CredsByteSet = set.NewByteSet([]byte(B32CharEncoding))
+var B32CredsEncoding = base32.NewEncoding(B32CharEncoding).WithPadding(base32.NoPadding)
+var EmptyCreds = DoltCreds{}
+
+var ErrBadB32CredsEncoding = errors.New("bad base32 credentials encoding")
+var ErrCredsNotFound = errors.New("credentials not found")
 
 type DoltCreds struct {
 	PubKey  []byte
 	PrivKey []byte
-	KeyID   string
+	KeyID   []byte
 }
 
-func PubKeyStrToKID(pub string) (string, error) {
-	data, err := encoding.DecodeString(pub)
+func PubKeyStrToKIDStr(pub string) (string, error) {
+	data, err := B32CredsEncoding.DecodeString(pub)
 
 	if err != nil {
 		return "", err
 	}
 
-	return PubKeyToKID(data), nil
+	return PubKeyToKIDStr(data), nil
 }
 
-func PubKeyToKID(pub []byte) string {
+func PubKeyToKID(pub []byte) []byte {
 	kidBytes := sha512.Sum512_224(pub)
-	kid := encoding.EncodeToString(kidBytes[:])
+	return kidBytes[:]
+}
+
+func PubKeyToKIDStr(pub []byte) string {
+	kidBytes := PubKeyToKID(pub)
+	kid := B32CredsEncoding.EncodeToString(kidBytes)
 	return kid
 }
 
@@ -59,9 +81,17 @@ func (dc DoltCreds) IsPubKeyValid() bool {
 }
 
 func (dc DoltCreds) PubKeyBase32Str() string {
-	return encoding.EncodeToString(dc.PubKey)
+	return B32CredsEncoding.EncodeToString(dc.PubKey)
 }
 
 func (dc DoltCreds) PrivKeyBase32Str() string {
-	return encoding.EncodeToString(dc.PubKey)
+	return B32CredsEncoding.EncodeToString(dc.PubKey)
+}
+
+func (dc DoltCreds) KeyIDBase32Str() string {
+	return B32CredsEncoding.EncodeToString(dc.KeyID)
+}
+
+func (dc DoltCreds) Sign(data []byte) []byte {
+	return ed25519.Sign(dc.PrivKey, data)
 }
