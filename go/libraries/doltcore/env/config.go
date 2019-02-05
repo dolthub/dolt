@@ -18,6 +18,10 @@ const (
 	UserNameKey  = "user.name"
 
 	DoltEditor = "core.editor"
+
+	RemotesHostKey      = "remotes.host"
+	RemotesHostPort     = "remotes.port"
+	RemotesLoginPathKey = "remotes.loginpath"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})

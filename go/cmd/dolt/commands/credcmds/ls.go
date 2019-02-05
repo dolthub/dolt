@@ -5,6 +5,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strings"
@@ -19,7 +20,7 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	credsDir, verr := EnsureCredsDir(dEnv)
+	credsDir, verr := actions.EnsureCredsDir(dEnv)
 
 	if verr == nil {
 		dEnv.FS.Iter(credsDir, false, getJWKHandler(dEnv))
