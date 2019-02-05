@@ -9,6 +9,14 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+)
+
+const (
+	DefaultCredsHost   = "dolthub.com"
+	DefaultRemotesHost = "dolthub.com"
+	DefaultLoginPath   = "cli/login"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -233,4 +241,19 @@ func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {
 
 func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
+}
+
+func (dEnv *DoltEnv) GrpcConn(creds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+
+	// TODO: transport creds
+
+	if creds != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(creds))
+	}
+
+	host := dEnv.Config.GetStringOrDefault(RemotesHostKey, DefaultRemotesHost)
+	conn, err := grpc.Dial(*host, opts...)
+
+	return conn, err
 }
