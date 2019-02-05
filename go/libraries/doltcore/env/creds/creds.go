@@ -1,11 +1,16 @@
 package creds
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/base32"
 	"errors"
+	"github.com/attic-labs/noms/go/util/datetime"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 	"golang.org/x/crypto/ed25519"
+	"gopkg.in/square/go-jose.v2"
+	"gopkg.in/square/go-jose.v2/jwt"
+	"time"
 )
 
 const (
@@ -94,4 +99,46 @@ func (dc DoltCreds) KeyIDBase32Str() string {
 
 func (dc DoltCreds) Sign(data []byte) []byte {
 	return ed25519.Sign(dc.PrivKey, data)
+}
+
+func (dc DoltCreds) toBearerToken() (string, error) {
+	b32KIDStr := dc.KeyIDBase32Str()
+	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: ed25519.PrivateKey(dc.PrivKey)}
+	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
+		JWTAlgHeader: string(jose.EdDSA),
+		JWTKIDHeader: b32KIDStr,
+	}}
+
+	signer, err := jose.NewSigner(key, opts)
+
+	if err != nil {
+		return "", err
+	}
+
+	// Shouldn't be hard coded
+	jwtBuilder := jwt.Signed(signer)
+	jwtBuilder = jwtBuilder.Claims(jwt.Claims{
+		Audience: []string{"dolthub-remote-api.dolthub.com"},
+		Issuer:   "dolt-client.dolthub.com",
+		Subject:  "doltClientCredentials/" + b32KIDStr,
+		Expiry:   jwt.NewNumericDate(datetime.Now().Add(30 * time.Second)),
+	})
+
+	return jwtBuilder.CompactSerialize()
+}
+
+func (dc DoltCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	t, err := dc.toBearerToken()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"authorization": "Bearer " + t,
+	}, nil
+}
+
+func (dc DoltCreds) RequireTransportSecurity() bool {
+	return false
 }

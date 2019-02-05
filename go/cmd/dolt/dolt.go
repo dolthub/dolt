@@ -36,6 +36,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts", Func: cnfcmds.Commands, ReqRepo: false},
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
+	{Name: "login", Desc: "Login to a dolt remote host", Func: commands.Login, ReqRepo: false},
 })
 
 func main() {
