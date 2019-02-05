@@ -6,7 +6,6 @@ go_out := ../go/gen/proto
 
 dolt_srcs := \
   services/dolt/v1alpha1/credentials.proto \
-  services/dolt/v1alpha1/doltblockstore.proto \
 
 go_files = $(patsubst %.proto, %.pb.go, $(dolt_srcs))
 
