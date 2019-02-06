@@ -105,7 +105,6 @@ func (dc DoltCreds) toBearerToken() (string, error) {
 	b32KIDStr := dc.KeyIDBase32Str()
 	key := jose.SigningKey{Algorithm: jose.EdDSA, Key: ed25519.PrivateKey(dc.PrivKey)}
 	opts := &jose.SignerOptions{ExtraHeaders: map[jose.HeaderKey]interface{}{
-		JWTAlgHeader: string(jose.EdDSA),
 		JWTKIDHeader: b32KIDStr,
 	}}
 
