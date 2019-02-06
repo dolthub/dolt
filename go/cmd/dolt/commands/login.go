@@ -3,16 +3,17 @@ package commands
 import (
 	"context"
 	"fmt"
+	"path"
+	"time"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/gen/proto/services/dolt/v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/skratchdot/open-golang/open"
-	"path"
-	"time"
 )
 
 const (

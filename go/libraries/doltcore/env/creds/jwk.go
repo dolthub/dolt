@@ -3,11 +3,12 @@ package creds
 import (
 	"encoding/base64"
 	"encoding/json"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
 const (
@@ -100,10 +101,12 @@ func JWKCredsWriteToDir(fs filesys.Filesys, dir string, creds DoltCreds) (string
 		return "", err
 	}
 
-	func() {
-		defer wr.Close()
-		err = JWKCredsWrite(wr, creds)
-	}()
+	err = JWKCredsWrite(wr, creds)
+	if err == nil {
+		err = wr.Close()
+	} else {
+		wr.Close()
+	}
 
 	return outFile, err
 }
@@ -111,10 +114,10 @@ func JWKCredsWriteToDir(fs filesys.Filesys, dir string, creds DoltCreds) (string
 func JWKCredsReadFromFile(fs filesys.Filesys, path string) (DoltCreds, error) {
 	rd, err := fs.OpenForRead(path)
 
-	if err == nil {
-		defer rd.Close()
-		return JWKCredsRead(rd)
+	if err != nil {
+		return DoltCreds{}, err
 	}
 
-	return DoltCreds{}, err
+	defer rd.Close()
+	return JWKCredsRead(rd)
 }

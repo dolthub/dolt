@@ -1,10 +1,11 @@
 package creds
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"bytes"
 	"path/filepath"
-	"reflect"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
 func TestSerializeAndDeserialize(t *testing.T) {
@@ -30,15 +31,15 @@ func TestSerializeAndDeserialize(t *testing.T) {
 		t.Fatal("Failed to read creds", err)
 	}
 
-	if !reflect.DeepEqual(creds.PubKey, deserialized.PubKey) {
+	if !bytes.Equal(creds.PubKey, deserialized.PubKey) {
 		t.Error(creds.PubKey, "!=", deserialized.PubKey)
 	}
 
-	if !reflect.DeepEqual(creds.PrivKey, deserialized.PrivKey) {
+	if !bytes.Equal(creds.PrivKey, deserialized.PrivKey) {
 		t.Error(creds.PrivKey, "!=", deserialized.PrivKey)
 	}
 
-	if creds.KeyID != deserialized.KeyID {
+	if !bytes.Equal(creds.KeyID, deserialized.KeyID) {
 		t.Error(creds.KeyID, "!=", deserialized.KeyID)
 	}
 }
