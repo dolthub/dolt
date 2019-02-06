@@ -12,13 +12,27 @@
    * on OSX / linux
      * Configure your environment using .bashrc / .bash_profile if you haven't already: https://scriptingosx.com/2017/04/about-bash_profile-and-bashrc-on-macos/
      * Add ~/go/bin to the PATH variable (export PATH=$HOME/go/bin:$PATH).
+     * The helper function can also be added to make installation easier:
+
+``` bash
+dolt_install() {
+  pushd ~/go/src/github.com/liquidata-inc/ld/dolt/go/cmd/dolt
+  GO111MODULE=on go install .
+  popd
+}
+```
+
    * on Windows
      * I dont know.  Do whatever windows stuff you gotta do so that %USERPROFILE%/go/bin is part of the path
  
 ## Installation
 
- * Open a command line in the dolt/go directory
- * run: go install github.com/liquidata-inc/ld/dolt/go/cmd/dolt
+ * If you setup dolt_install
+   * run: dolt_install
+ * If not
+   * Open a command line in the dolt/go directory
+   * run: GO111MODULE=on go install . 
+ 
  
 ## First commands
 

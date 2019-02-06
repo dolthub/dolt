@@ -1,27 +1,33 @@
 package tblcmds
 
 import (
+	"strconv"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"strconv"
 )
 
 var tblSchemaShortDesc = "Displays table schemas"
 var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a given commit.  If no commit is provided the " +
 	"working set will be used.\n" +
 	"\n" +
-	"A list of tables can optionally be provided.  If it is omitted all table schemas will be shown."
+	"A list of tables can optionally be provided.  If it is omitted all table schemas will be shown." + "\n" +
+	"\n" +
+	"dolt table schema --export exports a table's schema into a specified file. Both table and file must be specified."
+
 var tblSchemaSynopsis = []string{
-	"[<commit>] [<table>...]",
+	"[<commit>] [<table>...] --export <table> <file>",
 }
 
 var schColumns = []string{"idx", "name", "type", "nullable", "primary key"}
@@ -33,9 +39,34 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
+	ap.SupportsFlag("export", "", "exports schema into file.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
+
+	if apr.Contains("export") {
+		if len(args) < 2 {
+			cli.Println("Must specify table and file to which table will be exported.")
+			return 1
+		}
+
+		tblName := args[0]
+		fileName := args[1]
+		var root *doltdb.RootValue
+		root, _ = commands.GetWorkingWithVErr(dEnv)
+		if !root.HasTable(tblName) {
+			cli.Println(tblName + " not found")
+			return 1
+		}
+
+		tbl, _ := root.GetTable(tblName)
+		err := exportTblSchema(tblName, tbl, fileName, dEnv)
+		if err != nil {
+			cli.Println("file path not valid.")
+			return 1
+		}
+		return 0
+	}
 
 	cmStr := "working"
 
@@ -126,4 +157,13 @@ func schemaAsInMemTable(tbl *doltdb.Table, root *doltdb.RootValue) *table.InMemT
 	}
 
 	return imt
+}
+
+func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) error {
+	sch := tbl.GetSchema()
+	jsonSch, err := jsonenc.SchemaToJSON(sch)
+	if err != nil {
+		return err
+	}
+	return dEnv.FS.WriteFile(filename, jsonSch)
 }
