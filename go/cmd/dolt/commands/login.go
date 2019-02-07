@@ -8,7 +8,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/v1alpha1"
+	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/creds"
@@ -93,13 +93,13 @@ func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError 
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}
 
-	grpcClient := v1alpha1.NewCredentialsServiceClient(conn)
+	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
 
 	var prevMsgLen int
-	var whoAmI *v1alpha1.WhoAmIResponse
+	var whoAmI *remotesapi.WhoAmIResponse
 	for whoAmI == nil {
 		prevMsgLen = cli.DeleteAndPrint(prevMsgLen, "Checking remote server looking for key association.")
-		whoAmI, err = grpcClient.WhoAmI(context.Background(), &v1alpha1.WhoAmIRequest{})
+		whoAmI, err = grpcClient.WhoAmI(context.Background(), &remotesapi.WhoAmIRequest{})
 
 		if err != nil {
 			for i := 0; i < loginRetryInterval; i++ {
