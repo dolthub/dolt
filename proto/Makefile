@@ -5,7 +5,7 @@ PROTOBUF := ${HOME}/src/3p/protobuf/src
 go_out := ../go/gen/proto
 
 dolt_srcs := \
-  dolt/services/v1alpha1/credentials.proto \
+  dolt/services/remotesapi/v1alpha1/credentials.proto \
 
 go_files = $(patsubst %.proto, %.pb.go, $(dolt_srcs))
 
