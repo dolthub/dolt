@@ -2,13 +2,16 @@ package merge
 
 import (
 	"errors"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
 var ErrUpToDate = errors.New("up to date")
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
+var ErrSchemaNotIdentical = errors.New("schemas not identical and can't be merged")
 
 type Merger struct {
 	commit      *doltdb.Commit
@@ -58,6 +61,13 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		} else {
 			return mergeTbl, &MergeStats{Operation: TableAdded}, nil
 		}
+	}
+
+	tblSchema := tbl.GetSchema()
+	mergeTblSchema := mergeTbl.GetSchema()
+
+	if !isSchemaIdentical(tblSchema, mergeTblSchema) {
+		return nil, nil, ErrSchemaNotIdentical
 	}
 
 	rows := tbl.GetRowData()
@@ -239,4 +249,46 @@ func rowMerge(row, mergeRow, baseRow types.Value) (resultRow types.Value, isConf
 
 		return types.NewTuple(resultVals...), false
 	}
+}
+
+func isSchemaIdentical(tblSchema *schema.Schema, mergeTblSchema *schema.Schema) bool {
+
+	if tblSchema.NumFields() != mergeTblSchema.NumFields() {
+		return false
+	}
+
+	if tblSchema.GetPKIndex() != mergeTblSchema.GetPKIndex() {
+		return false
+	}
+
+	tblConstraints := tblSchema.TotalNumConstraints()
+	mergeTblConstraints := mergeTblSchema.TotalNumConstraints()
+
+	if tblConstraints != mergeTblConstraints {
+		return false
+	}
+
+	for i := 0; i < tblConstraints; i++ {
+		if tblSchema.GetConstraint(i).ConType() != mergeTblSchema.GetConstraint(i).ConType() {
+			return false
+		}
+		for j := range tblSchema.GetConstraint(i).FieldIndices() {
+			if tblSchema.GetConstraint(i).FieldIndices()[j] != mergeTblSchema.GetConstraint(i).FieldIndices()[j] {
+				return false
+			}
+		}
+	}
+
+	tblFieldNames := tblSchema.GetFieldNames()
+
+	for i := range tblFieldNames {
+		tblField := tblSchema.GetField(i)
+		mergeTblField := mergeTblSchema.GetField(i)
+
+		if !tblField.Equals(mergeTblField) {
+			return false
+		}
+	}
+
+	return true
 }

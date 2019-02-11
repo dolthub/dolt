@@ -2,6 +2,9 @@ package commands
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -9,8 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"sort"
-	"strconv"
 )
 
 const (
@@ -137,6 +138,8 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 		case merge.ErrFastForward:
 			// TODO: handle this case properly
 			fallthrough
+		case merge.ErrSchemaNotIdentical:
+			cli.Println("Schemas must be identical to complete merge.")
 		default:
 			return errhand.BuildDError("Bad merge").AddCause(err).Build()
 		}
