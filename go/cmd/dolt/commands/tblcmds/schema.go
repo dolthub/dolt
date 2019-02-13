@@ -34,7 +34,10 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 	"dolt table schema --rename-field renames a column of the specified table."
 
 var tblSchemaSynopsis = []string{
-	"[<commit>] [<table>...] [--export <table> <file>] [--add-field <table> <name> <type> <is_required>] [--rename-field <table> <old> <new>]",
+	"[<commit>] [<table>...]",
+	"--export <table> <file>",
+	"--add-field <table> <name> <type> <is_required>",
+	"--rename-field <table> <old> <new>]",
 }
 
 var schColumns = []string{"idx", "name", "type", "nullable", "primary key"}
@@ -55,42 +58,36 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var root *doltdb.RootValue
 	root, _ = commands.GetWorkingWithVErr(dEnv)
 
-	if apr.Contains("rename-field") {
-		return renameColumn(args, root, dEnv)
-	}
-
-	if apr.Contains("add-field") {
-		tbl, _ := root.GetTable(args[0])
-		return addField(args, tbl, root, dEnv)
-	}
-
-	if apr.Contains("export") {
-		return exportSchemas(args, root, dEnv)
-
-	}
-
-	cmStr := "working"
-
-	var cm *doltdb.Commit
 	var verr errhand.VerboseError
-	if apr.NArg() == 0 {
-		cm, verr = nil, nil
+	if apr.Contains("rename-field") {
+		verr = renameColumn(args, root, dEnv)
+	} else if apr.Contains("add-field") {
+		verr = addField(args, root, dEnv)
+	} else if apr.Contains("export") {
+		verr = exportSchemas(args, root, dEnv)
 	} else {
-		cm, verr = commands.MaybeGetCommitWithVErr(dEnv, cmStr)
-	}
+		cmStr := "working"
 
-	if verr == nil {
-		var root *doltdb.RootValue
-		if cm != nil {
-			cmStr = args[0]
-			args = args[1:]
-			root = cm.GetRootValue()
+		var cm *doltdb.Commit
+		if apr.NArg() == 0 {
+			cm, verr = nil, nil
 		} else {
-			root, verr = commands.GetWorkingWithVErr(dEnv)
+			cm, verr = commands.MaybeGetCommitWithVErr(dEnv, cmStr)
 		}
 
 		if verr == nil {
-			printSchemas(cmStr, root, args)
+			var root *doltdb.RootValue
+			if cm != nil {
+				cmStr = args[0]
+				args = args[1:]
+				root = cm.GetRootValue()
+			} else {
+				root, verr = commands.GetWorkingWithVErr(dEnv)
+			}
+
+			if verr == nil {
+				printSchemas(cmStr, root, args)
+			}
 		}
 	}
 
@@ -160,51 +157,49 @@ func schemaAsInMemTable(tbl *doltdb.Table, root *doltdb.RootValue) *table.InMemT
 	return imt
 }
 
-func exportSchemas(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) int {
+func exportSchemas(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(args) < 2 {
-		cli.Println("Must specify table and file to which table will be exported.")
-		return 1
+		return errhand.BuildDError("Must specify table and file to which table will be exported.").SetPrintUsage().Build()
 	}
 
 	tblName := args[0]
 	fileName := args[1]
 	root, _ = commands.GetWorkingWithVErr(dEnv)
 	if !root.HasTable(tblName) {
-		cli.Println(tblName + " not found")
-		return 1
+		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
 	tbl, _ := root.GetTable(tblName)
 	err := exportTblSchema(tblName, tbl, fileName, dEnv)
 	if err != nil {
-		cli.Println("file path not valid.")
-		return 1
+		return errhand.BuildDError("file path not valid.").Build()
 	}
-	return 0
 
+	return nil
 }
 
-func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) error {
+func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
 	sch := tbl.GetSchema()
 	jsonSch, err := jsonenc.SchemaToJSON(sch)
 	if err != nil {
-		return err
+		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
 	}
-	return dEnv.FS.WriteFile(filename, jsonSch)
+
+	err = dEnv.FS.WriteFile(filename, jsonSch)
+	return errhand.BuildIf(err, "Unable to write "+filename).AddCause(err).Build()
 }
 
-func addField(args []string, tbl *doltdb.Table, root *doltdb.RootValue, dEnv *env.DoltEnv) int {
+func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(args) < 4 {
-		cli.Println("Must specify table name, field name, field type, and if field required.")
-		return 1
+		return errhand.BuildDError("Must specify table name, field name, field type, and if field required.").SetPrintUsage().Build()
 	}
 
 	tblName := args[0]
 	if !root.HasTable(tblName) {
-		cli.Println(tblName + " not found")
-		return 1
+		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
+	tbl, _ := root.GetTable(tblName)
 	origFieldNames := tbl.GetSchema().GetFieldNames()
 	newFieldName := args[1]
 	newFieldType := args[2]
@@ -212,20 +207,18 @@ func addField(args []string, tbl *doltdb.Table, root *doltdb.RootValue, dEnv *en
 
 	for _, name := range origFieldNames {
 		if newFieldName == name {
-			cli.Println("this field already exists.")
-			return 1
+			return errhand.BuildDError("this field already exists.").Build()
 		}
 	}
 
 	newTable, err := addFieldToSchema(tblName, tbl, dEnv, newFieldName, newFieldType, isFieldRequired)
 	if err != nil {
-		cli.Println(err)
-		return 1
+		return errhand.BuildDError("failed to add field").AddCause(err).Build()
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
 	commands.UpdateWorkingWithVErr(dEnv, root)
-	return 0
+	return nil
 }
 
 func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string) (*doltdb.Table, error) {
@@ -269,16 +262,14 @@ func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newC
 	return nil, errors.New("invalid noms kind")
 }
 
-func renameColumn(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) int {
+func renameColumn(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(args) < 3 {
-		cli.Println("Table name, current column name, and new column name are needed to rename column.")
-		return 1
+		return errhand.BuildDError("Table name, current column name, and new column name are needed to rename column.").SetPrintUsage().Build()
 	}
 
 	tblName := args[0]
 	if !root.HasTable(tblName) {
-		cli.Println(tblName + " not found")
-		return 1
+		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
 	tbl, _ := root.GetTable(tblName)
@@ -287,14 +278,13 @@ func renameColumn(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) int 
 
 	newTbl, err := renameColumnOfSchema(oldColName, newColName, tbl, dEnv)
 	if err != nil {
-		cli.Println(err)
-		return 1
+		return errhand.BuildDError("failed to rename column").AddCause(err).Build()
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
 	commands.UpdateWorkingWithVErr(dEnv, root)
 
-	return 0
+	return nil
 }
 
 func renameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dEnv *env.DoltEnv) (*doltdb.Table, error) {
