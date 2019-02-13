@@ -2,6 +2,8 @@ package schema
 
 import (
 	"errors"
+
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
@@ -211,4 +213,30 @@ func (sch *Schema) IntersectFields(fields []string) (schemaOnly []string, inBoth
 	}
 
 	return schemaOnly, inBoth, fieldsOnly
+}
+
+func (sch *Schema) ChangeColumnType(fieldName string, newFieldType types.NomsKind) *Schema {
+	var schFields []*Field
+	var newField *Field
+
+	for i := 0; i < sch.NumFields(); i++ {
+		if fieldName == sch.GetField(i).NameStr() {
+			newField = NewField(fieldName, newFieldType, sch.GetField(i).IsRequired())
+			schFields = append(schFields, newField)
+		} else {
+			schFields = append(schFields, sch.GetField(i))
+		}
+	}
+
+	newSch := NewSchema(schFields)
+
+	origConstraints := make([]*Constraint, 0, sch.TotalNumConstraints())
+	for i := 0; i < sch.TotalNumConstraints(); i++ {
+		origConstraints = append(origConstraints, sch.GetConstraint(i))
+	}
+
+	for _, c := range origConstraints {
+		newSch.AddConstraint(c)
+	}
+	return newSch
 }
