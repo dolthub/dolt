@@ -1,5 +1,6 @@
 package fwt
 
+/*
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -94,3 +95,4 @@ func TestAutoSizing(t *testing.T) {
 		}
 	}
 }
+*/

@@ -16,9 +16,15 @@ type Pipeline struct {
 	transInCh map[string]chan *table.Row
 }
 
-func (p *Pipeline) GetInChForTransf(name string) (chan *table.Row, bool) {
+func (p *Pipeline) InsertRow(name string, row *table.Row) bool {
 	ch, ok := p.transInCh[name]
-	return ch, ok
+
+	if !ok {
+		return false
+	}
+
+	ch <- row
+	return true
 }
 
 func (p *Pipeline) Abort() {

@@ -12,8 +12,9 @@ type TooLongBehavior int
 const (
 	ErrorWhenTooLong TooLongBehavior = iota
 	SkipRowWhenTooLong
-	ConCatWhenTooLong
+	TruncateWhenTooLong
 	HashFillWhenTooLong
+	PrintAllWhenTooLong
 )
 
 type FWTTransformer struct {
@@ -54,17 +55,25 @@ func (fwtTr *FWTTransformer) Transform(row *table.Row) ([]*pipeline.TransformedR
 					return nil, "Value for " + fld.NameStr() + " too long."
 				case SkipRowWhenTooLong:
 					return nil, ""
-				case ConCatWhenTooLong:
+				case TruncateWhenTooLong:
 					str = str[0:colWidth]
 				case HashFillWhenTooLong:
 					str = fwtTr.fwtSch.NoFitStrs[i]
+				case PrintAllWhenTooLong:
+					break
 				}
 			}
 
-			n := copy(buf, str)
-			for ; n < colWidth; n++ {
-				buf[n] = ' '
+			if len(str) > colWidth {
+				buf = []byte(str)
+			} else {
+				n := copy(buf, str)
+
+				for ; n < colWidth; n++ {
+					buf[n] = ' '
+				}
 			}
+
 		}
 
 		destFields[i] = types.String(buf)

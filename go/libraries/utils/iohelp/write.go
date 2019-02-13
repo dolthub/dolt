@@ -53,3 +53,14 @@ var newLineBuf = []byte("\n")
 func WriteLine(w io.Writer, line string) error {
 	return WriteAll(w, []byte(line), newLineBuf)
 }
+
+type nopWrCloser struct {
+	io.Writer
+}
+
+func (nopWrCloser) Close() error { return nil }
+
+// NopWrCloser returns a WriteCloser with a no-op Close method wrapping the provided Writer wr.
+func NopWrCloser(wr io.Writer) io.WriteCloser {
+	return nopWrCloser{wr}
+}

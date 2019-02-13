@@ -1,5 +1,8 @@
 package fwt
 
+// It's better to use a AutoSizingFWTTransformer with a CSVWriter.  You get more control over the behavior.
+
+/*
 import (
 	"bufio"
 	"errors"
@@ -92,3 +95,4 @@ func (tWr *TextWriter) Close() error {
 		return errors.New("Already closed.")
 	}
 }
+*/
