@@ -463,7 +463,6 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	}
 
 	if _, ok := ExternalProtocols[parts[0]]; ok {
-		fmt.Println("found external spec", parts[0])
 		protocol, name = parts[0], parts[1]
 		return
 	}
