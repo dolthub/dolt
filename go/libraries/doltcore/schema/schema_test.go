@@ -126,3 +126,30 @@ func TestIntersectFields(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeColumnType(t *testing.T) {
+	fields := []*Field{
+		NewField("id", types.UUIDKind, true),
+		NewField("name", types.StringKind, true),
+		NewField("age", types.UintKind, false),
+	}
+	sch := NewSchema(fields)
+
+	tests := []struct {
+		fieldName       string
+		oldType         types.NomsKind
+		newType         types.NomsKind
+		expectedNewType types.NomsKind
+	}{
+		{"id", types.UUIDKind, types.UintKind, types.UintKind},
+	}
+
+	for i, test := range tests {
+		newSch := sch.ChangeColumnType("id", types.UintKind)
+
+		if newSch.GetField(i).kind != test.expectedNewType {
+			t.Error(newSch.GetField(i).kind != test.expectedNewType)
+		}
+
+	}
+}
