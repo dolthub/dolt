@@ -17,8 +17,10 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
 var tblSchemaShortDesc = "Displays table schemas"
@@ -128,15 +130,16 @@ func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltd
 	imt := schemaAsInMemTable(tbl, root)
 	rd := table.NewInMemTableReader(imt)
 	defer rd.Close()
-	wr := fwt.NewTextWriter(cli.CliOut, schOutSchema, " | ")
+
+	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), schOutSchema, &csv.CSVFileInfo{Delim: '|'})
 	defer wr.Close()
+
 	autoSize := fwt.NewAutoSizingFWTTransformer(schOutSchema, fwt.HashFillWhenTooLong, -1)
 	transforms := pipeline.NewTransformCollection(
 		pipeline.NamedTransform{fwtChName, autoSize.TransformToFWT})
 	p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-	in, _ := p.GetInChForTransf(fwtChName)
-	in <- headerRow
+	p.InsertRow(fwtChName, headerRow)
 	start()
 	_ = p.Wait()
 }

@@ -213,8 +213,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch *schema.Schema) errhand
 
 	p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-	ch, _ := p.GetInChForTransf("fwt")
-	ch <- untyped.NewRowFromStrings(unionedSch, unionedSch.GetFieldNames())
+	p.InsertRow("fwt", untyped.NewRowFromStrings(unionedSch, unionedSch.GetFieldNames()))
 	start()
 	p.Wait()
 

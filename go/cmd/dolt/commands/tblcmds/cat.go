@@ -14,8 +14,10 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
 var catShortDesc = "print tables"
@@ -86,7 +88,7 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 			rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 			defer rd.Close()
 
-			wr := fwt.NewTextWriter(cli.CliOut, outSch, " | ")
+			wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
 			defer wr.Close()
 
 			badRowCB := func(tff *pipeline.TransformRowFailure) (quit bool) {
@@ -95,8 +97,7 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 			}
 			p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-			ch, _ := p.GetInChForTransf("fwt")
-			ch <- untyped.NewRowFromStrings(outSch, outSch.GetFieldNames())
+			p.InsertRow("fwt", untyped.NewRowFromStrings(outSch, outSch.GetFieldNames()))
 
 			start()
 			p.Wait()
@@ -107,7 +108,7 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 }
 
 func addSizingTransform(outSch *schema.Schema, transforms *pipeline.TransformCollection) {
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.HashFillWhenTooLong, 0)
+	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
 	transforms.AppendTransforms(pipeline.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
 }
 
@@ -123,7 +124,6 @@ func addMapTransform(sch *schema.Schema, transforms *pipeline.TransformCollectio
 func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch *schema.Schema) *schema.Schema {
 	if tbl.HasConflicts() {
 		// this is so much code to add a column
-		const transCnfColName = "add cnf col"
 		const transCnfSetName = "set cnf col"
 
 		confSchema := untyped.NewUntypedSchema([]string{"Cnf"})
