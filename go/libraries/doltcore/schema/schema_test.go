@@ -2,6 +2,7 @@ package schema
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -114,6 +115,8 @@ func TestIntersectFields(t *testing.T) {
 			t.Error(actualBoth, "!=", test.expectedBoth)
 		}
 
+		sort.Strings(actualSchemaOnly)
+		sort.Strings(test.expectedSchema)
 		if !reflect.DeepEqual(actualSchemaOnly, test.expectedSchema) {
 			t.Error(actualSchemaOnly, "!=", test.expectedSchema)
 		}

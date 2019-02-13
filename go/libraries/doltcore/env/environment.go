@@ -3,7 +3,9 @@ package env
 import (
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
@@ -11,10 +13,10 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"path/filepath"
 )
 
 const (
-	DefaultCredsHost   = "dolthub.com"
 	DefaultRemotesHost = "dolthub.com"
 	DefaultLoginPath   = "cli/login"
 )
@@ -44,7 +46,7 @@ func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *D
 	repoState, rsErr := LoadRepoState(fs)
 	ddb := doltdb.LoadDoltDB(loc)
 
-	return &DoltEnv{
+	dEnv := &DoltEnv{
 		config,
 		cfgErr,
 		repoState,
@@ -54,11 +56,19 @@ func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *D
 		loc,
 		hdp,
 	}
+
+	spec.ExternalProtocols[DoltNomsProtocolID] = &DoltProtocol{dEnv}
+
+	return dEnv
 }
 
 // HasDoltDir returns true if the .dolt directory exists and is a valid directory
 func (dEnv *DoltEnv) HasDoltDir() bool {
-	exists, isDir := dEnv.FS.Exists(getDoltDir())
+	return dEnv.hasDoltDir("./")
+}
+
+func (dEnv *DoltEnv) hasDoltDir(path string) bool {
+	exists, isDir := dEnv.FS.Exists(filepath.Join(path, getDoltDir()))
 	return exists && isDir
 }
 
@@ -69,9 +79,9 @@ func (dEnv *DoltEnv) HasLocalConfig() bool {
 	return ok
 }
 
-func (dEnv *DoltEnv) bestEffortDeleteAllFromCWD() {
+func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 	fileToIsDir := make(map[string]bool)
-	dEnv.FS.Iter("./", false, func(path string, size int64, isDir bool) (stop bool) {
+	dEnv.FS.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
 		fileToIsDir[path] = isDir
 		return false
 	})
@@ -87,29 +97,75 @@ func (dEnv *DoltEnv) bestEffortDeleteAllFromCWD() {
 
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
-func (dEnv *DoltEnv) InitRepo(name, email string) error {
-	if dEnv.HasDoltDir() {
-		return ErrPreexistingDoltDir
-	}
-
-	err := dEnv.FS.MkDirs(doltdb.DoltDataDir)
+func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name and email args
+	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
-		return fmt.Errorf("unable to make directory %s within the working directory", doltdb.DoltDataDir)
+		return err
 	}
 
-	err = dEnv.Config.CreateLocalConfig(map[string]string{})
+	err = dEnv.configureRepo(doltDir)
+
+	if err == nil {
+		err = dEnv.initDBAndState(name, email)
+	}
 
 	if err != nil {
-		dEnv.bestEffortDeleteAllFromCWD()
-		return fmt.Errorf("failed creating file %s", getLocalConfigPath())
+		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
+	}
+
+	return err
+}
+
+func (dEnv *DoltEnv) InitRepoWithNoData() error {
+	doltDir, err := dEnv.createDirectories(".")
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.configureRepo(doltDir)
+
+	if err != nil {
+		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
 	}
 
 	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
-	err = dEnv.DoltDB.WriteEmptyRepo(name, email)
+
+	return err
+}
+
+func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
+	doltDir := filepath.Join(dir, doltdb.DoltDir)
+	if dEnv.hasDoltDir(doltDir) {
+		return "", ErrPreexistingDoltDir
+	}
+
+	doltDataDir := filepath.Join(doltDir, doltdb.DataDir)
+	err := dEnv.FS.MkDirs(doltDataDir)
 
 	if err != nil {
-		dEnv.bestEffortDeleteAllFromCWD()
+		return "", fmt.Errorf("unable to make directory %s within the working directory", doltdb.DoltDataDir)
+	}
+
+	return doltDir, nil
+}
+
+func (dEnv *DoltEnv) configureRepo(doltDir string) error {
+	err := dEnv.Config.CreateLocalConfig(map[string]string{})
+
+	if err != nil {
+		return fmt.Errorf("failed creating file %s", getLocalConfigPath())
+	}
+
+	return nil
+}
+
+func (dEnv *DoltEnv) initDBAndState(name, email string) error {
+	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
+	err := dEnv.DoltDB.WriteEmptyRepo(name, email)
+
+	if err != nil {
 		return doltdb.ErrNomsIO
 	}
 
@@ -120,7 +176,6 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error {
 	dEnv.RepoState, err = CreateRepoState(dEnv.FS, "master", rootHash)
 
 	if err != nil {
-		dEnv.bestEffortDeleteAllFromCWD()
 		return ErrStateUpdate
 	}
 
@@ -243,17 +298,58 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) GrpcConn(creds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+func (dEnv *DoltEnv) getRPCCreds() credentials.PerRPCCredentials {
+	return nil
+}
+
+func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
+	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
 
 	// TODO: transport creds
 
-	if creds != nil {
-		opts = append(opts, grpc.WithPerRPCCredentials(creds))
+	rpcCreds := dEnv.getRPCCreds()
+	if rpcCreds != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 	}
 
-	host := dEnv.Config.GetStringOrDefault(RemotesHostKey, DefaultRemotesHost)
-	conn, err := grpc.Dial(*host, opts...)
+	conn, err := grpc.Dial(hostAndPort, opts...)
 
 	return conn, err
+}
+
+func (dEnv *DoltEnv) GetRemotes() (map[string]*Remote, error) {
+	cfg, ok := dEnv.Config.GetConfig(LocalConfig)
+
+	if !ok {
+		panic("Need to validate repo before checking remotes")
+	}
+
+	return parseRemotesFromConfig(cfg)
+}
+
+var ErrNotACred = errors.New("not a valid credential key id or public key")
+
+func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
+	if !creds.B32CredsByteSet.ContainsAll([]byte(pubKeyOrId)) {
+		return "", creds.ErrBadB32CredsEncoding
+	}
+
+	if len(pubKeyOrId) == creds.B32EncodedPubKeyLen {
+		pubKeyOrId, _ = creds.PubKeyStrToKIDStr(pubKeyOrId)
+	}
+
+	if len(pubKeyOrId) != creds.B32EncodedKeyIdLen {
+		return "", ErrNotACred
+	}
+
+	path := filepath.Join(credsDir, pubKeyOrId+creds.JWKFileExtension)
+	exists, isDir := dEnv.FS.Exists(path)
+
+	if isDir {
+		return path, filesys.ErrIsDir
+	} else if !exists {
+		return "", creds.ErrCredsNotFound
+	} else {
+		return path, nil
+	}
 }

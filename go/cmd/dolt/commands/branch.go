@@ -31,7 +31,7 @@ var branchForceFlagDesc = "Reset <branchname> to <startpoint>, even if <branchna
 	"already exists, the same applies for -c (or --copy)."
 
 var branchSynopsis = []string{
-	`[--list] [-v]`,
+	`[--list] [-v] [-a]`,
 	`[-f] <branchname> [<start-point>]`,
 	`-m [-f] [<oldbranch>] <newbranch>`,
 	`-c [-f] [<oldbranch>] <newbranch>`,
@@ -45,6 +45,7 @@ const (
 	moveFlag    = "move"
 	deleteFlag  = "delete"
 	verboseFlag = "verbose"
+	allFlag     = "all"
 )
 
 func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -56,6 +57,7 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.SupportsFlag(moveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
+	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -77,20 +79,30 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
 	verbose := apr.Contains(verboseFlag)
+	printAll := apr.Contains(allParam)
+
 	branches := dEnv.DoltDB.GetBranches()
 	currentBranch := dEnv.RepoState.Branch
 	sort.Strings(branches)
 
 	for _, branch := range branches {
+		cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+
+		if cs.CSpecType() == doltdb.RemoteBranchCommitSpec && !printAll {
+			continue
+		}
+
 		line := ""
 		if branch == currentBranch {
 			line = fmt.Sprint("* ", color.GreenString("%-32s", branch))
+		} else if cs.CSpecType() == doltdb.RemoteBranchCommitSpec {
+			line = fmt.Sprint(color.RedString("  %-32s", branch))
 		} else {
 			line = fmt.Sprintf("  %-32s", branch)
 		}
 
 		if verbose {
-			cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+
 			cm, err := dEnv.DoltDB.Resolve(cs)
 
 			if err == nil {

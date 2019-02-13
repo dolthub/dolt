@@ -6,7 +6,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
@@ -24,7 +23,7 @@ func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	if verr == nil {
 		for _, arg := range args {
-			jwkFilePath, err := creds.FindCreds(dEnv, credsDir, arg)
+			jwkFilePath, err := dEnv.FindCreds(credsDir, arg)
 
 			if err == nil {
 				err = dEnv.FS.DeleteFile(jwkFilePath)

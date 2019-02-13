@@ -5,9 +5,12 @@ import (
 	"strings"
 )
 
-var UserBranchRegexStr = `^[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
-var hashRegex, _ = regexp.Compile(`^[0-9a-v]{32}$`)
-var userBranchRegex, _ = regexp.Compile(UserBranchRegexStr)
+var wordRegex = `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+`
+var UserBranchRegexStr = "^" + wordRegex + "$"
+var RemoteBranchRegexStr = "remotes/" + wordRegex + "/" + wordRegex
+var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
+var userBranchRegex = regexp.MustCompile(UserBranchRegexStr)
+var remoteBranchRegex = regexp.MustCompile(RemoteBranchRegexStr)
 
 // IsValidUserBranch returns true if name isn't a valid commit hash, it is not named "head" and it matches the
 // regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
@@ -15,11 +18,20 @@ func IsValidUserBranchName(name string) bool {
 	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != "head"
 }
 
-type commitSpecType string
+func IsValidRemoteBranchName(name string) bool {
+	return remoteBranchRegex.MatchString(name)
+}
+
+func LongRemoteBranchName(remote, branch string) string {
+	return "remotes/" + remote + "/" + branch
+}
+
+type CommitSpecType string
 
 const (
-	branchCommitSpec commitSpecType = "branch"
-	commitHashSpec   commitSpecType = "hash"
+	BranchCommitSpec       CommitSpecType = "branch"
+	RemoteBranchCommitSpec CommitSpecType = "remote_branch"
+	CommitHashSpec         CommitSpecType = "hash"
 )
 
 // CommitSpec handles three different types of string representations of commits.  Commits can either be represented
@@ -28,7 +40,7 @@ const (
 // of the referenced commit.
 type CommitSpec struct {
 	name   string
-	csType commitSpecType
+	csType CommitSpecType
 	aSpec  *AncestorSpec
 }
 
@@ -49,9 +61,11 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 	}
 
 	if hashRegex.MatchString(name) {
-		return &CommitSpec{name, commitHashSpec, as}, nil
+		return &CommitSpec{name, CommitHashSpec, as}, nil
 	} else if userBranchRegex.MatchString(name) {
-		return &CommitSpec{name, branchCommitSpec, as}, nil
+		return &CommitSpec{name, BranchCommitSpec, as}, nil
+	} else if remoteBranchRegex.MatchString(name) {
+		return &CommitSpec{name, RemoteBranchCommitSpec, as}, nil
 	} else {
 		return nil, ErrInvalidBranchOrHash
 	}
@@ -67,4 +81,7 @@ func (c *CommitSpec) AncestorSpec() *AncestorSpec {
 	return c.aSpec
 }
 
-//
+// CSpecType gets the type of the commit spec
+func (c *CommitSpec) CSpecType() CommitSpecType {
+	return c.csType
+}

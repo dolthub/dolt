@@ -57,7 +57,7 @@ func TestInit(t *testing.T) {
 			}
 		} else {
 			// failed as expected
-			if !dEnv.IsCWDEmpty() {
+			if !dEnv.HasDoltDir() {
 				t.Error(test.Name, "- CWD should be empty after failure to initialize... unless it wasn't empty to start with")
 			}
 		}

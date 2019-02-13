@@ -24,20 +24,20 @@ type jwkData struct {
 	Crv string  `json:"crv"`
 }
 
-func JWKCredSerialize(creds DoltCreds) ([]byte, error) {
-	if !creds.IsPubKeyValid() {
+func JWKCredSerialize(dc DoltCreds) ([]byte, error) {
+	if !dc.IsPubKeyValid() {
 		panic("public key missing or invalid.  This is a bug.  Should be validated before calling")
 	}
 
-	pubKeyStr := base64.URLEncoding.EncodeToString(creds.PubKey)
+	pubKeyStr := base64.URLEncoding.EncodeToString(dc.PubKey)
 
 	var privKeyStr string
-	if creds.HasPrivKey() {
-		if !creds.IsPrivKeyValid() {
+	if dc.HasPrivKey() {
+		if !dc.IsPrivKeyValid() {
 			panic("Invalid private key. This is a bug. Should be validated before calling")
 		}
 
-		privKeyStr = base64.URLEncoding.EncodeToString(creds.PrivKey)
+		privKeyStr = base64.URLEncoding.EncodeToString(dc.PrivKey)
 	}
 
 	toSerialize := jwkData{&pubKeyStr, &privKeyStr, kty, ed25519Crv}
@@ -73,8 +73,8 @@ func JWKCredsDeserialize(data []byte) (DoltCreds, error) {
 	return DoltCreds{}, err
 }
 
-func JWKCredsWrite(wr io.Writer, creds DoltCreds) error {
-	data, err := JWKCredSerialize(creds)
+func JWKCredsWrite(wr io.Writer, dc DoltCreds) error {
+	data, err := JWKCredSerialize(dc)
 
 	if err != nil {
 		return err
@@ -93,15 +93,15 @@ func JWKCredsRead(rd io.Reader) (DoltCreds, error) {
 	return JWKCredsDeserialize(data)
 }
 
-func JWKCredsWriteToDir(fs filesys.Filesys, dir string, creds DoltCreds) (string, error) {
-	outFile := filepath.Join(dir, creds.KeyIDBase32Str()+JWKFileExtension)
+func JWKCredsWriteToDir(fs filesys.Filesys, dir string, dc DoltCreds) (string, error) {
+	outFile := filepath.Join(dir, dc.KeyIDBase32Str()+JWKFileExtension)
 	wr, err := fs.OpenForWrite(outFile)
 
 	if err != nil {
 		return "", err
 	}
 
-	err = JWKCredsWrite(wr, creds)
+	err = JWKCredsWrite(wr, dc)
 	if err == nil {
 		err = wr.Close()
 	} else {

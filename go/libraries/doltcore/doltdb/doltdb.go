@@ -27,9 +27,10 @@ const (
 	InMemDoltDB = DoltDBLocation("mem")
 
 	DoltDir = ".dolt"
+	DataDir = "noms"
 )
 
-var DoltDataDir = filepath.Join(DoltDir, "noms")
+var DoltDataDir = filepath.Join(DoltDir, DataDir)
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = DoltDBLocation("nbs:" + DoltDataDir)
@@ -167,7 +168,7 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("Unable to resolve commit "+cs.Name(), func() error {
 		var err error
-		if cs.csType == commitHashSpec {
+		if cs.csType == CommitHashSpec {
 			commitSt, err = getCommitStForHash(ddb.db, cs.Name())
 		} else {
 			commitSt, err = getCommitStForBranch(ddb.db, cs.Name())
@@ -227,6 +228,44 @@ func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Commit, error) {
 	return ddb.CommitWithParents(valHash, branch, nil, cm)
+}
+
+func (ddb *DoltDB) FastForward(branch string, commit *Commit) error {
+	ds := ddb.db.GetDataset(branch)
+	_, err := ddb.db.FastForward(ds, types.NewRef(commit.commitSt))
+
+	return err
+}
+
+func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
+	currentSpec, _ := NewCommitSpec("HEAD", branch)
+	current, err := ddb.Resolve(currentSpec)
+
+	if err != nil {
+		if err == ErrBranchNotFound {
+			return true, nil
+		}
+
+		return false, err
+	}
+
+	ancestor, err := GetCommitAnscestor(current, new)
+
+	if err != nil {
+		return false, err
+	} else if ancestor == nil {
+		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
+	} else if ancestor.commitSt.Equals(current.commitSt) {
+		if ancestor.commitSt.Equals(new.commitSt) {
+			return true, ErrUpToDate
+		} else {
+			return true, nil
+		}
+	} else if ancestor.commitSt.Equals(new.commitSt) {
+		return false, ErrIsAhead
+	}
+
+	return false, errors.New("cannot perform fast forward merge. merge required")
 }
 
 func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
@@ -338,7 +377,7 @@ func (ddb *DoltDB) NewBranchAtCommit(newBranchName string, commit *Commit) error
 }
 
 func (ddb *DoltDB) DeleteBranch(branchName string) error {
-	if !IsValidUserBranchName(branchName) {
+	if !IsValidUserBranchName(branchName) && !IsValidRemoteBranchName(branchName) {
 		panic("Do not attempt to delete branches that fail the IsValidUserBranchName check")
 	}
 
@@ -349,6 +388,24 @@ func (ddb *DoltDB) DeleteBranch(branchName string) error {
 	}
 
 	_, err := ddb.db.Delete(ds)
+
+	return err
+}
+
+func (ddb *DoltDB) PullChunks(srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
+	var err error
+	//err := pantoerr.PanicToError("error: unable to transfer chunks.", func() error {
+	datas.Pull(srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
+	//	return nil
+	//})
+
+	if pantoerr.IsRecoveredPanic(err) {
+		cause := pantoerr.GetRecoveredPanicCause(err)
+
+		if errCause, ok := cause.(error); ok {
+			return errCause
+		}
+	}
 
 	return err
 }

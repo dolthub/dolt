@@ -2,6 +2,7 @@ package env
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -99,13 +100,18 @@ func ensureGlobalConfig(path string, fs filesys.ReadWriteFS) (config.ReadWriteCo
 // CreateLocalConfig creates a new repository local config file.  The current directory must have already been initialized
 // as a data repository before a local config can be created.
 func (dcc *DoltCliConfig) CreateLocalConfig(vals map[string]string) error {
-	if exists, isDir := dcc.fs.Exists(getDoltDir()); !exists {
+	return dcc.createLocalConfigAt(".", vals)
+}
+
+func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string) error {
+	doltDir := filepath.Join(dir, getDoltDir())
+	if exists, isDir := dcc.fs.Exists(doltDir); !exists {
 		return errors.New(doltdb.DoltDir + " directory not found. Is the current directory a repository directory?")
 	} else if !isDir {
 		return errors.New("A file exists with the name \"" + doltdb.DoltDir + "\". This is not a valid file within a data repository directory.")
 	}
 
-	path := getLocalConfigPath()
+	path := filepath.Join(dir, getLocalConfigPath())
 	cfg, err := config.NewFileConfig(path, dcc.fs, vals)
 
 	if err != nil {

@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package dolt.services.remotesapi.v1alpha1;
+
+option go_package = "dolt/services/remotesapi_v1alpha1;remotesapi";
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+
+
+service ChunkStoreService {
+  rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
+  rpc GetDownloadLoctions(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
+  rpc GetUploadLocations(GetUploadLocsRequest) returns (GetUploadLocsResponse);
+  rpc Rebase(RebaseRequest) returns (RebaseResponse);
+  rpc Root(RootRequest) returns (RootResponse);
+  rpc Commit(CommitRequest) returns (CommitResponse);
+}
+
+message RepoId {
+  string org = 1;
+  string repo_name = 2;
+}
+
+message HasChunksRequest {
+  RepoId repo_id = 1;
+  repeated bytes hashes = 2;
+}
+
+message HasChunksResponse {
+  repeated int32 absent = 1;
+}
+
+message HttpGetChunk {
+  string url = 1;
+}
+
+message DownloadLoc {
+  repeated bytes hashes = 1;
+  oneof location {
+    HttpGetChunk http_get = 2;
+  }
+}
+
+message HttpPostChunk {
+  string url = 1;
+}
+
+message UploadLoc {
+  repeated bytes hashes = 1;
+  oneof location {
+    HttpPostChunk http_post = 2;
+  }
+}
+
+message GetDownloadLocsRequest {
+  RepoId repo_id = 1;
+  repeated bytes hashes = 2;
+}
+
+message GetDownloadLocsResponse {
+  repeated DownloadLoc locs = 1;
+}
+
+message GetUploadLocsRequest {
+  RepoId repo_id = 1;
+  repeated bytes hashes = 2;
+}
+
+message GetUploadLocsResponse {
+  repeated UploadLoc locs = 1;
+}
+
+message RebaseRequest {
+  RepoId repo_id = 1;
+}
+
+message RebaseResponse {
+
+}
+
+message RootRequest {
+  RepoId repo_id = 1;
+}
+
+message RootResponse {
+  bytes root_hash = 1;
+}
+
+message CommitRequest {
+  RepoId repo_id = 1;
+  bytes current = 2;
+  bytes last = 3;
+}
+
+message CommitResponse {
+  bool success = 1;
+}

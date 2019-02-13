@@ -6,6 +6,7 @@ require (
 	github.com/attic-labs/noms v0.0.0-20181127201811-95e8b35cc96f
 	github.com/aws/aws-sdk-go v1.16.26 // indirect
 	github.com/edsrzf/mmap-go v1.0.0-20181222142022-904c4ced31cd // indirect
+	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
@@ -34,4 +35,4 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190128170251-00beb75270a9
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190213171954-6864940d587b

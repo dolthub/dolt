@@ -122,17 +122,11 @@ func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
 }
 
 func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
-	var ancestorRef types.Ref
-	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		ok := false
-		ancestorRef, ok = datas.FindCommonAncestor(ref1, ref2, vrw)
+	ancestorRef, ok := datas.FindCommonAncestor(ref1, ref2, vrw)
 
-		if !ok {
-			return ErrNoCommonAnscestor
-		}
+	if !ok {
+		return types.Ref{}, ErrNoCommonAnscestor
+	}
 
-		return nil
-	})
-
-	return ancestorRef, err
+	return ancestorRef, nil
 }
