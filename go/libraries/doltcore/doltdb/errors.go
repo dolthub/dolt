@@ -17,6 +17,8 @@ var ErrTableNotFound = errors.New("table not found")
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
 var ErrNoConflicts = errors.New("no conflicts")
+var ErrUpToDate = errors.New("up to date")
+var ErrIsAhead = errors.New("current commit is ahead of new commit")
 
 func IsInvalidFormatErr(err error) bool {
 	switch err {

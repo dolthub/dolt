@@ -44,11 +44,11 @@ func getGlobalCfgPath(hdp HomeDirProvider) (string, error) {
 }
 
 func getLocalConfigPath() string {
-	return filepath.Join(".", doltdb.DoltDir, configFile)
+	return filepath.Join(doltdb.DoltDir, configFile)
 }
 
 func getDoltDir() string {
-	return filepath.Join(".", doltdb.DoltDir)
+	return filepath.Join(doltdb.DoltDir)
 }
 
 func getRepoStateFile() string {

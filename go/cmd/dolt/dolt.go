@@ -37,6 +37,11 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts", Func: cnfcmds.Commands, ReqRepo: false},
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
 	{Name: "login", Desc: "Login to a dolt remote host", Func: commands.Login, ReqRepo: false},
+	{Name: "remote", Desc: "Manage set of tracked repositories.", Func: commands.Remote, ReqRepo: true},
+	{Name: "push", Desc: "Push to a dolt remote", Func: commands.Push, ReqRepo: true},
+	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Push, ReqRepo: true},
+	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true},
+	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false},
 })
 
 func main() {

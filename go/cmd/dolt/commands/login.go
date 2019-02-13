@@ -1,17 +1,17 @@
 package commands
 
 import (
-	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"path"
 	"time"
 
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -63,7 +63,7 @@ func loginWithExistingCreds(dEnv *env.DoltEnv, idOrPubKey string) errhand.Verbos
 		return errhand.BuildDError("error: could not get user home dir").Build()
 	}
 
-	jwkFilePath, err := creds.FindCreds(dEnv, credsDir, idOrPubKey)
+	jwkFilePath, err := dEnv.FindCreds(credsDir, idOrPubKey)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to find creds '%s'", idOrPubKey).AddCause(err).Build()
@@ -87,7 +87,7 @@ func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError 
 	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
 	open.Start(url)
 
-	conn, err := dEnv.GrpcConn(dc)
+	conn, err := dEnv.GrpcConn(*host)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()

@@ -155,7 +155,7 @@ func TestBestEffortDelete(t *testing.T) {
 		t.Error("Dir should not be empty before delete.")
 	}
 
-	dEnv.bestEffortDeleteAllFromCWD()
+	dEnv.bestEffortDeleteAll(workingDir)
 
 	if !isCWDEmpty(dEnv) {
 		t.Error("Dir should be empty after delete.")
