@@ -53,6 +53,10 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 		bdr.AddDetails("dolt config [-global|local] -set %[1]s:\"EMAIL_ADDRESS\"", env.UserEmailKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
+	} else if err == actions.ErrEmptyCommitMessage {
+		bdr := errhand.BuildDError("Aborting commit due to empty commit message.")
+
+		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if actions.IsNothingStaged(err) {
 		notStaged := actions.NothingStagedDiffs(err)
 		printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})

@@ -43,3 +43,64 @@ func TestExportTblSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestAddFieldToSchema(t *testing.T) {
+	tests := []struct {
+		tblName    string
+		newColName string
+		colType    string
+		required   string
+	}{
+		{tableName, "date", "string", "false"},
+	}
+	for _, test := range tests {
+		dEnv := createEnvWithSeedData(t)
+		root, _ := dEnv.WorkingRoot()
+		tbl, _ := root.GetTable(tableName)
+		originalSchemaFields := tbl.GetSchema().GetFieldNames()
+
+		result, err := addFieldToSchema(tableName, tbl, dEnv, test.newColName, test.colType, test.required)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		newSchema := result.GetSchema()
+		newSchemaFields := newSchema.GetFieldNames()
+		originalPlusNewField := append(originalSchemaFields, test.newColName)
+
+		if !reflect.DeepEqual(originalPlusNewField, newSchemaFields) {
+			t.Error(originalSchemaFields, "!=", newSchemaFields)
+		}
+	}
+
+}
+
+func TestRenameColumnOfSchema(t *testing.T) {
+	tests := []struct {
+		table         string
+		oldName       string
+		newName       string
+		newFieldNames []string
+	}{
+		{tableName, "is_married", "married", []string{"id", "name", "age", "title", "married"}},
+	}
+
+	for _, test := range tests {
+		dEnv := createEnvWithSeedData(t)
+		root, _ := dEnv.WorkingRoot()
+		tbl, _ := root.GetTable(tableName)
+
+		result, err := renameColumnOfSchema(test.oldName, test.newName, tbl, dEnv)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		newSchema := result.GetSchema()
+		newSchemaFields := newSchema.GetFieldNames()
+
+		if !reflect.DeepEqual(test.newFieldNames, newSchemaFields) {
+			t.Error(test.newFieldNames, "!=", newSchemaFields)
+		}
+	}
+
+}
