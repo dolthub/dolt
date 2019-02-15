@@ -4,11 +4,6 @@ package dolt.services.remotesapi.v1alpha1;
 
 option go_package = "dolt/services/remotesapi_v1alpha1;remotesapi";
 
-import "google/api/annotations.proto";
-import "google/protobuf/empty.proto";
-import "google/protobuf/field_mask.proto";
-
-
 service ChunkStoreService {
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
   rpc GetDownloadLoctions(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
