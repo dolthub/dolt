@@ -1,30 +1,44 @@
-PROTOC_GEN_TS_PATH := ${HOME}/src/3p/ts-protoc-gen/bazel-bin/bin/protoc-gen-ts
 GOOGLEAPIS := ${HOME}/src/3p/googleapis
 PROTOBUF := ${HOME}/src/3p/protobuf/src
 
-go_out := ../go/gen/proto
+PROTOC = protoc
+PROTOC_FLAGS = -I . -I $(GOOGLEAPIS) -I $(PROTOBUF)
 
-dolt_srcs := \
+pbgo_out := ../go/gen/proto
+
+REMOTESAPI_protos := \
   dolt/services/remotesapi/v1alpha1/chunkstore.proto \
-  dolt/services/remotesapi/v1alpha1/credentials.proto \
+  dolt/services/remotesapi/v1alpha1/credentials.proto
+REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi_v1alpha1
 
-go_files = $(patsubst %.proto, %.pb.go, $(dolt_srcs))
+PBGO_pkgs := REMOTESAPI
 
-artifacts = \
-    $(addprefix $(go_out)/, $(go_files)) \
-
-all: $(artifacts)
-
-$(go_out)/%.pb.go \
-: %.proto
-	protoc \
-	    -I . \
-	    -I $(GOOGLEAPIS) \
-	    -I $(PROTOBUF) \
-	    --go_out=plugins=grpc:$(go_out) \
-	    ./$*.proto
+all:
 
 .PHONY: clean
 
 clean:
-	rm -f $(artifacts)
+	@rm -f $(ALL_OUTPUTS)
+
+define PROTOC_template # 1=proto, 2=outputs, 3=flags
+$(2) : $(1)
+	@$$(PROTOC) $$(PROTOC_FLAGS) $(3) $(1)
+ALL_OUTPUTS += $(2)
+all: $(2)
+endef
+
+define PBGO_output # 1=proto
+$(patsubst %.proto,%.pb.go,$(1))
+endef
+
+define PBGO_template # 1=proto, 2=output pkg path, 3=output base
+$(call PROTOC_template,\
+  $(1),\
+  $(addprefix $(3)/$(2)/,$(notdir $(call PBGO_output,$(1)))),\
+	--go_out=plugins=grpc:$(3))
+endef
+
+$(foreach p,$(PBGO_pkgs),\
+  $(foreach f,$($(p)_protos),\
+    $(eval \
+      $(call PBGO_template,$(f),$($(p)_pbgo_pkg_path),$(pbgo_out)))))
