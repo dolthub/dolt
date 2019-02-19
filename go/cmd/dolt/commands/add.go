@@ -33,9 +33,9 @@ func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(dEnv)
+		err = actions.StageAllTables(dEnv, false)
 	} else {
-		err = actions.StageTables(dEnv, apr.Args())
+		err = actions.StageTables(dEnv, apr.Args(), false)
 	}
 
 	if err != nil {
@@ -55,13 +55,23 @@ func toAddVErr(err error) errhand.VerboseError {
 		return bdr.Build()
 
 	case actions.IsTblNotExist(err):
-		tbls := actions.GetTblNotExistTables(err)
+		tbls := actions.GetTablesForError(err)
 		bdr := errhand.BuildDError("Some of the specified tables were not found")
 		bdr.AddDetails("Unknown tables: %v", tbls)
 
 		return bdr.Build()
 
+	case actions.IsTblInConflict(err):
+		tbls := actions.GetTablesForError(err)
+		bdr := errhand.BuildDError("error: not all tables merged")
+
+		for _, tbl := range tbls {
+			bdr.AddDetails("  %s", tbl)
+		}
+
+		return bdr.Build()
+
 	default:
-		return errhand.BuildDError("Unknown error").Build()
+		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
 }

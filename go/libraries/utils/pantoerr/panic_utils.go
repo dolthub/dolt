@@ -1,7 +1,5 @@
 package pantoerr
 
-import "fmt"
-
 // RecoverPanic is used to convert panics to errors.  The attic-labs noms codebase loves to panic.  This is not
 // idiomatic for Go code. RecoverPanic wraps the cause of the panic retrieved from the recover call, and implements
 // the error interface so it can be treated like a standard error.
@@ -36,7 +34,6 @@ func PanicToErrorInstance(errInstance error, f func() error) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				err = errInstance
-				fmt.Println(r)
 			}
 		}()
 

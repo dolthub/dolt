@@ -130,7 +130,9 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 		schWithConf := typed.TypedSchemaUnion(confSchema, tblSch)
 		schWithConf.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{tblSch.GetPKIndex() + 1}))
 
-		cnfTransform := pipeline.NewRowTransformer(transCnfSetName, CnfTransformer(tblSch, schWithConf, tbl.GetConflicts()))
+		_, confData, _ := tbl.GetConflicts()
+
+		cnfTransform := pipeline.NewRowTransformer(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
 		transColl.AppendTransforms(pipeline.NamedTransform{transCnfSetName, cnfTransform})
 
 		return schWithConf

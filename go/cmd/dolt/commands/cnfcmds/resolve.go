@@ -4,6 +4,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
@@ -83,6 +84,11 @@ func autoResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *e
 	}
 
 	if err != nil {
+		if err == doltdb.ErrNoConflicts {
+			cli.Println("no conflicts to resolve.")
+			return 0
+		}
+
 		panic(err) // todo: fix
 		return 1
 	}

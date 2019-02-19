@@ -30,7 +30,12 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		return nil, err
 	}
 
-	conflicts := tbl.GetConflicts()
+	schemas, conflicts, err := tbl.GetConflicts()
+
+	if err != nil {
+		return nil, err
+	}
+
 	rowEditor := tbl.GetRowData().Edit()
 
 	var itrErr error
@@ -64,5 +69,8 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		return nil, itrErr
 	}
 
-	return doltdb.NewTable(vrw, tblSchVal, rowEditor.Map()), nil
+	newTbl := doltdb.NewTable(vrw, tblSchVal, rowEditor.Map())
+	newTbl = newTbl.SetConflicts(schemas, types.NewMap(vrw))
+
+	return newTbl, nil
 }

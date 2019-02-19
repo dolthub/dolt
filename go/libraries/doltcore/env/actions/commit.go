@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
@@ -41,7 +40,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string) error {
 
 	if err != nil {
 		return err
-	} else if len(staged.Tables) == 0 {
+	} else if len(staged.Tables) == 0 && dEnv.RepoState == nil {
 		return NothingStaged{notStaged}
 	}
 
@@ -62,7 +61,18 @@ func CommitStaged(dEnv *env.DoltEnv, msg string) error {
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	h := hash.Parse(dEnv.RepoState.Staged)
+	root, err := dEnv.StagedRoot()
+
+	if err != nil {
+		return err
+	}
+
+	h, err := dEnv.UpdateStagedRoot(root)
+
+	if err != nil {
+		return err
+	}
+
 	meta := doltdb.NewCommitMeta(name, email, msg)
 	_, err = dEnv.DoltDB.CommitWithParents(h, dEnv.RepoState.Branch, mergeCmSpec, meta)
 

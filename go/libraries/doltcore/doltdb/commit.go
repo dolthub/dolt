@@ -130,3 +130,43 @@ func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (type
 
 	return ancestorRef, nil
 }
+
+func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(c, new)
+
+	if err != nil {
+		return false, err
+	} else if ancestor == nil {
+		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
+	} else if ancestor.commitSt.Equals(c.commitSt) {
+		if ancestor.commitSt.Equals(new.commitSt) {
+			return true, ErrUpToDate
+		} else {
+			return true, nil
+		}
+	} else if ancestor.commitSt.Equals(new.commitSt) {
+		return false, ErrIsAhead
+	}
+
+	return false, nil
+}
+
+func (c *Commit) CanFastReverseTo(new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(c, new)
+
+	if err != nil {
+		return false, err
+	} else if ancestor == nil {
+		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
+	} else if ancestor.commitSt.Equals(new.commitSt) {
+		if ancestor.commitSt.Equals(c.commitSt) {
+			return true, ErrUpToDate
+		} else {
+			return true, nil
+		}
+	} else if ancestor.commitSt.Equals(c.commitSt) {
+		return false, ErrIsBehind
+	}
+
+	return false, nil
+}

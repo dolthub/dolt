@@ -69,7 +69,18 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, branch string) errhand
 	<-stopChan
 
 	if err != nil {
-		return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		if err == doltdb.ErrUpToDate {
+			cli.Println("Everything up-to-date")
+		} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
+			cli.Printf("To %s\n", r.Url)
+			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", branch, remoteBranch)
+			cli.Printf("error: failed to push some refs to '%s'\n", r.Url)
+			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+			cli.Println("hint: 'dolt pull ...') before pushing again.")
+		} else {
+			return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		}
 	}
 
 	return nil
@@ -104,7 +115,9 @@ func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {
 		}
 	}
 
-	cli.Println()
+	if lenPrinted > 0 {
+		cli.Println()
+	}
 	stopChan <- struct{}{}
 }
 

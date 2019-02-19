@@ -2,27 +2,61 @@ package actions
 
 import "strings"
 
-type TblNotExist struct {
-	Tables []string
+type tblErrorType string
+
+const (
+	tblErrInvalid        tblErrorType = "invalid"
+	tblErrTypeNotExist   tblErrorType = "do not exist"
+	tblErrTypeInConflict tblErrorType = "in conflict"
+)
+
+type TblError struct {
+	tables     []string
+	tblErrType tblErrorType
 }
 
-func (tne TblNotExist) Error() string {
-	return "error: the tables " + strings.Join(tne.Tables, ", ") + "do not exist"
+func NewTblNotExistError(tbls []string) TblError {
+	return TblError{tbls, tblErrTypeNotExist}
+}
+
+func NewTblInConflictError(tbls []string) TblError {
+	return TblError{tbls, tblErrTypeInConflict}
+}
+
+func (te TblError) Error() string {
+	return "error: the tables " + strings.Join(te.tables, ", ") + string(te.tblErrType)
+}
+
+func getTblErrType(err error) tblErrorType {
+	te, ok := err.(TblError)
+
+	if ok {
+		return te.tblErrType
+	}
+
+	return tblErrInvalid
+}
+
+func IsTblError(err error) bool {
+	return getTblErrType(err) != tblErrInvalid
 }
 
 func IsTblNotExist(err error) bool {
-	_, ok := err.(TblNotExist)
-	return ok
+	return getTblErrType(err) == tblErrTypeNotExist
 }
 
-func GetTblNotExistTables(err error) []string {
-	tne, ok := err.(TblNotExist)
+func IsTblInConflict(err error) bool {
+	return getTblErrType(err) == tblErrTypeInConflict
+}
+
+func GetTablesForError(err error) []string {
+	te, ok := err.(TblError)
 
 	if !ok {
-		panic("Must validate with IsTblNotExist before calling GetTblNotExistTables")
+		panic("Must validate with IsTblError or more specific methods before calling GetTablesForError")
 	}
 
-	return tne.Tables
+	return te.tables
 }
 
 type RootType int

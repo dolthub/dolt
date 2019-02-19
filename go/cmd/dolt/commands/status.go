@@ -61,6 +61,18 @@ const (
 	stagedHeader     = `Changes to be committed:`
 	stagedHeaderHelp = `  (use "dolt reset <table>..." to unstage)`
 
+	unmergedTablesHeader = `You have unmerged tables.
+  (fix conflicts and run "dolt commit")
+  (use "dolt merge --abort" to abort the merge)
+`
+
+	allMergedHeader = `All conflicts fixed but you are still merging.
+  (use "dolt commit" to conclude merge)
+`
+
+	mergedTableHeader = `Unmerged paths:`
+	mergedTableHelp   = `  (use "dolt add <file>..." to mark resolution)`
+
 	workingHeader     = `Changes not staged for commit:`
 	workingHeaderHelp = `  (use "dolt add <table>" to update what will be committed)
   (use "dolt checkout <table>" to discard changes in working directory)`
@@ -93,8 +105,30 @@ func printStagedDiffs(wr io.Writer, staged *actions.TableDiffs, printHelp bool) 
 	return 0
 }
 
-func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingNotStaged []string) int {
-	if notStaged.NumRemoved+notStaged.NumModified > 0 {
+func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingInConflict []string) int {
+	inCnfSet := set.NewStrSet(workingInConflict)
+
+	if len(workingInConflict) > 0 {
+		if linesPrinted > 0 {
+			cli.Println()
+		}
+
+		iohelp.WriteLine(wr, mergedTableHeader)
+
+		if printHelp {
+			iohelp.WriteLine(wr, mergedTableHelp)
+		}
+
+		lines := make([]string, 0, notStaged.Len())
+		for _, tblName := range workingInConflict {
+			lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
+		}
+
+		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+		linesPrinted += len(lines)
+	}
+
+	if notStaged.NumRemoved+notStaged.NumModified-inCnfSet.Size() > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -105,18 +139,12 @@ func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp 
 			iohelp.WriteLine(wr, workingHeaderHelp)
 		}
 
-		inCnfSet := set.NewStrSet(workingNotStaged)
-
 		lines := make([]string, 0, notStaged.Len())
 		for _, tblName := range notStaged.Tables {
 			tdt := notStaged.TableToType[tblName]
 
-			if tdt != actions.AddedTable {
-				if tdt == actions.ModifiedTable && inCnfSet.Contains(tblName) {
-					lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
-				} else {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
-				}
+			if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) {
+				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
 		}
 
@@ -154,10 +182,18 @@ func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp 
 func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs, workingInConflict []string) {
 	cli.Printf(branchHeader, dEnv.RepoState.Branch)
 
+	if dEnv.RepoState.Merge != nil {
+		if len(workingInConflict) > 0 {
+			cli.Println(unmergedTablesHeader)
+		} else {
+			cli.Println(allMergedHeader)
+		}
+	}
+
 	n := printStagedDiffs(cli.CliOut, staged, true)
 	n = printDiffsNotStaged(cli.CliOut, notStaged, true, n, workingInConflict)
 
-	if n == 0 {
+	if dEnv.RepoState.Merge == nil && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
 	}
 }

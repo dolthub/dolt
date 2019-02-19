@@ -1,23 +1,26 @@
 package actions
 
 import (
+	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
-func StageTables(dEnv *env.DoltEnv, tbls []string) error {
+var ErrTablesInConflict = errors.New("table is in conflict")
+
+func StageTables(dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
 	staged, working, err := getStagedAndWorking(dEnv)
 
 	if err != nil {
 		return err
 	}
 
-	return stageTables(dEnv, tbls, staged, working)
+	return stageTables(dEnv, tbls, staged, working, allowConflicts)
 
 }
 
-func StageAllTables(dEnv *env.DoltEnv) error {
+func StageAllTables(dEnv *env.DoltEnv, allowConflicts bool) error {
 	staged, working, err := getStagedAndWorking(dEnv)
 
 	if err != nil {
@@ -25,19 +28,57 @@ func StageAllTables(dEnv *env.DoltEnv) error {
 	}
 
 	tbls := AllTables(staged, working)
-	return stageTables(dEnv, tbls, staged, working)
+	return stageTables(dEnv, tbls, staged, working, allowConflicts)
 }
 
-func stageTables(dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue) error {
+func stageTables(dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
 	err := ValidateTables(tbls, staged, working)
 
 	if err != nil {
 		return err
 	}
 
-	updatedRoot := staged.UpdateTablesFromOther(tbls, working)
+	if !allowConflicts {
+		var inConflict []string
+		for _, tblName := range tbls {
+			tbl, _ := working.GetTable(tblName)
 
-	return dEnv.UpdateStagedRoot(updatedRoot)
+			if tbl.NumRowsInConflict() > 0 {
+				if !allowConflicts {
+					inConflict = append(inConflict, tblName)
+				}
+			}
+		}
+
+		if len(inConflict) > 0 {
+			return NewTblInConflictError(inConflict)
+		}
+	}
+
+	for _, tblName := range tbls {
+		tbl, _ := working.GetTable(tblName)
+
+		if tbl.HasConflicts() && tbl.NumRowsInConflict() == 0 {
+			working = working.PutTable(dEnv.DoltDB, tblName, tbl.ClearConflicts())
+		}
+	}
+
+	staged = staged.UpdateTablesFromOther(tbls, working)
+
+	if wh, err := dEnv.DoltDB.WriteRootValue(working); err == nil {
+		if sh, err := dEnv.DoltDB.WriteRootValue(staged); err == nil {
+			dEnv.RepoState.Staged = sh.String()
+			dEnv.RepoState.Working = wh.String()
+
+			if err = dEnv.RepoState.Save(); err != nil {
+				return env.ErrStateUpdate
+			}
+
+			return nil
+		}
+	}
+
+	return doltdb.ErrNomsIO
 }
 
 func AllTables(roots ...*doltdb.RootValue) []string {
@@ -70,7 +111,7 @@ func ValidateTables(tbls []string, roots ...*doltdb.RootValue) error {
 		return nil
 	}
 
-	return TblNotExist{missing}
+	return NewTblNotExistError(missing)
 }
 
 func getStagedAndWorking(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
