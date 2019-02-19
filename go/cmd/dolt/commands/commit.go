@@ -59,7 +59,11 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if actions.IsNothingStaged(err) {
 		notStaged := actions.NothingStagedDiffs(err)
-		printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
+		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
+
+		if n == 0 {
+			cli.Println("nothing to commit, working tree clean")
+		}
 
 		return 1
 	} else if err != nil {

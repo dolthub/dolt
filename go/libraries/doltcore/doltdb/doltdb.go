@@ -249,23 +249,7 @@ func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 		return false, err
 	}
 
-	ancestor, err := GetCommitAnscestor(current, new)
-
-	if err != nil {
-		return false, err
-	} else if ancestor == nil {
-		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
-	} else if ancestor.commitSt.Equals(current.commitSt) {
-		if ancestor.commitSt.Equals(new.commitSt) {
-			return true, ErrUpToDate
-		} else {
-			return true, nil
-		}
-	} else if ancestor.commitSt.Equals(new.commitSt) {
-		return false, ErrIsAhead
-	}
-
-	return false, errors.New("cannot perform fast forward merge. merge required")
+	return current.CanFastForwardTo(new)
 }
 
 func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {

@@ -41,7 +41,7 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 }
 
 func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := dEnv.UpdateStagedRoot(updatedRoot)
+	_, err := dEnv.UpdateStagedRoot(updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
@@ -58,7 +58,7 @@ func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.V
 
 	if err != nil {
 		if actions.IsTblNotExist(err) {
-			tbls := actions.GetTblNotExistTables(err)
+			tbls := actions.GetTablesForError(err)
 			bdr := errhand.BuildDError("Invalid Table(s):")
 
 			for _, tbl := range tbls {

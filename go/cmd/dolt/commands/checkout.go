@@ -92,7 +92,7 @@ func checkoutTable(dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
 		if actions.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
 		} else if actions.IsTblNotExist(err) {
-			badTbls := actions.GetTblNotExistTables(err)
+			badTbls := actions.GetTablesForError(err)
 			bdr := errhand.BuildDError("")
 			for _, tbl := range badTbls {
 				bdr.AddDetails("error: table '%s' did not match any table(s) known to dolt.", tbl)

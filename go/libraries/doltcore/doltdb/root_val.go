@@ -195,6 +195,11 @@ func (root *RootValue) TableDiff(other *RootValue) (added, modified, removed []s
 				pk2, val2 = itr2.Next()
 			}
 		} else {
+			//tblSt1 := val1.(types.Ref).TargetValue(root.vrw)
+			//tblSt2 := val2.(types.Ref).TargetValue(root.vrw)
+			//tbl1 := Table{root.vrw, tblSt1.(types.Struct)}
+			//tbl2 := Table{root.vrw, tblSt2.(types.Struct)}
+
 			if !val1.Equals(val2) {
 				modified = append(modified, string(pk1.(types.String)))
 			}

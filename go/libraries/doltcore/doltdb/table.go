@@ -59,10 +59,52 @@ func (t *Table) SetConflicts(schemas Conflict, conflictData types.Map) *Table {
 	return &Table{t.vrw, updatedSt}
 }
 
+func (t *Table) GetConflicts() (Conflict, types.Map, error) {
+	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+
+	if !ok {
+		return Conflict{}, types.EmptyMap, ErrNoConflicts
+	}
+
+	schemas := ConflictFromTuple(schemasVal.(types.Tuple))
+	conflictsVal := t.tableStruct.Get(conflictsKey)
+
+	confMap := types.EmptyMap
+	if conflictsVal != nil {
+		confMapRef := conflictsVal.(types.Ref)
+		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+	}
+
+	return schemas, confMap, nil
+}
+
 func (t *Table) HasConflicts() bool {
 	_, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	return ok
+}
+
+func (t *Table) NumRowsInConflict() uint64 {
+	conflictsVal, ok := t.tableStruct.MaybeGet(conflictsKey)
+
+	if !ok {
+		return 0
+	}
+
+	confMap := types.EmptyMap
+	if conflictsVal != nil {
+		confMapRef := conflictsVal.(types.Ref)
+		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+	}
+
+	return confMap.Len()
+}
+
+func (t *Table) ClearConflicts() *Table {
+	tSt := t.tableStruct.Delete(conflictSchemasKey)
+	tSt = tSt.Delete(conflictsKey)
+
+	return &Table{t.vrw, tSt}
 }
 
 func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err error) {
@@ -222,25 +264,20 @@ func (t *Table) GetRowData() types.Map {
 	return rowMap
 }
 
-func (t *Table) GetConflicts() types.Map {
-	conflictsVal := t.tableStruct.Get(conflictsKey)
-
-	if conflictsVal == nil {
-		return types.EmptyMap
-	}
-
-	confMapRef := conflictsVal.(types.Ref)
-	confMap := confMapRef.TargetValue(t.vrw).(types.Map)
-	return confMap
-}
-
 func (t *Table) ResolveConflicts(keys []string) (invalid, notFound []string, tbl *Table, err error) {
 	sch := t.GetSchema()
 	pk := sch.GetField(sch.GetPKIndex())
 	convFunc := doltcore.GetConvFunc(types.StringKind, pk.NomsKind())
 
 	removed := 0
-	confEdit := t.GetConflicts().Edit()
+	_, confData, err := t.GetConflicts()
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	confEdit := confData.Edit()
+
 	for _, keyStr := range keys {
 		key, err := convFunc(types.String(keyStr))
 
@@ -261,15 +298,8 @@ func (t *Table) ResolveConflicts(keys []string) (invalid, notFound []string, tbl
 	}
 
 	conflicts := confEdit.Map()
-
-	var updatedSt types.Struct
-	if conflicts.Len() == 0 {
-		updatedSt = t.tableStruct.Delete(conflictsKey)
-		updatedSt = updatedSt.Delete(conflictSchemasKey)
-	} else {
-		conflictsRef := writeValAndGetRef(t.vrw, conflicts)
-		updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
-	}
+	conflictsRef := writeValAndGetRef(t.vrw, conflicts)
+	updatedSt := t.tableStruct.Set(conflictsKey, conflictsRef)
 
 	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
 }

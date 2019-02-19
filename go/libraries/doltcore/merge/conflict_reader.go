@@ -60,7 +60,13 @@ func NewConflictReader(tbl *doltdb.Table) (*ConflictReader, error) {
 		return nil, err
 	}
 
-	confItr := tbl.GetConflicts().Iterator()
+	_, confData, err := tbl.GetConflicts()
+
+	if err != nil {
+		return nil, err
+	}
+
+	confItr := confData.Iterator()
 
 	baseConv, err := table.NewRowConverter(baseMapping)
 	conv, err := table.NewRowConverter(mapping)

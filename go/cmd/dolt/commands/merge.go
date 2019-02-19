@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"sort"
 	"strconv"
 
@@ -50,7 +51,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 	if apr.Contains(abortParam) {
 		if !dEnv.IsMergeActive() {
-			fmt.Println("fatal: There is no merge to abort")
+			cli.PrintErrln("fatal: There is no merge to abort")
 			return 1
 		}
 
@@ -128,6 +129,54 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 		return verr
 	}
 
+	cli.Println("Updating", cm1.HashOf().String()+".."+cm2.HashOf().String())
+
+	if ok, err := cm1.CanFastForwardTo(cm2); ok {
+		return executeFFMerge(dEnv, cm2)
+	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
+		cli.Println("Already up to date.")
+		return nil
+	} else {
+		return executeMerge(dEnv, cm1, cm2, branchName)
+	}
+
+	return nil
+}
+
+func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
+	cli.Println("Fast-forward")
+
+	h, err := dEnv.DoltDB.WriteRootValue(cm2.GetRootValue())
+
+	if err != nil {
+		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+	}
+
+	err = dEnv.DoltDB.FastForward(dEnv.RepoState.Branch, cm2)
+
+	if err != nil {
+		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+	}
+
+	dEnv.RepoState.Working = h.String()
+	dEnv.RepoState.Staged = h.String()
+	err = dEnv.RepoState.Save()
+
+	if err != nil {
+		return errhand.BuildDError("unable to execute repo state update.").
+			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
+At the moment the best way to fix this is to run:
+
+    dolt branch -v
+
+and take the hash for your current branch and use it for the value for "staged" and "working"`).
+			AddCause(err).Build()
+	}
+
+	return nil
+}
+
+func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string) errhand.VerboseError {
 	mergedRoot, tblToStats, err := actions.MergeCommits(dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
@@ -151,7 +200,7 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
-	verr = UpdateWorkingWithVErr(dEnv, mergedRoot)
+	verr := UpdateWorkingWithVErr(dEnv, mergedRoot)
 
 	if verr == nil {
 		hasConflicts := printSuccessStats(tblToStats)

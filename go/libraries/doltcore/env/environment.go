@@ -224,21 +224,21 @@ func (dEnv *DoltEnv) StagedRoot() (*doltdb.RootValue, error) {
 	return dEnv.DoltDB.ReadRootValue(h)
 }
 
-func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) error {
+func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, error) {
 	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
 
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return hash.Hash{}, doltdb.ErrNomsIO
 	}
 
 	dEnv.RepoState.Staged = h.String()
 	err = dEnv.RepoState.Save()
 
 	if err != nil {
-		return ErrStateUpdate
+		return hash.Hash{}, ErrStateUpdate
 	}
 
-	return nil
+	return h, nil
 }
 
 func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, tableName string) error {

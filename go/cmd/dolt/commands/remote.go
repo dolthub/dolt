@@ -40,6 +40,8 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr = renameRemote(dEnv, apr)
 	case apr.Arg(0) == removeRemoteId:
 		verr = removeRemote(dEnv, apr)
+	default:
+		verr = errhand.BuildDError("Invalid Usage").SetPrintUsage().Build()
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
