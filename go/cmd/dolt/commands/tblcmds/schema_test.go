@@ -50,8 +50,12 @@ func TestAddFieldToSchema(t *testing.T) {
 		newColName string
 		colType    string
 		required   string
+		defaultVal string
 	}{
-		{tableName, "date", "string", "false"},
+		{tableName, "date", "string", "false", ""},
+		{tableName, "date", "string", "true", ""},
+		{tableName, "date", "string", "true", "02-25-2019"},
+		{tableName, "number", "int", "true", "5"},
 	}
 	for _, test := range tests {
 		dEnv := createEnvWithSeedData(t)
@@ -59,7 +63,7 @@ func TestAddFieldToSchema(t *testing.T) {
 		tbl, _ := root.GetTable(tableName)
 		originalSchemaFields := tbl.GetSchema().GetFieldNames()
 
-		result, err := addFieldToSchema(tableName, tbl, dEnv, test.newColName, test.colType, test.required)
+		result, err := addFieldToSchema(tableName, tbl, dEnv, test.newColName, test.colType, test.required, &test.defaultVal)
 		if err != nil {
 			t.Fatal(err.Error())
 		}

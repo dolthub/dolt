@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -31,14 +33,15 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 	"\n" +
 	"dolt table schema --export exports a table's schema into a specified file. Both table and file must be specified." + "\n" +
 	"\n" +
-	"dolt table schema --add-field adds a column to specified table's schema." + "\n" +
+	"dolt table schema --add-field adds a column to specified table's schema. If no default value is provided" +
+	"the column will be empty.\n" +
 	"\n" +
 	"dolt table schema --rename-field renames a column of the specified table."
 
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
-	"--add-field <table> <name> <type> <is_required>",
+	"--add-field <table> <name> <type> <is_required>[<default_value>]",
 	"--rename-field <table> <old> <new>]",
 }
 
@@ -54,6 +57,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.SupportsFlag("export", "", "exports schema into file.")
 	ap.SupportsFlag("add-field", "", "add columm to table schema.")
 	ap.SupportsFlag("rename-field", "", "rename column for specified table.")
+
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
@@ -207,6 +211,11 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 	newFieldName := args[1]
 	newFieldType := args[2]
 	isFieldRequired := args[3]
+	var defaultVal *string
+
+	if len(args) == 5 {
+		defaultVal = &args[4]
+	}
 
 	for _, name := range origFieldNames {
 		if newFieldName == name {
@@ -214,17 +223,21 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 		}
 	}
 
-	newTable, err := addFieldToSchema(tblName, tbl, dEnv, newFieldName, newFieldType, isFieldRequired)
+	newTable, err := addFieldToSchema(tblName, tbl, dEnv, newFieldName, newFieldType, isFieldRequired, defaultVal)
 	if err != nil {
 		return errhand.BuildDError("failed to add field").AddCause(err).Build()
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
 	commands.UpdateWorkingWithVErr(dEnv, root)
+
 	return nil
 }
 
-func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string) (*doltdb.Table, error) {
+func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string, defaultVal *string) (*doltdb.Table, error) {
+	if required == "true" && defaultVal == nil {
+		return nil, errors.New("required column must have default value")
+	}
 	tblSch := tbl.GetSchema()
 
 	origTblFields := make([]*schema.Field, 0, tblSch.NumFields())
@@ -257,10 +270,39 @@ func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newC
 		if err != nil {
 			return nil, err
 		}
+
 		newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
 
-		return newTable, nil
+		if defaultVal == nil {
+			return newTable, nil
+		}
 
+		newTblSch := newTable.GetSchema()
+
+		rowData := newTable.GetRowData()
+		me := rowData.Edit()
+		var finalTable *doltdb.Table
+		defVal, _ := doltcore.StringToValue(*defaultVal, newColType)
+
+		rowData.Iter(func(k, v types.Value) (stop bool) {
+			oldRow, _ := newTable.GetRow(k, newTblSch)
+			oldRowData := oldRow.CurrData()
+			fieldVals := make([]types.Value, newTblSch.NumFields())
+			fieldVals[newTblSch.NumFields()-1] = defVal
+			oldRowData.CopyValues(fieldVals[0:newTblSch.NumFields()-1], 0, newTblSch.NumFields()-1)
+
+			newRowData := table.RowDataFromValues(newTblSch, fieldVals)
+			newRow := table.NewRow(newRowData)
+
+			me.Set(table.GetPKFromRow(newRow), table.GetNonPKFieldListFromRow(newRow, vrw))
+
+			return false
+		})
+
+		updatedTbl := newTable.UpdateRows(me.Map())
+
+		finalTable = doltdb.NewTable(vrw, schemaVal, updatedTbl.GetRowData())
+		return finalTable, nil
 	}
 	return nil, errors.New("invalid noms kind")
 }
