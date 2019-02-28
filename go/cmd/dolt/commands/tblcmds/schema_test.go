@@ -63,6 +63,7 @@ func TestAddFieldToSchema(t *testing.T) {
 		tbl, _ := root.GetTable(tableName)
 		originalSchemaFields := tbl.GetSchema().GetFieldNames()
 
+
 		result, err := addFieldToSchema(tableName, tbl, dEnv, test.newColName, test.colType, test.required, &test.defaultVal)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -107,4 +108,32 @@ func TestRenameColumnOfSchema(t *testing.T) {
 		}
 	}
 
+}
+
+func TestRemoveColumnFromTable(t *testing.T) {
+	tests := []struct {
+		table         string
+		colName       string
+		newFieldNames []string
+	}{
+		{tableName, "is_married", []string{"id", "name", "age", "title"}},
+	}
+
+	for _, test := range tests {
+		dEnv := createEnvWithSeedData(t)
+		root, _ := dEnv.WorkingRoot()
+		tbl, _ := root.GetTable(tableName)
+
+		result, err := removeColumnFromTable(tbl, test.colName, dEnv)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		newSchema := result.GetSchema()
+		newSchemaFields := newSchema.GetFieldNames()
+
+		if !reflect.DeepEqual(test.newFieldNames, newSchemaFields) {
+			t.Error(test.newFieldNames, "!=", newSchemaFields)
+		}
+	}
 }
