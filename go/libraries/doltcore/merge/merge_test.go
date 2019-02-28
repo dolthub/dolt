@@ -1,12 +1,13 @@
 package merge
 
 import (
+	"testing"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"testing"
 )
 
 func TestRowMerge(t *testing.T) {
@@ -79,6 +80,23 @@ func TestRowMerge(t *testing.T) {
 			types.NewTuple(types.String("one"), types.Uint(2)),
 			types.NewTuple(types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
 			false,
+		},
+		{
+			"modify row where values added in different columns",
+			types.NewTuple(types.String("one"), types.Uint(2), types.String(""), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))),
+			types.NewTuple(types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")), types.String("")),
+			types.NewTuple(types.String("one"), types.Uint(2), types.NullValue, types.NullValue),
+			nil,
+
+			true,
+		},
+		{
+			"modify row where intial value wasn't given",
+			types.NewTuple(types.String("one"), types.Uint(2), types.String("a")),
+			types.NewTuple(types.String("one"), types.Uint(2), types.String("b")),
+			types.NewTuple(types.String("one"), types.Uint(2), types.NullValue),
+			nil,
+			true,
 		},
 	}
 

@@ -8,7 +8,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
-var ErrUpToDate = errors.New("up to date")
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 var ErrSchemaNotIdentical = errors.New("schemas not identical and can't be merged")
@@ -27,16 +26,12 @@ func NewMerger(commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*
 		return nil, err
 	}
 
-	ancHash := ancestor.HashOf()
-	hash := commit.HashOf()
-	mergeHash := mergeCommit.HashOf()
-
-	if hash == mergeHash || ancHash == mergeHash {
-		return nil, ErrUpToDate
-	} else if hash == mergeHash {
+	ff, err := commit.CanFastForwardTo(mergeCommit)
+	if err != nil {
+		return nil, err
+	} else if ff {
 		return nil, ErrFastForward
 	}
-
 	return &Merger{commit, mergeCommit, ancestor, vrw}, nil
 }
 
@@ -245,6 +240,7 @@ func rowMerge(row, mergeRow, baseRow types.Value) (resultRow types.Value, isConf
 					resultVals[int(i)] = mergeVal
 				}
 			}
+
 		}
 
 		return types.NewTuple(resultVals...), false

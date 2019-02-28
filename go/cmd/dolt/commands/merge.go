@@ -2,9 +2,10 @@ package commands
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"sort"
 	"strconv"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -181,12 +182,10 @@ func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string)
 
 	if err != nil {
 		switch err {
-		case merge.ErrUpToDate:
-			cli.Println("Already up to date.")
-			return nil
+		case doltdb.ErrUpToDate:
+			return errhand.BuildDError("Already up to date.").AddCause(err).Build()
 		case merge.ErrFastForward:
-			// TODO: handle this case properly
-			fallthrough
+			panic("fast forward merge")
 		case merge.ErrSchemaNotIdentical:
 			cli.Println("Schemas must be identical to complete merge.")
 		default:
