@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/attic-labs/noms/go/types"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
@@ -36,13 +37,16 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 	"dolt table schema --add-field adds a column to specified table's schema. If no default value is provided" +
 	"the column will be empty.\n" +
 	"\n" +
-	"dolt table schema --rename-field renames a column of the specified table."
+	"dolt table schema --rename-field renames a column of the specified table.\n" +
+	"\n" +
+	"dolt table schema --drop-field removes a column of the specified table."
 
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
 	"--add-field <table> <name> <type> <is_required>[<default_value>]",
 	"--rename-field <table> <old> <new>]",
+	"--drop-field <table> <field>",
 }
 
 var schColumns = []string{"idx", "name", "type", "nullable", "primary key"}
@@ -57,6 +61,8 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.SupportsFlag("export", "", "exports schema into file.")
 	ap.SupportsFlag("add-field", "", "add columm to table schema.")
 	ap.SupportsFlag("rename-field", "", "rename column for specified table.")
+	ap.SupportsFlag("drop-field", "", "removes column from specified table.")
+
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -71,6 +77,8 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr = addField(args, root, dEnv)
 	} else if apr.Contains("export") {
 		verr = exportSchemas(args, root, dEnv)
+	} else if apr.Contains("drop-field") {
+		verr = removeColumns(args, root, dEnv)
 	} else {
 		cmStr := "working"
 
@@ -211,10 +219,12 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 	newFieldName := args[1]
 	newFieldType := args[2]
 	isFieldRequired := args[3]
+
 	var defaultVal *string
 
 	if len(args) == 5 {
 		defaultVal = &args[4]
+    
 	}
 
 	for _, name := range origFieldNames {
@@ -234,10 +244,12 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 	return nil
 }
 
+
 func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string, defaultVal *string) (*doltdb.Table, error) {
 	if required == "true" && defaultVal == nil {
 		return nil, errors.New("required column must have default value")
 	}
+  
 	tblSch := tbl.GetSchema()
 
 	origTblFields := make([]*schema.Field, 0, tblSch.NumFields())
@@ -276,7 +288,6 @@ func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newC
 		if defaultVal == nil {
 			return newTable, nil
 		}
-
 		newTblSch := newTable.GetSchema()
 
 		rowData := newTable.GetRowData()
@@ -368,4 +379,83 @@ func renameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dEn
 
 	return newTable, nil
 
+}
+
+func removeColumnFromTable(tbl *doltdb.Table, fieldName string, dEnv *env.DoltEnv) (*doltdb.Table, error) {
+	sch := tbl.GetSchema()
+	fieldIndToDelete := sch.GetFieldIndex(fieldName)
+	pkInd := sch.GetPKIndex()
+	var fieldsForNewSchema []*schema.Field
+
+	if fieldIndToDelete == -1 {
+		return nil, errors.New("field does not exist")
+	}
+
+	if fieldIndToDelete == pkInd || sch.GetField(fieldIndToDelete).IsRequired() {
+		return nil, errors.New("can't remove primary key or required field")
+	}
+
+	for i := 0; i < sch.NumFields(); i++ {
+		if i != fieldIndToDelete {
+			fieldsForNewSchema = append(fieldsForNewSchema, sch.GetField(i))
+		}
+
+	}
+
+	newSchema := schema.NewSchema(fieldsForNewSchema)
+	vrw := dEnv.DoltDB.ValueReadWriter()
+
+	for i := 0; i < sch.TotalNumConstraints(); i++ {
+		newSchema.AddConstraint(sch.GetConstraint(i))
+	}
+
+	rowData := tbl.GetRowData()
+	me := rowData.Edit()
+	rowData.Iter(func(k, v types.Value) (stop bool) {
+		oldRowData := table.RowDataFromPKAndValueList(sch, k, v.(types.Tuple))
+		fieldVals := make([]types.Value, newSchema.NumFields())
+		oldRowData.CopyValues(fieldVals[0:fieldIndToDelete], 0, fieldIndToDelete)
+		oldRowData.CopyValues(fieldVals[fieldIndToDelete:], fieldIndToDelete+1, newSchema.NumFields()-fieldIndToDelete)
+
+		newRowData := table.RowDataFromValues(newSchema, fieldVals)
+		newRow := table.NewRow(newRowData)
+
+		me.Set(table.GetPKFromRow(newRow), table.GetNonPKFieldListFromRow(newRow, vrw))
+
+		return false
+	})
+
+	updatedTbl := tbl.UpdateRows(me.Map())
+
+	schemaVal, err := noms.MarshalAsNomsValue(vrw, newSchema)
+
+	if err != nil {
+		return nil, err
+	}
+	newTable := doltdb.NewTable(vrw, schemaVal, updatedTbl.GetRowData())
+	return newTable, nil
+}
+
+func removeColumns(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+	if len(args) < 2 {
+		return errhand.BuildDError("Table name and column to be removed must be specified.").SetPrintUsage().Build()
+	}
+
+	tblName := args[0]
+	if !root.HasTable(tblName) {
+		return errhand.BuildDError(tblName + " not found").Build()
+	}
+
+	tbl, _ := root.GetTable(tblName)
+	colName := args[1]
+
+	newTbl, err := removeColumnFromTable(tbl, colName, dEnv)
+	if err != nil {
+		return errhand.BuildDError("failed to remove column").AddCause(err).Build()
+	}
+
+	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
+	commands.UpdateWorkingWithVErr(dEnv, root)
+
+	return nil
 }
