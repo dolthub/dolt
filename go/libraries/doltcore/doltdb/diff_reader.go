@@ -2,11 +2,12 @@ package doltdb
 
 import (
 	"errors"
+	"io"
+	"time"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"io"
-	"time"
 )
 
 const (
@@ -107,7 +108,7 @@ func (rdRd *RowDiffReader) ReadRow() (*table.Row, error) {
 				inOld := rdRd.oldConv.SrcSch.GetFieldIndex(fldName) != -1
 				inNew := rdRd.newConv.SrcSch.GetFieldIndex(fldName) != -1
 				if inOld && inNew {
-					if !oldVal.Equals(newVal) {
+					if (oldVal != nil && !oldVal.Equals(newVal)) || (oldVal == nil && newVal != nil) {
 						newColDiffs[fldName] = DiffModifiedNew
 						oldColDiffs[fldName] = DiffModifiedOld
 					}
