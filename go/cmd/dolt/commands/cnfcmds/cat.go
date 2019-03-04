@@ -86,7 +86,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 
 			defer cnfRd.Close()
 
-			cnfWr := merge.NewConflictWriter(cli.CliOut, cnfRd.GetSchema(), " | ")
+			cnfWr := merge.NewConflictSink(cli.CliOut, cnfRd.GetSchema(), " | ")
 			defer cnfWr.Close()
 
 			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)
@@ -94,11 +94,13 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
 
-			p, startFunc := pipeline.NewAsyncPipeline(cnfRd, transforms, cnfWr, func(failure *pipeline.TransformRowFailure) (quit bool) {
+			srcProcFunc := pipeline.ProcFuncForSourceFunc(cnfRd.NextConflict)
+			sinkProcFunc := pipeline.ProcFuncForSinkFunc(cnfWr.ProcRowWithProps)
+			p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, func(failure *pipeline.TransformRowFailure) (quit bool) {
 				panic("")
 			})
 
-			startFunc()
+			p.Start()
 			p.Wait()
 		}()
 	}

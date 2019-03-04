@@ -1,17 +1,11 @@
 package commands
 
-import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/nbf"
-	"testing"
-)
-
 const (
 	dataNbfFile = "data.nbf"
 	table1      = "tbl1"
 )
 
+/*
 func TestAddResetCommitRmCommands(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	imt, sch := dtestutils.CreateTestDataTable(true)
@@ -42,3 +36,4 @@ func TestAddResetCommitRmCommands(t *testing.T) {
 
 	Reset("dolt reset", []string{table1}, dEnv)
 }
+*/

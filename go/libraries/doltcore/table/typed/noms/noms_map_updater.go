@@ -4,14 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 )
 
 // NomsMapUpdater is a TableWriter that writes rows to a noms types.Map. Once all rows are written Close() should be
 // called and GetMap will then return the new map.
 type NomsMapUpdater struct {
-	sch *schema.Schema
+	sch schema.Schema
 	vrw types.ValueReadWriter
 
 	me     *types.MapEditor
@@ -19,8 +19,8 @@ type NomsMapUpdater struct {
 }
 
 // NewNomsMapUpdater creates a new NomsMapUpdater for a given map.
-func NewNomsMapUpdater(vrw types.ValueReadWriter, m types.Map, sch *schema.Schema) *NomsMapUpdater {
-	if sch.GetPKIndex() == -1 {
+func NewNomsMapUpdater(vrw types.ValueReadWriter, m types.Map, sch schema.Schema) *NomsMapUpdater {
+	if sch.GetPKCols().Size() == 0 {
 		panic("NomsMapUpdater requires a schema with a primary key.")
 	}
 
@@ -30,12 +30,12 @@ func NewNomsMapUpdater(vrw types.ValueReadWriter, m types.Map, sch *schema.Schem
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (nmu *NomsMapUpdater) GetSchema() *schema.Schema {
+func (nmu *NomsMapUpdater) GetSchema() schema.Schema {
 	return nmu.sch
 }
 
 // WriteRow will write a row to a table
-func (nmu *NomsMapUpdater) WriteRow(row *table.Row) error {
+func (nmu *NomsMapUpdater) WriteRow(r row.Row) error {
 	if nmu.me == nil {
 		panic("Attempting to write after closing.")
 	}
@@ -48,8 +48,8 @@ func (nmu *NomsMapUpdater) WriteRow(row *table.Row) error {
 			}
 		}()
 
-		pk := table.GetPKFromRow(row)
-		fieldVals := table.GetNonPKFieldListFromRow(row, nmu.vrw)
+		pk := r.NomsMapKey(nmu.sch)
+		fieldVals := r.NomsMapValue(nmu.sch)
 
 		nmu.me = nmu.me.Set(pk, fieldVals)
 	}()

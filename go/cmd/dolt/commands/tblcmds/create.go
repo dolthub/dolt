@@ -7,8 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"io/ioutil"
 	"os"
@@ -88,17 +87,17 @@ func readSchema(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value,
 		return nil, errhand.BuildDError("Failed to read %s", schemaFile).AddCause(err).Build()
 	}
 
-	sch, err := jsonenc.SchemaFromJSON(data)
+	sch, err := encoding.UnmarshalJson(string(data))
 
 	if err != nil {
 		return nil, errhand.BuildDError("Invalid json schema at %s", schemaFile).AddCause(err).Build()
-	} else if sch.NumFields() == 0 {
+	} else if sch.GetAllCols().Size() == 0 {
 		return nil, errhand.BuildDError("Invalid schema does not have any valid fields.").Build()
-	} else if sch.GetPKIndex() == -1 {
+	} else if sch.GetPKCols().Size() == 0 {
 		return nil, errhand.BuildDError("Invalid schema does not have a primary key.").Build()
 	}
 
-	schVal, err := noms.MarshalAsNomsValue(dEnv.DoltDB.ValueReadWriter(), sch)
+	schVal, err := encoding.MarshalAsNomsValue(dEnv.DoltDB.ValueReadWriter(), sch)
 
 	if err != nil {
 		//I dont really understand the cases where this would happen.

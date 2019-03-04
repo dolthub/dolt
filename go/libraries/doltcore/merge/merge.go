@@ -2,10 +2,12 @@ package merge
 
 import (
 	"errors"
-
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 )
 
 var ErrFastForward = errors.New("fast forward")
@@ -60,16 +62,17 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 
 	tblSchema := tbl.GetSchema()
 	mergeTblSchema := mergeTbl.GetSchema()
+	schemaUnion, err := typed.TypedSchemaUnion(tblSchema, mergeTblSchema)
 
-	if !isSchemaIdentical(tblSchema, mergeTblSchema) {
-		return nil, nil, ErrSchemaNotIdentical
+	if err != nil {
+		return nil, nil, err
 	}
 
 	rows := tbl.GetRowData()
 	mergeRows := mergeTbl.GetRowData()
 	ancRows := ancTbl.GetRowData()
 
-	mergedRowData, conflicts, stats, err := mergeTableData(rows, mergeRows, ancRows, merger.vrw)
+	mergedRowData, conflicts, stats, err := mergeTableData(schemaUnion, rows, mergeRows, ancRows, merger.vrw)
 
 	if err != nil {
 		return nil, nil, err
@@ -91,7 +94,7 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	}
 }
 
-func mergeTableData(rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
+func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 	stopChan, mergeStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
@@ -140,15 +143,15 @@ func mergeTableData(rows, mergeRows, ancRows types.Map, vrw types.ValueReadWrite
 			applyChange(mapEditor, stats, mergeChange)
 			mergeChange = types.ValueChanged{}
 		} else {
-			row, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(row, mergeRow, ancRow)
+			r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
+			mergedRow, isConflict := rowMerge(sch, r, mergeRow, ancRow)
 
 			if isConflict {
 				stats.Conflicts++
-				conflictTuple := doltdb.NewConflict(ancRow, row, mergeRow).ToNomsList(vrw)
+				conflictTuple := doltdb.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 				addConflict(conflictValChan, key, conflictTuple)
 			} else {
-				applyChange(mapEditor, stats, types.ValueChanged{change.ChangeType, key, row, mergedRow})
+				applyChange(mapEditor, stats, types.ValueChanged{change.ChangeType, key, r, mergedRow})
 			}
 
 			change = types.ValueChanged{}
@@ -182,109 +185,65 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(row, mergeRow, baseRow types.Value) (resultRow types.Value, isConflict bool) {
+func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (resultRow types.Value, isConflict bool) {
 	if baseRow == nil {
-		if row.Equals(mergeRow) {
+		if r.Equals(mergeRow) {
 			// same row added to both
-			return row, false
+			return r, false
 		} else {
 			// different rows added for the same key
 			return nil, true
 		}
-	} else if row == nil && mergeRow == nil {
+	} else if r == nil && mergeRow == nil {
 		// same row removed from both
 		return nil, false
-	} else if row == nil || mergeRow == nil {
+	} else if r == nil || mergeRow == nil {
 		// removed from one and modified in another
 		return nil, true
 	} else {
-		tuple := row.(types.Tuple)
-		mergeTuple := mergeRow.(types.Tuple)
-		baseTuple := baseRow.(types.Tuple)
+		rowVals := row.ParseTaggedValues(r.(types.Tuple))
+		mergeVals := row.ParseTaggedValues(mergeRow.(types.Tuple))
+		baseVals := row.ParseTaggedValues(baseRow.(types.Tuple))
 
-		numVals := tuple.Len()
-		numMergeVals := mergeTuple.Len()
-		numBaseVals := baseTuple.Len()
-		maxLen := numVals
-		if numMergeVals > maxLen {
-			maxLen = numMergeVals
-		}
+		processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
+			baseVal, _ := baseVals.Get(tag)
+			val, _ := rowVals.Get(tag)
+			mergeVal, _ := mergeVals.Get(tag)
 
-		resultVals := make([]types.Value, maxLen)
-		for i := uint64(0); i < maxLen; i++ {
-			var baseVal types.Value = types.NullValue
-			var val types.Value = types.NullValue
-			var mergeVal types.Value = types.NullValue
-			if i < numBaseVals {
-				baseVal = baseTuple.Get(i)
-			}
-			if i < numVals {
-				val = tuple.Get(i)
-			}
-
-			if i < numMergeVals {
-				mergeVal = mergeTuple.Get(i)
-			}
-
-			if val.Equals(mergeVal) {
-				resultVals[int(i)] = val
+			if valutil.NilSafeEqCheck(val, mergeVal) {
+				return val, false
 			} else {
-				modified := !val.Equals(baseVal)
-				mergeModified := !mergeVal.Equals(baseVal)
+				modified := !valutil.NilSafeEqCheck(val, baseVal)
+				mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
 				switch {
 				case modified && mergeModified:
 					return nil, true
 				case modified:
-					resultVals[int(i)] = val
+					return val, false
 				default:
-					resultVals[int(i)] = mergeVal
+					return mergeVal, false
 				}
 			}
 
 		}
 
-		return types.NewTuple(resultVals...), false
-	}
-}
+		resultVals := make(row.TaggedValues)
 
-func isSchemaIdentical(tblSchema *schema.Schema, mergeTblSchema *schema.Schema) bool {
+		var isConflict bool
+		sch.GetNonPKCols().ItrUnsorted(func(tag uint64, _ schema.Column) (stop bool) {
+			var val types.Value
+			val, isConflict = processTagFunc(tag)
+			resultVals[tag] = val
 
-	if tblSchema.NumFields() != mergeTblSchema.NumFields() {
-		return false
-	}
+			return isConflict
+		})
 
-	if tblSchema.GetPKIndex() != mergeTblSchema.GetPKIndex() {
-		return false
-	}
-
-	tblConstraints := tblSchema.TotalNumConstraints()
-	mergeTblConstraints := mergeTblSchema.TotalNumConstraints()
-
-	if tblConstraints != mergeTblConstraints {
-		return false
-	}
-
-	for i := 0; i < tblConstraints; i++ {
-		if tblSchema.GetConstraint(i).ConType() != mergeTblSchema.GetConstraint(i).ConType() {
-			return false
+		if isConflict {
+			return nil, true
 		}
-		for j := range tblSchema.GetConstraint(i).FieldIndices() {
-			if tblSchema.GetConstraint(i).FieldIndices()[j] != mergeTblSchema.GetConstraint(i).FieldIndices()[j] {
-				return false
-			}
-		}
+
+		tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
+
+		return tpl, false
 	}
-
-	tblFieldNames := tblSchema.GetFieldNames()
-
-	for i := range tblFieldNames {
-		tblField := tblSchema.GetField(i)
-		mergeTblField := mergeTblSchema.GetField(i)
-
-		if !tblField.Equals(mergeTblField) {
-			return false
-		}
-	}
-
-	return true
 }

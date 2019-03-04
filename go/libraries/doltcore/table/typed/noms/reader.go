@@ -3,33 +3,33 @@ package noms
 import (
 	"errors"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"io"
 )
 
 // NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is
 // a types.Value and the value is a types.Tuple of field values.
 type NomsMapReader struct {
-	sch *schema.Schema
+	sch schema.Schema
 	itr types.MapIterator
 }
 
 // NewNomsMapReader creates a NomsMapReader for a given noms types.Map
-func NewNomsMapReader(m types.Map, sch *schema.Schema) *NomsMapReader {
+func NewNomsMapReader(m types.Map, sch schema.Schema) *NomsMapReader {
 	itr := m.Iterator()
 
 	return &NomsMapReader{sch, itr}
 }
 
 // GetSchema gets the schema of the rows that this reader will return
-func (nmr *NomsMapReader) GetSchema() *schema.Schema {
+func (nmr *NomsMapReader) GetSchema() schema.Schema {
 	return nmr.sch
 }
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (nmr *NomsMapReader) ReadRow() (*table.Row, error) {
+func (nmr *NomsMapReader) ReadRow() (row.Row, error) {
 	var key types.Value
 	var val types.Value
 	var err error
@@ -48,11 +48,7 @@ func (nmr *NomsMapReader) ReadRow() (*table.Row, error) {
 		return nil, io.EOF
 	}
 
-	if valList, ok := val.(types.Tuple); !ok {
-		return nil, errors.New("Map value is not a tuple. This map is not a valid Dolt table.")
-	} else {
-		return table.NewRow(table.RowDataFromPKAndValueList(nmr.sch, key, valList)), nil
-	}
+	return row.FromNoms(nmr.sch, key.(types.Tuple), val.(types.Tuple)), nil
 }
 
 // Close should release resources being held

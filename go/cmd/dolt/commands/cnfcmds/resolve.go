@@ -2,8 +2,6 @@ package cnfcmds
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
@@ -97,7 +95,8 @@ func autoResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *e
 }
 
 func manualResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) int {
-	args := apr.Args()
+	panic("need to implement again :)")
+	/*args := apr.Args()
 
 	if len(args) < 2 {
 		usage()
@@ -114,7 +113,7 @@ func manualResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv 
 			if !ok {
 				verr = errhand.BuildDError("fatal: table not found - " + tblName).Build()
 			} else {
-				invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(args[1:])
+				/*invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(args[1:])
 
 				if err != nil {
 					verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
@@ -136,5 +135,5 @@ func manualResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv 
 		}
 	}
 
-	return commands.HandleVErrAndExitCode(verr, usage)
+	return commands.HandleVErrAndExitCode(verr, usage)*/
 }

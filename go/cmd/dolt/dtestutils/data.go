@@ -3,6 +3,7 @@ package dtestutils
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -18,21 +19,26 @@ var Ages = []uint64{32, 25, 21}
 var Titles = []string{"Senior Dufus", "Dufus", ""}
 var MaritalStatus = []bool{true, false, false}
 
-var UntypedSchema = untyped.NewUntypedSchema([]string{"id", "name", "age", "title", "is_married"})
-var TypedSchema = schema.NewSchema([]*schema.Field{
-	schema.NewField("id", types.UUIDKind, true),
-	schema.NewField("name", types.StringKind, true),
-	schema.NewField("age", types.UintKind, true),
-	schema.NewField("title", types.StringKind, false),
-	schema.NewField("is_married", types.BoolKind, true),
-})
+const (
+	IdTag uint64 = iota
+	NameTag
+	AgeTag
+	TitleTag
+	IsMarriedTag
+)
 
-func init() {
-	TypedSchema.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{0}))
-	UntypedSchema.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{0}))
-}
+var typedColColl, _ = schema.NewColCollection(
+	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("title", TitleTag, types.StringKind, false),
+	schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+)
 
-func CreateTestDataTable(typed bool) (*table.InMemTable, *schema.Schema) {
+var TypedSchema = schema.SchemaFromCols(typedColColl)
+var UntypedSchema = untyped.UntypeSchema(TypedSchema)
+
+func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	sch := TypedSchema
 	if !typed {
 		sch = UntypedSchema
@@ -41,15 +47,15 @@ func CreateTestDataTable(typed bool) (*table.InMemTable, *schema.Schema) {
 	imt := table.NewInMemTable(sch)
 
 	for i := 0; i < len(UUIDS); i++ {
-		var valsMap map[string]types.Value
+		var taggedVals row.TaggedValues
 
 		if typed {
-			valsMap = map[string]types.Value{
-				"id":         types.UUID(UUIDS[i]),
-				"name":       types.String(Names[i]),
-				"age":        types.Uint(Ages[i]),
-				"title":      types.String(Titles[i]),
-				"is_married": types.Bool(MaritalStatus[i]),
+			taggedVals = row.TaggedValues{
+				IdTag:        types.UUID(UUIDS[i]),
+				NameTag:      types.String(Names[i]),
+				AgeTag:       types.Uint(Ages[i]),
+				TitleTag:     types.String(Titles[i]),
+				IsMarriedTag: types.Bool(MaritalStatus[i]),
 			}
 		} else {
 			marriedStr := "true"
@@ -57,15 +63,16 @@ func CreateTestDataTable(typed bool) (*table.InMemTable, *schema.Schema) {
 				marriedStr = "false"
 			}
 
-			valsMap = map[string]types.Value{
-				"id":         types.String(UUIDS[i].String()),
-				"name":       types.String(Names[i]),
-				"age":        types.String(strconv.FormatUint(Ages[i], 10)),
-				"title":      types.String(Titles[i]),
-				"is_married": types.String(marriedStr),
+			taggedVals = row.TaggedValues{
+				IdTag:        types.String(UUIDS[i].String()),
+				NameTag:      types.String(Names[i]),
+				AgeTag:       types.String(strconv.FormatUint(Ages[i], 10)),
+				TitleTag:     types.String(Titles[i]),
+				IsMarriedTag: types.String(marriedStr),
 			}
 		}
-		imt.AppendRow(table.NewRow(table.RowDataFromValMap(sch, valsMap)))
+
+		imt.AppendRow(row.New(sch, taggedVals))
 	}
 
 	return imt, sch

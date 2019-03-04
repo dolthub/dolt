@@ -8,7 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -241,7 +241,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, err
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, tableName string) error {
+func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch schema.Schema, tableName string) error {
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
@@ -249,7 +249,7 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch *schema.Schema, table
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := noms.MarshalAsNomsValue(vrw, sch)
+	schVal, err := encoding.MarshalAsNomsValue(vrw, sch)
 
 	if err != nil {
 		return ErrMarshallingSchema

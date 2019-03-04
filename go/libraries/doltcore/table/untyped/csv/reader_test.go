@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -36,20 +37,20 @@ John Johnson, 21, Intern Dufus`
 
 func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
-	sch := untyped.NewUntypedSchema(colNames)
-	goodExpectedRows := []*table.Row{
+	_, sch := untyped.NewUntypedSchema(colNames...)
+	goodExpectedRows := []row.Row{
 		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
 		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
 		untyped.NewRowFromStrings(sch, []string{"John Johnson", "21", "Intern Dufus"}),
 	}
-	badExpectedRows := []*table.Row{
+	badExpectedRows := []row.Row{
 		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
 		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
 	}
 
 	tests := []struct {
 		inputStr     string
-		expectedRows []*table.Row
+		expectedRows []row.Row
 		info         *CSVFileInfo
 	}{
 		{PersonDB1, goodExpectedRows, NewCSVInfo()},
@@ -84,22 +85,22 @@ func TestReader(t *testing.T) {
 			t.Error("Unexpected bad rows count. expected:", expectedBad, "actual:", numBad)
 		}
 
-		if !rows[0].GetSchema().Equals(test.expectedRows[0].GetSchema()) {
-			t.Fatal("Unexpected schema")
+		if !row.IsValid(rows[0], sch) {
+			t.Fatal("Invalid Row for expected schema")
 		} else if len(rows) != len(test.expectedRows) {
 			t.Error("Did not receive the correct number of rows. expected: ", len(test.expectedRows), "actual:", len(rows))
 		} else {
-			for i, row := range rows {
+			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
-				if !table.RowsEqualIgnoringSchema(row, expectedRow) {
-					t.Error(table.RowFmt(row), "!=", table.RowFmt(expectedRow))
+				if !row.AreEqual(r, expectedRow, sch) {
+					t.Error(row.Fmt(r, sch), "!=", row.Fmt(expectedRow, sch))
 				}
 			}
 		}
 	}
 }
 
-func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]*table.Row, int, error) {
+func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, int, error) {
 	const root = "/"
 	const path = "/file.csv"
 
@@ -112,7 +113,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]*table.Ro
 	}
 
 	badRows := 0
-	var rows []*table.Row
+	var rows []row.Row
 	for {
 		row, err := csvR.ReadRow()
 

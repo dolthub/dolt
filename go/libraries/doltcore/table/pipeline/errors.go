@@ -1,9 +1,11 @@
 package pipeline
 
-import "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+)
 
 type TransformRowFailure struct {
-	Row           *table.Row
+	Row           row.Row
 	TransformName string
 	Details       string
 }
@@ -27,7 +29,7 @@ func GetTransFailureTransName(err error) string {
 	return trf.TransformName
 }
 
-func GetTransFailureRow(err error) *table.Row {
+func GetTransFailureRow(err error) row.Row {
 	trf, ok := err.(*TransformRowFailure)
 
 	if !ok {

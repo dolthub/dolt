@@ -1,29 +1,15 @@
 package tblcmds
 
 import (
-	"errors"
-	"strconv"
-
-	"github.com/attic-labs/noms/go/types"
-
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
 var tblSchemaShortDesc = "Displays table schemas"
@@ -44,14 +30,11 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
-	"--add-field <table> <name> <type> <is_required>[<default_value>]",
-	"--rename-field <table> <old> <new>]",
-	"--drop-field <table> <field>",
+	//"--add-field <table> <name> <type> <is_required>[<default_value>]",
+	//"--rename-field <table> <old> <new>]",
+	//"--drop-field <table> <field>",
 }
 
-var schColumns = []string{"idx", "name", "type", "nullable", "primary key"}
-var schOutSchema = untyped.NewUntypedSchema(schColumns)
-var headerRow = untyped.NewRowFromStrings(schOutSchema, schColumns)
 var bold = color.New(color.Bold)
 
 func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -59,50 +42,26 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
 	ap.SupportsFlag("export", "", "exports schema into file.")
-	ap.SupportsFlag("add-field", "", "add columm to table schema.")
-	ap.SupportsFlag("rename-field", "", "rename column for specified table.")
-	ap.SupportsFlag("drop-field", "", "removes column from specified table.")
-
+	//ap.SupportsFlag("add-field", "", "add columm to table schema.")
+	//ap.SupportsFlag("rename-field", "", "rename column for specified table.")
+	//ap.SupportsFlag("drop-field", "", "removes column from specified table.")
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	args = apr.Args()
 	var root *doltdb.RootValue
 	root, _ = commands.GetWorkingWithVErr(dEnv)
 
 	var verr errhand.VerboseError
-	if apr.Contains("rename-field") {
+	/*if apr.Contains("rename-field") {
 		verr = renameColumn(args, root, dEnv)
 	} else if apr.Contains("add-field") {
 		verr = addField(args, root, dEnv)
-	} else if apr.Contains("export") {
-		verr = exportSchemas(args, root, dEnv)
 	} else if apr.Contains("drop-field") {
 		verr = removeColumns(args, root, dEnv)
+	} else*/if apr.Contains("export") {
+		verr = exportSchemas(apr.Args(), root, dEnv)
 	} else {
-		cmStr := "working"
-
-		var cm *doltdb.Commit
-		if apr.NArg() == 0 {
-			cm, verr = nil, nil
-		} else {
-			cm, verr = commands.MaybeGetCommitWithVErr(dEnv, cmStr)
-		}
-
-		if verr == nil {
-			var root *doltdb.RootValue
-			if cm != nil {
-				cmStr = args[0]
-				args = args[1:]
-				root = cm.GetRootValue()
-			} else {
-				root, verr = commands.GetWorkingWithVErr(dEnv)
-			}
-
-			if verr == nil {
-				printSchemas(cmStr, root, args)
-			}
-		}
+		verr = printSchemas(apr, dEnv)
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
@@ -114,62 +73,66 @@ func badRowCB(_ *pipeline.TransformRowFailure) (quit bool) {
 
 const fwtChName = "fwt"
 
-func printSchemas(cmStr string, root *doltdb.RootValue, tables []string) {
-	if len(tables) == 0 {
-		tables = root.GetTableNames()
+func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+	cmStr := "working"
+	args := apr.Args()
+	tables := args
+
+	var root *doltdb.RootValue
+	var verr errhand.VerboseError
+	var cm *doltdb.Commit
+
+	if apr.NArg() == 0 {
+		cm, verr = nil, nil
+	} else {
+		cm, verr = commands.MaybeGetCommitWithVErr(dEnv, cmStr)
 	}
 
-	var notFound []string
-	for _, tblName := range tables {
-		tbl, ok := root.GetTable(tblName)
-
-		if !ok {
-			notFound = append(notFound, tblName)
+	if verr == nil {
+		if cm != nil {
+			cmStr = args[0]
+			args = args[1:]
+			root = cm.GetRootValue()
 		} else {
-			printTblSchema(cmStr, tblName, tbl, root)
-			cli.Println()
+			root, verr = commands.GetWorkingWithVErr(dEnv)
 		}
 	}
 
-	for _, tblName := range notFound {
-		cli.PrintErrln(color.YellowString("%s not found", tblName))
+	if verr == nil {
+		if len(tables) == 0 {
+			tables = root.GetTableNames()
+		}
+
+		var notFound []string
+		for _, tblName := range tables {
+			tbl, ok := root.GetTable(tblName)
+
+			if !ok {
+				notFound = append(notFound, tblName)
+			} else {
+				verr = printTblSchema(cmStr, tblName, tbl, root)
+				cli.Println()
+			}
+		}
+
+		for _, tblName := range notFound {
+			cli.PrintErrln(color.YellowString("%s not found", tblName))
+		}
 	}
+
+	return verr
 }
 
-func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) {
+func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
-
-	imt := schemaAsInMemTable(tbl, root)
-	rd := table.NewInMemTableReader(imt)
-	defer rd.Close()
-
-	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), schOutSchema, &csv.CSVFileInfo{Delim: '|'})
-	defer wr.Close()
-
-	autoSize := fwt.NewAutoSizingFWTTransformer(schOutSchema, fwt.HashFillWhenTooLong, -1)
-	transforms := pipeline.NewTransformCollection(
-		pipeline.NamedTransform{fwtChName, autoSize.TransformToFWT})
-	p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
-
-	p.InsertRow(fwtChName, headerRow)
-	start()
-	_ = p.Wait()
-}
-
-func schemaAsInMemTable(tbl *doltdb.Table, root *doltdb.RootValue) *table.InMemTable {
 	sch := tbl.GetSchema()
-	imt := table.NewInMemTable(schOutSchema)
-	for i := 0; i < sch.NumFields(); i++ {
-		fld := sch.GetField(i)
-		idxStr := strconv.FormatInt(int64(i), 10)
-		nullableStr := strconv.FormatBool(!fld.IsRequired())
-		isPKStr := strconv.FormatBool(sch.GetPKIndex() == i)
-		strs := []string{idxStr, fld.NameStr(), fld.KindString(), nullableStr, isPKStr}
-		row := untyped.NewRowFromStrings(schOutSchema, strs)
-		_ = imt.AppendRow(row)
+	jsonSchStr, err := encoding.MarshalAsJson(sch)
+	if err != nil {
+		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
 	}
 
-	return imt
+	cli.Println(jsonSchStr)
+	return nil
 }
 
 func exportSchemas(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
@@ -195,15 +158,16 @@ func exportSchemas(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) err
 
 func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
 	sch := tbl.GetSchema()
-	jsonSch, err := jsonenc.SchemaToJSON(sch)
+	jsonSchStr, err := encoding.MarshalAsJson(sch)
 	if err != nil {
 		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
 	}
 
-	err = dEnv.FS.WriteFile(filename, jsonSch)
+	err = dEnv.FS.WriteFile(filename, []byte(jsonSchStr))
 	return errhand.BuildIf(err, "Unable to write "+filename).AddCause(err).Build()
 }
 
+/*
 func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(args) < 4 {
 		return errhand.BuildDError("Must specify table name, field name, field type, and if field required.").SetPrintUsage().Build()
@@ -224,7 +188,7 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 
 	if len(args) == 5 {
 		defaultVal = &args[4]
-    
+
 	}
 
 	for _, name := range origFieldNames {
@@ -244,12 +208,11 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 	return nil
 }
 
-
 func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string, defaultVal *string) (*doltdb.Table, error) {
 	if required == "true" && defaultVal == nil {
 		return nil, errors.New("required column must have default value")
 	}
-  
+
 	tblSch := tbl.GetSchema()
 
 	origTblFields := make([]*schema.Field, 0, tblSch.NumFields())
@@ -459,3 +422,4 @@ func removeColumns(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) err
 
 	return nil
 }
+*/

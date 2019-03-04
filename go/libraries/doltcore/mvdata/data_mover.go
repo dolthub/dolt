@@ -1,13 +1,17 @@
 package mvdata
 
 import (
-	"fmt"
+	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"strings"
 )
 
 type MoveOperation string
@@ -78,11 +82,11 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 		return nil, &DataMoverCreationError{SchemaErr, err}
 	}
 
-	var mapping *schema.FieldMapping
+	var mapping *rowconv.FieldMapping
 	if mvOpts.MappingFile != "" {
-		mapping, err = schema.MappingFromFile(mvOpts.MappingFile, fs, rd.GetSchema(), outSch)
+		mapping, err = rowconv.MappingFromFile(mvOpts.MappingFile, fs, rd.GetSchema(), outSch)
 	} else {
-		mapping, err = schema.NewInferredMapping(rd.GetSchema(), outSch)
+		mapping, err = rowconv.NewInferredMapping(rd.GetSchema(), outSch)
 	}
 
 	if err != nil {
@@ -132,8 +136,8 @@ func (imp *DataMover) Move() error {
 		return true
 	}
 
-	p, start := pipeline.NewAsyncPipeline(imp.Rd, imp.Transforms, imp.Wr, badRowCB)
-	start()
+	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForReader(imp.Rd), pipeline.ProcFuncForWriter(imp.Wr), imp.Transforms, badRowCB)
+	p.Start()
 
 	err := p.Wait()
 
@@ -144,30 +148,32 @@ func (imp *DataMover) Move() error {
 	return rowErr
 }
 
-func maybeMapFields(transforms *pipeline.TransformCollection, mapping *schema.FieldMapping) error {
-	rconv, err := table.NewRowConverter(mapping)
+func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.FieldMapping) error {
+	rconv, err := rowconv.NewRowConverter(mapping)
 
 	if err != nil {
 		return err
 	}
 
 	if !rconv.IdentityConverter {
-		transformer := pipeline.NewRowTransformer("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
+		transformer := pipeline.NewRowTransformer("Mapping transform", rowconv.GetRowConvTransformFunc(rconv))
 		transforms.AppendTransforms(pipeline.NamedTransform{Name: "map", Func: transformer})
 	}
 
 	return nil
 }
 
-func maybeSort(wr table.TableWriteCloser, outSch *schema.Schema, srcIsSorted bool, mvOpts *MoveOptions) (table.TableWriteCloser, error) {
+func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool, mvOpts *MoveOptions) (table.TableWriteCloser, error) {
 	if !srcIsSorted && mvOpts.Dest.MustWriteSorted() {
-		wr = table.NewSortingTableWriter(wr, outSch.GetPKIndex(), mvOpts.ContOnErr)
+		//TODO: implement this
+		panic("Implement")
+		//wr = table.NewSortingTableWriter(wr, outSch.GetPKIndex(), mvOpts.ContOnErr)
 	}
 
 	return wr, nil
 }
 
-func getOutSchema(inSch *schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (*schema.Schema, error) {
+func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 		rd, _, err := mvOpts.Dest.CreateReader(root, fs)
@@ -196,7 +202,7 @@ func getOutSchema(inSch *schema.Schema, root *doltdb.RootValue, fs filesys.Reada
 
 }
 
-func schFromFileOrDefault(path string, fs filesys.ReadableFS, defSch *schema.Schema) (*schema.Schema, error) {
+func schFromFileOrDefault(path string, fs filesys.ReadableFS, defSch schema.Schema) (schema.Schema, error) {
 	if path != "" {
 		data, err := fs.ReadFile(path)
 
@@ -204,22 +210,46 @@ func schFromFileOrDefault(path string, fs filesys.ReadableFS, defSch *schema.Sch
 			return nil, err
 		}
 
-		return jsonenc.SchemaFromJSON(data)
+		return encoding.UnmarshalJson(string(data))
 	} else {
 		return defSch, nil
 	}
 }
 
-func addPrimaryKey(sch *schema.Schema, explicitKey string) (*schema.Schema, error) {
-	explicitKeyIdx := sch.GetFieldIndex(explicitKey)
-
+func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error) {
 	if explicitKey != "" {
-		if explicitKeyIdx == -1 {
-			return nil, fmt.Errorf("could not find a field named \"%s\" in the schema", explicitKey)
-		} else {
-			sch = sch.CopyWithoutConstraints()
-			sch.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{explicitKeyIdx}))
+		keyCols := strings.Split(explicitKey, ",")
+		trimmedCols := funcitr.MapStrings(keyCols, func(s string) string { return strings.TrimSpace(s) })
+		keyColSet := set.NewStrSet(trimmedCols)
+
+		foundPKCols := 0
+		var updatedCols []schema.Column
+
+		sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+			if keyColSet.Contains(col.Name) {
+				foundPKCols++
+				col.IsPartOfPK = true
+				col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
+			} else {
+				col.IsPartOfPK = false
+				col.Constraints = nil
+			}
+
+			updatedCols = append(updatedCols, col)
+			return false
+		})
+
+		if keyColSet.Size() != foundPKCols {
+			return nil, errors.New("could not find all pks: " + explicitKey)
 		}
+
+		updatedColColl, err := schema.NewColCollection(updatedCols...)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return schema.SchemaFromCols(updatedColColl), nil
 	}
 
 	return sch, nil

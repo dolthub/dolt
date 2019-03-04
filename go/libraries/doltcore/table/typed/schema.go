@@ -2,28 +2,24 @@ package typed
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
-func TypedSchemaUnion(schemas ...*schema.Schema) *schema.Schema {
-	allCols := set.NewStrSet([]string{})
-	var ordered []*schema.Field
+func TypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
+	var allCols []schema.Column
 
 	for _, sch := range schemas {
-		if sch == nil {
-			continue
-		}
-
-		for i := 0; i < sch.NumFields(); i++ {
-			fld := sch.GetField(i)
-			nameStr := fld.NameStr()
-
-			if !allCols.Contains(nameStr) {
-				allCols.Add(nameStr)
-				ordered = append(ordered, fld)
-			}
-		}
+		sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+			allCols = append(allCols, col)
+			return false
+		})
 	}
 
-	return schema.NewSchema(ordered)
+	allColColl, err := schema.NewColCollection(allCols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch := schema.SchemaFromCols(allColColl)
+	return sch, nil
 }

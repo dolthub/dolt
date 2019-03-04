@@ -1,13 +1,6 @@
 package tblcmds
 
-import (
-	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"strings"
-	"testing"
-)
-
+/*
 var allIDs = []types.UUID{
 	types.UUID(dtestutils.UUIDS[0]),
 	types.UUID(dtestutils.UUIDS[1]),
@@ -67,3 +60,4 @@ func checkExpectedRows(t *testing.T, commandStr string, dEnv *env.DoltEnv, uuids
 		}
 	}
 }
+*/

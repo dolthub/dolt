@@ -8,8 +8,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
@@ -19,6 +20,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
+
+var cnfTag = schema.ReservedTagMin
 
 var catShortDesc = "print tables"
 var catLongDesc = `The dolt table cat command reads tables and writes them to the standard output.`
@@ -92,14 +95,18 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 			defer wr.Close()
 
 			badRowCB := func(tff *pipeline.TransformRowFailure) (quit bool) {
-				cli.PrintErrln(color.RedString("Failed to transform row %s.", table.RowFmt(tff.Row)))
+				cli.PrintErrln(color.RedString("Failed to transform row %s.", row.Fmt(tff.Row, outSch)))
 				return true
 			}
-			p, start := pipeline.NewAsyncPipeline(rd, transforms, wr, badRowCB)
 
-			p.InsertRow("fwt", untyped.NewRowFromStrings(outSch, outSch.GetFieldNames()))
+			rdProcFunc := pipeline.ProcFuncForReader(rd)
+			wrProcFunc := pipeline.ProcFuncForWriter(wr)
+			p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCB)
 
-			start()
+			colNames := schema.ExtractAllColNames(outSch)
+			p.InsertRow("fwt", untyped.NewRowFromTaggedStrings(outSch, colNames))
+
+			p.Start()
 			p.Wait()
 		}()
 	}
@@ -107,28 +114,27 @@ func printTable(working *doltdb.RootValue, tblNames []string) errhand.VerboseErr
 	return verr
 }
 
-func addSizingTransform(outSch *schema.Schema, transforms *pipeline.TransformCollection) {
+func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformCollection) {
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
 	transforms.AppendTransforms(pipeline.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
 }
 
-func addMapTransform(sch *schema.Schema, transforms *pipeline.TransformCollection) *schema.Schema {
-	mapping := untyped.TypedToUntypedMapping(sch)
-	rConv, _ := table.NewRowConverter(mapping)
-	transform := pipeline.NewRowTransformer("schema mapping transform", pipeline.GetRowConvTransformFunc(rConv))
+func addMapTransform(sch schema.Schema, transforms *pipeline.TransformCollection) schema.Schema {
+	mapping := rowconv.TypedToUntypedMapping(sch)
+	rConv, _ := rowconv.NewRowConverter(mapping)
+	transform := pipeline.NewRowTransformer("schema mapping transform", rowconv.GetRowConvTransformFunc(rConv))
 	transforms.AppendTransforms(pipeline.NamedTransform{"map", transform})
 
 	return mapping.DestSch
 }
 
-func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch *schema.Schema) *schema.Schema {
+func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch schema.Schema) schema.Schema {
 	if tbl.HasConflicts() {
 		// this is so much code to add a column
 		const transCnfSetName = "set cnf col"
 
-		confSchema := untyped.NewUntypedSchema([]string{"Cnf"})
-		schWithConf := typed.TypedSchemaUnion(confSchema, tblSch)
-		schWithConf.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{tblSch.GetPKIndex() + 1}))
+		_, confSchema := untyped.NewUntypedSchemaWithFirstTag(cnfTag, "Cnf")
+		schWithConf, _ := typed.TypedSchemaUnion(confSchema, tblSch)
 
 		_, confData, _ := tbl.GetConflicts()
 
@@ -144,21 +150,21 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 var confLabel = types.String(" ! ")
 var noConfLabel = types.String("   ")
 
-func CnfTransformer(inSch, outSch *schema.Schema, conflicts types.Map) func(inRow *table.Row) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
-	numCols := inSch.NumFields()
-	pkIndex := inSch.GetPKIndex()
-	return func(inRow *table.Row) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
-		inData := inRow.CurrData()
-		fieldVals := make([]types.Value, numCols+1)
+func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
+	return func(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
+		key := inRow.NomsMapKey(inSch)
 
-		pk, _ := inData.GetField(pkIndex)
-		if conflicts.Has(pk) {
-			fieldVals[0] = confLabel
+		var err error
+		if conflicts.Has(key) {
+			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
 		} else {
-			fieldVals[0] = noConfLabel
+			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)
 		}
 
-		inData.CopyValues(fieldVals[1:], 0, numCols)
-		return []*pipeline.TransformedRowResult{{RowData: table.RowDataFromValues(outSch, fieldVals)}}, ""
+		if err != nil {
+			panic(err)
+		}
+
+		return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 	}
 }

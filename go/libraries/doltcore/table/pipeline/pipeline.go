@@ -1,29 +1,31 @@
 package pipeline
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"io"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"sync"
 	"sync/atomic"
 )
 
+type ProcFunc func(p *Pipeline, ch chan RowWithProps, badRowChan chan<- *TransformRowFailure)
 type BadRowCallback func(*TransformRowFailure) (quit bool)
 
 type Pipeline struct {
 	wg        *sync.WaitGroup
 	stopChan  chan bool
 	atomicErr atomic.Value
-	transInCh map[string]chan *table.Row
+	transInCh map[string]chan RowWithProps
+
+	Start func()
 }
 
-func (p *Pipeline) InsertRow(name string, row *table.Row) bool {
+func (p *Pipeline) InsertRow(name string, r row.Row) bool {
 	ch, ok := p.transInCh[name]
 
 	if !ok {
 		return false
 	}
 
-	ch <- row
+	ch <- RowWithProps{r, NoProps}
 	return true
 }
 
@@ -47,13 +49,13 @@ func (p *Pipeline) Wait() error {
 	return nil
 }
 
-func NewAsyncPipeline(rd table.TableReader, transforms *TransformCollection, wr table.TableWriter, badRowCB BadRowCallback) (pipeline *Pipeline, start func()) {
+func NewAsyncPipeline(processInputs, processOutputs ProcFunc, transforms *TransformCollection, badRowCB BadRowCallback) (pipeline *Pipeline) {
 	var wg sync.WaitGroup
 
-	in := make(chan *table.Row, 1024)
+	in := make(chan RowWithProps, 1024)
 	badRowChan := make(chan *TransformRowFailure, 1024)
 	stopChan := make(chan bool)
-	transInCh := make(map[string]chan *table.Row)
+	transInCh := make(map[string]chan RowWithProps)
 
 	curr := in
 	if transforms != nil {
@@ -64,20 +66,32 @@ func NewAsyncPipeline(rd table.TableReader, transforms *TransformCollection, wr 
 		}
 	}
 
-	p := &Pipeline{&wg, stopChan, atomic.Value{}, transInCh}
+	p := &Pipeline{&wg, stopChan, atomic.Value{}, transInCh, nil}
 
-	wg.Add(3)
-	go p.processBadRows(badRowCB, badRowChan)
-	go p.processOutputs(wr, curr, badRowChan)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		p.processBadRows(badRowCB, badRowChan)
+	}()
+	go func() {
+		defer wg.Done()
+		processOutputs(p, curr, badRowChan)
+	}()
 
-	return p, func() {
-		go p.processInputs(rd, in, badRowChan)
+	p.Start = func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			processInputs(p, in, badRowChan)
+		}()
 	}
+
+	return p
 }
 
-func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan *table.Row, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) chan *table.Row {
+func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) chan RowWithProps {
 	wg.Add(1)
-	outChan := make(chan *table.Row, 256)
+	outChan := make(chan RowWithProps, 256)
 
 	go func() {
 		defer wg.Done()
@@ -89,77 +103,24 @@ func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan *
 	return outChan
 }
 
-func (p *Pipeline) processInputs(rd table.TableReader, in chan<- *table.Row, badRowChan chan<- *TransformRowFailure) {
-	defer close(in)
-	defer p.wg.Done()
-
-	for {
-		// read row
-		row, err := rd.ReadRow()
-
-		// process read errors
-		if err != nil {
-			if err == io.EOF {
-				if row == nil {
-					return
-				}
-			} else if table.IsBadRow(err) {
-				badRowChan <- &TransformRowFailure{table.GetBadRowRow(err), "reader", err.Error()}
-			} else {
-				p.atomicErr.Store(err)
-				close(p.stopChan)
-				return
-			}
-		} else if row == nil {
-			panic("Readers should not be returning nil without error.  io.EOF should be used when done.")
-		}
-
-		// exit if stop
-		select {
-		case <-p.stopChan:
-			return
-
-		default:
-		}
-
-		if row != nil {
-			in <- row
-		}
-	}
+func (p Pipeline) StopWithErr(err error) {
+	p.atomicErr.Store(err)
+	close(p.stopChan)
 }
 
-func (p *Pipeline) processOutputs(wr table.TableWriter, out <-chan *table.Row, badRowChan chan<- *TransformRowFailure) {
-	defer close(badRowChan)
-	defer p.wg.Done()
+func (p Pipeline) IsStopping() bool {
+	// exit if stop
+	select {
+	case <-p.stopChan:
+		return true
 
-	for {
-		select {
-		case row, ok := <-out:
-			if ok {
-				err := wr.WriteRow(row)
-
-				if err != nil {
-					if table.IsBadRow(err) {
-						badRowChan <- &TransformRowFailure{row, "writer", err.Error()}
-					} else {
-						p.atomicErr.Store(err)
-						close(p.stopChan)
-						return
-					}
-				}
-			} else {
-				return
-			}
-
-		case <-p.stopChan:
-			return
-		}
+	default:
 	}
+
+	return false
 }
 
 func (p *Pipeline) processBadRows(badRowCB BadRowCallback, badRowChan <-chan *TransformRowFailure) {
-	defer p.wg.Done()
-
 	if badRowCB != nil {
 		for {
 			select {
