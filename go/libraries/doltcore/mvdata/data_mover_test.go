@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"testing"
 )
@@ -28,7 +29,7 @@ func TestDataMover(t *testing.T) {
 				Src:         NewDataLocation("data.csv", ""),
 				Dest:        NewDataLocation("data.psv", "psv")},
 		},
-		{
+		/*{
 			"",
 			"",
 			&MoveOptions{
@@ -51,7 +52,7 @@ func TestDataMover(t *testing.T) {
 				PrimaryKey:  "",
 				Src:         NewDataLocation("data.nbf", "nbf"),
 				Dest:        NewDataLocation("table-name", "")},
-		},
+		},*/
 		{
 			"",
 			"",
@@ -66,12 +67,19 @@ func TestDataMover(t *testing.T) {
 		},
 		{
 			`{
-	"fields": [
-		{"name": "key", "kind": "string", "required": true},
-		{"name": "value", "kind": "int", "required": true}
-	],
-	"constraints": [
-		{"constraint_type":"primary_key", "field_indices":[0]}
+	"columns": [
+		{
+			"name": "key", 
+			"kind": "string", 
+			"tag": 0, 
+			"is_part_of_pk": true, 
+			"col_constraints":[
+				{
+					"constraint_type": "not_null"
+				}
+			]
+		},
+		{"name": "value", "kind": "int", "tag": 1}
 	]
 }`,
 			`{"a":"key","b":"value"}`,
@@ -117,6 +125,8 @@ func TestDataMover(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		encoding.UnmarshalJson(test.schemaJSON)
 
 		dm, crDMErr := NewDataMover(root, fs, test.mvOpts)
 

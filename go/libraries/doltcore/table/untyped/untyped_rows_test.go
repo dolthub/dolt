@@ -2,53 +2,60 @@ package untyped
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"testing"
 )
 
 func TestNewUntypedSchema(t *testing.T) {
-	fieldNames := []string{"name", "city", "blurb"}
-	sch := NewUntypedSchema(fieldNames)
+	colNames := []string{"name", "city", "blurb"}
+	nameToTag, sch := NewUntypedSchema(colNames...)
 
-	if sch.NumFields() != 3 {
-		t.Error("Wrong field count")
+	if sch.GetAllCols().Size() != 3 {
+		t.Error("Wrong column count")
 	}
 
-	for i := 0; i < sch.NumFields(); i++ {
-		fld := sch.GetField(i)
-
-		if fld.NameStr() != fieldNames[i] {
+	i := 0
+	sch.GetNonPKCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		if col.Name != colNames[i] {
 			t.Error("Unexpected name")
 		}
 
-		if fld.NomsKind() != types.StringKind {
+		if col.Kind != types.StringKind {
 			t.Error("Unexpected kind")
 		}
 
-		if fld.IsRequired() {
+		if col.Constraints != nil {
 			t.Error("Nothing should be required")
 		}
-	}
+
+		if col.IsPartOfPK {
+			t.Error("non pk cols should not be part of the pk")
+		}
+
+		i++
+		return false
+	})
 
 	name := "Billy Bob"
 	city := "Fargo"
 	blurb := "Billy Bob is a scholar."
 	r := NewRowFromStrings(sch, []string{name, city, blurb})
 
-	nameVal, nameFld := r.CurrData().GetFieldByName("name")
+	nameVal, _ := r.GetColVal(nameToTag["name"])
 
-	if nameFld.NomsKind() != types.StringKind || string(nameVal.(types.String)) != name {
+	if nameVal.Kind() != types.StringKind || string(nameVal.(types.String)) != name {
 		t.Error("Unexpected name")
 	}
 
-	cityVal, cityFld := r.CurrData().GetFieldByName("city")
+	cityVal, _ := r.GetColVal(nameToTag["city"])
 
-	if cityFld.NomsKind() != types.StringKind || string(cityVal.(types.String)) != city {
+	if cityVal.Kind() != types.StringKind || string(cityVal.(types.String)) != city {
 		t.Error("Unexpected city")
 	}
 
-	blurbVal, blurbFld := r.CurrData().GetFieldByName("blurb")
+	blurbVal, _ := r.GetColVal(nameToTag["blurb"])
 
-	if blurbFld.NomsKind() != types.StringKind || string(blurbVal.(types.String)) != blurb {
+	if blurbVal.Kind() != types.StringKind || string(blurbVal.(types.String)) != blurb {
 		t.Error("Unexpected blurb")
 	}
 }

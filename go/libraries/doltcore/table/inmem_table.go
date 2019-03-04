@@ -1,67 +1,50 @@
 package table
 
 import (
-	"io"
-
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-)
-
-type SchemaValidation int
-
-const (
-	ValidateSameInstance SchemaValidation = iota
-	SlowlyCheckEachField
+	"io"
 )
 
 // InMemTable holds a simple list of rows that can be retrieved, or appended to.  It is meant primarily for testing.
 type InMemTable struct {
-	sch        *schema.Schema
-	rows       []*Row
-	validation SchemaValidation
+	sch  schema.Schema
+	rows []row.Row
 }
 
 // NewInMemTable creates an empty Table with the expectation that any rows added will have the given
 // Schema
-func NewInMemTable(sch *schema.Schema) *InMemTable {
-	return NewInMemTableWithData(sch, []*Row{})
+func NewInMemTable(sch schema.Schema) *InMemTable {
+	return NewInMemTableWithData(sch, []row.Row{})
 }
 
 // NewInMemTableWithData creates a Table with the riven rows
-func NewInMemTableWithData(sch *schema.Schema, rows []*Row) *InMemTable {
-	return NewInMemTableWithDataAndValidationType(sch, rows, SlowlyCheckEachField)
+func NewInMemTableWithData(sch schema.Schema, rows []row.Row) *InMemTable {
+	return NewInMemTableWithDataAndValidationType(sch, rows)
 }
 
-func NewInMemTableWithDataAndValidationType(sch *schema.Schema, rows []*Row, validation SchemaValidation) *InMemTable {
-	return &InMemTable{sch, rows, validation}
+func NewInMemTableWithDataAndValidationType(sch schema.Schema, rows []row.Row) *InMemTable {
+	return &InMemTable{sch, rows}
 }
 
-// AppendRow appends a row.  Appended rows must have the correct columns.
-func (imt *InMemTable) AppendRow(row *Row) error {
-	rowSch := row.GetSchema()
-	if rowSch != imt.sch {
-
-		invalid := true
-		if imt.validation == SlowlyCheckEachField {
-			invalid = rowSch.Equals(imt.sch)
-		}
-
-		if invalid {
-			panic("Can't write a row to a table if it has different columns.")
-		}
+// AppendRow appends a row.  Appended rows must be valid for the table's schema
+func (imt *InMemTable) AppendRow(r row.Row) error {
+	if !row.IsValid(r, imt.sch) {
+		return ErrInvalidRow
 	}
 
-	imt.rows = append(imt.rows, row)
+	imt.rows = append(imt.rows, r)
 
 	return nil
 }
 
 // GetRow gets a row by index
-func (imt *InMemTable) GetRow(index int) (*Row, error) {
+func (imt *InMemTable) GetRow(index int) (row.Row, error) {
 	return imt.rows[index], nil
 }
 
 // GetSchema gets the table's schema
-func (imt *InMemTable) GetSchema() *schema.Schema {
+func (imt *InMemTable) GetSchema() schema.Schema {
 	return imt.sch
 }
 
@@ -83,28 +66,28 @@ func NewInMemTableReader(imt *InMemTable) *InMemTableReader {
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (r *InMemTableReader) ReadRow() (*Row, error) {
-	numRows := r.tt.NumRows()
+func (rd *InMemTableReader) ReadRow() (row.Row, error) {
+	numRows := rd.tt.NumRows()
 
-	if r.current < numRows {
-		row := r.tt.rows[r.current]
-		r.current++
+	if rd.current < numRows {
+		r := rd.tt.rows[rd.current]
+		rd.current++
 
-		return &Row{row.data, nil}, nil
+		return r, nil
 	}
 
 	return nil, io.EOF
 }
 
 // Close should release resources being held
-func (r *InMemTableReader) Close() error {
-	r.current = -1
+func (rd *InMemTableReader) Close() error {
+	rd.current = -1
 	return nil
 }
 
 // GetSchema gets the schema of the rows that this reader will return
-func (r *InMemTableReader) GetSchema() *schema.Schema {
-	return r.tt.sch
+func (rd *InMemTableReader) GetSchema() schema.Schema {
+	return rd.tt.sch
 }
 
 // InMemTableWriter is an implementation of a TableWriter for an InMemTable
@@ -118,8 +101,8 @@ func NewInMemTableWriter(imt *InMemTable) *InMemTableWriter {
 }
 
 // WriteRow will write a row to a table
-func (w *InMemTableWriter) WriteRow(row *Row) error {
-	return w.tt.AppendRow(row)
+func (w *InMemTableWriter) WriteRow(r row.Row) error {
+	return w.tt.AppendRow(r)
 }
 
 // Close should flush all writes, release resources being held
@@ -128,6 +111,6 @@ func (w *InMemTableWriter) Close() error {
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (w *InMemTableWriter) GetSchema() *schema.Schema {
+func (w *InMemTableWriter) GetSchema() schema.Schema {
 	return w.tt.sch
 }

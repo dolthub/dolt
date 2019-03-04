@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
@@ -20,10 +20,10 @@ type CSVWriter struct {
 	bWr      *bufio.Writer
 	info     *CSVFileInfo
 	delimStr string
-	sch      *schema.Schema
+	sch      schema.Schema
 }
 
-func OpenCSVWriter(path string, fs filesys.WritableFS, outSch *schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
+func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 
 	if err != nil {
@@ -39,16 +39,18 @@ func OpenCSVWriter(path string, fs filesys.WritableFS, outSch *schema.Schema, in
 	return NewCSVWriter(wr, outSch, info)
 }
 
-func NewCSVWriter(wr io.WriteCloser, outSch *schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
+func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	delimStr := string(info.Delim)
 
 	if info.HasHeaderLine {
-		colNames := make([]string, outSch.NumFields())
-		for i := 0; i < outSch.NumFields(); i++ {
-			f := outSch.GetField(i)
-			colNames[i] = f.NameStr()
-		}
+		allCols := outSch.GetAllCols()
+		numCols := allCols.Size()
+		colNames := make([]string, 0, numCols)
+		allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+			colNames = append(colNames, col.Name)
+			return false
+		})
 
 		headerLine := strings.Join(colNames, delimStr)
 		err := iohelp.WriteLine(bwr, headerLine)
@@ -63,30 +65,29 @@ func NewCSVWriter(wr io.WriteCloser, outSch *schema.Schema, info *CSVFileInfo) (
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (csvw *CSVWriter) GetSchema() *schema.Schema {
+func (csvw *CSVWriter) GetSchema() schema.Schema {
 	return csvw.sch
 }
 
 // WriteRow will write a row to a table
-func (csvw *CSVWriter) WriteRow(row *table.Row) error {
-	sch := row.GetSchema()
-	numFields := sch.NumFields()
-	if numFields != csvw.sch.NumFields() {
-		return errors.New("Invalid row does not have the correct number of sch.")
-	}
+func (csvw *CSVWriter) WriteRow(r row.Row) error {
+	allCols := csvw.sch.GetAllCols()
 
-	colValStrs := make([]string, numFields)
-	rowData := row.CurrData()
-	for i := 0; i < numFields; i++ {
-		val, _ := rowData.GetField(i)
-		if val != nil {
+	i := 0
+	colValStrs := make([]string, allCols.Size())
+	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		val, ok := r.GetColVal(tag)
+		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {
 				colValStrs[i] = string(val.(types.String))
 			} else {
 				colValStrs[i] = types.EncodedValue(val)
 			}
 		}
-	}
+
+		i++
+		return false
+	})
 
 	rowStr := strings.Join(colValStrs, csvw.delimStr)
 	err := iohelp.WriteLine(csvw.bWr, rowStr)

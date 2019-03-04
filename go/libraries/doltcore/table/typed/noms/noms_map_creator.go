@@ -4,15 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 )
 
 // NomsMapUpdater is a TableWriter that creates a new noms types.Map.  It is backed by a StreamingMap which requires
 // the rows to be written in order.  If the keys being written to WriteRow are not sorted an error will be returned from
 // WriteRow.  Once all rows are written Close() should be called and GetMap will then return the new map.
 type NomsMapCreator struct {
-	sch *schema.Schema
+	sch schema.Schema
 	vrw types.ValueReadWriter
 
 	lastPK  types.Value
@@ -23,7 +23,7 @@ type NomsMapCreator struct {
 }
 
 // NewNomsMapCreator creates a new NomsMapCreator.
-func NewNomsMapCreator(vrw types.ValueReadWriter, sch *schema.Schema) *NomsMapCreator {
+func NewNomsMapCreator(vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
 	kvsChan := make(chan types.Value)
 	mapChan := types.NewStreamingMap(vrw, kvsChan)
 
@@ -31,13 +31,13 @@ func NewNomsMapCreator(vrw types.ValueReadWriter, sch *schema.Schema) *NomsMapCr
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (nmc *NomsMapCreator) GetSchema() *schema.Schema {
+func (nmc *NomsMapCreator) GetSchema() schema.Schema {
 	return nmc.sch
 }
 
 // WriteRow will write a row to a table.  The primary key for each row must be greater than the primary key of the row
 // written before it.
-func (nmc *NomsMapCreator) WriteRow(row *table.Row) error {
+func (nmc *NomsMapCreator) WriteRow(r row.Row) error {
 	if nmc.kvsChan == nil {
 		panic("Attempting to write after closing.")
 	}
@@ -50,8 +50,8 @@ func (nmc *NomsMapCreator) WriteRow(row *table.Row) error {
 			}
 		}()
 
-		pk := table.GetPKFromRow(row)
-		fieldVals := table.GetNonPKFieldListFromRow(row, nmc.vrw)
+		pk := r.NomsMapKey(nmc.sch)
+		fieldVals := r.NomsMapValue(nmc.sch)
 		if nmc.lastPK == nil || nmc.lastPK.Less(pk) {
 			nmc.kvsChan <- pk
 			nmc.kvsChan <- fieldVals

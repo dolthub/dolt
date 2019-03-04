@@ -1,13 +1,16 @@
 package tblcmds
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strings"
 )
@@ -102,13 +105,12 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	vrw := root.VRW()
 	sch := tbl.GetSchema()
 	row, verr := createRow(sch, prArgs)
 
 	if verr == nil {
 		me := tbl.GetRowData().Edit()
-		updated := me.Set(table.GetPKFromRow(row), table.GetNonPKFieldListFromRow(row, vrw)).Map()
+		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map()
 		tbl = tbl.UpdateRows(updated)
 		root = root.PutTable(dEnv.DoltDB, prArgs.TableName, tbl)
 
@@ -124,30 +126,48 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func createRow(sch *schema.Schema, prArgs *putRowArgs) (*table.Row, errhand.VerboseError) {
-	_, _, unknownFields := sch.IntersectFields(prArgs.FieldNames)
+func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseError) {
+	var unknownFields []string
+	untypedTaggedVals := make(row.TaggedValues)
+	for k, v := range prArgs.KVPs {
+		if col, ok := schema.ColFromName(sch, k); ok {
+			untypedTaggedVals[col.Tag] = types.String(v)
+		} else {
+			unknownFields = append(unknownFields, k)
+		}
+	}
+
 	if len(unknownFields) > 0 {
 		bdr := errhand.BuildDError("Not all supplied keys are known in this table's schema.")
 		bdr.AddDetails("The fields %v were supplied but are not known in this table.", unknownFields)
 		return nil, bdr.Build()
 	}
 
-	rd, firstBad := table.RowDataFromUntypedMap(sch, prArgs.KVPs)
-	row := table.NewRow(rd)
-	if firstBad != nil {
-		fld := sch.GetField(sch.GetFieldIndex(*firstBad))
-		val := prArgs.KVPs[*firstBad]
-		bdr := errhand.BuildDError("Not all parameter values could be converted to the appropriate types for the table.")
-		bdr.AddDetails(`For parameter "%s", could not convert "%s" to a %s`, *firstBad, val, fld.KindString())
-		return nil, bdr.Build()
+	untypedSch := untyped.UntypeSchema(sch)
+	mapping, err := rowconv.NewInferredMapping(untypedSch, sch)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Failed to infer mapping").AddCause(err).Build()
 	}
 
-	if !table.RowIsValid(row) {
-		invalidFlds := table.InvalidFieldsForRow(row)
+	rconv, err := rowconv.NewRowConverter(mapping)
+
+	if err != nil {
+		return nil, errhand.BuildDError("failed to create row converter").AddCause(err).Build()
+	}
+
+	untypedRow := row.New(untypedSch, untypedTaggedVals)
+	typedRow, err := rconv.Convert(untypedRow)
+
+	if err != nil {
+		return nil, errhand.BuildDError("failed to convert to row").AddCause(err).Build()
+	}
+
+	if col := row.GetInvalidCol(typedRow, sch); col != nil {
 		bdr := errhand.BuildDError("Missing required fields.")
-		bdr.AddDetails("The following missing fields are required: %v", invalidFlds)
+		bdr.AddDetails("The value for the column %s is not valid", col.Name)
 		return nil, bdr.Build()
 	}
 
-	return row, nil
+	return typedRow, nil
 }

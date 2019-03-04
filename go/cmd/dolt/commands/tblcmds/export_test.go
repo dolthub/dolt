@@ -1,11 +1,6 @@
 package tblcmds
 
-import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/mvdata"
-	"testing"
-)
-
+/*
 func TestExport(t *testing.T) {
 	tests := []struct {
 		args          []string
@@ -57,4 +52,4 @@ func TestExport(t *testing.T) {
 		imt, _ := dtestutils.CreateTestDataTable(test.outputIsTyped)
 		dtestutils.CheckResultsAgainstReader(t, rd, idIdx, imt, "id")
 	}
-}
+}*/

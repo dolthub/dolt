@@ -1,14 +1,6 @@
 package pipeline
 
-import (
-	"github.com/attic-labs/noms/go/types"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"strconv"
-	"testing"
-)
-
+/*
 var initialSchema = schema.NewSchema([]*schema.Field{
 	schema.NewField("id_str", types.StringKind, true),
 	schema.NewField("name", types.StringKind, true),
@@ -120,12 +112,13 @@ func testMappingRead(typedSchema *schema.Schema, rows []*table.Row, t *testing.T
 	}
 
 	if len(expectedRows) != len(rows) {
-		t.Error("Unexpected row count")
+		t.Error("Unexpected Row count")
 	}
 
-	for i, row := range rows {
-		if !table.RowsEqualIgnoringSchema(row, expectedRows[i]) {
-			t.Error("\n", table.RowFmt(row), "!=\n", table.RowFmt(expectedRows[i]))
+	for i, Row := range rows {
+		if !table.RowsEqualIgnoringSchema(Row, expectedRows[i]) {
+			t.Error("\n", table.RowFmt(Row), "!=\n", table.RowFmt(expectedRows[i]))
 		}
 	}
 }
+*/

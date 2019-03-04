@@ -1,12 +1,6 @@
 package dtestutils
 
-import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"testing"
-)
-
+/*
 func CheckResultTable(t *testing.T, tableName string, dEnv *env.DoltEnv, expectedTable *table.InMemTable, pkInExpectedTable string) {
 	root, err := dEnv.WorkingRoot()
 
@@ -27,7 +21,8 @@ func CheckResultTable(t *testing.T, tableName string, dEnv *env.DoltEnv, expecte
 	CheckResultsAgainstReader(t, tblRdr, tblRdr.GetSchema().GetPKIndex(), expectedTable, pkInExpectedTable)
 }
 
-func CheckResultsAgainstReader(t *testing.T, tblRdr table.TableReadCloser, tblPKIdx int, expectedTable *table.InMemTable, pkInExpectedTable string) {
+func CheckResultsAgainstReader(t *testing.T, tblRdr table.TableReadCloser, expectedTable *table.InMemTable, pkInExpectedTable string) {
+	sch := tblRdr.GetSchema()
 	expectedRdr := table.NewInMemTableReader(expectedTable)
 	defer expectedRdr.Close()
 
@@ -39,7 +34,7 @@ func CheckResultsAgainstReader(t *testing.T, tblRdr table.TableReadCloser, tblPK
 		return
 	}
 
-	expectedRowMap, _, err := table.ReadAllRowsToMap(expectedRdr, expectedPKIdx, false)
+	expectedRowMap, _, err := table.ReadAllRowsToMap(expectedRdr, false)
 
 	if err != nil {
 		t.Error("Could not read all expected rows to a map.", err)
@@ -67,9 +62,10 @@ func CheckResultsAgainstReader(t *testing.T, tblRdr table.TableReadCloser, tblPK
 		expectedRow := expectedRows[0]
 		actualRow := actualRows[0]
 
-		if !table.RowsEqualIgnoringSchema(expectedRow, actualRow) {
-			t.Error(table.RowFmt(expectedRow), "!=", table.RowFmt(actualRow))
+		if !row.AreEqual(expectedRow, actualRow, sch) {
+			t.Error(row.Fmt(expectedRow, sch), "!=", row.Fmt(actualRow, sch))
 			break
 		}
 	}
 }
+*/

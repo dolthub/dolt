@@ -5,7 +5,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/nbf"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -22,7 +21,7 @@ const (
 	DoltDB            DataFormat = "doltdb"
 	CsvFile           DataFormat = ".csv"
 	PsvFile           DataFormat = ".psv"
-	NbfFile           DataFormat = ".nbf"
+	//NbfFile           DataFormat = ".nbf"
 )
 
 func (df DataFormat) ReadableStr() string {
@@ -36,8 +35,8 @@ func (df DataFormat) ReadableStr() string {
 	case PsvFile:
 		return "psv file"
 
-	case NbfFile:
-		return "nbf file"
+		//case NbfFile:
+		//	return "nbf file"
 	}
 
 	return "invalid"
@@ -49,8 +48,8 @@ func DFFromString(dfStr string) DataFormat {
 		return CsvFile
 	case "psv", ".psv":
 		return PsvFile
-	case "nbf", ".nbf":
-		return NbfFile
+		//case "nbf", ".nbf":
+		//	return NbfFile
 	}
 
 	return InvalidDataFormat
@@ -79,8 +78,8 @@ func NewDataLocation(path, fileFmtStr string) *DataLocation {
 			dataFmt = CsvFile
 		case string(PsvFile):
 			dataFmt = PsvFile
-		case string(NbfFile):
-			dataFmt = NbfFile
+			//case string(NbfFile):
+			//	dataFmt = NbfFile
 		}
 	}
 
@@ -127,9 +126,9 @@ func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.Readable
 			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
 			return rd, false, err
 
-		case NbfFile:
-			rd, err := nbf.OpenNBFReader(dl.Path, fs)
-			return rd, true, err
+			//case NbfFile:
+			//	rd, err := nbf.OpenNBFReader(dl.Path, fs)
+			//	return rd, true, err
 		}
 	}
 
@@ -151,8 +150,8 @@ func (dl *DataLocation) Exists(root *doltdb.RootValue, fs filesys.ReadableFS) bo
 
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
-func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch *schema.Schema) (table.TableWriteCloser, error) {
-	if dl.RequiresPK() && outSch.GetPKIndex() == -1 {
+func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
 
@@ -173,17 +172,17 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim('|'))
 		return tWr, err
 
-	case NbfFile:
-		tWr, err := nbf.OpenNBFWriter(dl.Path, fs, outSch)
-		return tWr, err
+		//case NbfFile:
+		//	tWr, err := nbf.OpenNBFWriter(dl.Path, fs, outSch)
+		//	return tWr, err
 	}
 
-	panic("Invalid Data Format.")
+	panic("Invalid Data Format." + string(dl.Format))
 }
 
 // CreateUpdatingDataWriter will create a TableWriteCloser for a DataLocation that will update and append rows based
 // on their primary key.
-func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch *schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case DoltDB:
 		tableName := dl.Path
@@ -196,7 +195,7 @@ func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs file
 		m := tbl.GetRowData()
 		return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 
-	case CsvFile, PsvFile, NbfFile:
+	case CsvFile, PsvFile:
 		panic("Update not supported for this file type.")
 	}
 
@@ -205,10 +204,10 @@ func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs file
 
 // MustWriteSorted returns whether this DataLocation must be written to in primary key order
 func (dl *DataLocation) MustWriteSorted() bool {
-	return dl.Format == NbfFile
+	return false //dl.Format == NbfFile
 }
 
 // RequiresPK returns whether this DataLocation requires a primary key
 func (dl *DataLocation) RequiresPK() bool {
-	return dl.Format == NbfFile || dl.Format == DoltDB
+	return /*dl.Format == NbfFile ||*/ dl.Format == DoltDB
 }

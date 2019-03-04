@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -41,7 +42,7 @@ func NewFWTReader(r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (fwtRd *FWTReader) ReadRow() (*table.Row, error) {
+func (fwtRd *FWTReader) ReadRow() (row.Row, error) {
 	if fwtRd.isDone {
 		return nil, io.EOF
 	}
@@ -59,8 +60,8 @@ func (fwtRd *FWTReader) ReadRow() (*table.Row, error) {
 
 	fwtRd.isDone = isDone
 	if line != "" {
-		row, err := fwtRd.parseRow([]byte(line))
-		return row, err
+		r, err := fwtRd.parseRow([]byte(line))
+		return r, err
 	} else if err == nil {
 		return nil, io.EOF
 	}
@@ -69,7 +70,7 @@ func (fwtRd *FWTReader) ReadRow() (*table.Row, error) {
 }
 
 // GetSchema gets the schema of the rows that this reader will return
-func (fwtRd *FWTReader) GetSchema() *schema.Schema {
+func (fwtRd *FWTReader) GetSchema() schema.Schema {
 	return fwtRd.fwtSch.Sch
 }
 
@@ -85,25 +86,30 @@ func (fwtRd *FWTReader) Close() error {
 	}
 }
 
-func (fwtRd *FWTReader) parseRow(lineBytes []byte) (*table.Row, error) {
+func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 	sepWidth := len(fwtRd.colSep)
 	expectedBytes := fwtRd.fwtSch.GetTotalWidth(sepWidth)
 	if len(lineBytes) != expectedBytes {
 		return nil, table.NewBadRow(nil, fmt.Sprintf("expected a line containing %d bytes, but only received %d", len(lineBytes), expectedBytes))
 	}
 
-	numFields := fwtRd.fwtSch.Sch.NumFields()
+	allCols := fwtRd.fwtSch.Sch.GetAllCols()
+	numFields := allCols.Size()
 	fields := make([]string, numFields)
 
+	i := 0
 	offset := 0
-	for i := 0; i < numFields; i++ {
-		colWidth := fwtRd.fwtSch.Widths[i]
+	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		colWidth := fwtRd.fwtSch.TagToWidth[tag]
 
 		if colWidth > 0 {
 			fields[i] = strings.TrimSpace(string(lineBytes[offset : offset+colWidth]))
 			offset += colWidth + sepWidth
 		}
-	}
+
+		i++
+		return false
+	})
 
 	return untyped.NewRowFromStrings(fwtRd.GetSchema(), fields), nil
 }

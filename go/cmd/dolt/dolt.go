@@ -62,6 +62,7 @@ func main() {
 
 	restoreIO := cli.InitIO()
 	defer restoreIO()
+	restoreIO()
 
 	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 

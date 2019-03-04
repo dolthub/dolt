@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -19,7 +20,7 @@ type CSVReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
 	info   *CSVFileInfo
-	sch    *schema.Schema
+	sch    schema.Schema
 	isDone bool
 }
 
@@ -42,7 +43,7 @@ func NewCSVReader(r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 		return nil, err
 	}
 
-	sch := untyped.NewUntypedSchema(colStrs)
+	_, sch := untyped.NewUntypedSchema(colStrs...)
 
 	return &CSVReader{r, br, info, sch, false}, nil
 }
@@ -70,7 +71,7 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (csvr *CSVReader) ReadRow() (*table.Row, error) {
+func (csvr *CSVReader) ReadRow() (row.Row, error) {
 	if csvr.isDone {
 		return nil, io.EOF
 	}
@@ -89,8 +90,8 @@ func (csvr *CSVReader) ReadRow() (*table.Row, error) {
 	csvr.isDone = isDone
 	line = strings.TrimSpace(line)
 	if line != "" {
-		row, err := csvr.parseRow(line)
-		return row, err
+		r, err := csvr.parseRow(line)
+		return r, err
 	} else if err == nil {
 		return nil, io.EOF
 	}
@@ -99,7 +100,7 @@ func (csvr *CSVReader) ReadRow() (*table.Row, error) {
 }
 
 // GetSchema gets the schema of the rows that this reader will return
-func (csvr *CSVReader) GetSchema() *schema.Schema {
+func (csvr *CSVReader) GetSchema() schema.Schema {
 	return csvr.sch
 }
 
@@ -115,13 +116,14 @@ func (csvr *CSVReader) Close() error {
 	}
 }
 
-func (csvr *CSVReader) parseRow(line string) (*table.Row, error) {
+func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 	colVals := csvSplitLine(line, csvr.info.Delim, csvr.info.EscapeQuotes)
 
 	sch := csvr.sch
-	if len(colVals) != sch.NumFields() {
+	numCols := sch.GetAllCols().Size()
+	if len(colVals) != numCols {
 		return nil, table.NewBadRow(nil,
-			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", sch.NumFields(), len(colVals)),
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", numCols, len(colVals)),
 			fmt.Sprintf("line: %s", line),
 		)
 	}

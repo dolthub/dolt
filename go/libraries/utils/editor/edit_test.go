@@ -35,8 +35,8 @@ func TestOpenCommitEditor(t *testing.T) {
 		initialContents string
 		expected        string
 	}{
-		{`python -c 'import sys f = open(sys.argv[1], "w+") f.write("this is a test") f.close()'`, "", "this is a test"},
-		{`python -c 'import sys f = open(sys.argv[1], "w+") f.write("this is a test") f.close()'`, "Initial contents: ", "Initial contents: this is a test"},
+		{`python -c 'import sys; path = sys.argv[1]; f = open(path, "w+"); f.write("this is a test"); f.close()'`, "", "this is a test"},
+		{`python -c 'import sys; path = sys.argv[1]; f = open(path, "w+"); f.write("this is a test"); f.close()'`, "Initial contents: ", "this is a test"},
 	}
 
 	for _, test := range tests {
@@ -46,8 +46,8 @@ func TestOpenCommitEditor(t *testing.T) {
 			t.Error(err)
 		}
 
-		if val != test.initialContents {
-			t.Error(val, "!=", test.initialContents)
+		if val != test.expected {
+			t.Error(val, "!=", test.expected)
 		}
 	}
 }

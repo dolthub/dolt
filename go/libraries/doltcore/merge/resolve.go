@@ -3,8 +3,9 @@ package merge
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
 type AutoResolver func(key types.Value, conflict doltdb.Conflict) (types.Value, error)
@@ -24,7 +25,7 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 
 	tblSchRef := tbl.GetSchemaRef()
 	tblSchVal := tblSchRef.TargetValue(vrw)
-	tblSch, err := noms.UnmarshalNomsValue(tblSchVal)
+	tblSch, err := encoding.UnmarshalNomsValue(tblSchVal)
 
 	if err != nil {
 		return nil, err
@@ -52,9 +53,9 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		if types.IsNull(updated) {
 			rowEditor.Remove(key)
 		} else {
-			rd := table.RowDataFromPKAndValueList(tblSch, key, updated.(types.Tuple))
+			r := row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
 
-			if !rd.IsValid() {
+			if !row.IsValid(r, tblSch) {
 				itrErr = table.ErrInvalidRow
 				return true
 			}

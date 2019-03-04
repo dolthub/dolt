@@ -2,12 +2,27 @@ package csv
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"testing"
 )
+
+const (
+	nameColName  = "name"
+	ageColName   = "age"
+	titleColName = "title"
+	nameColTag   = 0
+	ageColTag    = 1
+	titleColTag  = 2
+)
+
+var lnVal = types.String("astley")
+var fnVal = types.String("rick")
+var addrVal = types.String("123 Fake St")
+var ageVal = types.Uint(53)
+var titleVal = types.NullValue
 
 func TestWriter(t *testing.T) {
 	const root = "/"
@@ -17,33 +32,30 @@ Bill Billerson,32,Senior Dufus
 Rob Robertson,25,Dufus
 John Johnson,21,Intern Dufus
 `
-
 	info := NewCSVInfo()
-	fields := []*schema.Field{
-		schema.NewField("name", types.StringKind, true),
-		schema.NewField("age", types.UintKind, true),
-		schema.NewField("title", types.StringKind, true),
+	var inCols = []schema.Column{
+		{nameColName, nameColTag, types.StringKind, true, nil},
+		{ageColName, ageColTag, types.UintKind, false, nil},
+		{titleColName, titleColTag, types.StringKind, false, nil},
 	}
-	outSch := untyped.NewUntypedSchema([]string{
-		fields[0].NameStr(),
-		fields[1].NameStr(),
-		fields[2].NameStr(),
-	})
-	rowSch := schema.NewSchema(fields)
-	rows := []*table.Row{
-		table.NewRow(table.RowDataFromValues(rowSch, []types.Value{
-			types.String("Bill Billerson"),
-			types.Uint(32),
-			types.String("Senior Dufus")})),
-		table.NewRow(table.RowDataFromValues(rowSch, []types.Value{
-			types.String("Rob Robertson"),
-			types.Uint(25),
-			types.String("Dufus")})),
-		table.NewRow(table.RowDataFromValues(rowSch, []types.Value{
-			types.String("John Johnson"),
-			types.Uint(21),
-			types.String("Intern Dufus")})),
+	colColl, _ := schema.NewColCollection(inCols...)
+	rowSch := schema.SchemaFromCols(colColl)
+	rows := []row.Row{
+		row.New(rowSch, row.TaggedValues{
+			nameColTag:  types.String("Bill Billerson"),
+			ageColTag:   types.Uint(32),
+			titleColTag: types.String("Senior Dufus")}),
+		row.New(rowSch, row.TaggedValues{
+			nameColTag:  types.String("Rob Robertson"),
+			ageColTag:   types.Uint(25),
+			titleColTag: types.String("Dufus")}),
+		row.New(rowSch, row.TaggedValues{
+			nameColTag:  types.String("John Johnson"),
+			ageColTag:   types.Uint(21),
+			titleColTag: types.String("Intern Dufus")}),
 	}
+
+	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
 	fs := filesys.NewInMemFS(nil, nil, root)
 	csvWr, err := OpenCSVWriter(path, fs, outSch, info)

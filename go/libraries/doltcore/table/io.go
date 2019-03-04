@@ -2,58 +2,28 @@ package table
 
 import (
 	"errors"
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"io"
-	"strings"
 )
-
-type BadRow struct {
-	Row     *Row
-	Details []string
-}
-
-func NewBadRow(row *Row, details ...string) *BadRow {
-	return &BadRow{row, details}
-}
-
-func IsBadRow(err error) bool {
-	_, ok := err.(*BadRow)
-
-	return ok
-}
-
-func GetBadRowRow(err error) *Row {
-	br, ok := err.(*BadRow)
-
-	if !ok {
-		panic("Call IsBadRow prior to trying to get the BadRowRow")
-	}
-
-	return br.Row
-}
-
-func (br *BadRow) Error() string {
-	return strings.Join(br.Details, "\n")
-}
 
 // TableReader is an interface for reading rows from a table
 type TableReader interface {
 	// GetSchema gets the schema of the rows that this reader will return
-	GetSchema() *schema.Schema
+	GetSchema() schema.Schema
 
 	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 	// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-	ReadRow() (*Row, error)
+	ReadRow() (row.Row, error)
 }
 
 // TableWriteCloser is an interface for writing rows to a table
 type TableWriter interface {
 	// GetSchema gets the schema of the rows that this writer writes
-	GetSchema() *schema.Schema
+	GetSchema() schema.Schema
 
 	// WriteRow will write a row to a table
-	WriteRow(row *Row) error
+	WriteRow(r row.Row) error
 }
 
 // TableCloser is an interface for a table stream that can be closed to release resources
@@ -80,7 +50,7 @@ type TableWriteCloser interface {
 func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
-		row, err := rd.ReadRow()
+		r, err := rd.ReadRow()
 
 		if err != nil && err != io.EOF {
 			if IsBadRow(err) && contOnBadRow {
@@ -89,14 +59,14 @@ func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, erro
 			}
 
 			return -1, -1, err
-		} else if err == io.EOF && row == nil {
+		} else if err == io.EOF && r == nil {
 			break
-		} else if row == nil {
+		} else if r == nil {
 			// row equal to nil should
 			return -1, -1, errors.New("reader returned nil row with err==nil")
 		}
 
-		err = wr.WriteRow(row)
+		err = wr.WriteRow(r)
 
 		if err != nil {
 			return -1, -1, err
@@ -110,16 +80,16 @@ func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, erro
 
 // ReadAllRows reads all rows from a TableReader and returns a slice containing those rows.  Usually this is used
 // for testing, or with very small data sets.
-func ReadAllRows(rd TableReader, contOnBadRow bool) ([]*Row, int, error) {
-	var rows []*Row
+func ReadAllRows(rd TableReader, contOnBadRow bool) ([]row.Row, int, error) {
+	var rows []row.Row
 	var err error
 
 	badRowCount := 0
 	for {
-		var row *Row
-		row, err = rd.ReadRow()
+		var r row.Row
+		r, err = rd.ReadRow()
 
-		if err != nil && err != io.EOF || row == nil {
+		if err != nil && err != io.EOF || r == nil {
 			if IsBadRow(err) {
 				badRowCount++
 
@@ -131,7 +101,7 @@ func ReadAllRows(rd TableReader, contOnBadRow bool) ([]*Row, int, error) {
 			break
 		}
 
-		rows = append(rows, row)
+		rows = append(rows, r)
 	}
 
 	if err == nil || err == io.EOF {
@@ -143,20 +113,20 @@ func ReadAllRows(rd TableReader, contOnBadRow bool) ([]*Row, int, error) {
 
 // ReadAllRowsToMap reads all rows from a TableReader and returns a map containing those rows keyed off of the index
 // provided.
-func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[types.Value][]*Row, int, error) {
+/*func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[types.Value][]row.Row, int, error) {
 	if keyIndex < 0 || keyIndex >= rd.GetSchema().NumFields() {
 		panic("Invalid index is out of range of fields.")
 	}
 
 	var err error
-	rows := make(map[types.Value][]*Row)
+	rows := make(map[types.Value][]row.Row)
 
 	badRowCount := 0
 	for {
-		var row *Row
-		row, err = rd.ReadRow()
+		var r row.Row
+		r, err = rd.ReadRow()
 
-		if err != nil && err != io.EOF || row == nil {
+		if err != nil && err != io.EOF || r == nil {
 			if IsBadRow(err) {
 				badRowCount++
 
@@ -168,9 +138,9 @@ func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[type
 			break
 		}
 
-		keyVal, _ := row.CurrData().GetField(keyIndex)
+		keyVal, _ := row.GetField(keyIndex)
 		rowsForThisKey := rows[keyVal]
-		rowsForThisKey = append(rowsForThisKey, row)
+		rowsForThisKey = append(rowsForThisKey, r)
 		rows[keyVal] = rowsForThisKey
 	}
 
@@ -179,4 +149,4 @@ func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[type
 	}
 
 	return nil, badRowCount, err
-}
+}*/

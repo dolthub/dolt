@@ -4,9 +4,9 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"regexp"
 )
@@ -107,7 +107,7 @@ func (t *Table) ClearConflicts() *Table {
 	return &Table{t.vrw, tSt}
 }
 
-func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err error) {
+func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err error) {
 	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	if ok {
@@ -117,7 +117,7 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err er
 		mergeRef := schemas.MergeValue.(types.Ref)
 
 		var err error
-		var baseSch, sch, mergeSch *schema.Schema
+		var baseSch, sch, mergeSch schema.Schema
 		if baseSch, err = refToSchema(t.vrw, baseRef); err == nil {
 			if sch, err = refToSchema(t.vrw, valRef); err == nil {
 				mergeSch, err = refToSchema(t.vrw, mergeRef)
@@ -130,13 +130,13 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch *schema.Schema, err er
 	}
 }
 
-func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (*schema.Schema, error) {
-	var schema *schema.Schema
+func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
+	var schema schema.Schema
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
 		schemaVal := ref.TargetValue(vrw)
 
 		var err error
-		schema, err = noms.UnmarshalNomsValue(schemaVal)
+		schema, err = encoding.UnmarshalNomsValue(schemaVal)
 
 		if err != nil {
 			return err
@@ -149,7 +149,7 @@ func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (*schema.Schema, erro
 }
 
 // GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
-func (t *Table) GetSchema() *schema.Schema {
+func (t *Table) GetSchema() schema.Schema {
 	schemaRefVal := t.tableStruct.Get(schemaRefKey)
 	schemaRef := schemaRefVal.(types.Ref)
 	schema, _ := refToSchema(t.vrw, schemaRef)
@@ -177,9 +177,14 @@ func (t *Table) HashOf() hash.Hash {
 	return t.tableStruct.Hash()
 }
 
+func (t *Table) GetRowByPKVals(pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
+	pkTuple := pkVals.NomsTupleForTags(sch.GetPKCols().Tags, true)
+	return t.GetRow(pkTuple, sch)
+}
+
 // GetRow uses the noms Map containing the row data to lookup a row by primary key.  If a valid row exists with this pk
 // then the supplied TableRowFactory will be used to create a TableRow using the row data.
-func (t *Table) GetRow(pk types.Value, sch *schema.Schema) (row *table.Row, exists bool) {
+func (t *Table) GetRow(pk types.Tuple, sch schema.Schema) (row.Row, bool) {
 	rowMap := t.GetRowData()
 	fieldsVal := rowMap.Get(pk)
 
@@ -187,49 +192,20 @@ func (t *Table) GetRow(pk types.Value, sch *schema.Schema) (row *table.Row, exis
 		return nil, false
 	}
 
-	return table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.Tuple))), true
+	return row.FromNoms(sch, pk, fieldsVal.(types.Tuple)), true
 }
 
-// ValueItr defines a function that iterates over a collection of noms values.  The ValueItr will return a valid value
-// and true until all the values in the collection are exhausted.  At that time nil and false will be returned.
-type ValueItr func() (val types.Value, ok bool)
-
-// ValueSliceItr returns a closure that has the signature of a ValueItr and can be used to iterate over a slice of values
-func ValueSliceItr(vals []types.Value) func() (types.Value, bool) {
-	next := 0
-	size := len(vals)
-	return func() (types.Value, bool) {
-		current := next
-		next++
-
-		if current < size {
-			return vals[current], true
-		}
-
-		return nil, false
-	}
-}
-
-// SetItr returns a closure that has the signature of a ValueItr and can be used to iterate over a noms Set of vaules
-func SetItr(valSet types.Set) func() (types.Value, bool) {
-	itr := valSet.Iterator()
-	return func() (types.Value, bool) {
-		v := itr.Next()
-		return v, v != nil
-	}
-}
-
-// GetRows takes in a ValueItr which will supply a stream of primary keys to be pulled from the table.  Each key is
+// GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
 // looked up sequentially.  If row data exists for a given pk it is converted to a TableRow, and added to the rows
 // slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
 // known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
 // known then 0 can be used.
-func (t *Table) GetRows(pkItr ValueItr, numPKs int, sch *schema.Schema) (rows []*table.Row, missing []types.Value) {
+func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value) {
 	if numPKs < 0 {
 		numPKs = 0
 	}
 
-	rows = make([]*table.Row, 0, numPKs)
+	rows = make([]row.Row, 0, numPKs)
 	missing = make([]types.Value, 0, numPKs)
 
 	rowMap := t.GetRowData()
@@ -240,8 +216,8 @@ func (t *Table) GetRows(pkItr ValueItr, numPKs int, sch *schema.Schema) (rows []
 		if fieldsVal == nil {
 			missing = append(missing, pk)
 		} else {
-			row := table.NewRow(table.RowDataFromPKAndValueList(sch, pk, fieldsVal.(types.Tuple)))
-			rows = append(rows, row)
+			r := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+			rows = append(rows, r)
 		}
 	}
 
@@ -264,10 +240,15 @@ func (t *Table) GetRowData() types.Map {
 	return rowMap
 }
 
-func (t *Table) ResolveConflicts(keys []string) (invalid, notFound []string, tbl *Table, err error) {
+func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []map[uint64]string, tbl *Table, err error) {
 	sch := t.GetSchema()
-	pk := sch.GetField(sch.GetPKIndex())
-	convFunc := doltcore.GetConvFunc(types.StringKind, pk.NomsKind())
+	pkCols := sch.GetPKCols()
+	convFuncs := make(map[uint64]doltcore.ConvFunc)
+
+	pkCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		convFuncs[tag] = doltcore.GetConvFunc(types.StringKind, col.Kind)
+		return false
+	})
 
 	removed := 0
 	_, confData, err := t.GetConflicts()
@@ -278,19 +259,35 @@ func (t *Table) ResolveConflicts(keys []string) (invalid, notFound []string, tbl
 
 	confEdit := confData.Edit()
 
-	for _, keyStr := range keys {
-		key, err := convFunc(types.String(keyStr))
+	for _, keyStrs := range keys {
+		i := 0
+		pk := make([]types.Value, pkCols.Size()*2)
+		pkCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+			strForTag, ok := keyStrs[tag]
+			pk[i] = types.Uint(tag)
 
-		if err != nil {
-			invalid = append(invalid, keyStr)
-		}
+			if ok {
+				convFunc, _ := convFuncs[tag]
+				pk[i+1], err = convFunc(types.String(strForTag))
 
-		if confEdit.Has(key) {
-			removed++
-			confEdit.Remove(key)
-		} else {
-			notFound = append(notFound, keyStr)
-		}
+				if err != nil {
+					invalid = append(invalid, keyStrs)
+				}
+			} else {
+				pk[i+1] = types.NullValue
+			}
+
+			pkTupleVal := types.NewTuple(pk...)
+
+			if confEdit.Has(pkTupleVal) {
+				removed++
+				confEdit.Remove(pkTupleVal)
+			} else {
+				notFound = append(notFound, keyStrs)
+			}
+			i += 2
+			return false
+		})
 	}
 
 	if removed == 0 {

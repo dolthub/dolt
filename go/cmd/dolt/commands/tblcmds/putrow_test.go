@@ -1,12 +1,6 @@
 package tblcmds
 
-import (
-	"github.com/attic-labs/noms/go/types"
-	"github.com/google/uuid"
-	"strings"
-	"testing"
-)
-
+/*
 var expectedId = types.UUID(uuid.Must(uuid.Parse("11111111-1111-1111-1111-111111111111")))
 var expectedFieldVals = map[string]types.Value{
 	"id":         expectedId,
@@ -69,3 +63,4 @@ func TestPutRow(t *testing.T) {
 		}
 	}
 }
+*/

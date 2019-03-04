@@ -10,17 +10,25 @@ import (
 	"testing"
 )
 
-func createTestSchema() *schema.Schema {
-	fields := []*schema.Field{
-		schema.NewField("id", types.UUIDKind, true),
-		schema.NewField("first", types.StringKind, true),
-		schema.NewField("last", types.StringKind, true),
-		schema.NewField("is_married", types.BoolKind, false),
-		schema.NewField("age", types.UintKind, false),
-		schema.NewField("empty", types.IntKind, false),
-	}
-	sch := schema.NewSchema(fields)
-	sch.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{0}))
+const (
+	idTag        = 0
+	firstTag     = 1
+	lastTag      = 2
+	isMarriedTag = 3
+	ageTag       = 4
+	emptyTag     = 5
+)
+
+func createTestSchema() schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", ageTag, types.UintKind, false),
+		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+	)
+	sch := schema.SchemaFromCols(colColl)
 
 	return sch
 }

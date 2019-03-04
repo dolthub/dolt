@@ -3,13 +3,13 @@ package mvdata
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/nbf"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 	"reflect"
 	"testing"
 )
@@ -41,7 +41,7 @@ func TestBasics(t *testing.T) {
 		{NewDataLocation("table-name", ""), DoltDB, "table-name", false, true, false},
 		{NewDataLocation("file.csv", ""), CsvFile, "file.csv", true, false, false},
 		{NewDataLocation("file.psv", ""), PsvFile, "file.psv", true, false, false},
-		{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true, true, true},
+		//{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true, true, true},
 	}
 
 	for _, test := range tests {
@@ -67,26 +67,22 @@ func TestBasics(t *testing.T) {
 	}
 }
 
-var fakeFields = []*schema.Field{
-	schema.NewField("a", types.StringKind, true),
-	schema.NewField("b", types.StringKind, true),
-}
-var fakeSchema *schema.Schema
+var fakeFields, _ = schema.NewColCollection(
+	schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("b", 1, types.StringKind, false),
+)
+
+var fakeSchema schema.Schema
 var imt *table.InMemTable
-var imtRows []*table.Row
+var imtRows []row.Row
 
 func init() {
-	fakeSchema = schema.NewSchema(fakeFields)
-	err := fakeSchema.AddConstraint(schema.NewConstraint(schema.PrimaryKey, []int{0}))
+	fakeSchema = schema.SchemaFromCols(fakeFields)
 
-	if err != nil {
-		panic(test.ShouldNeverHappen)
-	}
-
-	imtRows = []*table.Row{
-		table.NewRow(table.RowDataFromValues(fakeSchema, []types.Value{types.String("a"), types.String("1")})),
-		table.NewRow(table.RowDataFromValues(fakeSchema, []types.Value{types.String("b"), types.String("2")})),
-		table.NewRow(table.RowDataFromValues(fakeSchema, []types.Value{types.String("c"), types.String("3")})),
+	imtRows = []row.Row{
+		row.New(fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")}),
+		row.New(fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")}),
+		row.New(fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")}),
 	}
 
 	imt = table.NewInMemTableWithData(fakeSchema, imtRows)
@@ -97,7 +93,7 @@ func TestExists(t *testing.T) {
 		NewDataLocation("table-name", ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
-		NewDataLocation("file.nbf", ""),
+		//NewDataLocation("file.nbf", ""),
 	}
 
 	ddb, root, fs := createRootAndFS()
@@ -108,7 +104,7 @@ func TestExists(t *testing.T) {
 		}
 
 		if loc.Format == DoltDB {
-			schVal, _ := noms.MarshalAsNomsValue(ddb.ValueReadWriter(), fakeSchema)
+			schVal, _ := encoding.MarshalAsNomsValue(ddb.ValueReadWriter(), fakeSchema)
 			tbl := doltdb.NewTable(ddb.ValueReadWriter(), schVal, types.NewMap(ddb.ValueReadWriter()))
 			root = root.PutTable(ddb, loc.Path, tbl)
 		} else {
@@ -130,7 +126,7 @@ func TestCreateRdWr(t *testing.T) {
 		{NewDataLocation("table-name", ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*noms.NomsMapCreator)(nil)).Elem()},
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
-		{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
+		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
 	ddb, root, fs := createRootAndFS()
@@ -158,7 +154,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		if nomsWr, ok := wr.(noms.NomsMapWriteCloser); ok {
 			vrw := ddb.ValueReadWriter()
-			schVal, err := noms.MarshalAsNomsValue(vrw, nomsWr.GetSchema())
+			schVal, err := encoding.MarshalAsNomsValue(vrw, nomsWr.GetSchema())
 
 			if err != nil {
 				t.Fatal("Unable ta update table")
