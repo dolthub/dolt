@@ -140,18 +140,24 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 
 // GetRowConvTranformFunc can be used to wrap a RowConverter and use that RowConverter in a pipeline.
 func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
-		outRow, err := rc.Convert(inRow)
-
-		if err != nil {
-			return nil, err.Error()
+	if rc.IdentityConverter {
+		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
+			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
+	} else {
+		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
+			outRow, err := rc.Convert(inRow)
 
-		if !row.IsValid(outRow, rc.DestSch) {
-			col := row.GetInvalidCol(outRow, rc.DestSch)
-			return nil, "invalid column: " + col.Name
+			if err != nil {
+				return nil, err.Error()
+			}
+
+			if !row.IsValid(outRow, rc.DestSch) {
+				col := row.GetInvalidCol(outRow, rc.DestSch)
+				return nil, "invalid column: " + col.Name
+			}
+
+			return []*pipeline.TransformedRowResult{{outRow, nil}}, ""
 		}
-
-		return []*pipeline.TransformedRowResult{{outRow, nil}}, ""
 	}
 }
