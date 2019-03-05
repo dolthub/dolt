@@ -5,37 +5,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"testing"
 )
 
+var srcCols, _ = schema.NewColCollection(
+	schema.NewColumn("uuidtostr", 0, types.UUIDKind, true),
+	schema.NewColumn("floattostr", 1, types.FloatKind, false),
+	schema.NewColumn("uinttostr", 2, types.UintKind, false),
+	schema.NewColumn("booltostr", 3, types.BoolKind, false),
+	schema.NewColumn("inttostr", 4, types.IntKind, false),
+	schema.NewColumn("stringtostr", 5, types.StringKind, false),
+	schema.NewColumn("nulltostr", 6, types.NullKind, false),
+)
+
+var srcSch = schema.SchemaFromCols(srcCols)
+
 func TestRowConverter(t *testing.T) {
-	srcCols, _ := schema.NewColCollection(
-		schema.NewColumn("uuidtostr", 0, types.UUIDKind, true),
-		schema.NewColumn("floattostr", 1, types.FloatKind, false),
-		schema.NewColumn("uinttostr", 2, types.UintKind, false),
-		schema.NewColumn("booltostr", 3, types.BoolKind, false),
-		schema.NewColumn("inttostr", 4, types.IntKind, false),
-		schema.NewColumn("stringtostr", 5, types.StringKind, false),
-		schema.NewColumn("nulltostr", 6, types.NullKind, false),
-	)
-
-	destCols, _ := schema.NewColCollection(
-		schema.NewColumn("uuidToStr", 0, types.StringKind, true),
-		schema.NewColumn("floatToStr", 1, types.StringKind, false),
-		schema.NewColumn("uintToStr", 2, types.StringKind, false),
-		schema.NewColumn("boolToStr", 3, types.StringKind, false),
-		schema.NewColumn("intToStr", 4, types.StringKind, false),
-		schema.NewColumn("stringToStr", 5, types.StringKind, false),
-		schema.NewColumn("nullToStr", 6, types.StringKind, false),
-	)
-
-	srcSch := schema.SchemaFromCols(srcCols)
-	destSch := schema.SchemaFromCols(destCols)
-	mapping, err := NewInferredMapping(srcSch, destSch)
-
-	if err != nil {
-		t.Fatal("Err creating field oldNameToSchema2Name")
-	}
+	mapping := TypedToUntypedMapping(srcSch)
 
 	rConv, err := NewRowConverter(mapping)
 
@@ -54,12 +41,10 @@ func TestRowConverter(t *testing.T) {
 		6: types.NullValue,
 	})
 
-	outData, err := rConv.Convert(inRow)
+	results, _ := GetRowConvTransformFunc(rConv)(inRow, pipeline.ImmutableProperties{})
+	outData := results[0].RowData
 
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	destSch := mapping.DestSch
 	expected := row.New(destSch, row.TaggedValues{
 		0: types.String(id.String()),
 		1: types.String("1.25"),
@@ -72,5 +57,19 @@ func TestRowConverter(t *testing.T) {
 
 	if !row.AreEqual(outData, expected, destSch) {
 		t.Error("\n", row.Fmt(expected, destSch), "!=\n", row.Fmt(outData, destSch))
+	}
+}
+
+func TestUnneccessaryConversion(t *testing.T) {
+	mapping, err := NewInferredMapping(srcSch, srcSch)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	rconv, err := NewRowConverter(mapping)
+
+	if rconv != IdentityConverter {
+		t.Error("expected identity converter")
 	}
 }

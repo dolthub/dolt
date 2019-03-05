@@ -56,7 +56,7 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 			r := row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
 
 			if !row.IsValid(r, tblSch) {
-				itrErr = table.ErrInvalidRow
+				itrErr = table.NewBadRow(r)
 				return true
 			}
 

@@ -14,8 +14,11 @@ import (
 	"strings"
 )
 
+// ReadBufSize is the size of the buffer used when reading the fwt file.  It is set at the package level and all
+// readers create their own buffer's using the value of this variable at the time they create their buffers.
 var ReadBufSize = 256 * 1024
 
+// FWTReader implements TableReader.  It reads fwt files and returns rows.
 type FWTReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
@@ -24,6 +27,8 @@ type FWTReader struct {
 	colSep string
 }
 
+// OpenFWTReader opens a reader at a given path within a given filesys.  The FWTSchema should describe the fwt file
+// being opened and have the correct column widths.
 func OpenFWTReader(path string, fs filesys.ReadableFS, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	r, err := fs.OpenForRead(path)
 
@@ -34,6 +39,7 @@ func OpenFWTReader(path string, fs filesys.ReadableFS, fwtSch *FWTSchema, colSep
 	return NewFWTReader(r, fwtSch, colSep)
 }
 
+//
 func NewFWTReader(r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
@@ -99,7 +105,7 @@ func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 
 	i := 0
 	offset := 0
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		colWidth := fwtRd.fwtSch.TagToWidth[tag]
 
 		if colWidth > 0 {

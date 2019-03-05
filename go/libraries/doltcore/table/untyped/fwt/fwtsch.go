@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
+// FWTSchema is a fixed width text schema which includes information on a tables rows, and how wide they should be printed
 type FWTSchema struct {
 	Sch          schema.Schema
 	TagToWidth   map[uint64]int
@@ -14,10 +15,11 @@ type FWTSchema struct {
 	dispColCount int
 }
 
+// NewFWTSchema creates a FWTSchema given a standard schema and a map from column name to the width of that column.
 func NewFWTSchema(sch schema.Schema, fldToWidth map[string]int) (*FWTSchema, error) {
 	allCols := sch.GetAllCols()
 	tagToWidth := make(map[uint64]int, allCols.Size())
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		tagToWidth[tag] = 0
 		return false
 	})
@@ -39,6 +41,7 @@ func NewFWTSchema(sch schema.Schema, fldToWidth map[string]int) (*FWTSchema, err
 	return NewFWTSchemaWithWidths(sch, tagToWidth), nil
 }
 
+// NewFWTSchemaWithWidths creates a FWTSchema given a standard schema and a map from column tag to the width of that column
 func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSchema {
 	allCols := sch.GetAllCols()
 
@@ -46,7 +49,7 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 		panic("Invalid widths map should have a value for every field.")
 	}
 
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if col.Kind != types.StringKind {
 			panic("Invalid schema argument.  Has non-String fields. Use a rowconverter, or mapping reader / writer")
 		}
@@ -65,7 +68,7 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 	}
 
 	noFitStrs := make(map[uint64]string, allCols.Size())
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		chars := make([]byte, tagToWidth[tag])
 		for j := 0; j < tagToWidth[tag]; j++ {
 			chars[j] = '#'
@@ -78,6 +81,7 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 	return &FWTSchema{sch, tagToWidth, noFitStrs, totalWidth, dispColCount}
 }
 
+// GetTotalWidth returns the total width of all the columns
 func (fwtSch *FWTSchema) GetTotalWidth(charsBetweenFields int) int {
 	return fwtSch.totalWidth + ((fwtSch.dispColCount - 1) * charsBetweenFields)
 }

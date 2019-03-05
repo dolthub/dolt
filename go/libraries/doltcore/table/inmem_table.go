@@ -1,6 +1,7 @@
 package table
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"io"
@@ -30,7 +31,14 @@ func NewInMemTableWithDataAndValidationType(sch schema.Schema, rows []row.Row) *
 // AppendRow appends a row.  Appended rows must be valid for the table's schema
 func (imt *InMemTable) AppendRow(r row.Row) error {
 	if !row.IsValid(r, imt.sch) {
-		return ErrInvalidRow
+		col := row.GetInvalidCol(r, imt.sch)
+		val, ok := r.GetColVal(col.Tag)
+
+		if !ok {
+			return NewBadRow(r, col.Name+" is missing")
+		} else {
+			return NewBadRow(r, col.Name+":"+types.EncodedValue(val)+" is not valid.")
+		}
 	}
 
 	imt.rows = append(imt.rows, r)

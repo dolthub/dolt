@@ -13,8 +13,11 @@ import (
 	"strings"
 )
 
+// WriteBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
+// writers create their own buffer's using the value of this variable at the time they create their buffers.
 var WriteBufSize = 256 * 1024
 
+// CSVWriter implements TableWriter.  It writes rows as comma separated string values
 type CSVWriter struct {
 	closer   io.Closer
 	bWr      *bufio.Writer
@@ -23,6 +26,8 @@ type CSVWriter struct {
 	sch      schema.Schema
 }
 
+// OpenCSVWriter creates a file at the given path in the given filesystem and writes out rows based on the Schema,
+// and CSVFileInfo provided
 func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 
@@ -39,6 +44,7 @@ func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, inf
 	return NewCSVWriter(wr, outSch, info)
 }
 
+// NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	delimStr := string(info.Delim)
@@ -47,7 +53,7 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 		allCols := outSch.GetAllCols()
 		numCols := allCols.Size()
 		colNames := make([]string, 0, numCols)
-		allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 			colNames = append(colNames, col.Name)
 			return false
 		})
@@ -75,7 +81,7 @@ func (csvw *CSVWriter) WriteRow(r row.Row) error {
 
 	i := 0
 	colValStrs := make([]string, allCols.Size())
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		val, ok := r.GetColVal(tag)
 		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {

@@ -7,10 +7,14 @@ import (
 	"time"
 )
 
+// SourceFunc is a function that will return a new row for each successive call until all it's rows are exhausted, at
+// which point io.EOF should be returned
 type SourceFunc func() (row.Row, ImmutableProperties, error)
 
-func ProcFuncForSourceFunc(sourceFunc SourceFunc) ProcFunc {
-	return func(p *Pipeline, ch chan RowWithProps, badRowChan chan<- *TransformRowFailure) {
+// ProcFuncForSourceFunc is a helper method that creates an InFunc for a given SourceFunc.  It takes care of channel
+// processing, stop conditions, and error handling.
+func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
+	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure) {
 		defer close(ch)
 
 		for {
@@ -43,7 +47,8 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) ProcFunc {
 	}
 }
 
-func ProcFuncForReader(rd table.TableReader) ProcFunc {
+// ProcFuncForReader adapts a standard TableReader to work as an InFunc for a pipeline
+func ProcFuncForReader(rd table.TableReader) InFunc {
 	return ProcFuncForSourceFunc(func() (row.Row, ImmutableProperties, error) {
 		r, err := rd.ReadRow()
 
@@ -51,10 +56,14 @@ func ProcFuncForReader(rd table.TableReader) ProcFunc {
 	})
 }
 
+// SinkFunc is a function that will process the final transformed rows from a pipeline.  This function will be called
+// once for every row that makes it through the piplenie
 type SinkFunc func(row.Row, ReadableMap) error
 
-func ProcFuncForSinkFunc(sinkFunc SinkFunc) ProcFunc {
-	return func(p *Pipeline, ch chan RowWithProps, badRowChan chan<- *TransformRowFailure) {
+// ProcFuncForSinkFunc is a helper method that creates an OutFunc for a given SinkFunc.  It takes care of channel
+// processing, stop conditions, and error handling.
+func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
+	return func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure) {
 		defer close(badRowChan)
 
 		for {
@@ -86,7 +95,8 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) ProcFunc {
 	}
 }
 
-func ProcFuncForWriter(wr table.TableWriter) ProcFunc {
+// ProcFuncForWriter adapts a standard TableWriter to work as an InFunc for a pipeline
+func ProcFuncForWriter(wr table.TableWriter) OutFunc {
 	return ProcFuncForSinkFunc(func(r row.Row, props ReadableMap) error {
 		return wr.WriteRow(r)
 	})

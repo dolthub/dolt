@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// ConvFunc is a function that converts one noms value to another of a different type.
 type ConvFunc func(types.Value) (types.Value, error)
 
 var convFuncMap = map[types.NomsKind]map[types.NomsKind]ConvFunc{
@@ -66,6 +67,8 @@ var convFuncMap = map[types.NomsKind]map[types.NomsKind]ConvFunc{
 		types.NullKind:   convToNullFunc},
 }
 
+// GetConvFunc takes in a source kind and a destination kind and returns a ConvFunc which can convert values of the
+// source kind to values of the destination kind.
 func GetConvFunc(srcKind, destKind types.NomsKind) ConvFunc {
 	var convFunc ConvFunc
 	if destKindMap, ok := convFuncMap[srcKind]; ok {

@@ -1,7 +1,10 @@
 package valutil
 
-import "github.com/attic-labs/noms/go/types"
+import (
+	"github.com/attic-labs/noms/go/types"
+)
 
+// NilSafeEqCheck compares two types.Value instances in a manner that handles nils as equal to types.NullValue
 func NilSafeEqCheck(v1, v2 types.Value) bool {
 	if types.IsNull(v1) {
 		return types.IsNull(v2)

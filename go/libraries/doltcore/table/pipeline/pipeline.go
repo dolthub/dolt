@@ -6,18 +6,31 @@ import (
 	"sync/atomic"
 )
 
-type ProcFunc func(p *Pipeline, ch chan RowWithProps, badRowChan chan<- *TransformRowFailure)
+// InFunc is a pipeline input function that reads row data from a source and puts it in a channel.
+type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure)
+
+// OutFUnc is a pipeline output function that takes the data the pipeline has processed off of the channel.
+type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure)
+
+// BadRowCallback is a callback function that is called when a bad row is encountered.  returning true from this
+// function when called will quit the entire pipeline
 type BadRowCallback func(*TransformRowFailure) (quit bool)
 
+// Pipeline is a struct that manages the operation of a row processing pipeline, where data is read from some source
+// and written to a channel by the InFunc, a transform would then read the data off of their input channel, and write
+// the transformed data to their output channel.  A series of transforms can be applied until the transformed data
+// reaches the OutFunc which takes the data off the channel and would typically store the result somewhere.
 type Pipeline struct {
 	wg        *sync.WaitGroup
 	stopChan  chan bool
 	atomicErr atomic.Value
 	transInCh map[string]chan RowWithProps
 
+	// Start is a function used to start pipeline processing.  The Pipeline will be created in an unstarted state.
 	Start func()
 }
 
+// InsertRow will insert a row at a particular stage in the pipeline
 func (p *Pipeline) InsertRow(name string, r row.Row) bool {
 	ch, ok := p.transInCh[name]
 
@@ -29,6 +42,7 @@ func (p *Pipeline) InsertRow(name string, r row.Row) bool {
 	return true
 }
 
+// Abort will stop the pipeline
 func (p *Pipeline) Abort() {
 	defer func() {
 		recover()
@@ -37,6 +51,7 @@ func (p *Pipeline) Abort() {
 	close(p.stopChan)
 }
 
+// Wait will wait for the pipeline to complete
 func (p *Pipeline) Wait() error {
 	p.wg.Wait()
 
@@ -49,7 +64,8 @@ func (p *Pipeline) Wait() error {
 	return nil
 }
 
-func NewAsyncPipeline(processInputs, processOutputs ProcFunc, transforms *TransformCollection, badRowCB BadRowCallback) (pipeline *Pipeline) {
+//NewAsyncPipeline creates a Pipeline from a given InFunc, OutFunc, TransformCollection, and a BadRowCallback
+func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *TransformCollection, badRowCB BadRowCallback) (pipeline *Pipeline) {
 	var wg sync.WaitGroup
 
 	in := make(chan RowWithProps, 1024)
@@ -103,11 +119,14 @@ func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan R
 	return outChan
 }
 
+// StopWithErr provides a method by the pipeline can be stopped when an error is encountered.  This would typically be
+// done in InFuncs and OutFuncs
 func (p Pipeline) StopWithErr(err error) {
 	p.atomicErr.Store(err)
 	close(p.stopChan)
 }
 
+// IsStopping returns true if the pipeline is currently stopping
 func (p Pipeline) IsStopping() bool {
 	// exit if stop
 	select {

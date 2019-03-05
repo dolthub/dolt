@@ -40,23 +40,48 @@ var testCols = []Column{
 
 var allCols = append(append([]Column(nil), testKeyCols...), testCols...)
 
-func TestSchemaFromCols(t *testing.T) {
+func TestSchema(t *testing.T) {
 	colColl, _ := NewColCollection(allCols...)
-	sch := SchemaFromCols(colColl)
+	schFromCols := SchemaFromCols(colColl)
 
-	validateCols(t, allCols, sch.GetAllCols(), "SchemaFromCols::GetAllCols")
-	validateCols(t, testKeyCols, sch.GetPKCols(), "SchemaFromCols::GetPKCols")
-	validateCols(t, testCols, sch.GetNonPKCols(), "SchemaFromCols::GetNonPKCols")
-}
+	testSchema("SchemaFromCols", schFromCols, t)
 
-func TestSchemaFromPKAndNonPKCols(t *testing.T) {
 	testKeyColColl, _ := NewColCollection(testKeyCols...)
 	testNonKeyColsColl, _ := NewColCollection(testCols...)
-	sch, _ := SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColsColl)
+	schFromPKAndNonPKCols, _ := SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColsColl)
 
-	validateCols(t, allCols, sch.GetAllCols(), "SchemaFromPKAndNonPKCols::GetAllCols")
-	validateCols(t, testKeyCols, sch.GetPKCols(), "SchemaFromPKAndNonPKCols::GetPKCols")
-	validateCols(t, testCols, sch.GetNonPKCols(), "SchemaFromPKAndNonPKCols::GetNonPKCols")
+	testSchema("SchemaFromPKAndNonPKCols", schFromPKAndNonPKCols, t)
+
+	if !SchemasAreEqual(schFromCols, schFromPKAndNonPKCols) {
+		t.Error("schemas should be equal")
+	}
+}
+
+func testSchema(method string, sch Schema, t *testing.T) {
+	validateCols(t, allCols, sch.GetAllCols(), method+"GetAllCols")
+	validateCols(t, testKeyCols, sch.GetPKCols(), method+"GetPKCols")
+	validateCols(t, testCols, sch.GetNonPKCols(), method+"GetNonPKCols")
+
+	extracted := ExtractAllColNames(sch)
+	expExt := map[uint64]string{
+		lnColTag: lnColName, fnColTag: fnColName, ageColTag: ageColName, addrColTag: addrColName, titleColTag: titleColName, reservedColTag: reservedColName}
+
+	if !reflect.DeepEqual(extracted, expExt) {
+		t.Error("extracted columns did not match expectation")
+	}
+
+	if col, ok := ColFromName(sch, titleColName); !ok {
+		t.Error("Failed to get by name")
+	} else if col.Tag != titleColTag {
+		t.Error("Unexpected tag")
+	}
+
+	if col, ok := ColFromTag(sch, titleColTag); !ok {
+		t.Error("Failed to get by name")
+	} else if col.Name != titleColName {
+		t.Error("Unexpected tag")
+	}
+
 }
 
 func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg string) {

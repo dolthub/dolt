@@ -156,8 +156,8 @@ func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.F
 	}
 
 	if !rconv.IdentityConverter {
-		transformer := pipeline.NewRowTransformer("Mapping transform", rowconv.GetRowConvTransformFunc(rconv))
-		transforms.AppendTransforms(pipeline.NamedTransform{Name: "map", Func: transformer})
+		nt := pipeline.NewNamedTransform("Mapping transform", rowconv.GetRowConvTransformFunc(rconv))
+		transforms.AppendTransforms(nt)
 	}
 
 	return nil
@@ -225,7 +225,7 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 		foundPKCols := 0
 		var updatedCols []schema.Column
 
-		sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 			if keyColSet.Contains(col.Name) {
 				foundPKCols++
 				col.IsPartOfPK = true

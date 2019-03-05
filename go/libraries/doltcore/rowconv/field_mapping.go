@@ -10,40 +10,53 @@ import (
 	"strconv"
 )
 
-var ErrPrimaryKeyNotMapped = errors.New("primary key not mapped")
+// ErrMappingFileRead is an error returned when a mapping file cannot be read
 var ErrMappingFileRead = errors.New("error reading mapping file")
+
+// ErrUnmarshallingMapping is an error used when a mapping file cannot be converted from json
 var ErrUnmarshallingMapping = errors.New("error unmarshalling mapping")
+
+// ErrEmptyMapping is an error returned when the mapping is empty (No src columns, no destination columns)
 var ErrEmptyMapping = errors.New("empty mapping error")
 
+// BadMappingErr is a struct which implements the error interface and is used when there is an error with a mapping.
 type BadMappingErr struct {
 	srcField  string
 	destField string
 }
 
+// String representing the BadMappingError
 func (err *BadMappingErr) Error() string {
 	return fmt.Sprintf("Mapping file attempted to map %s to %s, but one or both of those fields are unknown.", err.srcField, err.destField)
 }
 
-var ErrBadMapping = errors.New("error bad mapping")
-
+// IsBadMappingErr returns true if the error is a BadMappingErr
 func IsBadMappingErr(err error) bool {
 	_, ok := err.(*BadMappingErr)
 	return ok
 }
 
+// FieldMapping defines a mapping from columns in a source schema to columns in a dest schema.
 type FieldMapping struct {
-	SrcSch    schema.Schema
-	DestSch   schema.Schema
+	// SrcSch is the source schema being mapped from.
+	SrcSch schema.Schema
+
+	// DestSch is the destination schema being mapped to.
+	DestSch schema.Schema
+
+	// SrcToDest is a map from a tag in the source schema to a tag in the dest schema.
 	SrcToDest map[uint64]uint64
 }
 
-func NewFieldMapping(inSch, outSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
-	inCols := inSch.GetAllCols()
-	outCols := outSch.GetAllCols()
+// NewFieldMapping creates a FieldMapping from a source schema, a destination schema, and a map from tags in the source
+// schema to tags in the dest schema.
+func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
+	srcCols := srcSch.GetAllCols()
+	deltCols := destSch.GetAllCols()
 
 	for srcTag, destTag := range srcTagToDestTag {
-		_, destOk := outCols.GetByTag(destTag)
-		_, srcOk := inCols.GetByTag(srcTag)
+		_, destOk := deltCols.GetByTag(destTag)
+		_, srcOk := srcCols.GetByTag(srcTag)
 
 		if !destOk || !srcOk {
 			return nil, &BadMappingErr{"src tag:" + strconv.FormatUint(srcTag, 10), "dest tag:" + strconv.FormatUint(destTag, 10)}
@@ -54,17 +67,19 @@ func NewFieldMapping(inSch, outSch schema.Schema, srcTagToDestTag map[uint64]uin
 		return nil, ErrEmptyMapping
 	}
 
-	return &FieldMapping{inSch, outSch, srcTagToDestTag}, nil
+	return &FieldMapping{srcSch, destSch, srcTagToDestTag}, nil
 }
 
-func NewFieldMappingFromNameMap(inSch, outSch schema.Schema, inNameToOutName map[string]string) (*FieldMapping, error) {
-	inCols := inSch.GetAllCols()
-	outCols := outSch.GetAllCols()
+// NewFieldMappingFromNameMap creates a FieldMapping from a source schema, a destination schema, and a map from column
+// names in the source schema to column names in the dest schema.
+func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName map[string]string) (*FieldMapping, error) {
+	srcCols := srcSch.GetAllCols()
+	destCols := destSch.GetAllCols()
 	srcToDest := make(map[uint64]uint64, len(inNameToOutName))
 
 	for k, v := range inNameToOutName {
-		inCol, inOk := inCols.GetByName(k)
-		outCol, outOk := outCols.GetByName(v)
+		inCol, inOk := srcCols.GetByName(k)
+		outCol, outOk := destCols.GetByName(v)
 
 		if !inOk || !outOk {
 			return nil, &BadMappingErr{k, v}
@@ -73,17 +88,19 @@ func NewFieldMappingFromNameMap(inSch, outSch schema.Schema, inNameToOutName map
 		srcToDest[inCol.Tag] = outCol.Tag
 	}
 
-	return NewFieldMapping(inSch, outSch, srcToDest)
+	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-func NewInferredMapping(inSch, outSch schema.Schema) (*FieldMapping, error) {
+// NewInferredMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
+// tag in the source and destination schemas.
+func NewInferredMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	successes := 0
-	inCols := inSch.GetAllCols()
-	outCols := outSch.GetAllCols()
+	srcCols := srcSch.GetAllCols()
+	destCols := destSch.GetAllCols()
 
-	srcToDest := make(map[uint64]uint64, outCols.Size())
-	outCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
-		inCol, ok := inCols.GetByTag(tag)
+	srcToDest := make(map[uint64]uint64, destCols.Size())
+	destCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		inCol, ok := srcCols.GetByTag(tag)
 
 		if ok {
 			srcToDest[inCol.Tag] = tag
@@ -97,9 +114,10 @@ func NewInferredMapping(inSch, outSch schema.Schema) (*FieldMapping, error) {
 		return nil, ErrEmptyMapping
 	}
 
-	return NewFieldMapping(inSch, outSch, srcToDest)
+	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
+// MappingFromFile reads a FieldMapping from a json file
 func MappingFromFile(mappingFile string, fs filesys.ReadableFS, inSch, outSch schema.Schema) (*FieldMapping, error) {
 	data, err := fs.ReadFile(mappingFile)
 
@@ -117,11 +135,12 @@ func MappingFromFile(mappingFile string, fs filesys.ReadableFS, inSch, outSch sc
 	return NewFieldMappingFromNameMap(inSch, outSch, inNameToOutName)
 }
 
+// TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.
 func TypedToUntypedMapping(sch schema.Schema) *FieldMapping {
 	untypedSch := untyped.UntypeSchema(sch)
 
 	identityMap := make(map[uint64]uint64)
-	sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		identityMap[tag] = tag
 		return false
 	})

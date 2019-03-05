@@ -24,7 +24,7 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 		buf := bytes.NewBuffer(backingBuffer[:0])
 
 		var ok bool
-		allCols.ItrInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+		allCols.IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
 			if ok {
 				buf.Write(fieldDelim)
 			}

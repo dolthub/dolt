@@ -49,6 +49,7 @@ func NewRowFromStrings(sch schema.Schema, valStrs []string) row.Row {
 	return row.New(sch, taggedVals)
 }
 
+// NewRowFromTaggedStrings takes an untyped schema and a map of column tag to string value and returns a row
 func NewRowFromTaggedStrings(sch schema.Schema, taggedStrs map[uint64]string) row.Row {
 	taggedVals := make(row.TaggedValues)
 	for tag, valStr := range taggedStrs {
@@ -58,9 +59,11 @@ func NewRowFromTaggedStrings(sch schema.Schema, taggedStrs map[uint64]string) ro
 	return row.New(sch, taggedVals)
 }
 
+// UntypeSchema takes a schema returns a schema with the same columns, but with the types of each of those columns as
+// types.StringKind
 func UntypeSchema(sch schema.Schema) schema.Schema {
 	var cols []schema.Column
-	sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		col.Kind = types.StringKind
 		cols = append(cols, col)
 		return false

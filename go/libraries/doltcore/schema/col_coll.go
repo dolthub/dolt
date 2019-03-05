@@ -5,18 +5,27 @@ import (
 	"sort"
 )
 
+// ErrColTagCollision is an error that is returned whet two columns within a ColCollection have the same tag
+// but different values
 var ErrColTagCollision = errors.New("two different columns with the same tag.")
 
+// EmptyColColl is an empty ColCollection.
 var EmptyColColl, _ = NewColCollection()
 
+// ColCollection is a collection of columns.
 type ColCollection struct {
-	cols       []Column
-	Tags       []uint64
+	cols []Column
+	// Tags is a list of all the tags in the ColCollection in their original order.
+	Tags []uint64
+	// SortedTags is a list of all the tags in the ColCollection in sorted order.
 	SortedTags []uint64
-	TagToCol   map[uint64]Column
-	NameToCol  map[string]Column
+	// TagToCol is a map of tag to column
+	TagToCol map[uint64]Column
+	// NameToCol is a map from name to column
+	NameToCol map[string]Column
 }
 
+// NewColCollection creates a new collection from a list of columns
 func NewColCollection(cols ...Column) (*ColCollection, error) {
 	var tags []uint64
 	var sortedTags []uint64
@@ -35,7 +44,6 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 		} else if !val.Equals(col) {
 			return nil, ErrColTagCollision
 		}
-
 	}
 
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
@@ -43,10 +51,12 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	return &ColCollection{uniqueCols, tags, sortedTags, tagToCol, nameToCol}, nil
 }
 
+// AppendColl returns a new collection with the additional ColCollection's columns appended
 func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, error) {
 	return cc.Append(colColl.cols...)
 }
 
+// Append returns a new collection with the additional columns appended
 func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 	allCols := make([]Column, 0, len(cols)+len(cc.cols))
 	allCols = append(allCols, cols...)
@@ -55,7 +65,8 @@ func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 	return NewColCollection(allCols...)
 }
 
-func (cc *ColCollection) ItrUnsorted(cb func(tag uint64, col Column) (stop bool)) {
+// Iter iterates over all the columns in the supplied ordering
+func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool)) {
 	for _, col := range cc.cols {
 		stop := cb(col.Tag, col)
 
@@ -65,7 +76,8 @@ func (cc *ColCollection) ItrUnsorted(cb func(tag uint64, col Column) (stop bool)
 	}
 }
 
-func (cc *ColCollection) ItrInSortedOrder(cb func(tag uint64, col Column) (stop bool)) {
+// IterInSortOrder iterates over all the columns from lowest tag to highest tag.
+func (cc *ColCollection) IterInSortedOrder(cb func(tag uint64, col Column) (stop bool)) {
 	for _, tag := range cc.SortedTags {
 		val := cc.TagToCol[tag]
 		stop := cb(tag, val)
@@ -76,6 +88,8 @@ func (cc *ColCollection) ItrInSortedOrder(cb func(tag uint64, col Column) (stop 
 	}
 }
 
+// GetByName takes the name of a column and returns the column and true if found, otherwise InvalidCol and false are
+// returned
 func (cc *ColCollection) GetByName(name string) (Column, bool) {
 	val, ok := cc.NameToCol[name]
 
@@ -86,6 +100,8 @@ func (cc *ColCollection) GetByName(name string) (Column, bool) {
 	return InvalidCol, false
 }
 
+// GetByTag takes a tag and returns the correspending column and true if found, otherwise InvalidCol and false are
+// returned
 func (cc *ColCollection) GetByTag(tag uint64) (Column, bool) {
 	val, ok := cc.TagToCol[tag]
 
@@ -96,10 +112,12 @@ func (cc *ColCollection) GetByTag(tag uint64) (Column, bool) {
 	return InvalidCol, false
 }
 
-func (cc *ColCollection) GetByUnsortedIndex(idx int) Column {
+// GetByIndex returns a column with a given index
+func (cc *ColCollection) GetByIndex(idx int) Column {
 	return cc.cols[idx]
 }
 
+// Size returns the number of columns in the collection.
 func (cc *ColCollection) Size() int {
 	return len(cc.cols)
 }

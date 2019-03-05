@@ -3,6 +3,7 @@ package untyped
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func TestNewUntypedSchema(t *testing.T) {
 	}
 
 	i := 0
-	sch.GetNonPKCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if col.Name != colNames[i] {
 			t.Error("Unexpected name")
 		}
@@ -57,5 +58,54 @@ func TestNewUntypedSchema(t *testing.T) {
 
 	if blurbVal.Kind() != types.StringKind || string(blurbVal.(types.String)) != blurb {
 		t.Error("Unexpected blurb")
+	}
+}
+
+func TestUntypedSchemaUnion(t *testing.T) {
+	cols := []schema.Column{
+		schema.NewColumn("a", 0, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("b", 1, types.IntKind, false),
+		schema.NewColumn("c", 2, types.UintKind, false),
+		schema.NewColumn("d", 3, types.StringKind, false),
+		schema.NewColumn("e", 4, types.BoolKind, false),
+	}
+
+	untypedColColl, _ := schema.NewColCollection(
+		schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("b", 1, types.StringKind, false),
+		schema.NewColumn("c", 2, types.StringKind, false),
+		schema.NewColumn("d", 3, types.StringKind, false),
+		schema.NewColumn("e", 4, types.StringKind, false))
+
+	unequalColCollumn := cols[1]
+	unequalColCollumn.Name = "bad"
+
+	untypedSch := schema.SchemaFromCols(untypedColColl)
+
+	tests := []struct {
+		colsA     []schema.Column
+		colsB     []schema.Column
+		expectErr bool
+	}{
+		{cols[:2], cols[2:], false},
+		{cols[:2], cols[1:], false},
+		{cols[:2], []schema.Column{unequalColCollumn}, true},
+	}
+
+	for i, test := range tests {
+		colCollA, _ := schema.NewColCollection(test.colsA...)
+		colCollB, _ := schema.NewColCollection(test.colsB...)
+		schA := schema.SchemaFromCols(colCollA)
+		schB := schema.SchemaFromCols(colCollB)
+
+		union, err := UntypedSchemaUnion(schA, schB)
+
+		if (err != nil) != test.expectErr {
+			t.Error(i, "expected err:", test.expectErr, "received err:", err != nil)
+		} else if err == nil && !schema.SchemasAreEqual(union, untypedSch) {
+			actualJson, _ := encoding.MarshalAsJson(untypedSch)
+			expectedJson, _ := encoding.MarshalAsJson(union)
+			t.Error(i, "\nexpected:\n", expectedJson, "\nactual:\n", actualJson)
+		}
 	}
 }

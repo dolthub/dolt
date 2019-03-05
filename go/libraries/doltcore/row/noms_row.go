@@ -69,10 +69,10 @@ func New(sch schema.Schema, colVals TaggedValues) Row {
 		return false
 	})
 
-	return FromTaggedVals(sch, keyVals, nonKeyVals)
+	return fromTaggedVals(sch, keyVals, nonKeyVals)
 }
 
-func FromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
+func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 	allCols := sch.GetAllCols()
 
 	keyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
@@ -110,7 +110,7 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
 	key := ParseTaggedValues(nomsKey)
 	val := ParseTaggedValues(nomsVal)
 
-	return FromTaggedVals(sch, key, val)
+	return fromTaggedVals(sch, key, val)
 }
 
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.Value {

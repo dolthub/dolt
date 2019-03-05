@@ -10,14 +10,19 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
 
+// IdentityConverter is a RowConverter which always returns the original row
 var IdentityConverter = &RowConverter{nil, true, nil}
 
+// RowConverter converts rows from one schema to another
 type RowConverter struct {
+	// FieldMapping is a mapping from source column to destination column
 	*FieldMapping
+	// IdentityConverter is a bool which is true if the converter is doing nothing.
 	IdentityConverter bool
 	convFuncs         map[uint64]doltcore.ConvFunc
 }
 
+// NewRowConverter createsa a row converter from a given FieldMapping.
 func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 	if !isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest) {
 		return IdentityConverter, nil
@@ -42,6 +47,8 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 	return &RowConverter{mapping, false, convFuncs}, nil
 }
 
+// Convert takes a row maps its columns to their destination columns, and performs any type conversion needed to create
+// a row of the expected destination schema.
 func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 	if rc.IdentityConverter {
 		return inRow, nil
@@ -58,8 +65,6 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 				outVal, err := convFunc(val)
 
 				if err != nil {
-					fmt.Println()
-					fmt.Println(types.EncodedValue(val))
 					convErr = err
 					return true
 				}
@@ -119,8 +124,8 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 	}
 
 	i := 0
-	destPKCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
-		srcPKCol := srcPKCols.GetByUnsortedIndex(i)
+	destPKCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		srcPKCol := srcPKCols.GetByIndex(i)
 
 		if srcPKCol.Tag != col.Tag {
 			return true
@@ -133,6 +138,7 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 	return false
 }
 
+// GetRowConvTranformFunc can be used to wrap a RowConverter and use that RowConverter in a pipeline.
 func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
 		outRow, err := rc.Convert(inRow)

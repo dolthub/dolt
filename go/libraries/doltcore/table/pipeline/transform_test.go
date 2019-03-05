@@ -66,10 +66,10 @@ func TestPipeline(t *testing.T) {
 		defer wr.Close()
 
 		tc := NewTransformCollection(
-			NamedTransform{"identity", NewRowTransformer("identity", identityTransFunc)},
-			NamedTransform{"label", NewRowTransformer("label", labelTransFunc)},
-			NamedTransform{"dupe", NewRowTransformer("dupe", dupeTransFunc)},
-			NamedTransform{"append", NewRowTransformer("append", appendColumnPre2000TransFunc)},
+			NewNamedTransform("identity", identityTransFunc),
+			NewNamedTransform("label", labelTransFunc),
+			NewNamedTransform("dupe", dupeTransFunc),
+			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		)
 
 		inProcFunc := ProcFuncForReader(rd)
