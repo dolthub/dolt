@@ -75,7 +75,7 @@ func (cdWr *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMa
 	}
 
 	i := 0
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		val, _ := r.GetColVal(tag)
 		str := string(val.(types.String))
 		colStrs[i] = str
@@ -104,7 +104,7 @@ func (cdWr *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMa
 
 	if colorColumns {
 		i = 0
-		allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 			if dt, ok := colDiffs[col.Name]; ok {
 				if colorFunc, ok := colDiffColors[dt]; ok {
 					colStrs[i] = colorFunc(colStrs[i])

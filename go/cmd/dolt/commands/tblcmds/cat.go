@@ -122,8 +122,8 @@ func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformColl
 func addMapTransform(sch schema.Schema, transforms *pipeline.TransformCollection) schema.Schema {
 	mapping := rowconv.TypedToUntypedMapping(sch)
 	rConv, _ := rowconv.NewRowConverter(mapping)
-	transform := pipeline.NewRowTransformer("schema mapping transform", rowconv.GetRowConvTransformFunc(rConv))
-	transforms.AppendTransforms(pipeline.NamedTransform{"map", transform})
+	transform := pipeline.NewNamedTransform("map", rowconv.GetRowConvTransformFunc(rConv))
+	transforms.AppendTransforms(transform)
 
 	return mapping.DestSch
 }
@@ -138,8 +138,8 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 
 		_, confData, _ := tbl.GetConflicts()
 
-		cnfTransform := pipeline.NewRowTransformer(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
-		transColl.AppendTransforms(pipeline.NamedTransform{transCnfSetName, cnfTransform})
+		cnfTransform := pipeline.NewNamedTransform(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
+		transColl.AppendTransforms(cnfTransform)
 
 		return schWithConf
 	}

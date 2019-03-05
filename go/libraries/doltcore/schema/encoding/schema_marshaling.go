@@ -83,7 +83,7 @@ func toSchemaData(sch schema.Schema) schemaData {
 	encCols := make([]encodedColumn, allCols.Size())
 
 	i := 0
-	allCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		encCols[i] = encodeColumn(col)
 		i++
 

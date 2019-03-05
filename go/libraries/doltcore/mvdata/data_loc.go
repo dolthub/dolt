@@ -169,7 +169,9 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 		return tWr, err
 
 	case PsvFile:
-		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim('|'))
+		csvInfo := csv.NewCSVInfo()
+		csvInfo.Delim = '|'
+		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csvInfo)
 		return tWr, err
 
 		//case NbfFile:

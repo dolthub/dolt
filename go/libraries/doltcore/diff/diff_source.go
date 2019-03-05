@@ -104,7 +104,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		if d.OldValue != nil && d.NewValue != nil {
 			oldColDiffs := make(map[string]DiffChType)
 			newColDiffs := make(map[string]DiffChType)
-			outCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+			outCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 				oldVal, _ := mappedOld.GetColVal(tag)
 				newVal, _ := mappedNew.GetColVal(tag)
 

@@ -245,7 +245,7 @@ func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []
 	pkCols := sch.GetPKCols()
 	convFuncs := make(map[uint64]doltcore.ConvFunc)
 
-	pkCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	pkCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		convFuncs[tag] = doltcore.GetConvFunc(types.StringKind, col.Kind)
 		return false
 	})
@@ -262,7 +262,7 @@ func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []
 	for _, keyStrs := range keys {
 		i := 0
 		pk := make([]types.Value, pkCols.Size()*2)
-		pkCols.ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+		pkCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 			strForTag, ok := keyStrs[tag]
 			pk[i] = types.Uint(tag)
 

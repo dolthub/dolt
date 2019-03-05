@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 )
 
 var ErrRowNotValid = errors.New("invalid row for current schema.")
@@ -47,7 +48,7 @@ func IsValid(r Row, sch schema.Schema) bool {
 	allCols := sch.GetAllCols()
 
 	valid := true
-	allCols.ItrInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if len(col.Constraints) > 0 {
 			val, _ := r.GetColVal(tag)
 
@@ -69,7 +70,7 @@ func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
 	allCols := sch.GetAllCols()
 
 	var badCol *schema.Column
-	allCols.ItrInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if len(col.Constraints) > 0 {
 			val, _ := r.GetColVal(tag)
 
@@ -95,10 +96,10 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 	}
 
 	for _, tag := range sch.GetAllCols().Tags {
-		val1, ok1 := row1.GetColVal(tag)
-		val2, ok2 := row2.GetColVal(tag)
+		val1, _ := row1.GetColVal(tag)
+		val2, _ := row2.GetColVal(tag)
 
-		if ok1 != ok2 || ok1 && !val1.Equals(val2) {
+		if !valutil.NilSafeEqCheck(val1, val2) {
 			return false
 		}
 	}

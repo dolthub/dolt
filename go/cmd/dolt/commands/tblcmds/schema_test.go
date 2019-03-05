@@ -1,12 +1,6 @@
 package tblcmds
 
-import (
-	"reflect"
-	"testing"
-
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/jsonenc"
-)
-
+/*
 func TestExportTblSchema(t *testing.T) {
 	tests := []struct {
 		table       string
@@ -62,7 +56,6 @@ func TestAddFieldToSchema(t *testing.T) {
 		root, _ := dEnv.WorkingRoot()
 		tbl, _ := root.GetTable(tableName)
 		originalSchemaFields := tbl.GetSchema().GetFieldNames()
-
 
 		result, err := addFieldToSchema(tableName, tbl, dEnv, test.newColName, test.colType, test.required, &test.defaultVal)
 		if err != nil {
@@ -137,3 +130,4 @@ func TestRemoveColumnFromTable(t *testing.T) {
 		}
 	}
 }
+*/

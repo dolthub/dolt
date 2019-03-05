@@ -86,7 +86,7 @@ func (cWr *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap)
 	}
 
 	i := 0
-	cWr.sch.GetAllCols().ItrUnsorted(func(tag uint64, col schema.Column) (stop bool) {
+	cWr.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if val, ok := r.GetColVal(tag); ok {
 			str := string(val.(types.String))
 			colStrs[i] = str

@@ -62,31 +62,22 @@ func TestAppendAndItrInSortOrder(t *testing.T) {
 	}
 
 	colColl, _ := NewColCollection(cols...)
-	validateItrInSortOrder(len(cols), colColl, t)
+	validateIter(len(cols), colColl, t)
 	colColl2, _ := colColl.Append(cols2...)
-	validateItrInSortOrder(len(cols), colColl, t) //validate immutability
-	validateItrInSortOrder(len(cols)+len(cols2), colColl2, t)
+	validateIter(len(cols), colColl, t) //validate immutability
+	validateIter(len(cols)+len(cols2), colColl2, t)
 }
 
-func validateItrInSortOrder(numCols int, colColl *ColCollection, t *testing.T) {
+func validateIter(numCols int, colColl *ColCollection, t *testing.T) {
 	if numCols != colColl.Size() {
 		t.Error("missing data")
 	}
 
-	var idx uint64
-	colColl.ItrInSortedOrder(func(tag uint64, col Column) (stop bool) {
-		if idx != tag {
-			t.Error("Not in order")
-		} else if col.Name != strconv.FormatUint(idx, 10) || col.Tag != tag {
+	colColl.Iter(func(tag uint64, col Column) (stop bool) {
+		if col.Name != strconv.FormatUint(tag, 10) || col.Tag != tag {
 			t.Errorf("tag:%d - %v", tag, col)
 		}
 
-		idx++
-
 		return false
 	})
-
-	if idx != uint64(numCols) {
-		t.Error("Did not iterate over all values")
-	}
 }

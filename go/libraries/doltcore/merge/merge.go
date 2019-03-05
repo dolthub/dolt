@@ -230,7 +230,7 @@ func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (resultRow ty
 		resultVals := make(row.TaggedValues)
 
 		var isConflict bool
-		sch.GetNonPKCols().ItrUnsorted(func(tag uint64, _ schema.Column) (stop bool) {
+		sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool) {
 			var val types.Value
 			val, isConflict = processTagFunc(tag)
 			resultVals[tag] = val

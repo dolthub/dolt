@@ -48,4 +48,24 @@ func TestIsValid(t *testing.T) {
 	if !IsValid(r, sch) {
 		t.Error("Not valid")
 	}
+
+	invalidRow, _ := r.SetColVal(lnColTag, nil, sch)
+
+	if IsValid(invalidRow, sch) {
+		t.Error("This row should not be valid")
+	}
+
+	col := GetInvalidCol(invalidRow, sch)
+
+	if col.Tag != lnColTag {
+		t.Error("Unexpected column returned by GetInvalidCol")
+	}
+
+	if !AreEqual(r, r, sch) {
+		t.Error("Row should definitely be equal to itself")
+	}
+
+	if AreEqual(r, invalidRow, sch) {
+		t.Error("Row should not be equal to invalidRow")
+	}
 }

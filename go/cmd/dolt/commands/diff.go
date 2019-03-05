@@ -202,10 +202,9 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	defer src.Close()
 
 	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
-	colorTr := pipeline.NewRowTransformer("coloring transform", diff.ColoringTransform)
 	transforms := pipeline.NewTransformCollection(
 		pipeline.NamedTransform{"fwt", fwtTr.TransformToFWT},
-		pipeline.NamedTransform{"color", colorTr})
+		pipeline.NewNamedTransform("color", diff.ColoringTransform))
 
 	sink := diff.NewColorDiffWriter(cli.CliOut, untypedUnionSch, " | ")
 	defer sink.Close()

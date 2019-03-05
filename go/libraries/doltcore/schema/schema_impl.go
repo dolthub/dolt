@@ -4,6 +4,7 @@ type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 }
 
+// SchemaFromCols creates a Schema from a collection of columns
 func SchemaFromCols(allCols *ColCollection) Schema {
 	var pkCols []Column
 	var nonPKCols []Column
@@ -26,6 +27,7 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 	return si
 }
 
+// SchemaFromPKAndNonPKCols creates a Schema from a collection of the key columns, and the non-key columns.
 func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) {
 	allCols := make([]Column, pkCols.Size()+nonPKCols.Size())
 
@@ -59,14 +61,17 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 	}, nil
 }
 
+// GetAllCols gets the collection of all columns (pk and non-pk)
 func (si *schemaImpl) GetAllCols() *ColCollection {
 	return si.allCols
 }
 
+// GetNonPKCols gets the collection of columns which are not part of the primary key.
 func (si *schemaImpl) GetNonPKCols() *ColCollection {
 	return si.nonPKCols
 }
 
+// GetPKCols gets the collection of columns which make the primary key.
 func (si *schemaImpl) GetPKCols() *ColCollection {
 	return si.pkCols
 }

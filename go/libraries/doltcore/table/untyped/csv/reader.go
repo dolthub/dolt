@@ -14,8 +14,11 @@ import (
 	"strings"
 )
 
+// ReadBufSize is the size of the buffer used when reading the csv file.  It is set at the package level and all
+// readers create their own buffer's using the value of this variable at the time they create their buffers.
 var ReadBufSize = 256 * 1024
 
+// CSVReader implements TableReader.  It reads csv files and returns rows.
 type CSVReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
@@ -24,6 +27,8 @@ type CSVReader struct {
 	isDone bool
 }
 
+// OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
+// being opened.
 func OpenCSVReader(path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVReader, error) {
 	r, err := fs.OpenForRead(path)
 
@@ -34,6 +39,7 @@ func OpenCSVReader(path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVR
 	return NewCSVReader(r, info)
 }
 
+// NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
 func NewCSVReader(r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(br, info)

@@ -1,6 +1,7 @@
 package row
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"reflect"
@@ -42,19 +43,16 @@ var testKeyColColl, _ = schema.NewColCollection(testKeyCols...)
 var testNonKeyColColl, _ = schema.NewColCollection(testCols...)
 var sch, _ = schema.SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColColl)
 
-func newTestRow() nomsRow {
-	key := TaggedValues{
-		fnColTag: fnVal,
-		lnColTag: lnVal,
-	}
-
-	val := TaggedValues{
+func newTestRow() Row {
+	vals := TaggedValues{
+		fnColTag:    fnVal,
+		lnColTag:    lnVal,
 		addrColTag:  addrVal,
 		ageColTag:   ageVal,
 		titleColTag: titleVal,
 	}
 
-	return nomsRow{key, val}
+	return New(sch, vals)
 }
 
 func TestItrRowCols(t *testing.T) {
@@ -124,4 +122,20 @@ func TestRowSet(t *testing.T) {
 
 	expected[lnColTag] = updatedVal
 	validateRow(t, updated, expected)
+}
+
+func TestConvToAndFromTuple(t *testing.T) {
+	r := newTestRow()
+
+	keyTpl := r.NomsMapKey(sch)
+	valTpl := r.NomsMapValue(sch)
+
+	r2 := FromNoms(sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
+
+	fmt.Println(Fmt(r, sch))
+	fmt.Println(Fmt(r2, sch))
+
+	if !AreEqual(r, r2, sch) {
+		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")
+	}
 }
