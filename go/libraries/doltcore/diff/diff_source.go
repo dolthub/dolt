@@ -89,13 +89,23 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		var mappedOld row.Row
 		var mappedNew row.Row
 
+		originalNewSch := rdRd.outSch
+		if !rdRd.newConv.IdentityConverter {
+			originalNewSch = rdRd.newConv.SrcSch
+		}
+
+		originalOldSch := rdRd.outSch
+		if !rdRd.oldConv.IdentityConverter {
+			originalOldSch = rdRd.oldConv.SrcSch
+		}
+
 		if d.OldValue != nil {
-			oldRow := row.FromNoms(rdRd.oldConv.SrcSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+			oldRow := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
 		}
 
 		if d.NewValue != nil {
-			newRow := row.FromNoms(rdRd.newConv.SrcSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+			newRow := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 
@@ -108,8 +118,8 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 				oldVal, _ := mappedOld.GetColVal(tag)
 				newVal, _ := mappedNew.GetColVal(tag)
 
-				_, inOld := rdRd.oldConv.SrcSch.GetAllCols().GetByTag(tag)
-				_, inNew := rdRd.newConv.SrcSch.GetAllCols().GetByTag(tag)
+				_, inOld := originalOldSch.GetAllCols().GetByTag(tag)
+				_, inNew := originalNewSch.GetAllCols().GetByTag(tag)
 
 				if inOld && inNew {
 					if !valutil.NilSafeEqCheck(oldVal, newVal) {
