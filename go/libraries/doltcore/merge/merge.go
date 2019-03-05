@@ -185,14 +185,12 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (resultRow types.Value, isConflict bool) {
+func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
 			// same row added to both
 			return r, false
-		} else {
-			// different rows added for the same key
-			return nil, true
 		}
 	} else if r == nil && mergeRow == nil {
 		// same row removed from both
@@ -201,49 +199,50 @@ func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (resultRow ty
 		// removed from one and modified in another
 		return nil, true
 	} else {
-		rowVals := row.ParseTaggedValues(r.(types.Tuple))
-		mergeVals := row.ParseTaggedValues(mergeRow.(types.Tuple))
-		baseVals := row.ParseTaggedValues(baseRow.(types.Tuple))
-
-		processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
-			baseVal, _ := baseVals.Get(tag)
-			val, _ := rowVals.Get(tag)
-			mergeVal, _ := mergeVals.Get(tag)
-
-			if valutil.NilSafeEqCheck(val, mergeVal) {
-				return val, false
-			} else {
-				modified := !valutil.NilSafeEqCheck(val, baseVal)
-				mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
-				switch {
-				case modified && mergeModified:
-					return nil, true
-				case modified:
-					return val, false
-				default:
-					return mergeVal, false
-				}
-			}
-
-		}
-
-		resultVals := make(row.TaggedValues)
-
-		var isConflict bool
-		sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool) {
-			var val types.Value
-			val, isConflict = processTagFunc(tag)
-			resultVals[tag] = val
-
-			return isConflict
-		})
-
-		if isConflict {
-			return nil, true
-		}
-
-		tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
-
-		return tpl, false
+		baseVals = row.ParseTaggedValues(baseRow.(types.Tuple))
 	}
+
+	rowVals := row.ParseTaggedValues(r.(types.Tuple))
+	mergeVals := row.ParseTaggedValues(mergeRow.(types.Tuple))
+
+	processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
+		baseVal, _ := baseVals.Get(tag)
+		val, _ := rowVals.Get(tag)
+		mergeVal, _ := mergeVals.Get(tag)
+
+		if valutil.NilSafeEqCheck(val, mergeVal) {
+			return val, false
+		} else {
+			modified := !valutil.NilSafeEqCheck(val, baseVal)
+			mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
+			switch {
+			case modified && mergeModified:
+				return nil, true
+			case modified:
+				return val, false
+			default:
+				return mergeVal, false
+			}
+		}
+
+	}
+
+	resultVals := make(row.TaggedValues)
+
+	var isConflict bool
+	sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool) {
+		var val types.Value
+		val, isConflict = processTagFunc(tag)
+		resultVals[tag] = val
+
+		return isConflict
+	})
+
+	if isConflict {
+		return nil, true
+	}
+
+	tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
+
+	return tpl, false
 }

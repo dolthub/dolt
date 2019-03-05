@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -126,7 +127,8 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 	colVals := csvSplitLine(line, csvr.info.Delim, csvr.info.EscapeQuotes)
 
 	sch := csvr.sch
-	numCols := sch.GetAllCols().Size()
+	allCols := sch.GetAllCols()
+	numCols := allCols.Size()
 	if len(colVals) != numCols {
 		return nil, table.NewBadRow(nil,
 			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", numCols, len(colVals)),
@@ -134,5 +136,14 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 		)
 	}
 
-	return untyped.NewRowFromStrings(sch, colVals), nil
+	taggedVals := make(row.TaggedValues)
+	for i := 0; i < allCols.Size(); i++ {
+		if len(colVals[i]) > 0 {
+			col := allCols.GetByIndex(i)
+			taggedVals[col.Tag] = types.String(colVals[i])
+		}
+	}
+
+	r := row.New(sch, taggedVals)
+	return r, nil
 }

@@ -1,5 +1,7 @@
 package schema
 
+import "math/rand"
+
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
 	// GetPKCols gets the collection of columns which make the primary key.
@@ -55,4 +57,30 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	})
 
 	return areEqual
+}
+
+func AutoGenerateTag(sch Schema) uint64 {
+	var maxTagVal int64 = 128
+
+	allCols := sch.GetAllCols()
+	for maxTagVal/2 < int64(allCols.Size()) {
+		if maxTagVal == int64(ReservedTagMin)-1 {
+			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
+		} else if maxTagVal*128 < maxTagVal {
+			maxTagVal = int64(ReservedTagMin) - 1
+		} else {
+			maxTagVal = maxTagVal * 128
+		}
+	}
+
+	var randTag uint64
+	for {
+		randTag = uint64(rand.Int63n(maxTagVal))
+
+		if _, ok := allCols.GetByTag(randTag); !ok {
+			break
+		}
+	}
+
+	return randTag
 }
