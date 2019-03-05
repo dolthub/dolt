@@ -81,7 +81,6 @@ func testSchema(method string, sch Schema, t *testing.T) {
 	} else if col.Name != titleColName {
 		t.Error("Unexpected tag")
 	}
-
 }
 
 func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg string) {
@@ -89,3 +88,33 @@ func validateCols(t *testing.T, cols []Column, colColl *ColCollection, msg strin
 		t.Error()
 	}
 }
+
+/*
+func TestAutoGenerateTag(t *testing.T) {
+	colColl, _ := NewColCollection()
+	sch := SchemaFromCols(colColl)
+
+	var max uint64 = 128
+	for i := uint64(0); i < 128*128; i++ {
+		if i > 8192 {
+			max = 2097152
+		} else if i > 64 {
+			max = 16384
+		}
+
+		tag := AutoGenerateTag(sch)
+
+		if tag >= max {
+			t.Fatal("auto generated tag out of range")
+		} else {
+			var err error
+			colColl, err = colColl.Append(NewColumn(strconv.FormatUint(i, 10), tag, types.StringKind, false))
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sch = SchemaFromCols(colColl)
+		}
+	}
+}*/

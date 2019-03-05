@@ -60,6 +60,11 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) {
 	ap.SupportOption(opt)
 }
 
+func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) {
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr}
+	ap.SupportOption(opt)
+}
+
 func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr}
 	ap.SupportOption(opt)

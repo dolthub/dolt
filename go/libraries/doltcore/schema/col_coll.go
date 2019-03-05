@@ -59,8 +59,8 @@ func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, err
 // Append returns a new collection with the additional columns appended
 func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 	allCols := make([]Column, 0, len(cols)+len(cc.cols))
-	allCols = append(allCols, cols...)
 	allCols = append(allCols, cc.cols...)
+	allCols = append(allCols, cols...)
 
 	return NewColCollection(allCols...)
 }

@@ -1,15 +1,29 @@
 package tblcmds
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"strings"
+)
+
+const (
+	exportFlag      = "export"
+	defaultParam    = "default"
+	tagParam        = "tag"
+	notNullFlag     = "not-null"
+	addFieldFlag    = "add-field"
+	renameFieldFlag = "rename-field"
+	dropFieldFlag   = "drop-field"
 )
 
 var tblSchemaShortDesc = "Displays table schemas"
@@ -30,7 +44,7 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
-	//"--add-field <table> <name> <type> <is_required>[<default_value>]",
+	"--add-field [--default <default_value>] [--not-null] [--tag <tag-number>] <table> <name> <type>",
 	//"--rename-field <table> <old> <new>]",
 	//"--drop-field <table> <field>",
 }
@@ -41,10 +55,13 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
-	ap.SupportsFlag("export", "", "exports schema into file.")
-	//ap.SupportsFlag("add-field", "", "add columm to table schema.")
-	//ap.SupportsFlag("rename-field", "", "rename column for specified table.")
-	//ap.SupportsFlag("drop-field", "", "removes column from specified table.")
+	ap.SupportsFlag(exportFlag, "", "exports schema into file.")
+	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
+	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new field.")
+	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this field will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
+	ap.SupportsFlag(addFieldFlag, "", "add columm to table schema.")
+	//ap.SupportsFlag(renameFieldFlag, "", "rename column for specified table.")
+	//ap.SupportsFlag(dlopFieldFlag, "", "removes column from specified table.")
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -54,11 +71,12 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 	/*if apr.Contains("rename-field") {
 		verr = renameColumn(args, root, dEnv)
-	} else if apr.Contains("add-field") {
-		verr = addField(args, root, dEnv)
 	} else if apr.Contains("drop-field") {
 		verr = removeColumns(args, root, dEnv)
-	} else*/if apr.Contains("export") {
+	} else*/
+	if apr.Contains(addFieldFlag) {
+		verr = addField(apr, root, dEnv)
+	} else if apr.Contains(exportFlag) {
 		verr = exportSchemas(apr.Args(), root, dEnv)
 	} else {
 		verr = printSchemas(apr, dEnv)
@@ -167,37 +185,65 @@ func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *e
 	return errhand.BuildIf(err, "Unable to write "+filename).AddCause(err).Build()
 }
 
-/*
-func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
-	if len(args) < 4 {
+func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+	if apr.NArg() != 3 {
 		return errhand.BuildDError("Must specify table name, field name, field type, and if field required.").SetPrintUsage().Build()
 	}
 
-	tblName := args[0]
+	tblName := apr.Arg(0)
 	if !root.HasTable(tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
 	tbl, _ := root.GetTable(tblName)
-	origFieldNames := tbl.GetSchema().GetFieldNames()
-	newFieldName := args[1]
-	newFieldType := args[2]
-	isFieldRequired := args[3]
+	tblSch := tbl.GetSchema()
+	newFieldName := apr.Arg(1)
 
 	var defaultVal *string
-
-	if len(args) == 5 {
-		defaultVal = &args[4]
-
+	if val, ok := apr.GetValue(defaultParam); ok {
+		defaultVal = &val
 	}
 
-	for _, name := range origFieldNames {
-		if newFieldName == name {
-			return errhand.BuildDError("this field already exists.").Build()
+	var tag uint64
+	if val, ok := apr.GetUint(tagParam); ok {
+		tag = val
+	} else {
+		tag = schema.AutoGenerateTag(tblSch)
+	}
+
+	var verr errhand.VerboseError
+
+	cols := tblSch.GetAllCols()
+	cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool) {
+		if currColTag == tag {
+			verr = errhand.BuildDError("A field with the tag %d already exists.", tag).Build()
+			return true
+		} else if currCol.Name == newFieldName {
+			verr = errhand.BuildDError("A field with the name %s already exists.", newFieldName).Build()
+			return true
 		}
+
+		return false
+	})
+
+	if verr != nil {
+		return verr
 	}
 
-	newTable, err := addFieldToSchema(tblName, tbl, dEnv, newFieldName, newFieldType, isFieldRequired, defaultVal)
+	newFieldType := strings.ToLower(apr.Arg(2))
+
+	newFieldKind, ok := schema.LwrStrToKind[newFieldType]
+	if !ok {
+		return errhand.BuildDError(newFieldType + " is not a valid type for this new field.").SetPrintUsage().Build()
+	}
+
+	notNull := apr.Contains(notNullFlag)
+
+	if notNull && defaultVal == nil && tbl.GetRowData().Len() > 0 {
+		return errhand.BuildDError("When adding a field that may not be null to a table with existing rows, a default value must be provided.").Build()
+	}
+
+	newTable, err := addFieldToSchema(tbl, dEnv, newFieldName, newFieldKind, tag, notNull, defaultVal)
 	if err != nil {
 		return errhand.BuildDError("failed to add field").AddCause(err).Build()
 	}
@@ -208,80 +254,57 @@ func addField(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.
 	return nil
 }
 
-func addFieldToSchema(tblName string, tbl *doltdb.Table, dEnv *env.DoltEnv, newColName string, colType string, required string, defaultVal *string) (*doltdb.Table, error) {
-	if required == "true" && defaultVal == nil {
-		return nil, errors.New("required column must have default value")
+// need to refactor this so it can be moved into the libraries
+func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind types.NomsKind, tag uint64, notNull bool, defaultVal *string) (*doltdb.Table, error) {
+	var col schema.Column
+	if notNull {
+		col = schema.NewColumn(name, tag, kind, false, schema.NotNullConstraint{})
+	} else {
+		col = schema.NewColumn(name, tag, kind, false)
 	}
 
-	tblSch := tbl.GetSchema()
+	sch := tbl.GetSchema()
+	updatedCols, err := sch.GetAllCols().Append(col)
 
-	origTblFields := make([]*schema.Field, 0, tblSch.NumFields())
-	for i := 0; i < tblSch.NumFields(); i++ {
-		origTblFields = append(origTblFields, tblSch.GetField(i))
+	if err != nil {
+		return nil, err
 	}
 
-	origConstraints := make([]*schema.Constraint, 0, tblSch.TotalNumConstraints())
-	for i := 0; i < tblSch.TotalNumConstraints(); i++ {
-		origConstraints = append(origConstraints, tblSch.GetConstraint(i))
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	newSchema := schema.SchemaFromCols(updatedCols)
+	newSchemaVal, err := encoding.MarshalAsNomsValue(vrw, newSchema)
+
+	if err != nil {
+		return nil, err
 	}
 
-	if newColType, ok := schema.LwrStrToKind[colType]; ok {
-		isRequired, err := strconv.ParseBool(required)
+	if defaultVal == nil {
+		newTable := doltdb.NewTable(vrw, newSchemaVal, tbl.GetRowData())
+		return newTable, nil
+	}
+
+	rowData := tbl.GetRowData()
+	me := rowData.Edit()
+	defVal, _ := doltcore.StringToValue(*defaultVal, kind)
+
+	rowData.Iter(func(k, v types.Value) (stop bool) {
+		oldRow, _ := tbl.GetRow(k.(types.Tuple), newSchema)
+		newRow, err := oldRow.SetColVal(tag, defVal, newSchema)
+
 		if err != nil {
-			return nil, err
-		}
-		newField := schema.NewField(newColName, newColType, isRequired)
-		fieldsForNewSchema := append(origTblFields, newField)
-
-		vrw := dEnv.DoltDB.ValueReadWriter()
-		newSchema := schema.NewSchema(fieldsForNewSchema)
-
-		for _, c := range origConstraints {
-			newSchema.AddConstraint(c)
+			return true
 		}
 
-		schemaVal, err := noms.MarshalAsNomsValue(vrw, newSchema)
+		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
 
-		if err != nil {
-			return nil, err
-		}
+		return false
+	})
 
-		newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
-
-		if defaultVal == nil {
-			return newTable, nil
-		}
-		newTblSch := newTable.GetSchema()
-
-		rowData := newTable.GetRowData()
-		me := rowData.Edit()
-		var finalTable *doltdb.Table
-		defVal, _ := doltcore.StringToValue(*defaultVal, newColType)
-
-		rowData.Iter(func(k, v types.Value) (stop bool) {
-			oldRow, _ := newTable.GetRow(k, newTblSch)
-			oldRowData := oldRow.CurrData()
-			fieldVals := make([]types.Value, newTblSch.NumFields())
-			fieldVals[newTblSch.NumFields()-1] = defVal
-			oldRowData.CopyValues(fieldVals[0:newTblSch.NumFields()-1], 0, newTblSch.NumFields()-1)
-
-			newRowData := table.RowDataFromValues(newTblSch, fieldVals)
-			newRow := table.NewRow(newRowData)
-
-			me.Set(table.GetPKFromRow(newRow), table.GetNonPKFieldListFromRow(newRow, vrw))
-
-			return false
-		})
-
-		updatedTbl := newTable.UpdateRows(me.Map())
-
-		finalTable = doltdb.NewTable(vrw, schemaVal, updatedTbl.GetRowData())
-		return finalTable, nil
-	}
-	return nil, errors.New("invalid noms kind")
+	updatedTbl := doltdb.NewTable(vrw, newSchemaVal, me.Map())
+	return updatedTbl, nil
 }
 
-func renameColumn(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+/*func renameColumn(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(args) < 3 {
 		return errhand.BuildDError("Table name, current column name, and new column name are needed to rename column.").SetPrintUsage().Build()
 	}

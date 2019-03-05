@@ -23,6 +23,15 @@ func isIntStr(str string) error {
 	return nil
 }
 
+func isUintStr(str string) error {
+	_, err := strconv.ParseUint(str, 10, 64)
+	if err != nil {
+		return errors.New("error: \"" + str + "\" is not a valid int.")
+	}
+
+	return nil
+}
+
 type Option struct {
 	Name      string
 	Abbrev    string

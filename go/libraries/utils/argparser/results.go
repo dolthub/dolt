@@ -97,6 +97,21 @@ func (res *ArgParseResults) GetInt(name string) (int, bool) {
 	return int(intVal), true
 }
 
+func (res *ArgParseResults) GetUint(name string) (uint64, bool) {
+	val, ok := res.options[name]
+
+	if !ok {
+		return math.MaxUint64, false
+	}
+
+	uintVal, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
+		return math.MaxUint64, false
+	}
+
+	return uintVal, true
+}
+
 func (res *ArgParseResults) GetIntOrDefault(name string, defVal int) int {
 	n, ok := res.GetInt(name)
 
