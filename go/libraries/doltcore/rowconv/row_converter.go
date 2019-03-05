@@ -10,7 +10,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
 
-// IdentityConverter is a RowConverter which always returns the original row
 var IdentityConverter = &RowConverter{nil, true, nil}
 
 // RowConverter converts rows from one schema to another
@@ -22,10 +21,14 @@ type RowConverter struct {
 	convFuncs         map[uint64]doltcore.ConvFunc
 }
 
+func newIdentityConverter(mapping *FieldMapping) *RowConverter {
+	return &RowConverter{mapping, true, nil}
+}
+
 // NewRowConverter createsa a row converter from a given FieldMapping.
 func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 	if !isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest) {
-		return IdentityConverter, nil
+		return newIdentityConverter(mapping), nil
 	}
 
 	convFuncs := make(map[uint64]doltcore.ConvFunc, len(mapping.SrcToDest))
