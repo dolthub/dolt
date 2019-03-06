@@ -1,16 +1,6 @@
 package tblcmds
 
-import (
-	"github.com/attic-labs/noms/go/types"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"strings"
-	"testing"
-)
-
+/*
 func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	imt, sch := dtestutils.CreateTestDataTable(true)
@@ -104,7 +94,7 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-/*func TestParseUpdateArgs(t *testing.T) {
+func TestParseUpdateArgs(t *testing.T) {
 	tests := []struct {
 		args         []string
 		expectedOpts *mvdata.MoveOptions

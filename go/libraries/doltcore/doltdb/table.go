@@ -3,7 +3,6 @@ package doltdb
 import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -240,7 +239,7 @@ func (t *Table) GetRowData() types.Map {
 	return rowMap
 }
 
-func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []map[uint64]string, tbl *Table, err error) {
+/*func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []types.Value, tbl *Table, err error) {
 	sch := t.GetSchema()
 	pkCols := sch.GetPKCols()
 	convFuncs := make(map[uint64]doltcore.ConvFunc)
@@ -250,15 +249,7 @@ func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []
 		return false
 	})
 
-	removed := 0
-	_, confData, err := t.GetConflicts()
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	confEdit := confData.Edit()
-
+	var pkTuples []types.Tuple
 	for _, keyStrs := range keys {
 		i := 0
 		pk := make([]types.Value, pkCols.Size()*2)
@@ -277,17 +268,31 @@ func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []
 				pk[i+1] = types.NullValue
 			}
 
-			pkTupleVal := types.NewTuple(pk...)
-
-			if confEdit.Has(pkTupleVal) {
-				removed++
-				confEdit.Remove(pkTupleVal)
-			} else {
-				notFound = append(notFound, keyStrs)
-			}
 			i += 2
 			return false
 		})
+
+		pkTupleVal := types.NewTuple(pk...)
+		pkTuples = append(pkTuples, pkTupleVal)
+	}
+}*/
+
+func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
+	removed := 0
+	_, confData, err := t.GetConflicts()
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	confEdit := confData.Edit()
+	for _, pkTupleVal := range pkTuples {
+		if confEdit.Has(pkTupleVal) {
+			removed++
+			confEdit.Remove(pkTupleVal)
+		} else {
+			notFound = append(notFound, pkTupleVal)
+		}
 	}
 
 	if removed == 0 {
