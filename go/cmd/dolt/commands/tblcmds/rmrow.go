@@ -14,7 +14,7 @@ import (
 var rmRowShortDesc = "Removes row(s) from a table"
 var rmRowLongDesc = "dolt table rm-row will remove one or more rows from a table in the working set."
 var rmRowSynopsis = []string{
-	"<table> [<definition>] <primary_key>...",
+	"<table> [<key_definition>] <key>...",
 }
 
 type rmRowArgs struct {

@@ -2,6 +2,8 @@ package cnfcmds
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
@@ -20,7 +22,7 @@ var resLongDesc = "When a merge operation finds conflicting changes, the rows wi
 	"In it's second form <b>dolt conflicts resolve --ours|--theirs <table>...</b>, resolve runs in auto resolve mode. " +
 	"where conflicts are resolved using a rule to determine which version of a row should be used."
 var resSynopsis = []string{
-	"<table> <key>...",
+	"<table> [<key_definition>] <key>...",
 	"--ours|--theirs <table>...",
 }
 
@@ -52,22 +54,23 @@ func Resolve(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	var verr errhand.VerboseError
 	if apr.ContainsAny(autoResolverParams...) {
-		return autoResolve(usage, apr, dEnv)
+		verr = autoResolve(apr, dEnv)
 	} else {
-		return manualResolve(usage, apr, dEnv)
+		verr = manualResolve(apr, dEnv)
 	}
+
+	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func autoResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) int {
+func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
-		usage()
-		return 1
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	} else if apr.NArg() == 0 {
-		usage()
-		return 1
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	autoResolveFlag := funcFlags.AsSlice()[0]
@@ -84,56 +87,61 @@ func autoResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *e
 	if err != nil {
 		if err == doltdb.ErrNoConflicts {
 			cli.Println("no conflicts to resolve.")
-			return 0
+			return nil
 		}
 
-		panic(err) // todo: fix
-		return 1
+		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
-	return 0
+	return nil
 }
 
-func manualResolve(usage cli.UsagePrinter, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) int {
-	panic("need to implement again :)")
-	/*args := apr.Args()
+func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+	args := apr.Args()
 
 	if len(args) < 2 {
-		usage()
-		return 1
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
-	if verr == nil {
-		tblName := args[0]
-		if root.HasTable(tblName) {
-			tbl, ok := root.GetTable(tblName)
+	if verr != nil {
+		return verr
+	}
 
-			if !ok {
-				verr = errhand.BuildDError("fatal: table not found - " + tblName).Build()
-			} else {
-				/*invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(args[1:])
+	tblName := args[0]
+	if !root.HasTable(tblName) {
+		return errhand.BuildDError("error: table '%s' not found", tblName).Build()
+	}
 
-				if err != nil {
-					verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
-				} else {
-					for _, key := range invalid {
-						cli.Println(key, "is not a valid key")
-					}
+	tbl, _ := root.GetTable(tblName)
+	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(), args[1:])
 
-					for _, key := range notFound {
-						cli.Println(key, "is not the primary key of a conflicting row")
-					}
+	if err != nil {
+		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
+	}
 
-					if updatedTbl.HashOf() != tbl.HashOf() {
-						root := root.PutTable(dEnv.DoltDB, tblName, updatedTbl)
-						verr = commands.UpdateWorkingWithVErr(dEnv, root)
-					}
-				}
-			}
+	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(keysToResolve)
+
+	if err != nil {
+		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
+	} else {
+		for _, key := range invalid {
+			cli.Println(key, "is not a valid key")
+		}
+
+		for _, key := range notFound {
+			cli.Println(key, "is not the primary key of a conflicting row")
+		}
+
+		if updatedTbl.HashOf() != tbl.HashOf() {
+			root := root.PutTable(dEnv.DoltDB, tblName, updatedTbl)
+			verr = commands.UpdateWorkingWithVErr(dEnv, root)
 		}
 	}
 
-	return commands.HandleVErrAndExitCode(verr, usage)*/
+	valid := len(keysToResolve) - len(invalid) - len(notFound)
+	cli.Println(valid, "rows resolved successfully")
+
+	return nil
 }

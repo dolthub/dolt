@@ -69,7 +69,7 @@ func TestUnneccessaryConversion(t *testing.T) {
 
 	rconv, err := NewRowConverter(mapping)
 
-	if rconv != IdentityConverter {
+	if !rconv.IdentityConverter {
 		t.Error("expected identity converter")
 	}
 }

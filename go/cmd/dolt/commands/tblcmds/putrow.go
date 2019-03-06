@@ -22,7 +22,7 @@ var putRowLongDesc = "dolt table put-row will put a row in a table.  If a row al
 	"\n" +
 	"  dolt table put-row \"field0:value0\" \"field1:value1\" ... \"fieldN:valueN\"\n"
 var putRowSynopsis = []string{
-	"<<field_name>:<field_value>>...",
+	"<table> <<field_name>:<field_value>>...",
 }
 
 type putRowArgs struct {
@@ -33,6 +33,7 @@ type putRowArgs struct {
 
 func parsePutRowArgs(commandStr string, args []string) *putRowArgs {
 	ap := argparser.NewArgParser()
+	ap.ArgListHelp["<table>"] = "The table being inserted into"
 	ap.ArgListHelp["<field_name>:<field_value"] = "There should be a <field_name>:<field_value> pair for each field " +
 		"that you want set on this row.  If all required fields are not set, then this command will fail."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, putRowShortDesc, putRowLongDesc, putRowSynopsis, ap)
