@@ -1,16 +1,20 @@
 package tblcmds
 
-import "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+import (
+	"github.com/attic-labs/noms/go/types"
+	"github.com/fatih/color"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+)
 
-func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	panic("fix me please")
-}
-
-/*
 var rmRowShortDesc = "Removes row(s) from a table"
 var rmRowLongDesc = "dolt table rm-row will remove one or more rows from a table in the working set."
 var rmRowSynopsis = []string{
-	"<table> <primary_key>...",
+	"<table> [<definition>] <primary_key>...",
 }
 
 type rmRowArgs struct {
@@ -44,21 +48,17 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	rmArgs := parseRmRowArgs(commandStr, args)
 
-	if rmArgs == nil {
-		return 1
-	}
-
 	var root *doltdb.RootValue
 	var tbl *doltdb.Table
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		var pkVals []types.Value
-		var pkFldName string
-		pkFldName, pkVals, verr = getPKsOfRowsToRm(root, tbl, rmArgs.PKs)
+		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(), rmArgs.PKs)
 
-		if verr == nil {
-			verr = updateTableWithRowsRemoved(root, tbl, rmArgs.TableName, pkFldName, pkVals, dEnv)
+		if err != nil {
+			verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
+		} else {
+			verr = updateTableWithRowsRemoved(root, tbl, rmArgs.TableName, pkVals, dEnv)
 		}
 	}
 
@@ -86,32 +86,7 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 	return root, tbl, nil
 }
 
-func getPKsOfRowsToRm(root *doltdb.RootValue, tbl *doltdb.Table, pks []string) (string, []types.Value, errhand.VerboseError) {
-	sch := tbl.GetSchema()
-
-	fld := sch.GetField(sch.GetPKIndex())
-	convFunc := doltcore.GetConvFunc(types.StringKind, fld.NomsKind())
-
-	if convFunc == nil {
-		bdr := errhand.BuildDError(`Conversion from string to %s is not defined.`, fld.KindString())
-		return "", nil, bdr.Build()
-	}
-
-	pkVals := make([]types.Value, len(pks))
-	for i, pkStr := range pks {
-		pkVal, err := convFunc(types.String(pkStr))
-
-		if err != nil {
-			return "", nil, errhand.BuildDError(`Failed to convert from "%s" to a %s`, pkStr, fld.KindString()).Build()
-		}
-
-		pkVals[i] = pkVal
-	}
-
-	return fld.NameStr(), pkVals, nil
-}
-
-func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkFldName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
+func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
 	m := tbl.GetRowData()
 
 	updates := 0
@@ -119,7 +94,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 		_, ok := m.MaybeGet(pk)
 
 		if !ok {
-			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, pkFldName, types.EncodedValue(pk)))
+			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, types.EncodedValue(pk)))
 			continue
 		}
 
@@ -155,4 +130,3 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 
 	return verr
 }
-*/
