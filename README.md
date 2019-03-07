@@ -6,12 +6,12 @@
 * Setup ssh keys for github authentication: https://help.github.com/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent/
 * Clone this repo and pull the latest
 * Install go: https://golang.org/doc/install
-* Set the environment variable NOMS_VERSION_NEXT=1
 * run: git config --global --add url."ssh://git@github.com".insteadOf "https://github.com"
 * Configure your environment with important variables. Put these in your .bash_profile / .bashrc
   * Set your `GOPATH` environment variable: 
       *     export GOPATH=`go env GOPATH`
       * If your go workspace is somewhere other than the default of `~/go`, set `GOPATH` manually via an export directive in your .bash_profile, e.g. `export GOPATH=/workspaces/liquidata/go`
+  * `export NOMS_VERSION_NEXT=1`
   * Add the go binary installation directory to your `PATH` variable (`export PATH=$GOPATH/bin:$PATH`).
 * This helper function can also be added to make installation easier:
 
