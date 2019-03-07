@@ -65,7 +65,7 @@ var importLongDesc = "If <b>--create-table | -c</b> is given the operation will 
 	"If <b>--update-table | -u</b> is given the operation will update <table> with the contents of file. The tables existing " +
 	"schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.\n" +
 	"\n" +
-	"During import, if there is an error importing a single row, the import will be aborted by default.  Use the <b>--continue<b>" +
+	"During import, if there is an error importing any row, the import will be aborted by default.  Use the <b>--continue<b>" +
 	"flag to continue importing when an error is encountered.\n" +
 	"\n" +
 	"A mapping file can be used to map fields between the file being imported and the table being written to.  This can " +
