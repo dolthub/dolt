@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	Version = "0.5.7"
+	Version = "0.5.7.1"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
@@ -62,7 +62,6 @@ func main() {
 
 	restoreIO := cli.InitIO()
 	defer restoreIO()
-	restoreIO()
 
 	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 

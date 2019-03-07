@@ -37,7 +37,7 @@ var cnfTag = schema.ReservedTagMin
 var selShortDesc = "print a selection of a table"
 var selLongDesc = `The dolt table select command selects rows from a table and prints out some or all of the table's columns`
 var selSynopsis = []string{
-	"dolt table select [--limit <record_count>] [--where <col1=val1>] [--hide-conflicts] [<commit>] <table> [<column>...]",
+	"[--limit <record_count>] [--where <col1=val1>] [--hide-conflicts] [<commit>] <table> [<column>...]",
 }
 
 type whereFunc func(r row.Row) (isTrue bool)
@@ -51,7 +51,7 @@ func parseWhere(sch schema.Schema, whereClause string) (whereFunc, error) {
 		tokens := strings.Split(whereClause, "=")
 
 		if len(tokens) != 2 {
-			return nil, errors.New("error: '" + whereClause + "' is not in the format key=value")
+			return nil, errors.New("'" + whereClause + "' is not in the format key=value")
 		}
 
 		key := tokens[0]
@@ -60,7 +60,7 @@ func parseWhere(sch schema.Schema, whereClause string) (whereFunc, error) {
 		col, ok := sch.GetAllCols().GetByName(key)
 
 		if !ok {
-			return nil, errors.New("error: where clause is invalid. '" + key + "' is not a known column.")
+			return nil, errors.New("where clause is invalid. '" + key + "' is not a known column.")
 		}
 
 		tag := col.Tag
@@ -68,7 +68,7 @@ func parseWhere(sch schema.Schema, whereClause string) (whereFunc, error) {
 		val, err := convFunc(types.String(valStr))
 
 		if err != nil {
-			return nil, errors.New("error: unable to convert '" + valStr + "' to " + col.KindString())
+			return nil, errors.New("unable to convert '" + valStr + "' to " + col.KindString())
 		}
 
 		return func(r row.Row) bool {
@@ -92,7 +92,7 @@ type SelectTransform struct {
 
 func (st *SelectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	if st.limit == -1 || st.count < st.limit {
-		if st.count == 0 || st.whFunc(inRow) {
+		if st.whFunc(inRow) {
 			st.count++
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
@@ -182,7 +182,7 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 	whereFunc, err := parseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
 	}
 
 	selTrans := &SelectTransform{nil, whereFunc, selArgs.limit, 0}
