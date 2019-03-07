@@ -4,9 +4,10 @@
 
 * Make sure git is installed
 * Setup ssh keys for github authentication: https://help.github.com/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent/
-* Clone this repo and pull the latest
 * Install go: https://golang.org/doc/install
 * run: git config --global --add url."ssh://git@github.com".insteadOf "https://github.com"
+* Clone this repo and pull the latest
+  * For compatibility with some tools, it's recommended to clone the repo into a specific directory structure in your go workspace. Specifically, clone source code into `$GOPATH/src/github.com/liquidata-inc/`. This directory structure should become unnecssary at some point in the future, but is necessary for some tools to work properly. See https://golang.org/doc/code.html#Workspaces for details.
 * Configure your environment with important variables. Put these in your .bash_profile / .bashrc
   * Set your `GOPATH` environment variable: 
       *     export GOPATH=`go env GOPATH`
