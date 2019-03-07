@@ -145,7 +145,7 @@ func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseE
 	}
 
 	untypedSch := untyped.UntypeSchema(sch)
-	mapping, err := rowconv.NewInferredMapping(untypedSch, sch)
+	mapping, err := rowconv.TagMapping(untypedSch, sch)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Failed to infer mapping").AddCause(err).Build()

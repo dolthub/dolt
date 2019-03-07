@@ -174,7 +174,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 
 	newToUnionConv := rowconv.IdentityConverter
 	if newSch != nil {
-		newToUnionMapping, err := rowconv.NewInferredMapping(newSch, untypedUnionSch)
+		newToUnionMapping, err := rowconv.TagMapping(newSch, untypedUnionSch)
 
 		if err != nil {
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
@@ -185,7 +185,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 
 	oldToUnionConv := rowconv.IdentityConverter
 	if oldSch != nil {
-		oldToUnionMapping, err := rowconv.NewInferredMapping(oldSch, untypedUnionSch)
+		oldToUnionMapping, err := rowconv.TagMapping(oldSch, untypedUnionSch)
 
 		if err != nil {
 			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()

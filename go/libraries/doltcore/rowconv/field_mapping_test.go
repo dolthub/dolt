@@ -71,7 +71,7 @@ func TestFieldMapping(t *testing.T) {
 		if mappingFile != "" {
 			mapping, err = MappingFromFile(mappingFile, fs, test.inSch, test.outSch)
 		} else {
-			mapping, err = NewInferredMapping(test.inSch, test.outSch)
+			mapping, err = TagMapping(test.inSch, test.outSch)
 		}
 
 		if (err != nil) != test.expectErr {

@@ -61,7 +61,7 @@ func TestRowConverter(t *testing.T) {
 }
 
 func TestUnneccessaryConversion(t *testing.T) {
-	mapping, err := NewInferredMapping(srcSch, srcSch)
+	mapping, err := TagMapping(srcSch, srcSch)
 
 	if err != nil {
 		t.Error(err)

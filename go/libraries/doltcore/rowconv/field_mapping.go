@@ -91,9 +91,9 @@ func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName m
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-// NewInferredMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
+// TagMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
 // tag in the source and destination schemas.
-func NewInferredMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	successes := 0
 	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
@@ -101,6 +101,32 @@ func NewInferredMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	srcToDest := make(map[uint64]uint64, destCols.Size())
 	destCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		inCol, ok := srcCols.GetByTag(tag)
+
+		if ok {
+			srcToDest[inCol.Tag] = tag
+			successes++
+		}
+
+		return false
+	})
+
+	if successes == 0 {
+		return nil, ErrEmptyMapping
+	}
+
+	return NewFieldMapping(srcSch, destSch, srcToDest)
+}
+
+// NameInferredMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
+// tag in the source and destination schemas.
+func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+	successes := 0
+	srcCols := srcSch.GetAllCols()
+	destCols := destSch.GetAllCols()
+
+	srcToDest := make(map[uint64]uint64, destCols.Size())
+	destCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		inCol, ok := srcCols.GetByName(col.Name)
 
 		if ok {
 			srcToDest[inCol.Tag] = tag
