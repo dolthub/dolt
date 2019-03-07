@@ -250,7 +250,7 @@ func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipelin
 	}
 
 	outSch := schema.SchemaFromCols(colColl)
-	mapping, err := rowconv.NewInferredMapping(sch, untyped.UntypeSchema(outSch))
+	mapping, err := rowconv.TagMapping(sch, untyped.UntypeSchema(outSch))
 
 	if err != nil {
 		panic(err)

@@ -48,19 +48,19 @@ func NewConflictReader(tbl *doltdb.Table) (*ConflictReader, error) {
 	}
 
 	var baseMapping, mapping, mergeMapping *rowconv.FieldMapping
-	baseMapping, err = rowconv.NewInferredMapping(base, untypedUnSch)
+	baseMapping, err = rowconv.TagMapping(base, untypedUnSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	mapping, err = rowconv.NewInferredMapping(sch, untypedUnSch)
+	mapping, err = rowconv.TagMapping(sch, untypedUnSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	mergeMapping, err = rowconv.NewInferredMapping(mergeSch, untypedUnSch)
+	mergeMapping, err = rowconv.TagMapping(mergeSch, untypedUnSch)
 
 	if err != nil {
 		return nil, err

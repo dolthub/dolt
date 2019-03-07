@@ -85,8 +85,10 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 	var mapping *rowconv.FieldMapping
 	if mvOpts.MappingFile != "" {
 		mapping, err = rowconv.MappingFromFile(mvOpts.MappingFile, fs, rd.GetSchema(), outSch)
+	} else if mapByTag(mvOpts.Src, mvOpts.Dest) {
+		mapping, err = rowconv.TagMapping(rd.GetSchema(), outSch)
 	} else {
-		mapping, err = rowconv.NewInferredMapping(rd.GetSchema(), outSch)
+		mapping, err = rowconv.NameMapping(rd.GetSchema(), outSch)
 	}
 
 	if err != nil {

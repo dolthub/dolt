@@ -213,3 +213,25 @@ func (dl *DataLocation) MustWriteSorted() bool {
 func (dl *DataLocation) RequiresPK() bool {
 	return /*dl.Format == NbfFile ||*/ dl.Format == DoltDB
 }
+
+func mapByTag(src *DataLocation, dest *DataLocation) bool {
+	switch src.Format {
+	case PsvFile, CsvFile:
+		return false
+	case DoltDB:
+		break
+	default:
+		panic("unhandled case")
+	}
+
+	switch dest.Format {
+	case PsvFile, CsvFile:
+		return false
+	case DoltDB:
+		break
+	default:
+		panic("unhandled case")
+	}
+
+	return true
+}
