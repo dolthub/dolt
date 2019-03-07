@@ -3,13 +3,12 @@
 
 package remotesapi
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-
 import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -35,16 +34,17 @@ func (m *RepoId) Reset()         { *m = RepoId{} }
 func (m *RepoId) String() string { return proto.CompactTextString(m) }
 func (*RepoId) ProtoMessage()    {}
 func (*RepoId) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{0}
+	return fileDescriptor_702c187af9ca94ec, []int{0}
 }
+
 func (m *RepoId) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RepoId.Unmarshal(m, b)
 }
 func (m *RepoId) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RepoId.Marshal(b, m, deterministic)
 }
-func (dst *RepoId) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RepoId.Merge(dst, src)
+func (m *RepoId) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RepoId.Merge(m, src)
 }
 func (m *RepoId) XXX_Size() int {
 	return xxx_messageInfo_RepoId.Size(m)
@@ -81,16 +81,17 @@ func (m *HasChunksRequest) Reset()         { *m = HasChunksRequest{} }
 func (m *HasChunksRequest) String() string { return proto.CompactTextString(m) }
 func (*HasChunksRequest) ProtoMessage()    {}
 func (*HasChunksRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{1}
+	return fileDescriptor_702c187af9ca94ec, []int{1}
 }
+
 func (m *HasChunksRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HasChunksRequest.Unmarshal(m, b)
 }
 func (m *HasChunksRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HasChunksRequest.Marshal(b, m, deterministic)
 }
-func (dst *HasChunksRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HasChunksRequest.Merge(dst, src)
+func (m *HasChunksRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HasChunksRequest.Merge(m, src)
 }
 func (m *HasChunksRequest) XXX_Size() int {
 	return xxx_messageInfo_HasChunksRequest.Size(m)
@@ -126,16 +127,17 @@ func (m *HasChunksResponse) Reset()         { *m = HasChunksResponse{} }
 func (m *HasChunksResponse) String() string { return proto.CompactTextString(m) }
 func (*HasChunksResponse) ProtoMessage()    {}
 func (*HasChunksResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{2}
+	return fileDescriptor_702c187af9ca94ec, []int{2}
 }
+
 func (m *HasChunksResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HasChunksResponse.Unmarshal(m, b)
 }
 func (m *HasChunksResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HasChunksResponse.Marshal(b, m, deterministic)
 }
-func (dst *HasChunksResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HasChunksResponse.Merge(dst, src)
+func (m *HasChunksResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HasChunksResponse.Merge(m, src)
 }
 func (m *HasChunksResponse) XXX_Size() int {
 	return xxx_messageInfo_HasChunksResponse.Size(m)
@@ -164,16 +166,17 @@ func (m *HttpGetChunk) Reset()         { *m = HttpGetChunk{} }
 func (m *HttpGetChunk) String() string { return proto.CompactTextString(m) }
 func (*HttpGetChunk) ProtoMessage()    {}
 func (*HttpGetChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{3}
+	return fileDescriptor_702c187af9ca94ec, []int{3}
 }
+
 func (m *HttpGetChunk) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpGetChunk.Unmarshal(m, b)
 }
 func (m *HttpGetChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HttpGetChunk.Marshal(b, m, deterministic)
 }
-func (dst *HttpGetChunk) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HttpGetChunk.Merge(dst, src)
+func (m *HttpGetChunk) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HttpGetChunk.Merge(m, src)
 }
 func (m *HttpGetChunk) XXX_Size() int {
 	return xxx_messageInfo_HttpGetChunk.Size(m)
@@ -205,16 +208,17 @@ func (m *DownloadLoc) Reset()         { *m = DownloadLoc{} }
 func (m *DownloadLoc) String() string { return proto.CompactTextString(m) }
 func (*DownloadLoc) ProtoMessage()    {}
 func (*DownloadLoc) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{4}
+	return fileDescriptor_702c187af9ca94ec, []int{4}
 }
+
 func (m *DownloadLoc) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DownloadLoc.Unmarshal(m, b)
 }
 func (m *DownloadLoc) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DownloadLoc.Marshal(b, m, deterministic)
 }
-func (dst *DownloadLoc) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DownloadLoc.Merge(dst, src)
+func (m *DownloadLoc) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DownloadLoc.Merge(m, src)
 }
 func (m *DownloadLoc) XXX_Size() int {
 	return xxx_messageInfo_DownloadLoc.Size(m)
@@ -322,16 +326,17 @@ func (m *HttpPostChunk) Reset()         { *m = HttpPostChunk{} }
 func (m *HttpPostChunk) String() string { return proto.CompactTextString(m) }
 func (*HttpPostChunk) ProtoMessage()    {}
 func (*HttpPostChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{5}
+	return fileDescriptor_702c187af9ca94ec, []int{5}
 }
+
 func (m *HttpPostChunk) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpPostChunk.Unmarshal(m, b)
 }
 func (m *HttpPostChunk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HttpPostChunk.Marshal(b, m, deterministic)
 }
-func (dst *HttpPostChunk) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HttpPostChunk.Merge(dst, src)
+func (m *HttpPostChunk) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HttpPostChunk.Merge(m, src)
 }
 func (m *HttpPostChunk) XXX_Size() int {
 	return xxx_messageInfo_HttpPostChunk.Size(m)
@@ -363,16 +368,17 @@ func (m *UploadLoc) Reset()         { *m = UploadLoc{} }
 func (m *UploadLoc) String() string { return proto.CompactTextString(m) }
 func (*UploadLoc) ProtoMessage()    {}
 func (*UploadLoc) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{6}
+	return fileDescriptor_702c187af9ca94ec, []int{6}
 }
+
 func (m *UploadLoc) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UploadLoc.Unmarshal(m, b)
 }
 func (m *UploadLoc) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_UploadLoc.Marshal(b, m, deterministic)
 }
-func (dst *UploadLoc) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UploadLoc.Merge(dst, src)
+func (m *UploadLoc) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UploadLoc.Merge(m, src)
 }
 func (m *UploadLoc) XXX_Size() int {
 	return xxx_messageInfo_UploadLoc.Size(m)
@@ -481,16 +487,17 @@ func (m *GetDownloadLocsRequest) Reset()         { *m = GetDownloadLocsRequest{}
 func (m *GetDownloadLocsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetDownloadLocsRequest) ProtoMessage()    {}
 func (*GetDownloadLocsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{7}
+	return fileDescriptor_702c187af9ca94ec, []int{7}
 }
+
 func (m *GetDownloadLocsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetDownloadLocsRequest.Unmarshal(m, b)
 }
 func (m *GetDownloadLocsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetDownloadLocsRequest.Marshal(b, m, deterministic)
 }
-func (dst *GetDownloadLocsRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetDownloadLocsRequest.Merge(dst, src)
+func (m *GetDownloadLocsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetDownloadLocsRequest.Merge(m, src)
 }
 func (m *GetDownloadLocsRequest) XXX_Size() int {
 	return xxx_messageInfo_GetDownloadLocsRequest.Size(m)
@@ -526,16 +533,17 @@ func (m *GetDownloadLocsResponse) Reset()         { *m = GetDownloadLocsResponse
 func (m *GetDownloadLocsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetDownloadLocsResponse) ProtoMessage()    {}
 func (*GetDownloadLocsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{8}
+	return fileDescriptor_702c187af9ca94ec, []int{8}
 }
+
 func (m *GetDownloadLocsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetDownloadLocsResponse.Unmarshal(m, b)
 }
 func (m *GetDownloadLocsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetDownloadLocsResponse.Marshal(b, m, deterministic)
 }
-func (dst *GetDownloadLocsResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetDownloadLocsResponse.Merge(dst, src)
+func (m *GetDownloadLocsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetDownloadLocsResponse.Merge(m, src)
 }
 func (m *GetDownloadLocsResponse) XXX_Size() int {
 	return xxx_messageInfo_GetDownloadLocsResponse.Size(m)
@@ -565,16 +573,17 @@ func (m *GetUploadLocsRequest) Reset()         { *m = GetUploadLocsRequest{} }
 func (m *GetUploadLocsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetUploadLocsRequest) ProtoMessage()    {}
 func (*GetUploadLocsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{9}
+	return fileDescriptor_702c187af9ca94ec, []int{9}
 }
+
 func (m *GetUploadLocsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetUploadLocsRequest.Unmarshal(m, b)
 }
 func (m *GetUploadLocsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetUploadLocsRequest.Marshal(b, m, deterministic)
 }
-func (dst *GetUploadLocsRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetUploadLocsRequest.Merge(dst, src)
+func (m *GetUploadLocsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetUploadLocsRequest.Merge(m, src)
 }
 func (m *GetUploadLocsRequest) XXX_Size() int {
 	return xxx_messageInfo_GetUploadLocsRequest.Size(m)
@@ -610,16 +619,17 @@ func (m *GetUploadLocsResponse) Reset()         { *m = GetUploadLocsResponse{} }
 func (m *GetUploadLocsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetUploadLocsResponse) ProtoMessage()    {}
 func (*GetUploadLocsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{10}
+	return fileDescriptor_702c187af9ca94ec, []int{10}
 }
+
 func (m *GetUploadLocsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetUploadLocsResponse.Unmarshal(m, b)
 }
 func (m *GetUploadLocsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetUploadLocsResponse.Marshal(b, m, deterministic)
 }
-func (dst *GetUploadLocsResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetUploadLocsResponse.Merge(dst, src)
+func (m *GetUploadLocsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetUploadLocsResponse.Merge(m, src)
 }
 func (m *GetUploadLocsResponse) XXX_Size() int {
 	return xxx_messageInfo_GetUploadLocsResponse.Size(m)
@@ -648,16 +658,17 @@ func (m *RebaseRequest) Reset()         { *m = RebaseRequest{} }
 func (m *RebaseRequest) String() string { return proto.CompactTextString(m) }
 func (*RebaseRequest) ProtoMessage()    {}
 func (*RebaseRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{11}
+	return fileDescriptor_702c187af9ca94ec, []int{11}
 }
+
 func (m *RebaseRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RebaseRequest.Unmarshal(m, b)
 }
 func (m *RebaseRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RebaseRequest.Marshal(b, m, deterministic)
 }
-func (dst *RebaseRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RebaseRequest.Merge(dst, src)
+func (m *RebaseRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RebaseRequest.Merge(m, src)
 }
 func (m *RebaseRequest) XXX_Size() int {
 	return xxx_messageInfo_RebaseRequest.Size(m)
@@ -685,16 +696,17 @@ func (m *RebaseResponse) Reset()         { *m = RebaseResponse{} }
 func (m *RebaseResponse) String() string { return proto.CompactTextString(m) }
 func (*RebaseResponse) ProtoMessage()    {}
 func (*RebaseResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{12}
+	return fileDescriptor_702c187af9ca94ec, []int{12}
 }
+
 func (m *RebaseResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RebaseResponse.Unmarshal(m, b)
 }
 func (m *RebaseResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RebaseResponse.Marshal(b, m, deterministic)
 }
-func (dst *RebaseResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RebaseResponse.Merge(dst, src)
+func (m *RebaseResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RebaseResponse.Merge(m, src)
 }
 func (m *RebaseResponse) XXX_Size() int {
 	return xxx_messageInfo_RebaseResponse.Size(m)
@@ -716,16 +728,17 @@ func (m *RootRequest) Reset()         { *m = RootRequest{} }
 func (m *RootRequest) String() string { return proto.CompactTextString(m) }
 func (*RootRequest) ProtoMessage()    {}
 func (*RootRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{13}
+	return fileDescriptor_702c187af9ca94ec, []int{13}
 }
+
 func (m *RootRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RootRequest.Unmarshal(m, b)
 }
 func (m *RootRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RootRequest.Marshal(b, m, deterministic)
 }
-func (dst *RootRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RootRequest.Merge(dst, src)
+func (m *RootRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RootRequest.Merge(m, src)
 }
 func (m *RootRequest) XXX_Size() int {
 	return xxx_messageInfo_RootRequest.Size(m)
@@ -754,16 +767,17 @@ func (m *RootResponse) Reset()         { *m = RootResponse{} }
 func (m *RootResponse) String() string { return proto.CompactTextString(m) }
 func (*RootResponse) ProtoMessage()    {}
 func (*RootResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{14}
+	return fileDescriptor_702c187af9ca94ec, []int{14}
 }
+
 func (m *RootResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RootResponse.Unmarshal(m, b)
 }
 func (m *RootResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RootResponse.Marshal(b, m, deterministic)
 }
-func (dst *RootResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RootResponse.Merge(dst, src)
+func (m *RootResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RootResponse.Merge(m, src)
 }
 func (m *RootResponse) XXX_Size() int {
 	return xxx_messageInfo_RootResponse.Size(m)
@@ -794,16 +808,17 @@ func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
 func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitRequest) ProtoMessage()    {}
 func (*CommitRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{15}
+	return fileDescriptor_702c187af9ca94ec, []int{15}
 }
+
 func (m *CommitRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitRequest.Unmarshal(m, b)
 }
 func (m *CommitRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommitRequest.Marshal(b, m, deterministic)
 }
-func (dst *CommitRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommitRequest.Merge(dst, src)
+func (m *CommitRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommitRequest.Merge(m, src)
 }
 func (m *CommitRequest) XXX_Size() int {
 	return xxx_messageInfo_CommitRequest.Size(m)
@@ -846,16 +861,17 @@ func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
 func (*CommitResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_8d29bbbce06036d9, []int{16}
+	return fileDescriptor_702c187af9ca94ec, []int{16}
 }
+
 func (m *CommitResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitResponse.Unmarshal(m, b)
 }
 func (m *CommitResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CommitResponse.Marshal(b, m, deterministic)
 }
-func (dst *CommitResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommitResponse.Merge(dst, src)
+func (m *CommitResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommitResponse.Merge(m, src)
 }
 func (m *CommitResponse) XXX_Size() int {
 	return xxx_messageInfo_CommitResponse.Size(m)
@@ -893,6 +909,55 @@ func init() {
 	proto.RegisterType((*CommitResponse)(nil), "dolt.services.remotesapi.v1alpha1.CommitResponse")
 }
 
+func init() {
+	proto.RegisterFile("dolt/services/remotesapi/v1alpha1/chunkstore.proto", fileDescriptor_702c187af9ca94ec)
+}
+
+var fileDescriptor_702c187af9ca94ec = []byte{
+	// 649 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x56, 0x4d, 0x4f, 0xdb, 0x40,
+	0x10, 0xc5, 0x04, 0xf2, 0x31, 0x09, 0x08, 0x56, 0x2d, 0xb5, 0xd2, 0x4b, 0xf0, 0x89, 0x16, 0x64,
+	0x43, 0xa8, 0x44, 0x3f, 0x2e, 0x55, 0xa8, 0x44, 0x2a, 0xa1, 0x7e, 0x2c, 0xea, 0xa1, 0x95, 0xaa,
+	0x68, 0x71, 0x56, 0x38, 0xaa, 0xed, 0x75, 0x77, 0xd7, 0xf4, 0xd8, 0xf6, 0xd4, 0x53, 0xff, 0x69,
+	0x7f, 0x44, 0xb5, 0xeb, 0x75, 0x70, 0xa0, 0x88, 0xa5, 0x8a, 0xb8, 0x79, 0x47, 0xfb, 0xe6, 0xbd,
+	0x37, 0x9e, 0x19, 0x1b, 0xfa, 0x63, 0x16, 0xcb, 0x40, 0x50, 0x7e, 0x3e, 0x09, 0xa9, 0x08, 0x38,
+	0x4d, 0x98, 0xa4, 0x82, 0x64, 0x93, 0xe0, 0x7c, 0x8f, 0xc4, 0x59, 0x44, 0xf6, 0x82, 0x30, 0xca,
+	0xd3, 0x2f, 0x42, 0x32, 0x4e, 0xfd, 0x8c, 0x33, 0xc9, 0xd0, 0xa6, 0xc2, 0xf8, 0x25, 0xc6, 0xbf,
+	0xc0, 0xf8, 0x25, 0xc6, 0x3b, 0x80, 0x3a, 0xa6, 0x19, 0x7b, 0x3d, 0x46, 0x6b, 0x50, 0x63, 0xfc,
+	0xcc, 0x75, 0x7a, 0xce, 0x56, 0x0b, 0xab, 0x47, 0xf4, 0x10, 0x5a, 0x9c, 0x66, 0x6c, 0x94, 0x92,
+	0x84, 0xba, 0x8b, 0x3a, 0xde, 0x54, 0x81, 0x37, 0x24, 0xa1, 0x5e, 0x0a, 0x6b, 0x43, 0x22, 0x0e,
+	0x35, 0x25, 0xa6, 0x5f, 0x73, 0x2a, 0x24, 0x1a, 0x40, 0x43, 0x03, 0x26, 0x63, 0x9d, 0xa6, 0xdd,
+	0x7f, 0xe4, 0xdf, 0xa8, 0xc0, 0x2f, 0xe8, 0x71, 0x9d, 0x17, 0x32, 0x36, 0xa0, 0x1e, 0x11, 0x11,
+	0x51, 0xe1, 0x2e, 0xf6, 0x6a, 0x5b, 0x1d, 0x6c, 0x4e, 0xde, 0x36, 0xac, 0x57, 0xf8, 0x44, 0xc6,
+	0x52, 0x41, 0xd5, 0x65, 0x72, 0x2a, 0x68, 0x2a, 0x5d, 0xa7, 0x57, 0xdb, 0x5a, 0xc6, 0xe6, 0xe4,
+	0xf5, 0xa0, 0x33, 0x94, 0x32, 0x3b, 0xa2, 0x52, 0x03, 0x94, 0xb7, 0x9c, 0xc7, 0xa5, 0xb7, 0x9c,
+	0xc7, 0xde, 0x77, 0x68, 0xbf, 0x62, 0xdf, 0xd2, 0x98, 0x91, 0xf1, 0x31, 0x0b, 0x2b, 0xac, 0x4e,
+	0x95, 0x15, 0x1d, 0x43, 0x33, 0x92, 0x32, 0x1b, 0x9d, 0x51, 0xa9, 0x2b, 0xd0, 0xee, 0x07, 0x16,
+	0x96, 0xaa, 0xdc, 0xc3, 0x05, 0xdc, 0x88, 0x8a, 0xf3, 0x00, 0xa0, 0x19, 0xb3, 0x90, 0xc8, 0x09,
+	0x4b, 0xbd, 0x4d, 0x58, 0x51, 0xd7, 0xde, 0x31, 0x71, 0xad, 0xc6, 0x1f, 0x0e, 0xb4, 0x3e, 0x64,
+	0x37, 0x49, 0x7c, 0x0b, 0x2d, 0x2d, 0x31, 0x63, 0xa2, 0xd4, 0xb8, 0x6b, 0xa9, 0x71, 0x4a, 0x3e,
+	0x5c, 0xc0, 0xda, 0xa7, 0x0a, 0xcc, 0xa8, 0x94, 0xb0, 0x71, 0x44, 0x65, 0xa5, 0x52, 0x77, 0xf2,
+	0xae, 0x3f, 0xc3, 0x83, 0x2b, 0xac, 0xe6, 0x8d, 0x0f, 0x60, 0x29, 0x66, 0x61, 0x51, 0x83, 0x76,
+	0xdf, 0xb7, 0xe0, 0xac, 0xa4, 0xc1, 0x1a, 0xeb, 0x71, 0xb8, 0x77, 0x44, 0xe5, 0xb4, 0xb2, 0x77,
+	0x62, 0xe9, 0x23, 0xdc, 0xbf, 0xc4, 0x69, 0x0c, 0xbd, 0x9c, 0x31, 0xb4, 0x63, 0xc1, 0x38, 0x4d,
+	0x62, 0xec, 0x9c, 0xc0, 0x0a, 0xa6, 0xa7, 0x44, 0xd0, 0x39, 0xfa, 0xf0, 0xd6, 0x60, 0xb5, 0x4c,
+	0x5a, 0x08, 0xf5, 0xde, 0x43, 0x1b, 0x33, 0x26, 0xe7, 0x49, 0xb2, 0x0d, 0x9d, 0x22, 0xa5, 0xa9,
+	0x85, 0x5a, 0x38, 0x8c, 0xc9, 0x91, 0xaa, 0x99, 0xce, 0xda, 0xc1, 0x4d, 0x15, 0x18, 0x12, 0x11,
+	0x79, 0x3f, 0x1d, 0x58, 0x39, 0x64, 0x49, 0x32, 0x99, 0xa7, 0x04, 0xe4, 0x42, 0x23, 0xcc, 0x39,
+	0x57, 0x2b, 0x64, 0x51, 0x13, 0x96, 0x47, 0x84, 0x60, 0x29, 0x26, 0x42, 0xba, 0x35, 0x1d, 0xd6,
+	0xcf, 0xde, 0x63, 0x58, 0x2d, 0x25, 0x18, 0xc9, 0x2e, 0x34, 0x44, 0x1e, 0x86, 0x54, 0x08, 0xad,
+	0xa1, 0x89, 0xcb, 0x63, 0xff, 0xcf, 0x32, 0xac, 0xeb, 0xe1, 0x3a, 0x51, 0x1b, 0xf9, 0xa4, 0xd0,
+	0x84, 0xce, 0xa1, 0x35, 0x5d, 0x63, 0x68, 0xdf, 0x66, 0x4e, 0x2f, 0x2d, 0xd9, 0xee, 0x93, 0xdb,
+	0x81, 0x8c, 0xce, 0xdf, 0x8e, 0x6e, 0xfa, 0xca, 0x30, 0xe8, 0x01, 0x17, 0xe8, 0x99, 0x45, 0xba,
+	0x7f, 0xaf, 0x80, 0xee, 0xf3, 0xff, 0x81, 0x1a, 0x3d, 0xbf, 0x1c, 0x40, 0xd5, 0x81, 0x30, 0x6a,
+	0x0e, 0xec, 0x52, 0x5e, 0x99, 0xdd, 0xee, 0xd3, 0xdb, 0x03, 0x8d, 0x92, 0x44, 0x7d, 0x01, 0x55,
+	0xa7, 0xa3, 0x5d, 0xab, 0xf6, 0xa9, 0x4c, 0x5a, 0x77, 0xef, 0x16, 0x08, 0x43, 0x77, 0x06, 0x4b,
+	0xaa, 0xe7, 0x91, 0xcd, 0xea, 0xaa, 0xcc, 0x5b, 0x37, 0xb0, 0xbe, 0x7f, 0xe1, 0xab, 0xe8, 0x55,
+	0x2b, 0x5f, 0x33, 0x93, 0x65, 0xe5, 0x6b, 0x76, 0x10, 0x06, 0xfe, 0xa7, 0x9d, 0xeb, 0xfe, 0x50,
+	0x46, 0x25, 0xe6, 0xc5, 0x45, 0xec, 0xb4, 0xae, 0x7f, 0x51, 0xf6, 0xff, 0x06, 0x00, 0x00, 0xff,
+	0xff, 0x92, 0x7e, 0x5c, 0x79, 0xd8, 0x08, 0x00, 0x00,
+}
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn
@@ -906,7 +971,7 @@ const _ = grpc.SupportPackageIsVersion4
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ChunkStoreServiceClient interface {
 	HasChunks(ctx context.Context, in *HasChunksRequest, opts ...grpc.CallOption) (*HasChunksResponse, error)
-	GetDownloadLoctions(ctx context.Context, in *GetDownloadLocsRequest, opts ...grpc.CallOption) (*GetDownloadLocsResponse, error)
+	GetDownloadLocations(ctx context.Context, in *GetDownloadLocsRequest, opts ...grpc.CallOption) (*GetDownloadLocsResponse, error)
 	GetUploadLocations(ctx context.Context, in *GetUploadLocsRequest, opts ...grpc.CallOption) (*GetUploadLocsResponse, error)
 	Rebase(ctx context.Context, in *RebaseRequest, opts ...grpc.CallOption) (*RebaseResponse, error)
 	Root(ctx context.Context, in *RootRequest, opts ...grpc.CallOption) (*RootResponse, error)
@@ -930,9 +995,9 @@ func (c *chunkStoreServiceClient) HasChunks(ctx context.Context, in *HasChunksRe
 	return out, nil
 }
 
-func (c *chunkStoreServiceClient) GetDownloadLoctions(ctx context.Context, in *GetDownloadLocsRequest, opts ...grpc.CallOption) (*GetDownloadLocsResponse, error) {
+func (c *chunkStoreServiceClient) GetDownloadLocations(ctx context.Context, in *GetDownloadLocsRequest, opts ...grpc.CallOption) (*GetDownloadLocsResponse, error) {
 	out := new(GetDownloadLocsResponse)
-	err := c.cc.Invoke(ctx, "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLoctions", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLocations", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -978,7 +1043,7 @@ func (c *chunkStoreServiceClient) Commit(ctx context.Context, in *CommitRequest,
 // ChunkStoreServiceServer is the server API for ChunkStoreService service.
 type ChunkStoreServiceServer interface {
 	HasChunks(context.Context, *HasChunksRequest) (*HasChunksResponse, error)
-	GetDownloadLoctions(context.Context, *GetDownloadLocsRequest) (*GetDownloadLocsResponse, error)
+	GetDownloadLocations(context.Context, *GetDownloadLocsRequest) (*GetDownloadLocsResponse, error)
 	GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error)
 	Rebase(context.Context, *RebaseRequest) (*RebaseResponse, error)
 	Root(context.Context, *RootRequest) (*RootResponse, error)
@@ -1007,20 +1072,20 @@ func _ChunkStoreService_HasChunks_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ChunkStoreService_GetDownloadLoctions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ChunkStoreService_GetDownloadLocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetDownloadLocsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ChunkStoreServiceServer).GetDownloadLoctions(ctx, in)
+		return srv.(ChunkStoreServiceServer).GetDownloadLocations(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLoctions",
+		FullMethod: "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLocations",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChunkStoreServiceServer).GetDownloadLoctions(ctx, req.(*GetDownloadLocsRequest))
+		return srv.(ChunkStoreServiceServer).GetDownloadLocations(ctx, req.(*GetDownloadLocsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1106,8 +1171,8 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ChunkStoreService_HasChunks_Handler,
 		},
 		{
-			MethodName: "GetDownloadLoctions",
-			Handler:    _ChunkStoreService_GetDownloadLoctions_Handler,
+			MethodName: "GetDownloadLocations",
+			Handler:    _ChunkStoreService_GetDownloadLocations_Handler,
 		},
 		{
 			MethodName: "GetUploadLocations",
@@ -1128,53 +1193,4 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "dolt/services/remotesapi/v1alpha1/chunkstore.proto",
-}
-
-func init() {
-	proto.RegisterFile("dolt/services/remotesapi/v1alpha1/chunkstore.proto", fileDescriptor_chunkstore_8d29bbbce06036d9)
-}
-
-var fileDescriptor_chunkstore_8d29bbbce06036d9 = []byte{
-	// 651 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x56, 0xcd, 0x6f, 0xd3, 0x4e,
-	0x10, 0xad, 0x9b, 0x36, 0x1f, 0x93, 0xb4, 0x6a, 0xf7, 0xf7, 0xa3, 0x58, 0xe1, 0x92, 0xfa, 0x54,
-	0x68, 0x65, 0xb7, 0x29, 0x52, 0xf9, 0xb8, 0xa0, 0x14, 0xa9, 0x41, 0xaa, 0xf8, 0xd8, 0x8a, 0x03,
-	0x48, 0x28, 0xda, 0x3a, 0xab, 0x38, 0xc2, 0xf6, 0x9a, 0xdd, 0x75, 0x38, 0x02, 0x27, 0x2e, 0xfc,
-	0xa7, 0xfc, 0x13, 0x68, 0xd7, 0x76, 0xe2, 0xb4, 0x54, 0xdd, 0xa0, 0xa8, 0x37, 0xcf, 0x68, 0xdf,
-	0xbc, 0xf7, 0xc6, 0x3b, 0x63, 0x43, 0x77, 0xc8, 0x42, 0xe9, 0x09, 0xca, 0x27, 0x63, 0x9f, 0x0a,
-	0x8f, 0xd3, 0x88, 0x49, 0x2a, 0x48, 0x32, 0xf6, 0x26, 0x47, 0x24, 0x4c, 0x02, 0x72, 0xe4, 0xf9,
-	0x41, 0x1a, 0x7f, 0x16, 0x92, 0x71, 0xea, 0x26, 0x9c, 0x49, 0x86, 0x76, 0x15, 0xc6, 0x2d, 0x30,
-	0xee, 0x0c, 0xe3, 0x16, 0x18, 0xe7, 0x04, 0xaa, 0x98, 0x26, 0xec, 0xd5, 0x10, 0x6d, 0x41, 0x85,
-	0xf1, 0x91, 0x6d, 0x75, 0xac, 0xbd, 0x06, 0x56, 0x8f, 0xe8, 0x01, 0x34, 0x38, 0x4d, 0xd8, 0x20,
-	0x26, 0x11, 0xb5, 0x57, 0x75, 0xbe, 0xae, 0x12, 0xaf, 0x49, 0x44, 0x9d, 0x18, 0xb6, 0xfa, 0x44,
-	0x9c, 0x6a, 0x4a, 0x4c, 0xbf, 0xa4, 0x54, 0x48, 0xd4, 0x83, 0x9a, 0x06, 0x8c, 0x87, 0xba, 0x4c,
-	0xb3, 0xfb, 0xd0, 0xbd, 0x55, 0x81, 0x9b, 0xd1, 0xe3, 0x2a, 0xcf, 0x64, 0xec, 0x40, 0x35, 0x20,
-	0x22, 0xa0, 0xc2, 0x5e, 0xed, 0x54, 0xf6, 0x5a, 0x38, 0x8f, 0x9c, 0x7d, 0xd8, 0x2e, 0xf1, 0x89,
-	0x84, 0xc5, 0x82, 0xaa, 0xc3, 0xe4, 0x52, 0xd0, 0x58, 0xda, 0x56, 0xa7, 0xb2, 0xb7, 0x8e, 0xf3,
-	0xc8, 0xe9, 0x40, 0xab, 0x2f, 0x65, 0x72, 0x46, 0xa5, 0x06, 0x28, 0x6f, 0x29, 0x0f, 0x0b, 0x6f,
-	0x29, 0x0f, 0x9d, 0x6f, 0xd0, 0x7c, 0xc9, 0xbe, 0xc6, 0x21, 0x23, 0xc3, 0x73, 0xe6, 0x97, 0x58,
-	0xad, 0x32, 0x2b, 0x3a, 0x87, 0x7a, 0x20, 0x65, 0x32, 0x18, 0x51, 0xa9, 0x3b, 0xd0, 0xec, 0x7a,
-	0x06, 0x96, 0xca, 0xdc, 0xfd, 0x15, 0x5c, 0x0b, 0xb2, 0xb8, 0x07, 0x50, 0x0f, 0x99, 0x4f, 0xe4,
-	0x98, 0xc5, 0xce, 0x2e, 0x6c, 0xa8, 0x63, 0x6f, 0x99, 0xb8, 0x51, 0xe3, 0x77, 0x0b, 0x1a, 0xef,
-	0x93, 0xdb, 0x24, 0xbe, 0x81, 0x86, 0x96, 0x98, 0x30, 0x51, 0x68, 0x3c, 0x34, 0xd4, 0x38, 0x25,
-	0xef, 0xaf, 0x60, 0xed, 0x53, 0x25, 0xe6, 0x54, 0x4a, 0xd8, 0x39, 0xa3, 0xb2, 0xd4, 0xa9, 0x3b,
-	0x79, 0xd7, 0x9f, 0xe0, 0xfe, 0x35, 0xd6, 0xfc, 0x8d, 0xf7, 0x60, 0x2d, 0x64, 0x7e, 0xd6, 0x83,
-	0x66, 0xd7, 0x35, 0xe0, 0x2c, 0x95, 0xc1, 0x1a, 0xeb, 0x70, 0xf8, 0xff, 0x8c, 0xca, 0x69, 0x67,
-	0xef, 0xc4, 0xd2, 0x07, 0xb8, 0x77, 0x85, 0x33, 0x37, 0xf4, 0x62, 0xce, 0xd0, 0x81, 0x01, 0xe3,
-	0xb4, 0x48, 0x6e, 0xe7, 0x02, 0x36, 0x30, 0xbd, 0x24, 0x82, 0x2e, 0xd1, 0x87, 0xb3, 0x05, 0x9b,
-	0x45, 0xd1, 0x4c, 0xa8, 0xf3, 0x0e, 0x9a, 0x98, 0x31, 0xb9, 0x4c, 0x92, 0x7d, 0x68, 0x65, 0x25,
-	0xf3, 0x5e, 0xa8, 0x85, 0xc3, 0x98, 0x1c, 0xa8, 0x9e, 0xe9, 0xaa, 0x2d, 0x5c, 0x57, 0x89, 0x3e,
-	0x11, 0x81, 0xf3, 0xc3, 0x82, 0x8d, 0x53, 0x16, 0x45, 0xe3, 0x65, 0x4a, 0x40, 0x36, 0xd4, 0xfc,
-	0x94, 0x73, 0xb5, 0x42, 0x56, 0x35, 0x61, 0x11, 0x22, 0x04, 0x6b, 0x21, 0x11, 0xd2, 0xae, 0xe8,
-	0xb4, 0x7e, 0x76, 0x1e, 0xc1, 0x66, 0x21, 0x21, 0x97, 0x6c, 0x43, 0x4d, 0xa4, 0xbe, 0x4f, 0x85,
-	0xd0, 0x1a, 0xea, 0xb8, 0x08, 0xbb, 0xbf, 0xd7, 0x61, 0x5b, 0x0f, 0xd7, 0x85, 0xda, 0xc8, 0x17,
-	0x99, 0x26, 0x34, 0x81, 0xc6, 0x74, 0x8d, 0xa1, 0x63, 0x93, 0x39, 0xbd, 0xb2, 0x64, 0xdb, 0x8f,
-	0x17, 0x03, 0xe5, 0x3a, 0x7f, 0x59, 0xf0, 0xdf, 0xfc, 0x4c, 0xa9, 0xf9, 0x16, 0xe8, 0xa9, 0x41,
-	0xb5, 0xbf, 0x6f, 0x80, 0xf6, 0xb3, 0x7f, 0x81, 0xe6, 0x72, 0x7e, 0x5a, 0x80, 0xca, 0xf3, 0x40,
-	0x32, 0x35, 0x27, 0x66, 0x25, 0xaf, 0x8d, 0x6e, 0xfb, 0xc9, 0xe2, 0xc0, 0x5c, 0x49, 0xa4, 0x3e,
-	0x80, 0xea, 0xa2, 0xa3, 0x43, 0xa3, 0xdb, 0x53, 0x1a, 0xb4, 0xf6, 0xd1, 0x02, 0x88, 0x9c, 0x6e,
-	0x04, 0x6b, 0xea, 0xca, 0x23, 0x93, 0xcd, 0x55, 0x1a, 0xb7, 0xb6, 0x67, 0x7c, 0x7e, 0xe6, 0x2b,
-	0xbb, 0xaa, 0x46, 0xbe, 0xe6, 0x06, 0xcb, 0xc8, 0xd7, 0xfc, 0x1c, 0xf4, 0xdc, 0x8f, 0x07, 0x37,
-	0xfd, 0xa0, 0x0c, 0x0a, 0xcc, 0xf3, 0x59, 0xee, 0xb2, 0xaa, 0xff, 0x50, 0x8e, 0xff, 0x04, 0x00,
-	0x00, 0xff, 0xff, 0x36, 0xc5, 0x20, 0xc3, 0xd7, 0x08, 0x00, 0x00,
 }

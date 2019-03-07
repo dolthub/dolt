@@ -5,21 +5,22 @@ import (
 	"fmt"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"log"
+	"sync/atomic"
 )
 
 type RemoteChunkStore struct {
+	HttpHost string
 }
 
 func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChunksRequest) (*remotesapi.HasChunksResponse, error) {
-	logFinish := logStart("HasChunks")
-	defer logFinish()
+	logger := getReqLogger("GRPC", "HasChunks")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "HasChunks")
 
@@ -27,11 +28,14 @@ func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChu
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
+	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+
 	hashes, hashToIndex := remotestorage.ParseByteSlices(req.Hashes)
 
 	absent := cs.HasMany(hashes)
 	indices := make([]int32, len(absent))
 
+	logger(fmt.Sprintf("missing chunks: %v", indices))
 	n := 0
 	for h := range absent {
 		indices[n] = int32(hashToIndex[h])
@@ -45,15 +49,17 @@ func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChu
 	return resp, nil
 }
 
-func (rs RemoteChunkStore) GetDownloadLoctions(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
-	logFinish := logStart("GetDownloadLoctions")
-	defer logFinish()
+func (rs RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remotesapi.GetDownloadLocsRequest) (*remotesapi.GetDownloadLocsResponse, error) {
+	logger := getReqLogger("GRPC", "GetDownloadLocations")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "GetDownloadLoctions")
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
+
+	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
@@ -65,9 +71,13 @@ func (rs RemoteChunkStore) GetDownloadLoctions(ctx context.Context, req *remotes
 		// if it's not absent send the download location
 		if _, ok := absent[h]; !ok {
 			tmp := h
-			url := fmt.Sprintf("http://localhost/%s/%s/%s", org, repoName, h.String())
+			url := fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, h.String())
 			loc := &remotesapi.DownloadLoc_HttpGet{HttpGet: &remotesapi.HttpGetChunk{Url: url}}
 			locs = append(locs, &remotesapi.DownloadLoc{Hashes: [][]byte{tmp[:]}, Location: loc})
+
+			logger(fmt.Sprintf("sending download location for chunk %s: %s", h.String(), url))
+		} else {
+			logger(fmt.Sprintf("could not find chunk %s", h.String()))
 		}
 	}
 
@@ -75,14 +85,16 @@ func (rs RemoteChunkStore) GetDownloadLoctions(ctx context.Context, req *remotes
 }
 
 func (rs RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
-	logFinish := logStart("GetUploadLocations")
-	defer logFinish()
+	logger := getReqLogger("GRPC", "GetUploadLocations")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "GetWriteChunkUrls")
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
+
+	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
@@ -94,9 +106,11 @@ func (rs RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesa
 		// if it's absent send the upload location
 		if _, ok := absent[h]; ok {
 			tmp := h
-			url := fmt.Sprintf("http://localhost/%s/%s/%s", org, repoName, h.String())
+			url := fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, h.String())
 			loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostChunk{Url: url}}
 			locs = append(locs, &remotesapi.UploadLoc{Hashes: [][]byte{tmp[:]}, Location: loc})
+
+			logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
 		}
 	}
 
@@ -104,8 +118,8 @@ func (rs RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesa
 }
 
 func (rs RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
-	logFinish := logStart("Rebase")
-	defer logFinish()
+	logger := getReqLogger("GRPC", "Rebase")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "Rebase")
 
@@ -113,14 +127,16 @@ func (rs RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseReq
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
+	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+
 	err := pantoerr.PanicToError("Rebase failed", func() error {
 		cs.Rebase()
 		return nil
 	})
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err)
-		log.Println("panic occurred during processing of Rebase of", req.RepoId.Org+"/"+req.RepoId.RepoName, "details", cause)
+		cause := pantoerr.GetRecoveredPanicCause(err).(error)
+		logger(fmt.Sprintf("panic occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
 		return nil, status.Error(codes.Internal, "Failed to rebase")
 	}
 
@@ -128,14 +144,16 @@ func (rs RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseReq
 }
 
 func (rs RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootRequest) (*remotesapi.RootResponse, error) {
-	logFinish := logStart("Root")
-	defer logFinish()
+	logger := getReqLogger("GRPC", "Root")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "Root")
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
+
+	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	var h hash.Hash
 	err := pantoerr.PanicToError("Root failed", func() error {
@@ -145,7 +163,7 @@ func (rs RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootRequest
 
 	if err != nil {
 		cause := pantoerr.GetRecoveredPanicCause(err)
-		log.Println("panic occurred during processing of Root rpc of", req.RepoId.Org+"/"+req.RepoId.RepoName, "details", cause)
+		logger(fmt.Sprintf("panic occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
 		return nil, status.Error(codes.Internal, "Failed to get root")
 	}
 
@@ -153,14 +171,16 @@ func (rs RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootRequest
 }
 
 func (rs RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRequest) (*remotesapi.CommitResponse, error) {
-	logFinish := logStart("Commit")
-	defer logFinish()
+	logger := getReqLogger("GRPC", "Commit")
+	defer func() { logger("finished") }()
 
 	cs := getStore(req.RepoId, "Commit")
 
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
+
+	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	currHash := hash.New(req.Current)
 	lastHash := hash.New(req.Last)
@@ -173,10 +193,11 @@ func (rs RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitReq
 
 	if err != nil {
 		cause := pantoerr.GetRecoveredPanicCause(err)
-		log.Println("panic occurred during processing of Commit of", req.RepoId.Org+"/"+req.RepoId.RepoName, "last:", lastHash.String(), "curr:", currHash.String(), "details", cause)
+		logger(fmt.Sprintf("panic occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), cause))
 		return nil, status.Error(codes.Internal, "Failed to rebase")
 	}
 
+	logger(fmt.Sprintf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String()))
 	return &remotesapi.CommitResponse{Success: ok}, nil
 }
 
@@ -193,11 +214,17 @@ func getStore(repoId *remotesapi.RepoId, rpcName string) chunks.ChunkStore {
 	return cs
 }
 
-func logStart(callName string) func() {
-	callId := callName + ":" + uuid.New().String()
-	log.Println("starting:", callId)
+var requestId int32
 
-	return func() {
-		log.Println("finished:", callId)
+func incReqId() int32 {
+	return atomic.AddInt32(&requestId, 1)
+}
+
+func getReqLogger(method, callName string) func(string) {
+	callId := fmt.Sprintf("%s(%05d)", method, incReqId())
+	log.Println(callId, "new request for:", callName)
+
+	return func(msg string) {
+		log.Println(callId, "-", msg)
 	}
 }
