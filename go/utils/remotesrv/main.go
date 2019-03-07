@@ -18,6 +18,7 @@ var csCache = NewCSCache(filesys.LocalFS)
 
 func main() {
 	dir := flag.String("dir", "", "root directory that this command will run in.")
+	httpHostParam := flag.String("http-host", "", "The host used for remote chunk upload and download requests")
 	grpcPort := flag.Int("grpc-port", 50051, "root directory that this command will run in.")
 	httpPort := flag.Int("http-port", 80, "root directory that this command will run in.")
 	flag.Parse()
@@ -32,11 +33,21 @@ func main() {
 		}
 	}
 
+	httpHost := *httpHostParam
+	if len(httpHost) == 0 {
+		log.Println("http-host provided.  Using localhost.  This will only work on this machine.")
+		httpHost = "localhost"
+	}
+
+	if *httpPort != 80 {
+		httpHost = fmt.Sprintf("%s:%d", httpHost, *httpPort)
+	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	stopChan := make(chan interface{})
 	go httpServer(*httpPort, &wg, stopChan)
-	go grpcServer(*grpcPort, &wg, stopChan)
+	go grpcServer(httpHost, *grpcPort, &wg, stopChan)
 
 	oneByte := [1]byte{}
 	for {
@@ -51,7 +62,7 @@ func main() {
 	wg.Wait()
 }
 
-func grpcServer(grpcPort int, wg *sync.WaitGroup, stopChan chan interface{}) {
+func grpcServer(httpHost string, grpcPort int, wg *sync.WaitGroup, stopChan chan interface{}) {
 	defer func() {
 		wg.Done()
 		log.Println("exiting grpc Server go routine")
@@ -63,7 +74,7 @@ func grpcServer(grpcPort int, wg *sync.WaitGroup, stopChan chan interface{}) {
 	}
 
 	grpcServer := grpc.NewServer(grpc.MaxRecvMsgSize(128 * 1024 * 1024))
-	remotesapi.RegisterChunkStoreServiceServer(grpcServer, RemoteChunkStore{})
+	remotesapi.RegisterChunkStoreServiceServer(grpcServer, RemoteChunkStore{httpHost})
 	go func() {
 		log.Println("Starting grpc server on port", grpcPort)
 		err := grpcServer.Serve(lis)

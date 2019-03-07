@@ -6,7 +6,7 @@ option go_package = "dolt/services/remotesapi_v1alpha1;remotesapi";
 
 service ChunkStoreService {
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
-  rpc GetDownloadLoctions(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
+  rpc GetDownloadLocations(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
   rpc GetUploadLocations(GetUploadLocsRequest) returns (GetUploadLocsResponse);
   rpc Rebase(RebaseRequest) returns (RebaseResponse);
   rpc Root(RootRequest) returns (RootResponse);

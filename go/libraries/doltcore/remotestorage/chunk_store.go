@@ -80,7 +80,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(hashes []hash.Hash) ([]chunks.Chun
 	// read all from remote and cache and put in known
 	hashesBytes := HashesToSlices(hashes)
 	req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), Hashes: hashesBytes}
-	resp, err := dcs.csClient.GetDownloadLoctions(context.Background(), &req)
+	resp, err := dcs.csClient.GetDownloadLocations(context.Background(), &req)
 
 	if err != nil {
 		return nil, err
