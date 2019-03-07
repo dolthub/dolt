@@ -7,7 +7,7 @@ import (
 )
 
 // InFunc is a pipeline input function that reads row data from a source and puts it in a channel.
-type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure)
+type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan bool)
 
 // OutFUnc is a pipeline output function that takes the data the pipeline has processed off of the channel.
 type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure)
@@ -21,8 +21,10 @@ type BadRowCallback func(*TransformRowFailure) (quit bool)
 // the transformed data to their output channel.  A series of transforms can be applied until the transformed data
 // reaches the OutFunc which takes the data off the channel and would typically store the result somewhere.
 type Pipeline struct {
-	wg        *sync.WaitGroup
-	stopChan  chan bool
+	wg         *sync.WaitGroup
+	stopChan   chan bool
+	noMoreChan chan bool
+
 	atomicErr atomic.Value
 	transInCh map[string]chan RowWithProps
 
@@ -51,6 +53,14 @@ func (p *Pipeline) Abort() {
 	close(p.stopChan)
 }
 
+func (p *Pipeline) NoMore() {
+	defer func() {
+		recover()
+	}()
+
+	close(p.noMoreChan)
+}
+
 // Wait will wait for the pipeline to complete
 func (p *Pipeline) Wait() error {
 	p.wg.Wait()
@@ -71,6 +81,7 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 	in := make(chan RowWithProps, 1024)
 	badRowChan := make(chan *TransformRowFailure, 1024)
 	stopChan := make(chan bool)
+	noMoreChan := make(chan bool)
 	transInCh := make(map[string]chan RowWithProps)
 
 	curr := in
@@ -82,7 +93,7 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 		}
 	}
 
-	p := &Pipeline{&wg, stopChan, atomic.Value{}, transInCh, nil}
+	p := &Pipeline{&wg, stopChan, noMoreChan, atomic.Value{}, transInCh, nil}
 
 	wg.Add(2)
 	go func() {
@@ -98,7 +109,7 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			processInputs(p, in, badRowChan)
+			processInputs(p, in, badRowChan, noMoreChan)
 		}()
 	}
 

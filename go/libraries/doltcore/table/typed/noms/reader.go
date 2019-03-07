@@ -1,10 +1,10 @@
 package noms
 
 import (
-	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"io"
 )
 
@@ -32,15 +32,10 @@ func (nmr *NomsMapReader) GetSchema() schema.Schema {
 func (nmr *NomsMapReader) ReadRow() (row.Row, error) {
 	var key types.Value
 	var val types.Value
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = errors.New("Error reading next value")
-			}
-		}()
+	err := pantoerr.PanicToError("Error reading next value", func() error {
 		key, val = nmr.itr.Next()
-	}()
+		return nil
+	})
 
 	if err != nil {
 		return nil, err
