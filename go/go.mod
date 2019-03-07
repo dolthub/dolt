@@ -21,7 +21,6 @@ require (
 	github.com/onsi/ginkgo v1.7.0 // indirect
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/pkg/profile v1.2.1
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 // indirect
@@ -30,7 +29,7 @@ require (
 	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
 	golang.org/x/sys v0.0.0-20190124100055-b90733256f2e // indirect
-	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca
+	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
 	google.golang.org/grpc v1.18.0
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
