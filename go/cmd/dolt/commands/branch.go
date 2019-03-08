@@ -17,7 +17,7 @@ var branchLongDesc = `If <b>--list</b> is given, or if there are no non-option a
 
 The command's second form creates a new branch head named <branchname> which points to the current <b>HEAD</b>, or <start-point> if given.
 
-Note that this will create the new branch, but it will not switch the working tree to it; use "dolt checkout <newbranch>" to switch to the new branche.
+Note that this will create the new branch, but it will not switch the working tree to it; use "dolt checkout <newbranch>" to switch to the new branch.
 
 With a <b>-m</b>, <oldbranch> will be renamed to <newbranch>. If <newbranch> exists, -f must be used to force the rename to happen.
 
