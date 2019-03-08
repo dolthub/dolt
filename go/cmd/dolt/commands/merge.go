@@ -80,7 +80,8 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			return 1
 		}
 
-		root, verr := GetWorkingWithVErr(dEnv)
+		var root *doltdb.RootValue
+		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
 			if root.HasConflicts() {
@@ -186,8 +187,6 @@ func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string)
 			return errhand.BuildDError("Already up to date.").AddCause(err).Build()
 		case merge.ErrFastForward:
 			panic("fast forward merge")
-		case merge.ErrSchemaNotIdentical:
-			cli.Println("Schemas must be identical to complete merge.")
 		default:
 			return errhand.BuildDError("Bad merge").AddCause(err).Build()
 		}

@@ -1,6 +1,9 @@
 package schema
 
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+)
 
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
@@ -59,8 +62,10 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	return areEqual
 }
 
+var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func AutoGenerateTag(sch Schema) uint64 {
-	var maxTagVal int64 = 128
+	var maxTagVal int64 = 128 * 128
 
 	allCols := sch.GetAllCols()
 	for maxTagVal/2 < int64(allCols.Size()) {
@@ -75,7 +80,7 @@ func AutoGenerateTag(sch Schema) uint64 {
 
 	var randTag uint64
 	for {
-		randTag = uint64(rand.Int63n(maxTagVal))
+		randTag = uint64(randGen.Int63n(maxTagVal))
 
 		if _, ok := allCols.GetByTag(randTag); !ok {
 			break
