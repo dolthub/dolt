@@ -6,13 +6,13 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 )
 
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
-var ErrSchemaNotIdentical = errors.New("schemas not identical and can't be merged")
 
 type Merger struct {
 	commit      *doltdb.Commit
@@ -78,7 +78,13 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		return nil, nil, err
 	}
 
-	mergedTable := tbl.UpdateRows(mergedRowData)
+	schUnionVal, err := encoding.MarshalAsNomsValue(merger.vrw, schemaUnion)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedTable := doltdb.NewTable(merger.vrw, schUnionVal, mergedRowData)
 
 	if conflicts.Len() > 0 {
 		schemas := doltdb.NewConflict(ancTbl.GetSchemaRef(), tbl.GetSchemaRef(), mergeTbl.GetSchemaRef())
