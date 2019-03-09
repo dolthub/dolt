@@ -23,6 +23,7 @@ func NewArgParser() *ArgParser {
 	return &ArgParser{supported, nameOrAbbrevToOpt, argListHelp}
 }
 
+// Adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
 func (ap *ArgParser) SupportOption(opt *Option) {
 	name := strings.ToLower(opt.Name)
 	abbrev := strings.ToLower(opt.Abbrev)
@@ -35,7 +36,7 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	} else if name == "help" || abbrev == "help" || name == "h" || abbrev == "h" {
 		panic(`"help" and "h" are both reserved`)
 	} else if nameExist || abbrevExist {
-		panic("There is a bug.  Two supported arguments have the same name of abbreviation")
+		panic("There is a bug.  Two supported arguments have the same name or abbreviation")
 	} else if name[0] == '-' || (len(abbrev) > 0 && abbrev[0] == '-') {
 		panic("There is a bug. Option names, and abbreviations should not start with -")
 	} else if strings.IndexAny(name, optNameValDelimChars) != -1 || strings.IndexAny(name, whitespaceChars) != -1 {
@@ -50,21 +51,25 @@ func (ap *ArgParser) SupportOption(opt *Option) {
 	}
 }
 
+// Adds support for a new flag (argument with no value). See SupportOpt for details on params.
 func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) {
 	opt := &Option{name, abbrev, "", OptionalFlag, desc, nil}
 	ap.SupportOption(opt)
 }
 
+// Adds support for a new string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil}
 	ap.SupportOption(opt)
 }
 
+// Adds support for a new uint argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsUint(name, abbrev, valDesc, desc string) {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isUintStr}
 	ap.SupportOption(opt)
 }
 
+// Adds support for a new int argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, isIntStr}
 	ap.SupportOption(opt)
@@ -89,6 +94,9 @@ func splitOption(optStr string) (string, *string) {
 	return argName, &argValue
 }
 
+// Parses the string args given using the configuration previously specified with calls to the various Supports*
+// methods. Any unrecognized arguments or incorrect types will result in an appropriate error being returned. If the
+// universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	var list []string
 	results := make(map[string]string)
