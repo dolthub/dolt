@@ -2,7 +2,9 @@ package errhand
 
 import "fmt"
 
-func PanicToVError(errMsg string, f func() VerboseError) (err VerboseError) {
+func PanicToVError(errMsg string, f func() VerboseError) VerboseError {
+	var err VerboseError
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -17,7 +19,6 @@ func PanicToVError(errMsg string, f func() VerboseError) (err VerboseError) {
 				err = bdr.Build()
 			}
 		}()
-
 		err = f()
 	}()
 
