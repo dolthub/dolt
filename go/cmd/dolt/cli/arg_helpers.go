@@ -24,7 +24,7 @@ func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter
 		}
 
 		usagePrinter()
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	return apr
