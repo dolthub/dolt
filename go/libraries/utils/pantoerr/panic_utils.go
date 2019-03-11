@@ -30,29 +30,23 @@ func GetRecoveredPanicCause(err error) interface{} {
 }
 
 func PanicToErrorInstance(errInstance error, f func() error) (err error) {
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = errInstance
-			}
-		}()
-
-		err = f()
+	defer func() {
+		if r := recover(); r != nil {
+			err = errInstance
+		}
 	}()
 
+	err = f()
 	return err
 }
 
 func PanicToError(errMsg string, f func() error) (err error) {
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = &RecoveredPanic{r, errMsg}
-			}
-		}()
-
-		err = f()
+	defer func() {
+		if r := recover(); r != nil {
+			err = &RecoveredPanic{r, errMsg}
+		}
 	}()
 
+	err = f()
 	return err
 }
