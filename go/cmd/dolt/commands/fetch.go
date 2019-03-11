@@ -54,7 +54,7 @@ func fetchRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, remoteName, branch stri
 	cm, err := srcDB.Resolve(cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find", branch).Build()
+		return errhand.BuildDError("error: unable to find %v", branch).Build()
 	}
 
 	progChan := make(chan datas.PullProgress)

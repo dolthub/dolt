@@ -105,5 +105,5 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 		}()
 	}
 
-	return nil
+	return verr
 }
