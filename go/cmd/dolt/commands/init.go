@@ -15,26 +15,25 @@ const (
 )
 
 var initShortDesc = "Create an empty Dolt data repository"
-var initLongDesc = `This command creates an empty Dolt data repository - basically a noms database in the local directory with the structure necessary for dolt.
+var initLongDesc = `This command creates an empty Dolt data repository in the current directory.
 
-Running dolt init will only succeed when run in a completely empty directory, and subsequent dolt init calls will fail`
+Running dolt init in an already initialized directory will fail.`
 var initSynopsis = []string{
 	"[<options>] [<path>]",
 }
 
 // Init is used by the init command
 func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	if dEnv.HasDoltDir() {
-		cli.PrintErrln(color.RedString("This directory has already been initialized."))
-		return 1
-	}
-
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
 	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if dEnv.HasDoltDir() {
+		cli.PrintErrln(color.RedString("This directory has already been initialized."))
+		return 1
+	}
 
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
