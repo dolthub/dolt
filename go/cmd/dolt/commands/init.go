@@ -35,6 +35,7 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
 	name = dEnv.Config.IfEmptyUseConfig(name, env.UserNameKey)
