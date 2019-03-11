@@ -83,6 +83,8 @@ func processConfigCommand(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, opName str
 	panic("New operation added but not implemented.")
 }
 
+// Gets the config value for the key requested in the args, running the printFn given with the key and fetched value as
+// arguments. If the key is not found, or if there is an error retrieving it, returns 1. Otherwise returns 0.
 func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, printFn func(string, *string)) int {
 	if len(args) != 1 {
 		// matches git behavior... kinda dumb
