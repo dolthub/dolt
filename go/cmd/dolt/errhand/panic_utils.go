@@ -2,21 +2,25 @@ package errhand
 
 import "fmt"
 
-func PanicToVError(errMsg string, f func() VerboseError) (err VerboseError) {
-	defer func() {
-		if r := recover(); r != nil {
-			bdr := BuildDError(errMsg)
+func PanicToVError(errMsg string, f func() VerboseError) VerboseError {
+	var err VerboseError
 
-			if recErr, ok := r.(error); ok {
-				bdr.AddCause(recErr)
-			} else {
-				bdr.AddDetails(fmt.Sprint(r))
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				bdr := BuildDError(errMsg)
+
+				if recErr, ok := r.(error); ok {
+					bdr.AddCause(recErr)
+				} else {
+					bdr.AddDetails(fmt.Sprint(r))
+				}
+
+				err = bdr.Build()
 			}
-
-			err = bdr.Build()
-		}
+		}()
+		err = f()
 	}()
 
-	err = f()
 	return err
 }
