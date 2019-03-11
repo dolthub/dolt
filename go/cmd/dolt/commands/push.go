@@ -54,7 +54,7 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, branch string) errhand
 	cm, err := dEnv.DoltDB.Resolve(cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find", branch).Build()
+		return errhand.BuildDError("error: unable to find %v", branch).Build()
 	}
 
 	destDB := r.GetRemoteDB()

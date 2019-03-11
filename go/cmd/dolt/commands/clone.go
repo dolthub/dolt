@@ -129,7 +129,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, fs filesys.Filesys) 
 	cm, err := srcDB.Resolve(cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find", branch).Build()
+		return errhand.BuildDError("error: unable to find %v", branch).Build()
 	}
 
 	progChan := make(chan datas.PullProgress)

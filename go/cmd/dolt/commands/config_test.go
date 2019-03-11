@@ -89,7 +89,7 @@ func TestConfig(t *testing.T) {
 
 	ret = getOperation(dEnv, globalCfg, []string{"name"}, func(k string, v *string) {
 		if v != nil {
-			t.Error("Failed to get expected value for \"name\" which should not be set in the cofig.")
+			t.Error("Failed to get expected value for \"name\" which should not be set in the config.")
 		}
 	})
 
