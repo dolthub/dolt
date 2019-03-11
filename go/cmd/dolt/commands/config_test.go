@@ -93,8 +93,8 @@ func TestConfig(t *testing.T) {
 		}
 	})
 
-	if ret != 0 {
-		t.Error("get operation failed")
+	if ret == 0 {
+		t.Error("get operation should return 1 for a key not found")
 	}
 }
 
