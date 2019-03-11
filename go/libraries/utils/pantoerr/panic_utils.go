@@ -29,28 +29,28 @@ func GetRecoveredPanicCause(err error) interface{} {
 	return rp.PanicCause
 }
 
-func PanicToErrorInstance(errInstance error, f func() error) (err error) {
+func PanicToErrorInstance(errInstance error, f func() error) error {
+	var err error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				err = errInstance
 			}
 		}()
-
 		err = f()
 	}()
 
 	return err
 }
 
-func PanicToError(errMsg string, f func() error) (err error) {
+func PanicToError(errMsg string, f func() error) error {
+	var err error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				err = &RecoveredPanic{r, errMsg}
 			}
 		}()
-
 		err = f()
 	}()
 
