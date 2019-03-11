@@ -57,8 +57,8 @@ func TestInit(t *testing.T) {
 			}
 		} else {
 			// failed as expected
-			if !dEnv.HasDoltDir() {
-				t.Error(test.Name, "- CWD should be empty after failure to initialize... unless it wasn't empty to start with")
+			if dEnv.HasDoltDir() {
+				t.Error(test.Name, "- dolt directory shouldn't exist after failure to initialize")
 			}
 		}
 	}
@@ -75,16 +75,6 @@ func TestInitTwice(t *testing.T) {
 	result = Init("dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
 
 	if result == 0 {
-		t.Error("First init should succeed")
-	}
-}
-
-func TestInitWithNonEmptyDir(t *testing.T) {
-	dEnv := createUninitializedEnv()
-	dEnv.FS.WriteFile("file.txt", []byte("file contents."))
-	result := Init("dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
-
-	if result == 0 {
-		t.Error("Init should fail if directory is not empty")
+		t.Error("Second init should fail")
 	}
 }
