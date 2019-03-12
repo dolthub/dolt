@@ -3,6 +3,7 @@
 use strict;
 
 use Data::Dumper;
+use List::Util qw(shuffle);;
 
 # These are defaults and will al be able to be overridden with command line args.
 use constant BENCHMARK_ROOT => '/var/tmp';
@@ -11,8 +12,8 @@ use constant VERBOSE => 1;
 use constant UNSAFE => 1;
 use constant CLEANUP => 1;
 
-use constant TEST_FILE      => 'test.csv'; 
-use constant TEST_INPUT_CSV => BENCHMARK_ROOT . '/' . TEST_FILE;
+use constant TEST_FILE        => 'test.csv'; 
+use constant TEST_INPUT_CSV   => BENCHMARK_ROOT . '/' . TEST_FILE;
 use constant TEST_SCHEMA_FILE => BENCHMARK_ROOT . '/test.schema';
 
 
@@ -160,7 +161,7 @@ my $benchmarks = {
 };
 
 # Define the schema and size of the test database
-my $lines = 1000;
+my $lines = 28000;
 my $schema = [
     {
 	name    => 'id',
@@ -411,30 +412,51 @@ sub create_test_input_csvs {
     write_to_files("\n", @all_filehandles);;
 
     # Create mock data
-    for ( my $i=0; $i < $size; $i++ ) {
+
+    # Create an array with the data and write the original CSV 
+    my @values;
+    foreach ( my $i = 0; $i < $size; $i++ ) {
 	$first = 1;
-	foreach my $column ( @{$schema} ) {
-	    write_to_files(',', @all_filehandles) unless $first;
-	    my $value = generate_value($column->{'type'}, 
-				       $column->{'gen'}, 
-				       $column->{'size'}, 
-				       $i);
-	    print CSV $value;
-	    
-            # Change the value if we roll under the probability
-	    foreach my $change ( @{$changes} ) {
-		if ( rand() < $change->{'pct'} ) {
-		    $value = generate_value($column->{'type'},
-					    $column->{'gen'},
-					    $column->{'size'},
-					    $i);
-		} 
-		my $fh = $change->{'filehandle'};
-		print $fh $value;
-	    }
+	$values[$i] = [];
+        foreach my $column ( @{$schema} ) {
+            print CSV ',' unless $first;
 	    $first = 0;
+            my $value = generate_value($column->{'type'},
+                                       $column->{'gen'},
+                                       $column->{'size'},
+                                       $i);
+            print CSV $value;
+	    push @{$values[$i]}, $value;
+	    
 	}
-	write_to_files("\n", @all_filehandles);
+	print CSV "\n";
+    }
+
+    # Shuffle the rows and change the values
+    foreach my $change ( @{$changes} ) {
+	my $fh = $change->{'filehandle'};
+	my @shuffle = shuffle(@values);
+	foreach my $row ( @shuffle ) {
+	    my $first = 1;
+	    my $i = 0;
+	    foreach my $column ( @{$schema} ) {
+		my $value = $row->[$i];
+
+		print $fh ',' unless $first;
+		$first = 0;
+
+		if ( rand() < $change->{'pct'} ) {
+                    $value = generate_value($column->{'type'},
+                                            $column->{'gen'},
+                                            $column->{'size'},
+                                            $row->[0]);
+		}
+
+		print $fh $value;
+		$i++;
+	    }
+	    print $fh "\n";
+	}
     }
 
     foreach my $fh (@all_filehandles) {
