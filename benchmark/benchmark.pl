@@ -14,12 +14,13 @@
 use strict;
 
 use Data::Dumper;
-use List::Util qw(shuffle);;
+use List::Util qw(shuffle);
 
 # These are defaults and will al be able to be overridden with command line args.
 use constant BENCHMARK_ROOT => '/var/tmp';
 
-use constant VERBOSE => 1;
+use constant STATUS => 1;
+use constant VERBOSE => 0;
 use constant UNSAFE => 1;
 use constant CLEANUP => 1;
 
@@ -67,7 +68,7 @@ my $changes = [
 # This creates a set of csv files and a dolt schema file which are used in the
 # benchmark tests. The gen field is either increment or rand. Types supported are
 # int and string.
-my $lines = 1000;
+my $lines = 5000000;
 my $schema = [
     {
 	name    => 'id',
@@ -280,15 +281,16 @@ if ( -d BENCHMARK_ROOT ) {
 	" because the directory does not exist.");
 }
 
+print "Building input files...\n" if STATUS;
 generate_dolt_schema($schema);
 create_test_input_csvs(TEST_INPUT_CSV, $lines, $schema, $changes);
 
-# TO DO: Gather system information to append to the output.
+# TO DO: Gather system information to insert into the output.
 
 # Run the benchmarks
 my %output;
 foreach my $benchmark ( keys %{$benchmarks} ) {
-    print "Executing $benchmark benchmark...\n" if VERBOSE;
+    print "Executing $benchmark benchmark...\n" if STATUS;
 
     my $root = $benchmarks->{$benchmark}{'root'};
     if ( -d $root ) {
@@ -304,12 +306,12 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
     }
 
     foreach my $test ( @{$benchmarks->{$benchmark}{'tests'}} ) {
+	print "Running test: " . $test->{'name'} . "\n" if STATUS;
+
 	foreach my $prep ( @{$test->{'prep'}} ) {
 	    run_command($prep, VERBOSE);
 	}
 	
-	print "Running test: " . $test->{'name'} . "\n" if VERBOSE;
-
 	my ($real, $user, $system) = time_command($test->{'command'}, VERBOSE);
 
 	$output{$test->{'name'}}{$benchmark}{'real'}   = $real;
@@ -329,6 +331,7 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
 }
 
 # Cleanup
+print "Cleaning up...\n" if STATUS; 
 cleanup($changes);
 
 # Output
