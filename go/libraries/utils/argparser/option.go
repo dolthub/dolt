@@ -36,10 +36,16 @@ func isUintStr(str string) error {
 
 // An Option encapsulates all the information necessary to represent and parse a command line argument.
 type Option struct {
-	Name      string // Long name for this Option, specified on the command line with --Name. Required.
-	Abbrev    string // Abbreviated name for this Option, specified on the command line with -Abbrev. Optional.
-	ValDesc   string // Brief description of the Option.
-	OptType   OptionType // The type of this option, either a flag or a value.
-	Desc      string // Longer help text for the option.
-	Validator ValidationFunc // Function to validate an Option after parsing, returning any error.
+	// Long name for this Option, specified on the command line with --Name. Required.
+	Name      string
+	// Abbreviated name for this Option, specified on the command line with -Abbrev. Optional.
+	Abbrev    string
+	// Brief description of the Option.
+	ValDesc   string
+	// The type of this option, either a flag or a value.
+	OptType   OptionType
+	// Longer help text for the option.
+	Desc      string
+	// Function to validate an Option after parsing, returning any error.
+	Validator ValidationFunc
 }
