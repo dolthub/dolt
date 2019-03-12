@@ -96,7 +96,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 				}
 
 			case <-time.After(100 * time.Millisecond):
-				return
+				// wake up and check stop condition
 			}
 		}
 	}
