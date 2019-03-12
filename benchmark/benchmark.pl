@@ -9,9 +9,12 @@ use constant BENCHMARK_ROOT => '/var/tmp';
 
 use constant VERBOSE => 1;
 use constant UNSAFE => 1;
+use constant CLEANUP => 1;
 
 use constant TEST_FILE      => 'test.csv'; 
 use constant TEST_INPUT_CSV => BENCHMARK_ROOT . '/' . TEST_FILE;
+use constant TEST_SCHEMA_FILE => BENCHMARK_ROOT . '/test.schema';
+
 
 # Set up the environment
 # TO DO: Figure out a portable way to get dolt in the path
@@ -111,7 +114,10 @@ my $benchmarks = {
 	    },
             {
 		# Need to set up the schema here.
-		prep => ['dolt table import -c --pk=id test ' . TEST_INPUT_CSV],
+		prep => [
+		    'dolt table create -s ' . TEST_SCHEMA_FILE . ' test',
+		    'dolt table import -u test ' . TEST_INPUT_CSV,
+		    ],
 		name =>'add',
 		command=> 'dolt add test',
 	    },
@@ -242,6 +248,7 @@ if ( -d BENCHMARK_ROOT ) {
 	" because the directory does not exist.";
 }
 
+generate_dolt_schema($schema);
 create_test_input_csvs(TEST_INPUT_CSV, $lines, $schema, $changes);
 
 # Run the benchmarks
@@ -284,13 +291,14 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
 	}
     }
 
-    run_command("rm -rf $root", VERBOSE);
+    run_command("rm -rf $root", VERBOSE) if CLEANUP;
 }
 
 # Cleanup
-unlink(TEST_INPUT_CSV);
+unlink(TEST_SCHEMA_FILE) if CLEANUP;
+unlink(TEST_INPUT_CSV) if CLEANUP;
 foreach my $change ( @{$changes} ) {
-    unlink($change->{'file'});
+    unlink($change->{'file'}) if CLEANUP;
 }
 
 print Dumper(\%output);
@@ -475,5 +483,42 @@ sub rndStr {
 # Generate schema
 
 sub generate_dolt_schema {
+    my $schema = shift;
+
+    my $filehandle = *SCHEMA;
+    open($filehandle, '>', TEST_SCHEMA_FILE) 
+	or die 'Could not open ' . TEST_SCHEMA_FILE . "\n";
+
+    print $filehandle "{\n\"columns\":[\n";
     
+    my $first = 1;
+    my $tag = 0;
+    foreach my $column ( @{$schema} ) {
+	print $filehandle ",\n" unless $first;
+	$first = 0;
+	generate_column_schema($column, $tag, $filehandle);
+	$tag++;
+    }
+
+    print $filehandle "]\n}\n";
+}
+
+sub generate_column_schema {
+    my $col_schema = shift;
+    my $tag        = shift;
+    my $filehandle = shift;
+
+    print $filehandle "{\n\"tag\": $tag,\n";
+    print $filehandle "\"name\":\"$col_schema->{name}\",\n";
+    print $filehandle "\"kind\":\"$col_schema->{type}\",\n";
+    if ( $col_schema->{primary} ) {
+	print $filehandle "\"is_part_of_pk\": true,\n" . 
+	    "\"col_constraints\": [\n{\n\"constraint_type\": \"not_null\",\n" .
+	    "\"params\": null\n}\n]\n";
+    } else {
+	print $filehandle "\"is_part_of_pk\": false,\n" .
+	    "\"col_constraints\": []\n";
+    }
+
+    print $filehandle "}";
 }
