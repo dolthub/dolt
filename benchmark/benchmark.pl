@@ -6,7 +6,9 @@ use Data::Dumper;
 
 # These are defaults and will al be able to be overridden with command line args.
 use constant BENCHMARK_ROOT => '/var/tmp';
-use constant VERBOSE => 0;
+
+use constant VERBOSE => 1;
+use constant UNSAFE => 1;
 
 use constant TEST_FILE      => 'test.csv'; 
 use constant TEST_INPUT_CSV => BENCHMARK_ROOT . '/' . TEST_FILE;
@@ -20,17 +22,17 @@ my $changes = [
     {
         filehandle => *SMALL,
         file => BENCHMARK_ROOT . '/small-change.csv',
-        pct  => 0.01,
+        pct  => 0.001,
     },
     {
         filehandle => *MEDIUM,
         file => BENCHMARK_ROOT . '/medium-change.csv',
-        pct  => 0.1,
+        pct  => 0.01,
     },
     {
         filehandle => *LARGE,
         file => BENCHMARK_ROOT . '/large-change.csv',
-        pct  => 0.5,
+        pct  => 0.05,
     },
 ];
 
@@ -47,7 +49,6 @@ my $benchmarks = {
 		name => 'init',
 		command => 'git init',
 	    },
-
 	    {
 		prep => [
 		    'cp ' . TEST_INPUT_CSV . ' ' . BENCHMARK_ROOT . '/git-benchmark/',
@@ -65,6 +66,11 @@ my $benchmarks = {
                     ],
                 name => 'small diff',
                 command => 'git diff ' . TEST_FILE,
+		post => [
+		    'git add ' . TEST_FILE,
+		    'git commit -m "Committed small diff"',
+		],
+		check_disk => 1, 
             },
             {
                 prep => [
@@ -72,6 +78,11 @@ my $benchmarks = {
                     ],
                 name => 'medium diff',
                 command => 'git diff ' . TEST_FILE,
+		post => [
+                    'git add ' . TEST_FILE,
+                    'git commit -m "Committed medium diff"',
+                ],
+		check_disk => 1,
             },
             {
                 prep => [
@@ -79,6 +90,11 @@ my $benchmarks = {
                     ],
                 name => 'large diff',
                 command => 'git diff ' . TEST_FILE,
+		post => [
+                    'git add ' . TEST_FILE,
+                    'git commit -m "Committed large diff"',
+                ],
+		check_disk => 1,
             },
 	],
     },
@@ -106,24 +122,39 @@ my $benchmarks = {
 	    {
                 prep => ['dolt table import -u test ' . $changes->[0]{'file'}],
                 name => 'small diff',
-                command=> 'dolt diff test',
+                command => 'dolt diff test',
+		post => [
+                    'dolt add test',
+                    'dolt commit -m "Committed small diff"',
+                ],
+		check_disk => 1,
             },
             {
                 prep => ['dolt table import -u test ' . $changes->[1]{'file'}],
                 name => 'medium diff',
-                command=> 'dolt diff test',
+                command => 'dolt diff test',
+                post => [
+                    'dolt add test',
+                    'dolt commit -m "Committed medium diff"',
+                ],
+                check_disk => 1,
             },
             {
                 prep => ['dolt table import -u test ' . $changes->[2]{'file'}],
                 name => 'large diff',
-                command=> 'dolt diff test',
+                command => 'dolt diff test',
+                post => [
+                    'dolt add test',
+                    'dolt commit -m "Committed large diff"',
+                ],
+                check_disk => 1,
             },
 	],
     },
 };
 
 # Define the schema and size of the test database
-my $lines = 1000000;
+my $lines = 1000;
 my $schema = [
     {
 	name    => 'id',
@@ -220,8 +251,11 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
 
     my $root = $benchmarks->{$benchmark}{'root'};
     if ( -d $root ) {
-	run_command("rm -rf $root", VERBOSE);
-	# die "$root must not exist to run benchmark\n";
+	if ( UNSAFE ) { 
+	    run_command("rm -rf $root", VERBOSE);
+	} else {
+	    die "$root must not exist to run benchmark\n";
+	}
     } else {
 	mkdir($root);
 	chdir($root);
@@ -240,13 +274,24 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
 	$output{$test->{'name'}}{$benchmark}{'real'}   = $real;
 	$output{$test->{'name'}}{$benchmark}{'user'}   = $user;
 	$output{$test->{'name'}}{$benchmark}{'system'} = $system;
+
+        foreach my $post ( @{$test->{'post'}} ) {
+            run_command($post, VERBOSE);
+        }
+
+	if ( $test->{'check_disk'} ) {
+	    $output{$test->{'name'}}{$benchmark}{'disk'} = disk_usage(VERBOSE);
+	}
     }
 
     run_command("rm -rf $root", VERBOSE);
 }
 
 # Cleanup
-# unlink(TEST_INPUT_CSV);
+unlink(TEST_INPUT_CSV);
+foreach my $change ( @{$changes} ) {
+    unlink($change->{'file'});
+}
 
 print Dumper(\%output);
 
@@ -255,6 +300,8 @@ print Dumper(\%output);
 # Functions
 #
 ###################################################################################
+
+# System utility functions
 
 sub time_command {
     my $command = shift;
@@ -289,6 +336,21 @@ sub time_command {
     return ($real, $user, $system);
 }
 
+sub disk_usage {
+    my $verbose = shift;
+
+    print "Checking disk usage...\n" if $verbose;
+
+    my $command = 'du -h -d 0';
+    print "Running $command\n" if $verbose;
+    my $output = `$command`;
+    print "Output:\n\t$output\n" if $verbose;
+
+    $output =~ /^\s*([\d\w\.]+)\s+\./;
+
+    return $1;
+}
+
 sub run_command {
     my $command = shift;
     my $verbose = shift || 0;
@@ -312,6 +374,8 @@ sub convert_time_output_to_ms {
 
     return $ms + ($seconds*1000) + ($minutes*60*1000);
 }
+
+# CSV Creation functions
 
 sub create_test_input_csvs {
     my $csv     = shift;
@@ -406,4 +470,10 @@ sub write_to_files {
 # Perl wizardry. Do not question.
 sub rndStr { 
     join('', @_[ map{ rand @_ } 1 .. shift ]); 
+}
+
+# Generate schema
+
+sub generate_dolt_schema {
+    
 }
