@@ -86,7 +86,7 @@ func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps
 	for i := 0; i < len(asWr.rowBuffer); i++ {
 		asWr.processRow(asWr.rowBuffer[i], outChan, badRowChan)
 
-		if i%10 == 0 {
+		if i%100 == 0 {
 			select {
 			case <-stopChan:
 				return
