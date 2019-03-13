@@ -19,8 +19,7 @@ use List::Util qw(shuffle);
 # These are defaults and will al be able to be overridden with command line args.
 use constant BENCHMARK_ROOT => '/var/tmp';
 
-use constant STATUS => 1;
-use constant VERBOSE => 0;
+use constant LOG_LEVEL => 1; # 0 = quiet, 1 = status, 2 = verbose
 use constant UNSAFE => 1;
 use constant CLEANUP => 1;
 
@@ -68,7 +67,7 @@ my $changes = [
 # This creates a set of csv files and a dolt schema file which are used in the
 # benchmark tests. The gen field is either increment or rand. Types supported are
 # int and string.
-my $lines = 5000000;
+my $lines = 1000000;
 my $schema = [
     {
 	name    => 'id',
@@ -171,6 +170,7 @@ my $benchmarks = {
             {
                 name => 'commit',
                 command => 'git commit -m "first test commit"',
+		check_disk => 1,
             },
 	    {
                 prep => [
@@ -232,6 +232,7 @@ my $benchmarks = {
             {
                 name => 'commit',
                 command => 'dolt commit -m "first test commit"',
+		check_disk => 1,
             },
 	    {
                 prep => ['dolt table import -u test ' . $changes->[0]{'file'}],
@@ -281,62 +282,62 @@ if ( -d BENCHMARK_ROOT ) {
 	" because the directory does not exist.");
 }
 
-print "Building input files...\n" if STATUS;
+my $columns = scalar(@{$schema});
+output("Building input files...$lines rows, $columns columns", 1);
 generate_dolt_schema($schema);
 create_test_input_csvs(TEST_INPUT_CSV, $lines, $schema, $changes);
 
 # TO DO: Gather system information to insert into the output.
 
 # Run the benchmarks
-my %output;
+my %data;
 foreach my $benchmark ( keys %{$benchmarks} ) {
-    print "Executing $benchmark benchmark...\n" if STATUS;
+    output("Executing $benchmark benchmark...", 1);
 
     my $root = $benchmarks->{$benchmark}{'root'};
     if ( -d $root ) {
 	if ( UNSAFE ) { 
-	    run_command("rm -rf $root", VERBOSE);
+	    run_command("rm -rf $root");
 	} else {
 	    error_exit("$root must not exist to run benchmark\n");
 	}
     } else {
 	mkdir($root);
 	chdir($root);
-	print "Changing directory to $root\n" if VERBOSE;
+	output("Changing directory to $root\n", 2);
     }
 
     foreach my $test ( @{$benchmarks->{$benchmark}{'tests'}} ) {
-	print "Running test: " . $test->{'name'} . "\n" if STATUS;
+	output("Running test: " . $test->{'name'}, 1);
 
 	foreach my $prep ( @{$test->{'prep'}} ) {
-	    run_command($prep, VERBOSE);
+	    run_command($prep);
 	}
 	
-	my ($real, $user, $system) = time_command($test->{'command'}, VERBOSE);
+	my ($real, $user, $system) = time_command($test->{'command'});
 
-	$output{$test->{'name'}}{$benchmark}{'real'}   = $real;
-	$output{$test->{'name'}}{$benchmark}{'user'}   = $user;
-	$output{$test->{'name'}}{$benchmark}{'system'} = $system;
+	$data{$test->{'name'}}{$benchmark}{'real'}   = $real;
+	$data{$test->{'name'}}{$benchmark}{'user'}   = $user;
+	$data{$test->{'name'}}{$benchmark}{'system'} = $system;
 
         foreach my $post ( @{$test->{'post'}} ) {
-            run_command($post, VERBOSE);
+            run_command($post);
         }
 
 	if ( $test->{'check_disk'} ) {
-	    $output{$test->{'name'}}{$benchmark}{'disk'} = disk_usage(VERBOSE);
+	    $data{$test->{'name'}}{$benchmark}{'disk'} = disk_usage();
 	}
     }
 
-    run_command("rm -rf $root", VERBOSE) if CLEANUP;
+    run_command("rm -rf $root") if CLEANUP;
 }
 
 # Cleanup
-print "Cleaning up...\n" if STATUS; 
+output("Cleaning up...", 1); 
 cleanup($changes);
 
 # Output
-# TO DO: Format this in a readable form.
-print Dumper(\%output);
+output_data(\%data, $benchmarks);
 
 exit 0;
 
@@ -350,14 +351,13 @@ exit 0;
 
 sub time_command {
     my $command = shift;
-    my $verbose = shift || 0; 
 
-    print "Running:\n\t$command\n" if $verbose;
+    output("Running:\n\t$command", 2);
 
     # time outputs to STDERR so I'll trash STDOUT and grab STDERR from
     # STDOUT which `` writes to
     my $piped_command;
-    if ( $verbose ) {
+    if ( LOG_LEVEL > 1 ) {
 	$piped_command = "{ time $command ;} 2>&1";
     } else {
 	$piped_command = "{ time $command ;} 2>&1 1>/dev/null";
@@ -372,7 +372,7 @@ sub time_command {
 
     $output =~ /real\s+(.+)\nuser\s+(.+)\nsys\s+(.+)\n/;
 
-    print "Output:\n\t$output\n" if ( $verbose and $output );
+    output("Output:\n\t$output", 2) if $output;
 
     my $real   = convert_time_output_to_ms($1);
     my $user   = convert_time_output_to_ms($2);
@@ -384,12 +384,12 @@ sub time_command {
 sub disk_usage {
     my $verbose = shift;
 
-    print "Checking disk usage...\n" if $verbose;
+    output("Checking disk usage...", 2);
 
     my $command = 'du -h -d 0';
-    print "Running $command\n" if $verbose;
+    output("Running $command", 2);
     my $output = `$command`;
-    print "Output:\n\t$output\n" if $verbose;
+    output("Output:\n\t$output", 2) if $output;
 
     $output =~ /^\s*([\d\w\.]+)\s+\./;
 
@@ -398,13 +398,12 @@ sub disk_usage {
 
 sub run_command {
     my $command = shift;
-    my $verbose = shift || 0;
 
-    print "Running:\n\t$command\n" if $verbose;
+    output("Running:\n\t$command", 2);
     my $output = `$command 2>&1`;
-    print "Output:\n\t$output\n" if ( $verbose and $output );
+    output("Output:\n\t$output", 2) if $output;
     if ($?) {
-	die "Error running: $command\n";
+	error_exit("Error running: $command");
     }
 }
 
@@ -434,7 +433,7 @@ sub create_test_input_csvs {
 
     foreach my $change ( @{$changes} ){
 	open($change->{'filehandle'}, '>', $change->{'file'}) 
-	    or error_exit("Could not open ". $change->{'file'} . ": $!\n");
+	    or error_exit("Could not open ". $change->{'file'} . ": $!");
 	push @all_filehandles, $change->{'filehandle'};
     }
 
@@ -511,16 +510,16 @@ sub generate_value {
 	if ( $gen eq 'rand' ) {
 	    return int(rand($size+1));
 	} else {
-	    error_exit("Do not understand generator: $gen\n");
+	    error_exit("Do not understand generator: $gen");
 	}
     } elsif ( $type eq 'string' ) {
 	if ( $gen eq 'rand' ) {
 	    return rndStr($size, 'a'..'z', 0..9);
 	} else {
-            error_exit("Do not understand generator: $gen\n");
+            error_exit("Do not understand generator: $gen");
 	}
     } else {
-	error_exit("Do not understand type: $type\n");
+	error_exit("Do not understand type: $type");
     }
 }
 
@@ -545,7 +544,7 @@ sub generate_dolt_schema {
 
     my $filehandle;
     open($filehandle, '>', TEST_SCHEMA_FILE) 
-	or error_exit('Could not open ' . TEST_SCHEMA_FILE . "\n");
+	or error_exit('Could not open ' . TEST_SCHEMA_FILE);
 
     print $filehandle "{\n\"columns\":[\n";
     
@@ -592,8 +591,49 @@ sub cleanup {
 	unlink($change->{'file'}) if ( CLEANUP && -e $change->{'file'} );
     }
 
-    run_command('rm -rf ' . BENCHMARK_ROOT . '/*', VERBOSE) 
+    run_command('rm -rf ' . BENCHMARK_ROOT . '/*') 
 	if ( UNSAFE && CLEANUP );
+}
+
+# Data
+sub output_data {
+    my $data       = shift;
+    my $benchmarks = shift;
+
+    return if ( LOG_LEVEL == 0 );
+
+    print Dumper $data if ( LOG_LEVEL >= 2 );
+
+    print "\n--- Times ---\n";
+    foreach my $test ( @{$benchmarks->{'dolt'}{'tests'}} ) {
+	my $test_name = $test->{'name'};
+
+	print "$test_name:\n";
+	print "\tDolt: $data->{$test_name}{dolt}{real}ms\n";
+	print "\tGit:  $data->{$test_name}{'git'}{'real'}ms\n";
+    }
+
+    print "\n--- Disk ---\n";
+    foreach my $test ( @{$benchmarks->{'dolt'}{'tests'}} ) {
+	my $test_name = $test->{'name'};
+	if ( $data->{$test_name}{'dolt'}{'disk'} ) {
+	    print "$test_name:\n";
+	    print "\tDolt: $data->{$test_name}{dolt}{disk}\n";
+	    print "\tGit:  $data->{$test_name}{'git'}{'disk'}\n";
+	}
+    }
+}
+
+# Logging
+
+# 0 = quiet, 1 = status, 2 = verbose
+sub output {
+    my $message = shift;
+    my $level   = shift;
+
+    my $now = localtime();
+
+    print "$now: $message\n" if ( $level <= LOG_LEVEL );
 }
 
 sub error_exit {
