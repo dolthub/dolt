@@ -7,7 +7,7 @@ import (
 )
 
 // InFunc is a pipeline input function that reads row data from a source and puts it in a channel.
-type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan bool)
+type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan NoValue)
 
 // OutFUnc is a pipeline output function that takes the data the pipeline has processed off of the channel.
 type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure)
@@ -16,14 +16,17 @@ type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *Transf
 // function when called will quit the entire pipeline
 type BadRowCallback func(*TransformRowFailure) (quit bool)
 
+// NoValue is a signal type to indicate that channels of this type should never expect to receive values, only control flow (close())
+type NoValue struct{}
+
 // Pipeline is a struct that manages the operation of a row processing pipeline, where data is read from some source
 // and written to a channel by the InFunc, a transform would then read the data off of their input channel, and write
 // the transformed data to their output channel.  A series of transforms can be applied until the transformed data
 // reaches the OutFunc which takes the data off the channel and would typically store the result somewhere.
 type Pipeline struct {
 	wg         *sync.WaitGroup
-	stopChan   chan bool
-	noMoreChan chan bool
+	stopChan   chan NoValue
+	noMoreChan chan NoValue
 
 	atomicErr atomic.Value
 	transInCh map[string]chan RowWithProps
@@ -44,20 +47,18 @@ func (p *Pipeline) InsertRow(name string, r row.Row) bool {
 	return true
 }
 
-// Abort will stop the pipeline
+// Abort signals the pipeline to stop processing.
 func (p *Pipeline) Abort() {
 	defer func() {
-		recover()
+		recover() // ignore multiple calls to close channel
 	}()
 
 	close(p.stopChan)
 }
 
+// NoMore signals that the pipeline has no more input to process. Must be called exactly once when there are no more
+// input rows to process.
 func (p *Pipeline) NoMore() {
-	defer func() {
-		recover()
-	}()
-
 	close(p.noMoreChan)
 }
 
@@ -80,8 +81,8 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 
 	in := make(chan RowWithProps, 1024)
 	badRowChan := make(chan *TransformRowFailure, 1024)
-	stopChan := make(chan bool)
-	noMoreChan := make(chan bool)
+	stopChan := make(chan NoValue)
+	noMoreChan := make(chan NoValue)
 	transInCh := make(map[string]chan RowWithProps)
 
 	curr := in
@@ -116,7 +117,7 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 	return p
 }
 
-func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) chan RowWithProps {
+func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan NoValue) chan RowWithProps {
 	wg.Add(1)
 	outChan := make(chan RowWithProps, 256)
 
@@ -134,7 +135,7 @@ func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan R
 // done in InFuncs and OutFuncs
 func (p Pipeline) StopWithErr(err error) {
 	p.atomicErr.Store(err)
-	close(p.stopChan)
+	p.Abort()
 }
 
 // IsStopping returns true if the pipeline is currently stopping
@@ -159,7 +160,7 @@ func (p *Pipeline) processBadRows(badRowCB BadRowCallback, badRowChan <-chan *Tr
 					quit := badRowCB(bRow)
 
 					if quit {
-						close(p.stopChan)
+						p.Abort()
 						return
 					}
 				} else {
