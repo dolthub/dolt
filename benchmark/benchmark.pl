@@ -16,15 +16,14 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use List::Util qw(shuffle);
+use Pod::Usage;
 
-# These are defaults and will al be able to be overridden with command line args.
-use constant BENCHMARK_ROOT => '/var/tmp';
-
-use constant LOG_LEVEL       => 2; # 0 = quiet, 1 = status, 2 = verbose
+# These are defaults and can be overridden with command line args.
+use constant BENCHMARK_ROOT  => '/var/tmp';
+use constant DOLT_PATH       => '~/go/bin/';
+use constant LOG_LEVEL       => 1; # 0 = quiet, 1 = status, 2 = verbose
 use constant UNSAFE          => 0;
 use constant PRESERVE_INPUTS => 0;
-
-use constant DOLT_PATH => '~/go/bin/';
 
 ###################################################################################
 #
@@ -46,7 +45,7 @@ my $benchmark_config = {
     # are int and string.
     seed => {
 	name   => 'test.csv',
-	size   => 10,
+	size   => 1000000,
 	schema_file => 'test.schema',
 	schema => [
 	    {
@@ -269,12 +268,19 @@ my $log_level = LOG_LEVEL;
 my $unsafe    = UNSAFE;
 my $preserve  = PRESERVE_INPUTS;
 my $dolt_path = DOLT_PATH;
-GetOptions(
-    "root=s"      => \$root,
-    "loglevel=i"  => \$log_level,
-    "preserve"    => \$preserve,
-    "unsafe"      => \$unsafe)
-or die("Error in command line arguments\n");
+my $help      = 0;
+my $man       = 0;
+
+GetOptions("root=s"      => \$root,
+	   "loglevel=i"  => \$log_level,
+	   "preserve"    => \$preserve,
+	   "unsafe"      => \$unsafe,
+	   "dolt-path=s" => \$dolt_path,
+	   'help|?'      => \$help, 
+	   'man'         => \$man) or pod2usage(2);
+
+pod2usage(1) if $help;
+pod2usage(-exitval => 0, -verbose => 2) if $man;
 
 # Set up the environment
 $ENV{'PATH'} = "$ENV{PATH}:$dolt_path";
@@ -307,6 +313,7 @@ my %data;
 foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
     output("Executing $benchmark benchmark...", 1);
 
+    # Build the root directory for the repository
     my $benchmarks = $benchmark_config->{'benchmarks'};
     my $benchmark_root = $benchmarks->{$benchmark}{'root'};
     if ( -d $benchmark_root ) {
@@ -317,11 +324,11 @@ foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
 	    error_exit("$root/$benchmark_root must not exist to run benchmark");
 	}
     }
-
     output("Changing directory to $benchmark_root\n", 2);
     mkdir($benchmark_root) or error_exit("Could not mkdir $benchmark_root");
     chdir($benchmark_root) or error_exit("Could not cd to $benchmark_root");
 
+    # Run and time the commands in the root directory
     foreach my $test ( @{$benchmarks->{$benchmark}{'tests'}} ) {
 	output("Running test: " . $test->{'name'}, 1);
 
@@ -344,12 +351,13 @@ foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
 	}
     }
 
+    # Cleanup the repository
     output("Changing directory to $root and removing $benchmark_root", 2);
     chdir($root);
     run_command("rm -rf $benchmark_root") unless $preserve;
 }
 
-# Cleanup
+# Cleanup the input files.
 output("Cleaning up...", 1); 
 cleanup($root, $benchmark_config, $preserve, $unsafe);
 
@@ -682,3 +690,57 @@ sub error_exit {
 
     exit 1;
 }
+
+__END__
+
+=head1 NAME
+
+benchmark.pl - Performs a Dolt benchmark against Git
+
+=head1 SYNOPSIS
+
+benchmark.pl [options]
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-root>
+
+Override the root directory to perform the benchmark in. Defaults to /var/tmp.
+
+=item B<-loglevel>
+
+The verbosity of the output. 0 is quiet. 1 is status. 2 is verbose. Defaults to 1.
+
+=item B<-dolt-path>
+
+Override where the dolt utility is located. Defaults to ~/go/bin/.
+
+=item B<-preserve>
+
+Do not delete the CSV inputs, Dolt repo, and Git repo. Useful for debugging.
+
+=item B<-unsafe>
+
+Delete files and directories that are in the way of the benchmark doing its job.
+
+=item B<-help>
+
+Print a brief help message and exit.
+
+=item B<-man>
+
+Print the manual page and exit.
+
+=back
+
+=head1 DESCRIPTION
+    
+B<benchmark.pl> will create a benchmark according to the benchmark configuration 
+specified in this script. The benchmark will entail creating random CSV input files
+of a defined schema. These files will be imported into a Dolt and Git repository
+and various commands will be timed. The disk usage will also be gathered at various
+points. The benchmark output will be printed to the screen. 
+
+=cut
