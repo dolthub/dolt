@@ -22,7 +22,7 @@ require (
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
-	github.com/stretchr/testify v1.3.0 // indirect
+	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 // indirect
 	go.opencensus.io v0.19.0 // indirect
 	golang.org/x/crypto v0.0.0-20190128193316-c7b33c32a30b
