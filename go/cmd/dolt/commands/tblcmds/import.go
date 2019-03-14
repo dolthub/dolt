@@ -132,17 +132,7 @@ func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The new or existing table being imported to."
-	ap.ArgListHelp["file"] = "The file being imported. Supported file types are csv, psv, and nbf."
-	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
-	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
-	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
-	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
-	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
-	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	ap := createArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -165,6 +155,21 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 		fileLoc,
 		tableLoc,
 	}
+}
+
+func createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp["table"] = "The new or existing table being imported to."
+	ap.ArgListHelp["file"] = "The file being imported. Supported file types are csv, psv, and nbf."
+	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
+	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
+	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
+	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
+	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
+	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	return ap
 }
 
 func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {

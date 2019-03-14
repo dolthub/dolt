@@ -29,6 +29,8 @@ func GetRecoveredPanicCause(err error) interface{} {
 	return rp.PanicCause
 }
 
+// Runs the function given, recovering from any panics and returning the given error instance instead. The
+// function can optionally return an error of its own, which will be returned in the non-panic case.
 func PanicToErrorInstance(errInstance error, f func() error) error {
 	var err error
 	func() {
@@ -43,6 +45,8 @@ func PanicToErrorInstance(errInstance error, f func() error) error {
 	return err
 }
 
+// Runs the function given, recovering from any panics and returning a RecoveredPanic error with the errMsg given. The
+// function can optionally return an error of its own, which will be returned in the non-panic case.
 func PanicToError(errMsg string, f func() error) error {
 	var err error
 	func() {
@@ -52,6 +56,21 @@ func PanicToError(errMsg string, f func() error) error {
 			}
 		}()
 		err = f()
+	}()
+
+	return err
+}
+
+// Same as PanicToError, but for functions that don't return errors except in the case of panic.
+func PanicToErrorNil(errMsg string, f func()) error {
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = &RecoveredPanic{r, errMsg}
+			}
+		}()
+		f()
 	}()
 
 	return err
