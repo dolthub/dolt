@@ -14,23 +14,17 @@
 use strict;
 
 use Data::Dumper;
+use Getopt::Long;
 use List::Util qw(shuffle);
 
 # These are defaults and will al be able to be overridden with command line args.
 use constant BENCHMARK_ROOT => '/var/tmp';
 
-use constant LOG_LEVEL => 1; # 0 = quiet, 1 = status, 2 = verbose
-use constant UNSAFE => 1;
-use constant CLEANUP => 1;
+use constant LOG_LEVEL       => 2; # 0 = quiet, 1 = status, 2 = verbose
+use constant UNSAFE          => 0;
+use constant PRESERVE_INPUTS => 0;
 
-use constant TEST_FILE        => 'test.csv'; 
-use constant TEST_INPUT_CSV   => BENCHMARK_ROOT . '/' . TEST_FILE;
-use constant TEST_SCHEMA_FILE => BENCHMARK_ROOT . '/test.schema';
-
-# Set up the environment
-# TO DO: Figure out a portable way to get dolt in the path
-$ENV{'PATH'} = $ENV{'PATH'} . ':~/go/bin/';
-$ENV{'NOMS_VERSION_NEXT'} = 1;
+use constant DOLT_PATH => '~/go/bin/';
 
 ###################################################################################
 #
@@ -42,230 +36,225 @@ $ENV{'NOMS_VERSION_NEXT'} = 1;
 # the repo and extract all this information from the repository. Then, we'll 
 # insert the output with the configuration version identifier in the output.
 
-# Version the configuration to store with the output
-my $configuration_version = "0.0.1";
-
-# This configuration defines which csv files we'll create to represent
-# a small, medium, and large change. The pct key/value pair is used to
-# calculate the percentage chance that a column value is changed. 
-my $changes = [
-    {
-        file => BENCHMARK_ROOT . '/small-change.csv',
-        pct  => 0.001,
-    },
-    {
-        file => BENCHMARK_ROOT . '/medium-change.csv',
-        pct  => 0.01,
-    },
-    {
-        file => BENCHMARK_ROOT . '/large-change.csv',
-        pct  => 0.05,
-    },
-];
-
-# Define the schema and size of the test database.
-# This creates a set of csv files and a dolt schema file which are used in the
-# benchmark tests. The gen field is either increment or rand. Types supported are
-# int and string.
-my $lines = 1000000;
-my $schema = [
-    {
-	name    => 'id',
-	type    => 'int',
-	primary => 1,
-	gen     => 'increment',
-    },
-    {
-	name    => 'int1',
-        type    => 'int',
-        primary => 0,
-	gen     => 'rand',
-	size    => 10,
-    },
-    {
-	name    => 'int2',
-	type    => 'int',
-        primary => 0,
-        gen     => 'rand',
-	size    => 100,
-    },
-    {
-	name    => 'int3',
-	type    => 'int',
-        primary => 0,
-        gen     => 'rand',
-	size    => 1000,
-    },
-    {
-	name    => 'int4',
-	type    => 'int',
-        primary => 0,
-        gen     => 'rand',
-	size    => 10000,
-    },
-    {
-	name    => 'int5',
-	type    => 'int',
-        primary => 0,
-        gen     => 'rand',
-	size    => 100000,
-    },
-    {
-	name    => 'string1',
-	type    => 'string',
-        primary => 0,
-        gen     => 'rand',
-	size    => 1,
-    },
-    {
-	name    => 'string2',
-        type    => 'string',
-        primary => 0,
-        gen     => 'rand',
-        size    => 2,
-    },
-    {
-	name    => 'string3',
-        type    => 'string',
-        primary => 0,
-        gen     => 'rand',
-        size    => 4,
-    },
-    {
-	name    => 'string4',
-        type    => 'string',
-        primary => 0,
-        gen     => 'rand',
-        size    => 8,
-    },
-    {
-	name    => 'string5',
-        type    => 'string',
-        primary => 0,
-        gen     => 'rand',
-        size    => 16,
-    },
-];
-
 # Define the benchmarks we will run.
-my $benchmarks = {
-    git => {
-	root => BENCHMARK_ROOT . '/git-benchmark/',
-	tests => [
+my $benchmark_config = {
+    # Version the configuration to store with the output
+    version => 0.0.1,
+    # Define the schema and size of the test database.
+    # This creates a set of csv files and a dolt schema file which are used in the
+    # benchmark tests. The gen field is either increment or rand. Types supported 
+    # are int and string.
+    seed => {
+	name   => 'test.csv',
+	size   => 10,
+	schema_file => 'test.schema',
+	schema => [
 	    {
-		name => 'raw',
-		command => 'git',
+		name    => 'id',
+		type    => 'int',
+		primary => 1,
+		gen     => 'increment',
 	    },
 	    {
-		name => 'init',
-		command => 'git init',
+		name    => 'int1',
+		type    => 'int',
+		primary => 0,
+		gen     => 'rand',
+		size    => 10,
 	    },
 	    {
-		prep => [
-		    'cp ' . TEST_INPUT_CSV . ' ' . BENCHMARK_ROOT . '/git-benchmark/',
-		    ],
-		name => 'add',
-		command => 'git add ' . TEST_FILE,
+		name    => 'int2',
+		type    => 'int',
+		primary => 0,
+		gen     => 'rand',
+		size    => 100,
 	    },
-            {
-                name => 'commit',
-                command => 'git commit -m "first test commit"',
-		check_disk => 1,
-            },
 	    {
-                prep => [
-                    'cp ' . $changes->[0]{'file'} . ' ' . BENCHMARK_ROOT . '/git-benchmark/' . TEST_FILE,
-                    ],
-                name => 'small diff',
-                command => 'git diff ' . TEST_FILE,
-		post => [
-		    'git add ' . TEST_FILE,
-		    'git commit -m "Committed small diff"',
-		],
-		check_disk => 1, 
-            },
-            {
-                prep => [
-                    'cp ' . $changes->[1]{'file'} . ' ' . BENCHMARK_ROOT . '/git-benchmark/' . TEST_FILE,
-                    ],
-                name => 'medium diff',
-                command => 'git diff ' . TEST_FILE,
-		post => [
-                    'git add ' . TEST_FILE,
-                    'git commit -m "Committed medium diff"',
-                ],
-		check_disk => 1,
-            },
-            {
-                prep => [
-                    'cp ' . $changes->[2]{'file'} . ' ' . BENCHMARK_ROOT . '/git-benchmark/' . TEST_FILE,
-                    ],
-                name => 'large diff',
-                command => 'git diff ' . TEST_FILE,
-		post => [
-                    'git add ' . TEST_FILE,
-                    'git commit -m "Committed large diff"',
-                ],
-		check_disk => 1,
-            },
-	],
+		name    => 'int3',
+		type    => 'int',
+		primary => 0,
+		gen     => 'rand',
+		size    => 1000,
+	    },
+	    {
+		name    => 'int4',
+		type    => 'int',
+		primary => 0,
+		gen     => 'rand',
+		size    => 10000,
+	    },
+	    {
+		name    => 'int5',
+		type    => 'int',
+		primary => 0,
+		gen     => 'rand',
+		size    => 100000,
+	    },
+	    {
+		name    => 'string1',
+		type    => 'string',
+		primary => 0,
+		gen     => 'rand',
+		size    => 1,
+	    },
+	    {
+		name    => 'string2',
+		type    => 'string',
+		primary => 0,
+		gen     => 'rand',
+		size    => 2,
+	    },
+	    {
+		name    => 'string3',
+		type    => 'string',
+		primary => 0,
+		gen     => 'rand',
+		size    => 4,
+	    },
+	    {
+		name    => 'string4',
+		type    => 'string',
+		primary => 0,
+		gen     => 'rand',
+		size    => 8,
+	    },
+	    {
+		name    => 'string5',
+		type    => 'string',
+		primary => 0,
+		gen     => 'rand',
+		size    => 16,
+	    },
+	    ],
     },
-    dolt => {
-	root => BENCHMARK_ROOT . '/dolt-benchmark/',
-        tests => [
-	    {
-		name => 'raw',
-		command => 'dolt',
-	    },
-	    {
-		name => 'init',
-		command => 'dolt init',
-	    },
-            {
-		prep => [
-		    'dolt table create -s ' . TEST_SCHEMA_FILE . ' test',
-		    'dolt table import -u test ' . TEST_INPUT_CSV,
-		    ],
-		name =>'add',
-		command=> 'dolt add test',
-	    },
-            {
-                name => 'commit',
-                command => 'dolt commit -m "first test commit"',
-		check_disk => 1,
-            },
-	    {
-                prep => ['dolt table import -u test ' . $changes->[0]{'file'}],
-                name => 'small diff',
-                command => 'dolt diff test',
-		post => [
-                    'dolt add test',
-                    'dolt commit -m "Committed small diff"',
-                ],
-		check_disk => 1,
-            },
-            {
-                prep => ['dolt table import -u test ' . $changes->[1]{'file'}],
-                name => 'medium diff',
-                command => 'dolt diff test',
-                post => [
-                    'dolt add test',
-                    'dolt commit -m "Committed medium diff"',
-                ],
-                check_disk => 1,
-            },
-            {
-                prep => ['dolt table import -u test ' . $changes->[2]{'file'}],
-                name => 'large diff',
-                command => 'dolt diff test',
-                post => [
-                    'dolt add test',
-                    'dolt commit -m "Committed large diff"',
-                ],
-                check_disk => 1,
-            },
-	],
-    },
+    # This configuration defines which csv files we'll create to represent
+    # a small, medium, and large change. The pct key/value pair is used to
+    # calculate the percentage chance that a column value is changed.
+    changes => [
+	{
+	    file => 'small-change.csv',
+	    pct  => 0.001,
+	},
+	{
+	    file => 'medium-change.csv',
+	    pct  => 0.01,
+	},
+	{
+	    file => 'large-change.csv',
+	    pct  => 0.05,
+	},
+    ],
+    benchmarks => { 
+	git => {
+	    root => 'git-benchmark',
+	    tests => [
+		{
+		    name => 'raw',
+		    command => 'git',
+		},
+		{
+		    name => 'init',
+		    command => 'git init',
+		},
+		{
+		    prep => ['cp ../test.csv .'],
+		    name => 'add',
+		    command => 'git add test.csv',
+		},
+		{
+		    name => 'commit',
+		    command => 'git commit -m "first test commit"',
+		    check_disk => 1,
+		},
+		{
+		    prep => ['cp ../small-change.csv ./test.csv'],
+		    name => 'small diff',
+		    command => 'git diff test.csv',
+		    post => [
+			'git add test.csv',
+			'git commit -m "Committed small diff"'
+			],
+		    check_disk => 1, 
+		},
+		{
+		    prep => ['cp ../medium-change.csv ./test.csv'],
+		    name => 'medium diff',
+		    command => 'git diff test.csv',
+		    post => [
+			'git add test.csv',
+			'git commit -m "Committed medium diff"'
+			],
+		    check_disk => 1,
+		},
+		{
+		    prep => ['cp ../large-change.csv ./test.csv'],
+		    name => 'large diff',
+		    command => 'git diff test.csv',
+		    post => [
+			'git add test.csv',
+			'git commit -m "Committed large diff"'
+			],
+		    check_disk => 1,
+		}
+		]
+	},
+        dolt => {
+	    root => 'dolt-benchmark',
+	    tests => [
+		{
+		    name => 'raw',
+		    command => 'dolt',
+		},
+		{
+		    name => 'init',
+		    command => 'dolt init',
+		},
+		{
+		    prep => [
+			'dolt table create -s ../test.schema test',
+			'dolt table import -u test ../test.csv',
+			],
+			name =>'add',
+			command=> 'dolt add test',
+		},
+		{
+		    name => 'commit',
+		    command => 'dolt commit -m "first test commit"',
+		    check_disk => 1,
+		},
+		{
+		    prep => ['dolt table import -u test ../small-change.csv'],
+		    name => 'small diff',
+		    command => 'dolt diff test',
+		    post => [
+			'dolt add test',
+			'dolt commit -m "Committed small diff"',
+			],
+		    check_disk => 1,
+		},
+		{
+		    prep => ['dolt table import -u test ../medium-change.csv'],
+		    name => 'medium diff',
+		    command => 'dolt diff test',
+		    post => [
+			'dolt add test',
+			'dolt commit -m "Committed medium diff"',
+			],
+		    check_disk => 1,
+		},
+		{
+		    prep => ['dolt table import -u test ../large-change.csv'],
+		    name => 'large diff',
+		    command => 'dolt diff test',
+		    post => [
+			'dolt add test',
+			'dolt commit -m "Committed large diff"',
+			],
+		    check_disk => 1,
+		}
+	    ]
+        }
+    }
 };
 
 ###################################################################################
@@ -274,38 +263,64 @@ my $benchmarks = {
 #
 ###################################################################################
 
-# Bootstrap the test
-if ( -d BENCHMARK_ROOT ) { 
-    chdir(BENCHMARK_ROOT);
+# Process command line arguments
+my $root      = BENCHMARK_ROOT;
+my $log_level = LOG_LEVEL;
+my $unsafe    = UNSAFE;
+my $preserve  = PRESERVE_INPUTS;
+my $dolt_path = DOLT_PATH;
+GetOptions(
+    "root=s"      => \$root,
+    "loglevel=i"  => \$log_level,
+    "preserve"    => \$preserve,
+    "unsafe"      => \$unsafe)
+or die("Error in command line arguments\n");
+
+# Set up the environment
+$ENV{'PATH'} = "$ENV{PATH}:$dolt_path";
+$ENV{'NOMS_VERSION_NEXT'} = 1;
+
+# Make sure root exists
+if ( -d $root ) {
+    output("Changing directory to $root", 2);
+    chdir($root) or die("Could not cd to $root\n");
 } else {
-    error_exit("Could not run benchmarks in " . BENCHMARK_ROOT . 
-	" because the directory does not exist.");
+    die("Could not run benchmarks in $root. Directory does not exist.\n");
 }
 
-my $columns = scalar(@{$schema});
-output("Building input files...$lines rows, $columns columns", 1);
-generate_dolt_schema($schema);
-create_test_input_csvs(TEST_INPUT_CSV, $lines, $schema, $changes);
+# Build input files
+my $test_csv    = $benchmark_config->{'seed'}{'name'};
+my $schema_file = $benchmark_config->{'seed'}{'schema_file'};
+my $schema      = $benchmark_config->{'seed'}{'schema'};
+my $rows        = $benchmark_config->{'seed'}{'size'};
+my $columns     = scalar(@{$schema});
+my $changes     = $benchmark_config->{'changes'};
+
+output("Building input files...$rows rows, $columns columns", 1);
+generate_dolt_schema($schema_file, $schema);
+create_test_input_csvs($test_csv, $rows, $schema, $changes);
 
 # TO DO: Gather system information to insert into the output.
 
 # Run the benchmarks
 my %data;
-foreach my $benchmark ( keys %{$benchmarks} ) {
+foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
     output("Executing $benchmark benchmark...", 1);
 
-    my $root = $benchmarks->{$benchmark}{'root'};
-    if ( -d $root ) {
-	if ( UNSAFE ) { 
-	    run_command("rm -rf $root");
+    my $benchmarks = $benchmark_config->{'benchmarks'};
+    my $benchmark_root = $benchmarks->{$benchmark}{'root'};
+    if ( -d $benchmark_root ) {
+	if ( $unsafe ) {
+	    output("Deleting $root/$benchmark_root because it alreadys exists", 2);
+	    run_command("rm -rf $benchmark_root");
 	} else {
-	    error_exit("$root must not exist to run benchmark\n");
+	    error_exit("$root/$benchmark_root must not exist to run benchmark");
 	}
-    } else {
-	mkdir($root);
-	chdir($root);
-	output("Changing directory to $root\n", 2);
     }
+
+    output("Changing directory to $benchmark_root\n", 2);
+    mkdir($benchmark_root) or error_exit("Could not mkdir $benchmark_root");
+    chdir($benchmark_root) or error_exit("Could not cd to $benchmark_root");
 
     foreach my $test ( @{$benchmarks->{$benchmark}{'tests'}} ) {
 	output("Running test: " . $test->{'name'}, 1);
@@ -329,15 +344,17 @@ foreach my $benchmark ( keys %{$benchmarks} ) {
 	}
     }
 
-    run_command("rm -rf $root") if CLEANUP;
+    output("Changing directory to $root and removing $benchmark_root", 2);
+    chdir($root);
+    run_command("rm -rf $benchmark_root") unless $preserve;
 }
 
 # Cleanup
 output("Cleaning up...", 1); 
-cleanup($changes);
+cleanup($root, $benchmark_config, $preserve, $unsafe);
 
 # Output
-output_data(\%data, $benchmarks);
+output_data(\%data, $benchmark_config->{'benchmarks'}, $log_level);
 
 exit 0;
 
@@ -540,11 +557,12 @@ sub rndStr {
 # Generate schema
 
 sub generate_dolt_schema {
-    my $schema = shift;
+    my $schema_file = shift;
+    my $schema      = shift;
 
     my $filehandle;
-    open($filehandle, '>', TEST_SCHEMA_FILE) 
-	or error_exit('Could not open ' . TEST_SCHEMA_FILE);
+    open($filehandle, '>', $schema_file)
+	or error_exit("Could not open $schema_file");
 
     print $filehandle "{\n\"columns\":[\n";
     
@@ -581,28 +599,43 @@ sub generate_column_schema {
 }
 
 sub cleanup { 
-    my $changes = shift;
+    my $root             = shift;
+    my $benchmark_config = shift;
+    my $preserve         = shift;
+    my $unsafe           = shift;
 
-    chdir(BENCHMARK_ROOT);
+    return if $preserve;
 
-    unlink(TEST_SCHEMA_FILE) if ( CLEANUP && -e TEST_SCHEMA_FILE);
-    unlink(TEST_INPUT_CSV) if ( CLEANUP && -e TEST_INPUT_CSV );
+    chdir($root) or error_exit("Could not cd to $root");
+
+    my $seed = $benchmark_config->{'seed'}{'name'};
+    my $schema = $benchmark_config->{'seed'}{'schema_file'};
+    my $changes = $benchmark_config->{'changes'};
+
+    output("Removing $seed and $schema files", 2);
+    unlink($seed) if ( -e $seed);
+    unlink($schema) if ( -e $schema );
     foreach my $change ( @{$changes} ) {
-	unlink($change->{'file'}) if ( CLEANUP && -e $change->{'file'} );
+	output("Removing $change->{file}", 2);
+	unlink($change->{'file'}) if ( -e $change->{'file'} );
     }
 
-    run_command('rm -rf ' . BENCHMARK_ROOT . '/*') 
-	if ( UNSAFE && CLEANUP );
+    output("Removing repository roots",2);
+    foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
+	my $benchmark_root = $benchmark_config->{'benchmarks'}{$benchmark}{'root'};
+	run_command("rm -rf $benchmark_root");
+    }
 }
 
 # Data
 sub output_data {
     my $data       = shift;
     my $benchmarks = shift;
+    my $log_level  = shift;
 
-    return if ( LOG_LEVEL == 0 );
+    return if ( $log_level == 0 );
 
-    print Dumper $data if ( LOG_LEVEL >= 2 );
+    print Dumper $data if ( $log_level >= 2 );
 
     print "\n--- Times ---\n";
     foreach my $test ( @{$benchmarks->{'dolt'}{'tests'}} ) {
@@ -633,7 +666,8 @@ sub output {
 
     my $now = localtime();
 
-    print "$now: $message\n" if ( $level <= LOG_LEVEL );
+    # Take advantage of log level being global
+    print "$now: $message\n" if ( $level <= $log_level );
 }
 
 sub error_exit {
@@ -642,7 +676,9 @@ sub error_exit {
     print STDERR "$message\n";
 
     print "Exiting early...attempting to cleanup...\n";
-    cleanup($changes);
+
+    # Take advantage that these are global so I don't have to pass them around.
+    cleanup($root, $benchmark_config, $preserve, $unsafe);
 
     exit 1;
 }
