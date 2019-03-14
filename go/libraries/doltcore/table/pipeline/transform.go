@@ -38,14 +38,14 @@ type TransFailCallback func(row RowWithProps, errDetails string)
 // TransformFunc reads rows from the inChan, transforms them, and then writes them to the outChan.  If an error occurs
 // processing a row a TransformRowFailure will be written to the failure channel, and if the stopChan is closed it should
 // exit all processing.
-type TransformFunc func(inChan <-chan RowWithProps, outChan chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool)
+type TransformFunc func(inChan <-chan RowWithProps, outChan chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan NoValue)
 
 // TransformRowFunc processes a single row and it's properties and can return 0 or more TransformRowResults per row. If
 // the row being processed is bad it should return nil, and a string containing details of the row problem.
 type TransformRowFunc func(inRow row.Row, props ReadableMap) (rowData []*TransformedRowResult, badRowDetails string)
 
 func newRowTransformer(name string, transRowFunc TransformRowFunc) TransformFunc {
-	return func(inChan <-chan RowWithProps, outChan chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan bool) {
+	return func(inChan <-chan RowWithProps, outChan chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan NoValue) {
 		for {
 			select {
 			case <-stopChan:
