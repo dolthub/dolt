@@ -38,7 +38,7 @@ use constant PRESERVE_INPUTS => 0;
 # Define the benchmarks we will run.
 my $benchmark_config = {
     # Version the configuration to store with the output
-    version => 0.0.1,
+    version => '0.0.1',
     # Define the schema and size of the test database.
     # This creates a set of csv files and a dolt schema file which are used in the
     # benchmark tests. The gen field is either increment or rand. Types supported 
@@ -222,7 +222,7 @@ my $benchmark_config = {
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -u test ../small-change.csv'],
+		    prep => ['dolt table import -c -f -s ../test.schema test ../small-change.csv'],
 		    name => 'small diff',
 		    command => 'dolt diff test',
 		    post => [
@@ -232,7 +232,7 @@ my $benchmark_config = {
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -u test ../medium-change.csv'],
+		    prep => ['dolt table import -c -f -s ../test.schema test ../medium-change.csv'],
 		    name => 'medium diff',
 		    command => 'dolt diff test',
 		    post => [
@@ -242,7 +242,7 @@ my $benchmark_config = {
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -u test ../large-change.csv'],
+		    prep => ['dolt table import -c -f -s ../test.schema test ../large-change.csv'],
 		    name => 'large diff',
 		    command => 'dolt diff test',
 		    post => [
@@ -254,6 +254,11 @@ my $benchmark_config = {
 	    ]
         }
     }
+};
+
+my $publish_config = {
+    repo_root => '/Users/timsehn/liquidata/dolt-repos/dolt-benchmark',
+    table => 'results'    
 };
 
 ###################################################################################
@@ -307,6 +312,8 @@ generate_dolt_schema($schema_file, $schema);
 create_test_input_csvs($test_csv, $rows, $schema, $changes);
 
 # TO DO: Gather system information to insert into the output.
+my $profile = {};
+gather_profile_info($profile);
 
 # Run the benchmarks
 my %data;
@@ -336,7 +343,7 @@ foreach my $benchmark ( keys %{$benchmark_config->{'benchmarks'}} ) {
 	    run_command($prep);
 	}
 	
-	my ($real, $user, $system) = time_command($test->{'command'});
+	my ($real, $user, $system) = time_command($test->{'command'}, $log_level);
 
 	$data{$test->{'name'}}{$benchmark}{'real'}   = $real;
 	$data{$test->{'name'}}{$benchmark}{'user'}   = $user;
@@ -362,6 +369,7 @@ output("Cleaning up...", 1);
 cleanup($root, $benchmark_config, $preserve, $unsafe);
 
 # Output
+publish($publish_config, \%data, $profile, $benchmark_config, $root);
 output_data(\%data, $benchmark_config->{'benchmarks'}, $log_level);
 
 exit 0;
@@ -375,14 +383,15 @@ exit 0;
 # System utility functions
 
 sub time_command {
-    my $command = shift;
+    my $command   = shift;
+    my $log_level = shift;
 
     output("Running:\n\t$command", 2);
 
     # time outputs to STDERR so I'll trash STDOUT and grab STDERR from
     # STDOUT which `` writes to
     my $piped_command;
-    if ( LOG_LEVEL > 1 ) {
+    if ( $log_level > 1 ) {
 	$piped_command = "{ time $command ;} 2>&1";
     } else {
 	$piped_command = "{ time $command ;} 2>&1 1>/dev/null";
@@ -407,8 +416,6 @@ sub time_command {
 }
 
 sub disk_usage {
-    my $verbose = shift;
-
     output("Checking disk usage...", 2);
 
     my $command = 'du -h -d 0';
@@ -562,8 +569,29 @@ sub rndStr {
     join('', @_[ map{ rand @_ } 1 .. shift ]); 
 }
 
+# Gather Profile information 
+
+sub gather_profile_info {
+    my $profile = shift;
+
+    output('Gathering profile information...', 1);
+    my $uname_cmd = 'uname -a';
+    output("Running $uname_cmd", 2);
+    # TO DO: Turn this into structured data
+    $profile->{'uname'} = `$uname_cmd`;
+    $profile->{'uname'} =~ s/\n//g;
+    if ($?) {
+        error_exit("Error running: $uname_cmd");
+    }
+    output("uname is:\n\t$profile->{uname}", 2);
+
+    $profile->{'now'} = time();
+}
+
 # Generate schema
 
+# TO DO: Change these schema generation functions to build the proper perl
+# data structure and use a JSON parser to output the proper JSON schema 
 sub generate_dolt_schema {
     my $schema_file = shift;
     my $schema      = shift;
@@ -663,6 +691,57 @@ sub output_data {
 	    print "\tGit:  $data->{$test_name}{'git'}{'disk'}\n";
 	}
     }
+}
+
+sub publish {
+    my $publish_config   = shift;
+    my $data             = shift;
+    my $profile          = shift;
+    my $benchmark_config = shift;
+    my $root             = shift;
+
+    # Once we have remotes, we'll want to pull the repo down from DoltHub,
+    # Make our inserts on a new branch, and then push the branch back to DoltHub.
+    # Then, we can delete the repo or have a keep flag if users want to inspect
+    # the results.
+
+    # We'll assume the output repo is in a schema we understand
+    my $data_repo_root = $publish_config->{'repo_root'};
+    my $results_table  = $publish_config->{'table'};
+
+    output('Publishing results to dolt...', 1);
+
+    output("Changing directory to $data_repo_root...", 2);
+    chdir($data_repo_root) or error_exit("Could not cd to $data_repo_root");
+
+    # Make sure this is a valid dolt repo and the results table exists
+    my $output = `dolt ls`;
+    error_exit("$data_repo_root does not contain a valid dolt repository") if ($?);
+    error_exit("$results_table not found in dolt repository in $data_repo_root")
+	unless ( $output =~ /$results_table/ );
+
+    # Insert data into dolt with the following schema:
+    # uname (pk), now (pk), benchmark version (pk), test name (pk),
+    # dolt time, git time, dolt disk, git disk
+    my $uname   = $profile->{'uname'};
+    my $now     = $profile->{'now'};
+    my $version = $benchmark_config->{version};
+    foreach my $test ( keys %{$data} ) {
+	my $dolt_time = $data->{$test}{'dolt'}{'real'};
+	my $git_time  = $data->{$test}{'git'}{'real'};
+	my $dolt_disk = $data->{$test}{'dolt'}{'disk'} || "";
+	my $git_disk  = $data->{$test}{'git'}{'disk'} || "";
+
+	my $dolt_insert = "dolt table put-row $results_table uname:\"$uname\" " .
+	  "test_time:$now benchmark_version:\"$version\" test_name:\"$test\" " .
+	  "dolt_time:$dolt_time git_time:$git_time dolt_disk:\"$dolt_disk\" " .
+	  "git_disk:\"$git_disk\"";
+
+	run_command($dolt_insert);
+    }
+
+    output("Returning to $root directory...", 2);
+    chdir($root) or error_exit("Could not cd to $root");
 }
 
 # Logging
