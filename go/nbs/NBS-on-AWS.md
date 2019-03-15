@@ -44,7 +44,7 @@ Create such a role using the IAM Management Console (or command line tool of you
             "Sid": "Stmt1454457944000",
             "Effect": "Allow",
             "Action": [
-                "s3:AbortMultipartUpload"
+                "s3:AbortMultipartUpload",
                 "s3:CompleteMultipartUpload",
                 "s3:CreateMultipartUpload",
                 "s3:GetObject",

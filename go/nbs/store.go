@@ -7,6 +7,8 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -18,8 +20,10 @@ import (
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
+
+var ErrFetchFailure = errors.New("fetch failed")
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
 // names of the tables that hold all the chunks in the store. The number of
@@ -67,6 +71,119 @@ type NomsBlockStore struct {
 	putCount uint64
 
 	stats *Stats
+}
+
+type Range struct {
+	Offset uint64
+	Length uint32
+}
+
+func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]map[hash.Hash]Range {
+	gr := toGetRecords(hashes)
+
+	ranges := make(map[hash.Hash]map[hash.Hash]Range)
+	f := func(css chunkSources) {
+		for _, cs := range css {
+			switch tr := cs.(type) {
+			case *mmapTableReader:
+				offsetRecSlice, _ := tr.findOffsets(gr)
+				if len(offsetRecSlice) > 0 {
+					y, ok := ranges[hash.Hash(tr.h)]
+
+					if !ok {
+						y = make(map[hash.Hash]Range)
+					}
+
+					for _, offsetRec := range offsetRecSlice {
+						ord := offsetRec.ordinal
+						length := tr.lengths[ord]
+						h := hash.Hash(*offsetRec.a)
+						y[h] = Range{Offset: offsetRec.offset, Length: length}
+
+						delete(hashes, h)
+					}
+
+					if len(offsetRecSlice) > 0 {
+						gr = toGetRecords(hashes)
+					}
+
+					ranges[hash.Hash(tr.h)] = y
+				}
+			case *chunkSourceAdapter:
+				y, ok := ranges[hash.Hash(tr.h)]
+
+				if !ok {
+					y = make(map[hash.Hash]Range)
+				}
+
+				tableIndex := tr.index()
+				var foundHashes []hash.Hash
+				for h := range hashes {
+					ord := tableIndex.lookupOrdinal(addr(h))
+
+					if ord < tableIndex.chunkCount {
+						foundHashes = append(foundHashes, h)
+						y[h] = Range{Offset: tableIndex.offsets[ord], Length: tableIndex.lengths[ord]}
+					}
+				}
+
+				ranges[hash.Hash(tr.h)] = y
+
+				for _, h := range foundHashes {
+					delete(hashes, h)
+				}
+
+			default:
+				panic(reflect.TypeOf(cs))
+			}
+		}
+	}
+
+	f(nbs.tables.upstream)
+	f(nbs.tables.novel)
+
+	return ranges
+}
+
+func (nbs *NomsBlockStore) UpdateManifest(updates map[hash.Hash]uint32) ManifestInfo {
+	nbs.mm.LockForUpdate()
+	defer nbs.mm.UnlockForUpdate()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	var stats Stats
+	ok, contents := nbs.mm.Fetch(&stats)
+
+	if !ok {
+		contents = manifestContents{vers: constants.NomsVersion}
+	}
+
+	currSpecs := make(map[addr]bool)
+	for _, spec := range contents.specs {
+		currSpecs[spec.name] = true
+	}
+
+	var addCount int
+	for h, count := range updates {
+		a := addr(h)
+
+		if _, ok := currSpecs[a]; !ok {
+			addCount++
+			contents.specs = append(contents.specs, tableSpec{a, count})
+		}
+	}
+
+	if addCount == 0 {
+		return contents
+	}
+
+	updatedContents := nbs.mm.Update(contents.lock, contents, &stats, nil)
+
+	nbs.upstream = updatedContents
+	nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
+
+	return updatedContents
 }
 
 func NewAWSStore(table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {

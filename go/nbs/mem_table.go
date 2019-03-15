@@ -12,6 +12,30 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
+func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
+	var size uint64
+	for _, chunk := range chunks {
+		size += uint64(len(chunk.Data()))
+	}
+
+	mt := newMemTable(size)
+
+	for _, chunk := range chunks {
+		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
+			panic("Didn't create this memory table with enough space to add all the chunks.")
+		}
+	}
+
+	var stats Stats
+	name, data, count := mt.write(nil, &stats)
+
+	if count != uint32(len(chunks)) {
+		panic("Didn't write everything.")
+	}
+
+	return name.String(), data, nil
+}
+
 type memTable struct {
 	chunks             map[addr][]byte
 	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order

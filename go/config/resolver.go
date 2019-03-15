@@ -114,7 +114,7 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 //   - resolve "" to the default db spec
 func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
 	dbc := r.DbConfigForDbSpec(str)
-	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), r.config.GetSpecOpts(dbc))
+	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
 func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 	dbc := r.DbConfigForDbSpec(str)
-	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), r.config.GetSpecOpts(dbc))
+	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), r.config.GetSpecOpts(dbc))
+	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
@@ -148,7 +148,7 @@ func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error)
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForPathOpts(r.verbose(str, specStr), r.config.GetSpecOpts(dbc))
+	sp, err := spec.ForPathOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, nil, err
 	}

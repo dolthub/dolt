@@ -251,7 +251,7 @@ func TestCwd(t *testing.T) {
 
 func assertSpecOptsEqual(assert *assert.Assertions, config *Config, expected *spec.SpecOptions) {
 	dbc := config.Db[awsAlias]
-	specOpts := config.GetSpecOpts(&dbc)
+	specOpts := specOptsForConfig(config, &dbc)
 	assert.Equal(expected, &specOpts)
 }
 
@@ -264,6 +264,6 @@ func TestGetSpecOpts(t *testing.T) {
 
 	assert.Panics(func() {
 		dbc := awsConfigDefaultWithInvalidCredSource.Db[awsAlias]
-		awsConfigDefaultWithInvalidCredSource.GetSpecOpts(&dbc)
+		specOptsForConfig(awsConfigDefaultWithInvalidCredSource, &dbc)
 	}, "Should panic with invalid cred source")
 }

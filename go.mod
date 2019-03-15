@@ -29,12 +29,12 @@ require (
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/julienschmidt/httprouter v1.2.0
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/liquidata-inc/ld v0.0.0-20181217230954-5276363e6eea
 	github.com/mattn/go-colorable v0.0.9
 	github.com/mattn/go-isatty v0.0.4
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
 	github.com/nsf/termbox-go v0.0.0-20190104133558-0938b5187e61
+	github.com/pkg/errors v0.8.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4
@@ -42,10 +42,12 @@ require (
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
 	go.opencensus.io v0.18.0
-	golang.org/x/net v0.0.0-20190107210223-45ffb0cd1ba0
+	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a // indirect
+	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
 	golang.org/x/oauth2 v0.0.0-20181203162652-d668ce993890
-	golang.org/x/sys v0.0.0-20190107173414-20be8e55dc7b
+	golang.org/x/sys v0.0.0-20190312061237-fead79001313
 	golang.org/x/text v0.3.0
+	golang.org/x/tools v0.0.0-20190314010720-1286b2016bb1 // indirect
 	google.golang.org/api v0.1.0
 	google.golang.org/appengine v1.4.0
 	google.golang.org/genproto v0.0.0-20181221175505-bd9b4fb69e2f
