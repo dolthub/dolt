@@ -169,30 +169,21 @@ my $benchmark_config = {
 		    prep => ['cp ../small-change.csv ./test.csv'],
 		    name => 'small diff',
 		    command => 'git diff test.csv',
-		    post => [
-			'git add test.csv',
-			'git commit -m "Committed small diff"'
-			],
+		    post => ['git add test.csv', 'git commit -m "Small change"'],
 		    check_disk => 1, 
 		},
 		{
 		    prep => ['cp ../medium-change.csv ./test.csv'],
 		    name => 'medium diff',
 		    command => 'git diff test.csv',
-		    post => [
-			'git add test.csv',
-			'git commit -m "Committed medium diff"'
-			],
+		    post => ['git add test.csv', 'git commit -m "Medium change"'],
 		    check_disk => 1,
 		},
 		{
 		    prep => ['cp ../large-change.csv ./test.csv'],
 		    name => 'large diff',
 		    command => 'git diff test.csv',
-		    post => [
-			'git add test.csv',
-			'git commit -m "Committed large diff"'
-			],
+		    post => ['git add test.csv', 'git commit -m "Large change"'],
 		    check_disk => 1,
 		}
 		]
@@ -222,33 +213,34 @@ my $benchmark_config = {
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -c -f -s ../test.schema test ../small-change.csv'],
+		    prep => [
+			'dolt table rm test',
+			'dolt table import -c -s ../test.schema test ../small-change.csv'
+			],
 		    name => 'small diff',
 		    command => 'dolt diff test',
-		    post => [
-			'dolt add test',
-			'dolt commit -m "Committed small diff"',
-			],
+		    post => ['dolt add test', 'dolt commit -m "small change"'],
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -c -f -s ../test.schema test ../medium-change.csv'],
+		    prep => [
+			'dolt table rm test',
+			'dolt table import -c -s ../test.schema test ../medium-change.csv'
+			],
 		    name => 'medium diff',
 		    command => 'dolt diff test',
-		    post => [
-			'dolt add test',
-			'dolt commit -m "Committed medium diff"',
-			],
+		    post => ['dolt add test', 
+			     'dolt commit -m "medium change"'],
 		    check_disk => 1,
 		},
 		{
-		    prep => ['dolt table import -c -f -s ../test.schema test ../large-change.csv'],
+		    prep => [
+			'dolt table rm test',
+			'dolt table import -c -s ../test.schema test ../large-change.csv'
+			],
 		    name => 'large diff',
 		    command => 'dolt diff test',
-		    post => [
-			'dolt add test',
-			'dolt commit -m "Committed large diff"',
-			],
+		    post => ['dolt add test', 'dolt commit -m "large change"'],
 		    check_disk => 1,
 		}
 	    ]
@@ -273,6 +265,8 @@ my $log_level    = LOG_LEVEL;
 my $unsafe       = UNSAFE;
 my $preserve     = PRESERVE_INPUTS;
 my $dolt_path    = DOLT_PATH;
+my $publish      = 0;
+my $publish_repo = '';
 my $help         = 0;
 my $man          = 0;
 
@@ -281,12 +275,19 @@ GetOptions("root=s"         => \$root,
 	   "preserve"       => \$preserve,
 	   "unsafe"         => \$unsafe,
 	   "dolt-path=s"    => \$dolt_path,
-	   "results-repo=s" => \$publish_config->{'repo_root'},
+	   "publish"        => \$publish,
+	   "publish-repo=s" => \$publish_repo,
 	   'help|?'         => \$help, 
 	   'man'            => \$man) or pod2usage(2);
 
 pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
+
+if ( $publish_repo ) {
+    die("Cannot specify --results-repo unless --publish is specified") 
+	unless $publish;
+    $publish_config->{'repo_root'} = $publish_repo; 
+}
 
 # Set up the environment
 $ENV{'PATH'} = "$ENV{PATH}:$dolt_path";
@@ -370,7 +371,7 @@ output("Cleaning up...", 1);
 cleanup($root, $benchmark_config, $preserve, $unsafe);
 
 # Output
-publish($publish_config, \%data, $profile, $benchmark_config, $root);
+publish($publish_config, \%data, $profile, $benchmark_config, $root) if $publish;
 output_data(\%data, $benchmark_config->{'benchmarks'}, $log_level);
 
 exit 0;
@@ -587,6 +588,11 @@ sub gather_profile_info {
     output("uname is:\n\t$profile->{uname}", 2);
 
     $profile->{'now'} = time();
+
+    $profile->{'git_version'}  = `git version`;
+    $profile->{'git_version'}  =~ s/\n//g;
+    $profile->{'dolt_version'} = `dolt version`;
+    $profile->{'dolt_version'} =~ s/\n//g;
 }
 
 # Generate schema
@@ -724,9 +730,12 @@ sub publish {
     # Insert data into dolt with the following schema:
     # uname (pk), now (pk), benchmark version (pk), test name (pk),
     # dolt time, git time, dolt disk, git disk
-    my $uname   = $profile->{'uname'};
-    my $now     = $profile->{'now'};
-    my $version = $benchmark_config->{version};
+    my $uname        = $profile->{'uname'};
+    my $now          = $profile->{'now'};
+    my $git_version  = $profile->{'git_version'};
+    my $dolt_version = $profile->{'dolt_version'};
+    my $version      = $benchmark_config->{version};
+
     foreach my $test ( keys %{$data} ) {
 	my $dolt_time = $data->{$test}{'dolt'}{'real'};
 	my $git_time  = $data->{$test}{'git'}{'real'};
@@ -734,9 +743,10 @@ sub publish {
 	my $git_disk  = $data->{$test}{'git'}{'disk'} || "";
 
 	my $dolt_insert = "dolt table put-row $results_table uname:\"$uname\" " .
-	  "test_time:$now benchmark_version:\"$version\" test_name:\"$test\" " .
-	  "dolt_time:$dolt_time git_time:$git_time dolt_disk:\"$dolt_disk\" " .
-	  "git_disk:\"$git_disk\"";
+	  "test_time:$now git_version:\"$git_version\" " .
+	  "dolt_version:\"$dolt_version\" benchmark_version:\"$version\" " . 
+	  "test_name:\"$test\" dolt_time:$dolt_time git_time:$git_time " . 
+	  "dolt_disk:\"$dolt_disk\" git_disk:\"$git_disk\"";
 
 	run_command($dolt_insert);
     }
@@ -789,11 +799,6 @@ benchmark.pl [options]
 
 Override the root directory to perform the benchmark in. Defaults to /var/tmp.
 
-=item B<-results-repo>
-
-Specify the directory where you would like the dolt repository used to pusblish 
-results to be placed.
-
 =item B<-loglevel>
 
 The verbosity of the output. 0 is quiet. 1 is status. 2 is verbose. Defaults to 1.
@@ -809,6 +814,15 @@ Do not delete the CSV inputs, Dolt repo, and Git repo. Useful for debugging.
 =item B<-unsafe>
 
 Delete files and directories that are in the way of the benchmark doing its job.
+
+=item B<-publish>
+
+Publish the results to the shared benchmark results Dolt repository.
+
+=item B<-publish-repo>
+
+Specify the directory where you would like the dolt repository used to pusblish 
+results to be placed. -publish must also be specified.
 
 =item B<-help>
 
