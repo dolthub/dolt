@@ -6,6 +6,9 @@ package nbs
 
 import (
 	"bytes"
+	"github.com/attic-labs/noms/go/types"
+	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 
@@ -13,6 +16,31 @@ import (
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestWriteChunks(t *testing.T) {
+	chunks := []chunks.Chunk{
+		types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, ")),
+		types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery ")),
+		types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the ")),
+		types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly ")),
+		types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing ")),
+		types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires ")),
+		types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically ")),
+		types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can.")),
+	}
+
+	name, data, err := WriteChunks(chunks)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = ioutil.WriteFile("/users/brian/write_chunks_test/"+name, data, os.ModePerm)
+
+	if err != nil {
+		t.Error(err)
+	}
+}
 
 func TestMemTableAddHasGetChunk(t *testing.T) {
 	assert := assert.New(t)

@@ -233,15 +233,19 @@ func (c *Config) getAWSCredFile(dbParams map[string]string) string {
 	return ""
 }
 
-// GetSpecOpts Uses config data from the global config and db configuration to
+// specOptsForConfig Uses config data from the global config and db configuration to
 // generate the spec.SpecOptions which should be used in calls to spec.For*Opts()
-func (c *Config) GetSpecOpts(dbc *DbConfig) spec.SpecOptions {
+func specOptsForConfig(c *Config, dbc *DbConfig) spec.SpecOptions {
 	dbParams := dbc.Options
 
-	return spec.SpecOptions{
-		Authorization: c.getAuthorization(dbParams),
-		AWSRegion:     c.getAWSRegion(dbParams),
-		AWSCredSource: c.getAWSCredentialSource(dbParams),
-		AWSCredFile:   c.getAWSCredFile(dbParams),
+	if c == nil {
+		return spec.SpecOptions{}
+	} else {
+		return spec.SpecOptions{
+			Authorization: c.getAuthorization(dbParams),
+			AWSRegion:     c.getAWSRegion(dbParams),
+			AWSCredSource: c.getAWSCredentialSource(dbParams),
+			AWSCredFile:   c.getAWSCredFile(dbParams),
+		}
 	}
 }
