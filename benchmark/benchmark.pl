@@ -268,21 +268,22 @@ my $publish_config = {
 ###################################################################################
 
 # Process command line arguments
-my $root      = BENCHMARK_ROOT;
-my $log_level = LOG_LEVEL;
-my $unsafe    = UNSAFE;
-my $preserve  = PRESERVE_INPUTS;
-my $dolt_path = DOLT_PATH;
-my $help      = 0;
-my $man       = 0;
+my $root         = BENCHMARK_ROOT;
+my $log_level    = LOG_LEVEL;
+my $unsafe       = UNSAFE;
+my $preserve     = PRESERVE_INPUTS;
+my $dolt_path    = DOLT_PATH;
+my $help         = 0;
+my $man          = 0;
 
-GetOptions("root=s"      => \$root,
-	   "loglevel=i"  => \$log_level,
-	   "preserve"    => \$preserve,
-	   "unsafe"      => \$unsafe,
-	   "dolt-path=s" => \$dolt_path,
-	   'help|?'      => \$help, 
-	   'man'         => \$man) or pod2usage(2);
+GetOptions("root=s"         => \$root,
+	   "loglevel=i"     => \$log_level,
+	   "preserve"       => \$preserve,
+	   "unsafe"         => \$unsafe,
+	   "dolt-path=s"    => \$dolt_path,
+	   "results-repo=s" => \$publish_config->{'repo_root'},
+	   'help|?'         => \$help, 
+	   'man'            => \$man) or pod2usage(2);
 
 pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
@@ -787,6 +788,11 @@ benchmark.pl [options]
 =item B<-root>
 
 Override the root directory to perform the benchmark in. Defaults to /var/tmp.
+
+=item B<-results-repo>
+
+Specify the directory where you would like the dolt repository used to pusblish 
+results to be placed.
 
 =item B<-loglevel>
 
