@@ -43,15 +43,15 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if name == "" {
 		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
-				"Use the init parameter -name \"FIRST LAST\" to set it for this repo, "+
-				"or dolt config -global -set %[1]s \"FIRST LAST\"", env.UserNameKey))
+				"Use the init parameter --name \"FIRST LAST\" to set it for this repo, "+
+				"or dolt config --global --add %[1]s \"FIRST LAST\"", env.UserNameKey))
 		usage()
 		return 1
 	} else if email == "" {
 		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
-				"Use the init parameter -email \"EMAIL_ADDRESS\" to set it for this repo, "+
-				"or dolt config -global -set %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey))
+				"Use the init parameter --email \"EMAIL_ADDRESS\" to set it for this repo, "+
+				"or dolt config --global --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey))
 		usage()
 		return 1
 	}
