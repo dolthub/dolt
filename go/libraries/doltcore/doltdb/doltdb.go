@@ -19,7 +19,7 @@ const (
 	CommitStructName = "Commit"
 )
 
-// DoltDBLocation represents a locations where a DoltDB database lives.
+// DoltDBLocation represents a location where a DoltDB database lives.
 type DoltDBLocation string
 
 const (
@@ -43,14 +43,14 @@ type DoltDB struct {
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the DoltDBLocation is InMemDoltDB then a reference
-// to a newly created in memory database will be used, if the location is LocalDirDoltDB a directory will be created if it
-// does not exist.
+// to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
+// this function panics.
 func LoadDoltDB(loc DoltDBLocation) *DoltDB {
 	if loc == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
 
 		if !exists {
-			return nil
+			panic("The dolt data directory doesn't exist")
 		} else if !isDir {
 			panic("A file exists where the dolt data directory should be.")
 		}
@@ -69,7 +69,7 @@ func LoadDoltDB(loc DoltDBLocation) *DoltDB {
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(name, email string) error {
 	if ddb.db.GetDataset(creationBranch).HasHead() {
-		return errors.New("Database already exists")
+		return errors.New("database already exists")
 	}
 
 	name = strings.TrimSpace(name)
@@ -163,7 +163,7 @@ func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorS
 	return commitSt, nil
 }
 
-// Resolve takes a CommitSpec and, if it exists, returns a Commit instance.
+// Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("Unable to resolve commit "+cs.Name(), func() error {
@@ -190,26 +190,26 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	return &Commit{ddb.db, commitSt}, nil
 }
 
-// WriteRootValue will write an doltdb.RootValue instance to the database.  This value will not be associated with a commit
-// and can be committed by hash at a later time.
+// WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
+// and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 	var valHash hash.Hash
-	err := pantoerr.PanicToError("Failed to write value.", func() error {
+	err := pantoerr.PanicToErrorNil("Failed to write value.", func() {
 		ref := ddb.db.WriteValue(rv.valueSt)
 		ddb.db.Flush()
 
 		valHash = ref.TargetHash()
-		return nil
 	})
 
 	return valHash, err
 }
 
+// ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
+// be read, or if the hash given doesn't represent a dolt RootValue.
 func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 	var val types.Value
-	err := pantoerr.PanicToError("Unable to read root value.", func() error {
+	err := pantoerr.PanicToErrorNil("Unable to read root value.", func() {
 		val = ddb.db.ReadValue(h)
-		return nil
 	})
 
 	if err != nil {
@@ -230,6 +230,7 @@ func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Co
 	return ddb.CommitWithParents(valHash, branch, nil, cm)
 }
 
+// FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(branch string, commit *Commit) error {
 	ds := ddb.db.GetDataset(branch)
 	_, err := ddb.db.FastForward(ds, types.NewRef(commit.commitSt))
@@ -237,6 +238,7 @@ func (ddb *DoltDB) FastForward(branch string, commit *Commit) error {
 	return err
 }
 
+// CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 	currentSpec, _ := NewCommitSpec("HEAD", branch)
 	current, err := ddb.Resolve(currentSpec)
@@ -252,9 +254,11 @@ func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 	return current.CanFastForwardTo(new)
 }
 
+// CommitWithParents commits the value hash given to the branch given, using the list of parent hashes given. Returns an
+// error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
 func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("Error committing value "+valHash.String(), func() error {
+	err := pantoerr.PanicToError("Error committing value " + valHash.String(), func() error {
 		val := ddb.db.ReadValue(valHash)
 
 		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
@@ -297,6 +301,7 @@ func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmS
 	return &Commit{ddb.db, commitSt}, nil
 }
 
+// ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
 func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.db
 }
@@ -313,18 +318,19 @@ func writeValAndGetRef(vrw types.ValueReadWriter, val types.Value) types.Ref {
 	return valRef
 }
 
+// ResolveParent returns the n-th ancestor of a given commit (direct parent is index 0). error return value will be
+// non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
+// underlying storage cannot be accessed.
 func (ddb *DoltDB) ResolveParent(commit *Commit, parentIdx int) (*Commit, error) {
 	var parentCommitSt types.Struct
 	errMsg := fmt.Sprintf("Failed to resolve parent of %s", commit.HashOf().String())
-	err := pantoerr.PanicToError(errMsg, func() error {
+	err := pantoerr.PanicToErrorNil(errMsg, func(){
 		parentSet := commit.getParents()
 		itr := parentSet.IteratorAt(uint64(parentIdx))
 		parentCommRef := itr.Next()
 
 		parentVal := parentCommRef.(types.Ref).TargetValue(ddb.ValueReadWriter())
 		parentCommitSt = parentVal.(types.Struct)
-
-		return nil
 	})
 
 	if err != nil {
@@ -334,10 +340,12 @@ func (ddb *DoltDB) ResolveParent(commit *Commit, parentIdx int) (*Commit, error)
 	return &Commit{ddb.ValueReadWriter(), parentCommitSt}, nil
 }
 
+// HasBranch returns whether the branch given exists in this database.
 func (ddb *DoltDB) HasBranch(name string) bool {
 	return ddb.db.Datasets().Has(types.String(name))
 }
 
+// GetBranches returns a list of all branches in the database.
 func (ddb *DoltDB) GetBranches() []string {
 	var branches []string
 	ddb.db.Datasets().IterAll(func(key, _ types.Value) {
@@ -350,9 +358,10 @@ func (ddb *DoltDB) GetBranches() []string {
 	return branches
 }
 
+// NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
 func (ddb *DoltDB) NewBranchAtCommit(newBranchName string, commit *Commit) error {
 	if !IsValidUserBranchName(newBranchName) {
-		panic("Do not attempt to create branches that fail the IsValidUserBranchName check")
+		panic(fmt.Sprintf("invalid branch name %v, use IsValidUserBranchName check", newBranchName))
 	}
 
 	ds := ddb.db.GetDataset(newBranchName)
@@ -360,9 +369,10 @@ func (ddb *DoltDB) NewBranchAtCommit(newBranchName string, commit *Commit) error
 	return err
 }
 
+// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
 func (ddb *DoltDB) DeleteBranch(branchName string) error {
 	if !IsValidUserBranchName(branchName) && !IsValidRemoteBranchName(branchName) {
-		panic("Do not attempt to delete branches that fail the IsValidUserBranchName check")
+		panic(fmt.Sprintf("invalid branch name %v, use IsValidUserBranchName check", branchName))
 	}
 
 	ds := ddb.db.GetDataset(branchName)
@@ -372,24 +382,11 @@ func (ddb *DoltDB) DeleteBranch(branchName string) error {
 	}
 
 	_, err := ddb.db.Delete(ds)
-
 	return err
 }
 
-func (ddb *DoltDB) PullChunks(srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	var err error
-	//err := pantoerr.PanicToError("error: unable to transfer chunks.", func() error {
+// PullChunks initiates a pull into this database from the source database given, at the commit given. The pull occurs
+// asynchronously, and progress is communicated over the provided channel.
+func (ddb *DoltDB) PullChunks(srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) {
 	datas.Pull(srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
-	//	return nil
-	//})
-
-	if pantoerr.IsRecoveredPanic(err) {
-		cause := pantoerr.GetRecoveredPanicCause(err)
-
-		if errCause, ok := cause.(error); ok {
-			return errCause
-		}
-	}
-
-	return err
 }

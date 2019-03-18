@@ -6,6 +6,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"path/filepath"
 	"testing"
 )
@@ -33,7 +35,7 @@ func createTestSchema() schema.Schema {
 	return sch
 }
 
-func TestEmptyRepoCreation(t *testing.T) {
+func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	ddb := LoadDoltDB(InMemDoltDB)
 	err := ddb.WriteEmptyRepo("Bill Billerson", "bigbillieb@fake.horse")
 
@@ -54,6 +56,33 @@ func TestEmptyRepoCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to get commit by hash")
 	}
+}
+
+func TestLoadNonExistentLocalFSRepo(t *testing.T) {
+	_, err := test.ChangeToTestDir("TestLoadRepo")
+
+	if err != nil {
+		panic("Couldn't change the working directory to the test directory.")
+	}
+
+	assert.Panics(t, func() {
+		LoadDoltDB(LocalDirDoltDB)
+	}, "Should have panicked when loading a non-existent data dir")
+}
+
+func TestLoadBadLocalFSRepo(t *testing.T) {
+	testDir, err := test.ChangeToTestDir("TestLoadRepo")
+
+	if err != nil {
+		panic("Couldn't change the working directory to the test directory.")
+	}
+
+	contents := []byte("not a directory")
+	ioutil.WriteFile(filepath.Join(testDir, DoltDataDir), contents, 0644)
+
+	assert.Panics(t, func() {
+		LoadDoltDB(LocalDirDoltDB)
+	}, "Should have panicked when loading a non-directory data dir file")
 }
 
 func TestLDNoms(t *testing.T) {
