@@ -29,7 +29,7 @@ func NewAutoSizingFWTTransformer(sch schema.Schema, tooLngBhv TooLongBehavior, n
 	return &AutoSizingFWTTransformer{numSamples, widths, rowBuffer, sch, tooLngBhv, nil}
 }
 
-func (asTr *AutoSizingFWTTransformer) TransformToFWT(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
+func (asTr *AutoSizingFWTTransformer) TransformToFWT(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 RowLoop:
 	for {
 		select {
@@ -53,7 +53,7 @@ RowLoop:
 	asTr.flush(outChan, badRowChan, stopChan)
 }
 
-func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
+func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 	if asTr.rowBuffer == nil {
 		asTr.processRow(r, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
@@ -77,7 +77,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 	}
 }
 
-func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan bool) {
+func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 	if asWr.fwtTr == nil {
 		fwtSch := NewFWTSchemaWithWidths(asWr.sch, asWr.widths)
 		asWr.fwtTr = NewFWTTransformer(fwtSch, asWr.tooLngBhv)
