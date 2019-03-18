@@ -12,10 +12,12 @@ var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
 var userBranchRegex = regexp.MustCompile(UserBranchRegexStr)
 var remoteBranchRegex = regexp.MustCompile(RemoteBranchRegexStr)
 
+const head string = "head"
+
 // IsValidUserBranch returns true if name isn't a valid commit hash, it is not named "head" and it matches the
 // regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
 func IsValidUserBranchName(name string) bool {
-	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != "head"
+	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != head
 }
 
 func IsValidRemoteBranchName(name string) bool {
@@ -35,8 +37,8 @@ const (
 )
 
 // CommitSpec handles three different types of string representations of commits.  Commits can either be represented
-// by the hash of the commit, a branch name, or using "head" to represent the lastest commit of the current branch.
-// An Ancestor spec can be appendend to the end of any of these in order to reach commits that are in the ancestor tree
+// by the hash of the commit, a branch name, or using "head" to represent the latest commit of the current branch.
+// An Ancestor spec can be appended to the end of any of these in order to reach commits that are in the ancestor tree
 // of the referenced commit.
 type CommitSpec struct {
 	name   string
@@ -44,8 +46,8 @@ type CommitSpec struct {
 	aSpec  *AncestorSpec
 }
 
-// NewCommitSpec takes a spec string and the current working branch.  The current working branch is only relavent when
-// using "head" to reference a commbit, but if it is not needed it will be ignored.
+// NewCommitSpec takes a spec string and the current working branch.  The current working branch is only relevant when
+// using "head" to reference a commit, but if it is not needed it will be ignored.
 func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 	cwbLwr := strings.ToLower(strings.TrimSpace(cwb))
 	cSpecStrLwr := strings.ToLower(strings.TrimSpace(cSpecStr))
@@ -56,7 +58,7 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 		return nil, err
 	}
 
-	if name == "head" {
+	if name == head {
 		name = cwbLwr
 	}
 

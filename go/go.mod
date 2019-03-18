@@ -15,6 +15,8 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/shurcooL/gofontwoff v0.0.0-20181114050219-180f79e6909d // indirect
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
+	github.com/stretchr/testify v1.3.0
+	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 // indirect
 	go.opencensus.io v0.19.0 // indirect
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
