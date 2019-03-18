@@ -1,9 +1,10 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"strings"
 )
 
 // CommandFunc specifies the signature of the functions that will be called based on the command line being executed.
@@ -45,7 +46,7 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 
 		subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 		if command, ok := commandMap[subCommandStr]; ok {
-			if command.ReqRepo {
+			if command.ReqRepo && !hasHelpFlag(args) {
 				if !dEnv.HasDoltDir() {
 					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
 					PrintErrln("run: dolt init before trying to run this command")
@@ -72,6 +73,15 @@ func isHelp(str string) bool {
 		return true
 	}
 
+	return false
+}
+
+func hasHelpFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
 	return false
 }
 
