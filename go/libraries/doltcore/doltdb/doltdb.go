@@ -20,12 +20,12 @@ const (
 	CommitStructName = "Commit"
 )
 
-// DoltDBLocation represents a location where a DoltDB database lives.
-type DoltDBLocation string
+// Location represents a location where a DoltDB database lives.
+type Location string
 
 const (
 	// InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
-	InMemDoltDB = DoltDBLocation("mem")
+	InMemDoltDB = Location("mem")
 
 	DoltDir = ".dolt"
 	DataDir = "noms"
@@ -34,7 +34,7 @@ const (
 var DoltDataDir = filepath.Join(DoltDir, DataDir)
 
 // LocalDirDoltDB stores the db in the current directory
-var LocalDirDoltDB = DoltDBLocation("nbs:" + DoltDataDir)
+var LocalDirDoltDB = Location("nbs:" + DoltDataDir)
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and I've opted to recover and return
@@ -43,10 +43,10 @@ type DoltDB struct {
 	db datas.Database
 }
 
-// LoadDoltDB will acquire a reference to the underlying noms db.  If the DoltDBLocation is InMemDoltDB then a reference
+// LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this function panics.
-func LoadDoltDB(loc DoltDBLocation) *DoltDB {
+func LoadDoltDB(loc Location) *DoltDB {
 	if loc == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
 
