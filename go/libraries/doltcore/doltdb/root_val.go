@@ -146,7 +146,7 @@ func (root *RootValue) HasConflicts() bool {
 	return len(cnfTbls) > 0
 }
 
-// PutTableToWorking inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
+// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ddb *DoltDB, tName string, table *Table) *RootValue {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")

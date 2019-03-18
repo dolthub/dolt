@@ -2,6 +2,7 @@ package actions
 
 import (
 	"errors"
+
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/util/math"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -184,9 +185,8 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")
-		} else {
-			return emptyHash, doltdb.ErrNomsIO
 		}
+		return emptyHash, doltdb.ErrNomsIO
 	}
 
 	return dEnv.DoltDB.WriteRootValue(root)

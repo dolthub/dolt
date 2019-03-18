@@ -2,12 +2,13 @@ package actions
 
 import (
 	"errors"
+
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
 
-var ErrCantFF = errors.New("can't fast forward merge.")
+var ErrCantFF = errors.New("can't fast forward merge")
 
 func Push(branch, remoteBranch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
 	canFF, err := srcDB.CanFastForward(remoteBranch, commit)

@@ -14,8 +14,8 @@ var remoteBranchRegex = regexp.MustCompile(RemoteBranchRegexStr)
 
 const head string = "head"
 
-// IsValidUserBranch returns true if name isn't a valid commit hash, it is not named "head" and it matches the
-// regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
+// IsValidUserBranchName returns true if name isn't a valid commit hash, it is not named "head" and
+// it matches the regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
 func IsValidUserBranchName(name string) bool {
 	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != head
 }

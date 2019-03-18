@@ -3,14 +3,15 @@ package doltdb
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -152,9 +153,8 @@ func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorS
 
 			if commitStPtr == nil {
 				return types.EmptyStruct, ErrInvalidAnscestorSpec
-			} else {
-				commitSt = *commitStPtr
 			}
+			commitSt = *commitStPtr
 		} else {
 			return types.EmptyStruct, ErrInvalidAnscestorSpec
 		}
@@ -166,7 +166,7 @@ func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorS
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("Unable to resolve commit "+cs.Name(), func() error {
+	err := pantoerr.PanicToError("unable to resolve commit "+cs.Name(), func() error {
 		var err error
 		if cs.csType == CommitHashSpec {
 			commitSt, err = getCommitStForHash(ddb.db, cs.Name())
@@ -194,7 +194,7 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 	var valHash hash.Hash
-	err := pantoerr.PanicToErrorNil("Failed to write value.", func() {
+	err := pantoerr.PanicToErrorNil("failed to write value", func() {
 		ref := ddb.db.WriteValue(rv.valueSt)
 		ddb.db.Flush()
 
@@ -208,7 +208,7 @@ func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 // be read, or if the hash given doesn't represent a dolt RootValue.
 func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 	var val types.Value
-	err := pantoerr.PanicToErrorNil("Unable to read root value.", func() {
+	err := pantoerr.PanicToErrorNil("unable to read root value", func() {
 		val = ddb.db.ReadValue(h)
 	})
 
@@ -222,7 +222,7 @@ func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 		}
 	}
 
-	return nil, errors.New("There is no dolt root value at that hash.")
+	return nil, errors.New("there is no dolt root value at that hash")
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -258,11 +258,11 @@ func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
 func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("Error committing value " + valHash.String(), func() error {
+	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
 		val := ddb.db.ReadValue(valHash)
 
 		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
-			return errors.New("Can't commit a value that is not a valid root value.")
+			return errors.New("can't commit a value that is not a valid root value")
 		}
 
 		ds := ddb.db.GetDataset(branch)
@@ -288,7 +288,7 @@ func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmS
 		if ds.HasHead() {
 			commitSt = ds.Head()
 		} else if err == nil {
-			return errors.New("Commit has no head but commit succeeded?!?! How?")
+			return errors.New("commit has no head but commit succeeded (How?!?!?)")
 		}
 
 		return err
@@ -323,8 +323,8 @@ func writeValAndGetRef(vrw types.ValueReadWriter, val types.Value) types.Ref {
 // underlying storage cannot be accessed.
 func (ddb *DoltDB) ResolveParent(commit *Commit, parentIdx int) (*Commit, error) {
 	var parentCommitSt types.Struct
-	errMsg := fmt.Sprintf("Failed to resolve parent of %s", commit.HashOf().String())
-	err := pantoerr.PanicToErrorNil(errMsg, func(){
+	errMsg := fmt.Sprintf("failed to resolve parent of %s", commit.HashOf().String())
+	err := pantoerr.PanicToErrorNil(errMsg, func() {
 		parentSet := commit.getParents()
 		itr := parentSet.IteratorAt(uint64(parentIdx))
 		parentCommRef := itr.Next()
