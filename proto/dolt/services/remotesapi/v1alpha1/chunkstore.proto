@@ -29,12 +29,24 @@ message HasChunksResponse {
 
 message HttpGetChunk {
   string url = 1;
+  repeated bytes hashes = 2;
+}
+
+message RangeChunk {
+  bytes hash = 1;
+  uint64 offset = 2;
+  uint32 length = 3;
+}
+
+message HttpGetRange {
+  string url = 1;
+  repeated RangeChunk ranges = 2;
 }
 
 message DownloadLoc {
-  repeated bytes hashes = 1;
   oneof location {
-    HttpGetChunk http_get = 2;
+    HttpGetChunk http_get = 1;
+    HttpGetRange http_get_range = 2;
   }
 }
 
@@ -43,7 +55,7 @@ message HttpPostChunk {
 }
 
 message UploadLoc {
-  repeated bytes hashes = 1;
+  bytes hash = 1;
   oneof location {
     HttpPostChunk http_post = 2;
   }
@@ -83,10 +95,16 @@ message RootResponse {
   bytes root_hash = 1;
 }
 
+message ChunkTableInfo {
+  bytes hash = 1;
+  uint32 chunk_count = 2;
+}
+
 message CommitRequest {
   RepoId repo_id = 1;
   bytes current = 2;
   bytes last = 3;
+  repeated ChunkTableInfo chunk_table_info = 4;
 }
 
 message CommitResponse {

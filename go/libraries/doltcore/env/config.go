@@ -17,6 +17,7 @@ const (
 
 	UserEmailKey = "user.email"
 	UserNameKey  = "user.name"
+	UserCreds    = "user.creds"
 
 	DoltEditor = "core.editor"
 
