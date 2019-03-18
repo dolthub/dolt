@@ -112,12 +112,7 @@ type SelectArgs struct {
 }
 
 func Select(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed."
-	ap.ArgListHelp["column"] = "List of columns to be printed"
-	ap.SupportsString(whereParam, "", "column", "")
-	ap.SupportsInt(limitParam, "", "record_count", "")
-	ap.SupportsFlag(hideConflictsFlag, "", "")
+	ap := newArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
@@ -169,6 +164,16 @@ func Select(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	return 0
+}
+
+func newArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp["table"] = "List of tables to be printed."
+	ap.ArgListHelp["column"] = "List of columns to be printed"
+	ap.SupportsString(whereParam, "", "column", "")
+	ap.SupportsInt(limitParam, "", "record_count", "")
+	ap.SupportsFlag(hideConflictsFlag, "", "")
+	return ap
 }
 
 func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseError {

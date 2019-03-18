@@ -14,7 +14,7 @@ type SourceFunc func() (row.Row, ImmutableProperties, error)
 // ProcFuncForSourceFunc is a helper method that creates an InFunc for a given SourceFunc.  It takes care of channel
 // processing, stop conditions, and error handling.
 func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
-	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan bool) {
+	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
 
 		for {
@@ -64,7 +64,7 @@ func ProcFuncForReader(rd table.TableReader) InFunc {
 }
 
 // SinkFunc is a function that will process the final transformed rows from a pipeline.  This function will be called
-// once for every row that makes it through the piplenie
+// once for every row that makes it through the pipeline
 type SinkFunc func(row.Row, ReadableMap) error
 
 // ProcFuncForSinkFunc is a helper method that creates an OutFunc for a given SinkFunc.  It takes care of channel
