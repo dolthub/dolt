@@ -117,8 +117,8 @@ func (dc DoltCreds) toBearerToken() (string, error) {
 	// Shouldn't be hard coded
 	jwtBuilder := jwt.Signed(signer)
 	jwtBuilder = jwtBuilder.Claims(jwt.Claims{
-		Audience: []string{"dolthub-remote-api.dolthub.com"},
-		Issuer:   "dolt-client.dolthub.com",
+		Audience: []string{"dolthub-remote-api.liquidata.co"},
+		Issuer:   "dolt-client.liquidata.co",
 		Subject:  "doltClientCredentials/" + b32KIDStr,
 		Expiry:   jwt.NewNumericDate(datetime.Now().Add(30 * time.Second)),
 	})
