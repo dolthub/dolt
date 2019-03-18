@@ -24,7 +24,7 @@ func NewRemote(name string, params map[string]string) (*Remote, error) {
 
 func (r *Remote) GetRemoteDB() *doltdb.DoltDB {
 	remoteLocStr := DoltNomsProtocolID + ":" + r.Url
-	return doltdb.LoadDoltDB(doltdb.DoltDBLocation(remoteLocStr))
+	return doltdb.LoadDoltDB(doltdb.Location(remoteLocStr))
 }
 
 func parseRemotesFromConfig(cfg config.ReadableConfig) (map[string]*Remote, error) {

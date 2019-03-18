@@ -37,12 +37,12 @@ type DoltEnv struct {
 	DoltDB *doltdb.DoltDB
 
 	FS  filesys.Filesys
-	loc doltdb.DoltDBLocation
+	loc doltdb.Location
 	hdp HomeDirProvider
 }
 
 // Load loads the DoltEnv for the current directory of the cli
-func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.DoltDBLocation) *DoltEnv {
+func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 	ddb := doltdb.LoadDoltDB(loc)
