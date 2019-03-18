@@ -24,6 +24,7 @@ const (
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
+var ErrInvalidCredsFile = errors.New("invalid creds file")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -298,8 +299,27 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) getRPCCreds() credentials.PerRPCCredentials {
-	return nil
+func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
+	kid, err := dEnv.Config.GetString(UserCreds)
+
+	if err == nil {
+		dir, err := dEnv.CredsDir()
+
+		if err != nil {
+			// not sure why you wouldn't be able to get the creds dir.
+			panic(err)
+		}
+
+		dCreds, err := creds.JWKCredsReadFromFile(dEnv.FS, filepath.Join(dir, kid+".jwk"))
+
+		if err != nil {
+			return nil, ErrInvalidCredsFile
+		}
+
+		return dCreds, nil
+	}
+
+	return nil, nil
 }
 
 func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
@@ -307,8 +327,11 @@ func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
 
 	// TODO: transport creds
 
-	rpcCreds := dEnv.getRPCCreds()
-	if rpcCreds != nil {
+	rpcCreds, err := dEnv.getRPCCreds()
+
+	if err != nil {
+		return nil, err
+	} else if rpcCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 	}
 
