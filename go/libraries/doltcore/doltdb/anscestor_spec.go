@@ -93,19 +93,19 @@ func SplitAncestorSpec(s string) (string, *AncestorSpec, error) {
 
 	if cIdx == -1 && tIdx == -1 {
 		return cleanStr, emptyASpec, nil
-	} else {
-		idx := cIdx
-		if cIdx == -1 || (tIdx != -1 && tIdx < cIdx) {
-			idx = tIdx
-		}
-
-		commitSpec := cleanStr[:idx]
-		as, err := NewAncestorSpec(s[idx:])
-
-		if err != nil {
-			return "", emptyASpec, err
-		}
-
-		return commitSpec, as, nil
 	}
+
+	idx := cIdx
+	if cIdx == -1 || (tIdx != -1 && tIdx < cIdx) {
+		idx = tIdx
+	}
+
+	commitSpec := cleanStr[:idx]
+	as, err := NewAncestorSpec(s[idx:])
+
+	if err != nil {
+		return "", emptyASpec, err
+	}
+
+	return commitSpec, as, nil
 }

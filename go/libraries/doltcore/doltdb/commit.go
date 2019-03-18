@@ -2,6 +2,7 @@ package doltdb
 
 import (
 	"errors"
+
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
@@ -137,13 +138,12 @@ func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
 	if err != nil {
 		return false, err
 	} else if ancestor == nil {
-		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
+		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.commitSt.Equals(c.commitSt) {
 		if ancestor.commitSt.Equals(new.commitSt) {
 			return true, ErrUpToDate
-		} else {
-			return true, nil
 		}
+		return true, nil
 	} else if ancestor.commitSt.Equals(new.commitSt) {
 		return false, ErrIsAhead
 	}
@@ -157,13 +157,12 @@ func (c *Commit) CanFastReverseTo(new *Commit) (bool, error) {
 	if err != nil {
 		return false, err
 	} else if ancestor == nil {
-		return false, errors.New("cannot perform fast forward merge.  commits have no common ancestor.")
+		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.commitSt.Equals(new.commitSt) {
 		if ancestor.commitSt.Equals(c.commitSt) {
 			return true, ErrUpToDate
-		} else {
-			return true, nil
 		}
+		return true, nil
 	} else if ancestor.commitSt.Equals(c.commitSt) {
 		return false, ErrIsBehind
 	}

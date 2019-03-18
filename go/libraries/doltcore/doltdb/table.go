@@ -1,13 +1,14 @@
 package doltdb
 
 import (
+	"regexp"
+
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"regexp"
 )
 
 const (
@@ -124,9 +125,8 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 		}
 
 		return baseSch, sch, mergeSch, err
-	} else {
-		return nil, nil, nil, ErrNoConflicts
 	}
+	return nil, nil, nil, ErrNoConflicts
 }
 
 func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
