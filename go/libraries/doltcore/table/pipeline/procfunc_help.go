@@ -14,7 +14,7 @@ type SourceFunc func() (row.Row, ImmutableProperties, error)
 // ProcFuncForSourceFunc is a helper method that creates an InFunc for a given SourceFunc.  It takes care of channel
 // processing, stop conditions, and error handling.
 func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
-	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan NoValue) {
+	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
 
 		for {

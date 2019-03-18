@@ -7,7 +7,7 @@ import (
 )
 
 // InFunc is a pipeline input function that reads row data from a source and puts it in a channel.
-type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan NoValue)
+type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{})
 
 // OutFUnc is a pipeline output function that takes the data the pipeline has processed off of the channel.
 type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure)
@@ -16,17 +16,14 @@ type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *Transf
 // function when called will quit the entire pipeline
 type BadRowCallback func(*TransformRowFailure) (quit bool)
 
-// NoValue is a signal type to indicate that channels of this type should never expect to receive values, only control flow (close())
-type NoValue struct{}
-
 // Pipeline is a struct that manages the operation of a row processing pipeline, where data is read from some source
 // and written to a channel by the InFunc, a transform would then read the data off of their input channel, and write
 // the transformed data to their output channel.  A series of transforms can be applied until the transformed data
 // reaches the OutFunc which takes the data off the channel and would typically store the result somewhere.
 type Pipeline struct {
 	wg         *sync.WaitGroup
-	stopChan   chan NoValue
-	noMoreChan chan NoValue
+	stopChan   chan struct{}
+	noMoreChan chan struct{}
 
 	atomicErr atomic.Value
 	transInCh map[string]chan RowWithProps
@@ -81,8 +78,8 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 
 	in := make(chan RowWithProps, 1024)
 	badRowChan := make(chan *TransformRowFailure, 1024)
-	stopChan := make(chan NoValue)
-	noMoreChan := make(chan NoValue)
+	stopChan := make(chan struct{})
+	noMoreChan := make(chan struct{})
 	transInCh := make(map[string]chan RowWithProps)
 
 	curr := in
@@ -117,7 +114,7 @@ func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, transforms *
 	return p
 }
 
-func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan NoValue) chan RowWithProps {
+func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan struct{}) chan RowWithProps {
 	wg.Add(1)
 	outChan := make(chan RowWithProps, 256)
 
