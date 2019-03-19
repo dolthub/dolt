@@ -1,6 +1,8 @@
 package tblcmds
 
 import (
+	"strings"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -12,7 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"strings"
 )
 
 var putRowShortDesc = "Adds or updates a row in a table"
@@ -161,7 +162,7 @@ func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseE
 	typedRow, err := rconv.Convert(untypedRow)
 
 	if err != nil {
-		return nil, errhand.BuildDError("failed to convert to row").AddCause(err).Build()
+		return nil, errhand.BuildDError("inserted row does not match schema").AddCause(err).Build()
 	}
 
 	if col := row.GetInvalidCol(typedRow, sch); col != nil {
