@@ -51,7 +51,7 @@ func LoadDoltDB(loc Location) *DoltDB {
 		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
 
 		if !exists {
-			panic("The dolt data directory doesn't exist")
+			return nil
 		} else if !isDir {
 			panic("A file exists where the dolt data directory should be.")
 		}
