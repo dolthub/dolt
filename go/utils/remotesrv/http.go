@@ -22,7 +22,7 @@ func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	tokens := strings.Split(path, "/")
 
 	if len(tokens) != 3 {
-		logger(fmt.Sprintf("response to:", req.RequestURI, "method:", req.Method, "http response code: ", http.StatusNotFound))
+		logger(fmt.Sprintf("response to: %v method: %v http response code: %v", req.RequestURI, req.Method, http.StatusNotFound))
 		respWr.WriteHeader(http.StatusNotFound)
 	}
 
