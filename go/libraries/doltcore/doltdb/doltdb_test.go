@@ -65,9 +65,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 		panic("Couldn't change the working directory to the test directory.")
 	}
 
-	assert.Panics(t, func() {
-		LoadDoltDB(LocalDirDoltDB)
-	}, "Should have panicked when loading a non-existent data dir")
+	assert.Nil(t, LoadDoltDB(LocalDirDoltDB), "Should return nil when loading a non-existent data dir")
 }
 
 func TestLoadBadLocalFSRepo(t *testing.T) {
@@ -80,9 +78,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	contents := []byte("not a directory")
 	ioutil.WriteFile(filepath.Join(testDir, DoltDataDir), contents, 0644)
 
-	assert.Panics(t, func() {
-		LoadDoltDB(LocalDirDoltDB)
-	}, "Should have panicked when loading a non-directory data dir file")
+	assert.Nil(t, LoadDoltDB(LocalDirDoltDB), "Should return nil when loading a non-directory data dir file")
 }
 
 func TestLDNoms(t *testing.T) {
