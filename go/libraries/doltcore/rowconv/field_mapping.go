@@ -91,8 +91,8 @@ func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName m
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-// TagMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
-// tag in the source and destination schemas.
+// TagMapping takes a source schema and a destination schema and maps all columns which have a matching tag in the
+// source and destination schemas.
 func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	successes := 0
 	srcCols := srcSch.GetAllCols()
@@ -117,8 +117,8 @@ func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-// NameInferredMapping takes a source schema, and a destination schema and maps columns all columns which have a matching
-// tag in the source and destination schemas.
+// NameMapping takes a source schema and a destination schema and maps all columns which have a matching name in the
+// source and destination schemas.
 func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	successes := 0
 	srcCols := srcSch.GetAllCols()
