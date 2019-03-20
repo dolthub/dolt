@@ -32,6 +32,8 @@ const (
 	cnfColName        = "Cnf"
 )
 
+var fwtStageName = "fwt"
+
 var cnfTag = schema.ReservedTagMin
 
 var selShortDesc = "print a selection of a table"
@@ -40,9 +42,9 @@ var selSynopsis = []string{
 	"[--limit <record_count>] [--where <col1=val1>] [--hide-conflicts] [<commit>] <table> [<column>...]",
 }
 
-type whereFunc func(r row.Row) (isTrue bool)
+type filterFn = func(r row.Row) (matchesFilter bool)
 
-func parseWhere(sch schema.Schema, whereClause string) (whereFunc, error) {
+func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
 	if whereClause == "" {
 		return func(r row.Row) bool {
 			return true
@@ -83,16 +85,16 @@ func parseWhere(sch schema.Schema, whereClause string) (whereFunc, error) {
 	}
 }
 
-type SelectTransform struct {
+type selectTransform struct {
 	p      *pipeline.Pipeline
-	whFunc whereFunc
+	filter filterFn
 	limit  int
 	count  int
 }
 
-func (st *SelectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
+func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	if st.limit == -1 || st.count < st.limit {
-		if st.whFunc(inRow) {
+		if st.filter(inRow) {
 			st.count++
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
@@ -176,6 +178,7 @@ func newArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Runs the selection pipeline and prints the table of resultant values, returning any error encountered.
 func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseError {
 	var verr errhand.VerboseError
 	if !root.HasTable(selArgs.tblName) {
@@ -184,13 +187,13 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 
 	tbl, _ := root.GetTable(selArgs.tblName)
 	tblSch := tbl.GetSchema()
-	whereFunc, err := parseWhere(tblSch, selArgs.whereClause)
+	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
 	}
 
-	selTrans := &SelectTransform{nil, whereFunc, selArgs.limit, 0}
+	selTrans := &selectTransform{nil, whereFn, selArgs.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
 	sch := maybeAddCnfColTransform(transforms, tbl, tblSch)
 	outSch, verr := addMapTransform(selArgs, sch, transforms)
@@ -199,36 +202,49 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 		return verr
 	}
 
+	p := createPipeline(tbl, tblSch, outSch, transforms)
+	selTrans.p = p
+
+	p.Start()
+	err = p.Wait()
+
+	if err != nil {
+		return errhand.BuildDError("error: error processing results").AddCause(err).Build()
+	}
+
+	return nil
+}
+
+// Creates a pipeline to select and print rows from the table given. Adds a fixed-width printing transform to the
+// collection of transformations given.
+func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schema, transforms *pipeline.TransformCollection) *pipeline.Pipeline {
+	colNames := schema.ExtractAllColNames(outSch)
 	addSizingTransform(outSch, transforms)
 
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
-	defer rd.Close()
-
 	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
-	defer wr.Close()
 
-	badRowCB := func(tff *pipeline.TransformRowFailure) (quit bool) {
+	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
 		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
 		return true
 	}
 
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
 	wrProcFunc := pipeline.ProcFuncForWriter(wr)
-	p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCB)
-	selTrans.p = p
 
-	colNames := schema.ExtractAllColNames(outSch)
-	p.InsertRow("fwt", untyped.NewRowFromTaggedStrings(outSch, colNames))
+	p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCallback)
+	p.RunAfter(func() { rd.Close() })
+	p.RunAfter(func() { wr.Close() })
 
-	p.Start()
-	p.Wait()
+	// Insert the table header row at the appropriate stage
+	p.InsertRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
 
-	return verr
+	return p
 }
 
 func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformCollection) {
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-	transforms.AppendTransforms(pipeline.NamedTransform{"fwt", autoSizeTransform.TransformToFWT})
+	transforms.AppendTransforms(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 }
 
 func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
