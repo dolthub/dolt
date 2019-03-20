@@ -45,7 +45,7 @@ type DoltDB struct {
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
-// this function panics.
+// this returns nil.
 func LoadDoltDB(loc Location) *DoltDB {
 	if loc == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
