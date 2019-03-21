@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -10,6 +11,7 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,12 +60,15 @@ func TestPipeline(t *testing.T) {
 	buf := bytes.NewBuffer([]byte(inCSV))
 	outBuf := bytes.NewBuffer([]byte{})
 
+	afterFinishCalled := false
+	afterFinishFunc := func() {
+		afterFinishCalled = true
+	}
+
 	func() {
 		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
 		rd, _ := csv.NewCSVReader(ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
-		defer rd.Close()
-		defer wr.Close()
 
 		tc := NewTransformCollection(
 			NewNamedTransform("identity", identityTransFunc),
@@ -75,13 +80,74 @@ func TestPipeline(t *testing.T) {
 		inProcFunc := ProcFuncForReader(rd)
 		outProcFunc := ProcFuncForWriter(wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
+
+		p.RunAfter(func() { rd.Close() })
+		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(afterFinishFunc)
+
 		p.Start()
 		p.Wait()
 	}()
 
+	if !afterFinishCalled {
+		t.Error("afterFinish func not called when pipeline ended")
+	}
+
 	outStr := outBuf.String()
 	if strings.TrimSpace(outStr) != strings.TrimSpace(outCSV) {
-		t.Error("output does not match expectation.")
+		t.Error("output does not match expectation")
+	}
+}
+
+func TestAbort(t *testing.T) {
+	buf := bytes.NewBuffer([]byte(inCSV))
+	outBuf := bytes.NewBuffer([]byte{})
+
+	afterFinishCalled := false
+	afterFinishFunc := func() {
+		afterFinishCalled = true
+	}
+
+	func() {
+		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
+		rd, _ := csv.NewCSVReader(ioutil.NopCloser(buf), csvInfo)
+		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
+
+		var wg = sync.WaitGroup{}
+
+		tc := NewTransformCollection(
+			NewNamedTransform("identity", identityTransFunc),
+			NewNamedTransform("dies", hangs(&wg)),
+		)
+
+		inProcFunc := ProcFuncForReader(rd)
+		outProcFunc := ProcFuncForWriter(wr)
+		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
+
+		p.RunAfter(func() { rd.Close() })
+		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(afterFinishFunc)
+
+		p.Start()
+		wg.Wait()
+		p.Abort()
+	}()
+
+	if !afterFinishCalled {
+		t.Error("afterFinish func not called when pipeline ended")
+	}
+}
+
+// Returns a function that hangs right after signalling the given WaitGroup that it's done
+func hangs(wg *sync.WaitGroup) func(inRow row.Row, props ReadableMap) ([]*TransformedRowResult, string) {
+	wg.Add(1)
+	return func(inRow row.Row, props ReadableMap) (results []*TransformedRowResult, s string) {
+		i := 0
+		fmt.Println("about to call done()")
+		wg.Done()
+		for {
+			i++
+		}
 	}
 }
 
