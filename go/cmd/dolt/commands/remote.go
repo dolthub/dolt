@@ -1,12 +1,20 @@
 package commands
 
 import (
+	"errors"
+	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
+	"path"
+	"strconv"
 	"strings"
 )
+
+var ErrInvalidPort = errors.New("invalid port")
 
 var remoteShortDesc = ""
 var remoteLongDesc = ""
@@ -21,6 +29,8 @@ const (
 	addRemoteId    = "add"
 	renameRemoteId = "rename"
 	removeRemoteId = "remove"
+
+	DolthubHostName = "dolthub.com"
 )
 
 func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -88,16 +98,65 @@ func renameRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	return nil
 }
 
+func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, error) {
+	u, err := earl.Parse(urlArg)
+
+	if err != nil {
+		return "", err
+	}
+
+	if u.Scheme != "" || u.Host != "" {
+		return urlArg, nil
+	}
+
+	hostName, err := cfg.GetString(env.RemotesApiHostKey)
+
+	if err != nil {
+		if err != config.ErrConfigParamNotFound {
+			return "", err
+		}
+
+		hostName = DolthubHostName
+	}
+
+	hostName = strings.TrimSpace(hostName)
+
+	portStr, err := cfg.GetString(env.RemotesApiHostPortKey)
+
+	if err != nil {
+		if err != config.ErrConfigParamNotFound {
+			return "", err
+		}
+
+		portStr = "443"
+	}
+
+	portStr = strings.TrimSpace(portStr)
+	portNum, err := strconv.ParseUint(portStr, 10, 16)
+
+	if err != nil {
+		return "", ErrInvalidPort
+	}
+
+	return path.Join(fmt.Sprintf("%s:%d", hostName, portNum), u.Path), nil
+}
+
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("Invalid usage.").SetPrintUsage().Build()
 	}
 
 	remoteName := strings.TrimSpace(apr.Arg(1))
-	remoteUrl := apr.Arg(2)
 
 	if strings.IndexAny(remoteName, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return errhand.BuildDError("invalid remote name: " + remoteName).Build()
+	}
+
+	remoteUrl := apr.Arg(2)
+	remoteUrl, err := getAbsRemoteUrl(dEnv.Config, remoteUrl)
+
+	if err != nil {
+		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).Build()
 	}
 
 	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)

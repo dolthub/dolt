@@ -21,9 +21,10 @@ const (
 
 	DoltEditor = "core.editor"
 
-	RemotesHostKey      = "remotes.host"
-	RemotesHostPort     = "remotes.port"
-	RemotesLoginPathKey = "remotes.loginpath"
+	RemotesApiHostKey     = "remotes.default_host"
+	RemotesApiHostPortKey = "remotes.default_port"
+
+	AddCredsUrlKey = "creds.add_url"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
