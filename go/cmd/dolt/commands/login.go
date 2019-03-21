@@ -79,14 +79,14 @@ func loginWithExistingCreds(dEnv *env.DoltEnv, idOrPubKey string) errhand.Verbos
 
 func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError {
 	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
-	url := fmt.Sprintf("%s?pub=%s", *loginUrl, dc.PubKeyBase32Str())
+	url := fmt.Sprintf("%s#%s", *loginUrl, dc.PubKeyBase32Str())
 
 	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
 	open.Start(url)
 
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-	conn, err := dEnv.GrpcConn(fmt.Sprintf("%s:%d", *host, port))
+	conn, err := dEnv.GrpcConnWithCreds(fmt.Sprintf("%s:%s", *host, *port), dc)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
@@ -94,10 +94,12 @@ func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError 
 
 	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
 
+	cli.Println("Checking remote server looking for key association.")
+
 	var prevMsgLen int
 	var whoAmI *remotesapi.WhoAmIResponse
 	for whoAmI == nil {
-		prevMsgLen = cli.DeleteAndPrint(prevMsgLen, "Checking remote server looking for key association.")
+		prevMsgLen = cli.DeleteAndPrint(prevMsgLen, "requesting update")
 		whoAmI, err = grpcClient.WhoAmI(context.Background(), &remotesapi.WhoAmIRequest{})
 
 		if err != nil {
@@ -108,5 +110,28 @@ func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError 
 		}
 	}
 
+	cli.Printf("\n\nKey successfully associated with user: %s email %s\n", whoAmI.Username, whoAmI.EmailAddress)
+
+	updateConfig(dEnv, whoAmI, dc)
+
 	return nil
+}
+
+func updateConfig(dEnv *env.DoltEnv, whoAmI *remotesapi.WhoAmIResponse, dCreds creds.DoltCreds) {
+	gcfg, hasGCfg := dEnv.Config.GetConfig(env.GlobalConfig)
+
+	if !hasGCfg {
+		panic("global config not found.  Should create it here if this is a thing.")
+	}
+
+	gcfg.SetStrings(map[string]string{env.UserCreds: dCreds.KeyIDBase32Str()})
+
+	userUpdates := map[string]string{env.UserNameKey: whoAmI.DisplayName, env.UserEmailKey: whoAmI.EmailAddress}
+	lcfg, hasLCfg := dEnv.Config.GetConfig(env.LocalConfig)
+
+	if hasLCfg {
+		lcfg.SetStrings(userUpdates)
+	} else {
+		gcfg.SetStrings(userUpdates)
+	}
 }
