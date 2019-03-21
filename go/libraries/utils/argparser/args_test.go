@@ -58,6 +58,14 @@ func TestParsing(t *testing.T) {
 			map[string]string{"message": "value"},
 			[]string{"b", "c"},
 		},
+		{
+			"empty string",
+			[]*Option{forceOpt, messageOpt},
+			[]string{"b", "--message=value", ""},
+			map[string]string{"message": "value"},
+			[]string{"b", ""},
+		},
+
 	}
 
 	for _, test := range tests {
