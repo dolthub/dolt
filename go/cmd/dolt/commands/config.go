@@ -122,14 +122,18 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 }
 
 func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
-	if len(args) != 2 {
+	if len(args)%2 != 0 {
 		cli.Println("error: wrong number of arguments")
 		usage()
 		return 1
 	}
 
 	isGlobal := setCfgTypes.Contains(globalParamName)
-	updates := map[string]string{strings.ToLower(args[0]): args[1]}
+	updates := make(map[string]string)
+
+	for i := 0; i < len(args); i += 2 {
+		updates[strings.ToLower(args[i])] = args[i+1]
+	}
 
 	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
 		if !isGlobal {

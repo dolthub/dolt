@@ -76,13 +76,25 @@ func PrintErrf(format string, a ...interface{}) {
 
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	msgLen := len(msg)
-	backspacesAndMsg := make([]byte, prevMsgLen+msgLen)
+	backspacesAndMsg := make([]byte, prevMsgLen+msgLen, 2*prevMsgLen+msgLen)
 	for i := 0; i < prevMsgLen; i++ {
 		backspacesAndMsg[i] = '\b'
 	}
 
 	for i, c := range []byte(msg) {
 		backspacesAndMsg[i+prevMsgLen] = c
+	}
+
+	diff := prevMsgLen - msgLen
+
+	if diff > 0 {
+		for i := 0; i < diff; i++ {
+			backspacesAndMsg = append(backspacesAndMsg, ' ')
+		}
+
+		for i := 0; i < diff; i++ {
+			backspacesAndMsg = append(backspacesAndMsg, '\b')
+		}
 	}
 
 	Print(string(backspacesAndMsg))

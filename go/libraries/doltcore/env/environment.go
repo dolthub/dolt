@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	DefaultLoginUrl       = "https://dolthub.com/cli/login"
+	DefaultLoginUrl       = "https://dolthub.awsdev.ld-corp.com/settings/credentials"
 	DefaultRemotesApiHost = "dolthub.com"
 	DefaultRemotesApiPort = "8080"
 )
@@ -324,22 +324,30 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	return nil, nil
 }
 
-func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
+func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
 	tc := credentials.NewTLS(&tls.Config{})
-	creds := grpc.WithTransportCredentials(tc)
+	dialOpts := grpc.WithTransportCredentials(tc)
 
-	opts := []grpc.DialOption{creds, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
-	rpcCreds, err := dEnv.getRPCCreds()
+	opts := []grpc.DialOption{dialOpts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
 
-	if err != nil {
-		return nil, err
-	} else if rpcCreds != nil {
+	if rpcCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 	}
 
 	conn, err := grpc.Dial(hostAndPort, opts...)
 
 	return conn, err
+}
+
+func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
+	rpcCreds, err := dEnv.getRPCCreds()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv.GrpcConnWithCreds(hostAndPort, rpcCreds)
+
 }
 
 func (dEnv *DoltEnv) GetRemotes() (map[string]*Remote, error) {
