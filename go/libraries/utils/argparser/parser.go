@@ -105,7 +105,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	for ; i < len(args); i++ {
 		arg := args[i]
 
-		if arg[0] != '-' {
+		if len(arg) == 0 || arg[0] != '-' { // empty strings should get passed through like other naked words
 			list = append(list, arg)
 		} else {
 			if arg == "--" {
