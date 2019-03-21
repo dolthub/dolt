@@ -23,16 +23,16 @@ const (
 	IdTag uint64 = iota
 	NameTag
 	AgeTag
-	TitleTag
 	IsMarriedTag
+	TitleTag
 )
 
 var typedColColl, _ = schema.NewColCollection(
 	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("title", TitleTag, types.StringKind, false),
 	schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
 var TypedSchema = schema.SchemaFromCols(typedColColl)
