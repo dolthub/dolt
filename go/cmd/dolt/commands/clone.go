@@ -94,12 +94,19 @@ func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseErr
 	return dEnv, nil
 }
 
-func createRemote(remoteName, remoteUrl string, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
+func createRemote(remoteName, remoteUrlIn string, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
+	remoteUrl, err := getAbsRemoteUrl(dEnv.Config, remoteUrlIn)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: '%s' is not valid.", remoteUrlIn).Build()
+	}
+
+	cli.Printf("cloning %s\n", remoteUrl)
 	r := &env.Remote{Name: remoteName, Url: remoteUrl}
 
 	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)
 	key := env.RemoteConfigParam(r.Name, env.RemoteUrlParam)
-	err := cfg.SetStrings(map[string]string{key: r.Url})
+	err = cfg.SetStrings(map[string]string{key: r.Url})
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to update local config with new remote " + remoteName).AddCause(err).Build()

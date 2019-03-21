@@ -1,6 +1,7 @@
 package env
 
 import (
+	"crypto/tls"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
@@ -17,8 +18,9 @@ import (
 )
 
 const (
-	DefaultRemotesHost = "dolthub.com"
-	DefaultLoginPath   = "cli/login"
+	DefaultLoginUrl       = "https://dolthub.com/cli/login"
+	DefaultRemotesApiHost = "dolthub.com"
+	DefaultRemotesApiPort = "8080"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -323,10 +325,10 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 }
 
 func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
+	tc := credentials.NewTLS(&tls.Config{})
+	creds := grpc.WithTransportCredentials(tc)
 
-	// TODO: transport creds
-
+	opts := []grpc.DialOption{creds, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
 	rpcCreds, err := dEnv.getRPCCreds()
 
 	if err != nil {

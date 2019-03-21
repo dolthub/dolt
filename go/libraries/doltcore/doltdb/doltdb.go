@@ -387,6 +387,7 @@ func (ddb *DoltDB) DeleteBranch(branchName string) error {
 
 // PullChunks initiates a pull into this database from the source database given, at the commit given. The pull occurs
 // asynchronously, and progress is communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) {
+func (ddb *DoltDB) PullChunks(srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
 	datas.Pull(srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
+	return nil
 }

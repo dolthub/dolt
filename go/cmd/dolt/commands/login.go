@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"path"
 	"time"
 
 	"context"
@@ -79,15 +78,15 @@ func loginWithExistingCreds(dEnv *env.DoltEnv, idOrPubKey string) errhand.Verbos
 }
 
 func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError {
-	host := dEnv.Config.GetStringOrDefault(env.RemotesHostKey, env.DefaultRemotesHost)
-	loginPath := dEnv.Config.GetStringOrDefault(env.RemotesLoginPathKey, env.DefaultLoginPath)
-	fullPath := path.Join(*host, *loginPath)
-	url := fmt.Sprintf("https://%s?pub=%s", fullPath, dc.PubKeyBase32Str())
+	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
+	url := fmt.Sprintf("%s?pub=%s", *loginUrl, dc.PubKeyBase32Str())
 
 	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
 	open.Start(url)
 
-	conn, err := dEnv.GrpcConn(*host)
+	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	conn, err := dEnv.GrpcConn(fmt.Sprintf("%s:%d", *host, port))
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()

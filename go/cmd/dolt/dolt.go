@@ -33,7 +33,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true},
 	{Name: "remote", Desc: "Manage set of tracked repositories.", Func: commands.Remote, ReqRepo: true},
 	{Name: "push", Desc: "Push to a dolt remote.", Func: commands.Push, ReqRepo: true},
-	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Push, ReqRepo: true},
+	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: nil, ReqRepo: true},
 	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true},
 	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false},
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
