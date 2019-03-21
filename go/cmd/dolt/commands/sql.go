@@ -22,8 +22,15 @@ const (
 func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(queryFlag, "q", "run a single query and exit")
-	_, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
 
-	usage()
+	apr := cli.ParseArgs(ap, args, help)
+	args = apr.Args()
+
+	if len(args) == 0 {
+		usage()
+		return 1
+	}
+
 	return 1
 }
