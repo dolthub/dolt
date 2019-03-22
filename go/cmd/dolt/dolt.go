@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	Version = "0.5.11"
+	Version = "0.6.0"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
