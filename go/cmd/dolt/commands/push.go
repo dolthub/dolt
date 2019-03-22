@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"runtime/debug"
 	"time"
 )
 
@@ -49,41 +50,49 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pushToRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, branch string) errhand.VerboseError {
+func pushToRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, branch string) (verr errhand.VerboseError) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			verr = remotePanicRecover(r, stack)
+		}
+	}()
+
 	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
 	cm, err := dEnv.DoltDB.Resolve(cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find %v", branch).Build()
-	}
+		verr = errhand.BuildDError("error: unable to find %v", branch).Build()
+	} else {
 
-	destDB := r.GetRemoteDB()
+		destDB := r.GetRemoteDB()
 
-	progChan := make(chan datas.PullProgress, 16)
-	stopChan := make(chan struct{})
-	go progFunc(progChan, stopChan)
+		progChan := make(chan datas.PullProgress, 16)
+		stopChan := make(chan struct{})
+		go progFunc(progChan, stopChan)
 
-	remoteBranch := doltdb.LongRemoteBranchName(r.Name, branch)
-	err = actions.Push(branch, remoteBranch, dEnv.DoltDB, destDB, cm, progChan)
-	close(progChan)
-	<-stopChan
+		remoteBranch := doltdb.LongRemoteBranchName(r.Name, branch)
+		err = actions.Push(branch, remoteBranch, dEnv.DoltDB, destDB, cm, progChan)
+		close(progChan)
+		<-stopChan
 
-	if err != nil {
-		if err == doltdb.ErrUpToDate {
-			cli.Println("Everything up-to-date")
-		} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
-			cli.Printf("To %s\n", r.Url)
-			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", branch, remoteBranch)
-			cli.Printf("error: failed to push some refs to '%s'\n", r.Url)
-			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-			cli.Println("hint: 'dolt pull ...') before pushing again.")
-		} else {
-			return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		if err != nil {
+			if err == doltdb.ErrUpToDate {
+				cli.Println("Everything up-to-date")
+			} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
+				cli.Printf("To %s\n", r.Url)
+				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", branch, remoteBranch)
+				cli.Printf("error: failed to push some refs to '%s'\n", r.Url)
+				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+				cli.Println("hint: 'dolt pull ...') before pushing again.")
+			} else {
+				verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
+			}
 		}
 	}
 
-	return nil
+	return
 }
 
 func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {

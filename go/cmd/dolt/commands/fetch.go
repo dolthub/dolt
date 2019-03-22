@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"path"
+	"runtime/debug"
 )
 
 var fetchShortDesc = ""
@@ -43,31 +44,39 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func fetchRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, remoteName, branch string) errhand.VerboseError {
+func fetchRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			verr = remotePanicRecover(r, stack)
+		}
+	}()
+
 	srcDB := r.GetRemoteDB()
 
 	if !srcDB.HasBranch(branch) {
-		return errhand.BuildDError("fatal: unknown branch " + branch).Build()
+		verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
+	} else {
+
+		cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+		cm, err := srcDB.Resolve(cs)
+
+		if err != nil {
+			verr = errhand.BuildDError("error: unable to find %v", branch).Build()
+		} else {
+			progChan := make(chan datas.PullProgress)
+			stopChan := make(chan struct{})
+			go progFunc(progChan, stopChan)
+
+			err = actions.Fetch(path.Join("remotes", remoteName, branch), srcDB, dEnv.DoltDB, cm, progChan)
+			close(progChan)
+			<-stopChan
+
+			if err != nil {
+				verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			}
+		}
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-	cm, err := srcDB.Resolve(cs)
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to find %v", branch).Build()
-	}
-
-	progChan := make(chan datas.PullProgress)
-	stopChan := make(chan struct{})
-	go progFunc(progChan, stopChan)
-
-	err = actions.Fetch(path.Join("remotes", remoteName, branch), srcDB, dEnv.DoltDB, cm, progChan)
-	close(progChan)
-	<-stopChan
-
-	if err != nil {
-		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-	}
-
-	return nil
+	return
 }
