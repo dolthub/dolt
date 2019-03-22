@@ -50,6 +50,12 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
+	if tbl.HashOf() == ancTbl.HashOf() {
+		return mergeTbl, &MergeStats{Operation: TableModified}, nil
+	} else if mergeTbl.HashOf() == ancTbl.HashOf() {
+		return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	}
+
 	if !ancOk {
 		if mergeOk && ok {
 			return nil, nil, ErrSameTblAddedTwice
