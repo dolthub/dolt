@@ -49,7 +49,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			false,
 		},
 		{
-			"host.dom/ts/emp",
+			"test.org/ts/emp",
 			config.NewMapConfig(map[string]string{
 				env.RemotesApiHostKey:     "host.dom",
 				env.RemotesApiHostPortKey: "8080",
