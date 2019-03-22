@@ -7,11 +7,13 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 )
 
 var cloneShortDesc = ""
@@ -115,57 +117,88 @@ func createRemote(remoteName, remoteUrlIn string, dEnv *env.DoltEnv) (*doltdb.Do
 	return r.GetRemoteDB(), nil
 }
 
-func cloneRemote(dir, remoteName, remoteUrl, branch string, fs filesys.Filesys) errhand.VerboseError {
+func cloneRemote(dir, remoteName, remoteUrl, branch string, fs filesys.Filesys) (verr errhand.VerboseError) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			verr = remotePanicRecover(r, stack)
+		}
+	}()
+
 	dEnv, verr := clonedEnv(dir, fs)
 
-	if verr != nil {
-		return verr
+	if verr == nil {
+		srcDB, verr := createRemote(remoteName, remoteUrl, dEnv)
+
+		if verr == nil {
+
+			if !srcDB.HasBranch(branch) {
+				verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
+			} else {
+
+				cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+				cm, err := srcDB.Resolve(cs)
+
+				if err != nil {
+					verr = errhand.BuildDError("error: unable to find %v", branch).Build()
+				} else {
+
+					progChan := make(chan datas.PullProgress)
+					stopChan := make(chan struct{})
+					go progFunc(progChan, stopChan)
+
+					remoteBranch := path.Join("remotes", remoteName, branch)
+					err = actions.Fetch(remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
+					close(progChan)
+					<-stopChan
+
+					if err != nil {
+						verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+					} else {
+
+						err = dEnv.DoltDB.NewBranchAtCommit(branch, cm)
+
+						if err != nil {
+							verr = errhand.BuildDError("error: failed to create branch " + branch).Build()
+						} else {
+
+							localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
+							localCommit, _ := dEnv.DoltDB.Resolve(localCommitSpec)
+							h, err := dEnv.DoltDB.WriteRootValue(localCommit.GetRootValue())
+							dEnv.RepoState, err = env.CreateRepoState(dEnv.FS, branch, h)
+
+							if err != nil {
+								verr = errhand.BuildDError("error: failed to write repo state").Build()
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
-	srcDB, verr := createRemote(remoteName, remoteUrl, dEnv)
+	return
+}
 
-	if verr != nil {
-		return verr
+type RpcErrVerbWrap struct {
+	*remotestorage.RpcError
+}
+
+func (vw RpcErrVerbWrap) ShouldPrintUsage() bool {
+	return false
+}
+
+func (vw RpcErrVerbWrap) Verbose() string {
+	return vw.FullDetails()
+}
+
+func remotePanicRecover(r interface{}, stack []byte) errhand.VerboseError {
+	switch val := r.(type) {
+	case *remotestorage.RpcError:
+		return &RpcErrVerbWrap{val}
+	case error:
+		return errhand.BuildDError("clone failed").AddCause(val).Build()
 	}
 
-	if !srcDB.HasBranch(branch) {
-		return errhand.BuildDError("fatal: unknown branch " + branch).Build()
-	}
-
-	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-	cm, err := srcDB.Resolve(cs)
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to find %v", branch).Build()
-	}
-
-	progChan := make(chan datas.PullProgress)
-	stopChan := make(chan struct{})
-	go progFunc(progChan, stopChan)
-
-	remoteBranch := path.Join("remotes", remoteName, branch)
-	err = actions.Fetch(remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
-	close(progChan)
-	<-stopChan
-
-	if err != nil {
-		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-	}
-
-	err = dEnv.DoltDB.NewBranchAtCommit(branch, cm)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to create branch " + branch).Build()
-	}
-
-	localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
-	localCommit, _ := dEnv.DoltDB.Resolve(localCommitSpec)
-	h, err := dEnv.DoltDB.WriteRootValue(localCommit.GetRootValue())
-	dEnv.RepoState, err = env.CreateRepoState(dEnv.FS, branch, h)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to write repo state").Build()
-	}
-
-	return nil
+	panic(r)
 }

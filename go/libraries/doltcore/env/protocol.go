@@ -43,7 +43,7 @@ func (dhp DoltProtocol) NewChunkStore(sp spec.Spec) (chunks.ChunkStore, error) {
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	return remotestorage.NewDoltChunkStore(org, repoName, csClient), nil
+	return remotestorage.NewDoltChunkStore(org, repoName, remoteUrl.Host, csClient), nil
 }
 
 func (dhp DoltProtocol) NewDatabase(sp spec.Spec) (datas.Database, error) {

@@ -24,12 +24,13 @@ var ErrUploadFailed = errors.New("upload failed")
 type DoltChunkStore struct {
 	org      string
 	repoName string
+	host     string
 	csClient remotesapi.ChunkStoreServiceClient
 	cache    chunkCache
 }
 
-func NewDoltChunkStore(org, repoName string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
-	return &DoltChunkStore{org, repoName, csClient, newMapChunkCache()}
+func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache()}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -93,7 +94,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(hashes []hash.Hash) ([]chunks.Chun
 	resp, err := dcs.csClient.GetDownloadLocations(context.Background(), &req)
 
 	if err != nil {
-		return nil, err
+		return nil, NewRpcError(err, "GetDownloadLocations", dcs.host, req)
 	}
 
 	chnks, err := dcs.downloadChunks(resp.Locs)
@@ -130,8 +131,9 @@ func (dcs *DoltChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
 	resp, err := dcs.csClient.HasChunks(context.Background(), &req)
 
 	if err != nil {
+		rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
 		//follow noms convention
-		panic(err)
+		panic(rpcErr)
 	}
 
 	numAbsent := len(resp.Absent)
@@ -186,8 +188,10 @@ func (dcs *DoltChunkStore) Rebase() {
 	_, err := dcs.csClient.Rebase(context.Background(), req)
 
 	if err != nil {
+		rpcErr := NewRpcError(err, "Rebase", dcs.host, req)
+
 		// follow noms convention
-		panic(err)
+		panic(rpcErr)
 	}
 }
 
@@ -198,8 +202,10 @@ func (dcs *DoltChunkStore) Root() hash.Hash {
 	resp, err := dcs.csClient.Root(context.Background(), req)
 
 	if err != nil {
+		rpcErr := NewRpcError(err, "Root", dcs.host, req)
+
 		// follow noms convention
-		panic(err)
+		panic(rpcErr)
 	}
 
 	return hash.New(resp.RootHash)
@@ -225,8 +231,10 @@ func (dcs *DoltChunkStore) Commit(current, last hash.Hash) bool {
 	resp, err := dcs.csClient.Commit(context.Background(), req)
 
 	if err != nil {
+		rpcErr := NewRpcError(err, "Commit", dcs.host, req)
+
 		// follow noms convention
-		panic(err)
+		panic(rpcErr)
 	}
 
 	return resp.Success
