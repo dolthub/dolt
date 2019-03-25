@@ -1,17 +1,19 @@
 package mvdata
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/pkg/errors"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type DataFormat string
@@ -21,6 +23,7 @@ const (
 	DoltDB            DataFormat = "doltdb"
 	CsvFile           DataFormat = ".csv"
 	PsvFile           DataFormat = ".psv"
+	JsonFile          DataFormat = ".json"
 	//NbfFile           DataFormat = ".nbf"
 )
 
@@ -35,6 +38,9 @@ func (df DataFormat) ReadableStr() string {
 	case PsvFile:
 		return "psv file"
 
+	case JsonFile:
+		return "json file"
+
 		//case NbfFile:
 		//	return "nbf file"
 	}
@@ -48,6 +54,8 @@ func DFFromString(dfStr string) DataFormat {
 		return CsvFile
 	case "psv", ".psv":
 		return PsvFile
+	case "json", ".json":
+		return JsonFile
 		//case "nbf", ".nbf":
 		//	return NbfFile
 	}
@@ -78,6 +86,8 @@ func NewDataLocation(path, fileFmtStr string) *DataLocation {
 			dataFmt = CsvFile
 		case string(PsvFile):
 			dataFmt = PsvFile
+		case string(JsonFile):
+			dataFmt = JsonFile
 			//case string(NbfFile):
 			//	dataFmt = NbfFile
 		}
@@ -97,7 +107,7 @@ func (dl *DataLocation) IsFileType() bool {
 	return true
 }
 
-func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.ReadableFS) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.ReadableFS, schPath string) (rdCl table.TableReadCloser, sorted bool, err error) {
 	if dl.Format == DoltDB {
 		tbl, ok := root.GetTable(dl.Path)
 
@@ -126,9 +136,14 @@ func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.Readable
 			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
 			return rd, false, err
 
+		case JsonFile:
+			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), schPath)
+			return rd, false, err
+
 			//case NbfFile:
 			//	rd, err := nbf.OpenNBFReader(dl.Path, fs)
 			//	return rd, true, err
+
 		}
 	}
 
@@ -174,6 +189,10 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csvInfo)
 		return tWr, err
 
+	case JsonFile:
+		tWr, err := json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
+		return tWr, err
+
 		//case NbfFile:
 		//	tWr, err := nbf.OpenNBFWriter(dl.Path, fs, outSch)
 		//	return tWr, err
@@ -197,7 +216,7 @@ func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs file
 		m := tbl.GetRowData()
 		return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 
-	case CsvFile, PsvFile:
+	case CsvFile, PsvFile, JsonFile:
 		panic("Update not supported for this file type.")
 	}
 
@@ -216,7 +235,7 @@ func (dl *DataLocation) RequiresPK() bool {
 
 func mapByTag(src *DataLocation, dest *DataLocation) bool {
 	switch src.Format {
-	case PsvFile, CsvFile:
+	case PsvFile, CsvFile, JsonFile:
 		return false
 	case DoltDB:
 		break
@@ -225,7 +244,7 @@ func mapByTag(src *DataLocation, dest *DataLocation) bool {
 	}
 
 	switch dest.Format {
-	case PsvFile, CsvFile:
+	case PsvFile, CsvFile, JsonFile:
 		return false
 	case DoltDB:
 		break
