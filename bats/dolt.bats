@@ -20,8 +20,152 @@ teardown() {
     run dolt
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
+    # Check help output for supported commands
+    [[ "$output" =~ "init -" ]]
+    [[ "$output" =~ "status -" ]]
+    [[ "$output" =~ "add -" ]]
+    [[ "$output" =~ "reset -" ]]
+    [[ "$output" =~ "commit -" ]]
+    [[ "$output" =~ "sql -" ]]
+    [[ "$output" =~ "log -" ]]
+    [[ "$output" =~ "diff -" ]]
+    [[ "$output" =~ "merge -" ]]
+    [[ "$output" =~ "branch -" ]]
+    [[ "$output" =~ "checkout -" ]]
+    [[ "$output" =~ "remote -" ]]
+    [[ "$output" =~ "push -" ]]
+    [[ "$output" =~ "pull -" ]]
+    [[ "$output" =~ "fetch -" ]]
+    [[ "$output" =~ "clone -" ]]
+    [[ "$output" =~ "creds -" ]]
+    [[ "$output" =~ "login -" ]]
+    [[ "$output" =~ "version -" ]]
+    [[ "$output" =~ "config -" ]]
+    [[ "$output" =~ "ls -" ]]
+    [[ "$output" =~ "table -" ]]
+    [[ "$output" =~ "conflicts -" ]]
 }
 
+@test "testing dolt version output" {
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt version " ]] 
+}
+
+
+# Tests for dolt commands outside of a dolt repository
+NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
+@test "dolt status outside of a dolt repository" {
+    run dolt status
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt add outside of a dolt repository" {
+    run dolt add
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt reset outside of a dolt repository" {
+    run dolt reset
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt commit outside of a dolt repository" {
+    run dolt commit
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt log outside of a dolt repository" {
+    run dolt log
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt diff outside of a dolt repository" {
+    run dolt diff
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt merge outside of a dolt repository" {
+    run dolt merge
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt branch outside of a dolt repository" {
+    run dolt branch
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt checkout outside of a dolt repository" {
+    run dolt checkout
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt remote outside of a dolt repository" {
+    run dolt remote
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt push outside of a dolt repository" {
+    run dolt push
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt pull outside of a dolt repository" {
+    run dolt pull
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt fetch outside of a dolt repository" {
+    run dolt fetch
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt ls outside of a dolt repository" {
+    run dolt ls
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table outside of a dolt repository" {
+    run dolt table
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "Valid commands for dolt table are" ]
+    # Check help output for supported commands
+    [[ "$output" =~ "import -" ]]
+    [[ "$output" =~ "export -" ]]
+    [[ "$output" =~ "create -" ]]
+    [[ "$output" =~ "rm -" ]]
+    [[ "$output" =~ "mv -" ]]
+    [[ "$output" =~ "cp -" ]]
+    [[ "$output" =~ "select -" ]]
+    [[ "$output" =~ "schema -" ]]
+    [[ "$output" =~ "put-row -" ]]
+    [[ "$output" =~ "rm-row -" ]]
+}
+
+@test "dolt conflicts outside of a dolt repository" {
+    run dolt conflicts
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "Valid commands for dolt conflicts are" ]
+    # Check help output for supported commands
+    [[ "$output" =~ "cat -" ]]
+    [[ "$output" =~ "resolve -" ]]
+}
+
+# Tests on an empty dolt repository
 @test "initializing a dolt repository" {
     run dolt init
     [ "$status" -eq 0 ]
@@ -30,6 +174,13 @@ teardown() {
     [ -d .dolt/noms ]
     [ -f .dolt/config.json ] 
     [ -f .dolt/repo_state.json ]
+}
+
+@test "dolt init on an already initialized repository" {
+    dolt init
+    run dolt init
+    [ "$status" -ne 0 ]
+    [ "$output" = "This directory has already been initialized." ]
 }
 
 @test "dolt status on a new repository" {
@@ -55,3 +206,33 @@ teardown() {
     # [ "$output" = "* master" ] 
     [[ "$output" =~ "* master" ]]
 }
+
+@test "dolt log in a new repository" {
+    dolt init
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "commit " ]]
+    [[ "$output" =~ "Data repository created." ]]
+}
+
+@test "dolt add . in new repository" {
+    dolt init
+    run dolt add .
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "dolt reset in new repository" {
+    dolt init
+    run dolt reset
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "dolt diff in new repository" {
+    dolt init
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
