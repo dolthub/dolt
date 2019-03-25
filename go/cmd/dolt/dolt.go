@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
 	"os"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
 
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"

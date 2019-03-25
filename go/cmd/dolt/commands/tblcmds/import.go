@@ -2,6 +2,8 @@ package tblcmds
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -12,7 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"strings"
 )
 
 const (
@@ -73,7 +74,7 @@ var importLongDesc = "If <b>--create-table | -c</b> is given the operation will 
 	"\n" +
 	"In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not " +
 	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of " +
-	"the file in one of the supported formats (csv, psv, nbf)"
+	"the file in one of the supported formats (csv, psv, nbf, json)"
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
@@ -182,6 +183,11 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 	if mvOpts.Operation == mvdata.OverwriteOp && !force && mvOpts.Dest.Exists(root, dEnv.FS) {
 		cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
+		return 1
+	}
+
+	if mvOpts.Src.Format == ".json" && mvOpts.SchFile == "" {
+		cli.Println("Please specify schema file for .json tables.")
 		return 1
 	}
 

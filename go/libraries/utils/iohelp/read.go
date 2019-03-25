@@ -129,3 +129,7 @@ func ReadLine(br *bufio.Reader) (line string, done bool, err error) {
 
 	return line[:lineLen-crlfCount], err != nil, nil
 }
+
+/*func ReadLineFromJSON(br *bufio.Reader) (line map[string]interface{}, done bool, err error) {
+	line, err = br.ReadMap()
+}*/

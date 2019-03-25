@@ -2,6 +2,8 @@ package mvdata
 
 import (
 	"errors"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -11,7 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"strings"
 )
 
 type MoveOperation string
@@ -70,7 +71,7 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 		}
 	}()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs)
+	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -178,7 +179,7 @@ func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool
 func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
-		rd, _, err := mvOpts.Dest.CreateReader(root, fs)
+		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile)
 
 		if err != nil {
 			return nil, err

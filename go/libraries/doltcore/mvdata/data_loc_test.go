@@ -1,17 +1,19 @@
 package mvdata
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"reflect"
-	"testing"
 )
 
 func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
@@ -41,6 +43,7 @@ func TestBasics(t *testing.T) {
 		{NewDataLocation("table-name", ""), DoltDB, "table-name", false, true, false},
 		{NewDataLocation("file.csv", ""), CsvFile, "file.csv", true, false, false},
 		{NewDataLocation("file.psv", ""), PsvFile, "file.psv", true, false, false},
+		{NewDataLocation("file.json", ""), JsonFile, "file.json", true, false, false},
 		//{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true, true, true},
 	}
 
@@ -93,6 +96,7 @@ func TestExists(t *testing.T) {
 		NewDataLocation("table-name", ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
+		NewDataLocation("file.json", ""),
 		//NewDataLocation("file.nbf", ""),
 	}
 
@@ -126,6 +130,7 @@ func TestCreateRdWr(t *testing.T) {
 		{NewDataLocation("table-name", ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*noms.NomsMapCreator)(nil)).Elem()},
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
+		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
