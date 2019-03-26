@@ -68,6 +68,12 @@ func (p *Pipeline) Abort() {
 // NoMore signals that the pipeline has no more input to process. Must be called exactly once by the consumer when there
 // are no more input rows to process.
 func (p *Pipeline) NoMore() {
+	defer func() {
+		// TODO zachmu: there is a bug in pipeline execution where a limit of 1 causes NoMore to be called more than
+		//  once. This should be an error we don't recover from.
+		recover()
+	}()
+
 	close(p.noMoreChan)
 }
 
