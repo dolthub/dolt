@@ -25,7 +25,7 @@ func newIdentityConverter(mapping *FieldMapping) *RowConverter {
 	return &RowConverter{mapping, true, nil}
 }
 
-// NewRowConverter createsa a row converter from a given FieldMapping.
+// NewRowConverter creates a a row converter from a given FieldMapping.
 func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 	if !isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest) {
 		return newIdentityConverter(mapping), nil
@@ -37,7 +37,7 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 		srcCol, srcOk := mapping.SrcSch.GetAllCols().GetByTag(srcTag)
 
 		if !destOk || !srcOk {
-			return nil, fmt.Errorf("Colud not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
+			return nil, fmt.Errorf("Could not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
 		}
 
 		convFuncs[srcTag] = doltcore.GetConvFunc(srcCol.Kind, destCol.Kind)
