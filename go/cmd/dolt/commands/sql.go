@@ -157,15 +157,24 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			switch op {
 			case sqlparser.EqualStr:
 
-				colName, ok := left.(*sqlparser.ColName)
+				colExpr := left
+				valExpr := right
+
+				colName, ok := colExpr.(*sqlparser.ColName)
 				if !ok {
-					return quitErr("Only column names and literals are supported in equal comparison")
+					colExpr = right
+					valExpr = left
+				}
+
+				colName, ok = colExpr.(*sqlparser.ColName)
+				if !ok {
+					return quitErr("Only column names and value literals are supported")
 				}
 
 				colNameStr := colName.Name.String()
 
 				var sqlVal string
-				switch r := right.(type) {
+				switch r := valExpr.(type) {
 				case *sqlparser.SQLVal:
 					switch r.Type {
 					// String-like values will print with quotes or other markers by default, so use the naked asci
@@ -178,11 +187,11 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 						sqlVal = string(r.Val)
 					default:
 						// Default is to use the string value of the SQL node and hope it works
-						sqlVal = nodeToString(right)
+						sqlVal = nodeToString(valExpr)
 					}
 				default:
 					// Default is to use the string value of the SQL node and hope it works
-					sqlVal = nodeToString(right)
+					sqlVal = nodeToString(valExpr)
 				}
 
 				col, ok := tableSch.GetAllCols().GetByName(colNameStr)
