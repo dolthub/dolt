@@ -236,3 +236,92 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$output" = "" ]
 }
 
+@test "dolt commit with nothing added" {
+    dolt init 
+    skip "This should fail. Currently succeeds and adds to the log."
+    run dolt commit -m "commit"
+    [ "$status" -eq 1 ]
+    [ "$output" = "" ]
+}
+
+@test "dolt checkout master on master" {
+    dolt init 
+    run dolt checkout master 
+    [ "$status" -eq 0 ]
+    skip "Should say Already on branch 'master'. Says Switched to branch 'master'"
+    [ "$output" = "Already on branch 'master'" ]
+}
+
+@test "dolt checkout non-existant branch" {
+    dolt init
+    run dolt checkout foo
+    [ "$status" -ne 0 ]
+    [ "$output" = "error: could not find foo" ]
+}
+
+# Create a single primary key table and do stuff
+@test "create a table with a schema file and examine repo" {
+    dolt init
+    run dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "test" ]]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "$output" = "pk|c1|c2|c3|c4|c5" ]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "diff --dolt a/test b/test" ]
+    [ "${lines[1]}" = "added table" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+}
+
+@test "create a table, dolt add, dolt reset, and dolt commit" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt add test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed" ]]
+    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    run dolt reset test 
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    run dolt add .
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed" ]]
+    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    run dolt commit -m "test commit"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]]
+}
+
+@test "add a row to a created table using dolt table put-row" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt add test
+    dolt commit -m "create table"
+    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    [ "$status" -eq 0 ]
+    [ "$output" = "Successfully put row." ]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]]
+}
