@@ -259,6 +259,21 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$output" = "error: could not find foo" ]
 }
 
+@test "create and checkout a branch" {
+    dolt init
+    run dolt branch test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt checkout test
+    [ "$status" -eq 0 ]
+    [ "$output" = "Switched to branch 'test'" ]
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* test" ]]
+}
+
+
+
 # Create a single primary key table and do stuff
 @test "create a table with a schema file and examine repo" {
     dolt init
@@ -325,3 +340,30 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]]
 }
+
+@test "dolt checkout branch and table name collision" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt branch test
+    run dolt checkout test
+    [ "$status" -eq 0 ]
+    skip "behavior ambiguous right now. should reset test table and switch to branch per git"
+}
+
+@test "make a change on a different branch, commit, and merge to master" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt branch test-branch
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]]
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "added test row" ]]
+}
+
