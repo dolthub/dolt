@@ -47,6 +47,8 @@ func TestSqlSelect(t *testing.T) {
 		{[]string{"-q", "select * from people where age = 25"}, 0},
 		{[]string{"-q", "select * from people where 25 = age"}, 0},
 		{[]string{"-q", "select * from people where is_married = false"}, 0},
+		{[]string{"-q", "select * from people where age < 30"}, 0},
+		{[]string{"-q", "select * from people where age > 24"}, 0},
 	}
 
 	for _, test := range tests {
