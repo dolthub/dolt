@@ -221,9 +221,134 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				runQueryAndPrintResults(root, selectStmt)
 
 			case sqlparser.LessThanStr:
-				return quitErr("< operation not supported")
+				colExpr := left
+				valExpr := right
+
+				colName, ok := colExpr.(*sqlparser.ColName)
+				if !ok {
+					colExpr = right
+					valExpr = left
+				}
+
+				colName, ok = colExpr.(*sqlparser.ColName)
+				if !ok {
+					return quitErr("Only column names and value literals are supported")
+				}
+
+				colNameStr := colName.Name.String()
+
+				var sqlVal string
+				switch r := valExpr.(type) {
+				case *sqlparser.SQLVal:
+					switch r.Type {
+					// String-like values will print with quotes or other markers by default, so use the naked asci
+					// bytes coerced into a string for them
+					case sqlparser.HexVal:
+						fallthrough
+					case sqlparser.BitVal:
+						fallthrough
+					case sqlparser.StrVal:
+						sqlVal = string(r.Val)
+					default:
+						// Default is to use the string value of the SQL node and hope it works
+						sqlVal = nodeToString(valExpr)
+					}
+				default:
+					// Default is to use the string value of the SQL node and hope it works
+					sqlVal = nodeToString(valExpr)
+				}
+
+				col, ok := tableSch.GetAllCols().GetByName(colNameStr)
+				if !ok {
+					return quitErr("%v is not a known column", colNameStr)
+				}
+
+				tag := col.Tag
+				convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
+				val, err := convFunc(types.String(string(sqlVal)))
+				if err != nil {
+					return quitErr("Couldn't convert column to string: %v", col)
+				}
+
+				filterFn := func(r row.Row) bool {
+					rowVal, ok := r.GetColVal(tag)
+
+					if !ok {
+						return false
+					}
+
+					return rowVal.Less(val)
+				}
+
+				selectStmt := &selectStatement{filterFn: filterFn, tableName: tableName, limit: -1}
+
+				runQueryAndPrintResults(root, selectStmt)
+
 			case sqlparser.GreaterThanStr:
-				return quitErr("> operation not supported")
+
+				colExpr := left
+				valExpr := right
+
+				colName, ok := colExpr.(*sqlparser.ColName)
+				if !ok {
+					colExpr = right
+					valExpr = left
+				}
+
+				colName, ok = colExpr.(*sqlparser.ColName)
+				if !ok {
+					return quitErr("Only column names and value literals are supported")
+				}
+
+				colNameStr := colName.Name.String()
+
+				var sqlVal string
+				switch r := valExpr.(type) {
+				case *sqlparser.SQLVal:
+					switch r.Type {
+					// String-like values will print with quotes or other markers by default, so use the naked asci
+					// bytes coerced into a string for them
+					case sqlparser.HexVal:
+						fallthrough
+					case sqlparser.BitVal:
+						fallthrough
+					case sqlparser.StrVal:
+						sqlVal = string(r.Val)
+					default:
+						// Default is to use the string value of the SQL node and hope it works
+						sqlVal = nodeToString(valExpr)
+					}
+				default:
+					// Default is to use the string value of the SQL node and hope it works
+					sqlVal = nodeToString(valExpr)
+				}
+
+				col, ok := tableSch.GetAllCols().GetByName(colNameStr)
+				if !ok {
+					return quitErr("%v is not a known column", colNameStr)
+				}
+
+				tag := col.Tag
+				convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
+				val, err := convFunc(types.String(string(sqlVal)))
+				if err != nil {
+					return quitErr("Couldn't convert column to string: %v", col)
+				}
+
+				filterFn := func(r row.Row) bool {
+					rowVal, ok := r.GetColVal(tag)
+
+					if !ok {
+						return false
+					}
+
+					return val.Less(rowVal)
+				}
+
+				selectStmt := &selectStatement{filterFn: filterFn, tableName: tableName, limit: -1}
+
+				runQueryAndPrintResults(root, selectStmt)
+
 			case sqlparser.LessEqualStr:
 				return quitErr("<= operation not supported")
 			case sqlparser.GreaterEqualStr:
