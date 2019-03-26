@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -36,6 +35,7 @@ const (
 	queryFlag = "query"
 )
 
+// Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
 	tableName string
 	colNames  []string
@@ -125,8 +125,49 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			return quitErr("Unrecognized table %v", tableName)
 		}
 
+		selectStmt := &selectStatement{tableName: tableName}
 		tableSch := tbl.GetSchema()
 
+		// Process the columns selected
+		var columns []string
+		colSelections := s.SelectExprs
+		for _, colSelection := range colSelections {
+			switch selectExpr := colSelection.(type) {
+			case *sqlparser.StarExpr:
+				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+					columns = append(columns, col.Name)
+					return false
+				})
+			case *sqlparser.AliasedExpr:
+				switch colExpr := selectExpr.Expr.(type) {
+				case *sqlparser.ColName:
+					columns = append(columns, colExpr.Name.String())
+				default:
+					return quitErr("Only column selections or * are supported")
+				}
+			case sqlparser.Nextval:
+				return quitErr("Next value is not supported: %v", query)
+			}
+		}
+
+		selectStmt.colNames = columns
+
+		// Include a limit if asked for
+		if s.Limit != nil && s.Limit.Rowcount != nil {
+			limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
+			if !ok {
+				return quitErr("Couldn't parse limit clause: %v", query)
+			}
+			limitInt, err := strconv.Atoi(nodeToString(limitVal))
+			if err != nil {
+				return quitErr("Couldn't parse limit clause: %v", query)
+			}
+			selectStmt.limit = limitInt
+		} else {
+			selectStmt.limit = -1
+		}
+
+		// Process the where clause
 		whereClause := s.Where
 		if whereClause.Type != sqlparser.WhereStr {
 			return quitErr("Having clause not supported: %v", query)
@@ -134,22 +175,6 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		switch expr := whereClause.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
-			var columns []string
-			colSelections := s.SelectExprs
-			for _, colSelection := range colSelections {
-				switch selectExpr := colSelection.(type) {
-				case *sqlparser.StarExpr:
-					tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-						columns = append(columns, col.Name)
-						return false
-					})
-				case *sqlparser.AliasedExpr:
-					fmt.Printf("colSelection: %v", colSelection)
-					return quitErr("Aliased expression not supported: %v", selectExpr, columns)
-				case sqlparser.Nextval:
-					return quitErr("Next value is not supported: %v", query)
-				}
-			}
 
 			left := expr.Left
 			right := expr.Right
@@ -277,7 +302,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				return quitErr("json not supported")
 			}
 
-			selectStmt := &selectStatement{filterFn: filterFn, tableName: tableName, limit: -1}
+			selectStmt.filterFn = filterFn
 			runQueryAndPrintResults(root, selectStmt)
 
 		case *sqlparser.AndExpr:
@@ -378,7 +403,7 @@ func runQueryAndPrintResults(root *doltdb.RootValue, statement *selectStatement)
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-	outSch, verr := addMapTransform(statement, tblSch, transforms)
+	outSch, verr := addColumnMapTransform(statement, tblSch, transforms)
 
 	if verr != nil {
 		return verr
@@ -429,8 +454,9 @@ func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformColl
 	transforms.AppendTransforms(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 }
 
-func addMapTransform(statement *selectStatement, sch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
-	colColl := sch.GetAllCols()
+// Adds a transformation that maps column names in a result set to a new set of columns.
+func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
+	colColl := tableSch.GetAllCols()
 
 	if len(statement.colNames) > 0 {
 		cols := make([]schema.Column, 0, len(statement.colNames)+1)
@@ -448,7 +474,7 @@ func addMapTransform(statement *selectStatement, sch schema.Schema, transforms *
 	}
 
 	outSch := schema.SchemaFromCols(colColl)
-	mapping, err := rowconv.TagMapping(sch, untyped.UntypeSchema(outSch))
+	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeSchema(outSch))
 
 	if err != nil {
 		panic(err)

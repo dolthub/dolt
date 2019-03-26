@@ -52,6 +52,8 @@ func TestSqlSelect(t *testing.T) {
 		{[]string{"-q", "select * from people where age >= 25"}, 0},
 		{[]string{"-q", "select * from people where name <= 'John Johnson'"}, 0},
 		{[]string{"-q", "select * from people where name <> 'John Johnson'"}, 0},
+		{[]string{"-q", "select age, is_married from people where name <> 'John Johnson'"}, 0},
+		{[]string{"-q", "select age, is_married from people where name <> 'John Johnson' limit 1"}, 0},
 	}
 
 	for _, test := range tests {
@@ -66,25 +68,6 @@ func TestSqlSelect(t *testing.T) {
 			commandLine := commandStr + " " + strings.Join(test.args, " ")
 			t.Fatal("Unexpected failure. command", commandLine, "returned", result)
 		}
-
-		//if result == 0 {
-		//	root, _ := dEnv.WorkingRoot()
-		//	tbl, _ := root.GetTable(tableName)
-		//	sch := tbl.GetSchema()
-		//	row, exists := tbl.GetRowByPKVals(row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
-		//
-		//	if !exists {
-		//		t.Fatal("Could not find row")
-		//	}
-		//
-		//	for i, v := range expectedFieldVals {
-		//		val, fld := row.GetColVal(i)
-		//
-		//		if !val.Equals(v) {
-		//			t.Error("Unexpected value for", fld, "expected:", v, "actual:", val)
-		//		}
-		//	}
-		//}
 	}
 }
 

@@ -52,10 +52,10 @@ type FieldMapping struct {
 // schema to tags in the dest schema.
 func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
 	srcCols := srcSch.GetAllCols()
-	deltCols := destSch.GetAllCols()
+	destCols := destSch.GetAllCols()
 
 	for srcTag, destTag := range srcTagToDestTag {
-		_, destOk := deltCols.GetByTag(destTag)
+		_, destOk := destCols.GetByTag(destTag)
 		_, srcOk := srcCols.GetByTag(srcTag)
 
 		if !destOk || !srcOk {
@@ -99,11 +99,11 @@ func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	destCols := destSch.GetAllCols()
 
 	srcToDest := make(map[uint64]uint64, destCols.Size())
-	destCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		inCol, ok := srcCols.GetByTag(tag)
+	destCols.Iter(func(destTag uint64, col schema.Column) (stop bool) {
+		srcCol, ok := srcCols.GetByTag(destTag)
 
 		if ok {
-			srcToDest[inCol.Tag] = tag
+			srcToDest[srcCol.Tag] = destTag
 			successes++
 		}
 
