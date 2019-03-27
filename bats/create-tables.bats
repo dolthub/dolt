@@ -37,3 +37,9 @@ teardown() {
     [ "${#lines[@]}" -eq 3 ]
 }
 
+@test "create two table with the same name" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "already exists." ]]
+}
