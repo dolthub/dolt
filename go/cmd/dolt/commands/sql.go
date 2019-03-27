@@ -444,7 +444,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	p.RunAfter(func() { wr.Close() })
 
 	// Insert the table header row at the appropriate stage
-	p.InsertRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
 
 	return p
 }

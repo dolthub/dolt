@@ -32,9 +32,6 @@ type TransformedRowResult struct {
 	PropertyUpdates map[string]interface{}
 }
 
-// TransFailCallback is a function that gets called when a transform encounters an error.
-type TransFailCallback func(row RowWithProps, errDetails string)
-
 // TransformFunc reads rows from the inChan, transforms them, and then writes them to the outChan.  If an error occurs
 // processing a row a TransformRowFailure will be written to the failure channel, and if the stopChan is closed it should
 // exit all processing.
