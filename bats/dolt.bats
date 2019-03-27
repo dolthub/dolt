@@ -272,7 +272,37 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "* test" ]]
 }
 
+@test "delete a branch" {
+    dolt init
+    dolt branch test
+    run dolt branch -d test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt branch
+    [[ ! "$output" =~ "test" ]]
+}
 
+@test "move a branch" {
+    dolt init
+    dolt branch test
+    run dolt branch -m test test2
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt branch
+    [[ ! "$output" =~ "test" ]]
+    [[ "$output" =~ "test2" ]]
+}
+
+@test "copy a branch" {
+    dolt init
+    dolt branch test
+    run dolt branch -c test test2
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt branch
+    [[ "$output" =~ "test" ]]
+    [[ "$output" =~ "test2" ]]
+}
 
 # Create a single primary key table and do stuff
 @test "create a table with a schema file and examine repo" {
@@ -365,5 +395,54 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added test row" ]]
+}
+
+@test "generate a merge conflict and resolve" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT (content)" ]]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Cnf" ]]
+    [[ "$output" =~ "!" ]]
+    run dolt conflicts cat test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]]+\| ]]
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]]+\| ]]
+    run dolt conflicts resolve --ours test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Cnf" ]]
+    [[ ! "$output" =~ "!" ]]
+    dolt add test
+    dolt commit -m "merged and resolved conflict"
+    run dolt log
+    [[ "$output" =~ "added test row" ]]
+    [[ "$output" =~ "added conflicting row" ]]
+    [[ "$output" =~ "merged and resolved conflict" ]]
+    [[ "$output" =~ "Merge:" ]]
+}
+
+@test "put a row that violates the schema" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:foo
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "inserted row does not match schema" ]
 }
 
