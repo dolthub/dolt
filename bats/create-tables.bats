@@ -14,13 +14,13 @@ teardown() {
 }
 
 @test "create a table with a schema file and examine repo" {
-    run dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "import data from csv and create the table" {
-    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/1pk5col.csv
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col.csv
         [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -29,7 +29,7 @@ teardown() {
 }
 
 @test "import data from psv and create the table" {
-    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/1pk5col.psv
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col.psv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
