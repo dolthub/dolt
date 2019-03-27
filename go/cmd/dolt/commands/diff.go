@@ -220,7 +220,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, badRowCB)
 
 	colNames := schema.ExtractAllColNames(untypedUnionSch)
-	p.InsertRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, colNames))
+	p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, colNames))
 	p.Start()
 	p.Wait()
 
