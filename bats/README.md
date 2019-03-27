@@ -6,4 +6,8 @@ First you need to install bats.
 ```
 npm install -g bats
 ```
-Then, you run dolt.bats. 
+Then, go to the directory witrh the bats tests and run: 
+```
+bats . 
+```
+This will run all the tests. Specify a particular .bats file to run only those tests.
