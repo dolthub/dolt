@@ -6,7 +6,7 @@ First you need to install bats.
 ```
 npm install -g bats
 ```
-Then, go to the directory witrh the bats tests and run: 
+Then, go to the directory with the bats tests and run: 
 ```
 bats . 
 ```
