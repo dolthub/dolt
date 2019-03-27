@@ -371,6 +371,22 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]]
 }
 
+@test "dolt checkout to put a table back to its checked in state" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "Added table and test row"
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:10
+    run dolt checkout test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]]
+    [[ ! "$output" =~ "10" ]]
+}
+
 @test "dolt checkout branch and table name collision" {
     dolt init
     dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
@@ -397,7 +413,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "added test row" ]]
 }
 
-@test "generate a merge conflict and resolve" {
+@test "generate a merge conflict and resolve with ours" {
     dolt init
     dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
     dolt add test
@@ -418,6 +434,10 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Cnf" ]]
     [[ "$output" =~ "!" ]]
+    run dolt table select --hide-conflicts test
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Cnf" ]]
+    [[ ! "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]]+\| ]]
@@ -429,6 +449,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Cnf" ]]
     [[ ! "$output" =~ "!" ]]
+    [[ "$output" =~ "5" ]]
+    [[ ! "$output" =~ "6" ]]
     dolt add test
     dolt commit -m "merged and resolved conflict"
     run dolt log
@@ -436,6 +458,27 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "added conflicting row" ]]
     [[ "$output" =~ "merged and resolved conflict" ]]
     [[ "$output" =~ "Merge:" ]]
+}
+
+@test "generate a merge conflict and resolve with theirs" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout master
+    dolt merge test-branch
+    run dolt conflicts resolve --theirs test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]]
+    [[ ! "$output" =~ "5" ]]
 }
 
 @test "put a row that violates the schema" {
@@ -569,4 +612,69 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]]
+}
+
+@test "dolt table select with options" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
+    dolt table put-row test pk:2 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt table select --where pk=1 test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "10" ]]
+    [[ ! "$output" =~ "5" ]]
+    [ "${#lines[@]}" -eq 2 ]
+    run dolt table select --where c1=1 test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]]
+    [[ ! "$output" =~ "10" ]]
+    [ "${#lines[@]}" -eq 3 ]
+    run dolt table select test pk c1 c2 c3
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "c4" ]]
+    run dolt table select --where c1=1 --limit=1 test
+    skip "Adding --limit=1 panics right now" 
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "dolt table export" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt table export test export.csv
+    [ "$status" -eq 0 ]
+    [ "$output" = "Successfully exported data." ]
+    [ -f export.csv ]
+    run grep 5 export.csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    run dolt table export test export.csv
+    [ "$status" -ne 0 ]
+    [[ "$output" = "Data already exists in" ]]
+    run dolt table export -f test export.csv
+    [ "$status" -eq 0 ]
+    [ "$output" = "Successfully exported data." ]
+    [ -f export.csv ]
+}
+
+@test "dolt table schema" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test @ working" ]]
+    [[ "$output" =~ "columns" ]]
+    [[ "$output" =~ "c1" ]]
+}
+
+@test "dolt table schema --export" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table schema --export test export.schema
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    [ -f export.schema ]
+    grep columns export.schema
 }
