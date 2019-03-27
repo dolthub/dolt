@@ -13,10 +13,26 @@ teardown() {
     rm -rf $BATS_TMPDIR/dolt-repo
 }
 
-@test "create a table with a schema file and examine repo" {
+@test "create a single primary key table" {
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+}
+
+@test "create a two primary key table" {
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col.schema test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "create a repo with two tables" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test1
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col.schema test2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]]
+    [[ "$output" =~ "test2" ]]
+    [ "${#lines[@]}" -eq 3 ]
 }
 
 @test "import data from csv and create the table" {
