@@ -446,3 +446,127 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "${lines[0]}" = "inserted row does not match schema" ]
 }
 
+@test "import data from a csv file after table created" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table import test $BATS_TEST_DIRNAME/1pk5col.csv
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "import data from csv and create the table" {
+    dolt init 
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/1pk5col.csv
+        [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "import data from a psv file after table created" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    run dolt table import test $BATS_TEST_DIRNAME/1pk5col.psv
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "import data from psv and create the table" {
+    dolt init
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/1pk5col.psv
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "overwrite a row. make sure it actually updates not inserts" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt table import test $BATS_TEST_DIRNAME/1pk5col.csv
+    run dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10
+    [ "$status" -eq 0 ]
+    [ "$output" = "Successfully put row." ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "add row on two different branches. no merge conflict" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:1 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row with one more column"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]]
+    [[ ! "$output" =~ "CONFLICT" ]]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "add column, no merge conflict" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table schema --add-field test c6 int 
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:6
+    dolt add test
+    dolt commit -m "added test row with one more column"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]]
+    [[ ! "$output" =~ "CONFLICT" ]]
+    run dolt diff 
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]]
+}
+
+@test "modify different fields, same row, no merge conflict" {
+    dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/1pk5col.schema test
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:2 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "modified c1 of test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:10
+    dolt add test
+    dolt commit -m "modified c5 of test row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]]
+    [[ ! "$output" =~ "CONFLICT" ]]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "10" ]]
+}
