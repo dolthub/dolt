@@ -35,9 +35,25 @@ teardown() {
     [ "${#lines[@]}" -eq 3 ]
 }
 
+@test "create a table with json import" {
+    run dolt table import -c -s $BATS_TEST_DIRNAME/helper/employees-sch.json employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select employees
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]]
+    [ "${#lines[@]}" -eq 4 ]
+}
+
+@test "create a table with json import. no schema" {
+    run dolt table import -c employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
+    [ "$status" -ne 0 ]
+    [ "$output" = "Please specify schema file for .json tables." ] 
+}
+
 @test "import data from csv and create the table" {
     run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col.csv
-        [ "$status" -eq 0 ]
+    [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
     [ "$status" -eq 0 ]
