@@ -145,6 +145,15 @@ teardown() {
     [[ "$output" =~ "* test" ]]
 }
 
+@test "create and checkout a branch with dolt checkout -b" {
+    run dolt checkout -b test
+    [ "$status" -eq 0 ]
+    [ "$output" = "Switched to branch 'test'" ]
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* test" ]]
+}
+
 @test "delete a branch" {
     dolt branch test
     run dolt branch -d test
