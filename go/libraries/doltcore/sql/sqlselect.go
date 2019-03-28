@@ -51,12 +51,13 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
 func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
-	var tableName string
-
 	tableExprs := s.From
 	if len(tableExprs) > 1 {
 		return quitErr("Only selecting from a single table is supported")
 	}
+
+	var tableName string
+
 	tableExpr := tableExprs[0]
 	switch te := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
@@ -64,7 +65,9 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		case sqlparser.TableName:
 			tableName = e.Name.String()
 		case *sqlparser.Subquery:
-			return quitErr("Subqueries are not supported: %v.", query)
+			quitErr("Subqueries are not supported: %v.", query)
+		default:
+			quitErr("Unrecognized expression: %v", nodeToString(e))
 		}
 	case *sqlparser.ParenTableExpr:
 		return quitErr("Parenthetical table expressions are not supported: %v,", query)
@@ -120,10 +123,29 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		selectStmt.limit = -1
 	}
 
-	// Process the where clause
+	err := processWhereClause(selectStmt, s, query, tableSch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createPipeline(root, selectStmt)
+}
+
+// Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
+// where clause can't be processed.
+func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query string, tableSch schema.Schema) error {
 	whereClause := s.Where
+
+	// nil where clause gets an always-true filter function
+	if whereClause == nil {
+		selectStmt.filterFn = func(r row.Row) bool {
+			return true
+		}
+		return nil
+	}
+
 	if whereClause.Type != sqlparser.WhereStr {
-		return quitErr("Having clause not supported: %v", query)
+		errors.New(fmt.Sprintf("Having clause not supported: %v", query))
 	}
 
 	switch expr := whereClause.Expr.(type) {
@@ -136,6 +158,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		colExpr := left
 		valExpr := right
 
+		// Swap the column and value expr as necessary
 		colName, ok := colExpr.(*sqlparser.ColName)
 		if !ok {
 			colExpr = right
@@ -144,7 +167,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 
 		colName, ok = colExpr.(*sqlparser.ColName)
 		if !ok {
-			return quitErr("Only column names and value literals are supported")
+			errors.New(fmt.Sprintf("Only column names and value literals are supported"))
 		}
 
 		colNameStr := colName.Name.String()
@@ -172,7 +195,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 
 		col, ok := tableSch.GetAllCols().GetByName(colNameStr)
 		if !ok {
-			return quitErr("%v is not a known column", colNameStr)
+			errors.New(fmt.Sprintf("%v is not a known column", colNameStr))
 		}
 
 		tag := col.Tag
@@ -180,15 +203,13 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		comparisonVal, err := convFunc(types.String(string(sqlVal)))
 
 		if err != nil {
-			return quitErr("Couldn't convert column to string: %v", err)
+			errors.New(fmt.Sprintf("Couldn't convert column to string: %v", err))
 		}
 
 		// All the operations differ only in their filter logic
-		var whereFn filterFn
-
 		switch op {
 		case sqlparser.EqualStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -196,7 +217,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return comparisonVal.Equals(rowVal)
 			}
 		case sqlparser.LessThanStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -204,7 +225,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return rowVal.Less(comparisonVal)
 			}
 		case sqlparser.GreaterThanStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -212,7 +233,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return comparisonVal.Less(rowVal)
 			}
 		case sqlparser.LessEqualStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -220,7 +241,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return rowVal.Less(comparisonVal) || rowVal.Equals(comparisonVal)
 			}
 		case sqlparser.GreaterEqualStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -228,7 +249,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return comparisonVal.Less(rowVal) || comparisonVal.Equals(rowVal)
 			}
 		case sqlparser.NotEqualStr:
-			whereFn = func(r row.Row) bool {
+			selectStmt.filterFn = func(r row.Row) bool {
 				rowVal, ok := r.GetColVal(tag)
 				if !ok {
 					return false
@@ -236,85 +257,83 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				return !comparisonVal.Equals(rowVal)
 			}
 		case sqlparser.NullSafeEqualStr:
-			return quitErr("null safe equal operation not supported")
+			return errors.New(fmt.Sprintf("null safe equal operation not supported"))
 		case sqlparser.InStr:
-			return quitErr("in keyword not supported")
+			return errors.New(fmt.Sprintf("in keyword not supported"))
 		case sqlparser.NotInStr:
-			return quitErr("in keyword not supported")
+			return errors.New(fmt.Sprintf("in keyword not supported"))
 		case sqlparser.LikeStr:
-			return quitErr("like keyword not supported")
+			return errors.New(fmt.Sprintf("like keyword not supported"))
 		case sqlparser.NotLikeStr:
-			return quitErr("like keyword not supported")
+			return errors.New(fmt.Sprintf("like keyword not supported"))
 		case sqlparser.RegexpStr:
-			return quitErr("regular expressions not supported")
+			return errors.New(fmt.Sprintf("regular expressions not supported"))
 		case sqlparser.NotRegexpStr:
-			return quitErr("regular expressions not supported")
+			return errors.New(fmt.Sprintf("regular expressions not supported"))
 		case sqlparser.JSONExtractOp:
-			return quitErr("json not supported")
+			return errors.New(fmt.Sprintf("json not supported"))
 		case sqlparser.JSONUnquoteExtractOp:
-			return quitErr("json not supported")
+			return errors.New(fmt.Sprintf("json not supported"))
 		}
-
-		selectStmt.filterFn = whereFn
-		return createPipeline(root, selectStmt)
-
 	case *sqlparser.AndExpr:
-		return quitErr("And expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("And expressions not supported: %v", query))
 	case *sqlparser.OrExpr:
-		return quitErr("Or expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Or expressions not supported: %v", query))
 	case *sqlparser.NotExpr:
-		return quitErr("Not expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Not expressions not supported: %v", query))
 	case *sqlparser.ParenExpr:
-		return quitErr("Parenthetical expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Parenthetical expressions not supported: %v", query))
 	case *sqlparser.RangeCond:
-		return quitErr("Range expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Range expressions not supported: %v", query))
 	case *sqlparser.IsExpr:
-		return quitErr("Is expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Is expressions not supported: %v", query))
 	case *sqlparser.ExistsExpr:
-		return quitErr("Exists expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Exists expressions not supported: %v", query))
 	case *sqlparser.SQLVal:
-		return quitErr("Not expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Not expressions not supported: %v", query))
 	case *sqlparser.NullVal:
-		return quitErr("NULL expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("NULL expressions not supported: %v", query))
 	case *sqlparser.BoolVal:
-		return quitErr("Bool expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Bool expressions not supported: %v", query))
 	case *sqlparser.ColName:
-		return quitErr("Column name expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Column name expressions not supported: %v", query))
 	case *sqlparser.ValTuple:
-		return quitErr("Tuple expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Tuple expressions not supported: %v", query))
 	case *sqlparser.Subquery:
-		return quitErr("Subquery expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Subquery expressions not supported: %v", query))
 	case *sqlparser.ListArg:
-		return quitErr("List expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("List expressions not supported: %v", query))
 	case *sqlparser.BinaryExpr:
-		return quitErr("Binary expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Binary expressions not supported: %v", query))
 	case *sqlparser.UnaryExpr:
-		return quitErr("Unary expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Unary expressions not supported: %v", query))
 	case *sqlparser.IntervalExpr:
-		return quitErr("Interval expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Interval expressions not supported: %v", query))
 	case *sqlparser.CollateExpr:
-		return quitErr("Collate expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Collate expressions not supported: %v", query))
 	case *sqlparser.FuncExpr:
-		return quitErr("Function expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Function expressions not supported: %v", query))
 	case *sqlparser.CaseExpr:
-		return quitErr("Case expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Case expressions not supported: %v", query))
 	case *sqlparser.ValuesFuncExpr:
-		return quitErr("Values func expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Values func expressions not supported: %v", query))
 	case *sqlparser.ConvertExpr:
-		return quitErr("Conversion expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Conversion expressions not supported: %v", query))
 	case *sqlparser.SubstrExpr:
-		return quitErr("Substr expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Substr expressions not supported: %v", query))
 	case *sqlparser.ConvertUsingExpr:
-		return quitErr("Convert expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Convert expressions not supported: %v", query))
 	case *sqlparser.MatchExpr:
-		return quitErr("Match expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Match expressions not supported: %v", query))
 	case *sqlparser.GroupConcatExpr:
-		return quitErr("Group concat expressions not supported: %v", query)
+		return errors.New(fmt.Sprintf("Group concat expressions not supported: %v", query))
 	case *sqlparser.Default:
-		return quitErr("Unrecognized expression: %v", query)
+		return errors.New(fmt.Sprintf("Unrecognized expression: %v", query))
 	default:
-		return quitErr("Unrecognized expression: %v", query)
+		return errors.New(fmt.Sprintf("Unrecognized expression: %v", query))
 	}
+
+	return nil
 }
 
 // Turns a node to a string
