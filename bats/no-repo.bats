@@ -149,6 +149,60 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "rm-row -" ]]
 }
 
+@test "dolt table import outside of a dolt repository" {
+    run dolt table import
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table create outside of a dolt repository" {
+    run dolt table create
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table rm outside of a dolt repository" {
+    run dolt table rm
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table mv outside of a dolt repository" {
+    run dolt table mv
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table cp outside of a dolt repository" {
+    run dolt table cp
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table select outside of a dolt repository" {
+    run dolt table select
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table schema outside of a dolt repository" {
+    run dolt table schema
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table put-row outside of a dolt repository" {
+    run dolt table put-row
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
+@test "dolt table rm-row outside of a dolt repository" {
+    run dolt table rm-row
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+}
+
 @test "dolt conflicts outside of a dolt repository" {
     run dolt conflicts
     [ "$status" -ne 0 ]
