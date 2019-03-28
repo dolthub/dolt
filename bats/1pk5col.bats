@@ -195,6 +195,30 @@ teardown() {
     [[ "$output" =~ "Merge:" ]]
 }
 
+@test "generate a merge conflict and try to roll back using checkout" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout master
+    dolt merge test-branch
+    run dolt checkout test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [[ "$output" =~ "5" ]]
+    [[ ! "$output" =~ "Cnf" ]]
+    run dolt status
+    [[ "$output" =~ "All conflicts fixed but you are still merging." ]]
+    skip "Need to implement dolt reset --merge functionality"
+}
+
 @test "generate a merge conflict and resolve with theirs" {
     dolt add test
     dolt commit -m "added test table"
