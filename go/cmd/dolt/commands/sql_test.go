@@ -40,6 +40,7 @@ func TestSqlSelect(t *testing.T) {
 	}{
 		{[]string{""}, 1},
 		{[]string{"-q", "select * from doesnt_exist where age = 32"}, 1},
+		{[]string{"-q", "select * from people"}, 0},
 		{[]string{"-q", "select * from people where age = 32"}, 0},
 		{[]string{"-q", "select * from people where title = 'Senior Dufus'"}, 0},
 		{[]string{"-q", "select * from people where name = 'Bill Billerson'"}, 0},
