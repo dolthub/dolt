@@ -59,3 +59,9 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" =~ "already exists." ]]
 }
+
+@test "reproduce the nutrition dataset bug" {
+    run dolt table import -c --pk=NDB_Number test $BATS_TEST_DIRNAME/helper/nutrition-bug.csv
+    skip "This throws an Error determining the output schema error. Should work"
+    [ "$status" -eq 0 ]
+}
