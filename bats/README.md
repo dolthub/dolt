@@ -1,4 +1,4 @@
-BATS - Bash Automated Testing System
+# BATS - Bash Automated Testing System #
 
 We are going to use bats to test the dolt command line. 
 
@@ -11,3 +11,8 @@ Then, go to the directory with the bats tests and run:
 bats . 
 ```
 This will run all the tests. Specify a particular .bats file to run only those tests.
+
+# Test coverage needed for: #
+* Remotes: dolt clone, fetch, pull, push
+* Databases with types other than int
+* dolt config. Not sure how this works.
