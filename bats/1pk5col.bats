@@ -73,6 +73,47 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]]
 }
 
+@test "delete a row with dolt table rm-row" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt table rm-row test 0
+    [ "$status" -eq 0 ]
+    [ "$output" = "Removed 1 rows" ]
+}
+
+@test "delete multiple rows with dolt table rm-row" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test pk:1 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt table rm-row test 0 1
+    [ "$status" -eq 0 ]
+    [ "$output" = "Removed 2 rows" ]
+}
+
+@test "delete the table" {
+    run dolt table rm test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt ls 
+    [[ ! "$output" =~ "test" ]]
+}
+
+@test "move a table" {
+    run dolt table mv test test1
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt ls
+    [[ ! "$output" =~ "test" ]]
+    [[ "$output" =~ "test1" ]]
+}
+
+@test "copy a table" {
+    run dolt table cp test test1
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt ls
+    [[ "$output" =~ "test" ]]
+    [[ "$output" =~ "test1" ]]
+}
+
 @test "dolt checkout to put a table back to its checked in state" {
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add test
