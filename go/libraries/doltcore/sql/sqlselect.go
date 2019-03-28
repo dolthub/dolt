@@ -17,8 +17,6 @@ import (
 	"strconv"
 )
 
-var fwtStageName = "fwt"
-
 // Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
 	tableName string
@@ -49,10 +47,10 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 	return nil, ""
 }
 
-// BuildQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
+// BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
-func BuildQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
+func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
 	var tableName string
 
 	tableExprs := s.From
@@ -327,7 +325,7 @@ func nodeToString(node sqlparser.SQLNode) string {
 }
 
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
-// BuildQueryPipeline.
+// BuildSelectQueryPipeline.
 func quitErr(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
 	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args))
 }

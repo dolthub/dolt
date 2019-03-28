@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -23,41 +24,12 @@ var sqlSynopsis = []string{
 	"[options] -q query_string",
 	"[options]",
 }
+
 var fwtStageName = "fwt"
 
 const (
 	queryFlag = "query"
 )
-
-// Struct to represent the salient results of parsing a select statement.
-type selectStatement struct {
-	tableName string
-	colNames  []string
-	filterFn  filterFn
-	limit     int
-}
-
-type filterFn = func(r row.Row) (matchesFilter bool)
-
-type selectTransform struct {
-	p      *pipeline.Pipeline
-	filter filterFn
-	limit  int
-	count  int
-}
-
-func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	if st.limit == -1 || st.count < st.limit {
-		if st.filter(inRow) {
-			st.count++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
-		}
-	} else {
-		st.p.NoMore()
-	}
-
-	return nil, ""
-}
 
 func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
@@ -76,62 +48,59 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
-		cli.PrintErrln(color.RedString("Error parsing SQL: %v.", err.Error()))
-		return 1
+		return quitErr("Error parsing SQL: %v.", err.Error())
 	}
 
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		return quitErr(verr.Verbose())
 	}
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
-		p, outSch, err := sql.BuildQueryPipeline(root, s, query)
-		if err != nil {
-			cli.PrintErrln(color.RedString(err.Error(), args))
-			return 1
-		}
-
-		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
-		p.RunAfter(func() { wr.Close() })
-
-		cliSink := pipeline.ProcFuncForWriter(wr)
-		p.SetOutput(cliSink)
-
-		p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-			cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
-			return true
-		})
-
-		colNames := schema.ExtractAllColNames(outSch)
-		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-		p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
-
-		// Insert the table header row at the appropriate stage
-		p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
-
-		p.Start()
-		err = p.Wait()
-		if err != nil {
-			return quitErr("error processing results: %v", err)
-		}
-
-		return 0
+		return sqlSelect(root, s, query)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 		return 1
 	}
 }
 
+func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
+	p, outSch, err := sql.BuildSelectQueryPipeline(root, s, query)
+	if err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
+		return 1
+	}
+
+	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
+	p.RunAfter(func() { wr.Close() })
+
+	cliSink := pipeline.ProcFuncForWriter(wr)
+	p.SetOutput(cliSink)
+
+	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
+		return true
+	})
+
+	colNames := schema.ExtractAllColNames(outSch)
+	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
+	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+
+	// Insert the table header row at the appropriate stage
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
+
+	p.Start()
+	err = p.Wait()
+	if err != nil {
+		return quitErr("error processing results: %v", err)
+	}
+
+	return 0
+}
+
 // Writes an error message to the CLI and returns 1
 func quitErr(fmtMsg string, args ...interface{}) int {
 	cli.PrintErrln(color.RedString(fmtMsg, args))
 	return 1
-}
-
-func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformCollection) {
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-	transforms.AppendTransforms(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 }
