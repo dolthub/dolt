@@ -65,10 +65,9 @@ teardown() {
 }
 
 @test "dolt commit with nothing added" {
-    skip "This should fail. Currently succeeds and adds to the log."
     run dolt commit -m "commit"
     [ "$status" -eq 1 ]
-    [ "$output" = "" ]
+    [ "$output" = `no changes added to commit (use "dolt add")` ]
 }
 
 @test "dolt table schema in new repository" {

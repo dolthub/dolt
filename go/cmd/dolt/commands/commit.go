@@ -62,10 +62,9 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
 
 		if n == 0 {
-			cli.Println("nothing to commit, working tree clean")
+			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
+			return HandleVErrAndExitCode(bdr.Build(), usage)
 		}
-
-		return 1
 	} else if err != nil {
 		verr := errhand.BuildDError("error: Failed to commit changes.").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usage)
