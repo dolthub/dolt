@@ -37,7 +37,7 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
-		cli.PrintErr(color.RedString("Invalid command line arguments."))
+		cli.PrintErr(color.RedString("Invalid command line arguments.\n"))
 		usagePrt()
 		return 1
 	} else {
