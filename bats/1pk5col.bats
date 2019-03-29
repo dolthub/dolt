@@ -18,7 +18,7 @@ teardown() {
 @test "create a table with a schema file and examine repo" {
     run dolt ls
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "test" ]]
+    [[ "${lines[1]}" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "$output" = "pk|c1|c2|c3|c4|c5" ]
@@ -29,7 +29,7 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]]
-    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]] || false
 }
 
 @test "create a table, dolt add, dolt reset, and dolt commit" {
@@ -39,27 +39,27 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed" ]]
-    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    [[ "$output" =~ "new table:" ]] || false
     run dolt reset test 
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]]
-    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    [[ "$output" =~ "new table:" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed" ]]
-    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    [[ "$output" =~ "new table:" ]] || false
     run dolt commit -m "test commit"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt log
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test commit" ]]
+    [[ "$output" =~ "test commit" ]] || false
 }
 
 @test "dolt log with -n specified" {
@@ -67,12 +67,12 @@ teardown() {
     dolt commit -m "first commit"
     run dolt log 
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "first commit" ]]
-    [[ "$output" =~ "Data repository created." ]]
+    [[ "$output" =~ "first commit" ]] || false
+    [[ "$output" =~ "Data repository created." ]] || false
     run dolt log -n 1
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "first commit" ]]
-    [[ ! "$output" =~ "Data repository created." ]]
+    [[ "$output" =~ "first commit" ]] || false
+    [[ ! "$output" =~ "Data repository created." ]] || false
 }
 
 @test "add a row to a created table using dolt table put-row" {
@@ -83,7 +83,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]]
+    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
 @test "delete a row with dolt table rm-row" {
@@ -101,32 +101,6 @@ teardown() {
     [ "$output" = "Removed 2 rows" ]
 }
 
-@test "delete the table" {
-    run dolt table rm test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt ls 
-    [[ ! "$output" =~ "test" ]]
-}
-
-@test "move a table" {
-    run dolt table mv test test1
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt ls
-    [[ ! "$output" =~ "test" ]]
-    [[ "$output" =~ "test1" ]]
-}
-
-@test "copy a table" {
-    run dolt table cp test test1
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt ls
-    [[ "$output" =~ "test" ]]
-    [[ "$output" =~ "test1" ]]
-}
-
 @test "dolt checkout to put a table back to its checked in state" {
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add test
@@ -137,8 +111,8 @@ teardown() {
     [ "$output" = "" ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "5" ]]
-    [[ ! "$output" =~ "10" ]]
+    [[ "$output" =~ "5" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
 }
 
 @test "dolt checkout branch and table name collision" {
@@ -157,10 +131,10 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Fast-forward" ]]
+    [[ "$output" =~ "Fast-forward" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "added test row" ]]
+    [[ "$output" =~ "added test row" ]] || false
 }
 
 @test "create a branch off an older commit than HEAD" {
@@ -173,8 +147,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "Switched to branch 'older-branch'" ]
     run dolt log
-    [[ ! "$output" =~ "added test row" ]]
-    [[ "$output" =~ "first commit" ]]
+    [[ ! "$output" =~ "added test row" ]] || false
+    [[ "$output" =~ "first commit" ]] || false
 }
 
 @test "delete an unmerged branch" {
@@ -215,8 +189,8 @@ teardown() {
     [[ "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]] || false+\|[[:space:]] || false+ours[[:space:]] || false+\| ]] || false
-    [[ "$output" =~ \+[[:space:]] || false+\|[[:space:]] || false+theirs[[:space:]] || false+\| ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]]+\| ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]]\| ]] || false
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
