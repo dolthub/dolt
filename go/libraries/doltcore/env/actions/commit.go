@@ -10,6 +10,7 @@ import (
 var ErrNameNotConfigured = errors.New("name not configured")
 var ErrEmailNotConfigured = errors.New("email not configured")
 var ErrEmptyCommitMessage = errors.New("commit message empty")
+var ErrNothingAddedToCommit = errors.New("nothing added to commit (use 'dolt add')")
 
 func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 	name, err := cfg.GetString(env.UserNameKey)
@@ -40,7 +41,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string) error {
 
 	if err != nil {
 		return err
-	} else if len(staged.Tables) == 0 && dEnv.RepoState == nil {
+	} else if len(staged.Tables) == 0 {
 		return NothingStaged{notStaged}
 	}
 
