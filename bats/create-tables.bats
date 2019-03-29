@@ -14,20 +14,20 @@ teardown() {
 }
 
 @test "create a single primary key table" {
-    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "create a two primary key table" {
-    run dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "create a repo with two tables" {
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test1
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col.schema test2
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test1
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema test2
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
@@ -52,7 +52,7 @@ teardown() {
 }
 
 @test "import data from csv and create the table" {
-    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col.csv
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -61,7 +61,7 @@ teardown() {
 }
 
 @test "import data from psv and create the table" {
-    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col.psv
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -70,8 +70,8 @@ teardown() {
 }
 
 @test "create two table with the same name" {
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
-    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     [ "$status" -ne 0 ]
     [[ "$output" =~ "already exists." ]] || false
 }

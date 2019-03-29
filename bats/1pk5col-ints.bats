@@ -7,7 +7,7 @@ setup() {
     mkdir dolt-repo
     cd dolt-repo
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
 }
 
 teardown() {
@@ -281,7 +281,7 @@ teardown() {
 }
 
 @test "import data from a csv file after table created" {
-    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col.csv
+    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -290,7 +290,7 @@ teardown() {
 }
 
 @test "import data from a psv file after table created" {
-    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col.psv
+    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -299,7 +299,7 @@ teardown() {
 }
 
 @test "overwrite a row. make sure it updates not inserts" {
-    dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col.csv
+    dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     run dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully put row." ]
@@ -480,7 +480,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    run diff $BATS_TEST_DIRNAME/helper/1pk5col.schema export.schema
+    run diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }

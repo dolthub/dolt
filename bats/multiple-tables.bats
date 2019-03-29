@@ -7,8 +7,8 @@ setup() {
     mkdir dolt-repo
     cd dolt-repo
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test1
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test2
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test1
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test2
 }
 
 teardown() {
