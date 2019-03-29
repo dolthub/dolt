@@ -28,7 +28,7 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]] || false
-    [[ "$output" =~ new[[:space:]] || falsetable:[[:space:]] || false+test ]] || false
+    [[ "$output" =~ "new table:" ]] || false
 }
 
 @test "add a row to a two primary table using dolt table put-row" {
@@ -39,7 +39,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]] || false+0[[:space:]] || false+\|[[:space:]] || false+0 ]] || false
+    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]] || false
 }
 
 @test "add a row where one of the primary keys is different, not both" {
