@@ -36,14 +36,14 @@ teardown() {
     [ "$status" -eq 0 ]
     # I can't seem to get this to match "* master" so I made a regex instead
     # [ "$output" = "* master" ]
-    [[ "$output" =~ "* master" ]]
+    [[ "$output" =~ "* master" ]] || false
 }
 
 @test "dolt log in a new repository" {
     run dolt log
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "commit " ]]
-    [[ "$output" =~ "Data repository created." ]]
+    [[ "$output" =~ "commit " ]] || false
+    [[ "$output" =~ "Data repository created." ]] || false
 }
 
 @test "dolt add . in new repository" {
@@ -67,7 +67,7 @@ teardown() {
 @test "dolt commit with nothing added" {
     run dolt commit -m "commit"
     [ "$status" -eq 1 ]
-    [ "$output" = `no changes added to commit (use "dolt add")` ]
+    [ "$output" = 'no changes added to commit (use "dolt add")' ]
 }
 
 @test "dolt table schema in new repository" {
@@ -97,7 +97,7 @@ teardown() {
 @test "dolt table rm in a new repository" {
     run dolt table rm 
     [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt table cp in a new repository" {
@@ -109,14 +109,14 @@ teardown() {
 @test "dolt table put-row in a new repository" {
     run dolt table put-row
     [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt table rm-row in a new repository" {
     run dolt table rm-row
     skip "dolt table rm-row throws a segmentation fault right now"
     [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt checkout master on master" {
@@ -140,7 +140,7 @@ teardown() {
     [ "$output" = "Switched to branch 'test'" ]
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* test" ]]
+    [[ "$output" =~ "* test" ]] || false
 }
 
 @test "create and checkout a branch with dolt checkout -b" {
@@ -149,7 +149,7 @@ teardown() {
     [ "$output" = "Switched to branch 'test'" ]
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* test" ]]
+    [[ "$output" =~ "* test" ]] || false
 }
 
 @test "delete a branch" {
@@ -158,25 +158,25 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt branch
-    [[ ! "$output" =~ "test" ]]
+    [[ ! "$output" =~ "test" ]] || false
 }
 
 @test "move a branch" {
-    dolt branch test
-    run dolt branch -m test test2
+    dolt branch foo
+    run dolt branch -m foo bar
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt branch
-    [[ ! "$output" =~ "test" ]]
-    [[ "$output" =~ "test2" ]]
+    [[ ! "$output" =~ "foo" ]] || false
+    [[ "$output" =~ "bar" ]] || false
 }
 
 @test "copy a branch" {
-    dolt branch test
-    run dolt branch -c test test2
+    dolt branch foo
+    run dolt branch -c foo bar
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt branch
-    [[ "$output" =~ "test" ]]
-    [[ "$output" =~ "test2" ]]
+    [[ "$output" =~ "foo" ]] || false
+    [[ "$output" =~ "bar" ]] || false
 }
