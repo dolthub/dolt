@@ -122,7 +122,7 @@ teardown() {
 
 @test "dolt checkout master on master" {
     run dolt checkout master
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [ "$output" = "Already on branch 'master'" ]
 }
 
