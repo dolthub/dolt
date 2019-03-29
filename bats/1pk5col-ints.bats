@@ -280,6 +280,12 @@ teardown() {
     [ "${lines[0]}" = "inserted row does not match schema" ]
 }
 
+@test "put a row that has a column not in the schema" {
+    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:10
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "Not all supplied keys are known in this table's schema." ]
+}
+
 @test "import data from a csv file after table created" {
     run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
