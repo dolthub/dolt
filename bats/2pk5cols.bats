@@ -17,7 +17,7 @@ teardown() {
 @test "create a table with a schema file and examine repo" {
     run dolt ls
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "test" ]]
+    [[ "${lines[1]}" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "$output" = "pk1|pk2|c1|c2|c3|c4|c5" ]
@@ -27,8 +27,8 @@ teardown() {
     [ "${lines[1]}" = "added table" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked files" ]]
-    [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]]
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ new[[:space:]] || falsetable:[[:space:]] || false+test ]] || false
 }
 
 @test "add a row to a two primary table using dolt table put-row" {
@@ -39,7 +39,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]]
+    [[ "$output" =~ \+[[:space:]] || false+0[[:space:]] || false+\|[[:space:]] || false+0 ]] || false
 }
 
 @test "add a row where one of the primary keys is different, not both" {
@@ -50,8 +50,8 @@ teardown() {
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
-    [[ "$output" =~ "5" ]]
-    [[ "$output" =~ "10" ]]
+    [[ "$output" =~ "|5" ]] || false
+    [[ "$output" =~ "|10" ]] || false
 }
 
 @test "overwrite a row with two primary keys" {
@@ -62,6 +62,6 @@ teardown() {
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    [[ ! "$output" =~ "5" ]]
-    [[ "$output" =~ "10" ]]
+    [[ ! "$output" =~ "|5" ]] || false
+    [[ "$output" =~ "|10" ]] || false
 }

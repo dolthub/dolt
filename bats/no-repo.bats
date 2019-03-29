@@ -14,35 +14,35 @@ setup() {
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
     # Check help output for supported commands                                       
-    [[ "$output" =~ "init -" ]]
-    [[ "$output" =~ "status -" ]]
-    [[ "$output" =~ "add -" ]]
-    [[ "$output" =~ "reset -" ]]
-    [[ "$output" =~ "commit -" ]]
-    [[ "$output" =~ "sql -" ]]
-    [[ "$output" =~ "log -" ]]
-    [[ "$output" =~ "diff -" ]]
-    [[ "$output" =~ "merge -" ]]
-    [[ "$output" =~ "branch -" ]]
-    [[ "$output" =~ "checkout -" ]]
-    [[ "$output" =~ "remote -" ]]
-    [[ "$output" =~ "push -" ]]
-    [[ "$output" =~ "pull -" ]]
-    [[ "$output" =~ "fetch -" ]]
-    [[ "$output" =~ "clone -" ]]
-    [[ "$output" =~ "creds -" ]]
-    [[ "$output" =~ "login -" ]]
-    [[ "$output" =~ "version -" ]]
-    [[ "$output" =~ "config -" ]]
-    [[ "$output" =~ "ls -" ]]
-    [[ "$output" =~ "table -" ]]
-    [[ "$output" =~ "conflicts -" ]]
+    [[ "$output" =~ "init -" ]] || false
+    [[ "$output" =~ "status -" ]] || false
+    [[ "$output" =~ "add -" ]] || false
+    [[ "$output" =~ "reset -" ]] || false
+    [[ "$output" =~ "commit -" ]] || false
+    [[ "$output" =~ "sql -" ]] || false
+    [[ "$output" =~ "log -" ]] || false
+    [[ "$output" =~ "diff -" ]] || false
+    [[ "$output" =~ "merge -" ]] || false
+    [[ "$output" =~ "branch -" ]] || false
+    [[ "$output" =~ "checkout -" ]] || false
+    [[ "$output" =~ "remote -" ]] || false
+    [[ "$output" =~ "push -" ]] || false
+    [[ "$output" =~ "pull -" ]] || false
+    [[ "$output" =~ "fetch -" ]] || false
+    [[ "$output" =~ "clone -" ]] || false
+    [[ "$output" =~ "creds -" ]] || false
+    [[ "$output" =~ "login -" ]] || false
+    [[ "$output" =~ "version -" ]] || false
+    [[ "$output" =~ "config -" ]] || false
+    [[ "$output" =~ "ls -" ]] || false
+    [[ "$output" =~ "table -" ]] || false
+    [[ "$output" =~ "conflicts -" ]] || false
 }
 
 @test "testing dolt version output" {
     run dolt version
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt version " ]]
+    [[ "$output" =~ "dolt version " ]] || false
 }
 
 
@@ -137,16 +137,16 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt table are" ]
     # Check help output for supported commands                                       
-    [[ "$output" =~ "import -" ]]
-    [[ "$output" =~ "export -" ]]
-    [[ "$output" =~ "create -" ]]
-    [[ "$output" =~ "rm -" ]]
-    [[ "$output" =~ "mv -" ]]
-    [[ "$output" =~ "cp -" ]]
-    [[ "$output" =~ "select -" ]]
-    [[ "$output" =~ "schema -" ]]
-    [[ "$output" =~ "put-row -" ]]
-    [[ "$output" =~ "rm-row -" ]]
+    [[ "$output" =~ "import -" ]] || false
+    [[ "$output" =~ "export -" ]] || false
+    [[ "$output" =~ "create -" ]] || false
+    [[ "$output" =~ "rm -" ]] || false
+    [[ "$output" =~ "mv -" ]] || false
+    [[ "$output" =~ "cp -" ]] || false
+    [[ "$output" =~ "select -" ]] || false
+    [[ "$output" =~ "schema -" ]] || false
+    [[ "$output" =~ "put-row -" ]] || false
+    [[ "$output" =~ "rm-row -" ]] || false
 }
 
 @test "dolt table import outside of a dolt repository" {
@@ -208,8 +208,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt conflicts are" ]
     # Check help output for supported commands                                       
-    [[ "$output" =~ "cat -" ]]
-    [[ "$output" =~ "resolve -" ]]
+    [[ "$output" =~ "cat -" ]] || false
+    [[ "$output" =~ "resolve -" ]] || false
 }
 
 @test "initializing a dolt repository" {

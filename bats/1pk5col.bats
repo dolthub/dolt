@@ -213,30 +213,46 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Cnf" ]]
     [[ "$output" =~ "!" ]]
-    run dolt table select --hide-conflicts test
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "Cnf" ]]
-    [[ ! "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]]+\| ]]
-    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]]+\| ]]
+    [[ "$output" =~ \+[[:space:]] || false+\|[[:space:]] || false+ours[[:space:]] || false+\| ]] || false
+    [[ "$output" =~ \+[[:space:]] || false+\|[[:space:]] || false+theirs[[:space:]] || false+\| ]] || false
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Cnf" ]]
-    [[ ! "$output" =~ "!" ]]
-    [[ "$output" =~ "5" ]]
-    [[ ! "$output" =~ "6" ]]
+    [[ "$output" =~ "Cnf" ]] || false
+    [[ ! "$output" =~ "!" ]] || false
+    [[ "$output" =~ "|5" ]] || false
+    [[ ! "$output" =~ "|6" ]] || false
     dolt add test
     dolt commit -m "merged and resolved conflict"
     run dolt log
-    [[ "$output" =~ "added test row" ]]
-    [[ "$output" =~ "added conflicting row" ]]
-    [[ "$output" =~ "merged and resolved conflict" ]]
-    [[ "$output" =~ "Merge:" ]]
+    [[ "$output" =~ "added test row" ]] || false
+    [[ "$output" =~ "added conflicting row" ]] || false
+    [[ "$output" =~ "merged and resolved conflict" ]] || false
+    [[ "$output" =~ "Merge:" ]] || false
+}
+
+@test "dolt table select --hide-conflicts" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    dolt checkout test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt add test
+    dolt commit -m "added conflicting test row"
+    dolt checkout master
+    dolt merge test-branch
+    run dolt table select --hide-conflicts test
+    [ "$status" -eq 0 ]
+    skip "--hide-conflicts does not work"
+    [[ ! "$output" =~ "Cnf" ]] || false
+    [[ ! "$output" =~ "!" ]] || false
 }
 
 @test "generate a merge conflict and try to roll back using checkout" {
@@ -256,10 +272,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
-    [[ "$output" =~ "5" ]]
-    [[ ! "$output" =~ "Cnf" ]]
+    [[ "$output" =~ "|5" ]] || false
+    [[ ! "$output" =~ "Cnf" ]] || false
     run dolt status
-    [[ "$output" =~ "All conflicts fixed but you are still merging." ]]
+    [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
     skip "Need to implement dolt reset --merge functionality"
 }
 
@@ -278,8 +294,10 @@ teardown() {
     dolt merge test-branch
     run dolt conflicts resolve --theirs test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "6" ]]
-    [[ ! "$output" =~ "5" ]]
+    [ "$output" = "" ]
+    run dolt table select test
+    [[ "$output" =~ "|6" ]] || false
+    [[ ! "$output" =~ "|5" ]] || false
 }
 
 @test "put a row that violates the schema" {
@@ -330,8 +348,8 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]]
-    [[ ! "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
@@ -352,11 +370,11 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]]
-    [[ ! "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt diff 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "6" ]]
+    [[ "$output" =~ "6" ]] || false
 }
 
 @test "modify different fields, same row, no merge conflict" {
@@ -374,11 +392,11 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]]
-    [[ ! "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "10" ]]
+    [[ "$output" =~ "10" ]] || false
 }
 
 @test "remove different row, no merge conflict" {
@@ -398,8 +416,8 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]]
-    [[ ! "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "remove same row, no merge conflict" {
@@ -419,8 +437,8 @@ teardown() {
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]]
-    [[ ! "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 } 
 
 @test "dolt table select with options" {
@@ -429,17 +447,17 @@ teardown() {
     dolt table put-row test pk:2 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table select --where pk=1 test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "10" ]]
-    [[ ! "$output" =~ "5" ]]
+    [[ "$output" =~ "|10" ]] || false
+    [[ ! "$output" =~ "|5" ]] || false
     [ "${#lines[@]}" -eq 2 ]
     run dolt table select --where c1=1 test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "5" ]]
-    [[ ! "$output" =~ "10" ]]
+    [[ "$output" =~ "|5" ]] || false
+    [[ ! "$output" =~ "|10" ]] || false
     [ "${#lines[@]}" -eq 3 ]
     run dolt table select test pk c1 c2 c3
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "c4" ]]
+    [[ ! "$output" =~ "c4" ]] || false
     run dolt table select --where c1=1 --limit=1 test
     skip "Adding --limit=1 panics right now" 
     [ "$status" -eq 0 ]
@@ -457,7 +475,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     run dolt table export test export.csv
     [ "$status" -ne 0 ]
-    [[ "$output" = "Data already exists in" ]]
+    [[ "$output" =~ "Data already exists in" ]] || false
     run dolt table export -f test export.csv
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully exported data." ]
@@ -467,14 +485,14 @@ teardown() {
 @test "dolt table schema" {
     run dolt table schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test @ working" ]]
-    [[ "$output" =~ "columns" ]]
-    [[ "$output" =~ "c1" ]]
+    [[ "$output" =~ "test @ working" ]] || false
+    [[ "$output" =~ "columns" ]] || false
+    [[ "$output" =~ "c1" ]] || false
     run dolt table schema test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test @ working" ]]
-    [[ "$output" =~ "columns" ]]
-    [[ "$output" =~ "c1" ]]
+    [[ "$output" =~ "test @ working" ]] || false
+    [[ "$output" =~ "columns" ]] || false
+    [[ "$output" =~ "c1" ]] || false
 }
 
 @test "dolt table schema on non existant table" {

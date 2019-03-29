@@ -30,8 +30,8 @@ teardown() {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col.schema test2
     run dolt ls
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test1" ]]
-    [[ "$output" =~ "test2" ]]
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
     [ "${#lines[@]}" -eq 3 ]
 }
 
@@ -41,7 +41,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt table select employees
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "tim" ]]
+    [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 4 ]
 }
 
@@ -73,7 +73,7 @@ teardown() {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col.schema test
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "already exists." ]]
+    [[ "$output" =~ "already exists." ]] || false
 }
 
 @test "reproduce the nutrition dataset bug" {
