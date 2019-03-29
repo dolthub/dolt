@@ -84,7 +84,7 @@ func (ddb *DoltDB) WriteEmptyRepo(name, email string) error {
 		rv := emptyRootValue(ddb.db)
 		_, err := ddb.WriteRootValue(rv)
 
-		cm := NewCommitMeta(name, email, "Data repository created.")
+		cm, _ := NewCommitMeta(name, email, "Data repository created.")
 
 		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(), Policy: nil}
 		firstCommit, err := ddb.db.Commit(ddb.db.GetDataset(creationBranch), rv.valueSt, commitOpts)

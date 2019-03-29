@@ -73,7 +73,11 @@ func CommitStaged(dEnv *env.DoltEnv, msg string) error {
 		return err
 	}
 
-	meta := doltdb.NewCommitMeta(name, email, msg)
+	meta, noCommitMsgErr := doltdb.NewCommitMeta(name, email, msg)
+	if noCommitMsgErr != nil {
+		return ErrEmptyCommitMessage
+	}
+
 	_, err = dEnv.DoltDB.CommitWithParents(h, dEnv.RepoState.Branch, mergeCmSpec, meta)
 
 	if err == nil {

@@ -3,9 +3,10 @@ package doltdb
 import (
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"strings"
 	"time"
+
+	"github.com/attic-labs/noms/go/types"
 )
 
 const (
@@ -31,19 +32,19 @@ var secToMilli = uint64(time.Second / time.Millisecond)
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
 // timestamp
-func NewCommitMeta(name, email, desc string) *CommitMeta {
+func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
 	n := strings.TrimSpace(name)
 	e := strings.TrimSpace(email)
 	d := strings.TrimSpace(desc)
 
 	if n == "" || e == "" || d == "" {
-		panic("Empty value for required parameter")
+		return nil, errors.New("Aborting commit due to empty commit message.")
 	}
 
 	ns := uint64(time.Now().UnixNano())
 	ms := ns / milliToNano
 
-	return &CommitMeta{n, e, ms, d}
+	return &CommitMeta{n, e, ms, d}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
