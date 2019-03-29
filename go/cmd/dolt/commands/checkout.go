@@ -127,6 +127,8 @@ func checkoutBranch(dEnv *env.DoltEnv, name string) errhand.VerboseError {
 			bdr.AddDetails("Please commit your changes or stash them before you switch branches.")
 			bdr.AddDetails("Aborting")
 			return bdr.Build()
+		} else if err == doltdb.ErrAlreadyOnBranch {
+			return errhand.BuildDError("Already on branch '%s'", name).Build()
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
 			bdr.AddCause(err)

@@ -123,7 +123,6 @@ teardown() {
 @test "dolt checkout master on master" {
     run dolt checkout master
     [ "$status" -eq 0 ]
-    skip "Should say Already on branch 'master'. Says Switched to branch 'master'"
     [ "$output" = "Already on branch 'master'" ]
 }
 

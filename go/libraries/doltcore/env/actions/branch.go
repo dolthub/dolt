@@ -90,6 +90,10 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 		return doltdb.ErrBranchNotFound
 	}
 
+	if dEnv.RepoState.Branch == brName {
+		return doltdb.ErrAlreadyOnBranch
+	}
+
 	currRoots, err := getRoots(dEnv, HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
