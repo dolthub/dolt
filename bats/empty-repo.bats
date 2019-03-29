@@ -11,7 +11,7 @@ teardown() {
     rm -rf $BATS_TMPDIR/dolt-repo
 }
 
-# Tests on an empty dolt repository                                                  
+# Tests on an empty dolt repository
 @test "dolt init on an already initialized repository" {
     run dolt init
     [ "$status" -ne 0 ]
@@ -34,8 +34,8 @@ teardown() {
 @test "dolt branch in a new repository" {
     run dolt branch
     [ "$status" -eq 0 ]
-    # I can't seem to get this to match "* master" so I made a regex instead         
-    # [ "$output" = "* master" ]                                                     
+    # I can't seem to get this to match "* master" so I made a regex instead
+    # [ "$output" = "* master" ]
     [[ "$output" =~ "* master" ]]
 }
 

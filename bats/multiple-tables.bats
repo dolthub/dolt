@@ -51,3 +51,24 @@ teardown() {
     [[ ! "$output" =~ "test2" ]]
     [ "${#lines[@]}" -eq 2 ]
 }
+
+@test "dolt add --all and dolt add . adds all changes" {
+    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add --all
+    run dolt status
+    [[ "$output" =~ "Changes to be committed" ]]
+    [[ ! "$output" =~ "Untracked files" ]]
+    run dolt reset test1 test2
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status 
+    [[ ! "$output" =~ "Changes to be committed" ]]
+    [[ "$output" =~ "Untracked files" ]]
+    run dolt add .
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [[ "$output" =~ "Changes to be committed" ]]
+    [[ ! "$output" =~ "Untracked files" ]]
+}

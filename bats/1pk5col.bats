@@ -62,6 +62,19 @@ teardown() {
     [[ "$output" =~ "test commit" ]]
 }
 
+@test "dolt log with -n specified" {
+    dolt add test
+    dolt commit -m "first commit"
+    run dolt log 
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "first commit" ]]
+    [[ "$output" =~ "Data repository created." ]]
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "first commit" ]]
+    [[ ! "$output" =~ "Data repository created." ]]
+}
+
 @test "add a row to a created table using dolt table put-row" {
     dolt add test
     dolt commit -m "create table"
@@ -148,6 +161,37 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added test row" ]]
+}
+
+@test "create a branch off an older commit than HEAD" {
+    dolt add test
+    dolt commit -m "first commit"
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    run dolt checkout -b older-branch HEAD^
+    [ "$status" -eq 0 ]
+    [ "$output" = "Switched to branch 'older-branch'" ]
+    run dolt log
+    [[ ! "$output" =~ "added test row" ]]
+    [[ "$output" =~ "first commit" ]]
+}
+
+@test "delete an unmerged branch" {
+    dolt checkout -b test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added test row"
+    run dolt branch -d test-branch 
+    [ "$status" -ne 0 ]
+    [ "$output" = "error: Cannot delete checked out branch 'test-branch'" ]
+    dolt checkout master
+    run dolt branch -d test-branch
+    skip "I should not be able to delete an unmerged branch without -f"
+    [ "$status" -ne 0 ]
+    run dolt branch -d -f test-branch
+    [ "$status" -eq 0 ]
+    [ "$output" = ""]
 }
 
 @test "generate a merge conflict and resolve with ours" {
@@ -336,6 +380,48 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]]
 }
+
+@test "remove different row, no merge conflict" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
+    dolt table put-row test pk:2 c1:11 c2:12 c3:13 c4:14 c5:15
+    dolt add test
+    dolt commit -m "added test rows"
+    dolt branch test-branch
+    dolt table rm-row test 1
+    dolt add test
+    dolt commit -m "removed pk=1 row"
+    dolt checkout test-branch
+    dolt table rm-row test 2
+    dolt add test
+    dolt commit -m "removed pk=2 row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]]
+    [[ ! "$output" =~ "CONFLICT" ]]
+}
+
+@test "remove same row, no merge conflict" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
+    dolt table put-row test pk:2 c1:11 c2:12 c3:13 c4:14 c5:15
+    dolt add test
+    dolt commit -m "added test rows"
+    dolt branch test-branch
+    dolt table rm-row test 1
+    dolt add test
+    dolt commit -m "removed pk=1 row"
+    dolt checkout test-branch
+    dolt table rm-row test 1
+    dolt add test
+    dolt commit -m "removed pk=1 row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]]
+    [[ ! "$output" =~ "CONFLICT" ]]
+} 
 
 @test "dolt table select with options" {
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
