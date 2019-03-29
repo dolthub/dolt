@@ -204,7 +204,7 @@ teardown() {
     dolt commit -m "merged and resolved conflict"
     run dolt log
     [[ "$output" =~ "added test row" ]] || false
-    [[ "$output" =~ "added conflicting row" ]] || false
+    [[ "$output" =~ "added conflicting test row" ]] || false
     [[ "$output" =~ "merged and resolved conflict" ]] || false
     [[ "$output" =~ "Merge:" ]] || false
 }

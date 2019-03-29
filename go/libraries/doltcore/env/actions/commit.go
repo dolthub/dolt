@@ -41,7 +41,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string) error {
 
 	if err != nil {
 		return err
-	} else if len(staged.Tables) == 0 {
+	} else if len(staged.Tables) == 0 && dEnv.RepoState.Merge == nil {
 		return NothingStaged{notStaged}
 	}
 
