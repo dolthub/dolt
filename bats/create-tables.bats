@@ -76,8 +76,8 @@ teardown() {
     [[ "$output" =~ "already exists." ]] || false
 }
 
-@test "reproduce the nutrition dataset bug" {
-    run dolt table import -c --pk=NDB_Number test $BATS_TEST_DIRNAME/helper/nutrition-bug.csv
-    skip "This throws an Error determining the output schema error. Should work"
+@test "create a table from CSV with common column name patterns" {
+    run dolt table import -c --pk=UPPERCASE test $BATS_TEST_DIRNAME/helper/caos-column-names.csv
+    skip "Import does not support capital letters in column names right now"
     [ "$status" -eq 0 ]
 }
