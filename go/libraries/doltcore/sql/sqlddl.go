@@ -6,31 +6,34 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/xwb1989/sqlparser"
 )
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteCreate(root *doltdb.RootValue, s *sqlparser.DDL, query string) (schema.Schema, error) {
+func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (schema.Schema, error) {
 
-	if s.Action != sqlparser.CreateStr {
+	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
 	}
 
 	var tableName string
-	tableNameExpr := s.Table
+	tableNameExpr := ddl.Table
 	tableName = tableNameExpr.Name.String()
 
 	if root.HasTable(tableName) {
-		return errCreate("error: table %s already defined", tableName)
+		return errCreate("error: table %ddl already defined", tableName)
 	}
 
-	spec := s.TableSpec
+	spec := ddl.TableSpec
 	sch, err := getSchema(spec)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: create table in noms
+	schVal, err := encoding.MarshalAsNomsValue(root.VRW(), sch)
+	tbl := doltdb.NewTable(root.VRW(), schVal, types.NewMap(root.VRW()))
+	root = root.PutTable(db, tableName, tbl)
 
 	return sch, nil
 }
@@ -40,7 +43,7 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 
 	var tag uint64
 	for i, colDef := range spec.Columns {
-		col, err := getColumn(colDef, tag)
+		col, err := getColumn(colDef, spec.Indexes, tag)
 		if err != nil {
 			return nil, err
 		}
@@ -57,8 +60,22 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 }
 
 
-func getColumn(colDef *sqlparser.ColumnDefinition, tag uint64) (schema.Column, error) {
+func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, error) {
 	columnType := colDef.Type
+	isPkey := false
+
+OuterLoop:
+	for _, index := range indexes {
+		if index.Info.Primary {
+			for _, indexCol := range index.Columns {
+				if indexCol.Column.Equal(colDef.Name) {
+					isPkey = true
+				}
+				break OuterLoop
+			}
+		}
+	}
+
 	switch columnType.Type {
 
 	// integer-like types
@@ -73,7 +90,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, tag uint64) (schema.Column, e
 	case INTEGER:
 		fallthrough
 	case BIGINT:
-		return schema.NewColumn(colDef.Name.String(), tag, types.IntKind, false), nil
+		return schema.NewColumn(colDef.Name.String(), tag, types.IntKind, isPkey), nil
 
 	// string-like types
 	case TEXT:
@@ -99,7 +116,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, tag uint64) (schema.Column, e
 	case BINARY:
 		fallthrough
 	case VARBINARY:
-		return schema.NewColumn(colDef.Name.String(), tag, types.StringKind, false), nil
+		return schema.NewColumn(colDef.Name.String(), tag, types.StringKind, isPkey), nil
 
 	// float-like types
 	case FLOAT_TYPE:
@@ -107,7 +124,13 @@ func getColumn(colDef *sqlparser.ColumnDefinition, tag uint64) (schema.Column, e
 	case DOUBLE:
 		fallthrough
 	case DECIMAL:
-		return schema.NewColumn(colDef.Name.String(), tag, types.FloatKind, false), nil
+		return schema.NewColumn(colDef.Name.String(), tag, types.FloatKind, isPkey), nil
+
+	// bool-like types
+	case BIT:
+		fallthrough
+	case BOOLEAN:
+		return schema.NewColumn(colDef.Name.String(), tag, types.BoolKind, isPkey), nil
 
 	// time-like types
 	case DATE:
@@ -122,8 +145,6 @@ func getColumn(colDef *sqlparser.ColumnDefinition, tag uint64) (schema.Column, e
 		return errColumn("Date and time types aren't supported")
 
 	// unsupported types
-	case BIT:
-		return errColumn("Unsupported column type %v", columnType.Type)
 	case ENUM:
 		return errColumn("Unsupported column type %v", columnType.Type)
 	case SET:
