@@ -33,9 +33,20 @@ func OpenJSONReader(path string, fs filesys.ReadableFS, info *JSONFileInfo, schP
 
 func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, schPath string, tblPath string) (*JSONReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
-	schData, _ := fs.ReadFile(schPath)
+	if schPath == "" {
+		return nil, errors.New("schema must be specified for json import")
+	}
+
+	schData, err := fs.ReadFile(schPath)
+	if err != nil {
+		return nil, err
+	}
+
 	jsonSchStr := string(schData)
 	sch, err := encoding.UnmarshalJson(jsonSchStr)
+	if err != nil {
+		return nil, err
+	}
 	tblData, _ := fs.ReadFile(tblPath)
 
 	jsonRows, err := UnmarshalFromJSON(tblData)
