@@ -170,7 +170,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		rd, _, err := loc.CreateReader(root, fs, "")
-		if test.dl.Format == ".json" && err.Error() == "schema must be specified for json import" { //!= nil && test.dl.Format == ".json" {
+		if test.dl.Format == ".json" && err.Error() == "schema must be specified for json import" {
 			continue
 		}
 
