@@ -77,7 +77,11 @@ teardown() {
 }
 
 @test "create a table from CSV with common column name patterns" {
-    run dolt table import -c --pk=UPPERCASE test $BATS_TEST_DIRNAME/helper/caos-column-names.csv
-    skip "Import does not support capital letters in column names right now"
+    run dolt table import -c --pk=UPPERCASE test $BATS_TEST_DIRNAME/helper/caps-column-names.csv
     [ "$status" -eq 0 ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "UPPERCASE" ]] || false
 }
+
+

@@ -229,7 +229,7 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 		var updatedCols []schema.Column
 
 		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-			if keyColSet.Contains(col.Name) {
+			if keyColSet.Contains(strings.ToLower(col.Name)) {
 				foundPKCols++
 				col.IsPartOfPK = true
 				col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
