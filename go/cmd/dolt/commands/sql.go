@@ -59,12 +59,15 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
 		return sqlSelect(root, s, query)
+	case *sqlparser.DDL:
+		return sqlDDL(root, s, query)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 		return 1
 	}
 }
 
+// Executes a SQL select statement and prints the result to the CLI.
 func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	p, outSch, err := sql.BuildSelectQueryPipeline(root, s, query)
 	if err != nil {
@@ -97,6 +100,34 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	}
 
 	return 0
+}
+
+// Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.
+func sqlDDL(root *doltdb.RootValue, ddl *sqlparser.DDL, query string) int {
+	switch ddl.Action {
+	case sqlparser.CreateStr:
+		_, err := sql.ExecuteCreate(root, ddl, query)
+		if err != nil {
+			return quitErr("Error creating table: %v", err)
+		}
+		return 0
+	case sqlparser.AlterStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.DropStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.RenameStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.TruncateStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.CreateVindexStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.AddColVindexStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	case sqlparser.DropColVindexStr:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	default:
+		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+	}
 }
 
 // Writes an error message to the CLI and returns 1

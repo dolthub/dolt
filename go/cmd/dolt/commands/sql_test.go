@@ -2,8 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
-	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -21,15 +19,6 @@ import (
 //var Titles = []string{"Senior Dufus", "Dufus", ""}
 //var MaritalStatus = []bool{true, false, false}
 
-var expectedFieldVals = map[uint64]types.Value{
-	dtestutils.IdTag:        expectedId,
-	dtestutils.NameTag:      types.String("Bill Billerson"),
-	dtestutils.AgeTag:       types.Uint(32),
-	dtestutils.IsMarriedTag: types.Bool(true),
-	dtestutils.TitleTag:     types.String("Senior Dufus"),
-}
-
-var expectedId = types.UUID(uuid.Must(uuid.Parse("11111111-1111-1111-1111-111111111111")))
 var tableName = "people"
 
 // Smoke tests, values are printed to console
