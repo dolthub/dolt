@@ -28,10 +28,10 @@ type selectStatement struct {
 type filterFn = func(r row.Row) (matchesFilter bool)
 
 type selectTransform struct {
-	p      *pipeline.Pipeline
-	filter filterFn
-	limit  int
-	count  int
+	noMoreCallback func()
+	filter         filterFn
+	limit          int
+	count          int
 }
 
 func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
@@ -41,10 +41,46 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
 	} else {
-		st.p.NoMore()
+		st.noMoreCallback()
 	}
 
 	return nil, ""
+}
+
+// ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
+func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([]row.Row, schema.Schema, error) {
+	p, schema, err := BuildSelectQueryPipeline(root, s, query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var rows []row.Row // your boat
+	rowSink := pipeline.ProcFuncForSinkFunc(
+		func(r row.Row, props pipeline.ReadableMap) error {
+			rows = append(rows, r)
+			return nil
+		})
+
+	var executionErr error
+	errSink := func(failure *pipeline.TransformRowFailure) (quit bool) {
+		executionErr = errors.New(fmt.Sprintf("Query execution failed at stage %v for row %v: error was %v",
+			failure.TransformName, failure.Row, failure.Details))
+		return true
+	}
+
+	p.SetOutput(rowSink)
+	p.SetBadRowCallback(errSink)
+
+	p.Start()
+	err = p.Wait()
+	if err != nil {
+		return nil, nil, err
+	}
+	if executionErr != nil {
+		return nil, nil, executionErr
+	}
+
+	return rows, schema, nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
@@ -65,9 +101,9 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		case sqlparser.TableName:
 			tableName = e.Name.String()
 		case *sqlparser.Subquery:
-			quitErr("Subqueries are not supported: %v.", query)
+			return quitErr("Subqueries are not supported: %v.", query)
 		default:
-			quitErr("Unrecognized expression: %v", nodeToString(e))
+			return quitErr("Unrecognized expression: %v", nodeToString(e))
 		}
 	case *sqlparser.ParenTableExpr:
 		return quitErr("Parenthetical table expressions are not supported: %v,", query)
@@ -145,7 +181,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 	}
 
 	if whereClause.Type != sqlparser.WhereStr {
-		errors.New(fmt.Sprintf("Having clause not supported: %v", query))
+		return errors.New(fmt.Sprintf("Having clause not supported: %v", query))
 	}
 
 	switch expr := whereClause.Expr.(type) {
@@ -167,7 +203,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 
 		colName, ok = colExpr.(*sqlparser.ColName)
 		if !ok {
-			errors.New(fmt.Sprintf("Only column names and value literals are supported"))
+			return errors.New(fmt.Sprintf("Only column names and value literals are supported"))
 		}
 
 		colNameStr := colName.Name.String()
@@ -346,7 +382,7 @@ func nodeToString(node sqlparser.SQLNode) string {
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
 // BuildSelectQueryPipeline.
 func quitErr(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
-	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args))
+	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args...))
 }
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
@@ -367,6 +403,8 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
 
 	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)
+	selTrans.noMoreCallback = func() {p.NoMore()}
+
 	p.RunAfter(func() { rd.Close() })
 
 	return p, outSchema, nil
@@ -377,7 +415,7 @@ func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, t
 	colColl := tableSch.GetAllCols()
 
 	if len(statement.colNames) > 0 {
-		cols := make([]schema.Column, 0, len(statement.colNames)+1)
+		cols := make([]schema.Column, 0, len(statement.colNames))
 
 
 		for _, name := range statement.colNames {
