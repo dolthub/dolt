@@ -14,7 +14,7 @@ var coShortDesc = `Switch branches or restore working tree tables`
 var coLongDesc = `Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
 
 dolt checkout <branch>
-   To prepare for working on <branch>, switch to it by updating the index and the files in the working tree, and by pointing HEAD at the branch. Local modifications to the files in the working
+   To prepare for working on <branch>, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
    tree are kept, so that they can be committed to the <branch>.
 
 dolt checkout -b <new_branch> [<start point>]
