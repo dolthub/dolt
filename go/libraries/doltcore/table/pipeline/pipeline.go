@@ -6,10 +6,13 @@ import (
 	"sync/atomic"
 )
 
+// Buffer size of processing channels created by the pipeline
+const channelSize = 1024
+
 // InFunc is a pipeline input function that reads row data from a source and puts it in a channel.
 type InFunc func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{})
 
-// OutFUnc is a pipeline output function that takes the data the pipeline has processed off of the channel.
+// OutFunc is a pipeline output function that takes the data the pipeline has processed off of the channel.
 type OutFunc func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure)
 
 // BadRowCallback is a callback function that is called when a bad row is encountered.  returning true from this
@@ -21,8 +24,13 @@ type BadRowCallback func(*TransformRowFailure) (quit bool)
 // input, passing output to the next stage, ultimately to the OutFunc. Each transform has a name, and is referred to as
 // a stage in the pipeline.
 //
+// Pipelines can be constructed in phases, with different call sites adding transformations or even redirecting output
+// as required. Once a pipeline is started with Start(), all configuration methods will panic.
+//
 // Pipelines must be cleaned up by a call to either Wait, Abort, or StopWithError, all of which run any deferred
 // functions registered with the pipeline via calls to RunAfter (e.g. closing readers and writers).
+//
+// Ironically, not even a little thread safe.
 type Pipeline struct {
 	// A wait group that will block until the pipeline is done.
 	wg *sync.WaitGroup
@@ -30,39 +38,103 @@ type Pipeline struct {
 	stopChan chan struct{}
 	// A channel for consumers to write to when there are no more input rows to process.
 	noMoreChan chan struct{}
+	// A channel for consumers to read from to handle bad rows.
+	badRowChan chan *TransformRowFailure
+	// A function to run on rows that cannot be transformed.
+	badRowCB BadRowCallback
 	// An error in the pipeline's operation, accessible after it finishes.
 	atomicErr atomic.Value
+	// The input function for the pipeline.
+	inFunc InFunc
+	// The output function for the pipeline.
+	outFunc OutFunc
+	// The series of transformations to apply, each of which has a name called the "stage" of the pipeline
+	stages *TransformCollection
 	// A map of stage name to input channel.
-	stageInChan map[string]chan RowWithProps
+	inputChansByStageName map[string]chan RowWithProps
+	// A collection of synthetic rows to insert into the pipeline at a particular stage, before any other pipelined
+	// input arrives to that stage.
+	syntheticRowsByStageName map[string][]row.Row
 	// A set of functions to run when the pipeline finishes.
 	runAfterFuncs []func()
-	// Start is a function used to start pipeline processing.  The Pipeline will be created in an unstarted state.
-	Start func()
+	// Whether the pipeline is currently running
+	isRunning bool
 }
 
-// InsertRow will insert a row at a particular stage in the pipeline
-func (p *Pipeline) InsertRow(stageName string, r row.Row) bool {
-	ch, ok := p.stageInChan[stageName]
+//NewAsyncPipeline creates a Pipeline from a given InFunc, OutFunc, TransformCollection, and a BadRowCallback.
+func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollection, badRowCB BadRowCallback) *Pipeline {
+	var wg sync.WaitGroup
 
+	return &Pipeline{
+		wg:                       &wg,
+		inFunc:                   inFunc,
+		outFunc:                  outFunc,
+		stages:                   stages,
+		badRowCB:                 badRowCB,
+		badRowChan:               make(chan *TransformRowFailure, channelSize),
+		stopChan:                 make(chan struct{}),
+		noMoreChan:               make(chan struct{}),
+		inputChansByStageName:    make(map[string]chan RowWithProps),
+		syntheticRowsByStageName: make(map[string][]row.Row),
+	}
+}
+
+// NewPartialPipeline creates a pipeline stub that doesn't have an output func set on it yet. An OutFunc must be
+// applied via a call to SetOutput before calling Start().
+func NewPartialPipeline(inFunc InFunc, stages *TransformCollection, badRowCB BadRowCallback) *Pipeline {
+	return NewAsyncPipeline(inFunc, nil, stages, badRowCB)
+}
+
+// AddStage adds a new named transform to the set of stages
+func (p *Pipeline) AddStage(stage NamedTransform) {
+	if p.isRunning {
+		panic("cannot add stages to a running pipeline")
+	}
+
+	p.stages.AppendTransforms(stage)
+}
+
+// SetOutput sets the output function to the
+func (p *Pipeline) SetOutput(outFunc OutFunc) {
+	if p.isRunning {
+		panic("cannot set output on a running pipeline")
+	}
+
+	p.outFunc = outFunc
+}
+
+// InjectRow injects a row at a particular stage in the pipeline. The row will be processed before other pipeline input
+// arrives.
+func (p *Pipeline) InjectRow(stageName string, r row.Row) {
+	if p.isRunning {
+		panic("cannot inject rows into a running pipeline")
+	}
+
+	var validStageName bool
+	for _, stage := range p.stages.Transforms {
+		if stage.Name == stageName {
+			validStageName = true
+			break
+		}
+	}
+	if !validStageName {
+		panic("unknown stage name " + stageName)
+	}
+
+	_, ok := p.syntheticRowsByStageName[stageName]
 	if !ok {
-		return false
+		p.syntheticRowsByStageName[stageName] = make([]row.Row, 0, 1)
 	}
-
-	ch <- RowWithProps{r, NoProps}
-	return true
+	p.syntheticRowsByStageName[stageName] = append(p.syntheticRowsByStageName[stageName], r)
 }
 
-// Abort signals the pipeline to stop processing.
-func (p *Pipeline) Abort() {
-	defer func() {
-		recover() // ignore multiple calls to close channels
-	}()
-
-	for _, f := range p.runAfterFuncs {
-		defer f()
+// Schedules the given function to run after the pipeline completes.
+func (p *Pipeline) RunAfter(f func()) {
+	if p.isRunning {
+		panic("cannot add a RunAfter function to a running pipeline")
 	}
 
-	close(p.stopChan)
+	p.runAfterFuncs = append(p.runAfterFuncs, f)
 }
 
 // NoMore signals that the pipeline has no more input to process. Must be called exactly once by the consumer when there
@@ -77,18 +149,71 @@ func (p *Pipeline) NoMore() {
 	close(p.noMoreChan)
 }
 
-// Schedules the given function to run after the pipeline completes.
-func (p *Pipeline) RunAfter(f func()) {
-	p.runAfterFuncs = append(p.runAfterFuncs, f)
+// Starts the pipeline processing. Panics if the pipeline hasn't been set up completely yet.
+func (p *Pipeline) Start() {
+	if p.isRunning {
+		panic("pipeline already started")
+	}
+
+	if p.inFunc == nil || p.outFunc == nil {
+		panic("pipeline started without input or output func")
+	}
+
+	in := make(chan RowWithProps, channelSize)
+	p.stopChan = make(chan struct{})
+
+	// Start all the transform stages, chaining the output of one to the input of the next.
+	curr := in
+	if p.stages != nil {
+		for i := 0; i < p.stages.NumTransforms(); i++ {
+			stage := p.stages.TransformAt(i)
+			p.inputChansByStageName[stage.Name] = curr
+			curr = transformAsync(stage.Func, p.wg, curr, p.badRowChan, p.stopChan)
+		}
+	}
+
+	// Inject all synthetic rows requested into their appropriate input channels.
+	for stageName, injectedRows := range p.syntheticRowsByStageName {
+		ch := p.inputChansByStageName[stageName]
+		for _, row := range injectedRows {
+			ch <- RowWithProps{row, NoProps}
+		}
+	}
+
+	// Start all the async processing: the sink, the error handlers, then the source.
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.processBadRows()
+	}()
+
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.outFunc(p, curr, p.badRowChan)
+	}()
+
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.inFunc(p, in, p.badRowChan, p.noMoreChan)
+	}()
+
+	p.isRunning = true
 }
 
-// Wait will wait for the pipeline to complete and return any erorr that occurred during its execution.
+// Wait waits for the pipeline to complete and return any error that occurred during its execution.
 func (p *Pipeline) Wait() error {
+	if !p.isRunning {
+		panic("cannot Wait() a pipeline before a call to Start()")
+	}
+
 	for _, f := range p.runAfterFuncs {
 		defer f()
 	}
 
 	p.wg.Wait()
+	p.isRunning = false
 
 	atomicErr := p.atomicErr.Load()
 
@@ -99,62 +224,23 @@ func (p *Pipeline) Wait() error {
 	return nil
 }
 
-//NewAsyncPipeline creates a Pipeline from a given InFunc, OutFunc, TransformCollection, and a BadRowCallback
-func NewAsyncPipeline(processInputs InFunc, processOutputs OutFunc, stages *TransformCollection, badRowCB BadRowCallback) (pipeline *Pipeline) {
-	var wg sync.WaitGroup
+// Abort signals the pipeline to stop processing.
+func (p *Pipeline) Abort() {
+	defer func() {
+		p.isRunning = false
+	}()
 
-	in := make(chan RowWithProps, 1024)
-	badRowChan := make(chan *TransformRowFailure, 1024)
-	stopChan := make(chan struct{})
-	noMoreChan := make(chan struct{})
-	stageInChan := make(map[string]chan RowWithProps)
+	defer func() {
+		recover() // ignore multiple calls to close channels
+	}()
 
-	curr := in
-	if stages != nil {
-		for i := 0; i < stages.NumTransforms(); i++ {
-			stage := stages.TransformAt(i)
-			stageInChan[stage.Name] = curr
-			curr = transformAsync(stage.Func, &wg, curr, badRowChan, stopChan)
-		}
+	for _, f := range p.runAfterFuncs {
+		defer f()
 	}
 
-	p := &Pipeline{wg: &wg, stopChan: stopChan, noMoreChan: noMoreChan, stageInChan: stageInChan}
-
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		p.processBadRows(badRowCB, badRowChan)
-	}()
-	go func() {
-		defer wg.Done()
-		processOutputs(p, curr, badRowChan)
-	}()
-
-	p.Start = func() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			processInputs(p, in, badRowChan, noMoreChan)
-		}()
-	}
-
-	return p
+	close(p.stopChan)
 }
 
-// Runs the ansync transform function given with the input channel given and returns its output channel.
-func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan struct{}) chan RowWithProps {
-	wg.Add(1)
-	outChan := make(chan RowWithProps, 1024)
-
-	go func() {
-		defer wg.Done()
-		defer close(outChan)
-
-		transformer(inChan, outChan, badRowChan, stopChan)
-	}()
-
-	return outChan
-}
 
 // StopWithErr provides a method by the pipeline can be stopped when an error is encountered.  This would typically be
 // done in InFuncs and OutFuncs
@@ -176,13 +262,14 @@ func (p Pipeline) IsStopping() bool {
 	return false
 }
 
-func (p *Pipeline) processBadRows(badRowCB BadRowCallback, badRowChan <-chan *TransformRowFailure) {
-	if badRowCB != nil {
+// Processes all the errors that occur during the pipeline
+func (p *Pipeline) processBadRows() {
+	if p.badRowCB != nil {
 		for {
 			select {
-			case bRow, ok := <-badRowChan:
+			case bRow, ok := <-p.badRowChan:
 				if ok {
-					quit := badRowCB(bRow)
+					quit := p.badRowCB(bRow)
 
 					if quit {
 						p.Abort()
@@ -197,4 +284,19 @@ func (p *Pipeline) processBadRows(badRowCB BadRowCallback, badRowChan <-chan *Tr
 			}
 		}
 	}
+}
+
+// Runs the ansync transform function given with the input channel given and returns its output channel.
+func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan <-chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan struct{}) chan RowWithProps {
+	wg.Add(1)
+	outChan := make(chan RowWithProps, channelSize)
+
+	go func() {
+		defer wg.Done()
+		defer close(outChan)
+
+		transformer(inChan, outChan, badRowChan, stopChan)
+	}()
+
+	return outChan
 }
