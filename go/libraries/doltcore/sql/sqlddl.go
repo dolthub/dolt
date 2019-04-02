@@ -10,32 +10,44 @@ import (
 	"github.com/xwb1989/sqlparser"
 )
 
-// ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (schema.Schema, error) {
+// For some reason these constants are private in the sql parser library, so we need to either fork that package or
+// duplicate them here. Not quite ready to fork it, so duplicating for now.
+const (
+	colKeyNone sqlparser.ColumnKeyOption = iota
+	colKeyPrimary
+	colKeySpatialKey
+	colKeyUnique
+	colKeyUniqueKey
+	colKey
+)
+
+// ExecuteCreate executes the given create statement and returns the new root value of the database and its
+// accompanying schema.
+func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
 
 	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
 	}
 
 	var tableName string
-	tableNameExpr := ddl.Table
+	tableNameExpr := ddl.NewName
 	tableName = tableNameExpr.Name.String()
 
 	if root.HasTable(tableName) {
-		return errCreate("error: table %ddl already defined", tableName)
+		return errCreate("error: table %v already defined", tableName)
 	}
 
 	spec := ddl.TableSpec
 	sch, err := getSchema(spec)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	schVal, err := encoding.MarshalAsNomsValue(root.VRW(), sch)
 	tbl := doltdb.NewTable(root.VRW(), schVal, types.NewMap(root.VRW()))
 	root = root.PutTable(db, tableName, tbl)
 
-	return sch, nil
+	return root, sch, nil
 }
 
 func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
@@ -62,16 +74,18 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 
 func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, error) {
 	columnType := colDef.Type
-	isPkey := false
+	isPkey := colDef.Type.KeyOpt == colKeyPrimary
 
-OuterLoop:
-	for _, index := range indexes {
-		if index.Info.Primary {
-			for _, indexCol := range index.Columns {
-				if indexCol.Column.Equal(colDef.Name) {
-					isPkey = true
+	if !isPkey {
+	OuterLoop:
+		for _, index := range indexes {
+			if index.Info.Primary {
+				for _, indexCol := range index.Columns {
+					if indexCol.Column.Equal(colDef.Name) {
+						isPkey = true
+					}
+					break OuterLoop
 				}
-				break OuterLoop
 			}
 		}
 	}
@@ -176,6 +190,6 @@ func errColumn(errFmt string, args... interface{}) (schema.Column, error) {
 	return schema.Column{}, errors.New(fmt.Sprintf(errFmt, args...))
 }
 
-func errCreate(errFmt string, args... interface{}) (schema.Schema, error) {
-	return nil, errors.New(fmt.Sprintf(errFmt, args...))
+func errCreate(errFmt string, args... interface{}) (*doltdb.RootValue, schema.Schema, error) {
+	return nil, nil, errors.New(fmt.Sprintf(errFmt, args...))
 }
