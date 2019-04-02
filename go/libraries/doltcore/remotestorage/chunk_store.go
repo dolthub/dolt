@@ -391,42 +391,113 @@ func (dcs *DoltChunkStore) httpGetDownload(httpGet *remotesapi.HttpGetChunk) ([]
 	return []chunks.Chunk{ch}, nil
 }
 
+type bytesResult struct {
+	r    *remotesapi.RangeChunk
+	data []byte
+	err  error
+}
+
+func getRanges(url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
+	for {
+		select {
+		case <-stopChan:
+			return
+		default:
+		}
+		select {
+		case r, ok := <-rangeChan:
+			if !ok {
+				return
+			}
+
+			req, err := http.NewRequest(http.MethodGet, url, nil)
+			rangeVal := fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+uint64(r.Length)-1)
+			req.Header.Set("Range", rangeVal)
+			resp, err := httpClient.Do(req)
+
+			if err != nil {
+				resultChan <- bytesResult{r, nil, err}
+				break
+			} else if resp.StatusCode/100 != 2 {
+				resultChan <- bytesResult{r, nil, errors.New(url + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))}
+				break
+			}
+
+			comprData, err := ioutil.ReadAll(resp.Body)
+
+			if err != nil {
+				resultChan <- bytesResult{r, nil, err}
+				break
+			}
+
+			data, err := snappy.Decode(nil, comprData[:len(comprData)-4])
+
+			if err != nil {
+				resultChan <- bytesResult{r, nil, err}
+				break
+			}
+
+			resultChan <- bytesResult{r, data, nil}
+
+		case <-stopChan:
+			return
+		}
+	}
+}
+
 func (dcs *DoltChunkStore) httpGetRangeDownload(getRange *remotesapi.HttpGetRange) ([]chunks.Chunk, error) {
 	url := getRange.Url
+	rangeCount := len(getRange.Ranges)
+
+	if rangeCount == 0 {
+		return []chunks.Chunk{}, nil
+	}
+
+	concurrency := rangeCount / 8
+
+	if concurrency == 0 {
+		concurrency = 1
+	} else if concurrency > 128 {
+		concurrency = 128
+	}
+
+	stopChan := make(chan struct{})
+	rangeChan := make(chan *remotesapi.RangeChunk, len(getRange.Ranges))
+	resultChan := make(chan bytesResult, 2*concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go getRanges(url, rangeChan, resultChan, stopChan)
+	}
+
+	for _, r := range getRange.Ranges {
+		rangeChan <- r
+	}
+
+	close(rangeChan)
 
 	var chnks []chunks.Chunk
-	for _, r := range getRange.Ranges {
-		//resp, err := http.Get(url)
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+uint64(r.Length)-1))
-		resp, err := httpClient.Do(req)
-
-		if err != nil {
-			return nil, err
-		} else if resp.StatusCode/100 != 2 {
-			return nil, errors.New(url + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
+	for res := range resultChan {
+		if res.err != nil {
+			close(stopChan)
+			return nil, res.err
 		}
 
-		comprData, err := ioutil.ReadAll(resp.Body)
-
-		if err != nil {
-			return nil, err
-		}
-
-		data, err := snappy.Decode(nil, comprData[:len(comprData)-4])
-
-		if err != nil {
-			return nil, err
-		}
+		r := res.r
 
 		expectedHash := hash.New(r.Hash)
-		ch := chunks.NewChunk(data)
+		ch := chunks.NewChunk(res.data)
 
 		if ch.Hash() != expectedHash {
+			close(stopChan)
 			return nil, errors.New("content did not match hash.")
 		}
 
 		chnks = append(chnks, ch)
+
+		if len(chnks) == rangeCount {
+			break
+		}
 	}
+
 	return chnks, nil
 }
