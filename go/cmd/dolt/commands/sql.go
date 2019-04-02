@@ -106,7 +106,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 func sqlDDL(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) int {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
-		_, err := sql.ExecuteCreate(db, root, ddl, query)
+		_, _, err := sql.ExecuteCreate(db, root, ddl, query)
 		if err != nil {
 			return quitErr("Error creating table: %v", err)
 		}
