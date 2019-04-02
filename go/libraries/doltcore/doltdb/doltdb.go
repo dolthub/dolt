@@ -3,6 +3,7 @@ package doltdb
 import (
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/chunks"
 	"path/filepath"
 	"strings"
 
@@ -41,6 +42,13 @@ var LocalDirDoltDB = Location("nbs:" + DoltDataDir)
 // errors in many cases.
 type DoltDB struct {
 	db datas.Database
+}
+
+// DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
+func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
+	db := datas.NewDatabase(cs)
+
+	return &DoltDB{db}
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
