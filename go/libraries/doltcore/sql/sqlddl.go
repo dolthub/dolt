@@ -24,9 +24,15 @@ const (
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
 func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
-
 	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
+	}
+
+	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
+	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
+	_, err := sqlparser.ParseStrictDDL(query)
+	if err != nil {
+		return &doltdb.RootValue{}, nil, err
 	}
 
 	var tableName string
@@ -83,8 +89,8 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 				for _, indexCol := range index.Columns {
 					if indexCol.Column.Equal(colDef.Name) {
 						isPkey = true
+						break OuterLoop
 					}
-					break OuterLoop
 				}
 			}
 		}
@@ -143,7 +149,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 	// bool-like types
 	case BIT:
 		fallthrough
-	case BOOLEAN:
+	case BOOLEAN: // not actually implemented at the moment (should be a synonym for bit)
 		return schema.NewColumn(colDef.Name.String(), tag, types.BoolKind, isPkey), nil
 
 	// time-like types
