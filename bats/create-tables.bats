@@ -61,8 +61,7 @@ teardown() {
 }
 
 @test "create a table with two primary keys from csv import" {
-    run dolt table import -c --pk=pk1 --pk=pk2 test $BATS_TEST_DIRNAME/helper/2pk5col-ints.csv
-    skip "Multiple primary key tables must be created with a schema file right now"
+    run dolt table import -c --pk=pk1,pk2 test $BATS_TEST_DIRNAME/helper/2pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
