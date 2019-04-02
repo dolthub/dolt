@@ -60,6 +60,10 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	case *sqlparser.Select:
 		return sqlSelect(root, s, query)
 	case *sqlparser.DDL:
+		_, err := sqlparser.ParseStrictDDL(query)
+		if err != nil {
+			return quitErr("Error parsing SQL: %v.", err.Error())
+		}
 		return sqlDDL(dEnv.DoltDB, root, s, query)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
