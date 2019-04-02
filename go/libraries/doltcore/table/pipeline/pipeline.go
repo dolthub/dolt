@@ -151,6 +151,10 @@ func (p *Pipeline) NoMore() {
 
 // Starts the pipeline processing. Panics if the pipeline hasn't been set up completely yet.
 func (p *Pipeline) Start() {
+	if p.isRunning {
+		panic("pipeline already started")
+	}
+
 	if p.inFunc == nil || p.outFunc == nil {
 		panic("pipeline started without input or output func")
 	}
