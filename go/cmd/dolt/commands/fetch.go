@@ -20,7 +20,7 @@ var fetchSynopsis = []string{
 
 func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

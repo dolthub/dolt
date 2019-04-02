@@ -17,7 +17,7 @@ var pullSynopsis = []string{
 
 func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	branch := dEnv.RepoState.Branch
 
