@@ -81,8 +81,8 @@ func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollectio
 
 // NewPartialPipeline creates a pipeline stub that doesn't have an output func set on it yet. An OutFunc must be
 // applied via a call to SetOutput before calling Start().
-func NewPartialPipeline(inFunc InFunc, stages *TransformCollection, badRowCB BadRowCallback) *Pipeline {
-	return NewAsyncPipeline(inFunc, nil, stages, badRowCB)
+func NewPartialPipeline(inFunc InFunc, stages *TransformCollection) *Pipeline {
+	return NewAsyncPipeline(inFunc, nil, stages, nil)
 }
 
 // AddStage adds a new named transform to the set of stages
@@ -94,13 +94,22 @@ func (p *Pipeline) AddStage(stage NamedTransform) {
 	p.stages.AppendTransforms(stage)
 }
 
-// SetOutput sets the output function to the
+// SetOutput sets the output function to the function given
 func (p *Pipeline) SetOutput(outFunc OutFunc) {
 	if p.isRunning {
 		panic("cannot set output on a running pipeline")
 	}
 
 	p.outFunc = outFunc
+}
+
+// SetBadRowCallback sets the callback to run when a bad row is encountered to the callback given
+func (p *Pipeline) SetBadRowCallback(callback BadRowCallback) {
+	if p.isRunning {
+		panic("cannot set bad row callback on a running pipeline")
+	}
+
+	p.badRowCB = callback
 }
 
 // InjectRow injects a row at a particular stage in the pipeline. The row will be processed before other pipeline input
