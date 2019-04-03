@@ -475,7 +475,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "c4" ]] || false
     run dolt table select --where c1=1 --limit=1 test
-    skip "Adding --limit=1 panics right now" 
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 }
