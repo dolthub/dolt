@@ -74,7 +74,7 @@ var importLongDesc = "If <b>--create-table | -c</b> is given the operation will 
 	"\n" +
 	"In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not " +
 	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of " +
-	"the file in one of the supported formats (csv, psv, nbf, json)"
+	"the file in one of the supported formats (csv, psv, nbf, json, xlsx)"
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
