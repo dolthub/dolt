@@ -2,8 +2,9 @@ package errhand
 
 import (
 	"fmt"
-	"github.com/fatih/color"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 type DErrorBuilder struct {
@@ -101,9 +102,8 @@ func (derr *DError) Error() string {
 func (derr *DError) Verbose() string {
 	sections := make([]string, 0, 6)
 
-	errMsg := derr.Error()
-	if errMsg != "" {
-		sections = append(sections, errMsg)
+	if derr.displayMsg != "" {
+		sections = append(sections, derr.Error())
 	}
 
 	if derr.details != "" {

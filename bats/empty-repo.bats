@@ -100,13 +100,13 @@ teardown() {
 @test "dolt table import in a new repository" {
     run dolt table import
     [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "Invalid usage." ]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt table export in a new repository" {
     run dolt table export
     [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "Invalid usage." ]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt table rm in a new repository" {
@@ -118,7 +118,7 @@ teardown() {
 @test "dolt table cp in a new repository" {
     run dolt table cp
     [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "invalid usage" ]
+    [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
 @test "dolt table put-row in a new repository" {

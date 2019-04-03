@@ -82,7 +82,6 @@ var importSynopsis = []string{
 
 func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, *mvdata.DataLocation, *mvdata.DataLocation) {
 	if apr.NArg() != 2 {
-		cli.Println("Invalid usage.")
 		usage()
 		return mvdata.InvalidOp, nil, nil
 	}

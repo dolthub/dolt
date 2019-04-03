@@ -19,7 +19,6 @@ var exportSynopsis = []string{
 
 func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (*mvdata.DataLocation, *mvdata.DataLocation) {
 	if apr.NArg() != 2 {
-		cli.Println("Invalid usage.")
 		usage()
 		return nil, nil
 	}

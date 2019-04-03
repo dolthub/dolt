@@ -59,7 +59,6 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr = abortMerge(dEnv)
 	} else {
 		if apr.NArg() != 1 {
-			cli.PrintErrln("invalid usage")
 			usage()
 			return 1
 		}

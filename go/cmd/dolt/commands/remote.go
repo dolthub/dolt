@@ -3,15 +3,16 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"path"
+	"strconv"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
-	"path"
-	"strconv"
-	"strings"
 )
 
 var ErrInvalidPort = errors.New("invalid port")
@@ -51,7 +52,7 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	case apr.Arg(0) == removeRemoteId:
 		verr = removeRemote(dEnv, apr)
 	default:
-		verr = errhand.BuildDError("Invalid Usage").SetPrintUsage().Build()
+		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -59,7 +60,7 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func removeRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
-		return errhand.BuildDError("Invalid usage.").SetPrintUsage().Build()
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	old := strings.TrimSpace(apr.Arg(1))
@@ -78,7 +79,7 @@ func removeRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 
 func renameRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
-		return errhand.BuildDError("Invalid usage.").SetPrintUsage().Build()
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	old := strings.TrimSpace(apr.Arg(1))
@@ -143,7 +144,7 @@ func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, error) {
 
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
-		return errhand.BuildDError("Invalid usage.").SetPrintUsage().Build()
+		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	remoteName := strings.TrimSpace(apr.Arg(1))

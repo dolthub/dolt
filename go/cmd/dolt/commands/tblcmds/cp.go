@@ -33,7 +33,6 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() < 2 || apr.NArg() > 3 {
-		cli.PrintErrln("invalid usage")
 		usage()
 		return 1
 	}
