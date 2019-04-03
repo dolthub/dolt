@@ -35,8 +35,8 @@ func TestOpenCommitEditor(t *testing.T) {
 		initialContents string
 		expected        string
 	}{
-		{`python -c 'import sys; path = sys.argv[1]; f = open(path, "w+"); f.write("this is a test"); f.close()'`, "", "this is a test"},
-		{`python -c 'import sys; path = sys.argv[1]; f = open(path, "w+"); f.write("this is a test"); f.close()'`, "Initial contents: ", "this is a test"},
+		{`/bin/sh -c 'printf "this is a test" > $1' -- `, "", "this is a test"},
+		{`/bin/sh -c 'printf "this is a test" > $1' -- `, "Initial contents: ", "this is a test"},
 	}
 
 	for _, test := range tests {
