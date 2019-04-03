@@ -17,6 +17,10 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 		}
 	}
 
+	if len(pkCols) == 0 {
+		panic("no primary key columns specified")
+	}
+
 	pkColColl, _ := NewColCollection(pkCols...)
 	nonPKColColl, _ := NewColCollection(nonPKCols...)
 
