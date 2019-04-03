@@ -72,7 +72,8 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 		}
 	}()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile)
+
+	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -183,7 +184,9 @@ func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool
 func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
-		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile)
+
+		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+
 
 		if err != nil {
 			return nil, err
