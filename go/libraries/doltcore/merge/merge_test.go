@@ -47,7 +47,7 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 
 	cols := make([]schema.Column, len(longest))
 	for i, val := range longest {
-		cols[i] = schema.NewColumn(strconv.FormatInt(int64(i), 10), uint64(i), val.Kind(), false)
+		cols[i] = schema.NewColumn(strconv.FormatInt(int64(i), 10), uint64(i), val.Kind(), true)
 	}
 
 	colColl, _ := schema.NewColCollection(cols...)
