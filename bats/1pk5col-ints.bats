@@ -323,7 +323,7 @@ teardown() {
 }
 
 @test "import data from a csv file after table created" {
-    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
+    run dolt table import test -u $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -332,7 +332,7 @@ teardown() {
 }
 
 @test "import data from a psv file after table created" {
-    run dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
+    run dolt table import test -u  $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
@@ -341,7 +341,7 @@ teardown() {
 }
 
 @test "overwrite a row. make sure it updates not inserts" {
-    dolt table import test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
+    dolt table import test -u $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     run dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully put row." ]
