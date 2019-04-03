@@ -301,7 +301,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	hash, _ := ddb.WriteRootValue(updatedRoot)
 	mergeHash, _ := ddb.WriteRootValue(mergeRoot)
 
-	meta := doltdb.NewCommitMeta(name, email, "fake")
+	meta, _ := doltdb.NewCommitMeta(name, email, "fake")
 	initialCommit, _ := ddb.Commit(masterHash, "master", meta)
 	commit, _ := ddb.Commit(hash, "master", meta)
 

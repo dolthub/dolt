@@ -150,8 +150,12 @@ func TestLDNoms(t *testing.T) {
 	// reopen the db and commit the value.  Perform a couple checks for
 	{
 		ddb := LoadDoltDB(LocalDirDoltDB)
-		commit, err := ddb.Commit(valHash, "master", NewCommitMeta(committerName, committerEmail, "Sample data"))
+		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
+		if err != nil {
+			t.Error("Failled to commit")
+		}
 
+		commit, err := ddb.Commit(valHash, "master", meta)
 		if err != nil {
 			t.Error("Failled to commit")
 		}
