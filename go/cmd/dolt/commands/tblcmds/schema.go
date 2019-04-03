@@ -1,6 +1,8 @@
 package tblcmds
 
 import (
+	"strings"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -13,7 +15,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"strings"
 )
 
 const (

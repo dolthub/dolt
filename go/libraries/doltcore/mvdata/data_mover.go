@@ -43,12 +43,13 @@ type DataMover struct {
 type DataMoverCreationErrType string
 
 const (
-	CreateReaderErr DataMoverCreationErrType = "Create reader error"
-	SchemaErr       DataMoverCreationErrType = "Schema error"
-	MappingErr      DataMoverCreationErrType = "Mapping error"
-	CreateMapperErr DataMoverCreationErrType = "Mapper creation error"
-	CreateWriterErr DataMoverCreationErrType = "Create writer error"
-	CreateSorterErr DataMoverCreationErrType = "Create sorter error"
+	CreateReaderErr   DataMoverCreationErrType = "Create reader error"
+	NomsKindSchemaErr DataMoverCreationErrType = "Invalid schema error"
+	SchemaErr         DataMoverCreationErrType = "Schema error"
+	MappingErr        DataMoverCreationErrType = "Mapping error"
+	CreateMapperErr   DataMoverCreationErrType = "Mapper creation error"
+	CreateWriterErr   DataMoverCreationErrType = "Create writer error"
+	CreateSorterErr   DataMoverCreationErrType = "Create sorter error"
 )
 
 type DataMoverCreationError struct {
@@ -80,6 +81,9 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 	outSch, err := getOutSchema(rd.GetSchema(), root, fs, mvOpts)
 
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid noms kind") {
+			return nil, &DataMoverCreationError{NomsKindSchemaErr, err}
+		}
 		return nil, &DataMoverCreationError{SchemaErr, err}
 	}
 
