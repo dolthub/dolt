@@ -161,11 +161,10 @@ teardown() {
     [ "$output" = "error: Cannot delete checked out branch 'test-branch'" ]
     dolt checkout master
     run dolt branch -d test-branch
-    skip "I should not be able to delete an unmerged branch without -f"
     [ "$status" -ne 0 ]
     run dolt branch -d -f test-branch
     [ "$status" -eq 0 ]
-    [ "$output" = ""]
+    [ "$output" = "" ]
 }
 
 @test "generate a merge conflict and resolve with ours" {
