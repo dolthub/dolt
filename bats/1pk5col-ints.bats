@@ -86,6 +86,43 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
+@test "add rows to table. dolt sql with select queries to examine the table" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
+    dolt table put-row test pk:101 c1:102 c2:103 c3:104 c4:105 c5:106
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|c5" ]] || false
+    [[ "$output" =~ "|5" ]] || false
+    [[ "$output" =~ "|10" ]] || false
+    [[ "$output" =~ "|106" ]] || false
+    run dolt sql -q "select * from test where pk=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|c5" ]] || false
+    [[ "$output" =~ "|10" ]] || false
+    run dolt sql -q "select c5 from test where pk=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c5" ]] || false
+    [[ "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from test limit 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "select * from test where c2 > 7"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "select * from test where c2 >= 7"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    run dolt sql -q "select * from test where c2 <> 7"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    run dolt sql -q "select * from test where c2 > 3 and c1 < 10"
+    [[ "$output" =~ "And expressions not supported" ]] || false
+    run dolt sql -q "select c10 from test where pk=1"
+    [ "$status" -eq 1 ]
+    [ "$output" = "error: unknown column 'c10'" ]
+}
+
 @test "delete a row with dolt table rm-row" {
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table rm-row test 0
