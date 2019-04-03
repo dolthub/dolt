@@ -10,8 +10,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
-var ErrAlreadyExists = errors.New("already Exists")
+var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
+var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
 func MoveBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	err := CopyBranch(dEnv, oldBranch, newBranch, force)
@@ -56,6 +57,36 @@ func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
 		return doltdb.ErrBranchNotFound
 	} else if dEnv.RepoState.Branch == brName {
 		return ErrCOBranchDelete
+	}
+
+	ms, err := doltdb.NewCommitSpec("head", "master")
+
+	if err != nil {
+		return err
+	}
+
+	master, err := dEnv.DoltDB.Resolve(ms)
+
+	if err != nil {
+		return err
+	}
+
+	cs, err := doltdb.NewCommitSpec("head", brName)
+
+	if err != nil {
+		return err
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(cs)
+
+	if err != nil {
+		return err
+	}
+
+	if !force {
+		if isMerged, _ := master.CanFastReverseTo(cm); !isMerged {
+			return ErrUnmergedBranchDelete
+		}
 	}
 
 	return dEnv.DoltDB.DeleteBranch(brName)
