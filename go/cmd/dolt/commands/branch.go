@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -9,7 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"sort"
 )
 
 var branchShortDesc = `List, create, or delete branches`
@@ -39,13 +40,14 @@ var branchSynopsis = []string{
 }
 
 const (
-	listFlag    = "list"
-	forceFlag   = "force"
-	copyFlag    = "copy"
-	moveFlag    = "move"
-	deleteFlag  = "delete"
-	verboseFlag = "verbose"
-	allFlag     = "all"
+	listFlag        = "list"
+	forceFlag       = "force"
+	copyFlag        = "copy"
+	moveFlag        = "move"
+	deleteFlag      = "delete"
+	deleteForceFlag = "D"
+	verboseFlag     = "verbose"
+	allFlag         = "all"
 )
 
 func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -56,6 +58,7 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(moveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
+	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for --delete --force.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
@@ -68,6 +71,8 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return copyBranch(dEnv, apr, usage)
 	case apr.Contains(deleteFlag):
 		return deleteBranches(dEnv, apr, usage)
+	case apr.Contains(deleteForceFlag):
+		return deleteForceBranches(dEnv, apr, usage)
 	case apr.NArg() > 0:
 		return createBranch(dEnv, apr, usage)
 	case apr.Contains(listFlag):
@@ -177,14 +182,21 @@ func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 }
 
 func deleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+	return handleDeleteBranches(dEnv, apr, usage, apr.Contains(forceFlag))
+}
+
+func deleteForceBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+	return handleDeleteBranches(dEnv, apr, usage, true)
+}
+
+func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
 	if apr.NArg() != 1 {
-		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
 
-	force := apr.Contains(forceFlag)
 	brName := apr.Arg(0)
+
 	err := actions.DeleteBranch(dEnv, brName, force)
 
 	var verr errhand.VerboseError

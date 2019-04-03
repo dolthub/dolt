@@ -1,8 +1,9 @@
 package argparser
 
 import (
-	"github.com/pkg/errors"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -25,8 +26,8 @@ func NewArgParser() *ArgParser {
 
 // Adds support for a new argument with the option given. Options must have a unique name and abbreviated name.
 func (ap *ArgParser) SupportOption(opt *Option) {
-	name := strings.ToLower(opt.Name)
-	abbrev := strings.ToLower(opt.Abbrev)
+	name := opt.Name
+	abbrev := opt.Abbrev
 
 	_, nameExist := ap.NameOrAbbrevToOpt[name]
 	_, abbrevExist := ap.NameOrAbbrevToOpt[abbrev]
@@ -113,7 +114,6 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 			}
 
 			optName, value := splitOption(arg)
-			optName = strings.ToLower(optName)
 
 			if optName == "help" || optName == "h" {
 				return nil, ErrHelp
