@@ -107,6 +107,14 @@ teardown() {
     run dolt sql -q "select * from test limit 1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "select * from test where c2 > 7"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "select * from test where c2 >= 7"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    run dolt sql -q "select * from test where c2 > 3 and c1 < 10"
+    [[ "$output" =~ "And expressions not supported" ]] || false
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
     [ "$output" = "error: unknown column 'c10'" ] || false
