@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -123,7 +124,6 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 
 func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
-		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -154,7 +154,6 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 
 func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
-		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -216,7 +215,6 @@ func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usa
 
 func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() == 0 || apr.NArg() > 2 {
-		cli.Println("Invalid usage.")
 		usage()
 		return 1
 	}
@@ -257,7 +255,9 @@ func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string, force
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
+		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
+			cli.PrintErrln(msg)
+		}
 
 		if verr.ShouldPrintUsage() {
 			usage()

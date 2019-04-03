@@ -1,12 +1,13 @@
 package commands
 
 import (
+	"path"
+	"runtime/debug"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"path"
-	"runtime/debug"
 )
 
 var pullShortDesc = ""
@@ -23,7 +24,7 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var verr errhand.VerboseError
 	if apr.NArg() != 1 {
-		verr = errhand.BuildDError("Invalid usage").SetPrintUsage().Build()
+		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	} else {
 		remoteName := apr.Arg(0)
 

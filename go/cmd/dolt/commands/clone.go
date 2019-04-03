@@ -1,6 +1,11 @@
 package commands
 
 import (
+	"os"
+	"path"
+	"path/filepath"
+	"runtime/debug"
+
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -10,10 +15,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"os"
-	"path"
-	"path/filepath"
-	"runtime/debug"
 )
 
 var cloneShortDesc = ""
@@ -42,7 +43,7 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseError) {
 	if apr.NArg() < 1 || apr.NArg() > 2 {
-		return "", "", errhand.BuildDError("Invalid usage").SetPrintUsage().Build()
+		return "", "", errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	urlStr := apr.Arg(0)

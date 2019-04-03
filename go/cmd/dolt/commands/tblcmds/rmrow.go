@@ -30,7 +30,6 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {
-		cli.PrintErrln("invalid usage")
 		usage()
 		return nil
 	}

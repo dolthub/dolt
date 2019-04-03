@@ -2,10 +2,12 @@ package commands
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"time"
 
+	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
@@ -37,7 +39,7 @@ func Login(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	} else if apr.NArg() == 1 {
 		verr = loginWithExistingCreds(dEnv, apr.Arg(0))
 	} else {
-		verr = errhand.BuildDError("invalid usage").SetPrintUsage().Build()
+		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	return HandleVErrAndExitCode(verr, usage)

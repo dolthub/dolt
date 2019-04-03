@@ -1,14 +1,15 @@
 package commands
 
 import (
+	"sort"
+	"strings"
+
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"sort"
-	"strings"
 )
 
 const (
@@ -81,7 +82,6 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 			return 1
 		}
 	} else {
-		cli.PrintErrln("Invalid usage")
 		usage()
 		return 1
 	}

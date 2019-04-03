@@ -1,6 +1,9 @@
 package tblcmds
 
 import (
+	"io/ioutil"
+	"os"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -9,8 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"io/ioutil"
-	"os"
 )
 
 var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty table(s)."
@@ -31,7 +32,6 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {
-		cli.Println("invalid usage")
 		usage()
 		return 1
 	}
