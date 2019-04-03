@@ -192,7 +192,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		inProcFunc := ProcFuncForReader(rd)
 		outProcFunc := ProcFuncForWriter(wr)
 
-		p := NewPartialPipeline(inProcFunc, tc, nil)
+		p := NewPartialPipeline(inProcFunc, tc)
 		for _, stage := range addedStages {
 			p.AddStage(stage)
 		}
