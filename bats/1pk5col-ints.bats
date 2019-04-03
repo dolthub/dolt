@@ -117,7 +117,7 @@ teardown() {
     [[ "$output" =~ "And expressions not supported" ]] || false
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "error: unknown column 'c10'" ] || false
+    [ "$output" = "error: unknown column 'c10'" ]
 }
 
 @test "delete a row with dolt table rm-row" {
