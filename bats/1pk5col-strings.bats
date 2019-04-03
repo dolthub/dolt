@@ -32,16 +32,16 @@ teardown() {
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
-    run dolt sql -q "select * from test where pk=tim"
+    run dolt sql -q "select * from test where pk='tim'"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    run dolt sql -q "select * from test where pk>tim"
+    run dolt sql -q "select * from test where pk>'tim'"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    run dolt sql -q "select * from test where pk>=tim"
+    run dolt sql -q "select * from test where pk>='tim'"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
-    run dolt sql -q "select * from test where pk<>tim"
+    run dolt sql -q "select * from test where pk<>'tim'"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
 }
