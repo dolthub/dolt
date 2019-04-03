@@ -41,4 +41,7 @@ teardown() {
     run dolt sql -q "select * from test where pk>=tim"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
+    run dolt sql -q "select * from test where pk<>tim"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
 }
