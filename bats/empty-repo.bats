@@ -70,6 +70,21 @@ teardown() {
     [ "$output" = 'no changes added to commit (use "dolt add")' ]
 }
 
+@test "dolt sql in a new repository" {
+   run dolt sql
+   [ "$status" -eq 1 ]
+   [ "${lines[0]}" = "usage: dolt sql [options] -q query_string" ]
+   run dolt sql -q "select * from test"
+   [ "$status" -eq 1 ]
+   [ "$output" = "error: unknown table 'test'" ]
+}
+
+@test "invalid sql in a new repository" {
+    run dolt sql -q "foo bar"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error parsing SQL" ]] || false
+}
+
 @test "dolt table schema in new repository" {
     run dolt table schema
     [ "$status" -eq 0 ]
