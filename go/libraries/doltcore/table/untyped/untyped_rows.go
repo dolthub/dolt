@@ -19,7 +19,9 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 
 	for i, name := range colNames {
 		tag := uint64(i) + firstTag
-		cols[i] = schema.NewColumn(name, tag, types.StringKind, false)
+		// We need at least one primary key col, so choose the first one
+		isPk := i == 0
+		cols[i] = schema.NewColumn(name, tag, types.StringKind, isPk)
 		nameToTag[name] = tag
 	}
 

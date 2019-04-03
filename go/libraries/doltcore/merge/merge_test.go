@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 )
@@ -145,22 +146,11 @@ func TestRowMerge(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actualResult, isConflict := rowMerge(test.sch, test.row, test.mergeRow, test.ancRow)
-
-		if test.expectedResult == nil {
-			if actualResult != nil {
-				t.Error("Test:", test.name, "failed. expected nil result, and got non, nil")
-			}
-		} else if !test.expectedResult.Equals(actualResult) {
-			t.Error(
-				"Test:", "\""+test.name+"\"", "failed.",
-				"Merged row did not match expected. expected:\n\t", types.EncodedValue(test.expectedResult),
-				"\nactual:\n\t", types.EncodedValue(actualResult))
-		}
-
-		if test.expectConflict != isConflict {
-			t.Error("Test:", test.name, "expected conflict:", test.expectConflict, "actual conflict:", isConflict)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			actualResult, isConflict := rowMerge(test.sch, test.row, test.mergeRow, test.ancRow)
+			assert.Equal(t, test.expectedResult, actualResult)
+			assert.Equal(t, test.expectConflict, isConflict)
+		})
 	}
 }
 
