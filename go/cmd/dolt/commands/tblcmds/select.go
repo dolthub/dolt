@@ -98,7 +98,7 @@ func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.Readable
 			st.count++
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
-	} else {
+	} else if st.count == st.limit {
 		st.p.NoMore()
 	}
 
