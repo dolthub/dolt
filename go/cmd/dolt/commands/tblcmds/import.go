@@ -87,10 +87,14 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		return mvdata.InvalidOp, nil, nil
 	}
 
-	mvOp := mvdata.UpdateOp
-	if apr.Contains(createParam) {
+	var mvOp mvdata.MoveOperation
+	if !apr.Contains(createParam) && !apr.Contains(updateParam) {
+		cli.PrintErrln("Must include '-c' for initial table import.")
+		return mvdata.InvalidOp, nil, nil
+	} else if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
 	} else {
+		mvOp = mvdata.UpdateOp
 		if apr.Contains(outSchemaParam) {
 			cli.PrintErrln("fatal:", outSchemaParam+"is not supported for update operations")
 			usage()
@@ -240,6 +244,11 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 	case mvdata.CreateReaderErr:
 		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.Src.Path)
 		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.Src.String(), mvOpts.Dest.String())
+		return bdr.AddCause(err.Cause).Build()
+
+	case mvdata.NomsKindSchemaErr:
+		bdr := errhand.BuildDError("Error creating schema.")
+		bdr.AddDetails("Column given invalid kind. Valid kinds include : string, int, bool, float, null.")
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.SchemaErr:
