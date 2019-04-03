@@ -89,7 +89,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 	var mvOp mvdata.MoveOperation
 	if !apr.Contains(createParam) && !apr.Contains(updateParam) {
-		cli.PrintErrln("Must include '-c' for initial table import.")
+		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table.")
 		return mvdata.InvalidOp, nil, nil
 	} else if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
