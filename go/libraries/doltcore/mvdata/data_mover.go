@@ -66,18 +66,17 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	defer func() {
-		if rd != nil {
-			rd.Close()
-		}
-	}()
-
-
 	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
 	}
+
+	defer func() {
+		if rd != nil {
+			rd.Close()
+		}
+	}()
 
 	outSch, err := getOutSchema(rd.GetSchema(), root, fs, mvOpts)
 
@@ -186,7 +185,6 @@ func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.Readab
 		// Get schema from target
 
 		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
-
 
 		if err != nil {
 			return nil, err
