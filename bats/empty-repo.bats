@@ -87,8 +87,8 @@ teardown() {
 
 @test "dolt table schema in new repository" {
     run dolt table schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "usage" ]] || false
 }
 
 @test "dolt table select in new repository" {

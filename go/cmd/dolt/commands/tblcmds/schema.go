@@ -118,8 +118,14 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 	}
 
 	if verr == nil {
+		// If the user hasn't specified table names, try to grab them all;
+		// show usage and error out if there aren't any
 		if len(tables) == 0 {
 			tables = root.GetTableNames()
+
+			if len(tables) == 0 {
+				return errhand.BuildDError("").SetPrintUsage().Build()
+			}
 		}
 
 		var notFound []string
