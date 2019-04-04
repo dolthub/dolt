@@ -1,6 +1,7 @@
 package row
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -79,4 +80,14 @@ func ParseTaggedValues(tpl types.Tuple) TaggedValues {
 	}
 
 	return taggedTuple
+}
+
+func (tt TaggedValues) String() string {
+	str := "{"
+	for k, v := range tt {
+		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(v))
+	}
+
+	str += "\n}"
+	return str
 }

@@ -44,10 +44,10 @@ func stringToFloat(s string) (types.Value, error) {
 	f, err := strconv.ParseFloat(s, 64)
 
 	if err != nil {
-		return types.Float(math.NaN()), err
+		return types.Float(math.NaN()), ConversionError{types.StringKind, types.FloatKind, err}
 	}
 
-	return types.Float(f), err
+	return types.Float(f), nil
 }
 
 func stringToBool(s string) (types.Value, error) {
@@ -56,7 +56,12 @@ func stringToBool(s string) (types.Value, error) {
 	}
 
 	b, err := strconv.ParseBool(strings.ToLower(s))
-	return types.Bool(b), err
+
+	if err != nil {
+		return types.Bool(false), ConversionError{types.StringKind, types.BoolKind, err}
+	}
+
+	return types.Bool(b), nil
 }
 
 func stringToInt(s string) (types.Value, error) {
@@ -65,7 +70,12 @@ func stringToInt(s string) (types.Value, error) {
 	}
 
 	n, err := strconv.ParseInt(s, 10, 64)
-	return types.Int(n), err
+
+	if err != nil {
+		return types.Int(0), ConversionError{types.StringKind, types.IntKind, err}
+	}
+
+	return types.Int(n), nil
 }
 
 func stringToUint(s string) (types.Value, error) {
@@ -74,7 +84,12 @@ func stringToUint(s string) (types.Value, error) {
 	}
 
 	n, err := strconv.ParseUint(s, 10, 64)
-	return types.Uint(n), err
+
+	if err != nil {
+		return types.Uint(0), ConversionError{types.StringKind, types.UintKind, err}
+	}
+
+	return types.Uint(n), nil
 }
 
 func stringToUUID(s string) (types.Value, error) {
@@ -83,5 +98,10 @@ func stringToUUID(s string) (types.Value, error) {
 	}
 
 	u, err := uuid.Parse(s)
-	return types.UUID(u), err
+
+	if err != nil {
+		return types.UUID(u), ConversionError{types.StringKind, types.UUIDKind, err}
+	}
+
+	return types.UUID(u), nil
 }

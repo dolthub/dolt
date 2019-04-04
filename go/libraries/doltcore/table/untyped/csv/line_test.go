@@ -27,6 +27,12 @@ func TestCSVSplitLine(t *testing.T) {
 		{`"one","two"`, ',', []string{`one`, `two`}, true},
 		{`one,  two`, ',', []string{`one`, `two`}, true},
 		{`one,"  two"`, ',', []string{`one`, `  two`}, true},
+		{
+			`23660|1300|"Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"""`,
+			'|',
+			[]string{"23660", "1300", `Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"`},
+			true,
+		},
 	}
 
 	for _, test := range splitTests {

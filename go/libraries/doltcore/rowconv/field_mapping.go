@@ -48,6 +48,20 @@ type FieldMapping struct {
 	SrcToDest map[uint64]uint64
 }
 
+func InvertMapping(fm *FieldMapping) *FieldMapping {
+	invertedMap := make(map[uint64]uint64)
+
+	for k, v := range fm.SrcToDest {
+		invertedMap[v] = k
+	}
+
+	return &FieldMapping{
+		SrcSch:    fm.DestSch,
+		DestSch:   fm.SrcSch,
+		SrcToDest: invertedMap,
+	}
+}
+
 // NewFieldMapping creates a FieldMapping from a source schema, a destination schema, and a map from tags in the source
 // schema to tags in the dest schema.
 func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {

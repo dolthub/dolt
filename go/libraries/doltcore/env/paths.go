@@ -47,10 +47,6 @@ func getLocalConfigPath() string {
 	return filepath.Join(doltdb.DoltDir, configFile)
 }
 
-func getDoltDir() string {
-	return filepath.Join(doltdb.DoltDir)
-}
-
 func getRepoStateFile() string {
-	return filepath.Join(getDoltDir(), repoStateFile)
+	return filepath.Join(doltdb.DoltDir, repoStateFile)
 }

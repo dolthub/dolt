@@ -106,7 +106,7 @@ func (dcc *DoltCliConfig) CreateLocalConfig(vals map[string]string) error {
 }
 
 func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string) error {
-	doltDir := filepath.Join(dir, getDoltDir())
+	doltDir := filepath.Join(dir, doltdb.DoltDir)
 	if exists, isDir := dcc.fs.Exists(doltDir); !exists {
 		return errors.New(doltdb.DoltDir + " directory not found. Is the current directory a repository directory?")
 	} else if !isDir {
