@@ -2,6 +2,7 @@ package schema
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 )
@@ -55,6 +56,14 @@ func TestSchema(t *testing.T) {
 	if !SchemasAreEqual(schFromCols, schFromPKAndNonPKCols) {
 		t.Error("schemas should be equal")
 	}
+}
+
+func TestSchemaWithNoPKs(t *testing.T) {
+	colColl, _ := NewColCollection(testCols...)
+
+	assert.Panics(t, func() {
+		SchemaFromCols(colColl)
+	})
 }
 
 func testSchema(method string, sch Schema, t *testing.T) {

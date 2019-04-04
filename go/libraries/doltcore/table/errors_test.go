@@ -1,13 +1,14 @@
 package table
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"testing"
 )
 
 func TestBadRow(t *testing.T) {
-	cols, _ := schema.NewColCollection()
+	cols, _ := schema.NewColCollection(schema.NewColumn("id", 0, types.IntKind, true))
 	sch := schema.SchemaFromCols(cols)
 	emptyRow := row.New(sch, row.TaggedValues{})
 

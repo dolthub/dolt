@@ -80,6 +80,9 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 
 func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, error) {
 	columnType := colDef.Type
+
+	// Primary key info can either be specified in the column's type info (for in-line declarations), or in a slice of
+	// indexes attached to the table def. We have to check both places to find if a column is part of the primary key
 	isPkey := colDef.Type.KeyOpt == colKeyPrimary
 
 	if !isPkey {

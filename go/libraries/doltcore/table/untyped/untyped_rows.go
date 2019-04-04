@@ -19,7 +19,9 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 
 	for i, name := range colNames {
 		tag := uint64(i) + firstTag
-		cols[i] = schema.NewColumn(name, tag, types.StringKind, false)
+		// We need at least one primary key col, so choose the first one
+		isPk := i == 0
+		cols[i] = schema.NewColumn(name, tag, types.StringKind, isPk)
 		nameToTag[name] = tag
 	}
 
@@ -59,8 +61,8 @@ func NewRowFromTaggedStrings(sch schema.Schema, taggedStrs map[uint64]string) ro
 	return row.New(sch, taggedVals)
 }
 
-// UntypeSchema takes a schema returns a schema with the same columns, but with the types of each of those columns as
-// types.StringKind
+// UntypeSchema takes a schema and returns a schema with the same columns, but with the types of each of those columns
+// as types.StringKind
 func UntypeSchema(sch schema.Schema) schema.Schema {
 	var cols []schema.Column
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
@@ -72,8 +74,23 @@ func UntypeSchema(sch schema.Schema) schema.Schema {
 	colColl, _ := schema.NewColCollection(cols...)
 
 	return schema.SchemaFromCols(colColl)
-
 }
+
+// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but none of them primary keys, and
+// with the types of each of those columns as types.StringKind
+func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
+	var cols []schema.Column
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		col.Kind = types.StringKind
+		cols = append(cols, col)
+		return false
+	})
+
+	colColl, _ := schema.NewColCollection(cols...)
+
+	return schema.UnkeyedSchemaFromCols(colColl)
+}
+
 
 // UntypedSchemaUnion takes an arbitrary number of schemas and provides the union of all of their key and non-key columns.
 // The columns will all be of type types.StringKind and and IsPartOfPK will be false for every column, and all of the
