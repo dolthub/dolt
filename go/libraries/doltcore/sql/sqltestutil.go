@@ -27,7 +27,7 @@ const (
 )
 
 var testSch = createTestSchema()
-var untypedSch = untyped.UntypeSchema(testSch)
+var untypedSch = untyped.UntypeUnkeySchema(testSch)
 
 var tableName = "people"
 
@@ -35,7 +35,6 @@ func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
 }
-
 
 func createTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
@@ -75,21 +74,23 @@ func rs(rows... row.Row) []row.Row {
 
 // Returns a subset of the schema given
 func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	colColl := sch.GetAllCols()
+	srcColls := sch.GetAllCols()
 
 	if len(colNames) > 0 {
-		cols := make([]schema.Column, 0, len(colNames))
+		var cols []schema.Column
 		for _, name := range colNames {
-			if col, ok := colColl.GetByName(name); !ok {
+			if col, ok := srcColls.GetByName(name); !ok {
 				panic("Unrecognized name")
 			} else {
 				cols = append(cols, col)
 			}
 		}
-		colColl, _ = schema.NewColCollection(cols...)
+		colColl, _ := schema.NewColCollection(cols...)
+		sch := schema.UnkeyedSchemaFromCols(colColl)
+		return sch
 	}
 
-	return schema.SchemaFromCols(colColl)
+	return schema.UnkeyedSchemaFromCols(srcColls)
 }
 
 // Converts the rows given, having the schema given, to an untyped (string-typed) row. Only the column names specified
@@ -113,7 +114,7 @@ func untypeRows(t *testing.T, rows []row.Row, colNames []string, tableSch schema
 func untypeRow(t *testing.T, r row.Row, colNames []string, tableSch schema.Schema) row.Row {
 	outSch := subsetSchema(tableSch, colNames...)
 
-	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeSchema(outSch))
+	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeUnkeySchema(outSch))
 	assert.Nil(t, err, "failed to create untyped mapping")
 
 	rConv, _ := rowconv.NewRowConverter(mapping)
