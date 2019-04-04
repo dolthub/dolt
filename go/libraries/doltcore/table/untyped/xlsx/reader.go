@@ -28,24 +28,36 @@ func OpenXLSXReader(path string, fs filesys.ReadableFS, info *XLSXFileInfo, tblN
 		return nil, err
 	}
 
-	return NewXLSXReader(r, info, fs, path, tblName), nil
+	return NewXLSXReader(r, info, fs, path, tblName)
 }
 
-func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, path string, tblName string) *XLSXReader {
+func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, path string, tblName string) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(path, tblName)
-	data, _ := getXlsxRows(path, tblName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := getXlsxRows(path, tblName)
+	if err != nil {
+		return nil, err
+	}
+
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	decodedRows, _ := decodeXLSXRows(data, sch)
+	decodedRows, err := decodeXLSXRows(data, sch)
+	if err != nil {
+		return nil, err
+	}
 	info.SetRows(decodedRows)
 
 	if err != nil {
 		r.Close()
-		return nil
+		return nil, err
 	}
 
-	return &XLSXReader{r, br, info, sch, 0}
+	return &XLSXReader{r, br, info, sch, 0}, nil
 }
 
 func getColHeaders(path string, sheetName string) ([]string, error) {

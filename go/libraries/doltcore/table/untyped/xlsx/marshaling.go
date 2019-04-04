@@ -60,8 +60,6 @@ func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
 }
 
 func getXlsxRows(path string, tblName string) ([][][]string, error) {
-	//var sheets []*xlsx.Sheet
-
 	data, err := xlsx.OpenFile(path)
 
 	if err != nil {
@@ -85,5 +83,5 @@ func getXlsxRows(path string, tblName string) ([][][]string, error) {
 		}
 
 	}
-	return nil, errors.New(tblName + " not present in " + path)
+	return nil, errors.New("table name must match excel sheet name.")
 }
