@@ -10,16 +10,39 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
 func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
+	testSchema := `
+		"rows": [
+			 {
+			   "id": 0,
+			   "first name": "tim",
+			   "last name": "sehn",
+			   "title": "ceo",
+			   "start date": "8/6/2018",
+			   "end date": ""
+			},
+			 {
+			   "id": 1,
+			   "first name": "brian",
+			   "last name": "hendriks",
+			   "title": "software engienner",
+			   "start date": "8/6/2018",
+			   "end date": ""
+			}
+		]
+	`
+
 	testHomeDir := "/user/bheni"
 	workingDir := "/user/bheni/datasets/states"
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
+	fs.WriteFile("schema.json", []byte(testSchema))
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
 
@@ -130,7 +153,7 @@ func TestCreateRdWr(t *testing.T) {
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		// TODO (oo): uncomment and fix this for json path test
-		//{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
+		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
@@ -169,10 +192,8 @@ func TestCreateRdWr(t *testing.T) {
 			root = root.PutTable(ddb, test.dl.Path, tbl)
 		}
 
-		rd, _, err := loc.CreateReader(root, fs, "")
-		if test.dl.Format == ".json" && err.Error() == "schema must be specified for json import" {
-			continue
-		}
+		// TODO (oo): fix this for json path test
+		rd, _, err := loc.CreateReader(root, fs, "schema.json", "")
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)
