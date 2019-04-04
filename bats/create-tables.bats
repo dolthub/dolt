@@ -89,3 +89,21 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "UPPERCASE" ]] || false
 }
+
+
+@test "create a table from excel import with multiple sheets" {
+    run dolt table import -c --pk=id employees $BATS_TEST_DIRNAME/helper/employees.xlsx
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select employees
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 4 ]
+    run dolt table import -c --pk=number basketball $BATS_TEST_DIRNAME/helper/employees.xlsx
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+     run dolt table select basketball
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 5 ]
+}
