@@ -45,12 +45,12 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	if err == actions.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
-		bdr.AddDetails("dolt config [-global|local] -set %[1]s:\"FIRST LAST\"", env.UserNameKey)
+		bdr.AddDetails("dolt config [-global|local] -add %[1]s:\"FIRST LAST\"", env.UserNameKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if err == actions.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
-		bdr.AddDetails("dolt config [-global|local] -set %[1]s:\"EMAIL_ADDRESS\"", env.UserEmailKey)
+		bdr.AddDetails("dolt config [-global|local] -add %[1]s:\"EMAIL_ADDRESS\"", env.UserEmailKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	} else if err == actions.ErrEmptyCommitMessage {
