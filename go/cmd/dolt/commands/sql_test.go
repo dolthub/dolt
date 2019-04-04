@@ -63,7 +63,7 @@ func TestSqlSelect(t *testing.T) {
 
 func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	imt, sch := dtestutils.CreateTestDataTable(true)
+	imt, sch := dtestutils.CreateTestDataTable(false)
 
 	rd := table.NewInMemTableReader(imt)
 	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)

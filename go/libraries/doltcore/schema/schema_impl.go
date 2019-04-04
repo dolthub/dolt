@@ -24,11 +24,27 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 	pkColColl, _ := NewColCollection(pkCols...)
 	nonPKColColl, _ := NewColCollection(nonPKCols...)
 
-	si := &schemaImpl{
+	return &schemaImpl{
 		pkColColl, nonPKColColl, allCols,
 	}
+}
 
-	return si
+// UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such
+// unkeyed schemas are not suitable to be inserted into storage.
+func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
+	var nonPKCols []Column
+
+	for _, c := range allCols.cols {
+		c.IsPartOfPK = false
+		nonPKCols = append(nonPKCols, c)
+	}
+
+	pkColColl, _ := NewColCollection()
+	nonPKColColl, _ := NewColCollection(nonPKCols...)
+
+	return &schemaImpl{
+		pkColColl, nonPKColColl, allCols,
+	}
 }
 
 // SchemaFromPKAndNonPKCols creates a Schema from a collection of the key columns, and the non-key columns.
