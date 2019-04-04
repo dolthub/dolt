@@ -4,6 +4,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ func TestNewUntypedSchema(t *testing.T) {
 	}
 
 	i := 0
-	sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if col.Name != colNames[i] {
 			t.Error("Unexpected name")
 		}
@@ -29,8 +30,26 @@ func TestNewUntypedSchema(t *testing.T) {
 			t.Error("Nothing should be required")
 		}
 
-		if col.IsPartOfPK {
-			t.Error("non pk cols should not be part of the pk")
+		if !col.IsPartOfPK {
+			t.Error("pk cols should be part of the pk")
+		}
+
+		i++
+		return false
+	})
+	assert.Equal(t, 1, i, "Exactly one PK column expected")
+
+	sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if col.Name != colNames[i] {
+			t.Error("Unexpected name")
+		}
+
+		if col.Kind != types.StringKind {
+			t.Error("Unexpected kind")
+		}
+
+		if col.Constraints != nil {
+			t.Error("Nothing should be required")
 		}
 
 		i++
@@ -64,16 +83,16 @@ func TestNewUntypedSchema(t *testing.T) {
 func TestUntypedSchemaUnion(t *testing.T) {
 	cols := []schema.Column{
 		schema.NewColumn("a", 0, types.UUIDKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.IntKind, false),
-		schema.NewColumn("c", 2, types.UintKind, false),
+		schema.NewColumn("b", 1, types.IntKind, true),
+		schema.NewColumn("c", 2, types.UintKind, true),
 		schema.NewColumn("d", 3, types.StringKind, false),
 		schema.NewColumn("e", 4, types.BoolKind, false),
 	}
 
 	untypedColColl, _ := schema.NewColCollection(
 		schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.StringKind, false),
-		schema.NewColumn("c", 2, types.StringKind, false),
+		schema.NewColumn("b", 1, types.StringKind, true),
+		schema.NewColumn("c", 2, types.StringKind, true),
 		schema.NewColumn("d", 3, types.StringKind, false),
 		schema.NewColumn("e", 4, types.StringKind, false))
 

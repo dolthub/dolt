@@ -89,7 +89,7 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([
 func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
 	tableExprs := s.From
 	if len(tableExprs) > 1 {
-		return quitErr("Only selecting from a single table is supported")
+		return selectErr("Only selecting from a single table is supported")
 	}
 
 	var tableName string
@@ -101,20 +101,20 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		case sqlparser.TableName:
 			tableName = e.Name.String()
 		case *sqlparser.Subquery:
-			return quitErr("Subqueries are not supported: %v.", query)
+			return selectErr("Subqueries are not supported: %v.", query)
 		default:
-			return quitErr("Unrecognized expression: %v", nodeToString(e))
+			return selectErr("Unrecognized expression: %v", nodeToString(e))
 		}
 	case *sqlparser.ParenTableExpr:
-		return quitErr("Parenthetical table expressions are not supported: %v,", query)
+		return selectErr("Parenthetical table expressions are not supported: %v,", query)
 	case *sqlparser.JoinTableExpr:
-		return quitErr("Joins are not supported: %v,", query)
+		return selectErr("Joins are not supported: %v,", query)
 	default:
-		return quitErr("Unsupported select statement: %v", query)
+		return selectErr("Unsupported select statement: %v", query)
 	}
 
 	if !root.HasTable(tableName) {
-		return quitErr("error: unknown table '%s'", tableName)
+		return selectErr("error: unknown table '%s'", tableName)
 	}
 	tbl, _:= root.GetTable(tableName)
 
@@ -136,10 +136,10 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			case *sqlparser.ColName:
 				columns = append(columns, colExpr.Name.String())
 			default:
-				return quitErr("Only column selections or * are supported")
+				return selectErr("Only column selections or * are supported")
 			}
 		case sqlparser.Nextval:
-			return quitErr("Next value is not supported: %v", query)
+			return selectErr("Next value is not supported: %v", query)
 		}
 	}
 	selectStmt.colNames = columns
@@ -148,11 +148,11 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	if s.Limit != nil && s.Limit.Rowcount != nil {
 		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
 		if !ok {
-			return quitErr("Couldn't parse limit clause: %v", query)
+			return selectErr("Couldn't parse limit clause: %v", query)
 		}
 		limitInt, err := strconv.Atoi(nodeToString(limitVal))
 		if err != nil {
-			return quitErr("Couldn't parse limit clause: %v", query)
+			return selectErr("Couldn't parse limit clause: %v", query)
 		}
 		selectStmt.limit = limitInt
 	} else {
@@ -231,7 +231,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 
 		col, ok := tableSch.GetAllCols().GetByName(colNameStr)
 		if !ok {
-			errors.New(fmt.Sprintf("%v is not a known column", colNameStr))
+			return errors.New(fmt.Sprintf("%v is not a known column", colNameStr))
 		}
 
 		tag := col.Tag
@@ -239,7 +239,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 		comparisonVal, err := convFunc(types.String(string(sqlVal)))
 
 		if err != nil {
-			errors.New(fmt.Sprintf("Couldn't convert column to string: %v", err))
+			return errors.New(fmt.Sprintf("Couldn't convert column to string: %v", err))
 		}
 
 		// All the operations differ only in their filter logic
@@ -381,7 +381,7 @@ func nodeToString(node sqlparser.SQLNode) string {
 
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
 // BuildSelectQueryPipeline.
-func quitErr(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
+func selectErr(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
 	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args...))
 }
 
@@ -429,8 +429,8 @@ func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, t
 		colColl, _ = schema.NewColCollection(cols...)
 	}
 
-	outSch := schema.SchemaFromCols(colColl)
-	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeSchema(outSch))
+	outSch := schema.UnkeyedSchemaFromCols(colColl)
+	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeUnkeySchema(outSch))
 
 	if err != nil {
 		panic(err)
