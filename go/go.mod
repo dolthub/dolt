@@ -15,8 +15,8 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/stretchr/testify v1.3.0
-	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	github.com/tealeg/xlsx v1.0.3
+	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	go.opencensus.io v0.19.0 // indirect
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
