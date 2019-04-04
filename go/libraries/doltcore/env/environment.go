@@ -70,8 +70,17 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 	return dEnv.hasDoltDir("./")
 }
 
+func (dEnv *DoltEnv) HasDoltDataDir() bool {
+	return dEnv.hasDoltDataDir("./")
+}
+
 func (dEnv *DoltEnv) hasDoltDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, getDoltDir()))
+	exists, isDir := dEnv.FS.Exists(filepath.Join(path, doltdb.DoltDir))
+	return exists && isDir
+}
+
+func (dEnv *DoltEnv) hasDoltDataDir(path string) bool {
+	exists, isDir := dEnv.FS.Exists(filepath.Join(path, doltdb.DoltDataDir))
 	return exists && isDir
 }
 

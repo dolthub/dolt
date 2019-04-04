@@ -106,3 +106,13 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 
 	return true
 }
+
+func GetTaggedVals(row Row) TaggedValues {
+	taggedVals := make(TaggedValues)
+	row.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		taggedVals[tag] = val
+		return false
+	})
+
+	return taggedVals
+}

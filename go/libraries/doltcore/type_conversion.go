@@ -1,9 +1,48 @@
 package doltcore
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"strconv"
 )
+
+type ConversionError struct {
+	fromKind types.NomsKind
+	toKind   types.NomsKind
+	err      error
+}
+
+func (ce ConversionError) Error() string {
+	toKindStr := types.KindToString[ce.toKind]
+	fromKindStr := types.KindToString[ce.fromKind]
+	return fmt.Sprint("error converting", fromKindStr, "to", toKindStr+":", ce.err.Error())
+}
+
+func IsConversionError(err error) bool {
+	_, ok := err.(ConversionError)
+
+	return ok
+}
+
+func GetFromAndToKinds(err error) (from, to types.NomsKind) {
+	ce, ok := err.(ConversionError)
+
+	if !ok {
+		panic("Check that this is a conversion error before using this.")
+	}
+
+	return ce.fromKind, ce.toKind
+}
+
+func GetUnderlyingError(err error) error {
+	ce, ok := err.(ConversionError)
+
+	if !ok {
+		panic("Check that this is a conversion error before using this.")
+	}
+
+	return ce.err
+}
 
 // ConvFunc is a function that converts one noms value to another of a different type.
 type ConvFunc func(types.Value) (types.Value, error)

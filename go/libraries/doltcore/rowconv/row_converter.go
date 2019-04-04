@@ -18,7 +18,7 @@ type RowConverter struct {
 	*FieldMapping
 	// IdentityConverter is a bool which is true if the converter is doing nothing.
 	IdentityConverter bool
-	convFuncs         map[uint64]doltcore.ConvFunc
+	ConvFuncs         map[uint64]doltcore.ConvFunc
 }
 
 func newIdentityConverter(mapping *FieldMapping) *RowConverter {
@@ -61,7 +61,7 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 	err := pantoerr.PanicToError("error converting row", func() error {
 		var convErr error
 		inRow.IterCols(func(tag uint64, val types.Value) (stop bool) {
-			convFunc, ok := rc.convFuncs[tag]
+			convFunc, ok := rc.ConvFuncs[tag]
 
 			if ok {
 				outTag := rc.SrcToDest[tag]
