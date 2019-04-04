@@ -19,7 +19,15 @@ type RowMergeTest struct {
 	expectConflict        bool
 }
 
-func valsToTestTuple(vals []types.Value) types.Value {
+func valsToTestTupleWithoutPks(vals []types.Value) types.Value {
+	return valsToTestTuple(vals, false)
+}
+
+func valsToTestTupleWithPks(vals []types.Value) types.Value {
+	return valsToTestTuple(vals, true)
+}
+
+func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
 	if vals == nil {
 		return nil
 	}
@@ -27,8 +35,12 @@ func valsToTestTuple(vals []types.Value) types.Value {
 	tplVals := make([]types.Value, 0, 2*len(vals))
 	for i, val := range vals {
 		if !types.IsNull(val) {
+			tag := i
 			// Assume one primary key tag, add 1 to all other tags
-			tplVals = append(tplVals, types.Uint(i+1))
+			if includePrimaryKeys {
+				tag++
+			}
+			tplVals = append(tplVals, types.Uint(tag))
 			tplVals = append(tplVals, val)
 		}
 	}
@@ -58,47 +70,47 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 	colColl, _ := schema.NewColCollection(cols...)
 	sch := schema.SchemaFromCols(colColl)
 
-	tpl := valsToTestTuple(vals)
-	mergeTpl := valsToTestTuple(mergeVals)
-	ancTpl := valsToTestTuple(ancVals)
-	expectedTpl := valsToTestTuple(expected)
+	tpl := valsToTestTupleWithPks(vals)
+	mergeTpl := valsToTestTupleWithPks(mergeVals)
+	ancTpl := valsToTestTupleWithPks(ancVals)
+	expectedTpl := valsToTestTupleWithPks(expected)
 	return RowMergeTest{name, tpl, mergeTpl, ancTpl, sch, expectedTpl, expectCnf}
 }
 
 func TestRowMerge(t *testing.T) {
 	tests := []RowMergeTest{
-		//createRowMergeStruct(
-		//	"add same row",
-		//	[]types.Value{types.String("one"), types.Int(2)},
-		//	[]types.Value{types.String("one"), types.Int(2)},
-		//	nil,
-		//	[]types.Value{types.String("one"), types.Int(2)},
-		//	false,
-		//),
-		//createRowMergeStruct(
-		//	"add diff row",
-		//	[]types.Value{types.String("one"), types.String("two")},
-		//	[]types.Value{types.String("one"), types.String("three")},
-		//	nil,
-		//	nil,
-		//	true,
-		//),
-		//createRowMergeStruct(
-		//	"both delete row",
-		//	nil,
-		//	nil,
-		//	[]types.Value{types.String("one"), types.Uint(2)},
-		//	nil,
-		//	false,
-		//),
-		//createRowMergeStruct(
-		//	"one delete one modify",
-		//	nil,
-		//	[]types.Value{types.String("two"), types.Uint(2)},
-		//	[]types.Value{types.String("one"), types.Uint(2)},
-		//	nil,
-		//	true,
-		//),
+		createRowMergeStruct(
+			"add same row",
+			[]types.Value{types.String("one"), types.Int(2)},
+			[]types.Value{types.String("one"), types.Int(2)},
+			nil,
+			[]types.Value{types.String("one"), types.Int(2)},
+			false,
+		),
+		createRowMergeStruct(
+			"add diff row",
+			[]types.Value{types.String("one"), types.String("two")},
+			[]types.Value{types.String("one"), types.String("three")},
+			nil,
+			nil,
+			true,
+		),
+		createRowMergeStruct(
+			"both delete row",
+			nil,
+			nil,
+			[]types.Value{types.String("one"), types.Uint(2)},
+			nil,
+			false,
+		),
+		createRowMergeStruct(
+			"one delete one modify",
+			nil,
+			[]types.Value{types.String("two"), types.Uint(2)},
+			[]types.Value{types.String("one"), types.Uint(2)},
+			nil,
+			true,
+		),
 		createRowMergeStruct(
 			"modify rows without overlap",
 			[]types.Value{types.String("two"), types.Uint(2)},
@@ -219,62 +231,62 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	}
 
 	initialRows := types.NewMap(vrw,
-		keyTuples[0], valsToTestTuple([]types.Value{types.String("person 1"), types.String("dufus")}),
-		keyTuples[1], valsToTestTuple([]types.Value{types.String("person 2"), types.NullValue}),
-		keyTuples[2], valsToTestTuple([]types.Value{types.String("person 3"), types.NullValue}),
-		keyTuples[3], valsToTestTuple([]types.Value{types.String("person 4"), types.String("senior dufus")}),
-		keyTuples[4], valsToTestTuple([]types.Value{types.String("person 5"), types.NullValue}),
-		keyTuples[5], valsToTestTuple([]types.Value{types.String("person 6"), types.NullValue}),
-		keyTuples[6], valsToTestTuple([]types.Value{types.String("person 7"), types.String("madam")}),
-		keyTuples[7], valsToTestTuple([]types.Value{types.String("person 8"), types.String("miss")}),
-		keyTuples[8], valsToTestTuple([]types.Value{types.String("person 9"), types.NullValue}),
+		keyTuples[0], valsToTestTupleWithoutPks([]types.Value{types.String("person 1"), types.String("dufus")}),
+		keyTuples[1], valsToTestTupleWithoutPks([]types.Value{types.String("person 2"), types.NullValue}),
+		keyTuples[2], valsToTestTupleWithoutPks([]types.Value{types.String("person 3"), types.NullValue}),
+		keyTuples[3], valsToTestTupleWithoutPks([]types.Value{types.String("person 4"), types.String("senior dufus")}),
+		keyTuples[4], valsToTestTupleWithoutPks([]types.Value{types.String("person 5"), types.NullValue}),
+		keyTuples[5], valsToTestTupleWithoutPks([]types.Value{types.String("person 6"), types.NullValue}),
+		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person 7"), types.String("madam")}),
+		keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person 8"), types.String("miss")}),
+		keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person 9"), types.NullValue}),
 	)
 
-	updateRowEditor := initialRows.Edit()                                                                                // leave 0 as is
-	updateRowEditor.Remove(keyTuples[1])                                                                                 // remove 1 from both
-	updateRowEditor.Remove(keyTuples[2])                                                                                 // remove 2 from update
-	updateRowEditor.Set(keyTuples[4], valsToTestTuple([]types.Value{types.String("person five"), types.NullValue}))      // modify 4 only in update
-	updateRowEditor.Set(keyTuples[6], valsToTestTuple([]types.Value{types.String("person 7"), types.String("dr")}))      // modify 6 in both without overlap
-	updateRowEditor.Set(keyTuples[7], valsToTestTuple([]types.Value{types.String("person eight"), types.NullValue}))     // modify 7 in both with equal overlap
-	updateRowEditor.Set(keyTuples[8], valsToTestTuple([]types.Value{types.String("person nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
-	updateRowEditor.Set(keyTuples[9], valsToTestTuple([]types.Value{types.String("person ten"), types.NullValue}))       // add 9 in update
-	updateRowEditor.Set(keyTuples[11], valsToTestTuple([]types.Value{types.String("person twelve"), types.NullValue}))   // add 11 in both without difference
-	updateRowEditor.Set(keyTuples[12], valsToTestTuple([]types.Value{types.String("person thirteen"), types.NullValue})) // add 12 in both with differences
+	updateRowEditor := initialRows.Edit()                                                                                       // leave 0 as is
+	updateRowEditor.Remove(keyTuples[1])                                                                                        // remove 1 from both
+	updateRowEditor.Remove(keyTuples[2])                                                                                        // remove 2 from update
+	updateRowEditor.Set(keyTuples[4], valsToTestTupleWithoutPks([]types.Value{types.String("person five"), types.NullValue}))      // modify 4 only in update
+	updateRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person 7"), types.String("dr")}))      // modify 6 in both without overlap
+	updateRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))     // modify 7 in both with equal overlap
+	updateRowEditor.Set(keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
+	updateRowEditor.Set(keyTuples[9], valsToTestTupleWithoutPks([]types.Value{types.String("person ten"), types.NullValue}))       // add 9 in update
+	updateRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))   // add 11 in both without difference
+	updateRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue})) // add 12 in both with differences
 
 	updatedRows := updateRowEditor.Map()
 
-	mergeRowEditor := initialRows.Edit()                                                                                       // leave 0 as is
-	mergeRowEditor.Remove(keyTuples[1])                                                                                        // remove 1 from both
-	mergeRowEditor.Remove(keyTuples[3])                                                                                        // remove 3 from merge
-	mergeRowEditor.Set(keyTuples[5], valsToTestTuple([]types.Value{types.String("person six"), types.NullValue}))              // modify 5 only in merge
-	mergeRowEditor.Set(keyTuples[6], valsToTestTuple([]types.Value{types.String("person seven"), types.String("madam")}))      // modify 6 in both without overlap
-	mergeRowEditor.Set(keyTuples[7], valsToTestTuple([]types.Value{types.String("person eight"), types.NullValue}))            // modify 7 in both with equal overlap
-	mergeRowEditor.Set(keyTuples[8], valsToTestTuple([]types.Value{types.String("person number nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
-	mergeRowEditor.Set(keyTuples[10], valsToTestTuple([]types.Value{types.String("person eleven"), types.NullValue}))          // add 10 in merge
-	mergeRowEditor.Set(keyTuples[11], valsToTestTuple([]types.Value{types.String("person twelve"), types.NullValue}))          // add 11 in both without difference
-	mergeRowEditor.Set(keyTuples[12], valsToTestTuple([]types.Value{types.String("person number thirteen"), types.NullValue})) // add 12 in both with differences
+	mergeRowEditor := initialRows.Edit()                                                                                              // leave 0 as is
+	mergeRowEditor.Remove(keyTuples[1])                                                                                               // remove 1 from both
+	mergeRowEditor.Remove(keyTuples[3])                                                                                               // remove 3 from merge
+	mergeRowEditor.Set(keyTuples[5], valsToTestTupleWithoutPks([]types.Value{types.String("person six"), types.NullValue}))              // modify 5 only in merge
+	mergeRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("madam")}))      // modify 6 in both without overlap
+	mergeRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))            // modify 7 in both with equal overlap
+	mergeRowEditor.Set(keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person number nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
+	mergeRowEditor.Set(keyTuples[10], valsToTestTupleWithoutPks([]types.Value{types.String("person eleven"), types.NullValue}))          // add 10 in merge
+	mergeRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))          // add 11 in both without difference
+	mergeRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue})) // add 12 in both with differences
 
 	mergeRows := mergeRowEditor.Map()
 
 	expectedRows := types.NewMap(vrw,
-		keyTuples[0], initialRows.Get(keyTuples[0]), // unaltered
-		keyTuples[4], updatedRows.Get(keyTuples[4]), // modified in updated
-		keyTuples[5], mergeRows.Get(keyTuples[5]), // modified in merged
-		keyTuples[6], valsToTestTuple([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
-		keyTuples[7], updatedRows.Get(keyTuples[7]), // modify both with the same value
-		keyTuples[8], updatedRows.Get(keyTuples[8]), // conflict
-		keyTuples[9], updatedRows.Get(keyTuples[9]), // added in update
-		keyTuples[10], mergeRows.Get(keyTuples[10]), // added in merge
-		keyTuples[11], updatedRows.Get(keyTuples[11]), // added same in both
-		keyTuples[12], updatedRows.Get(keyTuples[12]), // conflict
+		keyTuples[0], initialRows.Get(keyTuples[0]),                                                           // unaltered
+		keyTuples[4], updatedRows.Get(keyTuples[4]),                                                           // modified in updated
+		keyTuples[5], mergeRows.Get(keyTuples[5]),                                                             // modified in merged
+		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
+		keyTuples[7], updatedRows.Get(keyTuples[7]),                                                           // modify both with the same value
+		keyTuples[8], updatedRows.Get(keyTuples[8]),                                                           // conflict
+		keyTuples[9], updatedRows.Get(keyTuples[9]),                                                           // added in update
+		keyTuples[10], mergeRows.Get(keyTuples[10]),                                                           // added in merge
+		keyTuples[11], updatedRows.Get(keyTuples[11]),                                                         // added same in both
+		keyTuples[12], updatedRows.Get(keyTuples[12]),                                                         // conflict
 	)
 
 	updateConflict := doltdb.NewConflict(initialRows.Get(keyTuples[8]), updatedRows.Get(keyTuples[8]), mergeRows.Get(keyTuples[8]))
 
 	addConflict := doltdb.NewConflict(
 		nil,
-		valsToTestTuple([]types.Value{types.String("person thirteen"), types.NullValue}),
-		valsToTestTuple([]types.Value{types.String("person number thirteen"), types.NullValue}),
+		valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue}),
+		valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue}),
 	)
 	expectedConflicts := types.NewMap(vrw,
 		keyTuples[8], updateConflict.ToNomsList(vrw),
