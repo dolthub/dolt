@@ -85,7 +85,7 @@ func New(sch schema.Schema, rowData types.Map) *Dim {
 
 func (dim *Dim) Run() types.Map {
 	if err := termui.Init(); err != nil {
-		log.Fatal("failed to initialize termui: %v\n", err)
+		log.Fatalf("failed to initialize termui: %v\n", err)
 	}
 
 	defer termui.Close()
