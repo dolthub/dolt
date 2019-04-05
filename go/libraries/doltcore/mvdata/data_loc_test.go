@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	js "encoding/json"
+
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -16,33 +18,60 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
-func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
-	testSchema := `
+var testSchema = `
+	{
+		"columns": [
+		  {
+			"name": "a",
+			"kind": "string",
+			"tag": 0,
+			"is_part_of_pk": true,
+			"col_constraints":[
+			  {
+				"constraint_type": "not_null"
+			  }
+			]
+		  },
+		  {
+			"name": "b",
+			"kind": "string",
+			"tag": 1,
+			"is_part_of_pk": false,
+			"col_constraints": [
+		  ]}
+		]
+	}`
+
+var rowMap = []map[string]interface{}{
+
+	map[string]interface{}{"a": []string{"a", "b", "c"}},
+	map[string]interface{}{"b": []string{"1", "2", "3"}},
+}
+var testJSON = `{
 		"rows": [
 			 {
-			   "id": 0,
-			   "first name": "tim",
-			   "last name": "sehn",
-			   "title": "ceo",
-			   "start date": "8/6/2018",
-			   "end date": ""
-			},
+			   "a": "a",
+			   "b": "1"
+			}, 	
 			 {
-			   "id": 1,
-			   "first name": "brian",
-			   "last name": "hendriks",
-			   "title": "software engienner",
-			   "start date": "8/6/2018",
-			   "end date": ""
-			}
+				"a": "b",
+				"b": "2"
+			 },
+			 {
+				"a": "c",
+				"b": "3"
+			 }
 		]
-	`
+	}`
+
+func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 	testHomeDir := "/user/bheni"
 	workingDir := "/user/bheni/datasets/states"
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile("schema.json", []byte(testSchema))
+	fs.WriteFile("test.json", []byte(testJSON))
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
 
@@ -144,6 +173,11 @@ func TestExists(t *testing.T) {
 }
 
 func TestCreateRdWr(t *testing.T) {
+	var inter interface{}
+	err := js.Unmarshal([]byte(testJSON), &inter)
+	if err != nil {
+		panic(err)
+	}
 	tests := []struct {
 		dl          *DataLocation
 		expectedRdT reflect.Type
@@ -161,6 +195,7 @@ func TestCreateRdWr(t *testing.T) {
 
 	for _, test := range tests {
 		loc := test.dl
+
 		wr, err := loc.CreateOverwritingDataWriter(root, fs, true, fakeSchema)
 
 		if err != nil {
