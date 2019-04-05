@@ -70,6 +70,13 @@ teardown() {
     [ "$output" = 'no changes added to commit (use "dolt add")' ]
 }
 
+@test "dolt commit --allow-empty with nothing added" {
+    run dolt commit -m "foo commit" --allow-empty
+    [ "$status" -eq 0 ]
+    run dolt log
+    [[ "${lines[3]}" =~ "foo commit" ]] || false
+}
+
 @test "dolt sql in a new repository" {
    run dolt sql
    [ "$status" -eq 1 ]

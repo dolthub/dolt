@@ -27,9 +27,14 @@ var commitSynopsis = []string{
 }
 
 func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	const commitMessageArg = "message"
+	const (
+		allowEmptyFlag   = "allow-empty"
+		commitMessageArg = "message"
+	)
+
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
+	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -38,26 +43,35 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		msg = getCommitMessageFromEditor(dEnv)
 	}
 
-	err := actions.CommitStaged(dEnv, msg)
+	err := actions.CommitStaged(dEnv, msg, apr.Contains(allowEmptyFlag))
 	return handleCommitErr(err, usage)
 }
 
 func handleCommitErr(err error, usage cli.UsagePrinter) int {
+	if err == nil {
+		return 0
+	}
+
 	if err == actions.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
 		bdr.AddDetails("dolt config [-global|local] -add %[1]s:\"FIRST LAST\"", env.UserNameKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
-	} else if err == actions.ErrEmailNotConfigured {
+	}
+
+	if err == actions.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
 		bdr.AddDetails("dolt config [-global|local] -add %[1]s:\"EMAIL_ADDRESS\"", env.UserEmailKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
-	} else if err == actions.ErrEmptyCommitMessage {
-		bdr := errhand.BuildDError("Aborting commit due to empty commit message.")
+	}
 
+	if err == actions.ErrEmptyCommitMessage {
+		bdr := errhand.BuildDError("Aborting commit due to empty commit message.")
 		return HandleVErrAndExitCode(bdr.Build(), usage)
-	} else if actions.IsNothingStaged(err) {
+	}
+
+	if actions.IsNothingStaged(err) {
 		notStaged := actions.NothingStagedDiffs(err)
 		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
 
@@ -65,12 +79,10 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
 			return HandleVErrAndExitCode(bdr.Build(), usage)
 		}
-	} else if err != nil {
-		verr := errhand.BuildDError("error: Failed to commit changes.").AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	return 0
+	verr := errhand.BuildDError("error: Failed to commit changes.").AddCause(err).Build()
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func getCommitMessageFromEditor(dEnv *env.DoltEnv) string {
