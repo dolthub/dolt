@@ -17,7 +17,12 @@ const (
 
 	UserEmailKey = "user.email"
 	UserNameKey  = "user.name"
-	UserCreds    = "user.creds"
+
+	// should be able to have remote specific creds?
+	UserCreds = "user.creds"
+
+	// should be per remote?
+	GrpcInsecure = "grpc.insecure"
 
 	DoltEditor = "core.editor"
 
