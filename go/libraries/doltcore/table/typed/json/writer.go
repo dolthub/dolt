@@ -8,19 +8,24 @@ import (
 	"path/filepath"
 
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
+const jsonHeader = `{"rows": [`
+const jsonFooter = `]}`
+
 var WriteBufSize = 256 * 1024
 
 type JSONWriter struct {
-	closer io.Closer
-	bWr    *bufio.Writer
-	info   *JSONFileInfo
-	sch    schema.Schema
+	closer      io.Closer
+	bWr         *bufio.Writer
+	info        *JSONFileInfo
+	sch         schema.Schema
+	rowsWritten int
 }
 
 func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema, info *JSONFileInfo) (*JSONWriter, error) {
@@ -42,8 +47,11 @@ func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema, in
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema, info *JSONFileInfo) (*JSONWriter, error) {
 
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-
-	return &JSONWriter{wr, bwr, info, outSch}, nil
+	err := iohelp.WriteAll(bwr, []byte(jsonHeader))
+	if err != nil {
+		return nil, err
+	}
+	return &JSONWriter{wr, bwr, info, outSch, 0}, nil
 }
 
 func (jsonw *JSONWriter) GetSchema() schema.Schema {
@@ -59,6 +67,7 @@ func (jsonw *JSONWriter) WriteRow(r row.Row) error {
 		if ok && !types.IsNull(val) {
 			colValMap[col.Name] = val
 		}
+
 		return false
 	})
 
@@ -67,14 +76,30 @@ func (jsonw *JSONWriter) WriteRow(r row.Row) error {
 		return errors.New("marshaling did not work")
 	}
 
-	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	cli.Println(string(data))
 
-	return newErr
+	if jsonw.rowsWritten != 0 {
+		jsonw.bWr.WriteRune(',')
+	}
+
+	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	if newErr != nil {
+		return newErr
+	}
+	jsonw.rowsWritten++
+
+	return nil
 }
 
 // Close should flush all writes, release resources being held
 func (jsonw *JSONWriter) Close() error {
 	if jsonw.closer != nil {
+		err := iohelp.WriteAll(jsonw.bWr, []byte(jsonFooter))
+
+		if err != nil {
+			return err
+		}
+
 		errFl := jsonw.bWr.Flush()
 		errCl := jsonw.closer.Close()
 		jsonw.closer = nil
@@ -94,6 +119,7 @@ func marshalToJson(valMap interface{}) ([]byte, error) {
 	var err error
 
 	jsonBytes, err = json.Marshal(valMap)
+	cli.Println(string(jsonBytes))
 	if err != nil {
 		return nil, err
 	}

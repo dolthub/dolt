@@ -47,7 +47,11 @@ func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, s
 	if err != nil {
 		return nil, err
 	}
-	tblData, _ := fs.ReadFile(tblPath)
+
+	tblData, err := fs.ReadFile(tblPath)
+	if err != nil {
+		return nil, err
+	}
 
 	jsonRows, err := UnmarshalFromJSON(tblData)
 	if err != nil {
