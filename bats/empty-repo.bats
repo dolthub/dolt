@@ -129,7 +129,6 @@ teardown() {
 
 @test "dolt table rm-row in a new repository" {
     run dolt table rm-row
-    skip "dolt table rm-row throws a segmentation fault right now"
     [ "$status" -ne 0 ]
     [[ "${lines[0]}" =~ "usage" ]] || false
 }
