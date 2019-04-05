@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -313,7 +314,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
-	if err == nil {
+	if err == nil && kid != "" {
 		dir, err := dEnv.CredsDir()
 
 		if err != nil {
@@ -333,9 +334,25 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	return nil, nil
 }
 
+func (dEnv *DoltEnv) useInsecureGRPC() bool {
+	insecureStr, err := dEnv.Config.GetString(GrpcInsecure)
+
+	if err == nil {
+		return strings.ToLower(insecureStr) == "true"
+	}
+
+	return false
+}
+
 func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
 	tc := credentials.NewTLS(&tls.Config{})
-	dialOpts := grpc.WithTransportCredentials(tc)
+
+	var dialOpts grpc.DialOption
+	if dEnv.useInsecureGRPC() {
+		dialOpts = grpc.WithInsecure()
+	} else {
+		dialOpts = grpc.WithTransportCredentials(tc)
+	}
 
 	opts := []grpc.DialOption{dialOpts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
 
