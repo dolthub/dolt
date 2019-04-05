@@ -28,7 +28,7 @@ teardown() {
 @test "dolt ls in a new repository" {
     run dolt ls
     [ "$status" -eq 0 ]
-    [ "$output" = "Tables in working set:" ]
+    [ "$output" = "No tables in working set" ]
 }
 
 @test "dolt branch in a new repository" {

@@ -1,12 +1,13 @@
 package commands
 
 import (
+	"sort"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"sort"
 )
 
 var lsShortDesc = "List tables"
@@ -29,16 +30,16 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var root *doltdb.RootValue
 	var verr errhand.VerboseError
-	var str string
+	var label string
 	if apr.NArg() == 0 {
-		str = "working set"
+		label = "working set"
 		root, verr = GetWorkingWithVErr(dEnv)
 	} else {
-		str, root, verr = getRootForCommitSpecStr(apr.Arg(0), dEnv)
+		label, root, verr = getRootForCommitSpecStr(apr.Arg(0), dEnv)
 	}
 
 	if verr == nil {
-		verr = printTables(root, str, apr.Contains(verboseFlag))
+		verr = printTables(root, label, apr.Contains(verboseFlag))
 		return 0
 	}
 
@@ -46,11 +47,16 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 1
 }
 
-func printTables(root *doltdb.RootValue, str string, verbose bool) errhand.VerboseError {
+func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
 	tblNames := root.GetTableNames()
 	sort.Strings(tblNames)
 
-	cli.Printf("Tables in %s:\n", str)
+	if len(tblNames) == 0 {
+		cli.Println("No tables in", label)
+		return nil
+	}
+
+	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tblNames {
 		if verbose {
 			h, _ := root.GetTableHash(tbl)
