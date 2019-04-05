@@ -47,6 +47,10 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	rmArgs := parseRmRowArgs(commandStr, args)
 
+	if rmArgs == nil {
+		return 1
+	}
+
 	var root *doltdb.RootValue
 	var tbl *doltdb.Table
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
