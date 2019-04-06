@@ -79,12 +79,20 @@ func (t *Table) GetConflicts() (Conflict, types.Map, error) {
 }
 
 func (t *Table) HasConflicts() bool {
+	if t == nil {
+		return false
+	}
+
 	_, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	return ok
 }
 
 func (t *Table) NumRowsInConflict() uint64 {
+	if t == nil {
+		return 0
+	}
+
 	conflictsVal, ok := t.tableStruct.MaybeGet(conflictsKey)
 
 	if !ok {
