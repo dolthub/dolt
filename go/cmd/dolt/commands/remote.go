@@ -65,14 +65,22 @@ func removeRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	}
 
 	old := strings.TrimSpace(apr.Arg(1))
-	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)
 
-	oldId := "remote." + old + ".url"
+	remotes, err := dEnv.GetRemotes()
 
-	if _, err := cfg.GetString(oldId); err != nil {
-		return errhand.BuildDError("error: unknown remote " + oldId).Build()
+	if err != nil {
+		return errhand.BuildDError("error: unable to read remotes").Build()
+	}
+
+	if _, ok := remotes[old]; !ok {
+		return errhand.BuildDError("error: unknown remote " + old).Build()
 	} else {
-		cfg.Unset([]string{oldId})
+		delete(dEnv.RepoState.Remotes, old)
+		err := dEnv.RepoState.Save()
+
+		if err != nil {
+			return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
+		}
 	}
 
 	return nil
