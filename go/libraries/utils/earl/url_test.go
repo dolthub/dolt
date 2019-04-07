@@ -95,6 +95,23 @@ func TestParse(t *testing.T) {
 			false,
 		},
 		{
+			"http://localhost:50051/path1/path2",
+			url.URL{
+				Scheme: "http",
+				Host:   "localhost:50051",
+				Path:   "/path1/path2",
+			},
+			false,
+		},
+		{
+			"localhost:50051/path1/path2",
+			url.URL{
+				Host: "localhost:50051",
+				Path: "/path1/path2",
+			},
+			false,
+		},
+		{
 			"user:pass@place.org/path1/path2",
 			url.URL{
 				Host: "place.org",
@@ -108,6 +125,25 @@ func TestParse(t *testing.T) {
 			url.URL{
 				Scheme: "https",
 				Host:   "place.org",
+				Path:   "/path1/path2",
+				User:   url.UserPassword("user", "pass"),
+			},
+			false,
+		},
+		{
+			"user:pass@localhost/path1/path2",
+			url.URL{
+				Host: "localhost",
+				Path: "/path1/path2",
+				User: url.UserPassword("user", "pass"),
+			},
+			false,
+		},
+		{
+			"https://user:pass@localhost/path1/path2",
+			url.URL{
+				Scheme: "https",
+				Host:   "localhost",
 				Path:   "/path1/path2",
 				User:   url.UserPassword("user", "pass"),
 			},
