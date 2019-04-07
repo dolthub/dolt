@@ -51,7 +51,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pushToRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, branch string) (verr errhand.VerboseError) {
+func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()

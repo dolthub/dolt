@@ -27,7 +27,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()
-		repoState := &RepoState{"master", hashStr, hashStr, nil, nil}
+		repoState := &RepoState{"master", hashStr, hashStr, nil, nil, nil}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {

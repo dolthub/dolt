@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,25 +18,33 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
+const (
+	insecureFlag = "insecure"
+	remoteParam  = "remote"
+	branchParam  = "branch"
+)
+
 var cloneShortDesc = ""
 var cloneLongDesc = ""
 var cloneSynopsis = []string{
-	"[-remote <remote>] [-branch <branch>] <remote-url> <new-dir>",
+	"[-remote <remote>] [-branch <branch>] [-insecure] <remote-url> <new-dir>",
 }
 
 func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsString("remote", "", "name", "")
-	ap.SupportsString("branch", "b", "branch", "")
+	ap.SupportsFlag(insecureFlag, "", "Use an unencrypted connection.")
+	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
+	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified 'master' will be cloned.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	remoteName := apr.GetValueOrDefault("remote", "origin")
-	branch := apr.GetValueOrDefault("branch", "master")
+	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
+	branch := apr.GetValueOrDefault(branchParam, "master")
+	insecure := apr.Contains(insecureFlag)
 	dir, urlStr, verr := parseArgs(apr)
 
 	if verr == nil {
-		verr = cloneRemote(dir, remoteName, urlStr, branch, dEnv.FS)
+		verr = cloneRemote(dir, remoteName, urlStr, branch, insecure, dEnv.FS)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -47,7 +56,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	}
 
 	urlStr := apr.Arg(0)
-	_, err := env.ParseRemoteUrl(urlStr)
+	_, err := earl.Parse(urlStr)
 
 	if err != nil {
 		return "", "", errhand.BuildDError("error: invalid remote url: " + urlStr).Build()
@@ -97,7 +106,7 @@ func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseErr
 	return dEnv, nil
 }
 
-func createRemote(remoteName, remoteUrlIn string, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
+func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
 	remoteUrl, err := getAbsRemoteUrl(dEnv.Config, remoteUrlIn)
 
 	if err != nil {
@@ -105,11 +114,10 @@ func createRemote(remoteName, remoteUrlIn string, dEnv *env.DoltEnv) (*doltdb.Do
 	}
 
 	cli.Printf("cloning %s\n", remoteUrl)
-	r := &env.Remote{Name: remoteName, Url: remoteUrl}
+	r := env.NewRemote(remoteName, remoteUrl, insecure)
 
-	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)
-	key := env.RemoteConfigParam(r.Name, env.RemoteUrlParam)
-	err = cfg.SetStrings(map[string]string{key: r.Url})
+	dEnv.RepoState.AddRemote(r)
+	err = dEnv.RepoState.Save()
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to update local config with new remote " + remoteName).AddCause(err).Build()
@@ -118,7 +126,7 @@ func createRemote(remoteName, remoteUrlIn string, dEnv *env.DoltEnv) (*doltdb.Do
 	return r.GetRemoteDB(), nil
 }
 
-func cloneRemote(dir, remoteName, remoteUrl, branch string, fs filesys.Filesys) (verr errhand.VerboseError) {
+func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs filesys.Filesys) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -129,7 +137,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, fs filesys.Filesys) 
 	dEnv, verr := clonedEnv(dir, fs)
 
 	if verr == nil {
-		srcDB, verr := createRemote(remoteName, remoteUrl, dEnv)
+		srcDB, verr := createRemote(remoteName, remoteUrl, insecure, dEnv)
 
 		if verr == nil {
 

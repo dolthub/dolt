@@ -7,6 +7,7 @@ import (
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"regexp"
 	"strings"
 )
@@ -22,7 +23,14 @@ type DoltProtocol struct {
 }
 
 func (dhp DoltProtocol) NewChunkStore(sp spec.Spec) (chunks.ChunkStore, error) {
-	remoteUrl, err := ParseRemoteUrl(sp.DatabaseName)
+	remotes, err := dhp.dEnv.GetRemotes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	r := remotes[sp.DatabaseName]
+	remoteUrl, err := earl.Parse(r.Url)
 
 	if err != nil {
 		return nil, err
@@ -36,7 +44,7 @@ func (dhp DoltProtocol) NewChunkStore(sp spec.Spec) (chunks.ChunkStore, error) {
 	org := tokens[0]
 	repoName := tokens[1]
 
-	conn, err := dhp.dEnv.GrpcConn(remoteUrl.Host)
+	conn, err := dhp.dEnv.GrpcConn(remoteUrl.Host, IsInsecure(r))
 
 	if err != nil {
 		return nil, err

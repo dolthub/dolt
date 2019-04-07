@@ -14,10 +14,11 @@ type MergeState struct {
 }
 
 type RepoState struct {
-	Branch  string      `json:"branch"`
-	Staged  string      `json:"staged"`
-	Working string      `json:"working"`
-	Merge   *MergeState `json:"merge_state"`
+	Branch  string            `json:"branch"`
+	Staged  string            `json:"staged"`
+	Working string            `json:"working"`
+	Merge   *MergeState       `json:"merge_state"`
+	Remotes map[string]Remote `json:"remotes"`
 
 	fs filesys.ReadWriteFS `json:"-"`
 }
@@ -44,7 +45,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 
 func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
 	hashStr := rootHash.String()
-	rs := &RepoState{br, hashStr, hashStr, nil, fs}
+	rs := &RepoState{br, hashStr, hashStr, nil, nil, fs}
 
 	err := rs.Save()
 
@@ -86,4 +87,12 @@ func (rs *RepoState) AbortMerge() error {
 func (rs *RepoState) ClearMerge() error {
 	rs.Merge = nil
 	return rs.Save()
+}
+
+func (rs *RepoState) AddRemote(r Remote) {
+	if rs.Remotes == nil {
+		rs.Remotes = make(map[string]Remote)
+	}
+
+	rs.Remotes[r.Name] = r
 }
