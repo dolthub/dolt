@@ -1,11 +1,12 @@
 package commands
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"reflect"
-	"testing"
 )
 
 var globalCfg = set.NewStrSet([]string{globalParamName})
@@ -24,7 +25,7 @@ func TestConfig(t *testing.T) {
 	if ret != 0 {
 		t.Error("Failed to set global config")
 	} else if cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig); !ok || !config.Equals(cfg, expectedGlobal) {
-		t.Error("config -set did not yield expected global results")
+		t.Error("config -add did not yield expected global results")
 	}
 
 	ret = Config("dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
@@ -36,7 +37,7 @@ func TestConfig(t *testing.T) {
 	if ret != 0 {
 		t.Error("Failed to set local config")
 	} else if cfg, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok || !config.Equals(cfg, expectedLocal) {
-		t.Error("config -set did not yield expected local results")
+		t.Error("config -add did not yield expected local results")
 	} else if val, err := cfg.GetString("title"); err != nil || val != "senior dufus" {
 		t.Error("Unexpected value of \"title\" retrieved from the config hierarchy")
 	}
@@ -50,7 +51,7 @@ func TestConfig(t *testing.T) {
 	if ret != 0 {
 		t.Error("Failed to set global config")
 	} else if cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig); !ok || !config.Equals(cfg, expectedGlobal) {
-		t.Error("config -set did not yield expected global results")
+		t.Error("config -add did not yield expected global results")
 	}
 
 	expectedGlobal = map[string]string{"title": "dufus"}
@@ -108,7 +109,7 @@ func TestInvalidConfigArgs(t *testing.T) {
 		t.Error("Invalid commands should fail. Command has both local and global")
 	}
 
-	// both -set and -get are used
+	// both -add and -get are used
 	ret = Config("dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
 
 	if ret == 0 {
