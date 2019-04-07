@@ -42,7 +42,7 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
+func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
 	verr = fetchRemoteBranch(dEnv, r, remoteName, branch)
 
 	if verr == nil {

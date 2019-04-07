@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"path/filepath"
-	"strings"
 )
 
 const (
@@ -334,21 +333,11 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	return nil, nil
 }
 
-func (dEnv *DoltEnv) useInsecureGRPC() bool {
-	insecureStr, err := dEnv.Config.GetString(GrpcInsecure)
-
-	if err == nil {
-		return strings.ToLower(insecureStr) == "true"
-	}
-
-	return false
-}
-
-func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
+func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
 	tc := credentials.NewTLS(&tls.Config{})
 
 	var dialOpts grpc.DialOption
-	if dEnv.useInsecureGRPC() {
+	if insecure {
 		dialOpts = grpc.WithInsecure()
 	} else {
 		dialOpts = grpc.WithTransportCredentials(tc)
@@ -365,25 +354,27 @@ func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, rpcCreds credentials.
 	return conn, err
 }
 
-func (dEnv *DoltEnv) GrpcConn(hostAndPort string) (*grpc.ClientConn, error) {
+func (dEnv *DoltEnv) GrpcConn(hostAndPort string, insecure bool) (*grpc.ClientConn, error) {
 	rpcCreds, err := dEnv.getRPCCreds()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return dEnv.GrpcConnWithCreds(hostAndPort, rpcCreds)
+	return dEnv.GrpcConnWithCreds(hostAndPort, insecure, rpcCreds)
 
 }
 
-func (dEnv *DoltEnv) GetRemotes() (map[string]*Remote, error) {
-	cfg, ok := dEnv.Config.GetConfig(LocalConfig)
-
-	if !ok {
-		panic("Need to validate repo before checking remotes")
+func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
+	if dEnv.RSLoadErr != nil {
+		return nil, dEnv.RSLoadErr
 	}
 
-	return parseRemotesFromConfig(cfg)
+	if dEnv.RepoState.Remotes == nil {
+		return map[string]Remote{}, nil
+	}
+
+	return dEnv.RepoState.Remotes, nil
 }
 
 var ErrNotACred = errors.New("not a valid credential key id or public key")

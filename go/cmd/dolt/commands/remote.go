@@ -21,7 +21,7 @@ var remoteShortDesc = ""
 var remoteLongDesc = ""
 var remoteSynopsis = []string{
 	"[-v | --verbose]",
-	"add <name> <url>",
+	"add [-insecure] <name> <url>",
 	"rename <old> <new>",
 	"remove <name>",
 }
@@ -36,7 +36,8 @@ const (
 
 func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(verboseFlag, "v", "")
+	ap.SupportsFlag(verboseFlag, "v", "When printing the list of remotes adds additional details.")
+	ap.SupportsFlag(insecureFlag, "", "Use an unencrypted connection.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -84,16 +85,26 @@ func renameRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 
 	old := strings.TrimSpace(apr.Arg(1))
 	new := strings.TrimSpace(apr.Arg(2))
-	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)
 
-	oldId := env.RemoteConfigParam(old, env.RemoteUrlParam)
-	newId := env.RemoteConfigParam(new, env.RemoteUrlParam)
+	remotes, err := dEnv.GetRemotes()
 
-	if val, err := cfg.GetString(oldId); err != nil {
-		return errhand.BuildDError("error: unknown remote " + oldId).Build()
+	if err != nil {
+		return errhand.BuildDError("error: unable to read remotes").Build()
+	}
+
+	if r, ok := remotes[old]; !ok {
+		return errhand.BuildDError("error: unknown remote " + old).Build()
 	} else {
-		cfg.Unset([]string{oldId})
-		cfg.SetStrings(map[string]string{newId: val})
+		delete(dEnv.RepoState.Remotes, old)
+
+		r.Name = new
+		dEnv.RepoState.AddRemote(r)
+
+		err := dEnv.RepoState.Save()
+
+		if err != nil {
+			return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
+		}
 	}
 
 	return nil
@@ -160,10 +171,13 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).Build()
 	}
 
-	cfg, _ := dEnv.Config.GetConfig(env.LocalConfig)
-	key := env.RemoteConfigParam(remoteName, env.RemoteUrlParam)
+	r := env.NewRemote(remoteName, remoteUrl, apr.Contains(insecureFlag))
+	dEnv.RepoState.AddRemote(r)
+	err = dEnv.RepoState.Save()
 
-	cfg.SetStrings(map[string]string{key: remoteUrl})
+	if err != nil {
+		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
+	}
 
 	return nil
 }
@@ -175,11 +189,16 @@ func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 		return errhand.BuildDError("Unable to get remotes from the local directory").AddCause(err).Build()
 	}
 
-	for _, remote := range remotes {
+	for _, r := range remotes {
 		if apr.Contains(verboseFlag) {
-			cli.Printf("%s %s\n", remote.Name, remote.Url)
+			secureStr := "secure"
+			if env.IsInsecure(r) {
+				secureStr = "insecure"
+			}
+
+			cli.Printf("%s %s %s\n", r.Name, r.Url, secureStr)
 		} else {
-			cli.Println(remote.Name)
+			cli.Println(r.Name)
 		}
 	}
 

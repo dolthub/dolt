@@ -45,7 +45,7 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func fetchRemoteBranch(dEnv *env.DoltEnv, r *env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
+func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
