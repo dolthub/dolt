@@ -12,8 +12,6 @@ require (
 	github.com/google/uuid v1.1.0
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7 // indirect
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d
-	github.com/onsi/ginkgo v1.7.0 // indirect
-	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/stretchr/testify v1.3.0
@@ -28,4 +26,4 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190315231617-ce385b94f154
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190408232856-671acb36001e
