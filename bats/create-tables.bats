@@ -120,3 +120,72 @@ teardown() {
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 5 ]
 }
+
+@test "create a basic table (int types) using sql" {
+    run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    # use bash -c so I can | the output to grep
+    run bash -c "dolt table schema | grep -c '\"kind\": \"int\"'"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 6 ]
+}
+
+@test "create a table with sql with multiple primary keys" {
+    run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run bash -c "dolt table schema | grep -c '\"is_part_of_pk\": true'"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 2 ]
+}
+
+@test "create a table using sql with not null constraint" {
+    run dolt sql -q "create table test (pk int not null, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table schema test
+    [ "$status" -eq 0 ]
+    skip "sql create table does not support not null constraint yet"
+    [[ "$output" =~ "not_null" ]] || false
+}
+
+@test "create a table using sql with a float" {
+    run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table schema test
+    [[ "$output" =~ "float" ]] || false
+}
+
+@test "create a table using sql with a string" {
+    run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table schema test
+    [[ "$output" =~ "string" ]] || false
+}
+
+
+@test "create a table using sql with an unsigned int" {
+    run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table schema test
+    skip "dolt sql does not support the unsigned keyword yet"
+    [[ "$output" =~ "uint" ]] ||false
+}
+
+@test "create a table using sql with a boolean" {
+    run dolt sql -q "create table test (pk int not null, c1 bool, primary key (pk))"
+    skip "dolt sql does not support boolean types"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "create a table using sql with a uuid type" {
+    run dolt sql -q "create table test (pk int not null, c1 uuid, primary key (pk))"
+    skip "dolt sql does not support uuid types"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
