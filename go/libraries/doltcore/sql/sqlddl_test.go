@@ -67,7 +67,15 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("first", 2, types.StringKind, false),
 				schema.NewColumn("is_married", 3, types.BoolKind, false)),
 		},
+		{
+			name: "Test tag comments",
+			query: "create table people (id int primary key comment 'tag:5', age int comment 'tag:10')",
+			expectedSchema: createSchema(
+				schema.NewColumn("id", 5, types.IntKind, true),
+				schema.NewColumn("age", 10, types.IntKind, false)),
+		},
 	}
+
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		root, _ := dEnv.WorkingRoot()
