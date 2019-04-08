@@ -529,3 +529,17 @@ teardown() {
     [ "$output" = "" ]
 }
 
+@test "rm a staged but uncommitted table" {
+    run dolt add test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table rm test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt add test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "${lines[0]}" = "On branch master" ]
+    [ "${lines[1]}" = "nothing to commit, working tree clean" ]
+}
