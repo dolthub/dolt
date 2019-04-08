@@ -116,11 +116,11 @@ func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltE
 	cli.Printf("cloning %s\n", remoteUrl)
 	r := env.NewRemote(remoteName, remoteUrl, insecure)
 
-	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save()
+	dEnv.RSLoadErr = nil
+	dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: unable to update local config with new remote " + remoteName).AddCause(err).Build()
+		return nil, errhand.BuildDError("error: unable to create repo state with remote " + remoteName).AddCause(err).Build()
 	}
 
 	return r.GetRemoteDB(), nil
@@ -134,17 +134,17 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 		}
 	}()
 
-	dEnv, verr := clonedEnv(dir, fs)
+	var dEnv *env.DoltEnv
+	dEnv, verr = clonedEnv(dir, fs)
 
 	if verr == nil {
-		srcDB, verr := createRemote(remoteName, remoteUrl, insecure, dEnv)
+		var srcDB *doltdb.DoltDB
+		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
 
 		if verr == nil {
-
 			if !srcDB.HasBranch(branch) {
 				verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 			} else {
-
 				cs, _ := doltdb.NewCommitSpec("HEAD", branch)
 				cm, err := srcDB.Resolve(cs)
 
@@ -174,7 +174,11 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 							localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
 							localCommit, _ := dEnv.DoltDB.Resolve(localCommitSpec)
 							h, err := dEnv.DoltDB.WriteRootValue(localCommit.GetRootValue())
-							dEnv.RepoState, err = env.CreateRepoState(dEnv.FS, branch, h)
+
+							dEnv.RepoState.Branch = branch
+							dEnv.RepoState.Staged = h.String()
+							dEnv.RepoState.Working = h.String()
+							err = dEnv.RepoState.Save()
 
 							if err != nil {
 								verr = errhand.BuildDError("error: failed to write repo state").Build()

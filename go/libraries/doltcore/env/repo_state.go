@@ -43,6 +43,20 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 	return &repoState, nil
 }
 
+func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
+	h := hash.Hash{}
+	hashStr := h.String()
+	rs := &RepoState{"", hashStr, hashStr, nil, map[string]Remote {r.Name: r}, fs}
+
+	err := rs.Save()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return rs, nil
+}
+
 func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
 	hashStr := rootHash.String()
 	rs := &RepoState{br, hashStr, hashStr, nil, nil, fs}
