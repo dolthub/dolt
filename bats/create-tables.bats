@@ -112,13 +112,16 @@ teardown() {
     run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    # use bash -c so I can | the output to grep
+    run bash -c "dolt table schema | grep -c '\"kind\": \"int\"'"
+    [ "$status" -eq 0 ]
+    [ "$output" -eq 6 ]
 }
 
 @test "create a table with sql with multiple primary keys" {
     run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    # use bash -c so I can | the output to grep
     run bash -c "dolt table schema | grep -c '\"is_part_of_pk\": true'"
     [ "$status" -eq 0 ]
     [ "$output" -eq 2 ]
@@ -134,22 +137,29 @@ teardown() {
     [[ "$output" =~ "not_null" ]] || false
 }
 
-@test "create a table using sql with all supported types" {
-    run dolt sql -q "create table test (pk int not null, c1 int, c2 float, c3 varchar, primary key (pk))"
+@test "create a table using sql with a float" {
+    run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table schema test
-    [[ "$output" =~ "int" ]] || false
     [[ "$output" =~ "float" ]] || false
+}
+
+@test "create a table using sql with a " {
+    run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table schema test
     [[ "$output" =~ "string" ]] || false
 }
+
 
 @test "create a table using sql with an unsigned int" {
     run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table schema test
-    skip "dolt sql does not support the unsigned kweyword"
+    skip "dolt sql does not support the unsigned keyword yet"
     [[ "$output" =~ "uint" ]] ||false
 }
 
