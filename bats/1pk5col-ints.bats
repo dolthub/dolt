@@ -4,14 +4,16 @@ setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
-    mkdir dolt-repo
-    cd dolt-repo
+    # Append the directory name with the pid of the calling process so
+    # multiple tests can be run in parallel on the same machine
+    mkdir "dolt-repo-$$"
+    cd "dolt-repo-$$"
     dolt init
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/dolt-repo
+    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 # Create a single primary key table and do stuff
