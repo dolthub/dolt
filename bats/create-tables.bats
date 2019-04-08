@@ -26,9 +26,16 @@ teardown() {
 }
 
 @test "create a table that uses all supported types" {
-    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pkalltypes.schema test
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pksupportedtypes.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+}
+
+@test "create a table that uses unsupported blob type" {
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pkunsupportedtypes.schema test
+    skip "Can create a blob type in schema now but I should not be able to"
+    [ "$status" -eq 1 ]
+
 }
 
 @test "create a repo with two tables" {

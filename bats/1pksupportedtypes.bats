@@ -7,7 +7,7 @@ setup() {
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pkalltypes.schema test
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pksupportedtypes.schema test
 }
 
 teardown() {
