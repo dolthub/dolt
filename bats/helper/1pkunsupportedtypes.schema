@@ -60,6 +60,13 @@
       "kind": "blob",
       "is_part_of_pk": false,
       "col_constraints": []
+    },
+    {
+      "tag": 8,
+      "name": "poop",
+      "kind": "poop",
+      "is_part_of_pk": false,
+      "col_constraints": []
     }
   ]
 }
