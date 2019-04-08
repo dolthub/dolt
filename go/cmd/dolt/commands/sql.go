@@ -64,7 +64,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if err != nil {
 			return quitErr("Error parsing SQL: %v.", err.Error())
 		}
-		return sqlDDL(dEnv.DoltDB, root, s, query)
+		return sqlDDL(dEnv, root, s, query, usage)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 		return 1
@@ -107,14 +107,15 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 }
 
 // Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.
-func sqlDDL(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) int {
+func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string, usage cli.UsagePrinter) int {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
-		_, _, err := sql.ExecuteCreate(db, root, ddl, query)
+		root, _, err := sql.ExecuteCreate(dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return quitErr("Error creating table: %v", err)
 		}
-		return 0
+		verr := UpdateWorkingWithVErr(dEnv, root)
+		return HandleVErrAndExitCode(verr, usage)
 	case sqlparser.AlterStr:
 		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.DropStr:
