@@ -21,6 +21,8 @@ const (
 	colKey
 )
 
+var ErrNoPrimaryKeyColumns  = errors.New("at least one primary key column must be specified")
+
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
 func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
@@ -60,13 +62,20 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	cols := make([]schema.Column, len(spec.Columns))
 
 	var tag uint64
+	var seenPk bool
 	for i, colDef := range spec.Columns {
 		col, err := getColumn(colDef, spec.Indexes, tag)
 		if err != nil {
 			return nil, err
 		}
+		if col.IsPartOfPK {
+			seenPk = true
+		}
 		cols[i] = col
 		tag++
+	}
+	if !seenPk {
+		return nil, ErrNoPrimaryKeyColumns
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
