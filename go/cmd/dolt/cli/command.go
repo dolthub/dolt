@@ -51,6 +51,10 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
 					PrintErrln("run: dolt init before trying to run this command")
 					return 2
+				} else if dEnv.RSLoadErr != nil {
+					PrintErrln(color.RedString("The current directories repository state is invalid"))
+					PrintErrln(dEnv.RSLoadErr.Error())
+					return 2
 				}
 			}
 
