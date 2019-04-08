@@ -270,7 +270,7 @@ teardown() {
     [[ ! "$output" =~ "!" ]] || false
 }
 
-@test "generate a merge conflict and try to roll back using checkout" {
+@test "generate a merge conflict and try to roll back using dolt merge --abort" {
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -291,7 +291,12 @@ teardown() {
     [[ ! "$output" =~ "Cnf" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
-    skip "Need to implement dolt reset --merge functionality"
+    run dolt merge --abort
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "generate a merge conflict and resolve with theirs" {
