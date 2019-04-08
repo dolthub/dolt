@@ -121,6 +121,9 @@ teardown() {
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
     [ "$output" = "error: unknown column 'c10'" ]
+    run dolt sql -q "select * from test where c2=147"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "delete a row with dolt table rm-row" {
