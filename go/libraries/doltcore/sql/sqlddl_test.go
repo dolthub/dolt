@@ -31,6 +31,16 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 		{
+			name: "Test syntax error",
+			query: "create table people id int, age int",
+			expectedErr: true,
+		},
+		{
+			name: "Test no primary keys",
+			query: "create table people (id int, age int)",
+			expectedErr: true,
+		},
+		{
 			name: "Test types",
 			query: "create table people (id int primary key, age int, first varchar(80), is_married bit)",
 			expectedSchema: createSchema(
@@ -70,8 +80,10 @@ func TestExecuteCreate(t *testing.T) {
 			updatedRoot, sch, err := ExecuteCreate(dEnv.DoltDB, root, s, tt.query)
 
 			assert.Equal(t, tt.expectedErr, err != nil, "unexpected error condition")
-			assert.NotNil(t, updatedRoot)
-			assert.Equal(t, tt.expectedSchema, sch)
+			if !tt.expectedErr {
+				assert.NotNil(t, updatedRoot)
+				assert.Equal(t, tt.expectedSchema, sch)
+			}
 		})
 	}
 }
