@@ -8,6 +8,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/xwb1989/sqlparser"
+	"strconv"
+	"strings"
 )
 
 // For some reason these constants are private in the sql parser library, so we need to either fork that package or
@@ -20,6 +22,9 @@ const (
 	colKeyUniqueKey
 	colKey
 )
+
+var ErrNoPrimaryKeyColumns  = errors.New("at least one primary key column must be specified")
+var tagCommentPrefix = "tag:"
 
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
@@ -60,13 +65,20 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	cols := make([]schema.Column, len(spec.Columns))
 
 	var tag uint64
+	var seenPk bool
 	for i, colDef := range spec.Columns {
 		col, err := getColumn(colDef, spec.Indexes, tag)
 		if err != nil {
 			return nil, err
 		}
+		if col.IsPartOfPK {
+			seenPk = true
+		}
 		cols[i] = col
 		tag++
+	}
+	if !seenPk {
+		return nil, ErrNoPrimaryKeyColumns
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
@@ -97,6 +109,11 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 				}
 			}
 		}
+	}
+
+	commentTag := extractTag(columnType)
+	if commentTag != schema.InvalidTag {
+		tag = commentTag
 	}
 
 	switch columnType.Type {
@@ -193,6 +210,31 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 	default:
 		return errColumn("Unrecognized column type %v", columnType.Type)
 	}
+}
+
+// Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
+func extractTag(columnType sqlparser.ColumnType) uint64 {
+	if columnType.Comment == nil {
+		return schema.InvalidTag
+	}
+
+	sqlVal := columnType.Comment
+	if sqlVal.Type != sqlparser.StrVal {
+		return schema.InvalidTag
+	}
+
+	commentString := string(sqlVal.Val)
+	i := strings.Index(commentString, tagCommentPrefix)
+	if i >= 0 {
+		startIdx := i + len(tagCommentPrefix)
+		tag, err := strconv.ParseUint(commentString[startIdx:], 10, 64)
+		if err != nil {
+			return schema.InvalidTag
+		}
+		return tag
+	}
+
+	return schema.InvalidTag
 }
 
 func errColumn(errFmt string, args... interface{}) (schema.Column, error) {
