@@ -145,7 +145,7 @@ teardown() {
     [[ "$output" =~ "float" ]] || false
 }
 
-@test "create a table using sql with a " {
+@test "create a table using sql with a string" {
     run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
