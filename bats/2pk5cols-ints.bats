@@ -4,14 +4,14 @@ setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
-    mkdir dolt-repo
-    cd dolt-repo
+    mkdir "dolt-repo-$$"
+    cd "dolt-repo-$$"
     dolt init
     dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema test
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/dolt-repo
+    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 @test "create a table with a schema file and examine repo" {

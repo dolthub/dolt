@@ -2,7 +2,6 @@
 setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-
 }
 
 @test "checking we have a dolt executable available" {
