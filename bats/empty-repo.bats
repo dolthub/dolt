@@ -2,13 +2,13 @@ setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
-    mkdir dolt-repo
-    cd dolt-repo
+    mkdir "dolt-repo-$$"
+    cd "dolt-repo-$$"
     dolt init
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/dolt-repo
+    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 # Tests on an empty dolt repository

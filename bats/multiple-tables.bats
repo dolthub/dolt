@@ -4,15 +4,15 @@ setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
-    mkdir dolt-repo
-    cd dolt-repo
+    mkdir "dolt-repo-$$"
+    cd "dolt-repo-$$"
     dolt init
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test1
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test2
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/dolt-repo
+    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 @test "examine a multi table repo" {
