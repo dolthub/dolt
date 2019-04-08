@@ -25,6 +25,12 @@ teardown() {
     [ "$output" = "" ]
 }
 
+@test "create a table that uses all supported types" {
+    run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pkalltypes.schema test
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "create a repo with two tables" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test1
     dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema test2
