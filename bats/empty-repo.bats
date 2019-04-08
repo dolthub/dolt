@@ -71,10 +71,10 @@ teardown() {
 }
 
 @test "dolt commit --allow-empty with nothing added" {
-    run dolt commit -m "foo commit" --allow-empty
+    run dolt commit -m "distinctively-named commit" --allow-empty
     [ "$status" -eq 0 ]
     run dolt log
-    [[ "${lines[3]}" =~ "foo commit" ]] || false
+    [[ "$output" =~ "distinctively-named commit" ]] || false
 }
 
 @test "dolt sql in a new repository" {
