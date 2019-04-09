@@ -27,6 +27,13 @@ func TestExecuteInsert(t *testing.T) {
 			expectedResult: InsertResult{ NumRowsInserted: 1 },
 		},
 		{
+			name: "insert one row out of order",
+			query: `insert into people (rating, first, id, last, age, is_married) values
+					(5.1, "Maggie", 7, "Simpson", 1, false)`,
+			insertedValues: []row.Row{newRow(7, "Maggie", "Simpson", false, 1, 5.1)},
+			expectedResult: InsertResult{ NumRowsInserted: 1 },
+		},
+		{
 			name: "insert two rows, all columns",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, 5.1),
@@ -55,15 +62,28 @@ func TestExecuteInsert(t *testing.T) {
 			expectedResult: InsertResult{ NumRowsInserted: 5 },
 		},
 		{
-			name: "insert two rows, only primary key",
-			query: `insert into people (id) values (7), (8)`,
+			name: "insert two rows, only required columns",
+			query: `insert into people (id, first, last) values 
+					(7, "Maggie", "Simpson"),
+					(8, "Milhouse", "Van Houten")`,
 			insertedValues: []row.Row{
-				row.New(testSch, row.TaggedValues{idTag: types.Int(7)}),
-				row.New(testSch, row.TaggedValues{idTag: types.Int(8)}),
+				row.New(testSch, row.TaggedValues{idTag: types.Int(7), firstTag: types.String("Maggie"), lastTag: types.String("Simpson")}),
+				row.New(testSch, row.TaggedValues{idTag: types.Int(8), firstTag: types.String("Milhouse"), lastTag: types.String("Van Houten")}),
 			},
 			expectedResult: InsertResult{ NumRowsInserted: 2 },
 		},
+		{
+			name: "insert with missing required columns",
+			query: `insert into people (id) values (7)`,
+			expectedErr: true,
+		},
+		{
+			name: "insert no primary keys",
+			query: `insert into people (age) values (7), (8)`,
+			expectedErr: true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
@@ -74,13 +94,15 @@ func TestExecuteInsert(t *testing.T) {
 			s := sqlStatement.(*sqlparser.Insert)
 
 			result, err := ExecuteInsert(dEnv.DoltDB, root, s, tt.query)
-			assert.NotNil(t, result)
-			assert.NotNil(t, result.Root)
 
 			assert.Equal(t, tt.expectedErr, err != nil, "unexpected error value")
 			assert.Equal(t, tt.expectedResult.NumRowsInserted, result.NumRowsInserted)
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
+
+			if result == nil || result.Root == nil {
+				return
+			}
 
 			table, ok := result.Root.GetTable(testTableName)
 			assert.True(t, ok)

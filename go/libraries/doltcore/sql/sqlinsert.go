@@ -18,6 +18,9 @@ type InsertResult struct {
 	NumErrorsIgnored int
 }
 
+var ErrMissingPrimaryKeys = errors.New("one or more primary key columns missing from insert statement")
+var ErrConstraintFailure = errors.New("row constraint failed")
+
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string)  (*InsertResult, error) {
 	tableName := s.Table.Name.String()
@@ -43,18 +46,18 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	var rows []row.Row // your boat
 
 	switch queryRows := s.Rows.(type) {
-	case *sqlparser.Select:
-		return errInsert("Insert as select not supported")
-	case *sqlparser.ParenSelect:
-		return errInsert("Parenthesized select expressions in insert not supported")
-	case *sqlparser.Union:
-		return errInsert("Union not supported")
 	case sqlparser.Values:
 		var err error
 		rows, err = prepareInsertVals(cols, &queryRows, tableSch)
 		if err != nil {
 			return &InsertResult{}, err
 		}
+	case *sqlparser.Select:
+		return errInsert("Insert as select not supported")
+	case *sqlparser.ParenSelect:
+		return errInsert("Parenthesized select expressions in insert not supported")
+	case *sqlparser.Union:
+		return errInsert("Union not supported")
 	default:
 		return errInsert("Unrecognized type for insertRows: %v", queryRows)
 	}
@@ -82,14 +85,37 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 
 // Returns rows to insert from the set of values given
 func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
+
+	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
+	allKeysFound := true
+	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) bool {
+		var foundCol bool
+		for _, col := range cols {
+			if col.Tag == tag {
+				foundCol = true
+				break
+			}
+		}
+
+		allKeysFound = allKeysFound && foundCol
+		return foundCol
+	})
+	if !allKeysFound {
+		return nil, ErrMissingPrimaryKeys
+	}
+
 	rows := make([]row.Row, len(*values))
 
 	for i, valTuple := range *values {
-		row, err := makeRow(cols, tableSch, valTuple)
+		r, err := makeRow(cols, tableSch, valTuple)
+
+		if !row.IsValid(r, tableSch) {
+			return nil, ErrConstraintFailure
+		}
 		if err != nil {
 			return nil, err
 		}
-		rows[i] = row
+		rows[i] = r
 	}
 
 	return rows, nil
