@@ -65,10 +65,17 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			return quitErr("Error parsing SQL: %v.", err.Error())
 		}
 		return sqlDDL(dEnv, root, s, query, usage)
+	case *sqlparser.Insert:
+		return sqlInsert(root, s, query)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
-		return 1
 	}
+}
+
+// Executes a SQL insert statement and prints the result to the CLI.
+func sqlInsert(value *doltdb.RootValue, insert *sqlparser.Insert, s string) int {
+	// TODO: fill in
+	return 0
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
