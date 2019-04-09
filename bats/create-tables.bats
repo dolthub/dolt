@@ -58,10 +58,27 @@ teardown() {
     [ "${#lines[@]}" -eq 4 ]
 }
 
-@test "create a table with json import. no schema" {
+@test "create a table with json import. no schema." {
     run dolt table import -c employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
     [ "$status" -ne 0 ]
     [ "$output" = "Please specify schema file for .json tables." ] 
+}
+
+@test "create a table with json import. bad json." {
+    run dolt table import -c -s $BATS_TEST_DIRNAME/employees-sch.json employees $BATS_TEST_DIRNAME/helper/employees-tbl-bad.json
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error creating reader" ]] || false
+    [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+}
+
+@test "create a table with json import. bad schema." {
+    run dolt table import -c -s $BATS_TEST_DIRNAME/employees-sch-bad.json employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error creating reader" ]] || false
+    skip "Error message mentions valid table file but not invalid schema file"
+    # Be careful here. "employees-sch-bad.json" matches. I think it is because 
+    # the command line is somehow in $output. Added " to" to make it fail.
+    [[ "$output" =~ "employees-sch-bad.json to" ]] || false
 }
 
 @test "import data from csv and create the table" {
@@ -103,7 +120,6 @@ teardown() {
     [[ "$output" =~ "UPPERCASE" ]] || false
 }
 
-
 @test "create a table from excel import with multiple sheets" {
     run dolt table import -c --pk=id employees $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
@@ -126,6 +142,14 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table name must match excel sheet name" ]] || false
 }
+
+@test "import an .xlsx file that is not a valid excel spreadsheet" {
+    run dolt table import -c --pk=id test $BATS_TEST_DIRNAME/helper/bad.xlsx
+    [ "$status" -eq 1 ]
+    skip "errors with 'cause: zip: not a valid zip file'. should say not a valid xlsx file"
+    [[ "$output" =~ "not a valid xlsx file" ]] || false
+}
+
 
 @test "create a basic table (int types) using sql" {
     run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
