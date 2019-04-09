@@ -113,7 +113,11 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 				if err != nil {
 					return nil, err
 				}
-				taggedVals[column.Tag] = types.Int(intVal)
+				if column.Kind == types.IntKind {
+					taggedVals[column.Tag] = types.Int(intVal)
+				} else if column.Kind == types.FloatKind {
+					taggedVals[column.Tag] = types.Float(intVal)
+				}
 			case sqlparser.FloatVal:
 				floatVal, err := strconv.ParseFloat(string(val.Val), 64)
 				if err != nil {
