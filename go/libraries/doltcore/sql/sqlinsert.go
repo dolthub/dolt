@@ -31,7 +31,7 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	replace := s.Action == sqlparser.ReplaceStr
 	ignore := s.Ignore != ""
 
-	cols := make([]schema.Column, 0, len(s.Columns))
+	cols := make([]schema.Column, len(s.Columns))
 	for i, colName := range s.Columns {
 		col, ok := tableSch.GetAllCols().GetByName(colName.String())
 		if !ok {
@@ -49,9 +49,9 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 		return errInsert("Parenthesized select expressions in insert not supported")
 	case *sqlparser.Union:
 		return errInsert("Union not supported")
-	case *sqlparser.Values:
+	case sqlparser.Values:
 		var err error
-		rows, err = prepareInsertVals(cols, queryRows, tableSch)
+		rows, err = prepareInsertVals(cols, &queryRows, tableSch)
 		if err != nil {
 			return &InsertResult{}, err
 		}
@@ -82,7 +82,7 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 
 // Returns rows to insert from the set of values given
 func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
-	rows := make([]row.Row, 0, len(*values))
+	rows := make([]row.Row, len(*values))
 
 	for i, valTuple := range *values {
 		row, err := makeRow(cols, tableSch, valTuple)
@@ -124,14 +124,14 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 				strVal := string(val.Val)
 				taggedVals[column.Tag] = types.String(strVal)
 			case sqlparser.ValArg:
-				return errInsertRow("Value args not suported in insert statements")
+				return errInsertRow("Value args not supported in insert statements")
 			default:
 				return errInsertRow("Unrecognized SQLVal type %v", val.Type)
 			}
 		case *sqlparser.NullVal:
 			// nothing to do, just don't set a tagged value for this column
-		case *sqlparser.BoolVal:
-			taggedVals[column.Tag] = types.Bool(*val)
+		case sqlparser.BoolVal:
+			taggedVals[column.Tag] = types.Bool(val)
 
 		// Many of these shouldn't be possible in the grammar, but all cases included for completeness
 		case *sqlparser.ComparisonExpr:
@@ -152,7 +152,7 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 			return errInsertRow("Exists expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.ColName:
 			return errInsertRow("Column name expressions not supported in insert values: %v", nodeToString(tuple))
-		case *sqlparser.ValTuple:
+		case sqlparser.ValTuple:
 			return errInsertRow("Tuple expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.Subquery:
 			return errInsertRow("Subquery expressions not supported in insert values: %v", nodeToString(tuple))
