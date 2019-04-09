@@ -74,6 +74,13 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("id", 5, types.IntKind, true),
 				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
+		{
+			name: "Test faulty tag comments",
+			query: "create table people (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
+			expectedSchema: createSchema(
+				schema.NewColumn("id", 0, types.IntKind, true),
+				schema.NewColumn("age", 1, types.IntKind, false)),
+		},
 	}
 
 	for _, tt := range tests {

@@ -214,11 +214,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 			switch r.Type {
 			// String-like values will print with quotes or other markers by default, so use the naked asci
 			// bytes coerced into a string for them
-			case sqlparser.HexVal:
-				fallthrough
-			case sqlparser.BitVal:
-				fallthrough
-			case sqlparser.StrVal:
+			case sqlparser.HexVal, sqlparser.BitVal, sqlparser.StrVal:
 				sqlVal = string(r.Val)
 			default:
 				// Default is to use the string value of the SQL node and hope it works
@@ -326,7 +322,7 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 	case *sqlparser.ExistsExpr:
 		return errors.New(fmt.Sprintf("Exists expressions not supported: %v", query))
 	case *sqlparser.SQLVal:
-		return errors.New(fmt.Sprintf("Not expressions not supported: %v", query))
+		return errors.New(fmt.Sprintf("Literal expressions not supported: %v", query))
 	case *sqlparser.NullVal:
 		return errors.New(fmt.Sprintf("NULL expressions not supported: %v", query))
 	case *sqlparser.BoolVal:
