@@ -400,7 +400,53 @@ teardown() {
     [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt diff 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "6" ]] || false
+    [[ "$output" =~ " 6" ]] || false
+}
+
+@test "add different columns on two branches, no merge conflict" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table schema --add-field test c6 int
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:6
+    dolt add test
+    dolt commit -m "added new column and test row"
+    dolt checkout test-branch
+    dolt table schema --add-field test c7 int
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c7:7
+    dolt add test
+    dolt commit -m "added different column and test row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 6" ]] || false
+    [[ "$output" =~ " 7" ]] || false
+}
+
+@test "add a column and row on one branch a row on the other, no merge conflict" {
+    dolt add test
+    dolt commit -m "added test table"
+    dolt branch test-branch
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "added a test row"
+    dolt checkout test-branch
+    dolt table schema --add-field test c6 int
+    dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10 c6:12
+    dolt add test
+    dolt commit -m "added a column and new test row"
+    dolt checkout master
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 12" ]] || false
 }
 
 @test "modify different fields, same row, no merge conflict" {
