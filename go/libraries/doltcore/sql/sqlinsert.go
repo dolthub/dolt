@@ -68,14 +68,32 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	var result InsertResult
 
 	for _, r := range rows {
-		rowExists := rowData.Get(r.NomsMapKey(tableSch)) != nil
-		if (replace || ignore) && rowExists {
-			result.NumErrorsIgnored += 1
-		} else if rowExists {
-			return errInsert("cannot insert existing row %v", r)
+		if !row.IsValid(r, tableSch) {
+			if ignore {
+				result.NumErrorsIgnored += 1
+				continue
+			} else {
+				return nil, ErrConstraintFailure
+			}
 		}
-		result.NumRowsInserted += 1
-		me.Set(r.NomsMapKey(tableSch), r.NomsMapValue(tableSch))
+
+		key := r.NomsMapKey(tableSch)
+
+		rowExists := rowData.Get(key) != nil || me.Get(key) != nil
+		if rowExists {
+			if replace {
+				result.NumRowsUpdated += 1
+			} else if ignore {
+				result.NumErrorsIgnored += 1
+				continue
+			} else {
+				return errInsert("cannot insert existing row %v", r)
+			}
+		} else {
+			result.NumRowsInserted += 1
+		}
+
+		me.Set(key, r.NomsMapValue(tableSch))
 	}
 	table = table.UpdateRows(me.Map())
 
@@ -108,10 +126,6 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 
 	for i, valTuple := range *values {
 		r, err := makeRow(cols, tableSch, valTuple)
-
-		if !row.IsValid(r, tableSch) {
-			return nil, ErrConstraintFailure
-		}
 		if err != nil {
 			return nil, err
 		}
