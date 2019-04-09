@@ -4,8 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	js "encoding/json"
-
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -43,26 +41,9 @@ var testSchema = `
 	}`
 
 var rowMap = []map[string]interface{}{
-
-	map[string]interface{}{"a": []string{"a", "b", "c"}},
-	map[string]interface{}{"b": []string{"1", "2", "3"}},
+	{"a": []string{"a", "b", "c"}},
+	{"b": []string{"1", "2", "3"}},
 }
-var testJSON = `{
-		"rows": [
-			 {
-			   "a": "a",
-			   "b": "1"
-			}, 	
-			 {
-				"a": "b",
-				"b": "2"
-			 },
-			 {
-				"a": "c",
-				"b": "3"
-			 }
-		]
-	}`
 
 func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
@@ -71,7 +52,6 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile("schema.json", []byte(testSchema))
-	fs.WriteFile("test.json", []byte(testJSON))
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
 
@@ -173,11 +153,6 @@ func TestExists(t *testing.T) {
 }
 
 func TestCreateRdWr(t *testing.T) {
-	var inter interface{}
-	err := js.Unmarshal([]byte(testJSON), &inter)
-	if err != nil {
-		panic(err)
-	}
 	tests := []struct {
 		dl          *DataLocation
 		expectedRdT reflect.Type
