@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -76,8 +75,6 @@ func (jsonw *JSONWriter) WriteRow(r row.Row) error {
 		return errors.New("marshaling did not work")
 	}
 
-	cli.Println(string(data))
-
 	if jsonw.rowsWritten != 0 {
 		jsonw.bWr.WriteRune(',')
 	}
@@ -119,7 +116,6 @@ func marshalToJson(valMap interface{}) ([]byte, error) {
 	var err error
 
 	jsonBytes, err = json.Marshal(valMap)
-	cli.Println(string(jsonBytes))
 	if err != nil {
 		return nil, err
 	}
