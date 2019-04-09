@@ -2,6 +2,7 @@ package sql
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/google/go-cmp/cmp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/stretchr/testify/assert"
+	"math"
 	"testing"
 )
 
@@ -24,12 +26,12 @@ const (
 	isMarriedTag = 3
 	ageTag       = 4
 	emptyTag     = 5
+	ratingTag    = 6
 )
 
 var testSch = createTestSchema()
 var untypedSch = untyped.UntypeUnkeySchema(testSch)
-
-var tableName = "people"
+var testTableName = "people"
 
 func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
@@ -42,35 +44,42 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
-		schema.NewColumn("age", ageTag, types.UintKind, false),
-		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+		schema.NewColumn("age", ageTag, types.IntKind, false),
+//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+		schema.NewColumn("rating", ratingTag, types.FloatKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
 
-func newRow(id int, first, last string, isMarried bool, age int) row.Row {
+func newRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
 		firstTag: types.String(first),
 		lastTag: types.String(last),
 		isMarriedTag: types.Bool(isMarried),
-		ageTag: types.Uint(age),
+		ageTag: types.Int(age),
+		ratingTag: types.Float(rating),
 	}
 
 	return row.New(testSch, vals)
 }
 
 // Default set of rows to use for sql tests
-var homer = newRow(0, "Homer", "Simpson", true, 40)
-var marge = newRow(1, "Marge", "Simpson", true, 38)
-var bart = newRow(2, "Bart", "Simpson", false, 10)
-var lisa = newRow(3, "Lisa", "Simpson", false, 8)
-var moe = newRow(4, "Moe", "Szyslak", false, 48)
-var barney = newRow(5, "Barney", "Gumble", false, 40)
+var homer = newRow(0, "Homer", "Simpson", true, 40, 8.5)
+var marge = newRow(1, "Marge", "Simpson", true, 38, 8)
+var bart = newRow(2, "Bart", "Simpson", false, 10, 9)
+var lisa = newRow(3, "Lisa", "Simpson", false, 8, 10)
+var moe = newRow(4, "Moe", "Szyslak", false, 48, 6.5)
+var barney = newRow(5, "Barney", "Gumble", false, 40, 4)
 
 func rs(rows... row.Row) []row.Row {
 	return rows
 }
+
+// Compares two noms Floats for approximate equality
+var floatComparer = cmp.Comparer(func(x, y types.Float) bool {
+	return math.Abs(float64(x) - float64(y)) < .001
+})
 
 // Returns a subset of the schema given
 func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
@@ -140,6 +149,6 @@ func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 
 	assert.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), testTableName)
 	assert.Nil(t, err,"Unable to put initial value of table in in mem noms db")
 }

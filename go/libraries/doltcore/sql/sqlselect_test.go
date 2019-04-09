@@ -156,6 +156,12 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: untypedSch,
 		},
 		{
+			name:  "Test select *, where > float",
+			query: "select * from people where rating > 8.0",
+			expectedRows: rs(homer, bart, lisa),
+			expectedSchema: untypedSch,
+		},
+		{
 			name:  "Test select subset of cols",
 			query: "select first,last from people where age >= 40",
 			columns: []string { "first", "last" },
@@ -179,6 +185,11 @@ func TestExecuteSelect(t *testing.T) {
 			query: "select id, age from people where age > 80",
 			expectedRows: rs(),
 			expectedSchema: subsetSchema(untypedSch, "id", "age"),
+		},
+		{
+			name:  "Test select * unknown column",
+			query: "select * from people where dne > 8.0",
+			expectedErr: true,
 		},
 		{
 			name:  "Test unsupported comparison",

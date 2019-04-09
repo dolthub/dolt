@@ -7,7 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 )
 
-var ErrRowNotValid = errors.New("invalid row for current schema.")
+var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
 	NomsMapKey(sch schema.Schema) types.Value
