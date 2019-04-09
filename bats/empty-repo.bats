@@ -70,6 +70,13 @@ teardown() {
     [ "$output" = 'no changes added to commit (use "dolt add")' ]
 }
 
+@test "dolt commit --allow-empty with nothing added" {
+    run dolt commit -m "distinctively-named commit" --allow-empty
+    [ "$status" -eq 0 ]
+    run dolt log
+    [[ "$output" =~ "distinctively-named commit" ]] || false
+}
+
 @test "dolt sql in a new repository" {
    run dolt sql
    [ "$status" -eq 1 ]
