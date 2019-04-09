@@ -17,25 +17,33 @@ teardown() {
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "create a two primary key table" {
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "create a table that uses all supported types" {
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pksupportedtypes.schema test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "create a table that uses unsupported blob type" {
     run dolt table create -s=$BATS_TEST_DIRNAME/helper/1pkunsupportedtypes.schema test
     skip "Can create a blob type in schema now but I should not be able to. Also can create a column of type poop that gets converted to type bool."
     [ "$status" -eq 1 ]
-
 }
 
 @test "create a repo with two tables" {
@@ -46,12 +54,19 @@ teardown() {
     [[ "$output" =~ "test1" ]] || false
     [[ "$output" =~ "test2" ]] || false
     [ "${#lines[@]}" -eq 3 ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
 }
 
 @test "create a table with json import" {
     run dolt table import -c -s $BATS_TEST_DIRNAME/helper/employees-sch.json employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
     run dolt table select employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
@@ -69,6 +84,9 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
     [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "employees" ]] || false
 }
 
 @test "create a table with json import. bad schema." {
@@ -85,21 +103,36 @@ teardown() {
     run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "try to create a table with a bad csv" {
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error creating reader" ]] || false
 }
 
 @test "create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test $BATS_TEST_DIRNAME/helper/2pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "import data from psv and create the table" {
     run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
@@ -124,6 +157,9 @@ teardown() {
     run dolt table import -c --pk=id employees $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
     run dolt table select employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
@@ -131,6 +167,10 @@ teardown() {
     run dolt table import -c --pk=number basketball $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
+    [[ "$output" =~ "basketball" ]] || false
     run dolt table select basketball
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
@@ -141,6 +181,9 @@ teardown() {
     run dolt table import -c --pk=id bad-sheet-name $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table name must match excel sheet name" ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "bad-sheet-name" ]] || false
 }
 
 @test "import an .xlsx file that is not a valid excel spreadsheet" {
@@ -148,6 +191,9 @@ teardown() {
     [ "$status" -eq 1 ]
     skip "errors with 'cause: zip: not a valid zip file'. should say not a valid xlsx file"
     [[ "$output" =~ "not a valid xlsx file" ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test" ]] || false
 }
 
 
@@ -155,6 +201,9 @@ teardown() {
     run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
     # use bash -c so I can | the output to grep
     run bash -c "dolt table schema | grep -c '\"kind\": \"int\"'"
     [ "$status" -eq 0 ]
