@@ -28,8 +28,7 @@ const (
 
 var testSch = createTestSchema()
 var untypedSch = untyped.UntypeUnkeySchema(testSch)
-
-var tableName = "people"
+var testTableName = "people"
 
 func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
@@ -140,6 +139,6 @@ func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 
 	assert.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), testTableName)
 	assert.Nil(t, err,"Unable to put initial value of table in in mem noms db")
 }
