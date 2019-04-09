@@ -9,6 +9,7 @@ require (
 	github.com/gizak/termui/v3 v3.0.0
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+	github.com/google/go-cmp v0.2.0
 	github.com/google/uuid v1.1.0
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7 // indirect
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d

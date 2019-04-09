@@ -2,6 +2,7 @@ package sql
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/google/go-cmp/cmp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/stretchr/testify/assert"
+	"math"
 	"testing"
 )
 
@@ -73,6 +75,11 @@ var barney = newRow(5, "Barney", "Gumble", false, 40, 4)
 func rs(rows... row.Row) []row.Row {
 	return rows
 }
+
+// Compares two noms Floats for approximate equality
+var floatComparer = cmp.Comparer(func(x, y types.Float) bool {
+	return math.Abs(float64(x) - float64(y)) < .001
+})
 
 // Returns a subset of the schema given
 func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
