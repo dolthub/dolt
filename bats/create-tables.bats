@@ -115,10 +115,16 @@ teardown() {
     run dolt table import -c --pk=number basketball $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-     run dolt table select basketball
+    run dolt table select basketball
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "specify incorrect sheet name on excel import" {
+    run dolt table import -c --pk=id bad-sheet-name $BATS_TEST_DIRNAME/helper/employees.xlsx
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table name must match excel sheet name" ]] || false
 }
 
 @test "create a basic table (int types) using sql" {
