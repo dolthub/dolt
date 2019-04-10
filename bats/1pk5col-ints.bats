@@ -88,10 +88,60 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
-@test "add rows to table. dolt sql with select queries to examine the table" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
-    dolt table put-row test pk:101 c1:102 c2:103 c3:104 c4:105 c5:106
+@test "dolt sql all manner of inserts" {
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 1" ]
+    run dolt table select test
+    [[ "$output" =~ "6" ]] || false
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (1,7,7,7,7,7),(2,8,8,8,8,8)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 2" ]
+    run dolt table select test
+    [[ "$output" =~ "7" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    run dolt sql -q "insert into test (pk,c1,c3,c5) values (3,9,9,9)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 1" ]
+    run dolt table select test
+    [[ "$output" =~ "9" ]] || false
+    run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error inserting rows: [one or more primary key columns missing from insert statement]" ]
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error inserting rows: [Unknown column c6]" ]
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot insert existing row" ]] || false
+}
+
+@test "dolt sql with insert ignore and replace into" {
+    dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
+    run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Rows inserted: 1" ]
+    [ "${lines[1]}" = "Errors ignored: 1" ]
+    run dolt table select test
+    [[ "$output" =~ "111" ]] || false
+    run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Rows inserted: 1" ]
+    [ "${lines[1]}" = "Rows updated: 1" ]
+    run dolt table select test
+    [[ "$output" =~ "7" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    [[ "$output" =~ "111" ]] || false
+    [[ ! "$output" =~ "6" ]] || false
+}
+
+@test "dolt sql insert and dolt sql select" {
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 1" ]
+    run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (101,102,103,104,105,106),(1,6,7,8,9,10)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 2" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "|c5" ]] || false

@@ -65,3 +65,29 @@ teardown() {
     [[ ! "$output" =~ "|5" ]] || false
     [[ "$output" =~ "|10" ]] || false
 }
+
+@test "interact with a multiple primary key table with sql" {
+    run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,6,6,6,6,6)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 1" ]
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c5" ]] || false
+    [[ "$output" =~ "6" ]] || false
+    run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7),(1,0,8,8,8,8,8)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 2" ]
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c5" ]] || false
+    [[ "$output" =~ "7" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    run dolt sql -q "select * from test where pk1=1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c5" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "6" ]] || false
+    run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error inserting rows: [row constraint failed]" ] || false
+}
