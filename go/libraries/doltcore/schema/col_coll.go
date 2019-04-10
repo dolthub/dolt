@@ -51,6 +51,13 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	return &ColCollection{uniqueCols, tags, sortedTags, tagToCol, nameToCol}, nil
 }
 
+// GetColumns returns the underlying list of columns. The list returned is a copy.
+func (cc *ColCollection) GetColumns() []Column {
+	colsCopy := make([]Column, len(cc.cols))
+	copy(colsCopy, cc.cols)
+	return colsCopy
+}
+
 // AppendColl returns a new collection with the additional ColCollection's columns appended
 func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, error) {
 	return cc.Append(colColl.cols...)
