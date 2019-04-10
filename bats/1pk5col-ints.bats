@@ -122,6 +122,15 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "dolt sql insert no columns specified" {
+    run dolt sql -q "insert into test values (0,0,0,0,0,0)"
+    skip "This is valid sql that does not work right now. should insert the values in listed column order"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Rows inserted: 1" ]
+    run dolt table select test
+    [[ "$output" =~ "0" ]] || false
+}
+
 @test "dolt sql with insert ignore and replace into" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
