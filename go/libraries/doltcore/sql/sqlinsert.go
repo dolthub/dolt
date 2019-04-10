@@ -137,7 +137,7 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 
 func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
 	if len(columns) != len(tuple) {
-		return errInsertRow("Wrong number of values for tuple %v", nodeToString(tuple))
+		return errInsertRow("Wrong number of values for tuple %v",  nodeToString(tuple))
 	}
 
 	taggedVals := make(row.TaggedValues)
@@ -157,16 +157,28 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 					taggedVals[column.Tag] = types.Int(intVal)
 				} else if column.Kind == types.FloatKind {
 					taggedVals[column.Tag] = types.Float(intVal)
+				} else {
+					return errInsertRow("Type mismatch: numeric value but non-numeric column: %v", nodeToString(val))
 				}
 			case sqlparser.FloatVal:
 				floatVal, err := strconv.ParseFloat(string(val.Val), 64)
 				if err != nil {
 					return nil, err
 				}
-				taggedVals[column.Tag] = types.Float(floatVal)
+				switch column.Kind {
+				case types.FloatKind:
+					taggedVals[column.Tag] = types.Float(floatVal)
+				default:
+					return errInsertRow("Type mismatch: float value but non-float column: %v", nodeToString(val))
+				}
 			case sqlparser.StrVal:
 				strVal := string(val.Val)
-				taggedVals[column.Tag] = types.String(strVal)
+				switch column.Kind {
+				case types.StringKind:
+					taggedVals[column.Tag] = types.String(strVal)
+				default:
+					return errInsertRow("Type mismatch: string value but non-string column: %v", nodeToString(val))
+				}
 			case sqlparser.ValArg:
 				return errInsertRow("Value args not supported in insert statements")
 			default:
