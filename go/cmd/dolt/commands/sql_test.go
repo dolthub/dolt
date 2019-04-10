@@ -1,8 +1,11 @@
 package commands
 
 import (
+	"github.com/attic-labs/noms/go/types"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/stretchr/testify/assert"
@@ -116,9 +119,104 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
+// Tests of the insert SQL syntax, mostly a smoke test for errors in the command line handler. Most tests of
+// insert SQL syntax are in the sql package.
+func TestInsert(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		expectedRes int
+		expectedIds []uuid.UUID
+	}{
+		{
+			name: "no primary key",
+			query: "insert into people (title) values ('hello')",
+			expectedRes: 1,
+		},
+		{
+			name: "bad syntax",
+			query: "insert into table", expectedRes: 1,
+		},
+		{
+			name: "bad syntax",
+			query: "insert into people (id) values", expectedRes: 1,
+		},
+		{
+			name: "table doesn't exist",
+			query: "insert into dne (id) values (00000000-0000-0000-0000-000000000005)", expectedRes: 1,
+		},
+		{
+			name: "insert one row",
+			query: `insert into people (id, name, age, is_married) values 
+				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false)`,
+			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000005")},
+		},
+		{
+			name: "insert one row all columns",
+			query: `insert into people (id, name, age, is_married, title) values 
+				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false, 'Goon')`,
+			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000005")},
+		},
+		{
+			name: "insert two rows all columns",
+			query: `insert into people (id, name, age, is_married, title) values 
+				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false, 'Goon'),
+				('00000000-0000-0000-0000-000000000006', 'Kobe Buffalomeat', 30, false, 'Linebacker')`,
+			expectedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000005"),
+				uuid.MustParse("00000000-0000-0000-0000-000000000006"),
+			},
+		},
+		{
+			name: "missing required column",
+			query: `insert into people (id, name, age) values 
+				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10)`,
+			expectedRes: 1,
+		},
+		{
+			name: "existing primary key",
+			query: `insert into people (id, name, age, is_married, title) values 
+				('00000000-0000-0000-0000-000000000000', 'Frank Frankerson', 10, false, 'Goon')`,
+			expectedRes: 1,
+		},
+		{
+			name: "insert ignore",
+			query: `insert ignore into people (id, name, age, is_married, title) values 
+				('00000000-0000-0000-0000-000000000000', 'Frank Frankerson', 10, false, 'Goon')`,
+			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000000")},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+
+			if result == 0 {
+				root, err := dEnv.WorkingRoot()
+				assert.Nil(t, err)
+
+				// Assert that all expected IDs exist after the insert
+				for _, expectedid := range test.expectedIds {
+					table, _ := root.GetTable(tableName)
+					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
+					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
+					_, ok := table.GetRow(key, dtestutils.TypedSchema)
+					assert.True(t, ok, "expected id not found")
+				}
+			}
+		})
+	}
+}
+
 func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	imt, sch := dtestutils.CreateTestDataTable(false)
+	imt, sch := dtestutils.CreateTestDataTable(true)
 
 	rd := table.NewInMemTableReader(imt)
 	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
