@@ -116,6 +116,12 @@ teardown() {
     [[ "$output" =~ "cannot insert existing row" ]] || false
 }
 
+@test "dolt sql insert same column twice" {
+    run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
+    skip "We decided that inserting the same column twice should error. This works right now"
+    [ "$status" -eq 1 ]
+}
+
 @test "dolt sql with insert ignore and replace into" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
