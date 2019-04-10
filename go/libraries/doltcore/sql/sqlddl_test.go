@@ -21,13 +21,13 @@ func TestExecuteCreate(t *testing.T) {
 			name: "Test create single column schema",
 			query: "create table people (id int primary key)",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true)),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{})),
 		},
 		{
 			name: "Test create two column schema",
 			query: "create table people (id int primary key, age int)",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 		{
@@ -44,7 +44,7 @@ func TestExecuteCreate(t *testing.T) {
 			name: "Test types",
 			query: "create table people (id int primary key, age int, first varchar(80), is_married bit)",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false),
 				schema.NewColumn("first", 2, types.StringKind, false),
 				schema.NewColumn("is_married", 3, types.BoolKind, false)),
@@ -53,17 +53,26 @@ func TestExecuteCreate(t *testing.T) {
 			name: "Test primary keys",
 			query: "create table people (id int, age int, first varchar(80), is_married bit, primary key (id, age))",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true),
-				schema.NewColumn("age", 1, types.IntKind, true),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", 2, types.StringKind, false),
+				schema.NewColumn("is_married", 3, types.BoolKind, false)),
+		},
+		{
+			name: "Test not null constraints",
+			query: "create table people (id int, age int, first varchar(80) not null, is_married bit, primary key (id, age))",
+			expectedSchema: createSchema(
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", 2, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", 3, types.BoolKind, false)),
 		},
 		{
 			name: "Test quoted columns",
 			query: "create table people (`id` int, `age` int, `first` varchar(80), `is_married` bit, primary key (`id`, `age`))",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true),
-				schema.NewColumn("age", 1, types.IntKind, true),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", 2, types.StringKind, false),
 				schema.NewColumn("is_married", 3, types.BoolKind, false)),
 		},
@@ -71,14 +80,14 @@ func TestExecuteCreate(t *testing.T) {
 			name: "Test tag comments",
 			query: "create table people (id int primary key comment 'tag:5', age int comment 'tag:10')",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 5, types.IntKind, true),
+				schema.NewColumn("id", 5, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
 		{
 			name: "Test faulty tag comments",
 			query: "create table people (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
 			expectedSchema: createSchema(
-				schema.NewColumn("id", 0, types.IntKind, true),
+				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 	}
