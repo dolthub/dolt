@@ -3,6 +3,7 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
@@ -21,9 +22,9 @@ func TestExecuteInsert(t *testing.T) {
 	}{
 		{
 			name: "insert one row, all columns",
-			query: `insert into people (id, first, last, is_married, age, rating) values
-					(7, "Maggie", "Simpson", false, 1, 5.1)`,
-			insertedValues: []row.Row{newRow(7, "Maggie", "Simpson", false, 1, 5.1)},
+			query: `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
+			insertedValues: []row.Row{newRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
@@ -77,6 +78,12 @@ func TestExecuteInsert(t *testing.T) {
 			expectedErr: true,
 		},
 		{
+			name: "type mismatch int -> uuid",
+			query: `insert into people (id, first, last, is_married, age, uuid) values
+					(7, "Maggie", "Simpson", false, 1, 100)`,
+			expectedErr: true,
+		},
+		{
 			name: "type mismatch string -> int",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					("7", "Maggie", "Simpson", false, 1, 5.1)`,
@@ -86,6 +93,18 @@ func TestExecuteInsert(t *testing.T) {
 			name: "type mismatch string -> float",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, "5.1")`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch string -> uint",
+			query: `insert into people (id, first, last, is_married, age, num_episodes) values
+					(7, "Maggie", "Simpson", false, 1, "100")`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch string -> uuid",
+			query: `insert into people (id, first, last, is_married, age, uuid) values
+					(7, "Maggie", "Simpson", false, 1, "a uuid but idk what im doing")`,
 			expectedErr: true,
 		},
 		{

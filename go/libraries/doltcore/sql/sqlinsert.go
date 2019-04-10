@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -147,17 +148,19 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		case *sqlparser.SQLVal:
 			switch val.Type {
 			// Integer-like values
-			// TODO: support uint as well
 			case sqlparser.HexVal, sqlparser.HexNum, sqlparser.IntVal, sqlparser.BitVal:
 				intVal, err := strconv.ParseInt(string(val.Val), 0, 64)
 				if err != nil {
 					return nil, err
 				}
-				if column.Kind == types.IntKind {
+				switch column.Kind {
+				case types.IntKind:
 					taggedVals[column.Tag] = types.Int(intVal)
-				} else if column.Kind == types.FloatKind {
+				case types.FloatKind:
 					taggedVals[column.Tag] = types.Float(intVal)
-				} else {
+				case types.UintKind:
+					taggedVals[column.Tag] = types.Uint(intVal)
+				default:
 					return errInsertRow("Type mismatch: numeric value but non-numeric column: %v", nodeToString(val))
 				}
 			case sqlparser.FloatVal:
@@ -176,6 +179,12 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 				switch column.Kind {
 				case types.StringKind:
 					taggedVals[column.Tag] = types.String(strVal)
+				case types.UUIDKind:
+					id, err := uuid.Parse(strVal)
+					if err != nil {
+						return nil, err
+					}
+					taggedVals[column.Tag] = types.UUID(id)
 				default:
 					return errInsertRow("Type mismatch: string value but non-string column: %v", nodeToString(val))
 				}
