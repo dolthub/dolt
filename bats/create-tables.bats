@@ -225,7 +225,6 @@ teardown() {
     [ "$output" = "" ]
     run dolt table schema test
     [ "$status" -eq 0 ]
-    skip "sql create table does not support not null constraint yet"
     [[ "$output" =~ "not_null" ]] || false
 }
 
