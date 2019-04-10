@@ -3,6 +3,7 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -20,13 +21,15 @@ import (
 // transforming row results, and so on.
 
 const (
-	idTag        = 0
-	firstTag     = 1
-	lastTag      = 2
-	isMarriedTag = 3
-	ageTag       = 4
-	emptyTag     = 5
-	ratingTag    = 6
+	idTag        = iota
+	firstTag
+	lastTag
+	isMarriedTag
+	ageTag
+	emptyTag
+	ratingTag
+	uuidTag
+	numEpisodesTag
 )
 
 var testSch = createTestSchema()
@@ -47,6 +50,8 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("age", ageTag, types.IntKind, false),
 //		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 		schema.NewColumn("rating", ratingTag, types.FloatKind, false),
+		schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+		schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
@@ -59,6 +64,22 @@ func newRow(id int, first, last string, isMarried bool, age int, rating float32)
 		isMarriedTag: types.Bool(isMarried),
 		ageTag: types.Int(age),
 		ratingTag: types.Float(rating),
+	}
+
+	return row.New(testSch, vals)
+}
+
+// Most rows don't have these optional fields set, as they aren't needed for basic testing
+func newRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
+	vals := row.TaggedValues{
+		idTag: types.Int(id),
+		firstTag: types.String(first),
+		lastTag: types.String(last),
+		isMarriedTag: types.Bool(isMarried),
+		ageTag: types.Int(age),
+		ratingTag: types.Float(rating),
+		uuidTag: types.UUID(uid),
+		numEpisodesTag: types.Uint(numEpisodes),
 	}
 
 	return row.New(testSch, vals)
