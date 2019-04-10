@@ -65,6 +65,48 @@ func TestExecuteInsert(t *testing.T) {
 			expectedErr: true,
 		},
 		{
+			name: "type mismatch int -> string",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", 100, false, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch int -> bool",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", "Simpson", 10, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch string -> int",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					("7", "Maggie", "Simpson", false, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch string -> float",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", "Simpson", false, 1, "5.1")`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch float -> string",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, 8.1, "Simpson", false, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch float -> bool",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", "Simpson", 0.5, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch float -> int",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", "Simpson", false, 1.0, 5.1)`,
+			expectedErr: true,
+		},
+		{
 			name: "insert two rows with ignore, one with null constraint failure",
 			query: `insert ignore into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", null, false, 1, 5.1),
