@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -66,16 +67,32 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 		return sqlDDL(dEnv, root, s, query, usage)
 	case *sqlparser.Insert:
-		return sqlInsert(root, s, query)
+		return sqlInsert(dEnv, root, s, query, usage)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 	}
 }
 
 // Executes a SQL insert statement and prints the result to the CLI.
-func sqlInsert(value *doltdb.RootValue, insert *sqlparser.Insert, s string) int {
-	// TODO: fill in
-	return 0
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) int {
+	result, err := sql.ExecuteInsert(dEnv.DoltDB, root, stmt, query)
+	if err != nil {
+		return quitErr("Error inserting rows: %v", err.Error())
+	}
+
+	verr := UpdateWorkingWithVErr(dEnv, result.Root)
+
+	if verr == nil {
+		cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
+		if result.NumRowsUpdated > 0 {
+			cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+		}
+		if result.NumErrorsIgnored > 0 {
+			cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
+		}
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
