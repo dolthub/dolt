@@ -124,7 +124,6 @@ teardown() {
 
 @test "dolt sql insert no columns specified" {
     run dolt sql -q "insert into test values (0,0,0,0,0,0)"
-    skip "This is valid sql that does not work right now. should insert the values in listed column order"
     [ "$status" -eq 0 ]
     [ "$output" = "Rows inserted: 1" ]
     run dolt table select test
