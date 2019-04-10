@@ -35,13 +35,20 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	replace := s.Action == sqlparser.ReplaceStr
 	ignore := s.Ignore != ""
 
-	cols := make([]schema.Column, len(s.Columns))
-	for i, colName := range s.Columns {
-		col, ok := tableSch.GetAllCols().GetByName(colName.String())
-		if !ok {
-			return errInsert("Unknown column %v", colName)
+	// Get the list of columns to insert into. We support both naked inserts (no column list specified) as well as
+	// explicit column lists.
+	var cols []schema.Column
+	if s.Columns == nil || len(s.Columns) == 0 {
+		cols = tableSch.GetAllCols().GetColumns()
+	} else {
+		cols = make([]schema.Column, len(s.Columns))
+		for i, colName := range s.Columns {
+			col, ok := tableSch.GetAllCols().GetByName(colName.String())
+			if !ok {
+				return errInsert("Unknown column %v", colName)
+			}
+			cols[i] = col
 		}
-		cols[i] = col
 	}
 
 	var rows []row.Row // your boat
@@ -216,7 +223,8 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		case *sqlparser.ExistsExpr:
 			return errInsertRow("Exists expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.ColName:
-			return errInsertRow("Column name expressions not supported in insert values: %v", nodeToString(tuple))
+			// unquoted strings are interpreted by the parser as column names, give a hint
+			return errInsertRow("Column name expressions not supported in insert values. Did you forget to quote a string? %v", nodeToString(tuple))
 		case sqlparser.ValTuple:
 			return errInsertRow("Tuple expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.Subquery:
