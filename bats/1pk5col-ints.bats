@@ -118,7 +118,6 @@ teardown() {
 
 @test "dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
-    skip "We decided that inserting the same column twice should error. This works right now"
     [ "$status" -eq 1 ]
 }
 

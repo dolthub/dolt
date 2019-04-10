@@ -43,6 +43,12 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	} else {
 		cols = make([]schema.Column, len(s.Columns))
 		for i, colName := range s.Columns {
+			for _, c := range cols {
+				if c.Name == colName.String() {
+					return errInsert("Repeated column %v", c.Name)
+				}
+			}
+
 			col, ok := tableSch.GetAllCols().GetByName(colName.String())
 			if !ok {
 				return errInsert("Unknown column %v", colName)

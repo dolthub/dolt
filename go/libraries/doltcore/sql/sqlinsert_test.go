@@ -55,6 +55,12 @@ func TestExecuteInsert(t *testing.T) {
 			expectedErr: true,
 		},
 		{
+			name: "duplicate column list",
+			query: `insert into people (id, first, last, is_married, first, age, rating) values
+					(7, "Maggie", "Simpson", null, null, null, null)`,
+			expectedErr: true,
+		},
+		{
 			name: "insert two rows, all columns",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, 5.1),
