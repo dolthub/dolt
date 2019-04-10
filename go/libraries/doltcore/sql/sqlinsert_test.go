@@ -28,6 +28,13 @@ func TestExecuteInsert(t *testing.T) {
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
+			name: "insert one row, no column list",
+			query: `insert into people values
+					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
+			insertedValues: []row.Row{newRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
+			expectedResult: InsertResult{NumRowsInserted: 1},
+		},
+		{
 			name: "insert one row out of order",
 			query: `insert into people (rating, first, id, last, age, is_married) values
 					(5.1, "Maggie", 7, "Simpson", 1, false)`,
