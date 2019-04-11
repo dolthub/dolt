@@ -209,6 +209,9 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		case *sqlparser.NullVal:
 			// nothing to do, just don't set a tagged value for this column
 		case sqlparser.BoolVal:
+			if column.Kind != types.BoolKind {
+				return errInsertRow("Type mismatch: boolean value but non-boolean column: %v", nodeToString(val))
+			}
 			taggedVals[column.Tag] = types.Bool(val)
 
 		// Many of these shouldn't be possible in the grammar, but all cases included for completeness

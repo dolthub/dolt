@@ -139,6 +139,30 @@ func TestExecuteInsert(t *testing.T) {
 			expectedErr: true,
 		},
 		{
+			name: "type mismatch bool -> int",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(true, "Maggie", "Simpson", false, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch bool -> float",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, "Maggie", "Simpson", false, 1, true)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch bool -> string",
+			query: `insert into people (id, first, last, is_married, age, rating) values
+					(7, true, "Simpson", false, 1, 5.1)`,
+			expectedErr: true,
+		},
+		{
+			name: "type mismatch bool -> uuid",
+			query: `insert into people (id, first, last, is_married, age, uuid) values
+					(7, "Maggie", "Simpson", false, 1, true)`,
+			expectedErr: true,
+		},
+		{
 			name: "insert two rows with ignore, one with null constraint failure",
 			query: `insert ignore into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", null, false, 1, 5.1),
