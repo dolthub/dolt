@@ -119,6 +119,7 @@ teardown() {
 @test "dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "Repeated column" ]] || false
 }
 
 @test "dolt sql insert no columns specified" {
