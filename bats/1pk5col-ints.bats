@@ -128,9 +128,12 @@ teardown() {
     [ "$output" = "Rows inserted: 1" ]
     run dolt table select test
     [[ "$output" =~ "0" ]] || false
+    run dolt sql -q "insert into test values (4,1,2)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Wrong number of values" ]] || false
 }
 
-@test "dolt sql with insert ignore and replace into" {
+@test "dolt sql with insert ignore" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
     [ "$status" -eq 0 ]
@@ -138,6 +141,10 @@ teardown() {
     [ "${lines[1]}" = "Errors ignored: 1" ]
     run dolt table select test
     [[ "$output" =~ "111" ]] || false
+}
+
+@test "dolt sql replace into" {
+    dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "Rows inserted: 1" ]
@@ -145,7 +152,6 @@ teardown() {
     run dolt table select test
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
-    [[ "$output" =~ "111" ]] || false
     [[ ! "$output" =~ "6" ]] || false
 }
 
