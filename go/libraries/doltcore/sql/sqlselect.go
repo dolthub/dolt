@@ -114,7 +114,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	}
 
 	if !root.HasTable(tableName) {
-		return selectErr("error: unknown table '%s'", tableName)
+		return selectErr("Unknown table '%s'", tableName)
 	}
 	tbl, _:= root.GetTable(tableName)
 

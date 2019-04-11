@@ -68,9 +68,17 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return sqlDDL(dEnv, root, s, query, usage)
 	case *sqlparser.Insert:
 		return sqlInsert(dEnv, root, s, query, usage)
+	case *sqlparser.Update:
+		return sqlUpdate(dEnv, root, s, query, usage)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 	}
+}
+
+// Executes a SQL update statement and prints the result to the CLI.
+func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) int {
+	sql.ExecuteUpdate(dEnv.DoltDB, root, update, query)
+	return 0
 }
 
 // Executes a SQL insert statement and prints the result to the CLI.
