@@ -288,10 +288,13 @@ func TestExecuteInsert(t *testing.T) {
 			s := sqlStatement.(*sqlparser.Insert)
 
 			result, err := ExecuteInsert(dEnv.DoltDB, root, s, tt.query)
-			assert.Equal(t, tt.expectedErr, err != nil, "unexpected error value")
-
-			if tt.expectedResult.Root == nil {
+			if tt.expectedErr {
+				assert.NotNil(t, err,"expected error")
+				assert.Equal(t, InsertResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
+				assert.Nil(t, tt.insertedValues, "incorrect test setup: cannot assert both an error and inserted values")
 				return
+			} else {
+				assert.Nil(t, err, "unexpected error")
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsInserted, result.NumRowsInserted)
