@@ -60,47 +60,19 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
 		return sqlSelect(root, s, query)
+	case *sqlparser.Insert:
+		return sqlInsert(dEnv, root, s, query, usage)
+	case *sqlparser.Update:
+		return sqlUpdate(dEnv, root, s, query, usage)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
 			return quitErr("Error parsing SQL: %v.", err.Error())
 		}
 		return sqlDDL(dEnv, root, s, query, usage)
-	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s, query, usage)
-	case *sqlparser.Update:
-		return sqlUpdate(dEnv, root, s, query, usage)
 	default:
 		return quitErr("Unhandled SQL statement: %v.", query)
 	}
-}
-
-// Executes a SQL update statement and prints the result to the CLI.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) int {
-	sql.ExecuteUpdate(dEnv.DoltDB, root, update, query)
-	return 0
-}
-
-// Executes a SQL insert statement and prints the result to the CLI.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) int {
-	result, err := sql.ExecuteInsert(dEnv.DoltDB, root, stmt, query)
-	if err != nil {
-		return quitErr("Error inserting rows: %v", err.Error())
-	}
-
-	verr := UpdateWorkingWithVErr(dEnv, result.Root)
-
-	if verr == nil {
-		cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
-		if result.NumRowsUpdated > 0 {
-			cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-		}
-		if result.NumErrorsIgnored > 0 {
-			cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
-		}
-	}
-
-	return HandleVErrAndExitCode(verr, usage)
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
@@ -136,6 +108,47 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	}
 
 	return 0
+}
+
+// Executes a SQL insert statement and prints the result to the CLI.
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) int {
+	result, err := sql.ExecuteInsert(dEnv.DoltDB, root, stmt, query)
+	if err != nil {
+		return quitErr("Error inserting rows: %v", err.Error())
+	}
+
+	verr := UpdateWorkingWithVErr(dEnv, result.Root)
+
+	if verr == nil {
+		cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
+		if result.NumRowsUpdated > 0 {
+			cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+		}
+		if result.NumErrorsIgnored > 0 {
+			cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
+		}
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+// Executes a SQL update statement and prints the result to the CLI.
+func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) int {
+	result, err := sql.ExecuteUpdate(dEnv.DoltDB, root, update, query)
+	if err != nil {
+		return quitErr("Error during update: %v", err.Error())
+	}
+
+	verr := UpdateWorkingWithVErr(dEnv, result.Root)
+
+	if verr == nil {
+		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+		if result.NumRowsUnchanged > 0 {
+			cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
+		}
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 // Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.

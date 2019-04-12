@@ -80,8 +80,8 @@ func TestBadInput(t *testing.T) {
 	}
 }
 
-// Tests of the create table SQL syntax, mostly a smoke test for errors in the command line handler. Most tests of
-// create table SQL syntax are in the sql package.
+// Tests of the create table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// create table SQL command are in the sql package.
 func TestCreateTable(t *testing.T) {
 	tests := []struct {
 		query       string
@@ -119,8 +119,8 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
-// Tests of the insert SQL syntax, mostly a smoke test for errors in the command line handler. Most tests of
-// insert SQL syntax are in the sql package.
+// Tests of the insert SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// insert SQL command are in the sql package.
 func TestInsert(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -208,6 +208,79 @@ func TestInsert(t *testing.T) {
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
 					_, ok := table.GetRow(key, dtestutils.TypedSchema)
 					assert.True(t, ok, "expected id not found")
+				}
+			}
+		})
+	}
+}
+
+// Tests of the update SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// update SQL command are in the sql package.
+func TestUpdate(t *testing.T) {
+	tests := []struct {
+		name         string
+		query        string
+		expectedRes  int
+		expectedIds  []uuid.UUID
+		expectedAges []uint
+	}{
+		{
+			name: "bad syntax",
+			query: "update table", expectedRes: 1,
+		},
+		{
+			name: "bad syntax",
+			query: "update people set id", expectedRes: 1,
+		},
+		{
+			name: "table doesn't exist",
+			query: "update dne set id = '00000000-0000-0000-0000-000000000005'", expectedRes: 1,
+		},
+		{
+			name: "update one row",
+			query: `update people set age = 1 where id = '00000000-0000-0000-0000-000000000002'`,
+			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
+			expectedAges: []uint{1},
+		},
+		{
+			name: "insert two rows, two columns",
+			query: `update people set age = 1, is_married = true where age > 21`,
+			expectedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+			},
+			expectedAges: []uint{1,1},
+		},
+		{
+			name: "null constraint violation",
+			query: `update people set name = null where id ='00000000-0000-0000-0000-000000000000'`,
+			expectedRes: 1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+
+			if result == 0 {
+				root, err := dEnv.WorkingRoot()
+				assert.Nil(t, err)
+
+				// Assert that all rows have been updated
+				for i, expectedid := range test.expectedIds {
+					table, _ := root.GetTable(tableName)
+					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
+					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
+					row, ok := table.GetRow(key, dtestutils.TypedSchema)
+					assert.True(t, ok, "expected id not found")
+					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
+					assert.Equal(t, test.expectedAges[i], uint(ageVal.(types.Uint)))
 				}
 			}
 		})
