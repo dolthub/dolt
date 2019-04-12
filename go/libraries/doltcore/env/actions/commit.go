@@ -1,6 +1,9 @@
 package actions
 
 import (
+	"sort"
+
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
@@ -87,4 +90,48 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 	}
 
 	return err
+}
+
+func TimeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
+	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
+	err := AddCommits(ddb, commit, hashToCommit, n)
+
+	if err != nil {
+		return nil, err
+	}
+
+	idx := 0
+	uniqueCommits := make([]*doltdb.Commit, len(hashToCommit))
+	for _, v := range hashToCommit {
+		uniqueCommits[idx] = v
+		idx++
+	}
+
+	sort.Slice(uniqueCommits, func(i, j int) bool {
+		return uniqueCommits[i].GetCommitMeta().Timestamp > uniqueCommits[j].GetCommitMeta().Timestamp
+	})
+
+	return uniqueCommits, nil
+}
+
+func AddCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
+	hash := commit.HashOf()
+	hashToCommit[hash] = commit
+
+	numParents := commit.NumParents()
+	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
+		parentCommit, err := ddb.ResolveParent(commit, i)
+
+		if err != nil {
+			return err
+		}
+
+		err = AddCommits(ddb, parentCommit, hashToCommit, n)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
