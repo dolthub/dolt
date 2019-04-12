@@ -188,7 +188,6 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 			return true
 		}
 	} else {
-
 		switch expr := whereClause.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
 

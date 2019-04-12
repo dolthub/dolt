@@ -247,6 +247,17 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set uuid = false where id = 0`,
 			expectedErr: true,
 		},
+		{
+			name: "type mismatch in where clause",
+			query: `update people set first = "Homer" where id = "id"`,
+			expectedErr: true,
+		},
+		// This should fail but doesn't.
+		//{
+		//	name: "type mismatch in where clause",
+		//	query: `update people set first = "Homer" where id = "0"`,
+		//	expectedErr: true,
+		//},
 	}
 
 	for _, tt := range tests {
