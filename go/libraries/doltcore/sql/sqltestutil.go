@@ -13,6 +13,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/stretchr/testify/assert"
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ import (
 // transforming row results, and so on.
 
 const (
-	idTag        = iota
+	idTag = iota
 	firstTag
 	lastTag
 	isMarriedTag
@@ -122,6 +123,52 @@ func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 
 	return schema.UnkeyedSchemaFromCols(srcColls)
 }
+
+// Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
+func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
+	if len(tagsAndVals) % 2 != 0 {
+		panic("expected pairs of tags and values")
+	}
+
+	var mutated row.Row = r
+	var err error
+
+	for i := 0; i < len(tagsAndVals); i += 2{
+		tag := tagsAndVals[i].(int)
+		val := tagsAndVals[i+1]
+		var nomsVal types.Value
+		switch v := val.(type) {
+		case uint64:
+			nomsVal = types.Uint(v)
+		case int:
+			nomsVal = types.Int(v)
+		case int32:
+			nomsVal = types.Int(v)
+		case int64:
+			nomsVal = types.Int(v)
+		case float32:
+			nomsVal = types.Float(v)
+		case float64:
+			nomsVal = types.Float(v)
+		case string:
+			nomsVal = types.String(v)
+		case uuid.UUID:
+			nomsVal = types.UUID(v)
+		case bool:
+			nomsVal = types.Bool(v)
+		default:
+			panic("Unhandled type " + reflect.TypeOf(val).String())
+		}
+
+		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, testSch)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
+	return mutated
+}
+
 
 // Converts the rows given, having the schema given, to an untyped (string-typed) row. Only the column names specified
 // will be included.

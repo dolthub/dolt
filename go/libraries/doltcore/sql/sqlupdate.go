@@ -17,7 +17,9 @@ import (
 type UpdateResult struct {
 	Root             *doltdb.RootValue
 	NumRowsUpdated   int
-	NumErrorsIgnored int // TODO: update ignore not supported by parser yet
+	NumErrorsIgnored int
+	NumRowsIgnored   int
+	// TODO: update ignore not supported by parser yet
 }
 
 func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string)  (*UpdateResult, error) {
@@ -119,6 +121,8 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 				return errUpdate("Type mismatch: boolean value but non-boolean column: %v", nodeToString(val))
 			}
 			setVals[column.Tag] = types.Bool(val)
+		case *sqlparser.NullVal:
+			setVals[column.Tag] = nil
 
 		case *sqlparser.ColName:
 			return errUpdate("Column name expressions not supported: %v", nodeToString(val))
@@ -136,8 +140,6 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 			return errUpdate("Is expressions not supported: %v", nodeToString(val))
 		case *sqlparser.ExistsExpr:
 			return errUpdate("Exists expressions not supported: %v", nodeToString(val))
-		case *sqlparser.NullVal:
-			return errUpdate("NULL expressions not supported: %v", nodeToString(val))
 		case *sqlparser.ValTuple:
 			return errUpdate("Tuple expressions not supported: %v", nodeToString(val))
 		case *sqlparser.Subquery:
@@ -367,6 +369,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 	rowData := table.GetRowData()
 	me := rowData.Edit()
 	rowReader := noms.NewNomsMapReader(rowData, tableSch)
+
 	for {
 		r, err := rowReader.ReadRow()
 		if err != nil {
@@ -380,7 +383,22 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 			continue
 		}
 
+		var primaryKeyColChanged bool
+		var anyColChanged bool
+
 		for tag, val := range setVals {
+			// We need to know if a primay key changed values to correctly enforce key constraints (avoid overwriting
+			// existing rows that are keyed to the updated value)
+			currVal, _ := r.GetColVal(tag)
+			column, _ := tableSch.GetAllCols().GetByTag(tag)
+
+			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
+				anyColChanged = true
+				if column.IsPartOfPK {
+					primaryKeyColChanged = true
+				}
+			}
+
 			r, err = r.SetColVal(tag, val, tableSch)
 			if err != nil {
 				return nil, err
@@ -392,12 +410,15 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 		}
 
 		key := r.NomsMapKey(tableSch)
-
-		rowExists := me.Get(key) != nil
-		if rowExists {
-			return errUpdate("duplicate primary key %v", r)
-		} else {
+		// map editor reaches into the underlying table if there isn't an edit with this key
+		// this logic isn't correct for all possible queries, but works for now
+		if primaryKeyColChanged && me.Get(key) != nil {
+			return errUpdate("Update results in duplicate primary key %v", key)
+		}
+		if anyColChanged {
 			result.NumRowsUpdated += 1
+		} else {
+			result.NumRowsIgnored += 1
 		}
 
 		me.Set(key, r.NomsMapValue(tableSch))
