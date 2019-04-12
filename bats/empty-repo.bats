@@ -83,7 +83,7 @@ teardown() {
    [ "${lines[0]}" = "usage: dolt sql [options] -q query_string" ]
    run dolt sql -q "select * from test"
    [ "$status" -eq 1 ]
-   [ "$output" = "error: unknown table 'test'" ]
+   [[ "$output" = "Unknown table 'test'" ]] || false
 }
 
 @test "invalid sql in a new repository" {
