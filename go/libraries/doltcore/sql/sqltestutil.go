@@ -137,27 +137,31 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 		tag := tagsAndVals[i].(int)
 		val := tagsAndVals[i+1]
 		var nomsVal types.Value
-		switch v := val.(type) {
-		case uint64:
-			nomsVal = types.Uint(v)
-		case int:
-			nomsVal = types.Int(v)
-		case int32:
-			nomsVal = types.Int(v)
-		case int64:
-			nomsVal = types.Int(v)
-		case float32:
-			nomsVal = types.Float(v)
-		case float64:
-			nomsVal = types.Float(v)
-		case string:
-			nomsVal = types.String(v)
-		case uuid.UUID:
-			nomsVal = types.UUID(v)
-		case bool:
-			nomsVal = types.Bool(v)
-		default:
-			panic("Unhandled type " + reflect.TypeOf(val).String())
+		if val != nil {
+			switch v := val.(type) {
+			case uint64:
+				nomsVal = types.Uint(v)
+			case int:
+				nomsVal = types.Int(v)
+			case int32:
+				nomsVal = types.Int(v)
+			case int64:
+				nomsVal = types.Int(v)
+			case float32:
+				nomsVal = types.Float(v)
+			case float64:
+				nomsVal = types.Float(v)
+			case string:
+				nomsVal = types.String(v)
+			case uuid.UUID:
+				nomsVal = types.UUID(v)
+			case bool:
+				nomsVal = types.Bool(v)
+			default:
+				panic("Unhandled type " + reflect.TypeOf(val).String())
+			}
+		} else {
+			nomsVal = nil
 		}
 
 		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, testSch)
