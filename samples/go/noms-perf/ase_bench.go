@@ -36,6 +36,10 @@ func (msb *ASEBench) AddEdits(nextEdit NextEdit) {
 
 func (msb *ASEBench) SortEdits() {
 	msb.ase.Sort()
+
+	itr := msb.ase.Iterator()
+	numItems, inOrder := ase.IsInOrder(itr)
+	log.Println("in order:", inOrder, "- num items:", numItems)
 }
 
 func (msb *ASEBench) Map() {

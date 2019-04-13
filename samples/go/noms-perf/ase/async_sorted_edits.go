@@ -12,15 +12,21 @@ func sorter(in, out chan KVPSlice) {
 	}
 }
 
-func merger(in chan [2]KVPSlice, out chan KVPSlice) {
+func merger(in chan [2]*KVPCollection, out chan *KVPCollection) {
 	for {
-		slices, ok := <-in
+		colls, ok := <-in
 
 		if !ok {
 			return
 		}
 
-		res := slices[0].Merge(slices[1])
+		var res *KVPCollection
+		if colls[1] == nil {
+			res = colls[0]
+		} else {
+			res = colls[0].DestructiveMerge(colls[1])
+		}
+
 		out <- res
 	}
 }
@@ -35,7 +41,7 @@ type AsyncSortedEdits struct {
 	doneChan   chan bool
 
 	accumulating []KVP
-	sortedSlices [][]KVP
+	sortedColls  []*KVPCollection
 }
 
 func NewAsyncSortedEdits(sliceSize, asyncConCurrency, sortConcurrency int) *AsyncSortedEdits {
@@ -61,7 +67,7 @@ func NewAsyncSortedEdits(sliceSize, asyncConCurrency, sortConcurrency int) *Asyn
 		resultChan:       resChan,
 		doneChan:         doneChan,
 		accumulating:     make([]KVP, 0, sliceSize),
-		sortedSlices:     nil}
+		sortedColls:      nil}
 }
 
 func (ase *AsyncSortedEdits) Set(k, v types.Value) {
@@ -82,7 +88,9 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 	for {
 		select {
 		case val := <-ase.resultChan:
-			ase.sortedSlices = append(ase.sortedSlices, val)
+			coll := NewKVPCollection(val)
+			ase.sortedColls = append(ase.sortedColls, coll)
+
 		default:
 			return
 		}
@@ -108,7 +116,8 @@ func (ase *AsyncSortedEdits) wait() {
 	for {
 		select {
 		case val := <-ase.resultChan:
-			ase.sortedSlices = append(ase.sortedSlices, val)
+			coll := NewKVPCollection(val)
+			ase.sortedColls = append(ase.sortedColls, coll)
 
 		case <-ase.doneChan:
 			running--
@@ -122,9 +131,10 @@ func (ase *AsyncSortedEdits) wait() {
 }
 
 func (ase *AsyncSortedEdits) Sort() {
-	sortDir := true
-	for len(ase.sortedSlices) > 2 {
-		pairs := pairSlices(ase.sortedSlices)
+	for len(ase.sortedColls) > 2 {
+		pairs := pairCollections(ase.sortedColls)
+		ase.sortedColls = nil
+
 		numPairs := len(pairs)
 
 		numGoRs := ase.sortConcurrency
@@ -132,8 +142,8 @@ func (ase *AsyncSortedEdits) Sort() {
 			numGoRs = numPairs
 		}
 
-		sortChan := make(chan [2]KVPSlice, numPairs)
-		resChan := make(chan KVPSlice, numPairs)
+		sortChan := make(chan [2]*KVPCollection, numPairs)
+		resChan := make(chan *KVPCollection, numPairs)
 		for i := 0; i < numGoRs; i++ {
 			go func() {
 				defer func() {
@@ -148,14 +158,13 @@ func (ase *AsyncSortedEdits) Sort() {
 			sortChan <- pair
 		}
 
-		ase.sortedSlices = nil
 		close(sortChan)
 
 		done := false
 		for !done {
 			select {
 			case val := <-resChan:
-				ase.sortedSlices = append(ase.sortedSlices, val)
+				ase.sortedColls = append(ase.sortedColls, val)
 
 			case <-ase.doneChan:
 				numGoRs--
@@ -166,69 +175,37 @@ func (ase *AsyncSortedEdits) Sort() {
 				}
 			}
 		}
-
-		sortDir = !sortDir
 	}
 }
 
-func pairSlices(slices [][]KVP) [][2]KVPSlice {
-	numSlices := len(slices)
-	pairs := make([][2]KVPSlice, 0, numSlices/2+1)
-	sort.Slice(slices, func(i, j int) bool {
-		return len(slices[i]) < len(slices[j])
+func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
+	numColls := len(colls)
+	pairs := make([][2]*KVPCollection, 0, numColls/2+1)
+	sort.Slice(colls, func(i, j int) bool {
+		return colls[i].Size() < colls[j].Size()
 	})
 
-	if numSlices%2 == 1 {
-		x := slices[numSlices-1]
-		y := slices[numSlices-2]
-		z := slices[numSlices-3]
+	if numColls%2 == 1 {
+		pairs = append(pairs, [2]*KVPCollection{colls[numColls-1], nil})
 
-		middle := len(y) / 2
-
-		pairs = append(pairs, [2]KVPSlice{x, y[:middle]})
-		pairs = append(pairs, [2]KVPSlice{y[middle:], z})
-
-		slices = slices[:numSlices-3]
-		numSlices -= 3
+		colls = colls[:numColls-1]
+		numColls -= 1
 	}
 
-	for i, j := 0, numSlices-1; i < numSlices/2; i, j = i+1, j-1 {
-		pairs = append(pairs, [2]KVPSlice{slices[i], slices[j]})
+	for i, j := 0, numColls-1; i < numColls/2; i, j = i+1, j-1 {
+		pairs = append(pairs, [2]*KVPCollection{colls[i], colls[j]})
 	}
 
 	return pairs
 }
 
-func (ase *AsyncSortedEdits) Iterator() *SortedEditItr {
-	var left KVPSlice
-	var right KVPSlice
-
-	if len(ase.sortedSlices) > 0 {
-		left = ase.sortedSlices[0]
+func (ase *AsyncSortedEdits) Iterator() KVPIterator {
+	switch len(ase.sortedColls) {
+	case 1:
+		return NewItr(ase.sortedColls[0])
+	case 2:
+		return NewSortedEditItr(ase.sortedColls[0], ase.sortedColls[1])
 	}
 
-	if len(ase.sortedSlices) > 1 {
-		right = ase.sortedSlices[1]
-	}
-
-	if len(ase.sortedSlices) > 2 {
-		panic("wtf")
-	}
-
-	return NewSortedEditItr(left, right)
-}
-
-func (ase *AsyncSortedEdits) PanicIfNotInOrder() {
-	itr := ase.Iterator()
-
-	prev := itr.Next()
-	for {
-		curr := itr.Next()
-
-		if !prev.Key.Less(curr.Key) {
-			panic("Not in order")
-		}
-
-		prev = curr
-	}
+	panic("Sort needs to be called prior to getting an Iterator.")
 }

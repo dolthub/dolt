@@ -1,6 +1,13 @@
 package ase
 
-import "github.com/attic-labs/noms/go/types"
+import (
+	"fmt"
+	"github.com/attic-labs/noms/go/types"
+)
+
+type KVPIterator interface {
+	Next() *KVP
+}
 
 type KVP struct {
 	Key types.Value
@@ -21,40 +28,24 @@ func (kvps KVPSlice) Swap(i, j int) {
 	kvps[i], kvps[j] = kvps[j], kvps[i]
 }
 
-func (kvps KVPSlice) Merge(other KVPSlice) KVPSlice {
-	i := 0
-	j := 0
-	k := 0
-
-	x := kvps[i]
-	y := other[j]
-	dest := make(KVPSlice, len(kvps)+len(other))
+func IsInOrder(itr KVPIterator) (bool, int) {
+	count := 1
+	prev := itr.Next()
 
 	for {
-		if x.Key.Less(y.Key) {
-			dest[k] = x
-			k++
-			i++
+		var curr *KVP
+		curr = itr.Next()
 
-			if i < len(kvps) {
-				x = kvps[i]
-			} else {
-				copy(dest[k:], other[j:])
-				break
-			}
-		} else {
-			dest[k] = y
-			k++
-			j++
-
-			if j < len(other) {
-				y = other[j]
-			} else {
-				copy(dest[k:], kvps[i:])
-				break
-			}
+		if curr == nil {
+			break
+		} else if !prev.Key.Less(curr.Key) && !prev.Key.Equals(curr.Key) {
+			fmt.Println(types.EncodedValue(prev.Key), ">=", types.EncodedValue(curr.Key))
+			return false, count
 		}
+
+		count++
+		prev = curr
 	}
 
-	return dest
+	return true, count
 }
