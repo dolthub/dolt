@@ -22,6 +22,8 @@ func main() {
 	profPath := flag.String("profpath", "./", "")
 	cpuProf := flag.Bool("cpuprof", false, "")
 	memProf := flag.Bool("memprof", false, "")
+	meBench := flag.Bool("me-bench", false, "")
+	aseBench := flag.Bool("ase-bench", false, "")
 	count := flag.Int("n", 1000000, "")
 	flag.Parse()
 
@@ -37,10 +39,13 @@ func main() {
 		defer profile.Start(profile.MemProfile).Stop()
 	}
 
-	toBench := []MEBenchmark{
-		NewNomsMEBench(),
-		NewASEBench(50000, 2, 8),
-		//NewASEBench2(50000, 2, 8),
+	var toBench []MEBenchmark
+	if *meBench {
+		toBench = append(toBench, NewNomsMEBench())
+	}
+
+	if *aseBench {
+		toBench = append(toBench, NewASEBench(10000, 2, 8))
 	}
 
 	log.Printf("Running each benchmark for %d items\n", *count)
