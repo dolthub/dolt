@@ -153,6 +153,7 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+// Executes a SQL delete statement and prints the result to the CLI.
 func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) int {
 	result, err := sql.ExecuteDelete(dEnv.DoltDB, root, update, query)
 	if err != nil {

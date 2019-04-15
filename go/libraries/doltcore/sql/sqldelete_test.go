@@ -36,6 +36,12 @@ func TestExecuteDelete(t *testing.T) {
 			expectedResult: DeleteResult{NumRowsDeleted: 6},
 		},
 		{
+			name:  "delete no matching rows",
+			query: `delete from people where last = "Flanders"`,
+			deletedRows: []row.Row{},
+			expectedResult: DeleteResult{NumRowsDeleted: 0},
+		},
+		{
 			name: "delete multiple rows, =",
 			query: `delete from people where last = "Simpson"`,
 			deletedRows: []row.Row{homer, marge, bart, lisa},
@@ -118,21 +124,12 @@ func TestExecuteDelete(t *testing.T) {
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows are deleted
-			allRows := []row.Row{homer, marge, bart, lisa, moe, barney}
-			for _, r := range allRows {
-				expectDel := false
-				for _, deletedRow := range tt.deletedRows {
-					rowId, _ := r.GetColVal(idTag)
-					deletedId, _ := deletedRow.GetColVal(idTag)
-					if rowId.Equals(deletedId) {
-						expectDel = true
-						break
-					}
-				}
+			for _, r := range allTestRows {
+				deletedIdx := findRowIndex(r, tt.deletedRows)
 
 				key := r.NomsMapKey(testSch)
 				_, ok := table.GetRow(key.(types.Tuple), testSch)
-				if expectDel {
+				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)
 				} else {
 					assert.True(t, ok, "Row deleted unexpectedly: %v", r)
