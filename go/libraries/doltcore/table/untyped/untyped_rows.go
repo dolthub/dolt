@@ -76,12 +76,13 @@ func UntypeSchema(sch schema.Schema) schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but none of them primary keys, and
-// with the types of each of those columns as types.StringKind
+// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but stripped of constraints and primary
+// keys and using only string types. Meant for displaying output and tests.
 func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
 	var cols []schema.Column
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		col.Kind = types.StringKind
+		col.Constraints = nil
 		cols = append(cols, col)
 		return false
 	})

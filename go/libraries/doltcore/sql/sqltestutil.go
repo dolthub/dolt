@@ -127,7 +127,7 @@ func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 		var cols []schema.Column
 		for _, name := range colNames {
 			if col, ok := srcColls.GetByName(name); !ok {
-				panic("Unrecognized name")
+				panic("Unrecognized name " + name)
 			} else {
 				cols = append(cols, col)
 			}
@@ -189,32 +189,26 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	return mutated
 }
 
-
-// Converts the rows given, having the schema given, to an untyped (string-typed) row. Only the column names specified
-// will be included.
-func untypeRows(t *testing.T, rows []row.Row, colNames []string, tableSch schema.Schema) []row.Row {
-	// Zero typing make the nil slice and the empty slice appear equal to most functions, but they are semantically
+// Converts the rows given from the source schema give to the destination schema given, using a simple tag mapping.
+func convertRows(t *testing.T, rows []row.Row, srcSchema, destSchema schema.Schema) []row.Row {
+	// Zero typing makes the nil slice and the empty slice appear equal to most functions, but they are semantically
 	// distinct.
 	if rows == nil {
 		return nil
 	}
 
-	untyped := make([]row.Row, 0, len(rows))
+	result := make([]row.Row, 0, len(rows))
 	for _, r := range rows {
-		untyped = append(untyped, untypeRow(t, r, colNames, tableSch))
+		result = append(result, convertRow(t, r, srcSchema, destSchema))
 	}
-	return untyped
+	return result
 }
 
-// Converts the row given, having the schema given, to an untyped (string-typed) row. Only the column names specified
-// will be included.
-func untypeRow(t *testing.T, r row.Row, colNames []string, tableSch schema.Schema) row.Row {
-	outSch := subsetSchema(tableSch, colNames...)
+// Converts the row given from the source schema given to the destination schema given using a simple tag mapping.
+func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row {
+	fieldMapping, _ := rowconv.TagMapping(sch, destSchema)
 
-	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeUnkeySchema(outSch))
-	assert.Nil(t, err, "failed to create untyped mapping")
-
-	rConv, _ := rowconv.NewRowConverter(mapping)
+	rConv, _ := rowconv.NewRowConverter(fieldMapping)
 	untyped, err := rConv.Convert(r)
 	assert.Nil(t, err, "failed to untyped row to untyped")
 	return untyped
