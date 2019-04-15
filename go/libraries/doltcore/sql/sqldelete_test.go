@@ -36,6 +36,12 @@ func TestExecuteDelete(t *testing.T) {
 			expectedResult: DeleteResult{NumRowsDeleted: 6},
 		},
 		{
+			name:  "delete no matching rows",
+			query: `delete from people where last = "Flanders"`,
+			deletedRows: []row.Row{},
+			expectedResult: DeleteResult{NumRowsDeleted: 0},
+		},
+		{
 			name: "delete multiple rows, =",
 			query: `delete from people where last = "Simpson"`,
 			deletedRows: []row.Row{homer, marge, bart, lisa},
