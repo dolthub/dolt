@@ -94,8 +94,24 @@ var lisa = newRow(3, "Lisa", "Simpson", false, 8, 10)
 var moe = newRow(4, "Moe", "Szyslak", false, 48, 6.5)
 var barney = newRow(5, "Barney", "Gumble", false, 40, 4)
 
+var allTestRows = rs(homer, marge, bart, lisa, moe, barney)
+
 func rs(rows... row.Row) []row.Row {
 	return rows
+}
+
+// Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
+func findRowIndex(find row.Row, rows []row.Row) int {
+	verifyIdx := -1
+	for i, updatedRow := range rows {
+		rowId, _ := find.GetColVal(idTag)
+		updatedId, _ := updatedRow.GetColVal(idTag)
+		if rowId.Equals(updatedId) {
+			verifyIdx = i
+			break
+		}
+	}
+	return verifyIdx
 }
 
 // Compares two noms Floats for approximate equality
