@@ -287,6 +287,70 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+// Tests of the delete SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// delete SQL command are in the sql package.
+func TestDelete(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		expectedRes int
+		deletedIds  []uuid.UUID
+	}{
+		{
+			name: "bad syntax",
+			query: "delete table", expectedRes: 1,
+		},
+		{
+			name: "bad syntax",
+			query: "delete from people where", expectedRes: 1,
+		},
+		{
+			name: "table doesn't exist",
+			query: "delete from dne", expectedRes: 1,
+		},
+		{
+			name:       "delete one row",
+			query:      `delete from people where id = '00000000-0000-0000-0000-000000000002'`,
+			deletedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
+		},
+		{
+			name: "delete two rows",
+			query: `delete from people where age > 21`,
+			deletedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+
+			if result == 0 {
+				root, err := dEnv.WorkingRoot()
+				assert.Nil(t, err)
+
+				// Assert that all rows have been deleted
+				for _, expectedid := range test.deletedIds {
+					table, _ := root.GetTable(tableName)
+					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
+					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
+					_, ok := table.GetRow(key, dtestutils.TypedSchema)
+					assert.False(t, ok, "row not deleted")
+				}
+			}
+		})
+	}
+}
+
+
 func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	imt, sch := dtestutils.CreateTestDataTable(true)
