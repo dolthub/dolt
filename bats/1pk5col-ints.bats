@@ -205,22 +205,22 @@ teardown() {
     [ "$output" = "Rows updated: 1" ]
     run dolt sql -q "select * from test where pk=0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 10 ]] || false
-    [[ ! "$output" =~ |5 ]] || false
+    [[ "$output" =~ "10" ]] || false
+    [[ ! "$output" =~ "|5" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
     [ "$status" -eq 0 ]
     [ "$output" = "Rows updated: 2" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 11 ]] || false
-    [[ ! "$output" =~ 12 ]] || false
+    [[ "$output" =~ "11" ]] || false
+    [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
     [ "$status" -eq 0 ]
     [ "$output" = "Rows updated: 0" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 50 ]] || false
+    [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Unknown column c12" ]] || false
@@ -232,9 +232,9 @@ teardown() {
     [ "$output" = "Rows updated: 3" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 100 ]] || false
-    [[ "$output" =~ 10 ]] || false
-    [[ ! "$output" =~ 11 ]] || false
+    [[ "$output" =~ "100" ]] || false
+    [[ "$output" =~ "10" ]] || false
+    [[ ! "$output" =~ "11" ]] || false
 }
 
 @test "delete a row with dolt table rm-row" {
