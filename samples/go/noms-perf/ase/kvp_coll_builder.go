@@ -1,17 +1,19 @@
 package ase
 
-import "sort"
-
+// KVPCollBuilder is used to build a KVPCollection.  It creates two buffers which it fills with KVPs.  When a buffer
+// is filled the target buffer is changed for subsequent adds.  New buffers can be added to the builder so that
+// buffers of other KVPCollections can be reused.
 type KVPCollBuilder struct {
 	filled     []KVPSlice
 	toFill     []KVPSlice
 	currSl     KVPSlice
 	currSlSize int
 	currIdx    int
-	numItems   int
+	numItems   int64
 	buffSize   int
 }
 
+// NewKVPCollBuilder creates a builder which can be used to
 func NewKVPCollBuilder(buffSize int) *KVPCollBuilder {
 	buffs := []KVPSlice{make(KVPSlice, buffSize)}
 	currSl := make(KVPSlice, buffSize)
@@ -19,18 +21,16 @@ func NewKVPCollBuilder(buffSize int) *KVPCollBuilder {
 	return &KVPCollBuilder{nil, buffs, currSl, buffSize, 0, 0, buffSize}
 }
 
+// AddBuffer adds a buffer of KVPs that can be filled.
 func (cb *KVPCollBuilder) AddBuffer(buff KVPSlice) {
 	if cap(buff) != cb.buffSize {
 		panic("All buffers should be created with the same capacity.")
 	}
 
 	cb.toFill = append(cb.toFill, buff[:cap(buff)])
-
-	sort.Slice(cb.toFill, func(i, j int) bool {
-		return len(cb.toFill[i]) < len(cb.toFill[j])
-	})
 }
 
+// AddKVP adds a KVP to the current buffer
 func (cb *KVPCollBuilder) AddKVP(kvp KVP) {
 	cb.currSl[cb.currIdx] = kvp
 
@@ -42,15 +42,23 @@ func (cb *KVPCollBuilder) AddKVP(kvp KVP) {
 }
 
 func (cb *KVPCollBuilder) doneWithCurrBuff() {
-	cb.numItems += cb.currIdx
+	cb.numItems += int64(cb.currIdx)
 	cb.filled = append(cb.filled, cb.currSl[:cb.currIdx])
 
 	cb.currIdx = 0
-	cb.currSl = cb.toFill[0]
-	cb.currSlSize = len(cb.currSl)
-	cb.toFill = cb.toFill[1:]
+
+	if len(cb.toFill) > 0 {
+		cb.currSl = cb.toFill[0]
+		cb.currSlSize = len(cb.currSl)
+		cb.toFill = cb.toFill[1:]
+	} else {
+		cb.currSl = nil
+		cb.currSlSize = 0
+	}
 }
 
+// MoveRemaining takes a KVPCollItr and moves all the KVPs that still need to be iterated over and moves them
+// into the internal KVP buffers.
 func (cb *KVPCollBuilder) MoveRemaining(itr *KVPCollItr) {
 	remInCurr := itr.currSlSize - itr.idx
 	remInDest := cb.currSlSize - cb.currIdx
@@ -66,22 +74,15 @@ func (cb *KVPCollBuilder) MoveRemaining(itr *KVPCollItr) {
 	for itr.slIdx++; itr.slIdx < itr.coll.numSlices; itr.slIdx++ {
 		currSl := itr.coll.slices[itr.slIdx]
 		cb.filled = append(cb.filled, currSl)
-		cb.numItems += len(currSl)
+		cb.numItems += int64(len(currSl))
 	}
 }
 
+// Build takes all the filled and partially filled buffers and creates a new KVPCollection from them.
 func (cb *KVPCollBuilder) Build() *KVPCollection {
 	if cb.currIdx != 0 {
 		cb.doneWithCurrBuff()
 	}
 
-	maxSize := len(cb.filled[0])
-	for i := 1; i < len(cb.filled); i++ {
-		currSize := len(cb.filled[i])
-		if currSize > maxSize {
-			maxSize = currSize
-		}
-	}
-
-	return &KVPCollection{maxSize, len(cb.filled), cb.numItems, cb.filled}
+	return &KVPCollection{cb.buffSize, len(cb.filled), cb.numItems, cb.filled}
 }

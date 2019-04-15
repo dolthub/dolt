@@ -31,6 +31,9 @@ func merger(in chan [2]*KVPCollection, out chan *KVPCollection) {
 	}
 }
 
+// AsyncSortedEdits is a data structure that can have edits added to it, and as they are added it will
+// send them in batches to be sorted.  Once all edits have been added the batches of edits can then
+// be merge sorted together.
 type AsyncSortedEdits struct {
 	sliceSize        int
 	sortConcurrency  int
@@ -44,12 +47,15 @@ type AsyncSortedEdits struct {
 	sortedColls  []*KVPCollection
 }
 
-func NewAsyncSortedEdits(sliceSize, asyncConCurrency, sortConcurrency int) *AsyncSortedEdits {
-	sortChan := make(chan KVPSlice, asyncConCurrency*8)
-	resChan := make(chan KVPSlice, asyncConCurrency*8)
-	doneChan := make(chan bool, asyncConCurrency)
+// NewAsyncSortedEdits creates an AsyncSortedEdits object that creates batches of size 'sliceSize' and kicks off
+// 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
+// 'sortConcurrency' go routines
+func NewAsyncSortedEdits(sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
+	sortChan := make(chan KVPSlice, asyncConcurrency*8)
+	resChan := make(chan KVPSlice, asyncConcurrency*8)
+	doneChan := make(chan bool, asyncConcurrency)
 
-	for i := 0; i < asyncConCurrency; i++ {
+	for i := 0; i < asyncConcurrency; i++ {
 		go func() {
 			defer func() {
 				doneChan <- true
@@ -61,7 +67,7 @@ func NewAsyncSortedEdits(sliceSize, asyncConCurrency, sortConcurrency int) *Asyn
 
 	return &AsyncSortedEdits{
 		sliceSize:        sliceSize,
-		asyncConcurrency: asyncConCurrency,
+		asyncConcurrency: asyncConcurrency,
 		sortConcurrency:  sortConcurrency,
 		sortChan:         sortChan,
 		resultChan:       resChan,
@@ -70,6 +76,7 @@ func NewAsyncSortedEdits(sliceSize, asyncConCurrency, sortConcurrency int) *Asyn
 		sortedColls:      nil}
 }
 
+// Set adds an edit
 func (ase *AsyncSortedEdits) Set(k, v types.Value) {
 	ase.accumulating = append(ase.accumulating, KVP{k, v})
 
@@ -97,6 +104,7 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 	}
 }
 
+// FinishedEditing should be called once all edits have been added, before Sort is called
 func (ase *AsyncSortedEdits) FinishedEditing() {
 	close(ase.sortChan)
 
@@ -113,7 +121,7 @@ func (ase *AsyncSortedEdits) FinishedEditing() {
 func (ase *AsyncSortedEdits) wait() {
 	running := ase.asyncConcurrency
 
-	for {
+	for running > 0 {
 		select {
 		case val := <-ase.resultChan:
 			coll := NewKVPCollection(val)
@@ -121,15 +129,23 @@ func (ase *AsyncSortedEdits) wait() {
 
 		case <-ase.doneChan:
 			running--
+		}
+	}
 
-			if running == 0 {
-				close(ase.resultChan)
-				return
-			}
+	for {
+		select {
+		case val := <-ase.resultChan:
+			coll := NewKVPCollection(val)
+			ase.sortedColls = append(ase.sortedColls, coll)
+		default:
+			close(ase.resultChan)
+			return
 		}
 	}
 }
 
+// Sort performs a concurrent merge sort.  Once this completes use the Iterator method for getting a KVPIterator
+// which can be used to iterate over all the KVPs in order.
 func (ase *AsyncSortedEdits) Sort() {
 	for len(ase.sortedColls) > 2 {
 		pairs := pairCollections(ase.sortedColls)
@@ -160,19 +176,25 @@ func (ase *AsyncSortedEdits) Sort() {
 
 		close(sortChan)
 
-		done := false
-		for !done {
+		for numGoRs > 0 {
 			select {
 			case val := <-resChan:
 				ase.sortedColls = append(ase.sortedColls, val)
 
 			case <-ase.doneChan:
 				numGoRs--
+			}
+		}
 
-				if numGoRs == 0 {
-					close(resChan)
-					done = true
-				}
+		done := false
+		for !done {
+			select {
+			case val := <-resChan:
+				ase.sortedColls = append(ase.sortedColls, val)
+
+			default:
+				close(resChan)
+				done = true
 			}
 		}
 	}
@@ -199,6 +221,7 @@ func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 	return pairs
 }
 
+// Iterator returns a KVPIterator instance that can iterate over all the KVPs in order.
 func (ase *AsyncSortedEdits) Iterator() KVPIterator {
 	switch len(ase.sortedColls) {
 	case 1:
@@ -208,4 +231,13 @@ func (ase *AsyncSortedEdits) Iterator() KVPIterator {
 	}
 
 	panic("Sort needs to be called prior to getting an Iterator.")
+}
+
+func (ase *AsyncSortedEdits) Size() int64 {
+	size := int64(0)
+	for _, coll := range ase.sortedColls {
+		size += coll.Size()
+	}
+
+	return size
 }
