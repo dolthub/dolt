@@ -8,6 +8,20 @@ import (
 	"time"
 )
 
+func (coll *KVPCollection) String() string {
+	itr := coll.Iterator()
+	val := itr.Next()
+
+	keys := make([]types.Value, coll.totalSize)
+	for i := 0; val != nil; i++ {
+		keys[i] = val.Key
+		val = itr.Next()
+	}
+
+	tpl := types.NewTuple(keys...)
+	return types.EncodedValue(tpl)
+}
+
 func TestKVPCollection(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
 	testKVPCollection(t, rng)
