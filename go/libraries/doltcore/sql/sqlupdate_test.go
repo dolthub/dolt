@@ -78,6 +78,13 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 0},
 		},
 		{
+			name: "update no matching rows",
+			query: `update people set first = "Changed", rating = 0.0
+				where last = "Flanders"`,
+			updatedRows:   []row.Row{},
+			expectedResult: UpdateResult{NumRowsUpdated: 0, NumRowsUnchanged: 0},
+		},
+		{
 			name: "update without where clause",
 			query: `update people set first = "Changed", rating = 0.0`,
 			updatedRows:   []row.Row{
