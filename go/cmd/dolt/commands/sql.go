@@ -64,6 +64,8 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return sqlInsert(dEnv, root, s, query, usage)
 	case *sqlparser.Update:
 		return sqlUpdate(dEnv, root, s, query, usage)
+	case *sqlparser.Delete:
+		return sqlDelete(dEnv, root, s, query, usage)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
@@ -146,6 +148,21 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 		if result.NumRowsUnchanged > 0 {
 			cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
 		}
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) int {
+	result, err := sql.ExecuteDelete(dEnv.DoltDB, root, update, query)
+	if err != nil {
+		return quitErr("Error during update: %v", err.Error())
+	}
+
+	verr := UpdateWorkingWithVErr(dEnv, result.Root)
+
+	if verr == nil {
+		cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
