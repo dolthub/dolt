@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/xwb1989/sqlparser"
-	"strconv"
 )
 
 type InsertResult struct {
@@ -159,53 +157,11 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		column := columns[i]
 		switch val := expr.(type) {
 		case *sqlparser.SQLVal:
-			switch val.Type {
-			// Integer-like values
-			case sqlparser.HexVal, sqlparser.HexNum, sqlparser.IntVal, sqlparser.BitVal:
-				intVal, err := strconv.ParseInt(string(val.Val), 0, 64)
-				if err != nil {
-					return nil, err
-				}
-				switch column.Kind {
-				case types.IntKind:
-					taggedVals[column.Tag] = types.Int(intVal)
-				case types.FloatKind:
-					taggedVals[column.Tag] = types.Float(intVal)
-				case types.UintKind:
-					taggedVals[column.Tag] = types.Uint(intVal)
-				default:
-					return errInsertRow("Type mismatch: numeric value but non-numeric column: %v", nodeToString(val))
-				}
-			case sqlparser.FloatVal:
-				floatVal, err := strconv.ParseFloat(string(val.Val), 64)
-				if err != nil {
-					return nil, err
-				}
-				switch column.Kind {
-				case types.FloatKind:
-					taggedVals[column.Tag] = types.Float(floatVal)
-				default:
-					return errInsertRow("Type mismatch: float value but non-float column: %v", nodeToString(val))
-				}
-			case sqlparser.StrVal:
-				strVal := string(val.Val)
-				switch column.Kind {
-				case types.StringKind:
-					taggedVals[column.Tag] = types.String(strVal)
-				case types.UUIDKind:
-					id, err := uuid.Parse(strVal)
-					if err != nil {
-						return nil, err
-					}
-					taggedVals[column.Tag] = types.UUID(id)
-				default:
-					return errInsertRow("Type mismatch: string value but non-string column: %v", nodeToString(val))
-				}
-			case sqlparser.ValArg:
-				return errInsertRow("Value args not supported in insert statements")
-			default:
-				return errInsertRow("Unrecognized SQLVal type %v", val.Type)
+			nomsVal, err := extractNomsValueFromSQLVal(val, column)
+			if err != nil {
+				return nil, err
 			}
+			taggedVals[column.Tag] = nomsVal
 		case *sqlparser.NullVal:
 			// nothing to do, just don't set a tagged value for this column
 		case sqlparser.BoolVal:
