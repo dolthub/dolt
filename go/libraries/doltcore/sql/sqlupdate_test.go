@@ -16,26 +16,26 @@ func TestExecuteUpdate(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		verifyValues   []row.Row
+		updatedRows    []row.Row
 		expectedResult UpdateResult // root is not compared, but it's used for other assertions
 		expectedErr    bool
 	}{
 		{
 			name:           "update one row, one col, primary key where clause",
 			query:          `update people set first = "Domer" where id = 0`,
-			verifyValues:   []row.Row{mutateRow(homer, firstTag, "Domer")},
+			updatedRows:    []row.Row{mutateRow(homer, firstTag, "Domer")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
 			name:           "update one row, one col, non-primary key where clause",
 			query:          `update people set first = "Domer" where first = "Homer"`,
-			verifyValues:   []row.Row{mutateRow(homer, firstTag, "Domer")},
+			updatedRows:    []row.Row{mutateRow(homer, firstTag, "Domer")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
 			name:           "update one row, two cols, primary key where clause",
 			query:          `update people set first = "Ned", last = "Flanders" where id = 0`,
-			verifyValues:   []row.Row{mutateRow(homer, firstTag, "Ned", lastTag, "Flanders")},
+			updatedRows:    []row.Row{mutateRow(homer, firstTag, "Ned", lastTag, "Flanders")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
@@ -43,7 +43,7 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Ned", last = "Flanders", is_married = false, rating = 10,
 				age = 45, num_episodes = 150, uuid = '00000000-0000-0000-0000-000000000050'
 				where age = 38`,
-			verifyValues: []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Ned", lastTag, "Flanders", isMarriedTag, false,
 					ratingTag, 10.0, ageTag, 45, numEpisodesTag, uint64(150),
 					uuidTag, uuid.MustParse("00000000-0000-0000-0000-000000000050"))},
@@ -54,7 +54,7 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Homer", last = "Simpson", is_married = true, rating = 8.5, age = 40,
 				num_episodes = null, uuid = null
 				where id = 0`,
-			verifyValues:   []row.Row{homer}, // verify homer is unchanged by the update
+			updatedRows:    []row.Row{},
 			expectedResult: UpdateResult{NumRowsUpdated: 0, NumRowsUnchanged: 1},
 		},
 		{
@@ -62,14 +62,14 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Homer", last = "Simpson", is_married = null, rating = null, age = null,
 				num_episodes = null, uuid = null
 				where first = "Homer"`,
-			verifyValues:   []row.Row{mutateRow(homer, isMarriedTag, nil, ratingTag, nil, ageTag, nil)},
+			updatedRows:    []row.Row{mutateRow(homer, isMarriedTag, nil, ratingTag, nil, ageTag, nil)},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
 			name: "update multiple rows, set two columns",
 			query: `update people set first = "Changed", rating = 0.0
 				where last = "Simpson"`,
-			verifyValues:   []row.Row{
+			updatedRows:   []row.Row{
 				mutateRow(homer, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(marge, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(bart, firstTag, "Changed", ratingTag, 0.0),
@@ -78,9 +78,16 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 0},
 		},
 		{
+			name: "update no matching rows",
+			query: `update people set first = "Changed", rating = 0.0
+				where last = "Flanders"`,
+			updatedRows:   []row.Row{},
+			expectedResult: UpdateResult{NumRowsUpdated: 0, NumRowsUnchanged: 0},
+		},
+		{
 			name: "update without where clause",
 			query: `update people set first = "Changed", rating = 0.0`,
-			verifyValues:   []row.Row{
+			updatedRows:   []row.Row{
 				mutateRow(homer, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(marge, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(bart, firstTag, "Changed", ratingTag, 0.0),
@@ -94,8 +101,7 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update multiple rows, =",
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
-			verifyValues:   []row.Row{
-				homer, // unchanged
+			updatedRows:   []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(lisa, firstTag, "Homer"),
@@ -106,7 +112,7 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update multiple rows, <>",
 			query: `update people set last = "Simpson"
 				where last <> "Simpson"`,
-			verifyValues:   []row.Row{
+			updatedRows:   []row.Row{
 				mutateRow(moe, lastTag, "Simpson"),
 				mutateRow(barney, lastTag, "Simpson"),
 			},
@@ -115,8 +121,7 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name: "update multiple rows, >",
 			query: `update people set first = "Homer" where age > 10`,
-			verifyValues:   []row.Row{
-				homer, // unchanged
+			updatedRows:   []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(moe, firstTag, "Homer"),
 				mutateRow(barney, firstTag, "Homer"),
@@ -126,8 +131,7 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name: "update multiple rows, >=",
 			query: `update people set first = "Homer" where age >= 10`,
-			verifyValues:   []row.Row{
-				homer, // unchanged
+			updatedRows:   []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(moe, firstTag, "Homer"),
@@ -138,9 +142,8 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name: "update multiple rows, <",
 			query: `update people set first = "Bart" where age < 40`,
-			verifyValues:   []row.Row{
+			updatedRows:   []row.Row{
 				mutateRow(marge, firstTag, "Bart"),
-				bart, // unchanged
 				mutateRow(lisa, firstTag, "Bart"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 2, NumRowsUnchanged: 1},
@@ -148,8 +151,7 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name: "update multiple rows, <=",
 			query: `update people set first = "Homer" where age <= 40`,
-			verifyValues:   []row.Row{
-				homer, // unchanged
+			updatedRows:   []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(lisa, firstTag, "Homer"),
@@ -273,7 +275,7 @@ func TestExecuteUpdate(t *testing.T) {
 			if tt.expectedErr {
 				assert.True(t, err != nil, "expected error")
 				assert.Equal(t, UpdateResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
-				assert.Nil(t, tt.verifyValues, "incorrect test setup: cannot assert both an error and updated values")
+				assert.Nil(t, tt.updatedRows, "incorrect test setup: cannot assert both an error and updated values")
 				return
 			} else {
 				assert.Nil(t, err, "unexpected error")
@@ -286,7 +288,15 @@ func TestExecuteUpdate(t *testing.T) {
 			table, ok := result.Root.GetTable(testTableName)
 			assert.True(t, ok)
 
-			for _, expectedRow := range tt.verifyValues {
+			// make sure exactly the expected rows were updated
+			for _, r := range allTestRows {
+				updatedIdx := findRowIndex(r, tt.updatedRows)
+
+				expectedRow := r
+				if updatedIdx >= 0 {
+					expectedRow = tt.updatedRows[updatedIdx]
+				}
+
 				foundRow, ok := table.GetRow(expectedRow.NomsMapKey(testSch).(types.Tuple), testSch)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), floatComparer}
