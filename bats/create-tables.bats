@@ -205,18 +205,33 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
     # use bash -c so I can | the output to grep
-    run bash -c "dolt schema | grep -c '\"kind\": \"int\"'"
+    run bash -c "dolt schema"
     [ "$status" -eq 0 ]
-    [ "$output" -eq 6 ]
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
 }
 
 @test "create a table with sql with multiple primary keys" {
     run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run bash -c "dolt schema | grep -c '\"is_part_of_pk\": true'"
+    run bash -c "dolt schema"
     [ "$status" -eq 0 ]
-    [ "$output" -eq 2 ]
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk1 int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "pk2 int not null comment 'tag:1'" ]] || false
+    [[ "$output" =~ "c1 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:6'" ]] || false
+    [[ "$output" =~ "primary key (pk1,pk2)" ]] || false
 }
 
 @test "create a table using sql with not null constraint" {
@@ -225,7 +240,14 @@ teardown() {
     [ "$output" = "" ]
     run dolt schema test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "not_null" ]] || false
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
 }
 
 @test "create a table using sql with a float" {
@@ -233,15 +255,24 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt schema test
-    [[ "$output" =~ "float" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE test " ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 float comment 'tag:1'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
 }
 
+   
 @test "create a table using sql with a string" {
     run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt schema test
-    [[ "$output" =~ "string" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 varchar comment 'tag:1'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
 }
 
 
@@ -251,7 +282,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt schema test
     skip "dolt sql does not support the unsigned keyword yet"
-    [[ "$output" =~ "uint" ]] ||false
+    [[ "$output" =~ "uint" ]] || false
 }
 
 @test "create a table using sql with a boolean" {

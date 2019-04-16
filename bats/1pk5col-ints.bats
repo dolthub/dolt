@@ -703,15 +703,29 @@ teardown() {
 
 @test "dolt schema" {
     run dolt schema
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "columns" ]] || false
-    [[ "$output" =~ "c1" ]] || false
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
     run dolt schema test
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "columns" ]] || false
-    [[ "$output" =~ "c1" ]] || false
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
 }
 
 @test "dolt schema on non existant table" {

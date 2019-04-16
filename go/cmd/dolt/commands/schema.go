@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"strings"
 
 	"github.com/attic-labs/noms/go/types"
@@ -150,12 +151,13 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
 	sch := tbl.GetSchema()
-	jsonSchStr, err := encoding.MarshalAsJson(sch)
+	//schStr, err := encoding.MarshalAsJson(sch)
+	schStr, err := sql.SchemaAsCreateStmt(sch)
 	if err != nil {
 		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
 	}
 
-	cli.Println(jsonSchStr)
+	cli.Printf(schStr+"\n", tblName)
 	return nil
 }
 
