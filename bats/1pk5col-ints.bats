@@ -164,30 +164,31 @@ teardown() {
     [ "$output" = "Rows inserted: 2" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "|c5" ]] || false
-    [[ "$output" =~ "|5" ]] || false
-    [[ "$output" =~ "|10" ]] || false
-    [[ "$output" =~ "|106" ]] || false
+    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]*5 ]] || false
+    [[ "$output" =~ \|[[:space:]]*10 ]] || false
+    [[ "$output" =~ \|[[:space:]]*106 ]] || false
     run dolt sql -q "select * from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "|c5" ]] || false
-    [[ "$output" =~ "|10" ]] || false
+    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]*10 ]] || false
     run dolt sql -q "select c5 from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "c5" ]] || false
-    [[ "$output" =~ "10" ]] || false
+    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]*10 ]] || false
     run dolt sql -q "select * from test limit 1"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    # All line number assertions are offset by 3 to allow for table separator lines
+    [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select * from test where c2 > 7"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select * from test where c2 >= 7"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where c2 <> 7"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where c2 > 3 and c1 < 10"
     [[ "$output" =~ "And expressions not supported" ]] || false
     run dolt sql -q "select c10 from test where pk=1"
@@ -195,7 +196,7 @@ teardown() {
     [ "$output" = "Unknown column 'c10'" ]
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    [ "${#lines[@]}" -eq 4 ]
 }
 
 @test "dolt sql select as" {

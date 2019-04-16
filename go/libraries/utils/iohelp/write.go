@@ -54,6 +54,17 @@ func WriteLine(w io.Writer, line string) error {
 	return WriteAll(w, []byte(line), newLineBuf)
 }
 
+// WriteLines will write the given strings to an io.Writer, each followed by a newline.
+func WriteLines(w io.Writer, lines ...string) error {
+	for _, line := range lines {
+		err := WriteLine(w, line)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type nopWrCloser struct {
 	io.Writer
 }

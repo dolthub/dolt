@@ -31,22 +31,23 @@ teardown() {
     dolt table put-row test pk:this c1:test c2:is c3:a c4:good c5:test
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    # All row counts are offset by 3 to account for table printing
+    [ "${#lines[@]}" -eq 7 ] 
     run dolt sql -q "select * from test where pk='tim'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select * from test where pk>'tim'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select * from test where pk>='tim'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where pk<>'tim'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where pk='bob'"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    [ "${#lines[@]}" -eq 4 ]
 }
 
 @test "interact with a strings type table with sql" {
