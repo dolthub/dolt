@@ -52,11 +52,14 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 		buf := fwtTr.colBuffs[tag]
 
 		if colWidth != 0 {
-			var str string
 			val, _ := r.GetColVal(tag)
 
+			var str string
 			if !types.IsNull(val) {
 				str = string(val.(types.String))
+			} else {
+				// don't assign a value for nil columns
+				continue
 			}
 
 			if len(str) > colWidth {
