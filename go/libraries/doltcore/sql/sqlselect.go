@@ -17,28 +17,28 @@ import (
 
 // Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
-	tableName string
-	colNames  []string
-	filterFn  filterFn
-	limit     int
+	tableName       string
+	selectedColTags []uint64
+	colAliases      map[uint64]string
+	filterFn        rowFilterFn
+	limit           int
 }
-
-type filterFn = func(r row.Row) (matchesFilter bool)
 
 type selectTransform struct {
 	noMoreCallback func()
-	filter         filterFn
+	filter         rowFilterFn
 	limit          int
 	count          int
 }
 
+// Limits and filter the rows returned by a query
 func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	if st.limit == -1 || st.count < st.limit {
 		if st.filter(inRow) {
 			st.count++
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
-	} else {
+	} else if st.count == st.limit {
 		st.noMoreCallback()
 	}
 
@@ -119,20 +119,33 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	selectStmt := &selectStatement{tableName: tableName}
 	tableSch := tbl.GetSchema()
 
+	columnAliases := make(map[uint64]string)
+
 	// Process the columns selected
-	var columns []string
+	var columns []uint64
 	colSelections := s.SelectExprs
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
 			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-				columns = append(columns, col.Name)
+				columns = append(columns, tag)
 				return false
 			})
 		case *sqlparser.AliasedExpr:
+			colAlias := selectExpr.As.String()
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
-				columns = append(columns, colExpr.Name.String())
+				colName := colExpr.Name.String()
+				column, ok := tableSch.GetAllCols().GetByName(colName)
+				if !ok {
+					return errSelect("Unknown column '%v'", colName)
+				}
+
+				// an absent column alias will be empty
+				if colAlias != "" {
+					columnAliases[column.Tag] = colAlias
+				}
+				columns = append(columns, column.Tag)
 			default:
 				return errSelect("Only column selections or * are supported")
 			}
@@ -140,7 +153,8 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			return errSelect("Next value is not supported: %v", query)
 		}
 	}
-	selectStmt.colNames = columns
+	selectStmt.selectedColTags = columns
+	selectStmt.colAliases = columnAliases
 
 	// Include a limit if asked for
 	if s.Limit != nil && s.Limit.Rowcount != nil {
@@ -175,13 +189,6 @@ func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query 
 
 	selectStmt.filterFn = filter
 	return nil
-}
-
-// Turns a node to a string
-func nodeToString(node sqlparser.SQLNode) string {
-	buffer := sqlparser.NewTrackedBuffer(nil)
-	node.Format(buffer)
-	return buffer.String()
 }
 
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
@@ -219,14 +226,16 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
 	colColl := tableSch.GetAllCols()
 
-	if len(statement.colNames) > 0 {
-		cols := make([]schema.Column, 0, len(statement.colNames))
+	if len(statement.selectedColTags) > 0 {
+		cols := make([]schema.Column, 0, len(statement.selectedColTags))
 
-
-		for _, name := range statement.colNames {
-			if col, ok := colColl.GetByName(name); !ok {
-				return nil, errhand.BuildDError("error: unknown column '%s'", name).Build()
+		for _, tag := range statement.selectedColTags {
+			if col, ok := colColl.GetByTag(tag); !ok {
+				panic("unknown tag " + string(tag))
 			} else {
+				if alias, ok := statement.colAliases[col.Tag]; ok {
+					col.Name = alias
+				}
 				cols = append(cols, col)
 			}
 		}

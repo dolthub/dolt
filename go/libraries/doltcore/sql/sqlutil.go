@@ -221,13 +221,23 @@ const (
 	ZEROFILL = "zerofill"
 )
 
+// Boolean predicate func type to filter rows in result sets
+type rowFilterFn = func(r row.Row) (matchesFilter bool)
+
+// Turns a node to a string
+func nodeToString(node sqlparser.SQLNode) string {
+	buffer := sqlparser.NewTrackedBuffer(nil)
+	node.Format(buffer)
+	return buffer.String()
+}
+
 // createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) (filterFn, error) {
+func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}
 
-	var filter filterFn
+	var filter rowFilterFn
 	if whereClause == nil {
 		filter = func(r row.Row) bool {
 			return true
