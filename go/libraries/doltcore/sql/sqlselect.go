@@ -138,7 +138,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 				colName := colExpr.Name.String()
 				column, ok := tableSch.GetAllCols().GetByName(colName)
 				if !ok {
-					return errSelect("Unknown column %v", colName)
+					return errSelect("Unknown column '%v'", colName)
 				}
 
 				// an absent column alias will be empty
