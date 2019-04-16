@@ -11,8 +11,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/xwb1989/sqlparser"
@@ -85,7 +85,8 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 		return 1
 	}
 
-	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
+	cliWr := iohelp.NopWrCloser(cli.CliOut)
+	wr := tabular.NewTextTableWriter(cliWr, outSch)
 	p.RunAfter(func() { wr.Close() })
 
 	cliSink := pipeline.ProcFuncForWriter(wr)
