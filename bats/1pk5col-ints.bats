@@ -537,7 +537,7 @@ teardown() {
     dolt add test
     dolt commit -m "added test row"
     dolt checkout test-branch
-    dolt table schema --add-field test c6 int 
+    dolt schema --add-field test c6 int 
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:6
     dolt add test
     dolt commit -m "added test row with one more column"
@@ -555,12 +555,12 @@ teardown() {
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
-    dolt table schema --add-field test c6 int
+    dolt schema --add-field test c6 int
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:6
     dolt add test
     dolt commit -m "added new column and test row"
     dolt checkout test-branch
-    dolt table schema --add-field test c7 int
+    dolt schema --add-field test c7 int
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c7:7
     dolt add test
     dolt commit -m "added different column and test row"
@@ -583,7 +583,7 @@ teardown() {
     dolt add test
     dolt commit -m "added a test row"
     dolt checkout test-branch
-    dolt table schema --add-field test c6 int
+    dolt schema --add-field test c6 int
     dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10 c6:12
     dolt add test
     dolt commit -m "added a column and new test row"
@@ -701,27 +701,27 @@ teardown() {
     [ -f export.csv ]
 }
 
-@test "dolt table schema" {
-    run dolt table schema
+@test "dolt schema" {
+    run dolt schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "columns" ]] || false
     [[ "$output" =~ "c1" ]] || false
-    run dolt table schema test
+    run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "columns" ]] || false
     [[ "$output" =~ "c1" ]] || false
 }
 
-@test "dolt table schema on non existant table" {
-    run dolt table schema foo
+@test "dolt schema on non existant table" {
+    run dolt schema foo
     [ "$status" -eq 0 ]
     [ "$output" = "foo not found" ]
 }
 
-@test "dolt table schema --export" {
-    run dolt table schema --export test export.schema
+@test "dolt schema --export" {
+    run dolt schema --export test export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
