@@ -206,6 +206,10 @@ teardown() {
     [[ "$output" =~ "column2" ]] || false
     [[ ! "$output" =~ "c1" ]] || false
     [[ ! "$output" =~ "c2" ]] || false
+    run dolt sql -q "select c1 as column1 from test where column1=1"
+    skip "Renamed columns not supported in where clauses"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "dolt sql update queries" {
