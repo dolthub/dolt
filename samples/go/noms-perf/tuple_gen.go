@@ -37,7 +37,7 @@ func (tg *TupleGen) NextKVP() (types.Value, types.Value) {
 	}
 
 	key := types.Uint(tg.keys[tg.pos])
-	val := types.NewTupleOneWriter(
+	val := types.NewTuple(
 		types.UUID(uuid.New()),
 		types.Int(tg.rng.Int63()),
 		types.Uint(tg.rng.Uint64()),

@@ -33,6 +33,20 @@ func (itr *SortedEditItr) Next() *KVP {
 	return kvp
 }
 
+// Peek returns the next KVP without advancing
+func (itr *SortedEditItr) Peek() *KVP {
+	if itr.done {
+		return nil
+	}
+
+	lesser := itr.rightItr
+	if itr.leftItr.Less(itr.rightItr) {
+		lesser = itr.leftItr
+	}
+
+	return lesser.Peek()
+}
+
 // Size returns the total number of elements this iterator will iterate over.
 func (itr *SortedEditItr) Size() int64 {
 	return itr.leftItr.coll.totalSize + itr.rightItr.coll.totalSize
