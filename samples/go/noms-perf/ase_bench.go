@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/attic-labs/noms/samples/go/noms-perf/ase"
+	"github.com/attic-labs/noms/go/types/ase"
 	"log"
 	"time"
 )

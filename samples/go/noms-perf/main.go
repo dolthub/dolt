@@ -68,12 +68,12 @@ func benchmark(meb MEBenchmark, nextKVP NextEdit) {
 
 	log.Printf("%s - sort time: %f\n", meb.GetName(), sortDelta.Seconds())
 
-	/*startMap := time.Now()
+	startMap := time.Now()
 	meb.Map()
 	endMap := time.Now()
 	mapDelta := endMap.Sub(startMap)
 
-	log.Printf("%s - map time: %f\n", meb.GetName(), mapDelta.Seconds())*/
+	log.Printf("%s - map time: %f\n", meb.GetName(), mapDelta.Seconds())
 }
 
 func run(tg *TupleGen, toBench []MEBenchmark) {

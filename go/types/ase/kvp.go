@@ -10,7 +10,7 @@ type KVP struct {
 	Key types.Value
 
 	// Val is the value
-	Val types.Value
+	Val types.Valuable
 }
 
 // KVPSlice is a slice of KVPs that implements sort.Interface
@@ -35,6 +35,7 @@ func (kvps KVPSlice) Swap(i, j int) {
 // for two KVPCollection instances which merges as it iterates
 type KVPIterator interface {
 	Next() *KVP
+	Peek() *KVP
 }
 
 // IsInOrder iterates over every value and validates that they are returned in key order

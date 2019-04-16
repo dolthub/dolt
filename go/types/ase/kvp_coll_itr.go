@@ -63,6 +63,15 @@ func (itr *KVPCollItr) Next() *KVP {
 	return kvp
 }
 
+// Peek returns the next KVP without advancing
+func (itr *KVPCollItr) Peek() *KVP {
+	if itr.done {
+		return nil
+	}
+
+	return &itr.currSl[itr.idx]
+}
+
 // Reset sets the iterator back to the beginning of the collection so it can be iterated over again.
 func (itr *KVPCollItr) Reset() {
 	itr.done = false
