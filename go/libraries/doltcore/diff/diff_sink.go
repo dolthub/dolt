@@ -76,8 +76,14 @@ func (cdWr *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMa
 
 	i := 0
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		val, _ := r.GetColVal(tag)
-		str := string(val.(types.String))
+		val, ok := r.GetColVal(tag)
+		var str string
+		if ok {
+			str = string(val.(types.String))
+		} else {
+			str = "<NULL>"
+		}
+
 		colStrs[i] = str
 
 		i++
