@@ -1,4 +1,4 @@
-package tblcmds
+package commands
 
 import (
 	"strings"
@@ -6,7 +6,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -67,7 +66,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	var root *doltdb.RootValue
-	root, _ = commands.GetWorkingWithVErr(dEnv)
+	root, _ = GetWorkingWithVErr(dEnv)
 
 	var verr errhand.VerboseError
 	/*if apr.Contains("rename-field") {
@@ -83,7 +82,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr = printSchemas(apr, dEnv)
 	}
 
-	return commands.HandleVErrAndExitCode(verr, usage)
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func badRowCB(_ *pipeline.TransformRowFailure) (quit bool) {
@@ -104,7 +103,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 	if apr.NArg() == 0 {
 		cm, verr = nil, nil
 	} else {
-		cm, verr = commands.MaybeGetCommitWithVErr(dEnv, cmStr)
+		cm, verr = MaybeGetCommitWithVErr(dEnv, cmStr)
 	}
 
 	if verr == nil {
@@ -113,7 +112,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 			args = args[1:]
 			root = cm.GetRootValue()
 		} else {
-			root, verr = commands.GetWorkingWithVErr(dEnv)
+			root, verr = GetWorkingWithVErr(dEnv)
 		}
 	}
 
@@ -167,7 +166,7 @@ func exportSchemas(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) err
 
 	tblName := args[0]
 	fileName := args[1]
-	root, _ = commands.GetWorkingWithVErr(dEnv)
+	root, _ = GetWorkingWithVErr(dEnv)
 	if !root.HasTable(tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
@@ -256,7 +255,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
-	commands.UpdateWorkingWithVErr(dEnv, root)
+	UpdateWorkingWithVErr(dEnv, root)
 
 	return nil
 }
@@ -331,7 +330,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
-	commands.UpdateWorkingWithVErr(dEnv, root)
+	UpdateWorkingWithVErr(dEnv, root)
 
 	return nil
 }
@@ -448,7 +447,7 @@ func removeColumns(args []string, root *doltdb.RootValue, dEnv *env.DoltEnv) err
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
-	commands.UpdateWorkingWithVErr(dEnv, root)
+	UpdateWorkingWithVErr(dEnv, root)
 
 	return nil
 }

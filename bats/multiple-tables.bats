@@ -21,7 +21,7 @@ teardown() {
       [[ "$output" =~ "test1" ]] || false
       [[ "$output" =~ "test2" ]] || false
       [ "${#lines[@]}" -eq 3 ]
-      run dolt table schema
+      run dolt schema
       [ "$status" -eq 0 ]
       [[ "$output" =~ "test1 @ working" ]] || false
       [[ "$output" =~ "test2 @ working" ]] || false

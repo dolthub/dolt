@@ -1,4 +1,4 @@
-package tblcmds
+package commands
 
 /*
 func TestExportTblSchema(t *testing.T) {

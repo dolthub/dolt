@@ -42,6 +42,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false},
 	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false},
 	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true},
+	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
 })

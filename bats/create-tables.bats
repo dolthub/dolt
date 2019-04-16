@@ -205,7 +205,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
     # use bash -c so I can | the output to grep
-    run bash -c "dolt table schema | grep -c '\"kind\": \"int\"'"
+    run bash -c "dolt schema | grep -c '\"kind\": \"int\"'"
     [ "$status" -eq 0 ]
     [ "$output" -eq 6 ]
 }
@@ -214,7 +214,7 @@ teardown() {
     run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run bash -c "dolt table schema | grep -c '\"is_part_of_pk\": true'"
+    run bash -c "dolt schema | grep -c '\"is_part_of_pk\": true'"
     [ "$status" -eq 0 ]
     [ "$output" -eq 2 ]
 }
@@ -223,7 +223,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table schema test
+    run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "not_null" ]] || false
 }
@@ -232,7 +232,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table schema test
+    run dolt schema test
     [[ "$output" =~ "float" ]] || false
 }
 
@@ -240,7 +240,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table schema test
+    run dolt schema test
     [[ "$output" =~ "string" ]] || false
 }
 
@@ -249,7 +249,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table schema test
+    run dolt schema test
     skip "dolt sql does not support the unsigned keyword yet"
     [[ "$output" =~ "uint" ]] ||false
 }
