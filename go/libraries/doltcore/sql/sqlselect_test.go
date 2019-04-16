@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -21,7 +22,7 @@ func Test_selectTransform_limitAndFilter(t *testing.T) {
 
 	type fields struct {
 		noMoreCallback func()
-		filter         filterFn
+		filter         rowFilterFn
 		limit          int
 		count          int
 	}
@@ -120,7 +121,6 @@ func TestExecuteSelect(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		columns        []string
 		expectedRows   []row.Row
 		expectedSchema schema.Schema
 		expectedErr    bool
@@ -163,10 +163,24 @@ func TestExecuteSelect(t *testing.T) {
 		},
 		{
 			name:  "Test select subset of cols",
-			query: "select first,last from people where age >= 40",
-			columns: []string { "first", "last" },
+			query: "select first, last from people where age >= 40",
 			expectedRows: rs(homer, moe, barney),
 			expectedSchema: subsetSchema(untypedSch, "first", "last"),
+		},
+		{
+			name:  "Test column aliases",
+			query: "select first as f, last as l from people where age >= 40",
+			expectedRows: rs(homer, moe, barney),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test column aliases, all columns",
+			query: `select first as f, last as l, is_married as married, age as a,
+				rating as r, uuid as u, num_episodes as n from people
+				where age >= 40`,
+			expectedRows: rs(homer, moe, barney),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l", isMarriedTag, "married", ageTag, "a",
+				ratingTag, "r", uuidTag, "u", numEpisodesTag, "n"),
 		},
 		{
 			name:  "Test select *, not equals",
@@ -214,12 +228,33 @@ func TestExecuteSelect(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			rows, sch, err := ExecuteSelect(root, s, tt.query)
-			untypedRows := untypeRows(t, tt.expectedRows, tt.columns, testSch)
+			untypedRows := convertRows(t, tt.expectedRows, testSch, tt.expectedSchema)
 			assert.Equal(t, tt.expectedErr, err != nil)
 			assert.Equal(t, untypedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})
 	}
+}
+
+// Creates a new untyped schema as specified by the given pairs of column tags and names. Tags are normal ints, not
+// uint64
+func newUntypedSchema(colTagsAndNames ...interface{}) schema.Schema {
+	if len(colTagsAndNames) % 2 != 0 {
+		panic("Non-even number of inputs passed to newUntypedSchema")
+	}
+
+	cols := make([]schema.Column, len(colTagsAndNames) / 2)
+	for i := 0; i < len(colTagsAndNames); i += 2 {
+		tag := uint64(colTagsAndNames[i].(int))
+		name := colTagsAndNames[i+1].(string)
+		cols[i/2] = schema.NewColumn(name, tag, types.StringKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	return schema.UnkeyedSchemaFromCols(collection)
 }
 
 func TestBuildSelectQueryPipeline(t *testing.T) {
