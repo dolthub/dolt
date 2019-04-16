@@ -8,6 +8,14 @@ import (
 	"testing"
 )
 
+const expectedSQL = `CREATE TABLE %s (
+  first String comment 'tag:1',
+  last String not null comment 'tag:2',
+  age Uint comment 'tag:3',
+  id UUID not null comment 'tag:4',
+  primary key (id)
+);`
+
 func createTestSchema() schema.Schema {
 	columns := []schema.Column{
 		schema.NewColumn("id", 4, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -46,7 +54,10 @@ func TestNomsMarshalling(t *testing.T) {
 	if !reflect.DeepEqual(tSchema, unMarshalled) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
+}
 
+func TestJSONMarshalling(t *testing.T) {
+	tSchema := createTestSchema()
 	jsonStr, err := MarshalAsJson(tSchema)
 
 	if err != nil {
@@ -62,4 +73,8 @@ func TestNomsMarshalling(t *testing.T) {
 	if !reflect.DeepEqual(tSchema, jsonUnmarshalled) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
+}
+
+func TestSQLMarshalling(t *testing.T) {
+
 }
