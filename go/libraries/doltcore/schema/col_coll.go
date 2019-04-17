@@ -5,12 +5,27 @@ import (
 	"sort"
 )
 
-// ErrColTagCollision is an error that is returned whet two columns within a ColCollection have the same tag
-// but different values
+// ErrColTagCollision is an error that is returned when two columns within a ColCollection have the same tag
+// but a different name or type
 var ErrColTagCollision = errors.New("two different columns with the same tag.")
+
+// ErrColNotFound is an error that is returned when attempting an operation on a column that does not exist
+var ErrColNotFound = errors.New("column not found")
+
+// ErrColNameCollision is an error that is returned when two columns within a ColCollection have the same name
+// but a different type or tag
+var ErrColNameCollision = errors.New("two different columns with the same name exist")
 
 // EmptyColColl is an empty ColCollection.
 var EmptyColColl, _ = NewColCollection()
+
+var emptyColColl = &ColCollection{
+	[]Column{},
+	[]uint64{},
+	[]uint64{},
+	map[uint64]Column{},
+	map[string]Column{},
+}
 
 // ColCollection is a collection of columns.
 type ColCollection struct {
@@ -23,6 +38,18 @@ type ColCollection struct {
 	TagToCol map[uint64]Column
 	// NameToCol is a map from name to column
 	NameToCol map[string]Column
+}
+
+func NewColCollectionFromMap(colMap map[string]Column) (*ColCollection, error) {
+	cols := make([]Column, len(colMap))
+
+	i := 0
+	for _, col := range colMap {
+		cols[i] = col
+		i++
+	}
+
+	return NewColCollection(cols...)
 }
 
 // NewColCollection creates a new collection from a list of columns
