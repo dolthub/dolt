@@ -393,6 +393,27 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			case sqlparser.JSONUnquoteExtractOp:
 				return nil, errFmt("json not supported")
 			}
+		case *sqlparser.ColName:
+			colNameStr := expr.Name.String()
+			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = colName
+			}
+			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
+			if !ok {
+				return nil, errFmt("Unknown column: '%v'", colNameStr)
+			}
+			if column.Kind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", colNameStr)
+			}
+
+			filter = func(r row.Row) bool {
+				colVal, ok := r.GetColVal(column.Tag)
+				if !ok {
+					return false
+				}
+				return colVal.Equals(types.Bool(true))
+			}
+
 		case *sqlparser.AndExpr:
 			return nil, errFmt("And expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.OrExpr:
@@ -413,8 +434,6 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.BoolVal:
 			return nil, errFmt("Bool expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ColName:
-			return nil, errFmt("Column name expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.ValTuple:
 			return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.Subquery:

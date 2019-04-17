@@ -87,6 +87,11 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 			query: `select * from people where uuid = false`,
 			expectedErr: "Type mismatch:",
 		},
+		{
+			name: "Type mismatch: non-bool column used as bool",
+			query: `select * from people where uuid`,
+			expectedErr: "Type mismatch:",
+		},
 	}
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
