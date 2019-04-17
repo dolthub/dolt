@@ -152,12 +152,12 @@ func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltd
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
 	sch := tbl.GetSchema()
 	//schStr, err := encoding.MarshalAsJson(sch)
-	schStr, err := sql.SchemaAsCreateStmt(sch)
+	schStr, err := sql.SchemaAsCreateStmt(tblName, sch)
 	if err != nil {
 		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
 	}
 
-	cli.Printf(schStr+"\n", tblName)
+	cli.Println(schStr)
 	return nil
 }
 
