@@ -1,7 +1,23 @@
 package schema
 
+var EmptySchema = &schemaImpl{
+	emptyColColl,
+	emptyColColl,
+	emptyColColl,
+}
+
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
+}
+
+func SchemaFromColMap(allCols map[string]Column) (Schema, error) {
+	colColl, err := NewColCollectionFromMap(allCols)
+
+	if err != nil {
+		return EmptySchema, err
+	}
+
+	return SchemaFromCols(colColl), nil
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
