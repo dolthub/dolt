@@ -74,7 +74,3 @@ func TestJSONMarshalling(t *testing.T) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 }
-
-func TestSQLMarshalling(t *testing.T) {
-
-}

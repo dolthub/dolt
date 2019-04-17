@@ -9,7 +9,7 @@ import (
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
 // create this table
 func SchemaAsCreateStmt(sch schema.Schema) (string, error) {
-	sb := strings.Builder{}
+	sb := &strings.Builder{}
 	sb.WriteString("CREATE TABLE %s (\n")
 
 	firstLine := true
@@ -20,16 +20,18 @@ func SchemaAsCreateStmt(sch schema.Schema) (string, error) {
 			sb.WriteString(",\n")
 		}
 
-		sb.WriteString(fmt.Sprintf("  %s %s", col.Name, DoltToSQLType[col.Kind]))
+		fmt.Fprintf(sb, "  %s %s", col.Name, DoltToSQLType[col.Kind])
 
 		for _, cnst := range col.Constraints {
 			switch cnst.GetConstraintType() {
 			case schema.NotNullConstraintType:
 				sb.WriteString(" not null")
+			default:
+				panic("SchemaAsCreateStmt doesn't know how to format constraint type: " + cnst.GetConstraintType())
 			}
 		}
 
-		sb.WriteString(fmt.Sprintf(" comment 'tag:%d'", tag))
+		fmt.Fprintf(sb, " comment 'tag:%d'", tag)
 		return false
 	})
 

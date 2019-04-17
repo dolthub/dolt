@@ -703,7 +703,6 @@ teardown() {
 
 @test "dolt schema" {
     run dolt schema
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE test" ]] || false
@@ -715,7 +714,6 @@ teardown() {
     [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
     [[ "$output" =~ "primary key (pk)" ]] || false
     run dolt schema test
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE test" ]] || false
