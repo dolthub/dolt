@@ -10,6 +10,17 @@ type nomsRow struct {
 	value TaggedValues
 }
 
+func (nr nomsRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool {
+	stopped := false
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) bool {
+		value, _ := nr.GetColVal(tag)
+		stopped = cb(tag, value)
+		return stopped
+	})
+
+	return stopped
+}
+
 func (nr nomsRow) IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool {
 	stopped := nr.key.Iter(cb)
 

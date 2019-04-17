@@ -3,6 +3,7 @@ package fwt
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
@@ -57,7 +58,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 	if asTr.rowBuffer == nil {
 		asTr.processRow(r, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
-		r.Row.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool) {
 			if !types.IsNull(val) {
 				strVal := val.(types.String)
 				strLen := len(string(strVal))
@@ -66,8 +67,13 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 				if ok && strLen > width {
 					asTr.widths[tag] = strLen
 				}
+			} else {
+				// NULL string
+				width, ok := asTr.widths[tag]
+				if ok && len(sql.PRINTED_NULL) > width {
+					asTr.widths[tag] = len(sql.PRINTED_NULL)
+				}
 			}
-
 			return false
 		})
 
