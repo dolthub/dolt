@@ -7,6 +7,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
@@ -76,12 +77,10 @@ func (cdWr *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMa
 
 	i := 0
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		str := sql.PRINTED_NULL
 		val, ok := r.GetColVal(tag)
-		var str string
 		if ok {
 			str = string(val.(types.String))
-		} else {
-			str = "<NULL>"
 		}
 
 		colStrs[i] = str

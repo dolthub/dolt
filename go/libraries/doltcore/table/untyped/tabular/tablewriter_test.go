@@ -47,18 +47,18 @@ func TestWriter(t *testing.T) {
 		"Jim Halpert   ",
 	}
 	ages := []string {
-		"age ",
-		"43  ",
-		"25  ",
-		"29  ",
-//      "NULL",
+		"age   ",
+		"43    ",
+		"25    ",
+		"29    ",
+//      "<NULL>",
 	}
 	titles := []string {
 		"title                            ",
 		"Regional Manager                 ",
 		"Secretary                        ",
 		"Assistant to the Regional Manager",
-//		"NULL",
+//		"<NULL>",
 	}
 
 	rows := make([]row.Row, len(ages) + 1)
@@ -77,14 +77,14 @@ func TestWriter(t *testing.T) {
 	tableWr := NewTextTableWriter(&stringWr, outSch)
 
 	var expectedTableString = `
-+----------------+------+-----------------------------------+
-| name           | age  | title                             |
-+----------------+------+-----------------------------------+
-| Michael Scott  | 43   | Regional Manager                  |
-| Pam Beasley    | 25   | Secretary                         |
-| Dwight Schrute | 29   | Assistant to the Regional Manager |
-| Jim Halpert    | NULL | NULL                              |
-+----------------+------+-----------------------------------+
++----------------+--------+-----------------------------------+
+| name           | age    | title                             |
++----------------+--------+-----------------------------------+
+| Michael Scott  | 43     | Regional Manager                  |
+| Pam Beasley    | 25     | Secretary                         |
+| Dwight Schrute | 29     | Assistant to the Regional Manager |
+| Jim Halpert    | <NULL> | <NULL>                            |
++----------------+--------+-----------------------------------+
 `
 	// strip off the first newline, inserted for nice printing
 	expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
