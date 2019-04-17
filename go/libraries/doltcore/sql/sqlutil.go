@@ -234,7 +234,7 @@ func nodeToString(node sqlparser.SQLNode) string {
 }
 
 // createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) (rowFilterFn, error) {
+func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, aliases *Aliases) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}

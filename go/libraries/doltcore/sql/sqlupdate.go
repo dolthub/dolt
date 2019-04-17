@@ -132,7 +132,8 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 		}
 	}
 
-	filter, err := createFilterForWhere(s.Where, tableSch)
+	// TODO: support aliases in update
+	filter, err := createFilterForWhere(s.Where, tableSch, NewAliases())
 	if err != nil {
 		return errUpdate(err.Error())
 	}
