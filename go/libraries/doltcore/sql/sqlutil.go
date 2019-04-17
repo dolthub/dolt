@@ -251,12 +251,14 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			right := expr.Right
 			op := expr.Operator
 
+			colValOnLeft := true
 			colExpr := left
 			valExpr := right
 
 			// Swap the column and value expr as necessary
 			colName, ok := colExpr.(*sqlparser.ColName)
 			if !ok {
+				colValOnLeft = false
 				colExpr = right
 				valExpr = left
 			}
@@ -285,6 +287,9 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 				sqlVal = nodeToString(valExpr)
 			}
 
+			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = colName
+			}
 			col, ok := tableSch.GetAllCols().GetByName(colNameStr)
 			if !ok {
 				return nil, errFmt("%v is not a known column", colNameStr)
@@ -302,51 +307,79 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			switch op {
 			case sqlparser.EqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Equals(rowVal)
+					return comparisonVal.Equals(colVal)
 				}
 			case sqlparser.LessThanStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return rowVal.Less(comparisonVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return leftVal.Less(rightVal)
 				}
 			case sqlparser.GreaterThanStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Less(rowVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return rightVal.Less(leftVal)
 				}
 			case sqlparser.LessEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return rowVal.Less(comparisonVal) || rowVal.Equals(comparisonVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return leftVal.Less(rightVal) || leftVal.Equals(rightVal)
 				}
 			case sqlparser.GreaterEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Less(rowVal) || comparisonVal.Equals(rowVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return rightVal.Less(leftVal) || rightVal.Equals(leftVal)
 				}
 			case sqlparser.NotEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(tag)
 					if !ok {
 						return false
 					}
-					return !comparisonVal.Equals(rowVal)
+					return !comparisonVal.Equals(colVal)
 				}
 			case sqlparser.NullSafeEqualStr:
 				return nil, errFmt("null safe equal operation not supported")
@@ -427,6 +460,12 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 	}
 
 	return filter, nil
+}
+
+func swap(left, right *types.Value) {
+	temp := *right
+	*right = *left
+	*left = temp
 }
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
