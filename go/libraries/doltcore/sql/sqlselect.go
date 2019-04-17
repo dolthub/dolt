@@ -91,6 +91,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	}
 
 	var tableName string
+	aliases := NewAliases()
 
 	tableExpr := tableExprs[0]
 	switch te := tableExpr.(type) {
@@ -102,6 +103,10 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			return errSelect("Subqueries are not supported: %v.", query)
 		default:
 			return errSelect("Unrecognized expression: %v", nodeToString(e))
+		}
+
+		if !te.As.IsEmpty() {
+			aliases.AddTableAlias(tableName, te.As.String())
 		}
 	case *sqlparser.ParenTableExpr:
 		return errSelect("Parenthetical table expressions are not supported: %v,", query)
@@ -122,7 +127,6 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	// Process the columns selected
 	var columns []string
 	colSelections := s.SelectExprs
-	aliases := NewAliases()
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
@@ -134,6 +138,16 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			colAlias := selectExpr.As.String()
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
+
+				if !colExpr.Qualifier.IsEmpty() {
+					columnTableName := colExpr.Qualifier.Name.String()
+					if columnTableName != tableName {
+						if aliases.TablesByAlias[columnTableName] != tableName {
+							return errSelect("unknown table " + columnTableName)
+						}
+					}
+				}
+
 				colName := colExpr.Name.String()
 				_, ok := tableSch.GetAllCols().GetByName(colName)
 				if !ok {

@@ -264,6 +264,17 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
 		},
 		{
+			name:  "Test table aliases",
+			query: "select p.first as f, people.last as l from people p where p.f = 'Homer'",
+			expectedRows: rs(homer),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test table aliases with bad alias",
+			query: "select m.first as f, p.last as l from people p where p.f = 'Homer'",
+			expectedErr: true,
+		},
+		{
 			name:  "Test column aliases, all columns",
 			query: `select first as f, last as l, is_married as married, age as a,
 				rating as r, uuid as u, num_episodes as n from people
@@ -317,6 +328,11 @@ func TestExecuteSelect(t *testing.T) {
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.expectedRows != nil && tt.expectedSchema == nil {
+				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
+				t.FailNow()
+			}
+
 			rows, sch, err := ExecuteSelect(root, s, tt.query)
 			untypedRows := convertRows(t, tt.expectedRows, testSch, tt.expectedSchema)
 			assert.Equal(t, tt.expectedErr, err != nil)
