@@ -221,6 +221,8 @@ const (
 	ZEROFILL = "zerofill"
 )
 
+const PRINTED_NULL = "<NULL>"
+
 // Boolean predicate func type to filter rows in result sets
 type rowFilterFn = func(r row.Row) (matchesFilter bool)
 
