@@ -312,12 +312,11 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows: nil, // not the same as empty result set
 			expectedErr: true,
 		},
-		// This should fail but doesn't.
-		//{
-		//	name: "type mismatch in where clause",
-		//	query: `select * from people where id = "0"`,
-		//	expectedErr: true,
-		//},
+		{
+			name: "type mismatch in where clause",
+			query: `select * from people where id = "0"`,
+			expectedErr: true,
+		},
 	}
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
