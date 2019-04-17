@@ -756,3 +756,30 @@ teardown() {
     [ "${lines[0]}" = "On branch master" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
+
+@test "create and view a table with NULL values" {
+    dolt table put-row test pk:0
+    dolt table put-row test pk:1
+    dolt table put-row test pk:2
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "<NULL>" ]] || false
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    skip "Need to make NULL printing the same in dolt table select and dolt sql select"
+    [[ "$output" =~ "<NULL>" ]] || false
+    # Make sure we don't get a table with no spaces because that bug was 
+    # generated when making changes to NULL printing
+    [[ ! "$output" =~ "|||||" ]] || false
+}
+
+@test "using dolt sql to select rows with NULL values" {
+    dolt table put-row test pk:0
+    dolt table put-row test pk:1
+    dolt table put-row test pk:2 c1:0 c2:0 c3:0 c4:0 c5:0
+    run dolt sql -q "select * from test where c1 is null"
+    skip "is null not supported yet"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "<NULL>" ]] || false
+}
