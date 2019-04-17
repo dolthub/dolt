@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
 	"strings"
@@ -110,12 +111,12 @@ func (ttw *TextTableWriter) WriteRow(r row.Row) error {
 		rowVals.WriteString(" ")
 		val, _ := r.GetColVal(tag)
 		if types.IsNull(val) {
-			rowVals.WriteString("NULL")
+			rowVals.WriteString(sql.PRINTED_NULL)
 			colWidth, ok := ttw.colWidths[tag]
 			if !ok {
 				panic("No column width recorded for tag " + string(tag))
 			}
-			for i := 0; i < colWidth - 4; i++ {
+			for i := 0; i < colWidth - len(sql.PRINTED_NULL); i++ {
 				rowVals.WriteString(" ")
 			}
 		} else {
