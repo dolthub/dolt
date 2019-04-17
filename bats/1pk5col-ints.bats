@@ -748,6 +748,39 @@ teardown() {
     [ "$output" = "" ]
 }
 
+@test "dolt schema rename column" {
+    run dolt schema --rename-field test c1 c0
+    [ "$status" -eq 0 ]
+    run dolt schema test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test @ working" ]] || false
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ "$output" =~ "c0 int comment 'tag:1'" ]] || false
+    [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+}
+
+@test "dolt schema delete column" {
+    run dolt schema --drop-field test c1
+    [ "$status" -eq 0 ]
+    run dolt schema test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test @ working" ]] || false
+    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+}
+
 @test "rm a staged but uncommitted table" {
     run dolt add test
     [ "$status" -eq 0 ]
