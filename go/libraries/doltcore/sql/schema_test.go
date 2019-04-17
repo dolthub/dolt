@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-const expectedSQL = `CREATE TABLE %s (
+const expectedSQL = `CREATE TABLE table_name (
   id int not null comment 'tag:0',
   first varchar not null comment 'tag:1',
   last varchar not null comment 'tag:2',
@@ -18,7 +18,7 @@ const expectedSQL = `CREATE TABLE %s (
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := createTestSchema()
-	str, _ := SchemaAsCreateStmt(tSchema)
+	str, _ := SchemaAsCreateStmt("table_name", tSchema)
 
 	if str != expectedSQL {
 		t.Error("\n", str, "\n\t!=\n", expectedSQL)
