@@ -234,6 +234,30 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: untypedSch,
 		},
 		{
+			name:  "Test select *, where bool = ",
+			query: "select * from people where is_married = true",
+			expectedRows: rs(homer, marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool = false ",
+			query: "select * from people where is_married = false",
+			expectedRows: rs(bart, lisa, moe, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool <> ",
+			query: "select * from people where is_married <> false",
+			expectedRows: rs(homer, marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool",
+			query: "select * from people where is_married",
+			expectedRows: rs(homer, marge),
+			expectedSchema: untypedSch,
+		},
+		{
 			name:  "Test select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: rs(homer, moe, barney),
@@ -334,7 +358,11 @@ func TestExecuteSelect(t *testing.T) {
 
 			rows, sch, err := ExecuteSelect(root, s, tt.query)
 			untypedRows := convertRows(t, tt.expectedRows, testSch, tt.expectedSchema)
-			assert.Equal(t, tt.expectedErr, err != nil)
+			if err != nil {
+				assert.True(t, tt.expectedErr, err.Error())
+			} else {
+				assert.False(t, tt.expectedErr, "unexpected error")
+			}
 			assert.Equal(t, untypedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})
