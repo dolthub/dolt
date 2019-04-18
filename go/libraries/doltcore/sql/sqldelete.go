@@ -46,7 +46,8 @@ func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delet
 	table, _:= root.GetTable(tableName)
 	tableSch := table.GetSchema()
 
-	filter, err := createFilterForWhere(s.Where, tableSch)
+	// TODO: support aliases
+	filter, err := createFilterForWhere(s.Where, tableSch, NewAliases())
 	if err != nil {
 		return errDelete(err.Error())
 	}
