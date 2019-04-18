@@ -70,3 +70,21 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error parsing SQL" ]] || false
 }
+
+@test "create and view a table with NULL and empty string values" {
+    dolt table put-row test pk:tim c1:"" c2:"" c3:"" c4:"" c5:""
+    dolt table put-row test pk:aaron
+    dolt table put-row test pk:brian
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    # select orders by primary key right now so aaron, brian, tim 
+    [[ "${lines[4]}" =~ "<NULL>" ]] || false
+    [[ ! "${lines[5]}" =~ "<NULL>" ]] || false
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    skip "Need to make NULL printing the same in dolt table select and dolt sql select"
+    [[ "$output" =~ "<NULL>" ]] || false
+    # Make sure we don't get a table with no spaces because that bug was 
+    # generated when making changes to NULL printing
+    [[ ! "$output" =~ "|||||" ]] || false
+}
