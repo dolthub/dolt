@@ -23,12 +23,12 @@ const (
 	defaultParam    = "default"
 	tagParam        = "tag"
 	notNullFlag     = "not-null"
-	addFieldFlag    = "add-field"
-	renameFieldFlag = "rename-field"
-	dropFieldFlag   = "drop-field"
+	addFieldFlag    = "add-column"
+	renameFieldFlag = "rename-column"
+	dropFieldFlag   = "drop-column"
 )
 
-var tblSchemaShortDesc = "Displays table schemas"
+var tblSchemaShortDesc = "Displays and modifies table schemas"
 var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a given commit.  If no commit is provided the " +
 	"working set will be used.\n" +
 	"\n" +
@@ -36,19 +36,19 @@ var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a gi
 	"\n" +
 	"dolt table schema --export exports a table's schema into a specified file. Both table and file must be specified." + "\n" +
 	"\n" +
-	"dolt table schema --add-field adds a column to specified table's schema. If no default value is provided" +
+	"dolt table schema --add-Column adds a column to specified table's schema. If no default value is provided" +
 	"the column will be empty.\n" +
 	"\n" +
-	"dolt table schema --rename-field renames a column of the specified table.\n" +
+	"dolt table schema --rename-column renames a column of the specified table.\n" +
 	"\n" +
-	"dolt table schema --drop-field removes a column of the specified table."
+	"dolt table schema --drop-column removes a column of the specified table."
 
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
-	"--add-field [--default <default_value>] [--not-null] [--tag <tag-number>] <table> <name> <type>",
-	"--rename-field <table> <old> <new>]",
-	"--drop-field <table> <field>",
+	"--add-column [--default <default_value>] [--not-null] [--tag <tag-number>] <table> <name> <type>",
+	"--rename-column <table> <old> <new>]",
+	"--drop-column <table> <column>",
 }
 
 var bold = color.New(color.Bold)
@@ -59,8 +59,8 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
 	ap.SupportsFlag(exportFlag, "", "exports schema into file.")
 	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
-	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new field.")
-	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this field will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
+	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
+	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
 	ap.SupportsFlag(addFieldFlag, "", "add columm to table schema.")
 	ap.SupportsFlag(renameFieldFlag, "", "rename column for specified table.")
 	ap.SupportsFlag(dropFieldFlag, "", "removes column from specified table.")
@@ -196,7 +196,7 @@ func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *e
 
 func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {
-		return errhand.BuildDError("Must specify table name, field name, field type, and if field required.").SetPrintUsage().Build()
+		return errhand.BuildDError("Must specify table name, column name, column type, and if column required.").SetPrintUsage().Build()
 	}
 
 	tblName := apr.Arg(0)
@@ -225,10 +225,10 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	cols := tblSch.GetAllCols()
 	cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool) {
 		if currColTag == tag {
-			verr = errhand.BuildDError("A field with the tag %d already exists.", tag).Build()
+			verr = errhand.BuildDError("A column with the tag %d already exists.", tag).Build()
 			return true
 		} else if currCol.Name == newFieldName {
-			verr = errhand.BuildDError("A field with the name %s already exists.", newFieldName).Build()
+			verr = errhand.BuildDError("A column with the name %s already exists.", newFieldName).Build()
 			return true
 		}
 
@@ -243,18 +243,18 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 
 	newFieldKind, ok := schema.LwrStrToKind[newFieldType]
 	if !ok {
-		return errhand.BuildDError(newFieldType + " is not a valid type for this new field.").SetPrintUsage().Build()
+		return errhand.BuildDError(newFieldType + " is not a valid type for this new column.").SetPrintUsage().Build()
 	}
 
 	notNull := apr.Contains(notNullFlag)
 
 	if notNull && defaultVal == nil && tbl.GetRowData().Len() > 0 {
-		return errhand.BuildDError("When adding a field that may not be null to a table with existing rows, a default value must be provided.").Build()
+		return errhand.BuildDError("When adding a column that may not be null to a table with existing rows, a default value must be provided.").Build()
 	}
 
 	newTable, err := addFieldToSchema(tbl, dEnv, newFieldName, newFieldKind, tag, notNull, defaultVal)
 	if err != nil {
-		return errhand.BuildDError("failed to add field").AddCause(err).Build()
+		return errhand.BuildDError("failed to add column").AddCause(err).Build()
 	}
 
 	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
