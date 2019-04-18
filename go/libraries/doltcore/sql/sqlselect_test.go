@@ -138,8 +138,20 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: untypedSch,
 		},
 		{
+			name:  "Test select *, where > int reversed",
+			query: "select * from people where 40 > age",
+			expectedRows: rs(marge, bart, lisa),
+			expectedSchema: untypedSch,
+		},
+		{
 			name:  "Test select *, where <= int",
 			query: "select * from people where age <= 40",
+			expectedRows: rs(homer, marge, bart, lisa, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where >= int reversed",
+			query: "select * from people where 40 >= age",
 			expectedRows: rs(homer, marge, bart, lisa, barney),
 			expectedSchema: untypedSch,
 		},
@@ -150,15 +162,99 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: untypedSch,
 		},
 		{
+			name:  "Test select *, where < int reversed",
+			query: "select * from people where 40 < age",
+			expectedRows: rs(moe),
+			expectedSchema: untypedSch,
+		},
+		{
 			name:  "Test select *, where >= int",
 			query: "select * from people where age >= 40",
 			expectedRows: rs(homer, moe, barney),
 			expectedSchema: untypedSch,
 		},
 		{
+			name:  "Test select *, where <= int reversed",
+			query: "select * from people where 40 <= age",
+			expectedRows: rs(homer, moe, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where > string",
+			query: "select * from people where last > 'Simpson'",
+			expectedRows: rs(moe),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where < string",
+			query: "select * from people where last < 'Simpson'",
+			expectedRows: rs(barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where = string",
+			query: "select * from people where last = 'Simpson'",
+			expectedRows: rs(homer, marge, bart, lisa),
+			expectedSchema: untypedSch,
+		},
+		{
 			name:  "Test select *, where > float",
 			query: "select * from people where rating > 8.0",
 			expectedRows: rs(homer, bart, lisa),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where < float",
+			query: "select * from people where rating < 8.0",
+			expectedRows: rs(moe, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where = float",
+			query: "select * from people where rating = 8.0",
+			expectedRows: rs(marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where < float reversed",
+			query: "select * from people where 8.0 < rating",
+			expectedRows: rs(homer, bart, lisa),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where > float reversed",
+			query: "select * from people where 8.0 > rating",
+			expectedRows: rs(moe, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where = float reversed",
+			query: "select * from people where 8.0 = rating",
+			expectedRows: rs(marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool = ",
+			query: "select * from people where is_married = true",
+			expectedRows: rs(homer, marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool = false ",
+			query: "select * from people where is_married = false",
+			expectedRows: rs(bart, lisa, moe, barney),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool <> ",
+			query: "select * from people where is_married <> false",
+			expectedRows: rs(homer, marge),
+			expectedSchema: untypedSch,
+		},
+		{
+			name:  "Test select *, where bool",
+			query: "select * from people where is_married",
+			expectedRows: rs(homer, marge),
 			expectedSchema: untypedSch,
 		},
 		{
@@ -172,6 +268,35 @@ func TestExecuteSelect(t *testing.T) {
 			query: "select first as f, last as l from people where age >= 40",
 			expectedRows: rs(homer, moe, barney),
 			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test column aliases in where clause",
+			query: `select first as f, last as l from people where f = "Homer"`,
+			expectedRows: rs(homer),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test column aliases in where clause, >",
+			query: `select first as f, last as l from people where l > "Simpson"`,
+			expectedRows: rs(moe),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test column aliases in where clause, <",
+			query: `select first as f, last as l from people where "Simpson" < l`,
+			expectedRows: rs(moe),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test table aliases",
+			query: "select p.first as f, people.last as l from people p where p.f = 'Homer'",
+			expectedRows: rs(homer),
+			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l"),
+		},
+		{
+			name:  "Test table aliases with bad alias",
+			query: "select m.first as f, p.last as l from people p where p.f = 'Homer'",
+			expectedErr: true,
 		},
 		{
 			name:  "Test column aliases, all columns",
@@ -211,12 +336,11 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows: nil, // not the same as empty result set
 			expectedErr: true,
 		},
-		// This should fail but doesn't.
-		//{
-		//	name: "type mismatch in where clause",
-		//	query: `select * from people where id = "0"`,
-		//	expectedErr: true,
-		//},
+		{
+			name: "type mismatch in where clause",
+			query: `select * from people where id = "0"`,
+			expectedErr: true,
+		},
 	}
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
@@ -227,9 +351,18 @@ func TestExecuteSelect(t *testing.T) {
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.expectedRows != nil && tt.expectedSchema == nil {
+				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
+				t.FailNow()
+			}
+
 			rows, sch, err := ExecuteSelect(root, s, tt.query)
 			untypedRows := convertRows(t, tt.expectedRows, testSch, tt.expectedSchema)
-			assert.Equal(t, tt.expectedErr, err != nil)
+			if err != nil {
+				assert.True(t, tt.expectedErr, err.Error())
+			} else {
+				assert.False(t, tt.expectedErr, "unexpected error")
+			}
 			assert.Equal(t, untypedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})

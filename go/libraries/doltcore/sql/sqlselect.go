@@ -17,11 +17,11 @@ import (
 
 // Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
-	tableName       string
-	selectedColTags []uint64
-	colAliases      map[uint64]string
-	filterFn        rowFilterFn
-	limit           int
+	tableName    string
+	selectedCols []string
+	aliases      *Aliases
+	filterFn     rowFilterFn
+	limit        int
 }
 
 type selectTransform struct {
@@ -91,6 +91,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	}
 
 	var tableName string
+	aliases := NewAliases()
 
 	tableExpr := tableExprs[0]
 	switch te := tableExpr.(type) {
@@ -102,6 +103,10 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			return errSelect("Subqueries are not supported: %v.", query)
 		default:
 			return errSelect("Unrecognized expression: %v", nodeToString(e))
+		}
+
+		if !te.As.IsEmpty() {
+			aliases.AddTableAlias(tableName, te.As.String())
 		}
 	case *sqlparser.ParenTableExpr:
 		return errSelect("Parenthetical table expressions are not supported: %v,", query)
@@ -119,33 +124,41 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 	selectStmt := &selectStatement{tableName: tableName}
 	tableSch := tbl.GetSchema()
 
-	columnAliases := make(map[uint64]string)
-
 	// Process the columns selected
-	var columns []uint64
+	var columns []string
 	colSelections := s.SelectExprs
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
 			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-				columns = append(columns, tag)
+				columns = append(columns, col.Name)
 				return false
 			})
 		case *sqlparser.AliasedExpr:
 			colAlias := selectExpr.As.String()
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
+
+				if !colExpr.Qualifier.IsEmpty() {
+					columnTableName := colExpr.Qualifier.Name.String()
+					if columnTableName != tableName {
+						if aliases.TablesByAlias[columnTableName] != tableName {
+							return errSelect("unknown table " + columnTableName)
+						}
+					}
+				}
+
 				colName := colExpr.Name.String()
-				column, ok := tableSch.GetAllCols().GetByName(colName)
+				_, ok := tableSch.GetAllCols().GetByName(colName)
 				if !ok {
 					return errSelect("Unknown column '%v'", colName)
 				}
 
 				// an absent column alias will be empty
 				if colAlias != "" {
-					columnAliases[column.Tag] = colAlias
+					aliases.AddColumnAlias(colName, colAlias)
 				}
-				columns = append(columns, column.Tag)
+				columns = append(columns, colName)
 			default:
 				return errSelect("Only column selections or * are supported")
 			}
@@ -153,8 +166,8 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 			return errSelect("Next value is not supported: %v", query)
 		}
 	}
-	selectStmt.selectedColTags = columns
-	selectStmt.colAliases = columnAliases
+	selectStmt.selectedCols = columns
+	selectStmt.aliases = aliases
 
 	// Include a limit if asked for
 	if s.Limit != nil && s.Limit.Rowcount != nil {
@@ -171,7 +184,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		selectStmt.limit = -1
 	}
 
-	err := processWhereClause(selectStmt, s, query, tableSch)
+	err := processWhereClause(selectStmt, s, tableSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,8 +194,8 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 
 // Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
 // where clause can't be processed.
-func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, query string, tableSch schema.Schema) error {
-	filter, err := createFilterForWhere(s.Where, tableSch)
+func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, tableSch schema.Schema) error {
+	filter, err := createFilterForWhere(s.Where, tableSch, selectStmt.aliases)
 	if err != nil {
 		return err
 	}
@@ -226,14 +239,14 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
 	colColl := tableSch.GetAllCols()
 
-	if len(statement.selectedColTags) > 0 {
-		cols := make([]schema.Column, 0, len(statement.selectedColTags))
+	if len(statement.selectedCols) > 0 {
+		cols := make([]schema.Column, 0, len(statement.selectedCols))
 
-		for _, tag := range statement.selectedColTags {
-			if col, ok := colColl.GetByTag(tag); !ok {
-				panic("unknown tag " + string(tag))
+		for _, colName := range statement.selectedCols {
+			if col, ok := colColl.GetByName(colName); !ok {
+				panic("unknown column " + colName)
 			} else {
-				if alias, ok := statement.colAliases[col.Tag]; ok {
+				if alias, ok := statement.aliases.AliasesByColumn[colName]; ok {
 					col.Name = alias
 				}
 				cols = append(cols, col)

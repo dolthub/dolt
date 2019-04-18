@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/xwb1989/sqlparser"
@@ -234,7 +233,7 @@ func nodeToString(node sqlparser.SQLNode) string {
 }
 
 // createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) (rowFilterFn, error) {
+func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, aliases *Aliases) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}
@@ -251,12 +250,14 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) 
 			right := expr.Right
 			op := expr.Operator
 
+			colValOnLeft := true
 			colExpr := left
 			valExpr := right
 
 			// Swap the column and value expr as necessary
 			colName, ok := colExpr.(*sqlparser.ColName)
 			if !ok {
+				colValOnLeft = false
 				colExpr = right
 				valExpr = left
 			}
@@ -267,86 +268,111 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) 
 			}
 
 			colNameStr := colName.Name.String()
-
-			var sqlVal string
-			switch r := valExpr.(type) {
-			case *sqlparser.SQLVal:
-				switch r.Type {
-				// String-like values will print with quotes or other markers by default, so use the naked asci
-				// bytes coerced into a string for them
-				case sqlparser.HexVal, sqlparser.BitVal, sqlparser.StrVal:
-					sqlVal = string(r.Val)
-				default:
-					// Default is to use the string value of the SQL node and hope it works
-					sqlVal = nodeToString(valExpr)
-				}
-			default:
-				// Default is to use the string value of the SQL node and hope it works
-				sqlVal = nodeToString(valExpr)
+			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = colName
 			}
-
-			col, ok := tableSch.GetAllCols().GetByName(colNameStr)
+			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
 			if !ok {
-				return nil, errFmt("%v is not a known column", colNameStr)
+				return nil, errFmt("Unknown column: '%v'", colNameStr)
 			}
 
-			tag := col.Tag
-			convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
-			comparisonVal, err := convFunc(types.String(string(sqlVal)))
+			var comparisonVal types.Value
+			switch val := valExpr.(type) {
+			case *sqlparser.SQLVal:
+				var err error
+				comparisonVal, err = extractNomsValueFromSQLVal(val, column)
+				if err != nil {
+					return nil, err
+				}
+			case sqlparser.BoolVal:
+				switch column.Kind {
+				case types.BoolKind:
+					comparisonVal = types.Bool(bool(val))
+				default:
+					return nil, errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(val))
+				}
 
-			if err != nil {
-				return nil, errFmt("Couldn't convert column to string: %v", err.Error())
+			default:
+				return nil, errFmt("Only SQL literal values are supported in comparisons: %v", nodeToString(val))
 			}
 
 			// All the operations differ only in their filter logic
 			switch op {
 			case sqlparser.EqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Equals(rowVal)
+					return comparisonVal.Equals(colVal)
 				}
 			case sqlparser.LessThanStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return rowVal.Less(comparisonVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return leftVal.Less(rightVal)
 				}
 			case sqlparser.GreaterThanStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Less(rowVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return rightVal.Less(leftVal)
 				}
 			case sqlparser.LessEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return rowVal.Less(comparisonVal) || rowVal.Equals(comparisonVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return leftVal.Less(rightVal) || leftVal.Equals(rightVal)
 				}
 			case sqlparser.GreaterEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return comparisonVal.Less(rowVal) || comparisonVal.Equals(rowVal)
+
+					leftVal := colVal
+					rightVal := comparisonVal
+					if !colValOnLeft {
+						swap(&leftVal, &rightVal)
+					}
+
+					return rightVal.Less(leftVal) || rightVal.Equals(leftVal)
 				}
 			case sqlparser.NotEqualStr:
 				filter = func(r row.Row) bool {
-					rowVal, ok := r.GetColVal(tag)
+					colVal, ok := r.GetColVal(column.Tag)
 					if !ok {
 						return false
 					}
-					return !comparisonVal.Equals(rowVal)
+					return !comparisonVal.Equals(colVal)
 				}
 			case sqlparser.NullSafeEqualStr:
 				return nil, errFmt("null safe equal operation not supported")
@@ -367,6 +393,27 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) 
 			case sqlparser.JSONUnquoteExtractOp:
 				return nil, errFmt("json not supported")
 			}
+		case *sqlparser.ColName:
+			colNameStr := expr.Name.String()
+			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = colName
+			}
+			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
+			if !ok {
+				return nil, errFmt("Unknown column: '%v'", colNameStr)
+			}
+			if column.Kind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", colNameStr)
+			}
+
+			filter = func(r row.Row) bool {
+				colVal, ok := r.GetColVal(column.Tag)
+				if !ok {
+					return false
+				}
+				return colVal.Equals(types.Bool(true))
+			}
+
 		case *sqlparser.AndExpr:
 			return nil, errFmt("And expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.OrExpr:
@@ -387,8 +434,6 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) 
 			return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.BoolVal:
 			return nil, errFmt("Bool expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ColName:
-			return nil, errFmt("Column name expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.ValTuple:
 			return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
 		case *sqlparser.Subquery:
@@ -427,6 +472,12 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema) 
 	}
 
 	return filter, nil
+}
+
+func swap(left, right *types.Value) {
+	temp := *right
+	*right = *left
+	*left = temp
 }
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
@@ -470,7 +521,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 		case types.UUIDKind:
 			id, err := uuid.Parse(strVal)
 			if err != nil {
-				return nil, err
+				return nil, errFmt("Type mismatch: string value but non-string column: %v", nodeToString(val))
 			}
 			return types.UUID(id), nil
 		default:
