@@ -210,7 +210,15 @@ teardown() {
     run dolt sql -q "select c1 as column1 from test where column1=1"
     skip "Renamed columns not supported in where clauses"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "dolt sql select with inverted where clause" {
+    dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
+    run dolt sql -q "select * from test where 5 > c1"
+    skip "Inverted where clauses do not work right now"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
 }
 
 @test "dolt sql update queries" {
