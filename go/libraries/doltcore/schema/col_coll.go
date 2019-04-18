@@ -40,6 +40,7 @@ type ColCollection struct {
 	NameToCol map[string]Column
 }
 
+// NewColCollectionFromMap creates a column collection from a map.  The keys are ignored and the columns are extracted.
 func NewColCollectionFromMap(colMap map[string]Column) (*ColCollection, error) {
 	cols := make([]Column, len(colMap))
 
