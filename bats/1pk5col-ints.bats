@@ -270,7 +270,7 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "c10 is not a known column" ]] || false
+    [[ "$output" =~ "Unknown column: 'c10'" ]] || false
     run dolt sql -q "delete from test where c1='foo'"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error during update" ]] || false
