@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 )
 
+// RenameColumnOfSchema takes a table and renames a column from oldName to newName
 func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
 	if newName == oldName {
 		return tbl, nil
@@ -50,6 +51,7 @@ func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dol
 	return newTable, nil
 }
 
+// RemoveColumnFromTable takes a table and removes a column
 func RemoveColumnFromTable(colName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
 	if tbl == nil || doltDB == nil {
 		panic("invalid parameters")
