@@ -2,30 +2,13 @@ package schema
 
 // EmptySchema is an instance of a schema with no columns.
 var EmptySchema = &schemaImpl{
-	emptyColColl,
-	emptyColColl,
-	emptyColColl,
+	EmptyColColl,
+	EmptyColColl,
+	EmptyColColl,
 }
 
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
-}
-
-// SchemaFromColMap creates a new schema from a map of columns.  Here the map keys are ignored, and the columns are
-// extracted.  This is a convenience method that makes it easier to take a schema get the columns, and modify them
-// and then create a new schema from the modified columns like so:
-//
-//	colMap := sch.GetAllCols().NameToCol
-//	colMap = delete(colMap, "column_name")
-//	updatedSch := SchemaFromColMap(colMap)
-func SchemaFromColMap(allCols map[string]Column) (Schema, error) {
-	colColl, err := NewColCollectionFromMap(allCols)
-
-	if err != nil {
-		return EmptySchema, err
-	}
-
-	return SchemaFromCols(colColl), nil
 }
 
 // SchemaFromCols creates a Schema from a collection of columns

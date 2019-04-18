@@ -33,11 +33,13 @@ func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dol
 	colMap[newName] = col
 	delete(colMap, oldName)
 
-	newSch, err := schema.SchemaFromColMap(colMap)
+	colColl, err := schema.NewColCollectionFromMap(colMap)
 
 	if err != nil {
 		return nil, err
 	}
+
+	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
 	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)
@@ -68,11 +70,13 @@ func RemoveColumnFromTable(colName string, tbl *doltdb.Table, doltDB *doltdb.Dol
 	colMap := allCols.NameToCol
 	delete(colMap, colName)
 
-	newSch, err := schema.SchemaFromColMap(colMap)
+	colColl, err := schema.NewColCollectionFromMap(colMap)
 
 	if err != nil {
 		return nil, err
 	}
+
+	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
 	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)

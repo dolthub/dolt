@@ -16,10 +16,7 @@ var ErrColNotFound = errors.New("column not found")
 // but a different type or tag
 var ErrColNameCollision = errors.New("two different columns with the same name exist")
 
-// EmptyColColl is an empty ColCollection.
-var EmptyColColl, _ = NewColCollection()
-
-var emptyColColl = &ColCollection{
+var EmptyColColl = &ColCollection{
 	[]Column{},
 	[]uint64{},
 	[]uint64{},
