@@ -17,7 +17,7 @@ const expectedSQL = `CREATE TABLE table_name (
 );`
 
 func TestSchemaAsCreateStmt(t *testing.T) {
-	tSchema := createTestSchema()
+	tSchema := createPeopleTestSchema()
 	str, _ := SchemaAsCreateStmt("table_name", tSchema)
 
 	if str != expectedSQL {
