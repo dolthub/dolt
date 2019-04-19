@@ -33,16 +33,27 @@ const (
 	numEpisodesTag
 )
 
-var testSch = createTestSchema()
-var untypedSch = untyped.UntypeUnkeySchema(testSch)
-var testTableName = "people"
+const (
+	episodeIdTag = iota
+	epNameTag
+	epAirDateTag
+	epRatingTag
+)
+
+var peopleTestSchema = createPeopleTestSchema()
+var untypedPeopleSch = untyped.UntypeUnkeySchema(peopleTestSchema)
+var peopleTableName = "people"
+
+var episodesTestSchema = createEpisodesTestSchema()
+var untypedEpisodesSch = untyped.UntypeUnkeySchema(episodesTestSchema)
+var episodesTableName = "episodes"
 
 func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
 }
 
-func createTestSchema() schema.Schema {
+func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -57,7 +68,17 @@ func createTestSchema() schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-func newRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
+func createEpisodesTestSchema() schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("id", episodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", epNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("air_date", epAirDateTag, types.IntKind, false),
+		schema.NewColumn("rating", epRatingTag, types.FloatKind, false),
+	)
+	return schema.SchemaFromCols(colColl)
+}
+
+func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
 		firstTag: types.String(first),
@@ -67,11 +88,22 @@ func newRow(id int, first, last string, isMarried bool, age int, rating float32)
 		ratingTag: types.Float(rating),
 	}
 
-	return row.New(testSch, vals)
+	return row.New(peopleTestSchema, vals)
+}
+
+func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
+	vals := row.TaggedValues{
+		episodeIdTag: types.Int(id),
+		epNameTag: types.String(name),
+		epAirDateTag: types.Int(airdate),
+		ratingTag: types.Float(rating),
+	}
+
+	return row.New(episodesTestSchema, vals)
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
-func newRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
+func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
 		firstTag: types.String(first),
@@ -83,18 +115,23 @@ func newRowWithOptionalFields(id int, first, last string, isMarried bool, age in
 		numEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(testSch, vals)
+	return row.New(peopleTestSchema, vals)
 }
 
 // Default set of rows to use for sql tests
-var homer = newRow(0, "Homer", "Simpson", true, 40, 8.5)
-var marge = newRow(1, "Marge", "Simpson", true, 38, 8)
-var bart = newRow(2, "Bart", "Simpson", false, 10, 9)
-var lisa = newRow(3, "Lisa", "Simpson", false, 8, 10)
-var moe = newRow(4, "Moe", "Szyslak", false, 48, 6.5)
-var barney = newRow(5, "Barney", "Gumble", false, 40, 4)
+var homer = newPeopleRow(0, "Homer", "Simpson", true, 40, 8.5)
+var marge = newPeopleRow(1, "Marge", "Simpson", true, 38, 8)
+var bart = newPeopleRow(2, "Bart", "Simpson", false, 10, 9)
+var lisa = newPeopleRow(3, "Lisa", "Simpson", false, 8, 10)
+var moe = newPeopleRow(4, "Moe", "Szyslak", false, 48, 6.5)
+var barney = newPeopleRow(5, "Barney", "Gumble", false, 40, 4)
+var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
 
-var allTestRows = rs(homer, marge, bart, lisa, moe, barney)
+var ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
+var ep2 = newEpsRow(1, "Bart the Genius", 632372400, 9.0)
+var ep3 = newEpsRow(1, "Homer's Odyssey", 632977200, 7.0)
+var ep4 = newEpsRow(1, "There's No Disgrace Like Home", 633582000, 8.5)
+var allEpsRows = rs(ep1, ep2, ep3, ep4)
 
 func rs(rows... row.Row) []row.Row {
 	return rows
@@ -180,7 +217,7 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 			nomsVal = nil
 		}
 
-		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, testSch)
+		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, peopleTestSchema)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -214,16 +251,15 @@ func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row 
 	return untyped
 }
 
-// Creates a test database with the test data set in it
-func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	imt := table.NewInMemTable(testSch)
+func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs... row.Row) {
+	imt := table.NewInMemTable(sch)
 
-	for _, r := range []row.Row{homer, marge, bart, lisa, moe, barney} {
+	for _, r := range rs {
 		imt.AppendRow(r)
 	}
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), testSch)
+	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
 
 	_, _, err := table.PipeRows(rd, wr, false)
 	rd.Close()
@@ -231,6 +267,12 @@ func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 
 	assert.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), testTableName)
+	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
 	assert.Nil(t, err,"Unable to put initial value of table in in mem noms db")
+}
+
+// Creates a test database with the test data set in it
+func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
+	createTestTable(dEnv, t, peopleTableName, peopleTestSchema, allPeopleRows...)
+	createTestTable(dEnv, t, episodesTableName, episodesTestSchema, allEpsRows...)
 }

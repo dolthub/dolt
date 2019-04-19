@@ -237,6 +237,7 @@ func findSchemaForColumn(root *doltdb.RootValue, colName string, tableNames []st
 	return colSchema, nil
 }
 
+// Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
 func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 	tbl, _:= root.GetTable(tableName)
 	return tbl.GetSchema()
