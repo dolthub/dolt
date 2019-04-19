@@ -5,6 +5,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"io"
+	"sort"
 )
 
 // InMemTable holds a simple list of rows that can be retrieved, or appended to.  It is meant primarily for testing.
@@ -28,7 +29,7 @@ func NewInMemTableWithDataAndValidationType(sch schema.Schema, rows []row.Row) *
 	return &InMemTable{sch, rows}
 }
 
-// AppendRow appends a row.  Appended rows must be valid for the table's schema
+// AppendRow appends a row.  Appended rows must be valid for the table's schema. Sorts rows as they are inserted.
 func (imt *InMemTable) AppendRow(r row.Row) error {
 	if !row.IsValid(r, imt.sch) {
 		col := row.GetInvalidCol(r, imt.sch)
@@ -41,7 +42,13 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 		}
 	}
 
+	// If we are going to pipe these into noms, they need to be sorted.
 	imt.rows = append(imt.rows, r)
+	sort.Slice(imt.rows, func(i, j int) bool {
+		iRow := imt.rows[i]
+		jRow := imt.rows[j]
+		return iRow.NomsMapKey(imt.sch).Less(jRow.NomsMapKey(imt.sch))
+	})
 
 	return nil
 }

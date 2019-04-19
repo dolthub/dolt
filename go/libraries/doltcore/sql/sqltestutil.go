@@ -40,6 +40,21 @@ const (
 	epRatingTag
 )
 
+const (
+	appCharacterTag = iota
+	appEpTag
+	appCommentsTag
+)
+
+const (
+	homerId = iota
+	margeId
+	bartId
+	lisaId
+	moeId
+	barneyId
+)
+
 var peopleTestSchema = createPeopleTestSchema()
 var untypedPeopleSch = untyped.UntypeUnkeySchema(peopleTestSchema)
 var peopleTableName = "people"
@@ -47,6 +62,10 @@ var peopleTableName = "people"
 var episodesTestSchema = createEpisodesTestSchema()
 var untypedEpisodesSch = untyped.UntypeUnkeySchema(episodesTestSchema)
 var episodesTableName = "episodes"
+
+var appearancesTestSchema = createAppearancesTestSchema()
+var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
+var appearancesTableName = "appearances"
 
 func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
@@ -78,6 +97,15 @@ func createEpisodesTestSchema() schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
+func createAppearancesTestSchema() schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("character_id", appCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("episode_id", appEpTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("comments", appCommentsTag, types.StringKind, false),
+	)
+	return schema.SchemaFromCols(colColl)
+}
+
 func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
@@ -102,6 +130,16 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 	return row.New(episodesTestSchema, vals)
 }
 
+func newAppsRow(charId, epId int, comment string) row.Row {
+	vals := row.TaggedValues{
+		appCharacterTag: types.Int(charId),
+		appEpTag : types.Int(epId),
+		appCommentsTag: types.String(comment),
+	}
+
+	return row.New(appearancesTestSchema, vals)
+}
+
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
 func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
@@ -118,21 +156,37 @@ func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 	return row.New(peopleTestSchema, vals)
 }
 
-// Default set of rows to use for sql tests
-var homer = newPeopleRow(0, "Homer", "Simpson", true, 40, 8.5)
-var marge = newPeopleRow(1, "Marge", "Simpson", true, 38, 8)
-var bart = newPeopleRow(2, "Bart", "Simpson", false, 10, 9)
-var lisa = newPeopleRow(3, "Lisa", "Simpson", false, 8, 10)
-var moe = newPeopleRow(4, "Moe", "Szyslak", false, 48, 6.5)
-var barney = newPeopleRow(5, "Barney", "Gumble", false, 40, 4)
+// 6 characters
+var homer = newPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
+var marge = newPeopleRow(margeId, "Marge", "Simpson", true, 38, 8)
+var bart = newPeopleRow(bartId, "Bart", "Simpson", false, 10, 9)
+var lisa = newPeopleRow(lisaId, "Lisa", "Simpson", false, 8, 10)
+var moe = newPeopleRow(moeId, "Moe", "Szyslak", false, 48, 6.5)
+var barney = newPeopleRow(barneyId, "Barney", "Gumble", false, 40, 4)
 var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
 
+// Actually the first 4 episodes of the show
 var ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
 var ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
 var ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
 var ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
 var allEpsRows = rs(ep1, ep2, ep3, ep4)
 
+// These are made up, not the actual show data
+var app1 = newAppsRow(homerId, 1, "Homer is great in this one")
+var app2 = newAppsRow(margeId, 1, "Marge is here too")
+var app3 = newAppsRow(homerId, 2, "Homer is great in this one too")
+var app4 = newAppsRow(bartId, 2, "This episode is named after Bart")
+var app5 = newAppsRow(lisaId, 2, "Lisa is here too")
+var app6 = newAppsRow(moeId, 2, "I think there's a prank call scene")
+var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
+var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
+var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
+var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+// nobody in episode 4, that one was terrible
+var allAppsRows = rs(app1,app2,app3,app4,app5,app6,app7,app8,app9,app10)
+
+// Convenience func to avoid the boilerplate of typing []row.Row{} all the time
 func rs(rows... row.Row) []row.Row {
 	return rows
 }
@@ -175,6 +229,72 @@ func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	}
 
 	return schema.UnkeyedSchemaFromCols(srcColls)
+}
+
+// Returns the cross product of the collections of rows given with the target schema given
+func crossProduct(sch schema.Schema, rowCollections [][]row.Row) []row.Row{
+	emptyRow := row.New(sch, row.TaggedValues{})
+	return cph(emptyRow, sch, rowCollections)
+}
+
+// Recursive helper function for crossProduct
+func cph(r row.Row, sch schema.Schema, rowCollections [][]row.Row) []row.Row {
+	if len(rowCollections) == 0 {
+		return []row.Row{r}
+	}
+
+	resultSet := make([]row.Row, 0)
+	for _, r2 := range rowCollections[0] {
+		partialRow := combineRows(copyRow(r, sch), r2, sch)
+		resultSet = append(resultSet, cph(partialRow, sch, rowCollections[1:])...)
+	}
+	return resultSet
+}
+
+// Combines r2 into r1 and returns it
+func combineRows(r1 row.Row, r2 row.Row, sch schema.Schema) row.Row {
+	var maxTag uint64 = 0
+	r1.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		if tag > maxTag {
+			maxTag = tag
+		}
+		return false
+	})
+
+	r2.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		r1.SetColVal(maxTag, val, sch)
+		maxTag++
+		return false
+	})
+	return r1
+}
+
+// Makes a copy of the row given
+func copyRow(r row.Row, sch schema.Schema) row.Row {
+	var taggedVals row.TaggedValues
+	r.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		taggedVals[tag] = val
+		return false
+	})
+	return row.New(sch, taggedVals)
+}
+
+// Returns a schema that is the concatenation of the ones given. Rewrites tag numbers to be ascending order
+func concatSchemas(schs ...schema.Schema) schema.Schema {
+	cols := make([]schema.Column, 0)
+	var itag uint64
+	for _, col := range schs {
+		col.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			cols = append(cols, schema.NewColumn(col.Name, itag, col.Kind, false))
+			itag++
+			return false
+		})
+	}
+	colCollection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+	return schema.UnkeyedSchemaFromCols(colCollection)
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
@@ -275,4 +395,5 @@ func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch sche
 func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	createTestTable(dEnv, t, peopleTableName, peopleTestSchema, allPeopleRows...)
 	createTestTable(dEnv, t, episodesTableName, episodesTestSchema, allEpsRows...)
+	createTestTable(dEnv, t, appearancesTableName, appearancesTestSchema, allAppsRows...)
 }
