@@ -71,7 +71,7 @@ func createPeopleTestSchema() schema.Schema {
 func createEpisodesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", episodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", epNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("name", epNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("air_date", epAirDateTag, types.IntKind, false),
 		schema.NewColumn("rating", epRatingTag, types.FloatKind, false),
 	)
@@ -96,7 +96,7 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		episodeIdTag: types.Int(id),
 		epNameTag: types.String(name),
 		epAirDateTag: types.Int(airdate),
-		ratingTag: types.Float(rating),
+		epRatingTag: types.Float(rating),
 	}
 
 	return row.New(episodesTestSchema, vals)
@@ -128,9 +128,9 @@ var barney = newPeopleRow(5, "Barney", "Gumble", false, 40, 4)
 var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
 
 var ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
-var ep2 = newEpsRow(1, "Bart the Genius", 632372400, 9.0)
-var ep3 = newEpsRow(1, "Homer's Odyssey", 632977200, 7.0)
-var ep4 = newEpsRow(1, "There's No Disgrace Like Home", 633582000, 8.5)
+var ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
+var ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
+var ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
 var allEpsRows = rs(ep1, ep2, ep3, ep4)
 
 func rs(rows... row.Row) []row.Row {
