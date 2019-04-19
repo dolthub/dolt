@@ -13,5 +13,5 @@ bats .
 This will run all the tests. Specify a particular .bats file to run only those tests.
 
 # Test coverage needed for: #
-* dolt config: setting, unsetting, fresh user, etc
 * remotes: dolt clone, fetch, pull, push
+* large tables 
