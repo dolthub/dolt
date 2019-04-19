@@ -24,7 +24,7 @@ type Row interface {
 	IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool
 
 	// Returns the value for the column with the tag given, and a success bool. The value will be null if the row
-	// doesn't contain a value for that tag.z
+	// doesn't contain a value for that tag.
 	GetColVal(tag uint64) (types.Value, bool)
 
 	// Sets a value for the column with the tag given, returning a new row with the update.

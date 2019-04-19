@@ -307,6 +307,13 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newUntypedSchema(firstTag, "f", lastTag, "l", isMarriedTag, "married", ageTag, "a",
 				ratingTag, "r", uuidTag, "u", numEpisodesTag, "n"),
 		},
+		// TODO: implement joins to make this work
+		//{
+		//	name:  "Test selecting from multiple tables",
+		//	query: `select * from people, episodes`,
+		//	expectedRows: rs(homer, moe, barney),
+		//	expectedSchema: concatSchemas(untypedPeopleSch, untypedEpisodesSch),
+		//},
 		{
 			name:           "Test select *, not equals",
 			query:          "select * from people where age <> 40",
