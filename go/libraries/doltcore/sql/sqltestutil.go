@@ -11,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"reflect"
@@ -232,74 +233,23 @@ func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 }
 
 // Returns the cross product of the collections of rows given with the target schema given
-func crossProduct(sch schema.Schema, rowCollections [][]row.Row) []row.Row{
-	emptyRow := row.New(sch, row.TaggedValues{})
+func crossProduct(sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row{
+	emptyRow := resultset.RowWithSchema{row.New(sch, row.TaggedValues{}), sch}
 	return cph(emptyRow, sch, rowCollections)
 }
 
 // Recursive helper function for crossProduct
-func cph(r row.Row, sch schema.Schema, rowCollections [][]row.Row) []row.Row {
+func cph(r resultset.RowWithSchema, sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row {
 	if len(rowCollections) == 0 {
-		return []row.Row{r}
+		return []row.Row{r.Row}
 	}
 
 	resultSet := make([]row.Row, 0)
-	for _, r2 := range rowCollections[0] {
-		partialRow := combineRows(copyRow(r, sch), r2, sch)
-		resultSet = append(resultSet, cph(partialRow, sch, rowCollections[1:])...)
-	}
+	//for _, r2 := range rowCollections[0] {
+	//	partialRow := resultset.CombineRows(r, r2)
+	//	resultSet = append(resultSet, cph(partialRow, sch, rowCollections[1:])...)
+	//}
 	return resultSet
-}
-
-// Writes all values from r2 into r1 and returns it. Rewrites tag values as necessary.
-func combineRows(r1 row.Row, r2 row.Row, sch schema.Schema) row.Row {
-	var maxTag uint64
-	r1.IterCols(func(tag uint64, val types.Value) (stop bool) {
-		if tag > maxTag {
-			maxTag = tag
-		}
-		return false
-	})
-	maxTag++
-
-	r2.IterCols(func(tag uint64, val types.Value) (stop bool) {
-		var err error
-		r1, err = r1.SetColVal(maxTag, val, sch)
-		if err != nil {
-			panic(err.Error())
-		}
-		maxTag++
-		return false
-	})
-	return r1
-}
-
-// Makes a copy of the row given
-func copyRow(r row.Row, sch schema.Schema) row.Row {
-	var taggedVals row.TaggedValues
-	r.IterCols(func(tag uint64, val types.Value) (stop bool) {
-		taggedVals[tag] = val
-		return false
-	})
-	return row.New(sch, taggedVals)
-}
-
-// Returns a schema that is the concatenation of the ones given. Rewrites tag numbers to be ascending order
-func concatSchemas(schs ...schema.Schema) schema.Schema {
-	cols := make([]schema.Column, 0)
-	var itag uint64
-	for _, col := range schs {
-		col.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-			cols = append(cols, schema.NewColumn(col.Name, itag, col.Kind, false))
-			itag++
-			return false
-		})
-	}
-	colCollection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-	return schema.UnkeyedSchemaFromCols(colCollection)
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
@@ -372,7 +322,7 @@ func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row 
 
 	rConv, _ := rowconv.NewRowConverter(fieldMapping)
 	untyped, err := rConv.Convert(r)
-	assert.Nil(t, err, "failed to untyped row to untyped")
+	assert.Nil(t, err, "failed to convert row to new schema")
 	return untyped
 }
 
