@@ -82,6 +82,7 @@ func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
 	var cols []schema.Column
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		col.Kind = types.StringKind
+		col.IsPartOfPK = false
 		col.Constraints = nil
 		cols = append(cols, col)
 		return false
