@@ -19,7 +19,7 @@ type Row interface {
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
 	IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool
 
-	// Itereates over all columns in the schema, using the value for the row. Columns that have no value set in this row
+	// Iterates over all columns in the schema, using the value for the row. Columns that have no value set in this row
 	// will still be visited, and receive a nil value.
 	IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool
 

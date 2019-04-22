@@ -193,16 +193,16 @@ func rs(rows... row.Row) []row.Row {
 
 // Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
 func findRowIndex(find row.Row, rows []row.Row) int {
-	verifyIdx := -1
+	idx := -1
 	for i, updatedRow := range rows {
 		rowId, _ := find.GetColVal(idTag)
 		updatedId, _ := updatedRow.GetColVal(idTag)
 		if rowId.Equals(updatedId) {
-			verifyIdx = i
+			idx = i
 			break
 		}
 	}
-	return verifyIdx
+	return idx
 }
 
 // Compares two noms Floats for approximate equality
@@ -251,18 +251,23 @@ func cph(r row.Row, sch schema.Schema, rowCollections [][]row.Row) []row.Row {
 	return resultSet
 }
 
-// Combines r2 into r1 and returns it
+// Writes all values from r2 into r1 and returns it. Rewrites tag values as necessary.
 func combineRows(r1 row.Row, r2 row.Row, sch schema.Schema) row.Row {
-	var maxTag uint64 = 0
+	var maxTag uint64
 	r1.IterCols(func(tag uint64, val types.Value) (stop bool) {
 		if tag > maxTag {
 			maxTag = tag
 		}
 		return false
 	})
+	maxTag++
 
 	r2.IterCols(func(tag uint64, val types.Value) (stop bool) {
-		r1.SetColVal(maxTag, val, sch)
+		var err error
+		r1, err = r1.SetColVal(maxTag, val, sch)
+		if err != nil {
+			panic(err.Error())
+		}
 		maxTag++
 		return false
 	})
