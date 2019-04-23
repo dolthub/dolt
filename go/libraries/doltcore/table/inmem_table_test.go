@@ -23,6 +23,9 @@ var fields, _ = schema.NewColCollection(
 )
 
 var rowSch = schema.SchemaFromCols(fields)
+
+// These are in noms-key-sorted order, since InMemoryTable.AppendRow sorts its rows. This should probably be done
+// programatically instead of hard-coded.
 var rows = []row.Row{
 	row.New(rowSch, row.TaggedValues{
 		nameTag:  types.String("Bill Billerson"),
@@ -31,16 +34,16 @@ var rows = []row.Row{
 		greatTag: types.Bool(true),
 	}),
 	row.New(rowSch, row.TaggedValues{
-		nameTag:  types.String("Rob Robertson"),
-		ageTag:   types.Uint(25),
-		titleTag: types.String("Dufus"),
-		greatTag: types.Bool(false),
-	}),
-	row.New(rowSch, row.TaggedValues{
 		nameTag:  types.String("John Johnson"),
 		ageTag:   types.Uint(21),
 		titleTag: types.String("Intern Dufus"),
 		greatTag: types.Bool(true),
+	}),
+	row.New(rowSch, row.TaggedValues{
+		nameTag:  types.String("Rob Robertson"),
+		ageTag:   types.Uint(25),
+		titleTag: types.String("Dufus"),
+		greatTag: types.Bool(false),
 	}),
 }
 
@@ -114,7 +117,7 @@ func TestPipeRows(t *testing.T) {
 		}
 
 		if !row.AreEqual(r1, r2, rowSch) {
-			t.Error("Rows sholud be the same.", row.Fmt(r1, rowSch), "!=", row.Fmt(r2, rowSch))
+			t.Error("Rows should be the same.", row.Fmt(r1, rowSch), "!=", row.Fmt(r2, rowSch))
 		}
 	}
 }

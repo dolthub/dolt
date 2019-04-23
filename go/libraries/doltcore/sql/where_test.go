@@ -114,7 +114,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 			} else {
 				assert.Nil(t, err)
 			}
-			untypedRows := convertRows(t, tt.expectedRows, testSch, tt.expectedSchema)
+			untypedRows := convertRows(t, tt.expectedRows, peopleTestSchema, tt.expectedSchema)
 			assert.Equal(t, untypedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})

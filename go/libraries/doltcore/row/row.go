@@ -19,12 +19,12 @@ type Row interface {
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
 	IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool
 
-	// Itereates over all columns in the schema, using the value for the row. Columns that have no value set in this row
+	// Iterates over all columns in the schema, using the value for the row. Columns that have no value set in this row
 	// will still be visited, and receive a nil value.
 	IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool
 
 	// Returns the value for the column with the tag given, and a success bool. The value will be null if the row
-	// doesn't contain a value for that tag.z
+	// doesn't contain a value for that tag.
 	GetColVal(tag uint64) (types.Value, bool)
 
 	// Sets a value for the column with the tag given, returning a new row with the update.

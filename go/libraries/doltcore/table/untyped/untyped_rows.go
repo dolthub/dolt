@@ -76,12 +76,12 @@ func UntypeSchema(sch schema.Schema) schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but stripped of constraints and primary
-// keys and using only string types. Meant for displaying output and tests.
-func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
+// UnkeySchema takes a schema and returns a schema with the same columns and types, but stripped of constraints and
+// primary keys. Meant for use in result sets.
+func UnkeySchema(sch schema.Schema) schema.Schema {
 	var cols []schema.Column
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		col.Kind = types.StringKind
+		col.IsPartOfPK = false
 		col.Constraints = nil
 		cols = append(cols, col)
 		return false
@@ -92,6 +92,22 @@ func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
+// UntypeUnkeySchema takes a schema and returns a schema with the same columns, but stripped of constraints and primary
+// keys and using only string types. Meant for displaying output and tests.
+func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
+	var cols []schema.Column
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		col.Kind = types.StringKind
+		col.IsPartOfPK = false
+		col.Constraints = nil
+		cols = append(cols, col)
+		return false
+	})
+
+	colColl, _ := schema.NewColCollection(cols...)
+
+	return schema.UnkeyedSchemaFromCols(colColl)
+}
 
 // UntypedSchemaUnion takes an arbitrary number of schemas and provides the union of all of their key and non-key columns.
 // The columns will all be of type types.StringKind and and IsPartOfPK will be false for every column, and all of the

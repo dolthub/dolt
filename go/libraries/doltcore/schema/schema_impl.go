@@ -50,7 +50,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 	nonPKColColl, _ := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
-		pkColColl, nonPKColColl, allCols,
+		pkColColl, nonPKColColl, nonPKColColl,
 	}
 }
 
