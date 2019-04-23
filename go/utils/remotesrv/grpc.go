@@ -5,63 +5,26 @@ import (
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"log"
-	"strings"
 	"sync/atomic"
-	"time"
 )
-
-type StorageLocation string
-
-const (
-	InvalidStorageLoc = "invalid"
-	HttpFSStorage     = "http-file-server"
-	S3Storage         = "s3"
-)
-
-func StoragLocFromString(str string) StorageLocation {
-	switch strings.ToLower(str) {
-	case HttpFSStorage:
-		return HttpFSStorage
-	case S3Storage:
-		return S3Storage
-	}
-
-	return InvalidStorageLoc
-}
 
 type RemoteChunkStore struct {
-	HttpHost        string
-	storageLocation StorageLocation
-	csCache         *DBCache
-	bucket          string
-	s3Api           *s3.S3
-}
-
-func NewAwsBackedChunkStore(csCache *DBCache) *RemoteChunkStore {
-	return &RemoteChunkStore{
-		"",
-		S3Storage,
-		csCache,
-		csCache.bucket,
-		csCache.s3Api,
-	}
+	HttpHost string
+	csCache  *DBCache
+	bucket   string
 }
 
 func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache) *RemoteChunkStore {
 	return &RemoteChunkStore{
 		httpHost,
-		HttpFSStorage,
 		csCache,
 		"",
-		nil,
 	}
 }
 
@@ -136,28 +99,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 }
 
 func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), org, repoName, fileId string) (string, error) {
-	switch rs.storageLocation {
-	case HttpFSStorage:
-		return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
-
-	case S3Storage:
-		req, _ := rs.s3Api.GetObjectRequest(&s3.GetObjectInput{
-			Bucket: aws.String(rs.bucket),
-			Key:    aws.String(fileId),
-		})
-
-		url, err := req.Presign(15 * time.Minute)
-
-		if err != nil {
-			logger(fmt.Sprintln("error presigning request", err))
-			return "", err
-		}
-
-		return url, nil
-
-	default:
-		panic("Unsupported storage type " + rs.storageLocation)
-	}
+	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
 }
 
 func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
@@ -199,31 +141,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 }
 
 func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName, fileId string) (string, error) {
-	switch rs.storageLocation {
-	case HttpFSStorage:
-		return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
-
-	case S3Storage:
-		logger("generating s3 signed url")
-		req, _ := rs.s3Api.PutObjectRequest(&s3.PutObjectInput{
-			Bucket: aws.String(rs.bucket),
-			Key:    aws.String(fileId),
-			//ContentType: aws.String("application/octet-stream"),
-		})
-
-		//x := aws.LogDebugWithSigning
-		//req.Config.LogLevel = &x
-		url, err := req.Presign(2 * time.Minute)
-		if err != nil {
-			logger(fmt.Sprintln("error presigning request", err))
-			return "", err
-		}
-
-		return url, nil
-
-	default:
-		panic("Unsupported storage type " + rs.storageLocation)
-	}
+	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
