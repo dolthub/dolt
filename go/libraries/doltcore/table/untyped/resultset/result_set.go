@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
@@ -96,7 +97,7 @@ func (rss *ResultSetSchema) AddSchema(sch schema.Schema) error {
 	return nil
 }
 
-// Concanates the given schemas together into a new one. This rewrites the tag numbers to be contiguous and
+// Concatenates the given schemas together into a new one. This rewrites the tag numbers to be contiguous and
 // starting from zero, and removes all keys and constraints. Types are preserved.
 func ConcatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	cols := make([]schema.Column, 0)
@@ -114,6 +115,29 @@ func ConcatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	}
 	return schema.UnkeyedSchemaFromCols(colCollection), nil
 }
+
+// Returns the cross-product of the table results given. The returned rows will have the schema of this result set, and
+// will have (N * M * ... X) rows, one for every possible combination of entries in the table results given.
+func (rss *ResultSetSchema) CrossProduct(tables []TableResult) []row.Row {
+	emptyRow := RowWithSchema{row.New(rss.destSch, row.TaggedValues{}), rss.destSch}
+	return rss.cph(emptyRow, tables)
+}
+
+// Recursive helper function for CrossProduct
+func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult) []row.Row {
+	if len(tables) == 0 {
+		return []row.Row{r.Row}
+	}
+
+	resultSet := make([]row.Row, 0)
+	table := tables[0]
+	for _, r2 := range table.Rows {
+		partialRow := rss.CombineRows(r, RowWithSchema{r2, table.Schema})
+		resultSet = append(resultSet, rss.cph(partialRow, tables[1:])...)
+	}
+	return resultSet
+}
+
 
 // CombineRows writes all values from r2 into r1 and returns it. r1 must have the same schema as the result set.
 func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowWithSchema {
@@ -135,5 +159,17 @@ func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowW
 		}
 		return false
 	})
+	return r1
+}
+
+// CombineRows writes all values from other rows into r1 and returns it. r1 must have the same schema as the result set.
+func (rss *ResultSetSchema) CombineAllRows(r1 RowWithSchema, rows ...RowWithSchema) RowWithSchema {
+	if !schema.SchemasAreEqual(r1.Schema, rss.destSch) {
+		panic("Cannot call CombineRows on a row with a different schema than the result set schema")
+	}
+
+	for _, r2 := range rows {
+		r1 = rss.CombineRows(r1, r2)
+	}
 	return r1
 }

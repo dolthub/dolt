@@ -366,6 +366,32 @@ func TestCombineRows(t *testing.T) {
 	assert.Equal(t, expectedRow, r.Row)
 }
 
+func TestCrossProduct(t *testing.T) {
+	rss, err :=  NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+	assert.Nil(t, err)
+
+	tables := []TableResult{
+		{Rows: rs(homer, marge), Schema: peopleTestSchema},
+		{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		{Rows: rs(app1, app2), Schema: appearancesTestSchema},
+	}
+
+	resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
+	expectedResult := rs(
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+		rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+	)
+
+	result := rss.CrossProduct(tables)
+	assert.Equal(t, expectedResult, result)
+}
+
 func mustGetColVal(r row.Row, tag uint64) types.Value {
 	value, ok := r.GetColVal(tag)
 	if !ok {
