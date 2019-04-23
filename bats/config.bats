@@ -3,29 +3,16 @@
 setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    # Fail this test if another one is running so we don't pollute the users
-    # environment. We probably need a DOLT_CONFIG_ROOT environment variable
-    # we can set so we don't stomp the users' config.
-    if [ -f "$BATS_TMPDIR/configtest.lock" ] 
-    then
-	echo "Only one config bats test can be run at a time"
-    	return 1
-    else
-	touch "$BATS_TMPDIR/configtest.lock"
-	mv ~/.dolt/config_global.json ~/.dolt/config_global.json.$$.saved
-    fi
+    mkdir $BATS_TMPDIR/config-$$
+    export DOLT_ROOT_PATH=$BATS_TMPDIR/config-$$
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
 }
 
 teardown() {
-    if [ -f  ~/.dolt/config_global.json.$$.saved ]
-    then
-	mv ~/.dolt/config_global.json.$$.saved ~/.dolt/config_global.json
-	rm "$BATS_TMPDIR/configtest.lock"
-	rm -rf "$BATS_TMPDIR/dolt-repo-$$"
-    fi
+    rm -rf "$BATS_TMPDIR/config-$$"
+    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 @test "make sure no dolt configuration for simulated fresh user" {
