@@ -33,14 +33,19 @@ type DoltChunkStore struct {
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
 	httpFetcher HttpFetcher
+	context     context.Context
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher, context.Background()}
 }
 
 func (dcs *DoltChunkStore) WithHttpFetcher(fetcher HttpFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher, dcs.context}
+}
+
+func (dcs *DoltChunkStore) WithContext(context context.Context) *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.httpFetcher, context}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -101,7 +106,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(hashes []hash.Hash) ([]chunks.Chun
 	// read all from remote and cache and put in known
 	hashesBytes := HashesToSlices(hashes)
 	req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), Hashes: hashesBytes}
-	resp, err := dcs.csClient.GetDownloadLocations(context.Background(), &req)
+	resp, err := dcs.csClient.GetDownloadLocations(dcs.context, &req)
 
 	if err != nil {
 		return nil, NewRpcError(err, "GetDownloadLocations", dcs.host, req)
@@ -138,7 +143,7 @@ func (dcs *DoltChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
 
 	hashSl, byteSl := HashSetToSlices(notCached)
 	req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: byteSl}
-	resp, err := dcs.csClient.HasChunks(context.Background(), &req)
+	resp, err := dcs.csClient.HasChunks(dcs.context, &req)
 
 	if err != nil {
 		rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
@@ -195,7 +200,7 @@ func (dcs *DoltChunkStore) Version() string {
 // current root.
 func (dcs *DoltChunkStore) Rebase() {
 	req := &remotesapi.RebaseRequest{RepoId: dcs.getRepoId()}
-	_, err := dcs.csClient.Rebase(context.Background(), req)
+	_, err := dcs.csClient.Rebase(dcs.context, req)
 
 	if err != nil {
 		rpcErr := NewRpcError(err, "Rebase", dcs.host, req)
@@ -209,7 +214,7 @@ func (dcs *DoltChunkStore) Rebase() {
 // was opened or the most recent call to Rebase.
 func (dcs *DoltChunkStore) Root() hash.Hash {
 	req := &remotesapi.RootRequest{RepoId: dcs.getRepoId()}
-	resp, err := dcs.csClient.Root(context.Background(), req)
+	resp, err := dcs.csClient.Root(dcs.context, req)
 
 	if err != nil {
 		rpcErr := NewRpcError(err, "Root", dcs.host, req)
@@ -238,7 +243,7 @@ func (dcs *DoltChunkStore) Commit(current, last hash.Hash) bool {
 	}
 
 	req := &remotesapi.CommitRequest{RepoId: dcs.getRepoId(), Current: current[:], Last: last[:], ChunkTableInfo: chnkTblInfo}
-	resp, err := dcs.csClient.Commit(context.Background(), req)
+	resp, err := dcs.csClient.Commit(dcs.context, req)
 
 	if err != nil {
 		rpcErr := NewRpcError(err, "Commit", dcs.host, req)
@@ -306,9 +311,8 @@ func (dcs *DoltChunkStore) uploadChunks() (map[hash.Hash]int, error) {
 		hashBytes = append(hashBytes, tmp[:])
 	}
 
-	ctx := context.Background()
 	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), Hashes: hashBytes}
-	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
+	resp, err := dcs.csClient.GetUploadLocations(dcs.context, req)
 
 	if err != nil {
 		return map[hash.Hash]int{}, err
