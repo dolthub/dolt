@@ -54,7 +54,7 @@ func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, err
 	return rss, nil
 }
 
-// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Columns names
+// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
 // must be verified before subsetting. Unrecognized column names will cause a panic.
 func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	srcColls := sch.GetAllCols()
@@ -112,6 +112,11 @@ func (rss *ResultSetSchema) AddSchema(sch schema.Schema) error {
 
 	rss.mapping[sch] = mapping
 	return nil
+}
+
+// OutputSchema returns the schema for this result set.
+func (rss *ResultSetSchema) Schema() schema.Schema {
+	return rss.destSch
 }
 
 // Concatenates the given schemas together into a new one. This rewrites the tag numbers to be contiguous and
