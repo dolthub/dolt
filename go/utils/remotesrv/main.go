@@ -4,11 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"google.golang.org/grpc"
@@ -19,26 +14,10 @@ import (
 	"sync"
 )
 
-func initAWSResources(bucket, dynamoTable string) *DBCache {
-	awsConfig := aws.NewConfig().WithRegion("us-east-1")
-	awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
-	sess := session.Must(session.NewSession(awsConfig))
-	s3Api := s3.New(sess)
-	dynamoApi := dynamodb.New(sess)
-
-	return NewAWSCSCache(bucket, dynamoTable, s3Api, dynamoApi)
-}
-
 func main() {
 	dirParam := flag.String("dir", "", "root directory that this command will run in.")
-	grpcPortParam := flag.Int("grpc-port", 50051, "root directory that this command will run in.")
-	storageParam := flag.String("file-storage", S3Storage, "Backing storage.  Valid options are 'http-file-server' or 's3' (default)")
-	httpHostParam := flag.String("http-host", "", "The host used for remote chunk upload and download requests")
-	httpPortParam := flag.Int("http-port", 80, "root directory that this command will run in.")
-	httpFlag := flag.Bool("http", false, "Run the http server")
-	grpcFlag := flag.Bool("grpc", false, "Run the grpc server")
-	bucketParam := flag.String("bucket", "dulthub-dev-chunks", "The bucket where chunk files are stored")
-	dynamoTableParam := flag.String("dynamo-table", "dolthub-manifests-dev", "The bucket where chunk files are stored")
+	grpcPortParam := flag.Int("grpc-port", -1, "root directory that this command will run in.")
+	httpPortParam := flag.Int("http-port", -1, "root directory that this command will run in.")
 	flag.Parse()
 
 	if dirParam != nil && len(*dirParam) > 0 {
@@ -51,54 +30,45 @@ func main() {
 		} else {
 			log.Println("cwd set to " + *dirParam)
 		}
+	} else {
+		log.Println("'dir' parameter not provided. Using the current working dir.")
 	}
 
-	if !*httpFlag && !*grpcFlag {
-		log.Fatalln("Need to provide one or both of the flags: 'http', 'grpc'")
-		return
-	}
+	httpHost := "localhost"
 
-	httpHost := *httpHostParam
-	if len(httpHost) == 0 {
-		log.Println("http-host provided.  Using localhost.  This will only work on this machine.")
-		httpHost = "localhost"
-	}
-
-	if *httpPortParam != 80 {
+	if *httpPortParam != -1 {
 		httpHost = fmt.Sprintf("%s:%d", httpHost, *httpPortParam)
+	} else {
+		*httpPortParam = 80
+		log.Println("'http-port' parameter not provided. Using default port 80")
 	}
 
-	stLoc := StoragLocFromString(*storageParam)
-
-	if stLoc == InvalidStorageLoc {
-		log.Fatalln("Invalid storage option for 'file-storage'. Valid options are 'http-file-server' or 's3'. Received", *storageParam)
+	if *grpcPortParam == -1 {
+		*grpcPortParam = 50051
+		log.Println("'grpc-port' parameter not provided. Using default port 50051")
 	}
 
-	stopChan, wg := startServer(stLoc, *bucketParam, *dynamoTableParam, httpHost, *httpFlag, *grpcFlag, *httpPortParam, *grpcPortParam)
+	stopChan, wg := startServer(httpHost, *httpPortParam, *grpcPortParam)
 
 	close(stopChan)
 	wg.Wait()
 }
 
-func startServer(storageLoc StorageLocation, bucket, dynamoTable, httpHost string, serveHttp, serveGrpc bool, httpPort, grpcPort int) (chan interface{}, *sync.WaitGroup) {
+func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sync.WaitGroup) {
 	wg := sync.WaitGroup{}
 	stopChan := make(chan interface{})
 
-	if serveHttp {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			httpServer(httpPort, stopChan)
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		httpServer(httpPort, stopChan)
+	}()
 
-	if serveGrpc {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			grpcServer(storageLoc, bucket, dynamoTable, httpHost, grpcPort, stopChan)
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		grpcServer(httpHost, grpcPort, stopChan)
+	}()
 
 	oneByte := [1]byte{}
 	for {
@@ -112,21 +82,14 @@ func startServer(storageLoc StorageLocation, bucket, dynamoTable, httpHost strin
 	return stopChan, &wg
 }
 
-func grpcServer(stLoc StorageLocation, bucket, dynamoTable, httpHost string, grpcPort int, stopChan chan interface{}) {
+func grpcServer(httpHost string, grpcPort int, stopChan chan interface{}) {
 	defer func() {
 		log.Println("exiting grpc Server go routine")
 	}()
 
-	var chnkSt *RemoteChunkStore
-	if stLoc == S3Storage {
-		dbCache := initAWSResources(bucket, dynamoTable)
-		chnkSt = NewAwsBackedChunkStore(dbCache)
-	} else {
-		dbCache := NewLocalCSCache(filesys.LocalFS)
-		chnkSt = NewHttpFSBackedChunkStore(httpHost, dbCache)
-	}
+	dbCache := NewLocalCSCache(filesys.LocalFS)
+	chnkSt := NewHttpFSBackedChunkStore(httpHost, dbCache)
 
-	fmt.Println("Opening grpc socket on port", grpcPort)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -136,7 +99,7 @@ func grpcServer(stLoc StorageLocation, bucket, dynamoTable, httpHost string, grp
 	go func() {
 		remotesapi.RegisterChunkStoreServiceServer(grpcServer, chnkSt)
 
-		log.Println("Starting grpc server")
+		log.Println("Starting grpc server on port", grpcPort)
 		err := grpcServer.Serve(lis)
 		log.Println("grpc server exited. error:", err)
 	}()

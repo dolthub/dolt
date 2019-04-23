@@ -1,13 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,10 +33,10 @@ func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	statusCode := http.StatusMethodNotAllowed
 	switch req.Method {
 	case http.MethodGet:
-		query := req.URL.Query()
-		statusCode = readChunk(logger, org, repo, hashStr, query, respWr)
+		rangeStr := req.Header.Get("Range")
+		statusCode = readChunk(logger, org, repo, hashStr, rangeStr, respWr)
 
-	case http.MethodPost:
+	case http.MethodPost, http.MethodPut:
 		statusCode = writeChunk(logger, org, repo, hashStr, req)
 	}
 
@@ -85,44 +85,44 @@ func writeLocal(logger func(string), org, repo, fileId string, data []byte) erro
 	return nil
 }
 
-/*func writeS3(logger func(string), org, repo, fileId string, data []byte) error {
-	putObjResp, err := s3Api.PutObject(&s3.PutObjectInput{
-		Bucket:        bucket,
-		Key:           &fileId,
-		Body:          bytes.NewReader(data),
-		ACL:           aws.String("private"),
-		ContentLength: aws.Int64(int64(len(data))),
-	})
-
-	if err != nil {
-		logger(fmt.Sprintln("failed to write to s3.", err))
-		return err
+func offsetAndLenFromRange(rngStr string) (int64, int64, error) {
+	if rngStr == "" {
+		return -1, -1, nil
 	}
 
-	logger(fmt.Sprintln("successfully written to s3.", putObjResp))
+	if !strings.HasPrefix(rngStr, "bytes=") {
+		return -1, -1, errors.New("range string does not start with 'bytes=")
+	}
 
-	return nil
-}*/
+	tokens := strings.Split(rngStr[6:], "-")
 
-func readChunk(logger func(string), org, repo, fileId string, query url.Values, writer io.Writer) int {
-	offStr := query.Get("off")
-	lenStr := query.Get("len")
+	if len(tokens) != 2 {
+		return -1, -1, errors.New("invalid range format. should be bytes=#-#")
+	}
 
-	offset, err := strconv.ParseUint(offStr, 10, 64)
+	start, err := strconv.ParseUint(strings.TrimSpace(tokens[0]), 10, 64)
 
 	if err != nil {
-		logger(fmt.Sprintln(offStr, "is not a valid offset"))
+		return -1, -1, errors.New("invalid offset is not a number. should be bytes=#-#")
+	}
+
+	end, err := strconv.ParseUint(strings.TrimSpace(tokens[1]), 10, 64)
+
+	if err != nil {
+		return -1, -1, errors.New("invalid length is not a number. should be bytes=#-#")
+	}
+
+	return int64(start), int64(end-start) + 1, nil
+}
+
+func readChunk(logger func(string), org, repo, fileId, rngStr string, writer io.Writer) int {
+	offset, length, err := offsetAndLenFromRange(rngStr)
+
+	if err != nil {
+		logger(fmt.Sprintln(rngStr, "is not a valid range"))
 		return http.StatusBadRequest
 	}
 
-	length, err := strconv.ParseUint(lenStr, 10, 32)
-
-	if err != nil {
-		logger(fmt.Sprintln(lenStr + "is not a valid length"))
-		return http.StatusBadRequest
-	}
-
-	//data, retVal := readS3Range(logger, org, repo, fileId, int64(offset), int64(length))
 	data, retVal := readLocalRange(logger, org, repo, fileId, int64(offset), int64(length))
 
 	if retVal != -1 {
@@ -187,32 +187,3 @@ func readLocalRange(logger func(string), org, repo, fileId string, offset, lengt
 	logger(fmt.Sprintf("Successfully read %d bytes", len(data)))
 	return data[diff:], -1
 }
-
-/*func readS3Range(logger func(string), org, repo, fileId string, offset, length int64) ([]byte, int) {
-	rangeStr := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
-	getResp, err := s3Api.GetObject(&s3.GetObjectInput{
-		Bucket: bucket,
-		Key:    &fileId,
-		Range:  aws.String(rangeStr),
-	})
-
-	if err != nil {
-		logger(err.Error())
-
-		if err.Error() == s3.ErrCodeNoSuchKey {
-			return nil, http.StatusNotFound
-		}
-
-		return nil, http.StatusInternalServerError
-	}
-
-	data, err := ioutil.ReadAll(getResp.Body)
-
-	if err != nil {
-		logger(err.Error())
-
-		return nil, http.StatusInternalServerError
-	}
-
-	return data, -1
-}*/
