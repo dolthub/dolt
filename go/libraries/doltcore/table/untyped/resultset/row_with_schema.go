@@ -30,3 +30,8 @@ func (r *RowWithSchema) SetColVal(tag uint64, value types.Value) error {
 func (r *RowWithSchema) GetColVal(tag uint64) (types.Value, bool) {
 	return r.Row.GetColVal(tag)
 }
+
+// Returns a copy of this row.
+func (r *RowWithSchema) Copy() RowWithSchema {
+	return RowWithSchema{r.Row, r.Schema}
+}
