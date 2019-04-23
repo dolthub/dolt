@@ -79,7 +79,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 // Executes a SQL select statement and prints the result to the CLI.
 func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
-	p, outSch, err := sql.BuildSelectQueryPipeline(root, s, query)
+	p, outSch, err := sql.BuildSelectQueryPipeline(root, s)
 	if err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return 1
