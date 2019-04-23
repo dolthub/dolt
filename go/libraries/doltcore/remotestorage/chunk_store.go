@@ -5,32 +5,42 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"sort"
+	"strconv"
+
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"io/ioutil"
-	"net/http"
-	"sort"
-	"strconv"
+	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 )
-
-var httpClient = &http.Client{}
 
 var ErrUploadFailed = errors.New("upload failed")
 
+var globalHttpFetcher HttpFetcher = &http.Client{}
+
+type HttpFetcher interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type DoltChunkStore struct {
-	org      string
-	repoName string
-	host     string
-	csClient remotesapi.ChunkStoreServiceClient
-	cache    chunkCache
+	org         string
+	repoName    string
+	host        string
+	csClient    remotesapi.ChunkStoreServiceClient
+	cache       chunkCache
+	httpFetcher HttpFetcher
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache()}
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
+}
+
+func (dcs *DoltChunkStore) WithHttpFetcher(fetcher HttpFetcher) *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -325,8 +335,11 @@ func (dcs *DoltChunkStore) uploadChunks() (map[hash.Hash]int, error) {
 
 func (dcs *DoltChunkStore) httpPostUpload(hashBytes []byte, post *remotesapi.HttpPostChunk, data []byte) error {
 	//resp, err := http(post.Url, "application/octet-stream", bytes.NewBuffer(data))
-	req, _ := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
-	resp, err := httpClient.Do(req)
+	req, err := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	resp, err := dcs.httpFetcher.Do(req)
 
 	if err != nil {
 		return err
@@ -369,7 +382,11 @@ func (dcs *DoltChunkStore) httpGetDownload(httpGet *remotesapi.HttpGetChunk) ([]
 		return nil, errors.New("not supported yet")
 	}
 
-	resp, err := http.Get(httpGet.Url)
+	req, err := http.NewRequest(http.MethodGet, httpGet.Url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := dcs.httpFetcher.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -397,7 +414,7 @@ type bytesResult struct {
 	err  error
 }
 
-func getRanges(url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
+func getRanges(httpFetcher HttpFetcher, url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
 	for {
 		select {
 		case <-stopChan:
@@ -411,9 +428,13 @@ func getRanges(url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan c
 			}
 
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			if err != nil {
+				resultChan <- bytesResult{r, nil, err}
+				break
+			}
 			rangeVal := fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+uint64(r.Length)-1)
 			req.Header.Set("Range", rangeVal)
-			resp, err := httpClient.Do(req)
+			resp, err := httpFetcher.Do(req)
 
 			if err != nil {
 				resultChan <- bytesResult{r, nil, err}
@@ -466,7 +487,7 @@ func (dcs *DoltChunkStore) httpGetRangeDownload(getRange *remotesapi.HttpGetRang
 	resultChan := make(chan bytesResult, 2*concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		go getRanges(url, rangeChan, resultChan, stopChan)
+		go getRanges(dcs.httpFetcher, url, rangeChan, resultChan, stopChan)
 	}
 
 	for _, r := range getRange.Ranges {
