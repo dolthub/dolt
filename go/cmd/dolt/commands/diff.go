@@ -214,16 +214,15 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 
 	for _, tag := range tags {
 		dff, _ := diffs[tag]
-		if dff.DiffType == diff.DiffChangeNone {
-			// no change
+		switch dff.DiffType {
+		case diff.SchDiffNone:
 			cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
-		} else if dff.DiffType == types.DiffChangeAdded {
-			// added in sch2
+		case diff.SchDiffColAdded:
 			cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
-		} else if dff.DiffType == types.DiffChangeRemoved {
+		case diff.SchDiffColRemoved:
 			// removed from sch2
 			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
-		} else {
+		case diff.SchDiffColModified:
 			// changed in sch2
 			n0, t0 := dff.Old.Name, sql.DoltToSQLType[dff.Old.Kind]
 			n1, t1 := dff.New.Name, sql.DoltToSQLType[dff.New.Kind]
