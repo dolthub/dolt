@@ -119,6 +119,10 @@ func ConcatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 // Returns the cross-product of the table results given. The returned rows will have the schema of this result set, and
 // will have (N * M * ... X) rows, one for every possible combination of entries in the table results given.
 func (rss *ResultSetSchema) CrossProduct(tables []TableResult) []row.Row {
+	// special case: no tables means no rows
+	if len(tables) == 0 {
+		return nil
+	}
 	emptyRow := RowWithSchema{row.New(rss.destSch, row.TaggedValues{}), rss.destSch}
 	return rss.cph(emptyRow, tables)
 }
@@ -137,7 +141,6 @@ func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult) []row.Row
 	}
 	return resultSet
 }
-
 
 // CombineRows writes all values from r2 into r1 and returns it. r1 must have the same schema as the result set.
 func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowWithSchema {
@@ -164,10 +167,6 @@ func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowW
 
 // CombineRows writes all values from other rows into r1 and returns it. r1 must have the same schema as the result set.
 func (rss *ResultSetSchema) CombineAllRows(r1 RowWithSchema, rows ...RowWithSchema) RowWithSchema {
-	if !schema.SchemasAreEqual(r1.Schema, rss.destSch) {
-		panic("Cannot call CombineRows on a row with a different schema than the result set schema")
-	}
-
 	for _, r2 := range rows {
 		r1 = rss.CombineRows(r1, r2)
 	}
