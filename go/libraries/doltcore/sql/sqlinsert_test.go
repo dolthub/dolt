@@ -24,28 +24,28 @@ func TestExecuteInsert(t *testing.T) {
 			name: "insert one row, all columns",
 			query: `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
-			insertedValues: []row.Row{newRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
+			insertedValues: []row.Row{newPeopleRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
 			name: "insert one row, no column list",
 			query: `insert into people values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
-			insertedValues: []row.Row{newRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
+			insertedValues: []row.Row{newPeopleRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
 			name: "insert one row out of order",
 			query: `insert into people (rating, first, id, last, age, is_married) values
 					(5.1, "Maggie", 7, "Simpson", 1, false)`,
-			insertedValues: []row.Row{newRow(7, "Maggie", "Simpson", false, 1, 5.1)},
+			insertedValues: []row.Row{newPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1)},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
 			name: "insert one row, null values",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", null, null, null)`,
-			insertedValues: []row.Row{row.New(testSch, row.TaggedValues{idTag: types.Int(7), firstTag: types.String("Maggie"), lastTag: types.String("Simpson")})},
+			insertedValues: []row.Row{row.New(peopleTestSchema, row.TaggedValues{idTag: types.Int(7), firstTag: types.String("Maggie"), lastTag: types.String("Simpson")})},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
@@ -66,8 +66,8 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", "Simpson", false, 1, 5.1),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5)`,
 			insertedValues: []row.Row{
-				newRow(7, "Maggie", "Simpson", false, 1, 5.1),
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 2},
 		},
@@ -168,7 +168,7 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", null, false, 1, 5.1),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5)`,
 			insertedValues: []row.Row{
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 1, NumErrorsIgnored: 1},
 		},
@@ -184,7 +184,7 @@ func TestExecuteInsert(t *testing.T) {
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5)`,
 			insertedValues: []row.Row{
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
 				homer, // verify that homer is unchanged by the insert
 			},
 			expectedResult: InsertResult{NumRowsInserted: 1, NumErrorsIgnored: 1},
@@ -195,8 +195,8 @@ func TestExecuteInsert(t *testing.T) {
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5)`,
 			insertedValues: []row.Row{
-				newRow(0, "Homer", "Simpson", true, 45, 100),
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(0, "Homer", "Simpson", true, 45, 100),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 1, NumRowsUpdated: 1},
 		},
@@ -207,8 +207,8 @@ func TestExecuteInsert(t *testing.T) {
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
 			insertedValues: []row.Row{
-				newRow(0, "Homer", "Simpson", true, 45, 100),
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(0, "Homer", "Simpson", true, 45, 100),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 1, NumRowsUpdated: 1, NumErrorsIgnored: 1},
 		},
@@ -229,11 +229,11 @@ func TestExecuteInsert(t *testing.T) {
 					(10, "Patty", "Bouvier", false, 40, 7),
 					(11, "Selma", "Bouvier", false, 40, 7)`,
 			insertedValues: []row.Row{
-				newRow(7, "Maggie", "Simpson", false, 1, 5.1),
-				newRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
-				newRow(9, "Jacqueline", "Bouvier", true, 80, 2),
-				newRow(10, "Patty", "Bouvier", false, 40, 7),
-				newRow(11, "Selma", "Bouvier", false, 40, 7),
+				newPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
+				newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+				newPeopleRow(9, "Jacqueline", "Bouvier", true, 80, 2),
+				newPeopleRow(10, "Patty", "Bouvier", false, 40, 7),
+				newPeopleRow(11, "Selma", "Bouvier", false, 40, 7),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 5},
 		},
@@ -243,8 +243,8 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", "Simpson"),
 					(8, "Milhouse", "Van Houten")`,
 			insertedValues: []row.Row{
-				row.New(testSch, row.TaggedValues{idTag: types.Int(7), firstTag: types.String("Maggie"), lastTag: types.String("Simpson")}),
-				row.New(testSch, row.TaggedValues{idTag: types.Int(8), firstTag: types.String("Milhouse"), lastTag: types.String("Van Houten")}),
+				row.New(peopleTestSchema, row.TaggedValues{idTag: types.Int(7), firstTag: types.String("Maggie"), lastTag: types.String("Simpson")}),
+				row.New(peopleTestSchema, row.TaggedValues{idTag: types.Int(8), firstTag: types.String("Milhouse"), lastTag: types.String("Van Houten")}),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 2},
 		},
@@ -262,7 +262,7 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", "Simpson", false, 1, 5.1),
 					(7, "Milhouse", "Van Houten", false, 8, 3.5)`,
 			insertedValues: []row.Row{
-				newRow(7, "Maggie", "Simpson", false, 1, 5.1),
+				newPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 1, NumErrorsIgnored: 1},
 		},
@@ -301,11 +301,11 @@ func TestExecuteInsert(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
 
-			table, ok := result.Root.GetTable(testTableName)
+			table, ok := result.Root.GetTable(peopleTableName)
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {
-				foundRow, ok := table.GetRow(expectedRow.NomsMapKey(testSch).(types.Tuple), testSch)
+				foundRow, ok := table.GetRow(expectedRow.NomsMapKey(peopleTestSchema).(types.Tuple), peopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), floatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))

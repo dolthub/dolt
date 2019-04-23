@@ -17,7 +17,7 @@ import (
 
 // Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
-	tableName    string
+	tableNames   []string
 	selectedCols []string
 	aliases      *Aliases
 	filterFn     rowFilterFn
@@ -85,91 +85,16 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
 func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
-	tableExprs := s.From
-	if len(tableExprs) > 1 {
-		return errSelect("Only selecting from a single table is supported")
+	selectStmt := &selectStatement{aliases: NewAliases()}
+
+	if err := processFromClause(root, selectStmt, s.From, query); err != nil {
+		return nil, nil, err
 	}
 
-	var tableName string
-	aliases := NewAliases()
-
-	tableExpr := tableExprs[0]
-	switch te := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		switch e := te.Expr.(type) {
-		case sqlparser.TableName:
-			tableName = e.Name.String()
-		case *sqlparser.Subquery:
-			return errSelect("Subqueries are not supported: %v.", query)
-		default:
-			return errSelect("Unrecognized expression: %v", nodeToString(e))
-		}
-
-		if !te.As.IsEmpty() {
-			aliases.AddTableAlias(tableName, te.As.String())
-		}
-	case *sqlparser.ParenTableExpr:
-		return errSelect("Parenthetical table expressions are not supported: %v,", query)
-	case *sqlparser.JoinTableExpr:
-		return errSelect("Joins are not supported: %v,", query)
-	default:
-		return errSelect("Unsupported select statement: %v", query)
+	if err := processSelectedColumns(root, selectStmt, s.SelectExprs, query); err != nil {
+		return nil, nil, err
 	}
 
-	if !root.HasTable(tableName) {
-		return errSelect("Unknown table '%s'", tableName)
-	}
-	tbl, _:= root.GetTable(tableName)
-
-	selectStmt := &selectStatement{tableName: tableName}
-	tableSch := tbl.GetSchema()
-
-	// Process the columns selected
-	var columns []string
-	colSelections := s.SelectExprs
-	for _, colSelection := range colSelections {
-		switch selectExpr := colSelection.(type) {
-		case *sqlparser.StarExpr:
-			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-				columns = append(columns, col.Name)
-				return false
-			})
-		case *sqlparser.AliasedExpr:
-			colAlias := selectExpr.As.String()
-			switch colExpr := selectExpr.Expr.(type) {
-			case *sqlparser.ColName:
-
-				if !colExpr.Qualifier.IsEmpty() {
-					columnTableName := colExpr.Qualifier.Name.String()
-					if columnTableName != tableName {
-						if aliases.TablesByAlias[columnTableName] != tableName {
-							return errSelect("unknown table " + columnTableName)
-						}
-					}
-				}
-
-				colName := colExpr.Name.String()
-				_, ok := tableSch.GetAllCols().GetByName(colName)
-				if !ok {
-					return errSelect("Unknown column '%v'", colName)
-				}
-
-				// an absent column alias will be empty
-				if colAlias != "" {
-					aliases.AddColumnAlias(colName, colAlias)
-				}
-				columns = append(columns, colName)
-			default:
-				return errSelect("Only column selections or * are supported")
-			}
-		case sqlparser.Nextval:
-			return errSelect("Next value is not supported: %v", query)
-		}
-	}
-	selectStmt.selectedCols = columns
-	selectStmt.aliases = aliases
-
-	// Include a limit if asked for
 	if s.Limit != nil && s.Limit.Rowcount != nil {
 		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
 		if !ok {
@@ -184,17 +109,146 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 		selectStmt.limit = -1
 	}
 
-	err := processWhereClause(selectStmt, s, tableSch)
-	if err != nil {
+	if err := processWhereClause(root, selectStmt, s); err != nil {
 		return nil, nil, err
 	}
 
 	return createPipeline(root, selectStmt)
 }
 
+// Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
+// returning any error encountered.
+func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs, query string) error {
+	for _, tableExpr := range from {
+		var tableName string
+		switch te := tableExpr.(type) {
+		case *sqlparser.AliasedTableExpr:
+			switch e := te.Expr.(type) {
+			case sqlparser.TableName:
+				tableName = e.Name.String()
+			case *sqlparser.Subquery:
+				return errFmt("Subqueries are not supported: %v.", query)
+			default:
+				return errFmt("Unrecognized expression: %v", nodeToString(e))
+			}
+
+			if !te.As.IsEmpty() {
+				selectStmt.aliases.AddTableAlias(tableName, te.As.String())
+			}
+			selectStmt.aliases.AddTableAlias(tableName, tableName)
+			selectStmt.tableNames = append(selectStmt.tableNames, tableName)
+
+		case *sqlparser.ParenTableExpr:
+			return errFmt("Parenthetical table expressions are not supported: %v,", query)
+		case *sqlparser.JoinTableExpr:
+			return errFmt("Joins are not supported: %v,", query)
+		default:
+			return errFmt("Unsupported select statement: %v", query)
+		}
+
+		if !root.HasTable(tableName) {
+			return errFmt("Unknown table '%s'", tableName)
+		}
+	}
+
+	return nil
+}
+
+// Processes the select expression (columns to return from the query). Adds the results to the selectStatement given,
+// or returns an error if it cannot. All aliases must be established in the selectStatement.
+func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement, colSelections sqlparser.SelectExprs, query string) error {
+	var columns []string
+	for _, colSelection := range colSelections {
+		switch selectExpr := colSelection.(type) {
+		case *sqlparser.StarExpr:
+			// TODO: this only works for a single table
+			tableSch := mustGetSchema(root, selectStmt.tableNames[0])
+			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+				columns = append(columns, col.Name)
+				return false
+			})
+		case *sqlparser.AliasedExpr:
+			colAlias := selectExpr.As.String()
+			switch colExpr := selectExpr.Expr.(type) {
+			case *sqlparser.ColName:
+
+				var tableSch schema.Schema
+				colName := colExpr.Name.String()
+				if !colExpr.Qualifier.IsEmpty() {
+					columnTableName := colExpr.Qualifier.Name.String()
+					if tableName, ok := selectStmt.aliases.TablesByAlias[columnTableName]; ok{
+						tableSch = mustGetSchema(root, tableName)
+					} else {
+						return errFmt("unknown table " + columnTableName)
+					}
+				} else {
+					var err error
+					tableSch, err = findSchemaForColumn(root, colName, selectStmt.tableNames)
+					if err != nil {
+						return err
+					}
+				}
+
+				_, ok := tableSch.GetAllCols().GetByName(colName)
+				if !ok {
+					return errFmt("Unknown column '%v'", colName)
+				}
+
+				// an absent column alias will be empty
+				if colAlias != "" {
+					selectStmt.aliases.AddColumnAlias(colName, colAlias)
+				}
+				columns = append(columns, colName)
+			default:
+				return errFmt("Only column selections or * are supported")
+			}
+		case sqlparser.Nextval:
+			return errFmt("Next value is not supported: %v", query)
+		}
+	}
+
+	selectStmt.selectedCols = columns
+	return nil
+}
+
+// Finds the schema that contains the column name given among the tables given. Returns an error if no schema contains
+// such a column name, or if multiple do. This method is only used for naked column names, not qualified ones. Assumes
+// that table names have already been verified to exist.
+func findSchemaForColumn(root *doltdb.RootValue, colName string, tableNames []string) (schema.Schema, error) {
+	schemas := make(map[string]schema.Schema)
+	for _, tableName := range tableNames {
+		schemas[tableName] = mustGetSchema(root, tableName)
+	}
+
+	var colSchema schema.Schema
+	for _, sch := range schemas {
+		if _, ok := sch.GetAllCols().GetByName(colName); ok {
+			if colSchema != nil {
+				return nil, errFmt("Ambiguous column: %v", colName)
+			}
+			colSchema = sch
+		}
+	}
+
+	if colSchema == nil {
+		return nil, errFmt("Unknown column '%v'", colName)
+	}
+
+	return colSchema, nil
+}
+
+// Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
+func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
+	tbl, _:= root.GetTable(tableName)
+	return tbl.GetSchema()
+}
+
 // Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
 // where clause can't be processed.
-func processWhereClause(selectStmt *selectStatement, s *sqlparser.Select, tableSch schema.Schema) error {
+func processWhereClause(root *doltdb.RootValue, selectStmt *selectStatement, s *sqlparser.Select) error {
+	// TODO: make work for more than 1 table
+	tableSch := mustGetSchema(root, selectStmt.tableNames[0])
+
 	filter, err := createFilterForWhere(s.Where, tableSch, selectStmt.aliases)
 	if err != nil {
 		return err
@@ -213,7 +267,7 @@ func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.S
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
 func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, errhand.VerboseError) {
-	tbl, _ := root.GetTable(statement.tableName)
+	tbl, _ := root.GetTable(statement.tableNames[0])
 	tblSch := tbl.GetSchema()
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}

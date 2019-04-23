@@ -11,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"reflect"
@@ -33,16 +34,46 @@ const (
 	numEpisodesTag
 )
 
-var testSch = createTestSchema()
-var untypedSch = untyped.UntypeUnkeySchema(testSch)
-var testTableName = "people"
+const (
+	episodeIdTag = iota
+	epNameTag
+	epAirDateTag
+	epRatingTag
+)
+
+const (
+	appCharacterTag = iota
+	appEpTag
+	appCommentsTag
+)
+
+const (
+	homerId = iota
+	margeId
+	bartId
+	lisaId
+	moeId
+	barneyId
+)
+
+var peopleTestSchema = createPeopleTestSchema()
+var untypedPeopleSch = untyped.UntypeUnkeySchema(peopleTestSchema)
+var peopleTableName = "people"
+
+var episodesTestSchema = createEpisodesTestSchema()
+var untypedEpisodesSch = untyped.UntypeUnkeySchema(episodesTestSchema)
+var episodesTableName = "episodes"
+
+var appearancesTestSchema = createAppearancesTestSchema()
+var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
+var appearancesTableName = "appearances"
 
 func createSchema(columns... schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
 }
 
-func createTestSchema() schema.Schema {
+func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -57,7 +88,26 @@ func createTestSchema() schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-func newRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
+func createEpisodesTestSchema() schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("id", episodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", epNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("air_date", epAirDateTag, types.IntKind, false),
+		schema.NewColumn("rating", epRatingTag, types.FloatKind, false),
+	)
+	return schema.SchemaFromCols(colColl)
+}
+
+func createAppearancesTestSchema() schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("character_id", appCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("episode_id", appEpTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("comments", appCommentsTag, types.StringKind, false),
+	)
+	return schema.SchemaFromCols(colColl)
+}
+
+func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
 		firstTag: types.String(first),
@@ -67,11 +117,32 @@ func newRow(id int, first, last string, isMarried bool, age int, rating float32)
 		ratingTag: types.Float(rating),
 	}
 
-	return row.New(testSch, vals)
+	return row.New(peopleTestSchema, vals)
+}
+
+func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
+	vals := row.TaggedValues{
+		episodeIdTag: types.Int(id),
+		epNameTag: types.String(name),
+		epAirDateTag: types.Int(airdate),
+		epRatingTag: types.Float(rating),
+	}
+
+	return row.New(episodesTestSchema, vals)
+}
+
+func newAppsRow(charId, epId int, comment string) row.Row {
+	vals := row.TaggedValues{
+		appCharacterTag: types.Int(charId),
+		appEpTag : types.Int(epId),
+		appCommentsTag: types.String(comment),
+	}
+
+	return row.New(appearancesTestSchema, vals)
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
-func newRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
+func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
 		idTag: types.Int(id),
 		firstTag: types.String(first),
@@ -83,35 +154,56 @@ func newRowWithOptionalFields(id int, first, last string, isMarried bool, age in
 		numEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(testSch, vals)
+	return row.New(peopleTestSchema, vals)
 }
 
-// Default set of rows to use for sql tests
-var homer = newRow(0, "Homer", "Simpson", true, 40, 8.5)
-var marge = newRow(1, "Marge", "Simpson", true, 38, 8)
-var bart = newRow(2, "Bart", "Simpson", false, 10, 9)
-var lisa = newRow(3, "Lisa", "Simpson", false, 8, 10)
-var moe = newRow(4, "Moe", "Szyslak", false, 48, 6.5)
-var barney = newRow(5, "Barney", "Gumble", false, 40, 4)
+// 6 characters
+var homer = newPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
+var marge = newPeopleRow(margeId, "Marge", "Simpson", true, 38, 8)
+var bart = newPeopleRow(bartId, "Bart", "Simpson", false, 10, 9)
+var lisa = newPeopleRow(lisaId, "Lisa", "Simpson", false, 8, 10)
+var moe = newPeopleRow(moeId, "Moe", "Szyslak", false, 48, 6.5)
+var barney = newPeopleRow(barneyId, "Barney", "Gumble", false, 40, 4)
+var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
 
-var allTestRows = rs(homer, marge, bart, lisa, moe, barney)
+// Actually the first 4 episodes of the show
+var ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
+var ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
+var ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
+var ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
+var allEpsRows = rs(ep1, ep2, ep3, ep4)
 
+// These are made up, not the actual show data
+var app1 = newAppsRow(homerId, 1, "Homer is great in this one")
+var app2 = newAppsRow(margeId, 1, "Marge is here too")
+var app3 = newAppsRow(homerId, 2, "Homer is great in this one too")
+var app4 = newAppsRow(bartId, 2, "This episode is named after Bart")
+var app5 = newAppsRow(lisaId, 2, "Lisa is here too")
+var app6 = newAppsRow(moeId, 2, "I think there's a prank call scene")
+var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
+var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
+var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
+var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+// nobody in episode 4, that one was terrible
+var allAppsRows = rs(app1,app2,app3,app4,app5,app6,app7,app8,app9,app10)
+
+// Convenience func to avoid the boilerplate of typing []row.Row{} all the time
 func rs(rows... row.Row) []row.Row {
 	return rows
 }
 
 // Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
 func findRowIndex(find row.Row, rows []row.Row) int {
-	verifyIdx := -1
+	idx := -1
 	for i, updatedRow := range rows {
 		rowId, _ := find.GetColVal(idTag)
 		updatedId, _ := updatedRow.GetColVal(idTag)
 		if rowId.Equals(updatedId) {
-			verifyIdx = i
+			idx = i
 			break
 		}
 	}
-	return verifyIdx
+	return idx
 }
 
 // Compares two noms Floats for approximate equality
@@ -138,6 +230,26 @@ func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	}
 
 	return schema.UnkeyedSchemaFromCols(srcColls)
+}
+
+// Returns the cross product of the collections of rows given with the target schema given
+func crossProduct(sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row{
+	emptyRow := resultset.RowWithSchema{row.New(sch, row.TaggedValues{}), sch}
+	return cph(emptyRow, sch, rowCollections)
+}
+
+// Recursive helper function for crossProduct
+func cph(r resultset.RowWithSchema, sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row {
+	if len(rowCollections) == 0 {
+		return []row.Row{r.Row}
+	}
+
+	resultSet := make([]row.Row, 0)
+	//for _, r2 := range rowCollections[0] {
+	//	partialRow := resultset.CombineRows(r, r2)
+	//	resultSet = append(resultSet, cph(partialRow, sch, rowCollections[1:])...)
+	//}
+	return resultSet
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
@@ -180,7 +292,7 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 			nomsVal = nil
 		}
 
-		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, testSch)
+		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, peopleTestSchema)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -210,20 +322,19 @@ func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row 
 
 	rConv, _ := rowconv.NewRowConverter(fieldMapping)
 	untyped, err := rConv.Convert(r)
-	assert.Nil(t, err, "failed to untyped row to untyped")
+	assert.Nil(t, err, "failed to convert row to new schema")
 	return untyped
 }
 
-// Creates a test database with the test data set in it
-func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	imt := table.NewInMemTable(testSch)
+func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs... row.Row) {
+	imt := table.NewInMemTable(sch)
 
-	for _, r := range []row.Row{homer, marge, bart, lisa, moe, barney} {
+	for _, r := range rs {
 		imt.AppendRow(r)
 	}
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), testSch)
+	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
 
 	_, _, err := table.PipeRows(rd, wr, false)
 	rd.Close()
@@ -231,6 +342,13 @@ func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 
 	assert.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), testTableName)
+	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
 	assert.Nil(t, err,"Unable to put initial value of table in in mem noms db")
+}
+
+// Creates a test database with the test data set in it
+func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
+	createTestTable(dEnv, t, peopleTableName, peopleTestSchema, allPeopleRows...)
+	createTestTable(dEnv, t, episodesTableName, episodesTestSchema, allEpsRows...)
+	createTestTable(dEnv, t, appearancesTableName, appearancesTestSchema, allAppsRows...)
 }
