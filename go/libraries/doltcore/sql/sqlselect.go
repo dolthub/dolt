@@ -46,8 +46,8 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([]row.Row, schema.Schema, error) {
-	p, schema, err := BuildSelectQueryPipeline(root, s, query)
+func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
+	p, schema, err := BuildSelectQueryPipeline(root, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,25 +84,25 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
-func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
+func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, schema.Schema, error) {
 	selectStmt := &selectStatement{aliases: NewAliases()}
 
-	if err := processFromClause(root, selectStmt, s.From, query); err != nil {
+	if err := processFromClause(root, selectStmt, s.From); err != nil {
 		return nil, nil, err
 	}
 
-	if err := processSelectedColumns(root, selectStmt, s.SelectExprs, query); err != nil {
+	if err := processSelectedColumns(root, selectStmt, s.SelectExprs); err != nil {
 		return nil, nil, err
 	}
 
 	if s.Limit != nil && s.Limit.Rowcount != nil {
 		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
 		if !ok {
-			return errSelect("Couldn't parse limit clause: %v", query)
+			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 		}
 		limitInt, err := strconv.Atoi(nodeToString(limitVal))
 		if err != nil {
-			return errSelect("Couldn't parse limit clause: %v", query)
+			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 		}
 		selectStmt.limit = limitInt
 	} else {
@@ -118,7 +118,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
-func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs, query string) error {
+func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs) error {
 	for _, tableExpr := range from {
 		var tableName string
 		switch te := tableExpr.(type) {
@@ -127,7 +127,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 			case sqlparser.TableName:
 				tableName = e.Name.String()
 			case *sqlparser.Subquery:
-				return errFmt("Subqueries are not supported: %v.", query)
+				return errFmt("Subqueries are not supported: %v.", nodeToString(e))
 			default:
 				return errFmt("Unrecognized expression: %v", nodeToString(e))
 			}
@@ -139,11 +139,11 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 			selectStmt.tableNames = append(selectStmt.tableNames, tableName)
 
 		case *sqlparser.ParenTableExpr:
-			return errFmt("Parenthetical table expressions are not supported: %v,", query)
+			return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
 		case *sqlparser.JoinTableExpr:
-			return errFmt("Joins are not supported: %v,", query)
+			return errFmt("Joins are not supported: %v,", nodeToString(te))
 		default:
-			return errFmt("Unsupported select statement: %v", query)
+			return errFmt("Unsupported select statement: %v", nodeToString(te))
 		}
 
 		if !root.HasTable(tableName) {
@@ -156,7 +156,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 
 // Processes the select expression (columns to return from the query). Adds the results to the selectStatement given,
 // or returns an error if it cannot. All aliases must be established in the selectStatement.
-func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement, colSelections sqlparser.SelectExprs, query string) error {
+func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []string
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
@@ -203,7 +203,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement,
 				return errFmt("Only column selections or * are supported")
 			}
 		case sqlparser.Nextval:
-			return errFmt("Next value is not supported: %v", query)
+			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
 		}
 	}
 
