@@ -3,6 +3,7 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"testing"
 
@@ -261,7 +262,7 @@ func TestExecuteSelect(t *testing.T) {
 			name:  "Test select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: rs(homer, moe, barney),
-			expectedSchema: subsetSchema(untypedPeopleSch, "first", "last"),
+			expectedSchema: resultset.SubsetSchema(untypedPeopleSch, "first", "last"),
 		},
 		{
 			name:  "Test column aliases",
@@ -330,7 +331,7 @@ func TestExecuteSelect(t *testing.T) {
 			name:  "Test empty result set with columns",
 			query: "select id, age from people where age > 80",
 			expectedRows: rs(),
-			expectedSchema: subsetSchema(untypedPeopleSch, "id", "age"),
+			expectedSchema: resultset.SubsetSchema(untypedPeopleSch, "id", "age"),
 		},
 		{
 			name:  "Test select * unknown column",
@@ -414,7 +415,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			name:  "Test select columns ",
 			query: "select age, id from people",
 			expectedNumRows: len([]row.Row{homer, marge, bart, lisa, moe, barney}),
-			expectedSchema: subsetSchema(untypedPeopleSch, "age", "id"),
+			expectedSchema: resultset.SubsetSchema(untypedPeopleSch, "age", "id"),
 		},
 	}
 	for _, tt := range tests {

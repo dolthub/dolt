@@ -36,6 +36,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 
 	for _, c := range allCols.cols {
 		c.IsPartOfPK = false
+		c.Constraints = nil
 		nonPKCols = append(nonPKCols, c)
 	}
 
