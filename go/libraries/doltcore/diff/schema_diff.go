@@ -1,16 +1,20 @@
 package diff
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
+type SchemaChangeType int
+
 const (
-	DiffChangeNone types.DiffChangeType = 255
+	SchDiffNone SchemaChangeType = iota
+	SchDiffColAdded
+	SchDiffColRemoved
+	SchDiffColModified
 )
 
 type SchemaDifference struct {
-	DiffType types.DiffChangeType
+	DiffType SchemaChangeType
 	Tag      uint64
 	Old      *schema.Column
 	New      *schema.Column
@@ -22,13 +26,13 @@ func DiffSchemas(sch1, sch2 schema.Schema) map[uint64]SchemaDifference {
 	diffs := make(map[uint64]SchemaDifference)
 	for tag, colPair := range colPairMap {
 		if colPair[0] == nil {
-			diffs[tag] = SchemaDifference{types.DiffChangeAdded, tag, nil, colPair[1]}
+			diffs[tag] = SchemaDifference{SchDiffColAdded, tag, nil, colPair[1]}
 		} else if colPair[1] == nil {
-			diffs[tag] = SchemaDifference{types.DiffChangeRemoved, tag, colPair[0], nil}
+			diffs[tag] = SchemaDifference{SchDiffColRemoved, tag, colPair[0], nil}
 		} else if !colPair[0].Equals(*colPair[1]) {
-			diffs[tag] = SchemaDifference{types.DiffChangeModified, tag, colPair[0], colPair[1]}
+			diffs[tag] = SchemaDifference{SchDiffColModified, tag, colPair[0], colPair[1]}
 		} else {
-			diffs[tag] = SchemaDifference{DiffChangeNone, tag, colPair[0], colPair[1]}
+			diffs[tag] = SchemaDifference{SchDiffNone, tag, colPair[0], colPair[1]}
 		}
 	}
 
