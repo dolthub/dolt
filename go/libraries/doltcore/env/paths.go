@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	doltRootParentDirEnvVar = "PARENT_OF_DOLT_ROOT_DIR"
-	credsDir                = "creds"
+	doltRootPathEnvVar = "DOLT_ROOT_PATH"
+	credsDir           = "creds"
 
 	configFile   = "config.json"
 	globalConfig = "config_global.json"
@@ -22,11 +22,11 @@ const (
 type HomeDirProvider func() (string, error)
 
 // GetCurrentUserHomeDir will return the current user's home directory by default.  This directory is where global dolt
-// state will be stored inside of the .dolt directory.  The environment variable PARENT_OF_DOLT_ROOT_DIR can be used to
+// state will be stored inside of the .dolt directory.  The environment variable DOLT_ROOT_PATH can be used to
 // provide a different directory where the root .dolt directory should be located and global state will be stored there.
 func GetCurrentUserHomeDir() (string, error) {
-	if parentOfDoltRootDir, ok := os.LookupEnv(doltRootParentDirEnvVar); ok && parentOfDoltRootDir != "" {
-		return parentOfDoltRootDir, nil
+	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
+		return doltRootPath, nil
 	}
 
 	if usr, err := user.Current(); err != nil {
