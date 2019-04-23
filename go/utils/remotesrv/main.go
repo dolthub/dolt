@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
 )
 
@@ -49,9 +50,18 @@ func main() {
 	}
 
 	stopChan, wg := startServer(httpHost, *httpPortParam, *grpcPortParam)
+	waitForSignal()
 
 	close(stopChan)
 	wg.Wait()
+}
+
+func waitForSignal() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Kill)
+
+	<-c
 }
 
 func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sync.WaitGroup) {
@@ -69,15 +79,6 @@ func startServer(httpHost string, httpPort, grpcPort int) (chan interface{}, *sy
 		defer wg.Done()
 		grpcServer(httpHost, grpcPort, stopChan)
 	}()
-
-	oneByte := [1]byte{}
-	for {
-		_, err := os.Stdin.Read(oneByte[:])
-
-		if err != nil || oneByte[0] == '\n' {
-			break
-		}
-	}
 
 	return stopChan, &wg
 }
