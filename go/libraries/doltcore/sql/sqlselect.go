@@ -141,7 +141,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 		case *sqlparser.ParenTableExpr:
 			return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
 		case *sqlparser.JoinTableExpr:
-			return errFmt("Joins are not supported: %v,", nodeToString(te))
+			return errFmt("Joins expressions are not supported: %v,", nodeToString(te))
 		default:
 			return errFmt("Unsupported select statement: %v", nodeToString(te))
 		}

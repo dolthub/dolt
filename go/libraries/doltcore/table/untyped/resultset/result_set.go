@@ -54,6 +54,23 @@ func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, err
 	return rss, nil
 }
 
+// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Columns names
+// must be verified before subsetting. Unrecognized column names will cause a panic.
+func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
+	srcColls := sch.GetAllCols()
+
+	var cols []schema.Column
+	for _, name := range colNames {
+		if col, ok := srcColls.GetByName(name); !ok {
+			panic("Unrecognized name " + name)
+		} else {
+			cols = append(cols, col)
+		}
+	}
+	colColl, _ := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colColl)
+}
+
 // Validates that the given schema is suitable for use as a result set. Result set schemas must use contiguous tags
 // starting at 0.
 func validateSchema(sch schema.Schema) (uint64, error) {
