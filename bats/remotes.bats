@@ -5,7 +5,7 @@ setup() {
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    remotesrv --dir $BATS_TMPDIR/remotes-$$ &>/dev/null 3>&- &
+    remotesrv --dir $BATS_TMPDIR/remotes-$$ &>$BATS_TMPDIR/remotesrv-$$.log 3>&- &
     mkdir dolt-repo-$$
     cd dolt-repo-$$
     dolt init
@@ -15,6 +15,8 @@ setup() {
 teardown() {
     rm -rf $BATS_TMPDIR/dolt-repo-$$
     pkill -9 remotesrv
+    cat $BATS_TMPDIR/remotesrv-$$.log
+    rm $BATS_TMPDIR/remotesrv-$$.log
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
@@ -36,7 +38,6 @@ teardown() {
 
 @test "push and pull from a remote" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
-    pgrep remotesrv
     run dolt push test-remote master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -85,7 +86,6 @@ teardown() {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
-    pgrep remotesrv
     dolt push test-remote master
     cd "dolt-repo-clones"
     run dolt clone localhost:50051/test-org/test-repo --insecure
@@ -99,7 +99,6 @@ teardown() {
 
 @test "dolt fetch" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
-    pgrep remotesrv
     dolt push test-remote master
     run dolt fetch test-remote master
     [ "$status" -eq 0 ]
