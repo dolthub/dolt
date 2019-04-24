@@ -115,6 +115,10 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test commit" ]] || false
+    run dolt merge remotes/origin/master
+    [ "$status" -eq 0 ]
+    # This needs to say up-to-date like the skipped test above
+    # [[ "$output" =~ "up to date" ]]
     run dolt fetch origin master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
