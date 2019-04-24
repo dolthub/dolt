@@ -14,7 +14,7 @@ setup() {
 
 teardown() {
     rm -rf $BATS_TMPDIR/dolt-repo-$$
-    pkill -9 remotesrv
+    pkill -2 remotesrv
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
