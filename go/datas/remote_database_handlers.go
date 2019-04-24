@@ -189,7 +189,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 	}
 
 	if chunkCount > 0 {
-		types.PanicIfDangling(unresolvedRefs, cs)
+		types.PanicIfDangling(context.TODO(), unresolvedRefs, cs)
 		persistChunks(cs)
 	}
 
