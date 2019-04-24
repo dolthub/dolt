@@ -129,3 +129,24 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 }
+
+@test "try to push a remote that is behind tip" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo --insecure
+    cd ..
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    run dolt push origin master
+    [ "$status" -eq 0 ]
+    [ "$output" = "Everything up-to-date" ] || false
+    dolt fetch origin master
+    run dolt push origin master
+    skip "dolt push when behind returns a 0 exit code now. should be 1"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "tip of your current branch is behind" ]] || false
+}
