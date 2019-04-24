@@ -5,17 +5,17 @@ setup() {
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    remotesrv --dir "$BATS_TMPDIR/remotes-$$" &>/dev/null 3>&- &
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
+    remotesrv --dir $BATS_TMPDIR/remotes-$$ &>/dev/null 3>&- &
+    mkdir dolt-repo-$$
+    cd dolt-repo-$$
     dolt init
     mkdir "dolt-repo-clones"
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    rm -rf $BATS_TMPDIR/dolt-repo-$$
     pkill -9 remotesrv
-    rm -rf "$BATS_TMPDIR/remotes-$$"
+    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "dolt remotes server is running" {
