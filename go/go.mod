@@ -27,4 +27,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190408232856-671acb36001e
+// replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190408232856-671acb36001e
+replace github.com/attic-labs/noms => ../../../noms
