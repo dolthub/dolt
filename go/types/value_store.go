@@ -58,8 +58,8 @@ type ValueStore struct {
 	versOnce sync.Once
 }
 
-func PanicIfDangling(unresolved hash.HashSet, cs chunks.ChunkStore) {
-	absent := cs.HasMany(context.TODO(), unresolved)
+func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
+	absent := cs.HasMany(ctx, unresolved)
 	if len(absent) != 0 {
 		d.Panic("Found dangling references to %v", absent)
 	}
@@ -356,7 +356,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 				}
 			}
 
-			PanicIfDangling(lvs.unresolvedRefs, lvs.cs)
+			PanicIfDangling(context.TODO(), lvs.unresolvedRefs, lvs.cs)
 		}
 
 		if !lvs.cs.Commit(context.TODO(), current, last) {
