@@ -54,7 +54,7 @@ type Pipeline struct {
 	inputChansByStageName map[string]chan RowWithProps
 	// A collection of synthetic rows to insert into the pipeline at a particular stage, before any other pipelined
 	// input arrives to that stage.
-	syntheticRowsByStageName map[string][]row.Row
+	syntheticRowsByStageName map[string][]RowWithProps
 	// A set of functions to run when the pipeline finishes.
 	runAfterFuncs []func()
 	// Whether the pipeline is currently running
@@ -75,7 +75,7 @@ func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollectio
 		stopChan:                 make(chan struct{}),
 		noMoreChan:               make(chan struct{}),
 		inputChansByStageName:    make(map[string]chan RowWithProps),
-		syntheticRowsByStageName: make(map[string][]row.Row),
+		syntheticRowsByStageName: make(map[string][]RowWithProps),
 	}
 }
 
@@ -115,6 +115,10 @@ func (p *Pipeline) SetBadRowCallback(callback BadRowCallback) {
 // InjectRow injects a row at a particular stage in the pipeline. The row will be processed before other pipeline input
 // arrives.
 func (p *Pipeline) InjectRow(stageName string, r row.Row) {
+	p.InjectRowWithProps(stageName, r, nil)
+}
+
+func (p *Pipeline) InjectRowWithProps(stageName string, r row.Row, props map[string]interface{}) {
 	if p.isRunning {
 		panic("cannot inject rows into a running pipeline")
 	}
@@ -132,9 +136,11 @@ func (p *Pipeline) InjectRow(stageName string, r row.Row) {
 
 	_, ok := p.syntheticRowsByStageName[stageName]
 	if !ok {
-		p.syntheticRowsByStageName[stageName] = make([]row.Row, 0, 1)
+		p.syntheticRowsByStageName[stageName] = make([]RowWithProps, 0, 1)
 	}
-	p.syntheticRowsByStageName[stageName] = append(p.syntheticRowsByStageName[stageName], r)
+
+	rowWithProps := NewRowWithProps(r, props)
+	p.syntheticRowsByStageName[stageName] = append(p.syntheticRowsByStageName[stageName], rowWithProps)
 }
 
 // Schedules the given function to run after the pipeline completes.
@@ -184,8 +190,8 @@ func (p *Pipeline) Start() {
 	// Inject all synthetic rows requested into their appropriate input channels.
 	for stageName, injectedRows := range p.syntheticRowsByStageName {
 		ch := p.inputChansByStageName[stageName]
-		for _, row := range injectedRows {
-			ch <- RowWithProps{row, NoProps}
+		for _, rowWithProps := range injectedRows {
+			ch <- rowWithProps
 		}
 	}
 
@@ -249,7 +255,6 @@ func (p *Pipeline) Abort() {
 
 	close(p.stopChan)
 }
-
 
 // StopWithErr provides a method by the pipeline can be stopped when an error is encountered.  This would typically be
 // done in InFuncs and OutFuncs

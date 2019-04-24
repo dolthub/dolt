@@ -18,7 +18,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
+	"reflect"
 	"sort"
+	"strconv"
 )
 
 const (
@@ -253,8 +255,27 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 	return nil
 }
 
+func dumbDownSchema(in schema.Schema) schema.Schema {
+	allCols := in.GetAllCols()
+
+	dumbCols := make([]schema.Column, 0, allCols.Size())
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		col.Name = strconv.FormatUint(tag, 10)
+		col.Constraints = nil
+		dumbCols = append(dumbCols, col)
+
+		return false
+	})
+
+	dumbColColl, _ := schema.NewColCollection(dumbCols...)
+	return schema.SchemaFromCols(dumbColColl)
+}
+
 func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
-	untypedUnionSch, err := untyped.UntypedSchemaUnion(newSch, oldSch)
+	dumbNewSch := dumbDownSchema(newSch)
+	dumbOldSch := dumbDownSchema(oldSch)
+
+	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to merge schemas").Build()
@@ -307,8 +328,34 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
 	p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, badRowCB)
 
-	colNames := schema.ExtractAllColNames(untypedUnionSch)
-	p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, colNames))
+	oldColNames := make(map[uint64]string)
+	newColNames := make(map[uint64]string)
+	untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		oldCol, oldOk := oldSch.GetAllCols().GetByTag(tag)
+		newCol, newOk := newSch.GetAllCols().GetByTag(tag)
+
+		if oldOk {
+			oldColNames[tag] = oldCol.Name
+		} else {
+			oldColNames[tag] = ""
+		}
+
+		if newOk {
+			newColNames[tag] = newCol.Name
+		} else {
+			newColNames[tag] = ""
+		}
+
+		return false
+	})
+
+	if reflect.DeepEqual(oldColNames, newColNames) {
+		p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames))
+	} else {
+		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+	}
+
 	p.Start()
 	p.Wait()
 

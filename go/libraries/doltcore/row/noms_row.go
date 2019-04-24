@@ -90,7 +90,7 @@ func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream. col:" + col.Name)
+			delete(keyVals, tag)
 		} else if !col.IsPartOfPK {
 			panic("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
@@ -104,7 +104,7 @@ func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream. col:" + col.Name)
+			delete(nonKeyVals, tag)
 		} else if col.IsPartOfPK {
 			panic("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
