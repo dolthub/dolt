@@ -42,13 +42,37 @@ func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, err
 	}
 
 	if rss, err = NewFromDestSchema(sch); err != nil {
-		return &ResultSetSchema{}, err
+		return nil, err
 	}
 
 	for _, ss := range sourceSchemas {
 		if err = rss.AddSchema(ss); err != nil {
 			return nil, err
 		}
+	}
+
+	return rss, nil
+}
+
+// Creates a new result set schema for columns given. Tag numbers in the result schema will be rewritten as necessary,
+// starting from 0.
+func NewFromColumns(columns ...schema.Column) (*ResultSetSchema, error) {
+	var sch schema.Schema
+	var rss *ResultSetSchema
+	var err error
+
+	for i, _ := range columns {
+		columns[i].Tag = uint64(i)
+	}
+	colColl, err := schema.NewColCollection(columns...)
+	if err != nil {
+		return nil, err
+	}
+
+	sch = schema.UnkeyedSchemaFromCols(colColl)
+
+	if rss, err = NewFromDestSchema(sch); err != nil {
+		return nil, err
 	}
 
 	return rss, nil
@@ -92,7 +116,7 @@ func validateSchema(sch schema.Schema) (uint64, error) {
 	return expectedTag - 1, nil
 }
 
-// Adds a schema to the result set mapping. The order of
+// Adds a schema to the result set mapping
 func (rss *ResultSetSchema) AddSchema(sch schema.Schema) error {
 	if rss.maxAssignedTag + uint64(len(sch.GetAllCols().GetColumns()) - 1) > rss.maxSchTag {
 		return errors.New("No room for additional schema in mapping, result set schema too small")
@@ -114,9 +138,31 @@ func (rss *ResultSetSchema) AddSchema(sch schema.Schema) error {
 	return nil
 }
 
-// OutputSchema returns the schema for this result set.
+// Adds a single column to the result set schema, from the source schema given.
+func (rss *ResultSetSchema) AddColumn(sourceSchema schema.Schema, column schema.Column) error {
+	if rss.maxAssignedTag > rss.maxSchTag {
+		return errors.New("No room for additional column in mapping, result set schema too small")
+	}
+
+	fieldMapping, ok := rss.mapping[sourceSchema]
+	if !ok {
+		fieldMapping = &rowconv.FieldMapping{SrcSch: sourceSchema, DestSch: rss.destSch, SrcToDest: make(map[uint64]uint64)}
+	}
+	fieldMapping.SrcToDest[column.Tag] = rss.maxAssignedTag
+	rss.maxAssignedTag++
+
+	rss.mapping[sourceSchema] = fieldMapping
+	return nil
+}
+
+// Schema returns the schema for this result set.
 func (rss *ResultSetSchema) Schema() schema.Schema {
 	return rss.destSch
+}
+
+// Mapping returns the field mapping for the given schema.
+func (rss *ResultSetSchema) Mapping(sch schema.Schema) *rowconv.FieldMapping {
+	return rss.mapping[sch]
 }
 
 // Concatenates the given schemas together into a new one. This rewrites the tag numbers to be contiguous and
