@@ -3,14 +3,12 @@ package sql
 import (
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
@@ -18,10 +16,15 @@ import (
 
 // Struct to represent the salient results of parsing a select statement.
 type selectStatement struct {
+	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
+	// Columns to be selected
 	selectedCols []QualifiedColumn
+	// Aliases for columns and tables
 	aliases      *Aliases
+	// Filter function for the result set
 	filterFn     rowFilterFn
+	// Limit of results returned
 	limit        int
 }
 
@@ -272,7 +275,7 @@ func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.S
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, errhand.VerboseError) {
+func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, error) {
 
 	// TODO: make work for more than one table
 	var tblSch schema.Schema
@@ -284,14 +287,14 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 	}
 	tbl, _ := root.GetTable(tblName)
 
+	outSchema, err := getResultSetSchema(statement)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-//	outSchema := getResultSetSchema(statement)
-	outSchema, verr := addColumnMapTransform(statement, tblSch, transforms)
-
-	if verr != nil {
-		return nil, nil, verr
-	}
+	transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, outSchema))
 
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
@@ -301,47 +304,31 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 
 	p.RunAfter(func() { rd.Close() })
 
-//	return p, outSchema.Schema(), nil
-	return p, outSchema, nil
+	return p, outSchema.Schema(), nil
+//	return p, outSchema, nil
 }
 
-// Returns ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
+func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.ResultSetSchema) pipeline.NamedTransform {
+	mapping := rss.Mapping(tableSch)
+	rConv, _ := rowconv.NewRowConverter(mapping)
+	return pipeline.NewNamedTransform("mapToResultSet", rowconv.GetRowConvTransformFunc(rConv))
+}
+
+// Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
 // from the individual table schemas.
-func getResultSetSchema(stmt *selectStatement) *resultset.ResultSetSchema {
+func getResultSetSchema(statement *selectStatement) (*resultset.ResultSetSchema, error) {
 
-	for tableName, tableSch := range stmt.inputSchemas {
-		colNames := make([]string, 0)
-		for _, col := range stmt.selectedCols {
-			if col.TableName == tableName {
-				_, ok := tableSch.GetAllCols().GetByName(col.ColumnName)
-				if !ok {
-					panic(fmt.Sprintf("No column %v found in table %v", col.ColumnName, tableName))
-				}
-				colNames = append(colNames, col.ColumnName)
-			}
-		}
-		//subsetSchema := resultset.SubsetSchema(tableSch, colNames...)
-		//for _, col := range subsetSchema.GetAllCols().GetColumns() {
-			//if alias, ok := stmt.aliases.AliasesByColumn[Co]; ok {
-			//	col.Name = alias
-			//}
-		}
-	//}
+	// Iterate over the columns twice: first to get an ordered list to use to create an output schema with
+	cols := make([]schema.Column, 0, len(statement.selectedCols))
+	for _, selectedCol := range statement.selectedCols {
+		colName := selectedCol.ColumnName
+		tableName := selectedCol.TableName
 
-	return nil
-}
-
-// Adds a transformation that maps column names in a result set to a new set of columns.
-func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
-	colColl := tableSch.GetAllCols()
-
-	if len(statement.selectedCols) > 0 {
-		cols := make([]schema.Column, 0, len(statement.selectedCols))
-
-		for _, selectedCol := range statement.selectedCols {
-			colName := selectedCol.ColumnName
-			if col, ok := colColl.GetByName(colName); !ok {
-				panic("unknown column " + colName)
+		if tableSch, ok := statement.inputSchemas[tableName]; !ok {
+			panic ("Unknown table " + tableName)
+		} else {
+			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
+				panic("Unknown column " + colName)
 			} else {
 				if alias, ok := statement.aliases.AliasesByColumn[selectedCol]; ok {
 					col.Name = alias
@@ -349,20 +336,23 @@ func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, t
 				cols = append(cols, col)
 			}
 		}
-
-		colColl, _ = schema.NewColCollection(cols...)
 	}
 
-	outSch := schema.UnkeyedSchemaFromCols(colColl)
-	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeUnkeySchema(outSch))
-
+	rss, err := resultset.NewFromColumns(cols...)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	transform := pipeline.NewNamedTransform("map", rowconv.GetRowConvTransformFunc(rConv))
-	transforms.AppendTransforms(transform)
+	// Then a second time, to create a mapping from the source schema to the column in the result set.
+	for _, selectedCol := range statement.selectedCols {
+		tableSch := statement.inputSchemas[selectedCol.TableName]
+		col, _ := tableSch.GetAllCols().GetByName(selectedCol.ColumnName)
 
-	return mapping.DestSch, nil
+		err = rss.AddColumn(tableSch, col)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rss, nil
 }
