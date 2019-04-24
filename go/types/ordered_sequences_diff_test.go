@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,7 +100,7 @@ func (suite *diffTestSuite) TestDiff() {
 
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(col).TargetHash()
-		vs.Commit(vs.Root(), vs.Root())
+		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 		return vs.ReadValue(h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }

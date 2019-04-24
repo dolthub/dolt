@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -420,7 +421,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	}
 	m := me.Map()
 	r := vs.WriteValue(m)
-	vs.Commit(vs.Root(), vs.Root())
+	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	m = r.TargetValue(vs).(Map)
 
 	every := 100
@@ -441,7 +442,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 
 	m = me.Map()
 
-	vs.Commit(vs.Root(), vs.Root())
+	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
 	assert.Equal(t, uint64(3), NewRef(m).Height())
 	assert.Equal(t, 105, cs.Reads)

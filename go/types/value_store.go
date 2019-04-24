@@ -302,12 +302,12 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 }
 
-func (lvs *ValueStore) Root() hash.Hash {
-	return lvs.cs.Root(context.TODO())
+func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
+	return lvs.cs.Root(ctx)
 }
 
-func (lvs *ValueStore) Rebase() {
-	lvs.cs.Rebase(context.TODO())
+func (lvs *ValueStore) Rebase(ctx context.Context) {
+	lvs.cs.Rebase(ctx)
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
@@ -316,13 +316,13 @@ func (lvs *ValueStore) Rebase() {
 // opened, or last Rebased(), it will return false and will have internally
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
-func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
+func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	return func() bool {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
 		put := func(h hash.Hash, chunk chunks.Chunk) {
-			lvs.cs.Put(context.TODO(), chunk)
+			lvs.cs.Put(ctx, chunk)
 			delete(lvs.bufferedChunks, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 		}
@@ -339,7 +339,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		}
 		for _, c := range lvs.bufferedChunks {
 			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-			lvs.cs.Put(context.TODO(), c)
+			lvs.cs.Put(ctx, c)
 			lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		}
 		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
@@ -347,7 +347,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
 		if lvs.enforceCompleteness {
-			if (current != hash.Hash{} && current != lvs.Root()) {
+			if (current != hash.Hash{} && current != lvs.Root(ctx)) {
 				if _, ok := lvs.bufferedChunks[current]; !ok {
 					// If the client is attempting to move the root and the referenced
 					// value isn't still buffered, we need to ensure that it is contained
@@ -356,10 +356,10 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 				}
 			}
 
-			PanicIfDangling(context.TODO(), lvs.unresolvedRefs, lvs.cs)
+			PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 		}
 
-		if !lvs.cs.Commit(context.TODO(), current, last) {
+		if !lvs.cs.Commit(ctx, current, last) {
 			return false
 		}
 
