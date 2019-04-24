@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"math"
 	"math/rand"
 
@@ -27,9 +28,9 @@ const (
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
 func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) {
 	// Sanity Check
-	d.PanicIfFalse(srcDB.chunkStore().Has(sourceRef.TargetHash()))
+	d.PanicIfFalse(srcDB.chunkStore().Has(context.TODO(), sourceRef.TargetHash()))
 
-	if sinkDB.chunkStore().Has(sourceRef.TargetHash()) {
+	if sinkDB.chunkStore().Has(context.TODO(), sourceRef.TargetHash()) {
 		return // already up to date
 	}
 
@@ -62,7 +63,7 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 			// Concurrently pull all chunks from this batch that the sink is missing out of the source
 			neededChunks := map[hash.Hash]*chunks.Chunk{}
 			found := make(chan *chunks.Chunk)
-			go func() { defer close(found); srcDB.chunkStore().GetMany(batch.HashSet(), found) }()
+			go func() { defer close(found); srcDB.chunkStore().GetMany(context.TODO(), batch.HashSet(), found) }()
 			for c := range found {
 				neededChunks[c.Hash()] = c
 
@@ -78,7 +79,7 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 			// At the same time, gather up an ordered, uniquified list of all the children of the chunks in |batch| and add them to those in previous batches. This list is what we'll use to descend to the next level of the tree.
 			for _, h := range batch {
 				c := neededChunks[h]
-				sinkDB.chunkStore().Put(*c)
+				sinkDB.chunkStore().Put(context.TODO(), *c)
 				types.WalkRefs(*c, func(r types.Ref) {
 					if !nextLevel.Has(r.TargetHash()) {
 						uniqueOrdered = append(uniqueOrdered, r.TargetHash())
@@ -89,7 +90,7 @@ func Pull(srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgr
 		}
 
 		// Ask sinkDB which of the next level's hashes it doesn't have.
-		absentSet := sinkDB.chunkStore().HasMany(nextLevel)
+		absentSet := sinkDB.chunkStore().HasMany(context.TODO(), nextLevel)
 		absent = absent[:0]
 		for _, h := range uniqueOrdered {
 			if absentSet.Has(h) {

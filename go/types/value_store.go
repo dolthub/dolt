@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -58,7 +59,7 @@ type ValueStore struct {
 }
 
 func PanicIfDangling(unresolved hash.HashSet, cs chunks.ChunkStore) {
-	absent := cs.HasMany(unresolved)
+	absent := cs.HasMany(context.TODO(), unresolved)
 	if len(absent) != 0 {
 		d.Panic("Found dangling references to %v", absent)
 	}
@@ -132,7 +133,7 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 		return chunks.EmptyChunk
 	}()
 	if chunk.IsEmpty() {
-		chunk = lvs.cs.Get(h)
+		chunk = lvs.cs.Get(context.TODO(), h)
 	}
 	if chunk.IsEmpty() {
 		return nil
@@ -188,7 +189,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
-		go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
+		go func() { lvs.cs.GetMany(context.TODO(), remaining, foundChunks); close(foundChunks) }()
 		for c := range foundChunks {
 			h := c.Hash()
 			foundValues[h] = decode(h, c)
@@ -240,7 +241,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 
 	put := func(h hash.Hash, c chunks.Chunk) {
-		lvs.cs.Put(c)
+		lvs.cs.Put(context.TODO(), c)
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
 	}
@@ -302,11 +303,11 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 }
 
 func (lvs *ValueStore) Root() hash.Hash {
-	return lvs.cs.Root()
+	return lvs.cs.Root(context.TODO())
 }
 
 func (lvs *ValueStore) Rebase() {
-	lvs.cs.Rebase()
+	lvs.cs.Rebase(context.TODO())
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
@@ -321,7 +322,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		defer lvs.bufferMu.Unlock()
 
 		put := func(h hash.Hash, chunk chunks.Chunk) {
-			lvs.cs.Put(chunk)
+			lvs.cs.Put(context.TODO(), chunk)
 			delete(lvs.bufferedChunks, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 		}
@@ -338,7 +339,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		}
 		for _, c := range lvs.bufferedChunks {
 			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-			lvs.cs.Put(c)
+			lvs.cs.Put(context.TODO(), c)
 			lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		}
 		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
@@ -358,7 +359,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 			PanicIfDangling(lvs.unresolvedRefs, lvs.cs)
 		}
 
-		if !lvs.cs.Commit(current, last) {
+		if !lvs.cs.Commit(context.TODO(), current, last) {
 			return false
 		}
 

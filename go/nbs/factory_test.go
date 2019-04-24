@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,8 +29,8 @@ func TestLocalStoreFactory(t *testing.T) {
 	store := f.CreateStore(dbName)
 
 	c := chunks.NewChunk([]byte{0xff})
-	store.Put(c)
-	assert.True(store.Commit(c.Hash(), hash.Hash{}))
+	store.Put(context.Background(), c)
+	assert.True(store.Commit(context.Background(), c.Hash(), hash.Hash{}))
 
 	dbDir := filepath.Join(dir, dbName)
 	exists, contents := fileManifest{dbDir}.ParseIfExists(stats, nil)
@@ -46,5 +47,5 @@ func TestLocalStoreFactory(t *testing.T) {
 	assert.NoError(err)
 
 	cached := f.CreateStoreFromCache(dbName)
-	assert.Equal(c.Hash(), cached.Root())
+	assert.Equal(c.Hash(), cached.Root(context.Background()))
 }

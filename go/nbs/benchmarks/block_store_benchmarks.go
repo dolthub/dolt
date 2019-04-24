@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -23,16 +24,16 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 }
 
 func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.TestingT) {
-	root := store.Root()
+	root := store.Root(context.Background())
 	assert.Equal(t, hash.Hash{}, root)
 
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.Put(*c)
+		store.Put(context.Background(), *c)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	store.Put(newRoot)
-	assert.True(t, store.Commit(newRoot.Hash(), root))
+	store.Put(context.Background(), newRoot)
+	assert.True(t, store.Commit(context.Background(), newRoot.Hash(), root))
 }
 
 func goReadChunks(src *dataSource) <-chan *chunks.Chunk {
@@ -48,7 +49,7 @@ func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.Te
 	store := openStore()
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.Put(*c)
+		store.Put(context.Background(), *c)
 	}
 	assert.NoError(t, store.Close())
 }
@@ -62,7 +63,7 @@ func verifyChunk(h hash.Hash, c chunks.Chunk) {
 func benchmarkRead(openStore storeOpenFn, hashes hashSlice, src *dataSource, t assert.TestingT) {
 	store := openStore()
 	for _, h := range hashes {
-		verifyChunk(h, store.Get(h))
+		verifyChunk(h, store.Get(context.Background(), h))
 	}
 	assert.NoError(t, store.Close())
 }
@@ -101,7 +102,7 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 			wg.Add(1)
 			go func(hashes hash.HashSlice) {
 				chunkChan := make(chan *chunks.Chunk, len(hashes))
-				store.GetMany(hashes.HashSet(), chunkChan)
+				store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
 				close(chunkChan)
 				verifyChunks(hashes, chunkChan)
 				wg.Done()
@@ -114,7 +115,7 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 
 	if len(batch) > 0 {
 		chunkChan := make(chan *chunks.Chunk, len(batch))
-		store.GetMany(batch.HashSet(), chunkChan)
+		store.GetMany(context.Background(), batch.HashSet(), chunkChan)
 		close(chunkChan)
 
 		verifyChunks(batch, chunkChan)

@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -342,7 +343,7 @@ func (w *waitDuringUpdateRootChunkStore) Commit(current, last hash.Hash) bool {
 	if w.preUpdateRootHook != nil {
 		w.preUpdateRootHook()
 	}
-	return w.ChunkStore.Commit(current, last)
+	return w.ChunkStore.Commit(context.Background(), current, last)
 }
 
 func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {

@@ -7,6 +7,7 @@ package datas
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -161,7 +162,7 @@ func TestHandleGetRefs(t *testing.T) {
 		chunks.NewChunk([]byte(input2)),
 	}
 	for _, c := range chnx {
-		cs.Put(c)
+		cs.Put(context.Background(), c)
 	}
 	persistChunks(cs)
 
@@ -268,7 +269,7 @@ func TestHandleHasRefs(t *testing.T) {
 	}
 	present := chunks.NewChunk([]byte(input3))
 	cs := storage.NewView()
-	cs.Put(present)
+	cs.Put(context.Background(), present)
 	persistChunks(cs)
 
 	body := buildHashesRequest(chunks.ReadBatch{
@@ -308,8 +309,8 @@ func TestHandleGetRoot(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewView()
 	c := chunks.NewChunk([]byte("abc"))
-	cs.Put(c)
-	assert.True(cs.Commit(c.Hash(), hash.Hash{}))
+	cs.Put(context.Background(), c)
+	assert.True(cs.Commit(context.Background(), c.Hash(), hash.Hash{}))
 
 	w := httptest.NewRecorder()
 	HandleRootGet(w, newRequest("GET", "", "", nil, nil), params{}, storage.NewView())
@@ -367,7 +368,7 @@ func TestHandlePostRoot(t *testing.T) {
 	validate(http.StatusConflict, hash.Hash{}, w)
 
 	// Now, update the root manually to 'last' and try again.
-	assert.True(cs.Commit(firstHeadRef.TargetHash(), hash.Hash{}))
+	assert.True(cs.Commit(context.Background(), firstHeadRef.TargetHash(), hash.Hash{}))
 	w = httptest.NewRecorder()
 	HandleRootPost(w, newRequest("POST", "", url, nil, nil), params{}, storage.NewView())
 	validate(http.StatusOK, newHeadRef.TargetHash(), w)
@@ -395,7 +396,7 @@ func TestRejectPostRoot(t *testing.T) {
 
 	newHead := types.NewMap(vs, types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead)
-	cs.Put(chunk)
+	cs.Put(context.Background(), chunk)
 	persistChunks(cs)
 
 	// Attempt should fail, as newHead isn't the right type.

@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -537,8 +538,8 @@ func TestExternalProtocol(t *testing.T) {
 	cs := sp.NewChunkStore()
 	assert.Equal("foo", tp.name)
 	c := chunks.NewChunk([]byte("hi!"))
-	cs.Put(c)
-	assert.True(cs.Has(c.Hash()))
+	cs.Put(context.Background(), c)
+	assert.True(cs.Has(context.Background(), c.Hash()))
 
 	tp.name = ""
 	ds := sp.GetDataset()

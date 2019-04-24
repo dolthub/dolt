@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -133,7 +134,7 @@ func (hcs *httpChunkStore) StatsSummary() string {
 	return string(data)
 }
 
-func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
+func (hcs *httpChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
@@ -155,7 +156,7 @@ func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	return *(<-ch)
 }
 
-func (hcs *httpChunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (hcs *httpChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	cachedChunks := make(chan *chunks.Chunk)
 	go func() {
 		hcs.cacheMu.RLock()
@@ -189,7 +190,7 @@ func (hcs *httpChunkStore) batchGetRequests() {
 	hcs.batchReadRequests(hcs.getQueue, hcs.getRefs)
 }
 
-func (hcs *httpChunkStore) Has(h hash.Hash) bool {
+func (hcs *httpChunkStore) Has(ctx context.Context, h hash.Hash) bool {
 	checkCache := func(h hash.Hash) bool {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
@@ -210,7 +211,7 @@ func (hcs *httpChunkStore) Has(h hash.Hash) bool {
 	return <-ch
 }
 
-func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
+func (hcs *httpChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
 	var remaining hash.HashSet
 	func() {
 		hcs.cacheMu.RLock()
@@ -371,7 +372,7 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 	return
 }
 
-func (hcs *httpChunkStore) Put(c chunks.Chunk) {
+func (hcs *httpChunkStore) Put(ctx context.Context, c chunks.Chunk) {
 	hcs.cacheMu.RLock()
 	defer hcs.cacheMu.RUnlock()
 	select {
@@ -405,13 +406,13 @@ func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli h
 	}
 }
 
-func (hcs *httpChunkStore) Root() hash.Hash {
+func (hcs *httpChunkStore) Root(ctx context.Context) hash.Hash {
 	hcs.rootMu.RLock()
 	defer hcs.rootMu.RUnlock()
 	return hcs.root
 }
 
-func (hcs *httpChunkStore) Rebase() {
+func (hcs *httpChunkStore) Rebase(ctx context.Context) {
 	root, _ := hcs.getRoot(true)
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
@@ -435,7 +436,7 @@ func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string)
 	return hash.Parse(string(data)), res.Header.Get(NomsVersionHeader)
 }
 
-func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
+func (hcs *httpChunkStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
 	hcs.cacheMu.Lock()

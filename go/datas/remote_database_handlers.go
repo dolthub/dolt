@@ -6,6 +6,7 @@ package datas
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -174,7 +175,7 @@ func handleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			})
 
 			totalDataWritten += len(dc.Chunk.Data())
-			cs.Put(*dc.Chunk)
+			cs.Put(context.TODO(), *dc.Chunk)
 			chunkCount++
 			if chunkCount%100 == 0 {
 				verbose.Log("Enqueued %d chunks", chunkCount)
@@ -251,7 +252,7 @@ func (wc wc) Close() error {
 }
 
 func persistChunks(cs chunks.ChunkStore) {
-	for !cs.Commit(cs.Root(), cs.Root()) {
+	for !cs.Commit(context.TODO(), cs.Root(context.TODO()), cs.Root(context.TODO())) {
 	}
 }
 
@@ -276,7 +277,7 @@ func handleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 
 		chunkChan := make(chan *chunks.Chunk, maxGetBatchSize)
 		go func() {
-			cs.GetMany(batch.HashSet(), chunkChan)
+			cs.GetMany(context.TODO(), batch.HashSet(), chunkChan)
 			close(chunkChan)
 		}()
 
@@ -348,7 +349,7 @@ func handleHasRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	writer := respWriter(req, w)
 	defer writer.Close()
 
-	absent := cs.HasMany(hashes.HashSet())
+	absent := cs.HasMany(context.TODO(), hashes.HashSet())
 	for h := range absent {
 		fmt.Fprintln(writer, h.String())
 	}
@@ -358,7 +359,7 @@ func handleRootGet(w http.ResponseWriter, req *http.Request, ps URLParams, rt ch
 	if req.Method != "GET" {
 		d.Panic("Expected get method.")
 	}
-	fmt.Fprintf(w, "%v", rt.Root().String())
+	fmt.Fprintf(w, "%v", rt.Root(context.TODO()).String())
 	w.Header().Add("content-type", "text/plain")
 }
 
