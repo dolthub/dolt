@@ -29,7 +29,9 @@ func TestDiffSchemas(t *testing.T) {
 	oldColColl, _ := schema.NewColCollection(oldCols...)
 	newColColl, _ := schema.NewColCollection(newCols...)
 
-	diffs := DiffSchemas(schema.SchemaFromCols(oldColColl), schema.UnkeyedSchemaFromCols(newColColl))
+	oldSch := schema.SchemaFromCols(oldColColl)
+	newSch := schema.SchemaFromCols(newColColl)
+	diffs := DiffSchemas(oldSch, newSch)
 
 	expected := map[uint64]SchemaDifference{
 		0: {SchDiffNone, 0, &oldCols[0], &newCols[0]},
