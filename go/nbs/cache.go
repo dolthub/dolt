@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 
@@ -38,26 +39,26 @@ func (nbc *NomsBlockCache) Insert(c chunks.Chunk) {
 
 // Has checks if the chunk referenced by hash is in the cache.
 func (nbc *NomsBlockCache) Has(hash hash.Hash) bool {
-	return nbc.chunks.Has(hash)
+	return nbc.chunks.Has(context.TODO(), hash)
 }
 
 // HasMany returns a set containing the members of hashes present in the
 // cache.
 func (nbc *NomsBlockCache) HasMany(hashes hash.HashSet) hash.HashSet {
-	return nbc.chunks.HasMany(hashes)
+	return nbc.chunks.HasMany(context.TODO(), hashes)
 }
 
 // Get retrieves the chunk referenced by hash. If the chunk is not present,
 // Get returns the empty Chunk.
 func (nbc *NomsBlockCache) Get(hash hash.Hash) chunks.Chunk {
-	return nbc.chunks.Get(hash)
+	return nbc.chunks.Get(context.TODO(), hash)
 }
 
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
 func (nbc *NomsBlockCache) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
-	nbc.chunks.GetMany(hashes, foundChunks)
+	nbc.chunks.GetMany(context.TODO(), hashes, foundChunks)
 }
 
 // ExtractChunks writes the entire contents of the cache to chunkChan. The

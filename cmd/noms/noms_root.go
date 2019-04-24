@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -46,7 +47,7 @@ func runRoot(args []string) int {
 	cs, err := cfg.GetChunkStore(args[0])
 	d.CheckErrorNoUsage(err)
 
-	currRoot := cs.Root()
+	currRoot := cs.Root(context.Background())
 
 	if updateRoot == "" {
 		fmt.Println(currRoot)
@@ -86,7 +87,7 @@ Continue?`)
 		return 0
 	}
 
-	ok = cs.Commit(h, currRoot)
+	ok = cs.Commit(context.Background(), h, currRoot)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "Optimistic concurrency failure")
 		return 1

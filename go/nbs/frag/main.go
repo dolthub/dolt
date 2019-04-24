@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -71,7 +72,7 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-	current := hash.HashSlice{store.Root()}
+	current := hash.HashSlice{store.Root(context.Background())}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))

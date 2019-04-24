@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -61,42 +62,42 @@ func newHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv.POST(
 		constants.WriteValuePath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleWriteValue(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.GetRefsPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleGetRefs(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.HasRefsPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleHasRefs(w, req, ps, cs)
 		},
 	)
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleRootPost(w, req, ps, cs)
 		},
 	)
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
 	serv.GET(
 		constants.StatsPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleStats(w, req, ps, cs)
 		},
 	)
@@ -112,7 +113,7 @@ func newAuthenticatingHTTPChunkStoreForTest(assert *assert.Assertions, cs chunks
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			authenticate(req)
 			HandleRootPost(w, req, ps, cs)
 		},
@@ -120,7 +121,7 @@ func newAuthenticatingHTTPChunkStoreForTest(assert *assert.Assertions, cs chunks
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
@@ -132,7 +133,7 @@ func newBadVersionHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv.POST(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleRootPost(w, req, ps, cs)
 			w.Header().Set(NomsVersionHeader, "BAD")
 		},
@@ -140,7 +141,7 @@ func newBadVersionHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			cs.Rebase()
+			cs.Rebase(context.Background())
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
@@ -154,10 +155,10 @@ func (suite *HTTPChunkStoreSuite) TearDownTest() {
 
 func (suite *HTTPChunkStoreSuite) TestPutChunk() {
 	c := types.EncodeValue(types.String("abc"))
-	suite.http.Put(c)
-	suite.True(suite.http.Has(c.Hash()))
+	suite.http.Put(context.Background(), c)
+	suite.True(suite.http.Has(context.Background(), c.Hash()))
 
-	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+	suite.True(suite.http.Commit(context.Background(), hash.Hash{}, hash.Hash{}))
 	suite.Equal(1, suite.serverCS.Writes)
 }
 
@@ -170,44 +171,44 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	defer vs.Close()
 	le := types.NewList(vs).Edit()
 	for _, val := range vals {
-		suite.http.Put(types.EncodeValue(val))
+		suite.http.Put(context.Background(), types.EncodeValue(val))
 		le.Append(types.NewRef(val))
 	}
-	suite.http.Put(types.EncodeValue(le.List()))
-	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+	suite.http.Put(context.Background(), types.EncodeValue(le.List()))
+	suite.True(suite.http.Commit(context.Background(), hash.Hash{}, hash.Hash{}))
 
 	suite.Equal(3, suite.serverCS.Writes)
 }
 
 func (suite *HTTPChunkStoreSuite) TestStats() {
-	suite.http.Put(types.EncodeValue(types.String("abc")))
-	suite.http.Put(types.EncodeValue(types.String("def")))
+	suite.http.Put(context.Background(), types.EncodeValue(types.String("abc")))
+	suite.http.Put(context.Background(), types.EncodeValue(types.String("def")))
 
-	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
+	suite.True(suite.http.Commit(context.Background(), hash.Hash{}, hash.Hash{}))
 
 	suite.NotEmpty(suite.http.StatsSummary())
 }
 
 func (suite *HTTPChunkStoreSuite) TestRebase() {
-	suite.Equal(hash.Hash{}, suite.http.Root())
+	suite.Equal(hash.Hash{}, suite.http.Root(context.Background()))
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
 	c := types.EncodeValue(types.NewMap(db))
-	suite.serverCS.Put(c)
-	suite.True(suite.serverCS.Commit(c.Hash(), hash.Hash{})) // change happens behind our backs
-	suite.Equal(hash.Hash{}, suite.http.Root())              // shouldn't be visible yet
+	suite.serverCS.Put(context.Background(), c)
+	suite.True(suite.serverCS.Commit(context.Background(), c.Hash(), hash.Hash{})) // change happens behind our backs
+	suite.Equal(hash.Hash{}, suite.http.Root(context.Background()))                // shouldn't be visible yet
 
-	suite.http.Rebase()
-	suite.Equal(c.Hash(), suite.serverCS.Root())
+	suite.http.Rebase(context.Background())
+	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestRoot() {
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
 	c := types.EncodeValue(types.NewMap(db))
-	suite.serverCS.Put(c)
-	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.serverCS.Root())
+	suite.serverCS.Put(context.Background(), c)
+	suite.True(suite.http.Commit(context.Background(), c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
@@ -215,22 +216,22 @@ func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
 	vs := types.NewValueStore(store)
 	defer vs.Close()
 	c := types.EncodeValue(types.NewMap(vs))
-	suite.serverCS.Put(c)
-	suite.Panics(func() { store.Commit(c.Hash(), hash.Hash{}) })
+	suite.serverCS.Put(context.Background(), c)
+	suite.Panics(func() { store.Commit(context.Background(), c.Hash(), hash.Hash{}) })
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommit() {
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
 	c := types.EncodeValue(types.NewMap(db))
-	suite.serverCS.Put(c)
-	suite.True(suite.http.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.serverCS.Root())
+	suite.serverCS.Put(context.Background(), c)
+	suite.True(suite.http.Commit(context.Background(), c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestEmptyHashCommit() {
-	suite.True(suite.http.Commit(hash.Hash{}, hash.Hash{}))
-	suite.Equal(hash.Hash{}, suite.serverCS.Root())
+	suite.True(suite.http.Commit(context.Background(), hash.Hash{}, hash.Hash{}))
+	suite.Equal(hash.Hash{}, suite.serverCS.Root(context.Background()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
@@ -239,9 +240,9 @@ func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	vs := types.NewValueStore(store)
 	defer vs.Close()
 	c := types.EncodeValue(types.NewMap(vs))
-	suite.serverCS.Put(c)
-	suite.True(store.Commit(c.Hash(), hash.Hash{}))
-	suite.Equal(c.Hash(), suite.serverCS.Root())
+	suite.serverCS.Put(context.Background(), c)
+	suite.True(store.Commit(context.Background(), c.Hash(), hash.Hash{}))
+	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestGet() {
@@ -250,11 +251,11 @@ func (suite *HTTPChunkStoreSuite) TestGet() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
-	got := suite.http.Get(chnx[0].Hash())
+	got := suite.http.Get(context.Background(), chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
-	got = suite.http.Get(chnx[1].Hash())
+	got = suite.http.Get(context.Background(), chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
@@ -265,13 +266,13 @@ func (suite *HTTPChunkStoreSuite) TestGetMany() {
 	}
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
 	persistChunks(suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(context.Background(), hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -294,12 +295,12 @@ func (suite *HTTPChunkStoreSuite) TestOverGetThreshold_Issue3589() {
 	}
 
 	present := chunks.NewChunk([]byte("ghi"))
-	suite.serverCS.Put(present)
+	suite.serverCS.Put(context.Background(), present)
 	persistChunks(suite.serverCS)
 	hashes.Insert(present.Hash())
 
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(context.Background(), hashes, foundChunks); close(foundChunks) }()
 
 	found := hash.HashSet{}
 	for c := range foundChunks {
@@ -315,12 +316,12 @@ func (suite *HTTPChunkStoreSuite) TestGetManyAllCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.http.Put(c)
+		suite.http.Put(context.Background(), c)
 	}
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(context.Background(), hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -335,14 +336,14 @@ func (suite *HTTPChunkStoreSuite) TestGetManySomeCached() {
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
 	persistChunks(suite.serverCS)
-	suite.http.Put(cached)
+	suite.http.Put(context.Background(), cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
 	foundChunks := make(chan *chunks.Chunk)
-	go func() { suite.http.GetMany(hashes, foundChunks); close(foundChunks) }()
+	go func() { suite.http.GetMany(context.Background(), hashes, foundChunks); close(foundChunks) }()
 
 	for c := range foundChunks {
 		hashes.Remove(c.Hash())
@@ -356,11 +357,11 @@ func (suite *HTTPChunkStoreSuite) TestGetSame() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
-	got := suite.http.Get(chnx[0].Hash())
+	got := suite.http.Get(context.Background(), chnx[0].Hash())
 	suite.Equal(chnx[0].Hash(), got.Hash())
-	got = suite.http.Get(chnx[1].Hash())
+	got = suite.http.Get(context.Background(), chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
@@ -370,15 +371,15 @@ func (suite *HTTPChunkStoreSuite) TestGetWithRoot() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
-	suite.serverCS.Commit(chnx[0].Hash(), hash.Hash{})
+	suite.serverCS.Commit(context.Background(), chnx[0].Hash(), hash.Hash{})
 
 	serv := inlineServer{httprouter.New()}
 	serv.GET(
 		constants.RootPath,
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-			suite.serverCS.Rebase()
+			suite.serverCS.Rebase(context.Background())
 			HandleRootGet(w, req, ps, suite.serverCS)
 		},
 	)
@@ -387,13 +388,13 @@ func (suite *HTTPChunkStoreSuite) TestGetWithRoot() {
 		func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 			r := req.URL.Query().Get("root")
 			suite.Equal(chnx[0].Hash().String(), r)
-			suite.serverCS.Rebase()
+			suite.serverCS.Rebase(context.Background())
 			HandleGetRefs(w, req, ps, suite.serverCS)
 		},
 	)
 	store := newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
 
-	got := store.Get(chnx[1].Hash())
+	got := store.Get(context.Background(), chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())
 }
 
@@ -403,10 +404,10 @@ func (suite *HTTPChunkStoreSuite) TestHas() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
-	suite.True(suite.http.Has(chnx[0].Hash()))
-	suite.True(suite.http.Has(chnx[1].Hash()))
+	suite.True(suite.http.Has(context.Background(), chnx[0].Hash()))
+	suite.True(suite.http.Has(context.Background(), chnx[1].Hash()))
 }
 
 func (suite *HTTPChunkStoreSuite) TestHasMany() {
@@ -415,13 +416,13 @@ func (suite *HTTPChunkStoreSuite) TestHasMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
 	persistChunks(suite.serverCS)
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
-	absent := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(context.Background(), hashes)
 
 	suite.Len(absent, 1)
 	for _, c := range chnx {
@@ -436,12 +437,12 @@ func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.http.Put(c)
+		suite.http.Put(context.Background(), c)
 	}
 	persistChunks(suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
-	absent := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(context.Background(), hashes)
 
 	suite.Len(absent, 0)
 	for _, c := range chnx {
@@ -456,13 +457,13 @@ func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
 	}
 	cached := chunks.NewChunk([]byte("ghi"))
 	for _, c := range chnx {
-		suite.serverCS.Put(c)
+		suite.serverCS.Put(context.Background(), c)
 	}
 	persistChunks(suite.serverCS)
-	suite.http.Put(cached)
+	suite.http.Put(context.Background(), cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
-	absent := suite.http.HasMany(hashes)
+	absent := suite.http.HasMany(context.Background(), hashes)
 
 	suite.Len(absent, 0)
 	for _, c := range chnx {

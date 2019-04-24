@@ -264,7 +264,7 @@ func newNomsBlockStoreWithContents(mm manifestManager, mc manifestContents, p ta
 	}
 }
 
-func (nbs *NomsBlockStore) Put(c chunks.Chunk) {
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) {
 	t1 := time.Now()
 	a := addr(c.Hash())
 	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
@@ -288,7 +288,7 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
+func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.GetLatency.SampleTimeSince(t1)
@@ -314,7 +314,7 @@ func (nbs *NomsBlockStore) Get(h hash.Hash) chunks.Chunk {
 	return chunks.EmptyChunk
 }
 
-func (nbs *NomsBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	t1 := time.Now()
 	reqs := toGetRecords(hashes)
 
@@ -407,7 +407,7 @@ func (nbs *NomsBlockStore) Count() uint32 {
 	return count + tables.count()
 }
 
-func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
+func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) bool {
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.HasLatency.SampleTimeSince(t1)
@@ -425,7 +425,7 @@ func (nbs *NomsBlockStore) Has(h hash.Hash) bool {
 	return has
 }
 
-func (nbs *NomsBlockStore) HasMany(hashes hash.HashSet) hash.HashSet {
+func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
 	t1 := time.Now()
 
 	reqs := toHasRecords(hashes)
@@ -478,7 +478,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) Rebase() {
+func (nbs *NomsBlockStore) Rebase(ctx context.Context) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if exists, contents := nbs.mm.Fetch(nbs.stats); exists {
@@ -487,13 +487,13 @@ func (nbs *NomsBlockStore) Rebase() {
 	}
 }
 
-func (nbs *NomsBlockStore) Root() hash.Hash {
+func (nbs *NomsBlockStore) Root(ctx context.Context) hash.Hash {
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
 	return nbs.upstream.root
 }
 
-func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
+func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -504,7 +504,7 @@ func (nbs *NomsBlockStore) Commit(current, last hash.Hash) bool {
 	}
 
 	if !anyPossiblyNovelChunks() && current == last {
-		nbs.Rebase()
+		nbs.Rebase(ctx)
 		return true
 	}
 

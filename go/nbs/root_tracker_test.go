@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 	defer store.Close()
 
 	// No manifest file gets written until the first call to Commit(). Prior to that, Root() will simply return hash.Hash{}.
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -32,7 +33,7 @@ func TestChunkStoreVersion(t *testing.T) {
 
 	assert.Equal(constants.NomsVersion, store.Version())
 	newRoot := hash.Of([]byte("new root"))
-	if assert.True(store.Commit(newRoot, hash.Hash{})) {
+	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
 		assert.Equal(constants.NomsVersion, store.Version())
 	}
 }
@@ -42,20 +43,20 @@ func TestChunkStoreRebase(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
-	store.Rebase()
+	store.Rebase(context.Background())
 
 	// NOW it should
-	assert.Equal(newRoot, store.Root())
+	assert.Equal(newRoot, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -65,23 +66,23 @@ func TestChunkStoreCommit(t *testing.T) {
 	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
-	store.Put(newRootChunk)
-	if assert.True(store.Commit(newRoot, hash.Hash{})) {
-		assert.True(store.Has(newRoot))
-		assert.Equal(newRoot, store.Root())
+	store.Put(context.Background(), newRootChunk)
+	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
+		assert.True(store.Has(context.Background(), newRoot))
+		assert.Equal(newRoot, store.Root(context.Background()))
 	}
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	store.Put(secondRootChunk)
-	if assert.True(store.Commit(secondRoot, newRoot)) {
-		assert.Equal(secondRoot, store.Root())
-		assert.True(store.Has(newRoot))
-		assert.True(store.Has(secondRoot))
+	store.Put(context.Background(), secondRootChunk)
+	if assert.True(store.Commit(context.Background(), secondRoot, newRoot)) {
+		assert.Equal(secondRoot, store.Root(context.Background()))
+		assert.True(store.Has(context.Background(), newRoot))
+		assert.True(store.Has(context.Background(), secondRoot))
 	}
 }
 
@@ -90,14 +91,14 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -113,7 +114,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	store := newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	defer store.Close()
 
-	assert.Equal(newRoot, store.Root())
+	assert.Equal(newRoot, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -127,9 +128,9 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	newRoot2 := hash.Of([]byte("new root 2"))
-	assert.False(store.Commit(newRoot2, hash.Hash{}))
+	assert.False(store.Commit(context.Background(), newRoot2, hash.Hash{}))
 	assertDataInStore(chunks, store, assert)
-	assert.True(store.Commit(newRoot2, newRoot))
+	assert.True(store.Commit(context.Background(), newRoot2, newRoot))
 }
 
 func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
@@ -147,19 +148,19 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	defer interloper.Close()
 
 	chunk := chunks.NewChunk([]byte("hello"))
-	interloper.Put(chunk)
-	assert.True(interloper.Commit(chunk.Hash(), hash.Hash{}))
+	interloper.Put(context.Background(), chunk)
+	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
-	store.Put(chunk)
+	store.Put(context.Background(), chunk)
 	assert.NotNil(store.mt)
-	assert.False(store.Commit(chunk.Hash(), hash.Hash{}))
+	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 	assert.NotNil(store.mt)
 
-	assert.True(store.Commit(chunk.Hash(), store.Root()))
+	assert.True(store.Commit(context.Background(), chunk.Hash(), store.Root(context.Background())))
 	assert.Nil(store.mt)
-	assert.Equal(chunk.Hash(), store.Root())
+	assert.Equal(chunk.Hash(), store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -186,11 +187,11 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
-	store.Put(rootChunk)
-	assert.True(store.Commit(rootChunk.Hash(), store.Root()))
+	store.Put(context.Background(), rootChunk)
+	assert.True(store.Commit(context.Background(), rootChunk.Hash(), store.Root(context.Background())))
 
 	wg.Wait()
-	assert.Equal(store.Root(), fetched.root)
+	assert.Equal(store.Root(context.Background()), fetched.root)
 }
 
 func TestChunkStoreSerializeCommits(t *testing.T) {
@@ -223,20 +224,20 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			interloper.Put(interloperChunk)
-			assert.True(interloper.Commit(interloper.Root(), interloper.Root()))
+			interloper.Put(context.Background(), interloperChunk)
+			assert.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
 		}()
 
 		updateCount++
 	}
 
-	store.Put(storeChunk)
-	assert.True(store.Commit(store.Root(), store.Root()))
+	store.Put(context.Background(), storeChunk)
+	assert.True(store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background())))
 
 	wg.Wait()
 	assert.Equal(2, updateCount)
-	assert.True(interloper.Has(storeChunk.Hash()))
-	assert.True(interloper.Has(interloperChunk.Hash()))
+	assert.True(interloper.Has(context.Background(), storeChunk.Hash()))
+	assert.True(interloper.Has(context.Background(), interloperChunk.Hash()))
 }
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
@@ -266,7 +267,7 @@ func createMemTable(chunks [][]byte) *memTable {
 
 func assertDataInStore(slices [][]byte, store chunks.ChunkStore, assert *assert.Assertions) {
 	for _, data := range slices {
-		assert.True(store.Has(chunks.NewChunk(data).Hash()))
+		assert.True(store.Has(context.Background(), chunks.NewChunk(data).Hash()))
 	}
 }
 
