@@ -407,10 +407,10 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	// with this vs.Commit() right here. In this common case, the server
 	// already knows everything it needs to try again, so now we cut out the
 	// round trip to the client and just retry inline.
-	for to, from := proposed, last; !vs.Commit(to, from); {
+	for to, from := proposed, last; !vs.Commit(context.TODO(), to, from); {
 		// If committing failed, we go read out the map of Datasets at the root of the store, which is a Map[string]Ref<Commit>
 		rootMap := types.NewMap(vs)
-		root := vs.Root()
+		root := vs.Root(context.TODO())
 		if v := vs.ReadValue(root); v != nil {
 			rootMap = v.(types.Map)
 		}
@@ -434,7 +434,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	// tell the client what the new root is. If the commit failed, obviously
 	// we need to inform the client of the actual current root.
 	w.Header().Add("content-type", "text/plain")
-	fmt.Fprintf(w, "%v", vs.Root().String())
+	fmt.Fprintf(w, "%v", vs.Root(context.TODO()).String())
 }
 
 func validateLast(last hash.Hash, vrw types.ValueReadWriter) types.Map {

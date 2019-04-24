@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -28,9 +29,9 @@ var (
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
-	Rebase()
-	Root() hash.Hash
-	Commit(current, last hash.Hash) bool
+	Rebase(ctx context.Context)
+	Root(ctx context.Context) hash.Hash
+	Commit(ctx context.Context, current, last hash.Hash) bool
 }
 
 func newDatabase(cs chunks.ChunkStore) *database {
@@ -69,7 +70,7 @@ func (db *database) Flush() {
 }
 
 func (db *database) Datasets() types.Map {
-	rootHash := db.rt.Root()
+	rootHash := db.rt.Root(context.TODO())
 	if rootHash.IsEmpty() {
 		return types.NewMap(db)
 	}
@@ -90,7 +91,7 @@ func (db *database) GetDataset(datasetID string) Dataset {
 }
 
 func (db *database) Rebase() {
-	db.rt.Rebase()
+	db.rt.Rebase(context.TODO())
 }
 
 func (db *database) Close() error {
@@ -107,7 +108,7 @@ func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	}
 	commit := db.validateRefAsCommit(newHeadRef)
 
-	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
+	currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
 	commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map()
@@ -152,7 +153,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 	// This could loop forever, given enough simultaneous committers. BUG 2565
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
-		currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
+		currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
 		commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
@@ -198,7 +199,7 @@ func (db *database) Delete(ds Dataset) (Dataset, error) {
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (db *database) doDelete(datasetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
-	currentRootHash, currentDatasets := db.rt.Root(), db.Datasets()
+	currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
 	var initialHead types.Ref
 	if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead {
 		return nil
@@ -214,7 +215,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 			break
 		}
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
-		currentRootHash, currentDatasets = db.rt.Root(), db.Datasets()
+		currentRootHash, currentDatasets = db.rt.Root(context.TODO()), db.Datasets()
 		if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded
 			break
@@ -226,7 +227,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 func (db *database) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
 	newRootHash := db.WriteValue(currentDatasets).TargetHash()
 
-	if !db.rt.Commit(newRootHash, currentRootHash) {
+	if !db.rt.Commit(context.TODO(), newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed
 	}
 	return

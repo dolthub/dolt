@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -41,7 +42,7 @@ func TestIncrementalLoadList(t *testing.T) {
 
 	expected := NewList(vs, getTestVals(vs)...)
 	hash := vs.WriteValue(expected).TargetHash()
-	vs.Commit(vs.Root(), vs.Root())
+	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
 	actualVar := vs.ReadValue(hash)
 	actual := actualVar.(List)
