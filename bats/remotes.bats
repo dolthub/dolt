@@ -5,7 +5,7 @@ setup() {
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    remotesrv --dir $BATS_TMPDIR/remotes-$$ &>$BATS_TMPDIR/remotesrv-$$.log 3>&- &
+    remotesrv --http-port 1234 --dir $BATS_TMPDIR/remotes-$$ &>/dev/null 3>&- &
     mkdir dolt-repo-$$
     cd dolt-repo-$$
     dolt init
@@ -15,8 +15,6 @@ setup() {
 teardown() {
     rm -rf $BATS_TMPDIR/dolt-repo-$$
     pkill -9 remotesrv
-    cat $BATS_TMPDIR/remotesrv-$$.log
-    rm $BATS_TMPDIR/remotesrv-$$.log
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
