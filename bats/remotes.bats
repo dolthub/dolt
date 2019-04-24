@@ -36,6 +36,7 @@ teardown() {
 
 @test "push and pull from a remote" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    pgrep remotesrv
     run dolt push test-remote master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -84,6 +85,7 @@ teardown() {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
+    pgrep remotesrv
     dolt push test-remote master
     cd "dolt-repo-clones"
     run dolt clone localhost:50051/test-org/test-repo --insecure
@@ -97,6 +99,7 @@ teardown() {
 
 @test "dolt fetch" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    pgrep remotesrv
     dolt push test-remote master
     run dolt fetch test-remote master
     [ "$status" -eq 0 ]
