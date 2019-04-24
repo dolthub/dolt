@@ -150,3 +150,22 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
+
+@test "generate a merge with no conflict with a remote branch" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo --insecure
+    cd ..
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test2
+    dolt add test2
+    dolt commit -m "another test commit"
+    run dolt pull origin
+    skip "This panics right now with a panic: runtime error: invalid memory address or nil pointer dereference"
+    [ "$status" -eq 0 ]
+}
