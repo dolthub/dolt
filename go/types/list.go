@@ -67,7 +67,7 @@ func (l List) asSequence() sequence {
 }
 
 // Value interface
-func (l List) Value() Value {
+func (l List) Value(ctx context.Context) Value {
 	return l
 }
 

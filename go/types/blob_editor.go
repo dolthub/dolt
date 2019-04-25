@@ -29,7 +29,7 @@ func (be *BlobEditor) Kind() NomsKind {
 	return BlobKind
 }
 
-func (be *BlobEditor) Value() Value {
+func (be *BlobEditor) Value(ctx context.Context) Value {
 	return be.Blob()
 }
 

@@ -103,7 +103,7 @@ func (s Set) asSequence() sequence {
 }
 
 // Value interface
-func (s Set) Value() Value {
+func (s Set) Value(ctx context.Context) Value {
 	return s
 }
 

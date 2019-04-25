@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -149,7 +150,7 @@ func (s Struct) Empty() bool {
 }
 
 // Value interface
-func (s Struct) Value() Value {
+func (s Struct) Value(ctx context.Context) Value {
 	return s
 }
 

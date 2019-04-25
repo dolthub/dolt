@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"math"
 
@@ -16,7 +17,7 @@ import (
 type Float float64
 
 // Value interface
-func (v Float) Value() Value {
+func (v Float) Value(ctx context.Context) Value {
 	return v
 }
 

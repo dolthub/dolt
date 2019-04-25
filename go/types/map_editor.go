@@ -78,7 +78,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 			}
 
 			go func() {
-				sv := edit.value.Value()
+				sv := edit.value.Value(ctx)
 				if e, ok := sv.(Emptyable); ok {
 					if e.Empty() {
 						sv = nil

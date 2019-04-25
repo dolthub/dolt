@@ -31,7 +31,7 @@ func (se *SetEditor) Kind() NomsKind {
 	return SetKind
 }
 
-func (se *SetEditor) Value() Value {
+func (se *SetEditor) Value(ctx context.Context) Value {
 	return se.Set()
 }
 

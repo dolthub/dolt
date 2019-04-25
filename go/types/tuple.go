@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/d"
 )
@@ -89,7 +90,7 @@ func (t Tuple) Empty() bool {
 }
 
 // Value interface
-func (t Tuple) Value() Value {
+func (t Tuple) Value(ctx context.Context) Value {
 	return t
 }
 
