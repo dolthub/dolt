@@ -39,7 +39,7 @@ func autoResolve(dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.A
 			return doltdb.ErrTableNotFound
 		}
 
-		updatedTbl, err := merge.ResolveTable(root.VRW(), tbl, autoResolver)
+		updatedTbl, err := merge.ResolveTable(context.TODO(), root.VRW(), tbl, autoResolver)
 
 		if err != nil {
 			return err

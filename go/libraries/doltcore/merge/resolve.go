@@ -19,7 +19,7 @@ func Theirs(key types.Value, cnf doltdb.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
-func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc AutoResolver) (*doltdb.Table, error) {
+func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc AutoResolver) (*doltdb.Table, error) {
 	if !tbl.HasConflicts() {
 		return nil, doltdb.ErrNoConflicts
 	}
@@ -71,8 +71,8 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		return nil, itrErr
 	}
 
-	newTbl := doltdb.NewTable(context.TODO(), vrw, tblSchVal, rowEditor.Map())
-	newTbl = newTbl.SetConflicts(context.TODO(), schemas, types.NewMap(vrw))
+	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map())
+	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(vrw))
 
 	return newTbl, nil
 }
