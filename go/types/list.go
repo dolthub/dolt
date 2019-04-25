@@ -88,8 +88,8 @@ func (l List) Get(idx uint64) Value {
 // Concat returns a new List comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (l List) Concat(other List) List {
-	seq := concat(l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+func (l List) Concat(ctx context.Context, other List) List {
+	seq := concat(ctx, l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return l.newChunker(cur, vrw)
 	})
 	return newList(seq)

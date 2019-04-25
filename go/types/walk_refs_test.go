@@ -74,7 +74,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("Chunked", func(t *testing.T) {
 			l := NewList(vrw, newValueSlice(r)...)
 			for l.sequence.isLeaf() {
-				l = l.Concat(NewList(vrw, newValueSlice(r)...))
+				l = l.Concat(context.Background(), NewList(vrw, newValueSlice(r)...))
 			}
 			runTest(l, t)
 		})
@@ -137,7 +137,7 @@ func TestWalkRefs(t *testing.T) {
 		}
 		b := NewBlob(context.Background(), vrw, freshRandomBytes())
 		for b.sequence.isLeaf() {
-			b = b.Concat(NewBlob(context.Background(), vrw, freshRandomBytes()))
+			b = b.Concat(context.Background(), NewBlob(context.Background(), vrw, freshRandomBytes()))
 		}
 		runTest(b, t)
 	})
