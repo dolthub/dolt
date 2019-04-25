@@ -6,7 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
 
-func CheckoutAllTables(dEnv *env.DoltEnv) error {
+func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 	roots, err := getRoots(dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
@@ -14,21 +14,21 @@ func CheckoutAllTables(dEnv *env.DoltEnv) error {
 	}
 
 	tbls := AllTables(roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
-	return checkoutTables(dEnv, roots, tbls)
+	return checkoutTables(ctx, dEnv, roots, tbls)
 
 }
 
-func CheckoutTables(dEnv *env.DoltEnv, tbls []string) error {
+func CheckoutTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
 	roots, err := getRoots(dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
 	}
 
-	return checkoutTables(dEnv, roots, tbls)
+	return checkoutTables(ctx, dEnv, roots, tbls)
 }
 
-func checkoutTables(dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string) error {
+func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string) error {
 	var unknown []string
 
 	currRoot := roots[WorkingRoot]
@@ -46,7 +46,7 @@ func checkoutTables(dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbl
 			}
 		}
 
-		currRoot = currRoot.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl)
+		currRoot = currRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
 	}
 
 	if len(unknown) > 0 {

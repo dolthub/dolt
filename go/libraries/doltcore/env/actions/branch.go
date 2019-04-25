@@ -117,7 +117,7 @@ func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool
 	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
 }
 
-func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
 	if !dEnv.DoltDB.HasBranch(brName) {
 		return doltdb.ErrBranchNotFound
 	}
@@ -153,13 +153,13 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(dEnv, wrkTblHashes)
+	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes)
 
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(dEnv, stgTblHashes)
+	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes)
 
 	if err != nil {
 		return err
@@ -209,14 +209,14 @@ func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *
 	return resultMap
 }
 
-func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
+func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	root, err := doltdb.NewRootValue(context.TODO(), dEnv.DoltDB.ValueReadWriter(), tblHashes)
+	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes)
 
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
@@ -225,7 +225,7 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 		return emptyHash, doltdb.ErrNomsIO
 	}
 
-	return dEnv.DoltDB.WriteRootValue(context.TODO(), root)
+	return dEnv.DoltDB.WriteRootValue(ctx, root)
 }
 
 func getDifferingTables(root1, root2 *doltdb.RootValue) []string {

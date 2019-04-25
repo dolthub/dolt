@@ -35,7 +35,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
+func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 	staged, notStaged, err := GetTableDiffs(dEnv)
 
 	if msg == "" {
@@ -84,7 +84,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 		return ErrEmptyCommitMessage
 	}
 
-	_, err = dEnv.DoltDB.CommitWithParents(context.TODO(), h, dEnv.RepoState.Branch, mergeCmSpec, meta)
+	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Branch, mergeCmSpec, meta)
 
 	if err == nil {
 		dEnv.RepoState.ClearMerge()

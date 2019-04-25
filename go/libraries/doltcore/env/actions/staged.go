@@ -10,18 +10,18 @@ import (
 
 var ErrTablesInConflict = errors.New("table is in conflict")
 
-func StageTables(dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
+func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
 	staged, working, err := getStagedAndWorking(dEnv)
 
 	if err != nil {
 		return err
 	}
 
-	return stageTables(dEnv, tbls, staged, working, allowConflicts)
+	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
 
 }
 
-func StageAllTables(dEnv *env.DoltEnv, allowConflicts bool) error {
+func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool) error {
 	staged, working, err := getStagedAndWorking(dEnv)
 
 	if err != nil {
@@ -29,10 +29,10 @@ func StageAllTables(dEnv *env.DoltEnv, allowConflicts bool) error {
 	}
 
 	tbls := AllTables(staged, working)
-	return stageTables(dEnv, tbls, staged, working, allowConflicts)
+	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
 }
 
-func stageTables(dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
+func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
 	err := ValidateTables(tbls, staged, working)
 
 	if err != nil {
@@ -60,14 +60,14 @@ func stageTables(dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, wor
 		tbl, _ := working.GetTable(tblName)
 
 		if tbl.HasConflicts() && tbl.NumRowsInConflict() == 0 {
-			working = working.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl.ClearConflicts())
+			working = working.PutTable(ctx, dEnv.DoltDB, tblName, tbl.ClearConflicts())
 		}
 	}
 
 	staged = staged.UpdateTablesFromOther(tbls, working)
 
-	if wh, err := dEnv.DoltDB.WriteRootValue(context.TODO(), working); err == nil {
-		if sh, err := dEnv.DoltDB.WriteRootValue(context.TODO(), staged); err == nil {
+	if wh, err := dEnv.DoltDB.WriteRootValue(ctx, working); err == nil {
+		if sh, err := dEnv.DoltDB.WriteRootValue(ctx, staged); err == nil {
 			dEnv.RepoState.Staged = sh.String()
 			dEnv.RepoState.Working = wh.String()
 

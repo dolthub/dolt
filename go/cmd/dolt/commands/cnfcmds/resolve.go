@@ -80,9 +80,9 @@ func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Verb
 	var err error
 	tbls := apr.Args()
 	if len(tbls) == 1 && tbls[0] == "." {
-		err = actions.AutoResolveAll(dEnv, autoResolveFunc)
+		err = actions.AutoResolveAll(context.Background(), dEnv, autoResolveFunc)
 	} else {
-		err = actions.AutoResolveTables(dEnv, autoResolveFunc, tbls)
+		err = actions.AutoResolveTables(context.Background(), dEnv, autoResolveFunc, tbls)
 	}
 
 	if err != nil {

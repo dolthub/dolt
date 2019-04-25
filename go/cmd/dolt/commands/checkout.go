@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -84,7 +85,7 @@ func checkoutNewBranch(dEnv *env.DoltEnv, newBranch, startPt string) errhand.Ver
 }
 
 func checkoutTable(dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
-	err := actions.CheckoutTables(dEnv, tables)
+	err := actions.CheckoutTables(context.Background(), dEnv, tables)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {
@@ -108,7 +109,7 @@ func checkoutTable(dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
 }
 
 func checkoutBranch(dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	err := actions.CheckoutBranch(dEnv, name)
+	err := actions.CheckoutBranch(context.Background(), dEnv, name)
 
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {

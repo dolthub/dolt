@@ -10,7 +10,7 @@ import (
 type AutoResolveStats struct {
 }
 
-func AutoResolveAll(dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
+func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
@@ -18,20 +18,20 @@ func AutoResolveAll(dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
 	}
 
 	tbls := root.TablesInConflict()
-	return autoResolve(dEnv, root, autoResolver, tbls)
+	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
 }
 
-func AutoResolveTables(dEnv *env.DoltEnv, autoResolver merge.AutoResolver, tbls []string) error {
+func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver, tbls []string) error {
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
 		return err
 	}
 
-	return autoResolve(dEnv, root, autoResolver, tbls)
+	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
 }
 
-func autoResolve(dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
+func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
 	for _, tblName := range tbls {
 		tbl, ok := root.GetTable(tblName)
 
@@ -39,13 +39,13 @@ func autoResolve(dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.A
 			return doltdb.ErrTableNotFound
 		}
 
-		updatedTbl, err := merge.ResolveTable(context.TODO(), root.VRW(), tbl, autoResolver)
+		updatedTbl, err := merge.ResolveTable(ctx, root.VRW(), tbl, autoResolver)
 
 		if err != nil {
 			return err
 		}
 
-		root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
+		root = root.PutTable(ctx, dEnv.DoltDB, tblName, updatedTbl)
 	}
 
 	return dEnv.UpdateWorkingRoot(root)
