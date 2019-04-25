@@ -13,5 +13,6 @@ bats .
 This will run all the tests. Specify a particular .bats file to run only those tests.
 
 # Test coverage needed for: #
-* remotes: dolt clone, fetch, pull, push
 * large tables 
+* dolt login
+* schema diffs/merge/conflicts
