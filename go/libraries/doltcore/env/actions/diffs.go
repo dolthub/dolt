@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"sort"
@@ -51,20 +52,20 @@ func (td *TableDiffs) Len() int {
 	return len(td.Tables)
 }
 
-func GetTableDiffs(dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
+func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
 	headRoot, err := dEnv.HeadRoot()
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}
 	}
 
-	stagedRoot, err := dEnv.StagedRoot()
+	stagedRoot, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{StagedRoot, err}
 	}
 
-	workingRoot, err := dEnv.WorkingRoot()
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}

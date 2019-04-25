@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestLog(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo("Bill Billerson", "bigbillieb@fake.horse")
+	err := dEnv.InitRepo(context.Background(), "Bill Billerson", "bigbillieb@fake.horse")
 
 	if err != nil {
 		t.Error("Failed to init repo")

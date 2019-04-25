@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
@@ -99,7 +100,7 @@ func TestCreateTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			working, err := dEnv.WorkingRoot()
+			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			assert.False(t, working.HasTable(tableName), "table exists before creating it")
 
@@ -108,7 +109,7 @@ func TestCreateTable(t *testing.T) {
 			result := Sql(commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
-			working, err = dEnv.WorkingRoot()
+			working, err = dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			if test.expectedRes == 0 {
 				assert.True(t, working.HasTable(tableName), "table doesn't exist after creating it")
@@ -198,7 +199,7 @@ func TestInsert(t *testing.T) {
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot()
+				root, err := dEnv.WorkingRoot(context.Background())
 				assert.Nil(t, err)
 
 				// Assert that all expected IDs exist after the insert
@@ -269,7 +270,7 @@ func TestUpdate(t *testing.T) {
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot()
+				root, err := dEnv.WorkingRoot(context.Background())
 				assert.Nil(t, err)
 
 				// Assert that all rows have been updated
@@ -334,7 +335,7 @@ func TestDelete(t *testing.T) {
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot()
+				root, err := dEnv.WorkingRoot(context.Background())
 				assert.Nil(t, err)
 
 				// Assert that all rows have been deleted
@@ -366,7 +367,7 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 		t.Error("Failed to seed initial data", err)
 	}
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 
 	if err != nil {
 		t.Error("Unable to put initial value of table in in mem noms db", err)

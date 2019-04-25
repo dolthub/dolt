@@ -7,7 +7,7 @@ import (
 )
 
 func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
-	roots, err := getRoots(dEnv, WorkingRoot, StagedRoot, HeadRoot)
+	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
@@ -19,7 +19,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 }
 
 func CheckoutTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
-	roots, err := getRoots(dEnv, WorkingRoot, StagedRoot, HeadRoot)
+	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
@@ -58,5 +58,5 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 		}
 	}
 
-	return dEnv.UpdateWorkingRoot(currRoot)
+	return dEnv.UpdateWorkingRoot(ctx, currRoot)
 }

@@ -95,7 +95,7 @@ func TestExecuteCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 		sqlStatement, err := sqlparser.Parse(tt.query)
 		assert.Nil(t, err)
 

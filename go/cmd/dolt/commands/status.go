@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -26,14 +27,14 @@ func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(dEnv)
+	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(context.Background(), dEnv)
 
 	if err != nil {
 		panic(err) // fix
 		return 1
 	}
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(dEnv)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
 
 	if err != nil {
 		panic(err) // fix

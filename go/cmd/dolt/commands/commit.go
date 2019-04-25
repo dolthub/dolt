@@ -103,10 +103,10 @@ func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Branch
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(dEnv)
+	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(context.Background(), dEnv)
 	buf := bytes.NewBuffer([]byte{})
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(dEnv)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
 
 	if err != nil {
 		workingInConflict = []string{}

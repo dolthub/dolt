@@ -11,7 +11,7 @@ type AutoResolveStats struct {
 }
 
 func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return err
@@ -22,7 +22,7 @@ func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.A
 }
 
 func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver, tbls []string) error {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return err
@@ -48,5 +48,5 @@ func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue,
 		root = root.PutTable(ctx, dEnv.DoltDB, tblName, updatedTbl)
 	}
 
-	return dEnv.UpdateWorkingRoot(root)
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }

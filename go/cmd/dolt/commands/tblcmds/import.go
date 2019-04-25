@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -177,7 +178,7 @@ func createArgParser() *argparser.ArgParser {
 }
 
 func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.TODO())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))
@@ -227,7 +228,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		err = dEnv.PutTableToWorking(*nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
+		err = dEnv.PutTableToWorking(context.Background(), *nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))

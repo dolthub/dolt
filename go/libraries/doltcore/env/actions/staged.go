@@ -11,7 +11,7 @@ import (
 var ErrTablesInConflict = errors.New("table is in conflict")
 
 func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
-	staged, working, err := getStagedAndWorking(dEnv)
+	staged, working, err := getStagedAndWorking(ctx, dEnv)
 
 	if err != nil {
 		return err
@@ -22,7 +22,7 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 }
 
 func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool) error {
-	staged, working, err := getStagedAndWorking(dEnv)
+	staged, working, err := getStagedAndWorking(ctx, dEnv)
 
 	if err != nil {
 		return err
@@ -115,8 +115,8 @@ func ValidateTables(tbls []string, roots ...*doltdb.RootValue) error {
 	return NewTblNotExistError(missing)
 }
 
-func getStagedAndWorking(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(dEnv, StagedRoot, WorkingRoot)
+func getStagedAndWorking(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
+	roots, err := getRoots(ctx, dEnv, StagedRoot, WorkingRoot)
 
 	if err != nil {
 		return nil, nil, err
@@ -125,8 +125,8 @@ func getStagedAndWorking(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValu
 	return roots[StagedRoot], roots[WorkingRoot], nil
 }
 
-func getWorkingAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(dEnv, WorkingRoot, HeadRoot)
+func getWorkingAndHead(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
+	roots, err := getRoots(ctx, dEnv, WorkingRoot, HeadRoot)
 
 	if err != nil {
 		return nil, nil, err
@@ -135,16 +135,16 @@ func getWorkingAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue,
 	return roots[WorkingRoot], roots[HeadRoot], nil
 }
 
-func getRoots(dEnv *env.DoltEnv, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
+func getRoots(ctx context.Context, dEnv *env.DoltEnv, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
 	roots := make(map[RootType]*doltdb.RootValue)
 	for _, rt := range rootTypes {
 		var err error
 		var root *doltdb.RootValue
 		switch rt {
 		case StagedRoot:
-			root, err = dEnv.StagedRoot()
+			root, err = dEnv.StagedRoot(ctx)
 		case WorkingRoot:
-			root, err = dEnv.WorkingRoot()
+			root, err = dEnv.WorkingRoot(ctx)
 		case HeadRoot:
 			root, err = dEnv.HeadRoot()
 		default:

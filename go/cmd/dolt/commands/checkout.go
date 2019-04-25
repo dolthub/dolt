@@ -52,7 +52,7 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			verr = checkoutNewBranch(dEnv, newBranch, startPt)
 		} else {
 			name := apr.Arg(0)
-			isBranch, rootsWithTable, err := actions.BranchOrTable(dEnv, name)
+			isBranch, rootsWithTable, err := actions.BranchOrTable(context.Background(), dEnv, name)
 
 			if err != nil {
 				verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()

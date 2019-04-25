@@ -104,7 +104,7 @@ func TestExecuteDelete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			createTestDatabase(dEnv, t)
-			root, _ := dEnv.WorkingRoot()
+			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Delete)

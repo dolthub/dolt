@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/stretchr/testify/assert"
@@ -352,7 +353,7 @@ func TestExecuteSelect(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)
@@ -420,7 +421,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)

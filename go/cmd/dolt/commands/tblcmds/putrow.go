@@ -94,7 +94,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.TODO())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get working value."))

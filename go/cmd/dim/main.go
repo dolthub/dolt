@@ -74,7 +74,7 @@ func main() {
 	}
 
 	tableName := flag.Arg(0)
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		panic(err)
@@ -96,6 +96,6 @@ func main() {
 	if !data.Equals(updatedRows) {
 		updatedTbl := tbl.UpdateRows(context.Background(), updatedRows)
 		updatedRoot := root.PutTable(context.Background(), dEnv.DoltDB, tableName, updatedTbl)
-		dEnv.UpdateWorkingRoot(updatedRoot)
+		dEnv.UpdateWorkingRoot(context.Background(), updatedRoot)
 	}
 }

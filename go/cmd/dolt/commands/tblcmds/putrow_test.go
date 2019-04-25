@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
@@ -49,7 +50,7 @@ func TestPutRow(t *testing.T) {
 		}
 
 		if result == 0 {
-			root, _ := dEnv.WorkingRoot()
+			root, _ := dEnv.WorkingRoot(context.Background())
 			tbl, _ := root.GetTable(tableName)
 			sch := tbl.GetSchema()
 			row, exists := tbl.GetRowByPKVals(row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
@@ -90,7 +91,7 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 		t.Error("Failed to seed initial data", err)
 	}
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 
 	if err != nil {
 		t.Error("Unable to put initial value of table in in mem noms db", err)
