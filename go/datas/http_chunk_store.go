@@ -138,7 +138,7 @@ func (hcs *httpChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		return hcs.unwrittenPuts.Get(h)
+		return hcs.unwrittenPuts.Get(ctx, h)
 	}
 	if pending := checkCache(h); !pending.IsEmpty() {
 		return pending
@@ -162,7 +162,7 @@ func (hcs *httpChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
 		defer close(cachedChunks)
-		hcs.unwrittenPuts.GetMany(hashes, cachedChunks)
+		hcs.unwrittenPuts.GetMany(ctx, hashes, cachedChunks)
 	}()
 	remaining := hash.HashSet{}
 	for h := range hashes {
@@ -194,7 +194,7 @@ func (hcs *httpChunkStore) Has(ctx context.Context, h hash.Hash) bool {
 	checkCache := func(h hash.Hash) bool {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		return hcs.unwrittenPuts.Has(h)
+		return hcs.unwrittenPuts.Has(ctx, h)
 	}
 	if checkCache(h) {
 		return true
@@ -216,7 +216,7 @@ func (hcs *httpChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 	func() {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		remaining = hcs.unwrittenPuts.HasMany(hashes)
+		remaining = hcs.unwrittenPuts.HasMany(ctx, hashes)
 	}()
 	if len(remaining) == 0 {
 		return remaining
