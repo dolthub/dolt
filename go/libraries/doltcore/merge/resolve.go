@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -70,8 +71,8 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		return nil, itrErr
 	}
 
-	newTbl := doltdb.NewTable(vrw, tblSchVal, rowEditor.Map())
-	newTbl = newTbl.SetConflicts(schemas, types.NewMap(vrw))
+	newTbl := doltdb.NewTable(context.TODO(), vrw, tblSchVal, rowEditor.Map())
+	newTbl = newTbl.SetConflicts(context.TODO(), schemas, types.NewMap(vrw))
 
 	return newTbl, nil
 }

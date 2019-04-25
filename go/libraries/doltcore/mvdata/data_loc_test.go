@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -53,7 +54,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile("schema.json", []byte(testSchema))
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
-	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
 	commit, _ := ddb.Resolve(cs)
@@ -140,8 +141,8 @@ func TestExists(t *testing.T) {
 
 		if loc.Format == DoltDB {
 			schVal, _ := encoding.MarshalAsNomsValue(ddb.ValueReadWriter(), fakeSchema)
-			tbl := doltdb.NewTable(ddb.ValueReadWriter(), schVal, types.NewMap(ddb.ValueReadWriter()))
-			root = root.PutTable(ddb, loc.Path, tbl)
+			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(ddb.ValueReadWriter()))
+			root = root.PutTable(context.Background(), ddb, loc.Path, tbl)
 		} else {
 			fs.WriteFile(loc.Path, []byte("test"))
 		}
@@ -198,8 +199,8 @@ func TestCreateRdWr(t *testing.T) {
 				t.Fatal("Unable ta update table")
 			}
 
-			tbl := doltdb.NewTable(vrw, schVal, *nomsWr.GetMap())
-			root = root.PutTable(ddb, test.dl.Path, tbl)
+			tbl := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
+			root = root.PutTable(context.Background(), ddb, test.dl.Path, tbl)
 		}
 
 		// TODO (oo): fix this for json path test

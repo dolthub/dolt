@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
@@ -27,7 +28,7 @@ func MergeCommits(ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValu
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
-			root = root.PutTable(ddb, tblName, mergedTable)
+			root = root.PutTable(context.TODO(), ddb, tblName, mergedTable)
 		} else if root.HasTable(tblName) {
 			tblToStats[tblName] = &merge.MergeStats{Operation: merge.TableRemoved}
 			root, err = root.RemoveTables([]string{tblName})

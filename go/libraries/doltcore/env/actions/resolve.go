@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
@@ -44,7 +45,7 @@ func autoResolve(dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.A
 			return err
 		}
 
-		root = root.PutTable(dEnv.DoltDB, tblName, updatedTbl)
+		root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
 	}
 
 	return dEnv.UpdateWorkingRoot(root)

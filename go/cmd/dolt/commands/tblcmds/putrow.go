@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"strings"
 
 	"github.com/attic-labs/noms/go/types"
@@ -113,8 +114,8 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if verr == nil {
 		me := tbl.GetRowData().Edit()
 		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map()
-		tbl = tbl.UpdateRows(updated)
-		root = root.PutTable(dEnv.DoltDB, prArgs.TableName, tbl)
+		tbl = tbl.UpdateRows(context.TODO(), updated)
+		root = root.PutTable(context.TODO(), dEnv.DoltDB, prArgs.TableName, tbl)
 
 		verr = commands.UpdateWorkingWithVErr(dEnv, root)
 	}

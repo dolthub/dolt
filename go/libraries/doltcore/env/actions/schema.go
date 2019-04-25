@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -48,7 +49,7 @@ func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dol
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(context.TODO(), vrw, schemaVal, tbl.GetRowData())
 
 	return newTable, nil
 }
@@ -85,7 +86,7 @@ func RemoveColumnFromTable(colName string, tbl *doltdb.Table, doltDB *doltdb.Dol
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(context.TODO(), vrw, schemaVal, tbl.GetRowData())
 
 	return newTable, nil
 }

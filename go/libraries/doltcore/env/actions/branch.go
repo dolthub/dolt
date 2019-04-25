@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -215,7 +216,7 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 		}
 	}
 
-	root, err := doltdb.NewRootValue(dEnv.DoltDB.ValueReadWriter(), tblHashes)
+	root, err := doltdb.NewRootValue(context.TODO(), dEnv.DoltDB.ValueReadWriter(), tblHashes)
 
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
@@ -224,7 +225,7 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 		return emptyHash, doltdb.ErrNomsIO
 	}
 
-	return dEnv.DoltDB.WriteRootValue(root)
+	return dEnv.DoltDB.WriteRootValue(context.TODO(), root)
 }
 
 func getDifferingTables(root1, root2 *doltdb.RootValue) []string {

@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -90,11 +91,11 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		return nil, nil, err
 	}
 
-	mergedTable := doltdb.NewTable(merger.vrw, schUnionVal, mergedRowData)
+	mergedTable := doltdb.NewTable(context.TODO(), merger.vrw, schUnionVal, mergedRowData)
 
 	if conflicts.Len() > 0 {
 		schemas := doltdb.NewConflict(ancTbl.GetSchemaRef(), tbl.GetSchemaRef(), mergeTbl.GetSchemaRef())
-		mergedTable = mergedTable.SetConflicts(schemas, conflicts)
+		mergedTable = mergedTable.SetConflicts(context.TODO(), schemas, conflicts)
 	}
 
 	return mergedTable, stats, nil

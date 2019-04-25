@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -83,7 +84,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 		return ErrEmptyCommitMessage
 	}
 
-	_, err = dEnv.DoltDB.CommitWithParents(h, dEnv.RepoState.Branch, mergeCmSpec, meta)
+	_, err = dEnv.DoltDB.CommitWithParents(context.TODO(), h, dEnv.RepoState.Branch, mergeCmSpec, meta)
 
 	if err == nil {
 		dEnv.RepoState.ClearMerge()

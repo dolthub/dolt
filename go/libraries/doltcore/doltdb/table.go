@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"regexp"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -37,9 +38,9 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(vrw types.ValueReadWriter, schema types.Value, rowData types.Map) *Table {
-	schemaRef := writeValAndGetRef(vrw, schema)
-	rowDataRef := writeValAndGetRef(vrw, rowData)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map) *Table {
+	schemaRef := writeValAndGetRef(ctx, vrw, schema)
+	rowDataRef := writeValAndGetRef(ctx, vrw, rowData)
 
 	sd := types.StructData{
 		schemaRefKey: schemaRef,
@@ -50,8 +51,8 @@ func NewTable(vrw types.ValueReadWriter, schema types.Value, rowData types.Map) 
 	return &Table{vrw, tableStruct}
 }
 
-func (t *Table) SetConflicts(schemas Conflict, conflictData types.Map) *Table {
-	conflictsRef := writeValAndGetRef(t.vrw, conflictData)
+func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) *Table {
+	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflictData)
 
 	updatedSt := t.tableStruct.Set(conflictSchemasKey, schemas.ToNomsList(t.vrw))
 	updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
@@ -233,8 +234,8 @@ func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
-func (t *Table) UpdateRows(updatedRows types.Map) *Table {
-	rowDataRef := writeValAndGetRef(t.vrw, updatedRows)
+func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) *Table {
+	rowDataRef := writeValAndGetRef(ctx, t.vrw, updatedRows)
 	updatedSt := t.tableStruct.Set(tableRowsKey, rowDataRef)
 
 	return &Table{t.vrw, updatedSt}
@@ -285,7 +286,7 @@ func (t *Table) GetRowData() types.Map {
 	}
 }*/
 
-func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
+func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
 	_, confData, err := t.GetConflicts()
 
@@ -308,7 +309,7 @@ func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []ty
 	}
 
 	conflicts := confEdit.Map()
-	conflictsRef := writeValAndGetRef(t.vrw, conflicts)
+	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflicts)
 	updatedSt := t.tableStruct.Set(conflictsKey, conflictsRef)
 
 	return invalid, notFound, &Table{t.vrw, updatedSt}, nil

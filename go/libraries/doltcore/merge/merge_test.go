@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -217,7 +218,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
-	err := ddb.WriteEmptyRepo(name, email)
+	err := ddb.WriteEmptyRepo(context.Background(), name, email)
 
 	if err != nil {
 		panic(err)
@@ -294,25 +295,25 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	)
 
 	schVal, _ := encoding.MarshalAsNomsValue(vrw, sch)
-	tbl := doltdb.NewTable(vrw, schVal, initialRows)
-	updatedTbl := doltdb.NewTable(vrw, schVal, updatedRows)
-	mergeTbl := doltdb.NewTable(vrw, schVal, mergeRows)
+	tbl := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
+	updatedTbl := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows)
+	mergeTbl := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows)
 
 	mRoot := masterHead.GetRootValue()
-	mRoot = mRoot.PutTable(ddb, tableName, tbl)
-	updatedRoot := mRoot.PutTable(ddb, tableName, updatedTbl)
-	mergeRoot := mRoot.PutTable(ddb, tableName, mergeTbl)
+	mRoot = mRoot.PutTable(context.Background(), ddb, tableName, tbl)
+	updatedRoot := mRoot.PutTable(context.Background(), ddb, tableName, updatedTbl)
+	mergeRoot := mRoot.PutTable(context.Background(), ddb, tableName, mergeTbl)
 
-	masterHash, _ := ddb.WriteRootValue(mRoot)
-	hash, _ := ddb.WriteRootValue(updatedRoot)
-	mergeHash, _ := ddb.WriteRootValue(mergeRoot)
+	masterHash, _ := ddb.WriteRootValue(context.Background(), mRoot)
+	hash, _ := ddb.WriteRootValue(context.Background(), updatedRoot)
+	mergeHash, _ := ddb.WriteRootValue(context.Background(), mergeRoot)
 
 	meta, _ := doltdb.NewCommitMeta(name, email, "fake")
-	initialCommit, _ := ddb.Commit(masterHash, "master", meta)
-	commit, _ := ddb.Commit(hash, "master", meta)
+	initialCommit, _ := ddb.Commit(context.Background(), masterHash, "master", meta)
+	commit, _ := ddb.Commit(context.Background(), hash, "master", meta)
 
 	ddb.NewBranchAtCommit("to-merge", initialCommit)
-	mergeCommit, _ := ddb.Commit(mergeHash, "to-merge", meta)
+	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, "to-merge", meta)
 
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
 }
@@ -333,8 +334,8 @@ func TestMergeCommits(t *testing.T) {
 
 	tbl, _ := commit.GetRootValue().GetTable(tableName)
 	schRef := tbl.GetSchemaRef()
-	expected := doltdb.NewTable(vrw, schRef.TargetValue(vrw), expectedRows)
-	expected = expected.SetConflicts(doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
+	expected := doltdb.NewTable(context.Background(), vrw, schRef.TargetValue(vrw), expectedRows)
+	expected = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
 
 	if stats.Adds != 2 || stats.Deletes != 2 || stats.Modifications != 3 || stats.Conflicts != 2 {
 		t.Error("Actual stats differ from expected")

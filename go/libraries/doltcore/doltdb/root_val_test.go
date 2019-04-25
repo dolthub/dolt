@@ -1,13 +1,14 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"testing"
 )
 
 func TestTableDiff(t *testing.T) {
 	ddb := LoadDoltDB(InMemDoltDB)
-	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := NewCommitSpec("head", "master")
 	cm, _ := ddb.Resolve(cs)
@@ -22,7 +23,7 @@ func TestTableDiff(t *testing.T) {
 	sch := createTestSchema()
 	tbl1, _ := createTestTable(ddb.ValueReadWriter(), sch, types.NewMap(ddb.ValueReadWriter()))
 
-	root2 := root.PutTable(ddb, "tbl1", tbl1)
+	root2 := root.PutTable(context.Background(), ddb, "tbl1", tbl1)
 
 	added, modified, removed = root2.TableDiff(root)
 
@@ -39,7 +40,7 @@ func TestTableDiff(t *testing.T) {
 	rowData, _ := createTestRowData(ddb.ValueReadWriter(), sch)
 	tbl1Updated, _ := createTestTable(ddb.ValueReadWriter(), sch, rowData)
 
-	root3 := root.PutTable(ddb, "tbl1", tbl1Updated)
+	root3 := root.PutTable(context.Background(), ddb, "tbl1", tbl1Updated)
 
 	added, modified, removed = root3.TableDiff(root2)
 
@@ -53,7 +54,7 @@ func TestTableDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	root4 := root3.PutTable(ddb, "tbl2", tbl1)
+	root4 := root3.PutTable(context.Background(), ddb, "tbl2", tbl1)
 
 	added, modified, removed = root2.TableDiff(root4)
 	if len(modified) != 1 || modified[0] != "tbl1" || len(removed) != 1 || removed[0] != "tbl2" || +len(added) != 0 {

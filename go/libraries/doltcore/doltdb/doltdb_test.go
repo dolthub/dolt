@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -37,7 +38,7 @@ func createTestSchema() schema.Schema {
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	ddb := LoadDoltDB(InMemDoltDB)
-	err := ddb.WriteEmptyRepo("Bill Billerson", "bigbillieb@fake.horse")
+	err := ddb.WriteEmptyRepo(context.Background(), "Bill Billerson", "bigbillieb@fake.horse")
 
 	if err != nil {
 		t.Fatal("Unexpected error creating empty repo", err)
@@ -100,7 +101,7 @@ func TestLDNoms(t *testing.T) {
 		}
 
 		ddb := LoadDoltDB(LocalDirDoltDB)
-		err = ddb.WriteEmptyRepo(committerName, committerEmail)
+		err = ddb.WriteEmptyRepo(context.Background(), committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)
@@ -139,8 +140,8 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create test table with data")
 		}
 
-		root = root.PutTable(ddb, "test", tbl)
-		valHash, err = ddb.WriteRootValue(root)
+		root = root.PutTable(context.Background(), ddb, "test", tbl)
+		valHash, err = ddb.WriteRootValue(context.Background(), root)
 
 		if err != nil {
 			t.Fatal("Failed to write value")
@@ -155,7 +156,7 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Failled to commit")
 		}
 
-		commit, err := ddb.Commit(valHash, "master", meta)
+		commit, err := ddb.Commit(context.Background(), valHash, "master", meta)
 		if err != nil {
 			t.Error("Failled to commit")
 		}

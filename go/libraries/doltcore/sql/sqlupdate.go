@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -19,7 +20,7 @@ type UpdateResult struct {
 	// TODO: update ignore not supported by parser yet
 }
 
-func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string)  (*UpdateResult, error) {
+func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string) (*UpdateResult, error) {
 	tableExprs := s.TableExprs
 	if len(tableExprs) != 1 {
 		return errUpdate("Exactly one table to update must be specified")
@@ -48,7 +49,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 	if !root.HasTable(tableName) {
 		return errUpdate("Unknown table '%s'", tableName)
 	}
-	table, _:= root.GetTable(tableName)
+	table, _ := root.GetTable(tableName)
 	tableSch := table.GetSchema()
 
 	// map of column tag to value
@@ -152,7 +153,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 			}
 			return nil, err
 		}
-		
+
 		if !filter(r) {
 			continue
 		}
@@ -197,12 +198,12 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(me.Map())
+	table = table.UpdateRows(context.TODO(), me.Map())
 
-	result.Root = root.PutTable(db, tableName, table)
+	result.Root = root.PutTable(context.TODO(), db, tableName, table)
 	return &result, nil
 }
 
-func errUpdate(errorFmt string, args... interface{})  (*UpdateResult, error) {
+func errUpdate(errorFmt string, args ...interface{}) (*UpdateResult, error) {
 	return nil, errors.New(fmt.Sprintf(errorFmt, args...))
 }

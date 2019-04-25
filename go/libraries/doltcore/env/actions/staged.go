@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -59,14 +60,14 @@ func stageTables(dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, wor
 		tbl, _ := working.GetTable(tblName)
 
 		if tbl.HasConflicts() && tbl.NumRowsInConflict() == 0 {
-			working = working.PutTable(dEnv.DoltDB, tblName, tbl.ClearConflicts())
+			working = working.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl.ClearConflicts())
 		}
 	}
 
 	staged = staged.UpdateTablesFromOther(tbls, working)
 
-	if wh, err := dEnv.DoltDB.WriteRootValue(working); err == nil {
-		if sh, err := dEnv.DoltDB.WriteRootValue(staged); err == nil {
+	if wh, err := dEnv.DoltDB.WriteRootValue(context.TODO(), working); err == nil {
+		if sh, err := dEnv.DoltDB.WriteRootValue(context.TODO(), staged); err == nil {
 			dEnv.RepoState.Staged = sh.String()
 			dEnv.RepoState.Working = wh.String()
 

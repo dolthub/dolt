@@ -1,6 +1,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -80,7 +81,7 @@ func TableFromJSON(fp string, vrw types.ValueReadWriter, sch schema.Schema) (*do
 		return nil, err
 	}
 
-	tbl := doltdb.NewTable(vrw, schemaVal, rowMap)
+	tbl := doltdb.NewTable(context.TODO(), vrw, schemaVal, rowMap)
 	if err != nil {
 		return nil, err
 	}
