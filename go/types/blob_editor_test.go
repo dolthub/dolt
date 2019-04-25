@@ -68,13 +68,13 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 			}
 			if j%flushEvery == 0 {
 				// Flush
-				b = be.Blob()
+				b = be.Blob(context.Background())
 				be = b.Edit()
 			}
 		}
 
 		f.Sync()
-		b = be.Blob()
+		b = be.Blob(context.Background())
 
 		f.Seek(0, 0)
 		info, err := f.Stat()
