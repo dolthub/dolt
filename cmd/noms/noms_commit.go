@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -55,7 +56,7 @@ func runCommit(args []string) int {
 	absPath, err := spec.NewAbsolutePath(path)
 	d.CheckError(err)
 
-	value := absPath.Resolve(db)
+	value := absPath.Resolve(context.Background(), db)
 	if value == nil {
 		d.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
@@ -69,7 +70,7 @@ func runCommit(args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(context.Background(), db, "", "", nil, nil)
 	d.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ds, value, datas.CommitOptions{Meta: meta})

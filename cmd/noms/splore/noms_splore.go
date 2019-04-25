@@ -115,7 +115,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 		case id[0] == '#':
 			abspath, err := spec.NewAbsolutePath(id)
 			d.PanicIfError(err)
-			v = abspath.Resolve(sp.GetDatabase())
+			v = abspath.Resolve(r.Context(), sp.GetDatabase())
 		default:
 			path := types.MustParsePath(id)
 			v = path.Resolve(getValue(), sp.GetDatabase())

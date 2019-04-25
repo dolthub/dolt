@@ -87,7 +87,7 @@ func splitPath(sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	db := sp.GetDatabase()
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
-	rootVal = rootPath.Resolve(db)
+	rootVal = rootPath.Resolve(context.Background(), db)
 	if rootVal == nil {
 		d.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return

@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 
@@ -135,7 +136,7 @@ func argumentToValue(arg string, db datas.Database) (types.Value, error) {
 	if arg[0] == '@' {
 		p, err := spec.NewAbsolutePath(arg[1:])
 		d.PanicIfError(err)
-		return p.Resolve(db), nil
+		return p.Resolve(context.Background(), db), nil
 	}
 	if n, err := strconv.ParseFloat(arg, 64); err == nil {
 		return types.Float(n), nil
