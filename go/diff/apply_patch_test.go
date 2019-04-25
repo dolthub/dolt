@@ -364,7 +364,7 @@ func mustMarshal(v interface{}) types.Value {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	v1, err := marshal.Marshal(vs, v)
+	v1, err := marshal.Marshal(context.Background(), vs, v)
 	d.Chk.NoError(err)
 	return v1
 }

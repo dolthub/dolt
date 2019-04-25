@@ -452,7 +452,7 @@ func (suite *PerfSuite) getEnvironment(vrw types.ValueReadWriter) types.Value {
 	assert.NoError(err)
 	env.Host = *hostInfo
 
-	envStruct, err := marshal.Marshal(vrw, env)
+	envStruct, err := marshal.Marshal(context.Background(), vrw, env)
 	assert.NoError(err)
 	return envStruct
 }

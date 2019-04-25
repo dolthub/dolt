@@ -1516,7 +1516,7 @@ func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
 	}
 
 	var a Account
-	typ := marshal.MustMarshalType(a)
+	typ := marshal.MustMarshalType(context.Background(), a)
 	tc := NewTypeConverter()
 	_, err := tc.NomsTypeToGraphQLInputType(typ)
 	assert.NoError(err)
@@ -1530,7 +1530,7 @@ func TestErrorOnCyclicTypeRefsInputType(t *testing.T) {
 	}
 
 	var n Node
-	typ := marshal.MustMarshalType(n)
+	typ := marshal.MustMarshalType(context.Background(), n)
 	tc := NewTypeConverter()
 	_, err := tc.NomsTypeToGraphQLInputType(typ)
 	assert.Error(err)

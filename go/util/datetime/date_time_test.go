@@ -25,7 +25,7 @@ func TestBasics(t *testing.T) {
 	// Since we are using float64 in noms we cannot represent all possible times.
 	dt := DateTime{time.Unix(1234567, 1234567)}
 
-	nomsValue, err := marshal.Marshal(vs, dt)
+	nomsValue, err := marshal.Marshal(context.Background(), vs, dt)
 	assert.NoError(err)
 
 	var dt2 DateTime
@@ -86,7 +86,7 @@ func TestMarshal(t *testing.T) {
 	defer vs.Close()
 
 	test := func(dt DateTime, expected float64) {
-		v, err := marshal.Marshal(vs, dt)
+		v, err := marshal.Marshal(context.Background(), vs, dt)
 		assert.NoError(err)
 
 		assert.True(types.NewStruct("DateTime", types.StructData{
@@ -110,10 +110,10 @@ func TestMarshalType(t *testing.T) {
 	defer vs.Close()
 
 	dt := DateTime{time.Unix(0, 0)}
-	typ := marshal.MustMarshalType(dt)
+	typ := marshal.MustMarshalType(context.Background(), dt)
 	assert.Equal(DateTimeType, typ)
 
-	v := marshal.MustMarshal(vs, dt)
+	v := marshal.MustMarshal(context.Background(), vs, dt)
 	assert.Equal(typ, types.TypeOf(v))
 }
 
@@ -159,7 +159,7 @@ func TestHRSComment(t *testing.T) {
 	vs := newTestValueStore()
 
 	dt := Now()
-	mdt := marshal.MustMarshal(vs, dt)
+	mdt := marshal.MustMarshal(context.Background(), vs, dt)
 
 	exp := dt.Format(time.RFC3339)
 	s1 := types.EncodedValue(context.Background(), mdt)
