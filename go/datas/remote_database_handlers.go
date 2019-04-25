@@ -607,7 +607,7 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	if err != nil {
 		ngql.Error(err, writer)
 	} else {
-		ngql.Query(rootValue, query, db, writer)
+		ngql.Query(context.TODO(), rootValue, query, db, writer)
 	}
 }
 
