@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -270,7 +271,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 				return false
 			})
 		case List:
-			c.Iter(func(v Value, idx uint64) bool {
+			c.Iter(context.Background(), func(v Value, idx uint64) bool {
 				tgo := testGraphOp{keys: dupSlice(keys), kind: ListKind, item: v}
 				ops = append(ops, tgo)
 				return false

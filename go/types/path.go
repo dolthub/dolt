@@ -276,7 +276,7 @@ func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value 
 
 	switch v := v.(type) {
 	case List:
-		return seqIndex(func(i uint64) Value { return v.Get(i) })
+		return seqIndex(func(i uint64) Value { return v.Get(ctx, i) })
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
 			return seqIndex(func(i uint64) Value { return cd.ElemTypes[i] })
@@ -501,7 +501,7 @@ func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Va
 	switch v := v.(type) {
 	case List:
 		if !ann.IntoKey {
-			return v.Get(ai)
+			return v.Get(ctx, ai)
 		}
 	case Set:
 		return v.At(ai)

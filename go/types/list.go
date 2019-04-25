@@ -79,9 +79,9 @@ func (l List) WalkValues(cb ValueCallback) {
 
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
-func (l List) Get(idx uint64) Value {
+func (l List) Get(ctx context.Context, idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(context.TODO(), l.sequence, idx)
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
 	return cur.current().(Value)
 }
 
@@ -97,10 +97,10 @@ func (l List) Concat(ctx context.Context, other List) List {
 
 // Iter iterates over the list and calls f for every element in the list. If f returns true then the
 // iteration stops.
-func (l List) Iter(f func(v Value, index uint64) (stop bool)) {
+func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(context.TODO(), l.sequence, idx)
-	cur.iter(context.TODO(), func(v interface{}) bool {
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
+	cur.iter(ctx, func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
 		}
@@ -211,15 +211,15 @@ func iterRange(col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBy
 }
 
 // Iterator returns a ListIterator which can be used to iterate efficiently over a list.
-func (l List) Iterator() ListIterator {
-	return l.IteratorAt(0)
+func (l List) Iterator(ctx context.Context) ListIterator {
+	return l.IteratorAt(ctx, 0)
 }
 
 // IteratorAt returns a ListIterator starting at index. If index is out of bound the iterator will
 // have reached its end on creation.
-func (l List) IteratorAt(index uint64) ListIterator {
+func (l List) IteratorAt(ctx context.Context, index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(context.TODO(), l.sequence, index),
+		newCursorAtIndex(ctx, l.sequence, index),
 	}
 }
 

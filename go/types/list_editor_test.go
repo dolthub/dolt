@@ -36,7 +36,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 	assert.Equal(t, uint64(len(expectItems)), le.Len())
 
 	for i, v := range expectItems {
-		assert.Equal(t, Float(v), le.Get(uint64(i)))
+		assert.Equal(t, Float(v), le.Get(context.Background(), uint64(i)))
 	}
 
 	actualEditCount := 0
@@ -92,8 +92,8 @@ func TestListEditorBasic(t *testing.T) {
 		le.Append(Float(4))
 		l := le.List(context.Background())
 
-		assert.True(t, IsNull(l.Get(3)))
-		assert.True(t, l.Get(4).Equals(Float(4)))
+		assert.True(t, IsNull(l.Get(context.Background(), 3)))
+		assert.True(t, l.Get(context.Background(), 4).Equals(Float(4)))
 	})
 }
 

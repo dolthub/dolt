@@ -79,7 +79,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	assert := s.NewAssert()
 
 	last := func(v types.List) types.Value {
-		return v.Get(v.Len() - 1)
+		return v.Get(context.Background(), v.Len()-1)
 	}
 
 	l1 := s.headList("BuildList10mNumbers")

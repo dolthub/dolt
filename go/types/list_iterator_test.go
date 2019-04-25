@@ -17,14 +17,14 @@ func TestListIterator(t *testing.T) {
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
 	l := NewList(vrw, numbers...)
-	i := l.Iterator()
+	i := l.Iterator(context.Background())
 	vs := iterToSlice(i)
 	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
-	i = l.IteratorAt(3)
+	i = l.IteratorAt(context.Background(), 3)
 	vs = iterToSlice(i)
 	assert.True(vs.Equals(numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
 
-	i = l.IteratorAt(l.Len())
+	i = l.IteratorAt(context.Background(), l.Len())
 	assert.Nil(i.Next(context.Background()))
 }
