@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -40,7 +41,7 @@ type setIterator struct {
 func (si *setIterator) Next() Value {
 	if si.cursor.valid() {
 		si.currentValue = si.cursor.current().(Value)
-		si.cursor.advance()
+		si.cursor.advance(context.TODO())
 	} else {
 		si.currentValue = nil
 	}
@@ -57,7 +58,7 @@ func (si *setIterator) SkipTo(v Value) Value {
 		si.cursor = newCursorAtValue(si.s.orderedSequence, v, true, false)
 		if si.cursor.valid() {
 			si.currentValue = si.cursor.current().(Value)
-			si.cursor.advance()
+			si.cursor.advance(context.TODO())
 		} else {
 			si.currentValue = nil
 		}

@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/attic-labs/noms/go/d"
@@ -80,7 +81,7 @@ func (l List) WalkValues(cb ValueCallback) {
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(l.sequence, idx)
+	cur := newCursorAtIndex(context.TODO(), l.sequence, idx)
 	return cur.current().(Value)
 }
 
@@ -98,8 +99,8 @@ func (l List) Concat(other List) List {
 // iteration stops.
 func (l List) Iter(f func(v Value, index uint64) (stop bool)) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.sequence, idx)
-	cur.iter(func(v interface{}) bool {
+	cur := newCursorAtIndex(context.TODO(), l.sequence, idx)
+	cur.iter(context.TODO(), func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
 		}
@@ -218,7 +219,7 @@ func (l List) Iterator() ListIterator {
 // have reached its end on creation.
 func (l List) IteratorAt(index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(l.sequence, index),
+		newCursorAtIndex(context.TODO(), l.sequence, index),
 	}
 }
 

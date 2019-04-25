@@ -69,10 +69,10 @@ func (sc *sequenceChunker) resume() {
 	idx := sc.cur.idx
 
 	// Walk backwards to the start of the existing chunk.
-	for sc.cur.indexInChunk() > 0 && sc.cur.retreatMaybeAllowBeforeStart(false) {
+	for sc.cur.indexInChunk() > 0 && sc.cur.retreatMaybeAllowBeforeStart(context.TODO(), false) {
 	}
 
-	for ; sc.cur.idx < idx; sc.cur.advance() {
+	for ; sc.cur.idx < idx; sc.cur.advance(context.TODO()) {
 		sc.Append(sc.cur.current())
 	}
 }
@@ -102,7 +102,7 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 	//             parent chunkers then sc.resume() at |next|
 
 	for sc.cur.compare(next) > 0 {
-		next.advance() // Case (2)
+		next.advance(context.TODO()) // Case (2)
 	}
 
 	// If neither loop above and below are entered, it is Case (1). If the loop
@@ -123,7 +123,7 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 				// but that would force loading of the next sequence, which we don't
 				// need for any reason, so instead we advance the parent and take care
 				// not to allow it to step outside the sequence.
-				sc.cur.parent.advanceMaybeAllowPastEnd(false)
+				sc.cur.parent.advanceMaybeAllowPastEnd(context.TODO(), false)
 
 				// Invalidate this cursor, since it is now inconsistent with its parent
 				sc.cur.parent = nil
@@ -133,7 +133,7 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 			break
 		}
 
-		sc.cur.advance()
+		sc.cur.advance(context.TODO())
 	}
 
 	if sc.parent != nil && next.parent != nil {
@@ -158,7 +158,7 @@ func (sc *sequenceChunker) Append(item sequenceItem) bool {
 }
 
 func (sc *sequenceChunker) Skip() {
-	sc.cur.advance()
+	sc.cur.advance(context.TODO())
 }
 
 func (sc *sequenceChunker) createParent() {
@@ -278,14 +278,14 @@ func (sc *sequenceChunker) Done() sequence {
 
 // If we are mutating an existing sequence, appending subsequent items in the sequence until we reach a pre-existing chunk boundary or the end of the sequence.
 func (sc *sequenceChunker) finalizeCursor() {
-	for ; sc.cur.valid(); sc.cur.advance() {
+	for ; sc.cur.valid(); sc.cur.advance(context.TODO()) {
 		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
 			break // boundary occurred at same place in old & new sequence
 		}
 	}
 
 	if sc.cur.parent != nil {
-		sc.cur.parent.advance()
+		sc.cur.parent.advance(context.TODO())
 
 		// Invalidate this cursor, since it is now inconsistent with its parent
 		sc.cur.parent = nil
