@@ -155,8 +155,8 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	lastCur := newCursorAt(last, emptyKey, false, false)
-	currentCur := newCursorAt(current, emptyKey, false, false)
+	lastCur := newCursorAt(context.TODO(), last, emptyKey, false, false)
+	currentCur := newCursorAt(context.TODO(), current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
 		fastForward(lastCur, currentCur)

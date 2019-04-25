@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -60,7 +61,7 @@ func (se *SetEditor) Set() Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.value, true, false)
+				cc <- newCursorAtValue(context.TODO(), seq, edit.value, true, false)
 			}()
 
 			editChan <- edit

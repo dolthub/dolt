@@ -130,7 +130,7 @@ func (m Map) WalkValues(cb ValueCallback) {
 }
 
 func (m Map) firstOrLast(last bool) (Value, Value) {
-	cur := newCursorAt(m.orderedSequence, emptyKey, false, last)
+	cur := newCursorAt(context.TODO(), m.orderedSequence, emptyKey, false, last)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -157,7 +157,7 @@ func (m Map) At(idx uint64) (key, value Value) {
 }
 
 func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(m.orderedSequence, key, false, false)
+	cur := newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -170,7 +170,7 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 }
 
 func (m Map) Has(key Value) bool {
-	cur := newCursorAtValue(m.orderedSequence, key, false, false)
+	cur := newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -186,7 +186,7 @@ func (m Map) Get(key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(m.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(context.TODO(), m.orderedSequence, emptyKey, false, false)
 	cur.iter(context.TODO(), func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -217,7 +217,7 @@ func (m Map) IteratorAt(pos uint64) MapIterator {
 
 func (m Map) IteratorFrom(key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(m.orderedSequence, key, false, false),
+		cursor: newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false),
 	}
 }
 
@@ -237,7 +237,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(m.orderedSequence, start, false, false)
+	cur := newCursorAtValue(context.TODO(), m.orderedSequence, start, false, false)
 	cur.iter(context.TODO(), func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
