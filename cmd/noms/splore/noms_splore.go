@@ -119,7 +119,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 			v = abspath.Resolve(r.Context(), sp.GetDatabase())
 		default:
 			path := types.MustParsePath(id)
-			v = path.Resolve(getValue(), sp.GetDatabase())
+			v = path.Resolve(r.Context(), getValue(), sp.GetDatabase())
 		}
 
 		if v == nil {

@@ -291,7 +291,7 @@ func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(node.commit, db)
+	v := path.Resolve(context.Background(), node.commit, db)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
@@ -333,8 +333,8 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	parentCommit := parent.(types.Ref).TargetValue(context.Background(), db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(parentCommit, db) },
-		func() { neu = path.Resolve(node.commit, db) },
+		func() { old = path.Resolve(context.Background(), parentCommit, db) },
+		func() { neu = path.Resolve(context.Background(), node.commit, db) },
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization

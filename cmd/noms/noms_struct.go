@@ -125,7 +125,7 @@ func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ar
 
 func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
 	db := sp.GetDatabase()
-	baseVal := basePath.Resolve(rootVal, db)
+	baseVal := basePath.Resolve(context.Background(), rootVal, db)
 	if baseVal == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}

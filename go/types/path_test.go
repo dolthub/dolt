@@ -25,7 +25,7 @@ func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) 
 func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str string, vr ValueReader) {
 	p, err := ParsePath(str)
 	assert.NoError(err)
-	actual := p.Resolve(ref, vr)
+	actual := p.Resolve(context.Background(), ref, vr)
 	if expect == nil {
 		if actual != nil {
 			assert.Fail("", "Expected nil, but got %s", EncodedValue(actual))
