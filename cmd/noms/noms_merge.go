@@ -63,7 +63,7 @@ func runMerge(args []string) int {
 	left, right, ancestor := getMergeCandidates(db, leftDS, rightDS)
 	policy := decidePolicy(resolver)
 	pc := newMergeProgressChan()
-	merged, err := policy(left, right, ancestor, db, pc)
+	merged, err := policy(context.Background(), left, right, ancestor, db, pc)
 	d.CheckErrorNoUsage(err)
 	close(pc)
 

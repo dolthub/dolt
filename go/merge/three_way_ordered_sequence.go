@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
@@ -13,7 +14,7 @@ import (
 
 type applyFunc func(candidate, types.ValueChanged, types.Value) candidate
 
-func (m *merger) threeWayOrderedSequenceMerge(a, b, parent candidate, apply applyFunc, path types.Path) (types.Value, error) {
+func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent candidate, apply applyFunc, path types.Path) (types.Value, error) {
 	aChangeChan, bChangeChan := make(chan types.ValueChanged), make(chan types.ValueChanged)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
@@ -60,7 +61,7 @@ func (m *merger) threeWayOrderedSequenceMerge(a, b, parent candidate, apply appl
 			d.Panic("Diffs have skewed!") // Sanity check.
 		}
 
-		change, mergedVal, err := m.mergeChanges(aChange, bChange, a, b, parent, apply, path)
+		change, mergedVal, err := m.mergeChanges(ctx, aChange, bChange, a, b, parent, apply, path)
 		if err != nil {
 			return parent.getValue(), err
 		}
@@ -70,7 +71,7 @@ func (m *merger) threeWayOrderedSequenceMerge(a, b, parent candidate, apply appl
 	return merged.getValue(), nil
 }
 
-func (m *merger) mergeChanges(aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
+func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
 	path = a.pathConcat(aChange, path)
 	aValue, bValue := a.get(aChange.Key), b.get(bChange.Key)
 	// If the two diffs generate different kinds of changes at the same key, conflict.
@@ -91,7 +92,7 @@ func (m *merger) mergeChanges(aChange, bChange types.ValueChanged, a, b, p candi
 	if !unmergeable(aValue, bValue) {
 		// TODO: Add concurrency.
 		var err error
-		if mergedVal, err = m.threeWay(aValue, bValue, p.get(aChange.Key), path); err == nil {
+		if mergedVal, err = m.threeWay(ctx, aValue, bValue, p.get(aChange.Key), path); err == nil {
 			return aChange, mergedVal, nil
 		}
 		return change, nil, err

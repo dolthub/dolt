@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -34,7 +35,7 @@ func (s *ThreeWayMergeSuite) TearDownTest() {
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
+	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -42,7 +43,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained string) {
-	m, err := ThreeWay(a, b, p, s.vs, nil, nil)
+	m, err := ThreeWay(context.Background(), a, b, p, s.vs, nil, nil)
 	if s.Error(err) {
 		s.Contains(err.Error(), contained)
 		return
@@ -77,7 +78,7 @@ func valToTypesValue(f func(seq) types.Value, v interface{}) types.Value {
 func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
 	threeWayConflict := func(a, b, p types.Value, contained string) {
 		mrgr := &merger{}
-		m, err := mrgr.threeWay(a, b, p, nil)
+		m, err := mrgr.threeWay(context.Background(), a, b, p, nil)
 		if assert.Error(t, err) {
 			assert.Contains(t, err.Error(), contained)
 			return

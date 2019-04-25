@@ -164,7 +164,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 		return aChange, aVal, true
 	}
 
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, resolve, nil)
+	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, resolve, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -184,7 +184,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeOurs() {
 	b := kvs{"k1", "k-too", "k2", "k-two"}
 	exp := kvs{"k1", "k-won", "k2", "k-two"}
 
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, Ours, nil)
+	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, Ours, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
@@ -197,7 +197,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeTheirs() {
 	b := kvs{"k1", "k-too", "k2", "k-two"}
 	exp := kvs{"k1", "k-too", "k2", "k-two"}
 
-	merged, err := ThreeWay(s.create(a), s.create(b), s.create(p), s.vs, Theirs, nil)
+	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, Theirs, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
