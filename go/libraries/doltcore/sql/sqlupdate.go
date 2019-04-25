@@ -20,7 +20,7 @@ type UpdateResult struct {
 	// TODO: update ignore not supported by parser yet
 }
 
-func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string) (*UpdateResult, error) {
+func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string) (*UpdateResult, error) {
 	tableExprs := s.TableExprs
 	if len(tableExprs) != 1 {
 		return errUpdate("Exactly one table to update must be specified")
@@ -198,9 +198,9 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(context.TODO(), me.Map())
+	table = table.UpdateRows(ctx, me.Map())
 
-	result.Root = root.PutTable(context.TODO(), db, tableName, table)
+	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }
 

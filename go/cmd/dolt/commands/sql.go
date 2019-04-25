@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -115,7 +116,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 
 // Executes a SQL insert statement and prints the result to the CLI.
 func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) int {
-	result, err := sql.ExecuteInsert(dEnv.DoltDB, root, stmt, query)
+	result, err := sql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
 	if err != nil {
 		return quitErr("Error inserting rows: %v", err.Error())
 	}
@@ -137,7 +138,7 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 
 // Executes a SQL update statement and prints the result to the CLI.
 func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) int {
-	result, err := sql.ExecuteUpdate(dEnv.DoltDB, root, update, query)
+	result, err := sql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return quitErr("Error during update: %v", err.Error())
 	}
@@ -156,7 +157,7 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 
 // Executes a SQL delete statement and prints the result to the CLI.
 func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) int {
-	result, err := sql.ExecuteDelete(dEnv.DoltDB, root, update, query)
+	result, err := sql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return quitErr("Error during update: %v", err.Error())
 	}
@@ -174,7 +175,7 @@ func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Dele
 func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string, usage cli.UsagePrinter) int {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
-		root, _, err := sql.ExecuteCreate(dEnv.DoltDB, root, ddl, query)
+		root, _, err := sql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return quitErr("Error creating table: %v", err)
 		}
