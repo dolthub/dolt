@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestRefInList(t *testing.T) {
 
 	l := NewList(vs)
 	r := NewRef(l)
-	l = l.Edit().Append(r).List()
+	l = l.Edit().Append(r).List(context.Background())
 	r2 := l.Get(0)
 	assert.True(r.Equals(r2))
 }

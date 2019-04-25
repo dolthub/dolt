@@ -174,7 +174,7 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 		suite.http.Put(context.Background(), types.EncodeValue(val))
 		le.Append(types.NewRef(val))
 	}
-	suite.http.Put(context.Background(), types.EncodeValue(le.List()))
+	suite.http.Put(context.Background(), types.EncodeValue(le.List(context.Background())))
 	suite.True(suite.http.Commit(context.Background(), hash.Hash{}, hash.Hash{}))
 
 	suite.Equal(3, suite.serverCS.Writes)

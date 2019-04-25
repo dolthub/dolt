@@ -40,7 +40,7 @@ func TestHandleWriteValue(t *testing.T) {
 
 	newItem := types.NewEmptyBlob(db)
 	itemChunk := types.EncodeValue(newItem)
-	l2 := l.Edit().Insert(1, types.NewRef(newItem)).List()
+	l2 := l.Edit().Insert(1, types.NewRef(newItem)).List(context.Background())
 	listChunk := types.EncodeValue(l2)
 
 	body := &bytes.Buffer{}
