@@ -477,7 +477,7 @@ func getSetElements(vrw types.ValueReadWriter, v types.Value, args map[string]in
 	setIter := iter.(types.SetIterator)
 	values := make([]interface{}, 0, count)
 	for i := uint64(0); i < count; i++ {
-		v := setIter.Next()
+		v := setIter.Next(context.TODO())
 		if v == nil {
 			break
 		}
@@ -1042,11 +1042,11 @@ type setFirstIterator struct {
 	s types.Set
 }
 
-func (it *setFirstIterator) Next() types.Value {
+func (it *setFirstIterator) Next(ctx context.Context) types.Value {
 	return it.s.First()
 }
 
-func (it *setFirstIterator) SkipTo(v types.Value) types.Value {
+func (it *setFirstIterator) SkipTo(ctx context.Context, v types.Value) types.Value {
 	panic("not implemented")
 }
 

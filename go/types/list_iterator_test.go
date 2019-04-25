@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,5 +26,5 @@ func TestListIterator(t *testing.T) {
 	assert.True(vs.Equals(numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
 
 	i = l.IteratorAt(l.Len())
-	assert.Nil(i.Next())
+	assert.Nil(i.Next(context.Background()))
 }
