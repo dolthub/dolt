@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -60,7 +61,7 @@ func (me *MapEditor) Map() Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.key, true, false)
+				cc <- newCursorAtValue(context.TODO(), seq, edit.key, true, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)

@@ -114,7 +114,7 @@ func (s Set) WalkValues(cb ValueCallback) {
 }
 
 func (s Set) First() Value {
-	cur := newCursorAt(s.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(context.TODO(), s.orderedSequence, emptyKey, false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -131,14 +131,14 @@ func (s Set) At(idx uint64) Value {
 }
 
 func (s Set) Has(v Value) bool {
-	cur := newCursorAtValue(s.orderedSequence, v, false, false)
+	cur := newCursorAtValue(context.TODO(), s.orderedSequence, v, false, false)
 	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAt(s.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(context.TODO(), s.orderedSequence, emptyKey, false, false)
 	cur.iter(context.TODO(), func(v interface{}) bool {
 		return cb(v.(Value))
 	})
@@ -165,7 +165,7 @@ func (s Set) IteratorAt(idx uint64) SetIterator {
 
 func (s Set) IteratorFrom(val Value) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtValue(s.orderedSequence, val, false, false),
+		cursor: newCursorAtValue(context.TODO(), s.orderedSequence, val, false, false),
 		s:      s,
 	}
 }
