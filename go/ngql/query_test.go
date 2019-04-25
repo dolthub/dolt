@@ -96,27 +96,27 @@ func (suite *QueryGraphQLSuite) TestEmbeddedStruct() {
 
 func (suite *QueryGraphQLSuite) TestListBasic() {
 	for _, valuesKey := range []string{"elements", "values"} {
-		list := types.NewList(suite.vs)
+		list := types.NewList(context.Background(), suite.vs)
 		suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":0}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"}}", `{"data":{"root":{}}}`)
 
-		list = types.NewList(suite.vs, types.String("foo"), types.String("bar"), types.String("baz"))
+		list = types.NewList(context.Background(), suite.vs, types.String("foo"), types.String("bar"), types.String("baz"))
 
 		suite.assertQueryResult(list, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":["foo","bar","baz"]}}}`)
 		suite.assertQueryResult(list, "{root{size}}", `{"data":{"root":{"size":3}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(at:1,count:2)}}", `{"data":{"root":{"`+valuesKey+`":["bar","baz"]}}}`)
 
-		list = types.NewList(suite.vs, types.Bool(true), types.Bool(false), types.Bool(false))
+		list = types.NewList(context.Background(), suite.vs, types.Bool(true), types.Bool(false), types.Bool(false))
 
 		suite.assertQueryResult(list, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":[true,false,false]}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(at:1,count:2)}}", `{"data":{"root":{"`+valuesKey+`":[false,false]}}}`)
 
-		list = types.NewList(suite.vs, types.Float(1), types.Float(1.1), types.Float(-100))
+		list = types.NewList(context.Background(), suite.vs, types.Float(1), types.Float(1.1), types.Float(-100))
 
 		suite.assertQueryResult(list, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":[1,1.1,-100]}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(at:1,count:2)}}", `{"data":{"root":{"`+valuesKey+`":[1.1,-100]}}}`)
 
-		list = types.NewList(suite.vs, types.String("a"), types.String("b"), types.String("c"))
+		list = types.NewList(context.Background(), suite.vs, types.String("a"), types.String("b"), types.String("c"))
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(at:4)}}", `{"data":{"root":{"`+valuesKey+`":[]}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(count:0)}}", `{"data":{"root":{"`+valuesKey+`":[]}}}`)
 		suite.assertQueryResult(list, "{root{"+valuesKey+"(count:10)}}", `{"data":{"root":{"`+valuesKey+`":["a","b","c"]}}}`)
@@ -125,7 +125,7 @@ func (suite *QueryGraphQLSuite) TestListBasic() {
 }
 
 func (suite *QueryGraphQLSuite) TestListOfStruct() {
-	list := types.NewList(suite.vs,
+	list := types.NewList(context.Background(), suite.vs,
 		types.NewStruct("Foo", types.StructData{
 			"a": types.Float(28),
 			"b": types.String("foo"),
@@ -146,7 +146,7 @@ func (suite *QueryGraphQLSuite) TestListOfStruct() {
 }
 
 func (suite *QueryGraphQLSuite) TestListOfStructWithOptionalFields() {
-	list := types.NewList(suite.vs,
+	list := types.NewList(context.Background(), suite.vs,
 		types.NewStruct("Foo", types.StructData{
 			"a": types.Float(1),
 		}),
@@ -170,27 +170,27 @@ func (suite *QueryGraphQLSuite) TestListOfStructWithOptionalFields() {
 
 func (suite *QueryGraphQLSuite) TestSetBasic() {
 	for _, valuesKey := range []string{"elements", "values"} {
-		set := types.NewSet(suite.vs)
+		set := types.NewSet(context.Background(), suite.vs)
 		suite.assertQueryResult(set, "{root{size}}", `{"data":{"root":{"size":0}}}`)
 		suite.assertQueryResult(set, "{root{"+valuesKey+"}}", `{"data":{"root":{}}}`)
 
-		set = types.NewSet(suite.vs, types.String("foo"), types.String("bar"), types.String("baz"))
+		set = types.NewSet(context.Background(), suite.vs, types.String("foo"), types.String("bar"), types.String("baz"))
 
 		suite.assertQueryResult(set, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":["bar","baz","foo"]}}}`)
 		suite.assertQueryResult(set, "{root{size}}", `{"data":{"root":{"size":3}}}`)
 		suite.assertQueryResult(set, "{root{"+valuesKey+"(count:2)}}", `{"data":{"root":{"`+valuesKey+`":["bar","baz"]}}}`)
 
-		set = types.NewSet(suite.vs, types.Bool(true), types.Bool(false))
+		set = types.NewSet(context.Background(), suite.vs, types.Bool(true), types.Bool(false))
 
 		suite.assertQueryResult(set, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":[false,true]}}}`)
 		suite.assertQueryResult(set, "{root{"+valuesKey+"(count:1)}}", `{"data":{"root":{"`+valuesKey+`":[false]}}}`)
 
-		set = types.NewSet(suite.vs, types.Float(1), types.Float(1.1), types.Float(-100))
+		set = types.NewSet(context.Background(), suite.vs, types.Float(1), types.Float(1.1), types.Float(-100))
 
 		suite.assertQueryResult(set, "{root{"+valuesKey+"}}", `{"data":{"root":{"`+valuesKey+`":[-100,1,1.1]}}}`)
 		suite.assertQueryResult(set, "{root{"+valuesKey+"(count:2)}}", `{"data":{"root":{"`+valuesKey+`":[-100,1]}}}`)
 
-		set = types.NewSet(suite.vs, types.String("a"), types.String("b"), types.String("c"), types.String("d"))
+		set = types.NewSet(context.Background(), suite.vs, types.String("a"), types.String("b"), types.String("c"), types.String("d"))
 		suite.assertQueryResult(set, "{root{"+valuesKey+"(count:0)}}", `{"data":{"root":{"`+valuesKey+`":[]}}}`)
 		suite.assertQueryResult(set, "{root{"+valuesKey+"(count:2)}}", `{"data":{"root":{"`+valuesKey+`":["a","b"]}}}`)
 
@@ -205,7 +205,7 @@ func (suite *QueryGraphQLSuite) TestSetBasic() {
 }
 
 func (suite *QueryGraphQLSuite) TestSetOfStruct() {
-	set := types.NewSet(suite.vs,
+	set := types.NewSet(context.Background(), suite.vs,
 		types.NewStruct("Foo", types.StructData{
 			"a": types.Float(28),
 			"b": types.String("foo"),
@@ -228,11 +228,11 @@ func (suite *QueryGraphQLSuite) TestSetOfStruct() {
 func (suite *QueryGraphQLSuite) TestMapBasic() {
 	for _, entriesKey := range []string{"elements", "entries"} {
 
-		m := types.NewMap(suite.vs)
+		m := types.NewMap(context.Background(), suite.vs)
 		suite.assertQueryResult(m, "{root{size}}", `{"data":{"root":{"size":0}}}`)
 		suite.assertQueryResult(m, "{root{"+entriesKey+"}}", `{"data":{"root":{}}}`)
 
-		m = types.NewMap(suite.vs,
+		m = types.NewMap(context.Background(), suite.vs,
 			types.String("a"), types.Float(1),
 			types.String("b"), types.Float(2),
 			types.String("c"), types.Float(3),
@@ -245,7 +245,7 @@ func (suite *QueryGraphQLSuite) TestMapBasic() {
 }
 
 func (suite *QueryGraphQLSuite) TestMapOfStruct() {
-	m := types.NewMap(suite.vs,
+	m := types.NewMap(context.Background(), suite.vs,
 		types.String("foo"), types.NewStruct("Foo", types.StructData{
 			"a": types.Float(28),
 			"b": types.String("foo"),
@@ -280,14 +280,14 @@ func (suite *QueryGraphQLSuite) TestRef() {
 	suite.assertQueryResult(r, "{root{targetValue{a}}}", `{"data":{"root":{"targetValue":{"a":28}}}}`)
 	suite.assertQueryResult(r, "{root{targetValue{a b}}}", `{"data":{"root":{"targetValue":{"a":28,"b":"foo"}}}}`)
 
-	r = suite.vs.WriteValue(context.Background(), types.NewList(suite.vs, types.String("foo"), types.String("bar"), types.String("baz")))
+	r = suite.vs.WriteValue(context.Background(), types.NewList(context.Background(), suite.vs, types.String("foo"), types.String("bar"), types.String("baz")))
 
 	suite.assertQueryResult(r, "{root{targetValue{values}}}", `{"data":{"root":{"targetValue":{"values":["foo","bar","baz"]}}}}`)
 	suite.assertQueryResult(r, "{root{targetValue{values(at:1,count:2)}}}", `{"data":{"root":{"targetValue":{"values":["bar","baz"]}}}}`)
 }
 
 func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
-	list := types.NewList(suite.vs,
+	list := types.NewList(context.Background(), suite.vs,
 		types.NewStruct("Foo", types.StructData{
 			"a": types.Float(28),
 			"b": types.String("baz"),
@@ -309,7 +309,7 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 }
 
 func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() {
-	list := types.NewList(suite.vs,
+	list := types.NewList(context.Background(), suite.vs,
 		types.NewStruct("Foo", types.StructData{
 			"a": types.Float(28),
 		}),
@@ -330,7 +330,7 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 }
 
 func (suite *QueryGraphQLSuite) TestListOfUnionOfScalars() {
-	list := types.NewList(suite.vs,
+	list := types.NewList(context.Background(), suite.vs,
 		types.Float(28),
 		types.String("bar"),
 		types.Bool(true),
@@ -350,10 +350,10 @@ func (suite *QueryGraphQLSuite) TestCyclicStructs() {
 
 	s1 := types.NewStruct("A", types.StructData{
 		"a": types.String("aaa"),
-		"b": types.NewSet(suite.vs,
+		"b": types.NewSet(context.Background(), suite.vs,
 			types.NewStruct("A", types.StructData{
 				"a": types.String("bbb"),
-				"b": types.NewSet(suite.vs),
+				"b": types.NewSet(context.Background(), suite.vs),
 			})),
 	})
 
@@ -433,14 +433,14 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 }
 
 func (suite *QueryGraphQLSuite) TestNestedCollection() {
-	list := types.NewList(suite.vs,
-		types.NewSet(suite.vs,
-			types.NewMap(suite.vs, types.Float(10), types.String("foo")),
-			types.NewMap(suite.vs, types.Float(20), types.String("bar")),
+	list := types.NewList(context.Background(), suite.vs,
+		types.NewSet(context.Background(), suite.vs,
+			types.NewMap(context.Background(), suite.vs, types.Float(10), types.String("foo")),
+			types.NewMap(context.Background(), suite.vs, types.Float(20), types.String("bar")),
 		),
-		types.NewSet(suite.vs,
-			types.NewMap(suite.vs, types.Float(30), types.String("baz")),
-			types.NewMap(suite.vs, types.Float(40), types.String("bat")),
+		types.NewSet(context.Background(), suite.vs,
+			types.NewMap(context.Background(), suite.vs, types.Float(30), types.String("baz")),
+			types.NewMap(context.Background(), suite.vs, types.Float(40), types.String("bat")),
 		),
 	)
 
@@ -469,7 +469,7 @@ func (suite *QueryGraphQLSuite) TestError() {
 func (suite *QueryGraphQLSuite) TestMapArgs() {
 	for _, entriesKey := range []string{"elements", "entries"} {
 
-		m := types.NewMap(suite.vs,
+		m := types.NewMap(context.Background(), suite.vs,
 			types.String("a"), types.Float(1),
 			types.String("c"), types.Float(2),
 			types.String("e"), types.Float(3),
@@ -568,7 +568,7 @@ func (suite *QueryGraphQLSuite) TestMapArgs() {
 
 func (suite *QueryGraphQLSuite) TestMapKeysArg() {
 	for _, entriesKey := range []string{"elements", "entries"} {
-		m := types.NewMap(suite.vs,
+		m := types.NewMap(context.Background(), suite.vs,
 			types.String("a"), types.Float(1),
 			types.String("c"), types.Float(2),
 			types.String("e"), types.Float(3),
@@ -579,7 +579,7 @@ func (suite *QueryGraphQLSuite) TestMapKeysArg() {
 		suite.assertQueryResult(m, `{root{`+entriesKey+`(keys:[]){value}}}`,
 			`{"data":{"root":{"`+entriesKey+`":[]}}}`)
 
-		m = types.NewMap(suite.vs,
+		m = types.NewMap(context.Background(), suite.vs,
 			types.Float(1), types.String("a"),
 			types.Float(2), types.String("c"),
 			types.Float(3), types.String("e"),
@@ -602,7 +602,7 @@ func (suite *QueryGraphQLSuite) TestMapKeysArg() {
 
 func (suite *QueryGraphQLSuite) TestSetArgs() {
 	for _, valuesKey := range []string{"elements", "values"} {
-		s := types.NewSet(suite.vs,
+		s := types.NewSet(context.Background(), suite.vs,
 			types.String("a"),
 			types.String("c"),
 			types.String("e"),
@@ -703,7 +703,7 @@ func (suite *QueryGraphQLSuite) TestSetArgs() {
 }
 
 func (suite *QueryGraphQLSuite) TestMapValues() {
-	m := types.NewMap(suite.vs,
+	m := types.NewMap(context.Background(), suite.vs,
 		types.String("a"), types.Float(1),
 		types.String("c"), types.Float(2),
 		types.String("e"), types.Float(3),
@@ -781,7 +781,7 @@ func (suite *QueryGraphQLSuite) TestMapValues() {
 }
 
 func (suite *QueryGraphQLSuite) TestMapKeys() {
-	m := types.NewMap(suite.vs,
+	m := types.NewMap(context.Background(), suite.vs,
 		types.String("a"), types.Float(1),
 		types.String("c"), types.Float(2),
 		types.String("e"), types.Float(3),
@@ -860,7 +860,7 @@ func (suite *QueryGraphQLSuite) TestMapKeys() {
 
 func (suite *QueryGraphQLSuite) TestMapNullable() {
 	// When selecting the result based on keys the values may be null.
-	m := types.NewMap(suite.vs,
+	m := types.NewMap(context.Background(), suite.vs,
 		types.String("a"), types.Float(1),
 		types.String("c"), types.Float(2),
 	)
@@ -1021,11 +1021,11 @@ func (suite *QueryGraphQLSuite) TestMutationCollectionArgs() {
 }
 
 func (suite *QueryGraphQLSuite) TestMapWithComplexKeys() {
-	m := types.NewMap(suite.vs,
-		types.NewList(suite.vs, types.String("a")), types.Float(1),
-		types.NewList(suite.vs, types.String("c")), types.Float(2),
-		types.NewList(suite.vs, types.String("e")), types.Float(3),
-		types.NewList(suite.vs, types.String("g")), types.Float(4),
+	m := types.NewMap(context.Background(), suite.vs,
+		types.NewList(context.Background(), suite.vs, types.String("a")), types.Float(1),
+		types.NewList(context.Background(), suite.vs, types.String("c")), types.Float(2),
+		types.NewList(context.Background(), suite.vs, types.String("e")), types.Float(3),
+		types.NewList(context.Background(), suite.vs, types.String("g")), types.Float(4),
 	)
 
 	suite.assertQueryResult(m, `{root{values(key: ["e"])}}`, `{"data":{"root":{"values":[3]}}}`)
@@ -1051,7 +1051,7 @@ func (suite *QueryGraphQLSuite) TestMapWithComplexKeys() {
                 }
         }}`)
 
-	m2 := types.NewMap(suite.vs,
+	m2 := types.NewMap(context.Background(), suite.vs,
 		types.NewStruct("", types.StructData{
 			"n": types.String("a"),
 		}), types.Float(1),
@@ -1076,11 +1076,11 @@ func (suite *QueryGraphQLSuite) TestMapWithComplexKeys() {
 }
 
 func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
-	s := types.NewSet(suite.vs,
-		types.NewList(suite.vs, types.String("a")),
-		types.NewList(suite.vs, types.String("c")),
-		types.NewList(suite.vs, types.String("e")),
-		types.NewList(suite.vs, types.String("g")),
+	s := types.NewSet(context.Background(), suite.vs,
+		types.NewList(context.Background(), suite.vs, types.String("a")),
+		types.NewList(context.Background(), suite.vs, types.String("c")),
+		types.NewList(context.Background(), suite.vs, types.String("e")),
+		types.NewList(context.Background(), suite.vs, types.String("g")),
 	)
 
 	suite.assertQueryResult(s, `{root{values(key: ["e"]) { values }}}`,
@@ -1091,7 +1091,7 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 	suite.assertQueryResult(s, `{root{values(key: ["g"], through: ["c"]) { values }}}`,
 		`{"data":{"root":{"values":[{"values":["g"]},{"values":["a"]},{"values":["c"]}]}}}`)
 
-	s2 := types.NewSet(suite.vs,
+	s2 := types.NewSet(context.Background(), suite.vs,
 		types.NewStruct("", types.StructData{
 			"n": types.String("a"),
 		}),
@@ -1131,28 +1131,28 @@ func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	test(types.String("hi"), "hi")
 	test(types.String(""), "")
 
-	test(types.NewList(suite.vs, types.Float(42)), []interface{}{float64(42)})
-	test(types.NewList(suite.vs, types.Float(1), types.Float(2)), []interface{}{float64(1), float64(2)})
+	test(types.NewList(context.Background(), suite.vs, types.Float(42)), []interface{}{float64(42)})
+	test(types.NewList(context.Background(), suite.vs, types.Float(1), types.Float(2)), []interface{}{float64(1), float64(2)})
 
-	test(types.NewSet(suite.vs, types.Float(42)), []interface{}{float64(42)})
-	test(types.NewSet(suite.vs, types.Float(1), types.Float(2)), []interface{}{float64(1), float64(2)})
+	test(types.NewSet(context.Background(), suite.vs, types.Float(42)), []interface{}{float64(42)})
+	test(types.NewSet(context.Background(), suite.vs, types.Float(1), types.Float(2)), []interface{}{float64(1), float64(2)})
 
-	test(types.NewMap(suite.vs,
+	test(types.NewMap(context.Background(), suite.vs,
 		types.String("a"), types.Float(1),
 		types.String("b"), types.Float(2),
 	), []interface{}{
 		map[string]interface{}{"key": "a", "value": 1},
 		map[string]interface{}{"key": "b", "value": 2},
 	})
-	test(types.NewMap(suite.vs,
-		types.NewList(suite.vs, types.String("a")), types.Float(1),
-		types.NewList(suite.vs, types.String("b")), types.Float(2),
+	test(types.NewMap(context.Background(), suite.vs,
+		types.NewList(context.Background(), suite.vs, types.String("a")), types.Float(1),
+		types.NewList(context.Background(), suite.vs, types.String("b")), types.Float(2),
 	), []interface{}{
 		map[string]interface{}{"key": []interface{}{"a"}, "value": 1},
 		map[string]interface{}{"key": []interface{}{"b"}, "value": 2},
 	})
 
-	test(types.NewMap(suite.vs,
+	test(types.NewMap(context.Background(), suite.vs,
 		types.NewStruct("S", types.StructData{"a": types.Float(1)}), types.Float(11),
 		types.NewStruct("S", types.StructData{"a": types.Float(2)}), types.Float(22),
 	), []interface{}{
@@ -1160,7 +1160,7 @@ func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 		map[string]interface{}{"key": map[string]interface{}{"a": float64(2)}, "value": 22},
 	})
 
-	test(types.NewSet(suite.vs,
+	test(types.NewSet(context.Background(), suite.vs,
 		types.NewStruct("S", types.StructData{"a": types.Float(1)}),
 		types.NewStruct("S", types.StructData{"a": types.Float(2)}),
 	), []interface{}{
@@ -1240,13 +1240,13 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 		suite.JSONEq(expected, string(b))
 	}
 
-	v := types.NewList(suite.vs, types.Float(0), types.Float(1), types.Float(2), types.Float(3))
+	v := types.NewList(context.Background(), suite.vs, types.Float(0), types.Float(1), types.Float(2), types.Float(3))
 	test(v, `{"data":{"root":{"values":[0,1,2,3]}}}`, `query Test($c: Int) { root { values(count: $c) } }`, nil)
 	test(v, `{"data":{"root":{"values":[0,1]}}}`, `query Test($c: Int) { root { values(count: $c) } }`, map[string]interface{}{
 		"c": 2,
 	})
 
-	m := types.NewMap(suite.vs,
+	m := types.NewMap(context.Background(), suite.vs,
 		types.String("a"), types.Float(0),
 		types.String("b"), types.Float(1),
 		types.String("c"), types.Float(2),
@@ -1265,7 +1265,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 			"ks": []string{"a", "c"},
 		})
 
-	m2 := types.NewMap(suite.vs,
+	m2 := types.NewMap(context.Background(), suite.vs,
 		types.NewStruct("S", types.StructData{"n": types.String("a")}), types.Float(0),
 		types.NewStruct("S", types.StructData{"n": types.String("b")}), types.Float(1),
 		types.NewStruct("S", types.StructData{"n": types.String("c")}), types.Float(2),
@@ -1327,9 +1327,9 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 		},
 	)
 
-	m3 := types.NewMap(suite.vs,
-		types.NewMap(suite.vs, types.Float(0), types.String("zero")), types.Bool(false),
-		types.NewMap(suite.vs, types.Float(1), types.String("one")), types.Bool(true),
+	m3 := types.NewMap(context.Background(), suite.vs,
+		types.NewMap(context.Background(), suite.vs, types.Float(0), types.String("zero")), types.Bool(false),
+		types.NewMap(context.Background(), suite.vs, types.Float(1), types.String("one")), types.Bool(true),
 	)
 	keyNomsType := types.TypeOf(m3).Desc.(types.CompoundDesc).ElemTypes[0]
 	tc := NewTypeConverter()
@@ -1409,7 +1409,7 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 		"b": types.Float(2),
 	})
 
-	list := types.NewList(suite.vs, aVal, bVal)
+	list := types.NewList(context.Background(), suite.vs, aVal, bVal)
 
 	tc := NewTypeConverter()
 	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
@@ -1446,7 +1446,7 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
         }`
 	test(tc, list, expected, query, nil)
 
-	set := types.NewSet(suite.vs, aVal,
+	set := types.NewSet(context.Background(), suite.vs, aVal,
 		types.NewStruct("A", types.StructData{
 			"a": types.Float(2),
 		}),
@@ -1489,7 +1489,7 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 func TestGetListElementsWithSet(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
-	v := types.NewSet(vs, types.Float(0), types.Float(1), types.Float(2))
+	v := types.NewSet(context.Background(), vs, types.Float(0), types.Float(1), types.Float(2))
 	r := getListElements(vs, v, map[string]interface{}{})
 	assert.Equal([]interface{}{float64(0), float64(1), float64(2)}, r)
 

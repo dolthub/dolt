@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -82,12 +83,12 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(vrw, parentDs.HeadRef())
+	p := types.NewSet(context.Background(), vrw, parentDs.HeadRef())
 	return newDs.Database().Commit(newDs, types.String(v), datas.CommitOptions{Parents: p})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(vrw, ds1.HeadRef(), ds2.HeadRef())
+	p := types.NewSet(context.Background(), vrw, ds1.HeadRef(), ds2.HeadRef())
 	return ds1.Database().Commit(ds1, types.String(v), datas.CommitOptions{Parents: p})
 }
 
@@ -290,7 +291,7 @@ func (s *nomsLogTestSuite) TestTruncation() {
 		for _, v := range l {
 			nv = append(nv, types.String(v))
 		}
-		return types.NewList(db, nv...)
+		return types.NewList(context.Background(), db, nv...)
 	}
 
 	t := db.GetDataset("truncate")

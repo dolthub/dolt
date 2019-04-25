@@ -193,7 +193,7 @@ func TestWriteList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewList(vrw, Float(0), Float(1), Float(2), Float(3)),
+		NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
 	)
 }
 func TestWriteTuple(t *testing.T) {
@@ -216,7 +216,7 @@ func TestWriteListOfList(t *testing.T) {
 			ListKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 			ListKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewList(vrw, NewList(vrw, Float(0)), NewList(vrw, Float(1), Float(2), Float(3))),
+		NewList(context.Background(), vrw, NewList(context.Background(), vrw, Float(0)), NewList(context.Background(), vrw, Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -228,7 +228,7 @@ func TestWriteSet(t *testing.T) {
 			SetKind, uint64(0), uint64(4), /* len */
 			FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewSet(vrw, Float(3), Float(1), Float(2), Float(0)),
+		NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0)),
 	)
 }
 
@@ -241,7 +241,7 @@ func TestWriteSetOfSet(t *testing.T) {
 			SetKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 			SetKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 		},
-		NewSet(vrw, NewSet(vrw, Float(0)), NewSet(vrw, Float(1), Float(2), Float(3))),
+		NewSet(context.Background(), vrw, NewSet(context.Background(), vrw, Float(0)), NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -255,7 +255,7 @@ func TestWriteMap(t *testing.T) {
 			StringKind, "b", BoolKind, true,
 			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		NewMap(vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
+		NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
 	)
 }
 
@@ -268,7 +268,7 @@ func TestWriteMapOfMap(t *testing.T) {
 			MapKind, uint64(0), uint64(1) /* len */, StringKind, "a", FloatKind, Float(0),
 			SetKind, uint64(0), uint64(1) /* len */, BoolKind, true,
 		},
-		NewMap(vrw, NewMap(vrw, String("a"), Float(0)), NewSet(vrw, Bool(true))),
+		NewMap(context.Background(), vrw, NewMap(context.Background(), vrw, String("a"), Float(0)), NewSet(context.Background(), vrw, Bool(true))),
 	)
 }
 
@@ -342,7 +342,7 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		NewStruct("S", StructData{"l": NewList(vrw, String("a"), String("b"))}),
+		NewStruct("S", StructData{"l": NewList(context.Background(), vrw, String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -351,7 +351,7 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
-		NewStruct("S", StructData{"l": NewList(vrw)}),
+		NewStruct("S", StructData{"l": NewList(context.Background(), vrw)}),
 	)
 }
 
@@ -481,7 +481,7 @@ func TestWriteListOfUnion(t *testing.T) {
 			ListKind, uint64(0),
 			uint64(4) /* len */, StringKind, "0", FloatKind, Float(1), StringKind, "2", BoolKind, true,
 		},
-		NewList(vrw,
+		NewList(context.Background(), vrw,
 			String("0"),
 			Float(1),
 			String("2"),
@@ -498,7 +498,7 @@ func TestWriteListOfStruct(t *testing.T) {
 			ListKind, uint64(0), uint64(1), /* len */
 			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
 		},
-		NewList(vrw, NewStruct("S", StructData{"x": Float(42)})),
+		NewList(context.Background(), vrw, NewStruct("S", StructData{"x": Float(42)})),
 	)
 }
 
@@ -515,7 +515,7 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 			TypeKind, TypeKind,
 			TypeKind, StructKind, "S", uint64(1) /* len */, "x", FloatKind, false,
 		},
-		NewList(vrw,
+		NewList(context.Background(), vrw,
 			Bool(true),
 			FloaTType,
 			TypeType,
@@ -543,7 +543,7 @@ func TestWriteListOfTypes(t *testing.T) {
 			ListKind, uint64(0), uint64(2), /* len */
 			TypeKind, BoolKind, TypeKind, StringKind,
 		},
-		NewList(vrw, BoolType, StringType),
+		NewList(context.Background(), vrw, BoolType, StringType),
 	)
 }
 
@@ -561,7 +561,7 @@ func nomsTestWriteRecursiveStruct(t *testing.T) {
 			FloatKind, Float(42),
 		},
 		// {v: 42, cs: [{v: 555, cs: []}]}
-		NewStruct("A6", StructData{"cs": NewList(vrw), "v": Float(42)}),
+		NewStruct("A6", StructData{"cs": NewList(context.Background(), vrw), "v": Float(42)}),
 	)
 }
 
@@ -573,7 +573,7 @@ func TestWriteUnionList(t *testing.T) {
 			ListKind, uint64(0), uint64(3), /* len */
 			FloatKind, Float(23), StringKind, "hi", FloatKind, Float(42),
 		},
-		NewList(vrw, Float(23), String("hi"), Float(42)),
+		NewList(context.Background(), vrw, Float(23), String("hi"), Float(42)),
 	)
 }
 
@@ -584,7 +584,7 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(0), /* len */
 		},
-		NewList(vrw),
+		NewList(context.Background(), vrw),
 	)
 }
 

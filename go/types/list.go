@@ -32,26 +32,26 @@ func newList(seq sequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
 // with values, chunking if and when needed.
-func NewList(vrw ValueReadWriter, values ...Value) List {
-	ch := newEmptyListSequenceChunker(vrw)
+func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) List {
+	ch := newEmptyListSequenceChunker(ctx, vrw)
 	for _, v := range values {
-		ch.Append(v)
+		ch.Append(ctx, v)
 	}
-	return newList(ch.Done())
+	return newList(ch.Done(ctx))
 }
 
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
-func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
+func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
-		ch := newEmptyListSequenceChunker(vrw)
+		ch := newEmptyListSequenceChunker(ctx, vrw)
 		for v := range values {
-			ch.Append(v)
+			ch.Append(ctx, v)
 		}
-		out <- newList(ch.Done())
+		out <- newList(ch.Done(ctx))
 	}()
 	return out
 }
@@ -90,7 +90,7 @@ func (l List) Get(ctx context.Context, idx uint64) Value {
 // prolly tree chunks of other, so it's efficient.
 func (l List) Concat(ctx context.Context, other List) List {
 	seq := concat(ctx, l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-		return l.newChunker(cur, vrw)
+		return l.newChunker(ctx, cur, vrw)
 	})
 	return newList(seq)
 }
@@ -250,8 +250,8 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 	indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
-func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -268,6 +268,6 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptyListSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }

@@ -44,27 +44,27 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 
 	// [false true]
 	suite.EqualValues(
-		types.NewList(vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
+		types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
 		NomsValueFromDecodedJSON(vs, []interface{}{false, true}, false))
 
 	// [[false true]]
 	suite.EqualValues(
-		types.NewList(vs).Edit().Append(
-			types.NewList(vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background())).List(context.Background()),
+		types.NewList(context.Background(), vs).Edit().Append(
+			types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background())).List(context.Background()),
 		NomsValueFromDecodedJSON(vs, []interface{}{[]interface{}{false, true}}, false))
 
 	// {"string": "string",
 	//  "list": [false true],
 	//  "map": {"nested": "string"}
 	// }
-	m := types.NewMap(
+	m := types.NewMap(context.Background(),
 		vs,
 		types.String("string"),
 		types.String("string"),
 		types.String("list"),
-		types.NewList(vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
+		types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
 		types.String("map"),
-		types.NewMap(
+		types.NewMap(context.Background(),
 			vs,
 			types.String("nested"),
 			types.String("string")))
@@ -86,7 +86,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 	// }
 	tstruct := types.NewStruct("", types.StructData{
 		"string": types.String("string"),
-		"list":   types.NewList(vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
+		"list":   types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
 		"struct": types.NewStruct("", types.StructData{
 			"nested": types.String("string"),
 		}),
@@ -111,7 +111,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithNamedStruct() {
 	// }
 	tstruct := types.NewStruct("TStruct1", types.StructData{
 		"string": types.String("string"),
-		"list":   types.NewList(vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
+		"list":   types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
 		"struct": types.NewStruct("Id", types.StructData{
 			"owner": types.String("string"),
 			"value": types.String("string"),

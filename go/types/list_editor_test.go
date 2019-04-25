@@ -17,7 +17,7 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 	for _, v := range vals {
 		vs = append(vs, Float(v))
 	}
-	return NewList(vrw, vs...)
+	return NewList(context.Background(), vrw, vs...)
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {

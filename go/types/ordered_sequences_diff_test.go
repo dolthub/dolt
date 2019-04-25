@@ -95,8 +95,8 @@ func (suite *diffTestSuite) TestDiff() {
 		runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
-	newSetAsCol := func(vals []Value) Collection { return NewSet(vs, vals...) }
-	newMapAsCol := func(vals []Value) Collection { return NewMap(vs, vals...) }
+	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), vs, vals...) }
+	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), vs, vals...) }
 
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(context.Background(), col).TargetHash()
@@ -161,9 +161,9 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
 	runTest := func(df diffFn) {
-		s1 := NewSet(vs).orderedSequence
+		s1 := NewSet(context.Background(), vs).orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
+		s2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})

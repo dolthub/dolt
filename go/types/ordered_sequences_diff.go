@@ -238,8 +238,8 @@ func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b 
 			syncWithIdx(ctx, a, aHasMore, allowPastEnd)
 			syncWithIdx(ctx, b, bHasMore, allowPastEnd)
 		} else {
-			aHasMore = a.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
-			bHasMore = b.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
+			aHasMore = a.advanceMaybeAllowPastEnd(ctx, allowPastEnd)
+			bHasMore = b.advanceMaybeAllowPastEnd(ctx, allowPastEnd)
 		}
 	}
 	return aHasMore, bHasMore

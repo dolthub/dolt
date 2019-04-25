@@ -57,7 +57,7 @@ func (tl testList) Diff(last testList) []Splice {
 }
 
 func (tl testList) toList(vrw ValueReadWriter) List {
-	return NewList(vrw, tl...)
+	return NewList(context.Background(), vrw, tl...)
 }
 
 func newTestList(length int) testList {
@@ -73,7 +73,7 @@ func newTestListFromList(list List) testList {
 }
 
 func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
-	assert.True(t, l.Equals(NewList(vrw, values...)))
+	assert.True(t, l.Equals(NewList(context.Background(), vrw, values...)))
 	out := ValueSlice{}
 	l.IterAll(func(v Value, idx uint64) {
 		out = append(out, v)
@@ -92,7 +92,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 	length := 1 << size
 	elems := newTestList(length)
 	tr := MakeListType(FloaTType)
-	list := NewList(vrw, elems...)
+	list := NewList(context.Background(), vrw, elems...)
 	return &listTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    list,
@@ -113,13 +113,13 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 				dup := make([]Value, length+1)
 				dup[0] = Float(0)
 				copy(dup[1:], elems)
-				return NewList(vrw, dup...)
+				return NewList(context.Background(), vrw, dup...)
 			},
 			appendOne: func() Collection {
 				dup := make([]Value, length+1)
 				copy(dup, elems)
 				dup[len(dup)-1] = Float(0)
-				return NewList(vrw, dup...)
+				return NewList(context.Background(), vrw, dup...)
 			},
 		},
 		elems: elems,
@@ -213,12 +213,12 @@ func TestListRemoveAt(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	l0 := NewList(vrw)
+	l0 := NewList(context.Background(), vrw)
 	l0 = l0.Edit().Append(Bool(false), Bool(true)).List(context.Background())
 	l1 := l0.Edit().RemoveAt(1).List(context.Background())
-	assert.True(NewList(vrw, Bool(false)).Equals(l1))
+	assert.True(NewList(context.Background(), vrw, Bool(false)).Equals(l1))
 	l1 = l1.Edit().RemoveAt(0).List(context.Background())
-	assert.True(NewList(vrw).Equals(l1))
+	assert.True(NewList(context.Background(), vrw).Equals(l1))
 
 	assert.Panics(func() {
 		l1.Edit().RemoveAt(0).List(context.Background())
@@ -277,9 +277,9 @@ func TestStreamingListCreation(t *testing.T) {
 	vs := newTestValueStore()
 	simpleList := getTestList()
 
-	cl := NewList(vs, simpleList...)
+	cl := NewList(context.Background(), vs, simpleList...)
 	valueChan := make(chan Value)
-	listChan := NewStreamingList(vs, valueChan)
+	listChan := NewStreamingList(context.Background(), vs, valueChan)
 	for _, v := range simpleList {
 		valueChan <- v
 	}
@@ -304,7 +304,7 @@ func TestListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	newList := func(items testList) List {
-		return NewList(vrw, items...)
+		return NewList(context.Background(), vrw, items...)
 	}
 
 	listToSimple := func(cl List) (simple testList) {
@@ -364,7 +364,7 @@ func TestListValidateInsertAscending(t *testing.T) {
 
 	values := generateNumbersAsValues(1000)
 
-	s := NewList(vrw)
+	s := NewList(context.Background(), vrw)
 	for i, v := range values {
 		s = s.Edit().Insert(uint64(i), v).List(context.Background())
 		validateList(t, vrw, s, values[0:i+1])
@@ -382,7 +382,7 @@ func TestListValidateInsertAtZero(t *testing.T) {
 	vrw := newTestValueStore()
 
 	values := generateNumbersAsValues(1000)
-	s := NewList(vrw)
+	s := NewList(context.Background(), vrw)
 	count := len(values)
 	for count > 0 {
 		count--
@@ -572,7 +572,7 @@ func TestListRemoveEverything(t *testing.T) {
 
 	cl := getTestList().toList(vrw).Edit().Remove(0, getTestListLen()).List(context.Background())
 
-	assert.True(NewList(vrw).Equals(cl))
+	assert.True(NewList(context.Background(), vrw).Equals(cl))
 	assert.Equal(0, int(cl.Len()))
 }
 
@@ -698,7 +698,7 @@ func TestListFirstNNumbers(t *testing.T) {
 	vrw := newTestValueStore()
 
 	nums := generateNumbersAsValues(testListSize)
-	NewList(vrw, nums...)
+	NewList(context.Background(), vrw, nums...)
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -708,7 +708,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 	vrw := newTestValueStore()
 
 	nums := generateNumbersAsRefOfStructs(vrw, testListSize)
-	NewList(vrw, nums...)
+	NewList(context.Background(), vrw, nums...)
 }
 
 func TestListModifyAfterRead(t *testing.T) {
@@ -763,8 +763,8 @@ func TestListDiffIdentical(t *testing.T) {
 
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
-	l1 := NewList(vrw, nums...)
-	l2 := NewList(vrw, nums...)
+	l1 := NewList(context.Background(), vrw, nums...)
+	l2 := NewList(context.Background(), vrw, nums...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -781,8 +781,8 @@ func TestListDiffVersusEmpty(t *testing.T) {
 
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -806,8 +806,8 @@ func TestListDiffReverse(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -833,8 +833,8 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
 
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 
 	diff1 := accumulateDiffSplicesWithLimit(l1, l2, 27e6)
 	diff2 := accumulateDiffSplicesWithLimit(l2, l1, 27e6)
@@ -864,8 +864,8 @@ func TestListDiffRemove5x100(t *testing.T) {
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 100)
 	}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -897,8 +897,8 @@ func TestListDiffAdd5x5(t *testing.T) {
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 0, Float(0), Float(1), Float(2), Float(3), Float(4))
 	}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -931,8 +931,8 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 		out := reverseValues(nums2[(count-1)*1000 : (count-1)*1000+100])
 		nums2 = spliceValues(nums2, (count-1)*1000, 100, out...)
 	}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -959,8 +959,8 @@ func TestListDiffString1(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three")}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(0, len(diff))
@@ -975,8 +975,8 @@ func TestListDiffString2(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -994,8 +994,8 @@ func TestListDiffString3(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("four")}
-	l1 := NewList(vrw, nums1...)
-	l2 := NewList(vrw, nums2...)
+	l1 := NewList(context.Background(), vrw, nums1...)
+	l2 := NewList(context.Background(), vrw, nums2...)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -1016,7 +1016,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	cs1 := storage.NewView()
 	vs1 := NewValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
-	l1 := NewList(vs1, nums1...)
+	l1 := NewList(context.Background(), vs1, nums1...)
 	hash1 := vs1.WriteValue(context.Background(), l1).TargetHash()
 	vs1.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
 
@@ -1025,7 +1025,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
-	l2 := NewList(vs2, nums2...)
+	l2 := NewList(context.Background(), vs2, nums2...)
 	hash2 := vs2.WriteValue(context.Background(), l2).TargetHash()
 	vs2.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
 	refList2 := vs2.ReadValue(context.Background(), hash2).(List)
@@ -1085,7 +1085,7 @@ func TestListTypeAfterMutations(t *testing.T) {
 		vrw := newTestValueStore()
 		values := generateNumbersAsValues(n)
 
-		l := NewList(vrw, values...)
+		l := NewList(context.Background(), vrw, values...)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
 		assert.True(TypeOf(l).Equals(MakeListType(FloaTType)))
@@ -1185,15 +1185,15 @@ func TestListConcatDifferentTypes(t *testing.T) {
 	whole = append(whole, fst...)
 	whole = append(whole, snd...)
 
-	concat := NewList(vrw, fst...).Concat(context.Background(), NewList(vrw, snd...))
-	assert.True(NewList(vrw, whole...).Equals(concat))
+	concat := NewList(context.Background(), vrw, fst...).Concat(context.Background(), NewList(context.Background(), vrw, snd...))
+	assert.True(NewList(context.Background(), vrw, whole...).Equals(concat))
 }
 
 func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	list := NewList(vrw,
+	list := NewList(context.Background(), vrw,
 		NewStruct("Foo", StructData{
 			"a": Float(1),
 		}),
@@ -1214,10 +1214,10 @@ func TestListWithNil(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert.Panics(t, func() {
-		NewList(vrw, nil)
+		NewList(context.Background(), vrw, nil)
 	})
 	assert.Panics(t, func() {
-		NewList(vrw, Float(42), nil)
+		NewList(context.Background(), vrw, Float(42), nil)
 	})
 }
 
@@ -1225,9 +1225,9 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	l1 := NewList(vrw, String("a"), String("b"))
-	l2 := NewList(vrw, String("c"), String("d"))
-	l3 := NewList(vrw, l1, l2)
+	l1 := NewList(context.Background(), vrw, String("a"), String("b"))
+	l2 := NewList(context.Background(), vrw, String("c"), String("d"))
+	l3 := NewList(context.Background(), vrw, l1, l2)
 
 	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
 	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))

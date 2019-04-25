@@ -22,15 +22,15 @@ func newSet(seq orderedSequence) Set {
 	return Set{seq}
 }
 
-func NewSet(vrw ValueReadWriter, v ...Value) Set {
+func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
 	data := buildSetData(v)
-	ch := newEmptySetSequenceChunker(vrw)
+	ch := newEmptySetSequenceChunker(ctx, vrw)
 
 	for _, v := range data {
-		ch.Append(v)
+		ch.Append(ctx, v)
 	}
 
-	return newSet(ch.Done().(orderedSequence))
+	return newSet(ch.Done(ctx).(orderedSequence))
 }
 
 // NewStreamingSet takes an input channel of values and returns a output
@@ -39,9 +39,9 @@ func NewSet(vrw ValueReadWriter, v ...Value) Set {
 // out of order will result in a panic. Once the input channel is closed
 // by the caller, a finished Set will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingSet(vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
+func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
 	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
-		go readSetInput(vrw, vChan, outChan)
+		go readSetInput(ctx, vrw, vChan, outChan)
 	})
 }
 
@@ -54,9 +54,9 @@ func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streaming
 	return outChan
 }
 
-func readSetInput(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 	defer close(outChan)
-	ch := newEmptySetSequenceChunker(vrw)
+	ch := newEmptySetSequenceChunker(ctx, vrw)
 	var lastV Value
 	for v := range vChan {
 		d.PanicIfTrue(v == nil)
@@ -64,9 +64,9 @@ func readSetInput(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 			d.PanicIfFalse(lastV.Less(v))
 		}
 		lastV = v
-		ch.Append(v)
+		ch.Append(ctx, v)
 	}
-	outChan <- newSet(ch.Done().(orderedSequence))
+	outChan <- newSet(ch.Done(ctx).(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
@@ -216,6 +216,6 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptySetSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 }

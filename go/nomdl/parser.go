@@ -368,7 +368,7 @@ func (p *Parser) parseFloat() types.Float {
 
 func (p *Parser) parseList() types.List {
 	// already swallowed '['
-	le := types.NewList(p.vrw).Edit()
+	le := types.NewList(context.TODO(), p.vrw).Edit()
 
 	for p.lex.peek() != ']' {
 		v := p.parseValue()
@@ -387,7 +387,7 @@ func (p *Parser) parseList() types.List {
 func (p *Parser) parseSet() types.Set {
 	// already swallowed 'set'
 	p.lex.eat('{')
-	se := types.NewSet(p.vrw).Edit()
+	se := types.NewSet(context.TODO(), p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
 		v := p.parseValue()
@@ -406,7 +406,7 @@ func (p *Parser) parseSet() types.Set {
 func (p *Parser) parseMap() types.Map {
 	// already swallowed 'map'
 	p.lex.eat('{')
-	me := types.NewMap(p.vrw).Edit()
+	me := types.NewMap(context.TODO(), p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
 		key := p.parseValue()

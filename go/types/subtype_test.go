@@ -68,7 +68,7 @@ func TestAssertTypeValue(t *testing.T) {
 	assertSubtype(ValueType, Bool(true))
 	assertSubtype(ValueType, Float(1))
 	assertSubtype(ValueType, String("abc"))
-	l := NewList(vs, Float(0), Float(1), Float(2), Float(3))
+	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(ValueType, l)
 }
 
@@ -83,7 +83,7 @@ func TestAssertTypeList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	listOfNumberType := MakeListType(FloaTType)
-	l := NewList(vs, Float(0), Float(1), Float(2), Float(3))
+	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
 	assertSubtype(MakeListType(ValueType), l)
@@ -93,7 +93,7 @@ func TestAssertTypeMap(tt *testing.T) {
 	vs := newTestValueStore()
 
 	mapOfNumberToStringType := MakeMapType(FloaTType, StringType)
-	m := NewMap(vs, Float(0), String("a"), Float(2), String("b"))
+	m := NewMap(context.Background(), vs, Float(0), String("a"), Float(2), String("b"))
 	assertSubtype(mapOfNumberToStringType, m)
 	assertAll(tt, mapOfNumberToStringType, m)
 	assertSubtype(MakeMapType(ValueType, ValueType), m)
@@ -103,7 +103,7 @@ func TestAssertTypeSet(tt *testing.T) {
 	vs := newTestValueStore()
 
 	setOfNumberType := MakeSetType(FloaTType)
-	s := NewSet(vs, Float(0), Float(1), Float(2), Float(3))
+	s := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(setOfNumberType, s)
 	assertAll(tt, setOfNumberType, s)
 	assertSubtype(MakeSetType(ValueType), s)
@@ -136,17 +136,17 @@ func TestAssertTypeUnion(tt *testing.T) {
 	assertSubtype(MakeUnionType(FloaTType, StringType, BoolType), Bool(true))
 
 	lt := MakeListType(MakeUnionType(FloaTType, StringType))
-	assertSubtype(lt, NewList(vs, Float(1), String("hi"), Float(2), String("bye")))
+	assertSubtype(lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
 
 	st := MakeSetType(StringType)
 	assertSubtype(MakeUnionType(st, FloaTType), Float(42))
-	assertSubtype(MakeUnionType(st, FloaTType), NewSet(vs, String("a"), String("b")))
+	assertSubtype(MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, String("a"), String("b")))
 
 	assertInvalid(tt, MakeUnionType(), Float(42))
 	assertInvalid(tt, MakeUnionType(StringType), Float(42))
 	assertInvalid(tt, MakeUnionType(StringType, BoolType), Float(42))
 	assertInvalid(tt, MakeUnionType(st, StringType), Float(42))
-	assertInvalid(tt, MakeUnionType(st, FloaTType), NewSet(vs, Float(1), Float(2)))
+	assertInvalid(tt, MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, Float(1), Float(2)))
 }
 
 func TestAssertConcreteTypeIsUnion(tt *testing.T) {
@@ -182,37 +182,37 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(MakeUnionType())
-	assertSubtype(lt, NewList(vs))
+	assertSubtype(lt, NewList(context.Background(), vs))
 }
 
 func TestAssertTypeEmptyList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(FloaTType)
-	assertSubtype(lt, NewList(vs))
+	assertSubtype(lt, NewList(context.Background(), vs))
 
 	// List<> not a subtype of List<Float>
-	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(vs, Float(1)))
+	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), vs, Float(1)))
 }
 
 func TestAssertTypeEmptySet(tt *testing.T) {
 	vs := newTestValueStore()
 
 	st := MakeSetType(FloaTType)
-	assertSubtype(st, NewSet(vs))
+	assertSubtype(st, NewSet(context.Background(), vs))
 
 	// Set<> not a subtype of Set<Float>
-	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(vs, Float(1)))
+	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(context.Background(), vs, Float(1)))
 }
 
 func TestAssertTypeEmptyMap(tt *testing.T) {
 	vs := newTestValueStore()
 
 	mt := MakeMapType(FloaTType, StringType)
-	assertSubtype(mt, NewMap(vs))
+	assertSubtype(mt, NewMap(context.Background(), vs))
 
 	// Map<> not a subtype of Map<Float, Float>
-	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(vs, Float(1), Float(2)))
+	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(context.Background(), vs, Float(1), Float(2)))
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
@@ -257,7 +257,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c1 := NewStruct("Commit", StructData{
 		"value":   Float(1),
-		"parents": NewSet(vs),
+		"parents": NewSet(context.Background(), vs),
 	})
 	t1 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeUnionType()), false},
@@ -273,7 +273,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c2 := NewStruct("Commit", StructData{
 		"value":   Float(2),
-		"parents": NewSet(vs, NewRef(c1)),
+		"parents": NewSet(context.Background(), vs, NewRef(c1)),
 	})
 	assertSubtype(t11, c2)
 }
@@ -550,10 +550,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{String("s"), StringType},
 		{NewEmptyBlob(vs), BlobType},
 		{BoolType, TypeType},
-		{NewList(vs, Float(42)), MakeListType(FloaTType)},
-		{NewSet(vs, Float(42)), MakeSetType(FloaTType)},
+		{NewList(context.Background(), vs, Float(42)), MakeListType(FloaTType)},
+		{NewSet(context.Background(), vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42)), MakeRefType(FloaTType)},
-		{NewMap(vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
+		{NewMap(context.Background(), vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
 		{NewStruct("A", StructData{}), MakeStructType("A")},
 		// Not including CycleType or Union here
 	}
@@ -577,13 +577,13 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse(String("abc"), MakeUnionType(BoolType, FloaTType))
 	assertFalse(String("abc"), MakeUnionType())
 
-	assertTrue(NewList(vs), MakeListType(FloaTType))
-	assertTrue(NewList(vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
-	assertFalse(NewList(vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
-	assertTrue(NewList(vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertTrue(NewList(vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewList(vs, Float(0)), MakeListType(MakeUnionType()))
-	assertTrue(NewList(vs), MakeListType(MakeUnionType()))
+	assertTrue(NewList(context.Background(), vs), MakeListType(FloaTType))
+	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
+	assertFalse(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
+	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertTrue(NewList(context.Background(), vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewList(context.Background(), vs, Float(0)), MakeListType(MakeUnionType()))
+	assertTrue(NewList(context.Background(), vs), MakeListType(MakeUnionType()))
 
 	{
 		newChunkedList := func(vals ...Value) List {
@@ -607,13 +607,13 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedList(Float(0)), MakeListType(MakeUnionType()))
 	}
 
-	assertTrue(NewSet(vs), MakeSetType(FloaTType))
-	assertTrue(NewSet(vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
-	assertFalse(NewSet(vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))
-	assertTrue(NewSet(vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
-	assertTrue(NewSet(vs, Float(0), Bool(true)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewSet(vs, Float(0)), MakeSetType(MakeUnionType()))
-	assertTrue(NewSet(vs), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(context.Background(), vs), MakeSetType(FloaTType))
+	assertTrue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
+	assertFalse(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))
+	assertTrue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
+	assertTrue(NewSet(context.Background(), vs, Float(0), Bool(true)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewSet(context.Background(), vs, Float(0)), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(context.Background(), vs), MakeSetType(MakeUnionType()))
 
 	{
 		newChunkedSet := func(vals ...Value) Set {
@@ -636,17 +636,17 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedSet(Float(0)), MakeSetType(MakeUnionType()))
 	}
 
-	assertTrue(NewMap(vs), MakeMapType(FloaTType, StringType))
-	assertTrue(NewMap(vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))
-	assertFalse(NewMap(vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(BoolType, StringType))
-	assertFalse(NewMap(vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, BoolType))
-	assertTrue(NewMap(vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
-	assertTrue(NewMap(vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
-	assertTrue(NewMap(vs, Float(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
-	assertTrue(NewMap(vs, Float(0), String("a"), Float(1), Bool(true)), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
-	assertFalse(NewMap(vs, Float(0), String("a")), MakeMapType(MakeUnionType(), StringType))
-	assertFalse(NewMap(vs, Float(0), String("a")), MakeMapType(FloaTType, MakeUnionType()))
-	assertTrue(NewMap(vs), MakeMapType(MakeUnionType(), MakeUnionType()))
+	assertTrue(NewMap(context.Background(), vs), MakeMapType(FloaTType, StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(BoolType, StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, BoolType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), Bool(true)), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a")), MakeMapType(MakeUnionType(), StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a")), MakeMapType(FloaTType, MakeUnionType()))
+	assertTrue(NewMap(context.Background(), vs), MakeMapType(MakeUnionType(), MakeUnionType()))
 
 	{
 		newChunkedMap := func(vals ...Value) Map {
@@ -719,10 +719,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertTrue(
 		NewStruct("Node", StructData{
 			"value": Float(1),
-			"children": NewList(vs,
+			"children": NewList(context.Background(), vs,
 				NewStruct("Node", StructData{
 					"value":    Float(2),
-					"children": NewList(vs),
+					"children": NewList(context.Background(), vs),
 				}),
 			),
 		}),
@@ -735,10 +735,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse( // inner Node has wrong type.
 		NewStruct("Node", StructData{
 			"value": Float(1),
-			"children": NewList(vs,
+			"children": NewList(context.Background(), vs,
 				NewStruct("Node", StructData{
 					"value":    Bool(true),
-					"children": NewList(vs),
+					"children": NewList(context.Background(), vs),
 				}),
 			),
 		}),
@@ -756,7 +756,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			}
 			rv := NewStruct("Node", StructData{
 				"value":    value,
-				"children": NewList(vs, childrenAsRefs...),
+				"children": NewList(context.Background(), vs, childrenAsRefs...),
 			})
 			return rv
 		}

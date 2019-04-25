@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -48,7 +49,7 @@ func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 func nomsMapNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyMapEdits(sp, types.NewMap(sp.GetDatabase()), nil, args)
+	applyMapEdits(sp, types.NewMap(context.Background(), sp.GetDatabase()), nil, args)
 	return 0
 }
 

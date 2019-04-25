@@ -28,15 +28,15 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	hashValueBytes(entry.value, rv)
 }
 
-func NewMap(vrw ValueReadWriter, kv ...Value) Map {
+func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
 	entries := buildMapData(kv)
-	ch := newEmptyMapSequenceChunker(vrw)
+	ch := newEmptyMapSequenceChunker(ctx, vrw)
 
 	for _, entry := range entries {
-		ch.Append(entry)
+		ch.Append(ctx, entry)
 	}
 
-	return newMap(ch.Done().(orderedSequence))
+	return newMap(ch.Done(ctx).(orderedSequence))
 }
 
 // NewStreamingMap takes an input channel of values and returns a output
@@ -46,10 +46,10 @@ func NewMap(vrw ValueReadWriter, kv ...Value) Map {
 // input channel out of order will result in a panic. Once the input channel is
 // closed by the caller, a finished Map will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingMap(vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
+func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	d.PanicIfTrue(vrw == nil)
 	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		go readMapInput(vrw, kvs, outChan)
+		go readMapInput(ctx, vrw, kvs, outChan)
 	})
 }
 
@@ -61,9 +61,9 @@ func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMa
 	return outChan
 }
 
-func readMapInput(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
 	defer close(outChan)
-	ch := newEmptyMapSequenceChunker(vrw)
+	ch := newEmptyMapSequenceChunker(ctx, vrw)
 	var lastK Value
 	nextIsKey := true
 	var k Value
@@ -76,10 +76,10 @@ func readMapInput(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
 			nextIsKey = false
 			continue
 		}
-		ch.Append(mapEntry{key: k, value: v})
+		ch.Append(ctx, mapEntry{key: k, value: v})
 		nextIsKey = true
 	}
-	outChan <- newMap(ch.Done().(orderedSequence))
+	outChan <- newMap(ch.Done(ctx).(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
@@ -302,6 +302,6 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptyMapSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 }

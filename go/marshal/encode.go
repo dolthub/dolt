@@ -8,6 +8,7 @@
 package marshal
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -540,7 +541,7 @@ func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFun
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i), vrw)
 		}
-		return types.NewList(vrw, values...)
+		return types.NewList(context.TODO(), vrw, values...)
 	}
 
 	encoderCache.set(t, e)
@@ -567,7 +568,7 @@ func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) enc
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i), vrw)
 		}
-		return types.NewSet(vrw, values...)
+		return types.NewSet(context.TODO(), vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
@@ -593,7 +594,7 @@ func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(k, vrw)
 		}
-		return types.NewSet(vrw, values...)
+		return types.NewSet(context.TODO(), vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
@@ -622,7 +623,7 @@ func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 			kvs[2*i] = keyEncoder(k, vrw)
 			kvs[2*i+1] = valueEncoder(v.MapIndex(k), vrw)
 		}
-		return types.NewMap(vrw, kvs...)
+		return types.NewMap(context.TODO(), vrw, kvs...)
 	}
 
 	encoderCache.set(t, e)

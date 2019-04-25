@@ -135,13 +135,13 @@ func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n i
 // prolly tree chunks of other, so it's efficient.
 func (b Blob) Concat(ctx context.Context, other Blob) Blob {
 	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-		return b.newChunker(cur, vrw)
+		return b.newChunker(ctx, cur, vrw)
 	})
 	return newBlob(seq)
 }
 
-func (b Blob) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+func (b Blob) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
 func (b Blob) asSequence() sequence {
@@ -244,7 +244,7 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob 
 }
 
 func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
+	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
 
@@ -308,10 +308,10 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
 	for ch := range mtChan {
 		mt := <-ch
 		if sc.parent == nil {
-			sc.createParent()
+			sc.createParent(ctx)
 		}
-		sc.parent.Append(mt)
+		sc.parent.Append(ctx, mt)
 	}
 
-	return newBlob(sc.Done())
+	return newBlob(sc.Done(ctx))
 }

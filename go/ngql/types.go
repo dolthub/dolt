@@ -983,9 +983,9 @@ func InputToNomsValue(vrw types.ValueReadWriter, arg interface{}, nomsType *type
 			vs[i] = InputToNomsValue(vrw, v, elemType)
 		}
 		if nomsType.TargetKind() == types.ListKind {
-			return types.NewList(vrw, vs...)
+			return types.NewList(context.TODO(), vrw, vs...)
 		}
-		return types.NewSet(vrw, vs...)
+		return types.NewSet(context.TODO(), vrw, vs...)
 	case types.MapKind:
 		// Maps are passed as [{key: K, value: V}, ...]
 		keyType := nomsType.Desc.(types.CompoundDesc).ElemTypes[0]
@@ -997,7 +997,7 @@ func InputToNomsValue(vrw types.ValueReadWriter, arg interface{}, nomsType *type
 			kvs[2*i] = InputToNomsValue(vrw, v["key"], keyType)
 			kvs[2*i+1] = InputToNomsValue(vrw, v["value"], valType)
 		}
-		return types.NewMap(vrw, kvs...)
+		return types.NewMap(context.TODO(), vrw, kvs...)
 	case types.StructKind:
 		desc := nomsType.Desc.(types.StructDesc)
 		data := make(types.StructData, desc.Len())

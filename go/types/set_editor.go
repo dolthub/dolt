@@ -92,15 +92,15 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		if edit.insert {
-			ch.Append(edit.value)
+			ch.Append(ctx, edit.value)
 		} else {
-			ch.Skip()
+			ch.Skip(ctx)
 		}
 	}
 
@@ -108,7 +108,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		return se.s // no edits required application
 	}
 
-	return newSet(ch.Done().(orderedSequence))
+	return newSet(ch.Done(ctx).(orderedSequence))
 }
 
 func (se *SetEditor) Insert(vs ...Value) *SetEditor {

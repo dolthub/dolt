@@ -20,9 +20,9 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		String("hi"),
 		NewBlob(context.Background(), vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
-		NewSet(vrw, String("hi")),
-		NewList(vrw, String("hi")),
-		NewMap(vrw, String("hi"), String("hi")),
+		NewSet(context.Background(), vrw, String("hi")),
+		NewList(context.Background(), vrw, String("hi")),
+		NewMap(context.Background(), vrw, String("hi"), String("hi")),
 	}
 }
 
@@ -40,7 +40,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewList(vs, getTestVals(vs)...)
+	expected := NewList(context.Background(), vs, getTestVals(vs)...)
 	hash := vs.WriteValue(context.Background(), expected).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
@@ -70,7 +70,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewSet(vs, getTestVals(vs)...)
+	expected := NewSet(context.Background(), vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
 	actualVar := vs.ReadValue(context.Background(), ref)
@@ -91,7 +91,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewMap(vs, getTestVals(vs)...)
+	expected := NewMap(context.Background(), vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
 	actualVar := vs.ReadValue(context.Background(), ref)
@@ -116,7 +116,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := Float(42)
 	ref := vs.WriteValue(context.Background(), expectedItem)
 
-	expected := NewList(vs, ref)
+	expected := NewList(context.Background(), vs, ref)
 	ref = vs.WriteValue(context.Background(), expected)
 	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
 

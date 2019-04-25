@@ -63,39 +63,39 @@ func TestWriteHumanReadableRef(t *testing.T) {
 func TestWriteHumanReadableCollections(t *testing.T) {
 	vrw := newTestValueStore()
 
-	l := NewList(vrw, Float(0), Float(1), Float(2), Float(3))
+	l := NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
-	s := NewSet(vrw, Float(0), Float(1), Float(2), Float(3))
+	s := NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
-	m := NewMap(vrw, Float(0), Bool(false), Float(1), Bool(true))
+	m := NewMap(context.Background(), vrw, Float(0), Bool(false), Float(1), Bool(true))
 	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
-	l2 := NewList(vrw)
+	l2 := NewList(context.Background(), vrw)
 	assertWriteHRSEqual(t, "[]", l2)
 
-	l3 := NewList(vrw, Float(0))
+	l3 := NewList(context.Background(), vrw, Float(0))
 	assertWriteHRSEqual(t, "[\n  0,\n]", l3)
 
 	nums := make([]Value, 2000)
 	for i := range nums {
 		nums[i] = Float(0)
 	}
-	l4 := NewList(vrw, nums...)
+	l4 := NewList(context.Background(), vrw, nums...)
 	assertWriteHRSEqual(t, "[  // 2,000 items\n"+strings.Repeat("  0,\n", 2000)+"]", l4)
 }
 
 func TestWriteHumanReadableNested(t *testing.T) {
 	vrw := newTestValueStore()
 
-	l := NewList(vrw, Float(0), Float(1))
-	l2 := NewList(vrw, Float(2), Float(3))
+	l := NewList(context.Background(), vrw, Float(0), Float(1))
+	l2 := NewList(context.Background(), vrw, Float(2), Float(3))
 
-	s := NewSet(vrw, String("a"), String("b"))
-	s2 := NewSet(vrw, String("c"), String("d"))
+	s := NewSet(context.Background(), vrw, String("a"), String("b"))
+	s2 := NewSet(context.Background(), vrw, String("c"), String("d"))
 
-	m := NewMap(vrw, s, l, s2, l2)
+	m := NewMap(context.Background(), vrw, s, l, s2, l2)
 	assertWriteHRSEqual(t, `map {
   set {
     "c",
@@ -134,7 +134,7 @@ func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	str3 := NewStruct("S3", StructData{
 		"x": Float(3),
 	})
-	l := NewList(vrw, str1, str2, str3)
+	l := NewList(context.Background(), vrw, str1, str2, str3)
 	assertWriteHRSEqual(t, `[
   struct S3 {
     x: 1,
@@ -195,7 +195,7 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 		0x10,
 	}))
-	l := NewList(vrw, b1, NewEmptyBlob(vrw), b2, b3)
+	l := NewList(context.Background(), vrw, b1, NewEmptyBlob(vrw), b2, b3)
 	assertWriteHRSEqual(t, "[  // 4 items\n  blob {01},\n  blob {},\n  blob {02},\n  blob {  // 17 B\n    00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n    10\n  },\n]", l)
 }
 
@@ -302,11 +302,11 @@ func TestEmptyCollections(t *testing.T) {
 	assertWriteHRSEqual(t, "struct Rien {}", b)
 	c := MakeMapType(BlobType, FloaTType)
 	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
-	d := NewMap(vrw)
+	d := NewMap(context.Background(), vrw)
 	assertWriteHRSEqual(t, "map {}", d)
 	e := MakeSetType(StringType)
 	assertWriteHRSEqual(t, "Set<String>", e)
-	f := NewSet(vrw)
+	f := NewSet(context.Background(), vrw)
 	assertWriteHRSEqual(t, "set {}", f)
 }
 
@@ -314,7 +314,7 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	l1 := NewList(vrw, generateNumbersAsValues(11)...)
+	l1 := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
 	expected := strings.Join(strings.SplitAfterN(EncodedValue(context.Background(), l1), "\n", 6)[:5], "")
 	assert.Equal(expected, EncodedValueMaxLines(context.Background(), l1, 5))
 

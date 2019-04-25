@@ -60,23 +60,23 @@ func (be *BlobEditor) Blob(ctx context.Context) Blob {
 		idx++
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		dc := edit.removed
 		for dc > 0 {
-			ch.Skip()
+			ch.Skip(ctx)
 			dc--
 		}
 
 		for _, v := range edit.inserted {
-			ch.Append(v)
+			ch.Append(ctx, v)
 		}
 	}
 
-	return newBlob(ch.Done())
+	return newBlob(ch.Done(ctx))
 }
 
 func collapseBlobEdit(newEdit, edit *blobEdit) bool {
