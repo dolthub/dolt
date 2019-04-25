@@ -30,7 +30,7 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	blobBytes := []byte("hello")
 	blob := types.NewBlob(context.Background(), db, bytes.NewBuffer(blobBytes))

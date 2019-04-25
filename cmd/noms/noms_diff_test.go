@@ -46,7 +46,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -20,7 +21,7 @@ func nomsStats(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandl
 
 	return stats, func(input string) int {
 		cfg := config.NewResolver()
-		store, err := cfg.GetDatabase(*database)
+		store, err := cfg.GetDatabase(context.Background(), *database)
 		d.CheckError(err)
 		defer store.Close()
 

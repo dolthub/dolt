@@ -30,7 +30,7 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase().CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
+	sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
 	s.NoError(err)
 
 	commit := sp.GetDataset(context.Background()).Head()
@@ -43,7 +43,7 @@ func (s *nomsLogTestSuite) TestNomsLog() {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase() // create the database
+	sp.GetDatabase(context.Background()) // create the database
 	s.Panics(func() { s.MustRun(main, []string{"log", sp.String()}) })
 
 	testCommitInResults(s, sp.String(), 1)
@@ -55,7 +55,7 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
 		data := types.NewStruct("", types.StructData{
@@ -99,7 +99,7 @@ func (s *nomsLogTestSuite) TestNArg() {
 	s.NoError(err)
 	defer sp.Close()
 
-	ds := sp.GetDatabase().GetDataset(context.Background(), dsName)
+	ds := sp.GetDatabase(context.Background()).GetDataset(context.Background(), dsName)
 
 	ds, err = addCommit(ds, "1")
 	h1 := ds.Head().Hash()
@@ -133,7 +133,7 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	ds := db.GetDataset(context.Background(), "ds1")
 
 	meta := types.NewStruct("Meta", map[string]types.Value{
@@ -159,7 +159,7 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	b1 := db.GetDataset(context.Background(), "b1")
 	b1, err = addCommit(b1, "1")
@@ -212,7 +212,7 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	ba := db.GetDataset(context.Background(), "ba")
 	ba, err = addCommit(ba, "1")
@@ -243,7 +243,7 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	w := db.GetDataset(context.Background(), "w")
 
@@ -284,7 +284,7 @@ func (s *nomsLogTestSuite) TestTruncation() {
 	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
 	s.NoError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}

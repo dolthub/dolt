@@ -55,7 +55,7 @@ func runDs(args []string) int {
 		if len(args) >= 1 {
 			dbSpec = args[0]
 		}
-		store, err := cfg.GetDatabase(dbSpec)
+		store, err := cfg.GetDatabase(context.Background(), dbSpec)
 		d.CheckError(err)
 		defer store.Close()
 

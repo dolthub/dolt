@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,7 +46,7 @@ func runServe(args []string) int {
 	if len(args) > 0 {
 		db = args[0]
 	}
-	cs, err := cfg.GetChunkStore(db)
+	cs, err := cfg.GetChunkStore(context.Background(), db)
 	d.CheckError(err)
 	server := datas.NewRemoteDatabaseServer(cs, port)
 

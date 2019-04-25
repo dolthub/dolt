@@ -52,7 +52,7 @@ func nomsSet(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 func nomsSetNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applySetEdits(sp, types.NewSet(context.Background(), sp.GetDatabase()), nil, types.DiffChangeAdded, args)
+	applySetEdits(sp, types.NewSet(context.Background(), sp.GetDatabase(context.Background())), nil, types.DiffChangeAdded, args)
 	return 0
 }
 
@@ -77,7 +77,7 @@ func applySetEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ct ty
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		vv, err := argumentToValue(args[i], db)
