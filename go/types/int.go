@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -13,7 +14,7 @@ import (
 type Int int64
 
 // Value interface
-func (v Int) Value() Value {
+func (v Int) Value(ctx context.Context) Value {
 	return v
 }
 

@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -20,7 +21,7 @@ func IsNull(val Value) bool {
 type Null byte
 
 // Value interface
-func (v Null) Value() Value {
+func (v Null) Value(ctx context.Context) Value {
 	return v
 }
 

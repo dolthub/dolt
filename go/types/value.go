@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -18,7 +19,7 @@ type Valuable interface {
 	// Kind is the NomsKind describing the kind of value this is.
 	Kind() NomsKind
 
-	Value() Value
+	Value(ctx context.Context) Value
 }
 
 // Emptyable is an interface for Values which may or may not be empty

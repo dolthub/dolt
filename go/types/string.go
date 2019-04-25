@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -14,7 +15,7 @@ import (
 type String string
 
 // Value interface
-func (s String) Value() Value {
+func (s String) Value(ctx context.Context) Value {
 	return s
 }
 

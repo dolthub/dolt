@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -12,7 +13,7 @@ import (
 type Bool bool
 
 // Value interface
-func (b Bool) Value() Value {
+func (b Bool) Value(ctx context.Context) Value {
 	return b
 }
 

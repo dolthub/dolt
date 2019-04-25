@@ -118,7 +118,7 @@ func (m Map) asSequence() sequence {
 }
 
 // Value interface
-func (m Map) Value() Value {
+func (m Map) Value(ctx context.Context) Value {
 	return m
 }
 

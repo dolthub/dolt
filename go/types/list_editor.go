@@ -65,7 +65,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 				idx, val := i, v
 				wg.Add(1)
 				go func() {
-					edit.inserted[idx] = val.Value()
+					edit.inserted[idx] = val.Value(ctx)
 					wg.Done()
 				}()
 			}

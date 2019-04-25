@@ -6,6 +6,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -36,7 +37,7 @@ func (t *Type) TargetKind() NomsKind {
 }
 
 // Value interface
-func (t *Type) Value() Value {
+func (t *Type) Value(ctx context.Context) Value {
 	return t
 }
 

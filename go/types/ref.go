@@ -118,7 +118,7 @@ func (r Ref) TargetType() *Type {
 }
 
 // Value interface
-func (r Ref) Value() Value {
+func (r Ref) Value(ctx context.Context) Value {
 	return r
 }
 

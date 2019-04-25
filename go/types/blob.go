@@ -149,7 +149,7 @@ func (b Blob) asSequence() sequence {
 }
 
 // Value interface
-func (b Blob) Value() Value {
+func (b Blob) Value(ctx context.Context) Value {
 	return b
 }
 
