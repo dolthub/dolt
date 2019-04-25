@@ -107,7 +107,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 				t.FailNow()
 			}
 
-			rows, sch, err := ExecuteSelect(root, s, tt.query)
+			rows, sch, err := ExecuteSelect(root, s)
 			if tt.expectedErr != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

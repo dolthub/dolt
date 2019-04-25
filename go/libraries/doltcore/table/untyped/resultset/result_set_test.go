@@ -63,6 +63,33 @@ func TestConcatSchemas(t *testing.T) {
 	})
 }
 
+func TestSubsetSchema(t *testing.T) {
+	t.Run("Test subset schema", func(t *testing.T) {
+		colColl, _ := schema.NewColCollection(
+			schema.NewColumn("id", idTag, types.IntKind, true),
+			schema.NewColumn("last", lastTag, types.StringKind, false),
+			schema.NewColumn("age", ageTag, types.IntKind, false),
+			schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+		)
+
+		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
+		sch := SubsetSchema(peopleTestSchema, "id", "last", "age", "uuid")
+		assert.Equal(t, expectedSch, sch)
+	})
+
+	t.Run("Test subset unknown column", func(t *testing.T) {
+		assert.Panics(t, func() {
+			SubsetSchema(peopleTestSchema, "unknown")
+		})
+	})
+
+	t.Run("Test subset no columns", func(t *testing.T) {
+		expectedSch := schema.UnkeyedSchemaFromCols(schema.EmptyColColl)
+		sch := SubsetSchema(peopleTestSchema)
+		assert.Equal(t, expectedSch, sch)
+	})
+}
+
 func TestNewFromSchema(t *testing.T) {
 	t.Run("Test combine all schemas", func(t *testing.T) {
 		colColl := getAllSchemaColumns(t)
