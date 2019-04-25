@@ -11,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
+	"io"
 	"strconv"
 )
 
@@ -18,6 +19,8 @@ import (
 type SelectStatement struct {
 	// Result set schema
 	ResultSetSchema *resultset.ResultSetSchema
+	// Input tables in order of selection
+	inputTables []string
 	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
@@ -166,6 +169,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from
 			}
 			selectStmt.aliases.AddTableAlias(tableName, tableName)
 			selectStmt.inputSchemas[tableName] = mustGetSchema(root, tableName)
+			selectStmt.inputTables = append(selectStmt.inputTables, tableName)
 
 		case *sqlparser.ParenTableExpr:
 			return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
@@ -186,8 +190,10 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
-			for tableName, tableSch:= range selectStmt.inputSchemas {
-				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+
+			for _, tableName := range selectStmt.inputTables {
+				tableSch := selectStmt.inputSchemas[tableName]
+				tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
 					columns = append(columns, QualifiedColumn{tableName, col.Name})
 					return false
 				})
@@ -231,7 +237,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 			}
 		case sqlparser.Nextval:
 			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
-		}
+	 	}
 	}
 
 	selectStmt.selectedCols = columns
@@ -288,29 +294,93 @@ func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select) error 
 	return nil
 }
 
-// Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
-// BuildSelectQueryPipeline.
-func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, *SelectStatement, error) {
-	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args...))
+type singleTablePipelineResult struct {
+	p    *pipeline.Pipeline
+	rows []row.Row
+	err  error
 }
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
 func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeline.Pipeline, error) {
 
-	// TODO: make work for more than one table
-	var tblSch schema.Schema
-	var tblName string
-	for name, sch := range statement.inputSchemas {
-		tblSch = sch
-		tblName = name
-		break
+	if len(statement.inputSchemas) == 1 {
+		var tableName string
+		for name, _ := range statement.inputSchemas {
+			tableName = name
+		}
+		return createSingleTablePipeline(root, statement, tableName, true)
 	}
-	tbl, _ := root.GetTable(tblName)
+
+	pipelines := make(map[string]*singleTablePipelineResult)
+	for tableName := range statement.inputSchemas {
+		p, err := createSingleTablePipeline(root, statement, tableName, false)
+		if err != nil {
+			return nil, err
+		}
+
+		result := &singleTablePipelineResult{p: p, rows: make([]row.Row, 0)}
+		pipelines[tableName] = result
+
+		rowSink := pipeline.ProcFuncForSinkFunc(
+			func(r row.Row, props pipeline.ReadableMap) error {
+				result.rows = append(result.rows, r)
+				return nil
+			})
+
+		errSink := func(failure *pipeline.TransformRowFailure) (quit bool) {
+			result.err = errors.New(fmt.Sprintf("Query execution failed at stage %v for row %v: error was %v",
+				failure.TransformName, failure.Row, failure.Details))
+			return true
+		}
+
+		p.SetOutput(rowSink)
+		p.SetBadRowCallback(errSink)
+		p.Start()
+	}
+
+	results := make([]resultset.TableResult, 0)
+	for tableName, result := range pipelines {
+		if err := result.p.Wait(); err != nil || result.err != nil {
+			return nil, err
+		}
+		results = append(results, resultset.TableResult{
+			Schema: statement.inputSchemas[tableName],
+			Rows: result.rows,
+		})
+	}
+
+	crossProduct := statement.ResultSetSchema.CrossProduct(results)
+	source := sourceFuncForRows(crossProduct)
+
+	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+	// TODO: join conditions here
+
+	return p, nil
+}
+
+func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
+	idx := 0
+	return func() (row.Row, pipeline.ImmutableProperties, error) {
+		if idx >= len(rows) {
+			return nil, pipeline.NoProps, io.EOF
+		}
+		r := rows[idx]
+		idx++
+		return r, pipeline.NoProps, nil
+	}
+}
+
+// Creates a pipeline to return results from a single table.
+func createSingleTablePipeline(root *doltdb.RootValue, statement *SelectStatement, tableName string, isTerminal bool) (*pipeline.Pipeline, error) {
+	tblSch := statement.inputSchemas[tableName]
+	tbl, _ := root.GetTable(tableName)
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-	transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
+	if isTerminal {
+		transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
+	}
 
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
