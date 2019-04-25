@@ -33,10 +33,10 @@ func (suite *LibTestSuite) TearDownTest() {
 
 func (suite *LibTestSuite) TestPrimitiveTypes() {
 	vs := suite.vs
-	suite.EqualValues(types.String("expected"), NomsValueFromDecodedJSON(vs, "expected", false))
-	suite.EqualValues(types.Bool(false), NomsValueFromDecodedJSON(vs, false, false))
-	suite.EqualValues(types.Float(1.7), NomsValueFromDecodedJSON(vs, 1.7, false))
-	suite.False(NomsValueFromDecodedJSON(vs, 1.7, false).Equals(types.Bool(true)))
+	suite.EqualValues(types.String("expected"), NomsValueFromDecodedJSON(context.Background(), vs, "expected", false))
+	suite.EqualValues(types.Bool(false), NomsValueFromDecodedJSON(context.Background(), vs, false, false))
+	suite.EqualValues(types.Float(1.7), NomsValueFromDecodedJSON(context.Background(), vs, 1.7, false))
+	suite.False(NomsValueFromDecodedJSON(context.Background(), vs, 1.7, false).Equals(types.Bool(true)))
 }
 
 func (suite *LibTestSuite) TestCompositeTypes() {
@@ -45,13 +45,13 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 	// [false true]
 	suite.EqualValues(
 		types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background()),
-		NomsValueFromDecodedJSON(vs, []interface{}{false, true}, false))
+		NomsValueFromDecodedJSON(context.Background(), vs, []interface{}{false, true}, false))
 
 	// [[false true]]
 	suite.EqualValues(
 		types.NewList(context.Background(), vs).Edit().Append(
 			types.NewList(context.Background(), vs).Edit().Append(types.Bool(false)).Append(types.Bool(true)).List(context.Background())).List(context.Background()),
-		NomsValueFromDecodedJSON(vs, []interface{}{[]interface{}{false, true}}, false))
+		NomsValueFromDecodedJSON(context.Background(), vs, []interface{}{[]interface{}{false, true}}, false))
 
 	// {"string": "string",
 	//  "list": [false true],
@@ -68,7 +68,7 @@ func (suite *LibTestSuite) TestCompositeTypes() {
 			vs,
 			types.String("nested"),
 			types.String("string")))
-	o := NomsValueFromDecodedJSON(vs, map[string]interface{}{
+	o := NomsValueFromDecodedJSON(context.Background(), vs, map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"map":    map[string]interface{}{"nested": "string"},
@@ -91,7 +91,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithStruct() {
 			"nested": types.String("string"),
 		}),
 	})
-	o := NomsValueFromDecodedJSON(vs, map[string]interface{}{
+	o := NomsValueFromDecodedJSON(context.Background(), vs, map[string]interface{}{
 		"string": "string",
 		"list":   []interface{}{false, true},
 		"struct": map[string]interface{}{"nested": "string"},
@@ -117,7 +117,7 @@ func (suite *LibTestSuite) TestCompositeTypeWithNamedStruct() {
 			"value": types.String("string"),
 		}),
 	})
-	o := NomsValueUsingNamedStructsFromDecodedJSON(vs, map[string]interface{}{
+	o := NomsValueUsingNamedStructsFromDecodedJSON(context.Background(), vs, map[string]interface{}{
 		"_name":  "TStruct1",
 		"string": "string",
 		"list":   []interface{}{false, true},
@@ -129,5 +129,5 @@ func (suite *LibTestSuite) TestCompositeTypeWithNamedStruct() {
 
 func (suite *LibTestSuite) TestPanicOnUnsupportedType() {
 	vs := suite.vs
-	suite.Panics(func() { NomsValueFromDecodedJSON(vs, map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
+	suite.Panics(func() { NomsValueFromDecodedJSON(context.Background(), vs, map[int]string{1: "one"}, false) }, "Should panic on map[int]string!")
 }

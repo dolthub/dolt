@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useStruct bool, namedStructs bool) types.Value {
+func nomsValueFromDecodedJSONBase(ctx context.Context, vrw types.ValueReadWriter, o interface{}, useStruct bool, namedStructs bool) types.Value {
 	switch o := o.(type) {
 	case string:
 		return types.String(o)
@@ -25,12 +25,12 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 	case []interface{}:
 		items := make([]types.Value, 0, len(o))
 		for _, v := range o {
-			nv := nomsValueFromDecodedJSONBase(vrw, v, useStruct, namedStructs)
+			nv := nomsValueFromDecodedJSONBase(ctx, vrw, v, useStruct, namedStructs)
 			if nv != nil {
 				items = append(items, nv)
 			}
 		}
-		return types.NewList(context.TODO(), vrw, items...)
+		return types.NewList(ctx, vrw, items...)
 	case map[string]interface{}:
 		var v types.Value
 		if useStruct {
@@ -43,7 +43,7 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 						continue
 					}
 				}
-				nv := nomsValueFromDecodedJSONBase(vrw, v, useStruct, namedStructs)
+				nv := nomsValueFromDecodedJSONBase(ctx, vrw, v, useStruct, namedStructs)
 				if nv != nil {
 					k := types.EscapeStructField(k)
 					fields[k] = nv
@@ -53,12 +53,12 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 		} else {
 			kv := make([]types.Value, 0, len(o)*2)
 			for k, v := range o {
-				nv := nomsValueFromDecodedJSONBase(vrw, v, useStruct, namedStructs)
+				nv := nomsValueFromDecodedJSONBase(ctx, vrw, v, useStruct, namedStructs)
 				if nv != nil {
 					kv = append(kv, types.String(k), nv)
 				}
 			}
-			v = types.NewMap(context.TODO(), vrw, kv...)
+			v = types.NewMap(ctx, vrw, kv...)
 		}
 		return v
 
@@ -82,14 +82,14 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 // Composites:
 //  - []interface{}
 //  - map[string]interface{}
-func NomsValueFromDecodedJSON(vrw types.ValueReadWriter, o interface{}, useStruct bool) types.Value {
-	return nomsValueFromDecodedJSONBase(vrw, o, useStruct, false)
+func NomsValueFromDecodedJSON(ctx context.Context, vrw types.ValueReadWriter, o interface{}, useStruct bool) types.Value {
+	return nomsValueFromDecodedJSONBase(ctx, vrw, o, useStruct, false)
 }
 
 // NomsValueUsingNamedStructsFromDecodedJSON performs the same function as
 // NomsValueFromDecodedJson except that it always decodes JSON objects into
 // structs. If the JSON object has a string field name '_name' it uses the
 // value of that field as the name of the Noms struct.
-func NomsValueUsingNamedStructsFromDecodedJSON(vrw types.ValueReadWriter, o interface{}) types.Value {
-	return nomsValueFromDecodedJSONBase(vrw, o, true, true)
+func NomsValueUsingNamedStructsFromDecodedJSON(ctx context.Context, vrw types.ValueReadWriter, o interface{}) types.Value {
+	return nomsValueFromDecodedJSONBase(ctx, vrw, o, true, true)
 }
