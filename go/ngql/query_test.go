@@ -302,9 +302,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a b} ... on %s{b} ... on %s{c}}}}",
-			GetTypeName(types.TypeOf(list.Get(0))),
-			GetTypeName(types.TypeOf(list.Get(1))),
-			GetTypeName(types.TypeOf(list.Get(2)))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 0))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 1))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 2)))),
 		`{"data":{"root":{"values":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -323,9 +323,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a} ... on %s{b: a} ... on %s{c: a}}}}",
-			GetTypeName(types.TypeOf(list.Get(0))),
-			GetTypeName(types.TypeOf(list.Get(1))),
-			GetTypeName(types.TypeOf(list.Get(2)))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 0))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 1))),
+			GetTypeName(types.TypeOf(list.Get(context.Background(), 2)))),
 		`{"data":{"root":{"values":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
 }
 

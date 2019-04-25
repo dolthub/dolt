@@ -254,12 +254,12 @@ func adjustIdx(idx uint64, e *listEdit) uint64 {
 	return idx + e.removed - uint64(len(e.inserted))
 }
 
-func (le *ListEditor) Get(idx uint64) Valuable {
+func (le *ListEditor) Get(ctx context.Context, idx uint64) Valuable {
 	edit := le.edits
 	for edit != nil {
 		if edit.idx > idx {
 			// idx is before next splice
-			return le.l.Get(idx)
+			return le.l.Get(ctx, idx)
 		}
 
 		if edit.idx <= idx && idx < (edit.idx+uint64(len(edit.inserted))) {
@@ -271,7 +271,7 @@ func (le *ListEditor) Get(idx uint64) Valuable {
 		edit = edit.next
 	}
 
-	return le.l.Get(idx)
+	return le.l.Get(ctx, idx)
 }
 
 type listEdit struct {

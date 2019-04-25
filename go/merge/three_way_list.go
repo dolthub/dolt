@@ -96,7 +96,7 @@ func canMerge(ctx context.Context, a, b types.List, aSplice, bSplice types.Splic
 	if aSplice != bSplice {
 		return false
 	}
-	aIter, bIter := a.IteratorAt(aSplice.SpFrom), b.IteratorAt(bSplice.SpFrom)
+	aIter, bIter := a.IteratorAt(ctx, aSplice.SpFrom), b.IteratorAt(ctx, bSplice.SpFrom)
 	for count := uint64(0); count < aSplice.SpAdded; count++ {
 		aVal, bVal := aIter.Next(ctx), bIter.Next(ctx)
 		if aVal == nil || bVal == nil || !aVal.Equals(bVal) {
@@ -113,7 +113,7 @@ func merge(s1, s2 types.Splice) types.Splice {
 
 func apply(ctx context.Context, source, target types.List, offset uint64, s types.Splice) types.List {
 	toAdd := make([]types.Valuable, s.SpAdded)
-	iter := source.IteratorAt(s.SpFrom)
+	iter := source.IteratorAt(ctx, s.SpFrom)
 	for i := 0; uint64(i) < s.SpAdded; i++ {
 		v := iter.Next(ctx)
 		if v == nil {

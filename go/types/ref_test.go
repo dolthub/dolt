@@ -19,7 +19,7 @@ func TestRefInList(t *testing.T) {
 	l := NewList(vs)
 	r := NewRef(l)
 	l = l.Edit().Append(r).List(context.Background())
-	r2 := l.Get(0)
+	r2 := l.Get(context.Background(), 0)
 	assert.True(r.Equals(r2))
 }
 

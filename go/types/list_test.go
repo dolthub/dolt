@@ -129,7 +129,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 func (suite *listTestSuite) TestGet() {
 	list := suite.col.(List)
 	for i := 0; i < len(suite.elems); i++ {
-		suite.True(suite.elems[i].Equals(list.Get(uint64(i))))
+		suite.True(suite.elems[i].Equals(list.Get(context.Background(), uint64(i))))
 	}
 	suite.Equal(suite.expectLen, list.Len())
 }
@@ -138,7 +138,7 @@ func (suite *listTestSuite) TestIter() {
 	list := suite.col.(List)
 	expectIdx := uint64(0)
 	endAt := suite.expectLen / 2
-	list.Iter(func(v Value, idx uint64) bool {
+	list.Iter(context.Background(), func(v Value, idx uint64) bool {
 		suite.Equal(expectIdx, idx)
 		expectIdx++
 		suite.Equal(suite.elems[idx], v)
@@ -286,8 +286,8 @@ func TestStreamingListCreation(t *testing.T) {
 	close(valueChan)
 	sl := <-listChan
 	assert.True(cl.Equals(sl))
-	cl.Iter(func(v Value, idx uint64) (done bool) {
-		done = !assert.True(v.Equals(sl.Get(idx)))
+	cl.Iter(context.Background(), func(v Value, idx uint64) (done bool) {
+		done = !assert.True(v.Equals(sl.Get(context.Background(), idx)))
 		return
 	})
 }
@@ -724,7 +724,7 @@ func TestListModifyAfterRead(t *testing.T) {
 	list = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), list).TargetHash()).(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
-	z := list.Get(0)
+	z := list.Get(context.Background(), 0)
 	list = list.Edit().RemoveAt(0).List(context.Background())
 	assert.Equal(llen-1, list.Len())
 	list = list.Edit().Append(z).List(context.Background())

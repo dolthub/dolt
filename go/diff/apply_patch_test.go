@@ -201,7 +201,7 @@ func TestUpdateNode(t *testing.T) {
 	l1 := types.NewList(vs, types.String("one"), oldVal, types.String("three"))
 	pp = types.IndexPath{Index: types.Float(1)}
 	doTest(pp, l1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.List).Get(1)
+		return parent.(types.List).Get(context.Background(), 1)
 	})
 
 	m1 := types.NewMap(vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)

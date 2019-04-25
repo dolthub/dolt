@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -196,7 +197,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("[")
 		w.writeSize(v)
 		w.indent()
-		v.(List).Iter(func(v Value, i uint64) bool {
+		v.(List).Iter(context.TODO(), func(v Value, i uint64) bool {
 			if i == 0 {
 				w.newLine()
 			}

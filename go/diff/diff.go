@@ -5,6 +5,7 @@
 package diff
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -126,14 +127,14 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 		if splice.SpRemoved == splice.SpAdded {
 			// Heuristic: list only has modifications.
 			for i := uint64(0); i < splice.SpRemoved; i++ {
-				lastEl := v1.Get(splice.SpAt + i)
-				newEl := v2.Get(splice.SpFrom + i)
+				lastEl := v1.Get(context.TODO(), splice.SpAt+i)
+				newEl := v2.Get(context.TODO(), splice.SpFrom+i)
 				if d.shouldDescend(lastEl, newEl) {
 					idx := types.Float(splice.SpAt + i)
 					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
 					p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
-					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: v1.Get(splice.SpAt + i), NewValue: v2.Get(splice.SpFrom + i)}
+					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: v1.Get(context.TODO(), splice.SpAt+i), NewValue: v2.Get(context.TODO(), splice.SpFrom+i)}
 					stop = !d.sendDiff(dif)
 				}
 			}
@@ -143,12 +144,12 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 		// Heuristic: list only has additions/removals.
 		for i := uint64(0); i < splice.SpRemoved && !stop; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1.Get(splice.SpAt + i), NewValue: nil}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1.Get(context.TODO(), splice.SpAt+i), NewValue: nil}
 			stop = !d.sendDiff(dif)
 		}
 		for i := uint64(0); i < splice.SpAdded && !stop; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpFrom + i)))
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2.Get(splice.SpFrom + i)}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2.Get(context.TODO(), splice.SpFrom+i)}
 			stop = !d.sendDiff(dif)
 		}
 	}
