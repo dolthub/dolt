@@ -5,6 +5,7 @@
 package datetime
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -161,15 +162,15 @@ func TestHRSComment(t *testing.T) {
 	mdt := marshal.MustMarshal(vs, dt)
 
 	exp := dt.Format(time.RFC3339)
-	s1 := types.EncodedValue(mdt)
+	s1 := types.EncodedValue(context.Background(), mdt)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	RegisterHRSCommenter(time.UTC)
 	exp = dt.In(time.UTC).Format((time.RFC3339))
-	s1 = types.EncodedValue(mdt)
+	s1 = types.EncodedValue(context.Background(), mdt)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	types.UnregisterHRSCommenter(datetypename, hrsEncodingName)
-	s1 = types.EncodedValue(mdt)
+	s1 = types.EncodedValue(context.Background(), mdt)
 	a.False(strings.Contains(s1, "{ // 20"))
 }

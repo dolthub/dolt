@@ -34,7 +34,7 @@ func assertParse(t *testing.T, vrw types.ValueReadWriter, code string, expected 
 		if !assert.NoError(t, err) {
 			return
 		}
-		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", types.EncodedValue(expected), types.EncodedValue(actual))
+		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), actual))
 	})
 }
 
@@ -411,7 +411,7 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	test := func(v types.Value) {
-		code := types.EncodedValue(v)
+		code := types.EncodedValue(context.Background(), v)
 		assertParse(t, vs, code, v)
 	}
 

@@ -319,5 +319,5 @@ func ExampleGraphBuilder_Build() {
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Wash dishes"))
 	gb.MapSet([]Value{String("parent")}, String("combinedAge"), Float(86))
 	m := gb.Build()
-	fmt.Println("map:", EncodedValue(m))
+	fmt.Println("map:", EncodedValue(context.Background(), m))
 }

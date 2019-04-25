@@ -550,13 +550,13 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 		d.PanicIfFalse(aChange.Key.Equals(bChange.Key))
 		// If the two diffs generate different kinds of changes at the same key, conflict.
 		if aChange.ChangeType != bChange.ChangeType {
-			return parent, errors.New("Incompatible changes at " + types.EncodedValue(aChange.Key))
+			return parent, errors.New("Incompatible changes at " + types.EncodedValue(context.TODO(), aChange.Key))
 		}
 
 		// Otherwise, we're OK IFF the two diffs made exactly the same change
 		aValue := a.Get(context.TODO(), aChange.Key)
 		if aChange.ChangeType != types.DiffChangeRemoved && !aValue.Equals(b.Get(context.TODO(), bChange.Key)) {
-			return parent, errors.New("Incompatible changes at " + types.EncodedValue(aChange.Key))
+			return parent, errors.New("Incompatible changes at " + types.EncodedValue(context.TODO(), aChange.Key))
 		}
 		merged = apply(merged, aChange, aValue)
 		aChange, bChange = types.ValueChanged{}, types.ValueChanged{}

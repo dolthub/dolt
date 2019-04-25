@@ -40,6 +40,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 
@@ -307,5 +308,6 @@ func commonPrefixCount(stack graphStack, keys ValueSlice) int {
 }
 
 func (e *graphStackElem) String() string {
-	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(e.key), e.kind, e.ch)
+	// TODO: Sometimes you just gotta do some I/O in your `String()`.
+	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(context.Background(), e.key), e.kind, e.ch)
 }

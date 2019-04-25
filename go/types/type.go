@@ -29,7 +29,7 @@ func newType(desc TypeDesc) *Type {
 
 // Describe generate text that should parse into the struct being described.
 func (t *Type) Describe() (out string) {
-	return EncodedValue(t)
+	return EncodedValue(context.Background(), t)
 }
 
 func (t *Type) TargetKind() NomsKind {

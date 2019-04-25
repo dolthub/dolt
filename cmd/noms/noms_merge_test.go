@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -111,7 +112,7 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 		commit := sp.GetDataset().Head()
 		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(db, parents...)))
 		merged := sp.GetDataset().HeadValue()
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
 

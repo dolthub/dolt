@@ -216,11 +216,11 @@ type structPartCallbacks interface {
 	name(n string)
 	count(c uint64)
 	fieldName(n string)
-	fieldValue(v Value)
+	fieldValue(ctx context.Context, v Value)
 	end()
 }
 
-func (s Struct) iterParts(cbs structPartCallbacks) {
+func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	dec := s.decoder()
 	dec.skipKind()
 	cbs.name(dec.readString())
@@ -228,7 +228,7 @@ func (s Struct) iterParts(cbs structPartCallbacks) {
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
 		cbs.fieldName(dec.readString())
-		cbs.fieldValue(dec.readValue())
+		cbs.fieldValue(ctx, dec.readValue())
 	}
 	cbs.end()
 }
