@@ -36,7 +36,7 @@ func (v Float) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v Float) WalkValues(cb ValueCallback) {
+func (v Float) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v Float) WalkRefs(cb RefCallback) {

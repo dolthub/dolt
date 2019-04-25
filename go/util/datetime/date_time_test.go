@@ -29,7 +29,7 @@ func TestBasics(t *testing.T) {
 	assert.NoError(err)
 
 	var dt2 DateTime
-	err = marshal.Unmarshal(nomsValue, &dt2)
+	err = marshal.Unmarshal(context.Background(), nomsValue, &dt2)
 	assert.NoError(err)
 
 	assert.True(dt.Equal(dt2.Time))
@@ -40,7 +40,7 @@ func TestUnmarshal(t *testing.T) {
 
 	test := func(v types.Struct, t time.Time) {
 		var dt DateTime
-		err := marshal.Unmarshal(v, &dt)
+		err := marshal.Unmarshal(context.Background(), v, &dt)
 		assert.NoError(err)
 		assert.True(dt.Equal(t))
 	}
@@ -62,7 +62,7 @@ func TestUnmarshalInvalid(t *testing.T) {
 
 	test := func(v types.Value) {
 		var dt DateTime
-		err := marshal.Unmarshal(v, &dt)
+		err := marshal.Unmarshal(context.Background(), v, &dt)
 		assert.Error(err)
 	}
 
@@ -134,7 +134,7 @@ func TestZeroValues(t *testing.T) {
 	nomsDate, _ := dt1.MarshalNoms(vs)
 
 	dt2 := DateTime{}
-	marshal.Unmarshal(nomsDate, &dt2)
+	marshal.Unmarshal(context.Background(), nomsDate, &dt2)
 	assert.True(dt2.IsZero())
 
 	dt3 := DateTime{}

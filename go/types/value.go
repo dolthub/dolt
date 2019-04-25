@@ -47,7 +47,7 @@ type Value interface {
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
-	WalkValues(ValueCallback)
+	WalkValues(context.Context, ValueCallback)
 
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.

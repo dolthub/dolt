@@ -33,7 +33,7 @@ func (v Uint) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v Uint) WalkValues(cb ValueCallback) {
+func (v Uint) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v Uint) WalkRefs(cb RefCallback) {

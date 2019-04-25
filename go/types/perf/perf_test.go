@@ -68,11 +68,11 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 }
 
 func (s *perfSuite) Test03Read10mNumbers() {
-	s.headList("BuildList10mNumbers").IterAll(func(v types.Value, index uint64) {})
+	s.headList("BuildList10mNumbers").IterAll(context.Background(), func(v types.Value, index uint64) {})
 }
 
 func (s *perfSuite) Test04Read10mStructs() {
-	s.headList("BuildList10mStructs").IterAll(func(v types.Value, index uint64) {})
+	s.headList("BuildList10mStructs").IterAll(context.Background(), func(v types.Value, index uint64) {})
 }
 
 func (s *perfSuite) Test05Concat10mValues2kTimes() {

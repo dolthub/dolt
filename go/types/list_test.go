@@ -66,7 +66,7 @@ func newTestList(length int) testList {
 
 func newTestListFromList(list List) testList {
 	tl := testList{}
-	list.IterAll(func(v Value, idx uint64) {
+	list.IterAll(context.Background(), func(v Value, idx uint64) {
 		tl = append(tl, v)
 	})
 	return tl
@@ -75,7 +75,7 @@ func newTestListFromList(list List) testList {
 func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
 	assert.True(t, l.Equals(NewList(context.Background(), vrw, values...)))
 	out := ValueSlice{}
-	l.IterAll(func(v Value, idx uint64) {
+	l.IterAll(context.Background(), func(v Value, idx uint64) {
 		out = append(out, v)
 	})
 	assert.True(t, out.Equals(values))
@@ -104,7 +104,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 			validate: func(v2 Collection) bool {
 				l2 := v2.(List)
 				out := ValueSlice{}
-				l2.IterAll(func(v Value, index uint64) {
+				l2.IterAll(context.Background(), func(v Value, index uint64) {
 					out = append(out, v)
 				})
 				return ValueSlice(elems).Equals(out)
@@ -155,7 +155,7 @@ func (suite *listTestSuite) TestIterRange() {
 		batchSize := list.Len() / (2 << s)
 		expectIdx := uint64(0)
 		for i := uint64(0); i < list.Len(); i += batchSize {
-			list.IterRange(i, i+batchSize, func(v Value, idx uint64) {
+			list.IterRange(context.Background(), i, i+batchSize, func(v Value, idx uint64) {
 				suite.Equal(expectIdx, idx)
 				expectIdx++
 				suite.Equal(suite.elems[idx], v)
@@ -259,7 +259,7 @@ func getTestListUnique() testList {
 
 func testListFromNomsList(list List) testList {
 	simple := make(testList, list.Len())
-	list.IterAll(func(v Value, offset uint64) {
+	list.IterAll(context.Background(), func(v Value, offset uint64) {
 		simple[offset] = v
 	})
 	return simple
@@ -308,7 +308,7 @@ func TestListAppend(t *testing.T) {
 	}
 
 	listToSimple := func(cl List) (simple testList) {
-		cl.IterAll(func(v Value, offset uint64) {
+		cl.IterAll(context.Background(), func(v Value, offset uint64) {
 			simple = append(simple, v)
 		})
 		return

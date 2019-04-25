@@ -217,7 +217,7 @@ func (be *BlobEditor) Seek(offset int64, whence int) (int64, error) {
 	return abs, nil
 }
 
-func (be *BlobEditor) Read(p []byte) (n int, err error) {
+func (be *BlobEditor) Read(ctx context.Context, p []byte) (n int, err error) {
 	startIdx := uint64(be.pos)
 	endIdx := startIdx + uint64(len(p))
 	if endIdx > be.Len() {
@@ -234,7 +234,7 @@ func (be *BlobEditor) Read(p []byte) (n int, err error) {
 		to := p[:length]
 		wg.Add(1)
 		go func() {
-			be.b.ReadAt(to, idx)
+			be.b.ReadAt(ctx, to, idx)
 			wg.Done()
 		}()
 

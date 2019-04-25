@@ -190,7 +190,7 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) {
 		w.write("blob {")
 		blob := v.(Blob)
 		encoder := &hexWriter{hrs: w, size: blob.Len()}
-		_, w.err = io.Copy(encoder, blob.Reader())
+		_, w.err = io.Copy(encoder, blob.Reader(ctx))
 		w.write("}")
 
 	case ListKind:

@@ -90,7 +90,7 @@ func orderedKeyFromSum(msd []metaTuple) orderedKey {
 // LoadLeafNodes loads the set of leaf nodes which contain the items
 // [startIdx -> endIdx).  Returns the set of nodes and the offset within
 // the first sequence which corresponds to |startIdx|.
-func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64) {
+func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64) {
 	vrw := cols[0].asSequence().valueReadWriter()
 	d.PanicIfTrue(vrw == nil)
 
@@ -134,12 +134,12 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 	}
 
 	// Fetch committed child sequences in a single batch
-	readValues := vrw.ReadManyValues(context.TODO(), hs)
+	readValues := vrw.ReadManyValues(ctx, hs)
 
 	childCols := make([]Collection, len(readValues))
 	for i, v := range readValues {
 		childCols[i] = v.(Collection)
 	}
 
-	return LoadLeafNodes(childCols, startIdx, endIdx)
+	return LoadLeafNodes(ctx, childCols, startIdx, endIdx)
 }

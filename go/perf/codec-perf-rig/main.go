@@ -105,7 +105,7 @@ func main() {
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
 	buff := &bytes.Buffer{}
-	blob.Copy(buff)
+	blob.Copy(context.Background(), buff)
 	outBytes := buff.Bytes()
 	readDuration := time.Since(t1)
 	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)
@@ -182,7 +182,7 @@ func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn cr
 }
 
 func readList(c types.Collection) {
-	c.(types.List).IterAll(func(v types.Value, idx uint64) {
+	c.(types.List).IterAll(context.Background(), func(v types.Value, idx uint64) {
 	})
 }
 
@@ -205,7 +205,7 @@ func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn cre
 }
 
 func readSet(c types.Collection) {
-	c.(types.Set).IterAll(func(v types.Value) {
+	c.(types.Set).IterAll(context.Background(), func(v types.Value) {
 	})
 }
 
@@ -229,6 +229,6 @@ func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn cre
 }
 
 func readMap(c types.Collection) {
-	c.(types.Map).IterAll(func(k types.Value, v types.Value) {
+	c.(types.Map).IterAll(context.Background(), func(k types.Value, v types.Value) {
 	})
 }

@@ -79,7 +79,7 @@ func parentsToQueue(refs types.RefSlice, q *types.RefByHeight, vr types.ValueRea
 	for _, r := range refs {
 		c := r.TargetValue(context.TODO(), vr).(types.Struct)
 		p := c.Get(ParentsField).(types.Set)
-		p.IterAll(func(v types.Value) {
+		p.IterAll(context.TODO(), func(v types.Value) {
 			q.PushBack(v.(types.Ref))
 		})
 	}

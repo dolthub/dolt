@@ -121,7 +121,7 @@ func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
 // Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s
 func toValuesString(refSet types.Set, vr types.ValueReader) string {
 	values := []string{}
-	refSet.IterAll(func(v types.Value) {
+	refSet.IterAll(context.Background(), func(v types.Value) {
 		values = append(values, fmt.Sprintf("%v", v.(types.Ref).TargetValue(context.Background(), vr).(types.Struct).Get("value")))
 	})
 	return strings.Join(values, ",")

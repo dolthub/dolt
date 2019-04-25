@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/cmd/util"
@@ -58,7 +59,7 @@ func runDs(args []string) int {
 		d.CheckError(err)
 		defer store.Close()
 
-		store.Datasets().IterAll(func(k, v types.Value) {
+		store.Datasets().IterAll(context.Background(), func(k, v types.Value) {
 			fmt.Println(k)
 		})
 	}

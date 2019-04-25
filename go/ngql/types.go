@@ -431,7 +431,7 @@ func getListElements(vrw types.ValueReadWriter, v types.Value, args map[string]i
 
 	values := make([]interface{}, count)
 
-	cols, offset := types.LoadLeafNodes([]types.Collection{l}, uint64(idx), uint64(idx+count))
+	cols, offset := types.LoadLeafNodes(context.TODO(), []types.Collection{l}, uint64(idx), uint64(idx+count))
 
 	// Iterate the collections we got, skipping the first offset elements and bailing out
 	// once we've filled values with count elements.
@@ -446,7 +446,7 @@ func getListElements(vrw types.ValueReadWriter, v types.Value, args map[string]i
 	// change in the works that only creates Values as needed.
 	for _, c := range cols {
 		v := c.(types.Value)
-		v.WalkValues(maybeAddElement)
+		v.WalkValues(context.TODO(), maybeAddElement)
 		if elementsSeen-offset >= uint64(count) {
 			break
 		}

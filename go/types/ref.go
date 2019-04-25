@@ -122,7 +122,7 @@ func (r Ref) Value(ctx context.Context) Value {
 	return r
 }
 
-func (r Ref) WalkValues(cb ValueCallback) {
+func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (r Ref) typeOf() *Type {

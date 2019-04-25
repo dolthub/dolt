@@ -53,7 +53,7 @@ func WalkValues(ctx context.Context, target Value, vr ValueReader, cb SkipValueC
 				continue
 			}
 
-			v.WalkValues(func(sv Value) {
+			v.WalkValues(ctx, func(sv Value) {
 				values = append(values, valueRec{sv, true})
 			})
 		}
@@ -88,14 +88,14 @@ func WalkValues(ctx context.Context, target Value, vr ValueReader, cb SkipValueC
 	}
 }
 
-func mightContainStructs(t *Type) (mightHaveStructs bool) {
+func mightContainStructs(ctx context.Context, t *Type) (mightHaveStructs bool) {
 	if t.TargetKind() == StructKind || t.TargetKind() == ValueKind {
 		mightHaveStructs = true
 		return
 	}
 
-	t.WalkValues(func(v Value) {
-		mightHaveStructs = mightHaveStructs || mightContainStructs(v.(*Type))
+	t.WalkValues(ctx, func(v Value) {
+		mightHaveStructs = mightHaveStructs || mightContainStructs(ctx, v.(*Type))
 	})
 
 	return

@@ -107,8 +107,8 @@ func (s Set) Value(ctx context.Context) Value {
 	return s
 }
 
-func (s Set) WalkValues(cb ValueCallback) {
-	iterAll(s, func(v Value, idx uint64) {
+func (s Set) WalkValues(ctx context.Context, cb ValueCallback) {
+	iterAll(ctx, s, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
@@ -146,8 +146,8 @@ func (s Set) Iter(ctx context.Context, cb setIterCallback) {
 
 type setIterAllCallback func(v Value)
 
-func (s Set) IterAll(cb setIterAllCallback) {
-	iterAll(s, func(v Value, idx uint64) {
+func (s Set) IterAll(ctx context.Context, cb setIterAllCallback) {
+	iterAll(ctx, s, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
