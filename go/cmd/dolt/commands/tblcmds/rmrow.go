@@ -75,7 +75,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *doltdb.Table, errhand.VerboseError) {
-	root, err := dEnv.WorkingRoot(context.TODO())
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()
@@ -117,8 +117,8 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 	}
 
 	verr := errhand.PanicToVError("Failed to update the table.", func() errhand.VerboseError {
-		tbl = tbl.UpdateRows(context.TODO(), m)
-		root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl)
+		tbl = tbl.UpdateRows(context.Background(), m)
+		root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
 		return nil
 	})
 
