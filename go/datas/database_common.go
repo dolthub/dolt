@@ -111,7 +111,7 @@ func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
 	commitRef := db.WriteValue(context.TODO(), commit) // will be orphaned if the tryCommitChunks() below fails
 
-	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map()
+	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map(context.TODO())
 	return db.tryCommitChunks(currentDatasets, currentRootHash)
 }
 
@@ -186,7 +186,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 				}
 			}
 		}
-		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map()
+		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map(context.TODO())
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 	}
 	return err
@@ -209,7 +209,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 
 	var err error
 	for {
-		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map()
+		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map(context.TODO())
 		err = db.tryCommitChunks(currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break

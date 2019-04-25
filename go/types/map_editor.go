@@ -31,11 +31,11 @@ func (me *MapEditor) Kind() NomsKind {
 	return MapKind
 }
 
-func (me *MapEditor) Value() Value {
-	return me.Map()
+func (me *MapEditor) Value(ctx context.Context) Value {
+	return me.Map(ctx)
 }
 
-func (me *MapEditor) Map() Map {
+func (me *MapEditor) Map(ctx context.Context) Map {
 	if len(me.edits) == 0 {
 		return me.m // no edits
 	}
@@ -61,7 +61,7 @@ func (me *MapEditor) Map() Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(context.TODO(), seq, edit.key, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.key, true, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)

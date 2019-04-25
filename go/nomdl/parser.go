@@ -381,7 +381,7 @@ func (p *Parser) parseList() types.List {
 		break
 	}
 	p.lex.eat(']')
-	return le.List(context.Background())
+	return le.List(context.TODO())
 }
 
 func (p *Parser) parseSet() types.Set {
@@ -422,7 +422,7 @@ func (p *Parser) parseMap() types.Map {
 		break
 	}
 	p.lex.eat('}')
-	return me.Map()
+	return me.Map(context.TODO())
 }
 
 func (p *Parser) blobString(s string) []byte {
