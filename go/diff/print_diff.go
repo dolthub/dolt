@@ -27,7 +27,7 @@ type (
 // PrintDiff writes a textual reprensentation of the diff from |v1| to |v2|
 // to |w|. If |leftRight| is true then the left-right diff is used for ordered
 // sequences - see Diff vs DiffLeftRight in Set and Map.
-func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
+func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 	// In the case where the diff involves two simple values, just print out the
 	// diff and return. This is needed because the code below assumes that the
 	// values being compared have a parent.
@@ -68,7 +68,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 		}
 
 		lastPart := d.Path[len(d.Path)-1]
-		parentEl := parentPath.Resolve(context.TODO(), v1, nil)
+		parentEl := parentPath.Resolve(ctx, v1, nil)
 
 		var key types.Value
 		var pfunc printFunc = line
@@ -82,7 +82,7 @@ func PrintDiff(w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
 				// is a ref to the key. We need the actual key, not a ref to it.
 				hip1 := hip
 				hip1.IntoKey = true
-				key = hip1.Resolve(context.TODO(), parent, nil)
+				key = hip1.Resolve(ctx, parent, nil)
 			} else {
 				panic("unexpected Path type")
 			}

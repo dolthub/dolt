@@ -130,7 +130,7 @@ func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch d
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
-	newRootVal := diff.Apply(rootVal, patch)
+	newRootVal := diff.Apply(context.Background(), rootVal, patch)
 	d.Chk.NotNil(newRootVal)
 	r := db.WriteValue(context.Background(), newRootVal)
 	db.Flush()
