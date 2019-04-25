@@ -133,8 +133,8 @@ func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n i
 // Concat returns a new Blob comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this Blob, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (b Blob) Concat(other Blob) Blob {
-	seq := concat(b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+func (b Blob) Concat(ctx context.Context, other Blob) Blob {
+	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return b.newChunker(cur, vrw)
 	})
 	return newBlob(seq)
@@ -238,7 +238,7 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob 
 
 	b := blobs[0]
 	for i := 1; i < len(blobs); i++ {
-		b = b.Concat(blobs[i])
+		b = b.Concat(ctx, blobs[i])
 	}
 	return b
 }

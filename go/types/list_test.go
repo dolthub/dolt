@@ -1154,7 +1154,7 @@ func TestListConcat(t *testing.T) {
 		for i := from; i < to; i += by {
 			fst := reload(vs, listSlice[:i].toList(vs))
 			snd := reload(vs, listSlice[i:].toList(vs))
-			actual := fst.Concat(snd)
+			actual := fst.Concat(context.Background(), snd)
 			assert.True(list.Equals(actual),
 				"fail at %d/%d (with expected length %d, actual %d)", i, size, list.Len(), actual.Len())
 		}
@@ -1185,7 +1185,7 @@ func TestListConcatDifferentTypes(t *testing.T) {
 	whole = append(whole, fst...)
 	whole = append(whole, snd...)
 
-	concat := NewList(vrw, fst...).Concat(NewList(vrw, snd...))
+	concat := NewList(vrw, fst...).Concat(context.Background(), NewList(vrw, snd...))
 	assert.True(NewList(vrw, whole...).Equals(concat))
 }
 

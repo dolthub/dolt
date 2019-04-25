@@ -11,7 +11,7 @@ import (
 
 type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker
 
-func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
+func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
 	if fst.numLeaves() == 0 {
 		return snd
 	}
@@ -26,9 +26,9 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 	if vrw != snd.valueReadWriter() {
 		d.Panic("cannot concat sequences from different databases")
 	}
-	chunker := newSequenceChunker(newCursorAtIndex(context.TODO(), fst, fst.numLeaves()), vrw)
+	chunker := newSequenceChunker(newCursorAtIndex(ctx, fst, fst.numLeaves()), vrw)
 
-	for cur, ch := newCursorAtIndex(context.TODO(), snd, 0), chunker; ch != nil; ch = ch.parent {
+	for cur, ch := newCursorAtIndex(ctx, snd, 0), chunker; ch != nil; ch = ch.parent {
 		// Note that if snd is shallower than fst, then higher chunkers will have
 		// their cursors set to nil. This has the effect of "dropping" the final
 		// item in each of those sequences.
