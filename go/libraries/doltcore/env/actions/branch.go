@@ -126,7 +126,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(dEnv, HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dEnv, HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
 		return err
@@ -262,8 +262,8 @@ func intersect(sl1, sl2 []string) []string {
 	return intersection
 }
 
-func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
-	roots, err := getRoots(dEnv, ActiveRoots...)
+func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
+	roots, err := getRoots(ctx, dEnv, ActiveRoots...)
 
 	if err != nil {
 		return nil, err
@@ -279,8 +279,8 @@ func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func BranchOrTable(dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
-	rootsWithTbl, err := RootsWithTable(dEnv, str)
+func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
+	rootsWithTbl, err := RootsWithTable(ctx, dEnv, str)
 
 	if err != nil {
 		return false, nil, err

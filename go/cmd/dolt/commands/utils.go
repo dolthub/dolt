@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -8,7 +9,7 @@ import (
 )
 
 func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
-	working, err := dEnv.WorkingRoot()
+	working, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to get working.").AddCause(err).Build()
@@ -18,7 +19,7 @@ func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseEr
 }
 
 func GetStagedWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
-	staged, err := dEnv.StagedRoot()
+	staged, err := dEnv.StagedRoot(context.Background())
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
@@ -28,7 +29,7 @@ func GetStagedWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseErr
 }
 
 func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := dEnv.UpdateWorkingRoot(updatedRoot)
+	err := dEnv.UpdateWorkingRoot(context.Background(), updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
@@ -41,7 +42,7 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 }
 
 func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := dEnv.UpdateStagedRoot(updatedRoot)
+	_, err := dEnv.UpdateStagedRoot(context.Background(), updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:

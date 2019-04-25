@@ -110,7 +110,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
-func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name and email args
+func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -120,7 +120,7 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name 
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(name, email)
+		err = dEnv.initDBAndState(ctx, name, email)
 	}
 
 	if err != nil {
@@ -174,9 +174,9 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) initDBAndState(name, email string) error {
+func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
 	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
-	err := dEnv.DoltDB.WriteEmptyRepo(context.TODO(), name, email)
+	err := dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -195,15 +195,15 @@ func (dEnv *DoltEnv) initDBAndState(name, email string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) WorkingRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Working
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(context.TODO(), h)
+	return dEnv.DoltDB.ReadRootValue(ctx, h)
 }
 
-func (dEnv *DoltEnv) UpdateWorkingRoot(newRoot *doltdb.RootValue) error {
-	h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), newRoot)
+func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -230,15 +230,15 @@ func (dEnv *DoltEnv) HeadRoot() (*doltdb.RootValue, error) {
 	return commit.GetRootValue(), nil
 }
 
-func (dEnv *DoltEnv) StagedRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Staged
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(context.TODO(), h)
+	return dEnv.DoltDB.ReadRootValue(ctx, h)
 }
 
-func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), newRoot)
+func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
 
 	if err != nil {
 		return hash.Hash{}, doltdb.ErrNomsIO
@@ -254,8 +254,8 @@ func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, err
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch schema.Schema, tableName string) error {
-	root, err := dEnv.WorkingRoot()
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string) error {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -268,22 +268,22 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch schema.Schema, tableN
 		return ErrMarshallingSchema
 	}
 
-	tbl := doltdb.NewTable(context.TODO(), vrw, schVal, rows)
-	newRoot := root.PutTable(context.TODO(), dEnv.DoltDB, tableName, tbl)
+	tbl := doltdb.NewTable(ctx, vrw, schVal, rows)
+	newRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, tbl)
 
 	if root.HashOf() == newRoot.HashOf() {
 		return nil
 	}
 
-	return dEnv.UpdateWorkingRoot(newRoot)
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
 func (dEnv *DoltEnv) IsMergeActive() bool {
 	return dEnv.RepoState.Merge != nil
 }
 
-func (dEnv *DoltEnv) GetTablesWithConflicts() ([]string, error) {
-	root, err := dEnv.WorkingRoot()
+func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, error) {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, err

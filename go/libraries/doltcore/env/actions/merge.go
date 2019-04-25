@@ -44,7 +44,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 	return root, tblToStats, nil
 }
 
-func GetTablesInConflict(dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
 	headRoot, err = dEnv.HeadRoot()
@@ -53,13 +53,13 @@ func GetTablesInConflict(dEnv *env.DoltEnv) (workingInConflict, stagedInConflict
 		return
 	}
 
-	stagedRoot, err = dEnv.StagedRoot()
+	stagedRoot, err = dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return
 	}
 
-	workingRoot, err = dEnv.WorkingRoot()
+	workingRoot, err = dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return

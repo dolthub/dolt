@@ -75,7 +75,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *doltdb.Table, errhand.VerboseError) {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.TODO())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()

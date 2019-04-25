@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -96,7 +97,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)

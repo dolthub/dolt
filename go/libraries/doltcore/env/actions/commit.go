@@ -36,7 +36,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 }
 
 func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
-	staged, notStaged, err := GetTableDiffs(dEnv)
+	staged, notStaged, err := GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
 		return ErrEmptyCommitMessage
@@ -67,13 +67,13 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	root, err := dEnv.StagedRoot()
+	root, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	h, err := dEnv.UpdateStagedRoot(root)
+	h, err := dEnv.UpdateStagedRoot(ctx, root)
 
 	if err != nil {
 		return err

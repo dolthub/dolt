@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -61,7 +62,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
-	working, err := dEnv.WorkingRoot()
+	working, err := dEnv.WorkingRoot(context.TODO())
 
 	if err != nil {
 		return
@@ -92,7 +93,7 @@ func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValu
 }
 
 func getStagedAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	stagedRoot, err := dEnv.StagedRoot()
+	stagedRoot, err := dEnv.StagedRoot(context.Background())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
