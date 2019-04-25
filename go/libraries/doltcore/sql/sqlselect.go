@@ -15,17 +15,19 @@ import (
 )
 
 // Struct to represent the salient results of parsing a select statement.
-type selectStatement struct {
+type SelectStatement struct {
 	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
 	selectedCols []QualifiedColumn
 	// Aliases for columns and tables
-	aliases      *Aliases
+	aliases *Aliases
+	// Result set schema
+	ResultSetSchema *resultset.ResultSetSchema
 	// Filter function for the result set
-	filterFn     rowFilterFn
+	filterFn rowFilterFn
 	// Limit of results returned
-	limit        int
+	limit int
 }
 
 type selectTransform struct {
@@ -51,7 +53,7 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
-	p, schema, err := BuildSelectQueryPipeline(root, s)
+	p, statement, err := BuildSelectQueryPipeline(root, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -82,14 +84,14 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, sche
 		return nil, nil, executionErr
 	}
 
-	return rows, schema, nil
+	return rows, statement.ResultSetSchema.Schema(), nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
-func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, schema.Schema, error) {
-	selectStmt := &selectStatement{aliases: NewAliases(), inputSchemas: make(map[string]schema.Schema)}
+func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, *SelectStatement, error) {
+	selectStmt := &SelectStatement{aliases: NewAliases(), inputSchemas: make(map[string]schema.Schema)}
 
 	if err := processFromClause(root, selectStmt, s.From); err != nil {
 		return nil, nil, err
@@ -113,16 +115,25 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 		selectStmt.limit = -1
 	}
 
-	if err := processWhereClause(root, selectStmt, s); err != nil {
+	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
 
-	return createPipeline(root, selectStmt)
+	if err := processWhereClause(selectStmt, s); err != nil {
+		return nil, nil, err
+	}
+
+	p, err := createPipeline(root, selectStmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p, selectStmt, nil
 }
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
-func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs) error {
+func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from sqlparser.TableExprs) error {
 	for _, tableExpr := range from {
 		var tableName string
 		switch te := tableExpr.(type) {
@@ -158,9 +169,9 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 	return nil
 }
 
-// Processes the select expression (columns to return from the query). Adds the results to the selectStatement given,
-// or returns an error if it cannot. All aliases must be established in the selectStatement.
-func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement, colSelections sqlparser.SelectExprs) error {
+// Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
+// or returns an error if it cannot. All aliases must be established in the SelectStatement.
+func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
@@ -220,7 +231,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement,
 // Finds the schema that contains the column name given among the tables given. Returns an error if no schema contains
 // such a column name, or if multiple do. This method is only used for naked column names, not qualified ones. Assumes
 // that table names have already been verified to exist.
-func findSchemaForColumn(colName string, statement *selectStatement) (string, schema.Schema, error) {
+func findSchemaForColumn(colName string, statement *SelectStatement) (string, schema.Schema, error) {
 	schemas := statement.inputSchemas
 
 	var colSchema schema.Schema
@@ -248,9 +259,9 @@ func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 	return tbl.GetSchema()
 }
 
-// Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
+// Processes the where clause by applying an appropriate filter fn to the SelectStatement given. Returns an error if the
 // where clause can't be processed.
-func processWhereClause(root *doltdb.RootValue, selectStmt *selectStatement, s *sqlparser.Select) error {
+func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select) error {
 	// TODO: make work for more than 1 table
 	var tableSch schema.Schema
 	for _, sch := range selectStmt.inputSchemas {
@@ -269,13 +280,13 @@ func processWhereClause(root *doltdb.RootValue, selectStmt *selectStatement, s *
 
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
 // BuildSelectQueryPipeline.
-func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
+func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, *SelectStatement, error) {
 	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args...))
 }
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, error) {
+func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeline.Pipeline, error) {
 
 	// TODO: make work for more than one table
 	var tblSch schema.Schema
@@ -287,14 +298,9 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 	}
 	tbl, _ := root.GetTable(tblName)
 
-	outSchema, err := getResultSetSchema(statement)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-	transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, outSchema))
+	transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
 
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
@@ -304,8 +310,7 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 
 	p.RunAfter(func() { rd.Close() })
 
-	return p, outSchema.Schema(), nil
-//	return p, outSchema, nil
+	return p, nil
 }
 
 func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.ResultSetSchema) pipeline.NamedTransform {
@@ -316,7 +321,7 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 
 // Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
 // from the individual table schemas.
-func getResultSetSchema(statement *selectStatement) (*resultset.ResultSetSchema, error) {
+func createResultSetSchema(statement *SelectStatement) error {
 
 	// Iterate over the columns twice: first to get an ordered list to use to create an output schema with
 	cols := make([]schema.Column, 0, len(statement.selectedCols))
@@ -340,7 +345,7 @@ func getResultSetSchema(statement *selectStatement) (*resultset.ResultSetSchema,
 
 	rss, err := resultset.NewFromColumns(cols...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Then a second time, to create a mapping from the source schema to the column in the result set.
@@ -350,9 +355,12 @@ func getResultSetSchema(statement *selectStatement) (*resultset.ResultSetSchema,
 
 		err = rss.AddColumn(tableSch, col)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return rss, nil
+	// Finally set the result set schema in the statement
+	statement.ResultSetSchema = rss
+
+	return nil
 }

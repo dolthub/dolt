@@ -494,7 +494,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
-			p, sch, _ := BuildSelectQueryPipeline(root, s)
+			p, statement, _ := BuildSelectQueryPipeline(root, s)
 			var outputRows int
 			p.SetOutput(pipeline.ProcFuncForSinkFunc(
 				func(r row.Row, props pipeline.ReadableMap) error {
@@ -508,7 +508,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			p.Wait()
 
 			assert.Equal(t, tt.expectedNumRows, outputRows)
-			assert.Equal(t, tt.expectedSchema, sch)
+			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema.Schema())
 		})
 	}
 }
