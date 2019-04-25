@@ -16,14 +16,14 @@ import (
 
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
+	// Result set schema
+	ResultSetSchema *resultset.ResultSetSchema
 	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
 	selectedCols []QualifiedColumn
 	// Aliases for columns and tables
 	aliases *Aliases
-	// Result set schema
-	ResultSetSchema *resultset.ResultSetSchema
 	// Filter function for the result set
 	filterFn rowFilterFn
 	// Limit of results returned
@@ -101,18 +101,8 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 		return nil, nil, err
 	}
 
-	if s.Limit != nil && s.Limit.Rowcount != nil {
-		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
-		if !ok {
-			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-		}
-		limitInt, err := strconv.Atoi(nodeToString(limitVal))
-		if err != nil {
-			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-		}
-		selectStmt.limit = limitInt
-	} else {
-		selectStmt.limit = -1
+	if err := processLimitClause(s, selectStmt); err != nil {
+		return nil, nil, err
 	}
 
 	if err := createResultSetSchema(selectStmt); err != nil {
@@ -129,6 +119,26 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 	}
 
 	return p, selectStmt, nil
+}
+
+// Processed the limit clause of the SQL select statement given, storing the result of the analysis in the selectStmt
+// given or returning any error encountered.
+func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error {
+	if s.Limit != nil && s.Limit.Rowcount != nil {
+		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
+		if !ok {
+			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+		}
+		limitInt, err := strconv.Atoi(nodeToString(limitVal))
+		if err != nil {
+			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+		}
+		selectStmt.limit = limitInt
+	} else {
+		selectStmt.limit = -1
+	}
+
+	return nil
 }
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
