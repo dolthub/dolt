@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"io"
 	"sort"
@@ -26,7 +27,7 @@ type tableIndex struct {
 }
 
 type tableReaderAt interface {
-	ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error)
+	ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error)
 }
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
@@ -226,7 +227,7 @@ func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
 	length := uint64(tr.lengths[ordinal])
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
 
-	n, err := tr.r.ReadAtWithStats(buff, int64(offset), stats)
+	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(offset), stats)
 	d.Chk.NoError(err)
 	d.Chk.True(n == int(length))
 	data = tr.parseChunk(buff)
@@ -259,7 +260,7 @@ func (tr tableReader) readAtOffsets(
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
 
-	n, err := tr.r.ReadAtWithStats(buff, int64(readStart), stats)
+	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(readStart), stats)
 
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == readLength)
@@ -466,7 +467,7 @@ func (tr tableReader) extract(chunks chan<- extractRecord) {
 	}
 	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
 	buff := make([]byte, chunkLen)
-	n, err := tr.r.ReadAtWithStats(buff, int64(tr.offsets[0]), &Stats{})
+	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(tr.offsets[0]), &Stats{})
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == chunkLen)
 
@@ -490,7 +491,7 @@ type readerAdapter struct {
 }
 
 func (ra *readerAdapter) Read(p []byte) (n int, err error) {
-	n, err = ra.rat.ReadAtWithStats(p, ra.off, &Stats{})
+	n, err = ra.rat.ReadAtWithStats(context.TODO(), p, ra.off, &Stats{})
 	ra.off += int64(n)
 	return
 }

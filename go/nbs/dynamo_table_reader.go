@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -35,7 +36,7 @@ func (t tableNotInDynamoErr) Error() string {
 	return fmt.Sprintf("NBS table %s not present in DynamoDB table %s", t.nbs, t.dynamo)
 }
 
-func (dtra *dynamoTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (dtra *dynamoTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	data, err := dtra.ddb.ReadTable(dtra.h, stats)
 	d.PanicIfError(err)
 	n = copy(p, data[off:])

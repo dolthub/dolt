@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -38,7 +39,7 @@ type s3svc interface {
 	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
 }
 
-func (s3tra *s3TableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (s3tra *s3TableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	return s3tra.s3.ReadAt(s3tra.h, p, off, stats)
 }
 
