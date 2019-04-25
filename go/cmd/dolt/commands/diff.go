@@ -215,7 +215,7 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 	cli.Println("  CREATE TABLE", tableName, "(")
 
 	for _, tag := range tags {
-		dff, _ := diffs[tag]
+		dff := diffs[tag]
 		switch dff.DiffType {
 		case diff.SchDiffNone:
 			cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
