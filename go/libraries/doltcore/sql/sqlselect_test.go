@@ -309,13 +309,37 @@ func TestExecuteSelect(t *testing.T) {
 				"l", types.StringKind, "m", types.BoolKind, "a", types.IntKind, "r", types.FloatKind,
 				"u", types.UUIDKind, "n", types.UintKind),
 		},
-		// TODO: implement joins to make this work
-		//{
-		//	name:  "Test selecting from multiple tables",
-		//	query: `select * from people, episodes`,
-		//	expectedRows: rs(homer, moe, barney),
-		//	expectedSchema: concatSchemas(untypedPeopleSch, untypedEpisodesSch),
-		//},
+		{
+			name:  "Test selecting from multiple tables",
+			query: `select * from people, episodes`,
+			expectedRows: rs(
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep4),
+			),
+			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
+		},
 		{
 			name:           "Test select *, not equals",
 			query:          "select * from people where age <> 40",
@@ -366,7 +390,6 @@ func TestExecuteSelect(t *testing.T) {
 			}
 
 			rows, sch, err := ExecuteSelect(root, s)
-			//unkeyedRows := convertRows(t, tt.expectedRows, peopleTestSchema, untyped.UnkeySchema(peopleTestSchema))
 			if err != nil {
 				assert.True(t, tt.expectedErr, err.Error())
 			} else {
@@ -378,11 +401,45 @@ func TestExecuteSelect(t *testing.T) {
 	}
 }
 
+// Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row
+// returned will have a new schema identical to the result of compressSchema.
+func concatRows(schemasAndRows ...interface{}) row.Row {
+	if len(schemasAndRows) % 2 != 0 {
+		panic("Non-even number of inputs passed to concatRows")
+	}
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, 0)
+	var itag uint64
+	for i := 0; i < len(schemasAndRows); i += 2 {
+		sch := schemasAndRows[i].(schema.Schema)
+		r := schemasAndRows[i+1].(row.Row)
+		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+			val, ok := r.GetColVal(tag)
+			if ok {
+				taggedVals[itag] = val
+			}
+
+			col.Tag = itag
+			cols = append(cols, col)
+			itag++
+
+			return false
+		})
+	}
+
+	colCol, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return row.New(schema.UnkeyedSchemaFromCols(colCol), taggedVals)
+}
+
 // Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
 // want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
 // that the code was consistent with itself, not actually correct.
 func compressRow(sch schema.Schema, r row.Row) row.Row {
-
 	var itag uint64
 	compressedRow := make(row.TaggedValues)
 
@@ -430,6 +487,29 @@ func compressSchema(sch schema.Schema, colNames ...string) schema.Schema {
 		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
 			col.Tag = itag
 			cols[itag] = col
+			itag++
+			return false
+		})
+	}
+
+	colCol, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return schema.UnkeyedSchemaFromCols(colCol)
+}
+
+// Rewrites the tag numbers for the schemas given to start at 0, just like result set schemas.
+func compressSchemas(schs ...schema.Schema) schema.Schema {
+	var itag uint64
+	var cols []schema.Column
+
+	cols = make([]schema.Column, 0)
+	for _, sch := range schs {
+		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+			col.Tag = itag
+			cols = append(cols, col)
 			itag++
 			return false
 		})
