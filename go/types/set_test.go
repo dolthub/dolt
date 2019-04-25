@@ -311,7 +311,7 @@ func TestNewSet(t *testing.T) {
 	s = NewSet(vs)
 	assert.IsType(MakeSetType(FloaTType), TypeOf(s))
 
-	s2 := s.Edit().Remove(Float(1)).Set()
+	s2 := s.Edit().Remove(Float(1)).Set(context.Background())
 	assert.IsType(TypeOf(s), TypeOf(s2))
 }
 
@@ -327,14 +327,14 @@ func TestSetLen(t *testing.T) {
 	diffSetTest(assert, s0, s1, 0, 3)
 	diffSetTest(assert, s1, s0, 3, 0)
 
-	s2 := s1.Edit().Insert(Bool(false)).Set()
+	s2 := s1.Edit().Insert(Bool(false)).Set(context.Background())
 	assert.Equal(uint64(4), s2.Len())
 	diffSetTest(assert, s0, s2, 0, 4)
 	diffSetTest(assert, s2, s0, 4, 0)
 	diffSetTest(assert, s1, s2, 0, 1)
 	diffSetTest(assert, s2, s1, 1, 0)
 
-	s3 := s2.Edit().Remove(Bool(true)).Set()
+	s3 := s2.Edit().Remove(Bool(true)).Set(context.Background())
 	assert.Equal(uint64(3), s3.Len())
 	diffSetTest(assert, s2, s3, 1, 0)
 	diffSetTest(assert, s3, s2, 0, 1)
@@ -355,7 +355,7 @@ func TestSetEmptyInsert(t *testing.T) {
 
 	s := NewSet(vs)
 	assert.True(s.Empty())
-	s = s.Edit().Insert(Bool(false)).Set()
+	s = s.Edit().Insert(Bool(false)).Set(context.Background())
 	assert.False(s.Empty())
 	assert.Equal(uint64(1), s.Len())
 }
@@ -366,10 +366,10 @@ func TestSetEmptyInsertRemove(t *testing.T) {
 
 	s := NewSet(vs)
 	assert.True(s.Empty())
-	s = s.Edit().Insert(Bool(false)).Set()
+	s = s.Edit().Insert(Bool(false)).Set(context.Background())
 	assert.False(s.Empty())
 	assert.Equal(uint64(1), s.Len())
-	s = s.Edit().Remove(Bool(false)).Set()
+	s = s.Edit().Remove(Bool(false)).Set(context.Background())
 	assert.True(s.Empty())
 	assert.Equal(uint64(0), s.Len())
 }
@@ -419,7 +419,7 @@ func TestSetHas(t *testing.T) {
 	assert.True(s1.Has(String("hi")))
 	assert.False(s1.Has(String("ho")))
 
-	s2 := s1.Edit().Insert(Bool(false)).Set()
+	s2 := s1.Edit().Insert(Bool(false)).Set(context.Background())
 	assert.True(s2.Has(Bool(false)))
 	assert.True(s2.Has(Bool(true)))
 
@@ -458,7 +458,7 @@ func TestSetHas2(t *testing.T) {
 func validateSetInsertion(t *testing.T, vrw ValueReadWriter, values ValueSlice) {
 	s := NewSet(vrw)
 	for i, v := range values {
-		s = s.Edit().Insert(v).Set()
+		s = s.Edit().Insert(v).Set(context.Background())
 		validateSet(t, vrw, s, values[0:i+1])
 	}
 }
@@ -486,12 +486,12 @@ func TestSetInsert(t *testing.T) {
 	v3 := Float(0)
 
 	assert.False(s.Has(v1))
-	s = s.Edit().Insert(v1).Set()
+	s = s.Edit().Insert(v1).Set(context.Background())
 	assert.True(s.Has(v1))
-	s = s.Edit().Insert(v2).Set()
+	s = s.Edit().Insert(v2).Set(context.Background())
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
-	s2 := s.Edit().Insert(v3).Set()
+	s2 := s.Edit().Insert(v3).Set(context.Background())
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
 	assert.False(s.Has(v3))
@@ -515,7 +515,7 @@ func TestSetInsert2(t *testing.T) {
 		ts := toTestSet(scale, vrw)
 		expected := ts.toSet(vrw)
 		run := func(from, to int) {
-			actual := ts.Remove(from, to).toSet(vrw).Edit().Insert(ts[from:to]...).Set()
+			actual := ts.Remove(from, to).toSet(vrw).Edit().Insert(ts[from:to]...).Set(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
@@ -543,7 +543,7 @@ func TestSetInsertExistingValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2, vs)
 	original := ts.toSet(vs)
-	actual := original.Edit().Insert(ts[0]).Set()
+	actual := original.Edit().Insert(ts[0]).Set(context.Background())
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -560,11 +560,11 @@ func TestSetRemove(t *testing.T) {
 	assert.True(s.Has(v1))
 	assert.True(s.Has(v2))
 	assert.True(s.Has(v3))
-	s = s.Edit().Remove(v1).Set()
+	s = s.Edit().Remove(v1).Set(context.Background())
 	assert.False(s.Has(v1))
 	assert.True(s.Has(v2))
 	assert.True(s.Has(v3))
-	s2 := s.Edit().Remove(v2).Set()
+	s2 := s.Edit().Remove(v2).Set(context.Background())
 	assert.False(s.Has(v1))
 	assert.True(s.Has(v2))
 	assert.True(s.Has(v3))
@@ -589,7 +589,7 @@ func TestSetRemove2(t *testing.T) {
 		whole := ts.toSet(vrw)
 		run := func(from, to int) {
 			expected := ts.Remove(from, to).toSet(vrw)
-			actual := whole.Edit().Remove(ts[from:to]...).Set()
+			actual := whole.Edit().Remove(ts[from:to]...).Set(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
@@ -613,7 +613,7 @@ func TestSetRemoveNonexistentValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2, vs)
 	original := ts.toSet(vs)
-	actual := original.Edit().Remove(Float(-1)).Set() // rand.Int63 returns non-negative values.
+	actual := original.Edit().Remove(Float(-1)).Set(context.Background()) // rand.Int63 returns non-negative values.
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -625,13 +625,13 @@ func TestSetFirst(t *testing.T) {
 
 	s := NewSet(vs)
 	assert.Nil(s.First())
-	s = s.Edit().Insert(Float(1)).Set()
+	s = s.Edit().Insert(Float(1)).Set(context.Background())
 	assert.NotNil(s.First())
-	s = s.Edit().Insert(Float(2)).Set()
+	s = s.Edit().Insert(Float(2)).Set(context.Background())
 	assert.NotNil(s.First())
-	s2 := s.Edit().Remove(Float(1)).Set()
+	s2 := s.Edit().Remove(Float(1)).Set(context.Background())
 	assert.NotNil(s2.First())
-	s2 = s2.Edit().Remove(Float(2)).Set()
+	s2 = s2.Edit().Remove(Float(2)).Set(context.Background())
 	assert.Nil(s2.First())
 }
 
@@ -659,7 +659,7 @@ func TestSetIter(t *testing.T) {
 	s.Iter(func(v Value) bool {
 		_, ok := v.(Float)
 		assert.True(ok)
-		acc = acc.Edit().Insert(v).Set()
+		acc = acc.Edit().Insert(v).Set(context.Background())
 		return false
 	})
 	assert.True(s.Equals(acc))
@@ -712,7 +712,7 @@ func TestSetIterAll(t *testing.T) {
 	s.IterAll(func(v Value) {
 		_, ok := v.(Float)
 		assert.True(ok)
-		acc = acc.Edit().Insert(v).Set()
+		acc = acc.Edit().Insert(v).Set(context.Background())
 	})
 	assert.True(s.Equals(acc))
 }
@@ -881,15 +881,15 @@ func TestSetType(t *testing.T) {
 	s = NewSet(vs, Float(0))
 	assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
 
-	s2 := s.Edit().Remove(Float(1)).Set()
+	s2 := s.Edit().Remove(Float(1)).Set(context.Background())
 	assert.True(TypeOf(s2).Equals(MakeSetType(FloaTType)))
 
-	s2 = s.Edit().Insert(Float(0), Float(1)).Set()
+	s2 = s.Edit().Insert(Float(0), Float(1)).Set(context.Background())
 	assert.True(TypeOf(s).Equals(TypeOf(s2)))
 
-	s3 := s.Edit().Insert(Bool(true)).Set()
+	s3 := s.Edit().Insert(Bool(true)).Set(context.Background())
 	assert.True(TypeOf(s3).Equals(MakeSetType(MakeUnionType(BoolType, FloaTType))))
-	s4 := s.Edit().Insert(Float(3), Bool(true)).Set()
+	s4 := s.Edit().Insert(Float(3), Bool(true)).Set(context.Background())
 	assert.True(TypeOf(s4).Equals(MakeSetType(MakeUnionType(BoolType, FloaTType))))
 }
 
@@ -961,10 +961,10 @@ func TestSetModifyAfterRead(t *testing.T) {
 	set = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), set).TargetHash()).(Set)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
-	set = set.Edit().Remove(fst).Set()
+	set = set.Edit().Remove(fst).Set(context.Background())
 	assert.False(set.Has(fst))
 	assert.True(set.Has(set.First()))
-	set = set.Edit().Insert(fst).Set()
+	set = set.Edit().Insert(fst).Set(context.Background())
 	assert.True(set.Has(fst))
 }
 
@@ -983,12 +983,12 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
 
-		s = s.Edit().Insert(String("a")).Set()
+		s = s.Edit().Insert(String("a")).Set(context.Background())
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(MakeUnionType(FloaTType, StringType))))
 
-		s = s.Edit().Remove(String("a")).Set()
+		s = s.Edit().Remove(String("a")).Set(context.Background())
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
 		assert.True(TypeOf(s).Equals(MakeSetType(FloaTType)))
@@ -1030,7 +1030,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	for i := 1; s.asSequence().isLeaf(); i++ {
 		v := Float(i)
 		vals = append(vals, v)
-		s = s.Edit().Insert(v).Set()
+		s = s.Edit().Insert(v).Set(context.Background())
 	}
 
 	assert.Equal(len(vals), int(s.Len()))
@@ -1043,7 +1043,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	for len(vals) > 0 {
 		v := vals[0]
 		vals = vals[1:]
-		s = s.Edit().Remove(v).Set()
+		s = s.Edit().Remove(v).Set(context.Background())
 		assert.False(s.Has(v))
 		assert.Equal(len(vals), int(s.Len()))
 	}
@@ -1066,7 +1066,7 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 	for len(ts) > 0 {
 		last := ts[len(ts)-1]
 		ts = ts[:len(ts)-1]
-		ns = reload(ns.Edit().Remove(last).Set())
+		ns = reload(ns.Edit().Remove(last).Set(context.Background()))
 		assert.True(ts.toSet(vs).Equals(ns))
 	}
 }

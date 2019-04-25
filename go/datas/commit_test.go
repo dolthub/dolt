@@ -115,7 +115,7 @@ func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
 	for _, p := range commits {
 		set.Insert(types.NewRef(p))
 	}
-	return set.Set()
+	return set.Set(context.Background())
 }
 
 // Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s

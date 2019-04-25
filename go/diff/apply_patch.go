@@ -155,10 +155,10 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			}
 		case types.Set:
 			if top.oldValue != nil {
-				el = el.Edit().Remove(top.oldValue).Set()
+				el = el.Edit().Remove(top.oldValue).Set(ctx)
 			}
 			if top.newValue != nil {
-				el = el.Edit().Insert(top.newValue).Set()
+				el = el.Edit().Insert(top.newValue).Set(ctx)
 			}
 			return el
 		}
@@ -167,11 +167,11 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 		case types.Set:
 			switch top.changeType {
 			case types.DiffChangeAdded:
-				return el.Edit().Insert(top.newValue).Set()
+				return el.Edit().Insert(top.newValue).Set(ctx)
 			case types.DiffChangeRemoved:
-				return el.Edit().Remove(top.oldValue).Set()
+				return el.Edit().Remove(top.oldValue).Set(ctx)
 			case types.DiffChangeModified:
-				return el.Edit().Remove(top.oldValue).Insert(top.newValue).Set()
+				return el.Edit().Remove(top.oldValue).Insert(top.newValue).Set(ctx)
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}

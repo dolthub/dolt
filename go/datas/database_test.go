@@ -86,13 +86,13 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	for i := 0; i < 100; i++ {
 		se.Insert(suite.db.WriteValue(context.Background(), types.Float(100)))
 	}
-	s := se.Set()
+	s := se.Set(context.Background())
 
 	ds1, err := suite.db.CommitValue(ds1, s)
 	suite.NoError(err)
 
 	s = ds1.HeadValue().(types.Set)
-	s = s.Edit().Insert(types.NewRef(types.Float(1000))).Set() // danging ref
+	s = s.Edit().Insert(types.NewRef(types.Float(1000))).Set(context.Background()) // danging ref
 	suite.Panics(func() {
 		ds1, err = suite.db.CommitValue(ds1, s)
 	})

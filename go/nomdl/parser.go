@@ -400,7 +400,7 @@ func (p *Parser) parseSet() types.Set {
 		break
 	}
 	p.lex.eat('}')
-	return se.Set()
+	return se.Set(context.TODO())
 }
 
 func (p *Parser) parseMap() types.Map {
