@@ -38,7 +38,7 @@ func NewMerger(commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*
 	return &Merger{commit, mergeCommit, ancestor, vrw}, nil
 }
 
-func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, error) {
+func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.Table, *MergeStats, error) {
 	root := merger.commit.GetRootValue()
 	mergeRoot := merger.mergeCommit.GetRootValue()
 	ancRoot := merger.ancestor.GetRootValue()
@@ -91,11 +91,11 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		return nil, nil, err
 	}
 
-	mergedTable := doltdb.NewTable(context.TODO(), merger.vrw, schUnionVal, mergedRowData)
+	mergedTable := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData)
 
 	if conflicts.Len() > 0 {
 		schemas := doltdb.NewConflict(ancTbl.GetSchemaRef(), tbl.GetSchemaRef(), mergeTbl.GetSchemaRef())
-		mergedTable = mergedTable.SetConflicts(context.TODO(), schemas, conflicts)
+		mergedTable = mergedTable.SetConflicts(ctx, schemas, conflicts)
 	}
 
 	return mergedTable, stats, nil
