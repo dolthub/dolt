@@ -57,7 +57,7 @@ func nomsList(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandle
 func nomsListNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyListInserts(sp, types.NewList(context.Background(), sp.GetDatabase()), nil, 0, args)
+	applyListInserts(sp, types.NewList(context.Background(), sp.GetDatabase(context.Background())), nil, 0, args)
 	return 0
 }
 
@@ -104,7 +104,7 @@ func applyListInserts(sp spec.Spec, rootVal types.Value, basePath types.Path, po
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		vv, err := argumentToValue(args[i], db)

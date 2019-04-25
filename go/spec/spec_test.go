@@ -32,7 +32,7 @@ func TestMemDatabaseSpec(t *testing.T) {
 	assert.True(spec.Path.IsEmpty())
 
 	s := types.String("hello")
-	db := spec.GetDatabase()
+	db := spec.GetDatabase(context.Background())
 	db.WriteValue(context.Background(), s)
 	assert.Equal(s, db.ReadValue(context.Background(), s.Hash()))
 }
@@ -54,7 +54,7 @@ func TestMemDatasetSpec(t *testing.T) {
 	assert.False(ok)
 
 	s := types.String("hello")
-	ds, err = spec.GetDatabase().CommitValue(context.Background(), ds, s)
+	ds, err = spec.GetDatabase(context.Background()).CommitValue(context.Background(), ds, s)
 	assert.NoError(err)
 	assert.Equal(s, ds.HeadValue())
 }
@@ -75,7 +75,7 @@ func TestMemHashPathSpec(t *testing.T) {
 	// This is a reasonable check but it causes the next GetValue to return nil:
 	// assert.Nil(spec.GetValue())
 
-	spec.GetDatabase().WriteValue(context.Background(), s)
+	spec.GetDatabase(context.Background()).WriteValue(context.Background(), s)
 	assert.Equal(s, spec.GetValue(context.Background()))
 }
 
@@ -92,7 +92,7 @@ func TestMemDatasetPathSpec(t *testing.T) {
 
 	assert.Nil(spec.GetValue(context.Background()))
 
-	db := spec.GetDatabase()
+	db := spec.GetDatabase(context.Background())
 	ds := db.GetDataset(context.Background(), "test")
 	_, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), db, types.Float(42)))
 	assert.NoError(err)
@@ -128,7 +128,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal("nbs", spec1.Protocol)
 		assert.Equal(store1, spec1.DatabaseName)
 
-		assert.Equal(s, spec1.GetDatabase().ReadValue(context.Background(), s.Hash()))
+		assert.Equal(s, spec1.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash()))
 
 		// New databases can be created and read/written from.
 		store2 := path.Join(tmpDir, "store2")
@@ -140,7 +140,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal("nbs", spec2.Protocol)
 		assert.Equal(store2, spec2.DatabaseName)
 
-		db := spec2.GetDatabase()
+		db := spec2.GetDatabase(context.Background())
 		db.WriteValue(context.Background(), s)
 		r := db.WriteValue(context.Background(), s)
 		_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
@@ -402,7 +402,7 @@ func TestPinPathSpec(t *testing.T) {
 	assert.NoError(err)
 	defer unpinned.Close()
 
-	db := unpinned.GetDatabase()
+	db := unpinned.GetDatabase(context.Background())
 	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
 
 	pinned, ok := unpinned.Pin(context.Background())
@@ -428,7 +428,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.NoError(err)
 	defer unpinned.Close()
 
-	db := unpinned.GetDatabase()
+	db := unpinned.GetDatabase(context.Background())
 	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
 
 	pinned, ok := unpinned.Pin(context.Background())
@@ -475,11 +475,11 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 	assert.NoError(err2)
 
 	s := types.String("hello")
-	db := spec1.GetDatabase()
+	db := spec1.GetDatabase(context.Background())
 	r := db.WriteValue(context.Background(), s)
 	_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
 	assert.NoError(err)
-	assert.Equal(s, spec2.GetDatabase().ReadValue(context.Background(), s.Hash()))
+	assert.Equal(s, spec2.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash()))
 }
 
 func TestAcccessingInvalidSpec(t *testing.T) {
@@ -489,10 +489,10 @@ func TestAcccessingInvalidSpec(t *testing.T) {
 		sp, err := ForDatabase(spec)
 		assert.Error(err)
 		assert.Equal("", sp.Href())
-		assert.Panics(func() { sp.GetDatabase() })
-		assert.Panics(func() { sp.GetDatabase() })
-		assert.Panics(func() { sp.NewChunkStore() })
-		assert.Panics(func() { sp.NewChunkStore() })
+		assert.Panics(func() { sp.GetDatabase(context.Background()) })
+		assert.Panics(func() { sp.GetDatabase(context.Background()) })
+		assert.Panics(func() { sp.NewChunkStore(context.Background()) })
+		assert.Panics(func() { sp.NewChunkStore(context.Background()) })
 		assert.Panics(func() { sp.Close() })
 		assert.Panics(func() { sp.Close() })
 		// Spec was created with ForDatabase, so dataset/path related functions
@@ -535,7 +535,7 @@ func TestExternalProtocol(t *testing.T) {
 	assert.Equal("test", sp.Protocol)
 	assert.Equal("foo", sp.DatabaseName)
 
-	cs := sp.NewChunkStore()
+	cs := sp.NewChunkStore(context.Background())
 	assert.Equal("foo", tp.name)
 	c := chunks.NewChunk([]byte("hi!"))
 	cs.Put(context.Background(), c)

@@ -68,7 +68,7 @@ func TestNomsSplore(t *testing.T) {
 	sp, err := spec.ForDataset(fmt.Sprintf("nbs:%s::ds", dir))
 	d.PanicIfError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	strct := types.NewStruct("StructName", types.StructData{
 		"blob":          types.NewBlob(context.Background(), db),
 		"bool":          types.Bool(true),
@@ -82,7 +82,7 @@ func TestNomsSplore(t *testing.T) {
 		"typePrimitive": types.FloaTType,
 		"typeStruct":    types.MakeStructType("StructType", types.StructField{Name: "x", Type: types.StringType}, types.StructField{Name: "y", Type: types.MakeStructType("")}),
 	})
-	sp.GetDatabase().CommitValue(context.Background(), sp.GetDataset(context.Background()), strct)
+	sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), strct)
 
 	// The dataset head hash changes whenever the test data changes, so instead
 	// of updating it all the time, use string replacement.

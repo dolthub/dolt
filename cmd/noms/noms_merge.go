@@ -55,7 +55,7 @@ func runMerge(args []string) int {
 	if len(args) != 4 {
 		d.CheckErrorNoUsage(fmt.Errorf("Incorrect number of arguments"))
 	}
-	db, err := cfg.GetDatabase(args[0])
+	db, err := cfg.GetDatabase(context.Background(), args[0])
 	d.CheckError(err)
 	defer db.Close()
 

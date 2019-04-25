@@ -44,7 +44,7 @@ func runRoot(args []string) int {
 	}
 
 	cfg := config.NewResolver()
-	cs, err := cfg.GetChunkStore(args[0])
+	cs, err := cfg.GetChunkStore(context.Background(), args[0])
 	d.CheckErrorNoUsage(err)
 
 	currRoot := cs.Root(context.Background())
@@ -64,7 +64,7 @@ func runRoot(args []string) int {
 	}
 
 	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
-	db, err := cfg.GetDatabase(args[0])
+	db, err := cfg.GetDatabase(context.Background(), args[0])
 	d.CheckErrorNoUsage(err)
 	defer db.Close()
 	if !validate(db.ReadValue(context.Background(), h)) {

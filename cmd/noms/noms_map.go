@@ -49,7 +49,7 @@ func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 func nomsMapNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyMapEdits(sp, types.NewMap(context.Background(), sp.GetDatabase()), nil, args)
+	applyMapEdits(sp, types.NewMap(context.Background(), sp.GetDatabase(context.Background())), nil, args)
 	return 0
 }
 
@@ -87,7 +87,7 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		kp := parseKeyPart(args, i)

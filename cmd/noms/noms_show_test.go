@@ -42,7 +42,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	sp := s.spec(str)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	r1 := db.WriteValue(context.Background(), value)
 	_, err := db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
@@ -65,7 +65,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list := types.NewList(context.Background(), sp.GetDatabase(), types.String("elem1"), types.Float(2), types.String("elem3"))
+	list := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -94,7 +94,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
 	// out to same thing.

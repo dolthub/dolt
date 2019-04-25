@@ -113,23 +113,23 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 // Resolve string to database spec. If a config is present,
 //   - resolve a db alias to its db spec
 //   - resolve "" to the default db spec
-func (r *Resolver) GetDatabase(str string) (datas.Database, error) {
+func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, error) {
 	dbc := r.DbConfigForDbSpec(str)
 	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
-	return sp.GetDatabase(), nil
+	return sp.GetDatabase(ctx), nil
 }
 
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
-func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
+func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkStore, error) {
 	dbc := r.DbConfigForDbSpec(str)
 	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
-	return sp.NewChunkStore(), nil
+	return sp.NewChunkStore(ctx), nil
 }
 
 // Resolve string to a dataset. If a config is present,
@@ -141,7 +141,7 @@ func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, 
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
-	return sp.GetDatabase(), sp.GetDataset(ctx), nil
+	return sp.GetDatabase(ctx), sp.GetDataset(ctx), nil
 }
 
 // Resolve string to a value path. If a config is present,
@@ -153,5 +153,5 @@ func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, typ
 	if err != nil {
 		return nil, nil, err
 	}
-	return sp.GetDatabase(), sp.GetValue(ctx), nil
+	return sp.GetDatabase(ctx), sp.GetValue(ctx), nil
 }

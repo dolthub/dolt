@@ -84,7 +84,7 @@ func nomsStructDel(specStr string, args []string) int {
 }
 
 func splitPath(sp spec.Spec) (rootVal types.Value, basePath types.Path) {
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(context.Background(), db)
@@ -104,7 +104,7 @@ func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ar
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		if !types.IsValidStructFieldName(args[i]) {
@@ -124,7 +124,7 @@ func applyStructEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ar
 }
 
 func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	baseVal := basePath.Resolve(context.Background(), rootVal, db)
 	if baseVal == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))

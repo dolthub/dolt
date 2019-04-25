@@ -238,7 +238,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	}
 
 	defer func() {
-		db := sp.GetDatabase()
+		db := sp.GetDatabase(context.Background())
 
 		reps := make([]types.Value, *perfRepeatFlag)
 		for i, rep := range testReps {

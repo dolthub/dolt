@@ -84,7 +84,7 @@ func runLog(args []string) int {
 		return 1
 	}
 	defer pinned.Close()
-	database := pinned.GetDatabase()
+	database := pinned.GetDatabase(context.Background())
 
 	absPath := pinned.Path
 	path := absPath.Path
