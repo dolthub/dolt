@@ -178,7 +178,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 					}
 
 					ancestor, currentHead := db.validateRefAsCommit(ancestorRef), db.validateRefAsCommit(currentHeadRef)
-					merged, err := mergePolicy(commit.Get(ValueField), currentHead.Get(ValueField), ancestor.Get(ValueField), db, nil)
+					merged, err := mergePolicy(context.TODO(), commit.Get(ValueField), currentHead.Get(ValueField), ancestor.Get(ValueField), db, nil)
 					if err != nil {
 						return err
 					}
