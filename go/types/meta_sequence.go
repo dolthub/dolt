@@ -65,8 +65,8 @@ func (mt metaTuple) numLeaves() uint64 {
 	return dec.readCount()
 }
 
-func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
-	return mt.ref().TargetValue(context.TODO(), vr).(Collection).asSequence()
+func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) sequence {
+	return mt.ref().TargetValue(ctx, vr).(Collection).asSequence()
 }
 
 func (mt metaTuple) writeTo(w nomsWriter) {
@@ -293,13 +293,13 @@ func (ms metaSequence) isLeaf() bool {
 }
 
 // metaSequence interface
-func (ms metaSequence) getChildSequence(idx int) sequence {
+func (ms metaSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	mt := ms.getItem(idx).(metaTuple)
 	// TODO: IsZeroValue?
 	if mt.buff == nil {
 		return nil
 	}
-	return mt.getChildSequence(ms.vrw)
+	return mt.getChildSequence(ctx, ms.vrw)
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
@@ -419,7 +419,7 @@ func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("empty sequence")
 }
 
-func (es emptySequence) getChildSequence(i int) sequence {
+func (es emptySequence) getChildSequence(ctx context.Context, i int) sequence {
 	return nil
 }
 

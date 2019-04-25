@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -18,7 +19,7 @@ type sequence interface {
 	cumulativeNumberOfLeaves(idx int) uint64
 	Empty() bool
 	Equals(other Value) bool
-	getChildSequence(idx int) sequence
+	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(other sequence) compareFn
 	getCompositeChildSequence(start uint64, length uint64) sequence
 	getItem(idx int) sequenceItem

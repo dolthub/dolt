@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -59,7 +60,7 @@ func (ts testSequence) writeTo(nomsWriter) {
 	panic("not reached")
 }
 
-func (ts testSequence) getChildSequence(idx int) sequence {
+func (ts testSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}
 }

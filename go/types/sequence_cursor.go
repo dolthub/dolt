@@ -4,6 +4,7 @@
 
 package types
 
+import "context"
 import "github.com/attic-labs/noms/go/d"
 import "fmt"
 
@@ -46,7 +47,7 @@ func (cur *sequenceCursor) sync() {
 
 // getChildSequence retrieves the child at the current cursor position.
 func (cur *sequenceCursor) getChildSequence() sequence {
-	return cur.seq.getChildSequence(cur.idx)
+	return cur.seq.getChildSequence(context.TODO(), cur.idx)
 }
 
 // current returns the value at the current cursor position
