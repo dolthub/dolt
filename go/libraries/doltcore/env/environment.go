@@ -1,6 +1,7 @@
 package env
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
@@ -175,7 +176,7 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 
 func (dEnv *DoltEnv) initDBAndState(name, email string) error {
 	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
-	err := dEnv.DoltDB.WriteEmptyRepo(name, email)
+	err := dEnv.DoltDB.WriteEmptyRepo(context.TODO(), name, email)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -198,11 +199,11 @@ func (dEnv *DoltEnv) WorkingRoot() (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Working
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(h)
+	return dEnv.DoltDB.ReadRootValue(context.TODO(), h)
 }
 
 func (dEnv *DoltEnv) UpdateWorkingRoot(newRoot *doltdb.RootValue) error {
-	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
+	h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), newRoot)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -233,11 +234,11 @@ func (dEnv *DoltEnv) StagedRoot() (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Staged
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(h)
+	return dEnv.DoltDB.ReadRootValue(context.TODO(), h)
 }
 
 func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
+	h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), newRoot)
 
 	if err != nil {
 		return hash.Hash{}, doltdb.ErrNomsIO
@@ -267,8 +268,8 @@ func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch schema.Schema, tableN
 		return ErrMarshallingSchema
 	}
 
-	tbl := doltdb.NewTable(vrw, schVal, rows)
-	newRoot := root.PutTable(dEnv.DoltDB, tableName, tbl)
+	tbl := doltdb.NewTable(context.TODO(), vrw, schVal, rows)
+	newRoot := root.PutTable(context.TODO(), dEnv.DoltDB, tableName, tbl)
 
 	if root.HashOf() == newRoot.HashOf() {
 		return nil

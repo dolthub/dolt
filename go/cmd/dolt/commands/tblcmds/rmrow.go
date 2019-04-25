@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -116,8 +117,8 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 	}
 
 	verr := errhand.PanicToVError("Failed to update the table.", func() errhand.VerboseError {
-		tbl = tbl.UpdateRows(m)
-		root = root.PutTable(dEnv.DoltDB, tblName, tbl)
+		tbl = tbl.UpdateRows(context.TODO(), m)
+		root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl)
 		return nil
 	})
 

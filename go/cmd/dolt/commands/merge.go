@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -147,7 +148,7 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
-	h, err := dEnv.DoltDB.WriteRootValue(cm2.GetRootValue())
+	h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), cm2.GetRootValue())
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()

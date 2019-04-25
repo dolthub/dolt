@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
@@ -45,7 +46,7 @@ func checkoutTables(dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbl
 			}
 		}
 
-		currRoot = currRoot.PutTable(dEnv.DoltDB, tblName, tbl)
+		currRoot = currRoot.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl)
 	}
 
 	if len(unknown) > 0 {

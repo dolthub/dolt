@@ -1,6 +1,7 @@
 package cnfcmds
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -121,7 +122,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
 
-	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(keysToResolve)
+	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(context.TODO(), keysToResolve)
 
 	if err != nil {
 		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
@@ -135,7 +136,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		}
 
 		if updatedTbl.HashOf() != tbl.HashOf() {
-			root := root.PutTable(dEnv.DoltDB, tblName, updatedTbl)
+			root := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
 			verr = commands.UpdateWorkingWithVErr(dEnv, root)
 		}
 	}

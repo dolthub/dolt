@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/chunks"
@@ -76,7 +77,7 @@ func LoadDoltDB(loc Location) *DoltDB {
 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
-func (ddb *DoltDB) WriteEmptyRepo(name, email string) error {
+func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
 	if ddb.db.GetDataset(creationBranch).HasHead() {
 		return errors.New("database already exists")
 	}
@@ -90,7 +91,7 @@ func (ddb *DoltDB) WriteEmptyRepo(name, email string) error {
 
 	err := pantoerr.PanicToError("Failed to write empty repo", func() error {
 		rv := emptyRootValue(ddb.db)
-		_, err := ddb.WriteRootValue(rv)
+		_, err := ddb.WriteRootValue(ctx, rv)
 
 		cm, _ := NewCommitMeta(name, email, "Data repository created.")
 
@@ -200,10 +201,10 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
-func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
+func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
 	var valHash hash.Hash
 	err := pantoerr.PanicToErrorNil("failed to write value", func() {
-		ref := ddb.db.WriteValue(rv.valueSt)
+		ref := ddb.db.WriteValue(ctx, rv.valueSt)
 		ddb.db.Flush()
 
 		valHash = ref.TargetHash()
@@ -214,10 +215,10 @@ func (ddb *DoltDB) WriteRootValue(rv *RootValue) (hash.Hash, error) {
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
 // be read, or if the hash given doesn't represent a dolt RootValue.
-func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
+func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, error) {
 	var val types.Value
 	err := pantoerr.PanicToErrorNil("unable to read root value", func() {
-		val = ddb.db.ReadValue(h)
+		val = ddb.db.ReadValue(ctx, h)
 	})
 
 	if err != nil {
@@ -234,8 +235,8 @@ func (ddb *DoltDB) ReadRootValue(h hash.Hash) (*RootValue, error) {
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
-func (ddb *DoltDB) Commit(valHash hash.Hash, branch string, cm *CommitMeta) (*Commit, error) {
-	return ddb.CommitWithParents(valHash, branch, nil, cm)
+func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, branch string, cm *CommitMeta) (*Commit, error) {
+	return ddb.CommitWithParents(ctx, valHash, branch, nil, cm)
 }
 
 // FastForward fast-forwards the branch given to the commit given.
@@ -264,10 +265,10 @@ func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 
 // CommitWithParents commits the value hash given to the branch given, using the list of parent hashes given. Returns an
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
-func (ddb *DoltDB) CommitWithParents(valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
+func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, branch string, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
-		val := ddb.db.ReadValue(valHash)
+		val := ddb.db.ReadValue(ctx, valHash)
 
 		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
 			return errors.New("can't commit a value that is not a valid root value")
@@ -314,13 +315,13 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.db
 }
 
-func writeValAndGetRef(vrw types.ValueReadWriter, val types.Value) types.Ref {
+func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) types.Ref {
 	valRef := types.NewRef(val)
 
 	targetVal := valRef.TargetValue(vrw)
 
 	if targetVal == nil {
-		vrw.WriteValue(val)
+		vrw.WriteValue(ctx, val)
 	}
 
 	return valRef

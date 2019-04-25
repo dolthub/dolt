@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -10,11 +11,11 @@ import (
 )
 
 type DeleteResult struct {
-	Root             *doltdb.RootValue
-	NumRowsDeleted   int
+	Root           *doltdb.RootValue
+	NumRowsDeleted int
 }
 
-func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delete, query string)  (*DeleteResult, error) {
+func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delete, query string) (*DeleteResult, error) {
 	tableExprs := s.TableExprs
 	if len(tableExprs) != 1 {
 		return errDelete("Exactly one table to delete from must be specified")
@@ -43,7 +44,7 @@ func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delet
 	if !root.HasTable(tableName) {
 		return errDelete("Unknown table '%s'", tableName)
 	}
-	table, _:= root.GetTable(tableName)
+	table, _ := root.GetTable(tableName)
 	tableSch := table.GetSchema()
 
 	// TODO: support aliases
@@ -75,12 +76,12 @@ func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delet
 		me.Remove(r.NomsMapKey(tableSch))
 	}
 
-	table = table.UpdateRows(me.Map())
+	table = table.UpdateRows(context.TODO(), me.Map())
 
-	result.Root = root.PutTable(db, tableName, table)
+	result.Root = root.PutTable(context.TODO(), db, tableName, table)
 	return &result, nil
 }
 
-func errDelete(errorFmt string, args... interface{})  (*DeleteResult, error) {
+func errDelete(errorFmt string, args ...interface{}) (*DeleteResult, error) {
 	return nil, errors.New(fmt.Sprintf(errorFmt, args...))
 }

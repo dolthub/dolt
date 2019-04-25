@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -93,8 +94,8 @@ func main() {
 	updatedRows := dim.Run()
 
 	if !data.Equals(updatedRows) {
-		updatedTbl := tbl.UpdateRows(updatedRows)
-		updatedRoot := root.PutTable(dEnv.DoltDB, tableName, updatedTbl)
+		updatedTbl := tbl.UpdateRows(context.Background(), updatedRows)
+		updatedRoot := root.PutTable(context.Background(), dEnv.DoltDB, tableName, updatedTbl)
 		dEnv.UpdateWorkingRoot(updatedRoot)
 	}
 }

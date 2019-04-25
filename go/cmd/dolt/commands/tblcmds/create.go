@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 
@@ -44,7 +45,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			tbl := doltdb.NewTable(root.VRW(), schVal, types.NewMap(root.VRW()))
+			tbl := doltdb.NewTable(context.TODO(), root.VRW(), schVal, types.NewMap(root.VRW()))
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
 				if !force && root.HasTable(tblName) {
@@ -52,7 +53,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()
 				} else {
-					root = root.PutTable(dEnv.DoltDB, tblName, tbl)
+					root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, tbl)
 				}
 			}
 

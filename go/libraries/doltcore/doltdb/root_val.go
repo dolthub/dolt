@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
@@ -18,14 +19,14 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
-func NewRootValue(vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
 	values := make([]types.Value, 2*len(tables))
 
 	err := pantoerr.PanicToError("unable to read values from noms", func() error {
 		index := 0
 		for k, v := range tables {
 			values[index] = types.String(k)
-			valForHash := vrw.ReadValue(v)
+			valForHash := vrw.ReadValue(ctx, v)
 
 			if valForHash == nil {
 				return ErrHashNotFound
@@ -147,13 +148,13 @@ func (root *RootValue) HasConflicts() bool {
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
-func (root *RootValue) PutTable(ddb *DoltDB, tName string, table *Table) *RootValue {
+func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) *RootValue {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
 	rootValSt := root.valueSt
-	tableRef := writeValAndGetRef(ddb.ValueReadWriter(), table.tableStruct)
+	tableRef := writeValAndGetRef(ctx, ddb.ValueReadWriter(), table.tableStruct)
 
 	tableMap := rootValSt.Get(tablesKey).(types.Map)
 	tMapEditor := tableMap.Edit()

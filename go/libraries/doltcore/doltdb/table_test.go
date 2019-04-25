@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 		return nil, err
 	}
 
-	tbl := NewTable(vrw, schemaVal, rowData)
+	tbl := NewTable(context.Background(), vrw, schemaVal, rowData)
 
 	return tbl, nil
 }

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"strings"
@@ -257,7 +258,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		return errhand.BuildDError("failed to add column").AddCause(err).Build()
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
+	root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, newTable)
 	return UpdateWorkingWithVErr(dEnv, root)
 }
 
@@ -286,7 +287,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 	}
 
 	if defaultVal == nil {
-		newTable := doltdb.NewTable(vrw, newSchemaVal, tbl.GetRowData())
+		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData())
 		return newTable, nil
 	}
 
@@ -307,7 +308,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 		return false
 	})
 
-	updatedTbl := doltdb.NewTable(vrw, newSchemaVal, me.Map())
+	updatedTbl := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, me.Map())
 	return updatedTbl, nil
 }
 
@@ -330,7 +331,7 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 		return errToVerboseErr(oldColName, newColName, err)
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
+	root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, newTbl)
 
 	return UpdateWorkingWithVErr(dEnv, root)
 }
@@ -367,6 +368,6 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 		return errToVerboseErr(colName, "", err)
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
+	root = root.PutTable(context.TODO(), dEnv.DoltDB, tblName, newTbl)
 	return UpdateWorkingWithVErr(dEnv, root)
 }

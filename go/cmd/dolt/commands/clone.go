@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"os"
 	"path"
@@ -173,7 +174,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 
 							localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
 							localCommit, _ := dEnv.DoltDB.Resolve(localCommitSpec)
-							h, err := dEnv.DoltDB.WriteRootValue(localCommit.GetRootValue())
+							h, err := dEnv.DoltDB.WriteRootValue(context.TODO(), localCommit.GetRootValue())
 
 							dEnv.RepoState.Branch = branch
 							dEnv.RepoState.Staged = h.String()
