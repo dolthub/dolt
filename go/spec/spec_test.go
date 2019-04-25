@@ -34,7 +34,7 @@ func TestMemDatabaseSpec(t *testing.T) {
 	s := types.String("hello")
 	db := spec.GetDatabase()
 	db.WriteValue(context.Background(), s)
-	assert.Equal(s, db.ReadValue(s.Hash()))
+	assert.Equal(s, db.ReadValue(context.Background(), s.Hash()))
 }
 
 func TestMemDatasetSpec(t *testing.T) {
@@ -128,7 +128,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal("nbs", spec1.Protocol)
 		assert.Equal(store1, spec1.DatabaseName)
 
-		assert.Equal(s, spec1.GetDatabase().ReadValue(s.Hash()))
+		assert.Equal(s, spec1.GetDatabase().ReadValue(context.Background(), s.Hash()))
 
 		// New databases can be created and read/written from.
 		store2 := path.Join(tmpDir, "store2")
@@ -145,7 +145,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		r := db.WriteValue(context.Background(), s)
 		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 		assert.NoError(err)
-		assert.Equal(s, db.ReadValue(s.Hash()))
+		assert.Equal(s, db.ReadValue(context.Background(), s.Hash()))
 	}
 
 	run("")
@@ -479,7 +479,7 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 	r := db.WriteValue(context.Background(), s)
 	_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 	assert.NoError(err)
-	assert.Equal(s, spec2.GetDatabase().ReadValue(s.Hash()))
+	assert.Equal(s, spec2.GetDatabase().ReadValue(context.Background(), s.Hash()))
 }
 
 func TestAcccessingInvalidSpec(t *testing.T) {

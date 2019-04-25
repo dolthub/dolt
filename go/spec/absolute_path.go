@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -91,7 +92,7 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 			val = nil
 		}
 	} else if !p.Hash.IsEmpty() {
-		val = db.ReadValue(p.Hash)
+		val = db.ReadValue(context.TODO(), p.Hash)
 	} else {
 		panic("Unreachable")
 	}

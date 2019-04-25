@@ -532,7 +532,7 @@ func TestMapHas(t *testing.T) {
 		vrw := newTestValueStore()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		m2 := vrw.ReadValue(vrw.WriteValue(context.Background(), m).TargetHash()).(Map)
+		m2 := vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), m).TargetHash()).(Map)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -1480,7 +1480,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 	m := getTestNativeOrderMap(2, vs).toMap(vs)
 	// Drop chunk values.
-	m = vs.ReadValue(vs.WriteValue(context.Background(), m).TargetHash()).(Map)
+	m = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), m).TargetHash()).(Map)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
 	m = m.Edit().Remove(fst).Map()
@@ -1590,7 +1590,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(m Map) Map {
-		return vs.ReadValue(vs.WriteValue(context.Background(), m).TargetHash()).(Map)
+		return vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), m).TargetHash()).(Map)
 	}
 
 	tm := getTestNativeOrderMap(4, vs)

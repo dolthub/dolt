@@ -75,7 +75,7 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
-	suite.Nil(suite.db.ReadValue(hash.Hash{}))
+	suite.Nil(suite.db.ReadValue(context.Background(), hash.Hash{}))
 }
 
 func (suite *DatabaseSuite) TestCompletenessCheck() {

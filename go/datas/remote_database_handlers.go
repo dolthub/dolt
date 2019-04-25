@@ -301,7 +301,7 @@ func handleGetBlob(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 	}
 
 	vs := types.NewValueStore(cs)
-	v := vs.ReadValue(h)
+	v := vs.ReadValue(context.TODO(), h)
 	b, ok := v.(types.Blob)
 	if !ok {
 		d.Panic("h is not a Blob")
@@ -411,7 +411,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 		// If committing failed, we go read out the map of Datasets at the root of the store, which is a Map[string]Ref<Commit>
 		rootMap := types.NewMap(vs)
 		root := vs.Root(context.TODO())
-		if v := vs.ReadValue(root); v != nil {
+		if v := vs.ReadValue(context.TODO(), root); v != nil {
 			rootMap = v.(types.Map)
 		}
 
@@ -441,7 +441,7 @@ func validateLast(last hash.Hash, vrw types.ValueReadWriter) types.Map {
 	if last.IsEmpty() {
 		return types.NewMap(vrw)
 	}
-	lastVal := vrw.ReadValue(last)
+	lastVal := vrw.ReadValue(context.TODO(), last)
 	if lastVal == nil {
 		d.Panic("Can't Commit from a non-present Chunk")
 	}
@@ -454,7 +454,7 @@ func validateProposed(proposed, last hash.Hash, vrw types.ValueReadWriter) types
 		return types.NewMap(vrw)
 	}
 	// Ensure that proposed new Root is present in vr, is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
-	proposedVal := vrw.ReadValue(proposed)
+	proposedVal := vrw.ReadValue(context.TODO(), proposed)
 	if proposedVal == nil {
 		d.Panic("Can't set Root to a non-present Chunk")
 	}
@@ -594,7 +594,7 @@ func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 			err = fmt.Errorf("Dataset %s not found", ds)
 		}
 	} else {
-		rootValue = db.ReadValue(hash.Parse(h))
+		rootValue = db.ReadValue(context.TODO(), hash.Parse(h))
 		if rootValue == nil {
 			err = errors.New("Root value not found")
 		}

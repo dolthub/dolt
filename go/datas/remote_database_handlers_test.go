@@ -52,7 +52,7 @@ func TestHandleWriteValue(t *testing.T) {
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		db2 := NewDatabase(storage.NewView())
-		v := db2.ReadValue(l2.Hash())
+		v := db2.ReadValue(context.Background(), l2.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(l2), "%+v != %+v", v, l2)
 		}
@@ -92,7 +92,7 @@ func TestHandleWriteValueDupChunks(t *testing.T) {
 
 	if assert.Equal(http.StatusCreated, w.Code, "Handler error:\n%s", string(w.Body.Bytes())) {
 		db := NewDatabase(storage.NewView())
-		v := db.ReadValue(newItem.Hash())
+		v := db.ReadValue(context.Background(), newItem.Hash())
 		if assert.NotNil(v) {
 			assert.True(v.Equals(newItem), "%+v != %+v", v, newItem)
 		}

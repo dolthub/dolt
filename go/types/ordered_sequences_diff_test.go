@@ -101,7 +101,7 @@ func (suite *diffTestSuite) TestDiff() {
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(context.Background(), col).TargetHash()
 		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
-		return vs.ReadValue(h).(Collection)
+		return vs.ReadValue(context.Background(), h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }
 	newMapAsColRw := func(vs []Value) Collection { return rw(newMapAsCol(vs)) }

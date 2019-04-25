@@ -157,7 +157,7 @@ func (suite *PullSuite) TestPullEverything() {
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
+	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(l.Equals(v.Get(ValueField)))
 }
@@ -200,7 +200,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
+	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
 }
@@ -246,7 +246,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
+	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
 }
@@ -288,7 +288,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(sourceRef.TargetHash()).(types.Struct)
+	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(v.Get(ValueField)))
 }
