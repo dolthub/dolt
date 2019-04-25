@@ -80,7 +80,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 // Executes a SQL select statement and prints the result to the CLI.
 func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
-	p, outSch, err := sql.BuildSelectQueryPipeline(root, s)
+	p, statement, err := sql.BuildSelectQueryPipeline(root, s)
 	if err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return 1
@@ -89,26 +89,26 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	// Now that we have the output schema, we do two additional steps in the pipeline:
 	// 1) Coerce all the values in each row into strings
 	// 2) Run them through a fixed width transformer to make them print pretty
-	untypedSch, untypingTransform := NewUntypingTransformer(outSch)
+	untypedSch, untypingTransform := NewUntypingTransformer(statement.ResultSetSchema.Schema())
 	p.AddStage(untypingTransform)
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
 	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 
 	// Redirect outtput to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
-	wr := tabular.NewTextTableWriter(cliWr, outSch)
+	wr := tabular.NewTextTableWriter(cliWr, statement.ResultSetSchema.Schema())
 	p.RunAfter(func() { wr.Close() })
 
 	cliSink := pipeline.ProcFuncForWriter(wr)
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, statement.ResultSetSchema.Schema())))
 		return true
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(outSch)))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(statement.ResultSetSchema.Schema())))
 
 	p.Start()
 	err = p.Wait()
