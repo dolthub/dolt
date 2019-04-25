@@ -274,8 +274,8 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	srcL := buildListOfHeight(4, suite.source)
 	sourceRef := suite.commitToSource(srcL, types.NewSet(suite.source))
-	L3 := srcL.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
-	L2 := L3.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
+	L3 := srcL.Get(1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
+	L2 := L3.Get(1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
 	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List()
 	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List()
 	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List()

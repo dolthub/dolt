@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -65,7 +66,7 @@ func (mt metaTuple) numLeaves() uint64 {
 }
 
 func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
-	return mt.ref().TargetValue(vr).(Collection).asSequence()
+	return mt.ref().TargetValue(context.TODO(), vr).(Collection).asSequence()
 }
 
 func (mt metaTuple) writeTo(w nomsWriter) {

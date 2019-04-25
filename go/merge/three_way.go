@@ -195,7 +195,7 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 		}
 
 	case types.RefKind:
-		if aValue, bValue, pValue, ok := refAssert(a, b, parent, m.vrw); ok {
+		if aValue, bValue, pValue, ok := refAssert(ctx, a, b, parent, m.vrw); ok {
 			merged, err := m.threeWay(ctx, aValue, bValue, pValue, path)
 			if err != nil {
 				return parent, err
@@ -298,7 +298,7 @@ func mapAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap,
 	return aMap, bMap, pMap, aOk && bOk && pOk
 }
 
-func refAssert(a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bValue, pValue types.Value, ok bool) {
+func refAssert(ctx context.Context, a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bValue, pValue types.Value, ok bool) {
 	var aOk, bOk, pOk bool
 	var aRef, bRef, pRef types.Ref
 	aRef, aOk = a.(types.Ref)
@@ -307,11 +307,11 @@ func refAssert(a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bVa
 		return
 	}
 
-	aValue = aRef.TargetValue(vrw)
-	bValue = bRef.TargetValue(vrw)
+	aValue = aRef.TargetValue(ctx, vrw)
+	bValue = bRef.TargetValue(ctx, vrw)
 	if parent != nil {
 		if pRef, pOk = parent.(types.Ref); pOk {
-			pValue = pRef.TargetValue(vrw)
+			pValue = pRef.TargetValue(ctx, vrw)
 		}
 	} else {
 		pOk = true // parent == nil is still OK. It just leaves pValue as nil.

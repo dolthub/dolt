@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -462,7 +463,7 @@ func (ann TargetAnnotation) Resolve(v Value, vr ValueReader) Value {
 		d.Panic("@target annotation requires a database to resolve against")
 	}
 	if r, ok := v.(Ref); ok {
-		return r.TargetValue(vr)
+		return r.TargetValue(context.TODO(), vr)
 	} else {
 		return nil
 	}

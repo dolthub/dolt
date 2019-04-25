@@ -84,7 +84,7 @@ func (db *database) GetDataset(datasetID string) Dataset {
 	}
 	var head types.Value
 	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
-		head = r.(types.Ref).TargetValue(db)
+		head = r.(types.Ref).TargetValue(context.TODO(), db)
 	}
 
 	return newDataset(db, datasetID, head)
@@ -162,7 +162,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				head := r.(types.Ref).TargetValue(db)
+				head := r.(types.Ref).TargetValue(context.TODO(), db)
 				currentHeadRef := types.NewRef(head)
 				ancestorRef, found := FindCommonAncestor(commitRef, currentHeadRef, db)
 				if !found {

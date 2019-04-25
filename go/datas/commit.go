@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -76,7 +77,7 @@ func FindCommonAncestor(c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok
 
 func parentsToQueue(refs types.RefSlice, q *types.RefByHeight, vr types.ValueReader) {
 	for _, r := range refs {
-		c := r.TargetValue(vr).(types.Struct)
+		c := r.TargetValue(context.TODO(), vr).(types.Struct)
 		p := c.Get(ParentsField).(types.Set)
 		p.IterAll(func(v types.Value) {
 			q.PushBack(v.(types.Ref))

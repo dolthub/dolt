@@ -422,7 +422,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	m := me.Map()
 	r := vs.WriteValue(context.Background(), m)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
-	m = r.TargetValue(vs).(Map)
+	m = r.TargetValue(context.Background(), vs).(Map)
 
 	every := 100
 
