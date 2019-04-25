@@ -30,7 +30,7 @@ func assertParseType(t *testing.T, code string, expected *types.Type) {
 
 func assertParse(t *testing.T, vrw types.ValueReadWriter, code string, expected types.Value) {
 	t.Run(code, func(t *testing.T) {
-		actual, err := Parse(vrw, code)
+		actual, err := Parse(context.Background(), vrw, code)
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -45,7 +45,7 @@ func assertParseError(t *testing.T, code, msg string) {
 			Filename: "example",
 		})
 		err := catchSyntaxError(func() {
-			p.parseValue()
+			p.parseValue(context.Background())
 		})
 		if assert.Error(t, err) {
 			assert.Equal(t, msg, err.Error())
