@@ -53,7 +53,7 @@ func (jr JsonRows) decodeJSONRows(sch schema.Schema) ([]row.Row, error) {
 }
 
 //TableFromJSON takes a filepath, vrw, and schema and returns a dolt table.
-func TableFromJSON(fp string, vrw types.ValueReadWriter, sch schema.Schema) (*doltdb.Table, error) {
+func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sch schema.Schema) (*doltdb.Table, error) {
 	data, err := filesys.LocalFS.ReadFile(fp)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func TableFromJSON(fp string, vrw types.ValueReadWriter, sch schema.Schema) (*do
 		return nil, err
 	}
 
-	tbl := doltdb.NewTable(context.TODO(), vrw, schemaVal, rowMap)
+	tbl := doltdb.NewTable(ctx, vrw, schemaVal, rowMap)
 	if err != nil {
 		return nil, err
 	}
