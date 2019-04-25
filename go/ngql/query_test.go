@@ -41,7 +41,7 @@ func (suite *QueryGraphQLSuite) SetupTest() {
 
 func (suite *QueryGraphQLSuite) assertQueryResult(v types.Value, q, expect string) {
 	buf := &bytes.Buffer{}
-	Query(v, q, suite.vs, buf)
+	Query(context.Background(), v, q, suite.vs, buf)
 	suite.JSONEq(test.RemoveHashes(expect), test.RemoveHashes(buf.String()))
 }
 
@@ -884,7 +884,7 @@ func (suite *QueryGraphQLSuite) TestStructWithOptionalField() {
 	rootValue := types.NewStruct("", types.StructData{
 		"n": types.Float(42),
 	})
-	rootType := NomsTypeToGraphQLType(types.MakeStructType("",
+	rootType := NomsTypeToGraphQLType(context.Background(), types.MakeStructType("",
 		types.StructField{Name: "n", Type: types.FloaTType, Optional: false},
 		types.StructField{Name: "s", Type: types.StringType, Optional: true},
 	), false, tm)
@@ -903,7 +903,7 @@ func (suite *QueryGraphQLSuite) TestStructWithOptionalField() {
 	schemaConfig := graphql.SchemaConfig{Query: queryObj}
 	schema, err := graphql.NewSchema(schemaConfig)
 	suite.NoError(err)
-	ctx := NewContext(suite.vs)
+	ctx := NewContext(context.Background(), suite.vs)
 	query := `{root{n s}}`
 
 	r := graphql.Do(graphql.Params{
@@ -920,7 +920,7 @@ func (suite *QueryGraphQLSuite) TestMutationScalarArgs() {
 		tc := NewTypeConverter()
 		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
 		suite.NoError(err)
-		outType := tc.NomsTypeToGraphQLType(nomsType)
+		outType := tc.NomsTypeToGraphQLType(context.Background(), nomsType)
 		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
 			return p.Args["new"], nil
 		})
@@ -970,7 +970,7 @@ func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tc *
 			},
 		}),
 	}
-	queryWithSchemaConfig(root, query, schemaConfig, suite.vs, tc, buf)
+	queryWithSchemaConfig(context.Background(), root, query, schemaConfig, suite.vs, tc, buf)
 	suite.JSONEq(expected, buf.String())
 }
 
@@ -1116,7 +1116,7 @@ func (suite *QueryGraphQLSuite) TestSetWithComplexKeys() {
 
 func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	test := func(expected types.Value, val interface{}) {
-		suite.True(expected.Equals(InputToNomsValue(suite.vs, val, types.TypeOf(expected))))
+		suite.True(expected.Equals(InputToNomsValue(context.Background(), suite.vs, val, types.TypeOf(expected))))
 	}
 
 	test(types.Float(42), int(42))
@@ -1178,19 +1178,19 @@ func (suite *QueryGraphQLSuite) TestInputToNomsValue() {
 	val := map[string]interface{}{
 		"x": float64(42),
 	}
-	suite.Equal(expected, InputToNomsValue(suite.vs, val, expectedType))
+	suite.Equal(expected, InputToNomsValue(context.Background(), suite.vs, val, expectedType))
 
 	val = map[string]interface{}{
 		"x": float64(42),
 		"a": nil,
 	}
-	suite.Equal(expected, InputToNomsValue(suite.vs, val, expectedType))
+	suite.Equal(expected, InputToNomsValue(context.Background(), suite.vs, val, expectedType))
 
 	val = map[string]interface{}{
 		"x": nil,
 	}
 	suite.Panics(func() {
-		InputToNomsValue(suite.vs, val, expectedType)
+		InputToNomsValue(context.Background(), suite.vs, val, expectedType)
 	})
 }
 
@@ -1223,9 +1223,9 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 func (suite *QueryGraphQLSuite) TestVariables() {
 	test := func(rootValue types.Value, expected string, query string, vars map[string]interface{}) {
 		tc := NewTypeConverter()
-		ctx := NewContext(suite.vs)
+		ctx := NewContext(context.Background(), suite.vs)
 		schema, err := graphql.NewSchema(graphql.SchemaConfig{
-			Query: tc.NewRootQueryObject(rootValue),
+			Query: tc.NewRootQueryObject(context.Background(), rootValue),
 		})
 		suite.NoError(err)
 
@@ -1384,9 +1384,9 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 
 func (suite *QueryGraphQLSuite) TestNameFunc() {
 	test := func(tc *TypeConverter, rootValue types.Value, expected string, query string, vars map[string]interface{}) {
-		ctx := NewContext(suite.vs)
+		ctx := NewContext(context.Background(), suite.vs)
 		schema, err := graphql.NewSchema(graphql.SchemaConfig{
-			Query: tc.NewRootQueryObject(rootValue),
+			Query: tc.NewRootQueryObject(context.Background(), rootValue),
 		})
 		suite.NoError(err)
 
@@ -1490,15 +1490,15 @@ func TestGetListElementsWithSet(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 	v := types.NewSet(context.Background(), vs, types.Float(0), types.Float(1), types.Float(2))
-	r := getListElements(vs, v, map[string]interface{}{})
+	r := getListElements(context.Background(), vs, v, map[string]interface{}{})
 	assert.Equal([]interface{}{float64(0), float64(1), float64(2)}, r)
 
-	r = getListElements(vs, v, map[string]interface{}{
+	r = getListElements(context.Background(), vs, v, map[string]interface{}{
 		atKey: 1,
 	})
 	assert.Equal([]interface{}{float64(1), float64(2)}, r)
 
-	r = getListElements(vs, v, map[string]interface{}{
+	r = getListElements(context.Background(), vs, v, map[string]interface{}{
 		countKey: 2,
 	})
 	assert.Equal([]interface{}{float64(0), float64(1)}, r)
