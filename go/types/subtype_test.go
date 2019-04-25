@@ -75,7 +75,7 @@ func TestAssertTypeValue(t *testing.T) {
 func TestAssertTypeBlob(t *testing.T) {
 	vs := newTestValueStore()
 
-	blob := NewBlob(vs, bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob := NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0x00, 0x01}))
 	assertAll(t, BlobType, blob)
 }
 

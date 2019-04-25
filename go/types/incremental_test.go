@@ -18,7 +18,7 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		Bool(true),
 		Float(1),
 		String("hi"),
-		NewBlob(vrw, bytes.NewReader([]byte("hi"))),
+		NewBlob(context.Background(), vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
 		NewSet(vrw, String("hi")),
 		NewList(vrw, String("hi")),

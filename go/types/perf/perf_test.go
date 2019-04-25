@@ -5,6 +5,7 @@
 package perf
 
 import (
+	"context"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -151,7 +152,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 		}
 	})
 
-	b := types.NewBlob(s.Database, readers...)
+	b := types.NewBlob(context.Background(), s.Database, readers...)
 	assert.Equal(uint64(size), b.Len())
 }
 

@@ -214,7 +214,7 @@ func TestHandleGetBlob(t *testing.T) {
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
-	b := types.NewBlob(db, bytes.NewBuffer([]byte(blobContents)))
+	b := types.NewBlob(context.Background(), db, bytes.NewBuffer([]byte(blobContents)))
 
 	// Test non-present hash
 	w = httptest.NewRecorder()

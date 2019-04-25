@@ -437,7 +437,7 @@ func TestPathCanBePathIndex(t *testing.T) {
 	assert.True(ValueCanBePathIndex(String("yes")))
 
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
-	assert.False(ValueCanBePathIndex(NewBlob(vs, bytes.NewReader([]byte("yes")))))
+	assert.False(ValueCanBePathIndex(NewBlob(context.Background(), vs, bytes.NewReader([]byte("yes")))))
 }
 
 func TestCopyPath(t *testing.T) {

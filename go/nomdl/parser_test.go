@@ -6,6 +6,7 @@ package nomdl
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -375,7 +376,7 @@ func TestValueBlob(t *testing.T) {
 	vs := newTestValueStore()
 
 	test := func(code string, bs ...byte) {
-		assertParse(t, vs, code, types.NewBlob(vs, bytes.NewBuffer(bs)))
+		assertParse(t, vs, code, types.NewBlob(context.Background(), vs, bytes.NewBuffer(bs)))
 	}
 
 	test("blob {}")
@@ -433,7 +434,7 @@ func TestRoundTrips(t *testing.T) {
 	test(types.String("`"))
 
 	test(types.NewEmptyBlob(vs))
-	test(types.NewBlob(vs, bytes.NewBufferString("abc")))
+	test(types.NewBlob(context.Background(), vs, bytes.NewBufferString("abc")))
 
 	test(types.NewList(vs))
 	test(types.NewList(vs, types.Float(42), types.Bool(true), types.String("abc")))

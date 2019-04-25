@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -95,7 +96,7 @@ func main() {
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob := types.NewBlob(db, bytes.NewReader(blobBytes))
+	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
 	db.CommitValue(ds, blob)
 	buildDuration := time.Since(t1)
 

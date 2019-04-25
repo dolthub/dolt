@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 	}
 
 	for i := 0; i < rounds; i++ {
-		b := NewBlob(vs)
+		b := NewBlob(context.Background(), vs)
 
 		f, _ := ioutil.TempFile("", "buff")
 		be := b.Edit()

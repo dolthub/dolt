@@ -6,6 +6,7 @@ package nomdl
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -461,7 +462,7 @@ func (p *Parser) parseBlob() types.Blob {
 
 	}
 	p.lex.eat('}')
-	return types.NewBlob(p.vrw, bytes.NewReader(buff.Bytes()))
+	return types.NewBlob(context.TODO(), p.vrw, bytes.NewReader(buff.Bytes()))
 }
 
 func (p *Parser) parseStruct() types.Struct {

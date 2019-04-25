@@ -70,7 +70,7 @@ func TestNomsSplore(t *testing.T) {
 	defer sp.Close()
 	db := sp.GetDatabase()
 	strct := types.NewStruct("StructName", types.StructData{
-		"blob":          types.NewBlob(db),
+		"blob":          types.NewBlob(context.Background(), db),
 		"bool":          types.Bool(true),
 		"list":          types.NewList(db, types.Float(1), types.Float(2)),
 		"map":           types.NewMap(db, types.String("a"), types.String("b"), types.String("c"), types.String("d")),
