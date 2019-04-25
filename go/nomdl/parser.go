@@ -381,7 +381,7 @@ func (p *Parser) parseList() types.List {
 		break
 	}
 	p.lex.eat(']')
-	return le.List()
+	return le.List(context.Background())
 }
 
 func (p *Parser) parseSet() types.Set {

@@ -186,7 +186,7 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 	switch a.Kind() {
 	case types.ListKind:
 		if aList, bList, pList, ok := listAssert(m.vrw, a, b, parent); ok {
-			return threeWayListMerge(aList, bList, pList)
+			return threeWayListMerge(ctx, aList, bList, pList)
 		}
 
 	case types.MapKind:

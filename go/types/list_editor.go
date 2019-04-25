@@ -24,11 +24,11 @@ func (le *ListEditor) Kind() NomsKind {
 	return ListKind
 }
 
-func (le *ListEditor) Value() Value {
-	return le.List()
+func (le *ListEditor) Value(ctx context.Context) Value {
+	return le.List(ctx)
 }
 
-func (le *ListEditor) List() List {
+func (le *ListEditor) List(ctx context.Context) List {
 	if le.edits == nil {
 		return le.l // no edits
 	}
@@ -48,7 +48,7 @@ func (le *ListEditor) List() List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(context.TODO(), seq, edit.idx)
+				cc <- newCursorAtIndex(ctx, seq, edit.idx)
 			}()
 
 			sc := make(chan listEdit, 1)

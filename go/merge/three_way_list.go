@@ -5,13 +5,14 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/types"
 )
 
-func threeWayListMerge(a, b, parent types.List) (merged types.List, err error) {
+func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {
 	aSpliceChan, bSpliceChan := make(chan types.Splice), make(chan types.Splice)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
@@ -61,7 +62,7 @@ func threeWayListMerge(a, b, parent types.List) (merged types.List, err error) {
 		if overlap(aSplice, bSplice) {
 			if canMerge(a, b, aSplice, bSplice) {
 				splice := merge(aSplice, bSplice)
-				merged = apply(a, merged, offset, splice)
+				merged = apply(ctx, a, merged, offset, splice)
 				offset += splice.SpAdded - splice.SpRemoved
 				aSplice, bSplice = invalidSplice, invalidSplice
 				continue
@@ -69,12 +70,12 @@ func threeWayListMerge(a, b, parent types.List) (merged types.List, err error) {
 			return parent, newMergeConflict("Overlapping splices: %s vs %s", describeSplice(aSplice), describeSplice(bSplice))
 		}
 		if aSplice.SpAt < bSplice.SpAt {
-			merged = apply(a, merged, offset, aSplice)
+			merged = apply(ctx, a, merged, offset, aSplice)
 			offset += aSplice.SpAdded - aSplice.SpRemoved
 			aSplice = invalidSplice
 			continue
 		}
-		merged = apply(b, merged, offset, bSplice)
+		merged = apply(ctx, b, merged, offset, bSplice)
 		offset += bSplice.SpAdded - bSplice.SpRemoved
 		bSplice = invalidSplice
 	}
@@ -110,7 +111,7 @@ func merge(s1, s2 types.Splice) types.Splice {
 	return s1
 }
 
-func apply(source, target types.List, offset uint64, s types.Splice) types.List {
+func apply(ctx context.Context, source, target types.List, offset uint64, s types.Splice) types.List {
 	toAdd := make([]types.Valuable, s.SpAdded)
 	iter := source.IteratorAt(s.SpFrom)
 	for i := 0; uint64(i) < s.SpAdded; i++ {
@@ -120,7 +121,7 @@ func apply(source, target types.List, offset uint64, s types.Splice) types.List 
 		}
 		toAdd[i] = v
 	}
-	return target.Edit().Splice(s.SpAt+offset, s.SpRemoved, toAdd...).List()
+	return target.Edit().Splice(s.SpAt+offset, s.SpRemoved, toAdd...).List(ctx)
 }
 
 func describeSplice(s types.Splice) string {
