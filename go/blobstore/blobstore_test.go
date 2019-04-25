@@ -47,7 +47,7 @@ type BlobstoreTest struct {
 
 func appendGCSTest(tests []BlobstoreTest) []BlobstoreTest {
 	if testGCSBucket != "" {
-		gcsTest := BlobstoreTest{&GCSBlobstore{ctx, bucket, uuid.New().String() + "/"}, 4, 4}
+		gcsTest := BlobstoreTest{&GCSBlobstore{bucket, uuid.New().String() + "/"}, 4, 4}
 		tests = append(tests, gcsTest)
 	}
 
@@ -82,13 +82,13 @@ func randBytes(size int) []byte {
 
 func testPutAndGetBack(t *testing.T, bs Blobstore) {
 	testData := randBytes(32)
-	ver, err := PutBytes(bs, key, testData)
+	ver, err := PutBytes(context.Background(), bs, key, testData)
 
 	if err != nil {
 		t.Errorf("Put failed %v.", err)
 	}
 
-	retrieved, retVer, err := GetBytes(bs, key, BlobRange{})
+	retrieved, retVer, err := GetBytes(context.Background(), bs, key, BlobRange{})
 
 	if err != nil {
 		t.Errorf("Get failed: %v.", err)
@@ -110,7 +110,7 @@ func TestPutAndGetBack(t *testing.T) {
 }
 
 func testGetMissing(t *testing.T, bs Blobstore) {
-	_, _, err := GetBytes(bs, key, BlobRange{})
+	_, _, err := GetBytes(context.Background(), bs, key, BlobRange{})
 
 	if err == nil || !IsNotFoundError(err) {
 		t.Errorf("Key should be missing.")
@@ -126,7 +126,7 @@ func TestGetMissing(t *testing.T) {
 func testCheckAndPutError(t *testing.T, bs Blobstore) {
 	testData := randBytes(32)
 	badVersion := "bad" //has to be valid hex
-	_, err := CheckAndPutBytes(bs, badVersion, key, testData)
+	_, err := CheckAndPutBytes(context.Background(), bs, badVersion, key, testData)
 
 	if err == nil {
 		t.Errorf("Key should be missing.")
@@ -152,19 +152,19 @@ func TestCheckAndPutError(t *testing.T) {
 }
 
 func testCheckAndPut(t *testing.T, bs Blobstore) {
-	ver, err := CheckAndPutBytes(bs, "", key, randBytes(32))
+	ver, err := CheckAndPutBytes(context.Background(), bs, "", key, randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
 	}
 
-	newVer, err := CheckAndPutBytes(bs, ver, key, randBytes(32))
+	newVer, err := CheckAndPutBytes(context.Background(), bs, ver, key, randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
 	}
 
-	_, err = CheckAndPutBytes(bs, newVer, key, randBytes(32))
+	_, err = CheckAndPutBytes(context.Background(), bs, newVer, key, randBytes(32))
 
 	if err != nil {
 		t.Errorf("Failed CheckAndPut.")
@@ -184,7 +184,7 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 			panic("Having io issues.")
 		}
 
-		data, ver, err := GetBytes(bs, key, BlobRange{})
+		data, ver, err := GetBytes(context.Background(), bs, key, BlobRange{})
 
 		if err != nil && !IsNotFoundError(err) {
 			log.Println(err)
@@ -197,7 +197,7 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 		copy(newData, data)
 		newData[dataSize] = byte(dataSize)
 
-		_, err = CheckAndPutBytes(bs, ver, key, newData)
+		_, err = CheckAndPutBytes(context.Background(), bs, ver, key, newData)
 
 		if err == nil {
 			updates++
@@ -230,7 +230,7 @@ func testConcurrentCheckAndPuts(t *testing.T, bsTest BlobstoreTest, key string) 
 	var data []byte
 	var err error
 	for i := 0; i < rmwRetries; i++ {
-		data, _, err = GetBytes(bsTest.bs, key, BlobRange{})
+		data, _, err = GetBytes(context.Background(), bsTest.bs, key, BlobRange{})
 
 		if err == nil {
 			break
@@ -263,7 +263,7 @@ func TestConcurrentCheckAndPuts(t *testing.T) {
 }
 
 func setupRangeTest(t *testing.T, bs Blobstore, data []byte) {
-	_, err := PutBytes(bs, key, data)
+	_, err := PutBytes(context.Background(), bs, key, data)
 
 	if err != nil {
 		t.FailNow()
@@ -271,7 +271,7 @@ func setupRangeTest(t *testing.T, bs Blobstore, data []byte) {
 }
 
 func testGetRange(t *testing.T, bs Blobstore, br BlobRange, expected []byte) {
-	retrieved, _, err := GetBytes(bs, key, br)
+	retrieved, _, err := GetBytes(context.Background(), bs, key, br)
 
 	if err != nil {
 		t.Errorf("Get failed: %v.", err)

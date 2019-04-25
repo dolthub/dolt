@@ -2,6 +2,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/attic-labs/noms/go/blobstore"
 )
@@ -20,7 +21,7 @@ func (bsm blobstoreManifest) Name() string {
 }
 
 func manifestVersionAndContents(bs blobstore.Blobstore) (string, manifestContents, error) {
-	reader, ver, err := bs.Get(manifestFile, blobstore.AllRange)
+	reader, ver, err := bs.Get(context.TODO(), manifestFile, blobstore.AllRange)
 
 	if err != nil {
 		return "", manifestContents{}, err
@@ -62,7 +63,7 @@ func (bsm blobstoreManifest) Update(lastLock addr, newContents manifestContents,
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])
 		writeManifest(buffer, newContents)
-		_, err = bsm.bs.CheckAndPut(ver, manifestFile, buffer)
+		_, err = bsm.bs.CheckAndPut(context.TODO(), ver, manifestFile, buffer)
 
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {

@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"github.com/juju/fslock"
 	"io"
@@ -60,7 +61,7 @@ func NewLocalBlobstore(dir string) *LocalBlobstore {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *LocalBlobstore) Get(key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	f, err := os.Open(path)
 
@@ -130,7 +131,7 @@ func writeAll(f *os.File, readers ...io.Reader) error {
 }
 
 // Put sets the blob and the version for a key
-func (bs *LocalBlobstore) Put(key string, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
 	ver := uuid.New()
 
 	// written as temp file and renamed so the file corresponding to this key
@@ -176,7 +177,7 @@ func fLock(lockFilePath string) (*fslock.Lock, error) {
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *LocalBlobstore) CheckAndPut(expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	lockFilePath := path + lockExt
 	lck, err := fLock(lockFilePath)
@@ -187,7 +188,7 @@ func (bs *LocalBlobstore) CheckAndPut(expectedVersion, key string, reader io.Rea
 
 	defer lck.Unlock()
 
-	rc, ver, err := bs.Get(key, BlobRange{})
+	rc, ver, err := bs.Get(ctx, key, BlobRange{})
 
 	if err != nil {
 		if !IsNotFoundError(err) {
@@ -201,12 +202,12 @@ func (bs *LocalBlobstore) CheckAndPut(expectedVersion, key string, reader io.Rea
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
 
-	return bs.Put(key, reader)
+	return bs.Put(ctx, key, reader)
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // error may be returned if there are errors accessing the filesystem data.
-func (bs *LocalBlobstore) Exists(key string) (bool, error) {
+func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	_, err := os.Stat(path)
 

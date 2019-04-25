@@ -1,6 +1,7 @@
 package nbs
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -22,7 +23,7 @@ func (bsp *blobstorePersister) Persist(mt *memTable, haver chunkReader, stats *S
 		return emptyChunkSource{}
 	}
 
-	_, err := blobstore.PutBytes(bsp.bs, name.String(), data)
+	_, err := blobstore.PutBytes(context.TODO(), bsp.bs, name.String(), data)
 	d.PanicIfError(err)
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
@@ -48,7 +49,7 @@ type bsTableReaderAt struct {
 // ReadAtWithStats is the bsTableReaderAt implementation of the tableReaderAt interface
 func (bsTRA *bsTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (int, error) {
 	br := blobstore.NewBlobRange(off, int64(len(p)))
-	rc, _, err := bsTRA.bs.Get(bsTRA.key, br)
+	rc, _, err := bsTRA.bs.Get(context.TODO(), bsTRA.key, br)
 
 	if err != nil {
 		return 0, err
@@ -87,7 +88,7 @@ func newBSChunkSource(bs blobstore.Blobstore, name addr, chunkCount uint32, bloc
 	indexBytes, tra := func() ([]byte, tableReaderAt) {
 		size := int64(indexSize(chunkCount) + footerSize)
 		key := name.String()
-		buff, _, err := blobstore.GetBytes(bs, key, blobstore.NewBlobRange(-size, 0))
+		buff, _, err := blobstore.GetBytes(context.TODO(), bs, key, blobstore.NewBlobRange(-size, 0))
 		d.PanicIfError(err)
 		d.PanicIfFalse(size == int64(len(buff)))
 		return buff, &bsTableReaderAt{key, bs}
