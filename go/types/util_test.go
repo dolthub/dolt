@@ -11,13 +11,13 @@ import (
 )
 
 type iterator interface {
-	Next() Value
+	Next(ctx context.Context) Value
 }
 
 func iterToSlice(iter iterator) ValueSlice {
 	vs := ValueSlice{}
 	for {
-		v := iter.Next()
+		v := iter.Next(context.Background())
 		if v == nil {
 			break
 		}

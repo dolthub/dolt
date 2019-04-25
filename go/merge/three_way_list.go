@@ -60,7 +60,7 @@ func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged typ
 			break
 		}
 		if overlap(aSplice, bSplice) {
-			if canMerge(a, b, aSplice, bSplice) {
+			if canMerge(ctx, a, b, aSplice, bSplice) {
 				splice := merge(aSplice, bSplice)
 				merged = apply(ctx, a, merged, offset, splice)
 				offset += splice.SpAdded - splice.SpRemoved
@@ -92,13 +92,13 @@ func overlap(s1, s2 types.Splice) bool {
 }
 
 // canMerge returns whether aSplice and bSplice can be merged into a single splice that can be applied to parent. Currently, we're only willing to do this if the two splices do _precisely_ the same thing -- that is, remove the same number of elements from the same starting index and insert the exact same list of new elements.
-func canMerge(a, b types.List, aSplice, bSplice types.Splice) bool {
+func canMerge(ctx context.Context, a, b types.List, aSplice, bSplice types.Splice) bool {
 	if aSplice != bSplice {
 		return false
 	}
 	aIter, bIter := a.IteratorAt(aSplice.SpFrom), b.IteratorAt(bSplice.SpFrom)
 	for count := uint64(0); count < aSplice.SpAdded; count++ {
-		aVal, bVal := aIter.Next(), bIter.Next()
+		aVal, bVal := aIter.Next(ctx), bIter.Next(ctx)
 		if aVal == nil || bVal == nil || !aVal.Equals(bVal) {
 			return false
 		}
@@ -115,7 +115,7 @@ func apply(ctx context.Context, source, target types.List, offset uint64, s type
 	toAdd := make([]types.Valuable, s.SpAdded)
 	iter := source.IteratorAt(s.SpFrom)
 	for i := 0; uint64(i) < s.SpAdded; i++ {
-		v := iter.Next()
+		v := iter.Next(ctx)
 		if v == nil {
 			d.Panic("List diff returned a splice that inserts a nonexistent element.")
 		}
