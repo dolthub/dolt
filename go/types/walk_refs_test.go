@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -66,7 +67,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			l := NewList(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			l := NewList(vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(l, t)
 		})
 
@@ -85,7 +86,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			s := NewSet(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			s := NewSet(vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(s, t)
 		})
 
@@ -106,7 +107,7 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			m := NewMap(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			m := NewMap(vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(m, t)
 		})
 

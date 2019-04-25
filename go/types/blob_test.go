@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -213,7 +214,7 @@ func TestBlobConcat(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(b Blob) Blob {
-		return vs.ReadValue(vs.WriteValue(b).TargetHash()).(Blob)
+		return vs.ReadValue(vs.WriteValue(context.Background(), b).TargetHash()).(Blob)
 	}
 
 	split := func(b Blob, at int64) (Blob, Blob) {

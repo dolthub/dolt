@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -589,7 +590,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newListLeafSequence(vs, v)
 				list := newList(seq)
-				return newMetaTuple(vs.WriteValue(list), newOrderedKey(v), 1)
+				return newMetaTuple(vs.WriteValue(context.Background(), list), newOrderedKey(v), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
@@ -619,7 +620,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newSetLeafSequence(vs, v)
 				set := newSet(seq)
-				return newMetaTuple(vs.WriteValue(set), newOrderedKey(v), 1)
+				return newMetaTuple(vs.WriteValue(context.Background(), set), newOrderedKey(v), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
@@ -652,7 +653,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(e mapEntry) metaTuple {
 				seq := newMapLeafSequence(vs, e)
 				m := newMap(seq)
-				return newMetaTuple(vs.WriteValue(m), newOrderedKey(e.key), 1)
+				return newMetaTuple(vs.WriteValue(context.Background(), m), newOrderedKey(e.key), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals)/2)

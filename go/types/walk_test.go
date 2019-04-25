@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -62,7 +63,7 @@ func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	buff := randomBuff(16)
 	blob := NewBlob(suite.vs, bytes.NewReader(buff))
-	r := suite.vs.WriteValue(blob)
+	r := suite.vs.WriteValue(context.Background(), blob)
 	suite.True(r.Height() > 1)
 	outBlob := suite.vs.ReadValue(r.TargetHash()).(Blob)
 	suite.Equal(suite.ts.Reads, 0)
@@ -71,8 +72,8 @@ func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.assertCallbackCount(suite.vs.WriteValue(Float(0.0)), 2)
-	suite.assertCallbackCount(suite.vs.WriteValue(String("hello")), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), Float(0.0)), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
@@ -94,7 +95,7 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	suite.True(NewRef(l).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
-	r := suite.vs.WriteValue(l)
+	r := suite.vs.WriteValue(context.Background(), l)
 	outList := suite.vs.ReadValue(r.TargetHash())
 	suite.assertCallbackCount(outList, count+1)
 }
@@ -208,17 +209,17 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 
 func (suite *WalkAllTestSuite) NewList(vs ...Value) Ref {
 	v := NewList(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewMap(vs ...Value) Ref {
 	v := NewMap(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewSet(vs ...Value) Ref {
 	v := NewSet(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {

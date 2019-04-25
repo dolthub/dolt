@@ -27,7 +27,7 @@ type ValueReader interface {
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value writing.
 type ValueWriter interface {
-	WriteValue(v Value) Ref
+	WriteValue(ctx context.Context, v Value) Ref
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms
@@ -206,7 +206,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
-func (lvs *ValueStore) WriteValue(v Value) Ref {
+func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
@@ -215,7 +215,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(h, TypeOf(v), height)
-	lvs.bufferChunk(context.TODO(), v, c, height)
+	lvs.bufferChunk(ctx, v, c, height)
 	return r
 }
 

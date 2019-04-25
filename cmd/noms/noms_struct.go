@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -131,7 +132,7 @@ func appplyPatch(sp spec.Spec, rootVal types.Value, basePath types.Path, patch d
 
 	newRootVal := diff.Apply(rootVal, patch)
 	d.Chk.NotNil(newRootVal)
-	r := db.WriteValue(newRootVal)
+	r := db.WriteValue(context.Background(), newRootVal)
 	db.Flush()
 	newAbsPath := spec.AbsolutePath{
 		Hash: r.TargetHash(),

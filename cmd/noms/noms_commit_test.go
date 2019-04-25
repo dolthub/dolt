@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -29,7 +30,7 @@ func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.
 	s.NoError(err)
 
 	v := types.String("testcommit")
-	ref = sp.GetDatabase().WriteValue(v)
+	ref = sp.GetDatabase().WriteValue(context.Background(), v)
 
 	if doCommit {
 		_, err = sp.GetDatabase().CommitValue(sp.GetDataset(), ref)

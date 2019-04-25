@@ -33,7 +33,7 @@ func TestMemDatabaseSpec(t *testing.T) {
 
 	s := types.String("hello")
 	db := spec.GetDatabase()
-	db.WriteValue(s)
+	db.WriteValue(context.Background(), s)
 	assert.Equal(s, db.ReadValue(s.Hash()))
 }
 
@@ -75,7 +75,7 @@ func TestMemHashPathSpec(t *testing.T) {
 	// This is a reasonable check but it causes the next GetValue to return nil:
 	// assert.Nil(spec.GetValue())
 
-	spec.GetDatabase().WriteValue(s)
+	spec.GetDatabase().WriteValue(context.Background(), s)
 	assert.Equal(s, spec.GetValue())
 }
 
@@ -116,7 +116,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		func() {
 			db := datas.NewDatabase(nbs.NewLocalStore(store1, 8*(1<<20)))
 			defer db.Close()
-			r := db.WriteValue(s)
+			r := db.WriteValue(context.Background(), s)
 			_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 			assert.NoError(err)
 		}()
@@ -141,8 +141,8 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal(store2, spec2.DatabaseName)
 
 		db := spec2.GetDatabase()
-		db.WriteValue(s)
-		r := db.WriteValue(s)
+		db.WriteValue(context.Background(), s)
+		r := db.WriteValue(context.Background(), s)
 		_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 		assert.NoError(err)
 		assert.Equal(s, db.ReadValue(s.Hash()))
@@ -476,7 +476,7 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 
 	s := types.String("hello")
 	db := spec1.GetDatabase()
-	r := db.WriteValue(s)
+	r := db.WriteValue(context.Background(), s)
 	_, err = db.CommitValue(db.GetDataset("datasetID"), r)
 	assert.NoError(err)
 	assert.Equal(s, spec2.GetDatabase().ReadValue(s.Hash()))

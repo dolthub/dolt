@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -42,7 +43,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	defer sp.Close()
 
 	db := sp.GetDatabase()
-	r1 := db.WriteValue(value)
+	r1 := db.WriteValue(context.Background(), value)
 	_, err := db.CommitValue(sp.GetDataset(), r1)
 	s.NoError(err)
 
@@ -98,7 +99,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
 	// out to same thing.
 	test := func(in types.Value) {
-		r1 := db.WriteValue(in)
+		r1 := db.WriteValue(context.Background(), in)
 		db.CommitValue(sp.GetDataset(), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
@@ -111,7 +112,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test(types.String("hello"))
 
 	// Ref (one child chunk)
-	test(db.WriteValue(types.Float(42)))
+	test(db.WriteValue(context.Background(), types.Float(42)))
 
 	// Prolly tree with multiple child chunks
 	items := make([]types.Value, 10000)

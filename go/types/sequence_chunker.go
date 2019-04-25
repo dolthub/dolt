@@ -4,7 +4,10 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"context"
+	"github.com/attic-labs/noms/go/d"
+)
 
 type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher)
 
@@ -171,7 +174,7 @@ func (sc *sequenceChunker) createParent() {
 	if sc.unwrittenCol != nil {
 		// There is an unwritten collection, but this chunker now has a parent, so
 		// write it. See createSequence().
-		sc.vrw.WriteValue(sc.unwrittenCol)
+		sc.vrw.WriteValue(context.TODO(), sc.unwrittenCol)
 		sc.unwrittenCol = nil
 	}
 }
@@ -197,7 +200,7 @@ func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
 
 	var ref Ref
 	if write {
-		ref = sc.vrw.WriteValue(col)
+		ref = sc.vrw.WriteValue(context.TODO(), col)
 	} else {
 		ref = NewRef(col)
 		sc.unwrittenCol = col

@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -55,7 +56,7 @@ func TestWriteHumanReadableRef(t *testing.T) {
 	vs := newTestValueStore()
 
 	x := Float(42)
-	rv := vs.WriteValue(x)
+	rv := vs.WriteValue(context.Background(), x)
 	assertWriteHRSEqual(t, "#0123456789abcdefghijklmnopqrstuv", rv)
 }
 

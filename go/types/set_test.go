@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -253,13 +254,13 @@ func getTestRefValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 
 func getTestRefToNativeOrderSet(scale int, vrw ValueReadWriter) testSet {
 	return newRandomTestSet(64*scale, func(v int) Value {
-		return vrw.WriteValue(Float(v))
+		return vrw.WriteValue(context.Background(), Float(v))
 	})
 }
 
 func getTestRefToValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 	return newRandomTestSet(64*scale, func(v int) Value {
-		return vrw.WriteValue(NewSet(vrw, Float(v)))
+		return vrw.WriteValue(context.Background(), NewSet(vrw, Float(v)))
 	})
 }
 
@@ -440,7 +441,7 @@ func TestSetHas2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		set2 := vrw.ReadValue(vrw.WriteValue(set).TargetHash()).(Set)
+		set2 := vrw.ReadValue(vrw.WriteValue(context.Background(), set).TargetHash()).(Set)
 		for _, v := range ts {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
@@ -915,7 +916,7 @@ func TestSetChunks2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		set2chunks := getChunks(vrw.ReadValue(vrw.WriteValue(set).TargetHash()))
+		set2chunks := getChunks(vrw.ReadValue(vrw.WriteValue(context.Background(), set).TargetHash()))
 		for i, r := range getChunks(set) {
 			assert.True(TypeOf(r).Equals(TypeOf(set2chunks[i])), "%s != %s", TypeOf(r).Describe(), TypeOf(set2chunks[i]).Describe())
 		}
@@ -957,7 +958,7 @@ func TestSetModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 	set := getTestNativeOrderSet(2, vs).toSet(vs)
 	// Drop chunk values.
-	set = vs.ReadValue(vs.WriteValue(set).TargetHash()).(Set)
+	set = vs.ReadValue(vs.WriteValue(context.Background(), set).TargetHash()).(Set)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
 	set = set.Edit().Remove(fst).Set()
@@ -1056,7 +1057,7 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(s Set) Set {
-		return vs.ReadValue(vs.WriteValue(s).TargetHash()).(Set)
+		return vs.ReadValue(vs.WriteValue(context.Background(), s).TargetHash()).(Set)
 	}
 
 	ts := getTestNativeOrderSet(8, vs)

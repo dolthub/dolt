@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
@@ -199,7 +200,7 @@ func (m *merger) threeWay(a, b, parent types.Value, path types.Path) (merged typ
 			if err != nil {
 				return parent, err
 			}
-			return m.vrw.WriteValue(merged), nil
+			return m.vrw.WriteValue(context.TODO(), merged), nil
 		}
 
 	case types.SetKind:

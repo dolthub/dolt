@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -66,7 +67,7 @@ func runMerge(args []string) int {
 	d.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(outDS, db.WriteValue(datas.NewCommit(merged, types.NewSet(db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
+	_, err = db.SetHead(outDS, db.WriteValue(context.Background(), datas.NewCommit(merged, types.NewSet(db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")
