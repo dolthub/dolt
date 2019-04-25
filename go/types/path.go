@@ -353,7 +353,7 @@ func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (
 		return nil
 	}
 
-	cur := newCursorAt(context.TODO(), seq, orderedKeyFromHash(hip.Hash), false, false)
+	cur := newCursorAt(ctx, seq, orderedKeyFromHash(hip.Hash), false, false)
 	if !cur.valid() {
 		return nil
 	}
