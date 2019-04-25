@@ -104,7 +104,7 @@ func validate(r types.Value) bool {
 		return false
 	}
 
-	return r.(types.Map).Any(func(k, v types.Value) bool {
+	return r.(types.Map).Any(context.Background(), func(k, v types.Value) bool {
 		if !datas.IsRefOfCommitType(types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false

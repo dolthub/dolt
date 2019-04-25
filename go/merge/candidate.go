@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
@@ -17,7 +18,7 @@ import (
 // collections it's actually working with.
 type candidate interface {
 	diff(parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
-	get(k types.Value) types.Value
+	get(ctx context.Context, k types.Value) types.Value
 	pathConcat(change types.ValueChanged, path types.Path) (out types.Path)
 	getValue() types.Value
 }
@@ -30,8 +31,8 @@ func (mc mapCandidate) diff(p candidate, change chan<- types.ValueChanged, stop 
 	mc.m.Diff(p.(mapCandidate).m, change, stop)
 }
 
-func (mc mapCandidate) get(k types.Value) types.Value {
-	return mc.m.Get(k)
+func (mc mapCandidate) get(ctx context.Context, k types.Value) types.Value {
+	return mc.m.Get(ctx, k)
 }
 
 func (mc mapCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
@@ -56,7 +57,7 @@ func (sc setCandidate) diff(p candidate, change chan<- types.ValueChanged, stop 
 	sc.s.Diff(p.(setCandidate).s, change, stop)
 }
 
-func (sc setCandidate) get(k types.Value) types.Value {
+func (sc setCandidate) get(ctx context.Context, k types.Value) types.Value {
 	return k
 }
 
@@ -82,7 +83,7 @@ func (sc structCandidate) diff(p candidate, change chan<- types.ValueChanged, st
 	sc.s.Diff(p.(structCandidate).s, change, stop)
 }
 
-func (sc structCandidate) get(key types.Value) types.Value {
+func (sc structCandidate) get(ctx context.Context, key types.Value) types.Value {
 	if field, ok := key.(types.String); ok {
 		val, _ := sc.s.MaybeGet(string(field))
 		return val

@@ -47,7 +47,7 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 	// From here on, we can assume that every Difference will have at least one
 	// element in the Path
 	go func() {
-		Diff(v1, v2, dChan, stopChan, leftRight, nil)
+		Diff(ctx, v1, v2, dChan, stopChan, leftRight, nil)
 		close(dChan)
 	}()
 

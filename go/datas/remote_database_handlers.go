@@ -538,11 +538,11 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 		}
 
 		if aChange.Key != nil && (bChange.Key == nil || aChange.Key.Less(bChange.Key)) {
-			merged = apply(merged, aChange, a.Get(aChange.Key))
+			merged = apply(merged, aChange, a.Get(context.TODO(), aChange.Key))
 			aChange = types.ValueChanged{}
 			continue
 		} else if bChange.Key != nil && (aChange.Key == nil || bChange.Key.Less(aChange.Key)) {
-			merged = apply(merged, bChange, b.Get(bChange.Key))
+			merged = apply(merged, bChange, b.Get(context.TODO(), bChange.Key))
 			bChange = types.ValueChanged{}
 			continue
 		}
@@ -554,8 +554,8 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 		}
 
 		// Otherwise, we're OK IFF the two diffs made exactly the same change
-		aValue := a.Get(aChange.Key)
-		if aChange.ChangeType != types.DiffChangeRemoved && !aValue.Equals(b.Get(bChange.Key)) {
+		aValue := a.Get(context.TODO(), aChange.Key)
+		if aChange.ChangeType != types.DiffChangeRemoved && !aValue.Equals(b.Get(context.TODO(), bChange.Key)) {
 			return parent, errors.New("Incompatible changes at " + types.EncodedValue(aChange.Key))
 		}
 		merged = apply(merged, aChange, aValue)

@@ -184,7 +184,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 				return el.Edit().Remove(k).Map(ctx)
 			case types.DiffChangeModified:
 				if part.IntoKey {
-					v := el.Get(k)
+					v := el.Get(ctx, k)
 					return el.Edit().Remove(k).Set(top.newValue, v).Map(ctx)
 				}
 				return el.Edit().Set(k, top.newValue).Map(ctx)

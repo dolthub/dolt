@@ -83,7 +83,7 @@ func (db *database) GetDataset(datasetID string) Dataset {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
 	var head types.Value
-	if r, ok := db.Datasets().MaybeGet(types.String(datasetID)); ok {
+	if r, ok := db.Datasets().MaybeGet(context.TODO(), types.String(datasetID)); ok {
 		head = r.(types.Ref).TargetValue(context.TODO(), db)
 	}
 
@@ -158,7 +158,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
-			r, hasHead := currentDatasets.MaybeGet(types.String(datasetID))
+			r, hasHead := currentDatasets.MaybeGet(context.TODO(), types.String(datasetID))
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
@@ -201,7 +201,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
 	currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
 	var initialHead types.Ref
-	if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead {
+	if r, hasHead := currentDatasets.MaybeGet(context.TODO(), datasetID); !hasHead {
 		return nil
 	} else {
 		initialHead = r.(types.Ref)
@@ -216,7 +216,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 		}
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
 		currentRootHash, currentDatasets = db.rt.Root(context.TODO()), db.Datasets()
-		if r, hasHead := currentDatasets.MaybeGet(datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
+		if r, hasHead := currentDatasets.MaybeGet(context.TODO(), datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded
 			break
 		}

@@ -124,7 +124,7 @@ func getPatch(g1, g2 types.Value) Patch {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(g1, g2, dChan, sChan, true, nil)
+		Diff(context.Background(), g1, g2, dChan, sChan, true, nil)
 		close(dChan)
 	}()
 
@@ -207,7 +207,7 @@ func TestUpdateNode(t *testing.T) {
 	m1 := types.NewMap(vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
 	pp = types.IndexPath{Index: types.String("k2")}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.Map).Get(types.String("k2"))
+		return parent.(types.Map).Get(context.Background(), types.String("k2"))
 	})
 
 	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
@@ -215,7 +215,7 @@ func TestUpdateNode(t *testing.T) {
 	m1 = types.NewMap(vs, k1, oldVal)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.Map).Get(k1)
+		return parent.(types.Map).Get(context.Background(), k1)
 	})
 
 	set1 := types.NewSet(vs, oldVal, k1)
@@ -238,7 +238,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(n1, n2, dChan, sChan, leftRight, nil)
+		Diff(context.Background(), n1, n2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 

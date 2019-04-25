@@ -288,12 +288,12 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 
 	theirs, err := suite.db.Commit(ds1, newV, newOptsWithMerge(suite.db, merge.Theirs, ds1First.HeadRef()))
 	suite.NoError(err)
-	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(types.String("Friends"))))
+	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
 
 	newV = v.Edit().Set(types.String("Friends"), types.Float(47)).Map(context.Background())
 	ours, err := suite.db.Commit(ds1First, newV, newOptsWithMerge(suite.db, merge.Ours, ds1First.HeadRef()))
 	suite.NoError(err)
-	suite.True(types.Float(47).Equals(ours.HeadValue().(types.Map).Get(types.String("Friends"))))
+	suite.True(types.Float(47).Equals(ours.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
 }
 
 func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {

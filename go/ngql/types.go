@@ -556,10 +556,10 @@ func getMapElements(vrw types.ValueReadWriter, v types.Value, args map[string]in
 
 	iter, nomsKey, nomsThrough, count, singleExactMatch := getCollectionArgs(vrw, m, args, iteratorFactory{
 		IteratorFrom: func(from types.Value) interface{} {
-			return m.IteratorFrom(from)
+			return m.IteratorFrom(context.TODO(), from)
 		},
 		IteratorAt: func(at uint64) interface{} {
-			return m.IteratorAt(at)
+			return m.IteratorAt(context.TODO(), at)
 		},
 		First: func() interface{} {
 			return &mapFirstIterator{m: m}
@@ -1023,7 +1023,7 @@ func (it *mapIteratorForKeys) Next(ctx context.Context) (k, v types.Value) {
 		return
 	}
 	k = it.keys[it.idx]
-	v = it.m.Get(k)
+	v = it.m.Get(ctx, k)
 	it.idx++
 	return
 }
@@ -1033,7 +1033,7 @@ func (it *mapIteratorForKeys) Prev(ctx context.Context) (k, v types.Value) {
 		return
 	}
 	k = it.keys[it.idx]
-	v = it.m.Get(k)
+	v = it.m.Get(ctx, k)
 	it.idx--
 	return
 }
@@ -1055,7 +1055,7 @@ type mapFirstIterator struct {
 }
 
 func (it *mapFirstIterator) Next(ctx context.Context) (types.Value, types.Value) {
-	return it.m.First()
+	return it.m.First(ctx)
 }
 
 func (it *mapFirstIterator) Prev(ctx context.Context) (types.Value, types.Value) {

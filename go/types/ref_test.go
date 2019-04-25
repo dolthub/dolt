@@ -43,10 +43,10 @@ func TestRefInMap(t *testing.T) {
 	m := NewMap(vs)
 	r := NewRef(m)
 	m = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
-	r2 := m.Get(Float(0))
+	r2 := m.Get(context.Background(), Float(0))
 	assert.True(r.Equals(r2))
 
-	i := m.Get(r)
+	i := m.Get(context.Background(), r)
 	assert.Equal(int32(1), int32(i.(Float)))
 }
 
