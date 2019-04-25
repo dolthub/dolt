@@ -209,16 +209,16 @@ func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, ui
 
 // NewBlob creates a Blob by reading from every Reader in rs and
 // concatenating the result. NewBlob uses one goroutine per Reader.
-func NewBlob(vrw ValueReadWriter, rs ...io.Reader) Blob {
-	return readBlobsP(vrw, rs...)
+func NewBlob(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
+	return readBlobsP(ctx, vrw, rs...)
 }
 
-func readBlobsP(vrw ValueReadWriter, rs ...io.Reader) Blob {
+func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
 	switch len(rs) {
 	case 0:
 		return NewEmptyBlob(vrw)
 	case 1:
-		return readBlob(rs[0], vrw)
+		return readBlob(ctx, rs[0], vrw)
 	}
 
 	blobs := make([]Blob, len(rs))
@@ -229,7 +229,7 @@ func readBlobsP(vrw ValueReadWriter, rs ...io.Reader) Blob {
 	for i, r := range rs {
 		i2, r2 := i, r
 		go func() {
-			blobs[i2] = readBlob(r2, vrw)
+			blobs[i2] = readBlob(ctx, r2, vrw)
 			wg.Done()
 		}()
 	}
@@ -243,7 +243,7 @@ func readBlobsP(vrw ValueReadWriter, rs ...io.Reader) Blob {
 	return b
 }
 
-func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
+func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
 	sc := newEmptySequenceChunker(vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
@@ -277,7 +277,7 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 
 		go func(ch chan metaTuple, cp []byte) {
 			col, key, numLeaves := chunkBlobLeaf(vrw, cp)
-			ch <- newMetaTuple(vrw.WriteValue(context.TODO(), col), key, numLeaves)
+			ch <- newMetaTuple(vrw.WriteValue(ctx, col), key, numLeaves)
 		}(ch, cp)
 
 		offset = 0

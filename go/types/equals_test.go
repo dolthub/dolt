@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,17 +26,17 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return String("hi") },
 		func() Value { return String("bye") },
 		func() Value {
-			return NewBlob(vrw, &bytes.Buffer{})
+			return NewBlob(context.Background(), vrw, &bytes.Buffer{})
 		},
 		func() Value {
-			return NewBlob(vrw, bytes.NewBufferString("hi"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			return NewBlob(vrw, bytes.NewBufferString("bye"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 		},
 		func() Value {
-			b1 := NewBlob(vrw, bytes.NewBufferString("hi"))
-			b2 := NewBlob(vrw, bytes.NewBufferString("bye"))
+			b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
+			b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
 				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2),
 				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5),

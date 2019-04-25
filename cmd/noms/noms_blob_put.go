@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 	}
 	defer db.Close()
 
-	blob := types.NewBlob(db, readers...)
+	blob := types.NewBlob(context.Background(), db, readers...)
 
 	_, err = db.CommitValue(ds, blob)
 	if err != nil {

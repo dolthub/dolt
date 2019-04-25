@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 
@@ -64,7 +65,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob := NewBlob(vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	blob := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
 	nList := NewList(vrw, nums...)
 	nMap := NewMap(vrw, words...)
 	nRef := NewRef(blob)

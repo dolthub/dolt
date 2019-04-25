@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 
@@ -38,10 +39,10 @@ func (suite *OpCacheSuite) TestMapSet() {
 
 	entries := mapEntrySlice{
 		{NewList(vs, Float(8), Float(0)), String("ahoy")},
-		{String("A key"), NewBlob(vs, bytes.NewBufferString("A value"))},
+		{String("A key"), NewBlob(context.Background(), vs, bytes.NewBufferString("A value"))},
 		{Float(1), Bool(true)},
 		{Bool(false), Float(1)},
-		{NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(vs)},
+		{NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(vs)},
 		{Bool(true), Float(42)},
 		{NewStruct("thing1", StructData{"a": Float(7)}), Float(42)},
 		{String("struct"), NewStruct("thing2", nil)},
@@ -73,11 +74,11 @@ func (suite *OpCacheSuite) TestSetInsert() {
 	entries := ValueSlice{
 		NewList(vs, Float(8), Float(0)),
 		String("ahoy"),
-		NewBlob(vs, bytes.NewBufferString("A value")),
+		NewBlob(context.Background(), vs, bytes.NewBufferString("A value")),
 		Float(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
 		NewMap(vs),
 		Float(42),
 		NewStruct("thing1", StructData{"a": Float(7)}),
@@ -111,11 +112,11 @@ func (suite *OpCacheSuite) TestListAppend() {
 	entries := ValueSlice{
 		NewList(vs, Float(8), Float(0)),
 		String("ahoy"),
-		NewBlob(vs, bytes.NewBufferString("A value")),
+		NewBlob(context.Background(), vs, bytes.NewBufferString("A value")),
 		Float(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
 		NewMap(vs),
 		Float(42),
 		NewStruct("thing1", StructData{"a": Float(7)}),

@@ -135,9 +135,9 @@ func TestWalkRefs(t *testing.T) {
 			r.Read(scratch)
 			return bytes.NewReader(scratch)
 		}
-		b := NewBlob(vrw, freshRandomBytes())
+		b := NewBlob(context.Background(), vrw, freshRandomBytes())
 		for b.sequence.isLeaf() {
-			b = b.Concat(NewBlob(vrw, freshRandomBytes()))
+			b = b.Concat(NewBlob(context.Background(), vrw, freshRandomBytes()))
 		}
 		runTest(b, t)
 	})

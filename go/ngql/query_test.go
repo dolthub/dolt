@@ -451,7 +451,7 @@ func (suite *QueryGraphQLSuite) TestNestedCollection() {
 }
 
 func (suite *QueryGraphQLSuite) TestLoFi() {
-	b := types.NewBlob(suite.vs, bytes.NewBufferString("I am a blob"))
+	b := types.NewBlob(context.Background(), suite.vs, bytes.NewBufferString("I am a blob"))
 
 	suite.assertQueryResult(b, "{root}", `{"data":{"root":"0123456789abcdefghijklmnopqrstuv"}}`)
 

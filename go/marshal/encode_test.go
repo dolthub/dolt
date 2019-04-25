@@ -6,6 +6,7 @@ package marshal
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -99,7 +100,7 @@ func TestEncode(tt *testing.T) {
 	t(types.NewList(vs, types.Float(42)), types.NewList(vs, types.Float(42)))
 	t(types.NewMap(vs, types.Float(42), types.String("hi")), types.NewMap(vs, types.Float(42), types.String("hi")))
 	t(types.NewSet(vs, types.String("bye")), types.NewSet(vs, types.String("bye")))
-	t(types.NewBlob(vs, bytes.NewBufferString("hello")), types.NewBlob(vs, bytes.NewBufferString("hello")))
+	t(types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello")), types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello")))
 
 	type TestStruct struct {
 		Str string
@@ -934,7 +935,7 @@ func TestNomsTypes(t *testing.T) {
 		Type   *types.Type
 	}
 	s := S{
-		Blob:   types.NewBlob(vs),
+		Blob:   types.NewBlob(context.Background(), vs),
 		Bool:   types.Bool(true),
 		Number: types.Float(42),
 		String: types.String("hi"),
@@ -942,7 +943,7 @@ func TestNomsTypes(t *testing.T) {
 	}
 	assert.True(MustMarshal(vs, s).Equals(
 		types.NewStruct("S", types.StructData{
-			"blob":   types.NewBlob(vs),
+			"blob":   types.NewBlob(context.Background(), vs),
 			"bool":   types.Bool(true),
 			"number": types.Float(42),
 			"string": types.String("hi"),
