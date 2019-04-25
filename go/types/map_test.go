@@ -1410,7 +1410,7 @@ func TestMapType(t *testing.T) {
 	assert.True(tr.Equals(TypeOf(m2)))
 
 	m3 := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
-	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe())
+	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe(context.Background()))
 	m4 := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
 	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m4)))
 }

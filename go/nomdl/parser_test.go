@@ -24,7 +24,7 @@ func assertParseType(t *testing.T, code string, expected *types.Type) {
 	t.Run(code, func(t *testing.T) {
 		actual, err := ParseType(code)
 		assert.NoError(t, err)
-		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", expected.Describe(), actual.Describe())
+		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", expected.Describe(context.Background()), actual.Describe(context.Background()))
 	})
 }
 

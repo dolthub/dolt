@@ -19,7 +19,7 @@ import (
 type candidate interface {
 	diff(ctx context.Context, parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
 	get(ctx context.Context, k types.Value) types.Value
-	pathConcat(change types.ValueChanged, path types.Path) (out types.Path)
+	pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path)
 	getValue() types.Value
 }
 
@@ -35,7 +35,7 @@ func (mc mapCandidate) get(ctx context.Context, k types.Value) types.Value {
 	return mc.m.Get(ctx, k)
 }
 
-func (mc mapCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (mc mapCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
@@ -61,7 +61,7 @@ func (sc setCandidate) get(ctx context.Context, k types.Value) types.Value {
 	return k
 }
 
-func (sc setCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc setCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
@@ -88,14 +88,14 @@ func (sc structCandidate) get(ctx context.Context, key types.Value) types.Value 
 		val, _ := sc.s.MaybeGet(string(field))
 		return val
 	}
-	panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(key).Describe()))
+	panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(key).Describe(ctx)))
 }
 
-func (sc structCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc structCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	str, ok := change.Key.(types.String)
 	if !ok {
-		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe())
+		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe(ctx))
 	}
 	return append(out, types.NewFieldPath(string(str)))
 }

@@ -249,7 +249,7 @@ func ExampleMarshalType() {
 		return
 	}
 
-	fmt.Println(personNomsType.Describe())
+	fmt.Println(personNomsType.Describe(context.Background()))
 	// Output: Struct Person {
 	//   female: Bool,
 	//   given: String,
@@ -586,7 +586,7 @@ func TestMarshalTypeStructName(t *testing.T) {
 
 	var ts TestStructWithNameImpl
 	typ := MustMarshalType(context.Background(), ts)
-	assert.True(types.MakeStructType("A", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe())
+	assert.True(types.MakeStructType("A", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe(context.Background()))
 }
 
 func TestMarshalTypeStructName2(t *testing.T) {
@@ -594,7 +594,7 @@ func TestMarshalTypeStructName2(t *testing.T) {
 
 	var ts TestStructWithNameImpl2
 	typ := MustMarshalType(context.Background(), ts)
-	assert.True(types.MakeStructType("", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe())
+	assert.True(types.MakeStructType("", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe(context.Background()))
 }
 
 type OutPhoto struct {

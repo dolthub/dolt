@@ -18,7 +18,7 @@ import (
 func assertInvalid(tt *testing.T, t *Type, v Value) {
 	assert := assert.New(tt)
 	assert.Panics(func() {
-		assertSubtype(t, v)
+		assertSubtype(context.Background(), t, v)
 	})
 }
 
@@ -37,7 +37,7 @@ func assertAll(tt *testing.T, t *Type, v Value) {
 
 	for _, at := range allTypes {
 		if at == ValueType || t.Equals(at) {
-			assertSubtype(at, v)
+			assertSubtype(context.Background(), at, v)
 		} else {
 			assertInvalid(tt, at, v)
 		}
@@ -45,13 +45,13 @@ func assertAll(tt *testing.T, t *Type, v Value) {
 }
 
 func TestAssertTypePrimitives(t *testing.T) {
-	assertSubtype(BoolType, Bool(true))
-	assertSubtype(BoolType, Bool(false))
-	assertSubtype(FloaTType, Float(42))
-	assertSubtype(StringType, String("abc"))
-	assertSubtype(UUIDType, UUID(uuid.Must(uuid.NewUUID())))
-	assertSubtype(IntType, Int(-1))
-	assertSubtype(UintType, Uint(0xffffffffffffffff))
+	assertSubtype(context.Background(), BoolType, Bool(true))
+	assertSubtype(context.Background(), BoolType, Bool(false))
+	assertSubtype(context.Background(), FloaTType, Float(42))
+	assertSubtype(context.Background(), StringType, String("abc"))
+	assertSubtype(context.Background(), UUIDType, UUID(uuid.Must(uuid.NewUUID())))
+	assertSubtype(context.Background(), IntType, Int(-1))
+	assertSubtype(context.Background(), UintType, Uint(0xffffffffffffffff))
 
 	assertInvalid(t, BoolType, Float(1))
 	assertInvalid(t, BoolType, String("abc"))
@@ -65,11 +65,11 @@ func TestAssertTypePrimitives(t *testing.T) {
 func TestAssertTypeValue(t *testing.T) {
 	vs := newTestValueStore()
 
-	assertSubtype(ValueType, Bool(true))
-	assertSubtype(ValueType, Float(1))
-	assertSubtype(ValueType, String("abc"))
+	assertSubtype(context.Background(), ValueType, Bool(true))
+	assertSubtype(context.Background(), ValueType, Float(1))
+	assertSubtype(context.Background(), ValueType, String("abc"))
 	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
-	assertSubtype(ValueType, l)
+	assertSubtype(context.Background(), ValueType, l)
 }
 
 func TestAssertTypeBlob(t *testing.T) {
@@ -84,9 +84,9 @@ func TestAssertTypeList(tt *testing.T) {
 
 	listOfNumberType := MakeListType(FloaTType)
 	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
-	assertSubtype(listOfNumberType, l)
+	assertSubtype(context.Background(), listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
-	assertSubtype(MakeListType(ValueType), l)
+	assertSubtype(context.Background(), MakeListType(ValueType), l)
 }
 
 func TestAssertTypeMap(tt *testing.T) {
@@ -94,9 +94,9 @@ func TestAssertTypeMap(tt *testing.T) {
 
 	mapOfNumberToStringType := MakeMapType(FloaTType, StringType)
 	m := NewMap(context.Background(), vs, Float(0), String("a"), Float(2), String("b"))
-	assertSubtype(mapOfNumberToStringType, m)
+	assertSubtype(context.Background(), mapOfNumberToStringType, m)
 	assertAll(tt, mapOfNumberToStringType, m)
-	assertSubtype(MakeMapType(ValueType, ValueType), m)
+	assertSubtype(context.Background(), MakeMapType(ValueType, ValueType), m)
 }
 
 func TestAssertTypeSet(tt *testing.T) {
@@ -104,43 +104,43 @@ func TestAssertTypeSet(tt *testing.T) {
 
 	setOfNumberType := MakeSetType(FloaTType)
 	s := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
-	assertSubtype(setOfNumberType, s)
+	assertSubtype(context.Background(), setOfNumberType, s)
 	assertAll(tt, setOfNumberType, s)
-	assertSubtype(MakeSetType(ValueType), s)
+	assertSubtype(context.Background(), MakeSetType(ValueType), s)
 }
 
 func TestAssertTypeType(tt *testing.T) {
 	t := MakeSetType(FloaTType)
-	assertSubtype(TypeType, t)
+	assertSubtype(context.Background(), TypeType, t)
 	assertAll(tt, TypeType, t)
-	assertSubtype(ValueType, t)
+	assertSubtype(context.Background(), ValueType, t)
 }
 
 func TestAssertTypeStruct(tt *testing.T) {
 	t := MakeStructType("Struct", StructField{"x", BoolType, false})
 
 	v := NewStruct("Struct", StructData{"x": Bool(true)})
-	assertSubtype(t, v)
+	assertSubtype(context.Background(), t, v)
 	assertAll(tt, t, v)
-	assertSubtype(ValueType, v)
+	assertSubtype(context.Background(), ValueType, v)
 }
 
 func TestAssertTypeUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
-	assertSubtype(MakeUnionType(FloaTType), Float(42))
-	assertSubtype(MakeUnionType(FloaTType, StringType), Float(42))
-	assertSubtype(MakeUnionType(FloaTType, StringType), String("hi"))
-	assertSubtype(MakeUnionType(FloaTType, StringType, BoolType), Float(555))
-	assertSubtype(MakeUnionType(FloaTType, StringType, BoolType), String("hi"))
-	assertSubtype(MakeUnionType(FloaTType, StringType, BoolType), Bool(true))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType), Float(42))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType), Float(42))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType), String("hi"))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType, BoolType), Float(555))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType, BoolType), String("hi"))
+	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType, BoolType), Bool(true))
 
 	lt := MakeListType(MakeUnionType(FloaTType, StringType))
-	assertSubtype(lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
+	assertSubtype(context.Background(), lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
 
 	st := MakeSetType(StringType)
-	assertSubtype(MakeUnionType(st, FloaTType), Float(42))
-	assertSubtype(MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, String("a"), String("b")))
+	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), Float(42))
+	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, String("a"), String("b")))
 
 	assertInvalid(tt, MakeUnionType(), Float(42))
 	assertInvalid(tt, MakeUnionType(StringType), Float(42))
@@ -182,14 +182,14 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(MakeUnionType())
-	assertSubtype(lt, NewList(context.Background(), vs))
+	assertSubtype(context.Background(), lt, NewList(context.Background(), vs))
 }
 
 func TestAssertTypeEmptyList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(FloaTType)
-	assertSubtype(lt, NewList(context.Background(), vs))
+	assertSubtype(context.Background(), lt, NewList(context.Background(), vs))
 
 	// List<> not a subtype of List<Float>
 	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), vs, Float(1)))
@@ -199,7 +199,7 @@ func TestAssertTypeEmptySet(tt *testing.T) {
 	vs := newTestValueStore()
 
 	st := MakeSetType(FloaTType)
-	assertSubtype(st, NewSet(context.Background(), vs))
+	assertSubtype(context.Background(), st, NewSet(context.Background(), vs))
 
 	// Set<> not a subtype of Set<Float>
 	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(context.Background(), vs, Float(1)))
@@ -209,7 +209,7 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 	vs := newTestValueStore()
 
 	mt := MakeMapType(FloaTType, StringType)
-	assertSubtype(mt, NewMap(context.Background(), vs))
+	assertSubtype(context.Background(), mt, NewMap(context.Background(), vs))
 
 	// Map<> not a subtype of Map<Float, Float>
 	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(context.Background(), vs, Float(1), Float(2)))
@@ -222,13 +222,13 @@ func TestAssertTypeStructSubtypeByName(tt *testing.T) {
 	name2V := NewStruct("foo", StructData{"x": Float(42)})
 	anonV := NewStruct("", StructData{"x": Float(42)})
 
-	assertSubtype(namedT, namedV)
+	assertSubtype(context.Background(), namedT, namedV)
 	assertInvalid(tt, namedT, name2V)
 	assertInvalid(tt, namedT, anonV)
 
-	assertSubtype(anonT, namedV)
-	assertSubtype(anonT, name2V)
-	assertSubtype(anonT, anonV)
+	assertSubtype(context.Background(), anonT, namedV)
+	assertSubtype(context.Background(), anonT, name2V)
+	assertSubtype(context.Background(), anonT, anonV)
 }
 
 func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
@@ -239,17 +239,17 @@ func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
 	bv := NewStruct("", StructData{"x": Float(1)})
 	cv := NewStruct("", StructData{"x": Float(2), "s": String("hi")})
 
-	assertSubtype(at, av)
+	assertSubtype(context.Background(), at, av)
 	assertInvalid(tt, bt, av)
 	assertInvalid(tt, ct, av)
 
-	assertSubtype(at, bv)
-	assertSubtype(bt, bv)
+	assertSubtype(context.Background(), at, bv)
+	assertSubtype(context.Background(), bt, bv)
 	assertInvalid(tt, ct, bv)
 
-	assertSubtype(at, cv)
-	assertSubtype(bt, cv)
-	assertSubtype(ct, cv)
+	assertSubtype(context.Background(), at, cv)
+	assertSubtype(context.Background(), bt, cv)
+	assertSubtype(context.Background(), ct, cv)
 }
 
 func TestAssertTypeStructSubtype(tt *testing.T) {
@@ -263,19 +263,19 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 		StructField{"parents", MakeSetType(MakeUnionType()), false},
 		StructField{"value", FloaTType, false},
 	)
-	assertSubtype(t1, c1)
+	assertSubtype(context.Background(), t1, c1)
 
 	t11 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeRefType(MakeCycleType("Commit"))), false},
 		StructField{"value", FloaTType, false},
 	)
-	assertSubtype(t11, c1)
+	assertSubtype(context.Background(), t11, c1)
 
 	c2 := NewStruct("Commit", StructData{
 		"value":   Float(2),
 		"parents": NewSet(context.Background(), vs, NewRef(c1)),
 	})
-	assertSubtype(t11, c2)
+	assertSubtype(context.Background(), t11, c2)
 }
 
 func TestAssertTypeCycleUnion(tt *testing.T) {
