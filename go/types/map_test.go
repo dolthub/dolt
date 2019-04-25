@@ -136,7 +136,7 @@ func newSortedTestMap(length int, gen genValueFn) testMap {
 
 func newTestMapFromMap(m Map) testMap {
 	entries := make([]mapEntry, 0, m.Len())
-	m.IterAll(func(key, value Value) {
+	m.IterAll(context.Background(), func(key, value Value) {
 		entries = append(entries, mapEntry{key, value})
 	})
 	return testMap{entries, Float(-0)}
@@ -165,7 +165,7 @@ func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice
 	assert.True(t, m.Equals(tm.toMap(vrw)))
 
 	out := mapEntrySlice{}
-	m.IterAll(func(k Value, v Value) {
+	m.IterAll(context.Background(), func(k Value, v Value) {
 		out = append(out, mapEntry{k, v})
 	})
 
@@ -1071,7 +1071,7 @@ func TestMapIterAll(t *testing.T) {
 		sort.Sort(tm.entries)
 		idx := uint64(0)
 
-		m.IterAll(func(k, v Value) {
+		m.IterAll(context.Background(), func(k, v Value) {
 			assert.True(tm.entries[idx].key.Equals(k))
 			assert.True(tm.entries[idx].value.Equals(v))
 			idx++
@@ -1150,7 +1150,7 @@ func TestMapNotStringKeys(t *testing.T) {
 func testMapOrder(assert *assert.Assertions, vrw ValueReadWriter, keyType, valueType *Type, tuples []Value, expectOrdering []Value) {
 	m := NewMap(context.Background(), vrw, tuples...)
 	i := 0
-	m.IterAll(func(key, value Value) {
+	m.IterAll(context.Background(), func(key, value Value) {
 		assert.Equal(expectOrdering[i].Hash().String(), key.Hash().String())
 		i++
 	})

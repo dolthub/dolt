@@ -94,7 +94,7 @@ func (t Tuple) Value(ctx context.Context) Value {
 	return t
 }
 
-func (t Tuple) WalkValues(cb ValueCallback) {
+func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		cb(dec.readValue())

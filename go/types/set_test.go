@@ -85,7 +85,7 @@ func newSortedTestSet(length int, gen genValueFn) (values testSet) {
 
 func newTestSetFromSet(s Set) testSet {
 	values := make([]Value, 0, s.Len())
-	s.IterAll(func(v Value) {
+	s.IterAll(context.Background(), func(v Value) {
 		values = append(values, v)
 	})
 	return values
@@ -110,7 +110,7 @@ func newRandomTestSet(length int, gen genValueFn) testSet {
 func validateSet(t *testing.T, vrw ValueReadWriter, s Set, values ValueSlice) {
 	assert.True(t, s.Equals(NewSet(context.Background(), vrw, values...)))
 	out := ValueSlice{}
-	s.IterAll(func(v Value) {
+	s.IterAll(context.Background(), func(v Value) {
 		out = append(out, v)
 	})
 	assert.True(t, out.Equals(values))
@@ -140,7 +140,7 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 			validate: func(v2 Collection) bool {
 				l2 := v2.(Set)
 				out := ValueSlice{}
-				l2.IterAll(func(v Value) {
+				l2.IterAll(context.Background(), func(v Value) {
 					out = append(out, v)
 				})
 				exp := ValueSlice(elems)
@@ -709,7 +709,7 @@ func TestSetIterAll(t *testing.T) {
 
 	s := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	acc := NewSet(context.Background(), vs)
-	s.IterAll(func(v Value) {
+	s.IterAll(context.Background(), func(v Value) {
 		_, ok := v.(Float)
 		assert.True(ok)
 		acc = acc.Edit().Insert(v).Set(context.Background())
@@ -730,7 +730,7 @@ func TestSetIterAll2(t *testing.T) {
 		sort.Sort(ValueSlice(ts))
 		idx := uint64(0)
 
-		set.IterAll(func(v Value) {
+		set.IterAll(context.Background(), func(v Value) {
 			assert.True(ts[idx].Equals(v))
 			idx++
 		})
@@ -745,7 +745,7 @@ func TestSetIterAll2(t *testing.T) {
 func testSetOrder(assert *assert.Assertions, vrw ValueReadWriter, valueType *Type, value []Value, expectOrdering []Value) {
 	m := NewSet(context.Background(), vrw, value...)
 	i := 0
-	m.IterAll(func(value Value) {
+	m.IterAll(context.Background(), func(value Value) {
 		assert.Equal(expectOrdering[i].Hash().String(), value.Hash().String())
 		i++
 	})

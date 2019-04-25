@@ -71,8 +71,8 @@ func (l List) Value(ctx context.Context) Value {
 	return l
 }
 
-func (l List) WalkValues(cb ValueCallback) {
-	iterAll(l, func(v Value, idx uint64) {
+func (l List) WalkValues(ctx context.Context, cb ValueCallback) {
+	iterAll(ctx, l, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
@@ -109,22 +109,22 @@ func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool
 	})
 }
 
-func (l List) IterRange(startIdx, endIdx uint64, f func(v Value, idx uint64)) {
+func (l List) IterRange(ctx context.Context, startIdx, endIdx uint64, f func(v Value, idx uint64)) {
 	idx := uint64(startIdx)
 	cb := func(v Value) {
 		f(v, idx)
 		idx++
 	}
-	iterRange(l, startIdx, endIdx, cb)
+	iterRange(ctx, l, startIdx, endIdx, cb)
 }
 
 // IterAll iterates over the list and calls f for every element in the list. Unlike Iter there is no
 // way to stop the iteration and all elements are visited.
-func (l List) IterAll(f func(v Value, index uint64)) {
-	iterAll(l, f)
+func (l List) IterAll(ctx context.Context, f func(v Value, index uint64)) {
+	iterAll(ctx, l, f)
 }
 
-func iterAll(col Collection, f func(v Value, index uint64)) {
+func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64)) {
 	concurrency := 6
 	vcChan := make(chan chan Value, concurrency)
 
@@ -148,7 +148,7 @@ func iterAll(col Collection, f func(v Value, index uint64)) {
 			vcChan <- vc
 
 			go func() {
-				numBytes := iterRange(col, start, start+blockLength, func(v Value) {
+				numBytes := iterRange(ctx, col, start, start+blockLength, func(v Value) {
 					vc <- v
 				})
 				close(vc)
@@ -181,14 +181,14 @@ func iterAll(col Collection, f func(v Value, index uint64)) {
 	}
 }
 
-func iterRange(col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
+func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {
 		return
 	}
 
-	leaves, localStart := LoadLeafNodes([]Collection{col}, startIdx, endIdx)
+	leaves, localStart := LoadLeafNodes(ctx, []Collection{col}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 	numValues := 0

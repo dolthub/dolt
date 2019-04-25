@@ -71,7 +71,7 @@ func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type) {
 	t.Desc.writeTo(w, t, seensStructs)
 }
 
-func (t *Type) WalkValues(cb ValueCallback) {
+func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
 	t.Desc.walkValues(cb)
 }
 

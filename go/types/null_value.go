@@ -37,7 +37,7 @@ func (v Null) Hash() hash.Hash {
 	return NullHash
 }
 
-func (v Null) WalkValues(cb ValueCallback) {
+func (v Null) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v Null) WalkRefs(cb RefCallback) {

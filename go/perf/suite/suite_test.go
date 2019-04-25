@@ -224,10 +224,10 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.True(ok)
 	assert.Equal(*perfRepeatFlag, int(reps.Len()))
 
-	reps.IterAll(func(rep types.Value, _ uint64) {
+	reps.IterAll(context.Background(), func(rep types.Value, _ uint64) {
 		i := 0
 
-		rep.(types.Map).IterAll(func(k, timesVal types.Value) {
+		rep.(types.Map).IterAll(context.Background(), func(k, timesVal types.Value) {
 			if assert.True(i < len(expectedTests)) {
 				assert.Equal(expectedTests[i], string(k.(types.String)))
 			}

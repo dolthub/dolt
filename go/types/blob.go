@@ -33,7 +33,7 @@ func (b Blob) Edit() *BlobEditor {
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
-func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
+func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error) {
 	// TODO: Support negative off?
 	d.PanicIfTrue(off < 0)
 
@@ -55,7 +55,7 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 		return
 	}
 
-	leaves, localStart := LoadLeafNodes([]Collection{b}, startIdx, endIdx)
+	leaves, localStart := LoadLeafNodes(ctx, []Collection{b}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 
@@ -79,18 +79,18 @@ func (b Blob) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (b Blob) Reader() *BlobReader {
-	return &BlobReader{b, 0}
+func (b Blob) Reader(ctx context.Context) *BlobReader {
+	return &BlobReader{b, 0, ctx}
 }
 
-func (b Blob) Copy(w io.Writer) (n int64) {
-	return b.CopyReadAhead(w, 1<<23 /* 8MB */, 6)
+func (b Blob) Copy(ctx context.Context, w io.Writer) (n int64) {
+	return b.CopyReadAhead(ctx, w, 1<<23 /* 8MB */, 6)
 }
 
 // CopyReadAhead copies the entire contents of |b| to |w|, and attempts to stay
 // |concurrency| |chunkSize| blocks of bytes ahead of the last byte written to
 // |w|.
-func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n int64) {
+func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, concurrency int) (n int64) {
 	bChan := make(chan chan []byte, concurrency)
 
 	go func() {
@@ -107,7 +107,7 @@ func (b Blob) CopyReadAhead(w io.Writer, chunkSize uint64, concurrency int) (n i
 
 			go func() {
 				buff := make([]byte, blockLength)
-				b.ReadAt(buff, int64(start))
+				b.ReadAt(ctx, buff, int64(start))
 				bc <- buff
 			}()
 		}
@@ -153,16 +153,17 @@ func (b Blob) Value(ctx context.Context) Value {
 	return b
 }
 
-func (b Blob) WalkValues(cb ValueCallback) {
+func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 type BlobReader struct {
 	b   Blob
 	pos int64
+	ctx context.Context
 }
 
 func (cbr *BlobReader) Read(p []byte) (n int, err error) {
-	n, err = cbr.b.ReadAt(p, cbr.pos)
+	n, err = cbr.b.ReadAt(cbr.ctx, p, cbr.pos)
 	cbr.pos += int64(n)
 	return
 }

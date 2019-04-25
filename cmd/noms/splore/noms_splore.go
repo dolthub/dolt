@@ -166,7 +166,7 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 		children = getMetaChildren(v)
 		if children == nil {
 			children = make([]nodeChild, v.Len())
-			v.IterAll(func(vi types.Value, i uint64) {
+			v.IterAll(context.Background(), func(vi types.Value, i uint64) {
 				children[i] = nodeChild{
 					Value: info(vi, childPath("[%d]", i)),
 				}
@@ -177,7 +177,7 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 		if children == nil {
 			children = make([]nodeChild, v.Len())
 			i := 0
-			v.IterAll(func(k, v types.Value) {
+			v.IterAll(context.Background(), func(k, v types.Value) {
 				children[i] = nodeChild{
 					Key:   info(k, childPath("@at(%d)@key", i)),
 					Value: info(v, childPath("@at(%d)", i)),
@@ -190,7 +190,7 @@ func getNodeChildren(v types.Value, parentPath string) (children []nodeChild) {
 		if children == nil {
 			children = make([]nodeChild, v.Len())
 			i := 0
-			v.IterAll(func(v types.Value) {
+			v.IterAll(context.Background(), func(v types.Value) {
 				children[i] = nodeChild{
 					Value: info(v, childPath("@at(%d)", i)),
 				}

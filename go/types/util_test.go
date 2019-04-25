@@ -76,7 +76,7 @@ func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 }
 
 func leafCount(c Collection) int {
-	leaves, _ := LoadLeafNodes([]Collection{c}, 0, c.Len())
+	leaves, _ := LoadLeafNodes(context.Background(), []Collection{c}, 0, c.Len())
 	return len(leaves)
 }
 
@@ -84,8 +84,8 @@ func leafDiffCount(c1, c2 Collection) int {
 	count := 0
 	hashes := make(map[hash.Hash]int)
 
-	leaves1, _ := LoadLeafNodes([]Collection{c1}, 0, c1.Len())
-	leaves2, _ := LoadLeafNodes([]Collection{c2}, 0, c2.Len())
+	leaves1, _ := LoadLeafNodes(context.Background(), []Collection{c1}, 0, c1.Len())
+	leaves2, _ := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
 
 	for _, l := range leaves1 {
 		hashes[l.Hash()]++

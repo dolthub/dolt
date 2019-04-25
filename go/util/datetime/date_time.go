@@ -7,6 +7,7 @@
 package datetime
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -65,7 +66,7 @@ func (dt *DateTime) UnmarshalNoms(v types.Value) error {
 	strct := struct {
 		SecSinceEpoch float64
 	}{}
-	err := marshal.Unmarshal(v, &strct)
+	err := marshal.Unmarshal(context.TODO(), v, &strct)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (c DateTimeCommenter) Comment(v types.Value) string {
 		return ""
 	}
 	var dt DateTime
-	marshal.MustUnmarshal(v, &dt)
+	marshal.MustUnmarshal(context.TODO(), v, &dt)
 	return dt.In(c.tz).Format(time.RFC3339)
 }
 

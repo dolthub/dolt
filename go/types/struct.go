@@ -154,7 +154,7 @@ func (s Struct) Value(ctx context.Context) Value {
 	return s
 }
 
-func (s Struct) WalkValues(cb ValueCallback) {
+func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()

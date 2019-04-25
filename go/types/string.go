@@ -34,7 +34,7 @@ func (s String) Hash() hash.Hash {
 	return getHash(s)
 }
 
-func (s String) WalkValues(cb ValueCallback) {
+func (s String) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (s String) WalkRefs(cb RefCallback) {

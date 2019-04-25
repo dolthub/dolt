@@ -40,7 +40,7 @@ func (v UUID) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v UUID) WalkValues(cb ValueCallback) {
+func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v UUID) WalkRefs(cb RefCallback) {

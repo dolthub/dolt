@@ -122,8 +122,8 @@ func (m Map) Value(ctx context.Context) Value {
 	return m
 }
 
-func (m Map) WalkValues(cb ValueCallback) {
-	iterAll(m, func(v Value, idx uint64) {
+func (m Map) WalkValues(ctx context.Context, cb ValueCallback) {
+	iterAll(ctx, m, func(v Value, idx uint64) {
 		cb(v)
 	})
 	return
@@ -223,9 +223,9 @@ func (m Map) IteratorFrom(ctx context.Context, key Value) MapIterator {
 
 type mapIterAllCallback func(key, value Value)
 
-func (m Map) IterAll(cb mapIterAllCallback) {
+func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) {
 	var k Value
-	iterAll(m, func(v Value, idx uint64) {
+	iterAll(ctx, m, func(v Value, idx uint64) {
 		if k != nil {
 			cb(k, v)
 			k = nil

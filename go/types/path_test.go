@@ -487,7 +487,7 @@ func TestPathType(t *testing.T) {
 		String("List<number|string>"), NewList(context.Background(), vs, Float(42), String("foo")),
 		String("Map<Bool, Bool>"), NewMap(context.Background(), vs, Bool(true), Bool(false)))
 
-	m.IterAll(func(k, cv Value) {
+	m.IterAll(context.Background(), func(k, cv Value) {
 		ks := k.(String)
 		assertResolvesTo(assert, TypeOf(cv), m, fmt.Sprintf("[\"%s\"]@type", ks))
 	})

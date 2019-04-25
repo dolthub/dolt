@@ -37,7 +37,7 @@ func nomsBlobGet(ds string, filePath string) int {
 	defer profile.MaybeStartProfile().Stop()
 
 	if filePath == "" {
-		blob.Copy(os.Stdout)
+		blob.Copy(context.Background(), os.Stdout)
 		return 0
 	}
 
@@ -53,7 +53,7 @@ func nomsBlobGet(ds string, filePath string) int {
 	preader, pwriter := io.Pipe()
 
 	go func() {
-		blob.Copy(pwriter)
+		blob.Copy(context.Background(), pwriter)
 		pwriter.Close()
 	}()
 

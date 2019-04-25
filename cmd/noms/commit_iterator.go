@@ -158,7 +158,7 @@ func (bl branchList) RemoveBranches(indexes []int) branchList {
 
 func commitRefsFromSet(set types.Set) []types.Ref {
 	res := []types.Ref{}
-	set.IterAll(func(v types.Value) {
+	set.IterAll(context.Background(), func(v types.Value) {
 		res = append(res, v.(types.Ref))
 	})
 	return res

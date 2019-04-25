@@ -32,7 +32,7 @@ func (b Bool) Hash() hash.Hash {
 	return getHash(b)
 }
 
-func (b Bool) WalkValues(cb ValueCallback) {
+func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (b Bool) WalkRefs(cb RefCallback) {
