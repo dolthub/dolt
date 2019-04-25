@@ -302,9 +302,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructs() {
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a b} ... on %s{b} ... on %s{c}}}}",
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 0))),
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 1))),
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 2)))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 0))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 1))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 2)))),
 		`{"data":{"root":{"values":[{"a":28,"b":"baz"},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -323,9 +323,9 @@ func (suite *QueryGraphQLSuite) TestListOfUnionOfStructsConflictingFieldTypes() 
 
 	suite.assertQueryResult(list,
 		fmt.Sprintf("{root{values{... on %s{a} ... on %s{b: a} ... on %s{c: a}}}}",
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 0))),
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 1))),
-			GetTypeName(types.TypeOf(list.Get(context.Background(), 2)))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 0))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 1))),
+			GetTypeName(context.Background(), types.TypeOf(list.Get(context.Background(), 2)))),
 		`{"data":{"root":{"values":[{"a":28},{"b":"bar"},{"c":true}]}}}`)
 }
 
@@ -419,7 +419,7 @@ func (suite *QueryGraphQLSuite) TestCyclicStructsWithUnion() {
 	                                }
 	                        }
 	                }
-	        }`, GetTypeName(types.TypeOf(s1))),
+	        }`, GetTypeName(context.Background(), types.TypeOf(s1))),
 		`{
 	                "data": {
 	                        "root": {
@@ -918,7 +918,7 @@ func (suite *QueryGraphQLSuite) TestStructWithOptionalField() {
 func (suite *QueryGraphQLSuite) TestMutationScalarArgs() {
 	test := func(query, expected string, nomsType *types.Type) {
 		tc := NewTypeConverter()
-		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
+		inType, err := tc.NomsTypeToGraphQLInputType(context.Background(), nomsType)
 		suite.NoError(err)
 		outType := tc.NomsTypeToGraphQLType(context.Background(), nomsType)
 		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
@@ -939,7 +939,7 @@ func (suite *QueryGraphQLSuite) TestMutationScalarArgs() {
 func (suite *QueryGraphQLSuite) TestMutationWeirdosArgs() {
 	test := func(query, expected string, nomsType *types.Type) {
 		tc := NewTypeConverter()
-		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
+		inType, err := tc.NomsTypeToGraphQLInputType(context.Background(), nomsType)
 		suite.NoError(err)
 		outType := graphql.String
 		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
@@ -977,7 +977,7 @@ func (suite *QueryGraphQLSuite) assertMutationTypes(query, expected string, tc *
 func (suite *QueryGraphQLSuite) TestMutationCollectionArgs() {
 	test := func(query, expected string, expectedArg interface{}, nomsType *types.Type) {
 		tc := NewTypeConverter()
-		inType, err := tc.NomsTypeToGraphQLInputType(nomsType)
+		inType, err := tc.NomsTypeToGraphQLInputType(context.Background(), nomsType)
 		suite.NoError(err)
 		outType := graphql.Boolean
 		suite.assertMutationTypes(query, expected, tc, inType, outType, func(p graphql.ResolveParams) (interface{}, error) {
@@ -1199,7 +1199,7 @@ func (suite *QueryGraphQLSuite) TestErrorsInInputType() {
 
 	test := func(t *types.Type) {
 		tm := NewTypeMap()
-		_, err := NomsTypeToGraphQLInputType(t, tm)
+		_, err := NomsTypeToGraphQLInputType(context.Background(), t, tm)
 		suite.Error(err)
 	}
 
@@ -1272,13 +1272,13 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 		types.NewStruct("S", types.StructData{"n": types.String("d")}), types.Float(3),
 	)
 	keyType := types.TypeOf(m2).Desc.(types.CompoundDesc).ElemTypes[0]
-	q := fmt.Sprintf(`query Test($k: %s) { root { values(key: $k) } }`, GetInputTypeName(keyType))
+	q := fmt.Sprintf(`query Test($k: %s) { root { values(key: $k) } }`, GetInputTypeName(context.Background(), keyType))
 	test(m2, `{"data":{"root":{"values":[1]}}}`, q, map[string]interface{}{
 		"k": map[string]interface{}{
 			"n": "b",
 		},
 	})
-	q = fmt.Sprintf(`query Test($ks: [%s!]) { root { values(keys: $ks) } }`, GetInputTypeName(keyType))
+	q = fmt.Sprintf(`query Test($ks: [%s!]) { root { values(keys: $ks) } }`, GetInputTypeName(context.Background(), keyType))
 	test(m2, `{"data":{"root":{"values":[0, 3]}}}`, q, map[string]interface{}{
 		"ks": []interface{}{
 			map[string]interface{}{
@@ -1333,7 +1333,7 @@ func (suite *QueryGraphQLSuite) TestVariables() {
 	)
 	keyNomsType := types.TypeOf(m3).Desc.(types.CompoundDesc).ElemTypes[0]
 	tc := NewTypeConverter()
-	keyGraphQLInputType, err := tc.NomsTypeToGraphQLInputType(keyNomsType)
+	keyGraphQLInputType, err := tc.NomsTypeToGraphQLInputType(context.Background(), keyNomsType)
 	suite.NoError(err)
 	q = fmt.Sprintf(`query Test($k: %s!) { root { values(key: $k) } }`, keyGraphQLInputType.String())
 	test(m3, `{"data":{"root":{"values":[false]}}}`, q, map[string]interface{}{
@@ -1412,14 +1412,14 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 	list := types.NewList(context.Background(), suite.vs, aVal, bVal)
 
 	tc := NewTypeConverter()
-	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
+	tc.NameFunc = func(ctx context.Context, nomsType *types.Type, isInputType bool) string {
 		if nomsType.Equals(types.TypeOf(aVal)) {
 			return "A"
 		}
 		if nomsType.Equals(types.TypeOf(bVal)) {
 			return "BBB"
 		}
-		return DefaultNameFunc(nomsType, isInputType)
+		return DefaultNameFunc(ctx, nomsType, isInputType)
 	}
 
 	query := `query {
@@ -1455,14 +1455,14 @@ func (suite *QueryGraphQLSuite) TestNameFunc() {
 		}),
 	)
 	tc = NewTypeConverter()
-	tc.NameFunc = func(nomsType *types.Type, isInputType bool) string {
+	tc.NameFunc = func(ctx context.Context, nomsType *types.Type, isInputType bool) string {
 		if nomsType.Equals(types.TypeOf(aVal)) {
 			if isInputType {
 				return "AI"
 			}
 			return "A"
 		}
-		return DefaultNameFunc(nomsType, isInputType)
+		return DefaultNameFunc(ctx, nomsType, isInputType)
 	}
 
 	query = `query ($key: AI!) {
@@ -1518,7 +1518,7 @@ func TestNoErrorOnNonCyclicTypeRefsInputType(t *testing.T) {
 	var a Account
 	typ := marshal.MustMarshalType(context.Background(), a)
 	tc := NewTypeConverter()
-	_, err := tc.NomsTypeToGraphQLInputType(typ)
+	_, err := tc.NomsTypeToGraphQLInputType(context.Background(), typ)
 	assert.NoError(err)
 }
 
@@ -1532,6 +1532,6 @@ func TestErrorOnCyclicTypeRefsInputType(t *testing.T) {
 	var n Node
 	typ := marshal.MustMarshalType(context.Background(), n)
 	tc := NewTypeConverter()
-	_, err := tc.NomsTypeToGraphQLInputType(typ)
+	_, err := tc.NomsTypeToGraphQLInputType(context.Background(), typ)
 	assert.Error(err)
 }

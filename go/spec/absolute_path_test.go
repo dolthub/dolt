@@ -82,6 +82,7 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(nil, "#"+types.String("baz").Hash().String()+"[0]")
 }
 
+
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}

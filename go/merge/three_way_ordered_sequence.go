@@ -72,7 +72,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 }
 
 func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
-	path = a.pathConcat(aChange, path)
+	path = a.pathConcat(ctx, aChange, path)
 	aValue, bValue := a.get(ctx, aChange.Key), b.get(ctx, bChange.Key)
 	// If the two diffs generate different kinds of changes at the same key, conflict.
 	if aChange.ChangeType != bChange.ChangeType {
@@ -102,7 +102,7 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 		// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
 		return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
 	}
-	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(context.Background(), aValue), describeChange(bChange), types.EncodedValue(context.Background(), bValue))
+	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(ctx, aValue), describeChange(bChange), types.EncodedValue(ctx, bValue))
 }
 
 func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
