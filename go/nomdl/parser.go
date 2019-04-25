@@ -59,10 +59,10 @@ func MustParseType(code string) *types.Type {
 }
 
 // Parse parses a string describing a Noms value.
-func Parse(vrw types.ValueReadWriter, code string) (v types.Value, err error) {
+func Parse(ctx context.Context, vrw types.ValueReadWriter, code string) (v types.Value, err error) {
 	p := New(vrw, strings.NewReader(code), ParserOptions{})
 	err = catchSyntaxError(func() {
-		v = p.parseValue()
+		v = p.parseValue(ctx)
 		p.ensureAtEnd()
 	})
 	return
@@ -70,8 +70,8 @@ func Parse(vrw types.ValueReadWriter, code string) (v types.Value, err error) {
 
 // MustParse parses a string describing a Noms value and panics if there
 // is an error.
-func MustParse(vrw types.ValueReadWriter, code string) types.Value {
-	v, err := Parse(vrw, code)
+func MustParse(ctx context.Context, vrw types.ValueReadWriter, code string) types.Value {
+	v, err := Parse(ctx, vrw, code)
 	d.PanicIfError(err)
 	return v
 }
@@ -310,7 +310,7 @@ func (p *Parser) parseMapType() *types.Type {
 //
 // StructField :
 //   StructFieldName `:` Value
-func (p *Parser) parseValue() types.Value {
+func (p *Parser) parseValue(ctx context.Context) types.Value {
 	tok := p.lex.next()
 	switch tok {
 	case scanner.Ident:
@@ -320,13 +320,13 @@ func (p *Parser) parseValue() types.Value {
 		case "false":
 			return types.Bool(false)
 		case "set":
-			return p.parseSet()
+			return p.parseSet(ctx)
 		case "map":
-			return p.parseMap()
+			return p.parseMap(ctx)
 		case "struct":
-			return p.parseStruct()
+			return p.parseStruct(ctx)
 		case "blob":
-			return p.parseBlob()
+			return p.parseBlob(ctx)
 		default:
 			return p.parseTypeWithToken(tok, tokenText)
 		}
@@ -345,7 +345,7 @@ func (p *Parser) parseValue() types.Value {
 		}
 		return p.parseFloat()
 	case '[':
-		return p.parseList()
+		return p.parseList(ctx)
 	case scanner.String:
 		s := p.lex.tokenText()
 		s2, err := strconv.Unquote(s)
@@ -366,12 +366,12 @@ func (p *Parser) parseFloat() types.Float {
 	return types.Float(f)
 }
 
-func (p *Parser) parseList() types.List {
+func (p *Parser) parseList(ctx context.Context) types.List {
 	// already swallowed '['
-	le := types.NewList(context.TODO(), p.vrw).Edit()
+	le := types.NewList(ctx, p.vrw).Edit()
 
 	for p.lex.peek() != ']' {
-		v := p.parseValue()
+		v := p.parseValue(ctx)
 		le.Append(v)
 
 		if p.lex.eatIf(',') {
@@ -381,16 +381,16 @@ func (p *Parser) parseList() types.List {
 		break
 	}
 	p.lex.eat(']')
-	return le.List(context.TODO())
+	return le.List(ctx)
 }
 
-func (p *Parser) parseSet() types.Set {
+func (p *Parser) parseSet(ctx context.Context) types.Set {
 	// already swallowed 'set'
 	p.lex.eat('{')
-	se := types.NewSet(context.TODO(), p.vrw).Edit()
+	se := types.NewSet(ctx, p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
-		v := p.parseValue()
+		v := p.parseValue(ctx)
 		se.Insert(v)
 
 		if p.lex.eatIf(',') {
@@ -400,19 +400,19 @@ func (p *Parser) parseSet() types.Set {
 		break
 	}
 	p.lex.eat('}')
-	return se.Set(context.TODO())
+	return se.Set(ctx)
 }
 
-func (p *Parser) parseMap() types.Map {
+func (p *Parser) parseMap(ctx context.Context) types.Map {
 	// already swallowed 'map'
 	p.lex.eat('{')
-	me := types.NewMap(context.TODO(), p.vrw).Edit()
+	me := types.NewMap(ctx, p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
-		key := p.parseValue()
+		key := p.parseValue(ctx)
 
 		p.lex.eat(':')
-		value := p.parseValue()
+		value := p.parseValue(ctx)
 		me.Set(key, value)
 
 		if p.lex.eatIf(',') {
@@ -422,7 +422,7 @@ func (p *Parser) parseMap() types.Map {
 		break
 	}
 	p.lex.eat('}')
-	return me.Map(context.TODO())
+	return me.Map(ctx)
 }
 
 func (p *Parser) blobString(s string) []byte {
@@ -445,7 +445,7 @@ func (p *Parser) blobString(s string) []byte {
 	return buff.Bytes()
 }
 
-func (p *Parser) parseBlob() types.Blob {
+func (p *Parser) parseBlob(ctx context.Context) types.Blob {
 	// already swallowed 'blob'
 	p.lex.eat('{')
 	var buff bytes.Buffer
@@ -462,10 +462,10 @@ func (p *Parser) parseBlob() types.Blob {
 
 	}
 	p.lex.eat('}')
-	return types.NewBlob(context.TODO(), p.vrw, bytes.NewReader(buff.Bytes()))
+	return types.NewBlob(ctx, p.vrw, bytes.NewReader(buff.Bytes()))
 }
 
-func (p *Parser) parseStruct() types.Struct {
+func (p *Parser) parseStruct(ctx context.Context) types.Struct {
 	// already swallowed 'struct'
 	tok := p.lex.next()
 	name := ""
@@ -482,7 +482,7 @@ func (p *Parser) parseStruct() types.Struct {
 
 		fieldName := p.lex.tokenText()
 		p.lex.eat(':')
-		v := p.parseValue()
+		v := p.parseValue(ctx)
 		data[fieldName] = v
 
 		if p.lex.eatIf(',') {
