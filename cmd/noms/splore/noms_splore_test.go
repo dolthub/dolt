@@ -5,6 +5,7 @@
 package splore
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -74,7 +75,7 @@ func TestNomsSplore(t *testing.T) {
 		"list":          types.NewList(db, types.Float(1), types.Float(2)),
 		"map":           types.NewMap(db, types.String("a"), types.String("b"), types.String("c"), types.String("d")),
 		"number":        types.Float(42),
-		"ref":           db.WriteValue(types.Bool(true)),
+		"ref":           db.WriteValue(context.Background(), types.Bool(true)),
 		"set":           types.NewSet(db, types.Float(3), types.Float(4)),
 		"string":        types.String("hello world"),
 		"typeCompound":  types.MakeMapType(types.StringType, types.MakeListType(types.BoolType)),
@@ -597,13 +598,13 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	l3 := types.NewList(db, types.Float(1), types.Float(2))
 	assert.Nil(getMetaChildren(l3))
 
-	l4 := types.NewList(db, db.WriteValue(types.Float(1)))
+	l4 := types.NewList(db, db.WriteValue(context.Background(), types.Float(1)))
 	assert.Nil(getMetaChildren(l4))
 
-	l5 := types.NewList(db, db.WriteValue(types.Float(1)), types.Float(2))
+	l5 := types.NewList(db, db.WriteValue(context.Background(), types.Float(1)), types.Float(2))
 	assert.Nil(getMetaChildren(l5))
 
-	l6 := types.NewList(db, db.WriteValue(types.Float(1)), db.WriteValue(types.Float(2)))
+	l6 := types.NewList(db, db.WriteValue(context.Background(), types.Float(1)), db.WriteValue(context.Background(), types.Float(2)))
 	assert.Nil(getMetaChildren(l6))
 
 	l7 := types.NewList(db, l1)
@@ -615,9 +616,9 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	// List with more or equal ref<list> than elements. This can't possibly be a meta
 	// sequence, because there are no empty leaf sequences:
 
-	l1Ref := db.WriteValue(l1)
-	l2Ref := db.WriteValue(l2)
-	l3Ref := db.WriteValue(l3)
+	l1Ref := db.WriteValue(context.Background(), l1)
+	l2Ref := db.WriteValue(context.Background(), l2)
+	l3Ref := db.WriteValue(context.Background(), l3)
 	listRefList := types.NewList(db, l1Ref, l2Ref, l3Ref)
 
 	l9 := types.NewList(db, listRefList)
@@ -632,7 +633,7 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	l12 := types.NewList(db, types.Float(1), types.Float(2), listRefList)
 	assert.Nil(getMetaChildren(l12))
 
-	l13 := types.NewList(db, types.Float(1), db.WriteValue(types.Float(2)), listRefList)
+	l13 := types.NewList(db, types.Float(1), db.WriteValue(context.Background(), types.Float(2)), listRefList)
 	assert.Nil(getMetaChildren(l13))
 
 	// List with fewer ref<list> as children. For now this is the closet
@@ -650,12 +651,12 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	l14 := types.NewList(db, types.Float(1), types.Float(2), types.Float(3), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l14))
 
-	l15 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(types.Float(3)), listRefList)
+	l15 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(context.Background(), types.Float(3)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l15))
 
 	l16 := types.NewList(db, types.Float(1), types.Float(2), types.Float(3), types.Float(4), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l16))
 
-	l17 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(types.Float(3)), db.WriteValue(types.Float(4)), listRefList)
+	l17 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(context.Background(), types.Float(3)), db.WriteValue(context.Background(), types.Float(4)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l17))
 }

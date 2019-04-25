@@ -29,7 +29,7 @@ func TestValidateRef(t *testing.T) {
 	db := NewDatabase(st.NewView()).(*database)
 	defer db.Close()
 	b := types.Bool(true)
-	r := db.WriteValue(b)
+	r := db.WriteValue(context.Background(), b)
 
 	assert.Panics(t, func() { db.validateRefAsCommit(r) })
 	assert.Panics(t, func() { db.validateRefAsCommit(types.NewRef(b)) })
@@ -84,7 +84,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 
 	se := types.NewSet(suite.db).Edit()
 	for i := 0; i < 100; i++ {
-		se.Insert(suite.db.WriteValue(types.Float(100)))
+		se.Insert(suite.db.WriteValue(context.Background(), types.Float(100)))
 	}
 	s := se.Set()
 
@@ -502,12 +502,12 @@ func (suite *DatabaseSuite) TestFastForward() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
-	r1 := suite.db.WriteValue(types.String("hello"))
+	r1 := suite.db.WriteValue(context.Background(), types.String("hello"))
 	suite.Equal(uint64(1), r1.Height())
 
-	r2 := suite.db.WriteValue(r1)
+	r2 := suite.db.WriteValue(context.Background(), r1)
 	suite.Equal(uint64(2), r2.Height())
-	suite.Equal(uint64(3), suite.db.WriteValue(r2).Height())
+	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), r2).Height())
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
@@ -518,43 +518,43 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	v1 := types.String("hello")
 	v2 := types.String("world")
 	s1 := types.NewSet(suite.db, v1, v2)
-	suite.Equal(uint64(1), suite.db.WriteValue(s1).Height())
+	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), s1).Height())
 
 	// Set<Ref<String>>
-	s2 := types.NewSet(suite.db, suite.db.WriteValue(v1), suite.db.WriteValue(v2))
-	suite.Equal(uint64(2), suite.db.WriteValue(s2).Height())
+	s2 := types.NewSet(suite.db, suite.db.WriteValue(context.Background(), v1), suite.db.WriteValue(context.Background(), v2))
+	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), s2).Height())
 
 	// List<Set<String>>
 	v3 := types.String("foo")
 	v4 := types.String("bar")
 	s3 := types.NewSet(suite.db, v3, v4)
 	l1 := types.NewList(suite.db, s1, s3)
-	suite.Equal(uint64(1), suite.db.WriteValue(l1).Height())
+	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(suite.db, suite.db.WriteValue(s1), suite.db.WriteValue(s3))
-	suite.Equal(uint64(2), suite.db.WriteValue(l2).Height())
+	l2 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
+	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
-	s4 := types.NewSet(suite.db, suite.db.WriteValue(v3), suite.db.WriteValue(v4))
-	l3 := types.NewList(suite.db, suite.db.WriteValue(s4))
-	suite.Equal(uint64(3), suite.db.WriteValue(l3).Height())
+	s4 := types.NewSet(suite.db, suite.db.WriteValue(context.Background(), v3), suite.db.WriteValue(context.Background(), v4))
+	l3 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s4))
+	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), l3).Height())
 
 	// List<Set<String> | RefValue<Set<String>>>
-	l4 := types.NewList(suite.db, s1, suite.db.WriteValue(s3))
-	suite.Equal(uint64(2), suite.db.WriteValue(l4).Height())
-	l5 := types.NewList(suite.db, suite.db.WriteValue(s1), s3)
-	suite.Equal(uint64(2), suite.db.WriteValue(l5).Height())
+	l4 := types.NewList(suite.db, s1, suite.db.WriteValue(context.Background(), s3))
+	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l4).Height())
+	l5 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s1), s3)
+	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l5).Height())
 
 	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
 	everything := []types.Value{v1, v2, s1, s2, v3, v4, s3, l1, l2, s4, l3, l4, l5}
 	andMore := make([]types.Value, 0, len(everything)*3+2)
 	for _, v := range everything {
-		andMore = append(andMore, v, types.TypeOf(v), suite.db.WriteValue(v))
+		andMore = append(andMore, v, types.TypeOf(v), suite.db.WriteValue(context.Background(), v))
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 
-	suite.db.WriteValue(types.NewList(suite.db, andMore...))
+	suite.db.WriteValue(context.Background(), types.NewList(suite.db, andMore...))
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {

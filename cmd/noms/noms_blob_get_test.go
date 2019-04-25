@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -34,7 +35,7 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	blobBytes := []byte("hello")
 	blob := types.NewBlob(db, bytes.NewBuffer(blobBytes))
 
-	ref := db.WriteValue(blob)
+	ref := db.WriteValue(context.Background(), blob)
 	_, err = db.CommitValue(db.GetDataset("datasetID"), ref)
 	s.NoError(err)
 

@@ -331,13 +331,13 @@ func getTestRefValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 
 func getTestRefToNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, func(i int) Value {
-		return vrw.WriteValue(Float(i))
+		return vrw.WriteValue(context.Background(), Float(i))
 	})
 }
 
 func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, func(i int) Value {
-		return vrw.WriteValue(NewSet(vrw, Float(i)))
+		return vrw.WriteValue(context.Background(), NewSet(vrw, Float(i)))
 	})
 }
 
@@ -420,7 +420,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 		me.Set(Float(i), newLargeStruct(i))
 	}
 	m := me.Map()
-	r := vs.WriteValue(m)
+	r := vs.WriteValue(context.Background(), m)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	m = r.TargetValue(vs).(Map)
 
@@ -532,7 +532,7 @@ func TestMapHas(t *testing.T) {
 		vrw := newTestValueStore()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		m2 := vrw.ReadValue(vrw.WriteValue(m).TargetHash()).(Map)
+		m2 := vrw.ReadValue(vrw.WriteValue(context.Background(), m).TargetHash()).(Map)
 		for _, entry := range tm.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(k))
@@ -1459,8 +1459,8 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
-		k := vs.WriteValue(NewStruct("num", StructData{"n": Float(i)}))
-		v := vs.WriteValue(NewStruct("num", StructData{"n": Float(i + 1)}))
+		k := vs.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
+		v := vs.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
@@ -1480,7 +1480,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 	m := getTestNativeOrderMap(2, vs).toMap(vs)
 	// Drop chunk values.
-	m = vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
+	m = vs.ReadValue(vs.WriteValue(context.Background(), m).TargetHash()).(Map)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
 	m = m.Edit().Remove(fst).Map()
@@ -1590,7 +1590,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(m Map) Map {
-		return vs.ReadValue(vs.WriteValue(m).TargetHash()).(Map)
+		return vs.ReadValue(vs.WriteValue(context.Background(), m).TargetHash()).(Map)
 	}
 
 	tm := getTestNativeOrderMap(4, vs)

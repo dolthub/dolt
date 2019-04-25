@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -275,9 +276,9 @@ func (suite *PullSuite) TestPullUpdates() {
 	sourceRef := suite.commitToSource(srcL, types.NewSet(suite.source))
 	L3 := srcL.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
 	L2 := L3.Get(1).(types.Ref).TargetValue(suite.source).(types.List)
-	L2 = L2.Edit().Append(suite.source.WriteValue(types.String("oy!"))).List()
-	L3 = L3.Edit().Set(1, suite.source.WriteValue(L2)).List()
-	srcL = srcL.Edit().Set(1, suite.source.WriteValue(L3)).List()
+	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List()
+	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List()
+	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List()
 	sourceRef = suite.commitToSource(srcL, types.NewSet(suite.source, sourceRef))
 
 	pt := startProgressTracker()
@@ -312,7 +313,7 @@ func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	unique += 2
 
 	for i := 0; i < height; i++ {
-		r1, r2 := vrw.WriteValue(types.Float(unique)), vrw.WriteValue(l)
+		r1, r2 := vrw.WriteValue(context.Background(), types.Float(unique)), vrw.WriteValue(context.Background(), l)
 		unique++
 		l = types.NewList(vrw, r1, r2)
 	}

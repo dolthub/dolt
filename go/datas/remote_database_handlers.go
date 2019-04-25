@@ -426,7 +426,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 			w.WriteHeader(http.StatusConflict)
 			break
 		}
-		to, from = vs.WriteValue(merged).TargetHash(), root
+		to, from = vs.WriteValue(context.TODO(), merged).TargetHash(), root
 	}
 
 	// If committing succeeded, the root of the store might be |proposed|...or

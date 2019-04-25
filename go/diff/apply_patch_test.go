@@ -5,6 +5,7 @@
 package diff
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -210,7 +211,7 @@ func TestUpdateNode(t *testing.T) {
 	})
 
 	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
-	vs.WriteValue(k1)
+	vs.WriteValue(context.Background(), k1)
 	m1 = types.NewMap(vs, k1, oldVal)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {

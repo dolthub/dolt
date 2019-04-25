@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -68,7 +69,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vrw.WriteValue(NewStruct("num", StructData{"n": Float(i)}))
+		r := vrw.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
 		nums = append(nums, r)
 	}
 	return nums

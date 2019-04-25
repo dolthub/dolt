@@ -62,7 +62,7 @@ func (db *database) Flush() {
 	// TODO: This is a pretty ghetto hack - do better.
 	// See: https://github.com/attic-labs/noms/issues/3530
 	ds := db.GetDataset(fmt.Sprintf("-/flush/%s", random.Id()))
-	r := db.WriteValue(types.Bool(true))
+	r := db.WriteValue(context.TODO(), types.Bool(true))
 	ds, err := db.CommitValue(ds, r)
 	d.PanicIfError(err)
 	_, err = db.Delete(ds)
@@ -109,7 +109,7 @@ func (db *database) doSetHead(ds Dataset, newHeadRef types.Ref) error {
 	commit := db.validateRefAsCommit(newHeadRef)
 
 	currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
-	commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
+	commitRef := db.WriteValue(context.TODO(), commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map()
 	return db.tryCommitChunks(currentDatasets, currentRootHash)
@@ -154,7 +154,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 	var err error
 	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
 		currentRootHash, currentDatasets := db.rt.Root(context.TODO()), db.Datasets()
-		commitRef := db.WriteValue(commit) // will be orphaned if the tryCommitChunks() below fails
+		commitRef := db.WriteValue(context.TODO(), commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
@@ -182,7 +182,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(NewCommit(merged, types.NewSet(db, commitRef, currentHeadRef), types.EmptyStruct))
+					commitRef = db.WriteValue(context.TODO(), NewCommit(merged, types.NewSet(db, commitRef, currentHeadRef), types.EmptyStruct))
 				}
 			}
 		}
@@ -225,7 +225,7 @@ func (db *database) doDelete(datasetIDstr string) error {
 }
 
 func (db *database) tryCommitChunks(currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
-	newRootHash := db.WriteValue(currentDatasets).TargetHash()
+	newRootHash := db.WriteValue(context.TODO(), currentDatasets).TargetHash()
 
 	if !db.rt.Commit(context.TODO(), newRootHash, currentRootHash) {
 		err = ErrOptimisticLockFailed

@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -508,7 +509,7 @@ func TestPathTarget(t *testing.T) {
 		"foo": String("bar"),
 	})
 	vs := newTestValueStore()
-	r := vs.WriteValue(s)
+	r := vs.WriteValue(context.Background(), s)
 	s2 := NewStruct("", StructData{
 		"ref": r,
 	})

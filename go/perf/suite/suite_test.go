@@ -5,6 +5,7 @@
 package suite
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -34,7 +35,7 @@ func (s *testSuite) TestNonEmptyPaths() {
 func (s *testSuite) TestDatabase() {
 	assert := s.NewAssert()
 	val := types.Bool(true)
-	r := s.Database.WriteValue(val)
+	r := s.Database.WriteValue(context.Background(), val)
 	assert.True(s.Database.ReadValue(r.TargetHash()).Equals(val))
 }
 

@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -68,12 +69,12 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_HandleNil() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
-	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
+	strRef := s.vs.WriteValue(context.Background(), types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
 
-	m := items{s.vs.WriteValue(s.create(flatA)), s.vs.WriteValue(s.create(flatB))}
-	ma := items{"r1", s.vs.WriteValue(s.create(flatA))}
-	mb := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
-	mMerged := items{"r1", strRef, s.vs.WriteValue(s.create(flatA))}
+	m := items{s.vs.WriteValue(context.Background(), s.create(flatA)), s.vs.WriteValue(context.Background(), s.create(flatB))}
+	ma := items{"r1", s.vs.WriteValue(context.Background(), s.create(flatA))}
+	mb := items{"r1", strRef, s.vs.WriteValue(context.Background(), s.create(flatA))}
+	mMerged := items{"r1", strRef, s.vs.WriteValue(context.Background(), s.create(flatA))}
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)

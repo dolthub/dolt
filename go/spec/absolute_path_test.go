@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,10 +40,10 @@ func TestAbsolutePaths(t *testing.T) {
 	list := types.NewList(db, s0, s1)
 	emptySet := types.NewSet(db)
 
-	db.WriteValue(s0)
-	db.WriteValue(s1)
-	db.WriteValue(list)
-	db.WriteValue(emptySet)
+	db.WriteValue(context.Background(), s0)
+	db.WriteValue(context.Background(), s1)
+	db.WriteValue(context.Background(), list)
+	db.WriteValue(context.Background(), emptySet)
 
 	var err error
 	ds := db.GetDataset("ds")

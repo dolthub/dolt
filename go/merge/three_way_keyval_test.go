@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -126,22 +127,22 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMerge() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefMerge() {
-	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
+	strRef := s.vs.WriteValue(context.Background(), types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
 
-	m := kvs{"r2", s.vs.WriteValue(s.create(aa1))}
-	ma := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1a))}
-	mb := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aa1b))}
-	mMerged := kvs{"r1", strRef, "r2", s.vs.WriteValue(s.create(aaMerged))}
+	m := kvs{"r2", s.vs.WriteValue(context.Background(), s.create(aa1))}
+	ma := kvs{"r1", strRef, "r2", s.vs.WriteValue(context.Background(), s.create(aa1a))}
+	mb := kvs{"r1", strRef, "r2", s.vs.WriteValue(context.Background(), s.create(aa1b))}
+	mMerged := kvs{"r1", strRef, "r2", s.vs.WriteValue(context.Background(), s.create(aaMerged))}
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMultiLevelMerge() {
-	m := kvs{"mm1", mm1, "mm2", s.vs.WriteValue(s.create(mm2))}
-	ma := kvs{"mm1", mm1a, "mm2", s.vs.WriteValue(s.create(mm2a))}
-	mb := kvs{"mm1", mm1b, "mm2", s.vs.WriteValue(s.create(mm2b))}
-	mMerged := kvs{"mm1", mm1Merged, "mm2", s.vs.WriteValue(s.create(mm2Merged))}
+	m := kvs{"mm1", mm1, "mm2", s.vs.WriteValue(context.Background(), s.create(mm2))}
+	ma := kvs{"mm1", mm1a, "mm2", s.vs.WriteValue(context.Background(), s.create(mm2a))}
+	mb := kvs{"mm1", mm1b, "mm2", s.vs.WriteValue(context.Background(), s.create(mm2b))}
+	mMerged := kvs{"mm1", mm1Merged, "mm2", s.vs.WriteValue(context.Background(), s.create(mm2Merged))}
 
 	s.tryThreeWayMerge(ma, mb, m, mMerged)
 	s.tryThreeWayMerge(mb, ma, m, mMerged)
@@ -214,8 +215,8 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
-	strRef := s.vs.WriteValue(types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
-	numRef := s.vs.WriteValue(types.Float(7))
+	strRef := s.vs.WriteValue(context.Background(), types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
+	numRef := s.vs.WriteValue(context.Background(), types.Float(7))
 
 	m := kvs{"r2", strRef}
 	ma := kvs{"r1", strRef, "r2", strRef}

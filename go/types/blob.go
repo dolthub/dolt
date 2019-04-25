@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -276,7 +277,7 @@ func readBlob(r io.Reader, vrw ValueReadWriter) Blob {
 
 		go func(ch chan metaTuple, cp []byte) {
 			col, key, numLeaves := chunkBlobLeaf(vrw, cp)
-			ch <- newMetaTuple(vrw.WriteValue(col), key, numLeaves)
+			ch <- newMetaTuple(vrw.WriteValue(context.TODO(), col), key, numLeaves)
 		}(ch, cp)
 
 		offset = 0

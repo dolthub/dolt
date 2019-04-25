@@ -6,6 +6,7 @@ package ngql
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -265,13 +266,13 @@ func (suite *QueryGraphQLSuite) TestMapOfStruct() {
 }
 
 func (suite *QueryGraphQLSuite) TestRef() {
-	r := suite.vs.WriteValue(types.Float(100))
+	r := suite.vs.WriteValue(context.Background(), types.Float(100))
 
 	suite.assertQueryResult(r, "{root{targetValue}}", `{"data":{"root":{"targetValue":100}}}`)
 	suite.assertQueryResult(r, "{root{targetHash}}", `{"data":{"root":{"targetHash":"0123456789abcdefghijklmnopqrstuv"}}}`)
 	suite.assertQueryResult(r, "{root{targetValue targetHash}}", `{"data":{"root":{"targetHash":"0123456789abcdefghijklmnopqrstuv","targetValue":100}}}`)
 
-	r = suite.vs.WriteValue(types.NewStruct("Foo", types.StructData{
+	r = suite.vs.WriteValue(context.Background(), types.NewStruct("Foo", types.StructData{
 		"a": types.Float(28),
 		"b": types.String("foo"),
 	}))
@@ -279,7 +280,7 @@ func (suite *QueryGraphQLSuite) TestRef() {
 	suite.assertQueryResult(r, "{root{targetValue{a}}}", `{"data":{"root":{"targetValue":{"a":28}}}}`)
 	suite.assertQueryResult(r, "{root{targetValue{a b}}}", `{"data":{"root":{"targetValue":{"a":28,"b":"foo"}}}}`)
 
-	r = suite.vs.WriteValue(types.NewList(suite.vs, types.String("foo"), types.String("bar"), types.String("baz")))
+	r = suite.vs.WriteValue(context.Background(), types.NewList(suite.vs, types.String("foo"), types.String("bar"), types.String("baz")))
 
 	suite.assertQueryResult(r, "{root{targetValue{values}}}", `{"data":{"root":{"targetValue":{"values":["foo","bar","baz"]}}}}`)
 	suite.assertQueryResult(r, "{root{targetValue{values(at:1,count:2)}}}", `{"data":{"root":{"targetValue":{"values":["bar","baz"]}}}}`)

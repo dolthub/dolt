@@ -721,7 +721,7 @@ func TestListModifyAfterRead(t *testing.T) {
 
 	list := getTestList().toList(vs)
 	// Drop chunk values.
-	list = vs.ReadValue(vs.WriteValue(list).TargetHash()).(List)
+	list = vs.ReadValue(vs.WriteValue(context.Background(), list).TargetHash()).(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)
@@ -1017,7 +1017,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	vs1 := NewValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(vs1, nums1...)
-	hash1 := vs1.WriteValue(l1).TargetHash()
+	hash1 := vs1.WriteValue(context.Background(), l1).TargetHash()
 	vs1.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
 
 	refList1 := vs1.ReadValue(hash1).(List)
@@ -1026,7 +1026,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	vs2 := NewValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(vs2, nums2...)
-	hash2 := vs2.WriteValue(l2).TargetHash()
+	hash2 := vs2.WriteValue(context.Background(), l2).TargetHash()
 	vs2.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
 	refList2 := vs2.ReadValue(hash2).(List)
 
@@ -1056,7 +1056,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	newSequenceMetaTuple := func(vs ...Value) metaTuple {
 		seq := newListLeafSequence(vrw, vs...)
 		list := newList(seq)
-		return newMetaTuple(vrw.WriteValue(list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
+		return newMetaTuple(vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
 	}
 
 	m1 := newSequenceMetaTuple(Float(1), Float(2), Float(3))
@@ -1113,7 +1113,7 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(l List) List {
-		return vs.ReadValue(vs.WriteValue(l).TargetHash()).(List)
+		return vs.ReadValue(vs.WriteValue(context.Background(), l).TargetHash()).(List)
 	}
 
 	tl := newTestList(1024)
@@ -1138,7 +1138,7 @@ func TestListConcat(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(vs *ValueStore, l List) List {
-		return vs.ReadValue(vs.WriteValue(l).TargetHash()).(List)
+		return vs.ReadValue(vs.WriteValue(context.Background(), l).TargetHash()).(List)
 	}
 
 	run := func(seed int64, size, from, to, by int) {
@@ -1233,7 +1233,7 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	assert.Nil(vrw.ReadValue(l2.Hash()))
 	assert.Nil(vrw.ReadValue(l3.Hash()))
 
-	vrw.WriteValue(l3)
+	vrw.WriteValue(context.Background(), l3)
 	assert.Nil(vrw.ReadValue(l1.Hash()))
 	assert.Nil(vrw.ReadValue(l2.Hash()))
 }

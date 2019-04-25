@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,10 +23,10 @@ func TestTypes(t *testing.T) {
 	)
 	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
 
-	mRef := vs.WriteValue(mapType).TargetHash()
-	setRef := vs.WriteValue(setType).TargetHash()
-	mahRef := vs.WriteValue(mahType).TargetHash()
-	recRef := vs.WriteValue(recType).TargetHash()
+	mRef := vs.WriteValue(context.Background(), mapType).TargetHash()
+	setRef := vs.WriteValue(context.Background(), setType).TargetHash()
+	mahRef := vs.WriteValue(context.Background(), mahType).TargetHash()
+	recRef := vs.WriteValue(context.Background(), recType).TargetHash()
 
 	assert.True(mapType.Equals(vs.ReadValue(mRef)))
 	assert.True(setType.Equals(vs.ReadValue(setRef)))

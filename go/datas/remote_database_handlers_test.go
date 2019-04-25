@@ -31,10 +31,10 @@ func TestHandleWriteValue(t *testing.T) {
 
 	l := types.NewList(
 		db,
-		db.WriteValue(types.Bool(true)),
-		db.WriteValue(types.Bool(false)),
+		db.WriteValue(context.Background(), types.Bool(true)),
+		db.WriteValue(context.Background(), types.Bool(false)),
 	)
-	r := db.WriteValue(l)
+	r := db.WriteValue(context.Background(), l)
 	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
 	assert.NoError(err)
 
@@ -226,7 +226,7 @@ func TestHandleGetBlob(t *testing.T) {
 	)
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
-	r := db.WriteValue(b)
+	r := db.WriteValue(context.Background(), b)
 	ds, err := db.CommitValue(ds, r)
 	assert.NoError(err)
 
@@ -245,7 +245,7 @@ func TestHandleGetBlob(t *testing.T) {
 	}
 
 	// Test non-blob
-	r2 := db.WriteValue(types.Float(1))
+	r2 := db.WriteValue(context.Background(), types.Float(1))
 	_, err = db.CommitValue(ds, r2)
 	assert.NoError(err)
 
@@ -351,14 +351,14 @@ func TestHandlePostRoot(t *testing.T) {
 	validate(http.StatusOK, hash.Hash{}, w)
 
 	commit := buildTestCommit(vs, types.String("head"))
-	commitRef := vs.WriteValue(commit)
+	commitRef := vs.WriteValue(context.Background(), commit)
 	firstHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(commitRef))
-	firstHeadRef := vs.WriteValue(firstHead)
+	firstHeadRef := vs.WriteValue(context.Background(), firstHead)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
 	commit = buildTestCommit(vs, types.String("second"), commitRef)
-	newHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
-	newHeadRef := vs.WriteValue(newHead)
+	newHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
+	newHeadRef := vs.WriteValue(context.Background(), newHead)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
 	// First attempt should fail, as 'last' won't match.
@@ -407,8 +407,8 @@ func TestRejectPostRoot(t *testing.T) {
 
 	// Put in a legit commit
 	commit := buildTestCommit(vs, types.String("commit"))
-	head := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(commit)))
-	headRef := vs.WriteValue(head)
+	head := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
+	headRef := vs.WriteValue(context.Background(), head)
 	assert.True(vs.Commit(context.Background(), headRef.TargetHash(), vs.Root(context.Background())))
 
 	// Attempt to update head to empty hash should fail
