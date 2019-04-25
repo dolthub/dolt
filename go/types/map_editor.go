@@ -155,7 +155,7 @@ func (me *MapEditor) Remove(k Value) *MapEditor {
 	return me
 }
 
-func (me *MapEditor) Get(k Value) Valuable {
+func (me *MapEditor) Get(ctx context.Context, k Value) Valuable {
 	if idx, found := me.findEdit(k); found {
 		v := me.edits[idx].value
 		if v != nil {
@@ -163,15 +163,15 @@ func (me *MapEditor) Get(k Value) Valuable {
 		}
 	}
 
-	return me.m.Get(k)
+	return me.m.Get(ctx, k)
 }
 
-func (me *MapEditor) Has(k Value) bool {
+func (me *MapEditor) Has(ctx context.Context, k Value) bool {
 	if idx, found := me.findEdit(k); found {
 		return me.edits[idx].value != nil
 	}
 
-	return me.m.Has(k)
+	return me.m.Has(ctx, k)
 }
 
 func (me *MapEditor) set(k Value, v Valuable) {

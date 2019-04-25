@@ -260,7 +260,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 	generateOps = func(keys []Value, col Value) {
 		switch c := col.(type) {
 		case Map:
-			c.Iter(func(k, v Value) bool {
+			c.Iter(context.Background(), func(k, v Value) bool {
 				if isNomsCollectionKind(v.Kind()) {
 					newKeys := append(keys, k)
 					generateOps(newKeys, v)

@@ -283,9 +283,9 @@ func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value 
 		}
 	case Map:
 		if !ip.IntoKey {
-			return v.Get(ip.Index)
+			return v.Get(ctx, ip.Index)
 		}
-		if v.Has(ip.Index) {
+		if v.Has(ctx, ip.Index) {
 			return ip.Index
 		}
 	}
@@ -506,7 +506,7 @@ func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Va
 	case Set:
 		return v.At(ctx, ai)
 	case Map:
-		k, mapv := v.At(ai)
+		k, mapv := v.At(ctx, ai)
 		if ann.IntoKey {
 			return k
 		}

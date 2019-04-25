@@ -737,9 +737,9 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(a.Has(context.Background(), types.Float(2)))
 
 	b := s.Get("b").(types.Map)
-	assert.True(b.Has(types.Float(3)))
-	assert.True(b.Has(types.Float(4)))
-	assert.True(b.Has(types.Float(5)))
+	assert.True(b.Has(context.Background(), types.Float(3)))
+	assert.True(b.Has(context.Background(), types.Float(4)))
+	assert.True(b.Has(context.Background(), types.Float(5)))
 
 	d := s.Get("d").(types.Set)
 	assert.True(d.Has(context.Background(), types.String("A")))
@@ -747,9 +747,9 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(d.Has(context.Background(), types.String("C")))
 
 	e := s.Get("e").(types.Map)
-	assert.True(e.Has(types.String("D")))
-	assert.True(e.Has(types.String("E")))
-	assert.True(e.Has(types.String("F")))
+	assert.True(e.Has(context.Background(), types.String("D")))
+	assert.True(e.Has(context.Background(), types.String("E")))
+	assert.True(e.Has(context.Background(), types.String("F")))
 
 	g := s.Get("g").(types.Set)
 	assert.True(g.Has(context.Background(), types.Float(1)))

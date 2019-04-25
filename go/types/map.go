@@ -129,8 +129,8 @@ func (m Map) WalkValues(cb ValueCallback) {
 	return
 }
 
-func (m Map) firstOrLast(last bool) (Value, Value) {
-	cur := newCursorAt(context.TODO(), m.orderedSequence, emptyKey, false, last)
+func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
+	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, last)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -138,26 +138,26 @@ func (m Map) firstOrLast(last bool) (Value, Value) {
 	return entry.key, entry.value
 }
 
-func (m Map) First() (Value, Value) {
-	return m.firstOrLast(false)
+func (m Map) First(ctx context.Context) (Value, Value) {
+	return m.firstOrLast(ctx, false)
 }
 
-func (m Map) Last() (Value, Value) {
-	return m.firstOrLast(true)
+func (m Map) Last(ctx context.Context) (Value, Value) {
+	return m.firstOrLast(ctx, true)
 }
 
-func (m Map) At(idx uint64) (key, value Value) {
+func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
 	if idx >= m.Len() {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(context.TODO(), m.orderedSequence, idx)
+	cur := newCursorAtIndex(ctx, m.orderedSequence, idx)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
 
-func (m Map) MaybeGet(key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false)
+func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool) {
+	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -169,8 +169,8 @@ func (m Map) MaybeGet(key Value) (v Value, ok bool) {
 	return entry.value, true
 }
 
-func (m Map) Has(key Value) bool {
-	cur := newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false)
+func (m Map) Has(ctx context.Context, key Value) bool {
+	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -178,24 +178,24 @@ func (m Map) Has(key Value) bool {
 	return entry.key.Equals(key)
 }
 
-func (m Map) Get(key Value) Value {
-	v, _ := m.MaybeGet(key)
+func (m Map) Get(ctx context.Context, key Value) Value {
+	v, _ := m.MaybeGet(ctx, key)
 	return v
 }
 
 type mapIterCallback func(key, value Value) (stop bool)
 
-func (m Map) Iter(cb mapIterCallback) {
-	cur := newCursorAt(context.TODO(), m.orderedSequence, emptyKey, false, false)
-	cur.iter(context.TODO(), func(v interface{}) bool {
+func (m Map) Iter(ctx context.Context, cb mapIterCallback) {
+	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, false)
+	cur.iter(ctx, func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})
 }
 
 // Any returns true if cb() return true for any of the items in the map.
-func (m Map) Any(cb func(k, v Value) bool) (yep bool) {
-	m.Iter(func(k, v Value) bool {
+func (m Map) Any(ctx context.Context, cb func(k, v Value) bool) (yep bool) {
+	m.Iter(ctx, func(k, v Value) bool {
 		if cb(k, v) {
 			yep = true
 			return true
@@ -205,19 +205,19 @@ func (m Map) Any(cb func(k, v Value) bool) (yep bool) {
 	return
 }
 
-func (m Map) Iterator() MapIterator {
-	return m.IteratorAt(0)
+func (m Map) Iterator(ctx context.Context) MapIterator {
+	return m.IteratorAt(ctx, 0)
 }
 
-func (m Map) IteratorAt(pos uint64) MapIterator {
+func (m Map) IteratorAt(ctx context.Context, pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(context.TODO(), m.orderedSequence, pos),
+		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos),
 	}
 }
 
-func (m Map) IteratorFrom(key Value) MapIterator {
+func (m Map) IteratorFrom(ctx context.Context, key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(context.TODO(), m.orderedSequence, key, false, false),
+		cursor: newCursorAtValue(ctx, m.orderedSequence, key, false, false),
 	}
 }
 
@@ -236,9 +236,9 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 	d.PanicIfFalse(k == nil)
 }
 
-func (m Map) IterFrom(start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(context.TODO(), m.orderedSequence, start, false, false)
-	cur.iter(context.TODO(), func(v interface{}) bool {
+func (m Map) IterFrom(ctx context.Context, start Value, cb mapIterCallback) {
+	cur := newCursorAtValue(ctx, m.orderedSequence, start, false, false)
+	cur.iter(ctx, func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})

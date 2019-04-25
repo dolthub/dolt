@@ -49,11 +49,11 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 		// Since diff generates changes in key-order, and we never skip over a change without processing it, we can simply compare the keys at which aChange and bChange occurred to determine if either is safe to apply to the merge result without further processing. This is because if, e.g. aChange.V.Less(bChange.V), we know that the diff of b will never generate a change at that key. If it was going to, it would have done so on an earlier iteration of this loop and been processed at that time.
 		// It's also obviously OK to apply a change if only one diff is generating any changes, e.g. aChange.V is non-nil and bChange.V is nil.
 		if aChange.Key != nil && (bChange.Key == nil || aChange.Key.Less(bChange.Key)) {
-			merged = apply(merged, aChange, a.get(aChange.Key))
+			merged = apply(merged, aChange, a.get(ctx, aChange.Key))
 			aChange = types.ValueChanged{}
 			continue
 		} else if bChange.Key != nil && (aChange.Key == nil || bChange.Key.Less(aChange.Key)) {
-			merged = apply(merged, bChange, b.get(bChange.Key))
+			merged = apply(merged, bChange, b.get(ctx, bChange.Key))
 			bChange = types.ValueChanged{}
 			continue
 		}
@@ -73,7 +73,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 
 func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
 	path = a.pathConcat(aChange, path)
-	aValue, bValue := a.get(aChange.Key), b.get(bChange.Key)
+	aValue, bValue := a.get(ctx, aChange.Key), b.get(ctx, bChange.Key)
 	// If the two diffs generate different kinds of changes at the same key, conflict.
 	if aChange.ChangeType != bChange.ChangeType {
 		if change, mergedVal, ok := m.resolve(aChange.ChangeType, bChange.ChangeType, aValue, bValue, path); ok {
@@ -92,7 +92,7 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 	if !unmergeable(aValue, bValue) {
 		// TODO: Add concurrency.
 		var err error
-		if mergedVal, err = m.threeWay(ctx, aValue, bValue, p.get(aChange.Key), path); err == nil {
+		if mergedVal, err = m.threeWay(ctx, aValue, bValue, p.get(ctx, aChange.Key), path); err == nil {
 			return aChange, mergedVal, nil
 		}
 		return change, nil, err

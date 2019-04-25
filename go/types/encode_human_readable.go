@@ -228,7 +228,7 @@ func (w *hrsWriter) Write(v Value) {
 		if !v.(Map).Empty() {
 			w.newLine()
 		}
-		v.(Map).Iter(func(key, val Value) bool {
+		v.(Map).Iter(context.TODO(), func(key, val Value) bool {
 			w.Write(key)
 			w.write(": ")
 			w.Write(val)
