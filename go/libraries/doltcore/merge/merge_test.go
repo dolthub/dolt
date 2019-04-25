@@ -326,7 +326,7 @@ func TestMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged, stats, err := merger.MergeTable(tableName)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName)
 
 	if err != nil {
 		t.Fatal(err)

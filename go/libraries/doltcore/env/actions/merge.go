@@ -20,7 +20,7 @@ func MergeCommits(ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValu
 
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(tblName)
+		mergedTable, stats, err := merger.MergeTable(context.TODO(), tblName)
 
 		if err != nil {
 			return nil, nil, err
