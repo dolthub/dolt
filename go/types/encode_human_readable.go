@@ -250,7 +250,7 @@ func (w *hrsWriter) Write(v Value) {
 		if !v.(Set).Empty() {
 			w.newLine()
 		}
-		v.(Set).Iter(func(v Value) bool {
+		v.(Set).Iter(context.TODO(), func(v Value) bool {
 			w.Write(v)
 			w.write(",")
 			w.newLine()

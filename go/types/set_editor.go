@@ -129,12 +129,12 @@ func (se *SetEditor) Remove(vs ...Value) *SetEditor {
 	return se
 }
 
-func (se *SetEditor) Has(v Value) bool {
+func (se *SetEditor) Has(ctx context.Context, v Value) bool {
 	if idx, found := se.findEdit(v); found {
 		return se.edits[idx].insert
 	}
 
-	return se.s.Has(v)
+	return se.s.Has(ctx, v)
 }
 
 func (se *SetEditor) edit(v Value, insert bool) {

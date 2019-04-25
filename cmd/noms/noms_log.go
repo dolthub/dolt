@@ -323,7 +323,7 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	parents := node.commit.Get(datas.ParentsField).(types.Set)
 	var parent types.Value
 	if parents.Len() > 0 {
-		parent = parents.First()
+		parent = parents.First(context.Background())
 	}
 	if parent == nil {
 		_, err = fmt.Fprint(pw, "\n")

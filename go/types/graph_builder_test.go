@@ -277,7 +277,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 				return false
 			})
 		case Set:
-			c.Iter(func(v Value) bool {
+			c.Iter(context.Background(), func(v Value) bool {
 				tgo := testGraphOp{keys: dupSlice(keys), kind: SetKind, item: v}
 				ops = append(ops, tgo)
 				return false

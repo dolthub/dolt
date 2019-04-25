@@ -460,10 +460,10 @@ func getSetElements(vrw types.ValueReadWriter, v types.Value, args map[string]in
 
 	iter, nomsKey, nomsThrough, count, singleExactMatch := getCollectionArgs(vrw, s, args, iteratorFactory{
 		IteratorFrom: func(from types.Value) interface{} {
-			return s.IteratorFrom(from)
+			return s.IteratorFrom(context.TODO(), from)
 		},
 		IteratorAt: func(at uint64) interface{} {
-			return s.IteratorAt(at)
+			return s.IteratorAt(context.TODO(), at)
 		},
 		First: func() interface{} {
 			return &setFirstIterator{s: s}
@@ -1043,7 +1043,7 @@ type setFirstIterator struct {
 }
 
 func (it *setFirstIterator) Next(ctx context.Context) types.Value {
-	return it.s.First()
+	return it.s.First(ctx)
 }
 
 func (it *setFirstIterator) SkipTo(ctx context.Context, v types.Value) types.Value {
