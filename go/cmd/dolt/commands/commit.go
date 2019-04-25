@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"strings"
 
 	"github.com/fatih/color"
@@ -43,7 +44,7 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		msg = getCommitMessageFromEditor(dEnv)
 	}
 
-	err := actions.CommitStaged(dEnv, msg, apr.Contains(allowEmptyFlag))
+	err := actions.CommitStaged(context.Background(), dEnv, msg, apr.Contains(allowEmptyFlag))
 	return handleCommitErr(err, usage)
 }
 

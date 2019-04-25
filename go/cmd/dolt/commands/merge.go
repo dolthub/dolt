@@ -105,7 +105,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func abortMerge(doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(doltEnv)
+	err := actions.CheckoutAllTables(context.Background(), doltEnv)
 
 	if err == nil {
 		err = doltEnv.RepoState.ClearMerge()
@@ -179,7 +179,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string) errhand.VerboseError {
-	mergedRoot, tblToStats, err := actions.MergeCommits(dEnv.DoltDB, cm1, cm2)
+	mergedRoot, tblToStats, err := actions.MergeCommits(context.Background(), dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
 		switch err {

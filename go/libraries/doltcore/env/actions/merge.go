@@ -7,7 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
 )
 
-func MergeCommits(ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
+func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
 	merger, err := merge.NewMerger(cm1, cm2, ddb.ValueReadWriter())
 
 	if err != nil {
@@ -20,7 +20,7 @@ func MergeCommits(ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValu
 
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(context.TODO(), tblName)
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName)
 
 		if err != nil {
 			return nil, nil, err
@@ -28,7 +28,7 @@ func MergeCommits(ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValu
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
-			root = root.PutTable(context.TODO(), ddb, tblName, mergedTable)
+			root = root.PutTable(ctx, ddb, tblName, mergedTable)
 		} else if root.HasTable(tblName) {
 			tblToStats[tblName] = &merge.MergeStats{Operation: merge.TableRemoved}
 			root, err = root.RemoveTables([]string{tblName})

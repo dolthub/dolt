@@ -326,7 +326,7 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
-	newTbl, err := actions.RenameColumnOfSchema(oldColName, newColName, tbl, dEnv.DoltDB)
+	newTbl, err := actions.RenameColumnOfSchema(context.Background(), oldColName, newColName, tbl, dEnv.DoltDB)
 	if err != nil {
 		return errToVerboseErr(oldColName, newColName, err)
 	}
@@ -362,7 +362,7 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	tbl, _ := root.GetTable(tblName)
 	colName := apr.Arg(1)
 
-	newTbl, err := actions.RemoveColumnFromTable(colName, tbl, dEnv.DoltDB)
+	newTbl, err := actions.RemoveColumnFromTable(context.Background(), colName, tbl, dEnv.DoltDB)
 
 	if err != nil {
 		return errToVerboseErr(colName, "", err)
