@@ -5,6 +5,7 @@
 package datas
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -121,7 +122,7 @@ func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
 func toValuesString(refSet types.Set, vr types.ValueReader) string {
 	values := []string{}
 	refSet.IterAll(func(v types.Value) {
-		values = append(values, fmt.Sprintf("%v", v.(types.Ref).TargetValue(vr).(types.Struct).Get("value")))
+		values = append(values, fmt.Sprintf("%v", v.(types.Ref).TargetValue(context.Background(), vr).(types.Struct).Get("value")))
 	})
 	return strings.Join(values, ",")
 }
@@ -144,7 +145,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	// Assert that c is the common ancestor of a and b
 	assertCommonAncestor := func(expected, a, b types.Struct) {
 		if found, ok := FindCommonAncestor(types.NewRef(a), types.NewRef(b), db); assert.True(ok) {
-			ancestor := found.TargetValue(db).(types.Struct)
+			ancestor := found.TargetValue(context.Background(), db).(types.Struct)
 			assert.True(
 				expected.Equals(ancestor),
 				"%s should be common ancestor of %s, %s. Got %s",
@@ -199,7 +200,7 @@ func TestFindCommonAncestor(t *testing.T) {
 			"Should be no common ancestor of %s, %s. Got %s",
 			d2.Get(ValueField),
 			a6.Get(ValueField),
-			found.TargetValue(db).(types.Struct).Get(ValueField),
+			found.TargetValue(context.Background(), db).(types.Struct).Get(ValueField),
 		)
 	}
 }

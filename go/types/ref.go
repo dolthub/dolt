@@ -108,8 +108,8 @@ func (r Ref) Height() uint64 {
 	return dec.readCount()
 }
 
-func (r Ref) TargetValue(vr ValueReader) Value {
-	return vr.ReadValue(context.TODO(), r.TargetHash())
+func (r Ref) TargetValue(ctx context.Context, vr ValueReader) Value {
+	return vr.ReadValue(ctx, r.TargetHash())
 }
 
 func (r Ref) TargetType() *Type {

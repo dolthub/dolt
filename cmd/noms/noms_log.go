@@ -330,7 +330,7 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 		return 1, err
 	}
 
-	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
+	parentCommit := parent.(types.Ref).TargetValue(context.Background(), db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
 		func() { old = path.Resolve(parentCommit, db) },

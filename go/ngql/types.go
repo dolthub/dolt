@@ -938,7 +938,7 @@ func (tc *TypeConverter) refToGraphQLObject(nomsType *types.Type) *graphql.Objec
 					Type: targetType,
 					Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 						r := p.Source.(types.Ref)
-						return MaybeGetScalar(r.TargetValue(p.Context.Value(vrwKey).(types.ValueReader))), nil
+						return MaybeGetScalar(r.TargetValue(context.TODO(), p.Context.Value(vrwKey).(types.ValueReader))), nil
 					},
 				},
 			}
