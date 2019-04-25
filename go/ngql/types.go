@@ -573,7 +573,7 @@ func getMapElements(vrw types.ValueReadWriter, v types.Value, args map[string]in
 	mapIter := iter.(types.MapIterator)
 	values := make([]interface{}, 0, count)
 	for i := uint64(0); i < count; i++ {
-		k, v := mapIter.Next()
+		k, v := mapIter.Next(context.TODO())
 		if k == nil {
 			break
 		}
@@ -1018,7 +1018,7 @@ type mapIteratorForKeys struct {
 	idx  int
 }
 
-func (it *mapIteratorForKeys) Next() (k, v types.Value) {
+func (it *mapIteratorForKeys) Next(ctx context.Context) (k, v types.Value) {
 	if it.idx >= len(it.keys) {
 		return
 	}
@@ -1028,7 +1028,7 @@ func (it *mapIteratorForKeys) Next() (k, v types.Value) {
 	return
 }
 
-func (it *mapIteratorForKeys) Prev() (k, v types.Value) {
+func (it *mapIteratorForKeys) Prev(ctx context.Context) (k, v types.Value) {
 	if it.idx < 0 {
 		return
 	}
@@ -1054,10 +1054,10 @@ type mapFirstIterator struct {
 	m types.Map
 }
 
-func (it *mapFirstIterator) Next() (types.Value, types.Value) {
+func (it *mapFirstIterator) Next(ctx context.Context) (types.Value, types.Value) {
 	return it.m.First()
 }
 
-func (it *mapFirstIterator) Prev() (types.Value, types.Value) {
+func (it *mapFirstIterator) Prev(ctx context.Context) (types.Value, types.Value) {
 	panic("Not Implemented")
 }

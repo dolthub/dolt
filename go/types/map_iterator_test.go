@@ -24,13 +24,13 @@ func TestMapIterator(t *testing.T) {
 	m := me.Map(context.Background())
 	test := func(it MapIterator, start int, msg string) {
 		for i := start; i < 5; i++ {
-			k, v := it.Next()
+			k, v := it.Next(context.Background())
 			assert.True(k.Equals(k), msg)
 			assert.True(v.Equals(v), msg)
 			assert.True(String(string(byte(65+i))).Equals(k), msg)
 			assert.True(Float(i).Equals(v), msg)
 		}
-		k, v := it.Next()
+		k, v := it.Next(context.Background())
 		assert.Nil(k, msg)
 		assert.Nil(v, msg)
 	}
