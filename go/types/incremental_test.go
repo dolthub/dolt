@@ -78,7 +78,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
-	actual.Iter(func(v Value) (stop bool) {
+	actual.Iter(context.Background(), func(v Value) (stop bool) {
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount, cs.Reads)
 		return

@@ -504,7 +504,7 @@ func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Va
 			return v.Get(ctx, ai)
 		}
 	case Set:
-		return v.At(ai)
+		return v.At(ctx, ai)
 	case Map:
 		k, mapv := v.At(ai)
 		if ann.IntoKey {

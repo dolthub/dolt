@@ -389,9 +389,9 @@ func TestSetUniqueKeysString(t *testing.T) {
 
 	s1 := NewSet(vs, String("hello"), String("world"), String("hello"))
 	assert.Equal(uint64(2), s1.Len())
-	assert.True(s1.Has(String("hello")))
-	assert.True(s1.Has(String("world")))
-	assert.False(s1.Has(String("foo")))
+	assert.True(s1.Has(context.Background(), String("hello")))
+	assert.True(s1.Has(context.Background(), String("world")))
+	assert.False(s1.Has(context.Background(), String("foo")))
 }
 
 func TestSetUniqueKeysNumber(t *testing.T) {
@@ -400,11 +400,11 @@ func TestSetUniqueKeysNumber(t *testing.T) {
 
 	s1 := NewSet(vs, Float(4), Float(1), Float(0), Float(0), Float(1), Float(3))
 	assert.Equal(uint64(4), s1.Len())
-	assert.True(s1.Has(Float(4)))
-	assert.True(s1.Has(Float(1)))
-	assert.True(s1.Has(Float(0)))
-	assert.True(s1.Has(Float(3)))
-	assert.False(s1.Has(Float(2)))
+	assert.True(s1.Has(context.Background(), Float(4)))
+	assert.True(s1.Has(context.Background(), Float(1)))
+	assert.True(s1.Has(context.Background(), Float(0)))
+	assert.True(s1.Has(context.Background(), Float(3)))
+	assert.False(s1.Has(context.Background(), Float(2)))
 }
 
 func TestSetHas(t *testing.T) {
@@ -412,19 +412,19 @@ func TestSetHas(t *testing.T) {
 	vs := newTestValueStore()
 
 	s1 := NewSet(vs, Bool(true), Float(1), String("hi"))
-	assert.True(s1.Has(Bool(true)))
-	assert.False(s1.Has(Bool(false)))
-	assert.True(s1.Has(Float(1)))
-	assert.False(s1.Has(Float(0)))
-	assert.True(s1.Has(String("hi")))
-	assert.False(s1.Has(String("ho")))
+	assert.True(s1.Has(context.Background(), Bool(true)))
+	assert.False(s1.Has(context.Background(), Bool(false)))
+	assert.True(s1.Has(context.Background(), Float(1)))
+	assert.False(s1.Has(context.Background(), Float(0)))
+	assert.True(s1.Has(context.Background(), String("hi")))
+	assert.False(s1.Has(context.Background(), String("ho")))
 
 	s2 := s1.Edit().Insert(Bool(false)).Set(context.Background())
-	assert.True(s2.Has(Bool(false)))
-	assert.True(s2.Has(Bool(true)))
+	assert.True(s2.Has(context.Background(), Bool(false)))
+	assert.True(s2.Has(context.Background(), Bool(true)))
 
-	assert.True(s1.Has(Bool(true)))
-	assert.False(s1.Has(Bool(false)))
+	assert.True(s1.Has(context.Background(), Bool(true)))
+	assert.False(s1.Has(context.Background(), Bool(false)))
 }
 
 func TestSetHas2(t *testing.T) {
@@ -443,8 +443,8 @@ func TestSetHas2(t *testing.T) {
 		set := ts.toSet(vrw)
 		set2 := vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), set).TargetHash()).(Set)
 		for _, v := range ts {
-			assert.True(set.Has(v))
-			assert.True(set2.Has(v))
+			assert.True(set.Has(context.Background(), v))
+			assert.True(set2.Has(context.Background(), v))
 		}
 		diffSetTest(assert, set, set2, 0, 0)
 	}
@@ -485,19 +485,19 @@ func TestSetInsert(t *testing.T) {
 	v2 := Bool(true)
 	v3 := Float(0)
 
-	assert.False(s.Has(v1))
+	assert.False(s.Has(context.Background(), v1))
 	s = s.Edit().Insert(v1).Set(context.Background())
-	assert.True(s.Has(v1))
+	assert.True(s.Has(context.Background(), v1))
 	s = s.Edit().Insert(v2).Set(context.Background())
-	assert.True(s.Has(v1))
-	assert.True(s.Has(v2))
+	assert.True(s.Has(context.Background(), v1))
+	assert.True(s.Has(context.Background(), v2))
 	s2 := s.Edit().Insert(v3).Set(context.Background())
-	assert.True(s.Has(v1))
-	assert.True(s.Has(v2))
-	assert.False(s.Has(v3))
-	assert.True(s2.Has(v1))
-	assert.True(s2.Has(v2))
-	assert.True(s2.Has(v3))
+	assert.True(s.Has(context.Background(), v1))
+	assert.True(s.Has(context.Background(), v2))
+	assert.False(s.Has(context.Background(), v3))
+	assert.True(s2.Has(context.Background(), v1))
+	assert.True(s2.Has(context.Background(), v2))
+	assert.True(s2.Has(context.Background(), v3))
 }
 
 func TestSetInsert2(t *testing.T) {
@@ -557,20 +557,20 @@ func TestSetRemove(t *testing.T) {
 	v2 := Bool(true)
 	v3 := Float(0)
 	s := NewSet(vs, v1, v2, v3)
-	assert.True(s.Has(v1))
-	assert.True(s.Has(v2))
-	assert.True(s.Has(v3))
+	assert.True(s.Has(context.Background(), v1))
+	assert.True(s.Has(context.Background(), v2))
+	assert.True(s.Has(context.Background(), v3))
 	s = s.Edit().Remove(v1).Set(context.Background())
-	assert.False(s.Has(v1))
-	assert.True(s.Has(v2))
-	assert.True(s.Has(v3))
+	assert.False(s.Has(context.Background(), v1))
+	assert.True(s.Has(context.Background(), v2))
+	assert.True(s.Has(context.Background(), v3))
 	s2 := s.Edit().Remove(v2).Set(context.Background())
-	assert.False(s.Has(v1))
-	assert.True(s.Has(v2))
-	assert.True(s.Has(v3))
-	assert.False(s2.Has(v1))
-	assert.False(s2.Has(v2))
-	assert.True(s2.Has(v3))
+	assert.False(s.Has(context.Background(), v1))
+	assert.True(s.Has(context.Background(), v2))
+	assert.True(s.Has(context.Background(), v3))
+	assert.False(s2.Has(context.Background(), v1))
+	assert.False(s2.Has(context.Background(), v2))
+	assert.True(s2.Has(context.Background(), v3))
 }
 
 func TestSetRemove2(t *testing.T) {
@@ -624,15 +624,15 @@ func TestSetFirst(t *testing.T) {
 	vs := newTestValueStore()
 
 	s := NewSet(vs)
-	assert.Nil(s.First())
+	assert.Nil(s.First(context.Background()))
 	s = s.Edit().Insert(Float(1)).Set(context.Background())
-	assert.NotNil(s.First())
+	assert.NotNil(s.First(context.Background()))
 	s = s.Edit().Insert(Float(2)).Set(context.Background())
-	assert.NotNil(s.First())
+	assert.NotNil(s.First(context.Background()))
 	s2 := s.Edit().Remove(Float(1)).Set(context.Background())
-	assert.NotNil(s2.First())
+	assert.NotNil(s2.First(context.Background()))
 	s2 = s2.Edit().Remove(Float(2)).Set(context.Background())
-	assert.Nil(s2.First())
+	assert.Nil(s2.First(context.Background()))
 }
 
 func TestSetOfStruct(t *testing.T) {
@@ -646,7 +646,7 @@ func TestSetOfStruct(t *testing.T) {
 
 	s := NewSet(vs, elems...)
 	for i := 0; i < 200; i++ {
-		assert.True(s.Has(elems[i]))
+		assert.True(s.Has(context.Background(), elems[i]))
 	}
 }
 
@@ -656,7 +656,7 @@ func TestSetIter(t *testing.T) {
 
 	s := NewSet(vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	acc := NewSet(vs)
-	s.Iter(func(v Value) bool {
+	s.Iter(context.Background(), func(v Value) bool {
 		_, ok := v.(Float)
 		assert.True(ok)
 		acc = acc.Edit().Insert(v).Set(context.Background())
@@ -665,7 +665,7 @@ func TestSetIter(t *testing.T) {
 	assert.True(s.Equals(acc))
 
 	acc = NewSet(vs)
-	s.Iter(func(v Value) bool {
+	s.Iter(context.Background(), func(v Value) bool {
 		return true
 	})
 	assert.True(acc.Empty())
@@ -685,7 +685,7 @@ func TestSetIter2(t *testing.T) {
 		idx := uint64(0)
 		endAt := uint64(64)
 
-		set.Iter(func(v Value) (done bool) {
+		set.Iter(context.Background(), func(v Value) (done bool) {
 			assert.True(ts[idx].Equals(v))
 			if idx == endAt {
 				done = true
@@ -960,12 +960,12 @@ func TestSetModifyAfterRead(t *testing.T) {
 	// Drop chunk values.
 	set = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), set).TargetHash()).(Set)
 	// Modify/query. Once upon a time this would crash.
-	fst := set.First()
+	fst := set.First(context.Background())
 	set = set.Edit().Remove(fst).Set(context.Background())
-	assert.False(set.Has(fst))
-	assert.True(set.Has(set.First()))
+	assert.False(set.Has(context.Background(), fst))
+	assert.True(set.Has(context.Background(), set.First(context.Background())))
 	set = set.Edit().Insert(fst).Set(context.Background())
-	assert.True(set.Has(fst))
+	assert.True(set.Has(context.Background(), fst))
 }
 
 func TestSetTypeAfterMutations(t *testing.T) {
@@ -1034,17 +1034,17 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	}
 
 	assert.Equal(len(vals), int(s.Len()))
-	assert.True(bool(s.First().(Bool)))
+	assert.True(bool(s.First(context.Background()).(Bool)))
 
 	for _, v := range vals {
-		assert.True(s.Has(v))
+		assert.True(s.Has(context.Background(), v))
 	}
 
 	for len(vals) > 0 {
 		v := vals[0]
 		vals = vals[1:]
 		s = s.Edit().Remove(v).Set(context.Background())
-		assert.False(s.Has(v))
+		assert.False(s.Has(context.Background(), v))
 		assert.Equal(len(vals), int(s.Len()))
 	}
 }
@@ -1079,11 +1079,11 @@ func TestSetAt(t *testing.T) {
 	s := NewSet(vs, values...)
 
 	for i, v := range values {
-		assert.Equal(v, s.At(uint64(i)))
+		assert.Equal(v, s.At(context.Background(), uint64(i)))
 	}
 
 	assert.Panics(func() {
-		s.At(42)
+		s.At(context.Background(), 42)
 	})
 }
 

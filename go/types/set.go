@@ -113,33 +113,33 @@ func (s Set) WalkValues(cb ValueCallback) {
 	})
 }
 
-func (s Set) First() Value {
-	cur := newCursorAt(context.TODO(), s.orderedSequence, emptyKey, false, false)
+func (s Set) First(ctx context.Context) Value {
+	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
 	if !cur.valid() {
 		return nil
 	}
 	return cur.current().(Value)
 }
 
-func (s Set) At(idx uint64) Value {
+func (s Set) At(ctx context.Context, idx uint64) Value {
 	if idx >= s.Len() {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(context.TODO(), s.orderedSequence, idx)
+	cur := newCursorAtIndex(ctx, s.orderedSequence, idx)
 	return cur.current().(Value)
 }
 
-func (s Set) Has(v Value) bool {
-	cur := newCursorAtValue(context.TODO(), s.orderedSequence, v, false, false)
+func (s Set) Has(ctx context.Context, v Value) bool {
+	cur := newCursorAtValue(ctx, s.orderedSequence, v, false, false)
 	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
 type setIterCallback func(v Value) bool
 
-func (s Set) Iter(cb setIterCallback) {
-	cur := newCursorAt(context.TODO(), s.orderedSequence, emptyKey, false, false)
-	cur.iter(context.TODO(), func(v interface{}) bool {
+func (s Set) Iter(ctx context.Context, cb setIterCallback) {
+	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
+	cur.iter(ctx, func(v interface{}) bool {
 		return cb(v.(Value))
 	})
 }
@@ -152,20 +152,20 @@ func (s Set) IterAll(cb setIterAllCallback) {
 	})
 }
 
-func (s Set) Iterator() SetIterator {
-	return s.IteratorAt(0)
+func (s Set) Iterator(ctx context.Context) SetIterator {
+	return s.IteratorAt(ctx, 0)
 }
 
-func (s Set) IteratorAt(idx uint64) SetIterator {
+func (s Set) IteratorAt(ctx context.Context, idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(context.TODO(), s.orderedSequence, idx),
+		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx),
 		s:      s,
 	}
 }
 
-func (s Set) IteratorFrom(val Value) SetIterator {
+func (s Set) IteratorFrom(ctx context.Context, val Value) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtValue(context.TODO(), s.orderedSequence, val, false, false),
+		cursor: newCursorAtValue(ctx, s.orderedSequence, val, false, false),
 		s:      s,
 	}
 }

@@ -732,9 +732,9 @@ func TestEncodeSet(t *testing.T) {
 	// are correct in case the Set marshaling interferes with it.
 
 	a := s.Get("a").(types.Set)
-	assert.True(a.Has(types.Float(0)))
-	assert.True(a.Has(types.Float(1)))
-	assert.True(a.Has(types.Float(2)))
+	assert.True(a.Has(context.Background(), types.Float(0)))
+	assert.True(a.Has(context.Background(), types.Float(1)))
+	assert.True(a.Has(context.Background(), types.Float(2)))
 
 	b := s.Get("b").(types.Map)
 	assert.True(b.Has(types.Float(3)))
@@ -742,9 +742,9 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(b.Has(types.Float(5)))
 
 	d := s.Get("d").(types.Set)
-	assert.True(d.Has(types.String("A")))
-	assert.True(d.Has(types.String("B")))
-	assert.True(d.Has(types.String("C")))
+	assert.True(d.Has(context.Background(), types.String("A")))
+	assert.True(d.Has(context.Background(), types.String("B")))
+	assert.True(d.Has(context.Background(), types.String("C")))
 
 	e := s.Get("e").(types.Map)
 	assert.True(e.Has(types.String("D")))
@@ -752,9 +752,9 @@ func TestEncodeSet(t *testing.T) {
 	assert.True(e.Has(types.String("F")))
 
 	g := s.Get("g").(types.Set)
-	assert.True(g.Has(types.Float(1)))
-	assert.True(g.Has(types.Float(2)))
-	assert.True(g.Has(types.Float(3)))
+	assert.True(g.Has(context.Background(), types.Float(1)))
+	assert.True(g.Has(context.Background(), types.Float(2)))
+	assert.True(g.Has(context.Background(), types.Float(3)))
 }
 
 func TestEncodeOpt(t *testing.T) {
