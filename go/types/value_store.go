@@ -215,7 +215,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(h, TypeOf(v), height)
-	lvs.bufferChunk(v, c, height)
+	lvs.bufferChunk(context.TODO(), v, c, height)
 	return r
 }
 
@@ -229,7 +229,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 //    flushed).
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
-func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
+func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
@@ -241,7 +241,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 
 	put := func(h hash.Hash, c chunks.Chunk) {
-		lvs.cs.Put(context.TODO(), c)
+		lvs.cs.Put(ctx, c)
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
 	}
