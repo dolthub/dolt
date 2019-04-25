@@ -272,7 +272,7 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 				// field of type datetime.DateTimeType
 				if types.TypeOf(v).Equals(datetime.DateTimeType) {
 					var dt datetime.DateTime
-					dt.UnmarshalNoms(v)
+					dt.UnmarshalNoms(context.Background(), v)
 					fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
 				} else {
 					types.WriteEncodedValue(context.Background(), pw, v)

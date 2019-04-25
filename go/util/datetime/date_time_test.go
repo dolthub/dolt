@@ -138,7 +138,7 @@ func TestZeroValues(t *testing.T) {
 	assert.True(dt2.IsZero())
 
 	dt3 := DateTime{}
-	dt3.UnmarshalNoms(nomsDate)
+	dt3.UnmarshalNoms(context.Background(), nomsDate)
 	assert.True(dt3.IsZero())
 }
 

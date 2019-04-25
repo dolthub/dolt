@@ -33,7 +33,7 @@ import (
 
 // Function type for commenter functions
 type HRSCommenter interface {
-	Comment(Value) string
+	Comment(context.Context, Value) string
 }
 
 var (
@@ -289,7 +289,7 @@ type hrsStructWriter struct {
 	v Struct
 }
 
-func (w hrsStructWriter) name(n string) {
+func (w hrsStructWriter) name(ctx context.Context, n string) {
 	w.write("struct ")
 	if n != "" {
 		w.write(n)
@@ -298,7 +298,7 @@ func (w hrsStructWriter) name(n string) {
 	w.write("{")
 	commenters := GetHRSCommenters(n)
 	for _, commenter := range commenters {
-		if comment := commenter.Comment(w.v); comment != "" {
+		if comment := commenter.Comment(ctx, w.v); comment != "" {
 			w.write(" // " + comment)
 			break
 		}
