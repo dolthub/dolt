@@ -44,7 +44,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 
 	db := sp.GetDatabase()
 	r1 := db.WriteValue(context.Background(), value)
-	_, err := db.CommitValue(sp.GetDataset(), r1)
+	_, err := db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
 
 	return r1
@@ -100,7 +100,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	// out to same thing.
 	test := func(in types.Value) {
 		r1 := db.WriteValue(context.Background(), in)
-		db.CommitValue(sp.GetDataset(), r1)
+		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))

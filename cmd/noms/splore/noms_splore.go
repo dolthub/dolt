@@ -78,7 +78,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 		getValue = func() types.Value { return sp.GetValue(context.Background()) }
 	} else if dbSp, err := spec.ForDatabase(cfg.ResolveDbSpec(spStr)); err == nil {
 		sp = dbSp
-		getValue = func() types.Value { return sp.GetDatabase().Datasets() }
+		getValue = func() types.Value { return sp.GetDatabase().Datasets(context.Background()) }
 	} else {
 		d.CheckError(fmt.Errorf("Not a path or database: %s", spStr))
 	}
@@ -86,7 +86,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 	defer sp.Close()
 
 	req := func(w http.ResponseWriter, contentType string) {
-		sp.GetDatabase().Rebase()
+		sp.GetDatabase().Rebase(context.Background())
 		w.Header().Add("Content-Type", contentType)
 		w.Header().Add("Cache-Control", "max-age=0,no-cache")
 	}

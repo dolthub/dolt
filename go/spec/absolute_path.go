@@ -87,7 +87,7 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types.Value) {
 	if len(p.Dataset) > 0 {
 		var ok bool
-		ds := db.GetDataset(p.Dataset)
+		ds := db.GetDataset(ctx, p.Dataset)
 		if val, ok = ds.MaybeHead(); !ok {
 			val = nil
 		}

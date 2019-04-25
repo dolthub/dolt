@@ -348,9 +348,9 @@ func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
 // GetDataset is live, so if Commit is called on this Spec's Database later, a
 // new up-to-date Dataset will returned on the next call to GetDataset.  If
 // this is not a Dataset spec, returns nil.
-func (sp Spec) GetDataset() (ds datas.Dataset) {
+func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 	if sp.Path.Dataset != "" {
-		ds = sp.GetDatabase().GetDataset(sp.Path.Dataset)
+		ds = sp.GetDatabase().GetDataset(ctx, sp.Path.Dataset)
 	}
 	return
 }
@@ -381,7 +381,7 @@ func (sp Spec) Href() string {
 // with the hash of the HEAD of that dataset. This "pins" the path to the state
 // of the database at the current moment in time.  Returns itself if the
 // PathSpec is already "pinned".
-func (sp Spec) Pin() (Spec, bool) {
+func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 	var ds datas.Dataset
 
 	if !sp.Path.IsEmpty() {
@@ -390,9 +390,9 @@ func (sp Spec) Pin() (Spec, bool) {
 			return sp, true
 		}
 
-		ds = sp.GetDatabase().GetDataset(sp.Path.Dataset)
+		ds = sp.GetDatabase().GetDataset(ctx, sp.Path.Dataset)
 	} else {
-		ds = sp.GetDataset()
+		ds = sp.GetDataset(ctx)
 	}
 
 	commit, ok := ds.MaybeHead()

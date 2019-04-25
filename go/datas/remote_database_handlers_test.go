@@ -35,7 +35,7 @@ func TestHandleWriteValue(t *testing.T) {
 		db.WriteValue(context.Background(), types.Bool(false)),
 	)
 	r := db.WriteValue(context.Background(), l)
-	_, err := db.CommitValue(db.GetDataset("datasetID"), r)
+	_, err := db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
 	assert.NoError(err)
 
 	newItem := types.NewEmptyBlob(db)
@@ -164,7 +164,7 @@ func TestHandleGetRefs(t *testing.T) {
 	for _, c := range chnx {
 		cs.Put(context.Background(), c)
 	}
-	persistChunks(cs)
+	persistChunks(context.Background(), cs)
 
 	body := buildHashesRequest(chunks.ReadBatch{chnx[0].Hash(): nil, chnx[1].Hash(): nil})
 
@@ -202,7 +202,7 @@ func TestHandleGetBlob(t *testing.T) {
 	blobContents := "I am a blob"
 	storage := &chunks.MemoryStorage{}
 	db := NewDatabase(storage.NewView())
-	ds := db.GetDataset("foo")
+	ds := db.GetDataset(context.Background(), "foo")
 
 	// Test missing h
 	w := httptest.NewRecorder()
@@ -227,7 +227,7 @@ func TestHandleGetBlob(t *testing.T) {
 	assert.Equal(http.StatusBadRequest, w.Code, "Handler error:\n%s", string(w.Body.Bytes()))
 
 	r := db.WriteValue(context.Background(), b)
-	ds, err := db.CommitValue(ds, r)
+	ds, err := db.CommitValue(context.Background(), ds, r)
 	assert.NoError(err)
 
 	// Valid
@@ -246,7 +246,7 @@ func TestHandleGetBlob(t *testing.T) {
 
 	// Test non-blob
 	r2 := db.WriteValue(context.Background(), types.Float(1))
-	_, err = db.CommitValue(ds, r2)
+	_, err = db.CommitValue(context.Background(), ds, r2)
 	assert.NoError(err)
 
 	w = httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestHandleHasRefs(t *testing.T) {
 	present := chunks.NewChunk([]byte(input3))
 	cs := storage.NewView()
 	cs.Put(context.Background(), present)
-	persistChunks(cs)
+	persistChunks(context.Background(), cs)
 
 	body := buildHashesRequest(chunks.ReadBatch{
 		chnx[0].Hash(): nil,
@@ -397,7 +397,7 @@ func TestRejectPostRoot(t *testing.T) {
 	newHead := types.NewMap(context.Background(), vs, types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead)
 	cs.Put(context.Background(), chunk)
-	persistChunks(cs)
+	persistChunks(context.Background(), cs)
 
 	// Attempt should fail, as newHead isn't the right type.
 	url := buildPostRootURL(chunk.Hash(), hash.Hash{})

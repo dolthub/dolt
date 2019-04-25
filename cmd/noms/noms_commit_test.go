@@ -33,7 +33,7 @@ func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.
 	ref = sp.GetDatabase().WriteValue(context.Background(), v)
 
 	if doCommit {
-		_, err = sp.GetDatabase().CommitValue(sp.GetDataset(), ref)
+		_, err = sp.GetDatabase().CommitValue(context.Background(), sp.GetDataset(context.Background()), ref)
 		s.NoError(err)
 	}
 	return
@@ -43,7 +43,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	sp, ref := s.setupDataset("commitTestStdin", false)
 	defer sp.Close()
 
-	_, ok := sp.GetDataset().MaybeHead()
+	_, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.False(ok, "should not have a commit")
 
 	oldStdin := os.Stdin
@@ -66,7 +66,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	commit, ok := sp.GetDataset().MaybeHead()
+	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
 	value := commit.Get(datas.ValueField)
 	s.True(value.Hash() == ref.TargetHash(), "commit.value hash == writevalue hash")
@@ -79,7 +79,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	sp, ref := s.setupDataset("commitTest", false)
 	defer sp.Close()
 
-	_, ok := sp.GetDataset().MaybeHead()
+	_, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.False(ok, "should not have a commit")
 
 	stdoutString, stderrString := s.MustRun(main, []string{"commit", "#" + ref.TargetHash().String(), sp.String()})
@@ -89,7 +89,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	commit, ok := sp.GetDataset().MaybeHead()
+	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
 	value := commit.Get(datas.ValueField)
 	s.True(value.Hash() == ref.TargetHash(), "commit.value hash == writevalue hash")
@@ -109,7 +109,7 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	sp, ref := s.setupDataset(dsName, true)
 	defer sp.Close()
 
-	_, ok := sp.GetDataset().MaybeHeadValue()
+	_, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
 	s.True(ok, "should have a commit")
 
 	cliOptions := []string{"commit"}
@@ -131,7 +131,7 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	value, ok := sp.GetDataset().MaybeHeadValue()
+	value, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
 	s.True(ok, "should still have a commit")
 	s.True(value.Hash() == ref.Hash(), "commit.value hash == previous commit hash")
 }
@@ -146,7 +146,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ := s.setupDataset(dsName, true)
 	defer sp.Close()
 
-	metaOld := sp.GetDataset().Head().Get(datas.MetaField).(types.Struct)
+	metaOld := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
 	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String()})
 	s.Nil(err)
@@ -156,7 +156,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	metaNew := sp.GetDataset().Head().Get(datas.MetaField).(types.Struct)
+	metaNew := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
@@ -172,7 +172,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	metaNew = sp.GetDataset().Head().Get(datas.MetaField).(types.Struct)
+	metaNew = sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")

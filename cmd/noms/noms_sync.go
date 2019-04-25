@@ -53,7 +53,7 @@ func runSync(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDB, sinkDataset, err := cfg.GetDataset(args[1])
+	sinkDB, sinkDataset, err := cfg.GetDataset(context.Background(), args[1])
 	d.CheckError(err)
 	defer sinkDB.Close()
 
@@ -84,12 +84,12 @@ func runSync(args []string) int {
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-		datas.Pull(sourceStore, sinkDB, sourceRef, progressCh)
+		datas.Pull(context.Background(), sourceStore, sinkDB, sourceRef, progressCh)
 
 		var err error
-		sinkDataset, err = sinkDB.FastForward(sinkDataset, sourceRef)
+		sinkDataset, err = sinkDB.FastForward(context.Background(), sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
-			sinkDataset, err = sinkDB.SetHead(sinkDataset, sourceRef)
+			sinkDataset, err = sinkDB.SetHead(context.Background(), sinkDataset, sourceRef)
 			nonFF = true
 		}
 		d.PanicIfError(err)

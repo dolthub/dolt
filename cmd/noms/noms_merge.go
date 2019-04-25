@@ -67,7 +67,7 @@ func runMerge(args []string) int {
 	d.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(outDS, db.WriteValue(context.Background(), datas.NewCommit(merged, types.NewSet(context.Background(), db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
+	_, err = db.SetHead(context.Background(), outDS, db.WriteValue(context.Background(), datas.NewCommit(merged, types.NewSet(context.Background(), db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")
@@ -81,7 +81,7 @@ func resolveDatasets(db datas.Database, leftName, rightName, outName string) (le
 		if !datasetRe.MatchString(dsName) {
 			d.CheckErrorNoUsage(fmt.Errorf("Invalid dataset %s, must match %s", dsName, datas.DatasetRe.String()))
 		}
-		return db.GetDataset(dsName)
+		return db.GetDataset(context.Background(), dsName)
 	}
 	leftDS = makeDS(leftName)
 	rightDS = makeDS(rightName)
@@ -101,7 +101,7 @@ func getMergeCandidates(db datas.Database, leftDS, rightDS datas.Dataset) (left,
 }
 
 func getCommonAncestor(r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found := datas.FindCommonAncestor(r1, r2, vr)
+	aRef, found := datas.FindCommonAncestor(context.Background(), r1, r2, vr)
 	if !found {
 		return
 	}

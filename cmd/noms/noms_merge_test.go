@@ -98,8 +98,8 @@ func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 }
 
 func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p types.Set) types.Ref {
-	ds := sp.GetDataset()
-	ds, err := sp.GetDatabase().Commit(ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
+	ds := sp.GetDataset(context.Background())
+	ds, err := sp.GetDatabase().Commit(context.Background(), ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
 	s.NoError(err)
 	return ds.HeadRef()
 }
@@ -109,9 +109,9 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	db := sp.GetDatabase()
 	if s.NoError(err) {
 		defer sp.Close()
-		commit := sp.GetDataset().Head()
+		commit := sp.GetDataset(context.Background()).Head()
 		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(context.Background(), db, parents...)))
-		merged := sp.GetDataset().HeadValue()
+		merged := sp.GetDataset(context.Background()).HeadValue()
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
@@ -201,8 +201,8 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 	db := sp.GetDatabase()
 
 	prep := func(dsName string) {
-		ds := db.GetDataset(dsName)
-		db.CommitValue(ds, types.NewMap(context.Background(), db, types.String("foo"), types.String("bar")))
+		ds := db.GetDataset(context.Background(), dsName)
+		db.CommitValue(context.Background(), ds, types.NewMap(context.Background(), db, types.String("foo"), types.String("bar")))
 	}
 	prep(l)
 	prep(r)

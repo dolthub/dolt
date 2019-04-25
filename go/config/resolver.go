@@ -135,13 +135,13 @@ func (r *Resolver) GetChunkStore(str string) (chunks.ChunkStore, error) {
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
-func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error) {
+func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
 	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
-	return sp.GetDatabase(), sp.GetDataset(), nil
+	return sp.GetDatabase(), sp.GetDataset(ctx), nil
 }
 
 // Resolve string to a value path. If a config is present,

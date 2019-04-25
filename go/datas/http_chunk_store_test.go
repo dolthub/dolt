@@ -268,7 +268,7 @@ func (suite *HTTPChunkStoreSuite) TestGetMany() {
 	for _, c := range chnx {
 		suite.serverCS.Put(context.Background(), c)
 	}
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
 	foundChunks := make(chan *chunks.Chunk)
@@ -296,7 +296,7 @@ func (suite *HTTPChunkStoreSuite) TestOverGetThreshold_Issue3589() {
 
 	present := chunks.NewChunk([]byte("ghi"))
 	suite.serverCS.Put(context.Background(), present)
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 	hashes.Insert(present.Hash())
 
 	foundChunks := make(chan *chunks.Chunk)
@@ -338,7 +338,7 @@ func (suite *HTTPChunkStoreSuite) TestGetManySomeCached() {
 	for _, c := range chnx {
 		suite.serverCS.Put(context.Background(), c)
 	}
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 	suite.http.Put(context.Background(), cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
@@ -418,7 +418,7 @@ func (suite *HTTPChunkStoreSuite) TestHasMany() {
 	for _, c := range chnx {
 		suite.serverCS.Put(context.Background(), c)
 	}
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
@@ -439,7 +439,7 @@ func (suite *HTTPChunkStoreSuite) TestHasManyAllCached() {
 	for _, c := range chnx {
 		suite.http.Put(context.Background(), c)
 	}
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash())
 	absent := suite.http.HasMany(context.Background(), hashes)
@@ -459,7 +459,7 @@ func (suite *HTTPChunkStoreSuite) TestHasManySomeCached() {
 	for _, c := range chnx {
 		suite.serverCS.Put(context.Background(), c)
 	}
-	persistChunks(suite.serverCS)
+	persistChunks(context.Background(), suite.serverCS)
 	suite.http.Put(context.Background(), cached)
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), cached.Hash())
