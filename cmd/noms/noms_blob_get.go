@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -22,7 +23,7 @@ import (
 func nomsBlobGet(ds string, filePath string) int {
 	cfg := config.NewResolver()
 	var blob types.Blob
-	if db, val, err := cfg.GetPath(ds); err != nil {
+	if db, val, err := cfg.GetPath(context.Background(), ds); err != nil {
 		d.CheckErrorNoUsage(err)
 	} else if val == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -44,7 +45,7 @@ func setupSyncFlags() *flag.FlagSet {
 
 func runSync(args []string) int {
 	cfg := config.NewResolver()
-	sourceStore, sourceObj, err := cfg.GetPath(args[0])
+	sourceStore, sourceObj, err := cfg.GetPath(context.Background(), args[0])
 	d.CheckError(err)
 	defer sourceStore.Close()
 

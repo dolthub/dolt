@@ -5,6 +5,7 @@
 package splore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -74,7 +75,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 	cfg := config.NewResolver()
 	if pathSp, err := spec.ForPath(cfg.ResolvePathSpec(spStr)); err == nil {
 		sp = pathSp
-		getValue = func() types.Value { return sp.GetValue() }
+		getValue = func() types.Value { return sp.GetValue(context.Background()) }
 	} else if dbSp, err := spec.ForDatabase(cfg.ResolveDbSpec(spStr)); err == nil {
 		sp = dbSp
 		getValue = func() types.Value { return sp.GetDatabase().Datasets() }

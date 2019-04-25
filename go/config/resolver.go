@@ -147,11 +147,11 @@ func (r *Resolver) GetDataset(str string) (datas.Database, datas.Dataset, error)
 // Resolve string to a value path. If a config is present,
 //  - if no db spec is present, assume the default db
 //  - if the db spec is an alias, replace it
-func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
+func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
 	sp, err := spec.ForPathOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, nil, err
 	}
-	return sp.GetDatabase(), sp.GetValue(context.TODO()), nil
+	return sp.GetDatabase(), sp.GetValue(ctx), nil
 }
