@@ -62,7 +62,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
-	working, err := dEnv.WorkingRoot(context.TODO())
+	working, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return

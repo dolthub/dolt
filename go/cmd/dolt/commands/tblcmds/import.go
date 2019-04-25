@@ -178,7 +178,7 @@ func createArgParser() *argparser.ArgParser {
 }
 
 func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
-	root, err := dEnv.WorkingRoot(context.TODO())
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))

@@ -94,7 +94,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	root, err := dEnv.WorkingRoot(context.TODO())
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get working value."))
@@ -114,8 +114,8 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if verr == nil {
 		me := tbl.GetRowData().Edit()
 		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map()
-		tbl = tbl.UpdateRows(context.TODO(), updated)
-		root = root.PutTable(context.TODO(), dEnv.DoltDB, prArgs.TableName, tbl)
+		tbl = tbl.UpdateRows(context.Background(), updated)
+		root = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
 
 		verr = commands.UpdateWorkingWithVErr(dEnv, root)
 	}

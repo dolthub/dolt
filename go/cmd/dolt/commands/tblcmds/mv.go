@@ -44,7 +44,7 @@ func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				if !force && working.HasTable(new) {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working = working.PutTable(context.TODO(), dEnv.DoltDB, new, tbl)
+					working = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
 					working, err := working.RemoveTables([]string{old})
 
 					if err != nil {
