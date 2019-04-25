@@ -132,7 +132,7 @@ func (cc *ColCollection) GetByName(name string) (Column, bool) {
 	return InvalidCol, false
 }
 
-// GetByTag takes a tag and returns the correspending column and true if found, otherwise InvalidCol and false are
+// GetByTag takes a tag and returns the corresponding column and true if found, otherwise InvalidCol and false are
 // returned
 func (cc *ColCollection) GetByTag(tag uint64) (Column, bool) {
 	val, ok := cc.TagToCol[tag]

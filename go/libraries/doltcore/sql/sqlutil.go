@@ -268,8 +268,8 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			}
 
 			colNameStr := colName.Name.String()
-			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = colName
+			if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = col.ColumnName
 			}
 			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
 			if !ok {
@@ -395,8 +395,8 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			}
 		case *sqlparser.ColName:
 			colNameStr := expr.Name.String()
-			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = colName
+			if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+				colNameStr = col.ColumnName
 			}
 			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
 			if !ok {

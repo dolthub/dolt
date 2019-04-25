@@ -3,25 +3,31 @@ package sql
 import (
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 )
 
 // Struct to represent the salient results of parsing a select statement.
-type selectStatement struct {
-	tableNames   []string
-	selectedCols []string
-	aliases      *Aliases
-	filterFn     rowFilterFn
-	limit        int
+type SelectStatement struct {
+	// Input table schemas, keyed by table name
+	inputSchemas map[string]schema.Schema
+	// Columns to be selected
+	selectedCols []QualifiedColumn
+	// Aliases for columns and tables
+	aliases *Aliases
+	// Result set schema
+	ResultSetSchema *resultset.ResultSetSchema
+	// Filter function for the result set
+	filterFn rowFilterFn
+	// Limit of results returned
+	limit int
 }
 
 type selectTransform struct {
@@ -46,8 +52,8 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([]row.Row, schema.Schema, error) {
-	p, schema, err := BuildSelectQueryPipeline(root, s, query)
+func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
+	p, statement, err := BuildSelectQueryPipeline(root, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,47 +84,56 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) ([
 		return nil, nil, executionErr
 	}
 
-	return rows, schema, nil
+	return rows, statement.ResultSetSchema.Schema(), nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
-func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
-	selectStmt := &selectStatement{aliases: NewAliases()}
+func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, *SelectStatement, error) {
+	selectStmt := &SelectStatement{aliases: NewAliases(), inputSchemas: make(map[string]schema.Schema)}
 
-	if err := processFromClause(root, selectStmt, s.From, query); err != nil {
+	if err := processFromClause(root, selectStmt, s.From); err != nil {
 		return nil, nil, err
 	}
 
-	if err := processSelectedColumns(root, selectStmt, s.SelectExprs, query); err != nil {
+	if err := processSelectedColumns(root, selectStmt, s.SelectExprs); err != nil {
 		return nil, nil, err
 	}
 
 	if s.Limit != nil && s.Limit.Rowcount != nil {
 		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
 		if !ok {
-			return errSelect("Couldn't parse limit clause: %v", query)
+			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 		}
 		limitInt, err := strconv.Atoi(nodeToString(limitVal))
 		if err != nil {
-			return errSelect("Couldn't parse limit clause: %v", query)
+			return errSelect("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 		}
 		selectStmt.limit = limitInt
 	} else {
 		selectStmt.limit = -1
 	}
 
-	if err := processWhereClause(root, selectStmt, s); err != nil {
+	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
 
-	return createPipeline(root, selectStmt)
+	if err := processWhereClause(selectStmt, s); err != nil {
+		return nil, nil, err
+	}
+
+	p, err := createPipeline(root, selectStmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p, selectStmt, nil
 }
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
-func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs, query string) error {
+func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from sqlparser.TableExprs) error {
 	for _, tableExpr := range from {
 		var tableName string
 		switch te := tableExpr.(type) {
@@ -127,63 +142,65 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 			case sqlparser.TableName:
 				tableName = e.Name.String()
 			case *sqlparser.Subquery:
-				return errFmt("Subqueries are not supported: %v.", query)
+				return errFmt("Subqueries are not supported: %v.", nodeToString(e))
 			default:
 				return errFmt("Unrecognized expression: %v", nodeToString(e))
+			}
+
+			if !root.HasTable(tableName) {
+				return errFmt("Unknown table '%s'", tableName)
 			}
 
 			if !te.As.IsEmpty() {
 				selectStmt.aliases.AddTableAlias(tableName, te.As.String())
 			}
 			selectStmt.aliases.AddTableAlias(tableName, tableName)
-			selectStmt.tableNames = append(selectStmt.tableNames, tableName)
+			selectStmt.inputSchemas[tableName] = mustGetSchema(root, tableName)
 
 		case *sqlparser.ParenTableExpr:
-			return errFmt("Parenthetical table expressions are not supported: %v,", query)
+			return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
 		case *sqlparser.JoinTableExpr:
-			return errFmt("Joins are not supported: %v,", query)
+			return errFmt("Joins expressions are not supported: %v,", nodeToString(te))
 		default:
-			return errFmt("Unsupported select statement: %v", query)
-		}
-
-		if !root.HasTable(tableName) {
-			return errFmt("Unknown table '%s'", tableName)
+			return errFmt("Unsupported select statement: %v", nodeToString(te))
 		}
 	}
 
 	return nil
 }
 
-// Processes the select expression (columns to return from the query). Adds the results to the selectStatement given,
-// or returns an error if it cannot. All aliases must be established in the selectStatement.
-func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement, colSelections sqlparser.SelectExprs, query string) error {
-	var columns []string
+// Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
+// or returns an error if it cannot. All aliases must be established in the SelectStatement.
+func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
+	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
-			// TODO: this only works for a single table
-			tableSch := mustGetSchema(root, selectStmt.tableNames[0])
-			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-				columns = append(columns, col.Name)
-				return false
-			})
+			for tableName, tableSch:= range selectStmt.inputSchemas {
+				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+					columns = append(columns, QualifiedColumn{tableName, col.Name})
+					return false
+				})
+			}
 		case *sqlparser.AliasedExpr:
 			colAlias := selectExpr.As.String()
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
 
 				var tableSch schema.Schema
+				var tableName string
 				colName := colExpr.Name.String()
 				if !colExpr.Qualifier.IsEmpty() {
 					columnTableName := colExpr.Qualifier.Name.String()
-					if tableName, ok := selectStmt.aliases.TablesByAlias[columnTableName]; ok{
+					var ok bool
+					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok{
 						tableSch = mustGetSchema(root, tableName)
 					} else {
 						return errFmt("unknown table " + columnTableName)
 					}
 				} else {
 					var err error
-					tableSch, err = findSchemaForColumn(root, colName, selectStmt.tableNames)
+					tableName, tableSch, err = findSchemaForColumn(colName, selectStmt)
 					if err != nil {
 						return err
 					}
@@ -196,14 +213,14 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement,
 
 				// an absent column alias will be empty
 				if colAlias != "" {
-					selectStmt.aliases.AddColumnAlias(colName, colAlias)
+					selectStmt.aliases.AddColumnAlias(tableName, colName, colAlias)
 				}
-				columns = append(columns, colName)
+				columns = append(columns, QualifiedColumn{tableName, colName})
 			default:
 				return errFmt("Only column selections or * are supported")
 			}
 		case sqlparser.Nextval:
-			return errFmt("Next value is not supported: %v", query)
+			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
 		}
 	}
 
@@ -214,27 +231,26 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement,
 // Finds the schema that contains the column name given among the tables given. Returns an error if no schema contains
 // such a column name, or if multiple do. This method is only used for naked column names, not qualified ones. Assumes
 // that table names have already been verified to exist.
-func findSchemaForColumn(root *doltdb.RootValue, colName string, tableNames []string) (schema.Schema, error) {
-	schemas := make(map[string]schema.Schema)
-	for _, tableName := range tableNames {
-		schemas[tableName] = mustGetSchema(root, tableName)
-	}
+func findSchemaForColumn(colName string, statement *SelectStatement) (string, schema.Schema, error) {
+	schemas := statement.inputSchemas
 
 	var colSchema schema.Schema
-	for _, sch := range schemas {
+	var tableName string
+	for tbl, sch := range schemas {
 		if _, ok := sch.GetAllCols().GetByName(colName); ok {
 			if colSchema != nil {
-				return nil, errFmt("Ambiguous column: %v", colName)
+				return "", nil, errFmt("Ambiguous column: %v", colName)
 			}
 			colSchema = sch
+			tableName = tbl
 		}
 	}
 
 	if colSchema == nil {
-		return nil, errFmt("Unknown column '%v'", colName)
+		return "", nil, errFmt("Unknown column '%v'", colName)
 	}
 
-	return colSchema, nil
+	return tableName, colSchema, nil
 }
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
@@ -243,11 +259,15 @@ func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 	return tbl.GetSchema()
 }
 
-// Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
+// Processes the where clause by applying an appropriate filter fn to the SelectStatement given. Returns an error if the
 // where clause can't be processed.
-func processWhereClause(root *doltdb.RootValue, selectStmt *selectStatement, s *sqlparser.Select) error {
+func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select) error {
 	// TODO: make work for more than 1 table
-	tableSch := mustGetSchema(root, selectStmt.tableNames[0])
+	var tableSch schema.Schema
+	for _, sch := range selectStmt.inputSchemas {
+		tableSch = sch
+		break
+	}
 
 	filter, err := createFilterForWhere(s.Where, tableSch, selectStmt.aliases)
 	if err != nil {
@@ -260,23 +280,27 @@ func processWhereClause(root *doltdb.RootValue, selectStmt *selectStatement, s *
 
 // Returns an error with the message specified. Return type includes a nil Pipeline object to conform to the needs of
 // BuildSelectQueryPipeline.
-func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.Schema, error) {
+func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, *SelectStatement, error) {
 	return nil, nil, errors.New(fmt.Sprintf(fmtMsg, args...))
 }
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, errhand.VerboseError) {
-	tbl, _ := root.GetTable(statement.tableNames[0])
-	tblSch := tbl.GetSchema()
+func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeline.Pipeline, error) {
+
+	// TODO: make work for more than one table
+	var tblSch schema.Schema
+	var tblName string
+	for name, sch := range statement.inputSchemas {
+		tblSch = sch
+		tblName = name
+		break
+	}
+	tbl, _ := root.GetTable(tblName)
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-	outSchema, verr := addColumnMapTransform(statement, tblSch, transforms)
-
-	if verr != nil {
-		return nil, nil, verr
-	}
+	transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
 
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
@@ -286,40 +310,57 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 
 	p.RunAfter(func() { rd.Close() })
 
-	return p, outSchema, nil
+	return p, nil
 }
 
-// Adds a transformation that maps column names in a result set to a new set of columns.
-func addColumnMapTransform(statement *selectStatement, tableSch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
-	colColl := tableSch.GetAllCols()
+func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.ResultSetSchema) pipeline.NamedTransform {
+	mapping := rss.Mapping(tableSch)
+	rConv, _ := rowconv.NewRowConverter(mapping)
+	return pipeline.NewNamedTransform("mapToResultSet", rowconv.GetRowConvTransformFunc(rConv))
+}
 
-	if len(statement.selectedCols) > 0 {
-		cols := make([]schema.Column, 0, len(statement.selectedCols))
+// Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
+// from the individual table schemas.
+func createResultSetSchema(statement *SelectStatement) error {
 
-		for _, colName := range statement.selectedCols {
-			if col, ok := colColl.GetByName(colName); !ok {
-				panic("unknown column " + colName)
+	// Iterate over the columns twice: first to get an ordered list to use to create an output schema with
+	cols := make([]schema.Column, 0, len(statement.selectedCols))
+	for _, selectedCol := range statement.selectedCols {
+		colName := selectedCol.ColumnName
+		tableName := selectedCol.TableName
+
+		if tableSch, ok := statement.inputSchemas[tableName]; !ok {
+			panic ("Unknown table " + tableName)
+		} else {
+			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
+				panic("Unknown column " + colName)
 			} else {
-				if alias, ok := statement.aliases.AliasesByColumn[colName]; ok {
+				if alias, ok := statement.aliases.AliasesByColumn[selectedCol]; ok {
 					col.Name = alias
 				}
 				cols = append(cols, col)
 			}
 		}
-
-		colColl, _ = schema.NewColCollection(cols...)
 	}
 
-	outSch := schema.UnkeyedSchemaFromCols(colColl)
-	mapping, err := rowconv.TagMapping(tableSch, untyped.UntypeUnkeySchema(outSch))
-
+	rss, err := resultset.NewFromColumns(cols...)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	transform := pipeline.NewNamedTransform("map", rowconv.GetRowConvTransformFunc(rConv))
-	transforms.AppendTransforms(transform)
+	// Then a second time, to create a mapping from the source schema to the column in the result set.
+	for _, selectedCol := range statement.selectedCols {
+		tableSch := statement.inputSchemas[selectedCol.TableName]
+		col, _ := tableSch.GetAllCols().GetByName(selectedCol.ColumnName)
 
-	return mapping.DestSch, nil
+		err = rss.AddColumn(tableSch, col)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Finally set the result set schema in the statement
+	statement.ResultSetSchema = rss
+
+	return nil
 }
