@@ -2,6 +2,7 @@ package blobstore
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -33,7 +34,7 @@ func NewInMemoryBlobstore() *InMemoryBlobstore {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *InMemoryBlobstore) Get(key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -61,7 +62,7 @@ func (bs *InMemoryBlobstore) Get(key string, br BlobRange) (io.ReadCloser, strin
 }
 
 // Put sets the blob and the version for a key
-func (bs *InMemoryBlobstore) Put(key string, reader io.Reader) (string, error) {
+func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -80,7 +81,7 @@ func (bs *InMemoryBlobstore) Put(key string, reader io.Reader) (string, error) {
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *InMemoryBlobstore) CheckAndPut(expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -107,7 +108,7 @@ func (bs *InMemoryBlobstore) CheckAndPut(expectedVersion, key string, reader io.
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)
-func (bs *InMemoryBlobstore) Exists(key string) (bool, error) {
+func (bs *InMemoryBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	_, ok := bs.blobs[key]
 
 	return ok, nil

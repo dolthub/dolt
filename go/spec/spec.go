@@ -334,14 +334,13 @@ func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
 	bucket := u.Host
 	path := u.Path
 
-	ctx := context.Background()
-	gcs, err := storage.NewClient(ctx)
+	gcs, err := storage.NewClient(context.TODO())
 
 	if err != nil {
 		panic("Could not create GCSBlobstore")
 	}
 
-	return nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+	return nbs.NewGCSStore(bucket, path, gcs, 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
