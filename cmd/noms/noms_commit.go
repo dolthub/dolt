@@ -41,7 +41,7 @@ func setupCommitFlags() *flag.FlagSet {
 
 func runCommit(args []string) int {
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(args[len(args)-1])
+	db, ds, err := cfg.GetDataset(context.Background(), args[len(args)-1])
 	d.CheckError(err)
 	defer db.Close()
 
@@ -73,7 +73,7 @@ func runCommit(args []string) int {
 	meta, err := spec.CreateCommitMetaStruct(context.Background(), db, "", "", nil, nil)
 	d.CheckErrorNoUsage(err)
 
-	ds, err = db.Commit(ds, value, datas.CommitOptions{Meta: meta})
+	ds, err = db.Commit(context.Background(), ds, value, datas.CommitOptions{Meta: meta})
 	d.CheckErrorNoUsage(err)
 
 	if oldCommitExists {

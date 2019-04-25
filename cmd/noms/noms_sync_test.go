@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -26,8 +27,8 @@ type nomsSyncTestSuite struct {
 
 func (s *nomsSyncTestSuite) TestSyncValidation() {
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
-	source1 := sourceDB.GetDataset("src")
-	source1, err := sourceDB.CommitValue(source1, types.Float(42))
+	source1 := sourceDB.GetDataset(context.Background(), "src")
+	source1, err := sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
 	source1HeadRef := source1.Head().Hash()
 	source1.Database().Close()
@@ -47,11 +48,11 @@ func (s *nomsSyncTestSuite) TestSync() {
 	defer s.NoError(os.RemoveAll(s.DBDir2))
 
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
-	source1 := sourceDB.GetDataset("src")
-	source1, err := sourceDB.CommitValue(source1, types.Float(42))
+	source1 := sourceDB.GetDataset(context.Background(), "src")
+	source1, err := sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
 	source1HeadRef := source1.Head().Hash() // Remember first head, so we can sync to it.
-	source1, err = sourceDB.CommitValue(source1, types.Float(43))
+	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close()
 
@@ -62,7 +63,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.Regexp("Synced", sout)
 
 	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
-	dest := db.GetDataset("dest")
+	dest := db.GetDataset(context.Background(), "dest")
 	s.True(types.Float(42).Equals(dest.HeadValue()))
 	db.Close()
 
@@ -72,7 +73,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.Regexp("Synced", sout)
 
 	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
-	dest = db.GetDataset("dest")
+	dest = db.GetDataset(context.Background(), "dest")
 	s.True(types.Float(43).Equals(dest.HeadValue()))
 	db.Close()
 
@@ -86,7 +87,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.Regexp("Created", sout)
 
 	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
-	dest = db.GetDataset("dest2")
+	dest = db.GetDataset(context.Background(), "dest2")
 	s.True(types.Float(43).Equals(dest.HeadValue()))
 	db.Close()
 }
@@ -96,15 +97,15 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
 	// Create dataset "src1", which has a lineage of two commits.
-	source1 := sourceDB.GetDataset("src1")
-	source1, err := sourceDB.CommitValue(source1, types.Float(42))
+	source1 := sourceDB.GetDataset(context.Background(), "src1")
+	source1, err := sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(source1, types.Float(43))
+	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
 	s.NoError(err)
 
 	// Create dataset "src2", with a lineage of one commit.
-	source2 := sourceDB.GetDataset("src2")
-	source2, err = sourceDB.CommitValue(source2, types.Float(1))
+	source2 := sourceDB.GetDataset(context.Background(), "src2")
+	source2, err = sourceDB.CommitValue(context.Background(), source2, types.Float(1))
 	s.NoError(err)
 
 	sourceDB.Close() // Close Database backing both Datasets
@@ -115,7 +116,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 
 	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
-	dest := db.GetDataset("dest")
+	dest := db.GetDataset(context.Background(), "dest")
 	s.True(types.Float(43).Equals(dest.HeadValue()))
 	db.Close()
 
@@ -125,7 +126,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset2, sinkDatasetSpec2})
 
 	db = datas.NewDatabase(nbs.NewLocalStore(s.DBDir2, clienttest.DefaultMemTableSize))
-	dest = db.GetDataset("dest2")
+	dest = db.GetDataset(context.Background(), "dest2")
 	s.True(types.Float(1).Equals(dest.HeadValue()))
 	db.Close()
 
@@ -136,11 +137,11 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 func (s *nomsSyncTestSuite) TestRewind() {
 	var err error
 	sourceDB := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
-	src := sourceDB.GetDataset("foo")
-	src, err = sourceDB.CommitValue(src, types.Float(42))
+	src := sourceDB.GetDataset(context.Background(), "foo")
+	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(42))
 	s.NoError(err)
 	rewindRef := src.HeadRef().TargetHash()
-	src, err = sourceDB.CommitValue(src, types.Float(43))
+	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close() // Close Database backing both Datasets
 
@@ -149,7 +150,7 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 
 	db := datas.NewDatabase(nbs.NewLocalStore(s.DBDir, clienttest.DefaultMemTableSize))
-	dest := db.GetDataset("foo")
+	dest := db.GetDataset(context.Background(), "foo")
 	s.True(types.Float(42).Equals(dest.HeadValue()))
 	db.Close()
 }

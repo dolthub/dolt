@@ -153,7 +153,7 @@ func (suite *PullSuite) TestPullEverything() {
 	sourceRef := suite.commitToSource(l, types.NewSet(context.Background(), suite.source))
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
+	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
@@ -195,7 +195,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
+	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -241,7 +241,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
+	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 
 	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -283,7 +283,7 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	pt := startProgressTracker()
 
-	Pull(suite.source, suite.sink, sourceRef, pt.Ch)
+	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -294,15 +294,15 @@ func (suite *PullSuite) TestPullUpdates() {
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {
-	ds := suite.source.GetDataset(datasetID)
-	ds, err := suite.source.Commit(ds, v, CommitOptions{Parents: p})
+	ds := suite.source.GetDataset(context.Background(), datasetID)
+	ds, err := suite.source.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
 	suite.NoError(err)
 	return ds.HeadRef()
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
-	ds := suite.sink.GetDataset(datasetID)
-	ds, err := suite.sink.Commit(ds, v, CommitOptions{Parents: p})
+	ds := suite.sink.GetDataset(context.Background(), datasetID)
+	ds, err := suite.sink.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
 	suite.NoError(err)
 	return ds.HeadRef()
 }

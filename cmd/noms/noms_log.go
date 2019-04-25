@@ -78,7 +78,7 @@ func runLog(args []string) int {
 	d.CheckErrorNoUsage(err)
 	defer sp.Close()
 
-	pinned, ok := sp.Pin()
+	pinned, ok := sp.Pin(context.Background())
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Cannot resolve spec: %s\n", args[0])
 		return 1

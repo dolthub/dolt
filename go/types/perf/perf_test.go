@@ -37,10 +37,10 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	}
 	close(in)
 
-	ds := s.Database.GetDataset("BuildList10mNumbers")
+	ds := s.Database.GetDataset(context.Background(), "BuildList10mNumbers")
 
 	var err error
-	ds, err = s.Database.CommitValue(ds, <-out)
+	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
@@ -58,10 +58,10 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	}
 	close(in)
 
-	ds := s.Database.GetDataset("BuildList10mStructs")
+	ds := s.Database.GetDataset(context.Background(), "BuildList10mStructs")
 
 	var err error
-	ds, err = s.Database.CommitValue(ds, <-out)
+	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
@@ -98,9 +98,9 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 		assert.Equal((i+1)*(l1Len+l2Len), l3.Len())
 	}
 
-	ds := s.Database.GetDataset("Concat10mValues2kTimes")
+	ds := s.Database.GetDataset(context.Background(), "Concat10mValues2kTimes")
 	var err error
-	ds, err = s.Database.CommitValue(ds, l3)
+	ds, err = s.Database.CommitValue(context.Background(), ds, l3)
 
 	assert.NoError(err)
 	s.Database = ds.Database()
@@ -165,7 +165,7 @@ func (s *perfSuite) randomBytes(seed int64, size int) []byte {
 }
 
 func (s *perfSuite) headList(dsName string) types.List {
-	ds := s.Database.GetDataset(dsName)
+	ds := s.Database.GetDataset(context.Background(), dsName)
 	return ds.HeadValue().(types.List)
 }
 

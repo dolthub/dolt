@@ -63,7 +63,7 @@ func main() {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	height := types.NewRef(db.Datasets()).Height()
+	height := types.NewRef(db.Datasets(context.Background())).Height()
 	fmt.Println("Store is of height", height)
 	fmt.Println("| Height |   Nodes | Children | Branching | Groups | Reads | Pruned |")
 	fmt.Println("+--------+---------+----------+-----------+--------+-------+--------+")

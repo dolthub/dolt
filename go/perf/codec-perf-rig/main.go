@@ -56,10 +56,10 @@ func main() {
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
 			db := datas.NewDatabase(storage.NewView())
-			ds := db.GetDataset("test")
+			ds := db.GetDataset(context.Background(), "test")
 			t1 := time.Now()
 			col := buildFns[i](db, buildCount, valueFn)
-			ds, err := db.CommitValue(ds, col)
+			ds, err := db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -72,10 +72,10 @@ func main() {
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
 			db = datas.NewDatabase(storage.NewView())
-			ds = db.GetDataset("test")
+			ds = db.GetDataset(context.Background(), "test")
 			t1 = time.Now()
 			col = buildIncrFns[i](db, insertCount, valueFn)
-			ds, err = db.CommitValue(ds, col)
+			ds, err = db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -92,16 +92,16 @@ func main() {
 
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
-	ds := db.GetDataset("test")
+	ds := db.GetDataset(context.Background(), "test")
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
 	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
-	db.CommitValue(ds, blob)
+	db.CommitValue(context.Background(), ds, blob)
 	buildDuration := time.Since(t1)
 
 	db = datas.NewDatabase(storage.NewView())
-	ds = db.GetDataset("test")
+	ds = db.GetDataset(context.Background(), "test")
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
 	buff := &bytes.Buffer{}

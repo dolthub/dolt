@@ -82,11 +82,11 @@ func TestNomsSplore(t *testing.T) {
 		"typePrimitive": types.FloaTType,
 		"typeStruct":    types.MakeStructType("StructType", types.StructField{Name: "x", Type: types.StringType}, types.StructField{Name: "y", Type: types.MakeStructType("")}),
 	})
-	sp.GetDatabase().CommitValue(sp.GetDataset(), strct)
+	sp.GetDatabase().CommitValue(context.Background(), sp.GetDataset(context.Background()), strct)
 
 	// The dataset head hash changes whenever the test data changes, so instead
 	// of updating it all the time, use string replacement.
-	dsHash := sp.GetDataset().HeadRef().TargetHash().String()
+	dsHash := sp.GetDataset(context.Background()).HeadRef().TargetHash().String()
 	test := func(expectJSON string, id string) {
 		expectJSON = strings.Replace(expectJSON, "{{dsHash}}", dsHash, -1)
 		assert.JSONEq(expectJSON, getNode(id))

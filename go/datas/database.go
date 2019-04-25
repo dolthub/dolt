@@ -6,6 +6,7 @@
 package datas
 
 import (
+	"context"
 	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -34,14 +35,14 @@ type Database interface {
 
 	// Datasets returns the root of the database which is a
 	// Map<String, Ref<Commit>> where string is a datasetID.
-	Datasets() types.Map
+	Datasets(ctx context.Context) types.Map
 
 	// GetDataset returns a Dataset struct containing the current mapping of
 	// datasetID in the above Datasets Map.
-	GetDataset(datasetID string) Dataset
+	GetDataset(ctx context.Context, datasetID string) Dataset
 
 	// Rebase brings this Database's view of the world inline with upstream.
-	Rebase()
+	Rebase(ctx context.Context)
 
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
@@ -55,7 +56,7 @@ type Database interface {
 	// success or failure, and Datasets() is updated to match backing storage
 	// upon return as well. If the update cannot be performed, e.g., because
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
-	Commit(ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
+	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
 	// CommitValue updates the Commit that ds.ID() in this database points at.
 	// All Values that have been written to this Database are guaranteed to be
@@ -66,7 +67,7 @@ type Database interface {
 	// success or failure, and Datasets() is updated to match backing storage
 	// upon return as well. If the update cannot be performed, e.g., because
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
-	CommitValue(ds Dataset, v types.Value) (Dataset, error)
+	CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this
@@ -75,7 +76,7 @@ type Database interface {
 	// success or failure, and Datasets() is updated to match backing storage
 	// upon return as well. If the update cannot be performed, e.g., because
 	// of a conflict, Delete returns an 'ErrMergeNeeded' error.
-	Delete(ds Dataset) (Dataset, error)
+	Delete(ctx context.Context, ds Dataset) (Dataset, error)
 
 	// SetHead ignores any lineage constraints (e.g. the current Head being in
 	// commit’s Parent set) and force-sets a mapping from datasetID: commit in
@@ -87,7 +88,7 @@ type Database interface {
 	// The newest snapshot of the Dataset is always returned, so the caller an
 	// easily retry using the latest.
 	// Regardless, Datasets() is updated to match backing storage upon return.
-	SetHead(ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be
@@ -97,7 +98,7 @@ type Database interface {
 	// The newest snapshot of the Dataset is always returned, so the caller
 	// can easily retry using the latest.
 	// Regardless, Datasets() is updated to match backing storage upon return.
-	FastForward(ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	FastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is
@@ -109,7 +110,7 @@ type Database interface {
 	// if this operation is not supported.
 	StatsSummary() string
 
-	Flush()
+	Flush(ctx context.Context)
 
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-

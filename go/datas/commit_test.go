@@ -135,16 +135,16 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// Add a commit and return it
 	addCommit := func(datasetID string, val string, parents ...types.Struct) types.Struct {
-		ds := db.GetDataset(datasetID)
+		ds := db.GetDataset(context.Background(), datasetID)
 		var err error
-		ds, err = db.Commit(ds, types.String(val), CommitOptions{Parents: toRefSet(db, parents...)})
+		ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: toRefSet(db, parents...)})
 		assert.NoError(err)
 		return ds.Head()
 	}
 
 	// Assert that c is the common ancestor of a and b
 	assertCommonAncestor := func(expected, a, b types.Struct) {
-		if found, ok := FindCommonAncestor(types.NewRef(a), types.NewRef(b), db); assert.True(ok) {
+		if found, ok := FindCommonAncestor(context.Background(), types.NewRef(a), types.NewRef(b), db); assert.True(ok) {
 			ancestor := found.TargetValue(context.Background(), db).(types.Struct)
 			assert.True(
 				expected.Equals(ancestor),
@@ -194,7 +194,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assertCommonAncestor(a1, a6, c3) // Traversing multiple parents on both sides
 
 	// No common ancestor
-	if found, ok := FindCommonAncestor(types.NewRef(d2), types.NewRef(a6), db); !assert.False(ok) {
+	if found, ok := FindCommonAncestor(context.Background(), types.NewRef(d2), types.NewRef(a6), db); !assert.False(ok) {
 		assert.Fail(
 			"Unexpected common ancestor!",
 			"Should be no common ancestor of %s, %s. Got %s",

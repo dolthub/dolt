@@ -46,7 +46,7 @@ func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(dsPath)
+	db, ds, err := cfg.GetDataset(context.Background(), dsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return 1
@@ -55,7 +55,7 @@ func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 
 	blob := types.NewBlob(context.Background(), db, readers...)
 
-	_, err = db.CommitValue(ds, blob)
+	_, err = db.CommitValue(context.Background(), ds, blob)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return 1
