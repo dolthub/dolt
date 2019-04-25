@@ -159,7 +159,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 	currentCur := newCursorAt(ctx, current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
-		fastForward(lastCur, currentCur)
+		fastForward(ctx, lastCur, currentCur)
 
 		for lastCur.valid() && currentCur.valid() &&
 			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
@@ -179,8 +179,8 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, getMapValue(lastCur), getMapValue(currentCur)}) {
 					return false
 				}
-				lastCur.advance(context.TODO())
-				currentCur.advance(context.TODO())
+				lastCur.advance(ctx)
+				currentCur.advance(ctx)
 			}
 		}
 	}
@@ -189,13 +189,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v, getMapValue(lastCur), nil}) {
 			return false
 		}
-		lastCur.advance(context.TODO())
+		lastCur.advance(ctx)
 	}
 	for currentCur.valid() {
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v, nil, getMapValue(currentCur)}) {
 			return false
 		}
-		currentCur.advance(context.TODO())
+		currentCur.advance(ctx)
 	}
 
 	return true
@@ -204,14 +204,14 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 /**
  * Advances |a| and |b| past their common sequence of equal values.
  */
-func fastForward(a *sequenceCursor, b *sequenceCursor) {
+func fastForward(ctx context.Context, a *sequenceCursor, b *sequenceCursor) {
 	if a.valid() && b.valid() {
-		doFastForward(true, a, b)
+		doFastForward(ctx, true, a, b)
 	}
 }
 
-func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
-	cur.sync(context.TODO())
+func syncWithIdx(ctx context.Context, cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
+	cur.sync(ctx)
 	if hasMore {
 		cur.idx = 0
 	} else if allowPastEnd {
@@ -224,7 +224,7 @@ func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
 /*
  * Returns an array matching |a| and |b| respectively to whether that cursor has more values.
  */
-func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
+func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
 	d.PanicIfFalse(a.valid())
 	d.PanicIfFalse(b.valid())
 	aHasMore = true
@@ -234,9 +234,9 @@ func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHa
 		if nil != a.parent && nil != b.parent && isCurrentEqual(a.parent, b.parent) {
 			// Key optimisation: if the sequences have common parents, then entire chunks can be
 			// fast-forwarded without reading unnecessary data.
-			aHasMore, bHasMore = doFastForward(false, a.parent, b.parent)
-			syncWithIdx(a, aHasMore, allowPastEnd)
-			syncWithIdx(b, bHasMore, allowPastEnd)
+			aHasMore, bHasMore = doFastForward(ctx, false, a.parent, b.parent)
+			syncWithIdx(ctx, a, aHasMore, allowPastEnd)
+			syncWithIdx(ctx, b, bHasMore, allowPastEnd)
 		} else {
 			aHasMore = a.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
 			bHasMore = b.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
