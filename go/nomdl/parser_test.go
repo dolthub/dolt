@@ -271,10 +271,10 @@ func TestValuePrimitives(t *testing.T) {
 
 func TestValueList(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "[]", types.NewList(vs))
+	assertParse(t, vs, "[]", types.NewList(context.Background(), vs))
 
-	assertParse(t, vs, "[42]", types.NewList(vs, types.Float(42)))
-	assertParse(t, vs, "[42,]", types.NewList(vs, types.Float(42)))
+	assertParse(t, vs, "[42]", types.NewList(context.Background(), vs, types.Float(42)))
+	assertParse(t, vs, "[42,]", types.NewList(context.Background(), vs, types.Float(42)))
 
 	assertParseError(t, "[", "Unexpected token EOF, example:1:2")
 	assertParseError(t, "[,", "Unexpected token \",\", example:1:3")
@@ -284,18 +284,18 @@ func TestValueList(t *testing.T) {
 
 	assertParse(t, vs, `[42,
                 Bool,
-        ]`, types.NewList(vs, types.Float(42), types.BoolType))
+        ]`, types.NewList(context.Background(), vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `[42,
                 Bool
-        ]`, types.NewList(vs, types.Float(42), types.BoolType))
+        ]`, types.NewList(context.Background(), vs, types.Float(42), types.BoolType))
 }
 
 func TestValueSet(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "set {}", types.NewSet(vs))
+	assertParse(t, vs, "set {}", types.NewSet(context.Background(), vs))
 
-	assertParse(t, vs, "set {42}", types.NewSet(vs, types.Float(42)))
-	assertParse(t, vs, "set {42,}", types.NewSet(vs, types.Float(42)))
+	assertParse(t, vs, "set {42}", types.NewSet(context.Background(), vs, types.Float(42)))
+	assertParse(t, vs, "set {42,}", types.NewSet(context.Background(), vs, types.Float(42)))
 
 	assertParseError(t, "set", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "set {", "Unexpected token EOF, example:1:6")
@@ -306,18 +306,18 @@ func TestValueSet(t *testing.T) {
 
 	assertParse(t, vs, `set {42,
                 Bool,
-        }`, types.NewSet(vs, types.Float(42), types.BoolType))
+        }`, types.NewSet(context.Background(), vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `set {42,
                 Bool
-        }`, types.NewSet(vs, types.Float(42), types.BoolType))
+        }`, types.NewSet(context.Background(), vs, types.Float(42), types.BoolType))
 }
 
 func TestValueMap(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "map {}", types.NewMap(vs))
+	assertParse(t, vs, "map {}", types.NewMap(context.Background(), vs))
 
-	assertParse(t, vs, "map {42: true}", types.NewMap(vs, types.Float(42), types.Bool(true)))
-	assertParse(t, vs, "map {42: true,}", types.NewMap(vs, types.Float(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true}", types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true,}", types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true)))
 
 	assertParseError(t, "map", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "map {", "Unexpected token EOF, example:1:6")
@@ -330,10 +330,10 @@ func TestValueMap(t *testing.T) {
 
 	assertParse(t, vs, `map {42:
                 Bool,
-        }`, types.NewMap(vs, types.Float(42), types.BoolType))
+        }`, types.NewMap(context.Background(), vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `map {42:
                 Bool
-        }`, types.NewMap(vs, types.Float(42), types.BoolType))
+        }`, types.NewMap(context.Background(), vs, types.Float(42), types.BoolType))
 }
 
 func TestValueType(t *testing.T) {
@@ -436,14 +436,14 @@ func TestRoundTrips(t *testing.T) {
 	test(types.NewEmptyBlob(vs))
 	test(types.NewBlob(context.Background(), vs, bytes.NewBufferString("abc")))
 
-	test(types.NewList(vs))
-	test(types.NewList(vs, types.Float(42), types.Bool(true), types.String("abc")))
+	test(types.NewList(context.Background(), vs))
+	test(types.NewList(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
 
-	test(types.NewSet(vs))
-	test(types.NewSet(vs, types.Float(42), types.Bool(true), types.String("abc")))
+	test(types.NewSet(context.Background(), vs))
+	test(types.NewSet(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
 
-	test(types.NewMap(vs))
-	test(types.NewMap(vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(vs)))
+	test(types.NewMap(context.Background(), vs))
+	test(types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(context.Background(), vs)))
 
 	test(types.NewStruct("", nil))
 	test(types.NewStruct("Float", nil))

@@ -185,12 +185,12 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 
 	switch a.Kind() {
 	case types.ListKind:
-		if aList, bList, pList, ok := listAssert(m.vrw, a, b, parent); ok {
+		if aList, bList, pList, ok := listAssert(ctx, m.vrw, a, b, parent); ok {
 			return threeWayListMerge(ctx, aList, bList, pList)
 		}
 
 	case types.MapKind:
-		if aMap, bMap, pMap, ok := mapAssert(m.vrw, a, b, parent); ok {
+		if aMap, bMap, pMap, ok := mapAssert(ctx, m.vrw, a, b, parent); ok {
 			return m.threeWayMapMerge(ctx, aMap, bMap, pMap, path)
 		}
 
@@ -204,7 +204,7 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 		}
 
 	case types.SetKind:
-		if aSet, bSet, pSet, ok := setAssert(m.vrw, a, b, parent); ok {
+		if aSet, bSet, pSet, ok := setAssert(ctx, m.vrw, a, b, parent); ok {
 			return m.threeWaySetMerge(ctx, aSet, bSet, pSet, path)
 		}
 
@@ -274,26 +274,26 @@ func (m *merger) threeWayStructMerge(ctx context.Context, a, b, parent types.Str
 	return m.threeWayOrderedSequenceMerge(ctx, structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }
 
-func listAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
+func listAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
 	var aOk, bOk, pOk bool
 	aList, aOk = a.(types.List)
 	bList, bOk = b.(types.List)
 	if parent != nil {
 		pList, pOk = parent.(types.List)
 	} else {
-		pList, pOk = types.NewList(vrw), true
+		pList, pOk = types.NewList(ctx, vrw), true
 	}
 	return aList, bList, pList, aOk && bOk && pOk
 }
 
-func mapAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
+func mapAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
 	var aOk, bOk, pOk bool
 	aMap, aOk = a.(types.Map)
 	bMap, bOk = b.(types.Map)
 	if parent != nil {
 		pMap, pOk = parent.(types.Map)
 	} else {
-		pMap, pOk = types.NewMap(vrw), true
+		pMap, pOk = types.NewMap(ctx, vrw), true
 	}
 	return aMap, bMap, pMap, aOk && bOk && pOk
 }
@@ -319,14 +319,14 @@ func refAssert(ctx context.Context, a, b, parent types.Value, vrw types.ValueRea
 	return aValue, bValue, pValue, aOk && bOk && pOk
 }
 
-func setAssert(vrw types.ValueReadWriter, a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
+func setAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
 	var aOk, bOk, pOk bool
 	aSet, aOk = a.(types.Set)
 	bSet, bOk = b.(types.Set)
 	if parent != nil {
 		pSet, pOk = parent.(types.Set)
 	} else {
-		pSet, pOk = types.NewSet(vrw), true
+		pSet, pOk = types.NewSet(ctx, vrw), true
 	}
 	return aSet, bSet, pSet, aOk && bOk && pOk
 }

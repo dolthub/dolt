@@ -82,7 +82,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	datasetID := "ds1"
 	ds1 := suite.db.GetDataset(datasetID)
 
-	se := types.NewSet(suite.db).Edit()
+	se := types.NewSet(context.Background(), suite.db).Edit()
 	for i := 0; i < 100; i++ {
 		se.Insert(suite.db.WriteValue(context.Background(), types.Float(100)))
 	}
@@ -241,7 +241,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 }
 
 func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(vrw, parents...)}
+	return CommitOptions{Parents: types.NewSet(context.Background(), vrw, parents...)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -263,7 +263,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds1, ds2 := suite.db.GetDataset(datasetID1), suite.db.GetDataset(datasetID2)
 
 	var err error
-	v := types.NewMap(suite.db, types.String("Hello"), types.Float(42))
+	v := types.NewMap(context.Background(), suite.db, types.String("Hello"), types.Float(42))
 	ds1, err = suite.db.CommitValue(ds1, v)
 	ds1First := ds1
 	suite.NoError(err)
@@ -297,7 +297,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 }
 
 func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(vrw, parents...), Policy: merge.NewThreeWay(policy)}
+	return CommitOptions{Parents: types.NewSet(context.Background(), vrw, parents...), Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {
@@ -517,33 +517,33 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	// Set<String>
 	v1 := types.String("hello")
 	v2 := types.String("world")
-	s1 := types.NewSet(suite.db, v1, v2)
+	s1 := types.NewSet(context.Background(), suite.db, v1, v2)
 	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), s1).Height())
 
 	// Set<Ref<String>>
-	s2 := types.NewSet(suite.db, suite.db.WriteValue(context.Background(), v1), suite.db.WriteValue(context.Background(), v2))
+	s2 := types.NewSet(context.Background(), suite.db, suite.db.WriteValue(context.Background(), v1), suite.db.WriteValue(context.Background(), v2))
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), s2).Height())
 
 	// List<Set<String>>
 	v3 := types.String("foo")
 	v4 := types.String("bar")
-	s3 := types.NewSet(suite.db, v3, v4)
-	l1 := types.NewList(suite.db, s1, s3)
+	s3 := types.NewSet(context.Background(), suite.db, v3, v4)
+	l1 := types.NewList(context.Background(), suite.db, s1, s3)
 	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
+	l2 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
-	s4 := types.NewSet(suite.db, suite.db.WriteValue(context.Background(), v3), suite.db.WriteValue(context.Background(), v4))
-	l3 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s4))
+	s4 := types.NewSet(context.Background(), suite.db, suite.db.WriteValue(context.Background(), v3), suite.db.WriteValue(context.Background(), v4))
+	l3 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s4))
 	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), l3).Height())
 
 	// List<Set<String> | RefValue<Set<String>>>
-	l4 := types.NewList(suite.db, s1, suite.db.WriteValue(context.Background(), s3))
+	l4 := types.NewList(context.Background(), suite.db, s1, suite.db.WriteValue(context.Background(), s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l4).Height())
-	l5 := types.NewList(suite.db, suite.db.WriteValue(context.Background(), s1), s3)
+	l5 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), s3)
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l5).Height())
 
 	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
@@ -554,7 +554,7 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 
-	suite.db.WriteValue(context.Background(), types.NewList(suite.db, andMore...))
+	suite.db.WriteValue(context.Background(), types.NewList(context.Background(), suite.db, andMore...))
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {

@@ -54,21 +54,21 @@ func createMap(kv ...interface{}) types.Map {
 	vs := newTestValueStore()
 	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewMap(vs, keyValues...)
+	return types.NewMap(context.Background(), vs, keyValues...)
 }
 
 func createSet(kv ...interface{}) types.Set {
 	vs := newTestValueStore()
 	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewSet(vs, keyValues...)
+	return types.NewSet(context.Background(), vs, keyValues...)
 }
 
 func createList(kv ...interface{}) types.List {
 	vs := newTestValueStore()
 	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewList(vs, keyValues...)
+	return types.NewList(context.Background(), vs, keyValues...)
 }
 
 func createStruct(name string, kv ...interface{}) types.Struct {
@@ -332,8 +332,8 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
   }
 `
 
-	m1 := types.NewMap(vs, k1, types.Bool(true))
-	m2 := types.NewMap(vs, k1, types.Bool(false))
+	m1 := types.NewMap(context.Background(), vs, k1, types.Bool(true))
+	m2 := types.NewMap(context.Background(), vs, k1, types.Bool(false))
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		PrintDiff(context.Background(), buf, m1, m2, leftRight)

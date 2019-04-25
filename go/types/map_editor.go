@@ -115,16 +115,16 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		if existingValue != nil {
-			ch.Skip()
+			ch.Skip(ctx)
 		}
 		if kv.value != nil {
-			ch.Append(kv)
+			ch.Append(ctx, kv)
 		}
 	}
 
@@ -132,7 +132,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		return me.m // no edits required application
 	}
 
-	return newMap(ch.Done().(orderedSequence))
+	return newMap(ch.Done(ctx).(orderedSequence))
 }
 
 func (me *MapEditor) Set(k Value, v Valuable) *MapEditor {

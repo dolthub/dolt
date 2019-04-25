@@ -169,7 +169,7 @@ func (suite *HTTPChunkStoreSuite) TestPutChunksInOrder() {
 	}
 	vs := types.NewValueStore(suite.serverCS)
 	defer vs.Close()
-	le := types.NewList(vs).Edit()
+	le := types.NewList(context.Background(), vs).Edit()
 	for _, val := range vals {
 		suite.http.Put(context.Background(), types.EncodeValue(val))
 		le.Append(types.NewRef(val))
@@ -193,7 +193,7 @@ func (suite *HTTPChunkStoreSuite) TestRebase() {
 	suite.Equal(hash.Hash{}, suite.http.Root(context.Background()))
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
-	c := types.EncodeValue(types.NewMap(db))
+	c := types.EncodeValue(types.NewMap(context.Background(), db))
 	suite.serverCS.Put(context.Background(), c)
 	suite.True(suite.serverCS.Commit(context.Background(), c.Hash(), hash.Hash{})) // change happens behind our backs
 	suite.Equal(hash.Hash{}, suite.http.Root(context.Background()))                // shouldn't be visible yet
@@ -205,7 +205,7 @@ func (suite *HTTPChunkStoreSuite) TestRebase() {
 func (suite *HTTPChunkStoreSuite) TestRoot() {
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
-	c := types.EncodeValue(types.NewMap(db))
+	c := types.EncodeValue(types.NewMap(context.Background(), db))
 	suite.serverCS.Put(context.Background(), c)
 	suite.True(suite.http.Commit(context.Background(), c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
@@ -215,7 +215,7 @@ func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
 	store := newBadVersionHTTPChunkStoreForTest(suite.serverCS)
 	vs := types.NewValueStore(store)
 	defer vs.Close()
-	c := types.EncodeValue(types.NewMap(vs))
+	c := types.EncodeValue(types.NewMap(context.Background(), vs))
 	suite.serverCS.Put(context.Background(), c)
 	suite.Panics(func() { store.Commit(context.Background(), c.Hash(), hash.Hash{}) })
 }
@@ -223,7 +223,7 @@ func (suite *HTTPChunkStoreSuite) TestVersionMismatch() {
 func (suite *HTTPChunkStoreSuite) TestCommit() {
 	db := NewDatabase(suite.serverCS)
 	defer db.Close()
-	c := types.EncodeValue(types.NewMap(db))
+	c := types.EncodeValue(types.NewMap(context.Background(), db))
 	suite.serverCS.Put(context.Background(), c)
 	suite.True(suite.http.Commit(context.Background(), c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))
@@ -239,7 +239,7 @@ func (suite *HTTPChunkStoreSuite) TestCommitWithParams() {
 	store := newAuthenticatingHTTPChunkStoreForTest(suite.Assert(), suite.serverCS, u)
 	vs := types.NewValueStore(store)
 	defer vs.Close()
-	c := types.EncodeValue(types.NewMap(vs))
+	c := types.EncodeValue(types.NewMap(context.Background(), vs))
 	suite.serverCS.Put(context.Background(), c)
 	suite.True(store.Commit(context.Background(), c.Hash(), hash.Hash{}))
 	suite.Equal(c.Hash(), suite.serverCS.Root(context.Background()))

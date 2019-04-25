@@ -72,7 +72,7 @@ func (db *database) Flush() {
 func (db *database) Datasets() types.Map {
 	rootHash := db.rt.Root(context.TODO())
 	if rootHash.IsEmpty() {
-		return types.NewMap(db)
+		return types.NewMap(context.TODO(), db)
 	}
 
 	return db.ReadValue(context.TODO(), rootHash).(types.Map)
@@ -182,7 +182,7 @@ func (db *database) doCommit(datasetID string, commit types.Struct, mergePolicy 
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(context.TODO(), NewCommit(merged, types.NewSet(db, commitRef, currentHeadRef), types.EmptyStruct))
+					commitRef = db.WriteValue(context.TODO(), NewCommit(merged, types.NewSet(context.TODO(), db, commitRef, currentHeadRef), types.EmptyStruct))
 				}
 			}
 		}
@@ -248,7 +248,7 @@ func (db *database) validateRefAsCommit(r types.Ref) types.Struct {
 func buildNewCommit(ds Dataset, v types.Value, opts CommitOptions) types.Struct {
 	parents := opts.Parents
 	if (parents == types.Set{}) {
-		parents = types.NewSet(ds.Database())
+		parents = types.NewSet(context.TODO(), ds.Database())
 		if headRef, ok := ds.MaybeHeadRef(); ok {
 			parents = parents.Edit().Insert(headRef).Set(context.TODO())
 		}

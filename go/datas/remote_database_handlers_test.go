@@ -29,7 +29,7 @@ func TestHandleWriteValue(t *testing.T) {
 	storage := &chunks.TestStorage{}
 	db := NewDatabase(storage.NewView())
 
-	l := types.NewList(
+	l := types.NewList(context.Background(),
 		db,
 		db.WriteValue(context.Background(), types.Bool(true)),
 		db.WriteValue(context.Background(), types.Bool(false)),
@@ -352,12 +352,12 @@ func TestHandlePostRoot(t *testing.T) {
 
 	commit := buildTestCommit(vs, types.String("head"))
 	commitRef := vs.WriteValue(context.Background(), commit)
-	firstHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(commitRef))
+	firstHead := types.NewMap(context.Background(), vs, types.String("dataset1"), types.ToRefOfValue(commitRef))
 	firstHeadRef := vs.WriteValue(context.Background(), firstHead)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
 	commit = buildTestCommit(vs, types.String("second"), commitRef)
-	newHead := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
+	newHead := types.NewMap(context.Background(), vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
 	newHeadRef := vs.WriteValue(context.Background(), newHead)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
@@ -384,7 +384,7 @@ func buildPostRootURL(current, last hash.Hash) string {
 }
 
 func buildTestCommit(vrw types.ValueReadWriter, v types.Value, parents ...types.Value) types.Struct {
-	return NewCommit(v, types.NewSet(vrw, parents...), types.NewStruct("Meta", types.StructData{}))
+	return NewCommit(v, types.NewSet(context.Background(), vrw, parents...), types.NewStruct("Meta", types.StructData{}))
 }
 
 func TestRejectPostRoot(t *testing.T) {
@@ -394,7 +394,7 @@ func TestRejectPostRoot(t *testing.T) {
 	vs := types.NewValueStore(cs)
 	defer vs.Close()
 
-	newHead := types.NewMap(vs, types.String("dataset1"), types.String("Not a Head"))
+	newHead := types.NewMap(context.Background(), vs, types.String("dataset1"), types.String("Not a Head"))
 	chunk := types.EncodeValue(newHead)
 	cs.Put(context.Background(), chunk)
 	persistChunks(cs)
@@ -407,7 +407,7 @@ func TestRejectPostRoot(t *testing.T) {
 
 	// Put in a legit commit
 	commit := buildTestCommit(vs, types.String("commit"))
-	head := types.NewMap(vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
+	head := types.NewMap(context.Background(), vs, types.String("dataset1"), types.ToRefOfValue(vs.WriteValue(context.Background(), commit)))
 	headRef := vs.WriteValue(context.Background(), head)
 	assert.True(vs.Commit(context.Background(), headRef.TargetHash(), vs.Root(context.Background())))
 

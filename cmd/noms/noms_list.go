@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -56,7 +57,7 @@ func nomsList(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandle
 func nomsListNew(dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyListInserts(sp, types.NewList(sp.GetDatabase()), nil, 0, args)
+	applyListInserts(sp, types.NewList(context.Background(), sp.GetDatabase()), nil, 0, args)
 	return 0
 }
 

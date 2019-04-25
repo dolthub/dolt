@@ -91,7 +91,7 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	for i := 0; i < count; i++ {
 		nums[i] = Float(i)
 	}
-	l := NewList(suite.vs, nums...)
+	l := NewList(context.Background(), suite.vs, nums...)
 	suite.True(NewRef(l).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
@@ -170,7 +170,7 @@ func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) TestSkipListElement() {
-	wholeList := NewList(suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
+	wholeList := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -179,7 +179,7 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 }
 
 func (suite *WalkTestSuite) TestSkipSetElement() {
-	wholeSet := NewSet(suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
+	wholeSet := NewSet(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -189,8 +189,8 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 
 func (suite *WalkTestSuite) TestSkipMapValue() {
 	shouldAlsoSeeItem := String("Also good")
-	shouldAlsoSee := NewSet(suite.vs, shouldAlsoSeeItem)
-	wholeMap := NewMap(suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
+	shouldAlsoSee := NewSet(context.Background(), suite.vs, shouldAlsoSeeItem)
+	wholeMap := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -199,7 +199,7 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 }
 
 func (suite *WalkTestSuite) TestSkipMapKey() {
-	wholeMap := NewMap(suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
+	wholeMap := NewMap(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -208,17 +208,17 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 }
 
 func (suite *WalkAllTestSuite) NewList(vs ...Value) Ref {
-	v := NewList(suite.vs, vs...)
+	v := NewList(context.Background(), suite.vs, vs...)
 	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewMap(vs ...Value) Ref {
-	v := NewMap(suite.vs, vs...)
+	v := NewMap(context.Background(), suite.vs, vs...)
 	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewSet(vs ...Value) Ref {
-	v := NewSet(suite.vs, vs...)
+	v := NewSet(context.Background(), suite.vs, vs...)
 	return suite.vs.WriteValue(context.Background(), v)
 }
 
@@ -256,7 +256,7 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
-	suite.shouldSee = NewList(suite.vs, suite.shouldSeeItem)
+	suite.shouldSee = NewList(context.Background(), suite.vs, suite.shouldSeeItem)
 	suite.deadValue = Float(0xDEADBEEF)
-	suite.mustSkip = NewList(suite.vs, suite.deadValue)
+	suite.mustSkip = NewList(context.Background(), suite.vs, suite.deadValue)
 }

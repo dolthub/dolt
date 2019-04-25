@@ -70,6 +70,7 @@ package suite
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -249,14 +250,14 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 					"total":   types.Float(info.total.Nanoseconds()),
 				}))
 			}
-			reps[i] = types.NewMap(db, timesSlice...)
+			reps[i] = types.NewMap(context.Background(), db, timesSlice...)
 		}
 
 		record := types.NewStruct("", map[string]types.Value{
 			"environment":      suite.getEnvironment(db),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
-			"reps":             types.NewList(db, reps...),
+			"reps":             types.NewList(context.Background(), db, reps...),
 		})
 
 		ds := db.GetDataset(*perfPrefixFlag + datasetID)

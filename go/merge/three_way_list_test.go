@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
@@ -23,7 +24,7 @@ func (s *ThreeWayListMergeSuite) SetupSuite() {
 	s.create = func(i seq) (val types.Value) {
 		if i != nil {
 			items := valsToTypesValues(s.create, i.items()...)
-			val = types.NewList(s.vs, items...)
+			val = types.NewList(context.Background(), s.vs, items...)
 		}
 		return
 	}

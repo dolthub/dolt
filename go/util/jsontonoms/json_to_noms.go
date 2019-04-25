@@ -5,6 +5,7 @@
 package jsontonoms
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/attic-labs/noms/go/d"
@@ -29,7 +30,7 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 				items = append(items, nv)
 			}
 		}
-		return types.NewList(vrw, items...)
+		return types.NewList(context.TODO(), vrw, items...)
 	case map[string]interface{}:
 		var v types.Value
 		if useStruct {
@@ -57,7 +58,7 @@ func nomsValueFromDecodedJSONBase(vrw types.ValueReadWriter, o interface{}, useS
 					kv = append(kv, types.String(k), nv)
 				}
 			}
-			v = types.NewMap(vrw, kv...)
+			v = types.NewMap(context.TODO(), vrw, kv...)
 		}
 		return v
 

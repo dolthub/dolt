@@ -38,10 +38,10 @@ func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequen
 			if cur != nil && ch.parent == nil {
 				// If fst is shallower than snd, its cur will have a parent whereas the
 				// chunker to snd won't. In that case, create a parent for fst.
-				ch.createParent()
+				ch.createParent(ctx)
 			}
 		}
 	}
 
-	return chunker.Done()
+	return chunker.Done(ctx)
 }

@@ -409,7 +409,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 	// round trip to the client and just retry inline.
 	for to, from := proposed, last; !vs.Commit(context.TODO(), to, from); {
 		// If committing failed, we go read out the map of Datasets at the root of the store, which is a Map[string]Ref<Commit>
-		rootMap := types.NewMap(vs)
+		rootMap := types.NewMap(context.TODO(), vs)
 		root := vs.Root(context.TODO())
 		if v := vs.ReadValue(context.TODO(), root); v != nil {
 			rootMap = v.(types.Map)
@@ -439,7 +439,7 @@ func handleRootPost(w http.ResponseWriter, req *http.Request, ps URLParams, cs c
 
 func validateLast(last hash.Hash, vrw types.ValueReadWriter) types.Map {
 	if last.IsEmpty() {
-		return types.NewMap(vrw)
+		return types.NewMap(context.TODO(), vrw)
 	}
 	lastVal := vrw.ReadValue(context.TODO(), last)
 	if lastVal == nil {
@@ -451,7 +451,7 @@ func validateLast(last hash.Hash, vrw types.ValueReadWriter) types.Map {
 func validateProposed(proposed, last hash.Hash, vrw types.ValueReadWriter) types.Map {
 	// Only allowed to skip this check if both last and proposed are empty, because that represents the special case of someone flushing chunks into an empty store.
 	if last.IsEmpty() && proposed.IsEmpty() {
-		return types.NewMap(vrw)
+		return types.NewMap(context.TODO(), vrw)
 	}
 	// Ensure that proposed new Root is present in vr, is a Map and, if it has anything in it, that it's <String, <Ref<Commit>>
 	proposedVal := vrw.ReadValue(context.TODO(), proposed)

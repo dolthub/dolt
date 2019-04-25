@@ -37,8 +37,8 @@ func TestAbsolutePaths(t *testing.T) {
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(db, s0, s1)
-	emptySet := types.NewSet(db)
+	list := types.NewList(context.Background(), db, s0, s1)
+	emptySet := types.NewSet(context.Background(), db)
 
 	db.WriteValue(context.Background(), s0)
 	db.WriteValue(context.Background(), s1)
@@ -88,7 +88,7 @@ func TestReadAbsolutePaths(t *testing.T) {
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(db, s0, s1)
+	list := types.NewList(context.Background(), db, s0, s1)
 
 	ds := db.GetDataset("ds")
 	_, err := db.CommitValue(ds, list)

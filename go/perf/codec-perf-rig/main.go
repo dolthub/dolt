@@ -169,11 +169,11 @@ func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) 
 		values[i] = createFn(i)
 	}
 
-	return types.NewList(vrw, values...)
+	return types.NewList(context.Background(), vrw, values...)
 }
 
 func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList(vrw).Edit()
+	l := types.NewList(context.Background(), vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		l.Append(createFn(i))
 	}
@@ -192,11 +192,11 @@ func buildSet(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewSet(vrw, values...)
+	return types.NewSet(context.Background(), vrw, values...)
 }
 
 func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	s := types.NewSet(vrw).Edit()
+	s := types.NewSet(context.Background(), vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		s.Insert(createFn(i))
 	}
@@ -215,11 +215,11 @@ func buildMap(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewMap(vrw, values...)
+	return types.NewMap(context.Background(), vrw, values...)
 }
 
 func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	me := types.NewMap(vrw).Edit()
+	me := types.NewMap(context.Background(), vrw).Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
 		me.Set(createFn(i), createFn(i+1))
