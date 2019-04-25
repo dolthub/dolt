@@ -344,7 +344,7 @@ func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value) {
 	changes := make(chan ValueChanged)
 	go func() {
-		m1.Diff(m2, changes, nil)
+		m1.Diff(context.Background(), m2, changes, nil)
 		close(changes)
 	}()
 	for change := range changes {

@@ -19,11 +19,11 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent 
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
-		a.diff(parent, aChangeChan, aStopChan)
+		a.diff(ctx, parent, aChangeChan, aStopChan)
 		close(aChangeChan)
 	}()
 	go func() {
-		b.diff(parent, bChangeChan, bStopChan)
+		b.diff(ctx, parent, bChangeChan, bStopChan)
 		close(bChangeChan)
 	}()
 

@@ -73,7 +73,7 @@ func runShow(args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(os.Stdout, value, database)
+		types.WriteValueStats(context.Background(), os.Stdout, value, database)
 		return 0
 	}
 

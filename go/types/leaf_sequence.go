@@ -140,7 +140,7 @@ func (seq leafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	return uint64(idx) + 1
 }
 
-func (seq leafSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 

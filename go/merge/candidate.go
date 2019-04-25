@@ -17,7 +17,7 @@ import (
 // threeWayOrderedSequenceMerge() can remain agnostic to which kind of
 // collections it's actually working with.
 type candidate interface {
-	diff(parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
+	diff(ctx context.Context, parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
 	get(ctx context.Context, k types.Value) types.Value
 	pathConcat(change types.ValueChanged, path types.Path) (out types.Path)
 	getValue() types.Value
@@ -27,8 +27,8 @@ type mapCandidate struct {
 	m types.Map
 }
 
-func (mc mapCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	mc.m.Diff(p.(mapCandidate).m, change, stop)
+func (mc mapCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	mc.m.Diff(ctx, p.(mapCandidate).m, change, stop)
 }
 
 func (mc mapCandidate) get(ctx context.Context, k types.Value) types.Value {
@@ -53,8 +53,8 @@ type setCandidate struct {
 	s types.Set
 }
 
-func (sc setCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	sc.s.Diff(p.(setCandidate).s, change, stop)
+func (sc setCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	sc.s.Diff(ctx, p.(setCandidate).s, change, stop)
 }
 
 func (sc setCandidate) get(ctx context.Context, k types.Value) types.Value {
@@ -79,7 +79,7 @@ type structCandidate struct {
 	s types.Struct
 }
 
-func (sc structCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+func (sc structCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
 	sc.s.Diff(p.(structCandidate).s, change, stop)
 }
 

@@ -33,7 +33,7 @@ func (ts testSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (ts testSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
 	panic("not reached")
 }
 

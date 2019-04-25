@@ -225,15 +225,15 @@ func (l List) IteratorAt(ctx context.Context, index uint64) ListIterator {
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
 // closeChan to cancel the diff operation.
-func (l List) Diff(last List, changes chan<- Splice, closeChan <-chan struct{}) {
-	l.DiffWithLimit(last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
+func (l List) Diff(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}) {
+	l.DiffWithLimit(ctx, last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
 // DiffWithLimit streams the diff from last to the current list to the changes channel. Caller can
 // close closeChan to cancel the diff operation.
 // The maxSpliceMatrixSize determines the how big of an edit distance matrix we are willing to
 // compute versus just saying the thing changed.
-func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
+func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
 	if l.Equals(last) {
 		return
 	}
@@ -247,7 +247,7 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 		return
 	}
 
-	indexedSequenceDiff(last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
+	indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {

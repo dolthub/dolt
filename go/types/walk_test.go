@@ -35,7 +35,7 @@ func (suite *WalkAllTestSuite) SetupTest() {
 
 func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 	actual := 0
-	WalkValues(v, suite.vs, func(c Value) (stop bool) {
+	WalkValues(context.Background(), v, suite.vs, func(c Value) (stop bool) {
 		actual++
 		return
 	})
@@ -44,7 +44,7 @@ func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 
 func (suite *WalkAllTestSuite) assertVisitedOnce(root, v Value) {
 	actual := 0
-	WalkValues(v, suite.vs, func(c Value) bool {
+	WalkValues(context.Background(), v, suite.vs, func(c Value) bool {
 		if c == v {
 			actual++
 		}
@@ -160,7 +160,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 }
 
 func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
-	WalkValues(composite, suite.vs, func(v Value) bool {
+	WalkValues(context.Background(), composite, suite.vs, func(v Value) bool {
 		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
 		return v.Equals(suite.mustSkip)

@@ -20,7 +20,7 @@ import (
 // package that implements Value reading.
 type ValueReader interface {
 	ReadValue(ctx context.Context, h hash.Hash) Value
-	ReadManyValues(hashes hash.HashSlice) ValueSlice
+	ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice
 }
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g.
@@ -133,7 +133,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 		return chunks.EmptyChunk
 	}()
 	if chunk.IsEmpty() {
-		chunk = lvs.cs.Get(context.TODO(), h)
+		chunk = lvs.cs.Get(ctx, h)
 	}
 	if chunk.IsEmpty() {
 		return nil
@@ -148,7 +148,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 // ReadManyValues reads and decodes Values indicated by |hashes| from lvs and
 // returns the found Values in the same order. Any non-present Values will be
 // represented by nil.
-func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
+func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
 		v := DecodeValue(*chunk, lvs)
@@ -189,7 +189,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
-		go func() { lvs.cs.GetMany(context.TODO(), remaining, foundChunks); close(foundChunks) }()
+		go func() { lvs.cs.GetMany(ctx, remaining, foundChunks); close(foundChunks) }()
 		for c := range foundChunks {
 			h := c.Hash()
 			foundValues[h] = decode(h, c)

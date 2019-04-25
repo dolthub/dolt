@@ -17,11 +17,11 @@ func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged typ
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
-		a.Diff(parent, aSpliceChan, aStopChan)
+		a.Diff(ctx, parent, aSpliceChan, aStopChan)
 		close(aSpliceChan)
 	}()
 	go func() {
-		b.Diff(parent, bSpliceChan, bStopChan)
+		b.Diff(ctx, parent, bSpliceChan, bStopChan)
 		close(bSpliceChan)
 	}()
 
