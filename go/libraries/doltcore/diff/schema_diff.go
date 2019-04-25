@@ -7,12 +7,17 @@ import (
 type SchemaChangeType int
 
 const (
+	// SchDiffNone is the SchemaChangeType for two columns with the same tag that are identical
 	SchDiffNone SchemaChangeType = iota
+	// SchDiffAdded is the SchemaChangeType when a column is in the new schema but not the old
 	SchDiffColAdded
+	// SchDiffRemoved is the SchemaChangeType when a column is in the old schema but not the new
 	SchDiffColRemoved
+	// SchDiffModified is the SchemaChangeType for two columns with the same tag that are different
 	SchDiffColModified
 )
 
+// SchemaDifference is the result of comparing two columns from two schemas.
 type SchemaDifference struct {
 	DiffType SchemaChangeType
 	Tag      uint64
@@ -20,6 +25,7 @@ type SchemaDifference struct {
 	New      *schema.Column
 }
 
+// DiffSchemas compares two schemas by looking at column's with the same tag.
 func DiffSchemas(sch1, sch2 schema.Schema) map[uint64]SchemaDifference {
 	colPairMap := pairColumns(sch1, sch2)
 
@@ -39,6 +45,7 @@ func DiffSchemas(sch1, sch2 schema.Schema) map[uint64]SchemaDifference {
 	return diffs
 }
 
+// pairColumns loops over both sets of columns pairing columns with the same tag.
 func pairColumns(sch1, sch2 schema.Schema) map[uint64][2]*schema.Column {
 	colPairMap := make(map[uint64][2]*schema.Column)
 	sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
