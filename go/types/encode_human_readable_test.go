@@ -335,7 +335,7 @@ type TestCommenter struct {
 	testType *Type
 }
 
-func (c TestCommenter) Comment(v Value) string {
+func (c TestCommenter) Comment(ctx context.Context, v Value) string {
 	if !(v.typeOf().Equals(c.testType)) {
 		return ""
 	}

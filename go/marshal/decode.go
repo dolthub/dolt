@@ -114,7 +114,7 @@ func MustUnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface
 //  func (t *MyType) UnmarshalNoms(v types.Value) error {}
 type Unmarshaler interface {
 	// UnmarshalNoms decodes v, or returns an error.
-	UnmarshalNoms(v types.Value) error
+	UnmarshalNoms(ctx context.Context, v types.Value) error
 }
 
 var unmarshalerInterface = reflect.TypeOf((*Unmarshaler)(nil)).Elem()
@@ -172,7 +172,7 @@ type decoderFunc func(v types.Value, rv reflect.Value)
 
 func typeDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc {
 	if reflect.PtrTo(t).Implements(unmarshalerInterface) {
-		return marshalerDecoder(t)
+		return marshalerDecoder(ctx, t)
 	}
 
 	switch t.Kind() {
@@ -372,10 +372,10 @@ func nomsValueDecoder(v types.Value, rv reflect.Value) {
 	rv.Set(reflect.ValueOf(v))
 }
 
-func marshalerDecoder(t reflect.Type) decoderFunc {
+func marshalerDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	return func(v types.Value, rv reflect.Value) {
 		ptr := reflect.New(t)
-		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(v)
+		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(ctx, v)
 		if err != nil {
 			panic(&unmarshalNomsError{err})
 		}
