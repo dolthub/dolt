@@ -95,7 +95,7 @@ func TestWalkRefs(t *testing.T) {
 			for s.isLeaf() {
 				e := s.Edit()
 				e = e.Insert(newValueSlice(r)...)
-				s = e.Set()
+				s = e.Set(context.Background())
 			}
 			runTest(s, t)
 		})

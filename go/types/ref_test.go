@@ -30,7 +30,7 @@ func TestRefInSet(t *testing.T) {
 
 	s := NewSet(vs)
 	r := NewRef(s)
-	s = s.Edit().Insert(r).Set()
+	s = s.Edit().Insert(r).Set(context.Background())
 	r2 := s.First()
 	assert.True(r.Equals(r2))
 }

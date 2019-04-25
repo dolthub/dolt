@@ -201,7 +201,7 @@ func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn cre
 		s.Insert(createFn(i))
 	}
 
-	return s.Set()
+	return s.Set(context.Background())
 }
 
 func readSet(c types.Collection) {

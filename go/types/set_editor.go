@@ -32,10 +32,10 @@ func (se *SetEditor) Kind() NomsKind {
 }
 
 func (se *SetEditor) Value(ctx context.Context) Value {
-	return se.Set()
+	return se.Set(ctx)
 }
 
-func (se *SetEditor) Set() Set {
+func (se *SetEditor) Set(ctx context.Context) Set {
 	if len(se.edits) == 0 {
 		return se.s // no edits
 	}
@@ -61,7 +61,7 @@ func (se *SetEditor) Set() Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(context.TODO(), seq, edit.value, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.value, true, false)
 			}()
 
 			editChan <- edit
