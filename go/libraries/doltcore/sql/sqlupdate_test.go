@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -271,7 +272,7 @@ func TestExecuteUpdate(t *testing.T) {
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Update)
 
-			result, err := ExecuteUpdate(dEnv.DoltDB, root, s, tt.query)
+			result, err := ExecuteUpdate(context.Background(), dEnv.DoltDB, root, s, tt.query)
 			if tt.expectedErr {
 				assert.True(t, err != nil, "expected error")
 				assert.Equal(t, UpdateResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")

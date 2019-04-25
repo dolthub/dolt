@@ -15,7 +15,7 @@ type DeleteResult struct {
 	NumRowsDeleted int
 }
 
-func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delete, query string) (*DeleteResult, error) {
+func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delete, query string) (*DeleteResult, error) {
 	tableExprs := s.TableExprs
 	if len(tableExprs) != 1 {
 		return errDelete("Exactly one table to delete from must be specified")
@@ -76,9 +76,9 @@ func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delet
 		me.Remove(r.NomsMapKey(tableSch))
 	}
 
-	table = table.UpdateRows(context.TODO(), me.Map())
+	table = table.UpdateRows(ctx, me.Map())
 
-	result.Root = root.PutTable(context.TODO(), db, tableName, table)
+	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }
 

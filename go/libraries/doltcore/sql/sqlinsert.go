@@ -22,7 +22,7 @@ var ErrMissingPrimaryKeys = errors.New("one or more primary key columns missing 
 var ErrConstraintFailure = errors.New("row constraint failed")
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
+func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
 	tableName := s.Table.Name.String()
 	if !root.HasTable(tableName) {
 		return errInsert("Unknown table %v", tableName)
@@ -108,9 +108,9 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(context.TODO(), me.Map())
+	table = table.UpdateRows(ctx, me.Map())
 
-	result.Root = root.PutTable(context.TODO(), db, tableName, table)
+	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }
 

@@ -29,7 +29,7 @@ var tagCommentPrefix = "tag:"
 
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
-func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
+func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
 	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
 	}
@@ -56,8 +56,8 @@ func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL
 	}
 
 	schVal, err := encoding.MarshalAsNomsValue(root.VRW(), sch)
-	tbl := doltdb.NewTable(context.TODO(), root.VRW(), schVal, types.NewMap(root.VRW()))
-	root = root.PutTable(context.TODO(), db, tableName, tbl)
+	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(root.VRW()))
+	root = root.PutTable(ctx, db, tableName, tbl)
 
 	return root, sch, nil
 }
