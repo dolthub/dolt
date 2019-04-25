@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -125,7 +126,7 @@ func (s Set) At(idx uint64) Value {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(s.orderedSequence, idx)
+	cur := newCursorAtIndex(context.TODO(), s.orderedSequence, idx)
 	return cur.current().(Value)
 }
 
@@ -138,7 +139,7 @@ type setIterCallback func(v Value) bool
 
 func (s Set) Iter(cb setIterCallback) {
 	cur := newCursorAt(s.orderedSequence, emptyKey, false, false)
-	cur.iter(func(v interface{}) bool {
+	cur.iter(context.TODO(), func(v interface{}) bool {
 		return cb(v.(Value))
 	})
 }
@@ -157,7 +158,7 @@ func (s Set) Iterator() SetIterator {
 
 func (s Set) IteratorAt(idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(s.orderedSequence, idx),
+		cursor: newCursorAtIndex(context.TODO(), s.orderedSequence, idx),
 		s:      s,
 	}
 }

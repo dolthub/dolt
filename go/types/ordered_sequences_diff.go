@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -168,18 +169,18 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, getMapValue(currentCur)}) {
 					return false
 				}
-				currentCur.advance()
+				currentCur.advance(context.TODO())
 			} else if lastKey.Less(currentKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, getMapValue(lastCur), nil}) {
 					return false
 				}
-				lastCur.advance()
+				lastCur.advance(context.TODO())
 			} else {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, getMapValue(lastCur), getMapValue(currentCur)}) {
 					return false
 				}
-				lastCur.advance()
-				currentCur.advance()
+				lastCur.advance(context.TODO())
+				currentCur.advance(context.TODO())
 			}
 		}
 	}
@@ -188,13 +189,13 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v, getMapValue(lastCur), nil}) {
 			return false
 		}
-		lastCur.advance()
+		lastCur.advance(context.TODO())
 	}
 	for currentCur.valid() {
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v, nil, getMapValue(currentCur)}) {
 			return false
 		}
-		currentCur.advance()
+		currentCur.advance(context.TODO())
 	}
 
 	return true
@@ -210,7 +211,7 @@ func fastForward(a *sequenceCursor, b *sequenceCursor) {
 }
 
 func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
-	cur.sync()
+	cur.sync(context.TODO())
 	if hasMore {
 		cur.idx = 0
 	} else if allowPastEnd {
@@ -237,8 +238,8 @@ func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHa
 			syncWithIdx(a, aHasMore, allowPastEnd)
 			syncWithIdx(b, bHasMore, allowPastEnd)
 		} else {
-			aHasMore = a.advanceMaybeAllowPastEnd(allowPastEnd)
-			bHasMore = b.advanceMaybeAllowPastEnd(allowPastEnd)
+			aHasMore = a.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
+			bHasMore = b.advanceMaybeAllowPastEnd(context.TODO(), allowPastEnd)
 		}
 	}
 	return aHasMore, bHasMore

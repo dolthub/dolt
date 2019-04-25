@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -150,7 +151,7 @@ func (m Map) At(idx uint64) (key, value Value) {
 		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(m.orderedSequence, idx)
+	cur := newCursorAtIndex(context.TODO(), m.orderedSequence, idx)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
@@ -186,7 +187,7 @@ type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(cb mapIterCallback) {
 	cur := newCursorAt(m.orderedSequence, emptyKey, false, false)
-	cur.iter(func(v interface{}) bool {
+	cur.iter(context.TODO(), func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})
@@ -210,7 +211,7 @@ func (m Map) Iterator() MapIterator {
 
 func (m Map) IteratorAt(pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(m.orderedSequence, pos),
+		cursor: newCursorAtIndex(context.TODO(), m.orderedSequence, pos),
 	}
 }
 
@@ -237,7 +238,7 @@ func (m Map) IterAll(cb mapIterAllCallback) {
 
 func (m Map) IterFrom(start Value, cb mapIterCallback) {
 	cur := newCursorAtValue(m.orderedSequence, start, false, false)
-	cur.iter(func(v interface{}) bool {
+	cur.iter(context.TODO(), func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})

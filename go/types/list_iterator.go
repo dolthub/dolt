@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -21,7 +22,7 @@ func (li ListIterator) Next() (out Value) {
 	}
 	if li.cursor.valid() {
 		out = li.cursor.current().(Value)
-		li.cursor.advance()
+		li.cursor.advance(context.TODO())
 	}
 	return
 }

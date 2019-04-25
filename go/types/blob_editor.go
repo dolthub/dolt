@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"errors"
 
 	"io"
@@ -48,7 +49,7 @@ func (be *BlobEditor) Blob() Blob {
 		cc := make(chan *sequenceCursor, 1)
 		curs = append(curs, cc)
 		go func() {
-			cc <- newCursorAtIndex(seq, edit.idx)
+			cc <- newCursorAtIndex(context.TODO(), seq, edit.idx)
 		}()
 	}
 

@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -47,7 +48,7 @@ func (le *ListEditor) List() List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(seq, edit.idx)
+				cc <- newCursorAtIndex(context.TODO(), seq, edit.idx)
 			}()
 
 			sc := make(chan listEdit, 1)

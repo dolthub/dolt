@@ -4,6 +4,8 @@
 
 package types
 
+import "context"
+
 // MapIterator is the interface used by iterators over Noms Maps.
 type MapIterator interface {
 	Next() (k, v Value)
@@ -23,7 +25,7 @@ func (mi *mapIterator) Next() (k, v Value) {
 	if mi.cursor.valid() {
 		entry := mi.cursor.current().(mapEntry)
 		mi.currentKey, mi.currentValue = entry.key, entry.value
-		mi.cursor.advance()
+		mi.cursor.advance(context.TODO())
 	} else {
 		mi.currentKey, mi.currentValue = nil, nil
 	}
@@ -36,7 +38,7 @@ func (mi *mapIterator) Prev() (k, v Value) {
 	if mi.cursor.valid() {
 		entry := mi.cursor.current().(mapEntry)
 		mi.currentKey, mi.currentValue = entry.key, entry.value
-		mi.cursor.retreat()
+		mi.cursor.retreat(context.TODO())
 	} else {
 		mi.currentKey, mi.currentValue = nil, nil
 	}

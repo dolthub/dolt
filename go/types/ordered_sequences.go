@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -44,7 +45,7 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 			}
 		}
 
-		cs := cur.getChildSequence()
+		cs := cur.getChildSequence(context.TODO())
 		if cs == nil {
 			break
 		}
