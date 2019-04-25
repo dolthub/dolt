@@ -84,10 +84,10 @@ func runShow(args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(pgr.Writer, value)
+		types.WriteEncodedValue(context.Background(), pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		types.WriteEncodedValue(os.Stdout, value)
+		types.WriteEncodedValue(context.Background(), os.Stdout, value)
 	}
 
 	return 0

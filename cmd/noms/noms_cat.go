@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base32"
 	"encoding/binary"
 	"encoding/hex"
@@ -276,7 +277,7 @@ func printValue(w io.Writer, v types.Value, valSpec string) {
 		}
 	}()
 
-	types.WriteEncodedValue(w, v)
+	types.WriteEncodedValue(context.Background(), w, v)
 }
 
 func hexStr(bytes []byte) string {

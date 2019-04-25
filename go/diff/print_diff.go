@@ -21,7 +21,7 @@ const (
 )
 
 type (
-	printFunc func(w io.Writer, op prefixOp, key, val types.Value) error
+	printFunc func(ctx context.Context, w io.Writer, op prefixOp, key, val types.Value) error
 )
 
 // PrintDiff writes a textual reprensentation of the diff from |v1| to |v2|
@@ -32,8 +32,8 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 	// diff and return. This is needed because the code below assumes that the
 	// values being compared have a parent.
 	if !ShouldDescend(v1, v2) {
-		line(w, DEL, nil, v1)
-		return line(w, ADD, nil, v2)
+		line(ctx, w, DEL, nil, v1)
+		return line(ctx, w, ADD, nil, v2)
 	}
 
 	dChan := make(chan Difference, 16)
@@ -96,10 +96,10 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 		}
 
 		if d.OldValue != nil {
-			err = pfunc(w, DEL, key, d.OldValue)
+			err = pfunc(ctx, w, DEL, key, d.OldValue)
 		}
 		if d.NewValue != nil {
-			err = pfunc(w, ADD, key, d.NewValue)
+			err = pfunc(ctx, w, ADD, key, d.NewValue)
 		}
 		if err != nil {
 			stopDiff()
@@ -130,33 +130,33 @@ func writeFooter(w io.Writer, wroteHdr *bool) error {
 	return write(w, []byte("  }\n"))
 }
 
-func line(w io.Writer, op prefixOp, key, val types.Value) error {
+func line(ctx context.Context, w io.Writer, op prefixOp, key, val types.Value) error {
 	genPrefix := func(w *writers.PrefixWriter) []byte {
 		return []byte(op)
 	}
 	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
 	if key != nil {
-		writeEncodedValue(pw, key)
+		writeEncodedValue(ctx, pw, key)
 		write(w, []byte(": "))
 	}
-	writeEncodedValue(pw, val)
+	writeEncodedValue(ctx, pw, val)
 	return write(w, []byte("\n"))
 }
 
-func field(w io.Writer, op prefixOp, name, val types.Value) error {
+func field(ctx context.Context, w io.Writer, op prefixOp, name, val types.Value) error {
 	genPrefix := func(w *writers.PrefixWriter) []byte {
 		return []byte(op)
 	}
 	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
 	write(pw, []byte(name.(types.String)))
 	write(w, []byte(": "))
-	writeEncodedValue(pw, val)
+	writeEncodedValue(ctx, pw, val)
 	return write(w, []byte("\n"))
 }
 
-func writeEncodedValue(w io.Writer, v types.Value) error {
+func writeEncodedValue(ctx context.Context, w io.Writer, v types.Value) error {
 	if v.Kind() != types.BlobKind {
-		return types.WriteEncodedValue(w, v)
+		return types.WriteEncodedValue(ctx, w, v)
 	}
 	write(w, []byte("Blob ("))
 	write(w, []byte(humanize.Bytes(v.(types.Blob).Len())))

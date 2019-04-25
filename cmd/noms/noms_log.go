@@ -275,7 +275,7 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 					dt.UnmarshalNoms(v)
 					fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
 				} else {
-					types.WriteEncodedValue(pw, v)
+					types.WriteEncodedValue(context.Background(), pw, v)
 				}
 				fmt.Fprintln(pw)
 			})
@@ -295,7 +295,7 @@ func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
-		err = types.WriteEncodedValue(pw, v)
+		err = types.WriteEncodedValue(context.Background(), pw, v)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(writers.MaxLinesErr, err)

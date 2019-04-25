@@ -58,7 +58,7 @@ func TestAbsolutePaths(t *testing.T) {
 		if exp == nil {
 			assert.Nil(act)
 		} else {
-			assert.True(exp.Equals(act), "%s Expected %s Actual %s", str, types.EncodedValue(exp), types.EncodedValue(act))
+			assert.True(exp.Equals(act), "%s Expected %s Actual %s", str, types.EncodedValue(context.Background(), exp), types.EncodedValue(context.Background(), act))
 		}
 	}
 
