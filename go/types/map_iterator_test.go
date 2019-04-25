@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ func TestMapIterator(t *testing.T) {
 		me.Set(String(string(byte(65+i))), Float(i))
 	}
 
-	m := me.Map()
+	m := me.Map(context.Background())
 	test := func(it MapIterator, start int, msg string) {
 		for i := start; i < 5; i++ {
 			k, v := it.Next()

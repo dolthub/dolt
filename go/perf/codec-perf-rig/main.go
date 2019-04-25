@@ -225,7 +225,7 @@ func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn cre
 		me.Set(createFn(i), createFn(i+1))
 	}
 
-	return me.Map()
+	return me.Map(context.Background())
 }
 
 func readMap(c types.Collection) {

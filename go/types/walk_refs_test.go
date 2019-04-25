@@ -119,7 +119,7 @@ func TestWalkRefs(t *testing.T) {
 				for i := 0; i < len(vs); i += 2 {
 					e = e.Set(vs[i], vs[i+1])
 				}
-				m = e.Map()
+				m = e.Map(context.Background())
 			}
 			runTest(m, t)
 		})

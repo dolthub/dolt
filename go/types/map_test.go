@@ -419,7 +419,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		me.Set(Float(i), newLargeStruct(i))
 	}
-	m := me.Map()
+	m := me.Map(context.Background())
 	r := vs.WriteValue(context.Background(), m)
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	m = r.TargetValue(context.Background(), vs).(Map)
@@ -440,7 +440,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	cs.Writes = 0
 	cs.Reads = 0
 
-	m = me.Map()
+	m = me.Map(context.Background())
 
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
@@ -470,7 +470,7 @@ func TestMapInfiniteChunkBug(t *testing.T) {
 		me.Set(String(prefix+fmt.Sprintf("%d", i)), Float(i))
 	}
 
-	me.Map()
+	me.Map(context.Background())
 }
 
 func TestNewMap(t *testing.T) {
@@ -556,7 +556,7 @@ func TestMapHasRemove(t *testing.T) {
 	me := NewMap(vrw).Edit()
 	bothHave := func(k Value) bool {
 		meHas := me.Has(k)
-		mHas := me.Map().Has(k)
+		mHas := me.Map(context.Background()).Has(k)
 		assert.Equal(meHas, mHas)
 		return meHas
 	}
@@ -599,7 +599,7 @@ func TestMapHasRemove(t *testing.T) {
 	assert.False(bothHave(String("b")))
 	assert.False(bothHave(String("c")))
 
-	m := me.Map()
+	m := me.Map(context.Background())
 	assert.True(m.Len() == 0)
 }
 
@@ -619,7 +619,7 @@ func TestMapRemove(t *testing.T) {
 		whole := tm.toMap(vs)
 		run := func(i int) {
 			expected := tm.Remove(i, i+1).toMap(vs)
-			actual := whole.Edit().Remove(tm.entries[i].key).Map()
+			actual := whole.Edit().Remove(tm.entries[i].key).Map(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
@@ -646,7 +646,7 @@ func TestMapRemoveNonexistentKey(t *testing.T) {
 
 	tm := getTestNativeOrderMap(2, vrw)
 	original := tm.toMap(vrw)
-	actual := original.Edit().Remove(Float(-1)).Map() // rand.Int63 returns non-negative numbers.
+	actual := original.Edit().Remove(Float(-1)).Map(context.Background()) // rand.Int63 returns non-negative numbers.
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -665,7 +665,7 @@ func TestMapFirst(t *testing.T) {
 	assert.Nil(k)
 	assert.Nil(v)
 
-	m1 = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map()
+	m1 = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map(context.Background())
 	ak, av := m1.First()
 	var ek, ev Value
 
@@ -716,7 +716,7 @@ func TestMapLast(t *testing.T) {
 	assert.Nil(k)
 	assert.Nil(v)
 
-	m1 = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map()
+	m1 = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map(context.Background())
 	ak, av := m1.Last()
 	var ek, ev Value
 
@@ -765,7 +765,7 @@ func TestMapSetGet(t *testing.T) {
 	me := NewMap(vrw).Edit()
 	bothAre := func(k Value) Value {
 		meV := me.Get(k)
-		mV := me.Map().Get(k)
+		mV := me.Map(context.Background()).Get(k)
 		assert.True((meV == nil && mV == nil) || meV.(Value).Equals(mV))
 		return mV
 	}
@@ -809,7 +809,7 @@ func TestMapSetGet(t *testing.T) {
 	assert.Nil(bothAre(String("z")))
 	assert.Nil(bothAre(String("never-inserted")))
 
-	m := me.Map()
+	m := me.Map(context.Background())
 	assert.True(m.Len() == 0)
 }
 
@@ -823,8 +823,8 @@ func validateMapInsertion(t *testing.T, tm testMap) {
 		allMe.Set(entry.key, entry.value)
 		incrMe.Set(entry.key, entry.value)
 
-		m1 := allMe.Map()
-		m2 := incrMe.Map()
+		m1 := allMe.Map(context.Background())
+		m2 := incrMe.Map(context.Background())
 
 		validateMap(t, vrw, m1, tm.entries[0:i+1])
 		validateMap(t, vrw, m2, tm.entries[0:i+1])
@@ -859,7 +859,7 @@ func TestMapSet(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		expected := tm.toMap(vrw)
 		run := func(from, to int) {
-			actual := tm.Remove(from, to).toMap(vrw).Edit().SetM(toValuable(tm.Flatten(from, to))...).Map()
+			actual := tm.Remove(from, to).toMap(vrw).Edit().SetM(toValuable(tm.Flatten(from, to))...).Map(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
@@ -882,13 +882,13 @@ func TestMapSetM(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1 := NewMap(vrw)
-	m2 := m1.Edit().SetM().Map()
+	m2 := m1.Edit().SetM().Map(context.Background())
 	assert.True(m1.Equals(m2))
-	m3 := m2.Edit().SetM(String("foo"), String("bar"), String("hot"), String("dog")).Map()
+	m3 := m2.Edit().SetM(String("foo"), String("bar"), String("hot"), String("dog")).Map(context.Background())
 	assert.Equal(uint64(2), m3.Len())
 	assert.True(String("bar").Equals(m3.Get(String("foo"))))
 	assert.True(String("dog").Equals(m3.Get(String("hot"))))
-	m4 := m3.Edit().SetM(String("mon"), String("key")).Map()
+	m4 := m3.Edit().SetM(String("mon"), String("key")).Map(context.Background())
 	assert.Equal(uint64(2), m3.Len())
 	assert.Equal(uint64(3), m4.Len())
 }
@@ -913,7 +913,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 	for i, entry := range tm.entries {
 		newValue := Float(int64(entry.value.(Float)) + 1)
 		expectedWorking = expectedWorking.SetValue(i, newValue)
-		actual = actual.Edit().Set(entry.key, newValue).Map()
+		actual = actual.Edit().Set(entry.key, newValue).Map(context.Background())
 	}
 
 	expected := expectedWorking.toMap(vrw)
@@ -993,7 +993,7 @@ func TestMapIter(t *testing.T) {
 	m.Iter(cb)
 	assert.Equal(0, len(results))
 
-	m = m.Edit().Set(String("a"), Float(0)).Set(String("b"), Float(1)).Map()
+	m = m.Edit().Set(String("a"), Float(0)).Set(String("b"), Float(1)).Map(context.Background())
 	m.Iter(cb)
 	assert.Equal(2, len(results))
 	assert.True(got(String("a"), Float(0)))
@@ -1105,7 +1105,7 @@ func TestMapEquals(t *testing.T) {
 	diffMapTest(assert, m3, m2, 0, 0, 0)
 
 	m1 = NewMap(vrw, String("foo"), Float(0.0), String("bar"), NewList(vrw))
-	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(vrw)).Map()
+	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(vrw)).Map(context.Background())
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
@@ -1380,7 +1380,7 @@ func TestMapEmpty(t *testing.T) {
 
 	me := NewMap(vrw).Edit()
 	empty := func() bool {
-		return me.Map().Empty()
+		return me.Map(context.Background()).Empty()
 	}
 
 	assert.True(empty())
@@ -1399,19 +1399,19 @@ func TestMapType(t *testing.T) {
 	m := NewMap(vrw)
 	assert.True(TypeOf(m).Equals(emptyMapType))
 
-	m2 := m.Edit().Remove(String("B")).Map()
+	m2 := m.Edit().Remove(String("B")).Map(context.Background())
 	assert.True(emptyMapType.Equals(TypeOf(m2)))
 
 	tr := MakeMapType(StringType, FloaTType)
-	m2 = m.Edit().Set(String("A"), Float(1)).Map()
+	m2 = m.Edit().Set(String("A"), Float(1)).Map(context.Background())
 	assert.True(tr.Equals(TypeOf(m2)))
 
-	m2 = m.Edit().Set(String("B"), Float(2)).Set(String("C"), Float(2)).Map()
+	m2 = m.Edit().Set(String("B"), Float(2)).Set(String("C"), Float(2)).Map(context.Background())
 	assert.True(tr.Equals(TypeOf(m2)))
 
-	m3 := m2.Edit().Set(String("A"), Bool(true)).Map()
+	m3 := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
 	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe())
-	m4 := m3.Edit().Set(Bool(true), Float(1)).Map()
+	m4 := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
 	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m4)))
 }
 
@@ -1483,13 +1483,13 @@ func TestMapModifyAfterRead(t *testing.T) {
 	m = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), m).TargetHash()).(Map)
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval := m.First()
-	m = m.Edit().Remove(fst).Map()
+	m = m.Edit().Remove(fst).Map(context.Background())
 	assert.False(m.Has(fst))
 
 	fst2, _ := m.First()
 	assert.True(m.Has(fst2))
 
-	m = m.Edit().Set(fst, fstval).Map()
+	m = m.Edit().Set(fst, fstval).Map(context.Background())
 	assert.True(m.Has(fst))
 }
 
@@ -1510,12 +1510,12 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(FloaTType, FloaTType)))
 
-		m = m.Edit().Set(String("a"), String("a")).Map()
+		m = m.Edit().Set(String("a"), String("a")).Map(context.Background())
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(MakeUnionType(FloaTType, StringType), MakeUnionType(FloaTType, StringType))))
 
-		m = m.Edit().Remove(String("a")).Map()
+		m = m.Edit().Remove(String("a")).Map(context.Background())
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
 		assert.True(TypeOf(m).Equals(MakeMapType(FloaTType, FloaTType)))
@@ -1556,7 +1556,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	for i := 1; m.asSequence().isLeaf(); i++ {
 		k := Float(i)
 		kvs = append(kvs, k, v)
-		m = m.Edit().Set(k, v).Map()
+		m = m.Edit().Set(k, v).Map(context.Background())
 	}
 
 	assert.Equal(len(kvs)/2, int(m.Len()))
@@ -1576,7 +1576,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	for len(kvs) > 0 {
 		k := kvs[0]
 		kvs = kvs[2:]
-		m = m.Edit().Remove(k).Map()
+		m = m.Edit().Remove(k).Map(context.Background())
 		assert.False(m.Has(k))
 		assert.Equal(len(kvs)/2, int(m.Len()))
 	}
@@ -1601,7 +1601,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 		last := entr[len(entr)-1]
 		entr = entr[:len(entr)-1]
 		tm.entries = entr
-		nm = reload(nm.Edit().Remove(last.key).Map())
+		nm = reload(nm.Edit().Remove(last.key).Map(context.Background()))
 		assert.True(tm.toMap(vs).Equals(nm))
 	}
 }
@@ -1737,7 +1737,7 @@ func TestNestedEditing(t *testing.T) {
 	me1b.Set(String("b"), se2b)
 	se2b.Insert(String("b"))
 
-	mOut := me0.Map()
+	mOut := me0.Map(context.Background())
 	assert.True(t, mOut.Equals(NewMap(vrw,
 		String("a"), NewMap(vrw,
 			String("a"), NewSet(vrw, String("a")),
@@ -1750,7 +1750,7 @@ func TestNestedEditing(t *testing.T) {
 	se2a.Remove(String("a")).Insert(String("aa"))
 	se2b.Remove(String("b")).Insert(String("bb"))
 
-	mOut = me0.Map()
+	mOut = me0.Map(context.Background())
 	assert.True(t, mOut.Equals(NewMap(vrw,
 		String("a"), NewMap(vrw,
 			String("a"), NewSet(vrw, String("aa")),
@@ -1763,6 +1763,6 @@ func TestNestedEditing(t *testing.T) {
 	se2a.Remove(String("aa"))
 	se2b.Remove(String("bb"))
 
-	mOut = me0.Map()
+	mOut = me0.Map(context.Background())
 	assert.True(t, mOut.Equals(NewMap(vrw))) // remove empty
 }

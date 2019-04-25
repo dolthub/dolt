@@ -561,7 +561,7 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 		merged = apply(merged, aChange, aValue)
 		aChange, bChange = types.ValueChanged{}, types.ValueChanged{}
 	}
-	return merged.Map(), nil
+	return merged.Map(context.TODO()), nil
 }
 
 func handleGraphQL(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
