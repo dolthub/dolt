@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
@@ -98,13 +99,13 @@ func TestDynamoTableReaderAt(t *testing.T) {
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData)/4)
 		baseline := ddb.numGets
-		_, err := tra.ReadAtWithStats(scratch, 0, stats)
+		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
 		assert.NoError(err)
 		assert.True(ddb.numGets > baseline)
 
 		// Table should have been cached on read so read again, a different slice this time
 		baseline = ddb.numGets
-		_, err = tra.ReadAtWithStats(scratch, int64(len(scratch)), stats)
+		_, err = tra.ReadAtWithStats(context.Background(), scratch, int64(len(scratch)), stats)
 		assert.NoError(err)
 		assert.Zero(ddb.numGets - baseline)
 	})

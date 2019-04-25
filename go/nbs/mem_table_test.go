@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"io/ioutil"
 	"os"
@@ -134,7 +135,7 @@ func tableReaderAtFromBytes(b []byte) tableReaderAt {
 	return tableReaderAtAdapter{bytes.NewReader(b)}
 }
 
-func (adapter tableReaderAtAdapter) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (adapter tableReaderAtAdapter) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	return adapter.ReadAt(p, off)
 }
 

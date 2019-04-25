@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -66,9 +67,9 @@ func (atra *awsTableReaderAt) hash() addr {
 	return atra.name
 }
 
-func (atra *awsTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	atra.once.Do(func() { atra.tra = atra.getTableReaderAt(stats) })
-	return atra.tra.ReadAtWithStats(p, off, stats)
+	return atra.tra.ReadAtWithStats(ctx, p, off, stats)
 }
 
 func (atra *awsTableReaderAt) getTableReaderAt(stats *Stats) tableReaderAt {
