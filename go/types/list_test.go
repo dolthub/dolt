@@ -721,7 +721,7 @@ func TestListModifyAfterRead(t *testing.T) {
 
 	list := getTestList().toList(vs)
 	// Drop chunk values.
-	list = vs.ReadValue(vs.WriteValue(context.Background(), list).TargetHash()).(List)
+	list = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), list).TargetHash()).(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z := list.Get(0)
@@ -1020,7 +1020,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	hash1 := vs1.WriteValue(context.Background(), l1).TargetHash()
 	vs1.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
 
-	refList1 := vs1.ReadValue(hash1).(List)
+	refList1 := vs1.ReadValue(context.Background(), hash1).(List)
 
 	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
@@ -1028,7 +1028,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	l2 := NewList(vs2, nums2...)
 	hash2 := vs2.WriteValue(context.Background(), l2).TargetHash()
 	vs2.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
-	refList2 := vs2.ReadValue(hash2).(List)
+	refList2 := vs2.ReadValue(context.Background(), hash2).(List)
 
 	// diff lists without value store
 	diff1 := accumulateDiffSplices(l2, l1)
@@ -1113,7 +1113,7 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(l List) List {
-		return vs.ReadValue(vs.WriteValue(context.Background(), l).TargetHash()).(List)
+		return vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), l).TargetHash()).(List)
 	}
 
 	tl := newTestList(1024)
@@ -1138,7 +1138,7 @@ func TestListConcat(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(vs *ValueStore, l List) List {
-		return vs.ReadValue(vs.WriteValue(context.Background(), l).TargetHash()).(List)
+		return vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), l).TargetHash()).(List)
 	}
 
 	run := func(seed int64, size, from, to, by int) {
@@ -1229,11 +1229,11 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	l2 := NewList(vrw, String("c"), String("d"))
 	l3 := NewList(vrw, l1, l2)
 
-	assert.Nil(vrw.ReadValue(l1.Hash()))
-	assert.Nil(vrw.ReadValue(l2.Hash()))
-	assert.Nil(vrw.ReadValue(l3.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l3.Hash()))
 
 	vrw.WriteValue(context.Background(), l3)
-	assert.Nil(vrw.ReadValue(l1.Hash()))
-	assert.Nil(vrw.ReadValue(l2.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
 }

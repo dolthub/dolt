@@ -65,7 +65,7 @@ func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	blob := NewBlob(suite.vs, bytes.NewReader(buff))
 	r := suite.vs.WriteValue(context.Background(), blob)
 	suite.True(r.Height() > 1)
-	outBlob := suite.vs.ReadValue(r.TargetHash()).(Blob)
+	outBlob := suite.vs.ReadValue(context.Background(), r.TargetHash()).(Blob)
 	suite.Equal(suite.ts.Reads, 0)
 	suite.assertCallbackCount(outBlob, 1)
 	suite.Equal(suite.ts.Reads, 0)
@@ -96,7 +96,7 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	suite.assertCallbackCount(l, count+1)
 
 	r := suite.vs.WriteValue(context.Background(), l)
-	outList := suite.vs.ReadValue(r.TargetHash())
+	outList := suite.vs.ReadValue(context.Background(), r.TargetHash())
 	suite.assertCallbackCount(outList, count+1)
 }
 

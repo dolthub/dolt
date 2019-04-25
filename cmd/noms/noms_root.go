@@ -67,7 +67,7 @@ func runRoot(args []string) int {
 	db, err := cfg.GetDatabase(args[0])
 	d.CheckErrorNoUsage(err)
 	defer db.Close()
-	if !validate(db.ReadValue(h)) {
+	if !validate(db.ReadValue(context.Background(), h)) {
 		return 1
 	}
 

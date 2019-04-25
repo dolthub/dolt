@@ -44,7 +44,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	hash := vs.WriteValue(context.Background(), expected).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
-	actualVar := vs.ReadValue(hash)
+	actualVar := vs.ReadValue(context.Background(), hash)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads
@@ -73,7 +73,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	expected := NewSet(vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
-	actualVar := vs.ReadValue(ref)
+	actualVar := vs.ReadValue(context.Background(), ref)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads
@@ -94,7 +94,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	expected := NewMap(vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
-	actualVar := vs.ReadValue(ref)
+	actualVar := vs.ReadValue(context.Background(), ref)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads
@@ -118,7 +118,7 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 
 	expected := NewList(vs, ref)
 	ref = vs.WriteValue(context.Background(), expected)
-	actualVar := vs.ReadValue(ref.TargetHash())
+	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))

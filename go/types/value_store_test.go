@@ -18,10 +18,10 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
-	assert.Nil(vs.ReadValue(s.Hash())) // nil
+	assert.Nil(vs.ReadValue(context.Background(), s.Hash())) // nil
 	h := vs.WriteValue(context.Background(), s).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
-	v := vs.ReadValue(h) // non-nil
+	v := vs.ReadValue(context.Background(), h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(s), EncodedValue(v))
 	}
@@ -39,11 +39,11 @@ func TestReadWriteCache(t *testing.T) {
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	assert.Equal(1, ts.Writes)
 
-	v = vs.ReadValue(r.TargetHash())
+	v = vs.ReadValue(context.Background(), r.TargetHash())
 	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads)
 
-	v = vs.ReadValue(r.TargetHash())
+	v = vs.ReadValue(context.Background(), r.TargetHash())
 	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads)
 }
@@ -61,7 +61,7 @@ func TestValueReadMany(t *testing.T) {
 	}
 
 	// Get one Value into vs's Value cache
-	vs.ReadValue(vals[0].Hash())
+	vs.ReadValue(context.Background(), vals[0].Hash())
 
 	// Get one Value into vs's pendingPuts
 	three := Float(3)
@@ -220,7 +220,7 @@ func TestPanicOnBadVersion(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 	t.Run("Read", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
-		assert.Panics(t, func() { cvs.ReadValue(hash.Hash{}) })
+		assert.Panics(t, func() { cvs.ReadValue(context.Background(), hash.Hash{}) })
 	})
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})

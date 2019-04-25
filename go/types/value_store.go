@@ -19,7 +19,7 @@ import (
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
 type ValueReader interface {
-	ReadValue(h hash.Hash) Value
+	ReadValue(ctx context.Context, h hash.Hash) Value
 	ReadManyValues(hashes hash.HashSlice) ValueSlice
 }
 
@@ -117,7 +117,7 @@ func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 // ReadValue reads and decodes a value from lvs. It is not considered an error
 // for the requested chunk to be empty; in this case, the function simply
 // returns nil.
-func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
+func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.decodedChunks.Get(h); ok {
 		d.PanicIfTrue(v == nil)

@@ -28,10 +28,10 @@ func TestTypes(t *testing.T) {
 	mahRef := vs.WriteValue(context.Background(), mahType).TargetHash()
 	recRef := vs.WriteValue(context.Background(), recType).TargetHash()
 
-	assert.True(mapType.Equals(vs.ReadValue(mRef)))
-	assert.True(setType.Equals(vs.ReadValue(setRef)))
-	assert.True(mahType.Equals(vs.ReadValue(mahRef)))
-	assert.True(recType.Equals(vs.ReadValue(recRef)))
+	assert.True(mapType.Equals(vs.ReadValue(context.Background(), mRef)))
+	assert.True(setType.Equals(vs.ReadValue(context.Background(), setRef)))
+	assert.True(mahType.Equals(vs.ReadValue(context.Background(), mahRef)))
+	assert.True(recType.Equals(vs.ReadValue(context.Background(), recRef)))
 }
 
 func TestTypeType(t *testing.T) {

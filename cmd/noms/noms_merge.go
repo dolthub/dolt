@@ -105,7 +105,7 @@ func getCommonAncestor(r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, 
 	if !found {
 		return
 	}
-	v := vr.ReadValue(aRef.TargetHash())
+	v := vr.ReadValue(context.Background(), aRef.TargetHash())
 	if v == nil {
 		panic(aRef.TargetHash().String() + " not found")
 	}

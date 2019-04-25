@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -91,7 +92,7 @@ func runLog(args []string) int {
 		path = types.MustParsePath(".value")
 	}
 
-	origCommit, ok := database.ReadValue(absPath.Hash).(types.Struct)
+	origCommit, ok := database.ReadValue(context.Background(), absPath.Hash).(types.Struct)
 	if !ok || !datas.IsCommit(origCommit) {
 		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}

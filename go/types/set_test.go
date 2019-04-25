@@ -441,7 +441,7 @@ func TestSetHas2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		set2 := vrw.ReadValue(vrw.WriteValue(context.Background(), set).TargetHash()).(Set)
+		set2 := vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), set).TargetHash()).(Set)
 		for _, v := range ts {
 			assert.True(set.Has(v))
 			assert.True(set2.Has(v))
@@ -916,7 +916,7 @@ func TestSetChunks2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		set2chunks := getChunks(vrw.ReadValue(vrw.WriteValue(context.Background(), set).TargetHash()))
+		set2chunks := getChunks(vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), set).TargetHash()))
 		for i, r := range getChunks(set) {
 			assert.True(TypeOf(r).Equals(TypeOf(set2chunks[i])), "%s != %s", TypeOf(r).Describe(), TypeOf(set2chunks[i]).Describe())
 		}
@@ -958,7 +958,7 @@ func TestSetModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 	set := getTestNativeOrderSet(2, vs).toSet(vs)
 	// Drop chunk values.
-	set = vs.ReadValue(vs.WriteValue(context.Background(), set).TargetHash()).(Set)
+	set = vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), set).TargetHash()).(Set)
 	// Modify/query. Once upon a time this would crash.
 	fst := set.First()
 	set = set.Edit().Remove(fst).Set()
@@ -1057,7 +1057,7 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(s Set) Set {
-		return vs.ReadValue(vs.WriteValue(context.Background(), s).TargetHash()).(Set)
+		return vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), s).TargetHash()).(Set)
 	}
 
 	ts := getTestNativeOrderSet(8, vs)

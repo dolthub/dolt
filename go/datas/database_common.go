@@ -75,7 +75,7 @@ func (db *database) Datasets() types.Map {
 		return types.NewMap(db)
 	}
 
-	return db.ReadValue(rootHash).(types.Map)
+	return db.ReadValue(context.TODO(), rootHash).(types.Map)
 }
 
 func (db *database) GetDataset(datasetID string) Dataset {
@@ -234,7 +234,7 @@ func (db *database) tryCommitChunks(currentDatasets types.Map, currentRootHash h
 }
 
 func (db *database) validateRefAsCommit(r types.Ref) types.Struct {
-	v := db.ReadValue(r.TargetHash())
+	v := db.ReadValue(context.TODO(), r.TargetHash())
 
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
