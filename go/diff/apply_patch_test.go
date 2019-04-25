@@ -137,7 +137,7 @@ func getPatch(g1, g2 types.Value) Patch {
 
 func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, k2 string) {
 	patch := getPatch(g1, expectedG2)
-	g2 := Apply(g1, patch)
+	g2 := Apply(context.Background(), g1, patch)
 	assert.True(expectedG2.Equals(g2), "failed to apply diffs for k1: %s and k2: %s", k1, k2)
 }
 
@@ -183,7 +183,7 @@ func TestUpdateNode(t *testing.T) {
 	doTest := func(pp types.PathPart, parent, ov, nv, exp types.Value, f testFunc) {
 		stack := &patchStack{}
 		se := &stackElem{path: []types.PathPart{pp}, pathPart: pp, changeType: types.DiffChangeModified, oldValue: ov, newValue: nv}
-		updated := stack.updateNode(se, parent)
+		updated := stack.updateNode(context.Background(), se, parent)
 		testVal := f(updated)
 		assert.True(exp.Equals(testVal), "%s != %s", nv, testVal)
 	}
@@ -247,7 +247,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 		difs = append(difs, dif)
 	}
 
-	res := Apply(n1, difs)
+	res := Apply(context.Background(), n1, difs)
 	a.True(n2.Equals(res))
 }
 

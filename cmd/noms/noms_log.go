@@ -347,7 +347,7 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	}
 
 	if old != nil && neu != nil {
-		err = diff.PrintDiff(pw, old, neu, true)
+		err = diff.PrintDiff(context.Background(), pw, old, neu, true)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(err, writers.MaxLinesErr)

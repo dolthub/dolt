@@ -61,6 +61,6 @@ func runDiff(args []string) int {
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	diff.PrintDiff(pgr.Writer, value1, value2, false)
+	diff.PrintDiff(context.Background(), pgr.Writer, value1, value2, false)
 	return 0
 }
