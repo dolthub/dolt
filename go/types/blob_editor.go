@@ -30,10 +30,10 @@ func (be *BlobEditor) Kind() NomsKind {
 }
 
 func (be *BlobEditor) Value(ctx context.Context) Value {
-	return be.Blob()
+	return be.Blob(ctx)
 }
 
-func (be *BlobEditor) Blob() Blob {
+func (be *BlobEditor) Blob(ctx context.Context) Blob {
 	if be.edits == nil {
 		return be.b // no edits
 	}
@@ -49,7 +49,7 @@ func (be *BlobEditor) Blob() Blob {
 		cc := make(chan *sequenceCursor, 1)
 		curs = append(curs, cc)
 		go func() {
-			cc <- newCursorAtIndex(context.TODO(), seq, edit.idx)
+			cc <- newCursorAtIndex(ctx, seq, edit.idx)
 		}()
 	}
 
