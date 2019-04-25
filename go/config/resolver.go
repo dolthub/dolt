@@ -5,6 +5,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -152,5 +153,5 @@ func (r *Resolver) GetPath(str string) (datas.Database, types.Value, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return sp.GetDatabase(), sp.GetValue(), nil
+	return sp.GetDatabase(), sp.GetValue(context.TODO()), nil
 }

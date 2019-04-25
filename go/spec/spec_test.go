@@ -76,7 +76,7 @@ func TestMemHashPathSpec(t *testing.T) {
 	// assert.Nil(spec.GetValue())
 
 	spec.GetDatabase().WriteValue(context.Background(), s)
-	assert.Equal(s, spec.GetValue())
+	assert.Equal(s, spec.GetValue(context.Background()))
 }
 
 func TestMemDatasetPathSpec(t *testing.T) {
@@ -90,14 +90,14 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	assert.Equal("", spec.DatabaseName)
 	assert.False(spec.Path.IsEmpty())
 
-	assert.Nil(spec.GetValue())
+	assert.Nil(spec.GetValue(context.Background()))
 
 	db := spec.GetDatabase()
 	ds := db.GetDataset("test")
 	_, err = db.CommitValue(ds, types.NewList(db, types.Float(42)))
 	assert.NoError(err)
 
-	assert.Equal(types.Float(42), spec.GetValue())
+	assert.Equal(types.Float(42), spec.GetValue(context.Background()))
 }
 
 func TestNBSDatabaseSpec(t *testing.T) {
@@ -413,12 +413,12 @@ func TestPinPathSpec(t *testing.T) {
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash().String()), pinned.String())
-	assert.Equal(types.Float(42), pinned.GetValue())
-	assert.Equal(types.Float(42), unpinned.GetValue())
+	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
+	assert.Equal(types.Float(42), unpinned.GetValue(context.Background()))
 
 	db.CommitValue(db.GetDataset("foo"), types.Float(43))
-	assert.Equal(types.Float(42), pinned.GetValue())
-	assert.Equal(types.Float(43), unpinned.GetValue())
+	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
+	assert.Equal(types.Float(43), unpinned.GetValue(context.Background()))
 }
 
 func TestPinDatasetSpec(t *testing.T) {
@@ -443,11 +443,11 @@ func TestPinDatasetSpec(t *testing.T) {
 
 	assert.Equal(head.Hash(), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash().String()), pinned.String())
-	assert.Equal(types.Float(42), commitValue(pinned.GetValue()))
+	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
 	assert.Equal(types.Float(42), unpinned.GetDataset().HeadValue())
 
 	db.CommitValue(db.GetDataset("foo"), types.Float(43))
-	assert.Equal(types.Float(42), commitValue(pinned.GetValue()))
+	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
 	assert.Equal(types.Float(43), unpinned.GetDataset().HeadValue())
 }
 
@@ -500,7 +500,7 @@ func TestAcccessingInvalidSpec(t *testing.T) {
 		_, ok := sp.Pin()
 		assert.False(ok)
 		assert.Equal(datas.Dataset{}, sp.GetDataset())
-		assert.Nil(sp.GetValue())
+		assert.Nil(sp.GetValue(context.Background()))
 	}
 
 	test("")

@@ -84,7 +84,7 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 }
 
 // Resolve returns the Value reachable by 'p' in 'db'.
-func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
+func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types.Value) {
 	if len(p.Dataset) > 0 {
 		var ok bool
 		ds := db.GetDataset(p.Dataset)
@@ -92,7 +92,7 @@ func (p AbsolutePath) Resolve(db datas.Database) (val types.Value) {
 			val = nil
 		}
 	} else if !p.Hash.IsEmpty() {
-		val = db.ReadValue(context.TODO(), p.Hash)
+		val = db.ReadValue(ctx, p.Hash)
 	} else {
 		panic("Unreachable")
 	}
@@ -126,7 +126,7 @@ func (p AbsolutePath) String() (str string) {
 // ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
 // If any path fails to parse correctly or if any path can be resolved to an
 // existing Noms Value, then this function returns (nil, error).
-func ReadAbsolutePaths(db datas.Database, paths ...string) ([]types.Value, error) {
+func ReadAbsolutePaths(ctx context.Context, db datas.Database, paths ...string) ([]types.Value, error) {
 	r := make([]types.Value, 0, len(paths))
 	for _, ps := range paths {
 		p, err := NewAbsolutePath(ps)
@@ -134,7 +134,7 @@ func ReadAbsolutePaths(db datas.Database, paths ...string) ([]types.Value, error
 			return nil, fmt.Errorf("Invalid input path '%s'", ps)
 		}
 
-		v := p.Resolve(db)
+		v := p.Resolve(ctx, db)
 		if v == nil {
 			return nil, fmt.Errorf("Input path '%s' does not exist in database", ps)
 		}

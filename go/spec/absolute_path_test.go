@@ -54,7 +54,7 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo := func(exp types.Value, str string) {
 		p, err := NewAbsolutePath(str)
 		assert.NoError(err)
-		act := p.Resolve(db)
+		act := p.Resolve(context.Background(), db)
 		if exp == nil {
 			assert.Nil(act)
 		} else {
@@ -94,18 +94,18 @@ func TestReadAbsolutePaths(t *testing.T) {
 	_, err := db.CommitValue(ds, list)
 	assert.NoError(err)
 
-	vals, err := ReadAbsolutePaths(db, "ds.value[0]", "ds.value[1]")
+	vals, err := ReadAbsolutePaths(context.Background(), db, "ds.value[0]", "ds.value[1]")
 	assert.NoError(err)
 
 	assert.Equal(2, len(vals))
 	assert.Equal("foo", string(vals[0].(types.String)))
 	assert.Equal("bar", string(vals[1].(types.String)))
 
-	vals, err = ReadAbsolutePaths(db, "!!#")
+	vals, err = ReadAbsolutePaths(context.Background(), db, "!!#")
 	assert.Nil(vals)
 	assert.Equal("Invalid input path '!!#'", err.Error())
 
-	vals, err = ReadAbsolutePaths(db, "invalid.monkey")
+	vals, err = ReadAbsolutePaths(context.Background(), db, "invalid.monkey")
 	assert.Nil(vals)
 	assert.Equal("Input path 'invalid.monkey' does not exist in database", err.Error())
 }
