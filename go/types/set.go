@@ -72,30 +72,30 @@ func readSetInput(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (s Set) DiffHybrid(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |s| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (s Set) DiffLeftRight(last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffLeftRight(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 func (s Set) asSequence() sequence {

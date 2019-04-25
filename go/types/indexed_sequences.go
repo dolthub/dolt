@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -133,7 +134,7 @@ func LoadLeafNodes(cols []Collection, startIdx, endIdx uint64) ([]Collection, ui
 	}
 
 	// Fetch committed child sequences in a single batch
-	readValues := vrw.ReadManyValues(hs)
+	readValues := vrw.ReadManyValues(context.TODO(), hs)
 
 	childCols := make([]Collection, len(readValues))
 	for i, v := range readValues {

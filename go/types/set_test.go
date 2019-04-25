@@ -264,10 +264,10 @@ func getTestRefToValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 	})
 }
 
-func accumulateSetDiffChanges(s1, s2 Set) (added []Value, removed []Value) {
+func accumulateSetDiffChanges(ctx context.Context, s1, s2 Set) (added []Value, removed []Value) {
 	changes := make(chan ValueChanged)
 	go func() {
-		s1.Diff(s2, changes, nil)
+		s1.Diff(ctx, s2, changes, nil)
 		close(changes)
 	}()
 	for change := range changes {
@@ -281,7 +281,7 @@ func accumulateSetDiffChanges(s1, s2 Set) (added []Value, removed []Value) {
 }
 
 func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int, numRemovesExpected int) (added []Value, removed []Value) {
-	added, removed = accumulateSetDiffChanges(s1, s2)
+	added, removed = accumulateSetDiffChanges(context.Background(), s1, s2)
 	assert.Equal(numAddsExpected, len(added), "num added is not as expected")
 	assert.Equal(numRemovesExpected, len(removed), "num removed is not as expected")
 

@@ -116,7 +116,7 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 	stopChan := make(chan struct{}, 1) // buffer size of 1s, so this won't block if diff already finished
 
 	go func() {
-		v2.Diff(v1, spliceChan, stopChan)
+		v2.Diff(ctx, v1, spliceChan, stopChan)
 		close(spliceChan)
 	}()
 
@@ -174,9 +174,9 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) bo
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {
-				v2.DiffLeftRight(v1, cc, sc)
+				v2.DiffLeftRight(ctx, v1, cc, sc)
 			} else {
-				v2.DiffHybrid(v1, cc, sc)
+				v2.DiffHybrid(ctx, v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },
@@ -210,9 +210,9 @@ func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) bo
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {
-				v2.DiffLeftRight(v1, cc, sc)
+				v2.DiffLeftRight(ctx, v1, cc, sc)
 			} else {
-				v2.DiffHybrid(v1, cc, sc)
+				v2.DiffHybrid(ctx, v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },

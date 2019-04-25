@@ -76,7 +76,7 @@ func main() {
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		readValues := db.ReadManyValues(current)
+		readValues := db.ReadManyValues(context.Background(), current)
 		for i, v := range readValues {
 			h := current[i]
 			currentValues[h] = v

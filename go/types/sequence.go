@@ -21,7 +21,7 @@ type sequence interface {
 	Equals(other Value) bool
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(other sequence) compareFn
-	getCompositeChildSequence(start uint64, length uint64) sequence
+	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
 	getItem(idx int) sequenceItem
 	Hash() hash.Hash
 	isLeaf() bool

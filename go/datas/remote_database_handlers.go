@@ -472,7 +472,7 @@ func assertMapOfStringToRefOfCommit(proposed, datasets types.Map, vr types.Value
 	changes := make(chan types.ValueChanged)
 	go func() {
 		defer close(changes)
-		proposed.Diff(datasets, changes, stopChan)
+		proposed.Diff(context.TODO(), datasets, changes, stopChan)
 	}()
 	for change := range changes {
 		switch change.ChangeType {
@@ -497,11 +497,11 @@ func mergeDatasetMaps(a, b, parent types.Map, vrw types.ValueReadWriter) (types.
 
 	go func() {
 		defer close(aChangeChan)
-		a.Diff(parent, aChangeChan, stopChan)
+		a.Diff(context.TODO(), parent, aChangeChan, stopChan)
 	}()
 	go func() {
 		defer close(bChangeChan)
-		b.Diff(parent, bChangeChan, stopChan)
+		b.Diff(context.TODO(), parent, bChangeChan, stopChan)
 	}()
 	defer func() {
 		close(stopChan)

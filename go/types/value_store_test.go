@@ -73,7 +73,7 @@ func TestValueReadMany(t *testing.T) {
 	hashes = append(hashes, Bool(false).Hash())
 
 	found := map[hash.Hash]Value{}
-	readValues := vs.ReadManyValues(hashes)
+	readValues := vs.ReadManyValues(context.Background(), hashes)
 
 	for i, v := range readValues {
 		if v != nil {

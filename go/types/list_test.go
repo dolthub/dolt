@@ -734,7 +734,7 @@ func TestListModifyAfterRead(t *testing.T) {
 func accumulateDiffSplices(l1, l2 List) (diff []Splice) {
 	diffChan := make(chan Splice)
 	go func() {
-		l1.Diff(l2, diffChan, nil)
+		l1.Diff(context.Background(), l2, diffChan, nil)
 		close(diffChan)
 	}()
 	for splice := range diffChan {
@@ -746,7 +746,7 @@ func accumulateDiffSplices(l1, l2 List) (diff []Splice) {
 func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) (diff []Splice) {
 	diffChan := make(chan Splice)
 	go func() {
-		l1.DiffWithLimit(l2, diffChan, nil, maxSpliceMatrixSize)
+		l1.DiffWithLimit(context.Background(), l2, diffChan, nil, maxSpliceMatrixSize)
 		close(diffChan)
 	}()
 	for splice := range diffChan {

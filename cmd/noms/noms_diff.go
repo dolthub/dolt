@@ -54,7 +54,7 @@ func runDiff(args []string) int {
 	defer db2.Close()
 
 	if stat {
-		diff.Summary(value1, value2)
+		diff.Summary(context.Background(), value1, value2)
 		return 0
 	}
 
