@@ -267,7 +267,7 @@ func (sc *sequenceChunker) Done() sequence {
 	mt := sc.current[0].(metaTuple)
 
 	for {
-		child := mt.getChildSequence(sc.vrw)
+		child := mt.getChildSequence(context.TODO(), sc.vrw)
 		if _, ok := child.(metaSequence); !ok || child.seqLen() > 1 {
 			return child
 		}

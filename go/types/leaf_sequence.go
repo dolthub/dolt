@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"math"
 
 	"github.com/attic-labs/noms/go/d"
@@ -123,7 +124,7 @@ func (seq leafSequence) numLeaves() uint64 {
 	return seq.len
 }
 
-func (seq leafSequence) getChildSequence(idx int) sequence {
+func (seq leafSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	return nil
 }
 
