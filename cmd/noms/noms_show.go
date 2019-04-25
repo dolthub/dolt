@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -49,7 +50,7 @@ func setupShowFlags() *flag.FlagSet {
 
 func runShow(args []string) int {
 	cfg := config.NewResolver()
-	database, value, err := cfg.GetPath(args[0])
+	database, value, err := cfg.GetPath(context.Background(), args[0])
 	d.CheckErrorNoUsage(err)
 	defer database.Close()
 
