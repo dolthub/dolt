@@ -1330,10 +1330,10 @@ func TestUnmarshalMustUnmarshal(t *testing.T) {
 
 	type TestStruct struct{ F1 int }
 
-	v := MustMarshal(vs, types.Float(1))
+	v := MustMarshal(context.Background(), vs, types.Float(1))
 	var out TestStruct
 	a.Panics(func() { MustUnmarshal(v, &out) })
 
-	v = MustMarshal(vs, TestStruct{2})
+	v = MustMarshal(context.Background(), vs, TestStruct{2})
 	a.NotPanics(func() { MustUnmarshal(v, &out) })
 }
