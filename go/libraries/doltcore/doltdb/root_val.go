@@ -43,7 +43,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		return nil, err
 	}
 
-	tblMap := types.NewMap(vrw, values...)
+	tblMap := types.NewMap(context.TODO(), vrw, values...)
 	return newRootFromTblMap(vrw, tblMap), nil
 }
 
@@ -52,7 +52,7 @@ func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 }
 
 func emptyRootValue(vrw types.ValueReadWriter) *RootValue {
-	return newRootFromTblMap(vrw, types.NewMap(vrw))
+	return newRootFromTblMap(vrw, types.NewMap(context.TODO(), vrw))
 }
 
 func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
@@ -71,25 +71,25 @@ func (root *RootValue) VRW() types.ValueReadWriter {
 
 func (root *RootValue) HasTable(tName string) bool {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	return tableMap.Has(types.String(tName))
+	return tableMap.Has(context.TODO(), types.String(tName))
 }
 
 func (root *RootValue) getTableSt(tName string) (*types.Struct, bool) {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	tVal := tableMap.Get(types.String(tName))
+	tVal := tableMap.Get(context.TODO(), types.String(tName))
 
 	if tVal == nil {
 		return nil, false
 	}
 
 	tValRef := tVal.(types.Ref)
-	tableStruct := tValRef.TargetValue(root.vrw).(types.Struct)
+	tableStruct := tValRef.TargetValue(context.TODO(), root.vrw).(types.Struct)
 	return &tableStruct, true
 }
 
 func (root *RootValue) GetTableHash(tName string) (hash.Hash, bool) {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	tVal := tableMap.Get(types.String(tName))
+	tVal := tableMap.Get(context.TODO(), types.String(tName))
 
 	if tVal == nil {
 		return hash.Hash{}, false
@@ -114,7 +114,7 @@ func (root *RootValue) GetTableNames() []string {
 	numTables := int(tableMap.Len())
 	names := make([]string, 0, numTables)
 
-	tableMap.Iter(func(key, _ types.Value) (stop bool) {
+	tableMap.Iter(context.TODO(), func(key, _ types.Value) (stop bool) {
 		names = append(names, string(key.(types.String)))
 		return false
 	})
@@ -127,8 +127,8 @@ func (root *RootValue) TablesInConflict() []string {
 	numTables := int(tableMap.Len())
 	names := make([]string, 0, numTables)
 
-	tableMap.Iter(func(key, tblRefVal types.Value) (stop bool) {
-		tblVal := tblRefVal.(types.Ref).TargetValue(root.vrw)
+	tableMap.Iter(context.TODO(), func(key, tblRefVal types.Value) (stop bool) {
+		tblVal := tblRefVal.(types.Ref).TargetValue(context.TODO(), root.vrw)
 		tblSt := tblVal.(types.Struct)
 		tbl := &Table{root.vrw, tblSt}
 		if tbl.HasConflicts() {
@@ -160,7 +160,7 @@ func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, 
 	tMapEditor := tableMap.Edit()
 	tMapEditor = tMapEditor.Set(types.String(tName), tableRef)
 
-	rootValSt = rootValSt.Set(tablesKey, tMapEditor.Map())
+	rootValSt = rootValSt.Set(tablesKey, tMapEditor.Map(context.TODO()))
 	return newRootValue(root.vrw, rootValSt)
 }
 
@@ -180,20 +180,20 @@ func (root *RootValue) TableDiff(other *RootValue) (added, modified, removed []s
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
 	otherMap := other.valueSt.Get(tablesKey).(types.Map)
 
-	itr1 := tableMap.Iterator()
-	itr2 := otherMap.Iterator()
+	itr1 := tableMap.Iterator(context.TODO())
+	itr2 := otherMap.Iterator(context.TODO())
 
-	pk1, val1 := itr1.Next()
-	pk2, val2 := itr2.Next()
+	pk1, val1 := itr1.Next(context.TODO())
+	pk2, val2 := itr2.Next(context.TODO())
 
 	for pk1 != nil || pk2 != nil {
 		if pk1 == nil || pk2 == nil || !pk1.Equals(pk2) {
 			if pk2 == nil || (pk1 != nil && pk1.Less(pk2)) {
 				added = append(added, string(pk1.(types.String)))
-				pk1, val1 = itr1.Next()
+				pk1, val1 = itr1.Next(context.TODO())
 			} else {
 				removed = append(removed, string(pk2.(types.String)))
-				pk2, val2 = itr2.Next()
+				pk2, val2 = itr2.Next(context.TODO())
 			}
 		} else {
 			//tblSt1 := val1.(types.Ref).TargetValue(root.vrw)
@@ -205,8 +205,8 @@ func (root *RootValue) TableDiff(other *RootValue) (added, modified, removed []s
 				modified = append(modified, string(pk1.(types.String)))
 			}
 
-			pk1, val1 = itr1.Next()
-			pk2, val2 = itr2.Next()
+			pk1, val1 = itr1.Next(context.TODO())
+			pk2, val2 = itr2.Next(context.TODO())
 		}
 	}
 
@@ -220,14 +220,14 @@ func (root *RootValue) UpdateTablesFromOther(tblNames []string, other *RootValue
 	me := tableMap.Edit()
 	for _, tblName := range tblNames {
 		key := types.String(tblName)
-		if val, ok := otherMap.MaybeGet(key); ok {
+		if val, ok := otherMap.MaybeGet(context.TODO(), key); ok {
 			me = me.Set(key, val)
-		} else if _, ok := tableMap.MaybeGet(key); ok {
+		} else if _, ok := tableMap.MaybeGet(context.TODO(), key); ok {
 			me = me.Remove(key)
 		}
 	}
 
-	rootValSt := root.valueSt.Set(tablesKey, me.Map())
+	rootValSt := root.valueSt.Set(tablesKey, me.Map(context.TODO()))
 	return newRootValue(root.vrw, rootValSt)
 }
 
@@ -237,13 +237,13 @@ func (root *RootValue) RemoveTables(tables []string) (*RootValue, error) {
 	for _, tbl := range tables {
 		key := types.String(tbl)
 
-		if me.Has(key) {
+		if me.Has(context.TODO(), key) {
 			me = me.Remove(key)
 		} else {
 			return nil, ErrTableNotFound
 		}
 	}
 
-	rootValSt := root.valueSt.Set(tablesKey, me.Map())
+	rootValSt := root.valueSt.Set(tablesKey, me.Map(context.TODO()))
 	return newRootValue(root.vrw, rootValSt), nil
 }

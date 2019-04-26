@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
@@ -311,7 +312,7 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 		key := inRow.NomsMapKey(inSch)
 
 		var err error
-		if conflicts.Has(key) {
+		if conflicts.Has(context.TODO(), key) {
 			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
 		} else {
 			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)

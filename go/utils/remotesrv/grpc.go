@@ -213,7 +213,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash)] = cti.ChunkCount
 	}
 
-	cs.UpdateManifest(updates)
+	cs.UpdateManifest(ctx, updates)
 
 	currHash := hash.New(req.Current)
 	lastHash := hash.New(req.Last)

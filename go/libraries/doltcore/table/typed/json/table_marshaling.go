@@ -70,11 +70,11 @@ func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sc
 	}
 
 	var rowMap types.Map
-	me := types.NewMap(vrw).Edit()
+	me := types.NewMap(context.TODO(), vrw).Edit()
 	for _, row := range tblRows {
 		me = me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch))
 	}
-	rowMap = me.Map()
+	rowMap = me.Map(context.TODO())
 
 	schemaVal, err := encoding.MarshalAsNomsValue(vrw, sch)
 	if err != nil {

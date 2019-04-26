@@ -95,17 +95,17 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 
 	updates := 0
 	for _, pk := range pkVals {
-		_, ok := m.MaybeGet(pk)
+		_, ok := m.MaybeGet(context.TODO(), pk)
 
 		if !ok {
-			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, types.EncodedValue(pk)))
+			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, types.EncodedValue(context.TODO(), pk)))
 			continue
 		}
 
 		verr := errhand.PanicToVError("Failed to remove the row from the table.", func() errhand.VerboseError {
 			me := m.Edit()
 			me.Remove(pk)
-			m = me.Map()
+			m = me.Map(context.TODO())
 			return nil
 		})
 

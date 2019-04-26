@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -38,12 +39,12 @@ func appendRow(drs []*DimRow, toUntyped, toTyped *rowconv.RowConverter, k, v typ
 }
 
 func NewDataWindow(size int, data types.Map, toUntyped, toTyped *rowconv.RowConverter) *DataWindow {
-	itr := data.Iterator()
+	itr := data.Iterator(context.TODO())
 
 	ok := true
 	var drs []*DimRow
 	for i := 0; i < size && ok; i++ {
-		k, v := itr.Next()
+		k, v := itr.Next(context.TODO())
 		drs, ok = appendRow(drs, toUntyped, toTyped, k, v)
 	}
 
@@ -109,7 +110,7 @@ func (dw *DataWindow) PageUp() {
 
 func (dw *DataWindow) fillInData() {
 	for len(dw.dimRows) < dw.idx+dw.size {
-		k, v := dw.itr.Next()
+		k, v := dw.itr.Next(context.TODO())
 
 		var ok bool
 		dw.dimRows, ok = appendRow(dw.dimRows, dw.toUntyped, dw.toTyped, k, v)
@@ -176,7 +177,7 @@ func (dw *DataWindow) FlushEdits() {
 		}
 
 		log.Println("flushed edits")
-		dw.data = me.Map()
+		dw.data = me.Map(context.TODO())
 	}
 }
 

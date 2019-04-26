@@ -295,7 +295,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 	me := rowData.Edit()
 	defVal, _ := doltcore.StringToValue(*defaultVal, kind)
 
-	rowData.Iter(func(k, v types.Value) (stop bool) {
+	rowData.Iter(context.TODO(), func(k, v types.Value) (stop bool) {
 		oldRow, _ := tbl.GetRow(k.(types.Tuple), newSchema)
 		newRow, err := oldRow.SetColVal(tag, defVal, newSchema)
 
@@ -308,7 +308,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 		return false
 	})
 
-	updatedTbl := doltdb.NewTable(context.Background(), vrw, newSchemaVal, me.Map())
+	updatedTbl := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, me.Map(context.TODO()))
 	return updatedTbl, nil
 }
 

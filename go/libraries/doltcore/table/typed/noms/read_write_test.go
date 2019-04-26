@@ -1,6 +1,7 @@
 package noms
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 
 func TestReadWrite(t *testing.T) {
 	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase()
+	db := dbSPec.GetDatabase(context.Background())
 
 	rows := createRows(false, false)
 

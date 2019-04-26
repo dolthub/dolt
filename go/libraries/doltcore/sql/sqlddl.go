@@ -56,7 +56,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	schVal, err := encoding.MarshalAsNomsValue(root.VRW(), sch)
-	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(root.VRW()))
+	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
 	root = root.PutTable(ctx, db, tableName, tbl)
 
 	return root, sch, nil

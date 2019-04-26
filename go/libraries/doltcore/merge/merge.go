@@ -114,13 +114,13 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 
 	go func() {
 		//diff.Diff(rows1, ancRows, changeChan1, stopChan1, true, dontDescend)
-		rows.Diff(ancRows, changeChan, stopChan)
+		rows.Diff(context.TODO(), ancRows, changeChan, stopChan)
 		close(changeChan)
 	}()
 
 	go func() {
 		//diff.Diff(rows2, ancRows, changeChan2, stopChan2, true, dontDescend)
-		mergeRows.Diff(ancRows, mergeChangeChan, mergeStopChan)
+		mergeRows.Diff(context.TODO(), ancRows, mergeChangeChan, mergeStopChan)
 		close(mergeChangeChan)
 	}()
 
@@ -128,7 +128,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 	defer stopAndDrain(mergeStopChan, mergeChangeChan)
 
 	conflictValChan := make(chan types.Value)
-	conflictMapChan := types.NewStreamingMap(vrw, conflictValChan)
+	conflictMapChan := types.NewStreamingMap(context.TODO(), vrw, conflictValChan)
 	mapEditor := rows.Edit()
 
 	stats := &MergeStats{Operation: TableModified}
@@ -174,7 +174,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 
 	close(conflictValChan)
 	conflicts := <-conflictMapChan
-	mergedData := mapEditor.Map()
+	mergedData := mapEditor.Map(context.TODO())
 
 	return mergedData, conflicts, stats, nil
 }

@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"errors"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -47,7 +48,7 @@ func (c *Commit) ParentHashes() []hash.Hash {
 	parentSet := c.getParents()
 
 	hashes := make([]hash.Hash, 0, parentSet.Len())
-	parentSet.IterAll(func(parentVal types.Value) {
+	parentSet.IterAll(context.TODO(), func(parentVal types.Value) {
 		parentRef := parentVal.(types.Ref)
 		parentHash := parentRef.TargetHash()
 		hashes = append(hashes, parentHash)
@@ -73,15 +74,15 @@ func (c *Commit) NumParents() int {
 func (c *Commit) getParent(idx int) *types.Struct {
 	parentSet := c.getParents()
 
-	itr := parentSet.IteratorAt(uint64(idx))
-	parentVal := itr.Next()
+	itr := parentSet.IteratorAt(context.TODO(), uint64(idx))
+	parentVal := itr.Next(context.TODO())
 
 	if parentVal == nil {
 		return nil
 	}
 
 	parentRef := parentVal.(types.Ref)
-	parentSt := parentRef.TargetValue(c.vrw).(types.Struct)
+	parentSt := parentRef.TargetValue(context.TODO(), c.vrw).(types.Struct)
 	return &parentSt
 }
 
@@ -111,7 +112,7 @@ func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
 			return err
 		}
 
-		ancestorSt, _ = ref.TargetValue(cm1.vrw).(types.Struct)
+		ancestorSt, _ = ref.TargetValue(context.TODO(), cm1.vrw).(types.Struct)
 		return nil
 	})
 
@@ -123,7 +124,7 @@ func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
 }
 
 func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok := datas.FindCommonAncestor(ref1, ref2, vrw)
+	ancestorRef, ok := datas.FindCommonAncestor(context.TODO(), ref1, ref2, vrw)
 
 	if !ok {
 		return types.Ref{}, ErrNoCommonAnscestor

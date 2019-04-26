@@ -76,7 +76,7 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		me.Remove(r.NomsMapKey(tableSch))
 	}
 
-	table = table.UpdateRows(ctx, me.Map())
+	table = table.UpdateRows(ctx, me.Map(ctx))
 
 	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil

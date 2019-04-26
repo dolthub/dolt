@@ -1,6 +1,7 @@
 package noms
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -17,7 +18,7 @@ type NomsMapReader struct {
 
 // NewNomsMapReader creates a NomsMapReader for a given noms types.Map
 func NewNomsMapReader(m types.Map, sch schema.Schema) *NomsMapReader {
-	itr := m.Iterator()
+	itr := m.Iterator(context.TODO())
 
 	return &NomsMapReader{sch, itr}
 }
@@ -33,7 +34,7 @@ func (nmr *NomsMapReader) ReadRow() (row.Row, error) {
 	var key types.Value
 	var val types.Value
 	err := pantoerr.PanicToError("Error reading next value", func() error {
-		key, val = nmr.itr.Next()
+		key, val = nmr.itr.Next(context.TODO())
 		return nil
 	})
 

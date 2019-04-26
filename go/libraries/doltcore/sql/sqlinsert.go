@@ -92,7 +92,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 		key := r.NomsMapKey(tableSch)
 
-		rowExists := me.Get(key) != nil
+		rowExists := me.Get(ctx, key) != nil
 		if rowExists {
 			if replace {
 				result.NumRowsUpdated += 1
@@ -108,7 +108,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(ctx, me.Map())
+	table = table.UpdateRows(ctx, me.Map(ctx))
 
 	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil

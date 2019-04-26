@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
@@ -142,8 +143,8 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 
 		var sch1 schema.Schema
 		var sch2 schema.Schema
-		rowData1 := types.NewMap(dEnv.DoltDB.ValueReadWriter())
-		rowData2 := types.NewMap(dEnv.DoltDB.ValueReadWriter())
+		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
 			sch1 = tbl1.GetSchema()

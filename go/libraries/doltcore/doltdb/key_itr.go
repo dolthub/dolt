@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -61,9 +62,9 @@ func TupleSliceItr(vals []types.Tuple) func() (types.Tuple, bool) {
 
 // SetItr returns a closure that has the signature of a PKItr and can be used to iterate over a noms Set of vaules
 func SetItr(valSet types.Set) func() (types.Tuple, bool) {
-	itr := valSet.Iterator()
+	itr := valSet.Iterator(context.TODO())
 	return func() (types.Tuple, bool) {
-		v := itr.Next()
+		v := itr.Next(context.TODO())
 		return v.(types.Tuple), v != nil
 	}
 }
