@@ -270,11 +270,11 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "http", "https":
 		return nil
 	case "aws":
-		return parseAWSSpec(sp.Href(), sp.Options)
+		return parseAWSSpec(ctx, sp.Href(), sp.Options)
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
+		return nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return storage.NewView()
@@ -289,7 +289,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	}
 }
 
-func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
+func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
 	fmt.Println(awsURL, options)
 
 	u, _ := url.Parse(awsURL)
@@ -322,7 +322,7 @@ func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	return nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
 func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunks.ChunkStore {
@@ -340,7 +340,7 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	return nbs.NewGCSStore(bucket, path, gcs, 1<<28)
+	return nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
@@ -419,14 +419,14 @@ func (sp Spec) Close() error {
 func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	switch sp.Protocol {
 	case "http", "https":
-		return datas.NewDatabase(datas.NewHTTPChunkStore(sp.Href(), sp.Options.Authorization))
+		return datas.NewDatabase(datas.NewHTTPChunkStore(ctx, sp.Href(), sp.Options.Authorization))
 	case "aws":
-		return datas.NewDatabase(parseAWSSpec(sp.Href(), sp.Options))
+		return datas.NewDatabase(parseAWSSpec(ctx, sp.Href(), sp.Options))
 	case "gs":
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
+		return datas.NewDatabase(nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28))
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return datas.NewDatabase(storage.NewView())

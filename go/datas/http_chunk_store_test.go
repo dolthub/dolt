@@ -101,7 +101,7 @@ func newHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 			HandleStats(w, req, ps, cs)
 		},
 	)
-	return newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
+	return newHTTPChunkStoreWithClient(context.Background(), "http://localhost:9000", "", serv)
 }
 
 func newAuthenticatingHTTPChunkStoreForTest(assert *assert.Assertions, cs chunks.ChunkStore, hostUrl string) *httpChunkStore {
@@ -125,7 +125,7 @@ func newAuthenticatingHTTPChunkStoreForTest(assert *assert.Assertions, cs chunks
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
-	return newHTTPChunkStoreWithClient(hostUrl, "", serv)
+	return newHTTPChunkStoreWithClient(context.Background(), hostUrl, "", serv)
 }
 
 func newBadVersionHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
@@ -145,7 +145,7 @@ func newBadVersionHTTPChunkStoreForTest(cs chunks.ChunkStore) *httpChunkStore {
 			HandleRootGet(w, req, ps, cs)
 		},
 	)
-	return newHTTPChunkStoreWithClient("http://localhost", "", serv)
+	return newHTTPChunkStoreWithClient(context.Background(), "http://localhost", "", serv)
 }
 
 func (suite *HTTPChunkStoreSuite) TearDownTest() {
@@ -392,7 +392,7 @@ func (suite *HTTPChunkStoreSuite) TestGetWithRoot() {
 			HandleGetRefs(w, req, ps, suite.serverCS)
 		},
 	)
-	store := newHTTPChunkStoreWithClient("http://localhost:9000", "", serv)
+	store := newHTTPChunkStoreWithClient(context.Background(), "http://localhost:9000", "", serv)
 
 	got := store.Get(context.Background(), chnx[1].Hash())
 	suite.Equal(chnx[1].Hash(), got.Hash())

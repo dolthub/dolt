@@ -18,7 +18,7 @@ type ChunkStoreTestSuite struct {
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
-	store := suite.Factory.CreateStore("ns")
+	store := suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
 	store.Put(context.Background(), c)
@@ -29,7 +29,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
-	store := suite.Factory.CreateStore("ns")
+	store := suite.Factory.CreateStore(context.Background(), "ns")
 	oldRoot := store.Root(context.Background())
 	suite.True(oldRoot.IsEmpty())
 
@@ -47,7 +47,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreRoot() {
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	name := "ns"
-	store := suite.Factory.CreateStore(name)
+	store := suite.Factory.CreateStore(context.Background(), name)
 	input := "abc"
 	c := NewChunk([]byte(input))
 	store.Put(context.Background(), c)
@@ -56,22 +56,22 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	// Reading it via the API should work...
 	assertInputInStore(input, h, store, suite.Assert())
 	// ...but it shouldn't be persisted yet
-	assertInputNotInStore(input, h, suite.Factory.CreateStore(name), suite.Assert())
+	assertInputNotInStore(input, h, suite.Factory.CreateStore(context.Background(), name), suite.Assert())
 
 	store.Commit(context.Background(), h, store.Root(context.Background())) // Commit persists Chunks
 	assertInputInStore(input, h, store, suite.Assert())
-	assertInputInStore(input, h, suite.Factory.CreateStore(name), suite.Assert())
+	assertInputInStore(input, h, suite.Factory.CreateStore(context.Background(), name), suite.Assert())
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreGetNonExisting() {
-	store := suite.Factory.CreateStore("ns")
+	store := suite.Factory.CreateStore(context.Background(), "ns")
 	h := hash.Parse("11111111111111111111111111111111")
 	c := store.Get(context.Background(), h)
 	suite.True(c.IsEmpty())
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
-	store := suite.Factory.CreateStore("ns")
+	store := suite.Factory.CreateStore(context.Background(), "ns")
 	oldRoot := store.Root(context.Background())
 	suite.True(oldRoot.IsEmpty())
 	newRoot := hash.Parse("11111222223333344444555556666677")
@@ -81,7 +81,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreVersion() {
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
-	store1, store2 := suite.Factory.CreateStore("ns"), suite.Factory.CreateStore("ns")
+	store1, store2 := suite.Factory.CreateStore(context.Background(), "ns"), suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
 	store1.Put(context.Background(), c)

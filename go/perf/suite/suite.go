@@ -274,7 +274,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 		serverHost, stopServerFn := suite.StartRemoteDatabase()
 		suite.DatabaseSpec = serverHost
-		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(serverHost, ""))
+		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(context.Background(), serverHost, ""))
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {
@@ -497,7 +497,7 @@ func (suite *PerfSuite) StartRemoteDatabase() (host string, stopFn func()) {
 		chunkStore = st.NewView()
 	} else {
 		dbDir := suite.TempDir()
-		chunkStore = nbs.NewLocalStore(dbDir, 128*(1<<20))
+		chunkStore = nbs.NewLocalStore(context.Background(), dbDir, 128*(1<<20))
 	}
 
 	server := datas.NewRemoteDatabaseServer(chunkStore, 0)

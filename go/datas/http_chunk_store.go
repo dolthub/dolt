@@ -58,12 +58,12 @@ type httpChunkStore struct {
 	version string
 }
 
-func NewHTTPChunkStore(baseURL, auth string) chunks.ChunkStore {
+func NewHTTPChunkStore(ctx context.Context, baseURL, auth string) chunks.ChunkStore {
 	// Custom http.Client to give control of idle connections and timeouts
-	return newHTTPChunkStoreWithClient(baseURL, auth, &http.Client{Transport: &customHTTPTransport})
+	return newHTTPChunkStoreWithClient(ctx, baseURL, auth, &http.Client{Transport: &customHTTPTransport})
 }
 
-func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChunkStore {
+func newHTTPChunkStoreWithClient(ctx context.Context, baseURL, auth string, client httpDoer) *httpChunkStore {
 	u, err := url.Parse(baseURL)
 	d.PanicIfError(err)
 	if u.Scheme != "http" && u.Scheme != "https" {
@@ -79,7 +79,7 @@ func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChu
 		rateLimit:     make(chan struct{}, httpChunkStoreConcurrency),
 		workerWg:      &sync.WaitGroup{},
 		cacheMu:       &sync.RWMutex{},
-		unwrittenPuts: nbs.NewCache(),
+		unwrittenPuts: nbs.NewCache(ctx),
 		rootMu:        &sync.RWMutex{},
 	}
 	hcs.root, hcs.version = hcs.getRoot(false)
@@ -456,7 +456,7 @@ func (hcs *httpChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		sendWriteRequest(ctx, url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
 		verbose.Log("Finished sending %d hashes", count)
 		hcs.unwrittenPuts.Destroy()
-		hcs.unwrittenPuts = nbs.NewCache()
+		hcs.unwrittenPuts = nbs.NewCache(ctx)
 	}
 
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated. Regardless, the server returns its current root for this store

@@ -114,7 +114,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		store1 := path.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			db := datas.NewDatabase(nbs.NewLocalStore(store1, 8*(1<<20)))
+			db := datas.NewDatabase(nbs.NewLocalStore(context.Background(), store1, 8*(1<<20)))
 			defer db.Close()
 			r := db.WriteValue(context.Background(), s)
 			_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
@@ -516,7 +516,7 @@ type testProtocol struct {
 
 func (t *testProtocol) NewChunkStore(sp Spec) (chunks.ChunkStore, error) {
 	t.name = sp.DatabaseName
-	return chunks.NewMemoryStoreFactory().CreateStore(""), nil
+	return chunks.NewMemoryStoreFactory().CreateStore(context.Background(), ""), nil
 }
 func (t *testProtocol) NewDatabase(sp Spec) (datas.Database, error) {
 	t.name = sp.DatabaseName

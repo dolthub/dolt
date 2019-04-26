@@ -39,7 +39,7 @@ func (suite *BlockStoreSuite) SetupTest() {
 	var err error
 	suite.dir, err = ioutil.TempDir("", "")
 	suite.NoError(err)
-	suite.store = NewLocalStore(suite.dir, testMemTableSize)
+	suite.store = NewLocalStore(context.Background(), suite.dir, testMemTableSize)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
 	}
@@ -52,13 +52,13 @@ func (suite *BlockStoreSuite) TearDownTest() {
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 	newDir := filepath.Join(suite.dir, "does-not-exist")
-	suite.Panics(func() { NewLocalStore(newDir, testMemTableSize) })
+	suite.Panics(func() { NewLocalStore(context.Background(), newDir, testMemTableSize) })
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
 	os.Create(existingFile)
-	suite.Panics(func() { NewLocalStore(existingFile, testMemTableSize) })
+	suite.Panics(func() { NewLocalStore(context.Background(), existingFile, testMemTableSize) })
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {
@@ -213,7 +213,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root := suite.store.Root(context.Background())
 
-	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
 	interloper.Put(context.Background(), c1)
 	suite.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
 
@@ -237,7 +237,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
-	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
 	interloper.Put(context.Background(), c1)
 	suite.True(interloper.Commit(context.Background(), c1.Hash(), interloper.Root(context.Background())))
 
@@ -256,7 +256,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
 	root := suite.store.Root(context.Background())
 
-	interloper := NewLocalStore(suite.dir, testMemTableSize)
+	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
 	interloper.Put(context.Background(), c1)
 	suite.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
 
@@ -318,7 +318,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		p := newFakeTablePersister()
 		c := &fakeConjoiner{}
 
-		smallTableStore := newNomsBlockStore(mm, p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(context.Background(), mm, p, c, testMemTableSize)
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
@@ -347,7 +347,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore := newNomsBlockStore(makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
@@ -370,7 +370,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore := newNomsBlockStore(makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
