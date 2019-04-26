@@ -26,7 +26,7 @@ func TestLocalStoreFactory(t *testing.T) {
 	stats := &Stats{}
 
 	dbName := "db"
-	store := f.CreateStore(dbName)
+	store := f.CreateStore(context.Background(), dbName)
 
 	c := chunks.NewChunk([]byte{0xff})
 	store.Put(context.Background(), c)
@@ -46,6 +46,6 @@ func TestLocalStoreFactory(t *testing.T) {
 	err = clobberManifest(dbDir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), contents.specs[0].name.String(), "1"}, ":"))
 	assert.NoError(err)
 
-	cached := f.CreateStoreFromCache(dbName)
+	cached := f.CreateStoreFromCache(context.Background(), dbName)
 	assert.Equal(c.Hash(), cached.Root(context.Background()))
 }

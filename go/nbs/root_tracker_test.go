@@ -111,7 +111,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
-	store := newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	defer store.Close()
 
 	assert.Equal(newRoot, store.Root(context.Background()))
@@ -140,11 +140,11 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	interloper := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer interloper.Close()
 
 	chunk := chunks.NewChunk([]byte("hello"))
@@ -172,7 +172,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	// store.Commit() should lock out calls to mm.Fetch()
@@ -203,7 +203,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
@@ -211,6 +211,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	updateCount := 0
 
 	interloper := newNomsBlockStore(
+		context.Background(),
 		manifestManager{
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
@@ -244,7 +245,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
-	store = newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, 0)
+	store = newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, 0)
 	return
 }
 

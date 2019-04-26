@@ -27,7 +27,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
 	ds := datas.NewDatabase(cs)
 
 	ds.Close()
@@ -40,7 +40,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
 
 	id := "testdataset"

@@ -18,10 +18,10 @@ const (
 	defaultCacheMemTableSize uint64 = 1 << 27 // 128MiB
 )
 
-func NewCache() *NomsBlockCache {
+func NewCache(ctx context.Context) *NomsBlockCache {
 	dir, err := ioutil.TempDir("", "")
 	d.PanicIfError(err)
-	store := NewLocalStore(dir, defaultCacheMemTableSize)
+	store := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
 	d.Chk.NoError(err, "opening put cache in %s", dir)
 	return &NomsBlockCache{store, dir}
 }

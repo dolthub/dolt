@@ -201,11 +201,11 @@ func NewMemoryStoreFactory() Factory {
 	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 
-func (f *memoryStoreFactory) CreateStoreFromCache(ns string) ChunkStore {
-	return f.CreateStore(ns)
+func (f *memoryStoreFactory) CreateStoreFromCache(ctx context.Context, ns string) ChunkStore {
+	return f.CreateStore(ctx, ns)
 }
 
-func (f *memoryStoreFactory) CreateStore(ns string) ChunkStore {
+func (f *memoryStoreFactory) CreateStore(ctx context.Context, ns string) ChunkStore {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
