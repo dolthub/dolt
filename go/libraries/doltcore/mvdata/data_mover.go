@@ -79,7 +79,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		}
 	}()
 
-	outSch, err := getOutSchema(rd.GetSchema(), root, fs, mvOpts)
+	outSch, err := getOutSchema(ctx, rd.GetSchema(), root, fs, mvOpts)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid noms kind") {
@@ -130,9 +130,9 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	return imp, nil
 }
 
-func (imp *DataMover) Move() error {
-	defer imp.Rd.Close(context.TODO())
-	defer imp.Wr.Close(context.TODO())
+func (imp *DataMover) Move(ctx context.Context) error {
+	defer imp.Rd.Close(ctx)
+	defer imp.Wr.Close(ctx)
 
 	var rowErr error
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
@@ -145,8 +145,8 @@ func (imp *DataMover) Move() error {
 	}
 
 	p := pipeline.NewAsyncPipeline(
-		pipeline.ProcFuncForReader(context.TODO(), imp.Rd),
-		pipeline.ProcFuncForWriter(context.TODO(), imp.Wr),
+		pipeline.ProcFuncForReader(ctx, imp.Rd),
+		pipeline.ProcFuncForWriter(ctx, imp.Wr),
 		imp.Transforms,
 		badRowCB)
 	p.Start()
@@ -185,17 +185,17 @@ func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool
 	return wr, nil
 }
 
-func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
+func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.CreateReader(context.TODO(), root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+		rd, _, err := mvOpts.Dest.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 		if err != nil {
 			return nil, err
 		}
 
-		defer rd.Close(context.TODO())
+		defer rd.Close(ctx)
 
 		return rd.GetSchema(), nil
 	} else {

@@ -203,7 +203,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	err = mover.Move()
+	err = mover.Move(context.TODO())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {

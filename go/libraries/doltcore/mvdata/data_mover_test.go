@@ -135,7 +135,7 @@ func TestDataMover(t *testing.T) {
 			t.Fatal(crDMErr.String())
 		}
 
-		err = dm.Move()
+		err = dm.Move(context.Background())
 
 		if err != nil {
 			t.Fatal(err)
