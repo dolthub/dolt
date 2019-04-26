@@ -456,7 +456,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 	return
 }
 
-func (tr tableReader) extract(chunks chan<- extractRecord) {
+func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) {
 	// Build reverse lookup table from ordinal -> chunk hash
 	hashes := make(addrSlice, len(tr.prefixes))
 	for idx, prefix := range tr.prefixes {

@@ -377,16 +377,16 @@ func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (rea
 	return
 }
 
-func (nbs *NomsBlockStore) extractChunks(chunkChan chan<- *chunks.Chunk) {
+func (nbs *NomsBlockStore) extractChunks(ctx context.Context, chunkChan chan<- *chunks.Chunk) {
 	ch := make(chan extractRecord, 1)
 	go func() {
 		defer close(ch)
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		// Chunks in nbs.tables were inserted before those in nbs.mt, so extract chunks there _first_
-		nbs.tables.extract(ch)
+		nbs.tables.extract(ctx, ch)
 		if nbs.mt != nil {
-			nbs.mt.extract(ch)
+			nbs.mt.extract(ctx, ch)
 		}
 	}()
 	for rec := range ch {

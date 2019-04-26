@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"sort"
@@ -231,7 +232,7 @@ func TestExtract(t *testing.T) {
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
 	chunkChan := make(chan extractRecord)
-	go func() { tr.extract(chunkChan); close(chunkChan) }()
+	go func() { tr.extract(context.Background(), chunkChan); close(chunkChan) }()
 	i := 0
 	for rec := range chunkChan {
 		assert.NotNil(rec.data, "Nothing for", addrs[i])

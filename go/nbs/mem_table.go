@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -115,7 +116,7 @@ func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg
 	return
 }
 
-func (mt *memTable) extract(chunks chan<- extractRecord) {
+func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) {
 	for _, hrec := range mt.order {
 		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a]}
 	}

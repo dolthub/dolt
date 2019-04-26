@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -170,13 +171,13 @@ func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
 	return newTs
 }
 
-func (ts tableSet) extract(chunks chan<- extractRecord) {
+func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) {
 	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
 	for i := len(ts.upstream) - 1; i >= 0; i-- {
-		ts.upstream[i].extract(chunks)
+		ts.upstream[i].extract(ctx, chunks)
 	}
 	for i := len(ts.novel) - 1; i >= 0; i-- {
-		ts.novel[i].extract(chunks)
+		ts.novel[i].extract(ctx, chunks)
 	}
 }
 

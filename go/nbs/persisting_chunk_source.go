@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"sync"
 	"time"
@@ -114,10 +115,10 @@ func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) 
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
-func (ccs *persistingChunkSource) extract(chunks chan<- extractRecord) {
+func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
-	ccs.cs.extract(chunks)
+	ccs.cs.extract(ctx, chunks)
 }
 
 type emptyChunkSource struct{}
@@ -162,4 +163,4 @@ func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads
 	return 0, true
 }
 
-func (ecs emptyChunkSource) extract(chunks chan<- extractRecord) {}
+func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {}

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"io"
 	"math/rand"
 	"sync"
@@ -58,7 +59,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			rdr := s3p.Open(src.hash(), src.count(), &Stats{})
 			baseline := s3svc.getCount
 			ch := make(chan extractRecord)
-			go func() { defer close(ch); rdr.extract(ch) }()
+			go func() { defer close(ch); rdr.extract(context.Background(), ch) }()
 			for range ch {
 			}
 			assert.Zero(t, s3svc.getCount-baseline)

@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"sort"
 	"testing"
@@ -75,7 +76,7 @@ func TestConjoin(t *testing.T) {
 		}
 		expectSrcs, actualSrcs := open(expect), open(actual)
 		chunkChan := make(chan extractRecord, expectSrcs.count())
-		expectSrcs.extract(chunkChan)
+		expectSrcs.extract(context.Background(), chunkChan)
 		close(chunkChan)
 
 		for rec := range chunkChan {

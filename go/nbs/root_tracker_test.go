@@ -372,7 +372,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 					chunks <- extractRecord{a: src.hash(), err: r}
 				}
 			}()
-			src.extract(chunks)
+			src.extract(context.Background(), chunks)
 		}()
 		for rec := range chunks {
 			if rec.err != nil {
