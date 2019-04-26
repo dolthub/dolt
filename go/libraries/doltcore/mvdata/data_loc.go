@@ -186,7 +186,7 @@ func (dl *DataLocation) Exists(root *doltdb.RootValue, fs filesys.ReadableFS) bo
 
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
-func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
 	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
@@ -196,7 +196,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 		if sortedInput {
 			return noms.NewNomsMapCreator(root.VRW(), outSch), nil
 		} else {
-			m := types.NewMap(context.TODO(), root.VRW())
+			m := types.NewMap(ctx, root.VRW())
 			return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 		}
 

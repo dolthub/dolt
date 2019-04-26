@@ -195,7 +195,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(root, dEnv.FS, mvOpts)
+	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts)
 
 	if nDMErr != nil {
 		verr := newDataMoverErrToVerr(mvOpts, nDMErr)

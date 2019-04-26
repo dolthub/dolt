@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -61,7 +62,7 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
-func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
+func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
 	transforms := pipeline.NewTransformCollection()
@@ -108,7 +109,7 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
-		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch)
 	} else {
 		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(root, fs, srcIsSorted, outSch)
 	}
