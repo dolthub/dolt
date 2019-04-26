@@ -90,7 +90,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	wr := tabular.NewTextTableWriter(cliWr, outSch)
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
-	cliSink := pipeline.ProcFuncForWriter(wr)
+	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {

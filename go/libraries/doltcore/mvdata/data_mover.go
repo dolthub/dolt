@@ -144,7 +144,11 @@ func (imp *DataMover) Move() error {
 		return true
 	}
 
-	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForReader(imp.Rd), pipeline.ProcFuncForWriter(imp.Wr), imp.Transforms, badRowCB)
+	p := pipeline.NewAsyncPipeline(
+		pipeline.ProcFuncForReader(context.TODO(), imp.Rd),
+		pipeline.ProcFuncForWriter(context.TODO(), imp.Wr),
+		imp.Transforms,
+		badRowCB)
 	p.Start()
 
 	err := p.Wait()

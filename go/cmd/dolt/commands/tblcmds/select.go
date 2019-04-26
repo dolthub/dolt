@@ -230,8 +230,8 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 		return true
 	}
 
-	rdProcFunc := pipeline.ProcFuncForReader(rd)
-	wrProcFunc := pipeline.ProcFuncForWriter(wr)
+	rdProcFunc := pipeline.ProcFuncForReader(context.TODO(), rd)
+	wrProcFunc := pipeline.ProcFuncForWriter(context.TODO(), wr)
 
 	p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCallback)
 	p.RunAfter(func() { rd.Close(context.TODO()) })

@@ -57,9 +57,9 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 }
 
 // ProcFuncForReader adapts a standard TableReader to work as an InFunc for a pipeline
-func ProcFuncForReader(rd table.TableReader) InFunc {
+func ProcFuncForReader(ctx context.Context, rd table.TableReader) InFunc {
 	return ProcFuncForSourceFunc(func() (row.Row, ImmutableProperties, error) {
-		r, err := rd.ReadRow(context.TODO())
+		r, err := rd.ReadRow(ctx)
 
 		return r, NoProps, err
 	})
@@ -105,8 +105,8 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 }
 
 // ProcFuncForWriter adapts a standard TableWriter to work as an InFunc for a pipeline
-func ProcFuncForWriter(wr table.TableWriter) OutFunc {
+func ProcFuncForWriter(ctx context.Context, wr table.TableWriter) OutFunc {
 	return ProcFuncForSinkFunc(func(r row.Row, props ReadableMap) error {
-		return wr.WriteRow(context.TODO(), r)
+		return wr.WriteRow(ctx, r)
 	})
 }
