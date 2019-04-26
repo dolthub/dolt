@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/gizak/termui/v3"
 )
 
@@ -45,7 +46,7 @@ func (cp *ColonPrompt) Result() ColonPromptCommand {
 	return InvalidCommand
 }
 
-func (cp *ColonPrompt) InHandler(e termui.Event) (exit, render, releaseFocus bool) {
+func (cp *ColonPrompt) InHandler(ctx context.Context, e termui.Event) (exit, render, releaseFocus bool) {
 	if e.ID == "<Escape>" {
 		cp.in.Value = ""
 		cp.in.Clear()
@@ -61,7 +62,7 @@ func (cp *ColonPrompt) InHandler(e termui.Event) (exit, render, releaseFocus boo
 		case QuitNoSaveCommand:
 			return true, false, true
 		case WriteAndQuitCommand:
-			cp.dim.FlushEdits()
+			cp.dim.FlushEdits(ctx)
 			return true, false, true
 		}
 

@@ -90,8 +90,9 @@ func main() {
 	data := tbl.GetRowData()
 	sch := tbl.GetSchema()
 
-	dim := New(sch, data)
-	updatedRows := dim.Run()
+	ctx := context.Background()
+	dim := New(ctx, sch, data)
+	updatedRows := dim.Run(ctx)
 
 	if !data.Equals(updatedRows) {
 		updatedTbl := tbl.UpdateRows(context.Background(), updatedRows)
