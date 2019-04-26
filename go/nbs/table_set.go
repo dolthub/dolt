@@ -49,10 +49,10 @@ func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) get(h addr, stats *Stats) []byte {
+func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) []byte {
 	f := func(css chunkSources) []byte {
 		for _, haver := range css {
-			if data := haver.get(h, stats); data != nil {
+			if data := haver.get(ctx, h, stats); data != nil {
 				return data
 			}
 		}

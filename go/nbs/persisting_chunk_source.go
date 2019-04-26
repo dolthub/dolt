@@ -67,10 +67,10 @@ func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) bool {
 	return cr.hasMany(addrs)
 }
 
-func (ccs *persistingChunkSource) get(h addr, stats *Stats) []byte {
+func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
-	return cr.get(h, stats)
+	return cr.get(ctx, h, stats)
 }
 
 func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
@@ -131,7 +131,7 @@ func (ecs emptyChunkSource) hasMany(addrs []hasRecord) bool {
 	return true
 }
 
-func (ecs emptyChunkSource) get(h addr, stats *Stats) []byte {
+func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
 	return nil
 }
 
