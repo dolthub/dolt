@@ -1,6 +1,7 @@
 package noms
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -67,7 +68,7 @@ func (nmu *NomsMapUpdater) Close() error {
 					err = fmt.Errorf("panic occured during closing: %v", r)
 				}
 
-				result := nmu.me.Map()
+				result := nmu.me.Map(context.TODO())
 				nmu.result = &result
 
 				nmu.me = nil

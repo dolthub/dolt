@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -128,7 +129,7 @@ func TestParseKeyValues(t *testing.T) {
 				}
 
 				if !currActual.Equals(currExpected) {
-					t.Error("actual:", types.EncodedValue(currActual), "!= expected:", types.EncodedValue(currExpected))
+					t.Error("actual:", types.EncodedValue(context.Background(), currActual), "!= expected:", types.EncodedValue(context.Background(), currExpected))
 				}
 			}
 		}

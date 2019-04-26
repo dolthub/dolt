@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/attic-labs/noms/go/marshal"
@@ -113,7 +114,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 // MarshalAsNomsValue takes a Schema and converts it to a types.Value
 func MarshalAsNomsValue(vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
 	sd := toSchemaData(sch)
-	val, err := marshal.Marshal(vrw, sd)
+	val, err := marshal.Marshal(context.TODO(), vrw, sd)
 
 	if err != nil {
 		return types.EmptyStruct, err
@@ -129,7 +130,7 @@ func MarshalAsNomsValue(vrw types.ValueReadWriter, sch schema.Schema) (types.Val
 // UnmarshalNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalNomsValue(schemaVal types.Value) (schema.Schema, error) {
 	var sd schemaData
-	err := marshal.Unmarshal(schemaVal, &sd)
+	err := marshal.Unmarshal(context.TODO(), schemaVal, &sd)
 
 	if err != nil {
 		return nil, err

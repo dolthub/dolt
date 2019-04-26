@@ -21,7 +21,7 @@ func TestTableDiff(t *testing.T) {
 	}
 
 	sch := createTestSchema()
-	tbl1, _ := createTestTable(ddb.ValueReadWriter(), sch, types.NewMap(ddb.ValueReadWriter()))
+	tbl1, _ := createTestTable(ddb.ValueReadWriter(), sch, types.NewMap(context.Background(), ddb.ValueReadWriter()))
 
 	root2 := root.PutTable(context.Background(), ddb, "tbl1", tbl1)
 

@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -195,7 +196,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 		if sortedInput {
 			return noms.NewNomsMapCreator(root.VRW(), outSch), nil
 		} else {
-			m := types.NewMap(root.VRW())
+			m := types.NewMap(context.TODO(), root.VRW())
 			return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 		}
 

@@ -187,7 +187,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		key := r.NomsMapKey(tableSch)
 		// map editor reaches into the underlying table if there isn't an edit with this key
 		// this logic isn't correct for all possible queries, but works for now
-		if primaryKeyColChanged && me.Get(key) != nil {
+		if primaryKeyColChanged && me.Get(ctx, key) != nil {
 			return errUpdate("Update results in duplicate primary key %v", key)
 		}
 		if anyColChanged {
@@ -198,7 +198,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(ctx, me.Map())
+	table = table.UpdateRows(ctx, me.Map(ctx))
 
 	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil

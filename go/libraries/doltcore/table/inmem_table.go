@@ -1,6 +1,7 @@
 package table
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -38,7 +39,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 		if !ok {
 			return NewBadRow(r, col.Name+" is missing")
 		} else {
-			return NewBadRow(r, col.Name+":"+types.EncodedValue(val)+" is not valid.")
+			return NewBadRow(r, col.Name+":"+types.EncodedValue(context.TODO(), val)+" is not valid.")
 		}
 	}
 

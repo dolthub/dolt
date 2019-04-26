@@ -27,12 +27,12 @@ func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map,
 	rows[3] = row.New(sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
 
-	ed := types.NewMap(vrw).Edit()
+	ed := types.NewMap(context.Background(), vrw).Edit()
 	for _, r := range rows {
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
-	return ed.Map(), rows
+	return ed.Map(context.Background()), rows
 }
 
 func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
@@ -49,7 +49,7 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 
 func TestTables(t *testing.T) {
 	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase()
+	db := dbSPec.GetDatabase(context.Background())
 
 	tSchema := createTestSchema()
 	rowData, rows := createTestRowData(db, tSchema)

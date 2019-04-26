@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/diff"
 	"github.com/attic-labs/noms/go/types"
@@ -30,7 +31,7 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 
 func (ad *AsyncDiffer) Start(v1, v2 types.Value) {
 	go func() {
-		diff.Diff(v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
+		diff.Diff(context.TODO(), v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
 		close(ad.diffChan)
 	}()
 }

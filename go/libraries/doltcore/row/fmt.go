@@ -2,6 +2,7 @@ package row
 
 import (
 	"bytes"
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
@@ -35,7 +36,7 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 			if ok {
 				buf.Write([]byte(col.Name))
 				buf.WriteRune(delim)
-				types.WriteEncodedValue(buf, val)
+				types.WriteEncodedValue(context.TODO(), buf, val)
 				kvps = append(kvps, buf.String())
 			}
 

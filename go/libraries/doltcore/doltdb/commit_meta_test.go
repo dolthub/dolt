@@ -18,3 +18,4 @@ func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 
 	t.Log(cm.String())
 }
+

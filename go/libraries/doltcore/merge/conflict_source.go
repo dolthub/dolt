@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -72,7 +73,7 @@ func NewConflictReader(tbl *doltdb.Table) (*ConflictReader, error) {
 		return nil, err
 	}
 
-	confItr := confData.Iterator()
+	confItr := confData.Iterator(context.TODO())
 
 	baseConv, err := rowconv.NewRowConverter(baseMapping)
 	conv, err := rowconv.NewRowConverter(mapping)
@@ -98,7 +99,7 @@ func (cr *ConflictReader) GetSchema() schema.Schema {
 func (cr *ConflictReader) NextConflict() (row.Row, pipeline.ImmutableProperties, error) {
 	for {
 		if cr.currIdx == 0 {
-			key, value := cr.confItr.Next()
+			key, value := cr.confItr.Next(context.TODO())
 
 			if key == nil {
 				return nil, pipeline.NoProps, io.EOF

@@ -1,6 +1,7 @@
 package row
 
 import (
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -84,7 +85,7 @@ func validateRow(t *testing.T, r Row, expected TaggedValues) {
 		if !ok {
 			t.Error("missing value")
 		} else if val != nil && !val.Equals(expVal) {
-			t.Error(types.EncodedValue(val), "!=", types.EncodedValue(expVal))
+			t.Error(types.EncodedValue(context.Background(), val), "!=", types.EncodedValue(context.Background(), expVal))
 		}
 	}
 

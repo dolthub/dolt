@@ -25,7 +25,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	}
 
 	tblSchRef := tbl.GetSchemaRef()
-	tblSchVal := tblSchRef.TargetValue(vrw)
+	tblSchVal := tblSchRef.TargetValue(ctx, vrw)
 	tblSch, err := encoding.UnmarshalNomsValue(tblSchVal)
 
 	if err != nil {
@@ -41,7 +41,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	rowEditor := tbl.GetRowData().Edit()
 
 	var itrErr error
-	conflicts.Iter(func(key, value types.Value) (stop bool) {
+	conflicts.Iter(ctx, func(key, value types.Value) (stop bool) {
 		cnf := doltdb.ConflictFromTuple(value.(types.Tuple))
 
 		var updated types.Value
@@ -71,8 +71,8 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, itrErr
 	}
 
-	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map())
-	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(vrw))
+	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map(ctx))
+	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, vrw))
 
 	return newTbl, nil
 }

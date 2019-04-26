@@ -2,6 +2,7 @@ package csv
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -87,7 +88,7 @@ func (csvw *CSVWriter) WriteRow(r row.Row) error {
 			if val.Kind() == types.StringKind {
 				colValStrs[i] = string(val.(types.String))
 			} else {
-				colValStrs[i] = types.EncodedValue(val)
+				colValStrs[i] = types.EncodedValue(context.TODO(), val)
 			}
 		}
 

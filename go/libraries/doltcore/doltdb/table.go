@@ -73,7 +73,7 @@ func (t *Table) GetConflicts() (Conflict, types.Map, error) {
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+		confMap = confMapRef.TargetValue(context.TODO(), t.vrw).(types.Map)
 	}
 
 	return schemas, confMap, nil
@@ -103,7 +103,7 @@ func (t *Table) NumRowsInConflict() uint64 {
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+		confMap = confMapRef.TargetValue(context.TODO(), t.vrw).(types.Map)
 	}
 
 	return confMap.Len()
@@ -141,7 +141,7 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
 	var schema schema.Schema
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		schemaVal := ref.TargetValue(vrw)
+		schemaVal := ref.TargetValue(context.TODO(), vrw)
 
 		var err error
 		schema, err = encoding.UnmarshalNomsValue(schemaVal)
@@ -194,7 +194,7 @@ func (t *Table) GetRowByPKVals(pkVals row.TaggedValues, sch schema.Schema) (row.
 // then the supplied TableRowFactory will be used to create a TableRow using the row data.
 func (t *Table) GetRow(pk types.Tuple, sch schema.Schema) (row.Row, bool) {
 	rowMap := t.GetRowData()
-	fieldsVal := rowMap.Get(pk)
+	fieldsVal := rowMap.Get(context.TODO(), pk)
 
 	if fieldsVal == nil {
 		return nil, false
@@ -219,7 +219,7 @@ func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.
 	rowMap := t.GetRowData()
 
 	for pk, ok := pkItr(); ok; pk, ok = pkItr() {
-		fieldsVal := rowMap.Get(pk)
+		fieldsVal := rowMap.Get(context.TODO(), pk)
 
 		if fieldsVal == nil {
 			missing = append(missing, pk)
@@ -244,7 +244,7 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) *Table {
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData() types.Map {
 	rowMapRef := t.tableStruct.Get(tableRowsKey).(types.Ref)
-	rowMap := rowMapRef.TargetValue(t.vrw).(types.Map)
+	rowMap := rowMapRef.TargetValue(context.TODO(), t.vrw).(types.Map)
 	return rowMap
 }
 
@@ -296,7 +296,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 
 	confEdit := confData.Edit()
 	for _, pkTupleVal := range pkTuples {
-		if confEdit.Has(pkTupleVal) {
+		if confEdit.Has(context.TODO(), pkTupleVal) {
 			removed++
 			confEdit.Remove(pkTupleVal)
 		} else {
@@ -308,7 +308,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return invalid, notFound, tbl, nil
 	}
 
-	conflicts := confEdit.Map()
+	conflicts := confEdit.Map(context.TODO())
 	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflicts)
 	updatedSt := t.tableStruct.Set(conflictsKey, conflictsRef)
 

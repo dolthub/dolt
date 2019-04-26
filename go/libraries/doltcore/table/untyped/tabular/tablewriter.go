@@ -2,6 +2,7 @@ package tabular
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -116,14 +117,14 @@ func (ttw *TextTableWriter) WriteRow(r row.Row) error {
 			if !ok {
 				panic("No column width recorded for tag " + string(tag))
 			}
-			for i := 0; i < colWidth - len(sql.PRINTED_NULL); i++ {
+			for i := 0; i < colWidth-len(sql.PRINTED_NULL); i++ {
 				rowVals.WriteString(" ")
 			}
 		} else {
 			if val.Kind() == types.StringKind {
 				rowVals.WriteString(string(val.(types.String)))
 			} else {
-				rowVals.WriteString(types.EncodedValue(val))
+				rowVals.WriteString(types.EncodedValue(context.TODO(), val))
 			}
 		}
 

@@ -1,6 +1,7 @@
 package noms
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -25,7 +26,7 @@ type NomsMapCreator struct {
 // NewNomsMapCreator creates a new NomsMapCreator.
 func NewNomsMapCreator(vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
 	kvsChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(vrw, kvsChan)
+	mapChan := types.NewStreamingMap(context.TODO(), vrw, kvsChan)
 
 	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, nil}
 }
