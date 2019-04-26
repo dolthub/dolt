@@ -94,7 +94,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, outSch)))
 		return true
 	})
 

@@ -73,7 +73,7 @@ func TestTables(t *testing.T) {
 	if !ok {
 		t.Error("Could not find row 0 in table")
 	} else if !row.AreEqual(readRow0, rows[0], tSchema) {
-		t.Error(row.Fmt(readRow0, tSchema), "!=", row.Fmt(rows[0], tSchema))
+		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
 	}
 
 	_, ok = tbl.GetRowByPKVals(row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
@@ -93,7 +93,7 @@ func TestTables(t *testing.T) {
 
 	for i, r := range rows {
 		if !row.AreEqual(r, readRows[i], tSchema) {
-			t.Error(row.Fmt(readRows[i], tSchema), "!=", row.Fmt(r, tSchema))
+			t.Error(row.Fmt(context.Background(), readRows[i], tSchema), "!=", row.Fmt(context.Background(), r, tSchema))
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -93,7 +94,7 @@ func TestReader(t *testing.T) {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
 				if !row.AreEqual(r, expectedRow, sch) {
-					t.Error(row.Fmt(r, sch), "!=", row.Fmt(expectedRow, sch))
+					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
 				}
 			}
 		}

@@ -1,6 +1,7 @@
 package rowconv
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -56,7 +57,7 @@ func TestRowConverter(t *testing.T) {
 	})
 
 	if !row.AreEqual(outData, expected, destSch) {
-		t.Error("\n", row.Fmt(expected, destSch), "!=\n", row.Fmt(outData, destSch))
+		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))
 	}
 }
 
