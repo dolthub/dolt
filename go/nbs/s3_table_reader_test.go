@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 )
@@ -76,8 +78,8 @@ func makeFlakyS3(svc s3svc) *flakyS3 {
 	return &flakyS3{svc, map[string]struct{}{}}
 }
 
-func (fs3 *flakyS3) GetObject(input *s3.GetObjectInput) (output *s3.GetObjectOutput, err error) {
-	output, err = fs3.s3svc.GetObject(input)
+func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (output *s3.GetObjectOutput, err error) {
+	output, err = fs3.s3svc.GetObjectWithContext(ctx, input)
 	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
 		fs3.alreadyFailed[*input.Key] = struct{}{}
 		output.Body = ioutil.NopCloser(resettingReader{})
