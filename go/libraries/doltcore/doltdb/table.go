@@ -127,9 +127,9 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 
 		var err error
 		var baseSch, sch, mergeSch schema.Schema
-		if baseSch, err = refToSchema(t.vrw, baseRef); err == nil {
-			if sch, err = refToSchema(t.vrw, valRef); err == nil {
-				mergeSch, err = refToSchema(t.vrw, mergeRef)
+		if baseSch, err = refToSchema(context.TODO(), t.vrw, baseRef); err == nil {
+			if sch, err = refToSchema(context.TODO(), t.vrw, valRef); err == nil {
+				mergeSch, err = refToSchema(context.TODO(), t.vrw, mergeRef)
 			}
 		}
 
@@ -138,13 +138,13 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 	return nil, nil, nil, ErrNoConflicts
 }
 
-func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
+func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
 	var schema schema.Schema
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		schemaVal := ref.TargetValue(context.TODO(), vrw)
+		schemaVal := ref.TargetValue(ctx, vrw)
 
 		var err error
-		schema, err = encoding.UnmarshalNomsValue(context.TODO(), schemaVal)
+		schema, err = encoding.UnmarshalNomsValue(ctx, schemaVal)
 
 		if err != nil {
 			return err
@@ -160,7 +160,7 @@ func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error
 func (t *Table) GetSchema() schema.Schema {
 	schemaRefVal := t.tableStruct.Get(schemaRefKey)
 	schemaRef := schemaRefVal.(types.Ref)
-	schema, _ := refToSchema(t.vrw, schemaRef)
+	schema, _ := refToSchema(context.TODO(), t.vrw, schemaRef)
 
 	return schema
 }

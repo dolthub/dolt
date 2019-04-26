@@ -78,7 +78,7 @@ func LoadDoltDB(loc Location) *DoltDB {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
-	if ddb.db.GetDataset(context.TODO(), creationBranch).HasHead() {
+	if ddb.db.GetDataset(ctx, creationBranch).HasHead() {
 		return errors.New("database already exists")
 	}
 
@@ -90,19 +90,19 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 	}
 
 	err := pantoerr.PanicToError("Failed to write empty repo", func() error {
-		rv := emptyRootValue(ddb.db)
+		rv := emptyRootValue(ctx, ddb.db)
 		_, err := ddb.WriteRootValue(ctx, rv)
 
 		cm, _ := NewCommitMeta(name, email, "Data repository created.")
 
 		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(), Policy: nil}
-		firstCommit, err := ddb.db.Commit(context.TODO(), ddb.db.GetDataset(context.TODO(), creationBranch), rv.valueSt, commitOpts)
+		firstCommit, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, creationBranch), rv.valueSt, commitOpts)
 
 		if err != nil {
 			return err
 		}
 
-		_, err = ddb.db.SetHead(context.TODO(), ddb.db.GetDataset(context.TODO(), MasterBranch), firstCommit.HeadRef())
+		_, err = ddb.db.SetHead(ctx, ddb.db.GetDataset(ctx, MasterBranch), firstCommit.HeadRef())
 
 		return err
 	})
@@ -110,8 +110,8 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 	return err
 }
 
-func getCommitStForBranch(db datas.Database, b string) (types.Struct, error) {
-	ds := db.GetDataset(context.TODO(), b)
+func getCommitStForBranch(ctx context.Context, db datas.Database, b string) (types.Struct, error) {
+	ds := db.GetDataset(ctx, b)
 
 	if ds.HasHead() {
 		return ds.Head(), nil
@@ -120,7 +120,7 @@ func getCommitStForBranch(db datas.Database, b string) (types.Struct, error) {
 	return types.EmptyStruct, ErrBranchNotFound
 }
 
-func getCommitStForHash(db datas.Database, c string) (types.Struct, error) {
+func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
 	prefixed := c
 
 	if !strings.HasPrefix(c, "#") {
@@ -133,7 +133,7 @@ func getCommitStForHash(db datas.Database, c string) (types.Struct, error) {
 		return types.EmptyStruct, err
 	}
 
-	val := ap.Resolve(context.TODO(), db)
+	val := ap.Resolve(ctx, db)
 
 	if val == nil {
 		return types.EmptyStruct, ErrHashNotFound
@@ -148,7 +148,7 @@ func getCommitStForHash(db datas.Database, c string) (types.Struct, error) {
 	return valSt, nil
 }
 
-func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
+func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
 	if aSpec == nil || len(aSpec.Instructions) == 0 {
 		return commitSt, nil
 	}
@@ -158,7 +158,7 @@ func walkAncestorSpec(db datas.Database, commitSt types.Struct, aSpec *AncestorS
 		cm := Commit{db, commitSt}
 
 		if inst < cm.NumParents() {
-			commitStPtr := cm.getParent(inst)
+			commitStPtr := cm.getParent(ctx, inst)
 
 			if commitStPtr == nil {
 				return types.EmptyStruct, ErrInvalidAnscestorSpec
@@ -178,16 +178,16 @@ func (ddb *DoltDB) Resolve(cs *CommitSpec) (*Commit, error) {
 	err := pantoerr.PanicToError("unable to resolve commit "+cs.Name(), func() error {
 		var err error
 		if cs.csType == CommitHashSpec {
-			commitSt, err = getCommitStForHash(ddb.db, cs.Name())
+			commitSt, err = getCommitStForHash(context.TODO(), ddb.db, cs.Name())
 		} else {
-			commitSt, err = getCommitStForBranch(ddb.db, cs.Name())
+			commitSt, err = getCommitStForBranch(context.TODO(), ddb.db, cs.Name())
 		}
 
 		if err != nil {
 			return err
 		}
 
-		commitSt, err = walkAncestorSpec(ddb.db, commitSt, cs.AncestorSpec())
+		commitSt, err = walkAncestorSpec(context.TODO(), ddb.db, commitSt, cs.AncestorSpec())
 
 		return err
 	})
@@ -318,7 +318,7 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) types.Ref {
 	valRef := types.NewRef(val)
 
-	targetVal := valRef.TargetValue(context.TODO(), vrw)
+	targetVal := valRef.TargetValue(ctx, vrw)
 
 	if targetVal == nil {
 		vrw.WriteValue(ctx, val)
