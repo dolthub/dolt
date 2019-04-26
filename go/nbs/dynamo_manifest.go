@@ -15,6 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
@@ -33,8 +34,8 @@ var (
 )
 
 type ddbsvc interface {
-	GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
-	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
+	GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error)
+	PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error)
 }
 
 // dynamoManifest assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
@@ -57,7 +58,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
-	result, err := dm.ddbsvc.GetItem(&dynamodb.GetItemInput{
+	result, err := dm.ddbsvc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
 		TableName:      aws.String(dm.table),
 		Key: map[string]*dynamodb.AttributeValue{
@@ -128,7 +129,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		":vers": {S: aws.String(newContents.vers)},
 	}
 
-	_, ddberr := dm.ddbsvc.PutItem(&putArgs)
+	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
 	if ddberr != nil {
 		if errIsConditionalCheckFailed(ddberr) {
 			exists, upstream := dm.ParseIfExists(ctx, stats, nil)
