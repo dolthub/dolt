@@ -383,10 +383,10 @@ func (hcs *httpChunkStore) Put(ctx context.Context, c chunks.Chunk) {
 	hcs.unwrittenPuts.Insert(c)
 }
 
-func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
+func sendWriteRequest(ctx context.Context, u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
 	chunkChan := make(chan *chunks.Chunk, 1024)
 	go func() {
-		p.ExtractChunks(chunkChan)
+		p.ExtractChunks(ctx, chunkChan)
 		close(chunkChan)
 	}()
 
@@ -453,7 +453,7 @@ func (hcs *httpChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		url := *hcs.host
 		url.Path = httprouter.CleanPath(hcs.host.Path + constants.WriteValuePath)
 		verbose.Log("Sending %d chunks", count)
-		sendWriteRequest(url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
+		sendWriteRequest(ctx, url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
 		verbose.Log("Finished sending %d hashes", count)
 		hcs.unwrittenPuts.Destroy()
 		hcs.unwrittenPuts = nbs.NewCache()

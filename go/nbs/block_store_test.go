@@ -199,7 +199,7 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 	}
 
 	chunkChan := make(chan *chunks.Chunk)
-	go func() { suite.store.extractChunks(chunkChan); close(chunkChan) }()
+	go func() { suite.store.extractChunks(context.Background(), chunkChan); close(chunkChan) }()
 	i := 0
 	for c := range chunkChan {
 		suite.Equal(chnx[i].Data(), c.Data())
@@ -299,7 +299,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			rdrs[i] = src
 		}
 		chunkChan := make(chan extractRecord, rdrs.count())
-		rdrs.extract(chunkChan)
+		rdrs.extract(context.Background(), chunkChan)
 		close(chunkChan)
 
 		for rec := range chunkChan {

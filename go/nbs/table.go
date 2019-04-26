@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
@@ -210,7 +211,7 @@ type chunkReader interface {
 	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
 	count() uint32
 	uncompressedLen() uint64
-	extract(chunks chan<- extractRecord)
+	extract(ctx context.Context, chunks chan<- extractRecord)
 }
 
 type chunkReadPlanner interface {

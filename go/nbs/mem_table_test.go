@@ -225,8 +225,8 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(chunks chan<- extractRecord) {
+func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) {
 	for _, haver := range crg {
-		haver.extract(chunks)
+		haver.extract(ctx, chunks)
 	}
 }

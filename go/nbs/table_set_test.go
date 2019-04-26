@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -95,7 +96,7 @@ func TestTableSetExtract(t *testing.T) {
 	ts = ts.Prepend(mt, &Stats{})
 
 	chunkChan := make(chan extractRecord)
-	go func() { defer close(chunkChan); ts.extract(chunkChan) }()
+	go func() { defer close(chunkChan); ts.extract(context.Background(), chunkChan) }()
 	i := 0
 	for rec := range chunkChan {
 		a := computeAddr(testChunks[i])
