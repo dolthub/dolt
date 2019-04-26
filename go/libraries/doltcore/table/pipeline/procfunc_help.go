@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -58,7 +59,7 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 // ProcFuncForReader adapts a standard TableReader to work as an InFunc for a pipeline
 func ProcFuncForReader(rd table.TableReader) InFunc {
 	return ProcFuncForSourceFunc(func() (row.Row, ImmutableProperties, error) {
-		r, err := rd.ReadRow()
+		r, err := rd.ReadRow(context.TODO())
 
 		return r, NoProps, err
 	})
@@ -106,6 +107,6 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 // ProcFuncForWriter adapts a standard TableWriter to work as an InFunc for a pipeline
 func ProcFuncForWriter(wr table.TableWriter) OutFunc {
 	return ProcFuncForSinkFunc(func(r row.Row, props ReadableMap) error {
-		return wr.WriteRow(r)
+		return wr.WriteRow(context.TODO(), r)
 	})
 }

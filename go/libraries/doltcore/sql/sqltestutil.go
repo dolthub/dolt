@@ -336,11 +336,11 @@ func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch sche
 	}
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
 
-	_, _, err := table.PipeRows(rd, wr, false)
-	rd.Close()
-	wr.Close()
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
 
 	assert.Nil(t, err, "Failed to seed initial data")
 

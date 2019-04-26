@@ -107,7 +107,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
 	csvR, err := OpenCSVReader(path, fs, info)
-	defer csvR.Close()
+	defer csvR.Close(context.Background())
 
 	if err != nil {
 		t.Fatal("Could not open reader", err)
@@ -116,7 +116,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	badRows := 0
 	var rows []row.Row
 	for {
-		row, err := csvR.ReadRow()
+		row, err := csvR.ReadRow(context.Background())
 
 		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err

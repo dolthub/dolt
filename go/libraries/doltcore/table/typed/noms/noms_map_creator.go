@@ -24,9 +24,9 @@ type NomsMapCreator struct {
 }
 
 // NewNomsMapCreator creates a new NomsMapCreator.
-func NewNomsMapCreator(vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
+func NewNomsMapCreator(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
 	kvsChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(context.TODO(), vrw, kvsChan)
+	mapChan := types.NewStreamingMap(ctx, vrw, kvsChan)
 
 	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, nil}
 }
@@ -38,7 +38,7 @@ func (nmc *NomsMapCreator) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table.  The primary key for each row must be greater than the primary key of the row
 // written before it.
-func (nmc *NomsMapCreator) WriteRow(r row.Row) error {
+func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 	if nmc.kvsChan == nil {
 		panic("Attempting to write after closing.")
 	}
@@ -67,7 +67,7 @@ func (nmc *NomsMapCreator) WriteRow(r row.Row) error {
 
 // Close should flush all writes, release resources being held.  After this call is made no more rows may be written,
 // and the value of GetMap becomes valid.
-func (nmc *NomsMapCreator) Close() error {
+func (nmc *NomsMapCreator) Close(ctx context.Context) error {
 	if nmc.result == nil {
 		var err error
 		func() {

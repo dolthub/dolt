@@ -54,10 +54,10 @@ func TestInMemTable(t *testing.T) {
 	func() {
 		var wr TableWriteCloser
 		wr = NewInMemTableWriter(imt)
-		defer wr.Close()
+		defer wr.Close(context.Background())
 
 		for _, row := range rows {
-			err := wr.WriteRow(row)
+			err := wr.WriteRow(context.Background(), row)
 
 			if err != nil {
 				t.Fatal("Failed to write row")
@@ -68,10 +68,10 @@ func TestInMemTable(t *testing.T) {
 	func() {
 		var r TableReadCloser
 		r = NewInMemTableReader(imt)
-		defer r.Close()
+		defer r.Close(context.Background())
 
 		for _, expectedRow := range rows {
-			actualRow, err := r.ReadRow()
+			actualRow, err := r.ReadRow(context.Background())
 
 			if err != nil {
 				t.Error("Unexpected read error")
@@ -80,7 +80,7 @@ func TestInMemTable(t *testing.T) {
 			}
 		}
 
-		_, err := r.ReadRow()
+		_, err := r.ReadRow(context.Background())
 
 		if err != io.EOF {
 			t.Error("Should have reached the end.")
@@ -95,10 +95,10 @@ func TestPipeRows(t *testing.T) {
 	var err error
 	func() {
 		rd := NewInMemTableReader(imt)
-		defer rd.Close()
+		defer rd.Close(context.Background())
 		wr := NewInMemTableWriter(imtt2)
-		defer wr.Close()
-		_, _, err = PipeRows(rd, wr, false)
+		defer wr.Close(context.Background())
+		_, _, err = PipeRows(context.Background(), rd, wr, false)
 	}()
 
 	if err != nil {
@@ -131,8 +131,8 @@ func TestReadAllRows(t *testing.T) {
 	var results []row.Row
 	func() {
 		rd := NewInMemTableReader(imt)
-		defer rd.Close()
-		results, numBad, err = ReadAllRows(rd, true)
+		defer rd.Close(context.Background())
+		results, numBad, err = ReadAllRows(context.Background(), rd, true)
 	}()
 
 	if err != nil {

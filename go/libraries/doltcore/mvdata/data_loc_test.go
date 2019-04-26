@@ -184,8 +184,8 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		inMemRd := table.NewInMemTableReader(imt)
-		_, numBad, pipeErr := table.PipeRows(inMemRd, wr, false)
-		wr.Close()
+		_, numBad, pipeErr := table.PipeRows(context.Background(), inMemRd, wr, false)
+		wr.Close(context.Background())
 
 		if numBad != 0 || pipeErr != nil {
 			t.Fatal("Failed to write data. bad:", numBad, err)
@@ -204,7 +204,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		// TODO (oo): fix this for json path test
-		rd, _, err := loc.CreateReader(root, fs, "schema.json", "")
+		rd, _, err := loc.CreateReader(context.Background(), root, fs, "schema.json", "")
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)
@@ -215,6 +215,6 @@ func TestCreateRdWr(t *testing.T) {
 			t.Error("Unexpected reader type. Expected:", test.expectedRdT.Name(), "actual:", actualRdT.Name())
 		}
 
-		rd.Close()
+		rd.Close(context.Background())
 	}
 }

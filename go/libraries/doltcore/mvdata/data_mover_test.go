@@ -119,9 +119,9 @@ func TestDataMover(t *testing.T) {
 
 		imtRd := table.NewInMemTableReader(imt)
 
-		_, _, err = table.PipeRows(imtRd, seedWr, false)
-		seedWr.Close()
-		imtRd.Close()
+		_, _, err = table.PipeRows(context.Background(), imtRd, seedWr, false)
+		seedWr.Close(context.Background())
+		imtRd.Close(context.Background())
 
 		if err != nil {
 			t.Fatal(err)

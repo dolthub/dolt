@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -176,7 +177,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *selectStatement,
 				colName := colExpr.Name.String()
 				if !colExpr.Qualifier.IsEmpty() {
 					columnTableName := colExpr.Qualifier.Name.String()
-					if tableName, ok := selectStmt.aliases.TablesByAlias[columnTableName]; ok{
+					if tableName, ok := selectStmt.aliases.TablesByAlias[columnTableName]; ok {
 						tableSch = mustGetSchema(root, tableName)
 					} else {
 						return errFmt("unknown table " + columnTableName)
@@ -239,7 +240,7 @@ func findSchemaForColumn(root *doltdb.RootValue, colName string, tableNames []st
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
 func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
-	tbl, _:= root.GetTable(tableName)
+	tbl, _ := root.GetTable(tableName)
 	return tbl.GetSchema()
 }
 
@@ -278,13 +279,13 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 		return nil, nil, verr
 	}
 
-	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
+	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
 
 	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)
-	selTrans.noMoreCallback = func() {p.NoMore()}
+	selTrans.noMoreCallback = func() { p.NoMore() }
 
-	p.RunAfter(func() { rd.Close() })
+	p.RunAfter(func() { rd.Close(context.TODO()) })
 
 	return p, outSchema, nil
 }

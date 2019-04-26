@@ -67,7 +67,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+	rd, srcIsSorted, err := mvOpts.Src.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -75,7 +75,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 
 	defer func() {
 		if rd != nil {
-			rd.Close()
+			rd.Close(ctx)
 		}
 	}()
 
@@ -131,8 +131,8 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 }
 
 func (imp *DataMover) Move() error {
-	defer imp.Rd.Close()
-	defer imp.Wr.Close()
+	defer imp.Rd.Close(context.TODO())
+	defer imp.Wr.Close(context.TODO())
 
 	var rowErr error
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
@@ -185,13 +185,13 @@ func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.Readab
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+		rd, _, err := mvOpts.Dest.CreateReader(context.TODO(), root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 		if err != nil {
 			return nil, err
 		}
 
-		defer rd.Close()
+		defer rd.Close(context.TODO())
 
 		return rd.GetSchema(), nil
 	} else {

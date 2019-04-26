@@ -143,10 +143,10 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	var result UpdateResult
 	rowData := table.GetRowData()
 	me := rowData.Edit()
-	rowReader := noms.NewNomsMapReader(rowData, tableSch)
+	rowReader := noms.NewNomsMapReader(context.TODO(), rowData, tableSch)
 
 	for {
-		r, err := rowReader.ReadRow()
+		r, err := rowReader.ReadRow(context.TODO())
 		if err != nil {
 			if err == io.EOF {
 				break

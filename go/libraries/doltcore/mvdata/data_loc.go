@@ -124,7 +124,7 @@ func (dl *DataLocation) IsFileType() bool {
 	return true
 }
 
-func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string) (rdCl table.TableReadCloser, sorted bool, err error) {
 	if dl.Format == DoltDB {
 		tbl, ok := root.GetTable(dl.Path)
 
@@ -133,7 +133,7 @@ func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.Readable
 		}
 
 		sch := tbl.GetSchema()
-		rd := noms.NewNomsMapReader(tbl.GetRowData(), sch)
+		rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(), sch)
 		return rd, true, nil
 	} else {
 		exists, isDir := fs.Exists(dl.Path)
@@ -194,7 +194,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 	switch dl.Format {
 	case DoltDB:
 		if sortedInput {
-			return noms.NewNomsMapCreator(root.VRW(), outSch), nil
+			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
 			m := types.NewMap(ctx, root.VRW())
 			return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil

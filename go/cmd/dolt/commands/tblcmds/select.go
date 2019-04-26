@@ -222,7 +222,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	colNames := schema.ExtractAllColNames(outSch)
 	addSizingTransform(outSch, transforms)
 
-	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
+	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(), tblSch)
 	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
@@ -234,8 +234,8 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	wrProcFunc := pipeline.ProcFuncForWriter(wr)
 
 	p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCallback)
-	p.RunAfter(func() { rd.Close() })
-	p.RunAfter(func() { wr.Close() })
+	p.RunAfter(func() { rd.Close(context.TODO()) })
+	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	// Insert the table header row at the appropriate stage
 	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))

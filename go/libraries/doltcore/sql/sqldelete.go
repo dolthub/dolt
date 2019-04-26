@@ -57,10 +57,10 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	var result DeleteResult
 	rowData := table.GetRowData()
 	me := rowData.Edit()
-	rowReader := noms.NewNomsMapReader(rowData, tableSch)
+	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
 
 	for {
-		r, err := rowReader.ReadRow()
+		r, err := rowReader.ReadRow(ctx)
 		if err != nil {
 			if err == io.EOF {
 				break
