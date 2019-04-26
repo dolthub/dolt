@@ -31,6 +31,15 @@ func NewFromDestSchema(sch schema.Schema) (*ResultSetSchema, error) {
 	}, nil
 }
 
+// Creates an identity result set schema, to be used for intermediate result sets that haven't yet been compressed.
+func Identity(sch schema.Schema) *ResultSetSchema {
+	fieldMapping := rowconv.IdentityMapping(sch)
+	return &ResultSetSchema{
+		mapping:   map[schema.Schema]*rowconv.FieldMapping{sch: fieldMapping},
+		destSch:   sch,
+	}
+}
+
 // Creates a new result set schema for the source schemas given and fills in schema values as necessary.
 func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, error) {
 	var sch schema.Schema

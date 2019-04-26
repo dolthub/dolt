@@ -112,11 +112,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 		return nil, nil, err
 	}
 
-	if err := processWhereClause(selectStmt, s); err != nil {
-		return nil, nil, err
-	}
-
-	p, err := createPipeline(root, selectStmt)
+	p, err := createPipeline(root, s, selectStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,8 +247,8 @@ func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 
 // Processes the where clause by applying an appropriate filter fn to the SelectStatement given. Returns an error if the
 // where clause can't be processed.
-func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select) error {
-	filter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases)
+func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
+	filter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases, rss)
 	if err != nil {
 		return err
 	}
@@ -269,19 +265,29 @@ type singleTablePipelineResult struct {
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeline.Pipeline, error) {
+func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
 
-	if len(statement.inputSchemas) == 1 {
+	if len(selectStmt.inputSchemas) == 1 {
 		var tableName string
-		for name := range statement.inputSchemas {
+		var tableSch schema.Schema
+		for name, sch := range selectStmt.inputSchemas {
 			tableName = name
+			tableSch = sch
 		}
-		return createSingleTablePipeline(root, statement, tableName, true)
+
+		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
+		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
+		// table for where clause filtering, then convert those rows to the result set schema.
+		if err := processWhereClause(selectStmt, s, resultset.Identity(tableSch)); err != nil {
+			return nil, err
+		}
+
+		return createSingleTablePipeline(root, selectStmt, tableName, true)
 	}
 
 	pipelines := make(map[string]*singleTablePipelineResult)
-	for tableName := range statement.inputSchemas {
-		p, err := createSingleTablePipeline(root, statement, tableName, false)
+	for tableName := range selectStmt.inputSchemas {
+		p, err := createSingleTablePipeline(root, selectStmt, tableName, false)
 		if err != nil {
 			return nil, err
 		}
@@ -306,29 +312,36 @@ func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeli
 		p.Start()
 	}
 
+	// The where clause for multiple table selects operate on the result set schema. This won't work for every possible query.
+	// TODO: make work for all queries
+	if err := processWhereClause(selectStmt, s, selectStmt.ResultSetSchema); err != nil {
+		return nil, err
+	}
+
 	results := make([]resultset.TableResult, 0)
-	for _, tableName := range statement.inputTables {
+	for _, tableName := range selectStmt.inputTables {
 		result := pipelines[tableName]
 		if err := result.p.Wait(); err != nil || result.err != nil {
 			return nil, err
 		}
 		results = append(results, resultset.TableResult{
-			Schema: statement.inputSchemas[tableName],
-			Rows: result.rows,
+			Schema: selectStmt.inputSchemas[tableName],
+			Rows:   result.rows,
 		})
 	}
 
-	crossProduct := statement.ResultSetSchema.CrossProduct(results)
+	crossProduct := selectStmt.ResultSetSchema.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
-	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
+	selTrans := &selectTransform{nil, selectStmt.filterFn, selectStmt.limit, 0}
 	selTrans.noMoreCallback = func() { p.NoMore() }
 	p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
 
 	return p, nil
 }
 
+// Returns a source func that yields the rows given in order.
 func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 	idx := 0
 	return func() (row.Row, pipeline.ImmutableProperties, error) {

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 	"strings"
@@ -310,7 +311,7 @@ type valGetter struct {
 }
 
 // Returns a comparison value getter for the expression given, which could be a column value or a literal
-func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*valGetter, error) {
+func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
@@ -328,14 +329,14 @@ func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schem
 		if !ok {
 			return nil, errFmt("Unknown column %v", colNameStr)
 		}
+		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
 		getter := valGetter{Kind: COLNAME, NomsKind: column.Kind}
-
 		getter.Init = func() error {
 			return nil
 		}
 		getter.Get = func(r row.Row) types.Value {
-			value, _ := r.GetColVal(column.Tag)
+			value, _ := r.GetColVal(resultSetTag)
 			return value
 		}
 
@@ -389,7 +390,7 @@ func getColumnNameString(e *sqlparser.ColName) string {
 }
 
 // createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases) (rowFilterFn, error) {
+func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}
@@ -403,11 +404,11 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 		switch expr := whereClause.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
 
-			leftGetter, err := getComparisonValueGetter(expr.Left, inputSchemas, aliases)
+			leftGetter, err := getComparisonValueGetter(expr.Left, inputSchemas, aliases, rss)
 			if err != nil {
 				return nil, err
 			}
-			rightGetter, err := getComparisonValueGetter(expr.Right, inputSchemas, aliases)
+			rightGetter, err := getComparisonValueGetter(expr.Right, inputSchemas, aliases, rss)
 			if err != nil {
 				return nil, err
 			}
@@ -507,7 +508,7 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 				return nil, errFmt("json not supported")
 			}
 		case *sqlparser.ColName:
-			getter, err := getComparisonValueGetter(expr, inputSchemas, aliases)
+			getter, err := getComparisonValueGetter(expr, inputSchemas, aliases, rss)
 			if err != nil {
 				return nil, err
 			}
