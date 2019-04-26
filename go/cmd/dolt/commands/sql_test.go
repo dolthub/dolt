@@ -357,11 +357,11 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	imt, sch := dtestutils.CreateTestDataTable(true)
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
 
-	_, _, err := table.PipeRows(rd, wr, false)
-	rd.Close()
-	wr.Close()
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
 
 	if err != nil {
 		t.Error("Failed to seed initial data", err)

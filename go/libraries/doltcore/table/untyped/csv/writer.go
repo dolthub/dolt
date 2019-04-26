@@ -77,7 +77,7 @@ func (csvw *CSVWriter) GetSchema() schema.Schema {
 }
 
 // WriteRow will write a row to a table
-func (csvw *CSVWriter) WriteRow(r row.Row) error {
+func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()
 
 	i := 0
@@ -88,7 +88,7 @@ func (csvw *CSVWriter) WriteRow(r row.Row) error {
 			if val.Kind() == types.StringKind {
 				colValStrs[i] = string(val.(types.String))
 			} else {
-				colValStrs[i] = types.EncodedValue(context.TODO(), val)
+				colValStrs[i] = types.EncodedValue(ctx, val)
 			}
 		}
 
@@ -103,7 +103,7 @@ func (csvw *CSVWriter) WriteRow(r row.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (csvw *CSVWriter) Close() error {
+func (csvw *CSVWriter) Close(ctx context.Context) error {
 	if csvw.closer != nil {
 		errFl := csvw.bWr.Flush()
 		errCl := csvw.closer.Close()

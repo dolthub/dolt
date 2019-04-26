@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 
@@ -75,7 +76,7 @@ func (xlsxr *XLSXReader) GetSchema() schema.Schema {
 }
 
 // Close should release resources being held
-func (xlsxr *XLSXReader) Close() error {
+func (xlsxr *XLSXReader) Close(ctx context.Context) error {
 	if xlsxr.closer != nil {
 		err := xlsxr.closer.Close()
 		xlsxr.closer = nil
@@ -86,7 +87,7 @@ func (xlsxr *XLSXReader) Close() error {
 	}
 }
 
-func (xlsxr *XLSXReader) ReadRow() (row.Row, error) {
+func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
 	rows := xlsxr.info.Rows
 
 	if xlsxr.ind == len(rows) {

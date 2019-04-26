@@ -88,7 +88,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 	wr := tabular.NewTextTableWriter(cliWr, outSch)
-	p.RunAfter(func() { wr.Close() })
+	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	cliSink := pipeline.ProcFuncForWriter(wr)
 	p.SetOutput(cliSink)

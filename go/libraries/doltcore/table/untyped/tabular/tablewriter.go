@@ -98,7 +98,7 @@ func (ttw *TextTableWriter) GetSchema() schema.Schema {
 }
 
 // WriteRow will write a row to a table
-func (ttw *TextTableWriter) WriteRow(r row.Row) error {
+func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	// If this is the first row we've written, assume it's the column list
 	if ttw.colWidths == nil {
 		return ttw.writeTableHeader(r)
@@ -137,7 +137,7 @@ func (ttw *TextTableWriter) WriteRow(r row.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (ttw *TextTableWriter) Close() error {
+func (ttw *TextTableWriter) Close(ctx context.Context) error {
 	if ttw.closer != nil {
 		// Write the table footer to finish the table off
 		errFt := ttw.writeTableFooter()
