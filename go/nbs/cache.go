@@ -33,8 +33,8 @@ type NomsBlockCache struct {
 }
 
 // Insert stores c in the cache.
-func (nbc *NomsBlockCache) Insert(c chunks.Chunk) {
-	d.PanicIfFalse(nbc.chunks.addChunk(addr(c.Hash()), c.Data()))
+func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) {
+	d.PanicIfFalse(nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data()))
 }
 
 // Has checks if the chunk referenced by hash is in the cache.

@@ -380,7 +380,7 @@ func (hcs *httpChunkStore) Put(ctx context.Context, c chunks.Chunk) {
 		d.Panic("Tried to Put %s into closed ChunkStore", c.Hash())
 	default:
 	}
-	hcs.unwrittenPuts.Insert(c)
+	hcs.unwrittenPuts.Insert(ctx, c)
 }
 
 func sendWriteRequest(ctx context.Context, u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
