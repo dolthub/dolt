@@ -294,7 +294,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[12], addConflict.ToNomsList(vrw),
 	)
 
-	schVal, _ := encoding.MarshalAsNomsValue(vrw, sch)
+	schVal, _ := encoding.MarshalAsNomsValue(context.Background(), vrw, sch)
 	tbl := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
 	updatedTbl := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows)
 	mergeTbl := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows)

@@ -26,7 +26,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 
 	tblSchRef := tbl.GetSchemaRef()
 	tblSchVal := tblSchRef.TargetValue(ctx, vrw)
-	tblSch, err := encoding.UnmarshalNomsValue(tblSchVal)
+	tblSch, err := encoding.UnmarshalNomsValue(ctx, tblSchVal)
 
 	if err != nil {
 		return nil, err

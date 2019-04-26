@@ -280,14 +280,14 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	newSchema := schema.SchemaFromCols(updatedCols)
-	newSchemaVal, err := encoding.MarshalAsNomsValue(vrw, newSchema)
+	newSchemaVal, err := encoding.MarshalAsNomsValue(context.TODO(), vrw, newSchema)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if defaultVal == nil {
-		newTable := doltdb.NewTable(context.Background(), vrw, newSchemaVal, tbl.GetRowData())
+		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData())
 		return newTable, nil
 	}
 

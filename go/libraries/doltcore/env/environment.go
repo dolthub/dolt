@@ -262,7 +262,7 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalAsNomsValue(vrw, sch)
+	schVal, err := encoding.MarshalAsNomsValue(ctx, vrw, sch)
 
 	if err != nil {
 		return ErrMarshallingSchema

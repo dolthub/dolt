@@ -85,7 +85,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	schUnionVal, err := encoding.MarshalAsNomsValue(merger.vrw, schemaUnion)
+	schUnionVal, err := encoding.MarshalAsNomsValue(ctx, merger.vrw, schemaUnion)
 
 	if err != nil {
 		return nil, nil, err

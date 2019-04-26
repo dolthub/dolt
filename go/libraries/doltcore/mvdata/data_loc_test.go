@@ -140,7 +140,7 @@ func TestExists(t *testing.T) {
 		}
 
 		if loc.Format == DoltDB {
-			schVal, _ := encoding.MarshalAsNomsValue(ddb.ValueReadWriter(), fakeSchema)
+			schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
 			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(context.Background(), ddb.ValueReadWriter()))
 			root = root.PutTable(context.Background(), ddb, loc.Path, tbl)
 		} else {
@@ -193,7 +193,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		if nomsWr, ok := wr.(noms.NomsMapWriteCloser); ok {
 			vrw := ddb.ValueReadWriter()
-			schVal, err := encoding.MarshalAsNomsValue(vrw, nomsWr.GetSchema())
+			schVal, err := encoding.MarshalAsNomsValue(context.Background(), vrw, nomsWr.GetSchema())
 
 			if err != nil {
 				t.Fatal("Unable ta update table")

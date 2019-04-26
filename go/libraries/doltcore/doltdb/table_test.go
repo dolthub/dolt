@@ -36,7 +36,7 @@ func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map,
 }
 
 func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, tSchema)
+	schemaVal, err := encoding.MarshalAsNomsValue(context.Background(), vrw, tSchema)
 
 	if err != nil {
 		return nil, err

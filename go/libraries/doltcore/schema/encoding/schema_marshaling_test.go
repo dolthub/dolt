@@ -40,13 +40,13 @@ func TestNomsMarshalling(t *testing.T) {
 	}
 
 	db := dbSpec.GetDatabase(context.Background())
-	val, err := MarshalAsNomsValue(db, tSchema)
+	val, err := MarshalAsNomsValue(context.Background(), db, tSchema)
 
 	if err != nil {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalNomsValue(val)
+	unMarshalled, err := UnmarshalNomsValue(context.Background(), val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
