@@ -42,7 +42,7 @@ func TestNomsSplore(t *testing.T) {
 			return nil
 		}
 
-		go func() { run(&http.ServeMux{}, 0, false, "nbs:"+dir) }()
+		go func() { run(context.Background(), &http.ServeMux{}, 0, false, "nbs:"+dir) }()
 		l := <-lchan
 		defer l.Close()
 

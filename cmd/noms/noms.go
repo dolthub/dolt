@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -88,7 +89,7 @@ func main() {
 
 	// install kingpin handlers
 	for _, cmdFunction := range kingpinCommands {
-		command, handler := cmdFunction(noms)
+		command, handler := cmdFunction(context.Background(), noms)
 		handlers[command.FullCommand()] = handler
 	}
 
@@ -122,7 +123,7 @@ func main() {
 			if cmd.Nargs != 0 && len(args) < cmd.Nargs {
 				cmd.Usage()
 			}
-			exitCode := cmd.Run(args)
+			exitCode := cmd.Run(context.Background(), args)
 			if exitCode != 0 {
 				exit.Exit(exitCode)
 			}

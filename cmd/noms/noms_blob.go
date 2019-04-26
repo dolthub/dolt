@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"runtime"
 	"strconv"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-func nomsBlob(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func nomsBlob(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	blob := noms.Command("blob", "interact with blobs")
 
 	blobPut := blob.Command("put", "imports a blob to a dataset")
@@ -29,9 +30,9 @@ func nomsBlob(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandle
 	return blob, func(input string) int {
 		switch input {
 		case blobPut.FullCommand():
-			return nomsBlobPut(*putFile, *putDs, *concurrency)
+			return nomsBlobPut(ctx, *putFile, *putDs, *concurrency)
 		case blobGet.FullCommand():
-			return nomsBlobGet(*getDs, *getPath)
+			return nomsBlobGet(ctx, *getDs, *getPath)
 		}
 		d.Panic("notreached")
 		return 1

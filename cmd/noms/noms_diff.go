@@ -37,16 +37,16 @@ func setupDiffFlags() *flag.FlagSet {
 	return diffFlagSet
 }
 
-func runDiff(args []string) int {
+func runDiff(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db1, value1, err := cfg.GetPath(context.Background(), args[0])
+	db1, value1, err := cfg.GetPath(ctx, args[0])
 	d.CheckErrorNoUsage(err)
 	if value1 == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 	defer db1.Close()
 
-	db2, value2, err := cfg.GetPath(context.Background(), args[1])
+	db2, value2, err := cfg.GetPath(ctx, args[1])
 	d.CheckErrorNoUsage(err)
 	if value2 == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[1]))
@@ -54,13 +54,13 @@ func runDiff(args []string) int {
 	defer db2.Close()
 
 	if stat {
-		diff.Summary(context.Background(), value1, value2)
+		diff.Summary(ctx, value1, value2)
 		return 0
 	}
 
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	diff.PrintDiff(context.Background(), pgr.Writer, value1, value2, false)
+	diff.PrintDiff(ctx, pgr.Writer, value1, value2, false)
 	return 0
 }
