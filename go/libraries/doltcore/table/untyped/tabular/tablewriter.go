@@ -124,7 +124,7 @@ func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 			if val.Kind() == types.StringKind {
 				rowVals.WriteString(string(val.(types.String)))
 			} else {
-				rowVals.WriteString(types.EncodedValue(context.TODO(), val))
+				rowVals.WriteString(types.EncodedValue(ctx, val))
 			}
 		}
 

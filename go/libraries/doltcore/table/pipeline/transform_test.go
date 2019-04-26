@@ -79,8 +79,8 @@ func TestPipeline(t *testing.T) {
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		)
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 
 		p.RunAfter(func() { rd.Close(context.Background()) })
@@ -120,8 +120,8 @@ func TestAddingStages(t *testing.T) {
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 		for _, stage := range addedStages {
 			p.AddStage(stage)
@@ -190,8 +190,8 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 
 		p := NewPartialPipeline(inProcFunc, tc)
 		for _, stage := range addedStages {
@@ -276,8 +276,8 @@ func TestAbort(t *testing.T) {
 			NewNamedTransform("dies", hangs(&wg)),
 		)
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 
 		p.RunAfter(func() { rd.Close(context.Background()) })

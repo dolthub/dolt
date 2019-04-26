@@ -280,7 +280,7 @@ func createPipeline(root *doltdb.RootValue, statement *selectStatement) (*pipeli
 	}
 
 	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(), tblSch)
-	rdProcFunc := pipeline.ProcFuncForReader(rd)
+	rdProcFunc := pipeline.ProcFuncForReader(context.TODO(), rd)
 
 	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)
 	selTrans.noMoreCallback = func() { p.NoMore() }
