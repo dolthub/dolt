@@ -32,7 +32,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
 // new chunkSource.
-func (bsp *blobstorePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
 	return emptyChunkSource{}
 }
 

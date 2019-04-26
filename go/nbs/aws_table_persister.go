@@ -227,14 +227,14 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p awsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
 	plan := planConjoin(sources, stats)
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}
 	}
 	t1 := time.Now()
 	name := nameFromSuffixes(plan.suffixes())
-	s3p.executeCompactionPlan(plan, name.String())
+	s3p.executeCompactionPlan(ctx, plan, name.String())
 	verbose.Log("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
 	if s3p.tc != nil {
@@ -255,9 +255,9 @@ func (s3p awsTablePersister) loadIntoCache(name addr) {
 	s3p.tc.store(name, result.Body, uint64(*result.ContentLength))
 }
 
-func (s3p awsTablePersister) executeCompactionPlan(plan compactionPlan, key string) {
+func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) {
 	uploadID := s3p.startMultipartUpload(key)
-	multipartUpload, err := s3p.assembleTable(plan, key, uploadID)
+	multipartUpload, err := s3p.assembleTable(ctx, plan, key, uploadID)
 	if err != nil {
 		s3p.abortMultipartUpload(key, uploadID)
 		d.PanicIfError(err) // TODO: Better error handling here
@@ -265,11 +265,11 @@ func (s3p awsTablePersister) executeCompactionPlan(plan compactionPlan, key stri
 	s3p.completeMultipartUpload(key, uploadID, multipartUpload)
 }
 
-func (s3p awsTablePersister) assembleTable(plan compactionPlan, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
+func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionPlan, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
 	d.PanicIfTrue(len(plan.sources) > maxS3Parts) // TODO: BUG 3433: handle > 10k parts
 
 	// Separate plan.sources by amount of chunkData. Tables with >5MB of chunk data (copies) can be added to the new table using S3's multipart upload copy feature. Smaller tables with <5MB of chunk data (manuals) must be read, assembled into |buff|, and then re-uploaded in parts that are larger than 5MB.
-	copies, manuals, buff := dividePlan(plan, uint64(s3p.limits.partMin), uint64(s3p.limits.partMax))
+	copies, manuals, buff := dividePlan(ctx, plan, uint64(s3p.limits.partMin), uint64(s3p.limits.partMax))
 
 	// Concurrently read data from small tables into |buff|
 	var readWg sync.WaitGroup
@@ -391,7 +391,7 @@ type manualPart struct {
 }
 
 // dividePlan assumes that plan.sources (which is of type chunkSourcesByDescendingDataSize) is correctly sorted by descending data size.
-func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buff []byte) {
+func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buff []byte) {
 	// NB: if maxPartSize < 2*minPartSize, splitting large copies apart isn't solvable. S3's limits are plenty far enough apart that this isn't a problem in production, but we could violate this in tests.
 	d.PanicIfTrue(maxPartSize < 2*minPartSize)
 
@@ -420,7 +420,7 @@ func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []
 	var offset int64
 	for ; i < len(plan.sources); i++ {
 		sws := plan.sources[i]
-		manuals = append(manuals, manualPart{sws.source.reader(), offset, offset + int64(sws.dataLen)})
+		manuals = append(manuals, manualPart{sws.source.reader(ctx), offset, offset + int64(sws.dataLen)})
 		offset += int64(sws.dataLen)
 		buffSize += sws.dataLen
 	}

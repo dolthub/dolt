@@ -174,7 +174,7 @@ func TestGetMany(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(getBatch, chunkChan, wg, &Stats{})
+	tr.getMany(context.Background(), getBatch, chunkChan, wg, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 
@@ -314,7 +314,7 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	wg := &sync.WaitGroup{}
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(getBatch, chunkChan, wg, &Stats{})
+	tr.getMany(context.Background(), getBatch, chunkChan, wg, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 

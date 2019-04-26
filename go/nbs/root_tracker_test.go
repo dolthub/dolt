@@ -337,7 +337,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 	return emptyChunkSource{}
 }
 
-func (ftp fakeTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
 	name, data, chunkCount := compactSourcesToBuffer(sources)
 	if chunkCount > 0 {
 		ftp.mu.Lock()

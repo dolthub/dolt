@@ -28,7 +28,7 @@ type tablePersister interface {
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource.
-	ConjoinAll(sources chunkSources, stats *Stats) chunkSource
+	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource
 
 	// Open a table named |name|, containing |chunkCount| chunks.
 	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource

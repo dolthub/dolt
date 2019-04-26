@@ -106,7 +106,7 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 	t1 := time.Now()
 
 	toConjoin, toKeep := chooseConjoinees(sources)
-	conjoinedSrc := p.ConjoinAll(toConjoin, stats)
+	conjoinedSrc := p.ConjoinAll(ctx, toConjoin, stats)
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))

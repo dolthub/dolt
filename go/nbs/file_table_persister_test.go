@@ -189,7 +189,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		sources[i] = fts.Open(context.Background(), name, 2, nil)
 	}
 
-	src := fts.ConjoinAll(sources, &Stats{})
+	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -220,7 +220,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		}
 		sources[i] = fts.Persist(context.Background(), mt, nil, &Stats{})
 	}
-	src := fts.ConjoinAll(sources, &Stats{})
+	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))

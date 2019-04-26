@@ -249,6 +249,7 @@ func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offse
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 func (tr tableReader) readAtOffsets(
+	ctx context.Context,
 	readStart, readEnd uint64,
 	reqs []getRecord,
 	offsets offsetRecSlice,
@@ -260,7 +261,7 @@ func (tr tableReader) readAtOffsets(
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
 
-	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(readStart), stats)
+	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(readStart), stats)
 
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == readLength)
@@ -282,6 +283,7 @@ func (tr tableReader) readAtOffsets(
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
 func (tr tableReader) getMany(
+	ctx context.Context,
 	reqs []getRecord,
 	foundChunks chan *chunks.Chunk,
 	wg *sync.WaitGroup,
@@ -290,11 +292,12 @@ func (tr tableReader) getMany(
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyAtOffsets(reqs, offsetRecords, foundChunks, wg, stats)
+	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, stats)
 	return remaining
 }
 
 func (tr tableReader) getManyAtOffsets(
+	ctx context.Context,
 	reqs []getRecord,
 	offsetRecords offsetRecSlice,
 	foundChunks chan *chunks.Chunk,
@@ -329,13 +332,13 @@ func (tr tableReader) getManyAtOffsets(
 		}
 
 		wg.Add(1)
-		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg, stats)
+		go tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, wg, stats)
 		batch = nil
 	}
 
 	if batch != nil {
 		wg.Add(1)
-		go tr.readAtOffsets(readStart, readEnd, reqs, batch, foundChunks, wg, stats)
+		go tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, wg, stats)
 		batch = nil
 	}
 
@@ -467,7 +470,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	}
 	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
 	buff := make([]byte, chunkLen)
-	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(tr.offsets[0]), &Stats{})
+	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(tr.offsets[0]), &Stats{})
 	d.Chk.NoError(err)
 	d.Chk.True(uint64(n) == chunkLen)
 
@@ -481,17 +484,18 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	}
 }
 
-func (tr tableReader) reader() io.Reader {
-	return &readerAdapter{tr.r, 0}
+func (tr tableReader) reader(ctx context.Context) io.Reader {
+	return &readerAdapter{tr.r, 0, ctx}
 }
 
 type readerAdapter struct {
 	rat tableReaderAt
 	off int64
+	ctx context.Context
 }
 
 func (ra *readerAdapter) Read(p []byte) (n int, err error) {
-	n, err = ra.rat.ReadAtWithStats(context.TODO(), p, ra.off, &Stats{})
+	n, err = ra.rat.ReadAtWithStats(ra.ctx, p, ra.off, &Stats{})
 	ra.off += int64(n)
 	return
 }
