@@ -64,7 +64,7 @@ func (ts tableSet) get(h addr, stats *Stats) []byte {
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	f := func(css chunkSources) (remaining bool) {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
@@ -77,7 +77,7 @@ func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg 
 				continue
 			}
 
-			if !haver.getMany(reqs, foundChunks, wg, stats) {
+			if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
 				return false
 			}
 		}

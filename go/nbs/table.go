@@ -208,7 +208,7 @@ type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
 	get(h addr, stats *Stats) []byte
-	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
 	count() uint32
 	uncompressedLen() uint64
 	extract(ctx context.Context, chunks chan<- extractRecord)
@@ -231,7 +231,7 @@ type chunkSource interface {
 	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader() io.Reader
+	reader(context.Context) io.Reader
 	index() tableIndex
 }
 

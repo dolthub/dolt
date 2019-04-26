@@ -333,14 +333,14 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(reqs, foundChunks, nil, nbs.stats)
+			remaining = nbs.mt.getMany(ctx, reqs, foundChunks, nil, nbs.stats)
 		}
 
 		return
 	}()
 
 	if remaining {
-		tables.getMany(reqs, foundChunks, wg, nbs.stats)
+		tables.getMany(ctx, reqs, foundChunks, wg, nbs.stats)
 		wg.Wait()
 	}
 

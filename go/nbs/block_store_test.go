@@ -331,7 +331,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		for _, sp := range conjoinees {
 			srcs = append(srcs, p.Open(context.Background(), sp.name, sp.chunkCount, nil))
 		}
-		conjoined := p.ConjoinAll(srcs, stats)
+		conjoined := p.ConjoinAll(context.Background(), srcs, stats)
 		cannedSpecs := []tableSpec{{conjoined.hash(), conjoined.count()}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}

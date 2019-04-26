@@ -246,7 +246,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
 	plan := planConjoin(sources, &Stats{})
-	copies, manuals, _ := dividePlan(plan, minPartSize, maxPartSize)
+	copies, manuals, _ := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
 
 	perTableDataSize := map[string]int64{}
 	for _, c := range copies {
@@ -327,7 +327,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
-			src := s3p.ConjoinAll(sources, &Stats{})
+			src := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			assert.NotNil(ic.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -343,7 +343,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s3p := newPersister(s3svc, ddb)
 
 			sources := makeSources(s3p, smallChunks)
-			src := s3p.ConjoinAll(sources, &Stats{})
+			src := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			assert.NotNil(ic.get(src.hash()))
 
 			if assert.True(src.count() > 0) {
@@ -376,7 +376,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			}
 			sources[i] = s3p.Persist(context.Background(), mt, nil, &Stats{})
 		}
-		src := s3p.ConjoinAll(sources, &Stats{})
+		src := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -408,7 +408,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 		sources := chunkSources{s3p.Persist(context.Background(), mt, nil, &Stats{}), s3p.Persist(context.Background(), mtb, nil, &Stats{})}
 
-		src := s3p.ConjoinAll(sources, &Stats{})
+		src := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {
@@ -449,7 +449,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 		sources = append(sources, s3p.Persist(context.Background(), mt, nil, &Stats{}))
 
-		src := s3p.ConjoinAll(sources, &Stats{})
+		src := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NotNil(ic.get(src.hash()))
 
 		if assert.True(src.count() > 0) {

@@ -202,9 +202,9 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
 	return true
 }
 
-func (crg chunkReaderGroup) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, haver := range crg {
-		if !haver.getMany(reqs, foundChunks, wg, stats) {
+		if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
 			return false
 		}
 	}

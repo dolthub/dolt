@@ -103,7 +103,7 @@ func (mt *memTable) get(h addr, stats *Stats) []byte {
 	return mt.chunks[h]
 }
 
-func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
