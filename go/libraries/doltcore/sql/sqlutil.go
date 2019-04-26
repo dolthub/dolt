@@ -461,23 +461,18 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 				return nil, errFmt("json not supported")
 			}
 		case *sqlparser.ColName:
-			colNameStr := expr.Name.String()
-			if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = col.ColumnName
-			}
-			_, tableSch, err := findSchemaForColumn(colNameStr, inputSchemas)
+			getter, err := getComparisonValueGetter(expr, inputSchemas, aliases)
 			if err != nil {
 				return nil, err
 			}
-			column, _ := tableSch.GetAllCols().GetByName(colNameStr)
 
-			if column.Kind != types.BoolKind {
-				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", colNameStr)
+			if getter.NomsKind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", nodeToString(expr))
 			}
 
 			filter = func(r row.Row) bool {
-				colVal, ok := r.GetColVal(column.Tag)
-				if !ok {
+				colVal := getter.Get(r)
+				if types.IsNull(colVal) {
 					return false
 				}
 				return colVal.Equals(types.Bool(true))
@@ -541,10 +536,6 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 	}
 
 	return filter, nil
-}
-
-func swap(left, right *types.Value) {
-	*right, *left = *left, *right
 }
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
