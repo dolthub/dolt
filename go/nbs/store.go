@@ -267,21 +267,21 @@ func newNomsBlockStoreWithContents(ctx context.Context, mm manifestManager, mc m
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) {
 	t1 := time.Now()
 	a := addr(c.Hash())
-	d.PanicIfFalse(nbs.addChunk(a, c.Data()))
+	d.PanicIfFalse(nbs.addChunk(ctx, a, c.Data()))
 	nbs.putCount++
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
 }
 
 // TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
-func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bool {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.mt == nil {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		nbs.tables = nbs.tables.Prepend(context.TODO(), nbs.mt, nbs.stats)
+		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
 	}
@@ -527,7 +527,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 	nbs.mm.LockForUpdate()
 	defer nbs.mm.UnlockForUpdate()
 	for {
-		if err := nbs.updateManifest(current, last); err == nil {
+		if err := nbs.updateManifest(ctx, current, last); err == nil {
 			return true
 		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
 			return false
@@ -541,7 +541,7 @@ var (
 	errOptimisticLockFailedTables = fmt.Errorf("Tables changed")
 )
 
-func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
+func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	if nbs.upstream.root != last {
@@ -550,7 +550,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
 		nbs.upstream = upstream
-		nbs.tables = nbs.tables.Rebase(context.TODO(), upstream.specs, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
@@ -564,13 +564,13 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
-		nbs.tables = nbs.tables.Prepend(context.TODO(), nbs.mt, nbs.stats)
+		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 		nbs.mt = nil
 	}
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
-		nbs.upstream = nbs.c.Conjoin(context.TODO(), nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-		nbs.tables = nbs.tables.Rebase(context.TODO(), nbs.upstream.specs, nbs.stats)
+		nbs.upstream = nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(ctx, nbs.upstream.specs, nbs.stats)
 		return errOptimisticLockFailedTables
 	}
 
@@ -581,7 +581,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 		lock:  generateLockHash(current, specs),
 		specs: specs,
 	}
-	upstream := nbs.mm.Update(context.TODO(), nbs.upstream.lock, newContents, nbs.stats, nil)
+	upstream := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		return handleOptimisticLockFailure(upstream)
