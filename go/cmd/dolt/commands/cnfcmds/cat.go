@@ -1,6 +1,7 @@
 package cnfcmds
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -64,18 +65,18 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
 	if len(tblNames) == 1 && tblNames[0] == "." {
-		tblNames = actions.AllTables(root)
+		tblNames = actions.AllTables(context.TODO(), root)
 	}
 
 	var verr errhand.VerboseError
 	for _, tblName := range tblNames {
 		func() {
-			if !root.HasTable(tblName) {
+			if !root.HasTable(context.TODO(), tblName) {
 				verr = errhand.BuildDError("error: unknown table '%s'", tblName).Build()
 				return
 			}
 
-			tbl, _ := root.GetTable(tblName)
+			tbl, _ := root.GetTable(context.TODO(), tblName)
 			cnfRd, err := merge.NewConflictReader(tbl)
 
 			if err == doltdb.ErrNoConflicts {

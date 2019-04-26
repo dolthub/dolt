@@ -13,7 +13,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	tbls := AllTables(roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
+	tbls := AllTables(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
 	return checkoutTables(ctx, dEnv, roots, tbls)
 
 }
@@ -35,10 +35,10 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 	staged := roots[StagedRoot]
 	head := roots[HeadRoot]
 	for _, tblName := range tbls {
-		tbl, ok := staged.GetTable(tblName)
+		tbl, ok := staged.GetTable(ctx, tblName)
 
 		if !ok {
-			tbl, ok = head.GetTable(tblName)
+			tbl, ok = head.GetTable(ctx, tblName)
 
 			if !ok {
 				unknown = append(unknown, tblName)
@@ -51,7 +51,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 
 	if len(unknown) > 0 {
 		var err error
-		currRoot, err = currRoot.RemoveTables(unknown)
+		currRoot, err = currRoot.RemoveTables(ctx, unknown)
 
 		if err != nil {
 			return err

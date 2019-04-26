@@ -41,7 +41,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		tbls := apr.Args()
 
 		if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
-			tbls = actions.AllTables(stagedRoot, headRoot)
+			tbls = actions.AllTables(context.TODO(), stagedRoot, headRoot)
 		}
 
 		verr = ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
@@ -68,7 +68,7 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 		return
 	}
 
-	notStaged := actions.NewTableDiffs(working, staged)
+	notStaged := actions.NewTableDiffs(context.TODO(), working, staged)
 
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
@@ -87,7 +87,7 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 }
 
 func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot := staged.UpdateTablesFromOther(tbls, head)
+	updatedRoot := staged.UpdateTablesFromOther(context.TODO(), tbls, head)
 
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }

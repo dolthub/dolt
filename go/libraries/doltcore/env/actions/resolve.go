@@ -17,7 +17,7 @@ func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.A
 		return err
 	}
 
-	tbls := root.TablesInConflict()
+	tbls := root.TablesInConflict(ctx)
 	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
 }
 
@@ -33,7 +33,7 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merg
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
 	for _, tblName := range tbls {
-		tbl, ok := root.GetTable(tblName)
+		tbl, ok := root.GetTable(ctx, tblName)
 
 		if !ok {
 			return doltdb.ErrTableNotFound

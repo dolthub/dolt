@@ -48,7 +48,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
-				if !force && root.HasTable(tblName) {
+				if !force && root.HasTable(context.TODO(), tblName) {
 					bdr := errhand.BuildDError("table '%s' already exists.", tblName)
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()

@@ -111,11 +111,11 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tblName := args[0]
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError("error: table '%s' not found", tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(), args[1:])
 
 	if err != nil {

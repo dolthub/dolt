@@ -88,7 +88,7 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 
 	for ; i < len(args); i++ {
 		tbl := args[i]
-		if !(roots[0].HasTable(tbl) || roots[1].HasTable(tbl)) {
+		if !(roots[0].HasTable(context.TODO(), tbl) || roots[1].HasTable(context.TODO(), tbl)) {
 			verr := errhand.BuildDError("error: Unknown table: '%s'", tbl).Build()
 			return nil, nil, args, verr
 		}
@@ -120,12 +120,12 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 
 func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(tblNames) == 0 {
-		tblNames = actions.AllTables(r1, r2)
+		tblNames = actions.AllTables(context.TODO(), r1, r2)
 	}
 
 	for _, tblName := range tblNames {
-		tbl1, ok1 := r1.GetTable(tblName)
-		tbl2, ok2 := r2.GetTable(tblName)
+		tbl1, ok1 := r1.GetTable(context.TODO(), tblName)
+		tbl2, ok2 := r2.GetTable(context.TODO(), tblName)
 
 		if !ok1 && !ok2 {
 			bdr := errhand.BuildDError("Table could not be found.")

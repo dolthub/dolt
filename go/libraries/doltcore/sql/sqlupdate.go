@@ -46,10 +46,10 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errUpdate("Unsupported update statement %v", query)
 	}
 
-	if !root.HasTable(tableName) {
+	if !root.HasTable(ctx, tableName) {
 		return errUpdate("Unknown table '%s'", tableName)
 	}
-	table, _ := root.GetTable(tableName)
+	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema()
 
 	// map of column tag to value

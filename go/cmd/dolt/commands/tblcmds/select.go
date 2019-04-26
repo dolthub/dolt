@@ -182,11 +182,11 @@ func newArgParser() *argparser.ArgParser {
 // Runs the selection pipeline and prints the table of resultant values, returning any error encountered.
 func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseError {
 	var verr errhand.VerboseError
-	if !root.HasTable(selArgs.tblName) {
+	if !root.HasTable(context.TODO(), selArgs.tblName) {
 		return errhand.BuildDError("error: unknown table '%s'", selArgs.tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(selArgs.tblName)
+	tbl, _ := root.GetTable(context.TODO(), selArgs.tblName)
 	tblSch := tbl.GetSchema()
 	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
 

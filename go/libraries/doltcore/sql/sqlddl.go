@@ -45,7 +45,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	tableNameExpr := ddl.NewName
 	tableName = tableNameExpr.Name.String()
 
-	if root.HasTable(tableName) {
+	if root.HasTable(ctx, tableName) {
 		return errCreate("error: table %v already defined", tableName)
 	}
 

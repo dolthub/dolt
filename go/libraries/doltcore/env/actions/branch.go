@@ -146,8 +146,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 
 	newRoot := cm.GetRootValue()
 	conflicts := set.NewStrSet([]string{})
-	wrkTblHashes := tblHashesForCO(currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-	stgTblHashes := tblHashesForCO(currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+	wrkTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
+	stgTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
 
 	if conflicts.Size() > 0 {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
@@ -175,12 +175,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 
 var emptyHash = hash.Hash{}
 
-func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) map[string]hash.Hash {
+func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) map[string]hash.Hash {
 	resultMap := make(map[string]hash.Hash)
-	for _, tblName := range newRoot.GetTableNames() {
-		oldHash, _ := oldRoot.GetTableHash(tblName)
-		newHash, _ := newRoot.GetTableHash(tblName)
-		changedHash, _ := changedRoot.GetTableHash(tblName)
+	for _, tblName := range newRoot.GetTableNames(ctx) {
+		oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
+		newHash, _ := newRoot.GetTableHash(ctx, tblName)
+		changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
 
 		if oldHash == changedHash {
 			resultMap[tblName] = newHash
@@ -193,10 +193,10 @@ func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *
 		}
 	}
 
-	for _, tblName := range changedRoot.GetTableNames() {
+	for _, tblName := range changedRoot.GetTableNames(ctx) {
 		if _, exists := resultMap[tblName]; !exists {
-			oldHash, _ := oldRoot.GetTableHash(tblName)
-			changedHash, _ := changedRoot.GetTableHash(tblName)
+			oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
+			changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
 
 			if oldHash == emptyHash {
 				resultMap[tblName] = changedHash
@@ -228,12 +228,12 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 	return dEnv.DoltDB.WriteRootValue(ctx, root)
 }
 
-func getDifferingTables(root1, root2 *doltdb.RootValue) []string {
-	tbls := root1.GetTableNames()
+func getDifferingTables(ctx context.Context, root1, root2 *doltdb.RootValue) []string {
+	tbls := root1.GetTableNames(ctx)
 	differing := make([]string, 0, len(tbls))
 	for _, tbl := range tbls {
-		hsh1, _ := root1.GetTableHash(tbl)
-		hsh2, _ := root2.GetTableHash(tbl)
+		hsh1, _ := root1.GetTableHash(ctx, tbl)
+		hsh2, _ := root2.GetTableHash(ctx, tbl)
 
 		if hsh1 != hsh2 {
 			differing = append(differing, tbl)
@@ -271,7 +271,7 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 
 	rootsWithTable := make([]RootType, 0, len(roots))
 	for rt, root := range roots {
-		if root.HasTable(table) {
+		if root.HasTable(ctx, table) {
 			rootsWithTable = append(rootsWithTable, rt)
 		}
 	}

@@ -55,7 +55,7 @@ func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errh
 }
 
 func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
-	err := actions.ValidateTables(tbls, roots...)
+	err := actions.ValidateTables(context.TODO(), tbls, roots...)
 
 	if err != nil {
 		if actions.IsTblNotExist(err) {

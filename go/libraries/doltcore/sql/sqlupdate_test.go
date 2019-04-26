@@ -286,7 +286,7 @@ func TestExecuteUpdate(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumRowsUnchanged, result.NumRowsUnchanged)
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 
-			table, ok := result.Root.GetTable(peopleTableName)
+			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows were updated

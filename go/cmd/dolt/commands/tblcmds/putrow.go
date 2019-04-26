@@ -101,7 +101,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	tbl, ok := root.GetTable(prArgs.TableName)
+	tbl, ok := root.GetTable(context.TODO(), prArgs.TableName)
 
 	if !ok {
 		cli.PrintErrln(color.RedString("Unknown table %s", prArgs.TableName))

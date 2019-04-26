@@ -43,9 +43,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 	mergeRoot := merger.mergeCommit.GetRootValue()
 	ancRoot := merger.ancestor.GetRootValue()
 
-	tbl, ok := root.GetTable(tblName)
-	mergeTbl, mergeOk := mergeRoot.GetTable(tblName)
-	ancTbl, ancOk := ancRoot.GetTable(tblName)
+	tbl, ok := root.GetTable(ctx, tblName)
+	mergeTbl, mergeOk := mergeRoot.GetTable(ctx, tblName)
+	ancTbl, ancOk := ancRoot.GetTable(ctx, tblName)
 
 	if ok && mergeOk && tbl.HashOf() == mergeTbl.HashOf() {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil

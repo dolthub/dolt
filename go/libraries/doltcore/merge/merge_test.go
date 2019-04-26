@@ -332,7 +332,7 @@ func TestMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tbl, _ := commit.GetRootValue().GetTable(tableName)
+	tbl, _ := commit.GetRootValue().GetTable(context.Background(), tableName)
 	schRef := tbl.GetSchemaRef()
 	expected := doltdb.NewTable(context.Background(), vrw, schRef.TargetValue(context.Background(), vrw), expectedRows)
 	expected = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)

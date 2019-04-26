@@ -23,8 +23,8 @@ type TableDiffs struct {
 	Tables      []string
 }
 
-func NewTableDiffs(newer, older *doltdb.RootValue) *TableDiffs {
-	added, modified, removed := newer.TableDiff(older)
+func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) *TableDiffs {
+	added, modified, removed := newer.TableDiff(ctx, older)
 
 	var tbls []string
 	tbls = append(tbls, added...)
@@ -71,8 +71,8 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}
 
-	stagedDiffs := NewTableDiffs(stagedRoot, headRoot)
-	notStagedDiffs := NewTableDiffs(workingRoot, stagedRoot)
+	stagedDiffs := NewTableDiffs(ctx, stagedRoot, headRoot)
+	notStagedDiffs := NewTableDiffs(ctx, workingRoot, stagedRoot)
 
 	return stagedDiffs, notStagedDiffs, nil
 }

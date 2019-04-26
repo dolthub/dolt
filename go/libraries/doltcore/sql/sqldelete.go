@@ -41,10 +41,10 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errDelete("Unsupported update statement %v", query)
 	}
 
-	if !root.HasTable(tableName) {
+	if !root.HasTable(ctx, tableName) {
 		return errDelete("Unknown table '%s'", tableName)
 	}
-	table, _ := root.GetTable(tableName)
+	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema()
 
 	// TODO: support aliases
