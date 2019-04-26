@@ -72,15 +72,16 @@ func main() {
 
 		os.Exit(1)
 	}
+	ctx := context.Background()
 
 	tableName := flag.Arg(0)
-	root, err := dEnv.WorkingRoot(context.Background())
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		panic(err)
 	}
 
-	tbl, ok := root.GetTable(tableName)
+	tbl, ok := root.GetTable(ctx, tableName)
 
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Could not find table '%s'.\n", tableName)
@@ -90,13 +91,12 @@ func main() {
 	data := tbl.GetRowData()
 	sch := tbl.GetSchema()
 
-	ctx := context.Background()
 	dim := New(ctx, sch, data)
 	updatedRows := dim.Run(ctx)
 
 	if !data.Equals(updatedRows) {
-		updatedTbl := tbl.UpdateRows(context.Background(), updatedRows)
-		updatedRoot := root.PutTable(context.Background(), dEnv.DoltDB, tableName, updatedTbl)
-		dEnv.UpdateWorkingRoot(context.Background(), updatedRoot)
+		updatedTbl := tbl.UpdateRows(ctx, updatedRows)
+		updatedRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, updatedTbl)
+		dEnv.UpdateWorkingRoot(ctx, updatedRoot)
 	}
 }

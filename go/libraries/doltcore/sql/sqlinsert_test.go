@@ -302,7 +302,7 @@ func TestExecuteInsert(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
 
-			table, ok := result.Root.GetTable(peopleTableName)
+			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {

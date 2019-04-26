@@ -24,10 +24,10 @@ var ErrConstraintFailure = errors.New("row constraint failed")
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
 	tableName := s.Table.Name.String()
-	if !root.HasTable(tableName) {
+	if !root.HasTable(ctx, tableName) {
 		return errInsert("Unknown table %v", tableName)
 	}
-	table, _ := root.GetTable(tableName)
+	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema()
 
 	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword

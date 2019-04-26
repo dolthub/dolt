@@ -128,7 +128,7 @@ func TestLDNoms(t *testing.T) {
 
 		root := commit.GetRootValue()
 
-		if len(root.GetTableNames()) != 0 {
+		if len(root.GetTableNames(context.Background())) != 0 {
 			t.Fatal("There should be no tables in empty db")
 		}
 
@@ -166,7 +166,7 @@ func TestLDNoms(t *testing.T) {
 		}
 
 		root := commit.GetRootValue()
-		readTable, ok := root.GetTable("test")
+		readTable, ok := root.GetTable(context.Background(), "test")
 
 		if !ok {
 			t.Error("Could not retrieve test table")

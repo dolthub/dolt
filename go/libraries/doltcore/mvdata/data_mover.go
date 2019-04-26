@@ -111,7 +111,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	if mvOpts.Operation == OverwriteOp {
 		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch)
 	} else {
-		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, root, fs, srcIsSorted, outSch)
 	}
 
 	if err != nil {

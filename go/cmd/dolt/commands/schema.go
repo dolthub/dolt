@@ -123,7 +123,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 		// If the user hasn't specified table names, try to grab them all;
 		// show usage and error out if there aren't any
 		if len(tables) == 0 {
-			tables = root.GetTableNames()
+			tables = root.GetTableNames(context.TODO())
 
 			if len(tables) == 0 {
 				return errhand.BuildDError("").SetPrintUsage().Build()
@@ -132,7 +132,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 
 		var notFound []string
 		for _, tblName := range tables {
-			tbl, ok := root.GetTable(tblName)
+			tbl, ok := root.GetTable(context.TODO(), tblName)
 
 			if !ok {
 				notFound = append(notFound, tblName)
@@ -171,11 +171,11 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 	root, _ = GetWorkingWithVErr(dEnv)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	err := exportTblSchema(tblName, tbl, fileName, dEnv)
 	if err != nil {
 		return errhand.BuildDError("file path not valid.").Build()
@@ -201,11 +201,11 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	tblSch := tbl.GetSchema()
 	newFieldName := apr.Arg(1)
 
@@ -318,11 +318,11 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
@@ -355,11 +355,11 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	colName := apr.Arg(1)
 
 	newTbl, err := actions.RemoveColumnFromTable(context.Background(), colName, tbl, dEnv.DoltDB)

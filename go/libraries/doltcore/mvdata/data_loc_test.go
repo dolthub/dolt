@@ -135,7 +135,7 @@ func TestExists(t *testing.T) {
 	ddb, root, fs := createRootAndFS()
 
 	for _, loc := range testLocations {
-		if loc.Exists(root, fs) {
+		if loc.Exists(context.Background(), root, fs) {
 			t.Error("Shouldn't exist before creation")
 		}
 
@@ -147,7 +147,7 @@ func TestExists(t *testing.T) {
 			fs.WriteFile(loc.Path, []byte("test"))
 		}
 
-		if !loc.Exists(root, fs) {
+		if !loc.Exists(context.Background(), root, fs) {
 			t.Error("Should already exist after creation")
 		}
 	}

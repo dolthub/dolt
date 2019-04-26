@@ -13,7 +13,6 @@ import (
 	"github.com/xwb1989/sqlparser"
 )
 
-
 // Tests that the basic SelectAndLimit
 func Test_selectTransform_limitAndFilter(t *testing.T) {
 	var noMoreCallbackCalled = false
@@ -364,7 +363,7 @@ func TestExecuteSelect(t *testing.T) {
 				t.FailNow()
 			}
 
-			rows, sch, err := ExecuteSelect(root, s, tt.query)
+			rows, sch, err := ExecuteSelect(context.Background(), root, s, tt.query)
 			untypedRows := convertRows(t, tt.expectedRows, peopleTestSchema, tt.expectedSchema)
 			if err != nil {
 				assert.True(t, tt.expectedErr, err.Error())
@@ -427,7 +426,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
-			p, sch, _ := BuildSelectQueryPipeline(root, s, tt.query)
+			p, sch, _ := BuildSelectQueryPipeline(context.Background(), root, s, tt.query)
 			var outputRows int
 			p.SetOutput(pipeline.ProcFuncForSinkFunc(
 				func(r row.Row, props pipeline.ReadableMap) error {

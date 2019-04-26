@@ -81,7 +81,7 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()
 	}
 
-	tbl, ok := root.GetTable(tblName)
+	tbl, ok := root.GetTable(context.TODO(), tblName)
 
 	if !ok {
 		return nil, nil, errhand.BuildDError("Unknown table %s", tblName).Build()

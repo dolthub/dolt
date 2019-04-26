@@ -102,7 +102,7 @@ func TestCreateTable(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
-			assert.False(t, working.HasTable(tableName), "table exists before creating it")
+			assert.False(t, working.HasTable(context.Background(), tableName), "table exists before creating it")
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -112,9 +112,9 @@ func TestCreateTable(t *testing.T) {
 			working, err = dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			if test.expectedRes == 0 {
-				assert.True(t, working.HasTable(tableName), "table doesn't exist after creating it")
+				assert.True(t, working.HasTable(context.Background(), tableName), "table doesn't exist after creating it")
 			} else {
-				assert.False(t, working.HasTable(tableName), "table shouldn't exist after error")
+				assert.False(t, working.HasTable(context.Background(), tableName), "table shouldn't exist after error")
 			}
 		})
 	}
@@ -204,7 +204,7 @@ func TestInsert(t *testing.T) {
 
 				// Assert that all expected IDs exist after the insert
 				for _, expectedid := range test.expectedIds {
-					table, _ := root.GetTable(tableName)
+					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
 					_, ok := table.GetRow(key, dtestutils.TypedSchema)
@@ -275,7 +275,7 @@ func TestUpdate(t *testing.T) {
 
 				// Assert that all rows have been updated
 				for i, expectedid := range test.expectedIds {
-					table, _ := root.GetTable(tableName)
+					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
 					row, ok := table.GetRow(key, dtestutils.TypedSchema)
@@ -340,7 +340,7 @@ func TestDelete(t *testing.T) {
 
 				// Assert that all rows have been deleted
 				for _, expectedid := range test.deletedIds {
-					table, _ := root.GetTable(tableName)
+					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
 					_, ok := table.GetRow(key, dtestutils.TypedSchema)
@@ -350,7 +350,6 @@ func TestDelete(t *testing.T) {
 		})
 	}
 }
-
 
 func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()

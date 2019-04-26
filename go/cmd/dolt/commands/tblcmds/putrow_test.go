@@ -51,7 +51,7 @@ func TestPutRow(t *testing.T) {
 
 		if result == 0 {
 			root, _ := dEnv.WorkingRoot(context.Background())
-			tbl, _ := root.GetTable(tableName)
+			tbl, _ := root.GetTable(context.Background(), tableName)
 			sch := tbl.GetSchema()
 			row, exists := tbl.GetRowByPKVals(row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
 

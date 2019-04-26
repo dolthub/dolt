@@ -28,12 +28,12 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 		return err
 	}
 
-	tbls := AllTables(staged, working)
+	tbls := AllTables(ctx, staged, working)
 	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
 }
 
 func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
-	err := ValidateTables(tbls, staged, working)
+	err := ValidateTables(ctx, tbls, staged, working)
 
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	if !allowConflicts {
 		var inConflict []string
 		for _, tblName := range tbls {
-			tbl, _ := working.GetTable(tblName)
+			tbl, _ := working.GetTable(ctx, tblName)
 
 			if tbl.NumRowsInConflict() > 0 {
 				if !allowConflicts {
@@ -57,14 +57,14 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	}
 
 	for _, tblName := range tbls {
-		tbl, _ := working.GetTable(tblName)
+		tbl, _ := working.GetTable(ctx, tblName)
 
 		if tbl.HasConflicts() && tbl.NumRowsInConflict() == 0 {
 			working = working.PutTable(ctx, dEnv.DoltDB, tblName, tbl.ClearConflicts())
 		}
 	}
 
-	staged = staged.UpdateTablesFromOther(tbls, working)
+	staged = staged.UpdateTablesFromOther(ctx, tbls, working)
 
 	if wh, err := dEnv.DoltDB.WriteRootValue(ctx, working); err == nil {
 		if sh, err := dEnv.DoltDB.WriteRootValue(ctx, staged); err == nil {
@@ -82,22 +82,22 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	return doltdb.ErrNomsIO
 }
 
-func AllTables(roots ...*doltdb.RootValue) []string {
+func AllTables(ctx context.Context, roots ...*doltdb.RootValue) []string {
 	allTblNames := make([]string, 0, 16)
 	for _, root := range roots {
-		allTblNames = append(allTblNames, root.GetTableNames()...)
-		allTblNames = append(allTblNames, root.GetTableNames()...)
+		allTblNames = append(allTblNames, root.GetTableNames(ctx)...)
+		allTblNames = append(allTblNames, root.GetTableNames(ctx)...)
 	}
 
 	return set.Unique(allTblNames)
 }
 
-func ValidateTables(tbls []string, roots ...*doltdb.RootValue) error {
+func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootValue) error {
 	var missing []string
 	for _, tbl := range tbls {
 		found := false
 		for _, root := range roots {
-			if root.HasTable(tbl) {
+			if root.HasTable(ctx, tbl) {
 				found = true
 				break
 			}

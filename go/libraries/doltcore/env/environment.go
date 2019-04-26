@@ -289,7 +289,7 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 		return nil, err
 	}
 
-	return root.TablesInConflict(), nil
+	return root.TablesInConflict(ctx), nil
 }
 
 func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {

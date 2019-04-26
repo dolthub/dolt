@@ -15,7 +15,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 	}
 
 	root := cm1.GetRootValue()
-	tblNames := AllTables(root, cm2.GetRootValue())
+	tblNames := AllTables(ctx, root, cm2.GetRootValue())
 	tblToStats := make(map[string]*merge.MergeStats)
 
 	// need to validate merges can be done on all tables before starting the actual merges.
@@ -29,9 +29,9 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
 			root = root.PutTable(ctx, ddb, tblName, mergedTable)
-		} else if root.HasTable(tblName) {
+		} else if root.HasTable(ctx, tblName) {
 			tblToStats[tblName] = &merge.MergeStats{Operation: merge.TableRemoved}
-			root, err = root.RemoveTables([]string{tblName})
+			root, err = root.RemoveTables(ctx, []string{tblName})
 
 			if err != nil {
 				return nil, nil, err
@@ -65,9 +65,9 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 		return
 	}
 
-	headInConflict = headRoot.TablesInConflict()
-	stagedInConflict = stagedRoot.TablesInConflict()
-	workingInConflict = workingRoot.TablesInConflict()
+	headInConflict = headRoot.TablesInConflict(ctx)
+	stagedInConflict = stagedRoot.TablesInConflict(ctx)
+	workingInConflict = workingRoot.TablesInConflict(ctx)
 
 	return
 }

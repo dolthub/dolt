@@ -121,7 +121,7 @@ func TestExecuteDelete(t *testing.T) {
 
 			assert.Equal(t, tt.expectedResult.NumRowsDeleted, result.NumRowsDeleted)
 
-			table, ok := result.Root.GetTable(peopleTableName)
+			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows are deleted

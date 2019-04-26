@@ -84,7 +84,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
-			if root.HasConflicts() {
+			if root.HasConflicts(context.TODO()) {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
 				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
