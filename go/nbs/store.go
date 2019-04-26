@@ -300,14 +300,14 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
-			data = nbs.mt.get(a, nbs.stats)
+			data = nbs.mt.get(ctx, a, nbs.stats)
 		}
 		return data, nbs.tables
 	}()
 	if data != nil {
 		return chunks.NewChunkWithHash(h, data)
 	}
-	if data := tables.get(a, nbs.stats); data != nil {
+	if data := tables.get(ctx, a, nbs.stats); data != nil {
 		return chunks.NewChunkWithHash(h, data)
 	}
 

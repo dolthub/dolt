@@ -217,7 +217,7 @@ func (tr tableReader) has(h addr) bool {
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
-func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
+func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) (data []byte) {
 	ordinal := tr.lookupOrdinal(h)
 	if ordinal == tr.count() {
 		return
@@ -227,7 +227,7 @@ func (tr tableReader) get(h addr, stats *Stats) (data []byte) {
 	length := uint64(tr.lengths[ordinal])
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
 
-	n, err := tr.r.ReadAtWithStats(context.TODO(), buff, int64(offset), stats)
+	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(offset), stats)
 	d.Chk.NoError(err)
 	d.Chk.True(n == int(length))
 	data = tr.parseChunk(buff)

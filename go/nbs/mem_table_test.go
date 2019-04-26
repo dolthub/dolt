@@ -60,12 +60,12 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	assertChunksInReader(chunks, mt, assert)
 
 	for _, c := range chunks {
-		assert.Equal(bytes.Compare(c, mt.get(computeAddr(c), &Stats{})), 0)
+		assert.Equal(bytes.Compare(c, mt.get(context.Background(), computeAddr(c), &Stats{})), 0)
 	}
 
 	notPresent := []byte("nope")
 	assert.False(mt.has(computeAddr(notPresent)))
-	assert.Nil(mt.get(computeAddr(notPresent), &Stats{}))
+	assert.Nil(mt.get(context.Background(), computeAddr(notPresent), &Stats{}))
 }
 
 func TestMemTableAddOverflowChunk(t *testing.T) {
@@ -184,9 +184,9 @@ func (crg chunkReaderGroup) has(h addr) bool {
 	return false
 }
 
-func (crg chunkReaderGroup) get(h addr, stats *Stats) []byte {
+func (crg chunkReaderGroup) get(ctx context.Context, h addr, stats *Stats) []byte {
 	for _, haver := range crg {
-		if data := haver.get(h, stats); data != nil {
+		if data := haver.get(ctx, h, stats); data != nil {
 			return data
 		}
 	}

@@ -99,7 +99,7 @@ func (mt *memTable) hasMany(addrs []hasRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) get(h addr, stats *Stats) []byte {
+func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) []byte {
 	return mt.chunks[h]
 }
 
