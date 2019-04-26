@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
@@ -65,7 +66,7 @@ func (fm fileManifest) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
-func (fm fileManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
@@ -125,7 +126,7 @@ func parseManifest(r io.Reader) manifestContents {
 	}
 }
 
-func (fm fileManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 

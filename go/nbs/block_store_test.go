@@ -396,7 +396,7 @@ func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
 	return fc.canned[0].should
 }
 
-func (fc *fakeConjoiner) Conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
 	d.PanicIfTrue(len(fc.canned) == 0)
 	canned := fc.canned[0]
 	fc.canned = fc.canned[1:]
@@ -407,7 +407,7 @@ func (fc *fakeConjoiner) Conjoin(upstream manifestContents, mm manifestUpdater, 
 		specs: canned.specs,
 		lock:  generateLockHash(upstream.root, canned.specs),
 	}
-	upstream = mm.Update(upstream.lock, newContents, stats, nil)
+	upstream = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
 	d.PanicIfFalse(upstream.lock == newContents.lock)
 	return upstream
 }

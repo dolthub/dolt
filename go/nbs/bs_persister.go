@@ -17,13 +17,13 @@ type blobstorePersister struct {
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
-func (bsp *blobstorePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	name, data, chunkCount := mt.write(haver, stats)
 	if chunkCount == 0 {
 		return emptyChunkSource{}
 	}
 
-	_, err := blobstore.PutBytes(context.TODO(), bsp.bs, name.String(), data)
+	_, err := blobstore.PutBytes(ctx, bsp.bs, name.String(), data)
 	d.PanicIfError(err)
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}

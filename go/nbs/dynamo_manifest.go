@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -52,7 +53,7 @@ func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
-func (dm dynamoManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
@@ -96,7 +97,7 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	return false, false
 }
 
-func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -130,7 +131,7 @@ func (dm dynamoManifest) Update(lastLock addr, newContents manifestContents, sta
 	_, ddberr := dm.ddbsvc.PutItem(&putArgs)
 	if ddberr != nil {
 		if errIsConditionalCheckFailed(ddberr) {
-			exists, upstream := dm.ParseIfExists(stats, nil)
+			exists, upstream := dm.ParseIfExists(ctx, stats, nil)
 			d.Chk.True(exists)
 			d.Chk.True(upstream.vers == constants.NomsVersion)
 			return upstream

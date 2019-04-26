@@ -15,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
+func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
 
 	ccs := &persistingChunkSource{mt: mt}
@@ -23,7 +23,7 @@ func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister,
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		cs := p.Persist(mt, haver, stats)
+		cs := p.Persist(ctx, mt, haver, stats)
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()

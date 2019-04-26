@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
@@ -113,7 +114,7 @@ func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err e
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
-	return p.Persist(mt, nil, &Stats{}), nil
+	return p.Persist(context.Background(), mt, nil, &Stats{}), nil
 }
 
 func TestFSTablePersisterPersistNoData(t *testing.T) {
@@ -132,7 +133,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
 
-	src := fts.Persist(mt, existingTable, &Stats{})
+	src := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	assert.True(src.count() == 0)
 
 	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
@@ -217,7 +218,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		for _, c := range testChunks {
 			mt.addChunk(computeAddr(c), c)
 		}
-		sources[i] = fts.Persist(mt, nil, &Stats{})
+		sources[i] = fts.Persist(context.Background(), mt, nil, &Stats{})
 	}
 	src := fts.ConjoinAll(sources, &Stats{})
 
