@@ -51,8 +51,8 @@ func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 	return &RootValue{vrw, st}
 }
 
-func emptyRootValue(vrw types.ValueReadWriter) *RootValue {
-	return newRootFromTblMap(vrw, types.NewMap(context.TODO(), vrw))
+func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) *RootValue {
+	return newRootFromTblMap(vrw, types.NewMap(ctx, vrw))
 }
 
 func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
@@ -74,16 +74,16 @@ func (root *RootValue) HasTable(tName string) bool {
 	return tableMap.Has(context.TODO(), types.String(tName))
 }
 
-func (root *RootValue) getTableSt(tName string) (*types.Struct, bool) {
+func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool) {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	tVal := tableMap.Get(context.TODO(), types.String(tName))
+	tVal := tableMap.Get(ctx, types.String(tName))
 
 	if tVal == nil {
 		return nil, false
 	}
 
 	tValRef := tVal.(types.Ref)
-	tableStruct := tValRef.TargetValue(context.TODO(), root.vrw).(types.Struct)
+	tableStruct := tValRef.TargetValue(ctx, root.vrw).(types.Struct)
 	return &tableStruct, true
 }
 
@@ -101,7 +101,7 @@ func (root *RootValue) GetTableHash(tName string) (hash.Hash, bool) {
 
 // GetTable will retrieve a table by name
 func (root *RootValue) GetTable(tName string) (*Table, bool) {
-	if st, ok := root.getTableSt(tName); ok {
+	if st, ok := root.getTableSt(context.TODO(), tName); ok {
 		return &Table{root.vrw, *st}, true
 	}
 
