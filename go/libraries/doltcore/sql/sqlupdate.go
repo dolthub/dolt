@@ -6,6 +6,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/xwb1989/sqlparser"
 	"io"
@@ -66,7 +67,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 
 		switch val := update.Expr.(type) {
 		case *sqlparser.SQLVal:
-			nomsVal, err := extractNomsValueFromSQLVal(val, column)
+			nomsVal, err := extractNomsValueFromSQLVal(val, column.Kind)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +134,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 	}
 
 	// TODO: support aliases in update
-	filter, err := createFilterForWhere(s.Where, tableSch, NewAliases())
+	filter, err := createFilterForWhere(s.Where, map[string]schema.Schema{tableName: tableSch}, NewAliases())
 	if err != nil {
 		return errUpdate(err.Error())
 	}

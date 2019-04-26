@@ -232,8 +232,118 @@ func nodeToString(node sqlparser.SQLNode) string {
 	return buffer.String()
 }
 
+// Finds the schema that contains the column name given among the tables given. Returns an error if no schema contains
+// such a column name, or if multiple do. This method is only used for naked column names, not qualified ones. Assumes
+// that table names have already been verified to exist.
+func findSchemaForColumn(colName string, schemas map[string]schema.Schema) (string, schema.Schema, error) {
+	var colSchema schema.Schema
+	var tableName string
+	for tbl, sch := range schemas {
+		if _, ok := sch.GetAllCols().GetByName(colName); ok {
+			if colSchema != nil {
+				return "", nil, errFmt("Ambiguous column: %v", colName)
+			}
+			colSchema = sch
+			tableName = tbl
+		}
+	}
+
+	if colSchema == nil {
+		return "", nil, errFmt("Unknown column: '%v'", colName)
+	}
+
+	return tableName, colSchema, nil
+}
+
+type valGetterKind uint8
+const (
+	COLNAME valGetterKind = iota
+	SQL_VAL
+	BOOL_VAL
+)
+
+// valGetter is a convenience object used for comparing the right and left side of an expression
+type valGetter struct {
+	// The kind of this val getter
+	Kind      valGetterKind
+	// The value type returned by this getter
+	NomsKind  types.NomsKind
+	// The kind of the value that this getter's result will be compared against, filled in elsewhere
+	CmpKind   types.NomsKind
+	// Init() performs error checking and does any labor-saving pre-calculation that doens't need to be done for every
+	// row in the result set
+	Init      func() error
+	// Get() returns the value for this getter for the row given
+	Get       func(r row.Row) types.Value
+	// CachedVal is a handy place to put a pre-computed value for getters that deal with constants or literals
+	CachedVal types.Value
+}
+
+// Returns a comparison value getter for the expression given, which could be a column value or a literal
+func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*valGetter, error) {
+	switch e := expr.(type) {
+	case *sqlparser.ColName:
+		colNameStr := e.Name.String()
+		if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
+			colNameStr = col.ColumnName
+		}
+
+		_, tableSch, err := findSchemaForColumn(colNameStr, inputSchemas)
+		if err != nil {
+			return nil, err
+		}
+		column, _ := tableSch.GetAllCols().GetByName(colNameStr)
+		getter := valGetter{Kind: COLNAME, NomsKind: column.Kind}
+
+		getter.Init = func() error {
+			return nil
+		}
+		getter.Get = func(r row.Row) types.Value {
+			value, _ := r.GetColVal(column.Tag)
+			return value
+		}
+
+		return &getter, nil
+	case *sqlparser.SQLVal:
+		getter := valGetter{Kind: SQL_VAL}
+
+		getter.Init = func() error {
+			val, err := extractNomsValueFromSQLVal(e, getter.CmpKind)
+			if err != nil {
+				return err
+			}
+			getter.CachedVal = val
+			return nil
+		}
+		getter.Get = func(r row.Row) types.Value {
+			return getter.CachedVal
+		}
+
+		return &getter, nil
+	case sqlparser.BoolVal:
+		val := types.Bool(bool(e))
+		getter := valGetter{Kind: BOOL_VAL, NomsKind: types.BoolKind}
+
+		getter.Init = func() error {
+			switch getter.CmpKind {
+			case types.BoolKind:
+				return nil
+			default:
+				return errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(e))
+			}
+		}
+		getter.Get = func(r row.Row) types.Value {
+			return val
+		}
+
+		return &getter, nil
+	default:
+		return nil, errFmt("Unsupported comparison %v", nodeToString(e))
+	}
+}
+
 // createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, aliases *Aliases) (rowFilterFn, error) {
+func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}
@@ -246,133 +356,90 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 	} else {
 		switch expr := whereClause.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
-			left := expr.Left
-			right := expr.Right
-			op := expr.Operator
 
-			colValOnLeft := true
-			colExpr := left
-			valExpr := right
-
-			// Swap the column and value expr as necessary
-			colName, ok := colExpr.(*sqlparser.ColName)
-			if !ok {
-				colValOnLeft = false
-				colExpr = right
-				valExpr = left
+			leftGetter, err := getComparisonValueGetter(expr.Left, inputSchemas, aliases)
+			if err != nil {
+				return nil, err
+			}
+			rightGetter, err := getComparisonValueGetter(expr.Right, inputSchemas, aliases)
+			if err != nil {
+				return nil, err
 			}
 
-			colName, ok = colExpr.(*sqlparser.ColName)
-			if !ok {
-				return nil, errFmt("Only column names and value literals are supported")
+			// Fill in noms kinds for SQL_VAL fields if possible
+			if leftGetter.Kind == SQL_VAL && rightGetter.Kind != SQL_VAL {
+				leftGetter.NomsKind = rightGetter.NomsKind
+			}
+			if rightGetter.Kind == SQL_VAL && leftGetter.Kind != SQL_VAL {
+				rightGetter.NomsKind = leftGetter.NomsKind
 			}
 
-			colNameStr := colName.Name.String()
-			if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = col.ColumnName
-			}
-			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
-			if !ok {
-				return nil, errFmt("Unknown column: '%v'", colNameStr)
-			}
+			// Fill in comparison kinds before doing error checking
+			rightGetter.CmpKind, leftGetter.CmpKind = leftGetter.NomsKind, rightGetter.NomsKind
 
-			var comparisonVal types.Value
-			switch val := valExpr.(type) {
-			case *sqlparser.SQLVal:
-				var err error
-				comparisonVal, err = extractNomsValueFromSQLVal(val, column)
-				if err != nil {
-					return nil, err
-				}
-			case sqlparser.BoolVal:
-				switch column.Kind {
-				case types.BoolKind:
-					comparisonVal = types.Bool(bool(val))
-				default:
-					return nil, errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(val))
-				}
-
-			default:
-				return nil, errFmt("Only SQL literal values are supported in comparisons: %v", nodeToString(val))
+			// Initialize the getters, mostly so that literal vals can do type error checking and cache results
+			if err := leftGetter.Init(); err != nil {
+				return nil, err
+			}
+			if err := rightGetter.Init(); err != nil {
+				return nil, err
 			}
 
 			// All the operations differ only in their filter logic
-			switch op {
+			switch expr.Operator {
 			case sqlparser.EqualStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-					return comparisonVal.Equals(colVal)
+					return leftVal.Equals(rightVal)
 				}
 			case sqlparser.LessThanStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
 					return leftVal.Less(rightVal)
 				}
 			case sqlparser.GreaterThanStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
 					return rightVal.Less(leftVal)
 				}
 			case sqlparser.LessEqualStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
 					return leftVal.Less(rightVal) || leftVal.Equals(rightVal)
 				}
 			case sqlparser.GreaterEqualStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
 					return rightVal.Less(leftVal) || rightVal.Equals(leftVal)
 				}
 			case sqlparser.NotEqualStr:
 				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
+					leftVal := leftGetter.Get(r)
+					rightVal := rightGetter.Get(r)
+					if types.IsNull(leftVal) || types.IsNull(rightVal) {
 						return false
 					}
-					return !comparisonVal.Equals(colVal)
+					return !leftVal.Equals(rightVal)
 				}
 			case sqlparser.NullSafeEqualStr:
 				return nil, errFmt("null safe equal operation not supported")
@@ -398,10 +465,12 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 			if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
 				colNameStr = col.ColumnName
 			}
-			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
-			if !ok {
-				return nil, errFmt("Unknown column: '%v'", colNameStr)
+			_, tableSch, err := findSchemaForColumn(colNameStr, inputSchemas)
+			if err != nil {
+				return nil, err
 			}
+			column, _ := tableSch.GetAllCols().GetByName(colNameStr)
+
 			if column.Kind != types.BoolKind {
 				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", colNameStr)
 			}
@@ -475,14 +544,12 @@ func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, 
 }
 
 func swap(left, right *types.Value) {
-	temp := *right
-	*right = *left
-	*left = temp
+	*right, *left = *left, *right
 }
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
 // a hint and for type-checking
-func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (types.Value, error) {
+func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, kind types.NomsKind) (types.Value, error) {
 	switch val.Type {
 	// Integer-like values
 	case sqlparser.HexVal, sqlparser.HexNum, sqlparser.IntVal, sqlparser.BitVal:
@@ -490,7 +557,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 		if err != nil {
 			return nil, err
 		}
-		switch column.Kind {
+		switch kind {
 		case types.IntKind:
 			return types.Int(intVal), nil
 		case types.FloatKind:
@@ -506,7 +573,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 		if err != nil {
 			return nil, err
 		}
-		switch column.Kind {
+		switch kind {
 		case types.FloatKind:
 			return types.Float(floatVal), nil
 		default:
@@ -515,7 +582,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 	// Strings, which can be coerced into lots of other types
 	case sqlparser.StrVal:
 		strVal := string(val.Val)
-		switch column.Kind {
+		switch kind {
 		case types.StringKind:
 			return types.String(strVal), nil
 		case types.UUIDKind:
