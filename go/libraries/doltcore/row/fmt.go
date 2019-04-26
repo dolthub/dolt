@@ -7,13 +7,13 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
-type RowFormatFunc func(r Row, sch schema.Schema) string
+type RowFormatFunc func(ctx context.Context, r Row, sch schema.Schema) string
 
 var Fmt = FieldSeparatedFmt(':')
 var fieldDelim = []byte(" | ")
 
 func FieldSeparatedFmt(delim rune) RowFormatFunc {
-	return func(r Row, sch schema.Schema) string {
+	return func(ctx context.Context, r Row, sch schema.Schema) string {
 		if r == nil {
 			return "null"
 		}
@@ -36,7 +36,7 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 			if ok {
 				buf.Write([]byte(col.Name))
 				buf.WriteRune(delim)
-				types.WriteEncodedValue(context.TODO(), buf, val)
+				types.WriteEncodedValue(ctx, buf, val)
 				kvps = append(kvps, buf.String())
 			}
 

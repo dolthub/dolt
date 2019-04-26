@@ -133,8 +133,8 @@ func TestConvToAndFromTuple(t *testing.T) {
 
 	r2 := FromNoms(sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
 
-	fmt.Println(Fmt(r, sch))
-	fmt.Println(Fmt(r2, sch))
+	fmt.Println(Fmt(context.Background(), r, sch))
+	fmt.Println(Fmt(context.Background(), r2, sch))
 
 	if !AreEqual(r, r2, sch) {
 		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")

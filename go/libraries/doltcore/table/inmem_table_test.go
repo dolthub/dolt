@@ -1,6 +1,7 @@
 package table
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -117,7 +118,7 @@ func TestPipeRows(t *testing.T) {
 		}
 
 		if !row.AreEqual(r1, r2, rowSch) {
-			t.Error("Rows should be the same.", row.Fmt(r1, rowSch), "!=", row.Fmt(r2, rowSch))
+			t.Error("Rows should be the same.", row.Fmt(context.Background(), r1, rowSch), "!=", row.Fmt(context.Background(), r2, rowSch))
 		}
 	}
 }
@@ -148,7 +149,7 @@ func TestReadAllRows(t *testing.T) {
 
 	for i := 0; i < len(rows); i++ {
 		if !row.AreEqual(rows[i], results[i], rowSch) {
-			t.Error(row.Fmt(rows[i], rowSch), "!=", row.Fmt(results[i], rowSch))
+			t.Error(row.Fmt(context.Background(), rows[i], rowSch), "!=", row.Fmt(context.Background(), results[i], rowSch))
 		}
 	}
 }

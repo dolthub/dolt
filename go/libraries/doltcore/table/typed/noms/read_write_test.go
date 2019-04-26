@@ -147,7 +147,7 @@ func testReadAndCompare(t *testing.T, initialMapVal *types.Map, expectedRows []r
 
 	for i := 0; i < len(expectedRows); i++ {
 		if !row.AreEqual(actualRows[i], expectedRows[i], sch) {
-			t.Error(row.Fmt(actualRows[i], sch), "!=", row.Fmt(expectedRows[i], sch))
+			t.Error(row.Fmt(context.Background(), actualRows[i], sch), "!=", row.Fmt(context.Background(), expectedRows[i], sch))
 		}
 	}
 }
