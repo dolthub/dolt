@@ -59,6 +59,7 @@ func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
 
 func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
 	return newAWSChunkSource(
+		ctx,
 		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc},
 		s3p.limits,
@@ -80,7 +81,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}
 	}
 	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		s3p.ddb.Write(name, data)
+		s3p.ddb.Write(ctx, name, data)
 		return newReaderFromIndexData(s3p.indexCache, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
